@@ -343,6 +343,14 @@ set(NORMALIZE_REPLACE_TEST_SRC
 ConfigureTest(NORMALIZE_REPLACE_TEST "${NORMALIZE_REPLACE_TEST_SRC}")
 
 ###################################################################################################
+# - fixed_point tests -----------------------------------------------------------------------------
+
+set(FIXED_POINT_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/fixed_point/fixed_point_tests.cpp")
+
+ConfigureTest(FIXED_POINT_TEST "${FIXED_POINT_TEST_SRC}")
+
+###################################################################################################
 # - unary tests -----------------------------------------------------------------------------------
 
 set(UNARY_TEST_SRC
@@ -351,7 +359,7 @@ set(UNARY_TEST_SRC
 ConfigureTest(UNARY_TEST "${UNARY_TEST_SRC}")
 
 ###################################################################################################
-# - legacy unary tests -----------------------------------------------------------------------------------
+# - legacy unary tests ----------------------------------------------------------------------------
 
 set(LEGACY_UNARY_TEST_SRC 
     "${CMAKE_CURRENT_SOURCE_DIR}/unary/legacy/unary_ops_test.cu")

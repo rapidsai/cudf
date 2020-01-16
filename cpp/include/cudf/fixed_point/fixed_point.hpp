@@ -144,45 +144,5 @@ public:
                                                fixed_point<Rep2, Radix2> const& rhs);                                                  
 };
 
-// TODO port these to new cpp/tests file for fixed_point
-auto tests() {
-    using decimal32 = fixed_point<int32_t, 10>;
-
-    decimal32 x{3, 2};
-    decimal32 y{2, 2};
-
-    decimal32 a{1.23, 3};
-    decimal32 b{2.34, 3};
-
-    // std::cout << x     << ' ' << y     << '\n';
-    // std::cout << x + y << ' ' << y - x << ' ' << x * y << '\n';
-    // std::cout << a     << ' ' << b     << '\n';
-    // std::cout << a + b << ' ' << b - a << ' ' << a * b << '\n';
-
-    // std::cout << a * x << ' ' << b * x << ' ' << a * y << ' ' << b * y << '\n';
-    // std::cout << a / x << ' ' << b / x << ' ' << a / y << ' ' << b / y << '\n';
-
-    using binary_fp = fixed_point<int32_t, 2>;
-
-    binary_fp f{10, -3};
-    binary_fp g{3,  -3};
-
-    // std::cout << f << ' ' << g << ' ' << f + g << '\n';
-
-    decimal32 l{2, 3};
-    decimal32 m{3, 2};
-
-    // std::cout << l << ' ' << m << '\n';
-    // std::cout << l + m << " <- should be 5\n";
-    // std::cout << m + l << " <- should be 5\n";
-
-    decimal32 o{2.222, 3};
-    decimal32 p{3.3333, 4};
-
-    // std::cout << o << ' ' << p << '\n';
-    // std::cout << o + p << " <- should be 5.5553\n";
-    // std::cout << p + o << " <- should be 5.5553\n";
-}
-
 } // namespace fp
 } // namespace cudf
