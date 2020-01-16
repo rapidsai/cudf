@@ -30,9 +30,9 @@ namespace cudf
  * It is assumed the elements in `keys_column` are unique and
  * are in a strict, total order. Meaning, `keys_column[i]` is _ordered before
  * `keys_column[i+1]` for all `i in [0,n-1)` where `n` is the number of keys.
- * 
+ *
  * The indices values must be in the range [0,keys_column.size()).
- * 
+ *
  * The null_mask and null count for the output column are copied from the indices column.
  *
  * ```
@@ -41,7 +41,7 @@ namespace cudf
  * d = make_dictionary_column(k,i)
  * d is now {["a","c","d"],[1,0,0,2,2]}
  * ```
- * 
+ *
  * @throw cudf::logic_error if keys_column contains nulls
  *
  * @param keys_column Column of unique, ordered values to use as the new dictionary column's keys.

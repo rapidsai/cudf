@@ -20,7 +20,7 @@
 
 namespace cudf
 {
-    
+
 /**
  * @brief A wrapper class for operations on a dictionary column.
  *

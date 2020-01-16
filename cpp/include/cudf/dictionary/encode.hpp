@@ -34,9 +34,9 @@ namespace dictionary
 
  * The output column has a child indices column that is of integer type and with
  * the same size as the input column.
- * 
+ *
  * The null_mask and null count are copied from the input column to the output column.
- * 
+ *
  * @throw cudf::logic_error - only INT32 is supported for the indices type.
  *
  * ```
