@@ -21,7 +21,7 @@
 #include <cudf/search.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
-#include <cudf/dictionary/dictionary_column_ops.hpp>
+#include <cudf/dictionary/encode.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 
