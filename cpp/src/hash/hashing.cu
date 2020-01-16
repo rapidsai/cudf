@@ -31,6 +31,7 @@ namespace {
 
 constexpr size_type BLOCK_SIZE = 512;
 constexpr size_type ROWS_PER_THREAD = 8;
+constexpr size_type ELEMENT_PER_BLOCK = 2;
 
 /** 
  * @brief  Functor to map a hash value to a particular 'bin' or partition number
@@ -197,16 +198,33 @@ void move_to_output_buffer(DataType const *input_buf,
 
   size_type ipartition;
 
-  // Calculate the offset in shared memory of each partition in this thread block
-  if (threadIdx.x == 0) {
-    // TODO: could use a block scan instead of serialization
-    partition_offset_shared[0] = 0;
+  typedef cub::BlockScan<size_type, BLOCK_SIZE> BlockScan;
+  __shared__ typename BlockScan::TempStorage temp_storage;
 
-    for (ipartition = 0; ipartition < num_partitions; ipartition ++) {
-      partition_offset_shared[ipartition + 1] = partition_offset_shared[ipartition]
-        + block_partition_sizes[ipartition * gridDim.x + blockIdx.x];
+  // use ELEMENT_PER_BLOCK=2 to support upto 1024 partitions 
+  size_type temp_histo[ELEMENT_PER_BLOCK];
+
+  for (int i = 0; i < ELEMENT_PER_BLOCK; ++i) {
+    if (ELEMENT_PER_BLOCK * threadIdx.x + i < num_partitions) {
+      temp_histo[i] = block_partition_sizes[blockIdx.x + (ELEMENT_PER_BLOCK * threadIdx.x + i) * gridDim.x]; 
+    } else {
+      temp_histo[i] = 0;
     }
   }
+
+  __syncthreads();
+
+  BlockScan(temp_storage).ExclusiveSum(temp_histo, temp_histo);
+
+  __syncthreads();
+
+  for (int i = 0; i < ELEMENT_PER_BLOCK; ++i) {
+    if (ELEMENT_PER_BLOCK * threadIdx.x + i < num_partitions) {
+      partition_offset_shared[ELEMENT_PER_BLOCK * threadIdx.x + i] = temp_histo[i]; 
+    } 
+  }
+
+  __syncthreads();
 
   // Fetch the offset in the output buffer of each partition in this thread block
   ipartition = threadIdx.x;
