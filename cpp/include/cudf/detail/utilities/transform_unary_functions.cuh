@@ -116,10 +116,10 @@ struct transformer_meanvar
     using ResultType = meanvar<ElementType>;
 
     CUDA_HOST_DEVICE_CALLABLE
-    ResultType operator() (thrust::pair<ElementType, bool> const& pair)
+    ResultType operator()(thrust::pair<ElementType, bool> const& pair)
     {
         ElementType v = pair.first;
-        return ResultType(v, v*v, (pair.second)? 1 : 0 );
+        return meanvar<ElementType>(v, v*v, (pair.second)? 1 : 0 );
     };
 };
 
