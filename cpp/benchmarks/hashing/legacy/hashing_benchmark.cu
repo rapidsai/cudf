@@ -44,20 +44,21 @@ void BM_hash_partition(benchmark::State& state) {
   auto columns_to_hash = std::vector<cudf::size_type>(num_cols);
   std::iota(columns_to_hash.begin(), columns_to_hash.end(), 0);
 
-  // Create output columns
-  std::vector<column_wrapper<T>> output_columns(num_cols, {
-      static_cast<cudf::size_type>(num_rows), 
-      [](cudf::size_type row) { return static_cast<T>(row); }
-    });
-  std::vector<gdf_column*> raw_output(num_cols);
-  std::transform(output_columns.begin(), output_columns.end(),
-    raw_output.begin(), [](auto& col) { return col.get(); });
-
-  std::vector<int> output_offsets(num_partitions);
-
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
-    // TODO for fair comparison, allocate and free output inside loop
+
+    // Allocate output memory inside loop for fair benchmark
+    std::vector<column_wrapper<T>> output_columns(num_cols, {
+        static_cast<cudf::size_type>(num_rows), 
+        [](cudf::size_type row) { return static_cast<T>(row); }
+      });
+
+    std::vector<gdf_column*> raw_output(num_cols);
+    std::transform(output_columns.begin(), output_columns.end(),
+      raw_output.begin(), [](auto& col) { return col.get(); });
+
+    std::vector<int> output_offsets(num_partitions);
+
     gdf_hash_partition(num_cols, raw_input.data(), 
       columns_to_hash.data(), columns_to_hash.size(), num_partitions,
       raw_output.data(), output_offsets.data(), GDF_HASH_MURMUR3);
@@ -71,6 +72,6 @@ BENCHMARK_DEFINE_F(Hashing, gdf_hash_partition)
 
 BENCHMARK_REGISTER_F(Hashing, gdf_hash_partition)
   ->RangeMultiplier(2)
-  ->Ranges({{1<<17, 1<<20}, {32, 128}, {128, 512}})
+  ->Ranges({{1<<17, 1<<21}, {32, 128}, {128, 1024}})
   ->Unit(benchmark::kMillisecond)
   ->UseManualTime();

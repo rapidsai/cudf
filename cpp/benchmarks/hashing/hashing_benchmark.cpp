@@ -61,6 +61,6 @@ BENCHMARK_DEFINE_F(Hashing, hash_partition)
 
 BENCHMARK_REGISTER_F(Hashing, hash_partition)
   ->RangeMultiplier(2)
-  ->Ranges({{1<<17, 1<<20}, {32, 128}, {128, 512}})
+  ->Ranges({{1<<17, 1<<21}, {32, 128}, {128, 1024}})
   ->Unit(benchmark::kMillisecond)
   ->UseManualTime();
