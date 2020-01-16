@@ -44,17 +44,13 @@ def path_or_buf(datadir):
     yield _make_path_or_buf
 
 
-@pytest.mark.skip(
-    reason="This test segfaults occasionally. Skipping until "
-    "we can figure out why."
-)
 @pytest.mark.filterwarnings("ignore:Using CPU")
 @pytest.mark.parametrize("engine", ["cudf"])
 @pytest.mark.parametrize("inputfile, columns", [("example.avro", None)])
 def test_avro_reader_basic(datadir, inputfile, columns, engine):
     path = datadir / inputfile
     try:
-        reader = fa.reader(avro_file)
+        reader = fa.reader(open(path, "rb"))
     except Exception as excpr:
         if type(excpr).__name__ == "FileNotFoundError":
             pytest.skip(".avro file is not found")
