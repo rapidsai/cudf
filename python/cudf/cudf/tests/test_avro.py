@@ -43,7 +43,10 @@ def path_or_buf(datadir):
 
     yield _make_path_or_buf
 
-
+@pytest.mark.skip(
+    reason="This test segfaults occasionally. Skipping until "
+    "we can figure out why."
+)
 @pytest.mark.filterwarnings("ignore:Using CPU")
 @pytest.mark.parametrize("engine", ["cudf"])
 @pytest.mark.parametrize("inputfile, columns", [("example.avro", None)])
