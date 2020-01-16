@@ -13,6 +13,7 @@
 - PR #3627 Adding cudf::sort and cudf::sort_by_key
 - PR #3597 Implement new sort based groupby
 - PR #3776 Column equivalence comparator (using epsilon for float equality)
+- PR #3667 Define and implement round-robin partition API.
 - PR #3690 Add bools_to_mask
 - PR #3683 Added support for multiple delimiters in `nvtext.token_count()`
 
@@ -47,9 +48,11 @@
 - PR #3699 Stringify libcudacxx headers for binary op JIT
 - PR #3697 Improve column insert performance for wide frames
 - PR #3616 Add aggregation infrastructure for argmax/argmin.
+- PR #3653 Make `gather_bitmask_kernel` more reusable.
 - PR #3710 Remove multiple CMake configuration steps from root build script
 - PR #3657 Define and implement compiled binops for string column comparisons
 - PR #3520 Change read_parquet defaults and add warnings
+- PR #3780 Java APIs for selecting a GPU
 
 ## Bug Fixes
 
@@ -69,9 +72,10 @@
 - PR #3684 Fix ends_with logic for matching string case
 - PR #3687 Fixed bug while passing input GPU memory pointer in `nvtext.scatter_count()`
 - PR #3701 Fix hash_partition hashing all columns instead of columns_to_hash
-- PR #3694 Allow for null columns parameter in csv_writer`
+- PR #3694 Allow for null columns parameter in `csv_writer`
 - PR #3706 Removed extra type-dispatcher call from merge
 - PR #3704 Changed the default delimiter to `whitespace` for nvtext methods.
+- PR #3741 Construct DataFrame from dict-of-Series with alignment
 - PR #3724 Update rmm version to match release
 - PR #3743 Fix for `None` data in `__array_interface__`
 - PR #3731 Fix performance of zero sized dataframe slice
@@ -82,6 +86,9 @@
 - PR #3730 CSV reader: Set invalid float values to NaN/null
 - PR #3670 Floor when casting between timestamps of different precisions
 - PR #3728 Fix apply_boolean_mask issue with non-null string column
+- PR #3769 Don't look for a `name` attribute in column
+- PR #3783 Bind cuDF operators to Dask Dataframe
+- PR #3775 Fix segfault when reading compressed CSV files larger than 4GB
 
 
 # cuDF 0.11.0 (11 Dec 2019)
