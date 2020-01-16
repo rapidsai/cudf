@@ -215,7 +215,8 @@ struct rolling_window_launcher
 
 
   template<aggregation::Kind op, typename WindowIterator>
-  std::unique_ptr<column> operator()(column_view const& input,
+  std::enable_if_t<!(op == aggregation::MEAN), std::unique_ptr<column>>
+  operator()(column_view const& input,
                                      WindowIterator preceding_window_begin,
                                      WindowIterator following_window_begin,
                                      size_type min_periods,
@@ -224,14 +225,35 @@ struct rolling_window_launcher
                                      cudaStream_t stream)
   {
       return launch <InputType, typename corresponding_operator<op>::type, op, WindowIterator> (
-                                     input,
-                                     preceding_window_begin,
-                                     following_window_begin,
-                                     min_periods,
-                                     aggr,
-                                     mr,
-                                     stream);
+              input,
+              preceding_window_begin,
+              following_window_begin,
+              min_periods,
+              aggr,
+              mr,
+              stream);
   }
+
+  template<aggregation::Kind op, typename WindowIterator>
+  std::enable_if_t<(op == aggregation::MEAN), std::unique_ptr<column>>
+  operator()(column_view const& input,
+                                     WindowIterator preceding_window_begin,
+                                     WindowIterator following_window_begin,
+                                     size_type min_periods,
+                                     std::unique_ptr<aggregation> const& aggr,
+                                     rmm::mr::device_memory_resource *mr,
+                                     cudaStream_t stream) {
+
+      return launch <InputType, cudf::DeviceSum, op, WindowIterator> (
+              input,
+              preceding_window_begin,
+              following_window_begin,
+              min_periods,
+              aggr,
+              mr,
+              stream);
+  }
+
 
 };
 
