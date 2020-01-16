@@ -595,7 +595,7 @@ add_library(cudf
             src/scalar/scalar_factories.cpp
             src/dictionary/dictionary_column_view.cu
             src/dictionary/dictionary_factories.cu
-            src/dictionary/dictionary_column_ops.cu
+            src/dictionary/encode.cu
             src/groupby/groupby.cu
             src/groupby/hash/groupby.cu
             src/groupby/sort/groupby.cu

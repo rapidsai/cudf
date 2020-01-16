@@ -17,7 +17,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/null_mask.hpp>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 
 
 namespace cudf
@@ -57,6 +57,23 @@ std::unique_ptr<column> encode(
     data_type indices_type = data_type{INT32},
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
     cudaStream_t stream = 0);
+
+/**
+ * @brief Create a column by gathering the keys from the provided
+ * dictionary_column into a new column using the indices from that column.
+ *
+ * ```
+ * d1 = {["a","c","d"],[2,0,1,0]}
+ * s = decode(d1)
+ * s is now ["d","a","c","a"]
+ * ```
+ *
+ * @param dictionary_column Existing dictionary column.
+ * @param mr Resource for allocating memory for the output.
+ * @return New column with type matching the dictionary_column's keys.
+ */
+std::unique_ptr<column> decode( dictionary_column_view const& dictionary_column,
+                                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 } // namespace dictionary
 } // namespace cudf
