@@ -69,7 +69,7 @@ def test_sizeof_dataframe():
 
 def test_pickle_index():
     nelem = 10
-    idx = GenericIndex(rmm.to_device(np.arange(nelem)))
+    idx = GenericIndex(rmm.to_device(np.arange(nelem)), name="a")
     pickled = pickle.dumps(idx)
     out = pickle.loads(pickled)
     assert idx == out
