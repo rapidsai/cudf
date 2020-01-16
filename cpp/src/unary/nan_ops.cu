@@ -71,8 +71,8 @@ std::unique_ptr<column> is_nan(cudf::column_view const& input,
                                    rmm::mr::get_default_resource(),
                                cudaStream_t stream = 0) {
     
-    auto predicate = [] __device__ (auto element) {
-        return element.second and std::isnan(element.first);
+    auto predicate = [] __device__ (auto element_validity_pair) {
+        return element_validity_pair.second and std::isnan(element_validity_pair.first);
     };
 
     return cudf::experimental::type_dispatcher(input.type(), nan_dispatcher{},
@@ -80,17 +80,17 @@ std::unique_ptr<column> is_nan(cudf::column_view const& input,
 }
 
 /**
- * @copydoc cudf::experimental::is_notnan
+ * @copydoc cudf::experimental::is_not_nan
  *
  * @param[in] stream Optional CUDA stream on which to execute kernels
  */
-std::unique_ptr<column> is_notnan(cudf::column_view const& input,
+std::unique_ptr<column> is_not_nan(cudf::column_view const& input,
                                  rmm::mr::device_memory_resource* mr=
                                      rmm::mr::get_default_resource(),
                                  cudaStream_t stream = 0) {
     
-    auto predicate = [] __device__ (auto element) {
-        return !element.second or !std::isnan(element.first);
+    auto predicate = [] __device__ (auto element_validity_pair) {
+        return !element_validity_pair.second or !std::isnan(element_validity_pair.first);
     };
     
     return cudf::experimental::type_dispatcher(input.type(), nan_dispatcher{},
@@ -105,10 +105,10 @@ std::unique_ptr<column> is_nan(cudf::column_view const& input,
     return detail::is_nan(input, mr);
 }
 
-std::unique_ptr<column> is_notnan(cudf::column_view const& input,
+std::unique_ptr<column> is_not_nan(cudf::column_view const& input,
                                  rmm::mr::device_memory_resource* mr) {
 
-    return detail::is_notnan(input, mr);
+    return detail::is_not_nan(input, mr);
 }
 
 }// namespace experimental
