@@ -47,10 +47,10 @@ namespace detail {
     }
 
     // forward declare TODO might be unnecessary one file restructure is done
-    template <typename Rep1, int Radix1, 
+    template <typename Rep1, int Radix1,
               typename Rep2, int Radix2, typename Binop>
-    fixed_point<Rep1, Radix1> max_exponent_binop(fixed_point<Rep1, Radix1> const& lhs, 
-                                                 fixed_point<Rep2, Radix2> const& rhs, 
+    fixed_point<Rep1, Radix1> max_exponent_binop(fixed_point<Rep1, Radix1> const& lhs,
+                                                 fixed_point<Rep2, Radix2> const& rhs,
                                                  Binop binop);
 }
 
@@ -83,14 +83,14 @@ public:
     }
 
     explicit fixed_point(scaled_integer<Rep> s) :
-        _value(s.value), 
+        _value(s.value),
         _scale(s.scale)
     {
     }
 
     // EXPLICIT CONVERSION OPERATOR
     template <typename U> // TODO SFINAE to make sure it is not a fixed_point type
-    explicit constexpr operator U() const { 
+    explicit constexpr operator U() const {
         return detail::shift<Radix>(static_cast<U>(_value), -_scale);
     }
 
@@ -108,41 +108,113 @@ public:
 
     template <typename Rep2, int Radix2>
     fixed_point<Rep2, Radix2>& operator*=(fixed_point<Rep2, Radix2> const& rhs) {
-        *this = *this * rhs; 
+        *this = *this * rhs;
         return *this;
     }
 
     template <typename Rep2, int Radix2>
     fixed_point<Rep2, Radix2>& operator-=(fixed_point<Rep2, Radix2> const& rhs) {
-        *this = *this - rhs; 
+        *this = *this - rhs;
         return *this;
     }
 
     template <typename Rep2, int Radix2>
     fixed_point<Rep2, Radix2>& operator/=(fixed_point<Rep2, Radix2> const& rhs) {
-        *this = *this / rhs; 
+        *this = *this / rhs;
         return *this;
     }
 
     // enable access to _value & _scale
-    template <typename Rep1, int Radix1, 
+    template <typename Rep1, int Radix1,
               typename Rep2, int Radix2, typename Binop>
-    friend fixed_point<Rep1, Radix1> detail::max_exponent_binop(fixed_point<Rep1, Radix1> const& lhs, 
-                                                                fixed_point<Rep2, Radix2> const& rhs, 
+    friend fixed_point<Rep1, Radix1> detail::max_exponent_binop(fixed_point<Rep1, Radix1> const& lhs,
+                                                                fixed_point<Rep2, Radix2> const& rhs,
                                                                 Binop binop);
 
     // enable access to _value & _scale
-    template <typename Rep1, int Radix1, 
+    template <typename Rep1, int Radix1,
               typename Rep2, int Radix2>
-    friend fixed_point<Rep1, Radix1> operator*(fixed_point<Rep1, Radix1> const& lhs, 
+    friend fixed_point<Rep1, Radix1> operator*(fixed_point<Rep1, Radix1> const& lhs,
                                                fixed_point<Rep2, Radix2> const& rhs);
 
     // enable access to _value & _scale
-    template <typename Rep1, int Radix1, 
+    template <typename Rep1, int Radix1,
               typename Rep2, int Radix2>
-    friend fixed_point<Rep1, Radix1> operator/(fixed_point<Rep1, Radix1> const& lhs, 
-                                               fixed_point<Rep2, Radix2> const& rhs);                                                  
+    friend fixed_point<Rep1, Radix1> operator/(fixed_point<Rep1, Radix1> const& lhs,
+                                               fixed_point<Rep2, Radix2> const& rhs);
 };
+
+namespace detail {
+    // this function is for binary operations like + and - which when the exponent (scale)
+    // differ for lhs and rhs, you take the max exponent of the two and shift the other
+    // fixed_point in order to have the same exponent
+    template<typename Rep1, int Radix1,
+             typename Rep2, int Radix2, typename Binop>
+    fixed_point<Rep1, Radix1> max_exponent_binop(fixed_point<Rep1, Radix1>  const& lhs,
+                                                 fixed_point<Rep2, Radix2> const& rhs,
+                                                 Binop binop) {
+
+        static_assert(std::is_same<Rep1, Rep2>::value, "Represenation types should be the same");
+        static_assert(Radix1 == Radix2,                "Radix types should be the same");
+
+        // if exponents (aka scales) are different
+        if (lhs._scale > rhs._scale) {
+            auto const rhs_shifted_value = detail::shift<Radix1>(rhs._value, lhs._scale - rhs._scale);
+            return fixed_point<Rep1, Radix1>{scaled_integer<Rep1>(binop(lhs._value, rhs_shifted_value), lhs._scale)};
+        } else if (rhs._scale > lhs._scale) {
+            auto lhs_shifted_value = detail::shift<Radix1>(lhs._value, rhs._scale - lhs._scale);
+            return fixed_point<Rep1, Radix1>{scaled_integer<Rep1>(binop(lhs_shifted_value, rhs._value), rhs._scale)};
+        }
+
+        // if exponents (aka scales) are the same
+        return fixed_point<Rep1, Radix1>{scaled_integer<Rep1>(binop(lhs._value, rhs._value), lhs._scale)};
+    }
+}
+
+// PLUS Operation
+template<typename Rep1, int Radix1,
+         typename Rep2, int Radix2>
+fixed_point<Rep1, Radix1> operator+(fixed_point<Rep1, Radix1> const& lhs,
+                                    fixed_point<Rep2, Radix2> const& rhs) {
+    return detail::max_exponent_binop(lhs, rhs, std::plus<>());
+}
+
+// MINUS Operation
+template<typename Rep1, int Radix1,
+         typename Rep2, int Radix2>
+fixed_point<Rep1, Radix1> operator-(fixed_point<Rep1, Radix1> const& lhs,
+                                    fixed_point<Rep2, Radix2> const& rhs) {
+    return detail::max_exponent_binop(lhs, rhs, std::minus<>());
+}
+
+// MULTIPLIES Operation
+template<typename Rep1, int Radix1,
+         typename Rep2, int Radix2>
+fixed_point<Rep1, Radix1> operator*(fixed_point<Rep1, Radix1> const& lhs,
+                                    fixed_point<Rep2, Radix2> const& rhs) {
+
+    static_assert(std::is_same<Rep1, Rep2>::value, "Represenation types should be the same");
+    static_assert(Radix1 == Radix2,                "Radix types should be the same");
+
+    return fixed_point<Rep1, Radix1>{scaled_integer<Rep1>(lhs._value * rhs._value, lhs._scale + rhs._scale)};
+}
+
+// DIVISION Operation
+template<typename Rep1, int Radix1,
+         typename Rep2, int Radix2>
+fixed_point<Rep1, Radix1> operator/(fixed_point<Rep1, Radix1> const& lhs,
+                                    fixed_point<Rep2, Radix2> const& rhs) {
+
+    static_assert(std::is_same<Rep1, Rep2>::value, "Represenation types should be the same");
+    static_assert(Radix1 == Radix2,                "Radix types should be the same");
+
+    return fixed_point<Rep1, Radix1>{scaled_integer<Rep1>(lhs._value / rhs._value, lhs._scale - rhs._scale)};
+}
+
+template <typename Rep, int Radix>
+std::ostream& operator<<(std::ostream& os, fixed_point<Rep, Radix> const& si) {
+    return os << si.get();
+}
 
 } // namespace fp
 } // namespace cudf

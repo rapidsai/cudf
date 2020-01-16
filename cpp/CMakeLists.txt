@@ -598,7 +598,6 @@ add_library(cudf
             src/groupby/hash/groupby.cu
             src/groupby/sort/groupby.cu
             src/aggregation/aggregation.cpp
-            src/fixed_point/fixed_point.cpp
 )
 
 # Rename installation to proper names for later finding
