@@ -40,6 +40,121 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/gather.cuh>
 
+
+namespace {
+  
+template<typename T>
+using VectorT = rmm::device_vector<T>;  
+/**
+ * @brief Handles the "degenerate" case num_partitions >= num_rows.
+ *
+ * Specifically,
+ * If num_partitions == nrows:
+ * Then, offsets = [0..nrows-1]
+ * gather_row_indices = rotate [0..nrows-1] right by start_partition positions;
+ *
+ * If num_partitions > nrows:
+ * Then, let:
+ * dbg = generate a directed bipartite graph with num_partitions nodes and nrows edges, 
+ * so that node j has an edge to node (j+start_partition) % num_partitions, for j = 0,...,nrows-1;
+ *
+ * transpose_dbg = transpose graph of dbg; (i.e., (i -> j) edge in dbg means (j -> i) edge in transpose);
+ *
+ * (offsets, indxs) = (row_offsets, col_indices) of transpose_dbg;
+ * where (row_offsets, col_indices) are the CSR format of the graph;
+ *
+ * @Param[in] input The input table to be round-robin partitioned
+ * @Param[in] num_partitions Number of partitions for the table
+ * @Param[in] start_partition Index of the 1st partition
+ * @Param[in] mr Device memory allocator
+ * @Param[in] stream cuda stream to execute on
+ *
+ * @Returns A std::pair consisting of an unique_ptr to the partitioned table and the partition offsets for each partition within the table
+ */
+std::pair<std::unique_ptr<cudf::experimental::table>,
+          std::vector<cudf::size_type>>
+degenerate_partitions(cudf::table_view const& input,
+                      cudf::size_type num_partitions,
+                      cudf::size_type start_partition,
+                      rmm::mr::device_memory_resource* mr,
+                      cudaStream_t stream)
+{
+  auto nrows = input.num_rows();
+    
+  //iterator for partition index rotated right by start_partition positions:
+  //
+  auto rotated_iter_begin =
+    thrust::make_transform_iterator(thrust::make_counting_iterator<cudf::size_type>(0),
+                                    [num_partitions, start_partition] __device__ (auto index){
+                                      return (index + num_partitions - start_partition) % num_partitions;
+                                    });
+
+  if( num_partitions == nrows ) {
+    VectorT<cudf::size_type> partition_offsets(num_partitions, cudf::size_type{0});
+    auto exec = rmm::exec_policy(stream);
+    thrust::sequence(exec->on(stream),
+                     partition_offsets.begin(), partition_offsets.end());
+
+    auto uniq_tbl = cudf::experimental::detail::gather(input,
+                                                       rotated_iter_begin, rotated_iter_begin + nrows,//map
+                                                       false, false, false,
+                                                       mr,
+                                                       stream);
+
+    auto ret_pair =
+      std::make_pair(std::move(uniq_tbl), std::vector<cudf::size_type>(num_partitions));
+
+    cudaMemcpy(ret_pair.second.data(), partition_offsets.data().get(), sizeof(cudf::size_type)*num_partitions, cudaMemcpyDeviceToHost);
+
+    return ret_pair;
+  } else {  //( num_partitions > nrows )
+    VectorT<cudf::size_type> d_row_indices(nrows, cudf::size_type{0});
+
+    //copy rotated right partiton indexes that
+    //fall in the interval [0, nrows):
+    //(this relies on a _stable_ copy_if())
+    //
+    auto exec = rmm::exec_policy(stream);
+    thrust::copy_if(exec->on(stream),
+                    rotated_iter_begin, rotated_iter_begin + num_partitions,
+                    d_row_indices.begin(),
+                    [nrows] __device__ (auto index){
+                      return (index < nrows);
+                    });
+
+    //...and then use the result, d_row_indices, as gather map:
+    //
+    auto uniq_tbl = cudf::experimental::detail::gather(input,
+                                                       d_row_indices.begin(), d_row_indices.end(),//map
+                                                       false, false, false,
+                                                       mr,
+                                                       stream);
+
+    auto ret_pair =
+      std::make_pair(std::move(uniq_tbl), std::vector<cudf::size_type>(num_partitions));
+    
+    //offsets (part 1: compute partition sizes):
+    //
+    VectorT<cudf::size_type> nedges(num_partitions, cudf::size_type{0});
+    thrust::transform(exec->on(stream),
+                      rotated_iter_begin, rotated_iter_begin + num_partitions,
+                      nedges.begin(),
+                      [nrows] __device__ (auto index){
+                        return (index < nrows ? 1 : 0);
+                      });
+    
+    //offsets (part 2: compute partition offsets):
+    //
+    VectorT<cudf::size_type> partition_offsets(num_partitions, cudf::size_type{0});
+    thrust::exclusive_scan(nedges.begin(), nedges.end(), partition_offsets.begin());
+
+    cudaMemcpy(ret_pair.second.data(), partition_offsets.data().get(), sizeof(cudf::size_type)*num_partitions, cudaMemcpyDeviceToHost);
+
+    return ret_pair;
+  }
+}
+} //anonym.
+
 namespace cudf {
 namespace experimental { 
 namespace detail {
@@ -53,12 +168,16 @@ round_robin_partition(table_view const& input,
                       cudaStream_t stream = 0)
 {
   auto nrows = input.num_rows();
-
-  CUDF_EXPECTS( num_partitions > 1 && num_partitions < nrows, "Incorrect number of partitions. Must be greater than 1 and less than number of rows." );
+  
+  CUDF_EXPECTS( num_partitions > 1, "Incorrect number of partitions. Must be greater than 1." );
   CUDF_EXPECTS( start_partition < num_partitions, "Incorrect start_partition index. Must be less than number of partitions." );
 
-  //TODO: handle num_partitions >= nrows case;
-  
+  //handle degenerate case:
+  //
+  if (num_partitions >= nrows ) {
+    return degenerate_partitions(input, num_partitions, start_partition, mr, stream);
+  }
+
   auto num_partitions_max_size = nrows % num_partitions;//# partitions of max size
   cudf::size_type max_partition_size = std::ceil( static_cast<double>(nrows) / static_cast<double>(num_partitions));// max size of partitions
   
