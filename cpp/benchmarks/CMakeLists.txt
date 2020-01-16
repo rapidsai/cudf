@@ -87,6 +87,14 @@ set(JOIN_BENCH_SRC
 ConfigureBench(JOIN_BENCH "${JOIN_BENCH_SRC}")
 
 ###################################################################################################
+# - iterator benchmark ------------------------------------------------------------------------------
+
+set(ITERATOR_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/iterator/iterator_benchmark.cu")
+
+ConfigureBench(ITERATOR_BENCH "${ITERATOR_BENCH_SRC}")
+
+###################################################################################################
 # - search benchmark ------------------------------------------------------------------------------
 
 set(SEARCH_BENCH_SRC

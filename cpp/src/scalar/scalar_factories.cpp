@@ -62,4 +62,18 @@ std::unique_ptr<scalar> make_timestamp_scalar(
                                        stream, mr);
 }
 
+namespace {
+struct default_scalar_functor {
+  template <typename T>
+  auto operator()() {
+    using ScalarType = experimental::scalar_type_t<T>;
+    return std::unique_ptr<scalar>(new ScalarType);
+  }
+};
+}  // namespace
+
+std::unique_ptr<scalar> make_default_constructed_scalar(data_type type) {
+  return experimental::type_dispatcher(type, default_scalar_functor{});
+}
+
 }  // namespace cudf

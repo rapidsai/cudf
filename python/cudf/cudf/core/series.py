@@ -651,7 +651,7 @@ class Series(Table):
                 return func(lhs.fillna(fill_value), rhs)
         return func(lhs, rhs)
 
-    def add(self, other, fill_value=None):
+    def add(self, other, fill_value=None, axis=0):
         """Addition of series and other, element-wise
         (binary operator add).
 
@@ -662,12 +662,14 @@ class Series(Table):
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
         """
+        if axis != 0:
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._filled_binaryop(other, operator.add, fill_value)
 
     def __add__(self, other):
         return self._binaryop(other, "add")
 
-    def radd(self, other, fill_value=None):
+    def radd(self, other, fill_value=None, axis=0):
         """Addition of series and other, element-wise
         (binary operator radd).
 
@@ -678,12 +680,14 @@ class Series(Table):
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
         """
+        if axis != 0:
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._filled_binaryop(other, operator.add, fill_value, True)
 
     def __radd__(self, other):
         return self._rbinaryop(other, "add")
 
-    def sub(self, other, fill_value=None):
+    def sub(self, other, fill_value=None, axis=0):
         """Subtraction of series and other, element-wise
         (binary operator sub).
 
@@ -694,12 +698,14 @@ class Series(Table):
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
         """
+        if axis != 0:
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._filled_binaryop(other, operator.sub, fill_value)
 
     def __sub__(self, other):
         return self._binaryop(other, "sub")
 
-    def rsub(self, other, fill_value=None):
+    def rsub(self, other, fill_value=None, axis=0):
         """Subtraction of series and other, element-wise
         (binary operator rsub).
 
@@ -710,12 +716,14 @@ class Series(Table):
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
         """
+        if axis != 0:
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._filled_binaryop(other, operator.sub, fill_value, True)
 
     def __rsub__(self, other):
         return self._rbinaryop(other, "sub")
 
-    def mul(self, other, fill_value=None):
+    def mul(self, other, fill_value=None, axis=0):
         """Multiplication of series and other, element-wise
         (binary operator mul).
 
@@ -726,12 +734,14 @@ class Series(Table):
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
         """
+        if axis != 0:
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._filled_binaryop(other, operator.mul, fill_value)
 
     def __mul__(self, other):
         return self._binaryop(other, "mul")
 
-    def rmul(self, other, fill_value=None):
+    def rmul(self, other, fill_value=None, axis=0):
         """Multiplication of series and other, element-wise
         (binary operator rmul).
 
@@ -742,12 +752,14 @@ class Series(Table):
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
         """
+        if axis != 0:
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._filled_binaryop(other, operator.mul, fill_value, True)
 
     def __rmul__(self, other):
         return self._rbinaryop(other, "mul")
 
-    def mod(self, other, fill_value=None):
+    def mod(self, other, fill_value=None, axis=0):
         """Modulo of series and other, element-wise
         (binary operator mod).
 
@@ -758,12 +770,14 @@ class Series(Table):
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
         """
+        if axis != 0:
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._filled_binaryop(other, operator.mod, fill_value)
 
     def __mod__(self, other):
         return self._binaryop(other, "mod")
 
-    def rmod(self, other, fill_value=None):
+    def rmod(self, other, fill_value=None, axis=0):
         """Modulo of series and other, element-wise
         (binary operator rmod).
 
@@ -774,12 +788,14 @@ class Series(Table):
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
         """
+        if axis != 0:
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._filled_binaryop(other, operator.mod, fill_value, True)
 
     def __rmod__(self, other):
         return self._rbinaryop(other, "mod")
 
-    def pow(self, other, fill_value=None):
+    def pow(self, other, fill_value=None, axis=0):
         """Exponential power of series and other, element-wise
         (binary operator pow).
 
@@ -790,12 +806,14 @@ class Series(Table):
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
         """
+        if axis != 0:
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._filled_binaryop(other, operator.pow, fill_value)
 
     def __pow__(self, other):
         return self._binaryop(other, "pow")
 
-    def rpow(self, other, fill_value=None):
+    def rpow(self, other, fill_value=None, axis=0):
         """Exponential power of series and other, element-wise
         (binary operator rpow).
 
@@ -806,12 +824,14 @@ class Series(Table):
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
         """
+        if axis != 0:
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._filled_binaryop(other, operator.pow, fill_value, True)
 
     def __rpow__(self, other):
         return self._rbinaryop(other, "pow")
 
-    def floordiv(self, other, fill_value=None):
+    def floordiv(self, other, fill_value=None, axis=0):
         """Integer division of series and other, element-wise
         (binary operator floordiv).
 
@@ -822,12 +842,14 @@ class Series(Table):
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
         """
+        if axis != 0:
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._filled_binaryop(other, operator.floordiv, fill_value)
 
     def __floordiv__(self, other):
         return self._binaryop(other, "floordiv")
 
-    def rfloordiv(self, other, fill_value=None):
+    def rfloordiv(self, other, fill_value=None, axis=0):
         """Integer division of series and other, element-wise
         (binary operator rfloordiv).
 
@@ -838,6 +860,8 @@ class Series(Table):
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
         """
+        if axis != 0:
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._filled_binaryop(
             other, operator.floordiv, fill_value, True
         )
@@ -845,7 +869,7 @@ class Series(Table):
     def __rfloordiv__(self, other):
         return self._rbinaryop(other, "floordiv")
 
-    def truediv(self, other, fill_value=None):
+    def truediv(self, other, fill_value=None, axis=0):
         """Floating division of series and other, element-wise
         (binary operator truediv).
 
@@ -856,6 +880,8 @@ class Series(Table):
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
         """
+        if axis != 0:
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._filled_binaryop(other, operator.truediv, fill_value)
 
     def __truediv__(self, other):
@@ -865,7 +891,7 @@ class Series(Table):
         else:
             return self._binaryop(other, "truediv")
 
-    def rtruediv(self, other, fill_value=None):
+    def rtruediv(self, other, fill_value=None, axis=0):
         """Floating division of series and other, element-wise
         (binary operator rtruediv).
 
@@ -876,6 +902,8 @@ class Series(Table):
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
         """
+        if axis != 0:
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._filled_binaryop(other, operator.truediv, fill_value, True)
 
     def __rtruediv__(self, other):
@@ -969,7 +997,7 @@ class Series(Table):
         libcudf.nvtx.nvtx_range_pop()
         return result
 
-    def eq(self, other, fill_value=None):
+    def eq(self, other, fill_value=None, axis=0):
         """Equal to of series and other, element-wise
         (binary operator eq).
 
@@ -980,6 +1008,8 @@ class Series(Table):
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
         """
+        if axis != 0:
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._filled_binaryop(other, operator.eq, fill_value)
 
     def __eq__(self, other):
@@ -992,7 +1022,7 @@ class Series(Table):
             return False
         return self._unordered_compare(other, "eq").min()
 
-    def ne(self, other, fill_value=None):
+    def ne(self, other, fill_value=None, axis=0):
         """Not equal to of series and other, element-wise
         (binary operator ne).
 
@@ -1003,12 +1033,14 @@ class Series(Table):
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
         """
+        if axis != 0:
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._filled_binaryop(other, operator.ne, fill_value)
 
     def __ne__(self, other):
         return self._unordered_compare(other, "ne")
 
-    def lt(self, other, fill_value=None):
+    def lt(self, other, fill_value=None, axis=0):
         """Less than of series and other, element-wise
         (binary operator lt).
 
@@ -1019,12 +1051,14 @@ class Series(Table):
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
         """
+        if axis != 0:
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._filled_binaryop(other, operator.lt, fill_value)
 
     def __lt__(self, other):
         return self._ordered_compare(other, "lt")
 
-    def le(self, other, fill_value=None):
+    def le(self, other, fill_value=None, axis=0):
         """Less than or equal to of series and other, element-wise
         (binary operator le).
 
@@ -1035,12 +1069,14 @@ class Series(Table):
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
         """
+        if axis != 0:
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._filled_binaryop(other, operator.le, fill_value)
 
     def __le__(self, other):
         return self._ordered_compare(other, "le")
 
-    def gt(self, other, fill_value=None):
+    def gt(self, other, fill_value=None, axis=0):
         """Greater than of series and other, element-wise
         (binary operator gt).
 
@@ -1051,12 +1087,14 @@ class Series(Table):
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
         """
+        if axis != 0:
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._filled_binaryop(other, operator.gt, fill_value)
 
     def __gt__(self, other):
         return self._ordered_compare(other, "gt")
 
-    def ge(self, other, fill_value=None):
+    def ge(self, other, fill_value=None, axis=0):
         """Greater than or equal to of series and other, element-wise
         (binary operator ge).
 
@@ -1067,6 +1105,8 @@ class Series(Table):
             Value to fill nulls with before computation. If data in both
             corresponding Series locations is null the result will be null
         """
+        if axis != 0:
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return self._filled_binaryop(other, operator.ge, fill_value)
 
     def __ge__(self, other):
