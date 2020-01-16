@@ -671,6 +671,9 @@ class MultiIndex(Index):
             )
         return self._is_monotonic_decreasing
 
+    def unique(self):
+        return MultiIndex.from_frame(self._source_data.drop_duplicates())
+
     def repeat(self, repeats, axis=None):
         assert axis in (None, 0)
         return MultiIndex.from_frame(
