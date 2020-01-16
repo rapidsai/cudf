@@ -64,7 +64,8 @@ struct replace_multi_regex_fn
     {
         if( d_strings.is_null(idx) )
             return 0;
-        u_char data1[stack_size], data2[stack_size];
+        u_char data1[stack_size];
+        u_char data2[stack_size];
         string_view d_str = d_strings.element<string_view>(idx);
         auto nchars = d_str.length();     // number of characters in input string
         auto nbytes = d_str.size_bytes(); // number of bytes in input string
@@ -72,7 +73,8 @@ struct replace_multi_regex_fn
         char* out_ptr = nullptr;  // running output pointer (o)
         if( d_offsets )
             out_ptr = d_chars + d_offsets[idx];
-        size_type lpos = 0, ch_pos = 0;
+        size_type lpos = 0;
+        size_type ch_pos = 0;
         while( ch_pos < nchars )
         {
             for( size_type ptn_idx=0; ptn_idx < number_of_patterns; ++ptn_idx )
