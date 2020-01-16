@@ -148,8 +148,8 @@ protected:
     return col.release();
   }
 
-  template<typename agg_op, bool is_mean,
-           std::enable_if_t<cudf::detail::is_supported<T, agg_op, is_mean>()>* = nullptr>
+  template<typename agg_op, cudf::experimental::aggregation::Kind k, bool is_mean,
+           std::enable_if_t<cudf::detail::is_supported<T, agg_op, k, is_mean>()>* = nullptr>
   std::unique_ptr<cudf::column>
   create_reference_output(cudf::column_view const& input,
                           std::vector<size_type> const& preceding_window_col,
@@ -198,8 +198,8 @@ protected:
     return col.release();
   }
 
-  template<typename  agg_op, bool is_mean,
-           std::enable_if_t<!cudf::detail::is_supported<T, agg_op, is_mean>()>* = nullptr>
+  template<typename  agg_op, cudf::experimental::aggregation::Kind k, bool is_mean,
+           std::enable_if_t<!cudf::detail::is_supported<T, agg_op, k, is_mean>()>* = nullptr>
   std::unique_ptr<cudf::column> create_reference_output(cudf::column_view const& input,
                                                         std::vector<size_type> const& preceding_window_col,
                                                         std::vector<size_type> const& following_window_col,
@@ -217,18 +217,18 @@ protected:
     // unroll aggregation types
     switch(op->kind) {
     case cudf::experimental::aggregation::SUM:
-      return create_reference_output<cudf::DeviceSum, false>(input, preceding_window,
+      return create_reference_output<cudf::DeviceSum, cudf::experimental::aggregation::SUM, false>(input, preceding_window,
                                                              following_window, min_periods);
     case cudf::experimental::aggregation::MIN:
-      return create_reference_output<cudf::DeviceMin, false>(input, preceding_window,
+      return create_reference_output<cudf::DeviceMin, cudf::experimental::aggregation::MIN, false>(input, preceding_window,
                                                              following_window, min_periods);
     case cudf::experimental::aggregation::MAX:
-      return create_reference_output<cudf::DeviceMax, false>(input, preceding_window,
+      return create_reference_output<cudf::DeviceMax, cudf::experimental::aggregation::MAX, false>(input, preceding_window,
                                                              following_window, min_periods);
     case cudf::experimental::aggregation::COUNT:
       return create_count_reference_output(input, preceding_window, following_window, min_periods);
     case cudf::experimental::aggregation::MEAN:
-      return create_reference_output<cudf::DeviceSum, true>(input, preceding_window,
+      return create_reference_output<cudf::DeviceSum, cudf::experimental::aggregation::MEAN, true>(input, preceding_window,
                                                             following_window, min_periods);
     default:
       return fixed_width_column_wrapper<T>({}).release();
