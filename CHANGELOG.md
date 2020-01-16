@@ -69,7 +69,7 @@
 - PR #3684 Fix ends_with logic for matching string case
 - PR #3687 Fixed bug while passing input GPU memory pointer in `nvtext.scatter_count()`
 - PR #3701 Fix hash_partition hashing all columns instead of columns_to_hash
-- PR #3694 Allow for null columns parameter in csv_writer`
+- PR #3694 Allow for null columns parameter in `csv_writer`
 - PR #3706 Removed extra type-dispatcher call from merge
 - PR #3704 Changed the default delimiter to `whitespace` for nvtext methods.
 - PR #3741 Construct DataFrame from dict-of-Series with alignment
@@ -83,6 +83,7 @@
 - PR #3730 CSV reader: Set invalid float values to NaN/null
 - PR #3670 Floor when casting between timestamps of different precisions
 - PR #3728 Fix apply_boolean_mask issue with non-null string column
+- PR #3769 Don't look for a `name` attribute in column
 - PR #3783 Bind cuDF operators to Dask Dataframe
 - PR #3775 Fix segfault when reading compressed CSV files larger than 4GB
 
