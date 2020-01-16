@@ -74,6 +74,7 @@
 - PR #3694 Allow for null columns parameter in csv_writer`
 - PR #3706 Removed extra type-dispatcher call from merge
 - PR #3704 Changed the default delimiter to `whitespace` for nvtext methods.
+- PR #3741 Construct DataFrame from dict-of-Series with alignment
 - PR #3724 Update rmm version to match release
 - PR #3743 Fix for `None` data in `__array_interface__`
 - PR #3731 Fix performance of zero sized dataframe slice
