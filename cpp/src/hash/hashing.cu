@@ -218,9 +218,13 @@ void move_to_output_buffer(DataType const *input_buf,
 
   __syncthreads();
 
+  if (threadIdx.x == 0) {
+    partition_offset_shared[0] = 0;
+  }
+
   for (int i = 0; i < ELEMENT_PER_BLOCK; ++i) {
     if (ELEMENT_PER_BLOCK * threadIdx.x + i < num_partitions) {
-      partition_offset_shared[ELEMENT_PER_BLOCK * threadIdx.x + i] = temp_histo[i]; 
+      partition_offset_shared[ELEMENT_PER_BLOCK * threadIdx.x + i + 1] = temp_histo[i]; 
     } 
   }
 
