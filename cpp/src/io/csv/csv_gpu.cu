@@ -679,8 +679,7 @@ __global__ void convertCsvToGdf(const char *raw_csv, const ParseOptions opts,
 
       // Modify start & end to ignore whitespace and quotechars
       long tempPos = pos - 1;
-      if (!is_na && dtype[actual_col].id() != cudf::type_id::CATEGORY &&
-          dtype[actual_col].id() != cudf::type_id::STRING) {
+      if (!is_na && dtype[actual_col].id() != cudf::type_id::STRING) {
         trim_field_start_end(raw_csv, &start, &tempPos, opts.quotechar);
       }
 
