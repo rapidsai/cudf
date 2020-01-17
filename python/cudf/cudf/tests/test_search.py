@@ -51,7 +51,7 @@ def test_searchsorted_categorical(side):
     expect = psr1.searchsorted(psr2, side)
     got = sr1.searchsorted(sr2, side)
 
-    assert_eq(expect, got.to_array())
+    assert_eq(expect, cupy.asnumpy(got))
 
 
 @pytest.mark.parametrize("side", ["left", "right"])
@@ -81,4 +81,4 @@ def test_searchsorted_datetime(side):
     expect = psr1.searchsorted(psr2, side)
     got = sr1.searchsorted(sr2, side)
 
-    assert_eq(expect, got.to_array())
+    assert_eq(expect, cupy.asnumpy(got))

@@ -751,7 +751,7 @@ def test_dataframe_hash_columns(nrows):
     gdf["a"] = data
     gdf["b"] = gdf.a + 100
     out = gdf.hash_columns(["a", "b"])
-    assert isinstance(out, Series)
+    assert isinstance(out, cupy.ndarray)
     assert len(out) == nrows
     assert out.dtype == np.int32
 
