@@ -133,20 +133,24 @@ degenerate_partitions(cudf::table_view const& input,
     auto ret_pair =
       std::make_pair(std::move(uniq_tbl), std::vector<cudf::size_type>(num_partitions));
     
-    //offsets (part 1: compute partition sizes):
+    //offsets (part 1: compute partition sizes);
+    //iterator for number of edges of the transposed bipartite graph:
     //
-    VectorT<cudf::size_type> nedges(num_partitions, cudf::size_type{0});
-    thrust::transform(exec->on(stream),
-                      rotated_iter_begin, rotated_iter_begin + num_partitions,
-                      nedges.begin(),
-                      [nrows] __device__ (auto index){
-                        return (index < nrows ? 1 : 0);
-                      });
+    auto nedges_iter_begin =
+      thrust::make_transform_iterator(thrust::make_counting_iterator<cudf::size_type>(0),
+                                      [nrows, num_partitions, start_partition] __device__ (auto index){
+                                        //this composes rotated_iter transform (above) iterator with
+                                        //calculating number of edges of transposed bi-graph:
+                                        //
+                                        auto rotated_index = (index + num_partitions - start_partition) % num_partitions;
+                                        
+                                        return (rotated_index < nrows ? 1 : 0);
+                                      });
     
     //offsets (part 2: compute partition offsets):
     //
     VectorT<cudf::size_type> partition_offsets(num_partitions, cudf::size_type{0});
-    thrust::exclusive_scan(nedges.begin(), nedges.end(), partition_offsets.begin());
+    thrust::exclusive_scan(nedges_iter_begin, nedges_iter_begin + num_partitions, partition_offsets.begin());
 
     cudaMemcpy(ret_pair.second.data(), partition_offsets.data().get(), sizeof(cudf::size_type)*num_partitions, cudaMemcpyDeviceToHost);
 
