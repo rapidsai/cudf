@@ -175,6 +175,50 @@ TYPED_TEST (ClampTestNumeric, InputNull){
     cudf::test::expect_columns_equal(expected, got->view());
 }
 
+template <typename T>
+struct ClampFloatTest : public cudf::test::BaseFixture{};
+
+TYPED_TEST_CASE(ClampFloatTest, cudf::test::FloatingPointTypes);
+
+TYPED_TEST(ClampFloatTest, WithNANandNoNull) {
+    using T = TypeParam;
+    using ScalarType = cudf::experimental::scalar_type_t<T>;
+
+    cudf::test::fixed_width_column_wrapper<T> input({8.0, 6.0, NAN, 3.0, 4.0, 5.0, 1.0, NAN, 2.0, 9.0});
+    auto lo_scalar = cudf::make_numeric_scalar(cudf::data_type(cudf::data_type{cudf::experimental::type_to_id<T>()}));
+    auto hi_scalar = cudf::make_numeric_scalar(cudf::data_type(cudf::data_type{cudf::experimental::type_to_id<T>()}));
+
+    static_cast<ScalarType*>(lo_scalar.get())->set_value(2.0);
+    static_cast<ScalarType*>(lo_scalar.get())->set_valid(true);
+    static_cast<ScalarType*>(hi_scalar.get())->set_value(6.0);
+    static_cast<ScalarType*>(hi_scalar.get())->set_valid(true);
+
+    auto got = cudf::experimental::clamp(input, *lo_scalar, *hi_scalar);
+    cudf::test::fixed_width_column_wrapper<T> expected({6.0, 6.0, NAN, 3.0, 4.0, 5.0, 2.0, NAN, 2.0, 6.0});
+
+    cudf::test::expect_columns_equal(expected, got->view());
+}
+
+TYPED_TEST(ClampFloatTest, WithNANandNull) {
+    using T = TypeParam;
+    using ScalarType = cudf::experimental::scalar_type_t<T>;
+
+    cudf::test::fixed_width_column_wrapper<T> input({8.0, 6.0, NAN, 3.0, 4.0, 5.0, 1.0, NAN, 2.0, 9.0}, {1, 1, 1, 0, 1, 1, 1, 0, 1, 1});
+    auto lo_scalar = cudf::make_numeric_scalar(cudf::data_type(cudf::data_type{cudf::experimental::type_to_id<T>()}));
+    auto hi_scalar = cudf::make_numeric_scalar(cudf::data_type(cudf::data_type{cudf::experimental::type_to_id<T>()}));
+
+    static_cast<ScalarType*>(lo_scalar.get())->set_value(2.0);
+    static_cast<ScalarType*>(lo_scalar.get())->set_valid(true);
+    static_cast<ScalarType*>(hi_scalar.get())->set_value(6.0);
+    static_cast<ScalarType*>(hi_scalar.get())->set_valid(true);
+
+    auto got = cudf::experimental::clamp(input, *lo_scalar, *hi_scalar);
+    cudf::test::fixed_width_column_wrapper<T> expected({6.0, 6.0, NAN, 3.0, 4.0, 5.0, 2.0, NAN, 2.0, 6.0}, {1, 1, 1, 0, 1, 1, 1, 0, 1, 1});
+
+    cudf::test::expect_columns_equal(expected, got->view());
+}
+
+
 struct ClampStringTest : public cudf::test::BaseFixture{};
 
 TEST_F(ClampStringTest, WithNullableColumn)

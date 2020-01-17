@@ -55,7 +55,7 @@ form_offsets_and_char_column (cudf::column_device_view input,
                     mr, stream));
     }
 
-    auto d_offsets = offsets_column->view().template data<int32_t>();
+    auto d_offsets = offsets_column->view().template data<size_type>();
     // build chars column
     size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
     auto chars_column = cudf::strings::detail::create_chars_child_column( strings_count, input.null_count(), bytes, mr, stream);
@@ -97,7 +97,7 @@ std::unique_ptr<cudf::column> clamp_string_column (strings_column_view const& in
         auto offsets_column(std::move(offset_and_char.first));
         auto chars_column(std::move(offset_and_char.second));
 
-        auto d_offsets = offsets_column->view().template data<int32_t>();
+        auto d_offsets = offsets_column->view().template data<size_type>();
         auto d_chars = chars_column->mutable_view().template data<char>();
         // fill in chars
         auto copy_transformer = [d_input, d_lo, d_hi, d_offsets, d_chars] __device__(size_type idx){
@@ -138,7 +138,7 @@ std::unique_ptr<cudf::column> clamp_string_column (strings_column_view const& in
         auto offsets_column(std::move(offset_and_char.first));
         auto chars_column(std::move(offset_and_char.second));
 
-        auto d_offsets = offsets_column->view().template data<int32_t>();
+        auto d_offsets = offsets_column->view().template data<size_type>();
         auto d_chars = chars_column->mutable_view().template data<char>();
         // fill in chars
         auto copy_transformer = [d_input, d_hi, d_offsets, d_chars] __device__(size_type idx){
@@ -177,7 +177,7 @@ std::unique_ptr<cudf::column> clamp_string_column (strings_column_view const& in
         auto offsets_column(std::move(offset_and_char.first));
         auto chars_column(std::move(offset_and_char.second));
 
-        auto d_offsets = offsets_column->view().template data<int32_t>();
+        auto d_offsets = offsets_column->view().template data<size_type>();
         auto d_chars = chars_column->mutable_view().template data<char>();
         // fill in chars
         auto copy_transformer = [d_input, d_lo, d_offsets, d_chars] __device__(size_type idx){
@@ -308,9 +308,9 @@ struct dispatch_clamp {
               cudaStream_t stream) {
 
         using ScalarType = cudf::experimental::scalar_type_t<string_view>;
-        auto lo_scalar = static_cast<ScalarType const*>(&lo);
-        auto hi_scalar = static_cast<ScalarType const*>(&hi);
-        return clamp_string_column (input, *lo_scalar, *hi_scalar, mr, stream);
+        auto lo_scalar = static_cast<ScalarType const&>(lo);
+        auto hi_scalar = static_cast<ScalarType const&>(hi);
+        return clamp_string_column (input, lo_scalar, hi_scalar, mr, stream);
     }
 };
 } //namespace
@@ -325,8 +325,8 @@ std::unique_ptr<column> clamp(column_view const& input,
                               scalar const& hi,
                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                               cudaStream_t stream = 0) {
-    CUDF_EXPECTS(lo.type() == hi.type(), "mimatching types of scalars");
-    CUDF_EXPECTS(lo.type() == input.type(), "mimatching types of scalar and input");
+    CUDF_EXPECTS(lo.type() == hi.type(), "mismatching types of scalars");
+    CUDF_EXPECTS(lo.type() == input.type(), "mismatching types of scalar and input");
 
     if ((not lo.is_valid(stream) and not hi.is_valid(stream)) or 
         (input.is_empty())) {
