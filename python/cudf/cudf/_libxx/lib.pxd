@@ -5,7 +5,7 @@ from libcpp.memory cimport unique_ptr
 
 from rmm._lib.device_buffer cimport device_buffer, DeviceBuffer, move
 
-cdef extern from "types.hpp" namespace "cudf" nogil:
+cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
     ctypedef int32_t size_type
     ctypedef uint32_t bitmask_type
 
