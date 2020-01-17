@@ -31,6 +31,9 @@ namespace experimental {
  * Rows are assigned partitions based on their row index in the table,
  * in a round robin fashion.
  *
+ * @throws cudf::logic_error if num_partitions <= 1 
+ * @throws cudf::logic_error if start_partition >= num_partitions.
+ *
  * A good analogy for the algorithm is dealing out cards:
  *
  *  1. The deck of cards is represented as the rows in the table.
@@ -147,12 +150,13 @@ namespace experimental {
  * table => col 1 {9,10,0,1,2,3,4,5,6,7,8}
  * partition_offsets => {0,1,2,3,4,5,6,7,8,9,10}
  *
- * @Param[in] input The input table to be round-robin partitioned
- * @Param[in] num_partitions Number of partitions for the table
- * @Param[in] start_partition Index of the 1st partition
- * @Param[in] mr Device memory allocator
+ * @param[in] input The input table to be round-robin partitioned
+ * @param[in] num_partitions Number of partitions for the table
+ * @param[in] start_partition Index of the 1st partition
+ * @param[in] mr Device memory allocator
  *
- * @Returns A std::pair consisting of an unique_ptr to the partitioned table and the partition offsets for each partition within the table
+ * @return A std::pair consisting of an unique_ptr to the partitioned table 
+ * and the partition offsets for each partition within the table.
  */
 std::pair<std::unique_ptr<cudf::experimental::table>, std::vector<cudf::size_type>>
 round_robin_partition(table_view const& input,
