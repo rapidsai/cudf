@@ -18,6 +18,8 @@
 
 ## Improvements
 
+- PR #3292 Port NVStrings regex contains function
+- PR #3417 Port NVStrings regex findall function
 - PR #3351 Add warning when filepath resolves to multiple files in cudf readers
 - PR #3370 Port NVStrings strip functions
 - PR #3453 Port NVStrings IPv4 convert functions to cudf strings column
@@ -54,6 +56,7 @@
 - PR #3520 Change read_parquet defaults and add warnings
 - PR #3780 Java APIs for selecting a GPU
 - PR #3805 Avoid CuPy 7.1.0 for now
+- PR #3758 detail::scatter variant with map iterator support
 - PR #3713 Adding aggregation support to rolling_window
 
 ## Bug Fixes
@@ -93,6 +96,8 @@
 - PR #3783 Bind cuDF operators to Dask Dataframe
 - PR #3775 Fix segfault when reading compressed CSV files larger than 4GB
 - PR #3803 Keep name when unpickling Index objects
+- PR #3804 Fix cuda crash in AVRO reader
+- PR #3766 Remove references to cudf::type_id::CATEGORY from IO code
 
 
 # cuDF 0.11.0 (11 Dec 2019)
@@ -234,7 +239,6 @@
 - PR #3314 Drop `cython` from run requirements
 - PR #3301 Add tests for empty column wrapper.
 - PR #3294 Update to arrow-cpp and pyarrow 0.15.1
-- PR #3292 Port NVStrings regex contains function
 - PR #3310 Add `row_hasher` and `element_hasher` utilities
 - PR #3272 Support non-default streams when creating/destroying hash maps
 - PR #3286 Clean up the starter code on README
