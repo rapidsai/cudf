@@ -17,6 +17,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
+#include <cudf/dictionary/encode.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
@@ -32,7 +33,7 @@ TEST_F(DictionaryGatherTest, Gather)
     std::vector<const char*> h_strings{ "eee", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "eee", "aaa" };
     cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end() );
 
-    auto dictionary = cudf::make_dictionary_column( strings );
+    auto dictionary = cudf::dictionary::encode( strings );
     cudf::dictionary_column_view view(dictionary->view());
     auto keys = *(view.dictionary_keys());
 
