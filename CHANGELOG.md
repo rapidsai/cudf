@@ -14,6 +14,7 @@
 - PR #3667 Define and implement round-robin partition API.
 - PR #3690 Add bools_to_mask
 - PR #3683 Added support for multiple delimiters in `nvtext.token_count()`
+- PR #3792 Adding is_nan and is_notnan
 
 ## Improvements
 
@@ -52,6 +53,7 @@
 - PR #3657 Define and implement compiled binops for string column comparisons
 - PR #3520 Change read_parquet defaults and add warnings
 - PR #3780 Java APIs for selecting a GPU
+- PR #3805 Avoid CuPy 7.1.0 for now
 
 ## Bug Fixes
 
@@ -90,6 +92,7 @@
 - PR #3783 Bind cuDF operators to Dask Dataframe
 - PR #3775 Fix segfault when reading compressed CSV files larger than 4GB
 - PR #3803 Keep name when unpickling Index objects
+- PR #3804 Fix cuda crash in AVRO reader
 - PR #3766 Remove references to cudf::type_id::CATEGORY from IO code
 
 
