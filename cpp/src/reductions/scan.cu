@@ -9,7 +9,6 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <cudf/detail/utilities/device_atomics.cuh>
-#include <cub/device/device_scan.cuh>
 #include <cudf/reduction.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/null_mask.hpp>
@@ -42,22 +41,6 @@ struct ScanDispatcher {
     return std::is_arithmetic<T>::value || is_string_supported<T>();
   }
 
-  template <typename T, typename InputIterator>
-  static void exclusive_scan_cub(InputIterator input, T *output, size_type size,
-                                 rmm::mr::device_memory_resource *mr, cudaStream_t stream)
-  {
-    rmm::device_buffer temp_storage;
-    size_t temp_storage_bytes = 0;
-    // Prepare temp storage
-    cub::DeviceScan::ExclusiveScan(temp_storage.data(), temp_storage_bytes,
-                                   input, output, Op{},
-                                   Op::template identity<T>(), size, stream);
-    temp_storage = rmm::device_buffer{temp_storage_bytes, stream, mr};
-    cub::DeviceScan::ExclusiveScan(temp_storage.data(), temp_storage_bytes,
-                                   input, output, Op{},
-                                   Op::template identity<T>(), size, stream);
-  }
-
   //for arithmetic types
   template <typename T,
     std::enable_if_t<std::is_arithmetic<T>::value, T>* = nullptr>
@@ -77,10 +60,16 @@ struct ScanDispatcher {
 
     if (input_view.has_nulls()) {
       auto input = make_null_replacement_iterator(*d_input, Op::template identity<T>());
-      exclusive_scan_cub(input, output.data<T>(), size, mr, stream);
+      thrust::exclusive_scan(rmm::exec_policy(stream)->on(stream), 
+                            input, input + size, output.data<T>(),
+                            Op::template identity<T>(),
+                            Op{});
     } else {
       auto input = d_input->begin<T>();
-      exclusive_scan_cub(input, output.data<T>(), size, mr, stream);
+      thrust::exclusive_scan(rmm::exec_policy(stream)->on(stream), 
+                            input, input + size, output.data<T>(),
+                            Op::template identity<T>(),
+                            Op{});
     }
 
     CHECK_CUDA(stream);
@@ -88,26 +77,12 @@ struct ScanDispatcher {
   }
 
   //for string type
-template <typename T,
+  template <typename T,
     std::enable_if_t<is_string_supported<T>(), T>* = nullptr>
   std::unique_ptr<column> exclusive_scan(const column_view& input_view, bool skipna,
                       rmm::mr::device_memory_resource* mr, cudaStream_t stream)
   {
     CUDF_FAIL("String types supports only inclusive min/max for `cudf::scan`");
-  }
-
-  template <typename T, typename InputIterator>
-  static void inclusive_scan_cub(InputIterator input, T *output, size_type size,
-                                 rmm::mr::device_memory_resource *mr, cudaStream_t stream)
-  {
-    rmm::device_buffer temp_storage;
-    size_t temp_storage_bytes = 0;
-    // Prepare temp storage
-    cub::DeviceScan::InclusiveScan(temp_storage.data(), temp_storage_bytes,
-                                   input, output, Op{}, size, stream);
-    temp_storage = rmm::device_buffer{temp_storage_bytes, stream, mr};
-    cub::DeviceScan::InclusiveScan(temp_storage.data(), temp_storage_bytes,
-                                   input, output, Op{}, size, stream);
   }
 
   rmm::device_buffer mask_inclusive_scan(const column_view &input_view,
@@ -119,7 +94,7 @@ template <typename T,
     auto d_input = column_device_view::create(input_view, stream);
     auto v = experimental::detail::make_validity_iterator(*d_input);
     auto first_null_position = thrust::find_if_not(
-      //rmm::exec_policy(stream)->on(stream),
+      rmm::exec_policy(stream)->on(stream),
       v, v + input_view.size(), 
       thrust::identity<bool>{}) -  v;
     cudf::detail::clear_bits_from(static_cast<bitmask_type *>(mask.data()),
@@ -152,10 +127,14 @@ template <typename T,
 
     if (input_view.has_nulls()) {
       auto input = make_null_replacement_iterator(*d_input, Op::template identity<T>());
-      inclusive_scan_cub(input, output.data<T>(), size, mr, stream);
+      thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream), 
+                            input, input + size, output.data<T>(),
+                            Op{});
     } else {
       auto input = d_input->begin<T>();
-      inclusive_scan_cub(input, output.data<T>(), size, mr, stream);
+      thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream), 
+                            input, input + size, output.data<T>(),
+                            Op{});
     }
 
     CHECK_CUDA(stream);
@@ -175,10 +154,14 @@ template <typename T,
 
     if (input_view.has_nulls()) {
       auto input = make_null_replacement_iterator(*d_input, Op::template identity<T>());
-      inclusive_scan_cub(input, result.data().get(), size, mr, stream);
+      thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream), 
+                            input, input + size, result.data().get(),
+                            Op{});
     } else {
       auto input = d_input->begin<T>();
-      inclusive_scan_cub(input, result.data().get(), size, mr, stream);
+      thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream), 
+                            input, input + size, result.data().get(),
+                            Op{});
     }
     CHECK_CUDA(stream);
 
