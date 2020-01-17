@@ -42,7 +42,7 @@ size_type dictionary_column_view::keys_size() const noexcept
 {
     if( size()==0 )
         return 0;
-    return dictionary_keys()->size();
+    return dictionary_keys().size();
 }
 
 } // namespace cudf
