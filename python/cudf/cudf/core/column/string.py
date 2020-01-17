@@ -329,7 +329,7 @@ class StringMethods(object):
             mask = self._parent.mask
 
         col = column.build_column(
-            Buffer(out_dev_arr), dtype=np.dtype("bool"), mask=mask,
+            Buffer(out_dev_arr), dtype=np.dtype("bool"), mask=mask
         )
 
         return Series(col, index=self._index, name=self._name)
@@ -464,9 +464,7 @@ class StringColumn(column.ColumnBase):
             # bytes in the data buffer
             size = children[0].size - 1
 
-        super().__init__(
-            data, size, dtype, mask=mask, children=children,
-        )
+        super().__init__(data, size, dtype, mask=mask, children=children)
 
         self._nvstrings = None
         self._nvcategory = None
