@@ -18,6 +18,8 @@
 
 ## Improvements
 
+- PR #3292 Port NVStrings regex contains function
+- PR #3417 Port NVStrings regex findall function
 - PR #3351 Add warning when filepath resolves to multiple files in cudf readers
 - PR #3370 Port NVStrings strip functions
 - PR #3453 Port NVStrings IPv4 convert functions to cudf strings column
@@ -234,7 +236,6 @@
 - PR #3314 Drop `cython` from run requirements
 - PR #3301 Add tests for empty column wrapper.
 - PR #3294 Update to arrow-cpp and pyarrow 0.15.1
-- PR #3292 Port NVStrings regex contains function
 - PR #3310 Add `row_hasher` and `element_hasher` utilities
 - PR #3272 Support non-default streams when creating/destroying hash maps
 - PR #3286 Clean up the starter code on README
