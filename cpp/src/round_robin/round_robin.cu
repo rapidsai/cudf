@@ -147,7 +147,7 @@ degenerate_partitions(cudf::table_view const& input,
     //offsets (part 2: compute partition offsets):
     //
     VectorT<cudf::size_type> partition_offsets(num_partitions, cudf::size_type{0});
-    thrust::exclusive_scan(nedges_iter_begin, nedges_iter_begin + num_partitions, partition_offsets.begin());
+    thrust::exclusive_scan(exec->on(stream), nedges_iter_begin, nedges_iter_begin + num_partitions, partition_offsets.begin());
 
     cudaMemcpy(ret_pair.second.data(), partition_offsets.data().get(), sizeof(cudf::size_type)*num_partitions, cudaMemcpyDeviceToHost);
 
