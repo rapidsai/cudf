@@ -92,6 +92,7 @@
 - PR #3783 Bind cuDF operators to Dask Dataframe
 - PR #3775 Fix segfault when reading compressed CSV files larger than 4GB
 - PR #3803 Keep name when unpickling Index objects
+- PR #3804 Fix cuda crash in AVRO reader
 
 
 # cuDF 0.11.0 (11 Dec 2019)
