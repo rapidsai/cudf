@@ -647,6 +647,14 @@ set(MERGE_TEST_SRC
 ConfigureTest(MERGE_TEST "${MERGE_TEST_SRC}")
 
 ###################################################################################################
+# - round-robin new tests ----------------------------------------------------------------------------
+
+set(ROUND_ROBIN_TEST_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/round_robin/round_robin_test.cpp")
+
+ConfigureTest(ROUND_ROBIN_TEST "${ROUND_ROBIN_TEST_SRC}")
+
+###################################################################################################
 # - stream compaction tests -----------------------------------------------------------------------
 
 set(STREAM_COMPACTION_TEST_SRC
@@ -766,6 +774,7 @@ set(STRINGS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/datetime_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/extract_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/fill_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/findall_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/find_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/find_multiple_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/floats_tests.cu"
@@ -773,6 +782,7 @@ set(STRINGS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/integers_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/ipv4_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/pad_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/replace_regex_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/replace_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/split_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/strip_tests.cpp"
