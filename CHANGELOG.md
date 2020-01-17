@@ -95,6 +95,7 @@
 - PR #3775 Fix segfault when reading compressed CSV files larger than 4GB
 - PR #3803 Keep name when unpickling Index objects
 - PR #3804 Fix cuda crash in AVRO reader
+- PR #3766 Remove references to cudf::type_id::CATEGORY from IO code
 
 
 # cuDF 0.11.0 (11 Dec 2019)
