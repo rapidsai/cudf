@@ -19,6 +19,7 @@
 ## Improvements
 
 - PR #3292 Port NVStrings regex contains function
+- PR #3409 Port NVStrings regex replace function
 - PR #3417 Port NVStrings regex findall function
 - PR #3351 Add warning when filepath resolves to multiple files in cudf readers
 - PR #3370 Port NVStrings strip functions
