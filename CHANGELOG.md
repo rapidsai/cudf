@@ -98,6 +98,7 @@
 - PR #3803 Keep name when unpickling Index objects
 - PR #3804 Fix cuda crash in AVRO reader
 - PR #3766 Remove references to cudf::type_id::CATEGORY from IO code
+- PR #3817 Don't always deepcopy an index
 - PR #3821 Fix OOB read in gpuinflate prefetcher
 
 
