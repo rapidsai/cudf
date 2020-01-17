@@ -1,4 +1,5 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
+import cupy
 import pytest
 
 import cudf
@@ -29,7 +30,7 @@ def test_searchsorted(side, obj_class):
     expect = psr.searchsorted(pvals, side)
     got = sr.searchsorted(vals, side)
 
-    assert_eq(expect, got.to_array())
+    assert_eq(expect, cupy.asnumpy(got))
 
 
 @pytest.mark.parametrize("side", ["left", "right"])

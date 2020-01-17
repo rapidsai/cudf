@@ -3199,7 +3199,7 @@ class DataFrame(Table):
         )
 
     def hash_columns(self, columns=None):
-        """Hash the given *columns* and return a new Series
+        """Hash the given *columns* and return a new device array
 
         Parameters
         ----------
@@ -3213,7 +3213,7 @@ class DataFrame(Table):
             columns = self.columns
 
         cols = [self[k]._column for k in columns]
-        return Series(numerical.column_hash_values(*cols))
+        return Series(numerical.column_hash_values(*cols)).values
 
     def partition_by_hash(self, columns, nparts):
         """Partition the dataframe by the hashed value of data in *columns*.

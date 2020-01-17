@@ -757,14 +757,14 @@ def test_dataframe_hash_columns(nrows):
 
     # Check default
     out_all = gdf.hash_columns()
-    np.testing.assert_array_equal(out.to_array(), out_all.to_array())
+    np.testing.assert_array_equal(cupy.asnumpy(out), cupy.asnumpy(out_all))
 
     # Check single column
-    out_one = gdf.hash_columns(["a"]).to_array()
+    out_one = cupy.asnumpy(gdf.hash_columns(["a"]))
     # First matches last
     assert out_one[0] == out_one[-1]
     # Equivalent to the Series.hash_values()
-    np.testing.assert_array_equal(gdf.a.hash_values().to_array(), out_one)
+    np.testing.assert_array_equal(cupy.asnumpy(gdf.a.hash_values()), out_one)
 
 
 @pytest.mark.parametrize("nrows", [3, 10, 100, 1000])
