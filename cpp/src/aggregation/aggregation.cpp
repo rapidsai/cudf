@@ -63,10 +63,10 @@ std::unique_ptr<aggregation> make_argmin_aggregation() {
   return std::make_unique<aggregation>(aggregation::ARGMIN);
 }
 /// Factory to create a UDF aggregation
-std::unique_ptr<aggregation> make_udf_aggregation(bool is_ptx,
-                                                  std::string user_defined_aggregator,
+std::unique_ptr<aggregation> make_udf_aggregation(udf_type type,
+                                                  std::string const& user_defined_aggregator,
                                                   data_type output_type) {
-  aggregation* a = new detail::udf_aggregation{is_ptx? aggregation::PTX : aggregation::CUDA,
+  aggregation* a = new detail::udf_aggregation{type == udf_type::PTX? aggregation::PTX : aggregation::CUDA,
                                                user_defined_aggregator,
                                                output_type};
  return std::unique_ptr<aggregation>(a);

@@ -605,10 +605,10 @@ TEST_F(RollingTestStrings, StringsUnsupportedOperators)
                cudf::logic_error);
   EXPECT_THROW(cudf::experimental::rolling_window(input, 2, 2, 0, cudf::experimental::make_mean_aggregation()),
                cudf::logic_error);
-  EXPECT_THROW(cudf::experimental::rolling_window(input, 2, 2, 0, cudf::experimental::make_udf_aggregation(true, std::string{}, cudf::data_type{})),
-               cudf::logic_error);
-  EXPECT_THROW(cudf::experimental::rolling_window(input, 2, 2, 0, cudf::experimental::make_udf_aggregation(false, std::string{}, cudf::data_type{})),
-               cudf::logic_error);
+  EXPECT_THROW(cudf::experimental::rolling_window(input, 2, 2, 0, cudf::experimental::make_udf_aggregation(
+                  cudf::experimental::udf_type::PTX, std::string{}, cudf::data_type{})), cudf::logic_error);
+  EXPECT_THROW(cudf::experimental::rolling_window(input, 2, 2, 0, cudf::experimental::make_udf_aggregation(
+                  cudf::experimental::udf_type::CUDA, std::string{}, cudf::data_type{})), cudf::logic_error);
 }
 
 /*TEST_F(RollingTestStrings, SimpleStatic)

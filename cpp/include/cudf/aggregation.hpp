@@ -38,6 +38,11 @@ namespace experimental {
  */
 class aggregation;
 
+enum class udf_type : bool {
+   CUDA,
+   PTX
+};
+
 /// Factory to create a SUM aggregation
 std::unique_ptr<aggregation> make_sum_aggregation();
 
@@ -82,14 +87,14 @@ std::unique_ptr<aggregation> make_argmin_aggregation();
 /**
  * @brief Factory to create a aggregation base on UDF for PTX or CUDA
  *
- * @param[in] is_ptx A bool, if true then it is PTX else CUDA type UDF
+ * @param[in] type, udf_type signifining one of PTX or CUDA
  * @param[in] user_defined_aggregator A string which has the required aggregation
  * @param[in] output_type expected output type
  *
  * @return aggregation unique pointer housing user_defined_aggregator string.
  */
-std::unique_ptr<aggregation> make_udf_aggregation(bool is_ptx,
-                                                  std::string user_defined_aggregator,
+std::unique_ptr<aggregation> make_udf_aggregation(udf_type type,
+                                                  std::string const& user_defined_aggregator,
                                                   data_type output_type);
 
 }  // namespace experimental
