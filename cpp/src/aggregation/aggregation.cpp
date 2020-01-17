@@ -62,21 +62,14 @@ std::unique_ptr<aggregation> make_argmax_aggregation() {
 std::unique_ptr<aggregation> make_argmin_aggregation() {
   return std::make_unique<aggregation>(aggregation::ARGMIN);
 }
-/// Factory to create a PTX aggregation
-std::unique_ptr<aggregation> make_ptx_aggregation(std::string user_defined_aggregator,
+/// Factory to create a UDF aggregation
+std::unique_ptr<aggregation> make_udf_aggregation(bool is_ptx,
+                                                  std::string user_defined_aggregator,
                                                   data_type output_type) {
-  aggregation* a = new detail::udf_aggregation{aggregation::PTX,
-                                                    user_defined_aggregator,
-                                                    output_type};
+  aggregation* a = new detail::udf_aggregation{is_ptx? aggregation::PTX : aggregation::CUDA,
+                                               user_defined_aggregator,
+                                               output_type};
  return std::unique_ptr<aggregation>(a);
-}
-/// Factory to create a CUDA aggregation
-std::unique_ptr<aggregation> make_cuda_aggregation(std::string user_defined_aggregator,
-                                                   data_type output_type) {
-  aggregation* a = new detail::udf_aggregation{aggregation::CUDA,
-                                                    user_defined_aggregator,
-                                                    output_type};
-  return std::unique_ptr<aggregation>(a);
 }
 
 namespace detail {

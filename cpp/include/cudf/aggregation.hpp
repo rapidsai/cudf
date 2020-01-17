@@ -80,24 +80,17 @@ std::unique_ptr<aggregation> make_argmax_aggregation();
 std::unique_ptr<aggregation> make_argmin_aggregation();
 
 /**
- * @brief Factory to create a PTX aggregation
+ * @brief Factory to create a aggregation base on UDF for PTX or CUDA
  *
+ * @param[in] is_ptx A bool, if true then it is PTX else CUDA type UDF
  * @param[in] user_defined_aggregator A string which has the required aggregation
  * @param[in] output_type expected output type
  *
- * @return aggregation unique pointer housing user_defined_aggregator PTX string.
+ * @return aggregation unique pointer housing user_defined_aggregator string.
  */
-std::unique_ptr<aggregation> make_ptx_aggregation(std::string user_defined_aggregator, data_type output_type);
-
-/**
- * @brief Factory to create a CUDA aggregation
- *
- * @param[in] user_defined_aggregator A string which has the required aggregation
- * @param[in] output_type expected output type
- *
- * @return aggregation unique pointer housing user_defined_aggregator CUDA string.
- */
-std::unique_ptr<aggregation> make_cuda_aggregation(std::string user_defined_aggregator, data_type output_type);
+std::unique_ptr<aggregation> make_udf_aggregation(bool is_ptx,
+                                                  std::string user_defined_aggregator,
+                                                  data_type output_type);
 
 }  // namespace experimental
 }  // namespace cudf
