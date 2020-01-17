@@ -52,6 +52,7 @@
 - PR #3748 Optimize hash_partition using shared memory
 - PR #3520 Change read_parquet defaults and add warnings
 - PR #3780 Java APIs for selecting a GPU
+- PR #3808 Optimize hash_partition using shared memory and cub block scan
 
 ## Bug Fixes
 
