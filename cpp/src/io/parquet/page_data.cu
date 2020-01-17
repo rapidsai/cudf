@@ -60,7 +60,7 @@ struct page_state_s {
     int32_t nz_count;               // number of valid entries in nz_idx (write position in circular buffer)
     int32_t dict_pos;               // write position of dictionary indices
     int32_t out_pos;                // read position of final output
-    int32_t ts_scale;               // if non-zero, convert timestamp to nano
+    int32_t ts_scale;               // timestamp scale: <0: divide by -ts_scale, >0: multiply by ts_scale
     uint32_t nz_idx[NZ_BFRSZ];      // circular buffer of non-null row positions
     uint32_t dict_idx[NZ_BFRSZ];    // Dictionary index, boolean, or string offset values
     uint32_t str_len[NZ_BFRSZ];     // String length for plain encoding of strings
@@ -787,7 +787,7 @@ inline __device__ void gpuOutputInt96Timestamp(volatile page_state_s *s, int src
     if (dict_pos + 4 < dict_size)
     {
         uint3 v;
-        int64_t nanos, day;
+        int64_t nanos, secs;
         v.x = *(const uint32_t *)(src8 + dict_pos + 0);
         v.y = *(const uint32_t *)(src8 + dict_pos + 4);
         v.z = *(const uint32_t *)(src8 + dict_pos + 8);
@@ -801,13 +801,12 @@ inline __device__ void gpuOutputInt96Timestamp(volatile page_state_s *s, int src
         nanos = v.y;
         nanos <<= 32;
         nanos |= v.x;
-        day = v.z;
         // Convert from Julian day at noon to UTC seconds
-        day = (day - 2440588) * (24 * 60 * 60); // TBD: Should be noon instead of midnight, but this matches pyarrow
+        secs = (v.z - 2440588) * (24 * 60 * 60); // TBD: Should be noon instead of midnight, but this matches pyarrow
         if (s->col.ts_clock_rate)
-            ts = (day * s->col.ts_clock_rate) + nanos / (1000000000 / s->col.ts_clock_rate); // Output to desired clock rate
+            ts = (secs * s->col.ts_clock_rate) + nanos / (1000000000 / s->col.ts_clock_rate); // Output to desired clock rate
         else
-            ts = (day * 1000000000) + nanos;
+            ts = (secs * 1000000000) + nanos;
     }
     else
     {
