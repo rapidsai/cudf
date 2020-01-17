@@ -58,6 +58,7 @@
 - PR #3780 Java APIs for selecting a GPU
 - PR #3805 Avoid CuPy 7.1.0 for now
 - PR #3758 detail::scatter variant with map iterator support
+- PR #3823 Add header file for detail search functions
 
 ## Bug Fixes
 
