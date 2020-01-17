@@ -15,9 +15,12 @@
 - PR #3690 Add bools_to_mask
 - PR #3761 Introduce a NamedTable class and make Index, DataFrame and Series subclasses
 - PR #3683 Added support for multiple delimiters in `nvtext.token_count()`
+- PR #3792 Adding is_nan and is_notnan
 
 ## Improvements
 
+- PR #3292 Port NVStrings regex contains function
+- PR #3417 Port NVStrings regex findall function
 - PR #3351 Add warning when filepath resolves to multiple files in cudf readers
 - PR #3370 Port NVStrings strip functions
 - PR #3453 Port NVStrings IPv4 convert functions to cudf strings column
@@ -44,6 +47,7 @@
 - PR #3640 Enable memory_usage in dask_cudf (also adds pd.Index from_pandas)
 - PR #3654 Update Jitify submodule ref to include gcc-8 fix
 - PR #3639 Define and implement `nans_to_nulls`
+- PR #3561 Rework contains implementation in search
 - PR #3616 Add aggregation infrastructure for argmax/argmin.
 - PR #3699 Stringify libcudacxx headers for binary op JIT
 - PR #3697 Improve column insert performance for wide frames
@@ -52,6 +56,8 @@
 - PR #3657 Define and implement compiled binops for string column comparisons
 - PR #3520 Change read_parquet defaults and add warnings
 - PR #3780 Java APIs for selecting a GPU
+- PR #3805 Avoid CuPy 7.1.0 for now
+- PR #3758 detail::scatter variant with map iterator support
 
 ## Bug Fixes
 
@@ -90,6 +96,8 @@
 - PR #3783 Bind cuDF operators to Dask Dataframe
 - PR #3775 Fix segfault when reading compressed CSV files larger than 4GB
 - PR #3803 Keep name when unpickling Index objects
+- PR #3804 Fix cuda crash in AVRO reader
+- PR #3766 Remove references to cudf::type_id::CATEGORY from IO code
 
 
 # cuDF 0.11.0 (11 Dec 2019)
@@ -231,7 +239,6 @@
 - PR #3314 Drop `cython` from run requirements
 - PR #3301 Add tests for empty column wrapper.
 - PR #3294 Update to arrow-cpp and pyarrow 0.15.1
-- PR #3292 Port NVStrings regex contains function
 - PR #3310 Add `row_hasher` and `element_hasher` utilities
 - PR #3272 Support non-default streams when creating/destroying hash maps
 - PR #3286 Clean up the starter code on README
