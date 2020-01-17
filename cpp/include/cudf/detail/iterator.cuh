@@ -35,6 +35,7 @@
 #pragma once
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/scalar/scalar.hpp>
 
 namespace cudf {
 namespace experimental {
@@ -135,6 +136,35 @@ auto make_null_replacement_iterator(column_device_view const& column,
 }
 
 /**
+ * @brief Constructs a pair iterator over a column's values and its validity.
+ *
+ * Dereferencing the returned iterator returns a `thrust::pair<Element, bool>`.
+ * 
+ * If an element at position `i` is valid (or `has_nulls == false`), then for `p = *(iter + i)`, `p.first` contains 
+ * the value of the element at `i` and `p.second == true`.
+ *
+ * Else, if the element at `i` is null, then the value of `p.first` is undefined and `p.second == false`. 
+ * `pair(column[i], validity)`.
+ * `validity` is `true` if `has_nulls=false`.
+ * `validity` is validity of the element at `i` if `has_nulls=true` and the
+ * column is nullable.
+ *
+ * @throws `cudf::logic_error` if the column is nullable.
+ * @throws `cudf::logic_error` if column datatype and Element type mismatch.
+ *
+ * @tparam Element The type of elements in the column
+ * @tparam has_nulls boolean indicating to treat the column is nullable
+ * @param column The column to iterate
+ * @return auto Iterator that returns valid column elements, and validity of the
+ * element in a pair
+ */
+template <typename Element, bool has_nulls=false> 
+auto make_pair_iterator(column_device_view const& column)
+{
+  return column.pair_begin<Element, has_nulls>();
+}
+
+/**
  * @brief Constructs an iterator over a column's validities.
  *
  * Dereferencing the returned iterator for element `i` will return the validity
@@ -151,6 +181,55 @@ auto inline make_validity_iterator(column_device_view const& column)
   return thrust::make_transform_iterator(
       thrust::counting_iterator<cudf::size_type>{0},
       validity_accessor{column});
+}
+
+/**
+ * @brief Constructs a constant iterator over a scalar's value.
+ *
+ * Dereferencing the returned iterator returns a `Element`.
+ * 
+ * For `p = *(iter + i)`, `p` is the value stored in the scalar.
+ *
+ * @throws `cudf::logic_error` if scalar datatype and Element type mismatch.
+ * @throws `cudf::logic_error` if scalar is null.
+ *
+ * @tparam Element The type of elements in the scalar
+ * @param scalar_value The scalar to iterate
+ * @return auto Iterator that returns scalar value
+ */
+template <typename Element>
+auto inline make_scalar_iterator(scalar const& scalar_value)
+{
+  CUDF_EXPECTS(data_type(experimental::type_to_id<Element>()) == scalar_value.type(), "the data type mismatch");
+  CUDF_EXPECTS(scalar_value.is_valid(), "the scalar value must be valid");
+  using ScalarType = experimental::scalar_type_t<Element>;
+  return thrust::make_constant_iterator(static_cast<ScalarType const*>(&scalar_value)->value());
+}
+
+/**
+ * @brief Constructs a constant pair iterator over a scalar's value and its validity.
+ *
+ * Dereferencing the returned iterator returns a `thrust::pair<Element, bool>`.
+ *  
+ * If scalar is valid, then for `p = *(iter + i)`, `p.first` contains 
+ * the value of the scalar and `p.second == true`.
+ *
+ * Else, if the scalar is null, then the value of `p.first` is undefined and `p.second == false`. 
+ * 
+ * @throws `cudf::logic_error` if scalar datatype and Element type mismatch.
+ *
+ * @tparam Element The type of elements in the scalar
+ * @tparam bool unused. This template parameter exists to enforce same 
+ * template interface as @ref make_pair_iterator(column_device_view const&).
+ * @param scalar_value The scalar to iterate
+ * @return auto Iterator that returns scalar, and validity of the scalar in a pair
+ */
+template <typename Element, bool=false>
+auto inline make_pair_iterator(scalar const& scalar_value) {
+  CUDF_EXPECTS(data_type(experimental::type_to_id<Element>()) == scalar_value.type(), "the data type mismatch");
+  using ScalarType = experimental::scalar_type_t<Element>;
+  return thrust::make_constant_iterator(
+      thrust::make_pair( static_cast<ScalarType const*>(&scalar_value)->value(), scalar_value.is_valid()));
 }
 
 } //namespace detail

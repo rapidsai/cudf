@@ -385,6 +385,7 @@ add_library(cudf
             src/column/legacy/context.cpp
             src/table/legacy/table.cpp
             src/merge/merge.cu
+            src/round_robin/round_robin.cu
             src/strings/nvcategory_util.cpp
             src/join/legacy/joining.cu
             src/join/join.cu
@@ -472,6 +473,7 @@ add_library(cudf
             src/merge/legacy/merge.cu
             src/unary/cast_ops.cu
             src/unary/null_ops.cu
+            src/unary/nan_ops.cu
             src/unary/legacy/math_ops.cu
             src/unary/legacy/cast_ops.cu
             src/unary/legacy/null_ops.cu
@@ -575,6 +577,7 @@ add_library(cudf
             src/strings/copying/copying.cu
             src/strings/extract.cu
             src/strings/find.cu
+            src/strings/findall.cu
             src/strings/find_multiple.cu
             src/strings/filling/fill.cu
             src/strings/padding.cu

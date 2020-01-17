@@ -128,7 +128,6 @@ class parquet_column_view {
         _stats_dtype = statistics_dtype::dtype_int16;
         break;
       case cudf::type_id::INT32:
-      case cudf::type_id::CATEGORY:
         _physical_type = Type::INT32;
         _stats_dtype = statistics_dtype::dtype_int32;
         break;
