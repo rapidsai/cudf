@@ -4193,7 +4193,7 @@ def test_df_sr_binop(gsr, colnames, op):
     ],
 )
 @pytest.mark.parametrize(
-    "gsr", [Series([1, 2, 3, 4, 5], index=["a", "b", "d", "0", "12"])],
+    "gsr", [Series([1, 2, 3, 4, 5], index=["a", "b", "d", "0", "12"])]
 )
 def test_df_sr_binop_col_order(gsr, op):
     colnames = [0, 1, 2]
