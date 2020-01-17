@@ -2,6 +2,7 @@
 
 from __future__ import division, print_function
 
+import functools
 import pickle
 from copy import copy, deepcopy
 
@@ -174,6 +175,9 @@ class Index(object):
             return as_index(op(other))
         else:
             return as_index(op())
+
+    def unique(self):
+        return as_index(self._values.unique())
 
     def __add__(self, other):
         return self._apply_op("__add__", other)
@@ -618,7 +622,7 @@ class RangeIndex(Index):
             vals = cudautils.arange(self._start, self._stop, dtype=self.dtype)
         else:
             vals = rmm.device_array(0, dtype=self.dtype)
-        return column.build_column(data=Buffer(vals), dtype=vals.dtype,)
+        return column.build_column(data=Buffer(vals), dtype=vals.dtype)
 
     @copy_docstring(_to_frame)
     def to_frame(self, index=True, name=None):
@@ -664,6 +668,10 @@ class RangeIndex(Index):
 
     def memory_usage(self, **kwargs):
         return 0
+
+    def unique(self):
+        # RangeIndex always has unique values
+        return self
 
 
 def index_from_range(start, stop=None, step=None):
@@ -715,10 +723,7 @@ class GenericIndex(Index):
         assert isinstance(values, column.ColumnBase), type(values)
 
     def copy(self, deep=True):
-        if deep:
-            result = as_index(self.as_column().copy(deep=True))
-        else:
-            result = as_index(self.as_column().copy())
+        result = as_index(self.as_column().copy(deep=deep))
         result.name = self.name
         return result
 
@@ -726,7 +731,11 @@ class GenericIndex(Index):
         return self._values.__sizeof__()
 
     def __reduce__(self):
-        return self.__class__, tuple([self._values])
+        _maker = functools.partial(
+            self.__class__, self._values, name=self.name
+        )
+
+        return _maker, ()
 
     def __len__(self):
         return len(self._values)
@@ -899,7 +908,7 @@ class DatetimeIndex(GenericIndex):
         # but we need a NumericalColumn for GenericIndex..
         # how should this be handled?
         out_column = column.build_column(
-            data=out_column.data, dtype=out_column.dtype, mask=out_column.mask,
+            data=out_column.data, dtype=out_column.dtype, mask=out_column.mask
         )
         return as_index(out_column, name=self.name)
 
