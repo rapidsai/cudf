@@ -214,7 +214,7 @@ void move_to_output_buffer(DataType const *input_buf,
 
   __syncthreads();
 
-  BlockScan(temp_storage).ExclusiveSum(temp_histo, temp_histo);
+  BlockScan(temp_storage).InclusiveSum(temp_histo, temp_histo);
 
   __syncthreads();
 
