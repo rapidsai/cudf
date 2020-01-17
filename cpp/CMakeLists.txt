@@ -473,6 +473,7 @@ add_library(cudf
             src/merge/legacy/merge.cu
             src/unary/cast_ops.cu
             src/unary/null_ops.cu
+            src/unary/nan_ops.cu
             src/unary/legacy/math_ops.cu
             src/unary/legacy/cast_ops.cu
             src/unary/legacy/null_ops.cu
