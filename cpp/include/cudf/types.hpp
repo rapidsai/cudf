@@ -226,7 +226,7 @@ std::size_t size_of(data_type t);
 /**
  * @brief Define concrete dictionary type.
  */
-struct dictionary32_tag
+struct dictionary32
 {
   using index_type = int32_t;
 };

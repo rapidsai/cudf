@@ -64,12 +64,12 @@ std::unique_ptr<scalar> make_timestamp_scalar(
 
 namespace {
 struct default_scalar_functor {
-  template <typename T, typename std::enable_if_t<!std::is_same<T, dictionary32_tag>::value>* = nullptr>
+  template <typename T, typename std::enable_if_t<!std::is_same<T, dictionary32>::value>* = nullptr>
   std::unique_ptr<cudf::scalar> operator()() {
     using ScalarType = experimental::scalar_type_t<T>;
     return std::unique_ptr<scalar>(new ScalarType);
   }
-  template <typename T, typename std::enable_if_t<std::is_same<T, dictionary32_tag>::value>* = nullptr>
+  template <typename T, typename std::enable_if_t<std::is_same<T, dictionary32>::value>* = nullptr>
   std::unique_ptr<cudf::scalar> operator()() {
     CUDF_FAIL("dictionary type not supported");
     return nullptr;

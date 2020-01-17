@@ -109,7 +109,7 @@ __device__ weak_ordering relational_compare(Element lhs, Element rhs) {
 }
 
 template <>
-__device__ inline weak_ordering relational_compare<dictionary32_tag>(dictionary32_tag lhs, dictionary32_tag rhs) {
+__device__ inline weak_ordering relational_compare<dictionary32>(dictionary32 lhs, dictionary32 rhs) {
     release_assert(false && "dictionary elements not comparable.");
     return weak_ordering::EQUIVALENT;
 }
@@ -146,7 +146,7 @@ __device__ bool equality_compare(Element const lhs, Element const rhs) {
 }
 
 template <>
-__device__ inline bool equality_compare<dictionary32_tag>(dictionary32_tag const lhs, dictionary32_tag const rhs) {
+__device__ inline bool equality_compare<dictionary32>(dictionary32 const lhs, dictionary32 const rhs) {
     release_assert(false && "dictionary elements not comparable.");
     return false;
 }

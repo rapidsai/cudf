@@ -151,7 +151,7 @@ struct contains_scalar_dispatch {
 };
 
 template <>
-bool contains_scalar_dispatch::operator()<cudf::dictionary32_tag>(column_view const& col, scalar const& value,
+bool contains_scalar_dispatch::operator()<cudf::dictionary32>(column_view const& col, scalar const& value,
                 cudaStream_t stream, rmm::mr::device_memory_resource *mr) {
     CUDF_FAIL("dictionary type not supported yet");
 }
@@ -232,7 +232,7 @@ struct multi_contains_dispatch {
 };
 
 template <>
-std::unique_ptr<column> multi_contains_dispatch::operator()<dictionary32_tag>(column_view const& haystack,
+std::unique_ptr<column> multi_contains_dispatch::operator()<dictionary32>(column_view const& haystack,
                                    column_view const& needles,
                                    rmm::mr::device_memory_resource *mr,
                                    cudaStream_t stream) {

@@ -113,7 +113,7 @@ CUDF_TYPE_MAPPING(cudf::timestamp_s, type_id::TIMESTAMP_SECONDS);
 CUDF_TYPE_MAPPING(cudf::timestamp_ms, type_id::TIMESTAMP_MILLISECONDS);
 CUDF_TYPE_MAPPING(cudf::timestamp_us, type_id::TIMESTAMP_MICROSECONDS);
 CUDF_TYPE_MAPPING(cudf::timestamp_ns, type_id::TIMESTAMP_NANOSECONDS);
-CUDF_TYPE_MAPPING(dictionary32_tag, type_id::DICTIONARY32);
+CUDF_TYPE_MAPPING(dictionary32, type_id::DICTIONARY32);
 
 template <typename T>
 struct type_to_scalar_type_impl {
