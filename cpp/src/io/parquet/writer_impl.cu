@@ -454,7 +454,7 @@ void writer::impl::write(table_view const &table, const table_metadata *metadata
   uint32_t fragment_size = 5000;
   uint32_t num_fragments = (uint32_t)((md.num_rows + fragment_size - 1) / fragment_size);
   hostdevice_vector<gpu::PageFragment> fragments(num_columns * num_fragments);
-  if (num_fragments != 0) {
+  if (fragments.size() != 0) {
     init_page_fragments(fragments, col_desc, num_columns, num_fragments, num_rows, fragment_size, stream);
   }
 
