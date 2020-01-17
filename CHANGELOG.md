@@ -100,6 +100,7 @@
 - PR #3804 Fix cuda crash in AVRO reader
 - PR #3766 Remove references to cudf::type_id::CATEGORY from IO code
 - PR #3817 Don't always deepcopy an index
+- PR #3829 Parquet writer: fix empty dataframe causing cuda launch errors
 
 
 # cuDF 0.11.0 (11 Dec 2019)
