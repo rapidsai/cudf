@@ -49,6 +49,7 @@
 - PR #3639 Define and implement `nans_to_nulls`
 - PR #3561 Rework contains implementation in search
 - PR #3616 Add aggregation infrastructure for argmax/argmin.
+- PR #3673 Parquet reader: improve rounding of timestamp conversion to seconds 
 - PR #3699 Stringify libcudacxx headers for binary op JIT
 - PR #3697 Improve column insert performance for wide frames
 - PR #3653 Make `gather_bitmask_kernel` more reusable.
@@ -95,11 +96,13 @@
 - PR #3769 Don't look for a `name` attribute in column
 - PR #3783 Bind cuDF operators to Dask Dataframe
 - PR #3775 Fix segfault when reading compressed CSV files larger than 4GB
+- PR #3799 Align indices of Series inputs when adding as columns to DataFrame 
 - PR #3803 Keep name when unpickling Index objects
 - PR #3804 Fix cuda crash in AVRO reader
 - PR #3766 Remove references to cudf::type_id::CATEGORY from IO code
 - PR #3817 Don't always deepcopy an index
 - PR #3821 Fix OOB read in gpuinflate prefetcher
+- PR #3829 Parquet writer: fix empty dataframe causing cuda launch errors
 
 
 # cuDF 0.11.0 (11 Dec 2019)
