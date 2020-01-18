@@ -104,9 +104,9 @@ void compute_row_partition_numbers(row_hasher_t the_hasher,
                                    const size_type num_rows,
                                    const size_type num_partitions,
                                    const partitioner_type the_partitioner,
-                                   size_type * row_partition_numbers,
-                                   size_type * block_partition_sizes,
-                                   size_type * global_partition_sizes)
+                                   size_type * __restrict__ row_partition_numbers,
+                                   size_type * __restrict__ block_partition_sizes,
+                                   size_type * __restrict__ global_partition_sizes)
 {
   // Accumulate histogram of the size of each partition in shared memory
   extern __shared__ size_type shared_partition_sizes[];
@@ -174,10 +174,10 @@ void compute_row_partition_numbers(row_hasher_t the_hasher,
  */
 /* ----------------------------------------------------------------------------*/
 __global__ 
-void compute_row_output_locations(size_type * row_partition_numbers, 
+void compute_row_output_locations(size_type * __restrict__ row_partition_numbers, 
                                   const size_type num_rows,
                                   const size_type num_partitions,
-                                  size_type * block_partition_offsets)
+                                  size_type * __restrict__ block_partition_offsets)
 {
   // Shared array that holds the offset of this blocks partitions in 
   // global memory
@@ -315,6 +315,7 @@ hash_partition_table(table_view const& input,
   return std::make_pair(std::move(output), std::move(partition_offsets));
 }
 
+// Add a wrapper around nvtx to automatically pop the range when the function scope ends
 struct nvtx_raii {
   nvtx_raii(char const* name, nvtx::color color) { nvtx::range_push(name, color); }
   ~nvtx_raii() { nvtx::range_pop(); }
