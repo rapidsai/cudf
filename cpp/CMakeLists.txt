@@ -473,6 +473,7 @@ add_library(cudf
             src/merge/legacy/merge.cu
             src/unary/cast_ops.cu
             src/unary/null_ops.cu
+            src/unary/nan_ops.cu
             src/unary/legacy/math_ops.cu
             src/unary/legacy/cast_ops.cu
             src/unary/legacy/null_ops.cu
@@ -577,11 +578,15 @@ add_library(cudf
             src/strings/copying/copying.cu
             src/strings/extract.cu
             src/strings/find.cu
+            src/strings/findall.cu
             src/strings/find_multiple.cu
             src/strings/filling/fill.cu
             src/strings/padding.cu
             src/strings/regex/regcomp.cpp
             src/strings/regex/regexec.cu
+            src/strings/replace/replace_re.cu
+            src/strings/replace/backref_re.cu
+            src/strings/replace/multi_re.cu
             src/strings/replace/replace.cu
             src/strings/sorting/sorting.cu
             src/strings/split/partition.cu
