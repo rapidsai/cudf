@@ -18,7 +18,7 @@ cdef cudf_table* table_from_dataframe(df) except? NULL:
     cdef vector[gdf_column*] c_columns
     for col_name in df:
         col = df[col_name]._column
-        c_columns.push_back(column_view_from_column(col, col.name))
+        c_columns.push_back(column_view_from_column(col))
     c_table = new cudf_table(c_columns)
     return c_table
 

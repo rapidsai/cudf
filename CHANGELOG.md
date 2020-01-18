@@ -15,9 +15,13 @@
 - PR #3690 Add bools_to_mask
 - PR #3662 Define and implement `shift`.
 - PR #3683 Added support for multiple delimiters in `nvtext.token_count()`
+- PR #3792 Adding is_nan and is_notnan
 
 ## Improvements
 
+- PR #3292 Port NVStrings regex contains function
+- PR #3409 Port NVStrings regex replace function
+- PR #3417 Port NVStrings regex findall function
 - PR #3351 Add warning when filepath resolves to multiple files in cudf readers
 - PR #3370 Port NVStrings strip functions
 - PR #3453 Port NVStrings IPv4 convert functions to cudf strings column
@@ -44,7 +48,9 @@
 - PR #3640 Enable memory_usage in dask_cudf (also adds pd.Index from_pandas)
 - PR #3654 Update Jitify submodule ref to include gcc-8 fix
 - PR #3639 Define and implement `nans_to_nulls`
+- PR #3561 Rework contains implementation in search
 - PR #3616 Add aggregation infrastructure for argmax/argmin.
+- PR #3673 Parquet reader: improve rounding of timestamp conversion to seconds 
 - PR #3699 Stringify libcudacxx headers for binary op JIT
 - PR #3697 Improve column insert performance for wide frames
 - PR #3653 Make `gather_bitmask_kernel` more reusable.
@@ -52,6 +58,8 @@
 - PR #3657 Define and implement compiled binops for string column comparisons
 - PR #3520 Change read_parquet defaults and add warnings
 - PR #3780 Java APIs for selecting a GPU
+- PR #3805 Avoid CuPy 7.1.0 for now
+- PR #3758 detail::scatter variant with map iterator support
 
 ## Bug Fixes
 
@@ -62,6 +70,7 @@
 - PR #3563 Use `__cuda_array_interface__` for serialization
 - PR #3564 Fix cuda memory access error in gather_bitmask_kernel
 - PR #3548 Replaced CUDA_RT_CALL with CUDA_TRY
+- PR #3486 Pandas > 0.25 compatability 
 - PR #3622 Fix new warnings and errors when building with gcc-8
 - PR #3588 Remove avro reader column order reversal
 - PR #3629 Fix hash map test failure
@@ -71,7 +80,7 @@
 - PR #3684 Fix ends_with logic for matching string case
 - PR #3687 Fixed bug while passing input GPU memory pointer in `nvtext.scatter_count()`
 - PR #3701 Fix hash_partition hashing all columns instead of columns_to_hash
-- PR #3694 Allow for null columns parameter in csv_writer`
+- PR #3694 Allow for null columns parameter in `csv_writer`
 - PR #3706 Removed extra type-dispatcher call from merge
 - PR #3704 Changed the default delimiter to `whitespace` for nvtext methods.
 - PR #3741 Construct DataFrame from dict-of-Series with alignment
@@ -85,8 +94,15 @@
 - PR #3730 CSV reader: Set invalid float values to NaN/null
 - PR #3670 Floor when casting between timestamps of different precisions
 - PR #3728 Fix apply_boolean_mask issue with non-null string column
+- PR #3769 Don't look for a `name` attribute in column
 - PR #3783 Bind cuDF operators to Dask Dataframe
 - PR #3775 Fix segfault when reading compressed CSV files larger than 4GB
+- PR #3799 Align indices of Series inputs when adding as columns to DataFrame 
+- PR #3803 Keep name when unpickling Index objects
+- PR #3804 Fix cuda crash in AVRO reader
+- PR #3766 Remove references to cudf::type_id::CATEGORY from IO code
+- PR #3817 Don't always deepcopy an index
+- PR #3829 Parquet writer: fix empty dataframe causing cuda launch errors
 
 
 # cuDF 0.11.0 (11 Dec 2019)
@@ -228,7 +244,6 @@
 - PR #3314 Drop `cython` from run requirements
 - PR #3301 Add tests for empty column wrapper.
 - PR #3294 Update to arrow-cpp and pyarrow 0.15.1
-- PR #3292 Port NVStrings regex contains function
 - PR #3310 Add `row_hasher` and `element_hasher` utilities
 - PR #3272 Support non-default streams when creating/destroying hash maps
 - PR #3286 Clean up the starter code on README

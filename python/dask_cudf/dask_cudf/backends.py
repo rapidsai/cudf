@@ -54,7 +54,7 @@ try:
     @hash_object_dispatch.register(cudf.DataFrame)
     def hash_object_cudf(frame, index=True):
         if index:
-            return _string_safe_hash(frame.reset_index)
+            return _string_safe_hash(frame.reset_index())
         return _string_safe_hash(frame)
 
     @hash_object_dispatch.register(cudf.Index)
