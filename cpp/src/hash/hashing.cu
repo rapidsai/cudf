@@ -228,8 +228,6 @@ void move_to_output_buffer(DataType const *input_buf,
     } 
   }
 
-  __syncthreads();
-
   // Fetch the offset in the output buffer of each partition in this thread block
   ipartition = threadIdx.x;
   while (ipartition < num_partitions) {
