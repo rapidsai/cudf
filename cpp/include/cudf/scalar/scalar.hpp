@@ -78,6 +78,12 @@ class scalar {
    */
   bool* validity_data() { return _is_valid.data(); }
 
+  /**
+   * @brief Returns a const raw pointer to the validity bool in device memory
+   */
+  bool const* validity_data() const { return _is_valid.data(); }
+
+
  protected:
   data_type _type{EMPTY};      ///< Logical type of value in the scalar
   rmm::device_scalar<bool> _is_valid{};  ///< Device bool signifying validity

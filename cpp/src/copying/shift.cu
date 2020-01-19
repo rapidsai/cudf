@@ -22,6 +22,7 @@
 #include <cudf/detail/fill.hpp>
 #include <cudf/detail/gather.hpp>
 #include "cudf/column/column_device_view.cuh"
+#include "cudf/null_mask.hpp"
 #include "cudf/types.hpp"
 #include "cudf/utilities/traits.hpp"
 #include "cudf/utilities/type_dispatcher.hpp"
@@ -45,34 +46,31 @@ namespace experimental {
 namespace {
 
 template<typename T>
-struct functor_foreach {
+struct value_functor {
     column_device_view const input;
-    mutable_column_device_view output;
-    size_type offset;
-    T fill_value;
     size_type size;
-
-    functor_foreach(column_device_view input,
-                 mutable_column_device_view output,
-                 size_type offset,
-                 T fill_value): input(input),
-                                output(output),
-                                offset(offset),
-                                fill_value(fill_value),
-                                size(input.size())
-    {
-    }
+    size_type offset;
+    T const* fill;
 
     T __device__ operator()(size_type idx) {
-        if (idx < offset) {
-            return fill_value;
-        }
+        auto src_idx = idx - offset;
+        return src_idx < 0 || src_idx >= size
+            ? *fill
+            : input.element<T>(src_idx);
+    }
+};
 
-        if (idx > offset + size) {
-            return fill_value;
-        }
+struct validity_functor {
+    column_device_view const input;
+    size_type size;
+    size_type offset;
+    bool const* fill;
 
-        return input.element<T>(idx - offset);
+    bool __device__ operator()(size_type idx) {
+        auto src_idx = idx - offset;
+        return src_idx < 0 || src_idx >= size
+            ? *fill
+            : input.is_valid(src_idx);
     }
 };
 
@@ -99,16 +97,43 @@ struct functor {
         auto device_input = column_device_view::create(input);
         auto output = allocate_like(input, mask_allocation_policy::NEVER);
         auto device_output = mutable_column_device_view::create(*output);
-        auto func = functor_foreach<T>{*device_input,
-                                       *device_output,
-                                       offset,
-                                       scalar.value(stream)};
 
-        thrust::transform(rmm::exec_policy(stream)->on(stream),
-                          thrust::make_counting_iterator<size_type>(0),
-                          thrust::make_counting_iterator<size_type>(input.size()),
-                          device_output->data<T>(),
-                          func);
+        auto index_begin = thrust::make_counting_iterator<size_type>(0);
+        auto index_end = thrust::make_counting_iterator<size_type>(input.size());
+
+        auto func_value = value_functor<T>{*device_input,
+                                           input.size(),
+                                           offset,
+                                           scalar.data() };
+
+        if (scalar.is_valid() && not input.nullable())
+        {
+            thrust::transform(rmm::exec_policy(stream)->on(stream),
+                              index_begin,
+                              index_end,
+                              device_output->data<T>(),
+                              func_value);
+
+            return output;
+        }
+
+
+        auto func_validity = validity_functor{*device_input,
+                                              input.size(),
+                                              offset,
+                                              scalar.validity_data()};
+
+        thrust::transform_if(rmm::exec_policy(stream)->on(stream),
+                             index_begin,
+                             index_end,
+                             device_output->data<T>(),
+                             func_value,
+                             func_validity);
+
+        auto mask_pair = detail::valid_if(index_begin, index_end, func_validity);
+
+        output->set_null_mask(std::move(std::get<0>(mask_pair)));
+        output->set_null_count(std::get<1>(mask_pair));
 
         return output;
     }
@@ -118,7 +143,7 @@ struct functor {
 
 std::unique_ptr<table> shift(table_view const& input,
                              size_type offset,
-                             std::vector<scalar> const& fill_values,
+                             std::vector<std::unique_ptr<scalar>> const& fill_values,
                              rmm::mr::device_memory_resource *mr,
                              cudaStream_t stream)
 {
@@ -126,29 +151,22 @@ std::unique_ptr<table> shift(table_view const& input,
         return empty_like(input);
     }
 
-    if (input.num_columns() != static_cast<size_type>(fill_values.size())) {
-        // cudf::logic_error
+
+    CUDF_EXPECTS(input.num_columns() == static_cast<size_type>(fill_values.size()),
+                 "");
+
+    for (size_type i = 0; i < input.num_columns(); ++i) {
+        CUDF_EXPECTS(input.column(i).type() == fill_values[i]->type(),
+                 "");
     }
 
-    // verify input columns and fill_values have compatible dtypes.
-    // throw cudf::logic_error if any dtype is mismatched.
-    // possibly aggregate and report all mismatched-dtypes in a single throw.
-
-    if (abs(offset) >= input.num_rows()) {
-        // It may not be useful to process this case specially, since the normal
-        // dispatch implementation could handle this.
-        // allocate_like for each column
-        // fill each collumn
-        // return table of those columns.
-    }
-    
     auto output_columns = std::vector<std::unique_ptr<column>>{};
 
     for (auto col = 0; col < input.num_columns(); col++) {
         auto input_column = input.column(col);
         auto const& fill_value = fill_values[col];
         output_columns.push_back(type_dispatcher(input_column.type(), functor{},
-                                                 input_column, offset, fill_value,
+                                                 input_column, offset, *fill_value,
                                                  mr, stream));
     }
 
