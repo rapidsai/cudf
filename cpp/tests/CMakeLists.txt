@@ -144,7 +144,7 @@ set(ERROR_TEST_SRC
 ConfigureTest(ERROR_TEST "${ERROR_TEST_SRC}")
 
 ###################################################################################################
-# - groupby tests ---------------------------------------------------------------------------------
+# - legacy groupby tests ---------------------------------------------------------------------------------
 
 set(LEGACY_HASH_GROUPBY_TEST_SRC 
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/legacy/single_column_count.cu"
@@ -178,6 +178,23 @@ set(LEGACY_GROUPBY_WO_AGG_TEST_SRC
     )
 
 ConfigureTest(LEGACY_GROUPBY_WO_AGG_TEST "${LEGACY_GROUPBY_WO_AGG_TEST_SRC}")
+
+###################################################################################################
+# - groupby tests ---------------------------------------------------------------------------------
+
+set(GROUPBY_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/groupby_keys_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_count_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_sum_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_min_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_max_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_mean_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_var_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_std_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_median_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_quantile_test.cu")
+
+ConfigureTest(GROUPBY_TEST "${GROUPBY_TEST_SRC}")
 
 ###################################################################################################
 # - legacy join tests ------------------------------------------------------------------------------------

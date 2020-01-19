@@ -45,12 +45,6 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
     cudaStream_t stream, rmm::mr::device_memory_resource* mr);
 }  // namespace hash
 
-namespace sort {
-// Sort-based groupby
-std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
-    table_view const& keys, std::vector<aggregation_request> const& requests,
-    cudaStream_t stream, rmm::mr::device_memory_resource* mr);
-}  // namespace sort
 }  // namespace detail
 }  // namespace groupby
 }  // namespace experimental
