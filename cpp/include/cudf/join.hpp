@@ -233,7 +233,7 @@ std::unique_ptr<cudf::experimental::table> full_join(
  *          return_columns: { 1 }
  * Result: { c: {1, 2} }
  *
- * @throws cudf::logic_error if either table is empty
+ * @throws cudf::logic_error if number of columns in either `left` or `right` table is 0
  * @throws cudf::logic_error if number of returned columns is 0
  * @throws cudf::logic_error if number of elements in `right_on` and `left_on` are not equal
  *
@@ -283,7 +283,7 @@ std::unique_ptr<cudf::experimental::table> left_semi_join(cudf::table_view const
  *          return_columns: { 1 }
  * Result: { c: {1} }
  *
- * @throws cudf::logic_error if either table is empty
+ * @throws cudf::logic_error if number of columns in either `left` or `right` table is 0
  * @throws cudf::logic_error if number of returned columns is 0
  * @throws cudf::logic_error if number of elements in `right_on` and `left_on` are not equal
  *

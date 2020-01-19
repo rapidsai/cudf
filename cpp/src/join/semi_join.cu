@@ -30,7 +30,7 @@ namespace detail {
    * table and then select only rows that exist (or don't exist) to be included in
    * the return set.
    *
-   * @throws cudf::logic_error if either table is empty
+   * @throws cudf::logic_error if number of columns in either `left` or `right` table is 0
    * @throws cudf::logic_error if number of returned columns is 0
    * @throws cudf::logic_error if number of elements in `right_on` and `left_on` are not equal
    *
@@ -98,15 +98,15 @@ std::unique_ptr<cudf::experimental::table> left_semi_anti_join(cudf::table_view 
                                                 std::numeric_limits<bool8>::max(),
                                                 std::numeric_limits<cudf::size_type>::max(),
                                                 hash_build,
-                                                equality_build,
-                                                hash_probe,
-                                                equality_probe);
+                                                equality_build);
   auto hash_table = *hash_table_ptr;
 
-  constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
-  experimental::detail::grid_1d config(right.num_rows(), block_size);
-
-  build_hash_table<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(hash_table, right.num_rows());
+  thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+                     thrust::make_counting_iterator<size_type>(0),
+                     right.num_rows(),
+                     [hash_table] __device__ (size_type idx) mutable {
+                       hash_table.insert(thrust::make_pair(idx, true));
+                     });
 
   //
   // Now we have a hash table, we need to iterate over the rows of the left table
@@ -123,9 +123,9 @@ std::unique_ptr<cudf::experimental::table> left_semi_anti_join(cudf::table_view 
                                         thrust::make_counting_iterator<size_type>(0),
                                         thrust::make_counting_iterator<size_type>(left.num_rows()),
                                         gather_map.begin(),
-                                        [hash_table, join_type_boolean]
+                                        [hash_table, join_type_boolean, hash_probe, equality_probe]
                                         __device__ (size_type idx) {
-                                          auto pos = hash_table.find(idx);
+                                          auto pos = hash_table.find(idx, hash_probe, equality_probe);
                                           return (pos != hash_table.end()) == join_type_boolean;
                                         });
 
