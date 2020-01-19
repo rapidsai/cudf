@@ -19,6 +19,7 @@
 
 ## Improvements
 
+- PR #3124 Add support for grand-children in cudf column classes
 - PR #3292 Port NVStrings regex contains function
 - PR #3409 Port NVStrings regex replace function
 - PR #3417 Port NVStrings regex findall function

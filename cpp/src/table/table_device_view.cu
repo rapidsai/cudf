@@ -48,8 +48,8 @@ table_device_view_base<ColumnDeviceView, HostTableView>::table_device_view_base(
   if (source_view.num_columns() > 0) {
     //
     // First calculate the size of memory needed to hold the
-    // array of ColumnDeviceViews. This is done by calling extent()
-    // for each of the ColumnViews in the table_view's columns.
+    // table's ColumnDeviceViews. This is done by calling extent()
+    // for each of the table's ColumnViews columns.
     size_type views_size_bytes =
         std::accumulate(source_view.begin(), source_view.end(), 0,
             [](size_type init, auto col) {
@@ -57,7 +57,7 @@ table_device_view_base<ColumnDeviceView, HostTableView>::table_device_view_base(
             });
     // A buffer of CPU memory is allocated to hold the ColumnDeviceView
     // objects. Once filled, the CPU memory is then copied to device memory
-    // at the _columns member pointer.
+    // and the pointer is set in the _columns member.
     std::vector<int8_t> h_buffer(views_size_bytes);
     ColumnDeviceView* h_column = reinterpret_cast<ColumnDeviceView*>(h_buffer.data());
     // Each ColumnDeviceView instance may have child objects which may
@@ -71,9 +71,9 @@ table_device_view_base<ColumnDeviceView, HostTableView>::table_device_view_base(
     ColumnDeviceView* d_column = _columns;
     // The beginning of the memory must be the fixed-sized ColumnDeviceView
     // objects in order for _columns to be used as an array. Therefore,
-    // any child data is assigned to the end of this array.
-    int8_t* h_end = (int8_t*)(h_column + source_view.num_columns());
-    int8_t* d_end = (int8_t*)(d_column + source_view.num_columns());
+    // any child data is assigned to the end of this array (h_end/d_end).
+    auto h_end = (int8_t*)(h_column + source_view.num_columns());
+    auto d_end = (int8_t*)(d_column + source_view.num_columns());
     // Create the ColumnDeviceView from each column within the CPU memory
     // Any column child data should be copied into h_end and any
     // internal pointers should be set using d_end.
@@ -91,6 +91,7 @@ table_device_view_base<ColumnDeviceView, HostTableView>::table_device_view_base(
     
     CUDA_TRY(cudaMemcpyAsync(_columns, h_buffer.data(),
                              views_size_bytes, cudaMemcpyDefault, stream));
+    CUDA_TRY(cudaStreamSynchronize(stream));
   }
 }
 

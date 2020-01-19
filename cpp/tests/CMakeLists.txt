@@ -105,7 +105,8 @@ ConfigureTest(LEGACY_COLUMN_TEST "${LEGACY_COLUMN_TEST_SRC}")
 set(COLUMN_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/column/column_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/column/column_view_test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/column/column_device_view_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/column/column_device_view_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/column/compound_test.cu")
 
 ConfigureTest(COLUMN_TEST "${COLUMN_TEST_SRC}")
 
