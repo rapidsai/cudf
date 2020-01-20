@@ -91,8 +91,6 @@ constexpr orc::TypeKind to_orc_type(cudf::type_id id) {
     case cudf::type_id::TIMESTAMP_MILLISECONDS:
     case cudf::type_id::TIMESTAMP_NANOSECONDS:
       return TypeKind::TIMESTAMP;
-    case cudf::type_id::CATEGORY:
-      return TypeKind::INT;
     case cudf::type_id::STRING:
       return TypeKind::STRING;
     default:
@@ -108,9 +106,9 @@ constexpr T to_clockscale(cudf::type_id timestamp_id) {
   switch (timestamp_id) {
     case cudf::type_id::TIMESTAMP_SECONDS:
       return 9;
-    case cudf::type_id::TIMESTAMP_MICROSECONDS:
-      return 6;
     case cudf::type_id::TIMESTAMP_MILLISECONDS:
+      return 6;
+    case cudf::type_id::TIMESTAMP_MICROSECONDS:
       return 3;
     case cudf::type_id::TIMESTAMP_NANOSECONDS:
     default:

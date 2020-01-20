@@ -22,7 +22,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/aggregation.hpp>
-#include <cudf/detail/aggregation.hpp>
+#include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/aggregation/aggregation.cuh>
 
 #include <memory>
 #include <utility>
@@ -83,12 +84,14 @@ bool constexpr is_hash_aggregation(aggregation::Kind t) {
  */
 bool can_use_hash_groupby(table_view const& keys,
                       std::vector<aggregation_request> const& requests) {
-  return std::all_of(
-      requests.begin(), requests.end(), [](aggregation_request const& r) {
-        return std::all_of(
-            r.aggregations.begin(), r.aggregations.end(),
-            [](auto const& a) { return is_hash_aggregation(a->kind); });
-      });
+  return false;
+  // TODO (dm): Jake to enable the following code when hash-groupby is ready
+  // return std::all_of(
+  //     requests.begin(), requests.end(), [](aggregation_request const& r) {
+  //       return std::all_of(
+  //           r.aggregations.begin(), r.aggregations.end(),
+  //           [](auto const& a) { return is_hash_aggregation(a->kind); });
+  //     });
 }
 
 // Hash-based groupby
