@@ -327,6 +327,13 @@ class cached_property:
 
 
 class OrderedColumnDict(OrderedDict):
+    """
+    An OrderedDict with the following restrictions:
+
+    - All values must be of type ColumnBase (or its derivatives)
+    - All values must be of the same length
+    """
+
     def __setitem__(self, key, value):
         from cudf.core.column import ColumnBase
 
