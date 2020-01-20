@@ -147,26 +147,24 @@ std::unique_ptr<table> shift(table_view const& input,
                              rmm::mr::device_memory_resource *mr,
                              cudaStream_t stream)
 {
-    if (input.num_rows() == 0) {
-        return empty_like(input);
-    }
-
-
     CUDF_EXPECTS(input.num_columns() == static_cast<size_type>(fill_values.size()),
-                 "");
+                 "shift requires one fill value for each column.");
 
     for (size_type i = 0; i < input.num_columns(); ++i) {
         CUDF_EXPECTS(input.column(i).type() == fill_values[i]->type(),
-                 "");
+                     "shift requires each fill value type to match the corrosponding column type.");
+    }
+
+    if (input.num_rows() == 0) {
+        return empty_like(input);
     }
 
     auto output_columns = std::vector<std::unique_ptr<column>>{};
 
     for (auto col = 0; col < input.num_columns(); col++) {
         auto input_column = input.column(col);
-        auto const& fill_value = fill_values[col];
         output_columns.push_back(type_dispatcher(input_column.type(), functor{},
-                                                 input_column, offset, *fill_value,
+                                                 input_column, offset, *fill_values[col],
                                                  mr, stream));
     }
 
