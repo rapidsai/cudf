@@ -503,9 +503,9 @@ class RangeIndex(Index):
     def as_column(self):
         if len(self) > 0:
             vals = cudautils.arange(self._start, self._stop, dtype=self.dtype)
+            return column.as_column(vals)
         else:
-            vals = rmm.device_array(0, dtype=self.dtype)
-        return column.build_column(data=Buffer(vals), dtype=vals.dtype,)
+            return column.column_empty(0, masked=False, dtype=self.dtype)
 
     @cached_property
     def _values(self):
