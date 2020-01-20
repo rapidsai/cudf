@@ -729,7 +729,7 @@ def test_dataframe_append_to_empty():
 def test_dataframe_setitem_index_len1():
     gdf = DataFrame()
     gdf["a"] = [1]
-    gdf["b"] = gdf.index.as_column()
+    gdf["b"] = gdf.index._values
 
     np.testing.assert_equal(gdf.b.to_array(), [0])
 

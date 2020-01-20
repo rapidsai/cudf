@@ -1,4 +1,5 @@
 import functools
+from collections import OrderedDict
 from math import ceil, floor, isinf, isnan
 
 import numpy as np
@@ -323,3 +324,41 @@ class cached_property:
             value = self.func(instance)
             setattr(instance, self.func.__name__, value)
             return value
+
+
+class OrderedColumnDict(OrderedDict):
+    """
+    An OrderedDict with the following restrictions:
+
+    - All values must be of type ColumnBase (or its derivatives)
+    - All values must be of the same length
+    """
+
+    def __setitem__(self, key, value):
+        from cudf.core.column import ColumnBase
+
+        if not isinstance(value, ColumnBase):
+            raise TypeError(
+                f"Cannot insert object of type "
+                f"{value.__class__.__name__} into OrderedColumnDict"
+            )
+
+        if self.first is not None and len(self.first) > 0:
+            if len(value) != len(self.first):
+                raise ValueError(
+                    f"Cannot insert Column of different length "
+                    "into OrderedColumnDict"
+                )
+
+        super().__setitem__(key, value)
+
+    @property
+    def first(self):
+        """
+        Returns the first value if self is non-empty;
+        returns None otherwise.
+        """
+        if len(self) == 0:
+            return None
+        else:
+            return next(iter(self.values()))

@@ -238,16 +238,13 @@ class ColumnBase(Column):
         newsize = sum(map(len, objs))
 
         if is_categorical_dtype(head):
-            data = None
             data_dtype = head.codes.dtype
-            children = (
-                column_empty(newsize, dtype=head.codes.dtype, masked=True),
-            )
+            data = None
+            children = (column_empty(newsize, dtype=head.codes.dtype),)
         else:
             data_dtype = head.dtype
-            mem = rmm.DeviceBuffer(size=newsize * data_dtype.itemsize)
-            data = Buffer(mem)
-            children = None
+            data = Buffer.empty(size=newsize * data_dtype.itemsize)
+            children = ()
 
         # Allocate output mask only if there's nulls in the input objects
         mask = None
@@ -629,7 +626,7 @@ class ColumnBase(Column):
             raise TypeError(msg)
         return libcudf.quantile.quantile(self, quant, interpolation, exact)
 
-    def take(self, indices, ignore_index=False):
+    def take(self, indices):
         """Return Column by taking values from the corresponding *indices*.
         """
         from cudf.core.column import column_empty_like
