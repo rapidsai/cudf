@@ -11,10 +11,16 @@ from cudf.utils.utils import OrderedColumnDict
 
 
 cdef class Table:
-
     def __init__(self, data=None, index=None):
         """
-        Data: an iterable of Columns
+        Table: A collection of Column objects with an optional index.
+
+        Parameters
+        ----------
+        data : OrderedColumnDict
+            An OrderedColumnDict mapping column names to Columns
+        index : Table
+            A Table representing the (optional) index columns.
         """
         if data is None:
             data = {}

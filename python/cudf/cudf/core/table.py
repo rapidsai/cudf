@@ -6,6 +6,17 @@ from cudf.utils.dtypes import is_categorical_dtype
 
 
 class Frame(libcudfxx.Table):
+    """
+    Frame: A collection of Column objects with an optional index.
+
+    Parameters
+    ----------
+    data : OrderedColumnDict
+        An OrderedColumnDict mapping column names to Columns
+    index : Table
+        A Frame representing the (optional) index columns.
+    """
+
     def gather(self, gather_map):
         if not pd.api.types.is_integer_dtype(gather_map.dtype):
             gather_map = gather_map.astype("int32")
