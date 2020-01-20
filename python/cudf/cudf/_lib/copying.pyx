@@ -1,4 +1,3 @@
-
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
 # cython: profile=False
