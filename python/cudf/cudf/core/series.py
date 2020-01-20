@@ -13,11 +13,10 @@ import rmm
 
 import cudf
 import cudf._lib as libcudf
-import cudf._libxx as libcudfxx
 from cudf.core.column import ColumnBase, DatetimeColumn, column
+from cudf.core.frame import Frame
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
-from cudf.core.table import Frame
 from cudf.core.window import Rolling
 from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.docutils import copy_docstring

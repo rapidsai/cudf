@@ -22,7 +22,7 @@ from cudf.core.column import (
     StringColumn,
     column,
 )
-from cudf.core.table import Frame
+from cudf.core.frame import Frame
 from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import is_categorical_dtype, is_scalar, min_signed_type
