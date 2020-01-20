@@ -331,7 +331,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         else:
             df = DataFrame()
             for i, col in enumerate(columns_df._columns):
-                # need Series() in case a scalar ism returned
+                # need Series() in case a scalar is returned
                 df[i] = Series(col[arg[0]])
 
             df.index = as_index(columns_df.index[arg[0]])

@@ -799,7 +799,7 @@ class GenericIndex(Index):
             return res
 
     def as_column(self):
-        """Convert the index as a Series.
+        """Return the index as a Column
         """
         return self._data[self.name]
 
