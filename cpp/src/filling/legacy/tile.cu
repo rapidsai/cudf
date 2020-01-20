@@ -16,6 +16,8 @@
 
 #include <cudf/utilities/error.hpp>
 #include <cudf/legacy/copying.hpp>
+#include "cudf/types.hpp"
+#include "rmm/mr/device_memory_resource.hpp"
 
 #include <cudf/cudf.h>
 #include <cudf/types.h>
@@ -32,6 +34,8 @@ namespace cudf {
 namespace detail {
 
 cudf::table tile(const cudf::table &in, gdf_size_type count, 
+                 rmm::mr::device_memory_resource* mr =
+                   rmm::mr::get_default_resource(),
                  cudaStream_t stream = 0)
 {
   CUDF_EXPECTS(count >= 0, "Count cannot be negative");

@@ -37,8 +37,7 @@ struct interleave_columns_functor
     std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>>
     operator()(table_view const& input,
                bool create_mask,
-               rmm::mr::device_memory_resource *mr =
-                 rmm::mr::get_default_resource(),
+               rmm::mr::device_memory_resource *mr,
                cudaStream_t stream = 0)
     {
         auto arch_column = input.column(0);
@@ -57,10 +56,10 @@ struct interleave_columns_functor
         if (not create_mask)
         {
             thrust::transform(rmm::exec_policy(stream)->on(stream),
-                            index_begin,
-                            index_end,
-                            device_output->data<T>(),
-                            func_value);
+                              index_begin,
+                              index_end,
+                              device_output->data<T>(),
+                              func_value);
 
             return output;
         }
@@ -80,7 +79,11 @@ struct interleave_columns_functor
         rmm::device_buffer mask;
         size_type null_count;
 
-        std::tie(mask, null_count) = valid_if(index_begin, index_end, func_validity);
+        std::tie(mask, null_count) = valid_if(index_begin,
+                                              index_end,
+                                              func_validity,
+                                              stream,
+                                              mr);
 
         output->set_null_mask(std::move(mask), null_count);
 
@@ -92,7 +95,8 @@ struct interleave_columns_functor
 } // namespace detail
 
 std::unique_ptr<column>
-interleave_columns(table_view const& input)
+interleave_columns(table_view const& input,
+                   rmm::mr::device_memory_resource *mr)
 {
     CUDF_EXPECTS(input.num_columns() > 0, "input must have at least one column to determine dtype.");
 
@@ -105,7 +109,8 @@ interleave_columns(table_view const& input)
     }
 
     auto out = type_dispatcher(dtype, detail::interleave_columns_functor{},
-                               input, output_needs_mask);
+                               input, output_needs_mask,
+                               mr);
 
     return out;
 }
