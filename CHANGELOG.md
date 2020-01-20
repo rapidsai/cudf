@@ -2,6 +2,8 @@
 
 ## New Features
 
+- PR #3842 ORC writer: add support for column statistics
+
 ## Improvements
 
 ## Bug Fixes
