@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,30 +24,6 @@ namespace experimental {
 namespace detail {
 namespace {
 
-template<typename T>
-struct interleave_columns_element_selector
-{
-    table_device_view input;
-    T __device__ operator()(size_type idx)
-    {
-        auto col_num = idx % input.num_columns();
-        auto row_num = idx / input.num_columns();
-        auto in_col = input.column(col_num);
-        return in_col.element<T>(row_num);
-    }
-};
-
-struct interleave_columns_bitmask_selector
-{
-    table_device_view input;
-    bool __device__ operator()(size_type mask_idx, size_type bit_idx) {
-        auto col_idx = bit_idx % input.num_columns();
-        auto row_idx = bit_idx / input.num_columns();
-        auto in_col = input.column(col_idx);
-        return bit_is_set(in_col.null_mask(), row_idx);
-    }
-};
-
 struct interleave_columns_functor
 {
     template <typename T, typename... Args>
@@ -60,48 +36,55 @@ struct interleave_columns_functor
     template <typename T>
     std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>>
     operator()(table_view const& input,
-               mask_allocation_policy mask_policy,
+               bool create_mask,
                rmm::mr::device_memory_resource *mr =
                  rmm::mr::get_default_resource(),
                cudaStream_t stream = 0)
     {
         auto arch_column = input.column(0);
-        auto size = input.num_columns() * input.num_rows();
-        auto out = allocate_like(arch_column, size, mask_policy, mr, stream);
-        auto device_in = table_device_view::create(input);
-        auto device_out = mutable_column_device_view::create(*out);
-        auto counting_it = thrust::make_counting_iterator<size_type>(0);
+        auto output_size = input.num_columns() * input.num_rows();
+        auto output = allocate_like(arch_column, output_size, mask_allocation_policy::NEVER, mr, stream);
+        auto device_input = table_device_view::create(input);
+        auto device_output = mutable_column_device_view::create(*output);
+        auto index_begin = thrust::make_counting_iterator<size_type>(0);
+        auto index_end = thrust::make_counting_iterator<size_type>(output_size);
 
-        thrust::transform(rmm::exec_policy(stream)->on(stream),
-                          counting_it,
-                          counting_it + size,
-                          device_out->data<T>(),
-                          interleave_columns_element_selector<T>{*device_in});
+        auto func_value = [input=*device_input, divisor=input.num_columns()]
+            __device__ (size_type idx) {
+                return input.column(idx % divisor).element<T>(idx / divisor);
+            };
 
-        if (out->nullable())
+        if (not create_mask)
         {
-            auto constexpr block_size = 256;
-            auto const grid = grid_1d(size, block_size);
+            thrust::transform(rmm::exec_policy(stream)->on(stream),
+                            index_begin,
+                            index_end,
+                            device_output->data<T>(),
+                            func_value);
 
-            std::vector<bitmask_type*> masks = { device_out->null_mask() };
-            rmm::device_vector<bitmask_type*> device_masks{ masks };
-            rmm::device_vector<cudf::size_type> device_valid_counts(1, 0);
-
-            using Selector = interleave_columns_bitmask_selector;
-            auto selector = Selector{ *device_in };
-            auto kernel = select_bitmask_kernel<Selector, block_size>;
-            kernel<<<grid.num_blocks, block_size, 0, stream>>>(selector,
-                                                               device_masks.data().get(),
-                                                               1,
-                                                               size,
-                                                               device_valid_counts.data().get());
-
-            thrust::host_vector<cudf::size_type> valid_counts(device_valid_counts);
-
-            out->set_null_count(out->size() - valid_counts[0]);
+            return output;
         }
 
-        return out;
+        auto func_validity = [input=*device_input, divisor=input.num_columns()]
+            __device__ (size_type idx) {
+                return input.column(idx % divisor).is_valid(idx / divisor);
+            };
+
+        thrust::transform_if(rmm::exec_policy(stream)->on(stream),
+                             index_begin,
+                             index_end,
+                             device_output->data<T>(),
+                             func_value,
+                             func_validity);
+
+        rmm::device_buffer mask;
+        size_type null_count;
+
+        std::tie(mask, null_count) = valid_if(index_begin, index_end, func_validity);
+
+        output->set_null_mask(std::move(mask), null_count);
+
+        return output;
     }
 };
 
@@ -114,17 +97,15 @@ interleave_columns(table_view const& input)
     CUDF_EXPECTS(input.num_columns() > 0, "input must have at least one column to determine dtype.");
 
     auto dtype = input.column(0).type();
-    auto mask_policy = mask_allocation_policy::NEVER;
+    auto output_needs_mask = false;
 
-    for (auto &&col : input) {
+    for (auto& col : input) {
         CUDF_EXPECTS(dtype == col.type(), "DTYPE mismatch");
-        if (col.nullable()) {
-            mask_policy = mask_allocation_policy::ALWAYS;
-        }
+        output_needs_mask |= col.nullable();
     }
 
     auto out = type_dispatcher(dtype, detail::interleave_columns_functor{},
-                               input, mask_policy);
+                               input, output_needs_mask);
 
     return out;
 }
