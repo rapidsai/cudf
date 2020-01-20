@@ -202,7 +202,7 @@ std::unique_ptr<column> make_fixed_width_column(
 
 
 /**
- * @brief Construct STRING type column given a vector of pointer/size pairs.
+ * @brief Construct STRING type column given a device vector of pointer/size pairs.
  * The total number of char bytes must not exceed the maximum size of size_type.
  * The string characters are expected to be UTF-8 encoded sequence of char
  * bytes. Use the strings_column_view class to perform strings operations on
@@ -230,7 +230,7 @@ std::unique_ptr<column> make_strings_column(
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Construct STRING type column given a vector of string_view.
+ * @brief Construct STRING type column given a device vector of string_view.
  * The total number of char bytes must not exceed the maximum size of size_type.
  * The string characters are expected to be UTF-8 encoded sequence of char
  * bytes. Use the strings_column_view class to perform strings operations on
