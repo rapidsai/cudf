@@ -76,6 +76,7 @@
 
 ## Bug Fixes
 
+- PR #3618 Update 10 minutes to cudf and cupy to hide warning that were being shown in the docs
 - PR #3550 Update Java package to 0.12
 - PR #3549 Fix index name issue with iloc with RangeIndex
 - PR #3562 Fix 4GB limit for gzipped-compressed csv files
