@@ -77,7 +77,7 @@ class NumericalColumn(column.ColumnBase):
             msg = "{!r} operator not supported between {} and {}"
             raise TypeError(msg.format(binop, type(self), type(rhs)))
         return _numeric_column_binop(
-            lhs=self, rhs=rhs, op=binop, out_dtype=out_dtype, reflect=reflect,
+            lhs=self, rhs=rhs, op=binop, out_dtype=out_dtype, reflect=reflect
         )
 
     def unary_operator(self, unaryop):
@@ -146,7 +146,7 @@ class NumericalColumn(column.ColumnBase):
         from cudf.core.column import build_column
 
         return build_column(
-            data=self.astype("int64").data, dtype=dtype, mask=self.mask,
+            data=self.astype("int64").data, dtype=dtype, mask=self.mask
         )
 
     def as_numerical_column(self, dtype, **kwargs):
@@ -246,9 +246,7 @@ class NumericalColumn(column.ColumnBase):
             return self
 
         data = Buffer(cudautils.apply_round(self.data_array_view, decimals))
-        return column.build_column(
-            data=data, dtype=self.dtype, mask=self.mask,
-        )
+        return column.build_column(data=data, dtype=self.dtype, mask=self.mask)
 
     def applymap(self, udf, out_dtype=None):
         """Apply a elemenwise function to transform the values in the Column.
@@ -411,6 +409,61 @@ class NumericalColumn(column.ColumnBase):
                     [self], [1]
                 )
         return self._is_monotonic_decreasing
+
+    def can_cast_safely(self, to_dtype):
+        """
+        Returns true if all the values in self can be
+        safely cast to dtype
+        """
+        if self.dtype.kind == to_dtype.kind:
+            if self.dtype <= to_dtype:
+                return True
+            else:
+                # Kinds are the same but to_dtype is smaller
+                if "float" in to_dtype.name:
+                    info = np.finfo(to_dtype)
+                elif "int" in to_dtype.name:
+                    info = np.iinfo(to_dtype)
+                min_, max_ = info.min, info.max
+
+                if (self.min() > min_) and (self.max() < max_):
+                    return True
+                else:
+                    return False
+
+        # want to cast int to float
+        elif to_dtype.kind == "f" and self.dtype.kind == "i":
+            info = np.finfo(to_dtype)
+            biggest_exact_int = 2 ** (info.nmant + 1)
+            if (self.min() >= -biggest_exact_int) and (
+                self.max() <= biggest_exact_int
+            ):
+                return True
+            else:
+                from cudf import Series
+
+                if (
+                    Series(self).astype(to_dtype).astype(self.dtype)
+                    == Series(self)
+                ).all():
+                    return True
+                else:
+                    return False
+
+        # want to cast float to int:
+        elif to_dtype.kind == "i" and self.dtype.kind == "f":
+            info = np.iinfo(to_dtype)
+            min_, max_ = info.min, info.max
+            # best we can do is hope to catch it here and avoid compare
+            if (self.min() >= min_) and (self.max() <= max_):
+                from cudf import Series
+
+                if (Series(self) % 1 == 0).all():
+                    return True
+                else:
+                    return False
+            else:
+                return False
 
 
 def _numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
