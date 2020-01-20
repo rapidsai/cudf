@@ -26,6 +26,7 @@ from cudf.core.frame import Frame
 from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import is_categorical_dtype, is_scalar, min_signed_type
+from cudf.utils.utils import cached_property
 
 
 def _to_frame(this_index, index=True, name=None):
@@ -506,11 +507,9 @@ class RangeIndex(Index):
             vals = rmm.device_array(0, dtype=self.dtype)
         return column.build_column(data=Buffer(vals), dtype=vals.dtype,)
 
-    @property
+    @cached_property
     def _values(self):
-        if self._cached_values is None:
-            self._cached_values = self.as_column()
-        return self._cached_values
+        return self.as_column()
 
     @property
     def _data(self):
