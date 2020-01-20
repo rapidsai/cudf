@@ -1766,7 +1766,7 @@ class DataFrame(Frame):
         if isinstance(in_index, cudf.core.multiindex.MultiIndex):
             in_index = RangeIndex(len(in_index), name=in_index.name)
         out_cols, new_index = libcudf.stream_compaction.drop_duplicates(
-            [in_index.as_column()], in_cols, subset_cols, keep
+            [in_index._values], in_cols, subset_cols, keep
         )
         new_index = as_index(new_index, name=self.index.name)
         if isinstance(self.index, cudf.core.multiindex.MultiIndex):
@@ -1831,7 +1831,7 @@ class DataFrame(Frame):
         if isinstance(self.index, cudf.MultiIndex):
             index_cols.extend(self.index._source_data._columns)
         else:
-            index_cols.append(self.index.as_column())
+            index_cols.append(self.index._values)
 
         input_cols = index_cols + list(data_cols)
 
@@ -2813,8 +2813,8 @@ class DataFrame(Frame):
 
         else:
             idx_col_names.append(str(uuid.uuid4()))
-            lhs[idx_col_names[0]] = self.index.as_column()
-            rhs[idx_col_names[0]] = other.index.as_column()
+            lhs[idx_col_names[0]] = self.index._values
+            rhs[idx_col_names[0]] = other.index._values
 
         for name, col in self._data.items():
             lhs[name] = col
@@ -4325,7 +4325,7 @@ class DataFrame(Frame):
                 index = self.index.to_frame()._columns
                 index_names = self.index.to_frame().columns.to_list()
             else:
-                index = [self.index.as_column()]
+                index = [self.index._values]
                 index_names = [self.index.name]
         else:
             index = None

@@ -105,7 +105,7 @@ class Series(Frame):
             data = data.values
         elif isinstance(data, Index):
             name = data.name
-            data = data.as_column()
+            data = data._values
             if dtype is not None:
                 data = data.astype(dtype)
 
@@ -1205,7 +1205,7 @@ class Series(Frame):
         if isinstance(in_index, MultiIndex):
             in_index = RangeIndex(len(in_index))
         out_cols, new_index = libcudf.stream_compaction.drop_duplicates(
-            [in_index.as_column()], in_cols, None, keep
+            [in_index._values], in_cols, None, keep
         )
         new_index = as_index(new_index)
         if self.index.equals(new_index):
@@ -1634,7 +1634,7 @@ class Series(Frame):
             Series after replacement. The mask and index are preserved.
         """
         # if all the elements of replacement column are None then propagate the
-        # same dtype as self.dtype in column.as_column() for replacement
+        # same dtype as self.dtype in column._values for replacement
         all_nan = False
         if not is_scalar(to_replace):
             if is_scalar(replacement):
@@ -1687,7 +1687,7 @@ class Series(Frame):
         """
         rinds = cudautils.arange_reversed(self._column.size, dtype=np.int32)
         col = self._column[rinds]
-        index = self.index.as_column()[rinds]
+        index = self.index._values[rinds]
         return self._copy_construct(data=col, index=index)
 
     def one_hot_encoding(self, cats, dtype="float64"):
@@ -2089,8 +2089,8 @@ class Series(Frame):
 
         # If categorical, combine categories first
         if is_categorical_dtype(lhs):
-            lhs_cats = lhs.cat.categories.as_column()
-            rhs_cats = rhs.cat.categories.as_column()
+            lhs_cats = lhs.cat.categories._values
+            rhs_cats = rhs.cat.categories._values
             if np.issubdtype(rhs_cats.dtype, lhs_cats.dtype):
                 # if the categories are the same dtype, we can combine them
                 cats = Series(lhs_cats.append(rhs_cats)).drop_duplicates()

@@ -154,7 +154,7 @@ class StringMethods(object):
             others = others._column.nvstrings
         elif isinstance(others, Index):
             assert others.dtype == np.dtype("object")
-            others = others.as_column().nvstrings
+            others = others._values.nvstrings
         elif isinstance(others, StringMethods):
             """
             If others is a StringMethods then
