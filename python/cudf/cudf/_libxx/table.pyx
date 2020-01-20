@@ -28,6 +28,18 @@ cdef class Table:
         self._index = index
 
     @property
+    def _num_columns(self):
+        return len(self._data)
+
+    @property
+    def _num_rows(self):
+        if self._index is not None:
+            if len(self._index._data) == 0:
+                return 0
+            return self._index._num_rows
+        return len(next(iter(self._data.values())))
+
+    @property
     def _column_names(self):
         return tuple(self._data.keys())
 

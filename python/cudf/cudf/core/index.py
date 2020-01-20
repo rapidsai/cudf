@@ -448,9 +448,9 @@ class Index(Frame):
 
     @classmethod
     def _from_table(cls, table):
-        if len(table._data) == 0:
+        if table._num_columns == 0:
             raise ValueError("Cannot construct Index from any empty Table")
-        if len(table._data) == 1:
+        if table._num_columns == 1:
             return as_index(
                 next(iter(table._data.values())),
                 name=next(iter(table._data.keys())),

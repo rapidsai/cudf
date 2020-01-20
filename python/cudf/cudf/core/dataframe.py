@@ -347,7 +347,7 @@ class DataFrame(Frame):
     def shape(self):
         """Returns a tuple representing the dimensionality of the DataFrame.
         """
-        return len(self._index), len(self._data)
+        return self._num_rows, self._num_columns
 
     @property
     def ndim(self):
