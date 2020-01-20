@@ -1,4 +1,3 @@
-
 import itertools
 
 import numpy as np
@@ -36,7 +35,7 @@ cdef class Table:
         Return a list of Column objects backing this dataframe
         """
         return tuple(self._data.values())
-    
+
     @staticmethod
     cdef Table from_unique_ptr(unique_ptr[table] c_tbl,
                                column_names,
@@ -60,7 +59,9 @@ cdef class Table:
         if index_names is not None:
             index_columns = []
             for _ in index_names:
-                index_columns.append(Column.from_unique_ptr(move(dereference(it))))
+                index_columns.append(Column.from_unique_ptr(
+                    move(dereference(it))
+                ))
                 it += 1
             index = Table(OrderedColumnDict(zip(index_names, index_columns)))
 
@@ -72,7 +73,7 @@ cdef class Table:
         data = OrderedColumnDict(zip(column_names, data_columns))
 
         return Table(data=data, index=index)
-    
+
     cdef table_view view(self) except *:
         if self._index is None:
             return self._make_table_view(
@@ -102,7 +103,7 @@ cdef class Table:
         return self._make_table_view(
             self._data.values()
         )
-        
+
     cdef mutable_table_view mutable_data_view(self) except *:
         return self._make_mutable_table_view(
             self._data.values()
@@ -115,7 +116,7 @@ cdef class Table:
         return self._make_table_view(
             self._index.values()
         )
-        
+
     cdef mutable_table_view mutable_index_view(self) except *:
         if self._index is None:
             raise ValueError("Cannot get mutable_index_view of a Table "
@@ -123,7 +124,7 @@ cdef class Table:
         return self._make_mutable_table_view(
             self._index._data.values()
         )
-    
+
     cdef table_view _make_table_view(self, columns) except*:
         cdef vector[column_view] column_views
 
@@ -141,4 +142,3 @@ cdef class Table:
             mutable_column_views.push_back(col.mutable_view())
 
         return mutable_table_view(mutable_column_views)
-    
