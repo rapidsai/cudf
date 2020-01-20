@@ -31,7 +31,7 @@ namespace {
 
 constexpr size_type BLOCK_SIZE = 512;
 constexpr size_type ROWS_PER_THREAD = 8;
-constexpr size_type ELEMENT_PER_BLOCK = 2;
+constexpr size_type ELEMENT_PER_THREAD = 2;
 
 /** 
  * @brief  Functor to map a hash value to a particular 'bin' or partition number
@@ -201,12 +201,12 @@ void move_to_output_buffer(DataType const *input_buf,
   typedef cub::BlockScan<size_type, BLOCK_SIZE> BlockScan;
   __shared__ typename BlockScan::TempStorage temp_storage;
 
-  // use ELEMENT_PER_BLOCK=2 to support upto 1024 partitions 
-  size_type temp_histo[ELEMENT_PER_BLOCK];
+  // use src/partitioned_join.cuh=2 to support upto 1024 partitions 
+  size_type temp_histo[ELEMENT_PER_THREAD];
 
-  for (int i = 0; i < ELEMENT_PER_BLOCK; ++i) {
-    if (ELEMENT_PER_BLOCK * threadIdx.x + i < num_partitions) {
-      temp_histo[i] = block_partition_sizes[blockIdx.x + (ELEMENT_PER_BLOCK * threadIdx.x + i) * gridDim.x]; 
+  for (int i = 0; i < ELEMENT_PER_THREAD; ++i) {
+    if (ELEMENT_PER_THREAD * threadIdx.x + i < num_partitions) {
+      temp_histo[i] = block_partition_sizes[blockIdx.x + (ELEMENT_PER_THREAD * threadIdx.x + i) * gridDim.x]; 
     } else {
       temp_histo[i] = 0;
     }
@@ -222,9 +222,9 @@ void move_to_output_buffer(DataType const *input_buf,
     partition_offset_shared[0] = 0;
   }
 
-  for (int i = 0; i < ELEMENT_PER_BLOCK; ++i) {
-    if (ELEMENT_PER_BLOCK * threadIdx.x + i < num_partitions) {
-      partition_offset_shared[ELEMENT_PER_BLOCK * threadIdx.x + i + 1] = temp_histo[i]; 
+  for (int i = 0; i < ELEMENT_PER_THREAD; ++i) {
+    if (ELEMENT_PER_THREAD * threadIdx.x + i < num_partitions) {
+      partition_offset_shared[ELEMENT_PER_THREAD * threadIdx.x + i + 1] = temp_histo[i]; 
     } 
   }
 
