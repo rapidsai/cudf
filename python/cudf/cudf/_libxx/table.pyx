@@ -86,10 +86,10 @@ cdef class Table:
         of this Table.
         """
         if self._index is None:
-            return self._make_table_view(
+            return _make_table_view(
                 self._data.values()
             )
-        return self._make_table_view(
+        return _make_table_view(
             itertools.chain(
                 self._index._data.values(),
                 self._data.values(),
@@ -102,23 +102,23 @@ cdef class Table:
         (including index columns) of this Table.
         """
         if self._index is None:
-            return self._make_mutable_table_view(
+            return _make_mutable_table_view(
                 self._data.values()
             )
-        return self._make_mutable_table_view(
+        return _make_mutable_table_view(
             itertools.chain(
                 self._index._data.values(),
                 self._data.values(),
             )
         )
-        return self._make_mutable_table_view(self._data.values())
+        return _make_mutable_table_view(self._data.values())
 
     cdef table_view data_view(self) except *:
         """
         Return a cudf::table_view of just the data columns
         of this Table.
         """
-        return self._make_table_view(
+        return _make_table_view(
             self._data.values()
         )
 
@@ -127,7 +127,7 @@ cdef class Table:
         Return a cudf::mutable_table_view of just the data columns
         of this Table.
         """
-        return self._make_mutable_table_view(
+        return _make_mutable_table_view(
             self._data.values()
         )
 
@@ -139,7 +139,7 @@ cdef class Table:
         if self._index is None:
             raise ValueError("Cannot get index_view of a Table "
                              "that has no index")
-        return self._make_table_view(
+        return _make_table_view(
             self._index.values()
         )
 
@@ -151,32 +151,33 @@ cdef class Table:
         if self._index is None:
             raise ValueError("Cannot get mutable_index_view of a Table "
                              "that has no index")
-        return self._make_mutable_table_view(
+        return _make_mutable_table_view(
             self._index._data.values()
         )
 
-    cdef table_view _make_table_view(self, columns) except*:
-        """
-        Helper function to create a cudf::table_view from
-        a list of Columns
-        """
-        cdef vector[column_view] column_views
 
-        cdef Column col
-        for col in columns:
-            column_views.push_back(col.view())
+cdef table_view _make_table_view(columns) except*:
+    """
+    Helper function to create a cudf::table_view from
+    a list of Columns
+    """
+    cdef vector[column_view] column_views
 
-        return table_view(column_views)
+    cdef Column col
+    for col in columns:
+        column_views.push_back(col.view())
 
-    cdef mutable_table_view _make_mutable_table_view(self, columns) except*:
-        """
-        Helper function to create a cudf::mutable_table_view from
-        a list of Columns
-        """
-        cdef vector[mutable_column_view] mutable_column_views
+    return table_view(column_views)
 
-        cdef Column col
-        for col in columns:
-            mutable_column_views.push_back(col.mutable_view())
+cdef mutable_table_view _make_mutable_table_view(columns) except*:
+    """
+    Helper function to create a cudf::mutable_table_view from
+    a list of Columns
+    """
+    cdef vector[mutable_column_view] mutable_column_views
 
-        return mutable_table_view(mutable_column_views)
+    cdef Column col
+    for col in columns:
+        mutable_column_views.push_back(col.mutable_view())
+
+    return mutable_table_view(mutable_column_views)
