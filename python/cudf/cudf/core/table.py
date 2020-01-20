@@ -7,7 +7,7 @@ from cudf.core.column import as_column, build_categorical_column
 from cudf.utils.dtypes import is_categorical_dtype
 
 
-class NamedTable(libcudfxx.Table):
+class Frame(libcudfxx.Table):
     def gather(self, gather_map):
         if not pd.api.types.is_integer_dtype(gather_map.dtype):
             gather_map = gather_map.astype("int32")

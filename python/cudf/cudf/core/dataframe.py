@@ -35,7 +35,7 @@ from cudf.core.column import (
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
 from cudf.core.series import Series
-from cudf.core.table import NamedTable
+from cudf.core.table import Frame
 from cudf.core.window import Rolling
 from cudf.utils import applyutils, cudautils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
@@ -91,7 +91,7 @@ def _reverse_op(fn):
     }[fn]
 
 
-class DataFrame(NamedTable):
+class DataFrame(Frame):
     """
     A GPU Dataframe object.
 
