@@ -45,7 +45,10 @@ namespace orc {
  * @brief Options for the ORC writer.
  */
 struct writer_options {
+  /// Selects the compression format to use in the ORC file
   compression_type compression = compression_type::AUTO;
+  /// Enables writing column statistics in the ORC file
+  bool enable_statistics = true;
 
   writer_options() = default;
   writer_options(writer_options const&) = default;
@@ -55,7 +58,8 @@ struct writer_options {
    *
    * @param format Compression format to use
    */
-  explicit writer_options(compression_type format) : compression(format) {}
+  explicit writer_options(compression_type format, bool stats_en) :
+             compression(format), enable_statistics(stats_en) {}
 };
 
 /**

@@ -148,7 +148,7 @@ void write_orc(write_orc_args const& args,
                rmm::mr::device_memory_resource* mr) {
   namespace orc = cudf::experimental::io::detail::orc;
 
-  orc::writer_options options{args.compression};
+  orc::writer_options options{args.compression, args.enable_statistics};
   auto writer = make_writer<orc::writer>(args.sink, options, mr);
 
   writer->write_all(args.table, args.metadata);
