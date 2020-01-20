@@ -1499,22 +1499,15 @@ class DataFrame(Frame):
         else:
             return out.set_index(RangeIndex(len(self)))
 
-    def take(self, positions, ignore_index=False):
+    def take(self, positions):
         positions = as_column(positions)
         if pd.api.types.is_bool_dtype(positions):
-            return self._apply_boolean_mask(
-                positions, ignore_index=ignore_index
-            )
+            return self._apply_boolean_mask(positions,)
         out = self.gather(positions)
-        if ignore_index:
-            out = out.set_index(RangeIndex(len(positions)))
         return out
 
-    def _apply_boolean_mask(self, mask, ignore_index=False):
-        if ignore_index:
-            index = RangeIndex(len(mask))
-        else:
-            index = self.index.take(mask)
+    def _apply_boolean_mask(self, mask):
+        index = self.index.take(mask)
         out = DataFrame()
         if self._data:
             for i, col_name in enumerate(self._data.keys()):

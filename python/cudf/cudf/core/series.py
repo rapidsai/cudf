@@ -13,6 +13,7 @@ import rmm
 
 import cudf
 import cudf._lib as libcudf
+import cudf._libxx as libcudfxx
 from cudf.core.column import ColumnBase, DatetimeColumn, column
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
@@ -130,6 +131,12 @@ class Series(Frame):
 
         super().__init__({name: data})
         self._index = RangeIndex(len(data)) if index is None else index
+
+    @classmethod
+    def _from_table(cls, table):
+        name = next(iter(table._data.keys()))
+        data = next(iter(table._data.values()))
+        return cls(data=data, index=Index._from_table(table._index), name=name)
 
     @property
     def _column(self):
@@ -465,15 +472,10 @@ class Series(Frame):
 
         self._column[key] = value
 
-    def take(self, indices, ignore_index=False):
+    def take(self, indices):
         """Return Series by taking values from the corresponding *indices*.
         """
-        result = self[indices]
-        if ignore_index:
-            index = RangeIndex(len(result))
-            return result._copy_construct(index=index)
-        else:
-            return result
+        return self[indices]
 
     def _get_mask_as_series(self):
         mask = Series(cudautils.ones(len(self), dtype=np.bool))

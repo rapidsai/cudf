@@ -626,7 +626,7 @@ class ColumnBase(Column):
             raise TypeError(msg)
         return libcudf.quantile.quantile(self, quant, interpolation, exact)
 
-    def take(self, indices, ignore_index=False):
+    def take(self, indices):
         """Return Column by taking values from the corresponding *indices*.
         """
         from cudf.core.column import column_empty_like

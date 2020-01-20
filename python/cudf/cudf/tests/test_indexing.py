@@ -499,20 +499,13 @@ def test_dataframe_take(ntake):
 
     take_indices = np.random.randint(0, len(df), ntake)
 
-    def check(**kwargs):
-        out = df.take(take_indices, **kwargs)
-        assert len(out) == ntake
-        assert out.ii.null_count == 0
-        assert out.ff.null_count == 0
-        np.testing.assert_array_equal(out.ii.to_array(), ii[take_indices])
-        np.testing.assert_array_equal(out.ff.to_array(), ff[take_indices])
-        if kwargs.get("ignore_index"):
-            np.testing.assert_array_equal(out.index, np.arange(ntake))
-        else:
-            np.testing.assert_array_equal(out.index, take_indices)
-
-    check()
-    check(ignore_index=True)
+    out = df.take(take_indices)
+    assert len(out) == ntake
+    assert out.ii.null_count == 0
+    assert out.ff.null_count == 0
+    np.testing.assert_array_equal(out.ii.to_array(), ii[take_indices])
+    np.testing.assert_array_equal(out.ff.to_array(), ff[take_indices])
+    np.testing.assert_array_equal(out.index, take_indices)
 
 
 @pytest.mark.parametrize("nelem", [0, 1, 5, 20, 100])
