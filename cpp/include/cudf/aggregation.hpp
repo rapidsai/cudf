@@ -103,8 +103,8 @@ std::unique_ptr<aggregation> make_argmin_aggregation();
 /**
  * @brief Factory to create a aggregation base on UDF for PTX or CUDA
  *
- * @param[in] type, udf_type signifining one of PTX or CUDA
- * @param[in] user_defined_aggregator A string which has the required aggregation
+ * @param[in] type: either udf_type::PTX or udf_type::CUDA
+ * @param[in] user_defined_aggregator A string containing the aggregator code
  * @param[in] output_type expected output type
  *
  * @return aggregation unique pointer housing user_defined_aggregator string.
