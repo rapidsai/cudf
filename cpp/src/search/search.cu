@@ -124,54 +124,6 @@ std::unique_ptr<column> search_ordered(table_view const& t,
   return result;
 }
 
-<<<<<<< HEAD
-template <typename Element, bool nullable = true>
-struct compare_with_value{
-  compare_with_value(column_device_view c, Element val, bool val_is_valid, bool nulls_are_equal)
-
-    : col{c}, value{val}, val_is_valid{val_is_valid}, nulls_are_equal{nulls_are_equal} {}
-
-  __device__ bool operator()(size_type i) noexcept {
-    if (nullable) {
-      bool const col_is_null{col.nullable() and col.is_null(i)};
-      if (col_is_null and not val_is_valid)
-        return nulls_are_equal;
-      else if (col_is_null == val_is_valid)
-        return false;
-    }
-    
-    return equality_compare<Element>(col.element<Element>(i), value);
-  }
-
-  column_device_view        col;
-  Element                   value;
-  bool val_is_valid;
-  bool nulls_are_equal;
-};
-
-template <typename Element>
-void populate_element(scalar const& value, Element &e) {
-  using ScalarType = cudf::experimental::scalar_type_t<Element>;
-  auto s1 = static_cast<const ScalarType *>(&value);
-
-  e = s1->value();
-}
-
-template <>
-void populate_element<string_view>(scalar const& value, string_view &e) {
-  using ScalarType = cudf::experimental::scalar_type_t<string_view>;
-  auto s1 = static_cast<const ScalarType *>(&value);
-
-  e = string_view{s1->data(), s1->size()};
-}
-
-template <>
-void populate_element<dictionary32_tag>(scalar const& value, dictionary32_tag &e) {
-  CUDF_FAIL("dictionary type not supported yet");
-}
-
-=======
->>>>>>> branch-0.12
 struct contains_scalar_dispatch {
   template <typename Element>
   bool operator()(column_view const& col, scalar const& value,

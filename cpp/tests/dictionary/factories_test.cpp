@@ -32,8 +32,7 @@ TEST_F(DictionaryFactoriesTest, CreateFromColumns)
 
     auto dictionary = cudf::make_dictionary_column( keys_strings, values );
     cudf::dictionary_column_view view(dictionary->view());
-    auto keys = *(view.dictionary_keys());
 
-    cudf::test::expect_columns_equal(keys, keys_strings);
+    cudf::test::expect_columns_equal(view.dictionary_keys(), keys_strings);
     cudf::test::expect_columns_equal(view.indices(), values);
 }

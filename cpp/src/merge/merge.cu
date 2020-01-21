@@ -346,7 +346,7 @@ std::unique_ptr<column> column_merger::operator()<cudf::string_view>(column_view
 
 // specialization for dictionary
 template<>
-std::unique_ptr<column> column_merger::operator()<cudf::dictionary32_tag>(column_view const& lcol,
+std::unique_ptr<column> column_merger::operator()<cudf::dictionary32>(column_view const& lcol,
                                                                           column_view const& rcol) const
 {
   CUDF_FAIL("dictionary not supported yet");

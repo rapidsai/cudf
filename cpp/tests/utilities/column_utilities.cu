@@ -344,7 +344,7 @@ struct column_view_printer {
     }
   }
 
-  template <typename Element, typename std::enable_if_t<std::is_same<Element, cudf::dictionary32_tag>::value>* = nullptr>
+  template <typename Element, typename std::enable_if_t<std::is_same<Element, cudf::dictionary32>::value>* = nullptr>
   void operator()(cudf::column_view const& col, std::vector<std::string> & out) {
   }
 };

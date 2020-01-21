@@ -75,6 +75,7 @@ column::column(column &&other) noexcept
   other._size = 0;
   other._null_count = 0;
   other._type = data_type{EMPTY};
+  other._dictionary_keys_view = column_view{};
 }
 
 // Release contents
@@ -82,6 +83,7 @@ column::contents column::release() noexcept {
   _size = 0;
   _null_count = 0;
   _type = data_type{EMPTY};
+  _dictionary_keys_view = column_view{};
   return column::contents{
       std::make_unique<rmm::device_buffer>(std::move(_data)),
       std::make_unique<rmm::device_buffer>(std::move(_null_mask)),
@@ -96,15 +98,17 @@ column_view column::view() const {
   for (auto const &c : _children) {
     child_views.emplace_back(*c);
   }
-  std::shared_ptr<column_view> keys = nullptr;
+
+  // we store the keys' view here so that column_view's do not
+  // have to manage the memory for it
   if( _dictionary_keys )
-    keys = std::make_shared<column_view>(_dictionary_keys->view());
+    _dictionary_keys_view = _dictionary_keys->view();
 
   return column_view{
       type(),       size(),
       _data.data(), static_cast<bitmask_type const *>(_null_mask.data()),
       null_count(), 0,
-      child_views, keys};
+      child_views, &_dictionary_keys_view};
 }
 
 // Create mutable view
@@ -188,7 +192,7 @@ struct create_column_from_view {
  }
 
  template <typename ColumnType,
-           std::enable_if_t<std::is_same<ColumnType, cudf::dictionary32_tag>::value>* = nullptr>
+           std::enable_if_t<std::is_same<ColumnType, cudf::dictionary32>::value>* = nullptr>
  std::unique_ptr<column> operator()() {
    CUDF_FAIL("dictionary not supported yet");
  }
@@ -239,7 +243,7 @@ struct create_column_from_view_vector {
  }
 
  template <typename ColumnType,
-           std::enable_if_t<std::is_same<ColumnType, cudf::dictionary32_tag>::value>* = nullptr>
+           std::enable_if_t<std::is_same<ColumnType, cudf::dictionary32>::value>* = nullptr>
  std::unique_ptr<column> operator()() {
    CUDF_FAIL("dictionary not supported yet");
  }

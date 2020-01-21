@@ -107,7 +107,7 @@ struct out_of_place_fill_range_dispatch {
   }
   
   template <typename T>
-  std::enable_if_t<std::is_same<cudf::dictionary32_tag, T>::value,
+  std::enable_if_t<std::is_same<cudf::dictionary32, T>::value,
                    std::unique_ptr<cudf::column>>
   operator()(
       cudf::size_type begin, cudf::size_type end,

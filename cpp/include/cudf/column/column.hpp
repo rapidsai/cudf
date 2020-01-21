@@ -90,7 +90,7 @@ class column {
   column(data_type dtype, size_type size, B1&& data, B2&& null_mask = {},
          size_type null_count = UNKNOWN_NULL_COUNT,
          std::vector<std::unique_ptr<column>>&& children = {},
-         std::shared_ptr<const column> dictionary_keys = {})
+         std::shared_ptr<column const> dictionary_keys = {})
       : _type{dtype},
         _size{size},
         _data{std::forward<B1>(data)},
@@ -240,7 +240,7 @@ class column {
     std::unique_ptr<rmm::device_buffer> data;
     std::unique_ptr<rmm::device_buffer> null_mask;
     std::vector<std::unique_ptr<column>> children;
-    std::shared_ptr<const column> dictionary_keys;
+    std::shared_ptr<column const> dictionary_keys;
   };
 
   /**---------------------------------------------------------------------------*
@@ -320,7 +320,8 @@ class column {
   std::vector<std::unique_ptr<column>>
       _children{};  ///< Depending on element type, child
                     ///< columns may contain additional data
-  std::shared_ptr<const column> _dictionary_keys{}; ///< Used for dictionary column
+  std::shared_ptr<column const> _dictionary_keys{}; ///< Used for dictionary column
+  mutable column_view _dictionary_keys_view; // copy held for column_view's of this column
 };
 
 /**---------------------------------------------------------------------------*
