@@ -23,10 +23,10 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/detail/gather.hpp>
-#include <cudf/dictionary/detail/normalize.cuh>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/sequence.h>
+#include <thrust/sort.h>
 
 namespace cudf {
 namespace experimental {
@@ -60,8 +60,7 @@ std::unique_ptr<column> sorted_order(table_view input,
 
   mutable_column_view mutable_indices_view = sorted_indices->mutable_view();
 
-  auto normalized_columns = dictionary::detail::normalize(input);
-  auto device_table = table_device_view::create(normalized_columns, stream);
+  auto device_table = table_device_view::create(input, stream);
 
   thrust::sequence(rmm::exec_policy(stream)->on(stream),
                    mutable_indices_view.begin<int32_t>(),
