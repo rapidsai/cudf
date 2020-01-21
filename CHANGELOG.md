@@ -575,7 +575,6 @@
 - PR #2368 Full cudf+dask Parquet Support
 - PR #2380 New cudf::is_sorted checks whether cudf::table is sorted
 - PR #2356 Java column vector standard deviation support
-- PR #2415 Revamp `value_counts` to use groupby count series of any type
 - PR #2221 MultiIndex full indexing - Support iloc and wildcards for loc
 - PR #2429 Java support for getting length of strings in a ColumnVector
 - PR #2415 Add `value_counts` for series of any type
