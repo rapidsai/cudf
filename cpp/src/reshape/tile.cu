@@ -26,7 +26,7 @@ struct tile_functor {
 } // anonymous namespace
 
 std::unique_ptr<table>
-tile(const table_view &in, size_type count)
+tile(const table_view &in, size_type count, rmm::mr::device_memory_resource *mr)
 {
     CUDF_EXPECTS(count >= 0, "Count cannot be negative");
 
@@ -42,7 +42,7 @@ tile(const table_view &in, size_type count)
     auto tiled_it = thrust::make_transform_iterator(counting_it,
                                                     tile_functor{in_num_rows});
 
-    return detail::gather(in, tiled_it, tiled_it + out_num_rows);
+    return detail::gather(in, tiled_it, tiled_it + out_num_rows, mr);
 }
 
 } // namespace experimental
