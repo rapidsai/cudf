@@ -79,8 +79,10 @@ def test_full_dataframe_20(dtype, nrows, ncols):
     size = 20
     pdf = pd.DataFrame(np.random.randint(0, 100, (size, size))).astype(dtype)
     gdf = cudf.from_pandas(pdf)
+    ncols, nrows = gdf._repr_pandas025_formatting(ncols, nrows, dtype)
     pd.options.display.max_rows = int(nrows)
     pd.options.display.max_columns = int(ncols)
+
     assert pdf.__repr__() == gdf.__repr__()
     assert pdf._repr_html_() == gdf._repr_html_()
     assert pdf._repr_latex_() == gdf._repr_latex_()
@@ -109,6 +111,7 @@ def test_full_dataframe_21(dtype, nrows, ncols):
 def test_integer_dataframe(x):
     gdf = cudf.DataFrame({"x": x})
     pdf = gdf.to_pandas()
+    pd.options.display.max_columns = 1
     assert gdf.__repr__() == pdf.__repr__()
     assert gdf.T.__repr__() == pdf.T.__repr__()
 
@@ -189,6 +192,7 @@ def test_MI():
         }
     )
     pd.options.display.max_rows = 999
+    pd.options.display.max_columns = 0
     gdf = gdf.set_index(cudf.MultiIndex(levels=levels, codes=codes))
     pdf = gdf.to_pandas()
     gdfT = gdf.T
