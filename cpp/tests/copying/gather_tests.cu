@@ -1,269 +1,417 @@
-/*
- * Copyright (c) 2019, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 #include <cudf/copying.hpp>
-#include <cudf/legacy/table.hpp>
+#include <cudf/column/column_view.hpp>
+#include <cudf/table/table_view.hpp>
+#include <cudf/table/table.hpp>
+#include <tests/utilities/cudf_gtest.hpp>
+#include <tests/utilities/base_fixture.hpp>
+#include <tests/utilities/type_lists.hpp>
+#include <tests/utilities/column_wrapper.hpp>
+#include <tests/utilities/column_utilities.hpp>
+#include <tests/utilities/table_utilities.hpp>
+#include <cudf/detail/gather.hpp>
+#include <cudf/detail/gather.cuh>
+#include <tests/strings/utilities.h>
 
-#include <gmock/gmock.h>
-#include <gtest/gtest.h>
-#include <tests/utilities/column_wrapper.cuh>
-#include "tests/utilities/compare_column_wrappers.cuh"
-#include <tests/utilities/cudf_test_fixtures.h>
-#include <tests/utilities/cudf_test_utils.cuh>
-#include <tests/utilities/compare_column_wrappers.cuh>
-#include <cudf/types.hpp>
-#include <utilities/wrapper_types.hpp>
-
-#include <random>
 
 template <typename T>
-struct GatherTest : GdfTest {};
+class GatherTest : public cudf::test::BaseFixture {};
 
-using test_types =
-    ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double, cudf::bool8>;
-TYPED_TEST_CASE(GatherTest, test_types);
+TYPED_TEST_CASE(GatherTest, cudf::test::NumericTypes);
 
-TYPED_TEST(GatherTest, DtypeMistach){
-  constexpr gdf_size_type source_size{1000};
-  constexpr gdf_size_type destination_size{1000};
+// This test exercises using different iterator types as gather map inputs
+// to cudf::detail::gather -- device_vector and raw pointers.
+TYPED_TEST(GatherTest, GatherDetailDeviceVectorTest) {
+  constexpr cudf::size_type source_size{1000};
+  rmm::device_vector<cudf::size_type> gather_map(source_size);
+  thrust::sequence(thrust::device, gather_map.begin(), gather_map.end());
 
-  cudf::test::column_wrapper<int32_t> source{source_size};
-  cudf::test::column_wrapper<float> destination{destination_size};
+  auto data = cudf::test::make_counting_transform_iterator(0, [](auto i){return i;});
+  cudf::test::fixed_width_column_wrapper<TypeParam> source_column{data, data+source_size};
 
-  gdf_column * raw_source = source.get();
-  gdf_column * raw_destination = destination.get();
+  cudf::table_view source_table ({source_column});
 
-  cudf::table source_table{&raw_source, 1};
-  cudf::table destination_table{&raw_destination, 1};
+  // test with device vector iterators
+  {
+    std::unique_ptr<cudf::experimental::table> result =
+      cudf::experimental::detail::gather(source_table, gather_map.begin(), gather_map.end(), true);
 
-  rmm::device_vector<gdf_index_type> gather_map(source_size);
+    for (auto i=0; i<source_table.num_columns(); ++i) {
+      cudf::test::expect_columns_equal(source_table.column(i), result->view().column(i));
+    }
 
-  EXPECT_THROW(cudf::gather(&source_table, gather_map.data().get(),
-                             &destination_table), cudf::logic_error);
+    cudf::test::expect_tables_equal(source_table, result->view());
+  }
+
+  // test with raw pointers
+  {
+    std::unique_ptr<cudf::experimental::table> result =
+      cudf::experimental::detail::gather(source_table, gather_map.data().get(),
+                                         gather_map.data().get() + gather_map.size(),
+                                         true);
+
+    for (auto i=0; i<source_table.num_columns(); ++i) {
+      cudf::test::expect_columns_equal(source_table.column(i), result->view().column(i));
+    }
+
+    cudf::test::expect_tables_equal(source_table, result->view());
+  }
 }
 
-TYPED_TEST(GatherTest, DestMissingValid){
-  constexpr gdf_size_type source_size{1000};
-  constexpr gdf_size_type destination_size{1000};
+TYPED_TEST(GatherTest, GatherDetailInvalidIndexTest) {
+  constexpr cudf::size_type source_size{1000};
 
-  cudf::test::column_wrapper<TypeParam> source(source_size, true);
-  cudf::test::column_wrapper<TypeParam> destination(destination_size, false);
+  auto data = cudf::test::make_counting_transform_iterator(0, [](auto i){return i;});
+  cudf::test::fixed_width_column_wrapper<TypeParam> source_column{data, data+source_size};
+  auto gather_map_data = cudf::test::make_counting_transform_iterator(0, [](auto i){return (i%2)? -1:i;});
+  cudf::test::fixed_width_column_wrapper<int32_t> gather_map{gather_map_data, gather_map_data+(source_size*2)};
 
-  gdf_column * raw_source = source.get();
-  gdf_column * raw_destination = destination.get();
+  cudf::table_view source_table ({source_column});
+  std::unique_ptr<cudf::experimental::table> result =
+    cudf::experimental::detail::gather(
+           source_table,
+           gather_map,
+           false, true
+           );
 
-  cudf::table source_table{&raw_source, 1};
-  cudf::table destination_table{&raw_destination, 1};
+  auto expect_data = cudf::test::make_counting_transform_iterator(0, [](auto i){return (i%2)? 0:i;});
+  auto expect_valid = cudf::test::make_counting_transform_iterator(0, [](auto i){return (i%2) || (i >= source_size)? 0:1;});
+  cudf::test::fixed_width_column_wrapper<TypeParam> expect_column{
+    expect_data, expect_data+(source_size*2), expect_valid};
 
-  rmm::device_vector<gdf_index_type> gather_map(source_size);
-
-  EXPECT_THROW(cudf::gather(&source_table, gather_map.data().get(),
-                             &destination_table), cudf::logic_error);
-}
-
-TYPED_TEST(GatherTest, NumColumnsMismatch){
-  constexpr gdf_size_type source_size{1000};
-  constexpr gdf_size_type destination_size{1000};
-
-  cudf::test::column_wrapper<TypeParam> source0(source_size, true);
-  cudf::test::column_wrapper<TypeParam> source1(source_size, true);
-  cudf::test::column_wrapper<TypeParam> destination(destination_size, false);
-
-  std::vector<gdf_column*> source_cols{source0.get(), source1.get()};
-
-  gdf_column * raw_destination = destination.get();
-
-  cudf::table source_table{source_cols.data(), 2};
-  cudf::table destination_table{&raw_destination, 1};
-
-  rmm::device_vector<gdf_index_type> gather_map(source_size);
-
-  EXPECT_THROW(cudf::gather(&source_table, gather_map.data().get(),
-                             &destination_table), cudf::logic_error);
+  for (auto i=0; i<source_table.num_columns(); ++i) {
+    cudf::test::expect_columns_equal(expect_column, result->view().column(i));
+  }
 }
 
 TYPED_TEST(GatherTest, IdentityTest) {
-  constexpr gdf_size_type source_size{1000};
-  constexpr gdf_size_type destination_size{1000};
+  constexpr cudf::size_type source_size{1000};
 
-  cudf::test::column_wrapper<TypeParam> source_column{
-      source_size, [](gdf_index_type row) { return static_cast<TypeParam>(row); },
-      [](gdf_index_type row) { return true; }};
+  auto data = cudf::test::make_counting_transform_iterator(0, [](auto i){return i;});
+  cudf::test::fixed_width_column_wrapper<TypeParam> source_column{data, data+source_size};
+  cudf::test::fixed_width_column_wrapper<int32_t> gather_map{data, data+source_size};
 
-  thrust::device_vector<gdf_index_type> gather_map(destination_size);
-  thrust::sequence(gather_map.begin(), gather_map.end());
+  cudf::table_view source_table ({source_column});
 
-  cudf::test::column_wrapper<TypeParam> destination_column(destination_size,
-                                                           true);
+  std::unique_ptr<cudf::experimental::table> result =
+    std::move(cudf::experimental::gather(
+           source_table,
+           gather_map
+           ));
 
-  gdf_column* raw_source = source_column.get();
-  gdf_column* raw_destination = destination_column.get();
+  for (auto i=0; i<source_table.num_columns(); ++i) {
+    cudf::test::expect_columns_equal(source_table.column(i), result->view().column(i));
+  }
 
-  cudf::table source_table{&raw_source, 1};
-  cudf::table destination_table{&raw_destination, 1};
-
-  EXPECT_NO_THROW(
-      cudf::gather(&source_table, gather_map.data().get(), &destination_table));
-
-  expect_columns_are_equal<TypeParam>(source_column, destination_column);
+  cudf::test::expect_tables_equal(source_table, result->view());
 }
+
 
 TYPED_TEST(GatherTest, ReverseIdentityTest) {
-  constexpr gdf_size_type source_size{1000};
-  constexpr gdf_size_type destination_size{1000};
+  constexpr cudf::size_type source_size{1000};
 
-  static_assert(source_size == destination_size,
-                "Source and destination columns must be the same size.");
+  auto data = cudf::test::make_counting_transform_iterator(0, [](auto i){return i;});
+  auto reversed_data =
+    cudf::test::make_counting_transform_iterator (0, [](auto i){return source_size-1-i;});
 
-  cudf::test::column_wrapper<TypeParam> source_column{
-      source_size, [](gdf_index_type row) { return static_cast<TypeParam>(row); },
-      [](gdf_index_type row) { return true; }};
+  cudf::test::fixed_width_column_wrapper<TypeParam> source_column{data, data+source_size};
+  cudf::test::fixed_width_column_wrapper<int32_t> gather_map{
+    reversed_data,
+    reversed_data+source_size};
 
-  // Create gather_map that reverses order of source_column
-  std::vector<gdf_index_type> host_gather_map(source_size);
-  std::iota(host_gather_map.begin(), host_gather_map.end(), 0);
-  std::reverse(host_gather_map.begin(), host_gather_map.end());
-  thrust::device_vector<gdf_index_type> gather_map(host_gather_map);
+  cudf::table_view source_table ({source_column});
 
-  cudf::test::column_wrapper<TypeParam> destination_column(destination_size,
-                                                           true);
+  std::unique_ptr<cudf::experimental::table> result =
+    std::move(cudf::experimental::gather(
+           source_table,
+           gather_map
+           ));
+  cudf::test::fixed_width_column_wrapper<TypeParam> expect_column{
+    reversed_data,
+    reversed_data+source_size};
 
-  gdf_column* raw_source = source_column.get();
-  gdf_column* raw_destination = destination_column.get();
-
-  cudf::table source_table{&raw_source, 1};
-  cudf::table destination_table{&raw_destination, 1};
-
-  EXPECT_NO_THROW(
-      cudf::gather(&source_table, gather_map.data().get(), &destination_table));
-
-  // Expected result is the reversal of the source column
-  std::vector<TypeParam> expected_data;
-  std::vector<gdf_valid_type> expected_bitmask;
-  std::tie(expected_data, expected_bitmask) = source_column.to_host();
-  std::reverse(expected_data.begin(), expected_data.end());
-
-  // Copy result of destination column to host
-  std::vector<TypeParam> result_data;
-  std::vector<gdf_valid_type> result_bitmask;
-  std::tie(result_data, result_bitmask) = destination_column.to_host();
-
-  auto print_all_unequal_pairs { true };
-  expect_column_values_are_equal<TypeParam>(
-      destination_size, expected_data.data(), nullptr, "Expected",
-      result_data.data(), nullptr, "Actual",
-      print_all_unequal_pairs);
-
-  for (gdf_index_type i = 0; i < destination_size; i++) {
-    EXPECT_TRUE(gdf_is_valid(result_bitmask.data(), i))
-        << "Value at index " << i << " should be non-null!\n";
+  for (auto i=0; i<source_table.num_columns(); ++i) {
+    cudf::test::expect_columns_equal(expect_column, result->view().column(i));
   }
 }
+
+
+TYPED_TEST(GatherTest, EveryOtherNullOdds) {
+  constexpr cudf::size_type source_size{1000};
+
+  // Every other element is valid
+  auto data = cudf::test::make_counting_transform_iterator(0, [](auto i){return i;});
+  auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i){return i%2;});
+
+  cudf::test::fixed_width_column_wrapper<TypeParam> source_column{
+    data, data+source_size, validity};
+
+  // Gather odd-valued indices
+  auto map_data =
+    cudf::test::make_counting_transform_iterator(0, [](auto i){return i*2;});
+
+  cudf::test::fixed_width_column_wrapper<int32_t> gather_map{
+    map_data, map_data + (source_size/2)};
+
+  cudf::table_view source_table ({source_column});
+
+  std::unique_ptr<cudf::experimental::table> result =
+    std::move(cudf::experimental::gather(
+           source_table,
+           gather_map
+           ));
+
+  auto expect_data = cudf::test::make_counting_transform_iterator(0, [](auto i){return 0;});
+  auto expect_valid = cudf::test::make_counting_transform_iterator(0, [](auto i){return 0;});
+  cudf::test::fixed_width_column_wrapper<TypeParam> expect_column{
+    expect_data, expect_data+source_size/2, expect_valid};
+
+  for (auto i=0; i<source_table.num_columns(); ++i) {
+    cudf::test::expect_columns_equal(expect_column, result->view().column(i));
+  }
+}
+
+
+TYPED_TEST(GatherTest, EveryOtherNullEvens) {
+
+  constexpr cudf::size_type source_size{1000};
+
+  // Every other element is valid
+  auto data = cudf::test::make_counting_transform_iterator(0, [](auto i){return i;});
+  auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i){return i%2;});
+
+  cudf::test::fixed_width_column_wrapper<TypeParam> source_column{
+    data, data+source_size, validity};
+
+  // Gather even-valued indices
+  auto map_data =
+    cudf::test::make_counting_transform_iterator(0, [](auto i){return i*2 + 1;});
+
+  cudf::test::fixed_width_column_wrapper<int32_t> gather_map{
+    map_data, map_data + (source_size/2)};
+
+  cudf::table_view source_table ({source_column});
+
+  std::unique_ptr<cudf::experimental::table> result =
+    std::move(cudf::experimental::gather(
+           source_table,
+           gather_map
+           ));
+
+  auto expect_data = cudf::test::make_counting_transform_iterator(0, [](auto i){return i*2 + 1;});
+  auto expect_valid = cudf::test::make_counting_transform_iterator(0, [](auto i){return 1;});
+  cudf::test::fixed_width_column_wrapper<TypeParam> expect_column{
+    expect_data, expect_data+source_size/2, expect_valid};
+
+  for (auto i=0; i<source_table.num_columns(); ++i) {
+    cudf::test::expect_columns_equal(expect_column, result->view().column(i));
+  }
+}
+
 
 TYPED_TEST(GatherTest, AllNull) {
-  constexpr gdf_size_type source_size{1000};
-  constexpr gdf_size_type destination_size{1000};
+  constexpr cudf::size_type source_size{1000};
 
-  // source column has all null values
-  cudf::test::column_wrapper<TypeParam> source_column{
-      source_size, [](gdf_index_type row) { return static_cast<TypeParam>(row); },
-      [](gdf_index_type row) { return false; }};
+  // Every element is invalid
+  auto data = cudf::test::make_counting_transform_iterator(0, [](auto i){return i;});
+  auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i){return 0;});
 
-  // Create gather_map that gathers to random locations
-  std::vector<gdf_index_type> host_gather_map(source_size);
-  std::iota(host_gather_map.begin(), host_gather_map.end(), 0);
+  // Create a gather map that gathers to random locations
+  std::vector<cudf::size_type> host_map_data(source_size);
+  std::iota(host_map_data.begin(), host_map_data.end(), 0);
   std::mt19937 g(0);
-  std::shuffle(host_gather_map.begin(), host_gather_map.end(), g);
-  thrust::device_vector<gdf_index_type> gather_map(host_gather_map);
+  std::shuffle(host_map_data.begin(), host_map_data.end(), g);
+  thrust::device_vector<cudf::size_type> map_data(host_map_data);
 
-  cudf::test::column_wrapper<TypeParam> destination_column(destination_size,
-                                                           true);
+  cudf::test::fixed_width_column_wrapper<TypeParam> source_column{
+    data, data+source_size, validity};
+  cudf::test::fixed_width_column_wrapper<int32_t> gather_map{map_data.begin(),
+      map_data.end()};
 
-  gdf_column* raw_source = source_column.get();
-  gdf_column* raw_destination = destination_column.get();
+  cudf::table_view source_table ({source_column});
 
-  cudf::table source_table{&raw_source, 1};
-  cudf::table destination_table{&raw_destination, 1};
+  std::unique_ptr<cudf::experimental::table> result =
+    std::move(cudf::experimental::gather(
+           source_table,
+           gather_map
+           ));
 
-  EXPECT_NO_THROW(
-      cudf::gather(&source_table, gather_map.data().get(), &destination_table));
+  // Check that the result is also all invalid
+  cudf::test::expect_tables_equal(source_table, result->view());
+}
 
-  // Copy result of destination column to host
-  std::vector<TypeParam> result_data;
-  std::vector<gdf_valid_type> result_bitmask;
-  std::tie(result_data, result_bitmask) = destination_column.to_host();
 
-  // All values of result should be null
-  for (gdf_index_type i = 0; i < destination_size; i++) {
-    EXPECT_FALSE(gdf_is_valid(result_bitmask.data(), i))
-        << "Value at index " << i << " should be null!\n";
+TYPED_TEST(GatherTest, MultiColReverseIdentityTest) {
+  constexpr cudf::size_type source_size{1000};
+
+  constexpr cudf::size_type n_cols = 3;
+
+  auto data = cudf::test::make_counting_transform_iterator(0, [](auto i){return i;});
+  auto reversed_data =
+    cudf::test::make_counting_transform_iterator (0, [](auto i){return source_size-1-i;});
+
+  std::vector<cudf::test::fixed_width_column_wrapper<TypeParam>> source_column_wrappers;
+  std::vector<cudf::column_view> source_columns;
+
+  for (int i=0; i<n_cols; ++i) {
+    source_column_wrappers.push_back(cudf::test::fixed_width_column_wrapper
+             <TypeParam>(data,
+             data+source_size));
+    source_columns.push_back(source_column_wrappers[i]);
+  }
+
+  cudf::test::fixed_width_column_wrapper<int32_t> gather_map{
+    reversed_data,
+    reversed_data+source_size};
+
+  cudf::table_view source_table {source_columns};
+
+  std::unique_ptr<cudf::experimental::table> result =
+    std::move(cudf::experimental::gather(
+           source_table,
+           gather_map
+           ));
+
+  cudf::test::fixed_width_column_wrapper<TypeParam> expect_column{
+      reversed_data,
+      reversed_data+source_size};
+
+  for (auto i=0; i<source_table.num_columns(); ++i) {
+    cudf::test::expect_columns_equal(expect_column, result->view().column(i));
   }
 }
 
-TYPED_TEST(GatherTest, EveryOtherNull) {
-  constexpr gdf_size_type source_size{1234};
-  constexpr gdf_size_type destination_size{source_size};
+
+TYPED_TEST(GatherTest, MultiColNulls) {
+  constexpr cudf::size_type source_size{1000};
 
   static_assert(0 == source_size % 2,
-                "Size of source data must be a multiple of 2.");
-  static_assert(source_size == destination_size,
-                "Source and destination columns must be equal size.");
+    "Size of source data must be a multiple of 2.");
 
-  // elements with even indices are null
-  cudf::test::column_wrapper<TypeParam> source_column{
-      source_size, [](gdf_index_type row) { return static_cast<TypeParam>(row); },
-      [](gdf_index_type row) { return row % 2; }};
+  constexpr cudf::size_type n_cols = 3;
 
-  // Gather null values to the last half of the destination column
-  std::vector<gdf_index_type> host_gather_map(source_size);
-  for (gdf_size_type i = 0; i < destination_size / 2; ++i) {
-    host_gather_map[i] = i * 2 + 1;
-    host_gather_map[destination_size / 2 + i] = i * 2;
+  auto data = cudf::test::make_counting_transform_iterator(0, [](auto i){return i;});
+  auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i){return i%2;});
+
+  std::vector<cudf::test::fixed_width_column_wrapper<TypeParam>> source_column_wrappers;
+  std::vector<cudf::column_view> source_columns;
+
+  for (int i=0; i<n_cols; ++i) {
+    source_column_wrappers.push_back(cudf::test::fixed_width_column_wrapper
+             <TypeParam>(data,
+             data+source_size,
+             validity));
+    source_columns.push_back(source_column_wrappers[i]);
   }
 
-  thrust::device_vector<gdf_index_type> gather_map(host_gather_map);
+  auto reversed_data =
+    cudf::test::make_counting_transform_iterator (0, [](auto i){return source_size-1-i;});
 
-  cudf::test::column_wrapper<TypeParam> destination_column(destination_size,
-                                                           true);
+  cudf::test::fixed_width_column_wrapper<int32_t> gather_map{
+    reversed_data,
+    reversed_data+source_size};
 
-  gdf_column* raw_source = source_column.get();
-  gdf_column* raw_destination = destination_column.get();
+  cudf::table_view source_table {source_columns};
 
-  cudf::table source_table{&raw_source, 1};
-  cudf::table destination_table{&raw_destination, 1};
+  std::unique_ptr<cudf::experimental::table> result =
+    std::move(cudf::experimental::gather(
+           source_table,
+           gather_map
+           ));
 
-  EXPECT_NO_THROW(
-      cudf::gather(&source_table, gather_map.data().get(), &destination_table));
+  // Expected data
+  auto expect_data = cudf::test::make_counting_transform_iterator(0, [](auto i){
+      return source_size - i - 1;});
+  auto expect_valid = cudf::test::make_counting_transform_iterator(0, [](auto i){return (i+1)%2;});
 
-  // Copy result of destination column to host
-  std::vector<TypeParam> result_data;
-  std::vector<gdf_valid_type> result_bitmask;
-  std::tie(result_data, result_bitmask) = destination_column.to_host();
+  cudf::test::fixed_width_column_wrapper<TypeParam> expect_column{
+    expect_data, expect_data+source_size, expect_valid};
 
-  for (gdf_index_type i = 0; i < destination_size; i++) {
-    // The first half of the destination column should be all valid
-    // and values should be 1, 3, 5, 7, etc.
-    if (i < destination_size / 2) {
-      EXPECT_TRUE(gdf_is_valid(result_bitmask.data(), i))
-          << "Value at index " << i << " should be non-null!\n";
-      EXPECT_EQ(static_cast<TypeParam>(i * 2 + 1), result_data[i]);
-    } else {
-      // The last half of the destination column should be all null
-      EXPECT_FALSE(gdf_is_valid(result_bitmask.data(), i))
-          << "Value at index " << i << " should be null!\n";
+  for (auto i=0; i<source_table.num_columns(); ++i) {
+    cudf::test::expect_columns_equal(expect_column, result->view().column(i));
+  }
+
+}
+
+class GatherTestStr : public cudf::test::BaseFixture {};
+
+TEST_F(GatherTestStr, StringColumn) {
+    cudf::test::fixed_width_column_wrapper<int16_t> col1{{     1,    2,     3,   4,        5,      6}, {1, 1, 0, 1, 0, 1}};
+    cudf::test::strings_column_wrapper col2             {{"This", "is", "not", "a", "string", "type"}, {1, 1, 1, 1, 1, 0}};
+    cudf::table_view source_table {{col1, col2}};
+
+    cudf::test::fixed_width_column_wrapper<int16_t> gather_map{{0, 1, 3, 4}};
+
+    cudf::test::fixed_width_column_wrapper<int16_t> exp_col1{{     1,    2,   4,        5}, {1, 1, 1, 0}};
+    cudf::test::strings_column_wrapper exp_col2             {{"This", "is", "a", "string"}, {1, 1, 1, 1}};
+    cudf::table_view expected {{exp_col1, exp_col2}};
+
+    auto got = cudf::experimental::gather(source_table, gather_map);
+
+    cudf::test::expect_tables_equal(expected, got->view());
+}
+
+TEST_F(GatherTestStr, Gather)
+{
+    std::vector<const char*> h_strings{ "eee", "bb", "", "aa", "bbb", "ééé" };
+    cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end() );
+    cudf::table_view source_table ({strings});
+
+    std::vector<int32_t> h_map{ 4,1,5,2,7 };
+    cudf::test::fixed_width_column_wrapper<int32_t> gather_map{h_map.begin(), h_map.end()};
+    auto results = cudf::experimental::detail::gather(
+           source_table,
+           gather_map,
+           false, true
+           );
+
+    std::vector<const char*> h_expected;
+    std::vector<int32_t> expected_validity;
+    for( auto itr = h_map.begin(); itr != h_map.end(); ++itr )
+    {
+        auto index = *itr;
+        if( (0 <= index) && (index < static_cast<decltype(index)>(h_strings.size())) ) {
+            h_expected.push_back( h_strings[index] );
+            expected_validity.push_back(1);
+        }
+        else {
+            h_expected.push_back( "" );
+            expected_validity.push_back(0);
+        }
     }
-  }
+    cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
+        expected_validity.begin());
+    cudf::test::expect_columns_equal(results->view().column(0),expected);
+}
+
+TEST_F(GatherTestStr, GatherIgnoreOutOfBounds)
+{
+    std::vector<const char*> h_strings{ "eee", "bb", "", "aa", "bbb", "ééé" };
+    cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end() );
+    cudf::table_view source_table ({strings});
+
+    std::vector<int32_t> h_map{ 3,4,0,0 };
+    cudf::test::fixed_width_column_wrapper<int32_t> gather_map{h_map.begin(), h_map.end()};
+    auto results = cudf::experimental::detail::gather(
+           source_table,
+           gather_map,
+           false, true
+           );
+
+    std::vector<const char*> h_expected;
+    std::vector<int32_t> expected_validity;
+    for( auto itr = h_map.begin(); itr != h_map.end(); ++itr ) {
+        h_expected.push_back( h_strings[*itr] );
+        expected_validity.push_back(1);
+    }
+    cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
+        expected_validity.begin());
+    cudf::test::expect_columns_equal(results->view().column(0),expected);
+}
+
+TEST_F(GatherTestStr, GatherZeroSizeStringsColumn)
+{
+    cudf::column_view zero_size_strings_column( cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
+    rmm::device_vector<cudf::size_type> gather_map{};
+    auto results = cudf::experimental::detail::gather(cudf::table_view({zero_size_strings_column}), gather_map.begin(), gather_map.end(), false, true);
+    cudf::test::expect_strings_empty(results->get_column(0).view());
 }

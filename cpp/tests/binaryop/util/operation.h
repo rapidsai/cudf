@@ -17,8 +17,7 @@
  * limitations under the License.
  */
 
-#ifndef GDF_TESTS_BINARY_OPERATION_UTIL_OPERATION_H
-#define GDF_TESTS_BINARY_OPERATION_UTIL_OPERATION_H
+#pragma once
 
 #include <cmath>
 #include <type_traits>
@@ -109,6 +108,41 @@ namespace operation {
     };
 
     template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+    struct Equal {
+        TypeOut operator()(TypeLhs x, TypeRhs y) {
+            return (x == y);
+        }
+    };
+
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+    struct Less {
+        TypeOut operator()(TypeLhs x, TypeRhs y) {
+            return (x < y);
+        }
+    };
+
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+    struct Greater {
+        TypeOut operator()(TypeLhs x, TypeRhs y) {
+            return (x > y);
+        }
+    };
+
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+    struct LessEqual {
+        TypeOut operator()(TypeLhs x, TypeRhs y) {
+            return (x <= y);
+        }
+    };
+
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+    struct GreaterEqual {
+        TypeOut operator()(TypeLhs x, TypeRhs y) {
+            return (x >= y);
+        }
+    };
+
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
     struct BitwiseAnd {
         TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
             return (lhs & rhs);
@@ -146,5 +180,3 @@ namespace operation {
 }  // namespace operation
 }  // namespace library
 }  // namespace cudf
-
-#endif

@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from cudf.dataframe import DataFrame
+from cudf.core import DataFrame
 
 
 def test_to_records_noindex():

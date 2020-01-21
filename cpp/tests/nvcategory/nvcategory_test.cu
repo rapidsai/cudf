@@ -20,12 +20,15 @@
 
 #include <gtest/gtest.h>
 
-#include <cudf/binaryop.hpp>
+#include <cudf/legacy/binaryop.hpp>
 #include <cudf/cudf.h>
-#include <utilities/cudf_utils.h>
+#include <utilities/legacy/cudf_utils.h>
+#include <cudf/legacy/join.hpp>
 
-#include <cudf/functions.h>
+#include <cudf/legacy/functions.h>
 #include <cudf/types.h>
+#include <cudf/legacy/copying.hpp>
+#include <utilities/legacy/column_utils.hpp>
 #include <iostream>
 #include <random>
 
@@ -34,18 +37,18 @@
 
 #include <rmm/rmm.h>
 #include <cstring>
-#include <tests/utilities/cudf_test_utils.cuh>
-#include <tests/utilities/cudf_test_fixtures.h>
-#include <tests/utilities/nvcategory_utils.cuh>
+#include <tests/utilities/legacy/cudf_test_utils.cuh>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/nvcategory_utils.cuh>
 #include <bitmask/legacy/bit_mask.cuh>
 
 // See this header for all of the handling of valids' vectors 
-#include <tests/utilities/valid_vectors.h>
+#include <tests/utilities/legacy/valid_vectors.h>
 
-#include <string/nvcategory_util.hpp>
+#include <cudf/utilities/legacy/nvcategory_util.hpp>
 
 
-gdf_column * create_column_ints(int32_t* host_data, gdf_size_type num_rows){
+gdf_column * create_column_ints(int32_t* host_data, cudf::size_type num_rows){
 	gdf_column * column = new gdf_column{};
 	int32_t * data;
 	EXPECT_EQ(RMM_ALLOC(&data, num_rows * sizeof(int32_t) , 0), RMM_SUCCESS);
@@ -56,13 +59,13 @@ gdf_column * create_column_ints(int32_t* host_data, gdf_size_type num_rows){
 
 	gdf_error err = gdf_column_view(column,
 			(void *) data,
-			(gdf_valid_type *)valid,
+			(cudf::valid_type *)valid,
 			num_rows,
 			GDF_INT32);
 	return column;
 }
 
-gdf_column * create_column_constant(gdf_size_type num_rows, int value){
+gdf_column * create_column_constant(cudf::size_type num_rows, int value){
 	gdf_column * column = new gdf_column{};
 	int * data;
 	bit_mask::bit_mask_t * valid;
@@ -71,16 +74,16 @@ gdf_column * create_column_constant(gdf_size_type num_rows, int value){
 	cudaMemset(data,value,sizeof(int) * num_rows);
 	gdf_error err = gdf_column_view(column,
 			(void *) data,
-			(gdf_valid_type *) valid,
+			(cudf::valid_type *) valid,
 			num_rows,
 			GDF_INT32);
 	return column;
 }
 
-int32_t* generate_int_data(gdf_size_type num_rows, size_t max_value, bool print=false){
+int32_t* generate_int_data(cudf::size_type num_rows, size_t max_value, bool print=false){
 	int32_t* host_data = new int32_t[num_rows];
 
-	for(gdf_size_type row_index = 0; row_index < num_rows; row_index++){
+	for(cudf::size_type row_index = 0; row_index < num_rows; row_index++){
 		host_data[row_index] = std::rand() % max_value;
 
 		if(print)
@@ -94,7 +97,7 @@ int32_t* generate_int_data(gdf_size_type num_rows, size_t max_value, bool print=
 
 struct NVCategoryTest : public GdfTest
 {
-	gdf_column * create_boolean_column(gdf_size_type num_rows){
+	gdf_column * create_boolean_column(cudf::size_type num_rows){
 		gdf_column * column = new gdf_column{};
 		int * data;
 		bit_mask::bit_mask_t * valid;
@@ -102,14 +105,14 @@ struct NVCategoryTest : public GdfTest
 		EXPECT_EQ(RMM_ALLOC(&data, num_rows * sizeof(int8_t) , 0), RMM_SUCCESS);
 		gdf_error err = gdf_column_view(column,
 				(void *) data,
-				(gdf_valid_type *) valid,
+				(cudf::valid_type *) valid,
 				num_rows,
 				GDF_INT8);
 		return column;
 
 	}
 
-	gdf_column * create_indices_column(gdf_size_type num_rows){
+	gdf_column * create_indices_column(cudf::size_type num_rows){
 		gdf_column * column = new gdf_column{};
 		int * data;
 		bit_mask::bit_mask_t * valid;
@@ -117,7 +120,7 @@ struct NVCategoryTest : public GdfTest
 		EXPECT_EQ(RMM_ALLOC(&data, num_rows * sizeof(int) , 0), RMM_SUCCESS);
 		gdf_error err = gdf_column_view(column,
 				(void *) data,
-				(gdf_valid_type *) valid,
+				(cudf::valid_type *) valid,
 				num_rows,
 				GDF_INT32);
 		return column;
@@ -533,62 +536,67 @@ struct NVCategoryJoinTest : public GdfTest
     size_t num_columns = gdf_raw_left_columns.size();
     size_t result_num_cols = gdf_raw_left_columns.size() + gdf_raw_right_columns.size() - left_join_idx.size();
 
-    gdf_error result_error{GDF_SUCCESS};
-
-    gdf_column ** left_gdf_columns = gdf_raw_left_columns.data();
-    gdf_column ** right_gdf_columns = gdf_raw_right_columns.data();
-    gdf_column ** result_columns = gdf_raw_result_columns.data();
+    gdf_column * result_col = new gdf_column{};
+    // Number of join cols should be same in both left and right
+    size_t num_join_cols = left_join_idx.size();
+    std::vector <std::pair <int, int>> columns_in_common (num_join_cols);
+    for (unsigned int i = 0; i < num_join_cols; ++i)
+    {
+        columns_in_common[i].first = left_join_idx[i];
+        columns_in_common[i].second= right_join_idx[i];
+    }
+    // Same set of column set for both, as we are assuming that they have same name
+    std::vector <gdf_column *> result_idx_cols = {&left_result, &right_result};
+    cudf::table left_gdf_columns (gdf_raw_left_columns);
+    cudf::table right_gdf_columns (gdf_raw_right_columns);
+    cudf::table result_idx_table (result_idx_cols);
+    cudf::table result;
 
     switch(op)
     {
       case join_op::LEFT:
         {
-          result_error = gdf_left_join(
-                                       left_gdf_columns, num_columns, left_join_idx.data(),
-                                       right_gdf_columns, num_columns, right_join_idx.data(),
-                                       left_join_idx.size(),
-                                       result_num_cols, result_columns,
-                                       &left_result, &right_result,
-                                       &ctxt);
+          result = cudf::left_join(
+                          left_gdf_columns, right_gdf_columns,
+                          left_join_idx, right_join_idx, columns_in_common,
+                          &result_idx_table, &ctxt);
           break;
         }
       case join_op::INNER:
         {
-          result_error =  gdf_inner_join(
-                                         left_gdf_columns, num_columns, left_join_idx.data(),
-                                         right_gdf_columns, num_columns, right_join_idx.data(),
-                                         left_join_idx.size(),
-                                         result_num_cols, result_columns,
-                                         &left_result, &right_result,
-                                         &ctxt);
+          result = cudf::inner_join(
+                          left_gdf_columns, right_gdf_columns,
+                          left_join_idx, right_join_idx, columns_in_common,
+                          &result_idx_table, &ctxt);
           break;
         }
       case join_op::FULL:
         {
-          result_error =  gdf_full_join(
-                                         left_gdf_columns, num_columns, left_join_idx.data(),
-                                         right_gdf_columns, num_columns, right_join_idx.data(),
-                                         left_join_idx.size(),
-                                         result_num_cols, result_columns,
-                                         &left_result, &right_result,
-                                         &ctxt);
+          result = cudf::full_join(
+                          left_gdf_columns, right_gdf_columns,
+                          left_join_idx, right_join_idx, columns_in_common,
+                          &result_idx_table, &ctxt);
           break;
         }
       default:
         std::cout << "Invalid join method" << std::endl;
         EXPECT_TRUE(false);
     }
-   
-    EXPECT_EQ(expected_result, result_error) << "The gdf join function did not complete successfully";
-
-    // If the expected result was not GDF_SUCCESS, then this test was testing for a
-    // specific error condition, in which case we return imediately and do not do
-    // any further work on the output
-    if(GDF_SUCCESS != expected_result){
-      return std::vector<result_type>();
-    }
-
+  
     EXPECT_EQ(left_result.size, right_result.size) << "Join output size mismatch";
+
+    // Copy result of gdf join to local result
+    EXPECT_EQ(RMM_ALLOC(&result_col->data, result.get_column(0)->size * cudf::size_of(result.get_column(0)->dtype), 0), RMM_SUCCESS);
+    EXPECT_EQ(RMM_ALLOC(&result_col->valid, gdf_valid_allocation_size(result.get_column(0)->size) * sizeof(cudf::valid_type), 0), RMM_SUCCESS);
+    result_col->size = result.get_column(0)->size;
+    result_col->dtype = result.get_column(0)->dtype;
+    result_col->null_count = 0;
+    result_col->dtype_info = result.get_column(0)->dtype_info;
+    EXPECT_EQ(cudaMemcpy(result_col->data, result.get_column(0)->data, 
+               result.get_column(0)->size * cudf::size_of(result.get_column(0)->dtype), cudaMemcpyDeviceToDevice), cudaSuccess);
+    EXPECT_EQ(cudaMemcpy(result_col->valid, result.get_column(0)->valid, 
+               gdf_valid_allocation_size(result.get_column(0)->size) * sizeof(cudf::valid_type), cudaMemcpyDeviceToDevice), cudaSuccess);
+    gdf_raw_result_columns.push_back (result_col);
     // The output is an array of size `n` where the first n/2 elements are the
     // left_indices and the last n/2 elements are the right indices
     size_t total_pairs = left_result.size;
@@ -712,7 +720,6 @@ TEST_F(NVCategoryJoinTest, join_test){
 
 	gdf_column * left_column = cudf::test::create_nv_category_column_strings(left_string_data, rows_size);
   gdf_column * right_column = cudf::test::create_nv_category_column_strings(right_string_data, rows_size);
-  gdf_column * result_column = cudf::test::create_nv_category_column_strings(right_string_data, rows_size);
 	
 	if(print){
 		std::cout<<"Raw string indexes:\n";
@@ -722,7 +729,6 @@ TEST_F(NVCategoryJoinTest, join_test){
 
 	gdf_raw_left_columns.push_back(left_column);
   gdf_raw_right_columns.push_back(right_column);
-  gdf_raw_result_columns.push_back(result_column);
 
 	std::vector<result_type> reference_result = this->compute_reference_solution(op, print);
 

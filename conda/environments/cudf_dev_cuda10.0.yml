@@ -1,49 +1,51 @@
 name: cudf_dev
 channels:
-- rapidsai
-- nvidia
-- rapidsai-nightly
-- conda-forge
-- defaults
+  - rapidsai
+  - nvidia
+  - rapidsai-nightly
+  - conda-forge
+  - defaults
 dependencies:
-- nvstrings=0.9.*
-- rmm=0.9.*
-- cmake>=3.12
-- python>=3.6,<3.8
-- numba>=0.41,<0.45
-- pandas>=0.24.2,<0.25
-- pyarrow=0.14.1
-- notebook>=0.5.0
-- cython>=0.29,<0.30
-- pytest
-- sphinx
-- sphinx_rtd_theme
-- sphinxcontrib-websupport
-- nbsphinx
-- numpydoc
-- ipython
-- recommonmark
-- pandoc=<2.0.0
-- cudatoolkit=10.0
-- pip
-- s3fs
-- partd
-- moto
-- boto3
-- httpretty
-- flake8
-- black
-- isort
-- pre_commit
-- dask>=2.1.0
-- distributed>=2.1.0
-- dlpack
-- arrow-cpp=0.14.1
-- boost-cpp
-- double-conversion
-- rapidjson
-- flatbuffers
-- pip:
-  - sphinx-markdown-tables
-  - git+https://github.com/dask/dask.git
-  - git+https://github.com/dask/distributed.git
+  - cupy>=6.6.0,<8.0.0a0,!=7.1.0
+  - rmm=0.12.*
+  - cmake>=3.12
+  - cmake_setuptools>=0.1.3
+  - python>=3.6,<3.8
+  - numba>=0.46
+  - pandas>=0.25,<0.26
+  - pyarrow=0.15.0
+  - fastavro>=0.22.9
+  - notebook>=0.5.0
+  - cython>=0.29,<0.30
+  - fsspec>=0.3.3
+  - pytest
+  - sphinx
+  - sphinx_rtd_theme
+  - sphinxcontrib-websupport
+  - nbsphinx
+  - numpydoc
+  - ipython
+  - recommonmark
+  - pandoc=<2.0.0
+  - cudatoolkit=10.0
+  - pip
+  - partd
+  - flake8
+  - black
+  - isort
+  - pre_commit
+  - dask>=2.1.0
+  - distributed>=2.1.0
+  - streamz
+  - dlpack
+  - arrow-cpp=0.15.0
+  - boost-cpp
+  - double-conversion
+  - rapidjson
+  - flatbuffers
+  - hypothesis
+  - pip:
+      - sphinx-markdown-tables
+      - git+https://github.com/dask/dask.git
+      - git+https://github.com/dask/distributed.git
+      - git+https://github.com/python-streamz/streamz.git

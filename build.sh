@@ -18,31 +18,37 @@ ARGS=$*
 # script, and that this script resides in the repo dir!
 REPODIR=$(cd $(dirname $0); pwd)
 
-VALIDARGS="clean libcudf cudf dask_cudf bench -v -g -n -h"
-HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [bench] [-v] [-g] [-n] [-h]
+VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks -v -g -n --allgpuarch -h"
+HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [-v] [-g] [-n] [-h]
    clean        - remove all existing build artifacts and configuration (start
                   over)
+   libnvstrings - build the nvstrings C++ code only
+   nvstrings    - build the nvstrings Python package
    libcudf      - build the cudf C++ code only
    cudf         - build the cudf Python package
    dask_cudf    - build the dask_cudf Python package
-   bench        - build libcudf gbench benchmarks
+   benchmarks   - build benchmarks
    -v           - verbose build mode
    -g           - build for debug
    -n           - no install step
+   --allgpuarch - build for all supported GPU architectures
    -h           - print this text
 
-   default action (no args) is to build and install 'libcudf' then 'cudf' then
-   'dask_cudf' targets
+   default action (no args) is to build and install 'libnvstrings' then
+   'nvstrings' then 'libcudf' then 'cudf' then 'dask_cudf' targets
 "
-LIBCUDF_BUILD_DIR=${REPODIR}/cpp/build
+LIB_BUILD_DIR=${REPODIR}/cpp/build
+NVSTRINGS_BUILD_DIR=${REPODIR}/python/nvstrings/build
 CUDF_BUILD_DIR=${REPODIR}/python/cudf/build
 DASK_CUDF_BUILD_DIR=${REPODIR}/python/dask_cudf/build
-BUILD_DIRS="${LIBCUDF_BUILD_DIR} ${CUDF_BUILD_DIR} ${DASK_CUDF_BUILD_DIR}"
+BUILD_DIRS="${LIB_BUILD_DIR} ${NVSTRINGS_BUILD_DIR} ${CUDF_BUILD_DIR} ${DASK_CUDF_BUILD_DIR}"
 
 # Set defaults for vars modified by flags to this script
 VERBOSE=""
 BUILD_TYPE=Release
 INSTALL_TARGET=install
+BENCHMARKS=OFF
+BUILD_ALL_GPU_ARCH=0
 
 # Set defaults for vars that may not have been defined externally
 #  FIXME: if INSTALL_PREFIX is not set, check PREFIX, then check
@@ -52,6 +58,10 @@ PARALLEL_LEVEL=${PARALLEL_LEVEL:=""}
 
 function hasArg {
     (( ${NUMARGS} != 0 )) && (echo " ${ARGS} " | grep -q " $1 ")
+}
+
+function buildAll {
+    ((${NUMARGS} == 0 )) || !(echo " ${ARGS} " | grep -q " [^-]\+ ")
 }
 
 if hasArg -h; then
@@ -79,8 +89,11 @@ fi
 if hasArg -n; then
     INSTALL_TARGET=""
 fi
-if hasArg bench; then
-    BUILD_BENCHMARKS=ON
+if hasArg --allgpuarch; then
+    BUILD_ALL_GPU_ARCH=1
+fi
+if hasArg benchmarks; then
+    BENCHMARKS=ON
 fi
 
 # If clean given, run it prior to any other steps
@@ -97,34 +110,80 @@ if hasArg clean; then
     done
 fi
 
-################################################################################
-# Configure, build, and install libcudf
-if (( ${NUMARGS} == 0 )) || hasArg libcudf; then
+if (( ${BUILD_ALL_GPU_ARCH} == 0 )); then
+    GPU_ARCH="-DGPU_ARCHS="
+    echo "Building for the architecture of the GPU in the system..."
+else
+    GPU_ARCH="-DGPU_ARCHS=ALL"
+    echo "Building for *ALL* supported GPU architectures..."
+fi
 
-    mkdir -p ${LIBCUDF_BUILD_DIR}
-    cd ${LIBCUDF_BUILD_DIR}
+################################################################################
+# Configure, build, and install libnvstrings
+
+if buildAll || hasArg libnvstrings || hasArg libcudf; then
+
+    mkdir -p ${LIB_BUILD_DIR}
+    cd ${LIB_BUILD_DIR}
     cmake -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
           -DCMAKE_CXX11_ABI=ON \
-          -DBUILD_BENCHMARKS=${BUILD_BENCHMARKS} \
+          ${GPU_ARCH} \
+          -DBUILD_BENCHMARKS=${BENCHMARKS} \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ..
-    make -j${PARALLEL_LEVEL} VERBOSE=${VERBOSE} ${INSTALL_TARGET}
+fi
+
+if buildAll || hasArg libnvstrings; then
+
+    cd ${LIB_BUILD_DIR}
+    if [[ ${INSTALL_TARGET} != "" ]]; then
+        make -j${PARALLEL_LEVEL} install_nvstrings VERBOSE=${VERBOSE}
+    else
+        make -j${PARALLEL_LEVEL} nvstrings VERBOSE=${VERBOSE}
+    fi
+fi
+
+# Build and install the nvstrings Python package
+if buildAll || hasArg nvstrings; then
+
+    cd ${REPODIR}/python/nvstrings
+    if [[ ${INSTALL_TARGET} != "" ]]; then
+        python setup.py build_ext
+        python setup.py install --single-version-externally-managed --record=record.txt
+    else
+        python setup.py build_ext --library-dir=${LIBNVSTRINGS_BUILD_DIR}
+    fi
+fi
+
+# Configure, build, and install libcudf
+if buildAll || hasArg libcudf; then
+
+    cd ${LIB_BUILD_DIR}
+    if [[ ${INSTALL_TARGET} != "" ]]; then
+        make -j${PARALLEL_LEVEL} install_cudf VERBOSE=${VERBOSE}
+    else
+        make -j${PARALLEL_LEVEL} cudf VERBOSE=${VERBOSE}
+    fi
 fi
 
 # Build and install the cudf Python package
-if (( ${NUMARGS} == 0 )) || hasArg cudf; then
+if buildAll || hasArg cudf; then
 
     cd ${REPODIR}/python/cudf
     if [[ ${INSTALL_TARGET} != "" ]]; then
-    python setup.py build_ext --inplace
-    python setup.py install --single-version-externally-managed --record=record.txt
+        python setup.py build_ext --inplace
+        python setup.py install --single-version-externally-managed --record=record.txt
     else
-    python setup.py build_ext --inplace --library-dir=${LIBCUDF_BUILD_DIR}
+        python setup.py build_ext --inplace --library-dir=${LIBCUDF_BUILD_DIR}
     fi
 fi
 
 # Build and install the dask_cudf Python package
-if (( ${NUMARGS} == 0 )) || hasArg dask_cudf; then
+if buildAll || hasArg dask_cudf; then
 
     cd ${REPODIR}/python/dask_cudf
-    python setup.py install --single-version-externally-managed --record=record.txt
+    if [[ ${INSTALL_TARGET} != "" ]]; then
+        python setup.py install --single-version-externally-managed --record=record.txt
+    else
+        python setup.py build_ext --inplace
+    fi
 fi

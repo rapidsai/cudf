@@ -15,21 +15,25 @@
  */
 
 #include <benchmark/benchmark.h>
+#include <fixture/benchmark_fixture.hpp>
+#include <synchronization/synchronization.hpp>
 #include <vector>
 #include <cudf/cudf.h>
-#include <utilities/error_utils.hpp>
-#include <tests/utilities/column_wrapper.cuh>
+#include <cudf/legacy/join.hpp>
+#include <cudf/utilities/error.hpp>
+#include <tests/utilities/legacy/column_wrapper.cuh>
 
 #include "generate_input_tables.cuh"
-#include "../synchronization/synchronization.hpp"
 
+template <typename key_type, typename payload_type>
+class Join : public cudf::benchmark {};
 
 template<typename key_type, typename payload_type>
-static void join_benchmark(benchmark::State& state)
+static void BM_join(benchmark::State& state)
 {
-    const gdf_size_type build_table_size {(gdf_size_type) state.range(0)};
-    const gdf_size_type probe_table_size {(gdf_size_type) state.range(1)};
-    const gdf_size_type rand_max_val {build_table_size * 2};
+    const cudf::size_type build_table_size {(cudf::size_type) state.range(0)};
+    const cudf::size_type probe_table_size {(cudf::size_type) state.range(1)};
+    const cudf::size_type rand_max_val {build_table_size * 2};
     const double selectivity = 0.3;
     const bool is_build_table_key_unique = true;
 
@@ -38,7 +42,7 @@ static void join_benchmark(benchmark::State& state)
     cudf::test::column_wrapper<key_type> build_key_column(build_table_size);
     cudf::test::column_wrapper<key_type> probe_key_column(probe_table_size);
 
-    generate_input_tables<key_type, gdf_size_type>(
+    generate_input_tables<key_type, cudf::size_type>(
         (key_type *)build_key_column.get()->data, build_table_size,
         (key_type *)probe_key_column.get()->data, probe_table_size,
         selectivity, rand_max_val, is_build_table_key_unique
@@ -46,22 +50,22 @@ static void join_benchmark(benchmark::State& state)
 
     cudf::test::column_wrapper<payload_type> build_payload_column(
         build_table_size,
-        [] (gdf_index_type row_index) {
+        [] (cudf::size_type row_index) {
             return row_index;
         }
     );
 
     cudf::test::column_wrapper<payload_type> probe_payload_column(
         probe_table_size,
-        [] (gdf_index_type row_index) {
+        [] (cudf::size_type row_index) {
             return row_index;
         }
     );
 
-    CHECK_STREAM(0);
+    CHECK_CUDA(0);
 
-    std::vector<gdf_column*> build_table {build_key_column.get(), build_payload_column.get()};
-    std::vector<gdf_column*> probe_table {probe_key_column.get(), probe_payload_column.get()};
+    cudf::table build_table {build_key_column.get(), build_payload_column.get()};
+    cudf::table probe_table {probe_key_column.get(), probe_payload_column.get()};
 
     // Setup join parameters and result table
 
@@ -70,38 +74,34 @@ static void join_benchmark(benchmark::State& state)
         gdf_method::GDF_HASH   // hash based join
     };
 
-    int columns_to_join[] = {0};
-
-    const int nresult_cols = build_table.size() + probe_table.size() - 1;
-
-    std::vector<gdf_column> result_table(nresult_cols);
-    std::vector<gdf_column *> col_ptrs(nresult_cols);
-
-    for (size_t icol = 0; icol < result_table.size(); icol++) {
-        col_ptrs[icol] = &result_table[icol];
-    }
+    std::vector<cudf::size_type> columns_to_join = {0};
 
     // Benchmark the inner join operation
 
     for (auto _ : state) {
         cuda_event_timer raii(state, true, 0);
 
-        CUDF_TRY(gdf_inner_join(
-            probe_table.data(), 2, columns_to_join,
-            build_table.data(), 2, columns_to_join,
-            1, nresult_cols, col_ptrs.data(),
-            nullptr, nullptr, &ctxt
-        ));
-    }
+        cudf::table result = cudf::inner_join(
+            probe_table, build_table, 
+            columns_to_join, columns_to_join,
+            {{0,0}},
+            nullptr, &ctxt
+        );
 
-    // Cleanup
-
-    for (auto & col_ptr : col_ptrs) {
-        CUDF_TRY(gdf_column_free(col_ptr));
+        result.destroy();
     }
 }
 
-BENCHMARK_TEMPLATE(join_benchmark, int32_t, int32_t)->Unit(benchmark::kMillisecond)
+#define JOIN_BENCHMARK_DEFINE(name, key_type, payload_type)     \
+BENCHMARK_TEMPLATE_DEFINE_F(Join, name, key_type, payload_type) \
+(::benchmark::State& st) {                                      \
+  BM_join<key_type, payload_type>(st);                          \
+}
+
+JOIN_BENCHMARK_DEFINE(join_32bit, int32_t, int32_t);
+JOIN_BENCHMARK_DEFINE(join_64bit, int64_t, int64_t);
+
+BENCHMARK_REGISTER_F(Join, join_32bit)->Unit(benchmark::kMillisecond)
     ->Args({100'000, 100'000})
     ->Args({100'000, 400'000})
     ->Args({100'000, 1'000'000})
@@ -112,7 +112,7 @@ BENCHMARK_TEMPLATE(join_benchmark, int32_t, int32_t)->Unit(benchmark::kMilliseco
     ->Args({80'000'000, 240'000'000})
     ->UseManualTime();
 
-BENCHMARK_TEMPLATE(join_benchmark, int64_t, int64_t)->Unit(benchmark::kMillisecond)
+BENCHMARK_REGISTER_F(Join, join_64bit)->Unit(benchmark::kMillisecond)
     ->Args({50'000'000, 50'000'000})
     ->Args({40'000'000, 120'000'000})
     ->UseManualTime();

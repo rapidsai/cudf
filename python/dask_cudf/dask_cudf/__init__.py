@@ -10,7 +10,12 @@ from .core import (
     from_dask_dataframe,
     from_delayed,
 )
-from .io import read_csv, read_json, read_orc, read_parquet
+from .io import read_csv, read_json, read_orc, to_orc
+
+try:
+    from .io import read_parquet
+except ImportError:
+    pass
 
 __version__ = get_versions()["version"]
 del get_versions

@@ -1,8 +1,8 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-from io import BytesIO, StringIO
+from io import BytesIO, IOBase, StringIO
 
-from cudf.bindings.csv import cpp_read_csv, cpp_write_csv
+import cudf._lib as libcudf
 from cudf.utils import ioutils
 
 
@@ -40,13 +40,14 @@ def read_csv(
     na_filter=True,
     prefix=None,
     index_col=None,
+    **kwargs,
 ):
     """{docstring}"""
 
     filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
-        filepath_or_buffer, compression, (BytesIO, StringIO)
+        filepath_or_buffer, compression, (BytesIO, StringIO), **kwargs
     )
-    return cpp_read_csv(
+    return libcudf.csv.read_csv(
         filepath_or_buffer,
         lineterminator=lineterminator,
         quotechar=quotechar,
@@ -107,8 +108,11 @@ def to_csv(
         df = df.reset_index()
     rows_per_chunk = chunksize if chunksize else len(df)
 
-    return cpp_write_csv(
-        cols=df._cols,
+    if isinstance(path, IOBase):
+        path = path.name
+
+    return libcudf.csv.write_csv(
+        cols=df._data,
         path=path,
         sep=sep,
         na_rep=na_rep,

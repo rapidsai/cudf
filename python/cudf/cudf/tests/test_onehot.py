@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.dataframe import DataFrame, GenericIndex, Series
+from cudf.core import DataFrame, GenericIndex, Series
 from cudf.tests import utils
 
 

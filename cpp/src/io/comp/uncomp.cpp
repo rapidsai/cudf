@@ -21,6 +21,9 @@
 #include <zlib.h> // uncompress
 #include "unbz2.h" // bz2 uncompress
 
+namespace cudf {
+namespace io {
+
 #define GZ_FLG_FTEXT    0x01    // ASCII text hint
 #define GZ_FLG_FHCRC    0x02    // Header CRC present
 #define GZ_FLG_FEXTRA   0x04    // Extra fields present
@@ -269,6 +272,47 @@ int cpu_inflate(uint8_t *uncomp_data, size_t *destLen, const uint8_t *comp_data,
     return (zerr == Z_STREAM_END) ? Z_OK : zerr;
 }
 
+/**
+ * @Brief Uncompresses a raw DEFLATE stream to a char vector.
+ * The vector will be grown to match the uncompressed size
+ * Optimized for the case where the initial size is the uncompressed
+ * size truncated to 32-bit, and grows the buffer in 1GB increments.
+ *
+ * @param dst[out] Destination vector
+ * @param comp_data[in] Raw compressed data
+ * @param comp_len[in] Compressed data size
+ */
+int cpu_inflate_vector(std::vector<char>& dst, const uint8_t *comp_data, size_t comp_len)
+{
+    int zerr;
+    z_stream strm;
+
+    memset(&strm, 0, sizeof(strm));
+    strm.next_in = (Bytef *)comp_data;
+    strm.avail_in = comp_len;
+    strm.total_in = 0;
+    strm.next_out = reinterpret_cast<uint8_t*>(dst.data());
+    strm.avail_out = dst.size();
+    strm.total_out = 0;
+    zerr = inflateInit2(&strm, -15); // -15 for raw data without GZIP headers
+    if (zerr != 0)
+    {
+        dst.resize(0);
+        return zerr;
+    }
+    do {
+        if (strm.avail_out == 0) {
+            dst.resize(strm.total_out + (1 << 30));
+            strm.avail_out = dst.size() - strm.total_out;
+            strm.next_out = reinterpret_cast<uint8_t*>(dst.data()) + strm.total_out;
+        }
+        zerr = inflate(&strm, Z_SYNC_FLUSH);
+    } while ((zerr == Z_BUF_ERROR || zerr == Z_OK) && strm.avail_out == 0 && strm.total_out == dst.size());
+    dst.resize(strm.total_out);
+    inflateEnd(&strm);
+    return (zerr == Z_STREAM_END) ? Z_OK : zerr;
+}
+
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -284,7 +328,7 @@ int cpu_inflate(uint8_t *uncomp_data, size_t *destLen, const uint8_t *comp_data,
  * @returns gdf_error with error code on failure, otherwise GDF_SUCCESS
  */
 /* ----------------------------------------------------------------------------*/
-gdf_error io_uncompress_single_h2d(const void *src, gdf_size_type src_size, int strm_type, std::vector<char>& dst)
+gdf_error io_uncompress_single_h2d(const void *src, size_t src_size, int strm_type, std::vector<char>& dst)
 {
     const uint8_t *raw = (const uint8_t *)src;
     const uint8_t *comp_data = nullptr;
@@ -327,8 +371,8 @@ gdf_error io_uncompress_single_h2d(const void *src, gdf_size_type src_size, int 
                         // Bad cdir
                         break;
                     }
-                    // For now, only accept with non-zero file sizes and v2.0 DEFLATE
-                    if (cdfh->min_ver <= 20 && cdfh->comp_method == 8 && cdfh->comp_size > 0 && cdfh->uncomp_size > 0)
+                    // For now, only accept with non-zero file sizes and DEFLATE
+                    if (cdfh->comp_method == 8 && cdfh->comp_size > 0 && cdfh->uncomp_size > 0)
                     {
                         size_t lfh_ofs = cdfh->hdr_ofs;
                         const zip_lfh_s *lfh = (const zip_lfh_s *)(raw + lfh_ofs);
@@ -336,7 +380,7 @@ gdf_error io_uncompress_single_h2d(const void *src, gdf_size_type src_size, int 
                          && lfh->sig == 0x04034b50
                          && lfh_ofs + sizeof(zip_lfh_s) + lfh->fname_len + lfh->extra_len <= src_size)
                         {
-                            if (lfh->ver <= 20 && lfh->comp_method == 8 && lfh->comp_size > 0 && lfh->uncomp_size > 0)
+                            if (lfh->comp_method == 8 && lfh->comp_size > 0 && lfh->uncomp_size > 0)
                             {
                                 size_t file_start = lfh_ofs + sizeof(zip_lfh_s) + lfh->fname_len + lfh->extra_len;
                                 size_t file_end = file_start + lfh->comp_size;
@@ -389,9 +433,8 @@ gdf_error io_uncompress_single_h2d(const void *src, gdf_size_type src_size, int 
     {
         // INFLATE
         dst.resize(uncomp_len);
-        size_t zdestLen = uncomp_len;
-        int zerr = cpu_inflate((uint8_t*)dst.data(), &zdestLen, comp_data, comp_len);
-        if (zerr != 0 || zdestLen != uncomp_len)
+        int zerr = cpu_inflate_vector(dst, comp_data, comp_len);
+        if (zerr != 0)
         {
             dst.resize(0);
             return GDF_FILE_ERROR;
@@ -652,3 +695,8 @@ HostDecompressor *HostDecompressor::Create(int stream_type)
     }
     return decompressor;
 }
+
+
+} // namespace io
+} // namespace cudf
+

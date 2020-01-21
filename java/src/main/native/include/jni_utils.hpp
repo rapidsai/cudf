@@ -26,8 +26,9 @@
 
 #include "cudf/cudf.h"
 #include "cudf/legacy/table.hpp"
-#include "utilities/column_utils.hpp"
-#include "utilities/error_utils.hpp"
+#include "utilities/legacy/column_utils.hpp"
+#include "cudf/utilities/error.hpp"
+#include "utilities/legacy/error_utils.hpp"
 
 namespace cudf {
 namespace jni {
@@ -590,9 +591,9 @@ private:
   gdf_column *col = nullptr;
 
 public:
-  gdf_column_wrapper(gdf_size_type size, gdf_dtype dtype, bool has_validity_buffer) {
+  gdf_column_wrapper(cudf::size_type size, gdf_dtype dtype, bool has_validity_buffer) {
     if (dtype == GDF_STRING || dtype == GDF_STRING_CATEGORY) {
-      throw std::logic_error("STRINGS ARE NOT SUPPORTED WITH THIS CONSTRUCTOR");
+      throw std::logic_error("TYPES STRING AND STRING_CATEGORY ARE NOT SUPPORTED WITH THIS CONSTRUCTOR");
     }
     col = new gdf_column();
     gdf_column_view(col, nullptr, nullptr, size, dtype);
@@ -605,8 +606,40 @@ public:
     }
   }
 
-  gdf_column_wrapper(gdf_size_type size, gdf_dtype dtype, int null_count, void *data,
-                     gdf_valid_type *valid, void *cat = NULL) {
+  /**
+   * Create a new column wrapper optionally with an empty string category columns.
+   * If empty_cat is true and the input dtype is a GDF_STRING_CATEGORY, the memory for the
+   * offsets array will be allocated, but the NVCategory pointer will not be allocated.
+   *
+   * This will allow you to set it to whatever you want when the time is right.
+   */
+  gdf_column_wrapper(cudf::size_type size, gdf_dtype dtype, bool has_validity_buffer, bool empty_cat) {
+    if (dtype == GDF_STRING) {
+      throw std::logic_error("STRING IS NOT SUPPORTED WITH THIS CONSTRUCTOR");
+    }
+    if (!empty_cat && dtype == GDF_STRING_CATEGORY) {
+      throw std::logic_error("STRING_CATEGORY WAS NOT ENABLED FOR THIS CONSTRUCTOR");
+    }
+    col = new gdf_column();
+    gdf_column_view(col, nullptr, nullptr, size, dtype);
+
+    if (size > 0) {
+      if (dtype == GDF_STRING_CATEGORY) {
+        // allocate offsets which is 1 larger than the number of entries
+        // start_offset = data[i], end_offset = data[i + 1]
+        RMM_TRY(RMM_ALLOC(&col->data, (size + 1) * cudf::size_of(GDF_INT32), 0));
+      } else {
+        RMM_TRY(RMM_ALLOC(&col->data, size * cudf::size_of(col->dtype), 0));
+      }
+      if (has_validity_buffer) {
+        RMM_TRY(RMM_ALLOC(&col->valid, gdf_valid_allocation_size(size), 0));
+      }
+    }
+  }
+
+
+  gdf_column_wrapper(cudf::size_type size, gdf_dtype dtype, int null_count, void *data,
+                     cudf::valid_type *valid, void *cat = NULL) {
     col = new gdf_column();
     gdf_column_view(col, data, valid, size, dtype);
     col->dtype_info.category = cat;
@@ -664,9 +697,35 @@ public:
    */
   output_table(JNIEnv *env, cudf::table *const input_table) : env(env) {
     gdf_column **const input_cols = input_table->begin();
-    gdf_size_type const size = input_table->num_rows();
+    cudf::size_type const size = input_table->num_rows();
     for (int i = 0; i < input_table->num_columns(); ++i) {
       wrappers.emplace_back(size, input_cols[i]->dtype, input_cols[i]->valid != NULL);
+    }
+  }
+
+  /**
+   * @brief This constructs a vector of cudf::jni::gdf_column_wrapper using
+   * vector of gdf_columns from the provided cudf::table. The type and validity
+   * vectors of cudf::jni::gdf_column_wrappers are based on the input_cols and
+   * shouldn't be used with operations that expect the output table to be
+   * different in type from the input e.g. joins have more columns than either
+   * one of the input tables and they can also have nulls even if the input
+   * tables don't.
+   *
+   * If empty_cat is true STRING_CATEGORY columns will be allocated, but the
+   * NVCategory pointer in them will not be set.  This is so the caller can decide
+   * what it should be set to.
+   *
+   * @param in env - JNIEnv
+   * @param in input_table - cudf::table on which to base the output table
+   * @param in empty_cat - true if STRING_CATEGORY columns should be supported, else false
+   */
+
+  output_table(JNIEnv *env, cudf::table *const input_table, bool empty_cat) : env(env) {
+    gdf_column **const input_cols = input_table->begin();
+    cudf::size_type const size = input_table->num_rows();
+    for (int i = 0; i < input_table->num_columns(); ++i) {
+      wrappers.emplace_back(size, input_cols[i]->dtype, input_cols[i]->valid != NULL, empty_cat);
     }
   }
 

@@ -25,7 +25,7 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-class ReductionTest {
+class ReductionTest extends CudfTestBase {
 
   public static final double DELTAD = 0.00001;
   public static final float DELTAF = 0.00001f;

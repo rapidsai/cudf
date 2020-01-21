@@ -60,7 +60,29 @@ class Cudf {
         && BinaryOp.COMPARISON.contains(op)) {
       // Currenty cudf cannot handle string scalars, so convert the string scalar to a
       // category index and compare with that instead.
-      rhs = lhs.getCategoryIndex(rhs);
+      if (BinaryOp.INEQUALITY_COMPARISON.contains(op)) {
+        // Need to compute value bounds and potentially adjust the operation being performed
+        // since scalar might not be present in the category.
+        int[] bounds = lhs.getCategoryBounds(rhs);
+        if (bounds[0] == bounds[1]) {
+          // scalar is present in the category
+          rhs = Scalar.fromInt(bounds[0]);
+        } else {
+          // The scalar is not present in the category so either the lower bound or upper bound
+          // needs to be used as a proxy. The upper bound is chosen to avoid any potential issues
+          // with negative indices if the value were to be the first key in an updated category.
+          rhs = Scalar.fromInt(bounds[1]);
+          if (op == BinaryOp.LESS_EQUAL) {
+            // Avoid matching the upper bound since it is strictly greater than the scalar.
+            op = BinaryOp.LESS;
+          } else if (op == BinaryOp.GREATER) {
+            // Include the upper bound since it is strictly greater than the scalar.
+            op = BinaryOp.GREATER_EQUAL;
+          }
+        }
+      } else {
+        rhs = lhs.getCategoryIndex(rhs);
+      }
     }
     return gdfBinaryOpVS(lhs.getNativeCudfColumnAddress(),
         rhs.intTypeStorage, rhs.floatTypeStorage, rhs.doubleTypeStorage, rhs.isValid,
@@ -73,12 +95,6 @@ class Cudf {
                                            boolean rhsIsValid, int rhsDtype,
                                            int op, int dtype);
 
-
-  static long filter(ColumnVector input, ColumnVector mask) {
-    return filter(input.getNativeCudfColumnAddress(), mask.getNativeCudfColumnAddress());
-  }
-
-  private static native long filter(long input, long mask);
 
   /**
    * Replaces nulls on the input ColumnVector with the value of Scalar.
@@ -172,4 +188,10 @@ class Cudf {
   }
 
   private static native int getCategoryIndex(long cat, byte[] str);
+
+  static int[] getCategoryBounds(ColumnVector category, Scalar str) {
+    return getCategoryBounds(category.getNativeCudfColumnAddress(), str.stringTypeStorage);
+  }
+
+  private static native int[] getCategoryBounds(long cat, byte[] str);
 }

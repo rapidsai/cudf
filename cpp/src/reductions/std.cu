@@ -15,24 +15,25 @@
  */
 // The translation unit for reduction `standard deviation`
 
-#include "reduction_functions.cuh"
+#include <cudf/detail/reduction_functions.hpp>
 #include "compound.cuh"
 
-
 // @param[in] ddof Delta Degrees of Freedom used for `std`, `var`.
-//                 The divisor used in calculations is N - ddof, where N represents the number of elements.
+//                 The divisor used in calculations is N - ddof, where N
+//                 represents the number of elements.
 
-gdf_scalar cudf::reduction::standard_deviation(gdf_column const& col, gdf_dtype const output_dtype, gdf_size_type ddof, cudaStream_t stream)
+std::unique_ptr<cudf::scalar> cudf::experimental::reduction::standard_deviation(
+    column_view const& col, cudf::data_type const output_dtype,
+    cudf::size_type ddof,
+    rmm::mr::device_memory_resource* mr, cudaStream_t stream)
 {
-    // TODO: add cuda version check when the fix is available
+  // TODO: add cuda version check when the fix is available
 #if !defined(__CUDACC_DEBUG__)
-    using reducer = cudf::reduction::compound::element_type_dispatcher<cudf::reduction::op::standard_deviation>;
-    return cudf::type_dispatcher(col.dtype, reducer(), col, output_dtype, ddof, stream);
+  using reducer = cudf::experimental::reduction::compound::element_type_dispatcher< cudf::experimental::reduction::op::standard_deviation>;
+  return cudf::experimental::type_dispatcher(col.type(), reducer(), col, output_dtype, ddof, mr, stream);
 #else
-    // workaround for bug 200529165 which causes compilation error only at device debug build
-    // the bug will be fixed at cuda 10.2
-    CUDF_FAIL("var/std reductions are not supported at debug build.");
+  // workaround for bug 200529165 which causes compilation error only at device
+  // debug build the bug will be fixed at cuda 10.2
+  CUDF_FAIL("var/std reductions are not supported at debug build.");
 #endif
 }
-
-

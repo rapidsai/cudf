@@ -35,16 +35,16 @@ def test_from_cudf():
 def test_from_cudf_with_generic_idx():
 
     cdf = cudf.DataFrame(
-        [
-            ("a", list(range(20))),
-            ("b", list(reversed(range(20)))),
-            ("c", list(range(20))),
-        ]
+        {
+            "a": list(range(20)),
+            "b": list(reversed(range(20))),
+            "c": list(range(20)),
+        }
     )
 
     ddf = dgd.from_cudf(cdf, npartitions=2)
 
-    assert isinstance(ddf.index.compute(), cudf.dataframe.index.GenericIndex)
+    assert isinstance(ddf.index.compute(), cudf.core.index.GenericIndex)
     dd.assert_eq(ddf.loc[1:2, ["a"]], cdf.loc[1:2, ["a"]])
 
 
@@ -175,6 +175,7 @@ def test_set_index_2(nelem):
         assert_frame_equal_by_index_group(expect, got)
 
 
+@pytest.mark.xfail(reason="dask's index name '__dask_cudf.index' is correct")
 def test_set_index_w_series():
     with dask.config.set(scheduler="single-threaded"):
         nelem = 20
@@ -191,8 +192,54 @@ def test_set_index_w_series():
         res = dgf.set_index(dgf.x)  # sort by default
         got = res.compute().to_pandas()
 
-        expect.index.name = None
         dd.assert_eq(expect, got)
+
+
+def test_set_index_sorted():
+    with dask.config.set(scheduler="single-threaded"):
+        df1 = pd.DataFrame({"val": [4, 3, 2, 1, 0], "id": [0, 1, 3, 5, 7]})
+        ddf1 = dd.from_pandas(df1, npartitions=2)
+
+        gdf1 = cudf.from_pandas(df1)
+        gddf1 = dgd.from_cudf(gdf1, npartitions=2)
+
+        expect = ddf1.set_index("id", sorted=True)
+        got = gddf1.set_index("id", sorted=True)
+
+        dd.assert_eq(expect, got)
+
+        with pytest.raises(ValueError):
+            # Cannot set `sorted=True` for non-sorted column
+            gddf1.set_index("val", sorted=True)
+
+
+@pytest.mark.parametrize("nelem", [10, 200, 1333])
+@pytest.mark.parametrize("index", [None, "myindex"])
+def test_rearrange_by_divisions(nelem, index):
+    with dask.config.set(scheduler="single-threaded"):
+        np.random.seed(0)
+        df = pd.DataFrame(
+            {
+                "x": np.random.randint(0, 20, size=nelem),
+                "y": np.random.normal(size=nelem),
+                "z": np.random.choice(["dog", "cat", "bird"], nelem),
+            }
+        )
+        df["z"] = df["z"].astype("category")
+
+        ddf1 = dd.from_pandas(df, npartitions=4)
+        gdf1 = dgd.from_cudf(cudf.DataFrame.from_pandas(df), npartitions=4)
+        ddf1.index.name = index
+        gdf1.index.name = index
+        divisions = (0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20)
+
+        expect = dd.shuffle.rearrange_by_divisions(
+            ddf1, "x", divisions=divisions, shuffle="tasks"
+        )
+        result = dd.shuffle.rearrange_by_divisions(
+            gdf1, "x", divisions=divisions, shuffle="tasks"
+        )
+        dd.assert_eq(expect, result)
 
 
 def test_assign():
@@ -393,3 +440,31 @@ def test_boolean_index(gdf, gddf):
     gddf2 = gddf[gddf.x > 2]
 
     dd.assert_eq(gdf2, gddf2)
+
+
+def test_drop(gdf, gddf):
+    gdf2 = gdf.drop(columns="x")
+    gddf2 = gddf.drop(columns="x").compute()
+
+    dd.assert_eq(gdf2, gddf2)
+
+
+@pytest.mark.parametrize("deep", [True, False])
+@pytest.mark.parametrize("index", [True, False])
+def test_memory_usage(gdf, gddf, index, deep):
+    dd.assert_eq(
+        gdf.memory_usage(deep=deep, index=index),
+        gddf.memory_usage(deep=deep, index=index),
+    )
+
+
+@pytest.mark.parametrize("index", [True, False])
+def test_hash_object_dispatch(index):
+    obj = cudf.DataFrame(
+        {"x": ["a", "b", "c"], "y": [1, 2, 3]}, index=[2, 4, 6]
+    )
+
+    result = dd.utils.hash_object_dispatch(obj, index=index)
+    expected = dgd.backends.hash_object_cudf(obj, index=index)
+
+    dd.assert_eq(cudf.Series(result), cudf.Series(expected))

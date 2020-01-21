@@ -83,6 +83,10 @@ For more information on these sources, see the manual.
 #include "io_uncomp.h"
 #include <stdlib.h>
 #include <stdio.h>
+#include "unbz2.h"
+
+namespace cudf {
+namespace io {
 
 #ifdef _MSC_VER
 #define bswap_32(v)    _byteswap_ulong(v)
@@ -91,8 +95,6 @@ For more information on these sources, see the manual.
 #define bswap_32(v)    __builtin_bswap32(v)
 #define bswap_64(v)    __builtin_bswap64(v)
 #endif
-
-#include "unbz2.h"
 
 
 // Constants for the fast MTF decoder.
@@ -670,4 +672,6 @@ int32_t cpu_bz2_uncompress(const uint8_t *source, size_t sourceLen, uint8_t *des
     return ret;
 }
 
+} // namespace io
+} // namespace cudf
 

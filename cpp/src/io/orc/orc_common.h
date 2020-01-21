@@ -76,6 +76,19 @@ enum ColumnEncodingKind {
     DICTIONARY_V2 = 3,  // the encoding is dictionary-based using RLE v2
 };
 
+
+enum { // Protobuf field types
+    PB_TYPE_VARINT = 0,
+    PB_TYPE_FIXED64 = 1,
+    PB_TYPE_FIXEDLEN = 2,
+    PB_TYPE_START_GROUP = 3, // deprecated
+    PB_TYPE_END_GROUP = 4, // deprecated
+    PB_TYPE_FIXED32 = 5,
+    PB_TYPE_INVALID_6 = 6,
+    PB_TYPE_INVALID_7 = 7,
+};
+
+
 } // namespace orc
 } // namespace io
 } // namespace cudf

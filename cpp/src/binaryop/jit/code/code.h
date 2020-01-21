@@ -17,10 +17,10 @@
  * limitations under the License.
  */
 
-#ifndef GDF_BINARY_OPERATION_JIT_CODE_CODE_H
-#define GDF_BINARY_OPERATION_JIT_CODE_CODE_H
+#pragma once
 
 namespace cudf {
+namespace experimental {
 namespace binops {
 namespace jit {
 namespace code {
@@ -33,5 +33,4 @@ namespace code {
 }
 }
 }
-
-#endif
+}

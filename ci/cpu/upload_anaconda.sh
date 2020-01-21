@@ -4,16 +4,15 @@
 
 set -e
 
+export LIBNVSTRINGS_FILE=`conda build conda/recipes/libnvstrings --output`
+export NVSTRINGS_FILE=`conda build conda/recipes/nvstrings --python=$PYTHON --output`
 export LIBCUDF_FILE=`conda build conda/recipes/libcudf --output`
 export CUDF_FILE=`conda build conda/recipes/cudf --python=$PYTHON --output`
 export DASK_CUDF_FILE=`conda build conda/recipes/dask-cudf --python=$PYTHON --output`
+export CUSTREAMZ_FILE=`conda build conda/recipes/custreamz --python=$PYTHON --output`
 
 SOURCE_BRANCH=master
-CUDA_REL=${CUDA:0:3}
-if [ "${CUDA:0:2}" == '10' ]; then
-  # CUDA 10 release
-  CUDA_REL=${CUDA:0:4}
-fi
+CUDA_REL=${CUDA_VERSION%.*}
 
 # Restrict uploads to master branch
 if [ ${GIT_BRANCH} != ${SOURCE_BRANCH} ]; then
@@ -27,8 +26,13 @@ if [ -z "$MY_UPLOAD_KEY" ]; then
 fi
 
 if [ "$UPLOAD_LIBCUDF" == "1" ]; then
-  LABEL_OPTION="--label main --label cuda${CUDA_REL}"
+  LABEL_OPTION="--label main"
   echo "LABEL_OPTION=${LABEL_OPTION}"
+
+  test -e ${LIBNVSTRINGS_FILE}
+  echo "Upload libNVStrings"
+  echo ${LIBNVSTRINGS_FILE}
+  anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --force ${LIBNVSTRINGS_FILE}
 
   test -e ${LIBCUDF_FILE}
   echo "Upload libcudf"
@@ -37,8 +41,13 @@ if [ "$UPLOAD_LIBCUDF" == "1" ]; then
 fi
 
 if [ "$UPLOAD_CUDF" == "1" ]; then
-  LABEL_OPTION="--label main --label cuda9.2 --label cuda10.0"
+  LABEL_OPTION="--label main"
   echo "LABEL_OPTION=${LABEL_OPTION}"
+
+  test -e ${NVSTRINGS_FILE}
+  echo "Upload nvstrings"
+  echo ${NVSTRINGS_FILE}
+  anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --force ${NVSTRINGS_FILE}
 
   test -e ${CUDF_FILE}
   echo "Upload cudf"
@@ -49,5 +58,9 @@ if [ "$UPLOAD_CUDF" == "1" ]; then
   echo "Upload dask-cudf"
   echo ${DASK_CUDF_FILE}
   anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --force ${DASK_CUDF_FILE}
-  
+
+  test -e ${CUSTREAMZ_FILE}
+  echo "Upload custreamz"
+  echo ${CUSTREAMZ_FILE}
+  anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --force ${CUSTREAMZ_FILE}
 fi

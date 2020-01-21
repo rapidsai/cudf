@@ -18,11 +18,11 @@
 #define CUDF_BIT_MASK_CUH
 
 #include <cuda_runtime.h>
-#include <utilities/cudf_utils.h>
+#include <utilities/legacy/cudf_utils.h>
 #include <cudf/types.hpp>
-#include <utilities/bit_util.cuh>
-#include <utilities/error_utils.hpp>
-#include <utilities/integer_utils.hpp>
+#include <utilities/legacy/bit_util.cuh>
+#include <cudf/utilities/error.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
 
 namespace bit_mask {
 enum { bits_per_element = cudf::util::size_in_bits<bit_mask_t>() };
@@ -35,8 +35,8 @@ enum { bits_per_element = cudf::util::size_in_bits<bit_mask_t>() };
  * @return the number of elements
  */
 CUDA_HOST_DEVICE_CALLABLE
-constexpr gdf_size_type num_elements(gdf_size_type number_of_bits) {
-  return cudf::util::div_rounding_up_safe<gdf_size_type>(number_of_bits, bits_per_element);
+constexpr cudf::size_type num_elements(cudf::size_type number_of_bits) {
+  return cudf::util::div_rounding_up_safe<cudf::size_type>(number_of_bits, bits_per_element);
 }
 
 /**
@@ -134,18 +134,18 @@ constexpr inline T lcm(T u, T v) noexcept
  *  @return GDF_SUCCESS on success, the RMM or CUDA error on error
  */
 inline gdf_error create_bit_mask(bit_mask_t **mask,
-                                 gdf_size_type number_of_bits,
+                                 cudf::size_type number_of_bits,
                                  int fill_value = -1,
-                                 gdf_size_type padding_boundary = 64)
+                                 cudf::size_type padding_boundary = 64)
 {
   // We assume RMM_ALLOC satisfies the allocation alignment for the beginning
   // of the allocated space; we ensure its end also has that allocation.
   //
   // TODO: The assumption may not be valid
 
-  padding_boundary = detail::lcm<gdf_size_type>(sizeof(bit_mask_t), padding_boundary);
-  gdf_size_type num_quanta_to_allocate =
-      cudf::util::div_rounding_up_safe<gdf_size_type>(
+  padding_boundary = detail::lcm<cudf::size_type>(sizeof(bit_mask_t), padding_boundary);
+  cudf::size_type num_quanta_to_allocate =
+      cudf::util::div_rounding_up_safe<cudf::size_type>(
           number_of_bits, CHAR_BIT * padding_boundary);
 
   RMM_TRY(RMM_ALLOC(mask, padding_boundary * num_quanta_to_allocate, 0));
@@ -244,9 +244,9 @@ CUDA_DEVICE_CALLABLE void set_bit_safe(bit_mask_t *valid, T bit_index) {
   static_assert(std::is_integral<T>::value,
                 "Record index must be of an integral type");
 
-  const gdf_size_type rec{
+  const cudf::size_type rec{
       cudf::util::detail::bit_container_index<bit_mask_t, T>(bit_index)};
-  const gdf_size_type bit{
+  const cudf::size_type bit{
       cudf::util::detail::intra_container_index<bit_mask_t, T>(bit_index)};
 
   atomicOr(&valid[rec], (bit_mask_t{1} << bit));
@@ -268,9 +268,9 @@ CUDA_DEVICE_CALLABLE void clear_bit_safe(bit_mask_t *valid, T bit_index) {
   static_assert(std::is_integral<T>::value,
                 "Record index must be of an integral type");
 
-  const gdf_size_type rec{
+  const cudf::size_type rec{
       cudf::util::detail::bit_container_index<bit_mask_t, T>(bit_index)};
-  const gdf_size_type bit{
+  const cudf::size_type bit{
       cudf::util::detail::intra_container_index<bit_mask_t, T>(bit_index)};
 
   atomicAnd(&valid[rec], ~(bit_mask_t{1} << bit));

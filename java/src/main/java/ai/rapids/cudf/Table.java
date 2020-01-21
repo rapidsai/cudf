@@ -19,9 +19,7 @@
 package ai.rapids.cudf;
 
 import java.io.File;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 
 /**
  * Class to represent a collection of ColumnVectors and operations that can be performed on them
@@ -36,6 +34,10 @@ public final class Table implements AutoCloseable {
   private final long rows;
   private long nativeHandle;
   private ColumnVector[] columns;
+  // This is an estimate of how compressed data is when guessing the output size of data
+  // For ORC and Parquet this is relatively conservative. We might want a different
+  // one for text based formats.
+  private static final long COMPRESSION_RATIO_ESTIMATE = 10;
 
   /**
    * Table class makes a copy of the array of {@link ColumnVector}s passed to it. The class
@@ -45,7 +47,7 @@ public final class Table implements AutoCloseable {
    */
   public Table(ColumnVector... columns) {
     assert columns != null : "ColumnVectors can't be null";
-    rows = columns[0].getRowCount();
+    rows = columns.length > 0 ? columns[0].getRowCount() : 0;
 
     for (ColumnVector columnVector : columns) {
       assert (null != columnVector) : "ColumnVectors can't be null";
@@ -136,6 +138,17 @@ public final class Table implements AutoCloseable {
         '}';
   }
 
+  /**
+   * Returns the Device memory buffer size.
+   */
+  public long getDeviceMemorySize() {
+    long total = 0;
+    for (ColumnVector cv: columns) {
+      total += cv.getDeviceMemorySize();
+    }
+    return total;
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // NATIVE APIs
   /////////////////////////////////////////////////////////////////////////////
@@ -149,6 +162,13 @@ public final class Table implements AutoCloseable {
   private static native long createCudfTable(long[] cudfColumnPointers) throws CudfException;
 
   private static native void freeCudfTable(long handle) throws CudfException;
+
+  private static native long[] gdfReadJSON(String filePath, long bufferAddress, long bufferLength, long startRange, long rangeLength, String[] filterColumnNames, String[] columnNames, String[] typesAsStrings) throws CudfException;
+
+  private static native long gdfBound(long inputTable, long valueTable,
+    boolean[] descFlags, boolean areNullsSmallest, boolean isUpperBound) throws CudfException;
+
+  private static native void gdfWriteORC(int compressionType, String outputFileName, long buffer, long bufferLength, long tableToWrite) throws CudfException;
 
   /**
    * Ugly long function to read CSV.  This is a long function to avoid the overhead of reaching
@@ -183,9 +203,10 @@ public final class Table implements AutoCloseable {
    * @param filePath          the path of the file to read, or null if no path should be read.
    * @param address           the address of the buffer to read from or 0 if we should not.
    * @param length            the length of the buffer to read from.
+   * @param timeUnit          return type of TimeStamp in units
    */
-  private static native long[] gdfReadParquet(String[] filterColumnNames,
-                                              String filePath, long address, long length) throws CudfException;
+  private static native long[] gdfReadParquet(String[] filterColumnNames, String filePath,
+                                              long address, long length, int timeUnit) throws CudfException;
 
   /**
    * Read in ORC formatted data.
@@ -194,12 +215,16 @@ public final class Table implements AutoCloseable {
    * @param filePath          the path of the file to read, or null if no path should be read.
    * @param address           the address of the buffer to read from or 0 for no buffer.
    * @param length            the length of the buffer to read from.
+   * @param usingNumPyTypes   whether the parser should implicitly promote DATE32 and TIMESTAMP
+   *                          columns to DATE64 for compatibility with NumPy.
+   * @param timeUnit          return type of TimeStamp in units
    */
   private static native long[] gdfReadORC(String[] filterColumnNames,
-                                          String filePath, long address, long length) throws CudfException;
+                                          String filePath, long address, long length,
+                                          boolean usingNumPyTypes, int timeUnit) throws CudfException;
 
   private static native long[] gdfGroupByAggregate(long inputTable, int[] keyIndices, int[] aggColumnsIndices,
-                                                   int[] aggTypes) throws CudfException;
+                                                   int[] aggTypes, boolean ignoreNullKeys) throws CudfException;
 
   private static native long[] gdfOrderBy(long inputTable, long[] sortKeys, boolean[] isDescending,
                                           boolean areNullsSmallest) throws CudfException;
@@ -212,9 +237,249 @@ public final class Table implements AutoCloseable {
 
   private static native long[] concatenate(long[] cudfTablePointers) throws CudfException;
 
+  private static native long[] gdfFilter(long input, long mask);
+
   /////////////////////////////////////////////////////////////////////////////
   // TABLE CREATION APIs
   /////////////////////////////////////////////////////////////////////////////
+
+  /**
+   * Read a JSON file
+   * This method interprets each line as a complete json object and accepts json in two formats
+   * If the following format is passed, the column names will be inferred as 0, 1, 2,...
+   *  "[1, 1.2, \"hello\"]\n
+   *   [3, 2.3, \"string\"]\n
+   *   [2, 23.2, \"str\"]\n"
+   *
+   * If the following format is passed, the column names will be assigned as col1, col2, col3,...
+   *  "{\"col1\": 1, \"col2\": 1.1, \"col3\": \"a\"}\n
+   *   {\"col1\": 3, \"col2\": 4.2, \"col3\": \"hello\"}\n
+   *   {\"col1\": 7, \"col2\": 1.3, \"col3\": \"seven\u24E1\u25B6\"}"
+   *
+   * @param path local path to the json file
+   * @return the file parsed as a table on the GPU.
+   */
+  public static Table readJSON(File path) {
+    return readJSON(JSONOptions.DEFAULT, path);
+  }
+
+  /**
+   * Read a JSON file
+   * This method interprets each line as a complete json object and accepts json in two formats
+   * If the following format is passed, the column names will be inferred as 0, 1, 2,...
+   *  "[1, 1.2, \"hello\"]\n
+   *   [3, 2.3, \"string\"]\n
+   *   [2, 23.2, \"str\"]\n"
+   *
+   * If the following format is passed, the column names will be assigned as col1, col2, col3,...
+   *  "{\"col1\": 1, \"col2\": 1.1, \"col3\": \"a\"}\n
+   *   {\"col1\": 3, \"col2\": 4.2, \"col3\": \"hello\"}\n
+   *   {\"col1\": 7, \"col2\": 1.3, \"col3\": \"seven\u24E1\u25B6\"}"
+   *
+   * @param opts JSONOptions to use to parse the file, currently only offset and size is supported
+   * @param path local path to the json file
+   * @return the file parsed as a table on the GPU.
+   */
+  public static Table readJSON(JSONOptions opts, File path) {
+    return readJSON(Schema.INFERRED, opts, path);
+  }
+
+  /**
+   * Read a JSON file
+   * This method interprets each line as a complete json object and accepts json in two formats
+   * If the following format is passed, the column names will be inferred as 0, 1, 2,...
+   *  "[1, 1.2, \"hello\"]\n
+   *   [3, 2.3, \"string\"]\n
+   *   [2, 23.2, \"str\"]\n"
+   *
+   * If the following format is passed, the column names will be assigned as col1, col2, col3,...
+   *  "{\"col1\": 1, \"col2\": 1.1, \"col3\": \"a\"}\n
+   *   {\"col1\": 3, \"col2\": 4.2, \"col3\": \"hello\"}\n
+   *   {\"col1\": 7, \"col2\": 1.3, \"col3\": \"seven\u24E1\u25B6\"}"
+   *
+   * @param schema Schema containing the data types to use for the returned table
+   * @param path local path to the json file
+   * @return the file parsed as a table on the GPU.
+   */
+  public static Table readJSON(Schema schema, File path) {
+    return readJSON(schema, JSONOptions.DEFAULT, path);
+  }
+
+  /**
+   * Read a JSON file
+   * This method interprets each line as a complete json object and accepts json in two formats
+   * If the following format is passed, the column names will be inferred as 0, 1, 2,...
+   *  "[1, 1.2, \"hello\"]\n
+   *   [3, 2.3, \"string\"]\n
+   *   [2, 23.2, \"str\"]\n"
+   *
+   * If the following format is passed, the column names will be assigned as col1, col2, col3,...
+   *  "{\"col1\": 1, \"col2\": 1.1, \"col3\": \"a\"}\n
+   *   {\"col1\": 3, \"col2\": 4.2, \"col3\": \"hello\"}\n
+   *   {\"col1\": 7, \"col2\": 1.3, \"col3\": \"seven\u24E1\u25B6\"}"
+   *
+   * @param schema Schema containing the data types to use for the returned table
+   * @param opts JSONOptions to use to parse the file, currently only offset and size is supported
+   * @param path local path to the json file
+   * @return the file parsed as a table on the GPU.
+   */
+  public static Table readJSON(Schema schema, JSONOptions opts, File path) {
+    long amount = opts.getSizeGuessOrElse(() -> path.length());
+    try (DevicePrediction prediction = new DevicePrediction(amount, "JSON FILE")) {
+      return new Table(gdfReadJSON(path.getAbsolutePath(), 0, 0, 0, 0, opts.getIncludeColumnNames(), schema.getColumnNames(), schema.getTypesAsStrings()));
+    }
+  }
+
+  /**
+   * Read a JSON file
+   * This method interprets each line as a complete json object and accepts json in two formats
+   * If the following format is passed, the column names will be inferred as 0, 1, 2,...
+   *  "[1, 1.2, \"hello\"]\n
+   *   [3, 2.3, \"string\"]\n
+   *   [2, 23.2, \"str\"]\n"
+   *
+   * If the following format is passed, the column names will be assigned as col1, col2, col3,...
+   *  "{\"col1\": 1, \"col2\": 1.1, \"col3\": \"a\"}\n
+   *   {\"col1\": 3, \"col2\": 4.2, \"col3\": \"hello\"}\n
+   *   {\"col1\": 7, \"col2\": 1.3, \"col3\": \"seven\u24E1\u25B6\"}"
+   *
+   * @param buffer json data
+   * @return the file parsed as a table on the GPU.
+   */
+  public static Table readJSON(byte[] buffer) {
+    return readJSON(JSONOptions.DEFAULT, buffer);
+  }
+
+  /**
+   * Read a JSON file
+   * This method interprets each line as a complete json object and accepts json in two formats
+   * If the following format is passed, the column names will be inferred as 0, 1, 2,...
+   *  "[1, 1.2, \"hello\"]\n
+   *   [3, 2.3, \"string\"]\n
+   *   [2, 23.2, \"str\"]\n"
+   *
+   * If the following format is passed, the column names will be assigned as col1, col2, col3,...
+   *  "{\"col1\": 1, \"col2\": 1.1, \"col3\": \"a\"}\n
+   *   {\"col1\": 3, \"col2\": 4.2, \"col3\": \"hello\"}\n
+   *   {\"col1\": 7, \"col2\": 1.3, \"col3\": \"seven\u24E1\u25B6\"}"
+   *
+   * @param schema Schema containing the data types to use for the returned table
+   * @param buffer json data
+   * @return the file parsed as a table on the GPU.
+   */
+  public static Table readJSON(Schema schema, byte[] buffer) {
+    return readJSON(schema, JSONOptions.DEFAULT, buffer);
+  }
+
+  /**
+   * Read a JSON file
+   * This method interprets each line as a complete json object and accepts json in two formats
+   * If the following format is passed, the column names will be inferred as 0, 1, 2,...
+   *  "[1, 1.2, \"hello\"]\n
+   *   [3, 2.3, \"string\"]\n
+   *   [2, 23.2, \"str\"]\n"
+   *
+   * If the following format is passed, the column names will be assigned as col1, col2, col3,...
+   *  "{\"col1\": 1, \"col2\": 1.1, \"col3\": \"a\"}\n
+   *   {\"col1\": 3, \"col2\": 4.2, \"col3\": \"hello\"}\n
+   *   {\"col1\": 7, \"col2\": 1.3, \"col3\": \"seven\u24E1\u25B6\"}"
+   *
+   * @param opts JSONOptions to use to parse the file, currently only offset and size is supported
+   * @param buffer json data
+   * @return the file parsed as a table on the GPU.
+   */
+  public static Table readJSON(JSONOptions opts, byte[] buffer) {
+    return readJSON(Schema.INFERRED, opts, buffer);
+  }
+
+  /**
+   * Read a JSON file
+   * This method interprets each line as a complete json object and accepts json in two formats
+   * If the following format is passed, the column names will be inferred as 0, 1, 2,...
+   *  "[1, 1.2, \"hello\"]\n
+   *   [3, 2.3, \"string\"]\n
+   *   [2, 23.2, \"str\"]\n"
+   *
+   * If the following format is passed, the column names will be assigned as col1, col2, col3,...
+   *  "{\"col1\": 1, \"col2\": 1.1, \"col3\": \"a\"}\n
+   *   {\"col1\": 3, \"col2\": 4.2, \"col3\": \"hello\"}\n
+   *   {\"col1\": 7, \"col2\": 1.3, \"col3\": \"seven\u24E1\u25B6\"}"
+   *
+   * @param schema Schema containing the data types to use for the returned table
+   * @param opts JSONOptions to use to parse the file, currently only offset and size is supported
+   * @param buffer json data
+   * @return the file parsed as a table on the GPU.
+   */
+  public static Table readJSON(Schema schema, JSONOptions opts, byte[] buffer) {
+    return readJSON(schema, opts, buffer, 0, 0);
+  }
+
+  /**
+   * Read a JSON file
+   * This method interprets each line as a complete json object and accepts json in two formats
+   * If the following format is passed, the column names will be inferred as 0, 1, 2,...
+   *  "[1, 1.2, \"hello\"]\n
+   *   [3, 2.3, \"string\"]\n
+   *   [2, 23.2, \"str\"]\n"
+   *
+   * If the following format is passed, the column names will be assigned as col1, col2, col3,...
+   *  "{\"col1\": 1, \"col2\": 1.1, \"col3\": \"a\"}\n
+   *   {\"col1\": 3, \"col2\": 4.2, \"col3\": \"hello\"}\n
+   *   {\"col1\": 7, \"col2\": 1.3, \"col3\": \"seven\u24E1\u25B6\"}"
+   *
+   * @param schema Schema containing the data types to use for the returned table
+   * @param opts JSONOptions to use to parse the file, currently only offset and size is supported
+   * @param buffer json data
+   * @param offset start offset to start in buffer
+   * @param len size of the buffer to read after offset
+   * @return the file parsed as a table on the GPU.
+   */
+  public static Table readJSON(Schema schema, JSONOptions opts, byte[] buffer, long offset, long len) {
+    if (len == 0) {
+      len = buffer.length;
+    }
+    assert len > 0 : "Invalid buffer range size";
+    assert len <= buffer.length - offset : "Buffer range size greater than buffer";
+    assert offset >= 0 && offset < len : "Buffer offset out of range";
+    try (HostPrediction prediction = new HostPrediction(len, "readJSON");
+        HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
+      newBuf.setBytes(0, buffer, offset, len);
+      // using default ranges but keeping the included column names
+      return readJSON(schema, opts, newBuf, 0, 0);
+    }
+  }
+
+  /**
+   * Read a JSON file
+   * This method interprets each line as a complete json object and accepts json in two formats
+   * If the following format is passed, the column names will be inferred as 0, 1, 2,...
+   *  "[1, 1.2, \"hello\"]\n
+   *   [3, 2.3, \"string\"]\n
+   *   [2, 23.2, \"str\"]\n"
+   *
+   * If the following format is passed, the column names will be assigned as col1, col2, col3,...
+   *  "{\"col1\": 1, \"col2\": 1.1, \"col3\": \"a\"}\n
+   *   {\"col1\": 3, \"col2\": 4.2, \"col3\": \"hello\"}\n
+   *   {\"col1\": 7, \"col2\": 1.3, \"col3\": \"seven\u24E1\u25B6\"}"
+   *
+   * @param schema Schema containing the data types to use for the returned table
+   * @param buffer json data
+   * @param offset start offset to start in buffer
+   * @param len size of the buffer to read after offset
+   * @return the file parsed as a table on the GPU.
+   */
+  public static Table readJSON(Schema schema, JSONOptions opts, HostMemoryBuffer buffer, long offset, long len) {
+    if (len == 0) {
+      len = buffer.length;
+    }
+    assert len > 0 : "Invalid buffer range size";
+    assert len <= buffer.length - offset : "Buffer range size greater than buffer";
+    assert offset >= 0 && offset < buffer.length : "Buffer offset out of range";
+    long amount = opts.getSizeGuessOrElse(len);
+    try (DevicePrediction prediction = new DevicePrediction(amount, "JSON BUFFER")) {
+      return new Table(gdfReadJSON(null, buffer.getAddress() + offset, buffer.getLength(), offset, len, opts.getIncludeColumnNames(), schema.getColumnNames(), schema.getTypesAsStrings()));
+    }
+  }
 
   /**
    * Read a CSV file using the default CSVOptions.
@@ -234,17 +499,20 @@ public final class Table implements AutoCloseable {
    * @return the file parsed as a table on the GPU.
    */
   public static Table readCSV(Schema schema, CSVOptions opts, File path) {
-    return new Table(
-        gdfReadCSV(schema.getColumnNames(), schema.getTypesAsStrings(),
-            opts.getIncludeColumnNames(), path.getAbsolutePath(),
-            0, 0,
-            opts.getHeaderRow(),
-            opts.getDelim(),
-            opts.getQuote(),
-            opts.getComment(),
-            opts.getNullValues(),
-            opts.getTrueValues(),
-            opts.getFalseValues()));
+    long amount = opts.getSizeGuessOrElse(() -> path.length());
+    try (DevicePrediction prediction = new DevicePrediction(amount, "CSV FILE")) {
+      return new Table(
+          gdfReadCSV(schema.getColumnNames(), schema.getTypesAsStrings(),
+              opts.getIncludeColumnNames(), path.getAbsolutePath(),
+              0, 0,
+              opts.getHeaderRow(),
+              opts.getDelim(),
+              opts.getQuote(),
+              opts.getComment(),
+              opts.getNullValues(),
+              opts.getTrueValues(),
+              opts.getFalseValues()));
+    }
   }
 
   /**
@@ -285,7 +553,8 @@ public final class Table implements AutoCloseable {
     assert len > 0;
     assert len <= buffer.length - offset;
     assert offset >= 0 && offset < buffer.length;
-    try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
+    try (HostPrediction prediction = new HostPrediction(len, "readCSV");
+        HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
       newBuf.setBytes(0, buffer, offset, len);
       return readCSV(schema, opts, newBuf, 0, len);
     }
@@ -308,16 +577,19 @@ public final class Table implements AutoCloseable {
     assert len > 0;
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
-    return new Table(gdfReadCSV(schema.getColumnNames(), schema.getTypesAsStrings(),
-        opts.getIncludeColumnNames(), null,
-        buffer.getAddress() + offset, len,
-        opts.getHeaderRow(),
-        opts.getDelim(),
-        opts.getQuote(),
-        opts.getComment(),
-        opts.getNullValues(),
-        opts.getTrueValues(),
-        opts.getFalseValues()));
+    long amount = opts.getSizeGuessOrElse(len);
+    try (DevicePrediction prediction = new DevicePrediction(amount, "CSV BUFFER")) {
+      return new Table(gdfReadCSV(schema.getColumnNames(), schema.getTypesAsStrings(),
+          opts.getIncludeColumnNames(), null,
+          buffer.getAddress() + offset, len,
+          opts.getHeaderRow(),
+          opts.getDelim(),
+          opts.getQuote(),
+          opts.getComment(),
+          opts.getNullValues(),
+          opts.getTrueValues(),
+          opts.getFalseValues()));
+    }
   }
 
   /**
@@ -336,8 +608,11 @@ public final class Table implements AutoCloseable {
    * @return the file parsed as a table on the GPU.
    */
   public static Table readParquet(ParquetOptions opts, File path) {
-    return new Table(gdfReadParquet(opts.getIncludeColumnNames(),
-        path.getAbsolutePath(), 0, 0));
+    long amount = opts.getSizeGuessOrElse(() -> path.length() * COMPRESSION_RATIO_ESTIMATE);
+    try (DevicePrediction prediction = new DevicePrediction(amount, "PARQUET FILE")) {
+      return new Table(gdfReadParquet(opts.getIncludeColumnNames(),
+          path.getAbsolutePath(), 0, 0, opts.timeUnit().getNativeId()));
+    }
   }
 
   /**
@@ -374,7 +649,8 @@ public final class Table implements AutoCloseable {
     assert len > 0;
     assert len <= buffer.length - offset;
     assert offset >= 0 && offset < buffer.length;
-    try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
+    try (HostPrediction prediction = new HostPrediction(len, "readParquet");
+        HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
       newBuf.setBytes(0, buffer, offset, len);
       return readParquet(opts, newBuf, 0, len);
     }
@@ -396,8 +672,11 @@ public final class Table implements AutoCloseable {
     assert len > 0;
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
-    return new Table(gdfReadParquet(opts.getIncludeColumnNames(),
-        null, buffer.getAddress() + offset, len));
+    long amount = opts.getSizeGuessOrElse(len * COMPRESSION_RATIO_ESTIMATE);
+    try (DevicePrediction prediction = new DevicePrediction(amount, "PARQUET BUFFER")) {
+      return new Table(gdfReadParquet(opts.getIncludeColumnNames(),
+          null, buffer.getAddress() + offset, len, opts.timeUnit().getNativeId()));
+    }
   }
 
   /**
@@ -414,8 +693,11 @@ public final class Table implements AutoCloseable {
    * @return the file parsed as a table on the GPU.
    */
   public static Table readORC(ORCOptions opts, File path) {
-    return new Table(gdfReadORC(opts.getIncludeColumnNames(),
-        path.getAbsolutePath(), 0, 0));
+    long amount = opts.getSizeGuessOrElse(() -> path.length() * COMPRESSION_RATIO_ESTIMATE);
+    try (DevicePrediction prediction = new DevicePrediction(amount, "ORC FILE")) {
+      return new Table(gdfReadORC(opts.getIncludeColumnNames(),
+          path.getAbsolutePath(), 0, 0, opts.usingNumPyTypes(), opts.timeUnit().getNativeId()));
+    }
   }
 
   /**
@@ -452,7 +734,8 @@ public final class Table implements AutoCloseable {
     assert len > 0;
     assert len <= buffer.length - offset;
     assert offset >= 0 && offset < buffer.length;
-    try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
+    try (HostPrediction prediction = new HostPrediction(len, "readORC");
+        HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
       newBuf.setBytes(0, buffer, offset, len);
       return readORC(opts, newBuf, 0, len);
     }
@@ -474,8 +757,30 @@ public final class Table implements AutoCloseable {
     assert len > 0;
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
-    return new Table(gdfReadORC(opts.getIncludeColumnNames(),
-        null, buffer.getAddress() + offset, len));
+    long amount = opts.getSizeGuessOrElse(len * COMPRESSION_RATIO_ESTIMATE);
+    try (DevicePrediction prediction = new DevicePrediction(amount, "ORC BUFFER")) {
+      return new Table(gdfReadORC(opts.getIncludeColumnNames(),
+          null, buffer.getAddress() + offset, len, opts.usingNumPyTypes(),
+          opts.timeUnit().getNativeId()));
+    }
+  }
+
+  /**
+   * Writes this table to a file on the host
+   *
+   * @param outputFile - File to write the table to
+   */
+  public void writeORC(File outputFile) {
+    gdfWriteORC(ORCWriterOptions.DEFAULT.getCompressionType().nativeId, outputFile.getAbsolutePath(), 0, 0, this.nativeHandle);
+  }
+
+  /**
+   * Writes this table to a file on the host
+   *
+   * @param outputFile - File to write the table to
+   */
+  public void writeORC(ORCWriterOptions options, File outputFile) {
+    gdfWriteORC(options.getCompressionType().nativeId, outputFile.getAbsolutePath(), 0, 0, this.nativeHandle);
   }
 
   /**
@@ -487,13 +792,106 @@ public final class Table implements AutoCloseable {
     if (tables.length < 2) {
       throw new IllegalArgumentException("concatenate requires 2 or more tables");
     }
+    long amount = 0;
     int numColumns = tables[0].getNumberOfColumns();
     long[] tableHandles = new long[tables.length];
     for (int i = 0; i < tables.length; ++i) {
+      amount += tables[i].getDeviceMemorySize();
       tableHandles[i] = tables[i].nativeHandle;
       assert tables[i].getNumberOfColumns() == numColumns : "all tables must have the same schema";
     }
-    return new Table(concatenate(tableHandles));
+    try (DevicePrediction prediction = new DevicePrediction(amount, "concat")) {
+      return new Table(concatenate(tableHandles));
+    }
+  }
+
+  /**
+   * Given a sorted table return the lower bound.
+   * Example:
+   *
+   *  Single column:
+   *      idx            0   1   2   3   4
+   *   inputTable  =   { 10, 20, 20, 30, 50 }
+   *   valuesTable =   { 20 }
+   *   result      =   { 1 }
+   *
+   *  Multi Column:
+   *      idx                0    1    2    3    4
+   *   inputTable      = {{  10,  20,  20,  20,  20 },
+   *                      { 5.0,  .5,  .5,  .7,  .7 },
+   *                      {  90,  77,  78,  61,  61 }}
+   *   valuesTable     = {{ 20 },
+   *                      { .7 },
+   *                      { 61 }}
+   *   result          = {  3 }
+   * NaNs in column values produce incorrect results.
+   * The input table and the values table need to be non-empty (row count > 0)
+   * The column data types of the tables' have to match in order.
+   * Strings and String categories do not work for this method. If the input table is
+   * unsorted the results are wrong. Types of columns can be of mixed data types.
+   * @param areNullsSmallest true if nulls are assumed smallest
+   * @param valueTable the table of values that need to be inserted
+   * @param descFlags indicates the ordering of the column(s), true if descending
+   * @return ColumnVector with lower bound indices for all rows in valueTable
+   */
+  public ColumnVector lowerBound(boolean areNullsSmallest,
+      Table valueTable, boolean[] descFlags) {
+    assertForBounds(valueTable);
+    return new ColumnVector(gdfBound(this.nativeHandle, valueTable.nativeHandle,
+      descFlags, areNullsSmallest, false));
+  }
+
+  /**
+   * Given a sorted table return the upper bound.
+   * Example:
+   *
+   *  Single column:
+   *      idx            0   1   2   3   4
+   *   inputTable  =   { 10, 20, 20, 30, 50 }
+   *   valuesTable =   { 20 }
+   *   result      =   { 3 }
+   *
+   *  Multi Column:
+   *      idx                0    1    2    3    4
+   *   inputTable      = {{  10,  20,  20,  20,  20 },
+   *                      { 5.0,  .5,  .5,  .7,  .7 },
+   *                      {  90,  77,  78,  61,  61 }}
+   *   valuesTable     = {{ 20 },
+   *                      { .7 },
+   *                      { 61 }}
+   *   result          = {  5 }
+   * NaNs in column values produce incorrect results.
+   * The input table and the values table need to be non-empty (row count > 0)
+   * The column data types of the tables' have to match in order.
+   * Strings and String categories do not work for this method. If the input table is
+   * unsorted the results are wrong. Types of columns can be of mixed data types.
+   * @param areNullsSmallest true if nulls are assumed smallest
+   * @param valueTable the table of values that need to be inserted
+   * @param descFlags indicates the ordering of the column(s), true if descending
+   * @return ColumnVector with upper bound indices for all rows in valueTable
+   */
+  public ColumnVector upperBound(boolean areNullsSmallest,
+      Table valueTable, boolean[] descFlags) {
+    assertForBounds(valueTable);
+    return new ColumnVector(gdfBound(this.nativeHandle, valueTable.nativeHandle,
+      descFlags, areNullsSmallest, true));
+  }
+
+  private void assertForBounds(Table valueTable) {
+    assert this.getRowCount() != 0 : "Input table cannot be empty";
+    assert valueTable.getRowCount() != 0 : "Value table cannot be empty";
+    for (ColumnVector column : columns) {
+      assert column.getType() != DType.STRING && column.getType() != DType.STRING_CATEGORY :
+        "Strings and String categories are not supported";
+    }
+    for (ColumnVector column : valueTable.columns) {
+      assert column.getType() != DType.STRING && column.getType() != DType.STRING_CATEGORY :
+          "Strings and String categories are not supported";
+    }
+    for (int i = 0; i < Math.min(columns.length, valueTable.columns.length); i++) {
+      assert valueTable.columns[i].getType() == this.getColumn(i).getType() :
+          "Input and values tables' data types do not match";
+    }
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -522,7 +920,9 @@ public final class Table implements AutoCloseable {
       sortKeys[i] = columns[index].getNativeCudfColumnAddress();
     }
 
-    return new Table(gdfOrderBy(nativeHandle, sortKeys, isDescending, areNullsSmallest));
+    try (DevicePrediction prediction = new DevicePrediction(getDeviceMemorySize(), "orderBy")) {
+      return new Table(gdfOrderBy(nativeHandle, sortKeys, isDescending, areNullsSmallest));
+    }
   }
 
   public static OrderByArg asc(final int index) {
@@ -533,8 +933,8 @@ public final class Table implements AutoCloseable {
     return new OrderByArg(index, true);
   }
 
-  public static Aggregate count() {
-    return Aggregate.count();
+  public static Aggregate count(int index) {
+    return Aggregate.count(index);
   }
 
   public static Aggregate max(int index) {
@@ -553,9 +953,18 @@ public final class Table implements AutoCloseable {
     return Aggregate.mean(index);
   }
 
+  public AggregateOperation groupBy(GroupByOptions groupByOptions, int... indices) {
+    return groupByInternal(groupByOptions, indices);
+  }
+
   public AggregateOperation groupBy(int... indices) {
+    return groupByInternal(GroupByOptions.builder().withIgnoreNullKeys(false).build(),
+        indices);
+  }
+
+  private AggregateOperation groupByInternal(GroupByOptions groupByOptions, int[] indices) {
     int[] operationIndicesArray = copyAndValidate(indices);
-    return new AggregateOperation(this, operationIndicesArray);
+    return new AggregateOperation(this, groupByOptions, operationIndicesArray);
   }
 
   public TableOperation onColumns(int... indices) {
@@ -571,6 +980,35 @@ public final class Table implements AutoCloseable {
           "operation index is out of range 0 <= " + operationIndicesArray[i] + " < " + columns.length;
     }
     return operationIndicesArray;
+  }
+
+  /**
+   * Filters this table using a column of boolean values as a mask, returning a new one.
+   * <p>
+   * Given a mask column, each element `i` from the input columns
+   * is copied to the output columns if the corresponding element `i` in the mask is
+   * non-null and `true`. This operation is stable: the input order is preserved.
+   * <p>
+   * This table and mask columns must have the same number of rows.
+   * <p>
+   * The output table has size equal to the number of elements in boolean_mask
+   * that are both non-null and `true`.
+   * <p>
+   * If the original table row count is zero, there is no error, and an empty table is returned.
+   * @param mask column of type {@link DType#BOOL8} used as a mask to filter
+   *             the input column
+   * @return table containing copy of all elements of this table passing
+   * the filter defined by the boolean mask
+   */
+  public Table filter(ColumnVector mask) {
+    assert mask.getType() == DType.BOOL8 : "Mask column must be of type BOOL8";
+    assert getRowCount() == 0 || getRowCount() == mask.getRowCount() : "Mask column has incorrect size";
+    for (ColumnVector col : getColumns()){
+      assert col.getType() != DType.STRING : "STRING type must be converted to a STRING_CATEGORY for filter";
+    }
+    try (DevicePrediction prediction = new DevicePrediction(getDeviceMemorySize(), "filter")) {
+      return new Table(gdfFilter(nativeHandle, mask.getNativeCudfColumnAddress()));
+    }
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -601,14 +1039,44 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Keeps track of a gdf_column* and operator ids
+   */
+  private static final class ColumnOp {
+    private final long colNativeId;
+    private final int opNativeId;
+
+    ColumnOp(long column, int opNativeId){
+      this.colNativeId = column;
+      this.opNativeId = opNativeId;
+    }
+
+    @Override
+    public boolean equals(Object other) {
+      if (other instanceof ColumnOp){
+        ColumnOp otherCop = (ColumnOp) other;
+        return otherCop.colNativeId == colNativeId &&
+            otherCop.opNativeId == opNativeId;
+      }
+      return false;
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(colNativeId, opNativeId);
+    }
+  }
+
+  /**
    * Class representing aggregate operations
    */
   public static final class AggregateOperation {
 
     private final Operation operation;
+    private final GroupByOptions groupByOptions;
 
-    AggregateOperation(final Table table, final int... indices) {
+    AggregateOperation(final Table table, GroupByOptions groupByOptions, final int... indices) {
       operation = new Operation(table, indices);
+      this.groupByOptions = groupByOptions;
     }
 
     /**
@@ -631,16 +1099,89 @@ public final class Table implements AutoCloseable {
      */
     public Table aggregate(Aggregate... aggregates) {
       assert aggregates != null && aggregates.length > 0;
-      int[] aggregateColumnIndices = new int[aggregates.length];
-      int[] ops = new int[aggregates.length];
+
+      // aggregateColumnIndices: the numeric indices of the columns to aggregate
+      // as provided by the user
+      List<Integer> aggregateColumnIndices = new ArrayList<>();
+      // ops: the corresponding cudf enum values for each aggregate
+      // operation, for each column index
+      List<Integer> ops = new ArrayList<>();
+      // finalAggColumns: this holds the user's desired list of aggregates,
+      // as specified in the variadic for this method
+      List<ColumnOp> finalAggColumns = new ArrayList<>();
+      // aggToCudfColumn: a map of ColumnOp (tuple of gdf_column* and enum for operation)
+      // to the index of the column that we asked cudf to compute. 
+      // These indices can then be used after the aggregate to find ColumnVector
+      // instances, we should place (and ref count) in the order as provided by the user.
+      HashMap<ColumnOp, Integer> aggToCudfColumn = new HashMap<>();
+
+      // keep track of the unique agg indices, starting at 1 after the
+      // grouping key
+      int uniqueAggIndex = operation.indices.length;
       for (int aggregateIndex = 0; aggregateIndex < aggregates.length; aggregateIndex++) {
-        aggregateColumnIndices[aggregateIndex] = aggregates[aggregateIndex].getIndex();
-        ops[aggregateIndex] = aggregates[aggregateIndex].getNativeId();
+        Aggregate agg = aggregates[aggregateIndex];
+        int origColumnIndex = agg.getIndex();
+        int origOpNativeId = agg.getNativeId();
+
+        // keep track of (gdf_column*, op) pairs, as that is what
+        // compute_original_requests does to track duplicates
+        ColumnOp cop = new ColumnOp(
+            operation.table.getColumn(origColumnIndex).getNativeCudfColumnAddress(),
+            origOpNativeId);
+
+        // if we haven't seen an aggregate for this (gdf_column *, agg id) pair
+        if (!aggToCudfColumn.containsKey(cop)) {
+          // add to the aggregates that cudf will perform
+          aggregateColumnIndices.add(agg.getIndex());
+          ops.add(agg.getNativeId());
+
+          // keep the index of the column where we can find the result later
+          aggToCudfColumn.put(cop, uniqueAggIndex++);
+        }
+        finalAggColumns.add(cop);
       }
 
-      Table aggregate = new Table(gdfGroupByAggregate(operation.table.nativeHandle,
-          operation.indices, aggregateColumnIndices, ops));
-      return aggregate;
+      Table aggregate;
+      try (DevicePrediction prediction = new DevicePrediction(operation.table.getDeviceMemorySize(), "aggregate")) {
+        // aggregate with deduplicated operations
+        aggregate = new Table(gdfGroupByAggregate(
+            operation.table.nativeHandle,
+            operation.indices,
+            // one way of converting List[Integer] to int[]
+            aggregateColumnIndices.stream().mapToInt(i -> i).toArray(),
+            ops.stream().mapToInt(i -> i).toArray(),
+            groupByOptions.getIgnoreNullKeys()));
+      }
+
+      // prepare the final table
+      ColumnVector[] finalCols = new ColumnVector[operation.indices.length + aggregates.length];
+
+      int aggIndex = 0;
+
+      // pick out the grouping columns
+      for (int groupIndex : operation.indices) {
+        finalCols[groupIndex] = aggregate.getColumn(groupIndex);
+        aggIndex++;
+      }
+
+      // pick out the aggregate columns (copying the reference for duplicate aggs)
+      for (ColumnOp cop : finalAggColumns) {
+        int originalIndex = aggToCudfColumn.get(cop);
+        finalCols[aggIndex] = aggregate.getColumn(originalIndex);
+        aggIndex++;
+      }
+
+      // Note: Table will increase ref counts accordingly, which means
+      // that duplicate columns in finalCols, will get a refCount equal
+      // to the number of times their references appear on the table (good)
+      Table tbl = new Table(finalCols);
+
+      // returning a brand new table now, so we close the original
+      // this brings the refCount down for each column, such that Table
+      // is the only holder
+      aggregate.close();
+
+      return tbl;
     }
   }
 
@@ -659,11 +1200,15 @@ public final class Table implements AutoCloseable {
      * Table t2 ...
      * Table result = t1.onColumns(0,1).leftJoin(t2.onColumns(2,3));
      * @param rightJoinIndices - Indices of the right table to join on
-     * @return Joined {@link Table}
+     * @return the joined table.  The order of the columns returned will be join columns,
+     * left non-join columns, right non-join columns.
      */
     public Table leftJoin(TableOperation rightJoinIndices) {
-      return new Table(gdfLeftJoin(operation.table.nativeHandle, operation.indices,
-          rightJoinIndices.operation.table.nativeHandle, rightJoinIndices.operation.indices));
+      try (DevicePrediction prediction = new DevicePrediction(operation.table.getDeviceMemorySize() +
+          rightJoinIndices.operation.table.getDeviceMemorySize(), "leftJoin")) {
+        return new Table(gdfLeftJoin(operation.table.nativeHandle, operation.indices,
+            rightJoinIndices.operation.table.nativeHandle, rightJoinIndices.operation.indices));
+      }
     }
 
     /**
@@ -673,11 +1218,15 @@ public final class Table implements AutoCloseable {
      * Table t2 ...
      * Table result = t1.onColumns(0,1).innerJoin(t2.onColumns(2,3));
      * @param rightJoinIndices - Indices of the right table to join on
-     * @return Joined {@link Table}
+     * @return the joined table.  The order of the columns returned will be join columns,
+     * left non-join columns, right non-join columns.
      */
     public Table innerJoin(TableOperation rightJoinIndices) {
-      return new Table(gdfInnerJoin(operation.table.nativeHandle, operation.indices,
-          rightJoinIndices.operation.table.nativeHandle, rightJoinIndices.operation.indices));
+      try (DevicePrediction prediction = new DevicePrediction(operation.table.getDeviceMemorySize() +
+          rightJoinIndices.operation.table.getDeviceMemorySize(), "innerJoin")) {
+        return new Table(gdfInnerJoin(operation.table.nativeHandle, operation.indices,
+            rightJoinIndices.operation.table.nativeHandle, rightJoinIndices.operation.indices));
+      }
     }
 
     /**
@@ -689,11 +1238,13 @@ public final class Table implements AutoCloseable {
      */
     public PartitionedTable partition(int numberOfPartitions, HashFunction hashFunction) {
       int[] partitionOffsets = new int[numberOfPartitions];
-      return new PartitionedTable(new Table(gdfPartition(operation.table.nativeHandle,
-          operation.indices,
-          hashFunction.nativeId,
-          partitionOffsets.length,
-          partitionOffsets)), partitionOffsets);
+      try (DevicePrediction prediction = new DevicePrediction(operation.table.getDeviceMemorySize(), "partition")) {
+        return new PartitionedTable(new Table(gdfPartition(operation.table.nativeHandle,
+            operation.indices,
+            hashFunction.nativeId,
+            partitionOffsets.length,
+            partitionOffsets)), partitionOffsets);
+      }
     }
   }
 

@@ -6,7 +6,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from cudf.dataframe import DataFrame, Series
+from cudf.core import DataFrame, Series
+from cudf.core.column import NumericalColumn
 from cudf.tests.utils import assert_eq
 
 sort_nelem_args = [2, 257]
@@ -108,7 +109,7 @@ def test_series_nsmallest():
     assert raises.match('keep must be either "first", "last"')
 
 
-@pytest.mark.parametrize("nelem,n", [(10, 5), (100, 10)])
+@pytest.mark.parametrize("nelem,n", [(1, 1), (100, 100), (10, 5), (100, 10)])
 def test_dataframe_nlargest(nelem, n):
     np.random.seed(0)
     df = DataFrame()
@@ -211,8 +212,8 @@ def test_dataframe_multi_column(
     )
 
 
-@pytest.mark.parametrize("num_cols", [1, 2, 3, 5])
-@pytest.mark.parametrize("num_rows", [0, 1, 2, 1000])
+@pytest.mark.parametrize("num_cols", [1, 2, 3])
+@pytest.mark.parametrize("num_rows", [0, 1, 2, 3, 5])
 @pytest.mark.parametrize("dtype", ["float32", "float64"])
 @pytest.mark.parametrize("nulls", ["some", "all"])
 @pytest.mark.parametrize("ascending", [True, False])
@@ -227,7 +228,7 @@ def test_dataframe_multi_column_nulls(
     by = list(ascii_lowercase[:num_cols])
     pdf = pd.DataFrame()
 
-    for i in range(5):
+    for i in range(3):
         colname = ascii_lowercase[i]
         data = np.random.randint(0, 26, num_rows).astype(dtype)
         if nulls == "some":
@@ -249,3 +250,78 @@ def test_dataframe_multi_column_nulls(
     assert_eq(
         got[by].reset_index(drop=True), expect[by].reset_index(drop=True)
     )
+
+
+@pytest.mark.parametrize("nelem", [1, 100])
+def test_series_nlargest_nelem(nelem):
+    np.random.seed(0)
+    elems = np.random.random(nelem)
+    gds = Series(elems).nlargest(nelem)
+    pds = pd.Series(elems).nlargest(nelem)
+
+    assert (pds == gds.to_pandas()).all().all()
+
+
+@pytest.mark.parametrize("map_size", [1, 2, 8])
+@pytest.mark.parametrize("nelem", [1, 10, 100])
+@pytest.mark.parametrize("keep", [True, False])
+def test_dataframe_scatter_by_map(map_size, nelem, keep):
+
+    strlist = ["dog", "cat", "fish", "bird", "pig", "fox", "cow", "goat"]
+    np.random.seed(0)
+    df = DataFrame()
+    df["a"] = np.random.choice(strlist[:map_size], nelem)
+    df["b"] = np.random.uniform(low=0, high=map_size, size=nelem)
+    df["c"] = np.random.randint(map_size, size=nelem)
+    df["d"] = df["a"]._column.as_categorical_column(np.int32)
+
+    def _check_scatter_by_map(dfs, col):
+        assert len(dfs) == map_size
+        nrows = 0
+        # print(col._column)
+        name = col.name
+        for i, df in enumerate(dfs):
+            nrows += len(df)
+            if len(df) > 0:
+                # Make sure the column types were preserved
+                assert isinstance(df[name]._column, type(col._column))
+            sr = df[name].astype(np.int32)
+            assert sr.nunique() <= 1
+            if sr.nunique() == 1:
+                if isinstance(df[name]._column, NumericalColumn):
+                    assert sr[0] == i
+        assert nrows == nelem
+
+    _check_scatter_by_map(
+        df.scatter_by_map("a", map_size, keep_index=keep), df["a"]
+    )
+    _check_scatter_by_map(
+        df.scatter_by_map("b", map_size, keep_index=keep), df["b"]
+    )
+    _check_scatter_by_map(
+        df.scatter_by_map("c", map_size, keep_index=keep), df["c"]
+    )
+    _check_scatter_by_map(
+        df.scatter_by_map("d", map_size, keep_index=keep), df["d"]
+    )
+
+    if map_size == 2 and nelem == 100:
+        df.scatter_by_map("a")  # Auto-detect map_size
+        with pytest.raises(ValueError):
+            df.scatter_by_map("a", 1)  # Bad map_size
+
+    # Test GenericIndex
+    df2 = df.set_index("c")
+    generic_result = df2.scatter_by_map("b", map_size, keep_index=keep)
+    _check_scatter_by_map(generic_result, df2["b"])
+    if keep:
+        for frame in generic_result:
+            isinstance(frame.index, type(df2.index))
+
+    # Test MultiIndex
+    df2 = df.set_index(["a", "c"])
+    multiindex_result = df2.scatter_by_map("b", map_size, keep_index=keep)
+    _check_scatter_by_map(multiindex_result, df2["b"])
+    if keep:
+        for frame in multiindex_result:
+            isinstance(frame.index, type(df2.index))

@@ -20,11 +20,14 @@ package ai.rapids.cudf;
 
 import org.junit.jupiter.api.Test;
 
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-public class HostMemoryBufferTest {
+public class HostMemoryBufferTest extends CudfTestBase {
   @Test
   void testRefCountLeak() throws InterruptedException {
     assumeTrue(Boolean.getBoolean("ai.rapids.cudf.flaky-tests-enabled"));
@@ -38,6 +41,20 @@ public class HostMemoryBufferTest {
       leakNow = MemoryCleaner.leakCount.get();
     } while (leakNow != expectedLeakCount && System.currentTimeMillis() < maxTime);
     assertEquals(expectedLeakCount, MemoryCleaner.leakCount.get());
+  }
+
+  @Test
+  void asByteBuffer() {
+    final long size = 1024;
+    try (HostMemoryBuffer buff = HostMemoryBuffer.allocate(size)) {
+      ByteBuffer dbuff = buff.asByteBuffer();
+      assertEquals(size, dbuff.capacity());
+      assertEquals(ByteOrder.nativeOrder(), dbuff.order());
+      dbuff.putInt(101);
+      dbuff.putDouble(101.1);
+      assertEquals(101, buff.getInt(0));
+      assertEquals(101.1, buff.getDouble(4));
+    }
   }
 
   @Test
@@ -84,7 +101,6 @@ public class HostMemoryBufferTest {
 
   @Test
   public void testCopyFromDeviceBuffer() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (HostMemoryBuffer init = HostMemoryBuffer.allocate(16);
          DeviceMemoryBuffer tmp = DeviceMemoryBuffer.allocate(16);
          HostMemoryBuffer to = HostMemoryBuffer.allocate(16)) {

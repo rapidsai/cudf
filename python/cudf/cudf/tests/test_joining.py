@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.dataframe import DataFrame
+from cudf.core import DataFrame, Series
 from cudf.tests.utils import assert_eq
 
 
@@ -93,9 +93,9 @@ def test_dataframe_join_how(aa, bb, how, method):
     gotb = got.b
     gota = got.a
     del got["b"]
-    got.add_column("b", gotb.astype(np.float64).fillna(np.nan))
+    got.insert(len(got._data), "b", gotb.astype(np.float64).fillna(np.nan))
     del got["a"]
-    got.add_column("a", gota.astype(np.float64).fillna(np.nan))
+    got.insert(len(got._data), "a", gota.astype(np.float64).fillna(np.nan))
     expect.drop(["b"], axis=1)
     expect["b"] = expectb.astype(np.float64).fillna(np.nan)
     expect.drop(["a"], axis=1)
@@ -372,10 +372,10 @@ def test_dataframe_merge_no_common_column():
 
 
 def test_dataframe_empty_merge():
-    gdf1 = DataFrame([("a", []), ("b", [])])
-    gdf2 = DataFrame([("a", []), ("c", [])])
+    gdf1 = DataFrame({"a": [], "b": []})
+    gdf2 = DataFrame({"a": [], "c": []})
 
-    expect = DataFrame([("a", []), ("b", []), ("c", [])])
+    expect = DataFrame({"a": [], "b": [], "c": []})
     got = gdf1.merge(gdf2, how="left", on=["a"])
 
     assert_eq(expect, got)
@@ -682,3 +682,325 @@ def test_merge_sort(kwargs, hows):
     pd_merge = left.merge(right, **kwargs)
     if pd_merge.empty:
         assert gd_merge.empty
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    ["datetime64[s]", "datetime64[ms]", "datetime64[us]", "datetime64[ns]"],
+)
+def test_join_datetimes_index(dtype):
+    datetimes = pd.Series(pd.date_range("20010101", "20010102", freq="12h"))
+    pdf_lhs = pd.DataFrame(index=[1, 0, 1, 2, 0, 0, 1])
+    pdf_rhs = pd.DataFrame({"d": datetimes})
+    gdf_lhs = DataFrame.from_pandas(pdf_lhs)
+    gdf_rhs = DataFrame.from_pandas(pdf_rhs)
+
+    gdf_rhs["d"] = gdf_rhs["d"].astype(dtype)
+
+    pdf = pdf_lhs.join(pdf_rhs, sort=True)
+    gdf = gdf_lhs.join(gdf_rhs, sort=True)
+
+    assert gdf["d"].dtype == np.dtype(dtype)
+
+    assert_eq(pdf, gdf)
+
+
+def test_join_with_different_names():
+    left = pd.DataFrame({"a": [0, 1, 2.0, 3, 4, 5, 9]})
+    right = pd.DataFrame({"b": [12, 5, 3, 9.0, 5], "c": [1, 2, 3, 4, 5.0]})
+    gleft = DataFrame.from_pandas(left)
+    gright = DataFrame.from_pandas(right)
+    pd_merge = left.merge(right, how="outer", left_on=["a"], right_on=["b"])
+    gd_merge = gleft.merge(gright, how="outer", left_on=["a"], right_on=["b"])
+    assert_eq(pd_merge, gd_merge.sort_values(by=["a"]).reset_index(drop=True))
+
+
+def test_join_same_name_different_order():
+    left = pd.DataFrame({"a": [0, 0], "b": [1, 2]})
+    right = pd.DataFrame({"a": [1, 2], "b": [0, 0]})
+    gleft = DataFrame.from_pandas(left)
+    gright = DataFrame.from_pandas(right)
+    pd_merge = left.merge(right, left_on=["a", "b"], right_on=["b", "a"])
+    gd_merge = gleft.merge(gright, left_on=["a", "b"], right_on=["b", "a"])
+    assert_eq(
+        pd_merge, gd_merge.sort_values(by=["a_x"]).reset_index(drop=True)
+    )
+
+
+def test_join_empty_table_dtype():
+    left = pd.DataFrame({"a": []})
+    right = pd.DataFrame({"b": [12, 5, 3, 9.0, 5], "c": [1, 2, 3, 4, 5.0]})
+    gleft = DataFrame.from_pandas(left)
+    gright = DataFrame.from_pandas(right)
+    pd_merge = left.merge(right, how="left", left_on=["a"], right_on=["b"])
+    gd_merge = gleft.merge(gright, how="left", left_on=["a"], right_on=["b"])
+    assert_eq(pd_merge["a"].dtype, gd_merge["a"].dtype)
+
+
+@pytest.mark.parametrize("how", ["outer", "inner", "left", "right"])
+@pytest.mark.parametrize(
+    "column_a",
+    [
+        (
+            pd.Series([None, 1, 2, 3, 4, 5, 6, 7]).astype(np.float),
+            pd.Series([8, 9, 10, 11, 12, None, 14, 15]).astype(np.float),
+        )
+    ],
+)
+@pytest.mark.parametrize(
+    "column_b",
+    [
+        (
+            pd.Series([0, 1, 0, None, 1, 0, 0, 0]).astype(np.float),
+            pd.Series([None, 1, 2, 1, 2, 2, 0, 0]).astype(np.float),
+        )
+    ],
+)
+@pytest.mark.parametrize(
+    "column_c",
+    [
+        (
+            pd.Series(["dog", "cat", "fish", "bug"] * 2),
+            pd.Series(["bird", "cat", "mouse", "snake"] * 2),
+        ),
+        (
+            pd.Series(["dog", "cat", "fish", "bug"] * 2).astype("category"),
+            pd.Series(["bird", "cat", "mouse", "snake"] * 2).astype(
+                "category"
+            ),
+        ),
+    ],
+)
+def test_join_multi(how, column_a, column_b, column_c):
+    index = ["b", "c"]
+    df1 = pd.DataFrame()
+    df1["a1"] = column_a[0]
+    df1["b"] = column_b[0]
+    df1["c"] = column_c[0]
+    df1 = df1.set_index(index)
+    gdf1 = cudf.from_pandas(df1)
+
+    df2 = pd.DataFrame()
+    df2["a2"] = column_a[1]
+    df2["b"] = column_b[1]
+    df2["c"] = column_c[1]
+    df2 = df2.set_index(index)
+    gdf2 = cudf.from_pandas(df2)
+
+    gdf_result = gdf1.join(gdf2, how=how, sort=True)
+    pdf_result = df1.join(df2, how=how, sort=True)
+
+    # Make sure columns are in the same order
+    columns = pdf_result.columns.values
+    gdf_result = gdf_result[columns]
+    pdf_result = pdf_result[columns]
+
+    assert_eq(
+        gdf_result.reset_index(drop=True).fillna(-1),
+        pdf_result.sort_index().reset_index(drop=True).fillna(-1),
+    )
+
+
+@pytest.mark.parametrize("dtype_l", ["int8", "int16", "int32", "int64"])
+@pytest.mark.parametrize("dtype_r", ["int8", "int16", "int32", "int64"])
+def test_typecast_on_join_int_to_int(dtype_l, dtype_r):
+    other_data = ["a", "b", "c"]
+
+    join_data_l = Series([1, 2, 3], dtype=dtype_l)
+    join_data_r = Series([1, 2, 4], dtype=dtype_r)
+
+    gdf_l = DataFrame({"join_col": join_data_l, "B": other_data})
+    gdf_r = DataFrame({"join_col": join_data_r, "B": other_data})
+
+    exp_dtype = np.find_common_type([], [np.dtype(dtype_l), np.dtype(dtype_r)])
+
+    exp_join_data = [1, 2]
+    exp_other_data = ["a", "b"]
+    exp_join_col = Series(exp_join_data, dtype=exp_dtype)
+
+    expect = DataFrame(
+        {
+            "join_col": exp_join_col,
+            "B_x": exp_other_data,
+            "B_y": exp_other_data,
+        }
+    )
+
+    got = gdf_l.merge(gdf_r, on="join_col", how="inner")
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("dtype_l", ["float32", "float64"])
+@pytest.mark.parametrize("dtype_r", ["float32", "float64"])
+def test_typecast_on_join_float_to_float(dtype_l, dtype_r):
+    other_data = ["a", "b", "c", "d", "e", "f"]
+
+    join_data_l = Series([1, 2, 3, 0.9, 4.5, 6], dtype=dtype_l)
+    join_data_r = Series([1, 2, 3, 0.9, 4.5, 7], dtype=dtype_r)
+
+    gdf_l = DataFrame({"join_col": join_data_l, "B": other_data})
+    gdf_r = DataFrame({"join_col": join_data_r, "B": other_data})
+
+    exp_dtype = np.find_common_type([], [np.dtype(dtype_l), np.dtype(dtype_r)])
+
+    if dtype_l != dtype_r:
+        exp_join_data = [1, 2, 3, 4.5]
+        exp_other_data = ["a", "b", "c", "e"]
+    else:
+        exp_join_data = [1, 2, 3, 0.9, 4.5]
+        exp_other_data = ["a", "b", "c", "d", "e"]
+
+    exp_join_col = Series(exp_join_data, dtype=exp_dtype)
+
+    expect = DataFrame(
+        {
+            "join_col": exp_join_col,
+            "B_x": exp_other_data,
+            "B_y": exp_other_data,
+        }
+    )
+
+    got = gdf_l.merge(gdf_r, on="join_col", how="inner")
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "dtype_l", ["int8", "int16", "int32", "int64", "float32", "float64"]
+)
+@pytest.mark.parametrize(
+    "dtype_r", ["int8", "int16", "int32", "int64", "float32", "float64"]
+)
+def test_typecast_on_join_mixed_int_float(dtype_l, dtype_r):
+    if ("int" in dtype_l and "int" in dtype_r) or (
+        "float" in dtype_l and "float" in dtype_r
+    ):
+        pytest.skip("like types not tested in this function")
+
+    other_data = ["a", "b", "c", "d", "e", "f"]
+
+    join_data_l = Series([1, 2, 3, 0.9, 4.5, 6], dtype=dtype_l)
+    join_data_r = Series([1, 2, 3, 0.9, 4.5, 7], dtype=dtype_r)
+
+    gdf_l = DataFrame({"join_col": join_data_l, "B": other_data})
+    gdf_r = DataFrame({"join_col": join_data_r, "B": other_data})
+
+    exp_dtype = np.find_common_type([], [np.dtype(dtype_l), np.dtype(dtype_r)])
+
+    exp_join_data = [1, 2, 3]
+    exp_other_data = ["a", "b", "c"]
+    exp_join_col = Series(exp_join_data, dtype=exp_dtype)
+
+    expect = DataFrame(
+        {
+            "join_col": exp_join_col,
+            "B_x": exp_other_data,
+            "B_y": exp_other_data,
+        }
+    )
+
+    got = gdf_l.merge(gdf_r, on="join_col", how="inner")
+
+    assert_eq(expect, got)
+
+
+def test_typecast_on_join_no_float_round():
+
+    other_data = ["a", "b", "c", "d", "e"]
+
+    join_data_l = Series([1, 2, 3, 4, 5], dtype="int8")
+    join_data_r = Series([1, 2, 3, 4.01, 4.99], dtype="float32")
+
+    gdf_l = DataFrame({"join_col": join_data_l, "B": other_data})
+    gdf_r = DataFrame({"join_col": join_data_r, "B": other_data})
+
+    exp_join_data = [1, 2, 3, 4, 5]
+    exp_Bx = ["a", "b", "c", "d", "e"]
+    exp_By = ["a", "b", "c", None, None]
+    exp_join_col = Series(exp_join_data, dtype="float32")
+
+    expect = DataFrame(
+        {"join_col": exp_join_col, "B_x": exp_Bx, "B_y": exp_By}
+    )
+
+    got = gdf_l.merge(gdf_r, on="join_col", how="left")
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "dtype_l",
+    ["datetime64[s]", "datetime64[ms]", "datetime64[us]", "datetime64[ns]"],
+)
+@pytest.mark.parametrize(
+    "dtype_r",
+    ["datetime64[s]", "datetime64[ms]", "datetime64[us]", "datetime64[ns]"],
+)
+def test_typecast_on_join_dt_to_dt(dtype_l, dtype_r):
+    other_data = ["a", "b", "c", "d", "e"]
+    join_data_l = Series(
+        ["1991-11-20", "1999-12-31", "2004-12-04", "2015-01-01", "2019-08-15"]
+    ).astype(dtype_l)
+    join_data_r = Series(
+        ["1991-11-20", "1999-12-31", "2004-12-04", "2015-01-01", "2019-08-16"]
+    ).astype(dtype_r)
+
+    gdf_l = DataFrame({"join_col": join_data_l, "B": other_data})
+    gdf_r = DataFrame({"join_col": join_data_r, "B": other_data})
+
+    exp_dtype = max(np.dtype(dtype_l), np.dtype(dtype_r))
+
+    exp_join_data = ["1991-11-20", "1999-12-31", "2004-12-04", "2015-01-01"]
+    exp_other_data = ["a", "b", "c", "d"]
+    exp_join_col = Series(exp_join_data, dtype=exp_dtype)
+
+    expect = DataFrame(
+        {
+            "join_col": exp_join_col,
+            "B_x": exp_other_data,
+            "B_y": exp_other_data,
+        }
+    )
+
+    got = gdf_l.merge(gdf_r, on="join_col", how="inner")
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("dtype_l", ["category", "str", "int32", "float32"])
+@pytest.mark.parametrize("dtype_r", ["category", "str", "int32", "float32"])
+def test_typecast_on_join_categorical(dtype_l, dtype_r):
+    if not (dtype_l == "category" or dtype_r == "category"):
+        pytest.skip("at least one side must be category for this set of tests")
+    if dtype_l == "category" and dtype_r == "category":
+        pytest.skip("Can't determine which categorical to use")
+
+    other_data = ["a", "b", "c", "d", "e"]
+    join_data_l = Series([1, 2, 3, 4, 5], dtype=dtype_l)
+    join_data_r = Series([1, 2, 3, 4, 6], dtype=dtype_r)
+    if dtype_l == "category":
+        exp_dtype = join_data_l.dtype
+        exp_categories = join_data_l.astype(int)._column
+    elif dtype_r == "category":
+        exp_dtype = join_data_r.dtype
+        exp_categories = join_data_r.astype(int)._column
+
+    gdf_l = DataFrame({"join_col": join_data_l, "B": other_data})
+    gdf_r = DataFrame({"join_col": join_data_r, "B": other_data})
+
+    exp_join_data = [1, 2, 3, 4]
+    exp_other_data = ["a", "b", "c", "d"]
+    exp_join_col = Series(exp_join_data, dtype=exp_dtype)
+
+    expect = DataFrame(
+        {
+            "join_col": exp_join_col,
+            "B_x": exp_other_data,
+            "B_y": exp_other_data,
+        }
+    )
+    expect["join_col"] = expect["join_col"].cat.set_categories(exp_categories)
+
+    got = gdf_l.merge(gdf_r, on="join_col", how="inner")
+    assert_eq(expect, got, check_dtype=False)

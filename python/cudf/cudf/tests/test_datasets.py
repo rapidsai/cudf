@@ -1,4 +1,4 @@
-import pandas as pd
+import numpy as np
 
 import cudf as gd
 from cudf.tests.utils import assert_eq
@@ -28,7 +28,7 @@ def test_dataset_timeseries():
 
     assert gdf["value"].head().dtype == float
     assert gdf["id"].head().dtype == int
-    assert gdf["name"].head().dtype == pd.api.types.CategoricalDtype()
+    assert gdf["name"].head().dtype == "category"
 
     gdf = gd.datasets.randomdata()
     assert gdf["id"].head().dtype == int
@@ -43,3 +43,12 @@ def test_dataset_timeseries():
     assert gdf["a"].head().dtype == int
     assert gdf["b"].head().dtype == float
     assert len(gdf) == 20
+
+
+def test_make_bool():
+    n = 10
+    state = np.random.RandomState(12)
+    arr = gd.datasets.make_bool(n, state)
+    assert np.alltrue(np.isin(arr, [True, False]))
+    assert arr.size == n
+    assert arr.dtype == bool

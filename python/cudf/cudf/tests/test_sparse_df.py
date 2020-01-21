@@ -4,10 +4,10 @@ import os.path
 import numpy as np
 import pytest
 
-from librmm_cffi import librmm as rmm
+import rmm
 
 from cudf.comm.gpuarrow import GpuArrowReader
-from cudf.dataframe import DataFrame, Series
+from cudf.core import DataFrame, Series
 from cudf.tests.utils import assert_eq
 
 try:
@@ -74,7 +74,7 @@ def test_to_dense_array():
     mask = np.asarray([0b11010110], dtype=np.byte)
 
     sr = Series.from_masked_array(data=data, mask=mask, null_count=3)
-    assert sr.null_count > 0
+    assert sr.has_nulls
     assert sr.null_count != len(sr)
     filled = sr.to_array(fillna="pandas")
     dense = sr.to_array()
@@ -89,5 +89,5 @@ def test_to_dense_array():
 def test_reading_arrow_sparse_data():
     pdf, schema, darr = read_data()
     gar = GpuArrowReader(schema, darr)
-    gdf = DataFrame(gar.to_dict().items())
+    gdf = DataFrame(gar.to_dict())
     assert_eq(pdf, gdf)

@@ -21,7 +21,7 @@
 
     <groupId>ai.rapids</groupId>
     <artifactId>cudf</artifactId>
-    <version>0.9-SNAPSHOT</version>
+    <version>0.12-SNAPSHOT</version>
 
     <name>cudfjni</name>
     <description>
@@ -227,6 +227,20 @@
     <build>
         <resources>
             <resource>
+              <directory>${basedir}/..</directory>
+              <targetPath>META-INF</targetPath>
+              <includes>
+                <include>LICENSE</include>
+              </includes>
+            </resource>
+            <resource>
+              <directory>${basedir}</directory>
+              <targetPath>META-INF</targetPath>
+              <includes>
+                <include>LICENSE-bundled</include>
+              </includes>
+            </resource>
+            <resource>
                 <directory>${basedir}/target/native-deps/</directory>
             </resource>
         </resources>
@@ -247,7 +261,8 @@
                 </plugin>
                 <plugin>
                     <artifactId>maven-resources-plugin</artifactId>
-                    <version>3.0.2</version>
+                    <!-- downgrade version so symlinks are followed -->
+                    <version>2.6</version>
                 </plugin>
                 <plugin>
                     <artifactId>maven-compiler-plugin</artifactId>
@@ -312,7 +327,6 @@
                                       executable="cmake">
                                     <arg value="${basedir}/src/main/native"/>
                                     <arg value="-DCMAKE_CXX11_ABI=${cxx11.abi.value}"/>
-                                    <!--<arg value="-DUSE_NVTX"/>-->
                                 </exec>
                                 <exec dir="${native.build.path}"
                                       failonerror="true"
@@ -441,15 +455,16 @@
                                     <directory>${native.cudf.path}</directory>
                                     <includes>
                                         <include>libcudf.so</include>
+                                        <include>libNVCategory.so</include>
+                                        <include>libNVStrings.so</include>
                                     </includes>
                                 </resource>
                                 <resource>
                                     <!--Set by groovy script-->
                                     <directory>${native.deps.path}</directory>
                                     <includes>
+                                        <include>libboost_filesystem.so</include>
                                         <include>librmm.so</include>
-                                        <include>libNVCategory.so</include>
-                                        <include>libNVStrings.so</include>
                                     </includes>
                                 </resource>
                             </resources>

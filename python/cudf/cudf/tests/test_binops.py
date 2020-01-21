@@ -11,8 +11,8 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.dataframe import Series
-from cudf.dataframe.index import as_index
+from cudf.core import Series
+from cudf.core.index import as_index
 from cudf.tests import utils
 
 _binops = [
@@ -88,7 +88,7 @@ def test_series_binop_scalar(nelem, binop, obj_class):
 _bitwise_binops = [operator.and_, operator.or_, operator.xor]
 
 
-_int_types = ["int8", "int16", "int32", "int64"]
+_int_types = ["int8", "int16", "int32", "int64", "longlong"]
 
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
@@ -195,6 +195,7 @@ def test_series_compare(cmpop, obj_class, dtype):
         "float32",
         "float64",
         "datetime64[ms]",
+        "longlong",
     ],
 )
 def test_series_compare_scalar(nelem, cmpop, obj_class, dtype):
@@ -492,7 +493,7 @@ _operators_comparison = ["eq", "ne", "lt", "le", "gt", "ge"]
 
 
 @pytest.mark.parametrize("func", _operators_arithmetic)
-@pytest.mark.parametrize("has_nulls", _nulls)
+@pytest.mark.parametrize("has_nulls", [True, False])
 @pytest.mark.parametrize("fill_value", [None, 27])
 @pytest.mark.parametrize("dtype", ["float32", "float64"])
 def test_operator_func_between_series(dtype, func, has_nulls, fill_value):
@@ -517,7 +518,7 @@ def test_operator_func_between_series(dtype, func, has_nulls, fill_value):
 
 
 @pytest.mark.parametrize("func", _operators_arithmetic)
-@pytest.mark.parametrize("has_nulls", _nulls)
+@pytest.mark.parametrize("has_nulls", [True, False])
 @pytest.mark.parametrize("fill_value", [None, 27])
 @pytest.mark.parametrize("dtype", ["float32", "float64"])
 def test_operator_func_series_and_scalar(dtype, func, has_nulls, fill_value):
@@ -538,20 +539,19 @@ def test_operator_func_series_and_scalar(dtype, func, has_nulls, fill_value):
     utils.assert_eq(pdf_series_result, gdf_series_result)
 
 
-@pytest.mark.parametrize("dtype", ["float32", "float64"])
+_permu_values = [0, 1, None, np.nan]
+
+
+@pytest.mark.parametrize("fill_value", _permu_values)
+@pytest.mark.parametrize("scalar_a", _permu_values)
+@pytest.mark.parametrize("scalar_b", _permu_values)
 @pytest.mark.parametrize("func", _operators_comparison)
-@pytest.mark.parametrize("has_nulls", _nulls)
-@pytest.mark.parametrize("fill_value", [None, True, False, 1.0])
+@pytest.mark.parametrize("dtype", ["float32", "float64"])
 def test_operator_func_between_series_logical(
-    dtype, func, has_nulls, fill_value
+    dtype, func, scalar_a, scalar_b, fill_value
 ):
-    count = 1000
-    gdf_series_a = utils.gen_rand_series(
-        dtype, count, has_nulls=has_nulls, stride=10000
-    )
-    gdf_series_b = utils.gen_rand_series(
-        dtype, count, has_nulls=has_nulls, stride=100
-    )
+    gdf_series_a = Series([scalar_a]).astype(dtype)
+    gdf_series_b = Series([scalar_b]).astype(dtype)
     pdf_series_a = gdf_series_a.to_pandas()
     pdf_series_b = gdf_series_b.to_pandas()
 
@@ -562,12 +562,20 @@ def test_operator_func_between_series_logical(
         pdf_series_b, fill_value=fill_value
     )
 
+    if scalar_a in [None, np.nan] and scalar_b in [None, np.nan]:
+        # cudf binary operations will return `None` when both left- and right-
+        # side values are `None`. It will return `np.nan` when either side is
+        # `np.nan`. As a consequence, when we convert our gdf => pdf during
+        # assert_eq, we get a pdf with dtype='object' (all inputs are none).
+        # to account for this, we use fillna.
+        gdf_series_result.fillna(func == "ne", inplace=True)
+
     utils.assert_eq(pdf_series_result, gdf_series_result)
 
 
 @pytest.mark.parametrize("dtype", ["float32", "float64"])
 @pytest.mark.parametrize("func", _operators_comparison)
-@pytest.mark.parametrize("has_nulls", _nulls)
+@pytest.mark.parametrize("has_nulls", [True, False])
 @pytest.mark.parametrize("scalar", [-59.0, np.nan, 0, 59.0])
 @pytest.mark.parametrize("fill_value", [None, True, False, 1.0])
 def test_operator_func_series_and_scalar_logical(
@@ -619,7 +627,7 @@ def test_operator_func_dataframe(func, nulls, fill_value, other):
     gdf2 = cudf.DataFrame.from_pandas(pdf2) if other == "df" else 59.0
 
     got = getattr(gdf1, func)(gdf2, fill_value=fill_value)
-    expect = getattr(pdf1, func)(pdf2, fill_value=fill_value)[list(got._cols)]
+    expect = getattr(pdf1, func)(pdf2, fill_value=fill_value)[list(got._data)]
 
     utils.assert_eq(expect, got)
 
@@ -630,10 +638,6 @@ def test_binop_bool_uint(func, rhs):
     # TODO: remove this once issue #2172 is resolved
     if func == "rmod" or func == "rfloordiv":
         return
-    # TODO: remove this once issue #2173 is resolved
-    if func == "mod" or func == "floordiv":
-        if rhs == 0:
-            return
     psr = pd.Series([True, False, False])
     gsr = cudf.from_pandas(psr)
     utils.assert_eq(
@@ -665,3 +669,13 @@ def test_int8_float16_binop():
     expect = cudf.Series([0.5])
     got = a / b
     utils.assert_eq(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize("dtype", ["int64", "float64", "str"])
+def test_vector_to_none_binops(dtype):
+    data = Series([1, 2, 3, None], dtype=dtype)
+
+    expect = Series([None] * 4).astype(dtype)
+    got = data + None
+
+    utils.assert_eq(expect, got)

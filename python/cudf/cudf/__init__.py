@@ -1,28 +1,11 @@
 # Copyright (c) 2018-2019, NVIDIA CORPORATION.
 
-from librmm_cffi import librmm as rmm
 
-from cudf import dataframe, datasets
+from cudf import core, datasets
 from cudf._version import get_versions
-from cudf.dataframe import (
-    DataFrame,
-    Index,
-    MultiIndex,
-    Series,
-    from_pandas,
-    merge,
-)
-from cudf.io import (
-    from_dlpack,
-    read_csv,
-    read_feather,
-    read_hdf,
-    read_json,
-    read_orc,
-    read_parquet,
-)
-from cudf.multi import concat
-from cudf.ops import (
+from cudf.core import DataFrame, Index, MultiIndex, Series, from_pandas, merge
+from cudf.core.dtypes import CategoricalDtype
+from cudf.core.ops import (
     arccos,
     arcsin,
     arctan,
@@ -36,8 +19,18 @@ from cudf.ops import (
     sqrt,
     tan,
 )
-from cudf.reshape import get_dummies, melt
-from cudf.settings import set_options
+from cudf.core.reshape import concat, get_dummies, melt
+from cudf.io import (
+    from_dlpack,
+    read_avro,
+    read_csv,
+    read_feather,
+    read_hdf,
+    read_json,
+    read_orc,
+    read_parquet,
+)
+from cudf.utils.utils import set_allocator
 
 __version__ = get_versions()["version"]
 del get_versions

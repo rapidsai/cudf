@@ -6,7 +6,7 @@ from itertools import product
 import numpy as np
 import pytest
 
-from cudf.dataframe import Series
+from cudf.core import Series
 from cudf.tests import utils
 from cudf.tests.utils import gen_rand
 

@@ -27,13 +27,13 @@ def test_join_inner(left_nrows, right_nrows, left_nkeys, right_nkeys):
         {
             "x": np.random.randint(0, left_nkeys, size=left_nrows),
             "a": np.arange(left_nrows),
-        }.items()
+        }
     )
     right = cudf.DataFrame(
         {
             "x": np.random.randint(0, right_nkeys, size=right_nrows),
             "a": 1000 * np.arange(right_nrows),
-        }.items()
+        }
     )
 
     expect = left.set_index("x").join(
@@ -49,6 +49,10 @@ def test_join_inner(left_nrows, right_nrows, left_nkeys, right_nkeys):
         right.set_index("x"), how="inner", lsuffix="l", rsuffix="r"
     )
     got = joined.compute().to_pandas()
+
+    if len(got.columns):
+        got = got.sort_values(list(got.columns))
+        expect = expect.sort_values(list(expect.columns))
 
     # Check index
     np.testing.assert_array_equal(expect.index.values, got.index.values)
@@ -86,13 +90,13 @@ def test_join_left(left_nrows, right_nrows, left_nkeys, right_nkeys, how):
         {
             "x": np.random.randint(0, left_nkeys, size=left_nrows),
             "a": np.arange(left_nrows, dtype=np.float64),
-        }.items()
+        }
     )
     right = cudf.DataFrame(
         {
             "x": np.random.randint(0, right_nkeys, size=right_nrows),
             "a": 1000 * np.arange(right_nrows, dtype=np.float64),
-        }.items()
+        }
     )
 
     expect = left.set_index("x").join(
@@ -108,6 +112,10 @@ def test_join_left(left_nrows, right_nrows, left_nkeys, right_nkeys, how):
         right.set_index("x"), how=how, lsuffix="l", rsuffix="r"
     )
     got = joined.compute().to_pandas()
+
+    if len(got.columns):
+        got = got.sort_values(list(got.columns))
+        expect = expect.sort_values(list(expect.columns))
 
     # Check index
     np.testing.assert_array_equal(expect.index.values, got.index.values)
@@ -152,14 +160,14 @@ def test_merge_left(
             "x": np.random.randint(0, left_nkeys, size=left_nrows),
             "y": np.random.randint(0, left_nkeys, size=left_nrows),
             "a": np.arange(left_nrows, dtype=np.float64),
-        }.items()
+        }
     )
     right = cudf.DataFrame(
         {
             "x": np.random.randint(0, right_nkeys, size=right_nrows),
             "y": np.random.randint(0, right_nkeys, size=right_nrows),
             "a": 1000 * np.arange(right_nrows, dtype=np.float64),
-        }.items()
+        }
     )
 
     expect = left.merge(right, on=("x", "y"), how=how)
@@ -198,13 +206,13 @@ def test_merge_1col_left(
         {
             "x": np.random.randint(0, left_nkeys, size=left_nrows),
             "a": np.arange(left_nrows, dtype=np.float64),
-        }.items()
+        }
     )
     right = cudf.DataFrame(
         {
             "x": np.random.randint(0, right_nkeys, size=right_nrows),
             "a": 1000 * np.arange(right_nrows, dtype=np.float64),
-        }.items()
+        }
     )
 
     expect = left.merge(right, on=["x"], how=how)
@@ -225,6 +233,38 @@ def test_merge_1col_left(
     got = got.sort_values(["x", "a_x", "a_y"]).reset_index(drop=True)
 
     dd.assert_eq(expect, got)
+
+
+def test_merge_should_fail():
+    # Expected failure cases described in #2694
+    df1 = cudf.DataFrame()
+    df1["a"] = [1, 2, 3, 4, 5, 6] * 2
+    df1["b"] = np.random.randint(0, 12, 12)
+
+    df2 = cudf.DataFrame()
+    df2["a"] = [7, 2, 3, 8, 5, 9] * 2
+    df2["c"] = np.random.randint(0, 12, 12)
+
+    left = dgd.from_cudf(df1, 1).groupby("a").b.min().to_frame()
+    right = dgd.from_cudf(df2, 1).groupby("a").c.min().to_frame()
+
+    with pytest.raises(KeyError):
+        left.merge(right, how="left", on=["nonCol"])
+    with pytest.raises(ValueError):
+        left.merge(right, how="left", on=["b"])
+    with pytest.raises(KeyError):
+        left.merge(right, how="left", on=["c"])
+    with pytest.raises(KeyError):
+        left.merge(right, how="left", on=["a"])
+
+    # Same column names
+    df2["b"] = np.random.randint(0, 12, 12)
+    right = dgd.from_cudf(df2, 1).groupby("a").b.min().to_frame()
+
+    with pytest.raises(KeyError):
+        left.merge(right, how="left", on="NonCol")
+    with pytest.raises(KeyError):
+        left.merge(right, how="left", on="a")
 
 
 @pytest.mark.parametrize("how", ["inner", "left"])

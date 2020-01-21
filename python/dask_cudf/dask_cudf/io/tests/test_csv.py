@@ -1,3 +1,5 @@
+import gzip
+import os
 import warnings
 
 import numpy as np
@@ -7,7 +9,30 @@ import pytest
 import dask
 import dask.dataframe as dd
 
+import cudf
+
 import dask_cudf
+
+
+def test_csv_roundtrip(tmp_path):
+    df = cudf.DataFrame({"x": [1, 2, 3, 4], "id": ["a", "b", "c", "d"]})
+    ddf = dask_cudf.from_cudf(df, npartitions=2)
+
+    ddf.to_csv(tmp_path / "data-*.csv", index=False)
+
+    ddf2 = dask_cudf.read_csv(tmp_path / "data-*.csv")
+    dd.assert_eq(ddf, ddf2, check_divisions=False, check_index=False)
+
+
+def test_csv_roundtrip_filepath(tmp_path):
+    df = cudf.DataFrame({"x": [1, 2, 3, 4], "id": ["a", "b", "c", "d"]})
+    ddf = dask_cudf.from_cudf(df, npartitions=2)
+    stmp_path = str(tmp_path / "data-*.csv")
+
+    ddf.to_csv(f"file://{stmp_path}", index=False)
+
+    ddf2 = dask_cudf.read_csv(f"file://{stmp_path}")
+    dd.assert_eq(ddf, ddf2, check_divisions=False, check_index=False)
 
 
 def test_read_csv(tmp_path):
@@ -24,6 +49,13 @@ def test_read_csv(tmp_path):
     stmp_path = str(tmp_path / "data-*.csv")
     df3 = dask_cudf.read_csv(f"file://{stmp_path}")
     dd.assert_eq(df2, df3)
+
+    # file list test
+    list_paths = [
+        os.path.join(tmp_path, fname) for fname in sorted(os.listdir(tmp_path))
+    ]
+    df4 = dask_cudf.read_csv(list_paths)
+    dd.assert_eq(df, df4)
 
 
 def test_raises_FileNotFoundError():
@@ -65,3 +97,21 @@ def test_read_csv_compression(tmp_path):
         )
 
         assert not record
+
+
+def test_read_csv_compression_file_list(tmp_path):
+    # Repro from Issue#3412
+    lines = """col1,col2
+    0,1
+    2,3"""
+
+    files = [tmp_path / "test1.csv", tmp_path / "test2.csv"]
+
+    for fn in files:
+        with gzip.open(fn, "wb") as fp:
+            fp.write(lines.encode("utf-8"))
+
+    ddf_cpu = dd.read_csv(files, compression="gzip").compute()
+    ddf_gpu = dask_cudf.read_csv(files, compression="gzip").compute()
+
+    dd.assert_eq(ddf_cpu, ddf_gpu)

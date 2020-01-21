@@ -51,6 +51,9 @@ THE SOFTWARE.
 #include <stdint.h>
 #include "brotli_dict.h"
 
+namespace cudf {
+namespace io {
+
 static const brotli_dictionary_s g_dictionary = {
     // size_bits_by_length
     {
@@ -5923,3 +5926,8 @@ const brotli_dictionary_s *get_brotli_dictionary(void)
 {
     return &g_dictionary;
 }
+
+
+} // namespace io
+} // namespace cudf
+

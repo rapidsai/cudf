@@ -1,7 +1,5 @@
 /*
- * Copyright 2019 BlazingDB, Inc.
- *     Copyright 2019 Christian Noboa Mardini <christian@blazingdb.com>
- *     Copyright 2019 William Scott Malpica <william@blazingdb.com>
+ * Copyright (c) 2019, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,283 +14,250 @@
  * limitations under the License.
  */
 
-#include <gtest/gtest.h>
+#include <cudf/cudf.h>
+#include <tests/utilities/base_fixture.hpp>
 #include <cudf/copying.hpp>
-#include <tests/utilities/cudf_test_fixtures.h>
-#include <tests/copying/copying_test_helper.hpp>
-#include <tests/utilities/nvcategory_utils.cuh>
-#include <bitmask/legacy/bit_mask.cuh>
+#include <cudf/column/column_factories.hpp>
+#include <tests/utilities/column_utilities.hpp>
+#include <tests/utilities/table_utilities.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
+#include <tests/utilities/type_lists.hpp>
+#include <tests/utilities/column_wrapper.hpp>
+#include <cudf/legacy/interop.hpp>
+#include <tests/utilities/legacy/cudf_test_utils.cuh>
+#include <string>
+#include <vector>
 
-void call_slice(gdf_column const*          input_column,
-                gdf_index_type const*      indices,
-                gdf_size_type              num_indices,
-                std::vector<gdf_column*> & output){
+#include <cudf/strings/string_view.cuh>
+#include <cudf/strings/strings_column_view.hpp>
+#include <cudf/wrappers/timestamps.hpp>
 
-  output = cudf::slice(*input_column, indices, num_indices); 
+#include <tests/copying/slice_tests.cuh>
+
+template <typename T>
+struct SliceTest : public cudf::test::BaseFixture {};
+
+TYPED_TEST_CASE(SliceTest, cudf::test::NumericTypes);
+
+TYPED_TEST(SliceTest, NumericColumnsWithNulls) {
+    using T = TypeParam;
+
+    cudf::size_type start = 0;
+    cudf::size_type size = 10;
+    auto valids = cudf::test::make_counting_transform_iterator(start, [](auto i) { return i%2==0? true:false; });
+
+    cudf::test::fixed_width_column_wrapper<T> col = create_fixed_columns<T>(start, size, valids);
+
+    std::vector<cudf::size_type> indices{1, 3, 2, 2, 5, 9};
+    std::vector<cudf::test::fixed_width_column_wrapper<T>> expected = create_expected_columns<T>(indices, true);
+    std::vector<cudf::column_view> result = cudf::experimental::slice(col, indices);
+
+    EXPECT_EQ(expected.size(), result.size());
+
+    for (unsigned long index = 0; index < result.size(); index++) {
+        cudf::test::expect_columns_equal(expected[index], result[index]);
+    }
 }
 
-struct SliceInputTest : GdfTest {};
+struct SliceStringTest : public SliceTest <std::string>{};
 
-TEST_F(SliceInputTest, IndexesNull) {
-  const int SIZE = 32;
-  using ColumnType = std::int32_t;
+TEST_F(SliceStringTest, StringWithNulls) {
+    std::vector<std::string> strings{"", "this", "is", "a", "column", "of", "strings", "with", "in", "valid"};
+    auto valids = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i%2==0? true:false; });
+    cudf::test::strings_column_wrapper s(strings.begin(), strings.end(), valids);
 
-  // Create input column
-  auto input_column = create_random_column<ColumnType>(SIZE);
+    std::vector<cudf::size_type> indices{1, 3, 2, 4, 1, 9};
 
-  // Perform test
-  std::vector<gdf_column*> output;
-  ASSERT_NO_THROW(call_slice(input_column.get(), nullptr, 0, output));
-  ASSERT_EQ(output.size(), std::size_t(0));
+    std::vector<cudf::test::strings_column_wrapper> expected = create_expected_string_columns(strings, indices, true);
+    std::vector<cudf::column_view> result = cudf::experimental::slice(s, indices);
+
+    EXPECT_EQ(expected.size(), result.size());
+
+    for (unsigned long index = 0; index < result.size(); index++) {
+        cudf::test::expect_column_properties_equal(expected[index], result[index]);
+    }
 }
 
-TEST_F(SliceInputTest, InputColumnSizeNull) {
-  const int SIZE = 32;
-  using ColumnType = std::int32_t;
+struct SliceCornerCases : public SliceTest <int8_t>{};
 
-  // Create input column
-  gdf_column input_column{};
-  input_column.size = 0;
+TEST_F(SliceCornerCases, EmptyColumn) {
+    cudf::column col {};
+    std::vector<cudf::size_type> indices{1, 3, 2, 4, 5, 9};
 
-  // Create indices
-  std::vector<gdf_index_type> indices_host{SIZE / 4, SIZE / 2};
-  cudf::test::column_wrapper<gdf_index_type> indices(indices_host);
+    std::vector<cudf::column_view> result = cudf::experimental::slice(col.view(), indices);
 
-  // Perform test
-  std::vector<gdf_column*> output;
-  ASSERT_NO_THROW(call_slice(&input_column, static_cast<gdf_index_type*>(indices.get()->data), indices.get()->size, output));
-  ASSERT_EQ(output.size(), std::size_t(0));
+    unsigned long expected = 0;
+
+    EXPECT_EQ(expected, result.size());
 }
 
-TEST_F(SliceInputTest, InputColumnDataNull) {
-  const int SIZE = 32;
-  using ColumnType = std::int32_t;
+TEST_F(SliceCornerCases, EmptyIndices) {
+    cudf::size_type start = 0;
+    cudf::size_type size = 10;
+    auto valids = cudf::test::make_counting_transform_iterator(start, [](auto i) { return i%2==0? true:false; });
 
-  // Create input column
-  auto input_column = create_random_column<ColumnType>(SIZE);
-  gdf_column* input_column_test = input_column.get();
-  input_column_test->data = nullptr;
+    cudf::test::fixed_width_column_wrapper<int8_t> col = create_fixed_columns<int8_t>(start, size, valids);
+    std::vector<cudf::size_type> indices{};
 
-  // Create indices
-  std::vector<gdf_index_type> indices_host{SIZE / 4, SIZE / 2};
-  cudf::test::column_wrapper<gdf_index_type> indices(indices_host);
-
-  // Perform test
-  std::vector<gdf_column*> output;
-  ASSERT_ANY_THROW(call_slice(input_column_test, static_cast<gdf_index_type*>(indices.get()->data), indices.get()->size, output));
-}
-
-TEST_F(SliceInputTest, InputColumnBitmaskNull) {
-  const int SIZE = 32;
-  using ColumnType = std::int32_t;
-
-  // Create input column
-  auto input_column = create_random_column<ColumnType>(SIZE);
-  gdf_column* input_column_test = input_column.get();
-  input_column_test->valid = nullptr;
-
-  // Create indices
-  std::vector<gdf_index_type> indices_host{SIZE / 4, SIZE / 2};
-  cudf::test::column_wrapper<gdf_index_type> indices(indices_host);
-
-  // Perform test
-  std::vector<gdf_column*> output;
-  ASSERT_NO_THROW(call_slice(input_column_test, static_cast<gdf_index_type*>(indices.get()->data), indices.get()->size, output));
-}
-
-TEST_F(SliceInputTest, IndexesSizeNotEven) {
-  const int SIZE = 32;
-  using ColumnType = std::int32_t;
-
-  // Create input column
-  auto input_column = create_random_column<ColumnType>(SIZE);
-
-  // Create indices
-  std::vector<gdf_index_type> indices_host{SIZE / 4, SIZE / 2};
-
-  // Create indices for test
-  std::vector<gdf_index_type> indices_host_test{SIZE / 4, SIZE / 3, SIZE / 2};
-  cudf::test::column_wrapper<gdf_index_type> indices_test(indices_host_test);
-
-  // Perform test
-  std::vector<gdf_column*> output;
-  ASSERT_ANY_THROW(call_slice(input_column.get(), static_cast<gdf_index_type*>(indices_test.get()->data), indices_test.get()->size, output));
-}
-
-
-template <typename ColumnType>
-struct SliceTest : GdfTest {};
-
-using test_types =
-    ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
-TYPED_TEST_CASE(SliceTest, test_types);
-
-/**
- * It performs a parameterized type test, where the array of indices contains
- * multiple values.
- *
- * It tests:
- * when the indices are the same.
- * when is less than 16, less than 64 or greater than 64.
- */
-TYPED_TEST(SliceTest, MultipleSlices) {
-  // Create input column
-  auto input_column = create_random_column<TypeParam>(INPUT_SIZE);
-
-  // Create indices
-  std::vector<gdf_index_type> indices_host{7, 13, 17, 37, 43, 43, 17, INPUT_SIZE};
-  cudf::test::column_wrapper<gdf_index_type> indices(indices_host);
-
-  // Perform operation
-  std::vector<gdf_column*> output_column_ptrs;
-  ASSERT_NO_THROW(call_slice(input_column.get(), static_cast<gdf_index_type*>(indices.get()->data), indices.get()->size, output_column_ptrs));
-
-  // Transfer input column to host
-  std::vector<TypeParam> input_col_data;
-  std::vector<gdf_valid_type> input_col_bitmask;
-  std::tie(input_col_data, input_col_bitmask) = input_column.to_host();
-  
-  // Perform slice in cpu
-  std::vector<std::vector<TypeParam>> output_cols_data;
-  std::vector<std::vector<gdf_valid_type>> output_cols_bitmask;
-  std::vector<gdf_size_type> output_cols_null_count;
-  std::tie(output_cols_data, output_cols_bitmask, output_cols_null_count) = slice_columns<TypeParam>(input_col_data, 
-                                                                              input_col_bitmask, indices_host);
-
-  // Create Validation output column_wrappers
-  std::vector<cudf::test::column_wrapper<TypeParam>> validation_columns;
-  for (std::size_t i = 0; i < output_column_ptrs.size(); i++){
-    validation_columns.emplace_back(cudf::test::column_wrapper<TypeParam>(output_cols_data[i], output_cols_bitmask[i]));    
-    ASSERT_EQ(validation_columns[i].null_count(), output_cols_null_count[i]);
-  }
-
-  // Verify the operation
-  for (std::size_t i = 0; i < validation_columns.size(); ++i) {
-    if (validation_columns[i].size() > 0 && output_column_ptrs[i]->size > 0)
-      ASSERT_TRUE(validation_columns[i] == *(output_column_ptrs[i]));
-  }
-
-  for (std::size_t i = 0; i < output_column_ptrs.size(); i++){
-    gdf_column_free(output_column_ptrs[i]);
-    delete output_column_ptrs[i];
-  }
-}
-
-
-/**
- * It performs a parameterized type and a parameterized value test. The
- * indices array contains only two values with a fixed length between them.
- * The interval iterates over all the values in the input column.
- */
-TYPED_TEST(SliceTest, RangeIndexPosition) {
-  // Test parameters
-  constexpr gdf_index_type INIT_INDEX{0};
-  constexpr gdf_index_type SLICE_RANGE{37};
-  constexpr gdf_index_type FINAL_INDEX{INPUT_SIZE - SLICE_RANGE};
-
-  // Create input column
-  auto input_column = create_random_column<TypeParam>(INPUT_SIZE);
-  for (gdf_index_type index = INIT_INDEX; index < FINAL_INDEX; ++index) {
-    // Create indices
-    std::vector<gdf_index_type> indices_host{index, index + SLICE_RANGE};
-    cudf::test::column_wrapper<gdf_index_type> indices(indices_host);
+    std::vector<cudf::column_view> result = cudf::experimental::slice(col, indices);
     
-    // Perform operation
-    std::vector<gdf_column*> output_column_ptrs;
-    ASSERT_NO_THROW(call_slice(input_column.get(), static_cast<gdf_index_type*>(indices.get()->data), indices.get()->size, output_column_ptrs));
+    unsigned long expected = 0;
 
-    // Transfer input column to host
-    std::vector<TypeParam> input_col_data;
-    std::vector<gdf_valid_type> input_col_bitmask;
-    std::tie(input_col_data, input_col_bitmask) = input_column.to_host();
-
-    // Perform slice in cpu
-    std::vector<std::vector<TypeParam>> output_cols_data;
-    std::vector<std::vector<gdf_valid_type>> output_cols_bitmask;
-    std::vector<gdf_size_type> output_cols_null_count;
-    std::tie(output_cols_data, output_cols_bitmask, output_cols_null_count) = slice_columns<TypeParam>(input_col_data, 
-                                                                                input_col_bitmask, indices_host);
-    
-    // Create Validation output column_wrappers
-    std::vector<cudf::test::column_wrapper<TypeParam>> validation_columns;
-    for (std::size_t i = 0; i < output_column_ptrs.size(); i++){
-      validation_columns.emplace_back(cudf::test::column_wrapper<TypeParam>(output_cols_data[i], output_cols_bitmask[i]));    
-      ASSERT_EQ(validation_columns[i].null_count(), output_cols_null_count[i]);
-    }
-
-    // Verify the operation
-    for (std::size_t i = 0; i < validation_columns.size(); ++i) {
-      if (validation_columns[i].size() > 0 && output_column_ptrs[i]->size > 0)
-        ASSERT_TRUE(validation_columns[i] == *(output_column_ptrs[i]));
-    }
-
-    for (std::size_t i = 0; i < output_column_ptrs.size(); i++){
-      gdf_column_free(output_column_ptrs[i]);
-      delete output_column_ptrs[i];
-    }
-  }
+    EXPECT_EQ(expected, result.size());
 }
 
-TEST_F(SliceInputTest, NVCategoryMultipleSlices)  {
-  
-  // Create host strings
-  bool print = false;
-  const int length = 7;
-  const char ** orig_string_data = cudf::test::generate_string_data(INPUT_SIZE, length, print);
-  std::vector<std::string> orig_strings_vector(orig_string_data, orig_string_data + INPUT_SIZE);
-  
-  // Create input column
-  gdf_column * input_column = cudf::test::create_nv_category_column_strings(orig_string_data, INPUT_SIZE);
+TEST_F(SliceCornerCases, InvalidSetOfIndices) {
+    cudf::size_type start = 0;
+    cudf::size_type size = 10;
+    auto valids = cudf::test::make_counting_transform_iterator(start, [](auto i) { return i%2==0? true:false; });
+    cudf::test::fixed_width_column_wrapper<int8_t> col = create_fixed_columns<int8_t>(start, size, valids);
+    std::vector<cudf::size_type> indices{11, 12};
 
-  // Create indices
-  std::vector<gdf_index_type> indices_host{7, 13, 17, 37, 43, 43, 17, INPUT_SIZE};
-  cudf::test::column_wrapper<gdf_index_type> indices(indices_host);
+    EXPECT_THROW(cudf::experimental::slice(col, indices), cudf::logic_error);
+}
 
-  // Perform operation
-  std::vector<gdf_column*> output_column_ptrs;
-  ASSERT_NO_THROW(call_slice(input_column, static_cast<gdf_index_type*>(indices.get()->data), indices.get()->size, output_column_ptrs));
+TEST_F(SliceCornerCases, ImproperRange) {
+    cudf::size_type start = 0;
+    cudf::size_type size = 10;
+    auto valids = cudf::test::make_counting_transform_iterator(start, [](auto i) { return i%2==0? true:false; });
 
-  // Transfer input column to host
-  std::vector<std::string> input_col_data;
-  std::vector<gdf_valid_type> input_col_bitmask;
-  std::tie(input_col_data, input_col_bitmask) = cudf::test::nvcategory_column_to_host(input_column);
-  for(gdf_size_type i=0;i<INPUT_SIZE;i++){
-    ASSERT_EQ(orig_strings_vector[i], input_col_data[i]);
-  }
-  
-  // Transfer output to host
-  std::vector<std::vector<std::string>> host_output_string_vector(output_column_ptrs.size());
-  std::vector<std::vector<gdf_valid_type>> host_output_bitmask(output_column_ptrs.size());
-  for(std::size_t i=0;i<output_column_ptrs.size();i++){
-    std::tie(host_output_string_vector[i], host_output_bitmask[i]) = cudf::test::nvcategory_column_to_host(output_column_ptrs[i]);
-  }
-  
-  // Perform slice in cpu
-  std::vector<std::vector<std::string>> output_cols_data;
-  std::vector<std::vector<gdf_valid_type>> output_cols_bitmask;
-  std::vector<gdf_size_type> output_cols_null_count;
-  std::tie(output_cols_data, output_cols_bitmask, output_cols_null_count) = slice_columns<std::string>(input_col_data, 
-                                                                              input_col_bitmask, indices_host);
+    cudf::test::fixed_width_column_wrapper<int8_t> col = create_fixed_columns<int8_t>(start, size, valids);
+    std::vector<cudf::size_type> indices{5, 4};
 
-  // Verify the operation
-  ASSERT_EQ(host_output_string_vector.size(), output_cols_data.size());
-  ASSERT_EQ(host_output_bitmask.size(), output_cols_bitmask.size());
-  for (std::size_t i = 0; i < host_output_string_vector.size(); ++i) {
-    ASSERT_EQ(host_output_string_vector[i].size(), output_cols_data[i].size());
-    ASSERT_EQ(host_output_bitmask[i].size(), output_cols_bitmask[i].size());
-    ASSERT_EQ(output_cols_null_count[i], output_column_ptrs[i]->null_count);
-    for (std::size_t j = 0; j < host_output_string_vector[i].size(); ++j) {
-      ASSERT_EQ(host_output_string_vector[i][j], output_cols_data[i][j]);
-    }
-    for (std::size_t j = 0; j < host_output_string_vector[i].size(); ++j) {
-      bool lhs_is_valids = bit_mask::is_valid(reinterpret_cast<bit_mask::bit_mask_t*>(host_output_bitmask[i].data()),j);
-      bool rhs_is_valids = bit_mask::is_valid(reinterpret_cast<bit_mask::bit_mask_t*>(output_cols_bitmask[i].data()),j);
-      ASSERT_EQ(lhs_is_valids, rhs_is_valids);
-    }
-  }
+    EXPECT_THROW(cudf::experimental::slice(col, indices), cudf::logic_error);
+}
 
-  for (std::size_t i = 0; i < output_column_ptrs.size(); i++){
-    gdf_column_free(output_column_ptrs[i]);
-    delete output_column_ptrs[i];    
-  }
+TEST_F(SliceCornerCases, NegativeOffset) {
+    cudf::size_type start = 0;
+    cudf::size_type size = 10;
+    auto valids = cudf::test::make_counting_transform_iterator(start, [](auto i) { return i%2==0? true:false; });
+
+    cudf::test::fixed_width_column_wrapper<int8_t> col = create_fixed_columns<int8_t>(start, size, valids);
+    std::vector<cudf::size_type> indices{-1, 4};
+
+    EXPECT_THROW(cudf::experimental::slice(col, indices), cudf::logic_error);
+}
+
+
+template <typename T>
+struct SliceTableTest : public cudf::test::BaseFixture {};
+
+TYPED_TEST_CASE(SliceTableTest, cudf::test::NumericTypes);
+
+TYPED_TEST(SliceTableTest, NumericColumnsWithNulls) {
+    using T = TypeParam;
+
+    cudf::size_type start = 0;
+    cudf::size_type col_size = 10;
+    auto valids = cudf::test::make_counting_transform_iterator(start, [](auto i) { return i%2==0? true:false; });
+
+    cudf::size_type num_cols = 5; 
+    cudf::experimental::table src_table = create_fixed_table<T>(num_cols, start, col_size, valids);        
+
+    std::vector<cudf::size_type> indices{1, 3, 2, 2, 5, 9};
+    std::vector<cudf::experimental::table> expected = create_expected_tables<T>(num_cols, indices, true);
+
+    std::vector<cudf::table_view> result = cudf::experimental::slice(src_table, indices);
+
+    EXPECT_EQ(expected.size(), result.size());
+
+    for (unsigned long index = 0; index < result.size(); index++) {        
+        cudf::test::expect_tables_equal(expected[index], result[index]);
+    }        
+}
+
+struct SliceStringTableTest : public SliceTableTest <std::string>{};
+
+TEST_F(SliceStringTableTest, StringWithNulls) {    
+    auto valids = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i%2==0? true:false; });
+    
+    std::vector<std::string> strings[2]     = { {"", "this", "is", "a", "column", "of", "strings", "with", "in", "valid"}, 
+                                                {"", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"} };
+    cudf::test::strings_column_wrapper sw[2] = { {strings[0].begin(), strings[0].end(), valids},
+                                                {strings[1].begin(), strings[1].end(), valids} };
+                                                
+    std::vector<std::unique_ptr<cudf::column>> scols;
+    scols.push_back(sw[0].release());
+    scols.push_back(sw[1].release());    
+    cudf::experimental::table src_table(std::move(scols));
+
+    std::vector<cudf::size_type> indices{1, 3, 2, 4, 1, 9};
+
+    std::vector<cudf::experimental::table> expected = create_expected_string_tables(strings, indices, true);
+        
+    std::vector<cudf::table_view> result = cudf::experimental::slice(src_table, indices);
+
+    EXPECT_EQ(expected.size(), result.size());
+
+    for (unsigned long index = 0; index < result.size(); index++) {        
+        cudf::test::expect_table_properties_equal(expected[index], result[index]);
+    }        
+}
+
+struct SliceTableCornerCases : public SliceTableTest <int8_t>{};
+
+TEST_F(SliceTableCornerCases, EmptyTable) {        
+    std::vector<cudf::size_type> indices{1, 3, 2, 4, 5, 9};
+
+    cudf::experimental::table src_table{};    
+    std::vector<cudf::table_view> result = cudf::experimental::slice(src_table.view(), indices);
+
+    unsigned long expected = 0;
+
+    EXPECT_EQ(expected, result.size());
+}
+
+TEST_F(SliceTableCornerCases, EmptyIndices) {
+    cudf::size_type start = 0;
+    cudf::size_type col_size = 10;
+    auto valids = cudf::test::make_counting_transform_iterator(start, [](auto i) { return i%2==0? true:false; });
+
+    cudf::size_type num_cols = 5; 
+    cudf::experimental::table src_table = create_fixed_table<int8_t>(num_cols, start, col_size, valids);    
+    std::vector<cudf::size_type> indices{};
+
+    std::vector<cudf::table_view> result = cudf::experimental::slice(src_table, indices);
+    
+    unsigned long expected = 0;
+
+    EXPECT_EQ(expected, result.size());
+}
+
+TEST_F(SliceTableCornerCases, InvalidSetOfIndices) {
+    cudf::size_type start = 0;
+    cudf::size_type col_size = 10;
+    auto valids = cudf::test::make_counting_transform_iterator(start, [](auto i) { return i%2==0? true:false; });
+        
+    cudf::size_type num_cols = 5; 
+    cudf::experimental::table src_table = create_fixed_table<int8_t>(num_cols, start, col_size, valids);    
+    
+    std::vector<cudf::size_type> indices{11, 12};
+
+    EXPECT_THROW(cudf::experimental::slice(src_table, indices), cudf::logic_error);
+}
+
+TEST_F(SliceTableCornerCases, ImproperRange) {
+    cudf::size_type start = 0;
+    cudf::size_type col_size = 10;
+    auto valids = cudf::test::make_counting_transform_iterator(start, [](auto i) { return i%2==0? true:false; });
+
+    cudf::size_type num_cols = 5; 
+    cudf::experimental::table src_table = create_fixed_table<int8_t>(num_cols, start, col_size, valids);    
+    
+    std::vector<cudf::size_type> indices{5, 4};
+
+    EXPECT_THROW(cudf::experimental::slice(src_table, indices), cudf::logic_error);
+}
+
+TEST_F(SliceTableCornerCases, NegativeOffset) {
+    cudf::size_type start = 0;
+    cudf::size_type col_size = 10;
+    auto valids = cudf::test::make_counting_transform_iterator(start, [](auto i) { return i%2==0? true:false; });
+
+    cudf::size_type num_cols = 5; 
+    cudf::experimental::table src_table = create_fixed_table<int8_t>(num_cols, start, col_size, valids);    
+    
+    std::vector<cudf::size_type> indices{-1, 4};
+
+    EXPECT_THROW(cudf::experimental::slice(src_table, indices), cudf::logic_error);
 }

@@ -15,18 +15,7 @@
  */
 
 #include "parquet_gpu.h"
-
-#if (__CUDACC_VER_MAJOR__ >= 9)
-#define SHFL0(v)    __shfl_sync(~0, v, 0)
-#define SHFL(v, t)  __shfl_sync(~0, v, t)
-#define SYNCWARP()  __syncwarp()
-#define BALLOT(v)   __ballot_sync(~0, v)
-#else
-#define SHFL0(v)    __shfl(v, 0)
-#define SHFL(v, t)  __shfl(v, t)
-#define SYNCWARP()
-#define BALLOT(v)   __ballot(v)
-#endif
+#include <io/utilities/block_utils.cuh>
 
 namespace cudf {
 namespace io {
@@ -34,21 +23,6 @@ namespace parquet {
 namespace gpu {
 
 // Minimal thrift implementation for parsing page headers
-
-enum {
-    ST_FLD_TRUE = 1,
-    ST_FLD_FALSE = 2,
-    ST_FLD_BYTE = 3,
-    ST_FLD_I16 = 4,
-    ST_FLD_I32 = 5,
-    ST_FLD_I64 = 6,
-    ST_FLD_DOUBLE = 7,
-    ST_FLD_BINARY = 8,
-    ST_FLD_LIST = 9,
-    ST_FLD_SET = 10,
-    ST_FLD_MAP = 11,
-    ST_FLD_STRUCT = 12,
-};
 
 static const __device__ __constant__ uint8_t g_list2struct[16] =
 {

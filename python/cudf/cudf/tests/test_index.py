@@ -8,8 +8,8 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.dataframe import DataFrame
-from cudf.dataframe.index import (
+from cudf.core import DataFrame
+from cudf.core.index import (
     CategoricalIndex,
     DatetimeIndex,
     GenericIndex,
@@ -190,6 +190,40 @@ def test_index_rename():
     assert_eq(pds, gds)
 
 
+def test_index_rename_inplace():
+    pds = pd.Index([1, 2, 3], name="asdf")
+    gds = as_index(pds)
+
+    # inplace=False should yield a deep copy
+    gds_renamed_deep = gds.rename("new_name", inplace=False)
+    gds._values.data = GenericIndex([2, 3, 4])._values.data
+
+    assert (gds_renamed_deep.values == [1, 2, 3]).all()
+
+    # inplace=True returns none
+    gds_to_rename = gds
+    gds.rename("new_name", inplace=True)
+    gds._values.data = GenericIndex([3, 4, 5])._values.data
+
+    assert (gds_to_rename.values == [3, 4, 5]).all()
+
+
+def test_index_rename_preserves_arg():
+    idx1 = GenericIndex([1, 2, 3], name="orig_name")
+
+    # this should be an entirely new object
+    idx2 = idx1.rename("new_name", inplace=False)
+
+    assert idx2.name == "new_name"
+    assert idx1.name == "orig_name"
+
+    # a new object but referencing the same data
+    idx3 = as_index(idx1, name="last_name")
+
+    assert idx3.name == "last_name"
+    assert idx1.name == "orig_name"
+
+
 def test_set_index_as_property():
     cdf = DataFrame()
     col1 = np.arange(10)
@@ -219,11 +253,11 @@ def test_set_index_as_property():
 @pytest.mark.parametrize(
     "idx",
     [
-        cudf.dataframe.index.RangeIndex(1, 5),
-        cudf.dataframe.index.DatetimeIndex(["2001", "2003", "2003"]),
-        cudf.dataframe.index.StringIndex(["a", "b", "c"]),
-        cudf.dataframe.index.GenericIndex([1, 2, 3]),
-        cudf.dataframe.index.CategoricalIndex(["a", "b", "c"]),
+        cudf.core.index.RangeIndex(1, 5),
+        cudf.core.index.DatetimeIndex(["2001", "2003", "2003"]),
+        cudf.core.index.StringIndex(["a", "b", "c"]),
+        cudf.core.index.GenericIndex([1, 2, 3]),
+        cudf.core.index.CategoricalIndex(["a", "b", "c"]),
     ],
 )
 @pytest.mark.parametrize("deep", [True, False])
@@ -231,3 +265,42 @@ def test_index_copy(idx, deep):
     idx_copy = idx.copy(deep=deep)
     assert_eq(idx, idx_copy)
     assert type(idx) == type(idx_copy)
+
+
+@pytest.mark.parametrize("idx", [[1, None, 3, None, 5]])
+def test_index_isna(idx):
+    pidx = pd.Index(idx, name="idx")
+    gidx = cudf.core.index.GenericIndex(idx, name="idx")
+    assert_eq(gidx.isna().to_array(), pidx.isna())
+
+
+@pytest.mark.parametrize("idx", [[1, None, 3, None, 5]])
+def test_index_notna(idx):
+    pidx = pd.Index(idx, name="idx")
+    gidx = cudf.core.index.GenericIndex(idx, name="idx")
+    assert_eq(gidx.notna().to_array(), pidx.notna())
+
+
+def test_rangeindex_slice_attr_name():
+    start, stop = 0, 10
+    rg = RangeIndex(start, stop, "myindex")
+    sliced_rg = rg[0:9]
+    assert_eq(rg.name, sliced_rg.name)
+
+
+def test_from_pandas_str():
+    idx = ["a", "b", "c"]
+    pidx = pd.Index(idx, name="idx")
+    gidx_1 = cudf.core.index.StringIndex(idx, name="idx")
+    gidx_2 = cudf.from_pandas(pidx)
+
+    assert_eq(gidx_1, gidx_2)
+
+
+def test_from_pandas_gen():
+    idx = [2, 4, 6]
+    pidx = pd.Index(idx, name="idx")
+    gidx_1 = cudf.core.index.GenericIndex(idx, name="idx")
+    gidx_2 = cudf.from_pandas(pidx)
+
+    assert_eq(gidx_1, gidx_2)

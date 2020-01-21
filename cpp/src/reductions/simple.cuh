@@ -14,61 +14,58 @@
  * limitations under the License.
  */
 
-#ifndef CUDF_REDUCTION_DISPATCHER_CUH
-#define CUDF_REDUCTION_DISPATCHER_CUH
+#pragma once
 
-#include "reduction_functions.cuh"
+#include <cudf/detail/reduction.cuh>
+
+#include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 
 namespace cudf {
+namespace experimental {
 namespace reduction {
 namespace simple {
+
 
 /** --------------------------------------------------------------------------*    
  * @brief Reduction for 'sum', 'product', 'min', 'max', 'sum of squares'
  * which directly compute the reduction by a single step reduction call
  *
- * @param[in] col    input column
- * @param[out] scalar  output scalar data
+ * @param[in] col    input column view
+ * @param[in] mr The resource to use for all allocations
  * @param[in] stream cuda stream
+ * @returns   Output scalar in device memory
  *
  * @tparam ElementType  the input column cudf dtype
  * @tparam ResultType   the output cudf dtype
- * @tparam Op           the operator of cudf::reduction::op::
- * @tparam has_nulls    true if column has nulls
+ * @tparam Op           the operator of cudf::experimental::reduction::op::
  * ----------------------------------------------------------------------------**/
-template<typename ElementType, typename ResultType, typename Op, bool has_nulls>
-gdf_scalar simple_reduction(gdf_column const& col, gdf_dtype const output_dtype, cudaStream_t stream)
+template <typename ElementType, typename ResultType, typename Op>
+std::unique_ptr<scalar> simple_reduction(column_view const& col,
+                                         data_type const output_dtype,
+                                         rmm::mr::device_memory_resource* mr,
+                                         cudaStream_t stream)
 {
-    gdf_scalar scalar;
-    scalar.dtype = output_dtype;
-    scalar.is_valid = false; // the scalar is not valid for error case
-    ResultType identity = Op::Op::template identity<ResultType>();
+  // reduction by iterator
+  auto dcol = cudf::column_device_view::create(col, stream);
+  std::unique_ptr<scalar> result;
+  Op simple_op{};
 
-    //  allocate temporary memory for the result
-    ResultType *result = NULL;
-    RMM_TRY(RMM_ALLOC(&result, sizeof(ResultType), stream));
-
-    // initialize output by identity value
-    CUDA_TRY(cudaMemcpyAsync(result, &identity,
-            sizeof(ResultType), cudaMemcpyHostToDevice, stream));
-    CHECK_STREAM(stream);
-
-    // reduction by iterator
-    auto it = Op::template make_iterator<has_nulls, ElementType, ResultType>(col);
-    cudf::reduction::detail::reduce(result, it, col.size, identity,
-        typename Op::Op{}, stream);
-
-    // read back the result to host memory
-    // TODO: asynchronous copy
-    CUDA_TRY(cudaMemcpy(&scalar.data, result,
-            sizeof(ResultType), cudaMemcpyDeviceToHost));
-
-    // cleanup temporary memory
-    RMM_TRY(RMM_FREE(result, stream));
-
-    // set scalar is valid
-    scalar.is_valid = true;
-    return scalar;
+  if (col.has_nulls()) {
+    auto it = thrust::make_transform_iterator(
+      experimental::detail::make_null_replacement_iterator(*dcol, simple_op.template get_identity<ElementType>()),
+      simple_op.template get_element_transformer<ResultType>());
+    result = detail::reduce(it, col.size(), Op{}, mr, stream);
+  } else {
+    auto it = thrust::make_transform_iterator(
+        dcol->begin<ElementType>(), 
+        simple_op.template get_element_transformer<ResultType>());
+    result = detail::reduce(it, col.size(), Op{}, mr, stream);
+  }
+  // set scalar is valid
+  result->set_valid((col.null_count() < col.size()), stream);
+  return result;
 };
 
 // @brief result type dispatcher for simple reduction (a.k.a. sum, prod, min...)
@@ -78,29 +75,28 @@ private:
     template <typename ResultType>
     static constexpr bool is_supported_v()
     {
-        // for single step reductions,
-        // the available combination of input and output dtypes are
-        //  - same dtypes (including cudf::wrappers)
-        //  - any arithmetic dtype to any arithmetic dtype
-        //  - cudf::bool8 to/from any arithmetic dtype
-        return  std::is_convertible<ElementType, ResultType>::value ||
-        ( std::is_arithmetic<ElementType >::value && std::is_same<ResultType, cudf::bool8>::value ) ||
-        ( std::is_arithmetic<ResultType>::value && std::is_same<ElementType , cudf::bool8>::value );
+      // for single step reductions,
+      // the available combination of input and output dtypes are
+      //  - same dtypes (including cudf::wrappers)
+      //  - any arithmetic dtype to any arithmetic dtype
+      //  - cudf::experimental::bool8 to/from any arithmetic dtype
+      return std::is_convertible<ElementType, ResultType>::value &&
+             (std::is_arithmetic<ResultType>::value ||
+              std::is_same<Op, cudf::experimental::reduction::op::min>::value ||
+              std::is_same<Op, cudf::experimental::reduction::op::max>::value);
     }
 
 public:
     template <typename ResultType, std::enable_if_t<is_supported_v<ResultType>()>* = nullptr>
-    gdf_scalar operator()(gdf_column const& col, gdf_dtype const output_dtype, cudaStream_t stream)
+    std::unique_ptr<scalar> operator()(column_view const& col, data_type const output_dtype,
+    rmm::mr::device_memory_resource* mr, cudaStream_t stream)
     {
-        if( cudf::has_nulls(col) ){
-          return simple_reduction<ElementType, ResultType, Op, true >(col, output_dtype, stream);
-        }else{
-          return simple_reduction<ElementType, ResultType, Op, false>(col, output_dtype, stream);
-        }
+      return simple_reduction<ElementType, ResultType, Op>(col, output_dtype, mr, stream);
     }
 
     template <typename ResultType, std::enable_if_t<not is_supported_v<ResultType>()>* = nullptr>
-    gdf_scalar operator()(gdf_column const& col, gdf_dtype const output_dtype, cudaStream_t stream)
+    std::unique_ptr<scalar> operator()(column_view const& col, data_type const output_dtype,
+    rmm::mr::device_memory_resource* mr, cudaStream_t stream)
     {
         CUDF_FAIL("input data type is not convertible to output data type");
     }
@@ -115,22 +111,24 @@ private:
     template <typename ElementType>
     static constexpr bool is_supported_v()
     {
-        return std::is_arithmetic<ElementType>::value ||
-               std::is_same<ElementType, cudf::bool8>::value ||
-               std::is_same<Op, cudf::reduction::op::min>::value ||
-               std::is_same<Op, cudf::reduction::op::max>::value ;
+      // disable only for string ElementType except for operators min, max
+      return  !( std::is_same<ElementType, cudf::string_view>::value &&
+              !( std::is_same<Op, cudf::experimental::reduction::op::min>::value ||
+                 std::is_same<Op, cudf::experimental::reduction::op::max>::value ));
     }
 
 public:
     template <typename ElementType, std::enable_if_t<is_supported_v<ElementType>()>* = nullptr>
-    gdf_scalar operator()(gdf_column const& col, gdf_dtype const output_dtype, cudaStream_t stream)
+    std::unique_ptr<scalar> operator()(column_view const& col, data_type const output_dtype,
+    rmm::mr::device_memory_resource* mr, cudaStream_t stream)
     {
-        return cudf::type_dispatcher(output_dtype,
-            result_type_dispatcher<ElementType, Op>(), col, output_dtype, stream);
+        return cudf::experimental::type_dispatcher(output_dtype,
+            result_type_dispatcher<ElementType, Op>(), col, output_dtype, mr, stream);
     }
 
     template <typename ElementType, std::enable_if_t<not is_supported_v<ElementType>()>* = nullptr>
-    gdf_scalar operator()(gdf_column const& col, gdf_dtype const output_dtype, cudaStream_t stream)
+    std::unique_ptr<scalar> operator()(column_view const& col, data_type const output_dtype,
+    rmm::mr::device_memory_resource* mr, cudaStream_t stream)
     {
         CUDF_FAIL("Reduction operators other than `min` and `max`"
                   " are not supported for non-arithmetic types");
@@ -139,6 +137,6 @@ public:
 
 } // namespace simple
 } // namespace reduction
+} // namespace experimental
 } // namespace cudf
-#endif
 

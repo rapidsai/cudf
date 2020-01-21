@@ -9,9 +9,10 @@ import pytest
 from numba import cuda
 
 from cudf import DataFrame
+from cudf.tests.utils import assert_eq
 
 
-@pytest.mark.parametrize("nelem", [1, 2, 64, 128, 1000, 5000])
+@pytest.mark.parametrize("nelem", [1, 2, 64, 128, 129])
 def test_df_apply_rows(nelem):
     def kernel(in1, in2, in3, out1, out2, extra1, extra2):
         for i, (x, y, z) in enumerate(zip(in1, in2, in3)):
@@ -43,7 +44,7 @@ def test_df_apply_rows(nelem):
     np.testing.assert_array_almost_equal(got_out2, expect_out2)
 
 
-@pytest.mark.parametrize("nelem", [1, 2, 64, 128, 1000, 5000])
+@pytest.mark.parametrize("nelem", [1, 2, 64, 128, 129])
 @pytest.mark.parametrize("chunksize", [1, 2, 3, 4, 23])
 def test_df_apply_chunks(nelem, chunksize):
     def kernel(in1, in2, in3, out1, out2, extra1, extra2):
@@ -77,13 +78,12 @@ def test_df_apply_chunks(nelem, chunksize):
     np.testing.assert_array_almost_equal(got_out2, expect_out2)
 
 
-@pytest.mark.parametrize("nelem", [1, 15, 30, 64, 128, 1000])
+@pytest.mark.parametrize("nelem", [1, 15, 30, 64, 128, 129])
 def test_df_apply_custom_chunks(nelem):
     def kernel(in1, in2, in3, out1, out2, extra1, extra2):
         for i, (x, y, z) in enumerate(zip(in1, in2, in3)):
             out1[i] = extra2 * x - extra1 * y + z
-            # cuda.blockDim.x is 1
-            out2[i] = i * cuda.blockDim.x
+            out2[i] = i
 
     df = DataFrame()
     df["in1"] = in1 = np.arange(nelem)
@@ -116,9 +116,10 @@ def test_df_apply_custom_chunks(nelem):
     np.testing.assert_array_almost_equal(got_out2, expect_out2)
 
 
-@pytest.mark.parametrize("nelem", [1, 15, 30, 64, 128, 1000])
-@pytest.mark.parametrize("tpb", [1, 8, 16, 64])
-def test_df_apply_custom_chunks_tpb(nelem, tpb):
+@pytest.mark.parametrize("nelem", [1, 15, 30, 64, 128, 129])
+@pytest.mark.parametrize("blkct", [None, 1, 8])
+@pytest.mark.parametrize("tpb", [1, 8, 64])
+def test_df_apply_custom_chunks_blkct_tpb(nelem, blkct, tpb):
     def kernel(in1, in2, in3, out1, out2, extra1, extra2):
         for i in range(cuda.threadIdx.x, in1.size, cuda.blockDim.x):
             x = in1[i]
@@ -150,6 +151,7 @@ def test_df_apply_custom_chunks_tpb(nelem, tpb):
         outcols=dict(out1=np.float64, out2=np.int32),
         kwargs=dict(extra1=extra1, extra2=extra2),
         chunks=chunks,
+        blkct=blkct,
         tpb=tpb,
     )
 
@@ -158,3 +160,63 @@ def test_df_apply_custom_chunks_tpb(nelem, tpb):
 
     np.testing.assert_array_almost_equal(got_out1, expect_out1)
     np.testing.assert_array_almost_equal(got_out2, expect_out2)
+
+
+@pytest.mark.parametrize("nelem", [1, 2, 64, 128, 1000, 5000])
+def test_df_apply_rows_incols_mapping(nelem):
+    def kernel(x, y, z, out1, out2, extra1, extra2):
+        for i, (a, b, c) in enumerate(zip(x, y, z)):
+            out1[i] = extra2 * a - extra1 * b
+            out2[i] = b - extra1 * c
+
+    df = DataFrame()
+    df["in1"] = in1 = np.arange(nelem)
+    df["in2"] = in2 = np.arange(nelem)
+    df["in3"] = in3 = np.arange(nelem)
+
+    extra1 = 2.3
+    extra2 = 3.4
+
+    expected_out = DataFrame()
+    expected_out["out1"] = extra2 * in1 - extra1 * in2
+    expected_out["out2"] = in2 - extra1 * in3
+
+    outdf = df.apply_rows(
+        kernel,
+        incols={"in1": "x", "in2": "y", "in3": "z"},
+        outcols=dict(out1=np.float64, out2=np.float64),
+        kwargs=dict(extra1=extra1, extra2=extra2),
+    )
+
+    assert_eq(outdf[["out1", "out2"]], expected_out)
+
+
+@pytest.mark.parametrize("nelem", [1, 2, 64, 128, 129])
+@pytest.mark.parametrize("chunksize", [1, 2, 3, 4, 23])
+def test_df_apply_chunks_incols_mapping(nelem, chunksize):
+    def kernel(q, p, r, out1, out2, extra1, extra2):
+        for i, (a, b, c) in enumerate(zip(q, p, r)):
+            out1[i] = extra2 * a - extra1 * b + c
+            out2[i] = i
+
+    df = DataFrame()
+    df["in1"] = in1 = np.arange(nelem)
+    df["in2"] = in2 = np.arange(nelem)
+    df["in3"] = in3 = np.arange(nelem)
+
+    extra1 = 2.3
+    extra2 = 3.4
+
+    expected_out = DataFrame()
+    expected_out["out1"] = extra2 * in1 - extra1 * in2 + in3
+    expected_out["out2"] = np.arange(len(df)) % chunksize
+
+    outdf = df.apply_chunks(
+        kernel,
+        incols={"in1": "q", "in2": "p", "in3": "r"},
+        outcols=dict(out1=np.float64, out2=np.int64),
+        kwargs=dict(extra1=extra1, extra2=extra2),
+        chunks=chunksize,
+    )
+
+    assert_eq(outdf[["out1", "out2"]], expected_out)

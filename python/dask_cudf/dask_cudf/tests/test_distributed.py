@@ -7,6 +7,8 @@ from distributed.utils_test import loop  # noqa: F401
 
 import cudf
 
+import dask_cudf
+
 dask_cuda = pytest.importorskip("dask_cuda")
 
 
@@ -19,3 +21,24 @@ def test_basic(loop, delayed):  # noqa: F811
             if delayed:
                 gdf = dd.from_delayed(gdf.to_delayed())
             dd.assert_eq(pdf.head(), gdf.head())
+
+
+def test_merge():
+    # Repro Issue#3366
+    with dask_cuda.LocalCUDACluster(n_workers=1) as cluster:
+        with Client(cluster):
+            r1 = cudf.DataFrame()
+            r1["a1"] = range(4)
+            r1["a2"] = range(4, 8)
+            r1["a3"] = range(4)
+
+            r2 = cudf.DataFrame()
+            r2["b0"] = range(4)
+            r2["b1"] = range(4)
+            r2["b1"] = r2.b1.astype("str")
+
+            d1 = dask_cudf.from_cudf(r1, 2)
+            d2 = dask_cudf.from_cudf(r2, 2)
+
+            res = d1.merge(d2, left_on=["a3"], right_on=["b0"])
+            assert len(res) == 4

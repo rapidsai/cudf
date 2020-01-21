@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,30 +14,30 @@
  * limitations under the License.
  */
 
-#ifndef REDUCTION_HPP
-#define REDUCTION_HPP
+#pragma once
 
-#include "cudf.h"
-
-/**
- * @brief These enums indicate the supported operations of prefix scan that can be
- * performed on a column
- */
-typedef enum {
-  GDF_SCAN_SUM = 0,             ///< Computes the prefix scan of sum operation of all values for the column
-  GDF_SCAN_MIN,                 ///< Computes the prefix scan of maximum operation of all values for the column
-  GDF_SCAN_MAX,                 ///< Computes the prefix scan of maximum operation of all values for the column
-  GDF_SCAN_PRODUCT,             ///< Computes the prefix scan of multiplicative product operation of all values for the column
-} gdf_scan_op;
+#include <cudf/cudf.h>
+#include <cudf/scalar/scalar.hpp>
 
 namespace cudf {
+namespace experimental {
 
-namespace reduction {
+/**
+ * @brief These enums indicate the supported operations of prefix scan that can
+ * be performed on a column
+ */
+enum class scan_op {
+  SUM = 0,  ///< Computes the prefix scan of     sum operation of all values for the column
+  MIN,      ///< Computes the prefix scan of maximum operation of all values for the column
+  MAX,      ///< Computes the prefix scan of maximum operation of all values for the column
+  PRODUCT,  ///< Computes the prefix scan of multiplicative product operation of all values for the column
+};
+
 /**
  * @brief These enums indicate the supported reduction operations that can be
  * performed on a column
  */
-enum operators {
+enum class reduction_op {
   SUM = 0,        ///< Computes the sum of all values in the column
   MIN,            ///< Computes the minimum of all values in the column
   MAX,            ///< Computes the maximum of all values in the column
@@ -46,53 +46,62 @@ enum operators {
   MEAN,           ///< Computes the arithmetic mean of the values in the column
   VAR,            ///< Computes the variance of the values in the column
   STD,            ///< Computes the standard deviation of the values in the column
+  ANY,            ///< Computes to true if any of the values are non-zero/true
+  ALL,            ///< Computes to true if all of the values are non-zero/true
 };
-}  // namespace reduction
-
 
 /** --------------------------------------------------------------------------*
- * @brief  Computes the reduction of the values in all rows of a column
+ * @brief  Computes the reduction of the values in all rows of a column.
  * This function does not detect overflows in reductions.
- * Using a higher precision `dtype` may prevent overflow.
+ * Using a higher precision `data_type` may prevent overflow.
  * Only `min` and `max` ops are supported for reduction of non-arithmetic
- * types (date32, timestamp, category...).
+ * types (timestamp, string...).
  * The null values are skipped for the operation.
- * If the column is empty, the member is_valid of the output gdf_scalar
+ * If the column is empty, the member `is_valid()` of the output scalar
  * will contain `false`.
  *
- * @param[in] col Input column
+ * @throws `cudf::logic_error` if reduction is called for non-arithmetic output
+ * type and operator other than `min` and `max`.
+ * @throws `cudf::logic_error` if input column data type is not convertible to
+ * output data type.
+ * If the input column has arithmetic type, output_dtype can be any arithmetic
+ * type. For `mean`, `var` and `std` ops, a floating point output type must be 
+ * specified. If the input column has non-arithmetic type
+ *   eg.(timestamp, string...), the same type must be specified.
+ *
+ * @param[in] col Input column view
  * @param[in] op  The operator applied by the reduction
  * @param[in] output_dtype  The computation and output precision.
- *     `dtype` must be a data type that is convertible from the input dtype.
- *     If the input column has arithmetic type or cudf::bool8 type,
- *     output_dtype can be any arithmetic type or cudf::bool8 type.
- *     For `mean`, `var` and `std` ops, a floating point type must be specified.
- *     If the input column has non-arithmetic type
- *     (date32, timestamp, category...), the same type must be specified.
- * @param[in] ddof Delta Degrees of Freedom: the divisor used in calculation of `std` and `var` is `N - ddof`, where `N` is the population size.`
- *
- * @returns  gdf_scalar the result value
- * If the reduction fails, the member is_valid of the output gdf_scalar
+ * @params[in] mr The resource to use for all allocations
+ * @param[in] ddof Delta Degrees of Freedom: the divisor used in calculation of
+ * `std` and `var` is `N - ddof`, where `N` is the population size.`
+ * @returns  cudf::scalar the result value
+ * If the reduction fails, the member is_valid of the output scalar
  * will contain `false`.
  * ----------------------------------------------------------------------------**/
-gdf_scalar reduce(const gdf_column *col, cudf::reduction::operators op,
-                        gdf_dtype output_dtype,
-                        gdf_size_type ddof = 1);
+std::unique_ptr<scalar> reduce(
+    const column_view& col, reduction_op op, data_type output_dtype,
+    cudf::size_type ddof = 1,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /** --------------------------------------------------------------------------*
- * @brief  Computes the scan (a.k.a. prefix sum) of a column.
+ * @brief  Computes the scan of a column.
  * The null values are skipped for the operation, and if an input element
  * at `i` is null, then the output element at `i` will also be null.
  *
- * @param[in] input The input column for the san
- * @param[out] output The pre-allocated output column
+ * @throws `cudf::logic_error` if column datatype is not numeric type.
+ *
+ * @param[in] input The input column view for the scan
  * @param[in] op The operation of the scan
  * @param[in] inclusive The flag for applying an inclusive scan if true,
- * an exclusive scan if false.
+ *            an exclusive scan if false.
+ * @params[in] mr The resource to use for all allocations
+ * @returns unique pointer to new output column
  * ----------------------------------------------------------------------------**/
-void scan(const gdf_column *input, gdf_column *output,
-                   gdf_scan_op op, bool inclusive);
+std::unique_ptr<column> scan(
+    const column_view& input, scan_op op, bool inclusive,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+}  // namespace experimental
 }  // namespace cudf
 
-#endif  // REDUCTION_HPP

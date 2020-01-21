@@ -17,7 +17,7 @@
 #ifndef BITMASK_OPS_HPP
 #define BITMASK_OPS_HPP
 
-#include <cudf/types.hpp>
+#include <cudf/cudf.h>
 #include <cuda_runtime.h>
 
 #include <rmm/thrust_rmm_allocator.h>
@@ -36,9 +36,9 @@
  * @param stream cuda stream to run in
  * @return gdf_error
  *---------------------------------------------------------------------------**/
-gdf_error all_bitmask_on(gdf_valid_type* valid_out,
-                         gdf_size_type& out_null_count,
-                         gdf_size_type num_values, cudaStream_t stream);
+gdf_error all_bitmask_on(cudf::valid_type* valid_out,
+                         cudf::size_type& out_null_count,
+                         cudf::size_type num_values, cudaStream_t stream);
 
 /**---------------------------------------------------------------------------*
  * @brief Computes bitwise AND on two valid masks and sets it in output
@@ -52,12 +52,12 @@ gdf_error all_bitmask_on(gdf_valid_type* valid_out,
  * valid_right
  * @return gdf_error
  *---------------------------------------------------------------------------**/
-gdf_error apply_bitmask_to_bitmask(gdf_size_type& out_null_count,
-                                   gdf_valid_type* valid_out,
-                                   gdf_valid_type* valid_left,
-                                   gdf_valid_type* valid_right,
+gdf_error apply_bitmask_to_bitmask(cudf::size_type& out_null_count,
+                                   cudf::valid_type* valid_out,
+                                   const cudf::valid_type* valid_left,
+                                   const cudf::valid_type* valid_right,
                                    cudaStream_t stream,
-                                   gdf_size_type num_values);
+                                   cudf::size_type num_values);
 
 
 namespace cudf {

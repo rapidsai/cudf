@@ -17,6 +17,8 @@
 #include <stdint.h>
 #include <vector>
 
+namespace cudf {
+namespace io {
 
  /**
   * @brief Creates a transition table to convert ORC timestanps to UTC
@@ -27,4 +29,8 @@
   * @return true if successful, false if failed to find/parse the timezone information
   **/
 bool BuildTimezoneTransitionTable(std::vector<int64_t> &table, const std::string &timezone_name);
+
+
+} // namespace io
+} // namespace cudf
 

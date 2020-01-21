@@ -8,11 +8,11 @@ import pyarrow as pa
 import pytest
 from numba import cuda
 
-from librmm_cffi import librmm as rmm
+import rmm
 
 from cudf import concat
-from cudf.dataframe import DataFrame, Series
-from cudf.dataframe.index import StringColumn, StringIndex
+from cudf.core import DataFrame, Series
+from cudf.core.index import StringIndex
 from cudf.tests.utils import assert_eq
 
 data_list = [
@@ -120,7 +120,7 @@ def test_string_get_item(ps_gs, item):
         np.array([False] * 5),
         rmm.to_device(np.array([True] * 5)),
         rmm.to_device(np.array([False] * 5)),
-        list(np.random.randint(0, 2, 5).astype("bool")),
+        np.random.randint(0, 2, 5).astype("bool").tolist(),
         np.random.randint(0, 2, 5).astype("bool"),
         rmm.to_device(np.random.randint(0, 2, 5).astype("bool")),
     ],
@@ -405,6 +405,18 @@ def test_string_cat(ps_gs, others, sep, na_rep, index):
 
     expect = ps.str.cat(others=(ps.index, ps.index), sep=sep, na_rep=na_rep)
     got = gs.str.cat(others=(gs.index, gs.index), sep=sep, na_rep=na_rep)
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.xfail(raises=ValueError)
+@pytest.mark.parametrize("sep", [None, "", " ", "|", ",", "|||"])
+@pytest.mark.parametrize("na_rep", [None, "", "null", "a"])
+def test_string_cat_str(ps_gs, sep, na_rep):
+    ps, gs = ps_gs
+
+    got = gs.str.cat(gs.str, sep=sep, na_rep=na_rep)
+    expect = ps.str.cat(ps.str, sep=sep, na_rep=na_rep)
 
     assert_eq(expect, got)
 
@@ -758,7 +770,8 @@ def test_string_groupby_key(str_data, num_keys):
     "str_data", [[], ["a", "b", "c", "d", "e"], [None, None, None, None, None]]
 )
 @pytest.mark.parametrize("num_cols", [1, 2, 3])
-def test_string_groupby_non_key(str_data, num_cols):
+@pytest.mark.parametrize("agg", ["count", "max", "min"])
+def test_string_groupby_non_key(str_data, num_cols, agg):
     other_data = [1, 2, 3, 4, 5][: len(str_data)]
 
     pdf = pd.DataFrame()
@@ -769,33 +782,13 @@ def test_string_groupby_non_key(str_data, num_cols):
     pdf["a"] = other_data
     gdf["a"] = other_data
 
-    expect = pdf.groupby("a", as_index=False).count()
-    got = gdf.groupby("a", as_index=False).count()
+    expect = getattr(pdf.groupby("a", as_index=False), agg)()
+    got = getattr(gdf.groupby("a", as_index=False), agg)()
 
     expect = expect.sort_values(["a"]).reset_index(drop=True)
     got = got.sort_values(["a"]).reset_index(drop=True)
 
-    assert_eq(expect, got, check_dtype=False)
-
-    expect = pdf.groupby("a", as_index=False).max()
-    got = gdf.groupby("a", as_index=False).max()
-
-    expect = expect.sort_values(["a"]).reset_index(drop=True)
-    got = got.sort_values(["a"]).reset_index(drop=True)
-
-    if len(expect) == 0 and len(got) == 0:
-        for i in range(num_cols):
-            expect[i] = expect[i].astype("str")
-
-    assert_eq(expect, got, check_dtype=False)
-
-    expect = pdf.groupby("a", as_index=False).min()
-    got = gdf.groupby("a", as_index=False).min()
-
-    expect = expect.sort_values(["a"]).reset_index(drop=True)
-    got = got.sort_values(["a"]).reset_index(drop=True)
-
-    if len(expect) == 0 and len(got) == 0:
+    if agg in ["min", "max"] and len(expect) == 0 and len(got) == 0:
         for i in range(num_cols):
             expect[i] = expect[i].astype("str")
 
@@ -833,6 +826,9 @@ def test_string_set_scalar(scalar):
 
 
 def test_string_index():
+    from cudf.core.column import as_column
+    from cudf.core.index import as_index
+
     pdf = pd.DataFrame(np.random.rand(5, 5))
     gdf = DataFrame.from_pandas(pdf)
     stringIndex = ["a", "b", "c", "d", "e"]
@@ -847,7 +843,7 @@ def test_string_index():
     pdf.index = stringIndex
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
-    stringIndex = StringColumn(["a", "b", "c", "d", "e"], name="name")
+    stringIndex = as_index(as_column(["a", "b", "c", "d", "e"]), name="name")
     pdf.index = stringIndex
     gdf.index = stringIndex
     assert_eq(pdf, gdf)

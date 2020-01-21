@@ -2,7 +2,7 @@
 
 import os
 import random
-from distutils.version import LooseVersion
+from glob import glob
 from io import BytesIO
 from string import ascii_letters
 
@@ -118,7 +118,6 @@ def parquet_path_or_buf(datadir):
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
-@pytest.mark.filterwarnings("ignore:Strings are not yet supported")
 @pytest.mark.parametrize("engine", ["pyarrow", "cudf"])
 @pytest.mark.parametrize(
     "columns",
@@ -148,12 +147,15 @@ def test_parquet_reader_basic(parquet_file, columns, engine):
     assert_eq(expect, got, check_categorical=False)
 
 
+@pytest.mark.parametrize("has_null", [False, True])
 @pytest.mark.parametrize("strings_to_categorical", [False, True, None])
-def test_parquet_reader_strings(tmpdir, strings_to_categorical):
+def test_parquet_reader_strings(tmpdir, strings_to_categorical, has_null):
     df = pd.DataFrame(
         [(1, "aaa", 9.0), (2, "bbb", 8.0), (3, "ccc", 7.0)],
         columns=pd.Index(list("abc")),
     )
+    if has_null:
+        df.at[1, "b"] = None
     fname = tmpdir.join("test_pq_reader_strings.parquet")
     df.to_parquet(fname)
     assert os.path.exists(fname)
@@ -166,7 +168,10 @@ def test_parquet_reader_strings(tmpdir, strings_to_categorical):
         gdf = cudf.read_parquet(fname, engine="cudf")
 
     if strings_to_categorical:
-        hash_ref = [989983842, 429364346, 1169108191]
+        if has_null:
+            hash_ref = [989983842, None, 1169108191]
+        else:
+            hash_ref = [989983842, 429364346, 1169108191]
         assert gdf["b"].dtype == np.dtype("int32")
         assert list(gdf["b"]) == list(hash_ref)
     else:
@@ -192,18 +197,40 @@ def test_parquet_reader_index_col(tmpdir, index_col, columns):
 
     fname = tmpdir.join("test_pq_reader_index_col.parquet")
 
-    # PANDAS' PyArrow backend always writes the index unless disabled via a
-    # recently-added parameter; unfortunately cannot use kwargs to disable
-    if LooseVersion(pd.__version__) < LooseVersion("0.24"):
-        df.to_parquet(fname)
-    else:
-        df.to_parquet(fname, index=(False if index_col is None else True))
+    # PANDAS' PyArrow backend always writes the index unless disabled
+    df.to_parquet(fname, index=(False if index_col is None else True))
     assert os.path.exists(fname)
 
     pdf = pd.read_parquet(fname, columns=columns)
     gdf = cudf.read_parquet(fname, engine="cudf", columns=columns)
 
     assert_eq(pdf, gdf, check_categorical=False)
+
+
+@pytest.mark.parametrize("pandas_compat", [True, False])
+@pytest.mark.parametrize("columns", [["a"], ["d"], ["a", "b"], None])
+def test_parquet_reader_pandas_metadata(tmpdir, columns, pandas_compat):
+    df = pd.DataFrame({"a": range(6, 9), "b": range(3, 6), "c": range(6, 9)})
+    df.set_index("b", inplace=True)
+
+    fname = tmpdir.join("test_pq_reader_pandas_metadata.parquet")
+    df.to_parquet(fname)
+    assert os.path.exists(fname)
+
+    # PANDAS `read_parquet()` and PyArrow `read_pandas()` always includes index
+    # Instead, directly use PyArrow to optionally omit the index
+    expect = pa.parquet.read_table(
+        fname, columns=columns, use_pandas_metadata=pandas_compat
+    ).to_pandas()
+    got = cudf.read_parquet(
+        fname, columns=columns, use_pandas_metadata=pandas_compat
+    )
+
+    if pandas_compat or columns is None or "b" in columns:
+        assert got.index.name == "b"
+    else:
+        assert got.index.name is None
+    assert_eq(expect, got, check_categorical=False)
 
 
 def test_parquet_read_metadata(tmpdir, pdf):
@@ -269,8 +296,31 @@ def test_parquet_reader_spark_timestamps(datadir):
     assert_eq(expect, got)
 
 
+def test_parquet_reader_spark_decimals(datadir):
+    fname = datadir / "spark_decimal.parquet"
+
+    expect = pd.read_parquet(fname)
+    got = cudf.read_parquet(fname)
+
+    # Convert the decimal dtype from PyArrow to float64 for comparison to cuDF
+    # This is because cuDF returns as float64 as it lacks an equivalent dtype
+    expect = expect.apply(pd.to_numeric)
+
+    # np.testing.assert_allclose(expect, got)
+    assert_eq(expect, got)
+
+
 def test_parquet_reader_microsecond_timestamps(datadir):
     fname = datadir / "usec_timestamp.parquet"
+
+    expect = pd.read_parquet(fname)
+    got = cudf.read_parquet(fname)
+
+    assert_eq(expect, got)
+
+
+def test_parquet_reader_mixedcompression(datadir):
+    fname = datadir / "mixed_compression.parquet"
 
     expect = pd.read_parquet(fname)
     got = cudf.read_parquet(fname)
@@ -288,6 +338,30 @@ def test_parquet_reader_invalids(tmpdir):
     got = cudf.read_parquet(fname)
 
     assert_eq(expect, got)
+
+
+def test_parquet_chunked_skiprows(tmpdir):
+    processed = 0
+    batch = 10000
+    n = 100000
+    out_df = cudf.DataFrame(
+        {
+            "y": np.arange(n),
+            "z": np.random.choice(range(1000000, 2000000), n, replace=False),
+            "s": np.random.choice(range(20), n, replace=True),
+            "a": np.round(np.random.uniform(1, 5000, n), 2),
+        }
+    )
+
+    fname = tmpdir.join("skiprows.parquet")
+    out_df.to_pandas().to_parquet(fname)
+
+    for i in range(10):
+        chunk = cudf.read_parquet(fname, skip_rows=processed, num_rows=batch)
+        expect = out_df[processed : processed + batch].reset_index(drop=True)
+        assert_eq(chunk.reset_index(drop=True), expect)
+        processed += batch
+        del chunk
 
 
 def test_parquet_reader_filenotfound(tmpdir):
@@ -330,15 +404,36 @@ def test_parquet_writer(tmpdir, pdf, gdf):
     expect = pa.parquet.read_pandas(pdf_fname)
     got = pa.parquet.read_pandas(gdf_fname)
 
+    def clone_field(table, name, datatype):
+        f = table.schema.field_by_name(name)
+        return pa.field(f.name, datatype, f.nullable, f.metadata)
+
     # Pandas uses a datetime64[ns] while we use a datetime64[ms]
     expect_idx = expect.schema.get_field_index("col_datetime64[ms]")
-    got_idx = got.schema.get_field_index("col_datetime64[ms]")
+    expect_field = clone_field(expect, "col_datetime64[ms]", pa.date64())
     expect = expect.set_column(
-        expect_idx, expect.column(expect_idx).cast(pa.date64())
+        expect_idx,
+        expect_field,
+        expect.column(expect_idx).cast(expect_field.type),
     )
     expect = expect.replace_schema_metadata()
-    got = got.set_column(got_idx, got.column(got_idx).cast(pa.date64()))
+
+    got_idx = got.schema.get_field_index("col_datetime64[ms]")
+    got_field = clone_field(got, "col_datetime64[ms]", pa.date64())
+    got = got.set_column(
+        got_idx, got_field, got.column(got_idx).cast(got_field.type)
+    )
     got = got.replace_schema_metadata()
 
     # assert_eq(expect, got)
     assert pa.Table.equals(expect, got)
+
+
+def test_multifile_warning(datadir):
+    fpath = datadir.__fspath__() + "/*.parquet"
+    with pytest.warns(UserWarning):
+        got = cudf.read_parquet(fpath)
+        fname = sorted(glob(fpath))[0]
+        expect = pd.read_parquet(fname)
+        expect = expect.apply(pd.to_numeric)
+        assert_eq(expect, got)

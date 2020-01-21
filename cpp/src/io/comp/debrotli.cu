@@ -52,7 +52,11 @@ THE SOFTWARE.
 */
 
 #include "gpuinflate.h"
+#include <io/utilities/block_utils.cuh>
 #include "brotli_dict.h"
+
+namespace cudf {
+namespace io {
 
 #define HUFFTAB_LUT1_BITS                   8
 #define HUFFCODE(len, sym)                  ((uint16_t)(((sym) << 4) + (len)))
@@ -67,24 +71,6 @@ THE SOFTWARE.
 #include "brotli_tables.h"
 
 #define NUMTHREADS  256
-
-#if (__CUDACC_VER_MAJOR__ >= 9)
-#define SHFL0(v)    __shfl_sync(~0, v, 0)
-#define SHFL(v, t)  __shfl_sync(~0, v, t)
-#define SYNCWARP()  __syncwarp()
-#define BALLOT(v)   __ballot_sync(~0, v)
-#else
-#define SHFL0(v)    __shfl(v, 0)
-#define SHFL(v, t)  __shfl(v, t)
-#define SYNCWARP()
-#define BALLOT(v)   __ballot(v)
-#endif
-
-#if (__CUDA_ARCH__ >= 700)
-#define NANOSLEEP(d)  __nanosleep(d)
-#else
-#define NANOSLEEP(d)  clock()
-#endif
 
 #define BREV8(x)    (__brev(x) >> 24u)  // kReverseBits[x]
 
@@ -2180,4 +2166,8 @@ cudaError_t __host__ gpu_debrotli(gpu_inflate_input_s *inputs, gpu_inflate_statu
 
     return cudaSuccess;
 }
+
+
+} // namespace io
+} // namespace cudf
 

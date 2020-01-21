@@ -1,218 +1,198 @@
-/* Copyright 2018 NVIDIA Corporation.  All rights reserved. */
+/*
+ * Copyright (c) 2019, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+#include <cudf/transpose.hpp>
+#include <cudf/detail/transpose.hpp>
+#include <cudf/table/table_device_view.cuh>
+#include <cudf/utilities/nvtx_utils.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf/utilities/traits.hpp>
+#include <cudf/detail/copy.hpp>
+#include <cudf/detail/utilities/cuda.cuh>
 
-#include <utilities/nvtx/nvtx_utils.h>
-#include <utilities/type_dispatcher.hpp>
-#include <rmm/thrust_rmm_allocator.h>
-#include <bitmask/legacy/legacy_bitmask.hpp>
-#include <cudf/cudf.h>
-#include <cub/cub.cuh>
-#include <memory>
-#include <stdio.h>
-#include <algorithm>
+namespace cudf {
 
-namespace
-{
+namespace {
 
-constexpr int WARP_SIZE = 32;
+using experimental::detail::warp_size;
 constexpr int MAX_GRID_SIZE = (1<<16)-1;
 
 /**
- * @brief Transposes the values from ncols x nrows input columns to
- *  nrows x ncols output columns
+ * @brief Transposes the values from ncols x nrows input to nrows x ncols output 
  * 
- * @tparam ColumnType  Datatype of values pointed to by the pointers
- * @param in_cols[in]  Pointers to input columns' data
- * @param out_cols[out]  Pointers to pre-allocated output columns' data
- * @param ncols[in]  Number of columns in input table
- * @param nrows[in]  Number of rown in input table
+ * @tparam T  Datatype of values pointed to by the views
+ * @param input[in]  Device view of input columns' data
+ * @param output[out]  Mutable device view of pre-allocated output columns' data
  */
-template <typename ColumnType>
+template <typename T>
 __global__
-void gpu_transpose(ColumnType **in_cols, ColumnType **out_cols,
-                  gdf_size_type ncols, gdf_size_type nrows)
+void gpu_transpose(table_device_view const input, mutable_table_device_view output)
 {
-  gdf_size_type x = blockIdx.x * blockDim.x + threadIdx.x;
-  gdf_size_type y = blockIdx.y * blockDim.y + threadIdx.y;
-    
-  gdf_size_type stride_x = blockDim.x * gridDim.x;
-  gdf_size_type stride_y = blockDim.y * gridDim.y;
+  size_type x = blockIdx.x * blockDim.x + threadIdx.x;
+  size_type y = blockIdx.y * blockDim.y + threadIdx.y;
 
-  for(gdf_size_type i = x; i < ncols; i += stride_x)
-  {
-    for(gdf_size_type j = y; j < nrows; j += stride_y)
-    {
-      out_cols[j][i] = in_cols[i][j];
+  size_type stride_x = blockDim.x * gridDim.x;
+  size_type stride_y = blockDim.y * gridDim.y;
+
+  for (size_type i = x; i < input.num_columns(); i += stride_x) {
+    for (size_type j = y; j < input.num_rows(); j += stride_y) {
+      output.column(j).element<T>(i) = input.column(i).element<T>(j);
     }
   }
 }
 
 /**
- * @brief Transposes the validity mask
+ * @brief Transposes the null mask from ncols x nrows input to nrows x ncols output
  * 
- * @param[in] in_cols_valid  pointers to the validity mask of the input columns
- * @param[out] out_cols_valid  pointers to the pre-allocated validity mask of
- *  the output columns
- * @param[out] out_cols_null_count  array of per output-row null counts
- * @param[in] ncols  number of columns in input table
- * @param[in] nrows  number of rows in input table
+ * @tparam T  Datatype of values pointed to by the views
+ * @param input[in]  Device view of input columns' data
+ * @param output[out]  Mutable device view of pre-allocated output columns' data
  */
 __global__
-void gpu_transpose_valids(gdf_valid_type **in_cols_valid,
-                          gdf_valid_type **out_cols_valid,
-                          gdf_size_type *out_cols_null_count,
-                          gdf_size_type ncols, gdf_size_type nrows)
+void gpu_transpose_valids(table_device_view const input, mutable_table_device_view output,
+                          size_type *null_count)
 {
-  using MaskType = uint32_t;
-  constexpr uint32_t BITS_PER_MASK{sizeof(MaskType) * 8};
+  size_type x = blockIdx.x * blockDim.x + threadIdx.x;
+  size_type y = blockIdx.y * blockDim.y + threadIdx.y;
 
-  gdf_size_type x = blockIdx.x * blockDim.x + threadIdx.x;
-  gdf_size_type y = blockIdx.y * blockDim.y + threadIdx.y;
+  size_type stride_x = blockDim.x * gridDim.x;
+  size_type stride_y = blockDim.y * gridDim.y;
 
-  gdf_size_type stride_x = blockDim.x * gridDim.x;
-  gdf_size_type stride_y = blockDim.y * gridDim.y;
-
-  gdf_size_type i = x;
-  gdf_size_type j = y;
-  auto active_threads = __ballot_sync(0xffffffff, i < ncols);
-  while(i < ncols)
-  {
-    j = y;
-    while(j < nrows)
-    {
-      bool const input_is_valid{gdf_is_valid(in_cols_valid[i], j)};
-      MaskType const result_mask{__ballot_sync(active_threads, input_is_valid)};
-
-      MaskType* const __restrict__ out_mask32 =
-        reinterpret_cast<MaskType*>(out_cols_valid[j]);
-
-      gdf_index_type const out_location = i / BITS_PER_MASK;
+  size_type i = x;
+  auto active_threads = __ballot_sync(0xffffffff, i < input.num_columns());
+  while (i < input.num_columns()) {
+    for (size_type j = y; j < input.num_rows(); j += stride_y) {
+      auto const result = __ballot_sync(active_threads, input.column(i).is_valid(j));
 
       // Only one thread writes output
-      if (0 == threadIdx.x % warpSize) {
-        out_mask32[out_location] = result_mask;
-        int num_nulls = __popc(active_threads) - __popc(result_mask);
-        atomicAdd(out_cols_null_count + j, num_nulls);
+      if (0 == threadIdx.x % warp_size) {
+        output.column(j).set_mask_word(word_index(i), result);
+        int num_nulls = __popc(active_threads) - __popc(result);
+        atomicAdd(null_count + j, num_nulls);
       }
-      
-      j += stride_y;
     }
+
+    // Update active threads before branching
     i += stride_x;
-    active_threads = __ballot_sync(active_threads, i < ncols);
+    active_threads = __ballot_sync(active_threads, i < input.num_columns());
   }
 }
 
-// TODO: refactor and separate `valids` kernel launch into another function.
-// Should not need to pass `has_null`
-struct launch_kernel{
-  template <typename ColumnType>
-  gdf_error operator()(
-    void **in_cols_data_ptr, void **out_cols_data_ptr,
-    gdf_valid_type **in_cols_valid_ptr, gdf_valid_type **out_cols_valid_ptr,
-    gdf_size_type *out_cols_nullct_ptr,
-    gdf_size_type ncols, gdf_size_type nrows, bool has_null)
+struct launch_kernel {
+  template <typename T, std::enable_if_t<is_fixed_width<T>()>* = nullptr>
+  std::unique_ptr<experimental::table> operator()(table_view const& input,
+      bool allocate_nulls, rmm::mr::device_memory_resource* mr, cudaStream_t stream)
   {
-    dim3 dimBlock(WARP_SIZE, WARP_SIZE, 1);
-    dim3 dimGrid(std::min((ncols + WARP_SIZE - 1) / WARP_SIZE, MAX_GRID_SIZE),
-                 std::min((nrows + WARP_SIZE - 1) / WARP_SIZE, MAX_GRID_SIZE),
-                 1);
+    // Output has transposed shape of input
+    auto const output_ncols = input.num_rows();
+    auto const output_nrows = input.num_columns();
 
-    gpu_transpose<ColumnType><<<dimGrid,dimBlock>>>(
-      reinterpret_cast<ColumnType**>(in_cols_data_ptr),
-      reinterpret_cast<ColumnType**>(out_cols_data_ptr),
-      ncols, nrows
-    );
-    if (has_null){
-      gpu_transpose_valids<<<dimGrid,dimBlock>>>(
-        in_cols_valid_ptr,
-        out_cols_valid_ptr,
-        out_cols_nullct_ptr,
-        ncols, nrows
-      );
+    // If any input column has nulls, all output columns must
+    auto const& first = input.column(0);
+    auto const allocation_policy = allocate_nulls
+      ? experimental::mask_allocation_policy::ALWAYS
+      : experimental::mask_allocation_policy::NEVER;
+
+    // Allocate output columns
+    std::vector<std::unique_ptr<column>> output(output_ncols);
+    std::generate(output.begin(), output.end(), [=, &first]() {
+      return experimental::detail::allocate_like(first, output_nrows,
+        allocation_policy, mr, stream);
+    });
+
+    // Create mutable device view from input
+    auto device_input = table_device_view::create(input, stream);
+
+    // Create mutable table device view from output columns
+    auto output_views = std::vector<mutable_column_view>(output.size());
+    std::transform(output.begin(), output.end(), output_views.begin(),
+      [](auto const& col) { return static_cast<mutable_column_view>(*col); });
+    auto output_table = mutable_table_view(output_views);
+    auto device_output = mutable_table_device_view::create(output_table, stream);
+
+    // TODO benchmark, because a smaller block size (e.g. 32x8) may perform
+    // better. It would also require transposing via shared memory, which may
+    // improve performance anyway because it would enable coalesced loads and
+    // stores rather than one or the other.
+    dim3 dimBlock(warp_size, warp_size);
+    dim3 dimGrid(std::min(util::div_rounding_up_safe(input.num_columns(), warp_size), MAX_GRID_SIZE),
+                 std::min(util::div_rounding_up_safe(input.num_rows(), warp_size), MAX_GRID_SIZE));
+
+    gpu_transpose<T><<<dimGrid, dimBlock, 0, stream>>>(*device_input, *device_output);
+
+    if (allocate_nulls) {
+      // Transpose valids and compute null counts
+      rmm::device_vector<size_type> d_null_counts(output.size());
+      gpu_transpose_valids<<<dimGrid, dimBlock, 0, stream>>>(*device_input,
+        *device_output, d_null_counts.data().get());
+
+      // Set null counts on output columns
+      thrust::host_vector<size_type> null_counts(d_null_counts);
+      auto begin = thrust::make_zip_iterator(thrust::make_tuple(output.begin(), null_counts.begin()));
+      auto end = thrust::make_zip_iterator(thrust::make_tuple(output.end(), null_counts.end()));
+      thrust::for_each(thrust::host, begin, end,
+        [](thrust::tuple<std::unique_ptr<column>&, size_type const&> tuple) {
+          auto& out_col = thrust::get<0>(tuple);
+          auto const& null_count = thrust::get<1>(tuple);
+          out_col->set_null_count(null_count);
+        });;
     }
-    cudaDeviceSynchronize();
-    CUDA_CHECK_LAST();
-    return GDF_SUCCESS;
+
+    return std::make_unique<experimental::table>(std::move(output));
+  }
+
+  template <typename T, std::enable_if_t<not is_fixed_width<T>()>* = nullptr>
+  std::unique_ptr<experimental::table> operator()(table_view const& input,
+      bool allocate_nulls, rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+  {
+    // TODO add string support
+    CUDF_FAIL("Invalid, non-fixed-width type");
   }
 };
 
-}
+}  // namespace
 
-gdf_error gdf_transpose(gdf_size_type ncols, gdf_column** in_cols,
-                        gdf_column** out_cols) {
-  // Make sure the inputs are not null
-  GDF_REQUIRE((ncols > 0) && (nullptr != in_cols) && (nullptr != out_cols),
-              GDF_DATASET_EMPTY)
+namespace detail {
 
+std::unique_ptr<experimental::table> transpose(table_view const& input,
+  rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+{
   // If there are no rows in the input, return successfully
-  GDF_REQUIRE(in_cols[0]->size > 0, GDF_SUCCESS)
+  if (input.num_columns() == 0 || input.num_rows() == 0) {
+    return std::make_unique<experimental::table>();
+  }
 
   // Check datatype homogeneity
-  gdf_dtype dtype = in_cols[0]->dtype;
-  for (gdf_size_type i = 1; i < ncols; i++) {
-    GDF_REQUIRE(in_cols[i]->dtype == dtype, GDF_DTYPE_MISMATCH)
-  }
-  gdf_size_type nrows = in_cols[0]->size;
-  gdf_size_type out_ncols = nrows;
-  for (gdf_size_type i = 0; i < out_ncols; i++) {
-    GDF_REQUIRE(out_cols[i]->dtype == dtype, GDF_DTYPE_MISMATCH)
-  }
+  auto const dtype = input.column(0).type();
+  CUDF_EXPECTS(std::all_of(input.begin(), input.end(), [dtype](auto const& col) {
+    return dtype == col.type(); }), "Column type mismatch");
 
-  // Check if there are nulls to be processed
-  bool const has_null{ std::any_of(in_cols, in_cols + ncols, 
-    [](gdf_column * col){ return col->null_count > 0; }) };
+  nvtx::range_push("CUDF_TRANSPOSE", nvtx::color::GREEN);
+  auto output = experimental::type_dispatcher(dtype, launch_kernel{}, input,
+    has_nulls(input), mr, stream);
+  nvtx::range_pop();
 
-  if (has_null) {
-    for (gdf_size_type i = 0; i < out_ncols; i++) {
-      GDF_REQUIRE(out_cols[i]->valid != nullptr, GDF_VALIDITY_MISSING)
-    }
-  }
-
-  PUSH_RANGE("CUDF_TRANSPOSE", GDF_GREEN);
-
-  // Copy input columns `data` and `valid` pointers to device
-  std::vector<void*> in_columns_data(ncols);
-  std::vector<gdf_valid_type*> in_columns_valid(ncols);
-  for (gdf_size_type i = 0; i < ncols; ++i) {
-    in_columns_data[i] = in_cols[i]->data;
-    in_columns_valid[i] = in_cols[i]->valid;
-  }
-  rmm::device_vector<void*> d_in_columns_data(in_columns_data);
-  rmm::device_vector<gdf_valid_type*> d_in_columns_valid(in_columns_valid);
-
-  void** in_cols_data_ptr = d_in_columns_data.data().get();
-  gdf_valid_type** in_cols_valid_ptr = d_in_columns_valid.data().get();
-
-  // Copy output columns `data` and `valid` pointers to device
-  std::vector<void*> out_columns_data(out_ncols);
-  std::vector<gdf_valid_type*> out_columns_valid(out_ncols);
-  for (gdf_size_type i = 0; i < out_ncols; ++i) {
-    out_columns_data[i] = out_cols[i]->data;
-    out_columns_valid[i] = out_cols[i]->valid;
-  }
-  rmm::device_vector<void*> d_out_columns_data(out_columns_data);
-  rmm::device_vector<gdf_valid_type*> d_out_columns_valid(out_columns_valid);
-  rmm::device_vector<gdf_size_type> d_out_columns_nullct(out_ncols);
-
-  void** out_cols_data_ptr = d_out_columns_data.data().get();
-  gdf_valid_type** out_cols_valid_ptr = d_out_columns_valid.data().get();
-  gdf_size_type* out_cols_nullct_ptr = d_out_columns_nullct.data().get();
-
-  cudf::type_dispatcher(dtype,
-                        launch_kernel{},
-                        in_cols_data_ptr,
-                        out_cols_data_ptr,
-                        in_cols_valid_ptr,
-                        out_cols_valid_ptr,
-                        out_cols_nullct_ptr,
-                        ncols, nrows, has_null);
-
-  // Transfer null counts to gdf structs
-  thrust::host_vector<gdf_size_type> out_columns_nullct(d_out_columns_nullct);
-  for(gdf_size_type i = 0; i < out_ncols; i++)
-  {
-    out_cols[i]->null_count = out_columns_nullct[i];
-  }
-  
-  POP_RANGE();
-  return GDF_SUCCESS;
+  return output;
 }
+
+}  // namespace detail
+
+std::unique_ptr<experimental::table> transpose(table_view const& input,
+                                 rmm::mr::device_memory_resource* mr)
+{
+  return detail::transpose(input, mr);
+}
+
+}  // namespace cudf

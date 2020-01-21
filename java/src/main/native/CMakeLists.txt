@@ -135,32 +135,30 @@ endif (RMM_INCLUDE AND RMM_LIBRARY)
 ###################################################################################################
 # - NVStrings -------------------------------------------------------------------------------------
 
-find_path(NVSTRINGS_INCLUDE "nvstrings"
-          HINTS "$ENV{NVSTRINGS_ROOT}/include"
-                "$ENV{CONDA_PREFIX}/include/nvstrings"
-                "$ENV{CONDA_PREFIX}/include")
+# NVSTRING_INCLUDE is the same as CUDF_INCLUDE
 
 find_library(NVSTRINGS_LIBRARY "NVStrings"
              HINTS "$ENV{NVSTRINGS_ROOT}/lib"
-                   "$ENV{CONDA_PREFIX}/lib")
+                   "$ENV{CONDA_PREFIX}/lib"
+                   "../../../../cpp/build")
 
 find_library(NVCATEGORY_LIBRARY "NVCategory"
              HINTS "$ENV{NVSTRINGS_ROOT}/lib"
-                   "$ENV{CONDA_PREFIX}/lib")
+                   "$ENV{CONDA_PREFIX}/lib"
+                   "../../../../cpp/build")
 
-message(STATUS "NVSTRINGS: NVSTRINGS_INCLUDE set to ${NVSTRINGS_INCLUDE}")
 message(STATUS "NVSTRINGS: NVSTRINGS_LIBRARY set to ${NVSTRINGS_LIBRARY}")
 message(STATUS "NVSTRINGS: NVCATEGORY_LIBRARY set to ${NVCATEGORY_LIBRARY}")
 
 add_library(NVStrings SHARED IMPORTED ${NVSTRINGS_LIBRARY})
-if (NVSTRINGS_INCLUDE AND NVSTRINGS_LIBRARY)
+if (NVSTRINGS_LIBRARY)
     set_target_properties(NVStrings PROPERTIES IMPORTED_LOCATION ${NVSTRINGS_LIBRARY})
-endif (NVSTRINGS_INCLUDE AND NVSTRINGS_LIBRARY)
+endif (NVSTRINGS_LIBRARY)
 
 add_library(NVCategory SHARED IMPORTED ${NVCATEGORY_LIBRARY})
-if (NVSTRINGS_INCLUDE AND NVCATEGORY_LIBRARY)
+if (NVCATEGORY_LIBRARY)
     set_target_properties(NVCategory PROPERTIES IMPORTED_LOCATION ${NVCATEGORY_LIBRARY})
-endif (NVSTRINGS_INCLUDE AND NVCATEGORY_LIBRARY)
+endif (NVCATEGORY_LIBRARY)
 
 
 ###################################################################################################
@@ -181,8 +179,7 @@ include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${JNI_INCLUDE_DIRS}"
                     "${CUDF_INCLUDE}"
-                    "${RMM_INCLUDE}"
-                    "${NVSTRINGS_INCLUDE}")
+                    "${RMM_INCLUDE}")
 
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------
@@ -198,9 +195,11 @@ link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT
 # - library targets -------------------------------------------------------------------------------
 
 set(SOURCE_FILES
+    "src/HostMemoryBufferJni.cpp"
     "src/CudfJni.cpp"
     "src/CudaJni.cpp"
     "src/ColumnVectorJni.cpp"
+    "src/NvtxRangeJni.cpp"
     "src/RmmJni.cpp"
     "src/TableJni.cpp")
 add_library(cudfjni SHARED ${SOURCE_FILES})

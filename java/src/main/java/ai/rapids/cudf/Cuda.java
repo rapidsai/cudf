@@ -34,6 +34,22 @@ public class Cuda {
   public static native CudaMemInfo memGetInfo() throws CudaException;
 
   /**
+   * Allocate pinned memory on the host.  This call takes a long time, but can really speed up
+   * memory transfers.
+   * @param size how much memory, in bytes, to allocate.
+   * @return the address to the allocated memory.
+   * @throws CudaException on any error.
+   */
+  static native long hostAllocPinned(long size) throws CudaException;
+
+  /**
+   * Free memory allocated with hostAllocPinned.
+   * @param ptr the pointer returned by hostAllocPinned.
+   * @throws CudaException on any error.
+   */
+  static native void freePinned(long ptr) throws CudaException;
+
+  /**
    * Copies count bytes from the memory area pointed to by src to the memory area pointed to by
    * dst.
    * Calling cudaMemcpy() with dst and src pointers that do not
@@ -63,6 +79,20 @@ public class Cuda {
    * @throws CudaException on any error
    */
   public static native int getDevice() throws CudaException;
+
+  /**
+   * Set the id of the current device.
+   * Note this is relative to CUDA_SET_VISIBLE_DEVICES, e.g. if
+   * CUDA_SET_VISIBLE_DEVICES=1,0, and you call setDevice(0), you will get device 1.
+   * @throws CudaException on any error
+   */
+  public static native void setDevice(int device) throws CudaException;
+
+  /**
+   * Calls cudaFree(0). This can be used to initialize the GPU after a setDevice()
+   * @throws CudaException on any error
+   */
+  public static native void freeZero() throws CudaException;
 
   /**
    * This should only be used for tests, to enable or disable tests if the current environment

@@ -15,22 +15,22 @@
  */
 
 #include <cudf/cudf.h>
-#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <hash/concurrent_unordered_map.cuh>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <gtest/gtest.h>
-#include <iostream>
-#include <vector>
-#include <unordered_map>
-#include <random>
+#include <rmm/thrust_rmm_allocator.h>
 #include <thrust/device_vector.h>
-#include <cstdlib>
-#include <limits>
 #include <thrust/logical.h>
+#include <cstdlib>
+#include <iostream>
+#include <limits>
+#include <random>
+#include <unordered_map>
+#include <vector>
 
 template <typename K, typename V>
-struct key_value_types{
+struct key_value_types {
   using key_type = K;
   using value_type = V;
   using pair_type = thrust::pair<K, V>;
@@ -44,18 +44,18 @@ struct InsertTest : public GdfTest {
   using pair_type = typename T::pair_type;
   using map_type = typename T::map_type;
 
-  InsertTest(){
+  InsertTest() {
+    // prevent overflow of small types
+    const size_t input_size = std::min(static_cast<key_type>(size),
+                                       std::numeric_limits<key_type>::max());
+    pairs.resize(input_size);
+    map = std::move(map_type::create(compute_hash_table_size(size)));
+    CUDA_TRY(cudaStreamSynchronize(0));
+  }
 
-      // prevent overflow of small types
-      const size_t input_size = std::min(static_cast<key_type>(size), std::numeric_limits<key_type>::max());
-
-      pairs.resize(input_size);
-      map.reset(new map_type(compute_hash_table_size(size)));
-    }
-
-  const gdf_size_type size{10000};
+  const cudf::size_type size{10000};
   rmm::device_vector<pair_type> pairs;
-  std::unique_ptr<map_type> map;
+  std::unique_ptr<map_type, std::function<void(map_type*)>> map;
 };
 
 using TestTypes = ::testing::Types<
@@ -68,39 +68,38 @@ TYPED_TEST_CASE(InsertTest, TestTypes);
 
 template <typename map_type, typename pair_type>
 struct insert_pair {
-  insert_pair(map_type* _map) : map{_map} {}
+  insert_pair(map_type _map) : map{_map} {}
 
   __device__ bool operator()(pair_type const& pair) {
-
-    auto result = map->insert(pair);
-    if (result.first == map->end()) {
+    auto result = map.insert(pair);
+    if (result.first == map.end()) {
       return false;
     }
     return result.second;
   }
 
-  map_type* map;
+  map_type map;
 };
 
 template <typename map_type, typename pair_type>
 struct find_pair {
-  find_pair(map_type* _map) : map{_map} {}
+  find_pair(map_type _map) : map{_map} {}
 
   __device__ bool operator()(pair_type const& pair) {
-    auto result = map->find(pair.first);
-    if (result == map->end()) {
+    auto result = map.find(pair.first);
+    if (result == map.end()) {
       return false;
     }
     return *result == pair;
   }
-  map_type* map;
+  map_type map;
 };
 
 template <typename pair_type,
           typename key_type = typename pair_type::first_type,
           typename value_type = typename pair_type::second_type>
-struct unique_pair_generator{
-  __device__ pair_type operator()(gdf_size_type i) {
+struct unique_pair_generator {
+  __device__ pair_type operator()(cudf::size_type i) {
     return thrust::make_pair(key_type(i), value_type(i));
   }
 };
@@ -111,7 +110,7 @@ template <typename pair_type,
 struct identical_pair_generator {
   identical_pair_generator(key_type k = 42, value_type v = 42)
       : key{k}, value{v} {}
-  __device__ pair_type operator()(gdf_size_type i) {
+  __device__ pair_type operator()(cudf::size_type i) {
     return thrust::make_pair(key, value);
   }
   key_type key;
@@ -122,9 +121,8 @@ template <typename pair_type,
           typename key_type = typename pair_type::first_type,
           typename value_type = typename pair_type::second_type>
 struct identical_key_generator {
-  identical_key_generator(key_type k = 42)
-      : key{k}{}
-  __device__ pair_type operator()(gdf_size_type i) {
+  identical_key_generator(key_type k = 42) : key{k} {}
+  __device__ pair_type operator()(cudf::size_type i) {
     return thrust::make_pair(key, value_type(i));
   }
   key_type key;
@@ -136,13 +134,12 @@ TYPED_TEST(InsertTest, UniqueKeysUniqueValues) {
   thrust::tabulate(this->pairs.begin(), this->pairs.end(),
                    unique_pair_generator<pair_type>{});
   // All pairs should be new inserts
-  EXPECT_TRUE(
-      thrust::all_of(this->pairs.begin(), this->pairs.end(),
-                     insert_pair<map_type, pair_type>{this->map.get()}));
+  EXPECT_TRUE(thrust::all_of(this->pairs.begin(), this->pairs.end(),
+                             insert_pair<map_type, pair_type>{*this->map}));
 
   // All pairs should be present in the map
   EXPECT_TRUE(thrust::all_of(this->pairs.begin(), this->pairs.end(),
-                             find_pair<map_type, pair_type>{this->map.get()}));
+                             find_pair<map_type, pair_type>{*this->map}));
 }
 
 TYPED_TEST(InsertTest, IdenticalKeysIdenticalValues) {
@@ -151,17 +148,15 @@ TYPED_TEST(InsertTest, IdenticalKeysIdenticalValues) {
   thrust::tabulate(this->pairs.begin(), this->pairs.end(),
                    identical_pair_generator<pair_type>{});
   // Insert a single pair
-  EXPECT_TRUE(
-      thrust::all_of(this->pairs.begin(), this->pairs.begin() + 1,
-                     insert_pair<map_type, pair_type>{this->map.get()}));
+  EXPECT_TRUE(thrust::all_of(this->pairs.begin(), this->pairs.begin() + 1,
+                             insert_pair<map_type, pair_type>{*this->map}));
   // Identical inserts should all return false (no new insert)
-  EXPECT_FALSE(
-      thrust::all_of(this->pairs.begin(), this->pairs.end(),
-                     insert_pair<map_type, pair_type>{this->map.get()}));
+  EXPECT_FALSE(thrust::all_of(this->pairs.begin(), this->pairs.end(),
+                              insert_pair<map_type, pair_type>{*this->map}));
 
   // All pairs should be present in the map
   EXPECT_TRUE(thrust::all_of(this->pairs.begin(), this->pairs.end(),
-                             find_pair<map_type, pair_type>{this->map.get()}));
+                             find_pair<map_type, pair_type>{*this->map}));
 }
 
 TYPED_TEST(InsertTest, IdenticalKeysUniqueValues) {
@@ -171,19 +166,17 @@ TYPED_TEST(InsertTest, IdenticalKeysUniqueValues) {
                    identical_key_generator<pair_type>{});
 
   // Insert a single pair
-  EXPECT_TRUE(
-      thrust::all_of(this->pairs.begin(), this->pairs.begin() + 1,
-                     insert_pair<map_type, pair_type>{this->map.get()}));
+  EXPECT_TRUE(thrust::all_of(this->pairs.begin(), this->pairs.begin() + 1,
+                             insert_pair<map_type, pair_type>{*this->map}));
 
   // Identical key inserts should all return false (no new insert)
-  EXPECT_FALSE(
-      thrust::all_of(this->pairs.begin() + 1, this->pairs.end(),
-                     insert_pair<map_type, pair_type>{this->map.get()}));
+  EXPECT_FALSE(thrust::all_of(this->pairs.begin() + 1, this->pairs.end(),
+                              insert_pair<map_type, pair_type>{*this->map}));
 
   // Only first pair is present in map
   EXPECT_TRUE(thrust::all_of(this->pairs.begin(), this->pairs.begin() + 1,
-                             find_pair<map_type, pair_type>{this->map.get()}));
+                             find_pair<map_type, pair_type>{*this->map}));
 
   EXPECT_FALSE(thrust::all_of(this->pairs.begin() + 1, this->pairs.end(),
-                              find_pair<map_type, pair_type>{this->map.get()}));
+                              find_pair<map_type, pair_type>{*this->map}));
 }

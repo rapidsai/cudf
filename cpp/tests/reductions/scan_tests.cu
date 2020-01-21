@@ -21,55 +21,48 @@
 #include <iterator>
 #include <type_traits>
 
-#include <gtest/gtest.h>
+#include <tests/utilities/base_fixture.hpp>
+#include <tests/utilities/type_lists.hpp>
+//TODO remove after PR 3490 merge
+#include <tests/utilities/legacy/cudf_test_utils.cuh>
+#include <tests/utilities/column_wrapper.hpp>
+#include <tests/utilities/column_utilities.hpp>
 
 #include <cudf/cudf.h>
 #include <cudf/reduction.hpp>
 
 #include <thrust/device_vector.h>
 
-#include <tests/utilities/cudf_test_fixtures.h>
-#include <tests/utilities/cudf_test_utils.cuh>
-#include <tests/utilities/column_wrapper.cuh>
+using scan_op = cudf::experimental::scan_op;
+using cudf::column_view;
 
 // This is the main test feature
 template <typename T>
-struct ScanTest : public GdfTest
+struct ScanTest : public cudf::test::BaseFixture
 {
-    void scan_test(std::vector<int> const & int_values,
-        std::vector<int> const & exact_values,
-        gdf_scan_op op, bool inclusive)
+    void scan_test(
+        cudf::test::fixed_width_column_wrapper<T> const col_in,
+        cudf::test::fixed_width_column_wrapper<T> const expected_col_out,
+        scan_op op, bool inclusive)
     {
         bool do_print = false;
 
-        this->val_check(int_values, do_print, "input = ");
-        this->val_check(exact_values, do_print, "exact = ");
+        auto int_values = cudf::test::to_host<T>(col_in);
+        auto exact_values = cudf::test::to_host<T>(expected_col_out);
+        this->val_check(std::get<0>(int_values), do_print, "input = ");
+        this->val_check(std::get<0>(exact_values), do_print, "exact = ");
 
-        gdf_size_type col_size = int_values.size();
-        std::vector<T> input_values(col_size);
+        const column_view input_view = col_in;
+        std::unique_ptr<cudf::column> col_out;
 
-        std::transform(int_values.begin(), int_values.end(),
-            input_values.begin(),
-           [](int x) { T t(x) ; return t; } );
+        CUDF_EXPECT_NO_THROW( col_out = cudf::experimental::scan(input_view, op, inclusive) );
+        const column_view result_view = col_out->view();
 
-        cudf::test::column_wrapper<T> const col_in(input_values);
-        const gdf_column * raw_input = col_in.get();
+        cudf::test::expect_column_properties_equal(input_view, result_view);
+        cudf::test::expect_columns_equal(expected_col_out, result_view);
 
-        cudf::test::column_wrapper<T> col_out(col_size);
-        gdf_column * raw_output = col_out.get();
-
-        CUDF_EXPECT_NO_THROW( cudf::scan(raw_input, raw_output, op, inclusive) );
-
-        using UnderlyingType = T;
-        auto tuple_host_result = col_out.to_host();
-        auto host_result = std::get<0>(tuple_host_result);
-
-        this->val_check(host_result, do_print, "result = ");
-
-        std::equal(exact_values.begin(), exact_values.end(),
-            host_result.begin(), host_result.end(),
-            [](int x, UnderlyingType y) {
-                EXPECT_EQ(UnderlyingType(x), y); return true; });
+        auto host_result = cudf::test::to_host<T>(result_view);
+        this->val_check(std::get<0>(host_result), do_print, "result = ");
     }
 
     template <typename Ti>
@@ -94,66 +87,109 @@ struct ScanTest : public GdfTest
 
 };
 
-using Types = testing::Types<
-    int8_t,int16_t, int32_t, int64_t, float, double, cudf::bool8>;
+using Types = cudf::test::NumericTypes;
+//using Types = testing::Types<int32_t>;
 
 TYPED_TEST_CASE(ScanTest, Types);
 
 // ------------------------------------------------------------------------
 TYPED_TEST(ScanTest, Min)
 {
-    std::vector<int> v({123, 64, 63, 99, -5, 123, -16, -120, -111});
-    std::vector<int> exact;
-    int acc(v[0]);
+    std::vector<TypeParam>  v({123, 64, 63, 99, -5, 123, -16, -120, -111});
+    std::vector<bool> b({  1,  0,  1,  1,  1,   1,   0,    1,    1});
+    std::vector<TypeParam> exact(v.size());
 
-    std::for_each(v.begin(), v.end(),
-        [&acc, &exact](int i){
-            acc = std::min(acc, i); exact.push_back(acc);
-        }
-    );
+    std::transform(v.cbegin(), v.cend(),
+        exact.begin(),
+        [acc=v[0]](auto i) mutable { acc = std::min(acc, i); return acc; }
+        );
 
-    this->scan_test(v, exact, GDF_SCAN_MIN, true);
+    this->scan_test({v.begin(), v.end()}, 
+                    {exact.begin(), exact.end()},
+                    scan_op::MIN, true);
+
+    std::transform(v.cbegin(), v.cend(), b.begin(),
+        exact.begin(),
+        [acc=v[0]](auto i, bool b) mutable { if(b) acc = std::min(acc, i); return acc; }
+        );
+
+    this->scan_test({v.begin(), v.end(), b.begin()}, 
+                    {exact.begin(), exact.end(), b.begin()},
+                    scan_op::MIN, true);
 }
 
 TYPED_TEST(ScanTest, Max)
 {
-    std::vector<int> v({-120, 5, 0, -120, -111, 64, 63, 99, 123, -16});
+    std::vector<TypeParam>  v({-120, 5, 0, -120, -111, 64, 63, 99, 123, -16});
+    std::vector<bool> b({   1, 0, 1,    1,    1,  1,  0,  1,   1,   1});
+    std::vector<TypeParam> exact(v.size());
 
-    std::vector<int> exact;
-    int acc(v[0]);
+    std::transform(v.cbegin(), v.cend(),
+        exact.begin(),
+        [acc=v[0]](auto i) mutable { acc = std::max(acc, i); return acc; }
+        );
 
-    std::for_each(v.begin(), v.end(),
-        [&acc, &exact](int i){
-            acc = std::max(acc, i); exact.push_back(acc);
-        }
-    );
+    this->scan_test({v.begin(), v.end()}, 
+                    {exact.begin(), exact.end()},
+                    scan_op::MAX, true);
 
-    this->scan_test(v, exact, GDF_SCAN_MAX, true);
+    std::transform(v.cbegin(), v.cend(), b.begin(),
+        exact.begin(),
+        [acc=v[0]](auto i, bool b) mutable { if(b) acc = std::max(acc, i); return acc; }
+        );
+
+    this->scan_test({v.begin(), v.end(), b.begin()}, 
+                    {exact.begin(), exact.end(), b.begin()},
+                    scan_op::MAX, true);
 }
 
 
 TYPED_TEST(ScanTest, Product)
 {
-    std::vector<int> v({5, -1, 1, 3, -2, 4});
+    std::vector<TypeParam>  v({5, -1, 1, 3, -2, 4});
+    std::vector<bool> b({1,  1, 1, 0,  1, 1});
+    std::vector<TypeParam> exact(v.size());
 
-    std::vector<int> exact;
-    int acc(1);
-    std::for_each(v.begin(), v.end(),
-        [&acc, &exact](int i){ acc *= i; exact.push_back(acc); });
+    std::transform(v.cbegin(), v.cend(),
+        exact.begin(),
+        [acc=1](auto i) mutable { acc *= i; return acc; }
+        );
 
-    this->scan_test(v, exact, GDF_SCAN_PRODUCT, true);
+    this->scan_test({v.begin(), v.end()}, 
+                    {exact.begin(), exact.end()},
+                    scan_op::PRODUCT, true);
+
+    std::transform(v.cbegin(), v.cend(), b.begin(),
+        exact.begin(),
+        [acc=1](auto i, bool b) mutable { if(b) acc *= i; return acc; }
+        );
+
+    this->scan_test({v.begin(), v.end(), b.begin()}, 
+                    {exact.begin(), exact.end(), b.begin()},
+                    scan_op::PRODUCT, true);
 }
 
 TYPED_TEST(ScanTest, Sum)
 {
-    std::vector<int> v({-120, 5, 6, 113, -111, 64, -63, 9, 34, -16});
+    std::vector<TypeParam>  v({-120, 5, 6, 113, -111, 64, -63, 9, 34, -16});
+    std::vector<bool> b({   1, 0, 1,   1,    0,  0,   1, 1,  1,   1});
+    std::vector<TypeParam> exact(v.size());
 
-    std::vector<int> exact;
-    int acc(0);
-    std::for_each(v.begin(), v.end(),
-        [&acc, &exact](int i){ acc += i; exact.push_back(acc); });
+    std::transform(v.cbegin(), v.cend(),
+        exact.begin(),
+        [acc=0](auto i) mutable { acc += i; return acc; }
+        );
 
-    this->scan_test(v, exact, GDF_SCAN_SUM, true);
+    this->scan_test({v.begin(), v.end()}, 
+                    {exact.begin(), exact.end()},
+                    scan_op::SUM, true);
+
+    std::transform(v.cbegin(), v.cend(), b.begin(),
+        exact.begin(),
+        [acc=0](auto i, bool b) mutable { if(b) acc += i; return acc; }
+        );
+
+    this->scan_test({v.begin(), v.end(), b.begin()}, 
+                    {exact.begin(), exact.end(), b.begin()},
+                    scan_op::SUM, true);
 }
-
-

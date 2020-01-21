@@ -2,9 +2,64 @@
 
 import os
 import urllib
+import warnings
 from io import BytesIO, TextIOWrapper
 
+import fsspec
+
 from cudf.utils.docutils import docfmt_partial
+
+_docstring_remote_sources = """
+- cuDF supports local and remote data stores. See configuration details for
+  available sources
+  `here <https://docs.dask.org/en/latest/remote-data-services.html>`_.
+"""
+
+_docstring_read_avro = """
+Load an Avro dataset into a DataFrame
+
+Parameters
+----------
+filepath_or_buffer : str, path object, bytes, or file-like object
+    Either a path to a file (a `str`, `pathlib.Path`, or
+    `py._path.local.LocalPath`), URL (including http, ftp, and S3 locations),
+    Python bytes of raw binary data, or any object with a `read()` method
+    (such as builtin `open()` file handler function or `BytesIO`).
+engine : {{ 'cudf', 'fastavro' }}, default 'cudf'
+    Parser engine to use.
+columns : list, default None
+    If not None, only these columns will be read.
+skip_rows : int, default None
+    If not None, the nunber of rows to skip from the start of the file.
+num_rows : int, default None
+    If not None, the total number of rows to read.
+
+Returns
+-------
+DataFrame
+
+Notes
+-----
+{remote_data_sources}
+
+Examples
+--------
+>>> import cudf
+>>> df = cudf.read_avro(filename)
+>>> df
+  num1                datetime text
+0  123 2018-11-13T12:00:00.000 5451
+1  456 2018-11-14T12:35:01.000 5784
+2  789 2018-11-15T18:02:59.000 6117
+
+See Also
+--------
+cudf.io.csv.read_csv
+cudf.io.json.read_json
+""".format(
+    remote_data_sources=_docstring_remote_sources
+)
+doc_read_avro = docfmt_partial(docstring=_docstring_read_avro)
 
 _docstring_read_parquet_metadata = """
 Read a Parquet file's metadata and schema
@@ -50,7 +105,7 @@ filepath_or_buffer : str, path object, bytes, or file-like object
     `py._path.local.LocalPath`), URL (including http, ftp, and S3 locations),
     Python bytes of raw binary data, or any object with a `read()` method
     (such as builtin `open()` file handler function or `BytesIO`).
-engine : { 'cudf', 'pyarrow' }, default 'cudf'
+engine : {{ 'cudf', 'pyarrow' }}, default 'cudf'
     Parser engine to use.
 columns : list, default None
     If not None, only these columns will be read.
@@ -60,10 +115,20 @@ skip_rows : int, default None
     If not None, the nunber of rows to skip from the start of the file.
 num_rows : int, default None
     If not None, the total number of rows to read.
+strings_to_categorical : boolean, default False
+    If True, return string columns as GDF_CATEGORY dtype; if False, return a
+    as GDF_STRING dtype.
+use_pandas_metadata : boolean, default True
+    If True and dataset has custom PANDAS schema metadata, ensure that index
+    columns are also loaded.
 
 Returns
 -------
 DataFrame
+
+Notes
+-----
+{remote_data_sources}
 
 Examples
 --------
@@ -80,7 +145,9 @@ See Also
 cudf.io.parquet.read_parquet_metadata
 cudf.io.parquet.to_parquet
 cudf.io.orc.read_orc
-"""
+""".format(
+    remote_data_sources=_docstring_remote_sources
+)
 doc_read_parquet = docfmt_partial(docstring=_docstring_read_parquet)
 
 _docstring_to_parquet = """
@@ -150,7 +217,7 @@ filepath_or_buffer : str, path object, bytes, or file-like object
     `py._path.local.LocalPath`), URL (including http, ftp, and S3 locations),
     Python bytes of raw binary data, or any object with a `read()` method
     (such as builtin `open()` file handler function or `BytesIO`).
-engine : { 'cudf', 'pyarrow' }, default 'cudf'
+engine : {{ 'cudf', 'pyarrow' }}, default 'cudf'
     Parser engine to use.
 columns : list, default None
     If not None, only these columns will be read from the file.
@@ -168,6 +235,10 @@ Returns
 -------
 DataFrame
 
+Notes
+-----
+{remote_data_sources}
+
 Examples
 --------
 >>> import cudf
@@ -182,8 +253,26 @@ See Also
 --------
 cudf.io.parquet.read_parquet
 cudf.io.parquet.to_parquet
-"""
+""".format(
+    remote_data_sources=_docstring_remote_sources
+)
 doc_read_orc = docfmt_partial(docstring=_docstring_read_orc)
+
+_docstring_to_orc = """
+Write a DataFrame to the ORC format.
+
+Parameters
+----------
+fname : str
+    File path or object where the ORC dataset will be stored.
+compression : {{ 'snappy', None }}, default None
+    Name of the compression to use. Use None for no compression.
+
+See Also
+--------
+cudf.io.orc.read_orc
+"""
+doc_to_orc = docfmt_partial(docstring=_docstring_to_orc)
 
 _docstring_read_json = """
 Load a JSON dataset into a DataFrame
@@ -203,6 +292,7 @@ orient : string,
     Compatible JSON strings can be produced by ``to_json()`` with a
     corresponding orient value.
     The set of possible orients is:
+
     - ``'split'`` : dict like
       ``{index -> [index], columns -> [columns], data -> [values]}``
     - ``'records'`` : list like
@@ -210,13 +300,17 @@ orient : string,
     - ``'index'`` : dict like ``{index -> {column -> value}}``
     - ``'columns'`` : dict like ``{column -> {index -> value}}``
     - ``'values'`` : just the values array
+
     The allowed and default values depend on the value
     of the `typ` parameter.
+
     * when ``typ == 'series'``,
+
       - allowed orients are ``{'split','records','index'}``
       - default is ``'index'``
       - The Series index must be unique for orient ``'index'``.
     * when ``typ == 'frame'``,
+
       - allowed orients are ``{'split','records','index',
         'columns','values', 'table'}``
       - default is ``'columns'``
@@ -224,7 +318,6 @@ orient : string,
         ``'columns'``.
       - The DataFrame columns must be unique for orients ``'index'``,
         ``'columns'``, and ``'records'``.
-       'table' as an allowed value for the ``orient`` argument
 typ : type of object to recover (series or frame), default 'frame'
     With cudf engine, only frame output is supported.
 dtype : boolean or dict, default True
@@ -235,6 +328,7 @@ convert_axes : boolean, default True
 convert_dates : boolean, default True
     List of columns to parse for dates (pandas engine only); If True, then try
     to parse datelike columns default is True; a column label is datelike if
+
     * it ends with ``'_at'``,
     * it ends with ``'_time'``,
     * it begins with ``'timestamp'``,
@@ -301,24 +395,25 @@ path_or_buf : string or file handle, optional
     File path or object. If not specified, the result is returned as a string.
 orient : string
     Indication of expected JSON string format.
+
     * Series
         - default is 'index'
         - allowed values are: {'split','records','index','table'}
     * DataFrame
         - default is 'columns'
         - allowed values are:
-        {'split','records','index','columns','values','table'}
+          {'split','records','index','columns','values','table'}
     * The format of the JSON string
         - 'split' : dict like {'index' -> [index],
-        'columns' -> [columns], 'data' -> [values]}
+          'columns' -> [columns], 'data' -> [values]}
         - 'records' : list like
-        [{column -> value}, ... , {column -> value}]
+          [{column -> value}, ... , {column -> value}]
         - 'index' : dict like {index -> {column -> value}}
         - 'columns' : dict like {column -> {index -> value}}
         - 'values' : just the values array
         - 'table' : dict like {'schema': {schema}, 'data': {data}}
-        describing the data, and the data component is
-        like ``orient='records'``.
+          describing the data, and the data component is
+          like ``orient='records'``.
 date_format : {None, 'epoch', 'iso'}
     Type of date conversion. 'epoch' = epoch milliseconds,
     'iso' = ISO8601. The default depends on the `orient`. For
@@ -349,6 +444,7 @@ index : bool, default True
     Whether to include the index values in the JSON string. Not
     including the index (``index=False``) is only supported when
     orient is 'split' or 'table'.
+
 See Also
 --------
 .cudf.io.json.read_json
@@ -401,6 +497,7 @@ Returns
 -------
 item : object
     The selected object. Return type depends on the object stored.
+
 See Also
 --------
 cudf.io.hdf.to_hdf : Write a HDF file from a DataFrame.
@@ -439,10 +536,10 @@ format : {'fixed', 'table'}, default 'fixed'
     Possible values:
 
     - 'fixed': Fixed format. Fast writing/reading. Not-appendable,
-    nor searchable.
+      nor searchable.
     - 'table': Table format. Write as a PyTables Table structure
-    which may perform worse but allow more flexible operations
-    like searching / selecting subsets of the data.
+      which may perform worse but allow more flexible operations
+      like searching / selecting subsets of the data.
 append : bool, default False
     For Table formats, append the input data to the existing.
 data_columns :  list of columns or True, optional
@@ -475,7 +572,7 @@ See Also
 --------
 cudf.io.hdf.read_hdf : Read from HDF file.
 cudf.io.parquet.to_parquet : Write a DataFrame to the binary parquet format.
-cudf.io.feather..to_feather : Write out feather-format for DataFrames.
+cudf.io.feather.to_feather : Write out feather-format for DataFrames.
 """
 doc_to_hdf = docfmt_partial(docstring=_docstring_to_hdf)
 
@@ -570,7 +667,7 @@ names : list of str, default None
 dtype : type, list of types, or dict of column -> type, default None
     Data type(s) for data or columns. If list, types are applied in the same
     order as the column names. If dict, types are mapped to the column names.
-    E.g. {‘a’: np.float64, ‘b’: int32, ‘c’: ‘float’}
+    E.g. {{‘a’: np.float64, ‘b’: int32, ‘c’: ‘float’}}
     If `None`, dtypes are inferred from the dataset. Use `str` to preserve data
     and not infer or interpret to dtype.
 quotechar : char, default '"'
@@ -597,7 +694,7 @@ skiprows : int, default 0
     Number of rows to be skipped from the start of file.
 skipfooter : int, default 0
     Number of rows to be skipped at the bottom of file.
-compression : {'infer', 'gzip', 'zip', None}, default 'infer'
+compression : {{'infer', 'gzip', 'zip', None}}, default 'infer'
     For on-the-fly decompression of on-disk data. If ‘infer’, then detect
     compression from the following extensions: ‘.gz’,‘.zip’ (otherwise no
     decompression). If using ‘zip’, the ZIP file must contain only one
@@ -647,6 +744,10 @@ Returns
 -------
 GPU ``DataFrame`` object.
 
+Notes
+-----
+{remote_data_sources}
+
 Examples
 --------
 
@@ -674,7 +775,9 @@ Read the file with ``cudf.read_csv``
 See Also
 --------
 cudf.io.csv.to_csv
-"""
+""".format(
+    remote_data_sources=_docstring_remote_sources
+)
 doc_read_csv = docfmt_partial(docstring=_docstring_read_csv)
 
 _docstring_to_csv = """
@@ -769,7 +872,19 @@ def is_file_like(obj):
         return True
 
 
-def get_filepath_or_buffer(path_or_data, compression, iotypes=(BytesIO)):
+def _is_local_filesystem(fs):
+    local_filesystem_protocols = ["file"]
+
+    if hasattr(fs, "protocol"):
+        if fs.protocol in local_filesystem_protocols:
+            return True
+    else:
+        return False
+
+
+def get_filepath_or_buffer(
+    path_or_data, compression, iotypes=(BytesIO), **kwargs
+):
     """Return either a filepath string to data, or a memory buffer of data.
     If filepath, then the source filepath is expanded to user's environment.
     If buffer, then data is returned in-memory as bytes or a ByteIO object.
@@ -790,16 +905,34 @@ def get_filepath_or_buffer(path_or_data, compression, iotypes=(BytesIO)):
     compression : str
         Type of compression algorithm for the content
     """
-    if is_url(path_or_data):
-        with urllib.request.urlopen(path_or_data) as url:
-            compression = url.headers.get("Content-Encoding", None)
-            buffer = BytesIO(url.read())
-        return buffer, compression
-    elif isinstance(path_or_data, str):
-        return os.path.expanduser(path_or_data), compression
+    if isinstance(path_or_data, str):
+        storage_options = kwargs.get("storage_options")
+        # fsspec does not expanduser so handle here
+        path_or_data = os.path.expanduser(path_or_data)
+        fs, _, paths = fsspec.get_fs_token_paths(
+            path_or_data, mode="rb", storage_options=storage_options
+        )
+        if len(paths) == 0:
+            raise IOError(f"{path_or_data} could not be resolved to any files")
+        elif len(paths) > 1:
+            warnings.warn(
+                f"`path_or_data` resolved to more than 1 file. "
+                f"Only the first file {paths[0]} will be read.",
+                UserWarning,
+            )
+
+        if _is_local_filesystem(fs):
+            # Doing this as `read_json` accepts a json string
+            # path_or_data need not be a filepath like string
+            if os.path.exists(paths[0]):
+                path_or_data = paths[0]
+        else:
+            with fs.open(paths[0]) as f:
+                path_or_data = BytesIO(f.read())
+
     elif not isinstance(path_or_data, iotypes) and is_file_like(path_or_data):
         if isinstance(path_or_data, TextIOWrapper):
             path_or_data = path_or_data.buffer
-        return BytesIO(path_or_data.read()), compression
-    else:
-        return path_or_data, compression
+        path_or_data = BytesIO(path_or_data.read())
+
+    return path_or_data, compression

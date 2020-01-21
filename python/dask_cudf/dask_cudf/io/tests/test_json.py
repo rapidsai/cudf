@@ -1,3 +1,5 @@
+import os
+
 import pandas as pd
 import pytest
 
@@ -15,6 +17,18 @@ def test_read_json(tmp_path):
     df1.to_json(tmp_path / "data-*.json")
     df2 = dask_cudf.read_json(tmp_path / "data-*.json")
     dd.assert_eq(df1, df2)
+
+    # file path test
+    stmp_path = str(tmp_path / "data-*.json")
+    df3 = dask_cudf.read_json(f"file://{stmp_path}")
+    dd.assert_eq(df1, df3)
+
+    # file list test
+    list_paths = [
+        os.path.join(tmp_path, fname) for fname in sorted(os.listdir(tmp_path))
+    ]
+    df4 = dask_cudf.read_json(list_paths)
+    dd.assert_eq(df1, df4)
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")

@@ -14,123 +14,150 @@
  * limitations under the License.
  */
 
-#ifndef BINARYOP_HPP
-#define BINARYOP_HPP
+#pragma once
 
-#include "cudf.h"
+#include <cudf/column/column.hpp>
+#include <cudf/scalar/scalar.hpp>
+
+#include <memory>
+
+namespace cudf {
+namespace experimental {
 
 /**
  * @brief Types of binary operations that can be performed on data.
  */
-typedef enum {
-  GDF_ADD,            ///< operator +
-  GDF_SUB,            ///< operator -
-  GDF_MUL,            ///< operator *
-  GDF_DIV,            ///< operator / using common type of lhs and rhs
-  GDF_TRUE_DIV,       ///< operator / after promoting type to floating point
-  GDF_FLOOR_DIV,      ///< operator / after promoting to float and then flooring the result
-  GDF_MOD,            ///< operator %
-  GDF_PYMOD,          ///< operator % but following python's sign rules for negatives
-  GDF_POW,            ///< lhs ^ rhs
-  GDF_EQUAL,          ///< operator ==
-  GDF_NOT_EQUAL,      ///< operator !=
-  GDF_LESS,           ///< operator <
-  GDF_GREATER,        ///< operator >
-  GDF_LESS_EQUAL,     ///< operator <=
-  GDF_GREATER_EQUAL,  ///< operator >=
-  GDF_BITWISE_AND,    ///< operator &
-  GDF_BITWISE_OR,     ///< operator |
-  GDF_BITWISE_XOR,    ///< operator ^
-  GDF_LOGICAL_AND,    ///< operator &&
-  GDF_LOGICAL_OR,     ///< operator ||
-  GDF_COALESCE,       ///< operator x,y  x is null ? y : x
-  GDF_GENERIC_OP,     ///< generic binary operator to be generated with input ptx code
-  GDF_INVALID_BINARY  ///< invalid operation
-} gdf_binary_operator;
-
-namespace cudf
-{
-
-/**
- * @brief Performs a binary operation between a gdf_scalar and a gdf_column.
- *
- * The desired output type must be specified in out->dtype.
- *
- * If the valid field in the gdf_column output is not nullptr, then it will be
- * filled with the bitwise AND of the valid mask of rhs gdf_column and is_valid
- * bool of lhs gdf_scalar
- *
- * @param out (gdf_column) Output of the operation.
- * @param lhs (gdf_scalar) First operand of the operation.
- * @param rhs (gdf_column) Second operand of the operation.
- * @param ope (enum) The binary operator to use
- */
-void binary_operation(gdf_column*           out,
-                      gdf_scalar*           lhs,
-                      gdf_column*           rhs,
-                      gdf_binary_operator   ope);
+enum class binary_operator {
+  ADD,             ///< operator +
+  SUB,             ///< operator -
+  MUL,             ///< operator *
+  DIV,             ///< operator / using common type of lhs and rhs
+  TRUE_DIV,        ///< operator / after promoting type to floating point
+  FLOOR_DIV,       ///< operator / after promoting to 64 bit floating point and then
+                   ///< flooring the result
+  MOD,             ///< operator %
+  PYMOD,           ///< operator % but following python's sign rules for negatives
+  POW,             ///< lhs ^ rhs
+  EQUAL,           ///< operator ==
+  NOT_EQUAL,       ///< operator !=
+  LESS,            ///< operator <
+  GREATER,         ///< operator >
+  LESS_EQUAL,      ///< operator <=
+  GREATER_EQUAL,   ///< operator >=
+  BITWISE_AND,     ///< operator &
+  BITWISE_OR,      ///< operator |
+  BITWISE_XOR,     ///< operator ^
+  LOGICAL_AND,     ///< operator &&
+  LOGICAL_OR,      ///< operator ||
+  COALESCE,        ///< operator x,y  x is null ? y : x
+  GENERIC_BINARY,  ///< generic binary operator to be generated with input
+                   ///< ptx code
+  INVALID_BINARY   ///< invalid operation
+};
 
 /**
- * @brief Performs a binary operation between a gdf_column and a gdf_scalar.
+ * @brief Performs a binary operation between a scalar and a column.
  *
- * The desired output type must be specified in out->dtype.
+ * The output contains the result of op(lhs, rhs[i]) for all 0 <= i < rhs.size()
+ * The scalar is the left operand and the column elements are the right operand.
+ * This distinction is significant in case of non-commutative binary operations
  *
- * If the valid field in the gdf_column output is not nullptr, then it will be
- * filled with the bitwise AND of the valid mask of lhs gdf_column and is_valid
- * bool of rhs gdf_scalar
+ * Regardless of the operator, the validity of the output value is the logical
+ * AND of the validity of the two operands
  *
- * @param out (gdf_column) Output of the operation.
- * @param lhs (gdf_column) First operand of the operation.
- * @param rhs (gdf_scalar) Second operand of the operation.
- * @param ope (enum) The binary operator to use
+ * @param lhs         The left operand scalar
+ * @param rhs         The right operand column
+ * @param output_type The desired data type of the output column
+ * @param mr          Memory resource for allocating output column
+ * @return std::unique_ptr<column> Output column
+ * @throw cudf::logic_error if @p lhs and @p rhs dtypes aren't numeric
+ * @throw cudf::logic_error if @p output_type dtype isn't numeric
  */
-void binary_operation(gdf_column*           out,
-                      gdf_column*           lhs,
-                      gdf_scalar*           rhs,
-                      gdf_binary_operator   ope);
+std::unique_ptr<column> binary_operation(
+    scalar const& lhs,
+    column_view const& rhs,
+    binary_operator op,
+    data_type output_type,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Performs a binary operation between two gdf_columns.
+ * @brief Performs a binary operation between a column and a scalar.
  *
- * The desired output type must be specified in out->dtype.
+ * The output contains the result of op(lhs[i], rhs) for all 0 <= i < lhs.size()
+ * The column elements are the left operand and the scalar is the right operand.
+ * This distinction is significant in case of non-commutative binary operations
  *
- * If the valid field in the gdf_column output is not nullptr, then it will be
- * filled with the bitwise AND of the valid masks of lhs and rhs gdf_columns
+ * Regardless of the operator, the validity of the output value is the logical
+ * AND of the validity of the two operands
  *
- * @param out (gdf_column) Output of the operation.
- * @param lhs (gdf_column) First operand of the operation.
- * @param rhs (gdf_column) Second operand of the operation.
- * @param ope (enum) The binary operator to use
+ * @param lhs         The left operand column
+ * @param rhs         The right operand scalar
+ * @param output_type The desired data type of the output column
+ * @param mr          Memory resource for allocating output column
+ * @return std::unique_ptr<column> Output column
+ * @throw cudf::logic_error if @p lhs and @p rhs dtypes aren't numeric
+ * @throw cudf::logic_error if @p output_type dtype isn't numeric
  */
-void binary_operation(gdf_column*           out,
-                      gdf_column*           lhs,
-                      gdf_column*           rhs,
-                      gdf_binary_operator   ope);
-
+std::unique_ptr<column> binary_operation(
+    column_view const& lhs,
+    scalar const& rhs,
+    binary_operator op,
+    data_type output_type,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Performs a binary operation between two gdf_columns using a user-defined PTX function.
+ * @brief Performs a binary operation between two columns.
  *
- * Accepts a user-defined PTX function to apply between the `lhs` and `rhs`.
+ * The output contains the result of op(lhs[i], rhs[i]) for all 0 <= i <
+ * lhs.size()
  *
- * The desired output type must be specified in out->dtype.
+ * Regardless of the operator, the validity of the output value is the logical
+ * AND of the validity of the two operands
  *
- * If the valid field in the gdf_column output is not nullptr, then it will be
- * filled with the bitwise AND of the valid masks of lhs and rhs gdf_columns
- *
- * @param out (gdf_column) Output of the operation.
- * @param lhs (gdf_column) First operand of the operation.
- * @param rhs (gdf_column) Second operand of the operation.
- * @param ptx String containing the PTX of a binary function to apply between `lhs` and `rhs`
+ * @param lhs         The left operand column
+ * @param rhs         The right operand column
+ * @param output_type The desired data type of the output column
+ * @param mr          Memory resource for allocating output column
+ * @return std::unique_ptr<column> Output column
+ * @throw cudf::logic_error if @p lhs and @p rhs are different sizes
+ * @throw cudf::logic_error if @p lhs and @p rhs dtypes aren't fixed-width
+ * @throw cudf::logic_error if @p output_type dtype isn't numeric
  */
-void binary_operation(gdf_column*           out,
-                      gdf_column*           lhs,
-                      gdf_column*           rhs,
-                      const std::string&    ptx);
+std::unique_ptr<column> binary_operation(
+    column_view const& lhs,
+    column_view const& rhs,
+    binary_operator op,
+    data_type output_type,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-} // namespace cudf
+/**
+ * @brief Performs a binary operation between two columns using a
+ * user-defined PTX function.
+ *
+ * The output contains the result of op(lhs[i], rhs[i]) for all 0 <= i <
+ * lhs.size()
+ *
+ * Regardless of the operator, the validity of the output value is the logical
+ * AND of the validity of the two operands
+ *
+ * @param lhs         The left operand column
+ * @param rhs         The right operand column
+ * @param ptx         String containing the PTX of a binary function
+ * @param output_type The desired data type of the output column. It is assumed
+ *                    that output_type is compatible with the output data type
+ *                    of the function in the PTX code
+ * @param mr          Memory resource for allocating output column
+ * @return std::unique_ptr<column> Output column
+ * @throw cudf::logic_error if @p lhs and @p rhs are different sizes
+ * @throw cudf::logic_error if @p lhs and @p rhs dtypes aren't numeric
+ * @throw cudf::logic_error if @p output_type dtype isn't numeric
+ */
+std::unique_ptr<column> binary_operation(
+    column_view const& lhs,
+    column_view const& rhs,
+    std::string const& ptx,
+    data_type output_type,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-
-#endif // BINARYOP_HPP
-
-
+}  // namespace experimental
+}  // namespace cudf

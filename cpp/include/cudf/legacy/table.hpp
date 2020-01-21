@@ -47,7 +47,7 @@ struct table {
    * @param cols The array of columns wrapped by the table
    * @param num_cols  The number of columns in the array
    *---------------------------------------------------------------------------**/
-  table(gdf_column* cols[], gdf_size_type num_cols);
+  table(gdf_column* cols[], cudf::size_type num_cols);
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a table from an initializer_list of `gdf_column` pointers
@@ -64,15 +64,15 @@ struct table {
    * @note It is the caller's responsibility to free the array of gdf_columns
    *and their associated device memory.
    *
-   * @note Does not support `GDF_TIMESTAMP` columns as this would require
-   * passing in additional timestamp resolution information.
-   *
    * @param[in] num_rows The size of each gdf_column
    * @param[in] dtypes The type of each column
+   * @param[in] dtype_infos The gdf_extra_dtype_info for each column
    * @param[in] allocate_bitmasks If `true`, each column will be allocated an
    * appropriately sized bitmask
    *---------------------------------------------------------------------------**/
-  table(gdf_size_type num_rows, std::vector<gdf_dtype> const& dtypes,
+  table(cudf::size_type num_rows,
+        std::vector<gdf_dtype> const& dtypes,
+        std::vector<gdf_dtype_extra_info> const& dtype_infos,
         bool allocate_bitmasks = false, bool all_valid = false,
         cudaStream_t stream = 0);
 
@@ -110,7 +110,7 @@ struct table {
    * @param index The index of the desired column
    * @return gdf_column* Pointer to the column at `index`
    *---------------------------------------------------------------------------**/
-  gdf_column* get_column(gdf_index_type index) {
+  gdf_column* get_column(cudf::size_type index) {
     assert(index < _columns.size());
     return _columns[index];
   }
@@ -121,7 +121,7 @@ struct table {
    * @param index The index of the desired column
    * @return gdf_column* Pointer to the column at `index`
    *---------------------------------------------------------------------------**/
-  gdf_column const* get_column(gdf_index_type index) const {
+  gdf_column const* get_column(cudf::size_type index) const {
     assert(index < _columns.size());
     return _columns[index];
   }
@@ -130,18 +130,31 @@ struct table {
    * @brief Returns the number of _columns in the table
    *
    *---------------------------------------------------------------------------**/
-  gdf_size_type num_columns() const { return _columns.size(); }
+  cudf::size_type num_columns() const { return _columns.size(); }
 
   /**---------------------------------------------------------------------------*
    * @brief Returns the number of rows in the table
    *
    *---------------------------------------------------------------------------**/
-  gdf_size_type num_rows() const {
-    if (this->get_column(0) != nullptr) {
+  cudf::size_type num_rows() const {
+    if (not _columns.empty()) {
       return this->get_column(0)->size;
     }
     return 0;
   }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns a new `table` containing the set of specified columns.
+   *
+   * @throws cudf::logic_error
+   * If columns requested exceeds number of columns exist
+   * @throws std::out_of_range
+   * If the index of the column exceeds max column index in table
+   *
+   * @param column_indices Indices of the desired columns
+   * @return table New table containing only the desired columns
+   *---------------------------------------------------------------------------**/
+  table select(std::vector<cudf::size_type> const& column_indices) const;
 
   /**---------------------------------------------------------------------------*
    * @brief Destroys the `gdf_column`s in the table.
@@ -164,6 +177,14 @@ struct table {
 std::vector<gdf_dtype> column_dtypes(cudf::table const& table);
 
 /**---------------------------------------------------------------------------*
+ * @brief Returns vector of the dtype_infos of the columns in a table
+ *
+ * @param table The table to get the column dtypes_infos from
+ * @return std::vector<gdf_dtype_extra_info>
+ *---------------------------------------------------------------------------**/
+std::vector<gdf_dtype_extra_info> column_dtype_infos(cudf::table const& table);
+
+/**---------------------------------------------------------------------------*
  * @brief Indicates if a table contains any null values.
  *
  * @param table The table to check for null values
@@ -171,6 +192,19 @@ std::vector<gdf_dtype> column_dtypes(cudf::table const& table);
  * @return false If the table contains zero null values
  *---------------------------------------------------------------------------**/
 bool has_nulls(cudf::table const& table);
+
+/**---------------------------------------------------------------------------*
+ * @brief `table1` and `table2` are concatenated to return single table
+ *
+ * @throws cudf::logic_error
+ * If number of rows mismatch
+ *
+ * @param table1 The table to be concatenated with `table2`
+ * @param table2 The table to be concatenated with `table1`
+ * @return A single table having all the columns from `table1` and `table2`
+ * respectively in the same order.
+ *---------------------------------------------------------------------------**/
+table concat(cudf::table const& table1, cudf::table const&table2);
 
 }  // namespace cudf
 

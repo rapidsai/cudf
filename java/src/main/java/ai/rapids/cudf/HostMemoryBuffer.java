@@ -24,27 +24,51 @@ import org.slf4j.LoggerFactory;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 
 /**
- * This class represents an off-heap buffer held in the host memory.
+ * This class holds an off-heap buffer in the host/CPU memory.
+ * Please note that instances must be explicitly closed or native memory will be leaked!
  *
- * NOTE: Instances must be explicitly closed or native memory will be leaked!
+ * Internally this class may optionally use PinnedMemoryPool to allocate and free the memory
+ * it uses. To try to use the pinned memory pool for allocations set the java system property
+ * ai.rapids.cudf.prefer-pinned to true.
+ *
+ * Be aware that the off heap memory limits set by java do nto apply to these buffers.
  */
 public class HostMemoryBuffer extends MemoryBuffer {
+  private static final boolean defaultPreferPinned = Boolean.getBoolean(
+      "ai.rapids.cudf.prefer-pinned");
   private static final Logger log = LoggerFactory.getLogger(HostMemoryBuffer.class);
 
-  private static final class HostBufferCleaner extends MemoryCleaner.Cleaner {
-    private long address;
+  // Make sure we loaded the native dependencies so we have a way to create a ByteBuffer
+  {
+    NativeDepsLoader.loadNativeDeps();
+  }
 
-    HostBufferCleaner(long address) {
+  /**
+   * This will turn an address into a ByteBuffer.  The buffer will NOT own the memory
+   * so closing it has no impact on the underlying memory. It should never
+   * be used if the corresponding HostMemoryBuffer is closed.
+   */
+  private static native ByteBuffer wrapRangeInBuffer(long address, long len);
+
+  private static final class HostBufferCleaner extends MemoryBufferCleaner {
+    private long address;
+    private final long length;
+
+    HostBufferCleaner(long address, long length) {
       this.address = address;
+      this.length = length;
     }
 
     @Override
-    public boolean clean(boolean logErrorIfNotClean) {
+    protected boolean cleanImpl(boolean logErrorIfNotClean) {
       boolean neededCleanup = false;
       if (address != 0) {
         UnsafeMemoryAccessor.free(address);
+        MemoryListener.hostDeallocation(length, getId());
         address = 0;
         neededCleanup = true;
       }
@@ -56,21 +80,73 @@ public class HostMemoryBuffer extends MemoryBuffer {
     }
   }
 
-  HostMemoryBuffer(long address, long length) {
-    super(address, length, new HostBufferCleaner(address));
+  /**
+   * Allocate memory, but be sure to close the returned buffer to avoid memory leaks.
+   * @param bytes size in bytes to allocate
+   * @param preferPinned If set to true, the pinned memory pool will be used if possible with a
+   *                    fallback to off-heap memory.  If set to false, the allocation will always
+   *                    be from off-heap memory.
+   * @return the newly created buffer
+   */
+  public static HostMemoryBuffer allocate(long bytes, boolean preferPinned) {
+    if (preferPinned) {
+      HostMemoryBuffer pinnedBuffer = PinnedMemoryPool.tryAllocate(bytes);
+      if (pinnedBuffer != null) {
+        return pinnedBuffer;
+      }
+    }
+    return new HostMemoryBuffer(UnsafeMemoryAccessor.allocate(bytes), bytes);
   }
 
   /**
-   * Factory method to create this buffer
-   * @param bytes - size in bytes to allocate
-   * @return - return this newly created buffer
+   * Allocate memory, but be sure to close the returned buffer to avoid memory leaks. Pinned memory
+   * will be preferred for allocations if the java system property ai.rapids.cudf.prefer-pinned is
+   * set to true.
+   * @param bytes size in bytes to allocate
+   * @return the newly created buffer
    */
   public static HostMemoryBuffer allocate(long bytes) {
-    return new HostMemoryBuffer(UnsafeMemoryAccessor.allocate(bytes), bytes);
+    return allocate(bytes, defaultPreferPinned);
+  }
+
+  HostMemoryBuffer(long address, long length) {
+    this(address, length, new HostBufferCleaner(address, length));
+  }
+
+  HostMemoryBuffer(long address, long length, MemoryBufferCleaner cleaner) {
+    super(address, length, cleaner);
+    if (length > 0) {
+      MemoryListener.hostAllocation(length, id);
+    }
   }
 
   private HostMemoryBuffer(long address, long lengthInBytes, HostMemoryBuffer parent) {
     super(address, lengthInBytes, parent);
+    // This is a slice so we are not going to mark it as allocated
+  }
+
+  /**
+   * Return a ByteBuffer that provides access to the underlying memory.  Please note: if the buffer
+   * is larger than a ByteBuffer can handle (2GB) an exception will be thrown.  Also
+   * be aware that the ByteBuffer will be in native endian order, which is different from regular
+   * ByteBuffers that are big endian by default.
+   */
+  public final ByteBuffer asByteBuffer() {
+    assert length <= Integer.MAX_VALUE : "2GB limit on ByteBuffers";
+    return asByteBuffer(0, (int) length);
+  }
+
+  /**
+   * Return a ByteBuffer that provides access to the underlying memory.  Be aware that the
+   * ByteBuffer will be in native endian order, which is different from regular
+   * ByteBuffers that are big endian by default.
+   * @param offset the offset to start at
+   * @param length how many bytes to include.
+   */
+  public final ByteBuffer asByteBuffer(long offset, int length) {
+    addressOutOfBoundsCheck(address + offset, length, "asByteBuffer");
+    return wrapRangeInBuffer(address + offset, length)
+        .order(ByteOrder.nativeOrder());
   }
 
   /**
@@ -138,7 +214,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param dst       the data to be copied.
    */
   public final void getBytes(byte[] dst, long dstOffset, long srcOffset, long len) {
-    assert len > 0;
+    assert len >= 0;
     assert len <= dst.length - dstOffset;
     assert srcOffset >= 0;
     long requestedAddress = this.address + srcOffset;
@@ -152,7 +228,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param data   the data to be copied.
    */
   public final void setBytes(long offset, byte[] data, long srcOffset, long len) {
-    assert len > 0 : "length is not allowed " + len;
+    assert len >= 0 : "length is not allowed " + len;
     assert len <= data.length - srcOffset;
     assert srcOffset >= 0;
     long requestedAddress = this.address + offset;

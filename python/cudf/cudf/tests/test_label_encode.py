@@ -6,7 +6,7 @@ from itertools import product
 import numpy as np
 import pytest
 
-from cudf.dataframe import DataFrame
+from cudf.core import DataFrame
 
 
 def _random_float(nelem, dtype):

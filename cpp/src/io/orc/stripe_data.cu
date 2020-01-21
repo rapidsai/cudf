@@ -16,25 +16,14 @@
 
 #include "orc_common.h"
 #include "orc_gpu.h"
+#include <io/utilities/block_utils.cuh>
 
-#if (__CUDACC_VER_MAJOR__ >= 9)
-#define SHFL0(v)        __shfl_sync(~0, v, 0)
-#define SHFL(v, t)      __shfl_sync(~0, v, t)
-#define SHFL_XOR(v, m)  __shfl_xor_sync(~0, v, m)
-#define SYNCWARP()      __syncwarp()
-#define BALLOT(v)       __ballot_sync(~0, v)
-#else
-#define SHFL0(v)        __shfl(v, 0)
-#define SHFL(v, t)      __shfl(v, t)
-#define SHFL_XOR(v, m)  __shfl_xor(v, m)
-#define SYNCWARP()
-#define BALLOT(v)       __ballot(v)
-#endif
 
 #define LOG2_BYTESTREAM_BFRSZ   13  // Must be able to handle 512x 8-byte values
 
 #define BYTESTREAM_BFRSZ        (1 << LOG2_BYTESTREAM_BFRSZ)
 #define BYTESTREAM_BFRMASK32    ((BYTESTREAM_BFRSZ-1) >> 2)
+//TODO: Should be more efficient with 512 threads per block and circular queue for values
 #define LOG2_NWARPS             5   // Log2 of number of warps per threadblock
 #define LOG2_NTHREADS           (LOG2_NWARPS+5)
 #define NWARPS                  (1 << LOG2_NWARPS)
@@ -51,6 +40,13 @@ namespace orc {
 namespace gpu {
 
 static __device__ __constant__ int64_t kORCTimeToUTC = 1420070400; // Seconds from January 1st, 1970 to January 1st, 2015
+
+struct int128_s
+{
+    uint64_t lo;
+    int64_t hi;
+};
+
 
 struct orc_bytestream_s
 {
@@ -82,10 +78,7 @@ struct orc_rlev2_state_s
         uint64_t u64[NWARPS];
     } baseval;
     uint16_t m2_pw_byte3[NWARPS];
-    union {
-        int32_t i32[NWARPS];
-        int64_t i64[NWARPS];
-    } delta;
+    int64_t delta[NWARPS];
     uint16_t runs_loc[NTHREADS];
 };
 
@@ -487,6 +480,37 @@ inline __device__ int decode_base128_varint(volatile orc_bytestream_s *bs, int p
 
 
 /**
+ * @brief Decodes a signed int128 encoded as base-128 varint (used for decimals)
+ **/
+inline __device__ int128_s decode_varint128(volatile orc_bytestream_s *bs, int pos)
+{
+    uint32_t b = bytestream_readbyte(bs, pos++);
+    int64_t sign_mask = -(int32_t)(b & 1);
+    uint64_t v = (b >> 1) & 0x3f;
+    uint32_t bitpos = 6;
+    uint64_t lo = v;
+    uint64_t hi = 0;
+    while (b > 0x7f && bitpos < 128)
+    {
+        b = bytestream_readbyte(bs, pos++);
+        v |= ((uint64_t)(b & 0x7f)) << (bitpos & 0x3f);
+        if (bitpos == 62) { // 6 + 7 * 8 = 62
+            lo = v;
+            v = (b & 0x7f) >> 2; // 64 - 62
+        }
+        bitpos += 7;
+    }
+    if (bitpos >= 64) {
+        hi = v;
+    }
+    else {
+        lo = v;
+    }
+    return { (uint64_t)(lo ^ sign_mask), (int64_t)(hi ^ sign_mask) };
+}
+
+
+/**
  * @brief Decodes an unsigned 32-bit varint
  **/
 inline __device__ int decode_varint(volatile orc_bytestream_s *bs, int pos, uint32_t &result)
@@ -798,7 +822,7 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s *bs, volatile orc_rlev
                         {
                             uint64_t baseval, mask;
                             bytestream_readbe(bs, pos * 8, bw * 8, baseval);
-                            mask = 2;
+                            mask = 1;
                             mask <<= (bw*8) - 1;
                             mask -= 1;
                             rle->baseval.u64[r] = (baseval > mask) ? (-(int64_t)(baseval & mask)) : baseval;
@@ -809,22 +833,19 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s *bs, volatile orc_rlev
                     else
                     {
                         T baseval;
+                        int64_t delta;
                         // Delta
                         pos = decode_varint(bs, pos, baseval);
                         if (sizeof(T) <= 4)
                         {
-                            int32_t delta;
-                            pos = decode_varint(bs, pos, delta);
                             rle->baseval.u32[r] = baseval;
-                            rle->delta.i32[r] = delta;
                         }
                         else
                         {
-                            int64_t delta;
-                            pos = decode_varint(bs, pos, delta);
                             rle->baseval.u64[r] = baseval;
-                            rle->delta.i64[r] = delta;
                         }
+                        pos = decode_varint(bs, pos, delta);
+                        rle->delta[r] = delta;
                     }
                 }
             }
@@ -855,9 +876,16 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s *bs, volatile orc_rlev
                 }
                 else
                 {
-                    int32_t delta = rle->delta.i32[r];
-                    uint32_t ofs = (i == 0) ? 0 : (w > 1 && i > 1) ? bytestream_readbits(bs, pos * 8 + (i - 2)*w, w) : abs(delta);
-                    vals[base + i] = (delta < 0) ? -ofs : ofs;
+                    int64_t delta = rle->delta[r];
+                    if (w > 1 && i > 1)
+                    {
+                        int32_t delta_s = (delta < 0) ? -1 : 0;
+                        vals[base + i] = (bytestream_readbits(bs, pos * 8 + (i - 2)*w, w) ^ delta_s) - delta_s;
+                    }
+                    else
+                    {
+                        vals[base + i] = (i == 0) ? 0 : static_cast<uint32_t>(delta);
+                    }
                 }
             }
             else
@@ -879,9 +907,17 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s *bs, volatile orc_rlev
                 }
                 else
                 {
-                    int64_t delta = rle->delta.i64[r];
-                    uint64_t ofs = (i == 0) ? 0 : (w > 1 && i > 1) ? bytestream_readbits64(bs, pos * 8 + (i - 2)*w, w) : llabs(delta);
-                    vals[base + i] = (delta < 0) ? -ofs : ofs;
+                    int64_t delta = rle->delta[r], ofs;
+                    if (w > 1 && i > 1)
+                    {
+                        int64_t delta_s = (delta < 0) ? -1 : 0;                        
+                        ofs = (bytestream_readbits64(bs, pos * 8 + (i - 2)*w, w) ^ delta_s) - delta_s;
+                    }
+                    else
+                    {
+                        ofs = (i == 0) ? 0 : delta;
+                    }
+                    vals[base + i] = ofs;
                 }
             }
         }
@@ -1043,7 +1079,6 @@ static __device__ uint32_t Byte_RLE(orc_bytestream_s *bs, volatile orc_byterle_s
  * @brief Powers of 10
  *
  **/
-#if DECIMALS_AS_FLOAT64
 static const __device__ __constant__ double kPow10[40] =
 {
     1.0,    1.e1,   1.e2,   1.e3,   1.e4,   1.e5,   1.e6,   1.e7,
@@ -1052,30 +1087,38 @@ static const __device__ __constant__ double kPow10[40] =
     1.e24,  1.e25,  1.e26,  1.e27,  1.e28,  1.e29,  1.e30,  1.e31,
     1.e32,  1.e33,  1.e34,  1.e35,  1.e36,  1.e37,  1.e38,  1.e39,
 };
-#else // DECIMALS_AS_FLOAT64
-static const __device__ __constant__ int64_t kPow10[19] =
+
+static const __device__ __constant__ int64_t kPow5i[28] =
 {
     1,
-    10,
-    100,
-    1000,
-    10000,
-    100000,
-    1000000,
-    10000000,
-    100000000,
-    1000000000,
-    10000000000ll,
-    100000000000ll,
-    1000000000000ll,
-    10000000000000ll,
-    100000000000000ll,
-    1000000000000000ll,
-    10000000000000000ll,
-    100000000000000000ll,
-    1000000000000000000ll
+    5,
+    25,
+    125,
+    625,
+    3125,
+    15625,
+    78125,
+    390625,
+    1953125,
+    9765625,
+    48828125,
+    244140625,
+    1220703125,
+    6103515625ll,
+    30517578125ll,
+    152587890625ll,
+    762939453125ll,
+    3814697265625ll,
+    19073486328125ll,
+    95367431640625ll,
+    476837158203125ll,
+    2384185791015625ll,
+    11920928955078125ll,
+    59604644775390625ll,
+    298023223876953125ll,
+    1490116119384765625ll,
+    7450580596923828125ll
 };
-#endif // DECIMALS_AS_FLOAT64
 
 /**
  * @brief ORC Decimal decoding (unbounded base-128 varints)
@@ -1090,11 +1133,6 @@ static const __device__ __constant__ int64_t kPow10[19] =
  **/
 static __device__ int Decode_Decimals(orc_bytestream_s *bs, volatile orc_byterle_state_s *scratch, volatile int64_t *vals, int val_scale, int numvals, int col_scale, int t)
 {
-#if DECIMALS_AS_FLOAT64
-    int scale = (t < numvals) ? val_scale : 0;
-#else
-    int scale = (t < numvals) ? col_scale - val_scale : 0;
-#endif
     if (t == 0)
     {
         uint32_t maxpos = min(bs->len, bs->pos + (BYTESTREAM_BFRSZ - 8u));
@@ -1117,24 +1155,50 @@ static __device__ int Decode_Decimals(orc_bytestream_s *bs, volatile orc_byterle
     if (t < numvals)
     {
         int pos = *(volatile int32_t *)&vals[t];
-        int64_t v;
-        decode_varint(bs, pos, v);
-#if DECIMALS_AS_FLOAT64
-        if (scale >= 0)
-            reinterpret_cast<volatile double *>(vals)[t] = __ll2double_rn(v) / kPow10[min(scale, 39)];
+        int128_s v = decode_varint128(bs, pos);
+
+        if (col_scale & ORC_DECIMAL2FLOAT64_SCALE)
+        {
+            double f = Int128ToDouble_rn(v.lo, v.hi);
+            int32_t scale = (t < numvals) ? val_scale : 0;
+            if (scale >= 0)
+                reinterpret_cast<volatile double *>(vals)[t] = f / kPow10[min(scale, 39)];
+            else
+                reinterpret_cast<volatile double *>(vals)[t] = f * kPow10[min(-scale, 39)];
+        }
         else
-            reinterpret_cast<volatile double *>(vals)[t] = __ll2double_rn(v) * kPow10[min(-scale, 39)];
-#else
-        if (scale > 0)
         {
-            v *= kPow10[min(scale, 18)];
+            int32_t scale = (t < numvals) ? (col_scale & ~ORC_DECIMAL2FLOAT64_SCALE) - val_scale : 0;
+            if (scale >= 0)
+            {
+                scale = min(scale, 27);
+                vals[t] = ((int64_t)v.lo * kPow5i[scale]) << scale;
+            }
+            else //if (scale < 0)
+            {
+                bool is_negative = (v.hi < 0);
+                uint64_t hi = v.hi, lo = v.lo;
+                scale = min(-scale, 27);
+                if (is_negative)
+                {
+                    hi = (~hi) + (lo == 0);
+                    lo = (~lo) + 1;
+                }
+                lo = (lo >> (uint32_t)scale) | ((uint64_t)hi << (64 - scale));
+                hi >>= (int32_t)scale;
+                if (hi != 0)
+                {
+                    // Use intermediate float
+                    lo = __double2ull_rn(Int128ToDouble_rn(lo, hi) / __ll2double_rn(kPow5i[scale]));
+                    hi = 0;
+                }
+                else
+                {
+                    lo /= kPow5i[scale];
+                }
+                vals[t] = (is_negative) ? -(int64_t)lo : (int64_t)lo;
+            }
         }
-        else if (scale < 0)
-        {
-            v /= kPow10[min(-scale, 18)];
-        }
-        vals[t] = v;
-#endif
     }
     return numvals;
 }
@@ -1586,7 +1650,7 @@ static const __device__ __constant__ uint32_t kTimestampNanoScale[8] =
  **/
 // blockDim {NTHREADS,1,1}
 extern "C" __global__ void __launch_bounds__(NTHREADS)
-gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, int64_t *tz_table, RowGroup *row_groups, size_t max_num_rows, size_t first_row, uint32_t num_columns, uint32_t tz_len, uint32_t num_rowgroups, uint32_t rowidx_stride)
+gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, int64_t *tz_table, const RowGroup *row_groups, size_t max_num_rows, size_t first_row, uint32_t num_columns, uint32_t tz_len, uint32_t num_rowgroups, uint32_t rowidx_stride)
 {
     __shared__ __align__(16) orcdec_state_s state_g;
 
@@ -1901,7 +1965,7 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
             {
                 if (s->chunk.type_kind == TIMESTAMP)
                 {
-                    s->top.data.buffered_count = s->top.data.max_vals - (numvals + vals_skipped);
+                    s->top.data.buffered_count = s->top.data.max_vals - numvals;
                 }
                 s->top.data.max_vals = numvals;
             }
@@ -1914,7 +1978,8 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
                 return;
             }
             // Store decoded values to output
-            if (t < min(s->top.data.max_vals, s->top.data.nrows) && s->u.rowdec.row[t] != 0)
+            if (t < min(min(s->top.data.max_vals, s->u.rowdec.nz_count), s->top.data.nrows) && s->u.rowdec.row[t] != 0
+             && s->top.data.cur_row + s->u.rowdec.row[t] - 1 < s->top.data.end_row)
             {
                 size_t row = s->top.data.cur_row + s->u.rowdec.row[t] - 1 - first_row;
                 if (row < max_num_rows)
@@ -2002,7 +2067,10 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
                         {
                             seconds -= 1;
                         }
-                        reinterpret_cast<int64_t *>(data_out)[row] = seconds * ORC_TS_CLKRATE + (nanos + (499999999 / ORC_TS_CLKRATE)) / (1000000000 / ORC_TS_CLKRATE); // Output to desired clock rate
+                        if (s->chunk.ts_clock_rate)
+                            reinterpret_cast<int64_t *>(data_out)[row] = seconds * s->chunk.ts_clock_rate + (nanos + (499999999 / s->chunk.ts_clock_rate)) / (1000000000 / s->chunk.ts_clock_rate); // Output to desired clock rate
+                        else
+                            reinterpret_cast<int64_t *>(data_out)[row] = seconds * 1000000000 + nanos;
                         break;
                     }
                     }
@@ -2012,7 +2080,7 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
             // Buffer secondary stream values
             if (s->chunk.type_kind == TIMESTAMP)
             {
-                int buffer_pos = s->top.data.max_vals + vals_skipped;
+                int buffer_pos = s->top.data.max_vals;
                 if (t >= buffer_pos && t < buffer_pos + s->top.data.buffered_count)
                 {
                     s->vals.u32[t - buffer_pos] = secondary_val;
@@ -2078,7 +2146,7 @@ cudaError_t __host__ DecodeNullsAndStringDictionaries(ColumnDesc *chunks, Dictio
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
 cudaError_t __host__ DecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, uint32_t num_columns, uint32_t num_stripes, size_t max_num_rows, size_t first_row,
-    int64_t *tz_table, size_t tz_len, RowGroup *row_groups, uint32_t num_rowgroups, uint32_t rowidx_stride,
+    int64_t *tz_table, size_t tz_len, const RowGroup *row_groups, uint32_t num_rowgroups, uint32_t rowidx_stride,
     cudaStream_t stream)
 {
     uint32_t num_chunks = num_columns * num_stripes;

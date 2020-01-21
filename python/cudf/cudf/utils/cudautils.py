@@ -1,12 +1,11 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-from math import fmod, isnan
+from functools import lru_cache
 
 import numpy as np
 from numba import cuda, int32, numpy_support
 
-import nvstrings
-from librmm_cffi import librmm as rmm
+import rmm
 
 from cudf.utils.utils import (
     check_equals_float,
@@ -15,6 +14,7 @@ from cudf.utils.utils import (
     mask_bitsize,
     mask_get,
     mask_set,
+    rint,
 )
 
 
@@ -277,10 +277,9 @@ def prefixsum(vals):
     Given the input of N.  The output size is N + 1.
     The first value is always 0.  The last value is the sum of *vals*.
     """
+    import cudf._lib as libcudf
 
-    import cudf.bindings.reduce as cpp_reduce
-    from cudf.dataframe.numerical import NumericalColumn
-    from cudf.dataframe.buffer import Buffer
+    from cudf.core.column import as_column
 
     # Allocate output
     slots = rmm.device_array(shape=vals.size + 1, dtype=vals.dtype)
@@ -288,13 +287,9 @@ def prefixsum(vals):
     gpu_fill_value[1, 1](slots[:1], 0)
 
     # Compute prefixsum on the mask
-    in_col = NumericalColumn(
-        data=Buffer(vals), mask=None, null_count=0, dtype=vals.dtype
-    )
-    out_col = NumericalColumn(
-        data=Buffer(slots[1:]), mask=None, null_count=0, dtype=vals.dtype
-    )
-    cpp_reduce.apply_scan(in_col, out_col, "sum", inclusive=True)
+    in_col = as_column(vals)
+    out_col = as_column(slots[1:])
+    libcudf.reduce.scan(in_col, out_col, "sum", inclusive=True)
     return slots
 
 
@@ -346,25 +341,6 @@ def compact_mask_bytes(boolbytes):
     return bits
 
 
-@cuda.jit
-def gpu_mask_from_devary(ary, bits):
-    tid = cuda.grid(1)
-    base = tid * mask_bitsize
-    for i in range(base, base + mask_bitsize):
-        if i >= len(ary):
-            break
-        if not isnan(ary[i]):
-            mask_set(bits, i)
-
-
-def mask_from_devary(ary):
-    bits = make_mask(len(ary))
-    if bits.size > 0:
-        gpu_fill_value.forall(bits.size)(bits, 0)
-        gpu_mask_from_devary.forall(bits.size)(ary, bits)
-    return bits
-
-
 def make_empty_mask(size):
     bits = make_mask(size)
     if bits.size > 0:
@@ -384,61 +360,6 @@ def gpu_fill_masked(value, validity, out):
         valid = mask_get(validity, tid)
         if not valid:
             out[tid] = value
-
-
-def fillna(data, mask, value):
-    out = rmm.device_array_like(data)
-    out.copy_to_device(data)
-    if data.size > 0:
-        configured = gpu_fill_masked.forall(data.size)
-        configured(value, mask, out)
-    return out
-
-
-@cuda.jit
-def gpu_isnull(validity, out):
-    tid = cuda.grid(1)
-    if tid < out.size:
-        valid = mask_get(validity, tid)
-        if valid:
-            out[tid] = False
-        else:
-            out[tid] = True
-
-
-def isnull_mask(data, mask):
-    # necessary due to rapidsai/custrings#263
-    if isinstance(data, nvstrings.nvstrings):
-        output_dary = rmm.device_array(data.size(), dtype=np.bool_)
-    else:
-        output_dary = rmm.device_array(data.size, dtype=np.bool_)
-
-    if output_dary.size > 0:
-        gpu_isnull.forall(output_dary.size)(mask, output_dary)
-    return output_dary
-
-
-@cuda.jit
-def gpu_notna(validity, out):
-    tid = cuda.grid(1)
-    if tid < out.size:
-        valid = mask_get(validity, tid)
-        if valid:
-            out[tid] = True
-        else:
-            out[tid] = False
-
-
-def notna_mask(data, mask):
-    # necessary due to rapidsai/custrings#263
-    if isinstance(data, nvstrings.nvstrings):
-        output_dary = rmm.device_array(data.size(), dtype=np.bool_)
-    else:
-        output_dary = rmm.device_array(data.size, dtype=np.bool_)
-
-    if output_dary.size > 0:
-        gpu_notna.forall(output_dary.size)(mask, output_dary)
-    return output_dary
 
 
 #
@@ -575,30 +496,13 @@ def gpu_diff(in_col, out_col, N):
 @cuda.jit
 def gpu_round(in_col, out_col, decimal):
     i = cuda.grid(1)
-    round_val = 10 ** (-1.0 * decimal)
+    f = 10 ** decimal
 
     if i < in_col.size:
-        if not in_col[i]:
-            out_col[i] = np.nan
-            return
-
-        newval = in_col[i] // round_val * round_val
-        remainder = fmod(in_col[i], round_val)
-
-        if remainder != 0 and remainder > (0.5 * round_val) and in_col[i] > 0:
-            newval = newval + round_val
-            out_col[i] = newval
-
-        elif (
-            remainder != 0
-            and abs(remainder) < (0.5 * round_val)
-            and in_col[i] < 0
-        ):
-            newval = newval + round_val
-            out_col[i] = newval
-
-        else:
-            out_col[i] = newval
+        ret = in_col[i] * f
+        ret = rint(ret)
+        tmp = ret / f
+        out_col[i] = tmp
 
 
 def apply_round(data, decimal):
@@ -806,7 +710,7 @@ def find_first(arr, val, compare="eq"):
                 gpu_mark_found_int.forall(found.size)(
                     arr, val, found, arr.size
                 )
-    from cudf.dataframe.columnops import as_column
+    from cudf.core.column import as_column
 
     found_col = as_column(found)
     min_index = found_col.min()
@@ -839,7 +743,7 @@ def find_last(arr, val, compare="eq"):
                 gpu_mark_found_float.forall(found.size)(arr, val, found, -1)
             else:
                 gpu_mark_found_int.forall(found.size)(arr, val, found, -1)
-    from cudf.dataframe.columnops import as_column
+    from cudf.core.column import as_column
 
     found_col = as_column(found)
     max_index = found_col.max()
@@ -954,3 +858,41 @@ def window_sizes_from_offset(arr, offset):
             arr, window_sizes, offset
         )
     return window_sizes
+
+
+@lru_cache(maxsize=32)
+def compile_udf(udf, type_signature):
+    """Copmile ``udf`` with `numba`
+
+    Compile a python callable function ``udf`` with
+    `numba.cuda.jit(device=True)` using ``type_signature`` into CUDA PTX
+    together with the generated output type.
+
+    The output is expected to be passed to the PTX parser in `libcudf`
+    to generate a CUDA device funtion to be inlined into CUDA kernels,
+    compiled at runtime and launched.
+
+    Parameters
+    --------
+    udf:
+      a python callable function
+
+    type_signature:
+      a tuple that specifies types of each of the input parameters of ``udf``.
+      The types should be one in `numba.types` and could be converted from
+      numpy types with `numba.numpy_support.from_dtype(...)`.
+
+    Returns
+    --------
+    ptx_code:
+      The compiled CUDA PTX
+
+    output_type:
+      An numpy type
+
+    """
+    decorated_udf = cuda.jit(udf, device=True)
+    compiled = decorated_udf.compile(type_signature)
+    ptx_code = decorated_udf.inspect_ptx(type_signature).decode("utf-8")
+    output_type = numpy_support.as_dtype(compiled.signature.return_type)
+    return (ptx_code, output_type.type)
