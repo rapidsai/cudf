@@ -690,6 +690,24 @@ __device__ inline string_view const column_device_view::element<string_view>(
   return string_view{d_strings + offset, d_offsets[index + 1] - offset};
 }
 
+/**
+ * @brief Returns `dictionary32` element at the specified index for a
+ * dictionary column.
+ *
+ * If the element at the specified index is NULL, i.e., `is_null(element_index)
+ *== true`, then any attempt to use the result will lead to undefined behavior.
+ *
+ * This function accounts for the offset.
+ *
+ * @param element_index Position of the desired string element
+ * @return dictionary32 instance representing this element at this index
+ */
+template <>
+__device__ inline dictionary32 const column_device_view::element<dictionary32>(size_type element_index) const noexcept {
+  size_type index = element_index + offset();  // account for this view's _offset
+  return dictionary32{d_children[0].element<int32_t>(index)};
+}
+
 namespace detail {
 /** -------------------------------------------------------------------------*
  * @brief value accessor of column without null bitmask
