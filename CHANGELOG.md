@@ -109,6 +109,7 @@
 - PR #3821 Fix OOB read in gpuinflate prefetcher
 - PR #3829 Parquet writer: fix empty dataframe causing cuda launch errors
 - PR #3835 Fix memory leak in Cython when dealing with nulls in string columns
+- PR #3858 Fixes the broken debug build after #3728
 
 
 # cuDF 0.11.0 (11 Dec 2019)
