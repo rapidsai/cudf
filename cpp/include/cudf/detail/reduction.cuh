@@ -96,7 +96,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in, cudf::size_type num_items, op
 
 // @brief string_view specialization of simple reduction
 template <typename Op, typename InputIterator, typename OutputType=typename thrust::iterator_value<InputIterator>::type,
-typename std::enable_if_t<std::is_same<OutputType, dictionary32_tag>::value>* = nullptr >
+typename std::enable_if_t<std::is_same<OutputType, dictionary32>::value>* = nullptr >
 std::unique_ptr<scalar> reduce(InputIterator d_in, cudf::size_type num_items, op::simple_op<Op> sop,
   rmm::mr::device_memory_resource* mr, cudaStream_t stream)
 {

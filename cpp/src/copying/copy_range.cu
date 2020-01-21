@@ -139,7 +139,7 @@ struct out_of_place_copy_range_dispatch {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<cudf::dictionary32_tag, T>::value,
+  std::enable_if_t<std::is_same<cudf::dictionary32, T>::value,
                    std::unique_ptr<cudf::column>>
   operator()(
       cudf::size_type source_begin, cudf::size_type source_end,

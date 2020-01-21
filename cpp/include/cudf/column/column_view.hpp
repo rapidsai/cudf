@@ -314,7 +314,7 @@ class column_view : public detail::column_view_base {
               bitmask_type const* null_mask = nullptr,
               size_type null_count = UNKNOWN_NULL_COUNT, size_type offset = 0,
               std::vector<column_view> const& children = {},
-              std::shared_ptr<column_view> dictionary_keys = {} );
+              column_view* dictionary_keys = {} );
 
   /**---------------------------------------------------------------------------*
    * @brief Returns the specified child
@@ -329,9 +329,7 @@ class column_view : public detail::column_view_base {
   /**
    * @brief Returns the dictionary_keys column.
    */
-  std::shared_ptr<column_view> dictionary_keys() const noexcept {
-    return _dictionary_keys;
-  }
+  column_view dictionary_keys() const noexcept;
 
   /**---------------------------------------------------------------------------*
    * @brief Returns the number of child columns.
@@ -341,7 +339,7 @@ class column_view : public detail::column_view_base {
  private:
   std::vector<column_view> _children{};  ///< Based on element type, children
                                          ///< may contain additional data
-  std::shared_ptr<column_view> _dictionary_keys;    ///< Keys for dictionary column
+  column_view* _dictionary_keys;         ///< Keys for dictionary column
 };
 
 /**---------------------------------------------------------------------------*
@@ -509,8 +507,18 @@ class mutable_column_view : public detail::column_view_base {
    *---------------------------------------------------------------------------**/
   operator column_view() const;
 
+  /**
+   * @brief Returns the dictionary_keys column.
+   */
+  column_view dictionary_keys() const noexcept {
+    if( _dictionary_keys )
+      return *_dictionary_keys;
+    return column_view{};
+  }
+
  private:
   std::vector<mutable_column_view> mutable_children;
+  column_view* _dictionary_keys;         ///< Keys for dictionary column
 };
 
 /**---------------------------------------------------------------------------*

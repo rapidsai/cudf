@@ -17,6 +17,7 @@
 #include <cmath>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/detail/utilities/release_assert.cuh>
 
 namespace cudf {
 namespace experimental {
@@ -100,6 +101,7 @@ struct quantile_index
     size_type nearest;
     double fraction;
 
+    CUDA_HOST_DEVICE_CALLABLE
     quantile_index(size_type count, double quantile)
     {
         quantile = std::min(std::max(quantile, 0.0), 1.0);
@@ -112,6 +114,7 @@ struct quantile_index
     }
 };
 
+#pragma nv_exec_check_disable
 /* @brief computes a quantile value.
  *
  * Computes a value for a quantile by interpolating between two values on either
@@ -128,8 +131,8 @@ struct quantile_index
  *
  * @returns Value of the desired quantile.
  */
-
 template<typename Result, typename ValueAccessor>
+CUDA_HOST_DEVICE_CALLABLE
 Result
 select_quantile(ValueAccessor get_value,
                 size_type size,
@@ -162,7 +165,12 @@ select_quantile(ValueAccessor get_value,
         return static_cast<Result>(get_value(idx.nearest));
 
     default:
-        CUDF_FAIL("Invalid interpolation operation for quantiles.");
+        #if defined(__CUDA_ARCH__)
+            release_assert(false && "Invalid interpolation operation for quantiles");
+            return Result();
+        #else
+            CUDF_FAIL("Invalid interpolation operation for quantiles.");
+        #endif
     }
 }
 

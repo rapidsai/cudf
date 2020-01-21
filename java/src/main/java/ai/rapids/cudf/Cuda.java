@@ -81,6 +81,20 @@ public class Cuda {
   public static native int getDevice() throws CudaException;
 
   /**
+   * Set the id of the current device.
+   * Note this is relative to CUDA_SET_VISIBLE_DEVICES, e.g. if
+   * CUDA_SET_VISIBLE_DEVICES=1,0, and you call setDevice(0), you will get device 1.
+   * @throws CudaException on any error
+   */
+  public static native void setDevice(int device) throws CudaException;
+
+  /**
+   * Calls cudaFree(0). This can be used to initialize the GPU after a setDevice()
+   * @throws CudaException on any error
+   */
+  public static native void freeZero() throws CudaException;
+
+  /**
    * This should only be used for tests, to enable or disable tests if the current environment
    * is not compatible with this version of the library.  Currently it only does some very
    * basic checks, but these may be expanded in the future depending on needs.

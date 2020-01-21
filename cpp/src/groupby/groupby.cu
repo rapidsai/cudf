@@ -18,8 +18,9 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/detail/aggregation.hpp>
+#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/groupby.hpp>
+#include <cudf/detail/groupby/sort_helper.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -48,18 +49,28 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>>
 groupby::dispatch_aggregation(std::vector<aggregation_request> const& requests,
                               cudaStream_t stream,
                               rmm::mr::device_memory_resource* mr) {
+  // If sort groupby has been called once on this groupby object, then
+  // always use sort groupby from now on. Because once keys are sorted, 
+  // all the aggs that can be done by hash groupby are efficiently done by
+  // sort groupby as well.
   // Only use hash groupby if the keys aren't sorted and all requests can be
   // satisfied with a hash implementation
   if (not _keys_are_sorted and
+      not _helper and
       detail::hash::can_use_hash_groupby(_keys, requests)) {
     return detail::hash::groupby(_keys, requests, _ignore_null_keys, stream,
                                  mr);
   } else {
-    return detail::sort::groupby(_keys, requests, stream, mr);
+    return sort_aggregate(requests, stream, mr);
   }
 }
 
+// Destructor
+// Needs to be in source file because sort_groupby_helper was forward declared
+groupby::~groupby() = default;
+
 namespace {
+/// Make an empty table with appropriate types for requested aggs
 auto empty_results(std::vector<aggregation_request> const& requests) {
   std::vector<aggregation_result> empty_results;
 
@@ -80,6 +91,23 @@ auto empty_results(std::vector<aggregation_request> const& requests) {
 
   return empty_results;
 }
+
+/// Verifies the agg requested on the request's values is valid
+void verify_valid_requests(std::vector<aggregation_request> const& requests) {
+  CUDF_EXPECTS(
+      std::all_of(requests.begin(), requests.end(),
+                  [](auto const& request) {
+                    return std::all_of(
+                        request.aggregations.begin(),
+                        request.aggregations.end(),
+                        [&request](auto const& agg) {
+                          return experimental::detail::is_valid_aggregation(
+                              request.values.type(), agg->kind);
+                        });
+                  }),
+      "Invalid type/aggregation combination.");
+}
+
 }  // namespace
 
 // Compute aggregation requests
@@ -91,12 +119,25 @@ groupby::aggregate(std::vector<aggregation_request> const& requests,
                              return request.values.size() == _keys.num_rows();
                            }),
                "Size mismatch between request values and groupby keys.");
+
+  verify_valid_requests(requests);
+
   if (_keys.num_rows() == 0) {
     std::make_pair(empty_like(_keys), empty_results(requests));
   }
 
   return dispatch_aggregation(requests, 0, mr);
 }
+
+// Get the sort helper object
+detail::sort::sort_groupby_helper& groupby::helper() {
+  if (_helper)
+    return *_helper;
+  _helper = std::make_unique<detail::sort::sort_groupby_helper>(
+    _keys, _ignore_null_keys, _keys_are_sorted);
+  return *_helper;
+};
+
 }  // namespace groupby
 }  // namespace experimental
 }  // namespace cudf

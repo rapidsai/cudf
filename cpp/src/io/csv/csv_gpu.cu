@@ -535,10 +535,10 @@ __inline__ __device__ cudf::string_view decode_value(const char *data,
   return cudf::string_view{};
 }
 template <>
-__inline__ __device__ cudf::dictionary32_tag decode_value(const char *data,
+__inline__ __device__ cudf::dictionary32 decode_value(const char *data,
                                                      long start, long end,
                                                      ParseOptions const &opts) {
-  return cudf::dictionary32_tag{};
+  return cudf::dictionary32{};
 }
 
 /**
@@ -685,8 +685,7 @@ __global__ void convertCsvToGdf(const char *raw_csv, const ParseOptions opts,
 
       // Modify start & end to ignore whitespace and quotechars
       long tempPos = pos - 1;
-      if (!is_na && dtype[actual_col].id() != cudf::type_id::CATEGORY &&
-          dtype[actual_col].id() != cudf::type_id::STRING) {
+      if (!is_na && dtype[actual_col].id() != cudf::type_id::STRING) {
         trim_field_start_end(raw_csv, &start, &tempPos, opts.quotechar);
       }
 

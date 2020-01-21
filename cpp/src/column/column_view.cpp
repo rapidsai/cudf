@@ -81,12 +81,18 @@ column_view::column_view(data_type type, size_type size, void const* data,
                          bitmask_type const* null_mask, size_type null_count,
                          size_type offset,
                          std::vector<column_view> const& children,
-                         std::shared_ptr<column_view> dictionary_keys)
+                         column_view* dictionary_keys)
     : detail::column_view_base{type, size, data, null_mask, null_count, offset},
       _children{children}, _dictionary_keys{dictionary_keys} {
   if (type.id() == EMPTY) {
     CUDF_EXPECTS(num_children() == 0, "EMPTY column cannot have children.");
   }
+}
+
+column_view column_view::dictionary_keys() const noexcept {
+  if( _dictionary_keys )
+    return *_dictionary_keys;
+  return column_view{};
 }
 
 // Mutable view constructor

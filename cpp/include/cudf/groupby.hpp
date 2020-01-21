@@ -27,6 +27,15 @@ namespace cudf {
 namespace experimental {
 namespace groupby {
 
+namespace detail {
+namespace sort {
+
+class sort_groupby_helper;
+    
+} // namespace sort  
+} // namespace detail
+
+
 /**
  * @brief Request for groupby aggregation(s) to perform on a column.
  *
@@ -62,7 +71,7 @@ struct aggregation_result {
 class groupby {
  public:
   groupby() = delete;
-  ~groupby() = default;
+  ~groupby();
   groupby(groupby const&) = delete;
   groupby(groupby&&) = delete;
   groupby& operator=(groupby const&) = delete;
@@ -162,6 +171,16 @@ class groupby {
   std::vector<null_order> _null_precedence{};  ///< If keys are sorted,
                                                ///< indicates null order
                                                ///< of each column
+  std::unique_ptr<detail::sort::sort_groupby_helper> _helper; ///< Helper object
+                                       ///< used by sort based implementation
+
+  /**
+   * @brief Get the sort helper object
+   * 
+   * The object is constructed on first invocation and subsequent invocations
+   * of this function return the memoized object.
+   */
+  detail::sort::sort_groupby_helper& helper();
 
   /**
    * @brief Dispatches to the appropriate implementation to satisfy the
@@ -171,6 +190,12 @@ class groupby {
   dispatch_aggregation(std::vector<aggregation_request> const& requests,
                        cudaStream_t stream,
                        rmm::mr::device_memory_resource* mr);
+
+  // Sort-based groupby
+  std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> 
+  sort_aggregate(std::vector<aggregation_request> const& requests,
+                 cudaStream_t stream, rmm::mr::device_memory_resource* mr);
+
 };
 }  // namespace groupby
 }  // namespace experimental
