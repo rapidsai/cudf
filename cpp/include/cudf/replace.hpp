@@ -73,6 +73,56 @@ std::unique_ptr<column> find_and_replace_all(column_view const& input_col,
                                              column_view const& replacement_values,
                                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/**
+ * @brief Replaces values less than `lo` in `input` with `lo_replace`,
+ * and values greater than `hi` with `hi_replace`.
+ *
+ * if `lo` is invalid, then lo will not be considered while
+ * evaluating the input (Essentially considered minimum value of that type).
+ * if `hi` is invalid, then hi will not be considered while
+ * evaluating the input (Essentially considered maximum value of that type).
+ *
+ * @note: If `lo` is valid then `lo_replace` should be valid
+ *        If `hi` is valid then `hi_replace` should be valid
+ *
+ * ```
+ * Example:
+ *    input: {1, 2, 3, NULL, 5, 6, 7}
+ *
+ *    valid lo and hi
+ *    lo: 3, hi: 5, lo_replace : 0, hi_replace : 16
+ *    output:{0, 0, 3, NULL, 5, 16, 16}
+ *
+ *    invalid lo
+ *    lo: NULL, hi: 5, lo_replace : 0, hi_replace : 16
+ *    output:{1, 2, 3, NULL, 5, 16, 16}
+ *
+ *    invalid hi
+ *    lo: 3, hi: NULL, lo_replace : 0, hi_replace : 16
+ *    output:{0, 0, 3, NULL, 5, 6, 7}
+ * ```
+ *
+ * @throws cudf::logic_error if `lo.type() != hi.type()`
+ * @throws cudf::logic_error if `lo_replace.type() != hi_replace.type()`
+ * @throws cudf::logic_error if `lo.type() != lo_replace.type()`
+ * @throws cudf::logic_error if `lo.type() != input.type()`
+ *
+ * @param[in] input Column whose elements will be clamped
+ * @param[in] lo Minimum clamp value. All elements less than `lo` will be replaced by `lo_replace`. Ignored if null.
+ * @param[in] lo_replace All elements less than `lo` will be replaced by `lo_replace`.
+ * @param[in] hi Maximum clamp value. All elements greater than `hi` will be replaced by `hi_replace`. Ignored if null.
+ * @param[in] hi_replace All elements greater than `hi` will be replaced by `hi_replace`.
+ * @param[in] mr Optional resource to use for device memory
+ *           allocation of the returned result column.
+ *
+ * @return Returns a clamped column as per `lo` and `hi` boundaries
+ */
+std::unique_ptr<column> clamp(column_view const& input,
+                              scalar const& lo,
+                              scalar const& lo_replace,
+                              scalar const& hi,
+                              scalar const& hi_replace,
+                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Replaces values less than `lo` in `input` with `lo`, 
