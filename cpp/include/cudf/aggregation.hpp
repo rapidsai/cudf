@@ -53,6 +53,22 @@ std::unique_ptr<aggregation> make_count_aggregation();
 /// Factory to create a MEAN aggregation
 std::unique_ptr<aggregation> make_mean_aggregation();
 
+/**
+ * @brief Factory to create a VARIANCE aggregation
+ * 
+ * @param ddof Delta degrees of freedom. The divisor used in calculation of 
+ *             `variance` is `N - ddof`, where `N` is the population size.
+ */
+std::unique_ptr<aggregation> make_variance_aggregation(size_type ddof = 1);
+
+/**
+ * @brief Factory to create a STD aggregation
+ * 
+ * @param ddof Delta degrees of freedom. The divisor used in calculation of 
+ *             `std` is `N - ddof`, where `N` is the population size.
+ */
+std::unique_ptr<aggregation> make_std_aggregation(size_type ddof = 1);
+
 /// Factory to create a MEDIAN aggregation
 std::unique_ptr<aggregation> make_median_aggregation();
 
@@ -63,6 +79,21 @@ std::unique_ptr<aggregation> make_median_aggregation();
  * @param interpolation The desired interpolation
  */
 std::unique_ptr<aggregation> make_quantile_aggregation(
-    std::vector<double> const& q, interpolation i);
+    std::vector<double> const& q, interpolation i = interpolation::LINEAR);
+
+/**
+ * @brief Factory to create an `argmax` aggregation
+ * 
+ * `argmax` returns the index of the maximum element.
+*/
+std::unique_ptr<aggregation> make_argmax_aggregation();
+
+/**
+ * @brief Factory to create an `argmin` aggregation
+ * 
+ * `argmin` returns the index of the minimum element.
+*/
+std::unique_ptr<aggregation> make_argmin_aggregation();
+
 }  // namespace experimental
 }  // namespace cudf
