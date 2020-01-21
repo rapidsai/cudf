@@ -21,7 +21,9 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
+
 #include <hash/unordered_multiset.cuh>
+#include <cudf/detail/iterator.cuh>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <strings/utilities.hpp>
@@ -122,6 +124,7 @@ std::unique_ptr<column> search_ordered(table_view const& t,
   return result;
 }
 
+<<<<<<< HEAD
 template <typename Element, bool nullable = true>
 struct compare_with_value{
   compare_with_value(column_device_view c, Element val, bool val_is_valid, bool nulls_are_equal)
@@ -167,32 +170,30 @@ void populate_element<dictionary32_tag>(scalar const& value, dictionary32_tag &e
   CUDF_FAIL("dictionary type not supported yet");
 }
 
+=======
+>>>>>>> branch-0.12
 struct contains_scalar_dispatch {
   template <typename Element>
   bool operator()(column_view const& col, scalar const& value,
-                  cudaStream_t stream,
-                  rmm::mr::device_memory_resource *mr) {
+                  cudaStream_t stream, rmm::mr::device_memory_resource *mr) {
 
+    using ScalarType = cudf::experimental::scalar_type_t<Element>;
     auto d_col = column_device_view::create(col, stream);
-    auto data_it = thrust::make_counting_iterator<size_type>(0);
-
-    bool    element_is_valid{value.is_valid()};
-    Element element;
-
-    populate_element(value, element);
+    auto s = static_cast<const ScalarType *>(&value);
 
     if (col.has_nulls()) {
-      auto eq_op = compare_with_value<Element, true>(*d_col, element, element_is_valid, true);
+      auto found_iter = thrust::find(rmm::exec_policy(stream)->on(stream),
+                                     d_col->pair_begin<Element, true>(),
+                                     d_col->pair_end<Element, true>(),
+                                     thrust::make_pair(s->value(), true));
 
-      return thrust::any_of(rmm::exec_policy(stream)->on(stream),
-                            data_it, data_it + col.size(),
-                            eq_op);
+      return found_iter != d_col->pair_end<Element, true>();
     } else {
-      auto eq_op = compare_with_value<Element, false>(*d_col, element, element_is_valid, true);
+      auto found_iter =  thrust::find(rmm::exec_policy(stream)->on(stream),
+                                      d_col->begin<Element>(),
+                                      d_col->end<Element>(), s->value());
 
-      return thrust::any_of(rmm::exec_policy(stream)->on(stream),
-                            data_it, data_it + col.size(),
-                            eq_op);
+      return found_iter != d_col->end<Element>();
     }
   }
 };

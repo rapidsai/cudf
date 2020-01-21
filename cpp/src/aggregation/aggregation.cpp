@@ -43,6 +43,14 @@ std::unique_ptr<aggregation> make_count_aggregation() {
 std::unique_ptr<aggregation> make_mean_aggregation() {
   return std::make_unique<aggregation>(aggregation::MEAN);
 }
+/// Factory to create a VARIANCE aggregation
+std::unique_ptr<aggregation> make_variance_aggregation(size_type ddof) {
+  return std::make_unique<detail::std_var_aggregation>(aggregation::VARIANCE, ddof);
+};
+/// Factory to create a STD aggregation
+std::unique_ptr<aggregation> make_std_aggregation(size_type ddof) {
+  return std::make_unique<detail::std_var_aggregation>(aggregation::STD, ddof);
+};
 /// Factory to create a MEDIAN aggregation
 std::unique_ptr<aggregation> make_median_aggregation() {
   // TODO I think this should just return a quantile_aggregation?
@@ -51,8 +59,7 @@ std::unique_ptr<aggregation> make_median_aggregation() {
 /// Factory to create a QUANTILE aggregation
 std::unique_ptr<aggregation> make_quantile_aggregation(
     std::vector<double> const& q, interpolation i) {
-  aggregation* a = new detail::quantile_aggregation{q, i};
-  return std::unique_ptr<aggregation>(a);
+  return std::make_unique<detail::quantile_aggregation>(q, i);
 }
 /// Factory to create a ARGMAX aggregation
 std::unique_ptr<aggregation> make_argmax_aggregation() {

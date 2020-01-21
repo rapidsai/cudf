@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2019, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 from __future__ import division, print_function
 
@@ -125,7 +125,7 @@ class DataFrame(Table):
     >>> n = 5
     >>> df = cudf.DataFrame({
     >>>   'id': np.arange(n),
-    >>>   'datetimes', np.array([(t0+ timedelta(seconds=x)) for x in range(n)])
+    >>>   'datetimes': np.array([(t0+ timedelta(seconds=x)) for x in range(n)])
     >>> })
     >>> df
         id                datetimes
@@ -461,7 +461,7 @@ class DataFrame(Table):
                     df.index = self.index
                     return df
                 for col in arg:
-                    df[col] = self[col]
+                    df[col] = self._data[col]
                 df.index = self.index
             return df
         elif isinstance(arg, DataFrame):
@@ -516,6 +516,15 @@ class DataFrame(Table):
                 if arg in self._data:
                     if is_scalar(value):
                         value = utils.scalar_broadcast_to(value, len(self))
+                    if len(self) == 0:
+                        if isinstance(value, (pd.Series, Series)):
+                            self._index = as_index(value.index)
+                        elif len(value) > 0:
+                            self._index = RangeIndex(start=0, stop=len(value))
+                    elif isinstance(value, (pd.Series, Series)):
+                        value = Series(value)._align_to_index(
+                            self._index, how="right", allow_non_unique=True
+                        )
                     self._data[arg] = column.as_column(value)
                 else:
                     # disc. with pandas here
@@ -842,9 +851,7 @@ class DataFrame(Table):
                 and not self._data[col].dtype == "O"
                 and not is_datetime_dtype(self._data[col].dtype)
             ):
-                output[col] = (
-                    output._data[col].astype("str").str().fillna("null")
-                )
+                output[col] = output._data[col].astype("str").fillna("null")
             else:
                 output[col] = output._data[col]
         if isinstance(self.columns, cudf.MultiIndex):
@@ -1472,20 +1479,20 @@ class DataFrame(Table):
         if not drop:
             if isinstance(self.index, cudf.core.multiindex.MultiIndex):
                 framed = self.index.to_frame()
-                for c in framed.columns:
-                    out[c] = framed[c]
+                for col_name, col_value in framed._data.items():
+                    out[col_name] = col_value
             else:
                 name = "index"
                 if self.index.name is not None:
                     name = self.index.name
-                out[name] = self.index
-            for c in self.columns:
-                out[c] = self[c]
+                out[name] = self.index._values
+            for col_name, col_value in self._data.items():
+                out[col_name] = col_value
         else:
             out = self
         if inplace is True:
             for column_name in set(out.columns) - set(self.columns):
-                self[column_name] = out[column_name]
+                self[column_name] = out._data[column_name]
                 self._data.move_to_end(column_name, last=False)
             self.index = RangeIndex(len(self))
         else:
@@ -1598,6 +1605,8 @@ class DataFrame(Table):
                             masked=True,
                             newsize=len(value),
                         )
+        elif isinstance(value, (pd.Series, Series)):
+            value = Series(value)._align_to_index(self._index, how="right")
 
         value = column.as_column(value)
 
@@ -2791,23 +2800,19 @@ class DataFrame(Table):
                 idx_col_name = str(uuid.uuid4())
                 idx_col_names.append(idx_col_name)
 
-                lhs[idx_col_name] = index_frame_l[name].set_index(self.index)
-                rhs[idx_col_name] = index_frame_r[name].set_index(other.index)
+                lhs[idx_col_name] = index_frame_l._data[name]
+                rhs[idx_col_name] = index_frame_r._data[name]
 
         else:
             idx_col_names.append(str(uuid.uuid4()))
-            lhs[idx_col_names[0]] = Series(self.index.as_column()).set_index(
-                self.index
-            )
-            rhs[idx_col_names[0]] = Series(other.index.as_column()).set_index(
-                other.index
-            )
+            lhs[idx_col_names[0]] = self.index.as_column()
+            rhs[idx_col_names[0]] = other.index.as_column()
 
-        for name in self.columns:
-            lhs[name] = self[name]
+        for name, col in self._data.items():
+            lhs[name] = col
 
-        for name in other.columns:
-            rhs[name] = other[name]
+        for name, col in other._data.items():
+            rhs[name] = col
 
         lhs = lhs.reset_index(drop=True)
         rhs = rhs.reset_index(drop=True)
@@ -3194,7 +3199,7 @@ class DataFrame(Table):
         )
 
     def hash_columns(self, columns=None):
-        """Hash the given *columns* and return a new Series
+        """Hash the given *columns* and return a new device array
 
         Parameters
         ----------
@@ -3208,7 +3213,7 @@ class DataFrame(Table):
             columns = self.columns
 
         cols = [self[k]._column for k in columns]
-        return Series(numerical.column_hash_values(*cols))
+        return Series(numerical.column_hash_values(*cols)).values
 
     def partition_by_hash(self, columns, nparts):
         """Partition the dataframe by the hashed value of data in *columns*.
