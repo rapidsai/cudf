@@ -17,6 +17,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/scalar/scalar_device_view.cuh>
+#include <cudf/table/table_view.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 
@@ -106,7 +107,7 @@ struct binary_op {
   }
 
   std::unique_ptr<column> operator()(column_view const& lhs, column_view const& rhs, binary_operator op, data_type out_type, rmm::mr::device_memory_resource* mr, cudaStream_t stream) {
-    auto new_mask = bitmask_and(lhs, rhs, stream, mr);
+    auto new_mask = bitmask_and(table_view({lhs, rhs}), mr, stream);
     auto out = make_fixed_width_column(out_type, lhs.size(), new_mask,
                                        cudf::UNKNOWN_NULL_COUNT, stream, mr);
 

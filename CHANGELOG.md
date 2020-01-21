@@ -11,6 +11,8 @@
 - PR #3604 Add nvtext ngrams-tokenize function
 - PR #3610 Add memory_usage to DataFrame and Series APIs
 - PR #3627 Adding cudf::sort and cudf::sort_by_key
+- PR #3597 Implement new sort based groupby
+- PR #3776 Add column equivalence comparator (using epsilon for float equality)
 - PR #3667 Define and implement round-robin partition API.
 - PR #3690 Add bools_to_mask
 - PR #3577 Add initial dictionary support to column classes
@@ -19,7 +21,9 @@
 
 ## Improvements
 
+- PR #3124 Add support for grand-children in cudf column classes
 - PR #3292 Port NVStrings regex contains function
+- PR #3409 Port NVStrings regex replace function
 - PR #3417 Port NVStrings regex findall function
 - PR #3351 Add warning when filepath resolves to multiple files in cudf readers
 - PR #3370 Port NVStrings strip functions
@@ -49,17 +53,21 @@
 - PR #3639 Define and implement `nans_to_nulls`
 - PR #3561 Rework contains implementation in search
 - PR #3616 Add aggregation infrastructure for argmax/argmin.
+- PR #3673 Parquet reader: improve rounding of timestamp conversion to seconds 
 - PR #3699 Stringify libcudacxx headers for binary op JIT
 - PR #3697 Improve column insert performance for wide frames
+- PR #3616 Add aggregation infrastructure for argmax/argmin.
 - PR #3653 Make `gather_bitmask_kernel` more reusable.
 - PR #3710 Remove multiple CMake configuration steps from root build script
 - PR #3657 Define and implement compiled binops for string column comparisons
 - PR #3520 Change read_parquet defaults and add warnings
 - PR #3780 Java APIs for selecting a GPU
 - PR #3805 Avoid CuPy 7.1.0 for now
+- PR #3758 detail::scatter variant with map iterator support
 
 ## Bug Fixes
 
+- PR #3618 Update 10 minutes to cudf and cupy to hide warning that were being shown in the docs
 - PR #3550 Update Java package to 0.12
 - PR #3549 Fix index name issue with iloc with RangeIndex
 - PR #3562 Fix 4GB limit for gzipped-compressed csv files
@@ -94,9 +102,14 @@
 - PR #3769 Don't look for a `name` attribute in column
 - PR #3783 Bind cuDF operators to Dask Dataframe
 - PR #3775 Fix segfault when reading compressed CSV files larger than 4GB
+- PR #3799 Align indices of Series inputs when adding as columns to DataFrame 
 - PR #3803 Keep name when unpickling Index objects
 - PR #3804 Fix cuda crash in AVRO reader
 - PR #3766 Remove references to cudf::type_id::CATEGORY from IO code
+- PR #3817 Don't always deepcopy an index
+- PR #3821 Fix OOB read in gpuinflate prefetcher
+- PR #3829 Parquet writer: fix empty dataframe causing cuda launch errors
+- PR #3835 Fix memory leak in Cython when dealing with nulls in string columns
 
 
 # cuDF 0.11.0 (11 Dec 2019)
