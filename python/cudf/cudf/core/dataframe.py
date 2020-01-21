@@ -1488,6 +1488,16 @@ class DataFrame(Table):
                 out[name] = self.index._values
             for col_name, col_value in self._data.items():
                 out[col_name] = col_value
+            if isinstance(self.columns, cudf.core.multiindex.MultiIndex):
+                # could also be multi index
+                top = DataFrame([name] + (len(self.columns) - 1) * [""])
+                bottom = self.columns.to_frame().reset_index(drop=True)
+                index_frame = cudf.concat([top, bottom])
+                mc_df = DataFrame()
+                for idx, key in enumerate(out._data):
+                    mc_df[idx] = out[key]
+                mc_df.columns = cudf.MultiIndex.from_frame(index_frame)
+                out = mc_df
         else:
             out = self
         if inplace is True:
