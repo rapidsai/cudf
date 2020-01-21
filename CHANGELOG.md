@@ -61,6 +61,7 @@
 - PR #3657 Define and implement compiled binops for string column comparisons
 - PR #3520 Change read_parquet defaults and add warnings
 - PR #3780 Java APIs for selecting a GPU
+- PR #3796 Improve on round-robin with the case when number partitions greater than number of rows.
 - PR #3805 Avoid CuPy 7.1.0 for now
 - PR #3758 detail::scatter variant with map iterator support
 
