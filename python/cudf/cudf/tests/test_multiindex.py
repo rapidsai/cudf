@@ -710,9 +710,7 @@ def test_multiindex_groupby_reset_index():
 
 
 def test_multicolumn_reset_index():
-    gdf = cudf.DataFrame(
-        {"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5]}
-    )
+    gdf = cudf.DataFrame({"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5]})
     pdf = gdf.to_pandas()
     gdg = gdf.groupby(["x"]).agg({"y": ["count", "mean"]})
     pdg = pdf.groupby(["x"]).agg({"y": ["count", "mean"]})
