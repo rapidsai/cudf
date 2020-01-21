@@ -2207,7 +2207,7 @@ class Series(Table):
         """
         from cudf.core.column import numerical
 
-        return Series(numerical.column_hash_values(self._column))
+        return Series(numerical.column_hash_values(self._column)).values
 
     def hash_encode(self, stop, use_name=False):
         """Encode column values as ints in [0, stop) using hash function.
@@ -2586,7 +2586,7 @@ class Series(Table):
         A Column of insertion points with the same shape as value
         """
         outcol = self._column.searchsorted(value, side)
-        return Series(outcol)
+        return Series(outcol).values
 
     @property
     def is_unique(self):
