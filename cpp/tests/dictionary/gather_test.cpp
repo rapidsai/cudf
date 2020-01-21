@@ -25,7 +25,6 @@
 
 #include <vector>
 
-
 struct DictionaryGatherTest : public cudf::test::BaseFixture {};
 
 TEST_F(DictionaryGatherTest, Gather)
@@ -35,23 +34,13 @@ TEST_F(DictionaryGatherTest, Gather)
 
     auto dictionary = cudf::dictionary::encode( strings );
     cudf::dictionary_column_view view(dictionary->view());
-    auto keys = *(view.dictionary_keys());
-
-    std::vector<const char*> h_keys{ "aaa", "bbb", "ccc", "ddd", "eee" };
-    cudf::test::strings_column_wrapper keys_strings( h_keys.begin(), h_keys.end() );
-    cudf::test::expect_columns_equal(keys, keys_strings);
-
-    std::vector<int32_t> h_expected{4,0,3,1,2,2,2,4,0};
-    cudf::test::fixed_width_column_wrapper<int32_t> expected( h_expected.begin(), h_expected.end() );
-    cudf::test::expect_columns_equal(view.indices(), expected);
 
     cudf::test::fixed_width_column_wrapper<int16_t> gather_map{{0, 1, 3, 4}};
-    cudf::table_view source_table{{dictionary->view()}};
+    auto table_result = cudf::experimental::gather(cudf::table_view{{dictionary->view()}}, gather_map);
+    auto result = cudf::dictionary_column_view(table_result->view().column(0));
 
-//    auto got = cudf::experimental::gather(source_table, gather_map);
-//    auto result = cudf::dictionary_column_view(got->view().column(0));
-//    cudf::test::print( result.indices() );
-//    cudf::test::print( *(result.dictionary_keys()) );
-
+    std::vector<int32_t> h_expected{4,0,1,2};
+    cudf::test::fixed_width_column_wrapper<int32_t> expected( h_expected.begin(), h_expected.end() );
+    cudf::test::expect_columns_equal(result.indices(), expected);
 }
 
