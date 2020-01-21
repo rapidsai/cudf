@@ -371,10 +371,22 @@ class concurrent_unordered_map {
   /**---------------------------------------------------------------------------*
    * @brief Searches the map for the specified key.
    *
-   * @note `find` is not threadsafe with `insert`. I.e., it is not safe to
-   *do concurrent `insert` and `find` operations.
+   * This version of the find function specifies a hashing function and an
+   * equality comparison.  This allows the caller to use different functions
+   * for insert and find (for example, when you want to insert keys from
+   * one table and use find to match keys from a different table with the
+   * keys from the first table).
    *
-   * @param k The key to search for
+   * @note `find` is not threadsafe with `insert`. I.e., it is not safe to
+   * do concurrent `insert` and `find` operations.
+   *
+   * @tparam find_hasher     Type of hashing function
+   * @tparam find_key_equal  Type of equality comparison
+   *
+   * @param k         The key to search for
+   * @param f_hash    The hashing function to use to hash this key
+   * @param f_equal   The equality function to use to compare this key with the
+   *                  contents of the hash table
    * @return An iterator to the key if it exists, else map.end()
    *---------------------------------------------------------------------------**/
   template <typename find_hasher, typename find_key_equal>
