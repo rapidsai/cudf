@@ -28,7 +28,7 @@
 #include <cudf/detail/utilities/release_assert.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/detail/gather.cuh>
-#include <cudf/dictionary/detail/gather.cuh>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/detail/valid_if.cuh>
 
 #include <rmm/thrust_rmm_allocator.h>
@@ -192,7 +192,7 @@ struct column_gatherer_impl<string_view, MapItType>
 };
 
 template<typename MapItType>
-struct column_gatherer_impl<dictionary32_tag, MapItType>
+struct column_gatherer_impl<dictionary32, MapItType>
 {
  /**
   * @brief Type-dispatched function to gather from one column to another based
@@ -211,21 +211,41 @@ struct column_gatherer_impl<dictionary32_tag, MapItType>
                                      bool nullify_out_of_bounds,
                                      rmm::mr::device_memory_resource *mr,
                                      cudaStream_t stream) {
-      if (true == nullify_out_of_bounds) {
-        return cudf::dictionary::detail::gather<true>(
-                       dictionary_column_view(source_column),
-                       gather_map_begin, gather_map_end,
-                       false,
-                       mr, stream);
-      } else {
-        return cudf::dictionary::detail::gather<false>(
-                       dictionary_column_view(source_column),
-                       gather_map_begin, gather_map_end,
-                       false,
-                       mr, stream);
-      }
-  }
+      dictionary_column_view dictionary(source_column);
+      auto output_count = std::distance(gather_map_begin, gather_map_end);
+      auto elements_count = dictionary.size();
+      if( output_count == 0 )
+          return make_empty_column(data_type{DICTIONARY32});
 
+      // create view of the indices column combined with the null mask
+      // in order to call gather on it
+      column_view indices( data_type{INT32}, dictionary.size(), 
+                           dictionary.indices().data<int32_t>(),
+                           dictionary.null_mask(), dictionary.null_count(),
+                           dictionary.offset() );
+      column_gatherer_impl<int32_t,MapItType> index_gatherer;
+      auto new_indices = index_gatherer( indices, gather_map_begin, gather_map_end,
+                                         nullify_out_of_bounds, mr, stream);
+      // copy null mask for the output parent
+      auto null_count = new_indices->null_count();
+      rmm::device_buffer null_mask;
+      if( null_count )
+          null_mask = copy_bitmask(new_indices->view(),stream,mr);
+      // reset null mask on indices column
+      new_indices->set_null_mask( rmm::device_buffer{0,stream,mr}, 0 );
+
+      // somehow need to increment the shared-ptr count of the keys
+      auto keys_copy = std::make_shared<column>(dictionary.dictionary_keys());
+
+      std::vector<std::unique_ptr<column>> children;
+      children.emplace_back(std::move(new_indices));
+      return std::make_unique<column>(
+          data_type{DICTIONARY32}, output_count,
+          rmm::device_buffer{0,stream,mr},
+          null_mask, null_count,
+          std::move(children),
+          keys_copy);
+  }
 };
 
 
