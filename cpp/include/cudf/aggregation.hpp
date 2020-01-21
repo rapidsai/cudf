@@ -64,5 +64,24 @@ std::unique_ptr<aggregation> make_median_aggregation();
  */
 std::unique_ptr<aggregation> make_quantile_aggregation(
     std::vector<double> const& q, interpolation i);
+
+/**
+ * @brief Factory to create an `argmax` aggregation
+ * 
+ * `argmax` returns the index of the maximum element.
+*/
+std::unique_ptr<aggregation> make_argmax_aggregation();
+
+
+/**
+ * @brief Factory to create an `argmin` aggregation
+ * 
+ * `argmin` returns the index of the minimum element.
+*/
+std::unique_ptr<aggregation> make_argmin_aggregation();
+
+
+
+
 }  // namespace experimental
 }  // namespace cudf

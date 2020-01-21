@@ -14,7 +14,7 @@ import rmm
 import cudf as gd
 from cudf.core.dataframe import DataFrame, Series
 from cudf.tests import utils
-from cudf.tests.utils import assert_eq, gen_rand
+from cudf.tests.utils import assert_eq, does_not_raise, gen_rand
 
 
 def test_init_via_list_of_tuples():
@@ -38,6 +38,96 @@ def test_init_via_list_of_empty_tuples(rows):
     gdf = DataFrame(data)
 
     assert_eq(pdf, gdf, check_like=True)
+
+
+@pytest.mark.parametrize(
+    "dict_of_series",
+    [
+        {"a": pd.Series([1.0, 2.0, 3.0])},
+        {"a": pd.Series([1.0, 2.0, 3.0], index=[4, 5, 6])},
+        {
+            "a": pd.Series([1.0, 2.0, 3.0], index=[4, 5, 6]),
+            "b": pd.Series([1.0, 2.0, 4.0], index=[1, 2, 3]),
+        },
+        {"a": [1, 2, 3], "b": pd.Series([1.0, 2.0, 3.0], index=[4, 5, 6])},
+        {
+            "a": pd.Series([1.0, 2.0, 3.0], index=["a", "b", "c"]),
+            "b": pd.Series([1.0, 2.0, 4.0], index=["c", "d", "e"]),
+        },
+        {
+            "a": pd.Series(
+                ["a", "b", "c"],
+                index=pd.MultiIndex.from_tuples([(1, 2), (1, 3), (2, 3)]),
+            ),
+            "b": pd.Series(
+                ["a", " b", "d"],
+                index=pd.MultiIndex.from_tuples([(1, 2), (1, 3), (2, 3)]),
+            ),
+        },
+    ],
+)
+def test_init_from_series_align(dict_of_series):
+    pdf = pd.DataFrame(dict_of_series)
+    gdf = gd.DataFrame(dict_of_series)
+
+    assert_eq(pdf, gdf)
+
+    for key in dict_of_series:
+        if isinstance(dict_of_series[key], pd.Series):
+            dict_of_series[key] = gd.Series(dict_of_series[key])
+
+    gdf = gd.DataFrame(dict_of_series)
+
+    assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize(
+    ("dict_of_series", "expectation"),
+    [
+        (
+            {
+                "a": pd.Series(["a", "b", "c"], index=[4, 4, 5]),
+                "b": pd.Series(["a", "b", "c"], index=[4, 5, 6]),
+            },
+            pytest.raises(
+                ValueError, match="Cannot align indices with non-unique values"
+            ),
+        ),
+        (
+            {
+                "a": pd.Series(["a", "b", "c"], index=[4, 4, 5]),
+                "b": pd.Series(["a", "b", "c"], index=[4, 4, 5]),
+            },
+            does_not_raise(),
+        ),
+    ],
+)
+def test_init_from_series_align_nonunique(dict_of_series, expectation):
+    with expectation:
+        gdf = gd.DataFrame(dict_of_series)
+
+    if expectation == does_not_raise():
+        pdf = pd.DataFrame(dict_of_series)
+        assert_eq(pdf, gdf)
+
+
+def test_init_unaligned_with_index():
+    pdf = pd.DataFrame(
+        {
+            "a": pd.Series([1.0, 2.0, 3.0], index=[4, 5, 6]),
+            "b": pd.Series([1.0, 2.0, 3.0], index=[1, 2, 3]),
+        },
+        index=[7, 8, 9],
+    )
+    gdf = gd.DataFrame(
+        {
+            "a": gd.Series([1.0, 2.0, 3.0], index=[4, 5, 6]),
+            "b": gd.Series([1.0, 2.0, 3.0], index=[1, 2, 3]),
+        },
+        index=[7, 8, 9],
+    )
+
+    assert_eq(pdf, gdf, check_dtype=False)
 
 
 def test_series_basic():
@@ -4103,7 +4193,7 @@ def test_df_sr_binop(gsr, colnames, op):
     ],
 )
 @pytest.mark.parametrize(
-    "gsr", [Series([1, 2, 3, 4, 5], index=["a", "b", "d", "0", "12"])],
+    "gsr", [Series([1, 2, 3, 4, 5], index=["a", "b", "d", "0", "12"])]
 )
 def test_df_sr_binop_col_order(gsr, op):
     colnames = [0, 1, 2]

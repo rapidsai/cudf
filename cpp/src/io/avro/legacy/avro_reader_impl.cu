@@ -452,7 +452,7 @@ void reader::Impl::decode_data(
       static_cast<block_desc_s *>(block_list.data()), schema_desc.device_ptr(),
       reinterpret_cast<gpu::nvstrdesc_s *>(global_dictionary.device_ptr()),
       static_cast<const uint8_t *>(block_data.data()),
-      static_cast<uint32_t>(block_list.size()),
+      static_cast<uint32_t>(md_->block_list.size()),
       static_cast<uint32_t>(schema_desc.size()),
       static_cast<uint32_t>(total_dictionary_entries), md_->num_rows,
       md_->skip_rows, min_row_data_size, 0));

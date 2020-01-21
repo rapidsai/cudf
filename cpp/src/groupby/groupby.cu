@@ -18,7 +18,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/detail/aggregation.hpp>
+#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/groupby.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/table/table.hpp>
@@ -60,6 +60,7 @@ groupby::dispatch_aggregation(std::vector<aggregation_request> const& requests,
 }
 
 namespace {
+/// Make an empty table with appropriate types for requested aggs
 auto empty_results(std::vector<aggregation_request> const& requests) {
   std::vector<aggregation_result> empty_results;
 
@@ -80,6 +81,23 @@ auto empty_results(std::vector<aggregation_request> const& requests) {
 
   return empty_results;
 }
+
+/// Verifies the agg requested on the request's values is valid
+void verify_valid_requests(std::vector<aggregation_request> const& requests) {
+  CUDF_EXPECTS(
+      std::all_of(requests.begin(), requests.end(),
+                  [](auto const& request) {
+                    return std::all_of(
+                        request.aggregations.begin(),
+                        request.aggregations.end(),
+                        [&request](auto const& agg) {
+                          return experimental::detail::is_valid_aggregation(
+                              request.values.type(), agg->kind);
+                        });
+                  }),
+      "Invalid type/aggregation combination.");
+}
+
 }  // namespace
 
 // Compute aggregation requests
@@ -91,6 +109,9 @@ groupby::aggregate(std::vector<aggregation_request> const& requests,
                              return request.values.size() == _keys.num_rows();
                            }),
                "Size mismatch between request values and groupby keys.");
+
+  verify_valid_requests(requests);
+
   if (_keys.num_rows() == 0) {
     std::make_pair(empty_like(_keys), empty_results(requests));
   }

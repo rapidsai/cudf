@@ -91,8 +91,6 @@ constexpr orc::TypeKind to_orc_type(cudf::type_id id) {
     case cudf::type_id::TIMESTAMP_MILLISECONDS:
     case cudf::type_id::TIMESTAMP_NANOSECONDS:
       return TypeKind::TIMESTAMP;
-    case cudf::type_id::CATEGORY:
-      return TypeKind::INT;
     case cudf::type_id::STRING:
       return TypeKind::STRING;
     default:

@@ -199,7 +199,7 @@ class CategoricalAccessor(object):
 
         ordered = kwargs.get("ordered", self.ordered)
         new_codes = df["new_codes"]._column
-        new_dtype = CategoricalDtype(categories=new_cats, ordered=ordered,)
+        new_dtype = CategoricalDtype(categories=new_cats, ordered=ordered)
 
         if kwargs.get("inplace", False):
             self._parent.data = None
@@ -297,7 +297,7 @@ class CategoricalColumn(column.ColumnBase):
     @property
     def as_numerical(self):
         return column.build_column(
-            data=self.codes.data, dtype=self.codes.dtype, mask=self.mask,
+            data=self.codes.data, dtype=self.codes.dtype, mask=self.mask
         )
 
     @property
@@ -307,7 +307,7 @@ class CategoricalColumn(column.ColumnBase):
     @categories.setter
     def categories(self, value):
         self.dtype = CategoricalDtype(
-            categories=value, ordered=self.dtype.ordered,
+            categories=value, ordered=self.dtype.ordered
         )
 
     @property
@@ -402,8 +402,8 @@ class CategoricalColumn(column.ColumnBase):
             dictionary=self.categories.to_arrow(),
         )
 
-    def unique(self, method=None):
-        codes = self.as_numerical.unique(method)
+    def unique(self, method="sort"):
+        codes = self.as_numerical.unique(method=method)
         return column.build_categorical_column(
             categories=self.categories,
             codes=codes,
