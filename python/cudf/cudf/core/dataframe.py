@@ -125,7 +125,7 @@ class DataFrame(Table):
     >>> n = 5
     >>> df = cudf.DataFrame({
     >>>   'id': np.arange(n),
-    >>>   'datetimes', np.array([(t0+ timedelta(seconds=x)) for x in range(n)])
+    >>>   'datetimes': np.array([(t0+ timedelta(seconds=x)) for x in range(n)])
     >>> })
     >>> df
         id                datetimes
