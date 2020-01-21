@@ -77,6 +77,49 @@ table_with_metadata read_avro(
     read_avro_args const& args,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/**---------------------------------------------------------------------------*
+ * @brief Input arguments to the `read_json` interface
+ *
+ * Available parameters and are closely patterned after PANDAS' `read_json` API.
+ * Not all parameters are unsupported. If the matching PANDAS' parameter
+ * has a default value of `None`, then a default value of `-1` or `0` may be
+ * used as the equivalent.
+ *
+ * Parameters in PANDAS that are unavailable or in cudf:
+ *  `orient`                - currently fixed-format
+ *  `typ`                   - data is always returned as a cudf::table
+ *  `convert_axes`          - use column functions for axes operations instead
+ *  `convert_dates`         - dates are detected automatically
+ *  `keep_default_dates`    - dates are detected automatically
+ *  `numpy`                 - data is always returned as a cudf::table
+ *  `precise_float`         - there is only one converter
+ *  `date_unit`             - only millisecond units are supported
+ *  `encoding`              - only ASCII-encoded data is supported
+ *  `chunksize`             - use `byte_range_xxx` for chunking instead
+ *---------------------------------------------------------------------------**/
+struct read_json_args {
+  source_info source;
+
+  ///< Data types of the column; empty to infer dtypes
+  std::vector<std::string> dtype;
+  /// Specify the compression format of the source or infer from file extension
+  compression_type compression = compression_type::AUTO;
+
+  ///< Read the file as a json object per line
+  bool lines = false;
+
+  ///< Bytes to skip from the start
+  size_t byte_range_offset = 0;             
+  ///< Bytes to read; always reads complete rows
+  size_t byte_range_size = 0;
+
+  explicit read_json_args(const source_info& src) : source(src) {}
+};
+
+// Freeform API wraps the detail reader class API
+table_with_metadata read_json(read_json_args const& args,
+                                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()); 
+
 /**
  * @brief Settings to use for `read_csv()`
  */

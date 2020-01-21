@@ -67,7 +67,8 @@ private:
   size_t byte_range_offset_ = 0;
   size_t byte_range_size_ = 0;
 
-  std::vector<std::string> column_names_;
+  //std::vector<std::string> column_names_;
+  table_metadata         metadata;
   std::vector<data_type> dtypes_;
   //std::vector<gdf_dtype_extra_info> dtypes_extra_info_;
   //std::vector<gdf_column_wrapper> columns_;

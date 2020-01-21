@@ -223,7 +223,7 @@ namespace json {
      *
      * @return cudf::table object that contains the array of gdf_columns.
      *---------------------------------------------------------------------------**/
-    table_with_metadata read_all(cudaStream_t stream);
+    table_with_metadata read_all(cudaStream_t stream = 0);
 
     /**---------------------------------------------------------------------------*
      * @brief Reads and returns all the rows within a byte range.
@@ -237,7 +237,7 @@ namespace json {
      *
      * @return cudf::table object that contains the array of gdf_columns
      *---------------------------------------------------------------------------**/
-    table_with_metadata read_byte_range(size_t offset, size_t size, cudaStream_t stream);
+    table_with_metadata read_byte_range(size_t offset, size_t size, cudaStream_t stream = 0);
   };
 
 }  // namespace JSON

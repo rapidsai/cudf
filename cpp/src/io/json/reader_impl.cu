@@ -344,7 +344,7 @@ void reader::impl::set_column_names() {
   // If the first opening bracket is '{', assume object format
   const bool is_object = first_curly_bracket < first_square_bracket;
   if (is_object) {
-    column_names_ = getNamesFromJsonObject(first_row, opts_);
+    metadata.column_names = getNamesFromJsonObject(first_row, opts_);
   } else {
     int cols_found = 0;
     bool quotation = false;
@@ -355,7 +355,7 @@ void reader::impl::set_column_names() {
       }
       // Check if end of a column/row
       else if (pos == first_row.size() - 1 || (!quotation && first_row[pos] == opts_.delimiter)) {
-        column_names_.emplace_back(std::to_string(cols_found++));
+        metadata.column_names.emplace_back(std::to_string(cols_found++));
       }
     }
   }
@@ -363,7 +363,7 @@ void reader::impl::set_column_names() {
 
 void reader::impl::set_data_types() {  
   if (!args_.dtype.empty()) {
-    CUDF_EXPECTS(args_.dtype.size() == column_names_.size(), "Need to specify the type of each column.\n");
+    CUDF_EXPECTS(args_.dtype.size() == metadata.column_names.size(), "Need to specify the type of each column.\n");
     // Assume that the dtype is in dictionary format only if all elements contain a colon
     const bool is_dict = std::all_of(args_.dtype.begin(), args_.dtype.end(), [](const std::string &s) {
       return std::find(s.begin(), s.end(), ':') != s.end();
@@ -386,7 +386,7 @@ void reader::impl::set_data_types() {
 
       // Using the map here allows O(n log n) complexity
       for (size_t col = 0; col < args_.dtype.size(); ++col) {
-        dtypes_.push_back(col_type_map[column_names_[col]]);
+        dtypes_.push_back(col_type_map[metadata.column_names[col]]);
         // dtypes_extra_info_.push_back(col_type_info_map[column_names_[col]]);
       }
     } else {
@@ -399,7 +399,7 @@ void reader::impl::set_data_types() {
     }
   } else {
     CUDF_EXPECTS(rec_starts_.size() != 0, "No data available for data type inference.\n");
-    const auto num_columns = column_names_.size();
+    const auto num_columns = metadata.column_names.size();
 
     // dtypes_extra_info_ = std::vector<gdf_dtype_extra_info>(num_columns, gdf_dtype_extra_info{ TIME_UNIT_NONE });
 
@@ -476,7 +476,7 @@ table_with_metadata reader::impl::convert_data_to_table(cudaStream_t stream) {
   thrust::host_vector<cudf::size_type> h_valid_counts = d_valid_counts;
   std::vector<std::unique_ptr<column>> out_columns;
   for (size_t i = 0; i < num_columns; ++i) {
-    out_buffers[i].null_count() = out_buffers[i].data_size() - h_valid_counts[i];
+    out_buffers[i].null_count() = num_records - h_valid_counts[i];
 
     out_columns.emplace_back(make_column(dtypes_[i], num_records, out_buffers[i]));
   }   
@@ -490,7 +490,7 @@ table_with_metadata reader::impl::convert_data_to_table(cudaStream_t stream) {
   // CUDF_EXPECTS(!columns_.empty(), "Error converting json input into gdf columns.\n");
 
   // return { std::make_unique<table>(std::move(out_columns)), std::move(metadata) };
-  return table_with_metadata{std::make_unique<table>(std::move(out_columns))};  
+  return table_with_metadata{std::make_unique<table>(std::move(out_columns)), metadata};  
 }
 
 reader::impl::impl(std::unique_ptr<datasource> source, std::string filepath,
@@ -523,8 +523,8 @@ table_with_metadata reader::impl::read(size_t range_offset, size_t range_size, c
   CUDF_EXPECTS(data_.size() != 0, "Error uploading input data to the GPU.\n");
 
   set_column_names();
-  CUDF_EXPECTS(!column_names_.empty(), "Error determining column names.\n");
-
+  CUDF_EXPECTS(!metadata.column_names.empty(), "Error determining column names.\n");
+  
   set_data_types();
   CUDF_EXPECTS(!dtypes_.empty(), "Error in data type detection.\n");
 

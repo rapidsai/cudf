@@ -73,6 +73,22 @@ table_with_metadata read_avro(read_avro_args const& args,
 }
 
 // Freeform API wraps the detail reader class API
+table_with_metadata read_json(read_json_args const& args,
+                                rmm::mr::device_memory_resource* mr) {
+  namespace json = cudf::experimental::io::detail::json;
+
+  json::reader_options options{args.lines, args.compression, args.dtype};
+  auto reader = make_reader<json::reader>(args.source, options, mr);
+
+   if (args.byte_range_offset != 0 || args.byte_range_size != 0) {
+    return reader->read_byte_range(args.byte_range_offset,
+                                   args.byte_range_size);
+  } else {
+    return reader->read_all();
+  }
+}
+
+// Freeform API wraps the detail reader class API
 table_with_metadata read_csv(read_csv_args const& args,
                                 rmm::mr::device_memory_resource* mr) {
   namespace csv = cudf::experimental::io::detail::csv;
