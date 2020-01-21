@@ -24,6 +24,7 @@
 #include <tests/utilities/column_wrapper.hpp>
 
 #include <vector>
+#include <thrust/sequence.h>
 
 struct DictionarySortTest : public cudf::test::BaseFixture {};
 
@@ -35,18 +36,15 @@ TEST_F(DictionarySortTest, StringColumn)
     auto dictionary = cudf::dictionary::encode( strings );
     cudf::dictionary_column_view view(dictionary->view());
 
-    cudf::test::print(view.dictionary_keys());
-    std::cout << std::endl;
-    cudf::test::print(view.indices());
-    std::cout << std::endl;
-
     cudf::table_view input{{strings}};
     std::vector<cudf::order> column_order{cudf::order::ASCENDING};
     auto got = cudf::experimental::sorted_order(cudf::table_view{{dictionary->view()}},
-                            std::vector<cudf::order>{cudf::order::ASCENDING});
+                                                std::vector<cudf::order>{cudf::order::ASCENDING});
 
-    cudf::test::print( *got );
-    std::cout << std::endl;
+    auto h_indices = cudf::test::to_host<int32_t>(view.indices()).first;
+    std::vector<int32_t> h_expected(got->size());
+    thrust::sequence( h_expected.begin(), h_expected.end() );
+    std::sort( h_expected.begin(), h_expected.end(), [h_indices] (int32_t lhs, int32_t rhs) { return h_indices[lhs] < h_indices[rhs]; } );
+    cudf::test::fixed_width_column_wrapper<int32_t> expected( h_expected.begin(), h_expected.end() );
+    cudf::test::expect_columns_equal(got->view(), expected);
 }
-
-
