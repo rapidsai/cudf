@@ -45,7 +45,7 @@ struct dictionary_wrapper
   // conversion operator
   CUDA_HOST_DEVICE_CALLABLE explicit operator value_type() const { return _value; }
   // simple accessor
-  CUDA_HOST_DEVICE_CALLABLE value_type value() { return _value; }
+  CUDA_HOST_DEVICE_CALLABLE value_type value() const { return _value; }
 
 private:
   value_type _value;
