@@ -2332,7 +2332,7 @@ class DataFrame(Frame):
         return melt(self, **kwargs)
 
     def _typecast_before_merge(self, lhs, rhs, left_on, right_on, how):
-        def casting_rules(dtype_l, dtype_r, how):
+        def casting_rules(lhs, rhs, dtype_l, dtype_r, how):
             cast_warn = "can't safely cast column {} from {} with type \
                          {} to {}, upcasting to {}"
             ctgry_err = "can't implicitly cast column {0} to categories \
@@ -2349,7 +2349,7 @@ class DataFrame(Frame):
 
                 check_col = rhs._data[rcol].fillna(0)
                 if not check_col.can_cast_safely(dtype_l):
-                    rtn = casting_rules(dtype_l, dtype_r, "inner")
+                    rtn = casting_rules(lhs, rhs, dtype_l, dtype_r, "inner")
                     warnings.warn(
                         cast_warn.format(rcol, "right", dtype_r, dtype_l, rtn)
                     )
@@ -2358,7 +2358,7 @@ class DataFrame(Frame):
             elif how == "right":
                 check_col = lhs._data[lcol].fillna(0)
                 if not check_col.can_cast_safely(dtype_r):
-                    rtn = casting_rules(dtype_l, dtype_r, "inner")
+                    rtn = casting_rules(lhs, rhs, dtype_l, dtype_r, "inner")
                     warnings.warn(
                         cast_warn.format(lcol, "left", dtype_l, dtype_r, rtn)
                     )
@@ -2404,7 +2404,7 @@ class DataFrame(Frame):
             if pd.api.types.is_dtype_equal(dtype_l, dtype_r):
                 continue
 
-            to_dtype = casting_rules(dtype_l, dtype_r, how)
+            to_dtype = casting_rules(lhs, rhs, dtype_l, dtype_r, how)
 
             if to_dtype is not None:
                 lhs[lcol] = lhs[lcol].astype(to_dtype)
