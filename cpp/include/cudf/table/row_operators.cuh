@@ -108,12 +108,6 @@ __device__ weak_ordering relational_compare(Element lhs, Element rhs) {
     return detail::compare_elements(lhs, rhs);
 }
 
-template <>
-__device__ inline weak_ordering relational_compare<dictionary32>(dictionary32 lhs, dictionary32 rhs) {
-    release_assert(false && "dictionary elements not comparable.");
-    return weak_ordering::EQUIVALENT;
-}
-
 /**---------------------------------------------------------------------------*
  * @brief A specialization for floating-point `Element` type to check if
  * `lhs` is equivalent to `rhs`. `nan == nan`.
@@ -143,12 +137,6 @@ template <typename Element,
             std::enable_if_t<not std::is_floating_point<Element>::value>* = nullptr>
 __device__ bool equality_compare(Element const lhs, Element const rhs) {
     return lhs == rhs;
-}
-
-template <>
-__device__ inline bool equality_compare<dictionary32>(dictionary32 const lhs, dictionary32 const rhs) {
-    release_assert(false && "dictionary elements not comparable.");
-    return false;
 }
 
 /**---------------------------------------------------------------------------*
@@ -297,7 +285,6 @@ class element_relational_comparator {
                                       size_type rhs_element_index) {
     release_assert(false &&
                    "Attempted to compare elements of uncomparable types.");
-    return weak_ordering::EQUIVALENT;
   }
 
  private:
