@@ -73,3 +73,20 @@ TYPED_TEST(TileTest, OneColumn)
 
     cudf::test::expect_tables_equal(expected, actual->view());
 }
+
+TYPED_TEST(TileTest, OneColumnNullable)
+{
+    using T = TypeParam;
+
+    fixed_width_column_wrapper<T> in_a({ -1, 0, 1 }, { 1, 0, 0 });
+
+    cudf::table_view in (std::vector<cudf::column_view>{ in_a });
+
+    fixed_width_column_wrapper<T> expected_a({ -1, 0, 1, -1, 0, 1 }, { 1, 0, 0, 1, 0, 0 });
+
+    cudf::table_view expected (std::vector<cudf::column_view>{ expected_a });
+
+    auto actual = cudf::experimental::tile(in, 2);
+
+    cudf::test::expect_tables_equal(expected, actual->view());
+}
