@@ -104,8 +104,10 @@ degenerate_partitions(cudf::table_view const& input,
     auto ret_pair =
       std::make_pair(std::move(uniq_tbl), std::vector<cudf::size_type>(num_partitions));
 
-    cudaMemcpy(ret_pair.second.data(), partition_offsets.data().get(), sizeof(cudf::size_type)*num_partitions, cudaMemcpyDeviceToHost);
+    CUDA_TRY(cudaMemcpyAsync(ret_pair.second.data(), partition_offsets.data().get(), sizeof(cudf::size_type)*num_partitions, cudaMemcpyDeviceToHost, stream));
 
+    CUDA_TRY(cudaStreamSynchronize(stream));
+    
     return ret_pair;
   } else {  //( num_partitions > nrows )
     VectorT<cudf::size_type> d_row_indices(nrows, cudf::size_type{0});
@@ -149,8 +151,10 @@ degenerate_partitions(cudf::table_view const& input,
     VectorT<cudf::size_type> partition_offsets(num_partitions, cudf::size_type{0});
     thrust::exclusive_scan(exec->on(stream), nedges_iter_begin, nedges_iter_begin + num_partitions, partition_offsets.begin());
 
-    cudaMemcpy(ret_pair.second.data(), partition_offsets.data().get(), sizeof(cudf::size_type)*num_partitions, cudaMemcpyDeviceToHost);
+    CUDA_TRY(cudaMemcpyAsync(ret_pair.second.data(), partition_offsets.data().get(), sizeof(cudf::size_type)*num_partitions, cudaMemcpyDeviceToHost, stream));
 
+    CUDA_TRY(cudaStreamSynchronize(stream));
+    
     return ret_pair;
   }
 }
