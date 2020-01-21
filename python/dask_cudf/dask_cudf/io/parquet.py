@@ -1,3 +1,4 @@
+import warnings
 from functools import partial
 
 import pyarrow.parquet as pq
@@ -6,7 +7,7 @@ import dask.dataframe as dd
 from dask.dataframe.io.parquet.arrow import ArrowEngine
 
 import cudf
-from cudf.core.column import CategoricalColumn
+from cudf.core.column import build_categorical_column
 
 
 class CudfEngine(ArrowEngine):
@@ -83,8 +84,8 @@ class CudfEngine(ArrowEngine):
                     val.as_py() for val in partitions.levels[i].dictionary
                 ]
                 sr = cudf.Series(index2).astype(type(index2)).repeat(len(df))
-                df[name] = CategoricalColumn(
-                    data=sr._column.data, categories=categories, ordered=False
+                df[name] = build_categorical_column(
+                    categories=categories, codes=sr._column, ordered=False
                 )
 
         return df
@@ -141,7 +142,12 @@ class CudfEngine(ArrowEngine):
 
 
 def read_parquet(
-    path, columns=None, split_row_groups=True, gather_statistics=None, **kwargs
+    path,
+    columns=None,
+    chunksize=None,
+    split_row_groups=True,
+    gather_statistics=None,
+    **kwargs,
 ):
     """ Read parquet files into a Dask DataFrame
 
@@ -162,11 +168,20 @@ def read_parquet(
     """
     if isinstance(columns, str):
         columns = [columns]
-    if split_row_groups:
-        gather_statistics = True
+    if chunksize and gather_statistics is False:
+        warnings.warn(
+            "Setting chunksize parameter with gather_statistics=False. "
+            "Use gather_statistics=True to enable row-group aggregation."
+        )
+    if chunksize and split_row_groups is False:
+        warnings.warn(
+            "Setting chunksize parameter with split_row_groups=False. "
+            "Use split_row_groups=True to enable row-group aggregation."
+        )
     return dd.read_parquet(
         path,
         columns=columns,
+        chunksize=chunksize,
         split_row_groups=split_row_groups,
         gather_statistics=gather_statistics,
         engine=CudfEngine,

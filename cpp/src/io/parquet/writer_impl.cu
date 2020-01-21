@@ -128,7 +128,6 @@ class parquet_column_view {
         _stats_dtype = statistics_dtype::dtype_int16;
         break;
       case cudf::type_id::INT32:
-      case cudf::type_id::CATEGORY:
         _physical_type = Type::INT32;
         _stats_dtype = statistics_dtype::dtype_int32;
         break;
@@ -455,7 +454,9 @@ void writer::impl::write(table_view const &table, const table_metadata *metadata
   uint32_t fragment_size = 5000;
   uint32_t num_fragments = (uint32_t)((md.num_rows + fragment_size - 1) / fragment_size);
   hostdevice_vector<gpu::PageFragment> fragments(num_columns * num_fragments);
-  init_page_fragments(fragments, col_desc, num_columns, num_fragments, num_rows, fragment_size, stream);
+  if (fragments.size() != 0) {
+    init_page_fragments(fragments, col_desc, num_columns, num_fragments, num_rows, fragment_size, stream);
+  }
 
   // Decide row group boundaries based on uncompressed data size
   size_t rowgroup_size = 0;
@@ -483,8 +484,10 @@ void writer::impl::write(table_view const &table, const table_metadata *metadata
   rmm::device_vector<statistics_chunk> frag_stats;
   if (stats_granularity_ != statistics_freq::STATISTICS_NONE) {
     frag_stats.resize(num_fragments * num_columns);
-    gather_fragment_statistics(frag_stats.data().get(), fragments, col_desc,
-                               num_columns, num_fragments, fragment_size, stream);
+    if (frag_stats.size() != 0) {
+      gather_fragment_statistics(frag_stats.data().get(), fragments, col_desc,
+                                 num_columns, num_fragments, fragment_size, stream);
+    }
   }
 
   // Initialize row groups and column chunks
@@ -552,7 +555,9 @@ void writer::impl::write(table_view const &table, const table_metadata *metadata
   }
 
   // Build chunk dictionaries and count pages
-  build_chunk_dictionaries(chunks, col_desc, num_rowgroups, num_columns, num_dictionaries, stream);
+  if (num_chunks != 0) {
+    build_chunk_dictionaries(chunks, col_desc, num_rowgroups, num_columns, num_dictionaries, stream);
+  }
 
   // Initialize batches of rowgroups to encode (mainly to limit peak memory usage)
   std::vector<uint32_t> batch_list;
@@ -578,8 +583,10 @@ void writer::impl::write(table_view const &table, const table_metadata *metadata
     if ((r == num_rowgroups) || (groups_in_batch != 0 && bytes_in_batch + rowgroup_size > max_bytes_in_batch)) {
       max_uncomp_bfr_size = std::max(max_uncomp_bfr_size, bytes_in_batch);
       max_pages_in_batch = std::max(max_pages_in_batch, pages_in_batch);
-      batch_list.push_back(groups_in_batch);
-      groups_in_batch = 0;
+      if (groups_in_batch != 0) {
+        batch_list.push_back(groups_in_batch);
+        groups_in_batch = 0;
+      }
       bytes_in_batch = 0;
       pages_in_batch = 0;
     }
@@ -610,11 +617,14 @@ void writer::impl::write(table_view const &table, const table_metadata *metadata
       }
     }
   }
-  init_encoder_pages(chunks, col_desc, pages.data().get(),
-                     (num_stats_bfr) ? page_stats.data().get() : nullptr,
-                     (num_stats_bfr) ? frag_stats.data().get() : nullptr,
-                     num_rowgroups, num_columns, num_pages, num_stats_bfr,
-                     stream);
+
+  if (num_pages != 0) {
+    init_encoder_pages(chunks, col_desc, pages.data().get(),
+                       (num_stats_bfr) ? page_stats.data().get() : nullptr,
+                       (num_stats_bfr) ? frag_stats.data().get() : nullptr,
+                       num_rowgroups, num_columns, num_pages, num_stats_bfr,
+                       stream);
+  }
 
   auto host_bfr = [&]() {
     return pinned_buffer<uint8_t>{[](size_t size) {

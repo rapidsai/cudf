@@ -15,7 +15,8 @@ add_library(cudftestutil STATIC
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/legacy/nvcategory_utils.cu"
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/column_utilities.cu"
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/scalar_utilities.cu"
-            "${CMAKE_CURRENT_SOURCE_DIR}/utilities/table_utilities.cu")
+            "${CMAKE_CURRENT_SOURCE_DIR}/utilities/table_utilities.cu"
+            "${CMAKE_CURRENT_SOURCE_DIR}/strings/utilities.cu")
 
 target_link_libraries(cudftestutil cudf)
 
@@ -104,7 +105,8 @@ ConfigureTest(LEGACY_COLUMN_TEST "${LEGACY_COLUMN_TEST_SRC}")
 set(COLUMN_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/column/column_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/column/column_view_test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/column/column_device_view_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/column/column_device_view_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/column/compound_test.cu")
 
 ConfigureTest(COLUMN_TEST "${COLUMN_TEST_SRC}")
 
@@ -142,7 +144,7 @@ set(ERROR_TEST_SRC
 ConfigureTest(ERROR_TEST "${ERROR_TEST_SRC}")
 
 ###################################################################################################
-# - groupby tests ---------------------------------------------------------------------------------
+# - legacy groupby tests ---------------------------------------------------------------------------------
 
 set(LEGACY_HASH_GROUPBY_TEST_SRC 
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/legacy/single_column_count.cu"
@@ -176,6 +178,23 @@ set(LEGACY_GROUPBY_WO_AGG_TEST_SRC
     )
 
 ConfigureTest(LEGACY_GROUPBY_WO_AGG_TEST "${LEGACY_GROUPBY_WO_AGG_TEST_SRC}")
+
+###################################################################################################
+# - groupby tests ---------------------------------------------------------------------------------
+
+set(GROUPBY_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/groupby_keys_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_count_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_sum_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_min_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_max_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_mean_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_var_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_std_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_median_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_quantile_test.cu")
+
+ConfigureTest(GROUPBY_TEST "${GROUPBY_TEST_SRC}")
 
 ###################################################################################################
 # - legacy join tests ------------------------------------------------------------------------------------
@@ -303,6 +322,12 @@ set(LEGACY_REDUCTION_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/reductions/legacy/scan_tests.cu")
 
 ConfigureTest(LEGACY_REDUCTION_TEST "${LEGACY_REDUCTION_TEST_SRC}")
+
+set(REDUCTION_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/reductions/reduction_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/reductions/scan_tests.cu")
+
+ConfigureTest(REDUCTION_TEST "${REDUCTION_TEST_SRC}")
 
 ###################################################################################################
 # - legacy replace tests --------------------------------------------------------------------------
@@ -639,6 +664,14 @@ set(MERGE_TEST_SRC
 ConfigureTest(MERGE_TEST "${MERGE_TEST_SRC}")
 
 ###################################################################################################
+# - round-robin new tests ----------------------------------------------------------------------------
+
+set(ROUND_ROBIN_TEST_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/round_robin/round_robin_test.cpp")
+
+ConfigureTest(ROUND_ROBIN_TEST "${ROUND_ROBIN_TEST_SRC}")
+
+###################################################################################################
 # - stream compaction tests -----------------------------------------------------------------------
 
 set(STREAM_COMPACTION_TEST_SRC
@@ -754,23 +787,25 @@ set(STRINGS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/chars_types_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/combine_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/concatenate_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/contains_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/datetime_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/extract_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/fill_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/findall_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/find_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/find_multiple_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/floats_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/strings/gather_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/hash_string.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/integers_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/ipv4_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/pad_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/replace_regex_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/replace_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/split_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/strip_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/substring_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/translate_tests.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/strings/urls_tests.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/strings/utilities.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/urls_tests.cpp")
 
 ConfigureTest(STRINGS_TEST "${STRINGS_TEST_SRC}")
 
