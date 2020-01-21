@@ -112,7 +112,7 @@ degenerate_partitions(cudf::table_view const& input,
   } else {  //( num_partitions > nrows )
     VectorT<cudf::size_type> d_row_indices(nrows, cudf::size_type{0});
 
-    //copy rotated right partiton indexes that
+    //copy rotated right partition indexes that
     //fall in the interval [0, nrows):
     //(this relies on a _stable_ copy_if())
     //

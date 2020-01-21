@@ -52,7 +52,7 @@ namespace experimental {
  * at the corresponding offset and ending at the next player's 
  * starting offset or the last card in the deck if it's the last player.
  *
- * When num_partitions > nrows, we have more players than decks. 
+ * When num_partitions > nrows, we have more players than cards. 
  * We start dealing to the first indicated player and continuing 
  * around the players until we run out of cards before we run out of players. 
  * Players that did not get any cards are represented by
