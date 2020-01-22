@@ -391,12 +391,12 @@ def test_parquet_reader_filepath_or_buffer(parquet_path_or_buf, src):
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
-def test_parquet_writer(tmpdir, pdf, gdf):
+def test_parquet_writer_cpu_pyarrow(tmpdir, pdf, gdf):
     pdf_fname = tmpdir.join("pdf.parquet")
     gdf_fname = tmpdir.join("gdf.parquet")
 
     pdf.to_parquet(pdf_fname.strpath)
-    gdf.to_parquet(gdf_fname.strpath)
+    gdf.to_parquet(gdf_fname.strpath, engine="pyarrow")
 
     assert os.path.exists(pdf_fname)
     assert os.path.exists(gdf_fname)
@@ -437,3 +437,14 @@ def test_multifile_warning(datadir):
         expect = pd.read_parquet(fname)
         expect = expect.apply(pd.to_numeric)
         assert_eq(expect, got)
+
+
+# Validates the integrity of the GPU accelerated parquet writer.
+def test_parquet_writer_gpu(tmpdir, gdf):
+    gdf_fname = tmpdir.join("gdf.parquet")
+    gdf.to_parquet(gdf_fname.strpath, engine="cudf")
+    assert os.path.exists(gdf_fname)
+    expect = gdf
+    got = cudf.read_parquet(gdf_fname)
+
+    assert_eq(expect, got)
