@@ -166,6 +166,62 @@ void compute_row_partition_numbers(row_hasher_t the_hasher,
 
 /* --------------------------------------------------------------------------*/
 /** 
+ * @brief  Given an array of partition numbers, computes the final output location
+   for each element in the output such that all rows with the same partition are 
+   contiguous in memory.
+ * 
+ * @param row_partition_numbers The array that records the partition number for each row
+ * @param num_rows The number of rows
+ * @param num_partitions THe number of partitions
+ * @param[out] block_partition_offsets Array that holds the offset of each partition for each thread block,
+ * i.e., { {block0 partition0 offset, block1 partition0 offset, ...}, 
+         {block0 partition1 offset, block1 partition1 offset, ...},
+         ...
+         {block0 partition(num_partitions-1) offset, block1 partition(num_partitions -1) offset, ...} }
+ */
+/* ----------------------------------------------------------------------------*/
+__global__ 
+void compute_row_output_locations(size_type * __restrict__ row_partition_numbers, 
+                                  const size_type num_rows,
+                                  const size_type num_partitions,
+                                  size_type * __restrict__ block_partition_offsets)
+{
+  // Shared array that holds the offset of this blocks partitions in 
+  // global memory
+  extern __shared__ size_type shared_partition_offsets[];
+
+  // Initialize array of this blocks offsets from global array
+  size_type partition_number= threadIdx.x;
+  while(partition_number < num_partitions)
+  {
+    shared_partition_offsets[partition_number] = block_partition_offsets[partition_number * gridDim.x + blockIdx.x];
+    partition_number += blockDim.x;
+  }
+  __syncthreads();
+
+  size_type row_number = threadIdx.x + blockIdx.x * blockDim.x;
+
+  // Get each row's partition number, and get it's output location by 
+  // incrementing block's offset counter for that partition number
+  // and store the row's output location in-place
+  while( row_number < num_rows )
+  {
+    // Get partition number of this row
+    const size_type partition_number = row_partition_numbers[row_number];
+
+    // Get output location based on partition number by incrementing the corresponding
+    // partition offset for this block
+    const size_type row_output_location = atomicAdd(&(shared_partition_offsets[partition_number]), size_type(1));
+
+    // Store the row's output location in-place
+    row_partition_numbers[row_number] = row_output_location;
+
+    row_number += blockDim.x * gridDim.x;
+  }
+}
+
+/* --------------------------------------------------------------------------*/
+/** 
  * @brief Move one column from the input table to the hashed table.
  * 
  * @param[in] input_buf Data buffer of the column in the input table
@@ -389,30 +445,46 @@ hash_partition_table(table_view const& input,
                            num_partitions * sizeof(size_type),
                            cudaMemcpyDeviceToHost,
                            stream));
+                           
+  if (num_partitions <= 1024) {
+    std::vector<std::unique_ptr<column>> output_cols(input.num_columns());
 
-  std::vector<std::unique_ptr<column>> output_cols(input.num_columns());
+    // Move data from input table to hashed table
+    auto row_partition_numbers_ptr {row_partition_numbers.data().get()};
+    auto row_partition_offset_ptr {row_partition_offset.data().get()};
+    auto block_partition_sizes_ptr {block_partition_sizes.data().get()};
+    auto scanned_block_partition_sizes_ptr {scanned_block_partition_sizes.data().get()};
+    std::transform(input.begin(), input.end(), output_cols.begin(),
+      [=](auto const& col) {
+        return cudf::experimental::type_dispatcher(
+          col.type(),
+          move_to_output_buffer_dispatcher{},
+          col,
+          num_partitions,
+          row_partition_numbers_ptr,
+          row_partition_offset_ptr,
+          block_partition_sizes_ptr,
+          scanned_block_partition_sizes_ptr,
+          grid_size, mr, stream);
+      });
 
-  // Move data from input table to hashed table
-  auto row_partition_numbers_ptr {row_partition_numbers.data().get()};
-  auto row_partition_offset_ptr {row_partition_offset.data().get()};
-  auto block_partition_sizes_ptr {block_partition_sizes.data().get()};
-  auto scanned_block_partition_sizes_ptr {scanned_block_partition_sizes.data().get()};
-  std::transform(input.begin(), input.end(), output_cols.begin(),
-    [=](auto const& col) {
-      return cudf::experimental::type_dispatcher(
-        col.type(),
-        move_to_output_buffer_dispatcher{},
-        col,
-        num_partitions,
-        row_partition_numbers_ptr,
-        row_partition_offset_ptr,
-        block_partition_sizes_ptr,
-        scanned_block_partition_sizes_ptr,
-        grid_size, mr, stream);
-    });
+    auto output {std::make_unique<experimental::table>(std::move(output_cols))};
+    return std::make_pair(std::move(output), std::move(partition_offsets));
+  }
+  else {
+    // Compute the output location for each row in-place based on it's 
+    // partition number such that each partition will be contiguous in memory
+    auto row_output_locations {row_partition_numbers.data().get()};
+    auto scanned_block_partition_sizes_ptr {scanned_block_partition_sizes.data().get()};
+    compute_row_output_locations
+        <<<grid_size, BLOCK_SIZE, num_partitions * sizeof(size_type), stream>>>
+            (row_output_locations, num_rows, num_partitions, scanned_block_partition_sizes_ptr);
 
-  auto output {std::make_unique<experimental::table>(std::move(output_cols))};
-  return std::make_pair(std::move(output), std::move(partition_offsets));
+    auto scatter_map = column_view{data_type{INT32}, num_rows, row_output_locations};
+    auto output = experimental::detail::scatter(input, scatter_map, input, false, mr, stream);
+
+    return std::make_pair(std::move(output), std::move(partition_offsets));
+  }
 }
 
 // Add a wrapper around nvtx to automatically pop the range when the function scope ends
