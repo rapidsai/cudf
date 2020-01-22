@@ -125,6 +125,7 @@
 - PR #3835 Fix memory leak in Cython when dealing with nulls in string columns
 - PR #3858 Fixes the broken debug build after #3728
 - PR #3850 Fix merge typecast scope issue and resulting memory leak
+- PR #3868 Fix apply_grouped moving average example 
 
 
 # cuDF 0.11.0 (11 Dec 2019)
