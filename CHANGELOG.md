@@ -42,6 +42,7 @@
 - PR #3620 Add stream parameter to unary ops detail API
 - PR #3593 Adding begin/end for mutable_column_device_view
 - PR #3587 Merge CHECK_STREAM & CUDA_CHECK_LAST to CHECK_CUDA
+- PR #3733 Rework `hash_partition` API
 - PR #3655 Use move with make_pair to avoid copy construction
 - PR #3402 Define and implement new quantiles APIs
 - PR #3612 Add ability to customize the JIT kernel cache path
@@ -64,6 +65,8 @@
 - PR #3796 Improve on round-robin with the case when number partitions greater than number of rows.
 - PR #3805 Avoid CuPy 7.1.0 for now
 - PR #3758 detail::scatter variant with map iterator support
+- PR #2438 Build GBench Benchmarks in CI
+- PR #3713 Adding aggregation support to rolling_window
 
 ## Bug Fixes
 
@@ -110,6 +113,7 @@
 - PR #3821 Fix OOB read in gpuinflate prefetcher
 - PR #3829 Parquet writer: fix empty dataframe causing cuda launch errors
 - PR #3835 Fix memory leak in Cython when dealing with nulls in string columns
+- PR #3858 Fixes the broken debug build after #3728
 - PR #3850 Fix merge typecast scope issue and resulting memory leak
 
 
