@@ -26,7 +26,7 @@ if [ -z "$MY_UPLOAD_KEY" ]; then
 fi
 
 if [ "$UPLOAD_LIBCUDF" == "1" ]; then
-  LABEL_OPTION="--label main --label cuda${CUDA_REL}"
+  LABEL_OPTION="--label main"
   echo "LABEL_OPTION=${LABEL_OPTION}"
 
   test -e ${LIBNVSTRINGS_FILE}
@@ -41,14 +41,13 @@ if [ "$UPLOAD_LIBCUDF" == "1" ]; then
 fi
 
 if [ "$UPLOAD_CUDF" == "1" ]; then
-  LABEL_OPTION="--label main --label cuda9.2 --label cuda10.0"
+  LABEL_OPTION="--label main"
   echo "LABEL_OPTION=${LABEL_OPTION}"
 
   test -e ${NVSTRINGS_FILE}
   echo "Upload nvstrings"
   echo ${NVSTRINGS_FILE}
   anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --force ${NVSTRINGS_FILE}
-
 
   test -e ${CUDF_FILE}
   echo "Upload cudf"

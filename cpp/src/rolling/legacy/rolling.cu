@@ -27,7 +27,7 @@
 
 #include <cudf/legacy/copying.hpp>
 #include <cudf/legacy/rolling.hpp>
-#include "rolling_detail.hpp"
+#include <rolling/legacy/rolling_detail.hpp>
 
 // allocate column
 #include <io/utilities/wrapper_utils.hpp>
@@ -182,7 +182,7 @@ struct rolling_window_launcher
     null_count = nrows - device_valid_count.value();
 
     // check the stream for debugging
-    CHECK_STREAM(stream);
+    CHECK_CUDA(stream);
 
     cudf::nvtx::range_pop();
   }

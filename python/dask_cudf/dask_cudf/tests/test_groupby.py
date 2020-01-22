@@ -173,8 +173,9 @@ def test_groupby_split_out(split_out, column):
             "c": [0, 1] * 4,
             "d": ["dog", "cat", "cat", "dog", "dog", "dog", "cat", "bird"],
         }
-    )
+    ).fillna(0)
     df["e"] = df["d"].astype("category")
+
     gdf = cudf.from_pandas(df)
 
     ddf = dd.from_pandas(df, npartitions=3)

@@ -16,6 +16,7 @@ from dask.dataframe import from_delayed
 from dask.dataframe.core import Scalar, handle_out, map_partitions
 from dask.dataframe.utils import raise_on_meta_error
 from dask.delayed import delayed
+from dask.highlevelgraph import HighLevelGraph
 from dask.optimization import cull, fuse
 from dask.utils import M, OperatorMethodMixin, derived_from, funcname
 
@@ -44,7 +45,11 @@ def optimize(dsk, keys, **kwargs):
 
 
 def finalize(results):
-    return cudf.concat(results)
+    if results and isinstance(
+        results[0], (cudf.DataFrame, cudf.Series, cudf.Index, cudf.MultiIndex)
+    ):
+        return cudf.concat(results)
+    return results
 
 
 class _Frame(dd.core._Frame, OperatorMethodMixin):
@@ -74,6 +79,8 @@ class _Frame(dd.core._Frame, OperatorMethodMixin):
         return type(self), (self._name, self._meta, self.divisions)
 
     def __init__(self, dsk, name, meta, divisions):
+        if not isinstance(dsk, HighLevelGraph):
+            dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
         self.dask = dsk
         self._name = name
         meta = dd.core.make_meta(meta)
@@ -628,3 +635,31 @@ from_cudf = dd.from_pandas
 
 def from_dask_dataframe(df):
     return df.map_partitions(cudf.from_pandas)
+
+
+for name in [
+    "add",
+    "sub",
+    "mul",
+    "truediv",
+    "floordiv",
+    "mod",
+    "pow",
+    "radd",
+    "rsub",
+    "rmul",
+    "rtruediv",
+    "rfloordiv",
+    "rmod",
+    "rpow",
+]:
+    meth = getattr(cudf.DataFrame, name)
+    DataFrame._bind_operator_method(name, meth)
+
+    meth = getattr(cudf.Series, name)
+    Series._bind_operator_method(name, meth)
+
+for name in ["lt", "gt", "le", "ge", "ne", "eq"]:
+
+    meth = getattr(cudf.Series, name)
+    Series._bind_comparison_method(name, meth)

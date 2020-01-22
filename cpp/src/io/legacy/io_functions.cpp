@@ -130,7 +130,8 @@ table read_orc(orc_read_arg const &args) {
   namespace orc = cudf::io::orc;
   auto reader = [&]() {
     orc::reader_options options{args.columns, args.use_index,
-                                args.use_np_dtypes, args.timestamp_unit};
+                                args.use_np_dtypes, args.timestamp_unit,
+                                args.decimals_as_float, args.forced_decimals_scale};
 
     if (args.source.type == FILE_PATH) {
       return std::make_unique<orc::reader>(args.source.filepath, options);

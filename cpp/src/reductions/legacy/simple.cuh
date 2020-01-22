@@ -51,7 +51,7 @@ gdf_scalar simple_reduction(gdf_column const& col, gdf_dtype const output_dtype,
     // initialize output by identity value
     CUDA_TRY(cudaMemcpyAsync(result, &identity,
             sizeof(ResultType), cudaMemcpyHostToDevice, stream));
-    CHECK_STREAM(stream);
+    CHECK_CUDA(stream);
 
     // reduction by iterator
     auto it = Op::template make_iterator<has_nulls, ElementType, ResultType>(col);

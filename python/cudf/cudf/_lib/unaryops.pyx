@@ -1,4 +1,3 @@
-
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
 # cython: profile=False
@@ -13,13 +12,17 @@ import numpy as np
 from libcpp.pair cimport pair
 from libcpp.vector cimport vector
 from libcpp.string cimport string
+
 import rmm
+from rmm._lib.lib cimport cudaStream_t, c_free
 
 from cudf.utils import cudautils
 
+from cudf._libxx.column cimport Column
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
 from cudf._lib.GDFError import GDFError
+
 
 cimport cudf._lib.includes.unaryops as cpp_unaryops
 
@@ -42,17 +45,14 @@ _UNARY_OP = {
 }
 
 
-def apply_unary_op(incol, op):
+def apply_unary_op(Column incol, op):
     """
-    Call Unary ops.
+    Call Unary op on input column
     """
-
-    check_gdf_compatibility(incol)
+    from cudf.core.column import build_column
 
     cdef gdf_column* c_incol = column_view_from_column(incol)
-
     cdef gdf_column c_out_col
-
     cdef string cpp_str
     cdef gdf_dtype g_type
     cdef cpp_unaryops.unary_op c_op
@@ -88,14 +88,10 @@ def apply_unary_op(incol, op):
     return gdf_column_to_column(&c_out_col)
 
 
-def apply_dt_extract_op(incol, outcol, op):
+def apply_dt_extract_op(Column incol, Column outcol, op):
     """
     Call a datetime extraction op
     """
-
-    check_gdf_compatibility(incol)
-    check_gdf_compatibility(outcol)
-
     cdef gdf_column* c_incol = column_view_from_column(incol)
     cdef gdf_column* c_outcol = column_view_from_column(outcol)
 
@@ -143,38 +139,34 @@ def apply_dt_extract_op(incol, outcol, op):
     check_gdf_error(result)
 
 
-def nans_to_nulls(py_col):
+def nans_to_nulls(Column py_col):
     from cudf.core.column import as_column
-
-    py_col = as_column(py_col)
+    from cudf.core.buffer import Buffer
+    from cudf.utils.utils import mask_bitsize, calc_chunk_size
 
     cdef gdf_column* c_col = column_view_from_column(py_col)
-
     cdef pair[cpp_unaryops.bit_mask_t_ptr, size_type] result
+    cdef cudaStream_t stream = <cudaStream_t><size_t>(0)
 
     with nogil:
         result = cpp_unaryops.nans_to_nulls(c_col[0])
 
     mask = None
-    if result.first:
+    if result.second > 0:
         mask_ptr = int(<uintptr_t>result.first)
-        mask = rmm.device_array_from_ptr(
-            mask_ptr,
-            nelem=calc_chunk_size(len(py_col), mask_bitsize),
-            dtype=mask_dtype,
-            finalizer=rmm._make_finalizer(mask_ptr, 0)
+        mask_buf = rmm.DeviceBuffer(
+            ptr=mask_ptr,
+            size=calc_chunk_size(len(py_col), mask_bitsize)
         )
+        mask = Buffer(mask_buf)
+        c_free(result.first, stream)
 
     free_column(c_col)
 
     return mask
 
 
-def is_null(col):
-    from cudf.core.column import as_column, Column
-
-    if (not isinstance(col, Column)):
-        col = as_column(col)
+def is_null(Column col):
     cdef gdf_column* c_col = column_view_from_column(col)
 
     cdef gdf_column result = cpp_unaryops.is_null(c_col[0])
@@ -183,11 +175,7 @@ def is_null(col):
     return gdf_column_to_column(&result)
 
 
-def is_not_null(col):
-    from cudf.core.column import as_column, Column
-
-    if (not isinstance(col, Column)):
-        col = as_column(col)
+def is_not_null(Column col):
     cdef gdf_column* c_col = column_view_from_column(col)
 
     cdef gdf_column result = cpp_unaryops.is_not_null(c_col[0])

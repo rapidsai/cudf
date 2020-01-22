@@ -8,6 +8,8 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core.column import as_column
+from cudf.core.index import as_index
 from cudf.tests.utils import assert_eq, assert_neq
 
 
@@ -93,7 +95,7 @@ def test_multiindex_series_assignment():
 
 
 def test_string_index():
-    from cudf.core.index import StringIndex, StringColumn
+    from cudf.core.index import StringIndex
 
     pdf = pd.DataFrame(np.random.rand(5, 5))
     gdf = cudf.from_pandas(pdf)
@@ -109,7 +111,7 @@ def test_string_index():
     pdf.index = stringIndex
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
-    stringIndex = StringColumn(["a", "b", "c", "d", "e"], name="name")
+    stringIndex = as_index(as_column(["a", "b", "c", "d", "e"]), name="name")
     pdf.index = stringIndex
     gdf.index = stringIndex
     assert_eq(pdf, gdf)

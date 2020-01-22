@@ -69,5 +69,32 @@ std::unique_ptr<column> to_integers( strings_column_view const& strings,
 std::unique_ptr<column> from_integers( column_view const& integers,
                                        rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/**
+ * @brief Returns a new integer numeric column parsing hexadecimal values from the
+ * provided strings column.
+ *
+ * Any null entries will result in corresponding null entries in the output column.
+ *
+ * Only characters [0-9] and [A-F] are recognized.
+ * When any other character is encountered, the parsing ends for that string.
+ * No interpretation is made on the sign of the integer.
+ *
+ * Overflow of the resulting integer type is not checked.
+ * Each string is converted using an int64 type and then cast to the
+ * target integer type before storing it into the output column.
+ * If the resulting integer type is too small to hold the value,
+ * the stored value will be undefined.
+ *
+ * @throw cudf::logic_error if output_type is not integral type.
+ *
+ * @param strings Strings instance for this operation.
+ * @param output_type Type of integer numeric column to return.
+ * @param mr Resource for allocating device memory.
+ * @return New column with integers converted from strings.
+ */
+std::unique_ptr<column> hex_to_integers( strings_column_view const& strings,
+                                         data_type output_type,
+                                         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
 } // namespace strings
 } // namespace cudf

@@ -605,7 +605,7 @@ table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
   std::vector<gdf_column *> chunk_map(num_column_chunks);
 
   // Tracker for eventually deallocating compressed and uncompressed data
-  std::vector<rmm::device_buffer> page_data;
+  std::vector<rmm::device_buffer> page_data(num_column_chunks);
 
   // Initialize column chunk info
   LOG_PRINTF("[+] Column Chunk Description\n");
@@ -659,8 +659,8 @@ table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
                                 : col_meta.data_page_offset;
         const auto buffer =
             source_->get_buffer(offset, col_meta.total_compressed_size);
-        page_data.emplace_back(buffer->data(), align_size(buffer->size()));
-        d_compdata = static_cast<uint8_t *>(page_data.back().data());
+        page_data[chunks.size()] = rmm::device_buffer(buffer->data(), buffer->size());
+        d_compdata = static_cast<uint8_t *>(page_data[chunks.size()].data());
       }
       chunks.insert(parquet::gpu::ColumnChunkDesc(
           col_meta.total_compressed_size, d_compdata, col_meta.num_values,
@@ -701,12 +701,18 @@ table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
   const auto total_pages = count_page_headers(chunks);
   if (total_pages > 0) {
     hostdevice_vector<parquet::gpu::PageInfo> pages(total_pages, total_pages);
+    rmm::device_buffer decomp_page_data;
 
     decode_page_headers(chunks, pages);
     if (total_decompressed_size > 0) {
-      auto decomp_page_data = decompress_page_data(chunks, pages);
-      page_data.clear();
-      page_data.push_back(std::move(decomp_page_data));
+      decomp_page_data = decompress_page_data(chunks, pages);
+      // Free compressed data
+      for (size_t c = 0; c < chunks.size(); c++) {
+        if (chunks[c].codec != parquet::Compression::UNCOMPRESSED) {
+          page_data[c].resize(0);
+          page_data[c].shrink_to_fit();
+        }
+      }
     }
 
     for (auto &column : columns) {

@@ -17,7 +17,11 @@
 #pragma once
 
 #include <limits>
-#include <cudf/utilities/chrono.hpp>
+
+#define _LIBCUDACXX_USE_CXX20_CHRONO
+#define _LIBCUDACXX_USE_CXX17_TYPE_TRAITS
+
+#include <simt/chrono>
 
 /**---------------------------------------------------------------------------*
  * @file timestamps.hpp

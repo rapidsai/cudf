@@ -108,7 +108,7 @@ class table_view_base {
    *
    * @throws std::out_of_range
    * If `column_index` is out of the range [0, num_columns)
-   * 
+   *
    * @param column_index The index of the desired column
    * @return A reference to the desired column
    *---------------------------------------------------------------------------**/
@@ -124,7 +124,7 @@ class table_view_base {
    *---------------------------------------------------------------------------**/
   size_type num_rows() const noexcept { return _num_rows; }
 
-  table_view_base() = delete;
+  table_view_base() = default;
 
   ~table_view_base() = default;
 
@@ -147,6 +147,8 @@ class table_view : public detail::table_view_base<column_view> {
 
 public:
   using ColumnView = column_view;
+
+  table_view() = default;
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a table from a vector of table views
@@ -193,6 +195,8 @@ class mutable_table_view : public detail::table_view_base<mutable_column_view> {
 public:
   using ColumnView = mutable_column_view;
 
+  mutable_table_view() = default;
+
   mutable_column_view& column(size_type column_index) const {
     return const_cast<mutable_column_view&>(table_view_base::column(column_index));
   }
@@ -225,5 +229,20 @@ public:
 inline bool has_nulls(table_view view) {
   return std::any_of(view.begin(), view.end(),
                      [](column_view col) { return col.has_nulls(); });
+}
+
+/**---------------------------------------------------------------------------*
+   * @brief Checks if two `table_view`s have columns of same types
+   *
+   * @param lhs left-side table_view operand
+   * @param rhs right-side table_view operand
+   * @return boolean comparison result
+   *---------------------------------------------------------------------------**/
+inline bool have_same_types(table_view const& lhs, table_view const& rhs) {
+  return std::equal(lhs.begin(), lhs.end(),
+                    rhs.begin(), rhs.end(),
+                    [](column_view const& lcol, column_view const& rcol){
+                      return (lcol.type() == rcol.type());
+                    });
 }
 }  // namespace cudf

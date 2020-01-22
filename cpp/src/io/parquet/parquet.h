@@ -53,7 +53,7 @@ struct file_ender_s {
  * as a schema tree.
  **/
 struct SchemaElement {
-  Type type = BOOLEAN;
+  Type type = UNDEFINED_TYPE;
   ConvertedType converted_type = UNKNOWN;
   int32_t type_length = 0;                // Byte length of FIXED_LENGTH_BYTE_ARRAY elements, or maximum bit length for other types
   FieldRepetitionType repetition_type = REQUIRED;
@@ -82,6 +82,7 @@ struct ColumnMetaData {
   int64_t data_page_offset = 0;           // Byte offset from beginning of file to first data page
   int64_t index_page_offset = 0;          // Byte offset from beginning of file to root index page
   int64_t dictionary_page_offset = 0;     // Byte offset from the beginning of file to first (only) dictionary page
+  std::vector<uint8_t> statistics_blob;   // Encoded chunk-level statistics as binary blob
 };
 
 /**
@@ -139,6 +140,7 @@ struct FileMetaData {
   std::vector<RowGroup> row_groups;
   std::vector<KeyValue> key_value_metadata;
   std::string created_by = "";
+  uint32_t column_order_listsize = 0;
 };
 
 /**
@@ -213,29 +215,14 @@ static inline int CountLeadingZeros32(uint32_t value) {
 class CompactProtocolReader
 {
  protected:
-  // Struct field types
-  enum {
-    ST_FLD_TRUE = 1,
-    ST_FLD_FALSE = 2,
-    ST_FLD_BYTE = 3,
-    ST_FLD_I16 = 4,
-    ST_FLD_I32 = 5,
-    ST_FLD_I64 = 6,
-    ST_FLD_DOUBLE = 7,
-    ST_FLD_BINARY = 8,
-    ST_FLD_LIST = 9,
-    ST_FLD_SET = 10,
-    ST_FLD_MAP = 11,
-    ST_FLD_STRUCT = 12,
-  };
   static const uint8_t g_list2struct[16];
 
  public:
-  explicit CompactProtocolReader(const uint8_t *base, size_t len) {
+  explicit CompactProtocolReader(const uint8_t *base = nullptr, size_t len = 0) { init(base, len); }
+  void init(const uint8_t *base, size_t len) {
     m_base = m_cur = base;
     m_end = base + len;
   }
-
   ptrdiff_t bytecount() const { return m_cur - m_base; }
   unsigned int getb() { return (m_cur < m_end) ? *m_cur++ : 0; }
   void skip_bytes(size_t bytecnt) { bytecnt = std::min(bytecnt, (size_t)(m_end - m_cur)); m_cur += bytecnt; }
@@ -277,6 +264,40 @@ class CompactProtocolReader
   const uint8_t *m_cur = nullptr;
   const uint8_t *m_end = nullptr;
 };
+
+
+/**
+ * @brief Class for parsing Parquet's Thrift Compact Protocol encoded metadata
+ *
+ * This class takes in the Parquet structs and outputs a Thrift-encoded binary blob
+ *
+ **/
+class CompactProtocolWriter
+{
+public:
+  CompactProtocolWriter() { m_buf = nullptr; }
+  CompactProtocolWriter(std::vector<uint8_t> *output) { m_buf = output; }
+  void putb(uint8_t v) { m_buf->push_back(v); }
+  void putb(const uint8_t *raw, uint32_t len) { for (uint32_t i = 0; i < len; i++) m_buf->push_back(raw[i]); }
+  uint32_t put_uint(uint64_t v) { int l = 1; while (v > 0x7f) { putb(static_cast<uint8_t>(v | 0x80)); v >>= 7; l++; } putb(static_cast<uint8_t>(v)); return l; }
+  uint32_t put_int(int64_t v) { int64_t s = (v < 0); return put_uint(((v ^ -s) << 1) + s); }
+  void put_fldh(int f, int cur, int t) { if (f > cur && f <= cur + 15) putb(((f - cur) << 4) | t); else { putb(t); put_int(f); } }
+
+public:
+#define DECL_CPW_STRUCT(st) size_t write(const st *)
+  DECL_CPW_STRUCT(FileMetaData);
+  DECL_CPW_STRUCT(SchemaElement);
+  DECL_CPW_STRUCT(RowGroup);
+  DECL_CPW_STRUCT(KeyValue);
+  DECL_CPW_STRUCT(ColumnChunk);
+  DECL_CPW_STRUCT(ColumnMetaData);
+#undef DECL_CPW_STRUCT
+
+protected:
+    std::vector<uint8_t> *m_buf;
+};
+
+
 
 } // namespace parquet
 } // namespace io

@@ -25,7 +25,7 @@
 
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
-#include <cudf/utilities/legacy/wrapper_types.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <type_traits>
 
@@ -73,6 +73,17 @@ struct DeviceCount {
   }
 };
 
+/**
+ * @brief string value for sentinel which is used in min, max reduction
+ * operators
+ * This sentinel string value is the highest possible valid UTF-8 encoded
+ * character. This serves as identity value for maximum operator on string
+ * values. Also, this char pointer serves as valid device pointer of identity
+ * value for minimum operator on string values.
+ *
+ */
+__constant__ char max_string_sentinel[5]{"\xF7\xBF\xBF\xBF"};
+
 /* @brief binary `min` operator */
 struct DeviceMin {
   template <typename T>
@@ -80,9 +91,19 @@ struct DeviceMin {
     return std::min(lhs, rhs);
   }
 
-  template <typename T>
+  template <typename T,
+            typename std::enable_if_t<!std::is_same<T, cudf::string_view>::value>* = nullptr>
   static constexpr T identity() {
     return std::numeric_limits<T>::max();
+  }
+
+  // @brief identity specialized for string_view 
+  template <typename T,
+            typename std::enable_if_t<std::is_same<T, cudf::string_view>::value>* = nullptr>
+  static constexpr T identity() {
+    const char* psentinel{nullptr};
+    cudaGetSymbolAddress((void**)&psentinel, max_string_sentinel);
+    return T(psentinel, 4);
   }
 };
 
@@ -93,10 +114,19 @@ struct DeviceMax {
     return std::max(lhs, rhs);
   }
 
-  template <typename T>
+  template <typename T,
+            typename std::enable_if_t<!std::is_same<T, cudf::string_view>::value>* = nullptr>
   static constexpr T identity() {
     return std::numeric_limits<T>::lowest();
   }
+  template <typename T,
+            typename std::enable_if_t<std::is_same<T, cudf::string_view>::value>* = nullptr>
+  static constexpr T identity() {
+    const char* psentinel{nullptr};
+    cudaGetSymbolAddress((void**)&psentinel, max_string_sentinel);
+    return T(psentinel, 0);
+  }
+
 };
 
 /* @brief binary `product` operator */

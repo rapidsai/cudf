@@ -42,7 +42,7 @@ std::unique_ptr<column> concatenate( std::vector<strings_column_view> const& str
     if( strings_count == 0 )
         return make_empty_strings_column(mr,stream);
     size_t total_bytes = thrust::transform_reduce( strings_columns.begin(), strings_columns.end(),
-        [] (auto scv) { return scv.chars().size(); }, static_cast<size_t>(0), thrust::plus<size_t>());
+        [] (auto scv) { return scv.chars_size(); }, static_cast<size_t>(0), thrust::plus<size_t>());
     CUDF_EXPECTS( total_bytes < std::numeric_limits<size_type>::max(), "total size of strings is too large for cudf column" );
 
     // create chars column
@@ -61,9 +61,11 @@ std::unique_ptr<column> concatenate( std::vector<strings_column_view> const& str
     size_type null_count = 0;
     for( auto column = strings_columns.begin(); column != strings_columns.end(); ++column )
     {
+        size_type size = column->size();
+        if( size==0 )
+            continue;
         column_view offsets_child = column->offsets();
         column_view chars_child = column->chars();
-        size_type size = column->size();
 
         // copy the offsets column
         auto d_offsets = offsets_child.data<int32_t>();

@@ -34,59 +34,16 @@
 #include <numeric> // for std::accumulate
 #include <memory>
 
+#include <tests/utilities/cudf_gmock.hpp>
+#define ASSERT_RMM_SUCCEEDED(expr)  ASSERT_EQ(RMM_SUCCESS, expr)
+#define EXPECT_RMM_SUCCEEDED(expr)  EXPECT_EQ(RMM_SUCCESS, expr)
+
 // We use this single character to represent a gdf_column element being null
 constexpr const char null_representative = '@';
 
 // Type for a unique_ptr to a gdf_column with a custom deleter
 // Custom deleter is defined at construction
 using gdf_col_pointer = typename std::unique_ptr<gdf_column, std::function<void(gdf_column*)>>;
-
-#define ASSERT_CUDA_SUCCEEDED(expr) ASSERT_EQ(cudaSuccess, expr)
-#define EXPECT_CUDA_SUCCEEDED(expr) EXPECT_EQ(cudaSuccess, expr)
-
-#define ASSERT_RMM_SUCCEEDED(expr)  ASSERT_EQ(RMM_SUCCESS, expr)
-#define EXPECT_RMM_SUCCEEDED(expr)  EXPECT_EQ(RMM_SUCCESS, expr)
-
-#define ASSERT_CUDF_SUCCEEDED(gdf_error_expression)                           \
-do {                                                                          \
-    gdf_error _assert_cudf_success_eval_result;                               \
-    ASSERT_NO_THROW(_assert_cudf_success_eval_result = gdf_error_expression); \
-    const char* _assertion_failure_message = #gdf_error_expression;           \
-    ASSERT_EQ(_assert_cudf_success_eval_result, GDF_SUCCESS) <<               \
-      "Failing expression: " << _assertion_failure_message;                   \
-} while (0)
-
-// Utility for testing the expectation that an expression x throws the specified
-// exception whose what() message ends with the msg
-#define EXPECT_THROW_MESSAGE(x, exception, startswith, endswith)     \
-do { \
-  EXPECT_THROW({                                                     \
-    try { x; }                                                       \
-    catch (const exception &e) {                                     \
-    ASSERT_NE(nullptr, e.what());                                    \
-    EXPECT_THAT(e.what(), testing::StartsWith((startswith)));        \
-    EXPECT_THAT(e.what(), testing::EndsWith((endswith)));            \
-    throw;                                                           \
-  }}, exception);                                                    \
-} while (0)
-
-#define CUDF_EXPECT_THROW_MESSAGE(x, msg) \
-EXPECT_THROW_MESSAGE(x, cudf::logic_error, "cuDF failure at:", msg)
-
-#define CUDA_EXPECT_THROW_MESSAGE(x, msg) \
-EXPECT_THROW_MESSAGE(x, cudf::cuda_error, "CUDA error encountered at:", msg)
-
-/**---------------------------------------------------------------------------*
- * @brief test macro to be expected as no exception.
- * The testing is same with EXPECT_NO_THROW() in gtest.
- * It also outputs captured error message, useful for debugging.
- *
- * @param statement The statement to be tested
- *---------------------------------------------------------------------------**/
-#define CUDF_EXPECT_NO_THROW(statement)                 \
-try{ statement; } catch (std::exception& e)             \
-    { FAIL() << "statement:" << #statement << std::endl \
-             << "reason: " << e.what() << std::endl; }
 
 /**
  * @brief  Counts the number of valid bits for the specified number of rows

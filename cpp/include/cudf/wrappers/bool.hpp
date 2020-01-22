@@ -65,7 +65,7 @@ struct bool8 {
 
   // conversion operators
 
-  CUDA_HOST_DEVICE_CALLABLE operator bool() const {
+  CUDA_HOST_DEVICE_CALLABLE constexpr operator bool() const {
     return static_cast<bool>(this->value);
   }
 
@@ -97,7 +97,7 @@ struct bool8 {
     return static_cast<bool>(*this) >= static_cast<bool>(rhs); 
   }
 
-  CUDA_HOST_DEVICE_CALLABLE bool operator<(bool8 const &rhs) const {
+  CUDA_HOST_DEVICE_CALLABLE constexpr bool operator<(bool8 const &rhs) const {
     return static_cast<bool>(*this) < static_cast<bool>(rhs);
   }
 

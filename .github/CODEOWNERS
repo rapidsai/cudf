@@ -13,9 +13,9 @@ python/dask_cudf/  @rapidsai/cudf-dask-codeowners
 java/              @rapidsai/cudf-java-codeowners
 
 #build/ops code owners
-.github/           @rapidsai/cudf-ops-codeowners 
-ci/                @rapidsai/cudf-ops-codeowners
-conda/             @rapidsai/cudf-ops-codeowners
-**/Dockerfile      @rapidsai/cudf-ops-codeowners
-**/.dockerignore   @rapidsai/cudf-ops-codeowners
-docker/            @rapidsai/cudf-ops-codeowners
+.github/           @rapidsai/ops-codeowners 
+ci/                @rapidsai/ops-codeowners
+conda/             @rapidsai/ops-codeowners
+**/Dockerfile      @rapidsai/ops-codeowners
+**/.dockerignore   @rapidsai/ops-codeowners
+docker/            @rapidsai/ops-codeowners

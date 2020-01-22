@@ -62,7 +62,7 @@ static void BM_join(benchmark::State& state)
         }
     );
 
-    CHECK_STREAM(0);
+    CHECK_CUDA(0);
 
     cudf::table build_table {build_key_column.get(), build_payload_column.get()};
     cudf::table probe_table {probe_key_column.get(), probe_payload_column.get()};

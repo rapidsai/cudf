@@ -58,8 +58,8 @@ std::unique_ptr<writer> make_writer(sink_info const& sink,
 }  // namespace
 
 // Freeform API wraps the detail reader class API
-std::unique_ptr<table> read_avro(read_avro_args const& args,
-                                 rmm::mr::device_memory_resource* mr) {
+table_with_metadata read_avro(read_avro_args const& args,
+                              rmm::mr::device_memory_resource* mr) {
   namespace avro = cudf::experimental::io::detail::avro;
 
   avro::reader_options options{args.columns};
@@ -73,7 +73,7 @@ std::unique_ptr<table> read_avro(read_avro_args const& args,
 }
 
 // Freeform API wraps the detail reader class API
-std::unique_ptr<table> read_csv(read_csv_args const& args,
+table_with_metadata read_csv(read_csv_args const& args,
                                 rmm::mr::device_memory_resource* mr) {
   namespace csv = cudf::experimental::io::detail::csv;
 
@@ -125,12 +125,13 @@ std::unique_ptr<table> read_csv(read_csv_args const& args,
 }
 
 // Freeform API wraps the detail reader class API
-std::unique_ptr<table> read_orc(read_orc_args const& args,
+table_with_metadata read_orc(read_orc_args const& args,
                                 rmm::mr::device_memory_resource* mr) {
   namespace orc = cudf::experimental::io::detail::orc;
 
   orc::reader_options options{args.columns, args.use_index, args.use_np_dtypes,
-                              args.timestamp_type};
+                              args.timestamp_type, args.decimals_as_float,
+                              args.forced_decimals_scale};
   auto reader = make_reader<orc::reader>(args.source, options, mr);
 
   if (args.stripe != -1) {
@@ -150,11 +151,11 @@ void write_orc(write_orc_args const& args,
   orc::writer_options options{args.compression};
   auto writer = make_writer<orc::writer>(args.sink, options, mr);
 
-  writer->write_all(args.table);
+  writer->write_all(args.table, args.metadata);
 }
 
 // Freeform API wraps the detail reader class API
-std::unique_ptr<table> read_parquet(read_parquet_args const& args,
+table_with_metadata read_parquet(read_parquet_args const& args,
                                     rmm::mr::device_memory_resource* mr) {
   namespace parquet = cudf::experimental::io::detail::parquet;
 
@@ -170,6 +171,17 @@ std::unique_ptr<table> read_parquet(read_parquet_args const& args,
   } else {
     return reader->read_all();
   }
+}
+
+// Freeform API wraps the detail writer class API
+void write_parquet(write_parquet_args const& args,
+               rmm::mr::device_memory_resource* mr) {
+  namespace parquet = cudf::experimental::io::detail::parquet;
+
+  parquet::writer_options options{args.compression, args.stats_level};
+  auto writer = make_writer<parquet::writer>(args.sink, options, mr);
+
+  writer->write_all(args.table, args.metadata);
 }
 
 }  // namespace io

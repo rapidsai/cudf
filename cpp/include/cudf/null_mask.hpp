@@ -79,6 +79,19 @@ rmm::device_buffer create_null_mask(
     size_type size, mask_state state, cudaStream_t stream = 0,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+ /**---------------------------------------------------------------------------*
+ * @brief Sets a pre-allocated bitmask buffer to a given state
+ *
+ * @param bitmask Pointer to bitmask (e.g. returned by `column_view.null_mask()`)
+ * @param size The number of elements represented by the mask (e.g.,
+   number of rows in a column)
+ * @param valid If true set all entries to valid; otherwise, set all to null.
+ * @param stream Optional, stream on which all memory allocations/operations
+ * will be submitted
+ *---------------------------------------------------------------------------**/
+  void set_null_mask(bitmask_type* bitmask,
+                     size_type size, bool valid, cudaStream_t stream = 0);
+  
 /**---------------------------------------------------------------------------*
  * @brief Given a bitmask, counts the number of set (1) bits in the range
  * `[start, stop)`
@@ -171,6 +184,22 @@ rmm::device_buffer copy_bitmask(column_view const& view,
  * the column views in the views vector
  *---------------------------------------------------------------------------**/
 rmm::device_buffer concatenate_masks(std::vector<column_view> const &views,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+    cudaStream_t stream = 0);
+
+/**
+ * @brief Returns a bitwise AND of the bitmasks of columns of a table
+ * 
+ * If any of the columns isn't nullable, it is considered all valid. 
+ * If no column in the table is nullable, an empty bitmask is returned.
+ * 
+ * @param view The table of columns
+ * @param stream CUDA stream on which to execute kernels 
+ * @param mr Memory resource for allocating output bitmask
+ * @return rmm::device_buffer Output bitmask
+ */
+rmm::device_buffer bitmask_and(
+    table_view const& view,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
     cudaStream_t stream = 0);
 

@@ -24,21 +24,6 @@ namespace gpu {
 
 // Minimal thrift implementation for parsing page headers
 
-enum {
-    ST_FLD_TRUE = 1,
-    ST_FLD_FALSE = 2,
-    ST_FLD_BYTE = 3,
-    ST_FLD_I16 = 4,
-    ST_FLD_I32 = 5,
-    ST_FLD_I64 = 6,
-    ST_FLD_DOUBLE = 7,
-    ST_FLD_BINARY = 8,
-    ST_FLD_LIST = 9,
-    ST_FLD_SET = 10,
-    ST_FLD_MAP = 11,
-    ST_FLD_STRUCT = 12,
-};
-
 static const __device__ __constant__ uint8_t g_list2struct[16] =
 {
     0, 1, 2, ST_FLD_BYTE,

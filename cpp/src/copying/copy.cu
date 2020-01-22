@@ -30,7 +30,11 @@ std::unique_ptr<column> copy_if_else( column_view const& lhs, column_view const&
    CUDF_EXPECTS(lhs.size() == rhs.size(), "Both columns must be of the size");   
    CUDF_EXPECTS(not boolean_mask.has_nulls(), "Boolean mask must not contain null values.");
    CUDF_EXPECTS(boolean_mask.type() == data_type(BOOL8), "Boolean mask column must be of type BOOL8");   
-   CUDF_EXPECTS(boolean_mask.size() == lhs.size(), "Boolean mask column must be the same size as lhs and rhs columns");   
+   CUDF_EXPECTS(boolean_mask.size() == lhs.size(), "Boolean mask column must be the same size as lhs and rhs columns");
+
+   if (lhs.size() == 0) {
+       return cudf::experimental::empty_like(lhs);
+   }
 
    auto bool_mask_device_p = column_device_view::create(boolean_mask);
    column_device_view bool_mask_device = *bool_mask_device_p;

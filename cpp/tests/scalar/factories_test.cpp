@@ -96,3 +96,30 @@ TYPED_TEST(TimestampScalarFactory, TypeCast) {
   EXPECT_TRUE(s->is_valid());
 }
 
+template <typename T>
+struct DefaultScalarFactory : public cudf::test::BaseFixture {
+  static constexpr auto factory = cudf::make_default_constructed_scalar;
+};
+
+using MixedTypes = cudf::test::Concat<cudf::test::AllTypes, cudf::test::StringTypes>;
+TYPED_TEST_CASE(DefaultScalarFactory,  MixedTypes);
+
+TYPED_TEST(DefaultScalarFactory, FactoryDefault) {
+  std::unique_ptr<cudf::scalar> s = this->factory(
+    cudf::data_type{cudf::experimental::type_to_id<TypeParam>()});
+
+  EXPECT_EQ(s->type(), cudf::data_type{cudf::experimental::type_to_id<TypeParam>()});
+  EXPECT_FALSE(s->is_valid());
+}
+
+TYPED_TEST(DefaultScalarFactory, TypeCast) {
+  std::unique_ptr<cudf::scalar> s = this->factory(
+    cudf::data_type{cudf::experimental::type_to_id<TypeParam>()});
+
+  auto numeric_s = 
+    static_cast< cudf::experimental::scalar_type_t<TypeParam>* >(s.get());
+
+  EXPECT_NO_THROW(numeric_s->value());
+  EXPECT_FALSE(numeric_s->is_valid());
+  EXPECT_FALSE(s->is_valid());
+}

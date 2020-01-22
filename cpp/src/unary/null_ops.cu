@@ -25,7 +25,8 @@ namespace cudf {
 
 namespace experimental {
 
-std::unique_ptr<column> is_null(cudf::column_view const& input) {
+std::unique_ptr<column> is_null(cudf::column_view const& input,
+                                rmm::mr::device_memory_resource* mr) {
     auto input_device_view = column_device_view::create(input);
     auto device_view = *input_device_view;
     auto predicate = [device_view] __device__(auto index){
@@ -33,10 +34,11 @@ std::unique_ptr<column> is_null(cudf::column_view const& input) {
                      };
     return detail::true_if(thrust::make_counting_iterator(0),
                            thrust::make_counting_iterator(input.size()),
-                           input.size(), predicate);
+                           input.size(), predicate, mr);
 }
 
-std::unique_ptr<column> is_valid(cudf::column_view const& input) {
+std::unique_ptr<column> is_valid(cudf::column_view const& input,
+                                 rmm::mr::device_memory_resource* mr) {
     auto input_device_view = column_device_view::create(input);
     auto device_view = *input_device_view;
     auto predicate = [device_view] __device__(auto index){
@@ -44,7 +46,7 @@ std::unique_ptr<column> is_valid(cudf::column_view const& input) {
                      };
     return detail::true_if(thrust::make_counting_iterator(0),
                            thrust::make_counting_iterator(input.size()),
-                           input.size(), predicate);
+                           input.size(), predicate, mr);
 }
 
 }// experimental

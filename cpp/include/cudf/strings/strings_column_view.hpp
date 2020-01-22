@@ -22,10 +22,10 @@
 
 namespace cudf {
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Given a column-view of strings type, an instance of this class
  * provides a wrapper on this compound column for strings operations.
- *---------------------------------------------------------------------------**/
+ */
 class strings_column_view : private column_view
 {
 public:
@@ -45,27 +45,38 @@ public:
     using column_view::has_nulls;
     using column_view::offset;
 
-    /**---------------------------------------------------------------------------*
-    * @brief Returns the parent column.
-    *---------------------------------------------------------------------------**/
+    /**
+     * @brief Returns the parent column.
+     */
     column_view parent() const;
 
-    /**---------------------------------------------------------------------------*
-    * @brief Returns the internal column of offsets
-    *---------------------------------------------------------------------------**/
+    /**
+     * @brief Returns the internal column of offsets
+     *
+     * @throw cudf::logic error if this is an empty column
+     */
     column_view offsets() const;
 
-    /**---------------------------------------------------------------------------*
-    * @brief Returns the internal column of chars
-    *---------------------------------------------------------------------------**/
+    /**
+     * @brief Returns the internal column of chars
+     *
+     * @throw cudf::logic error if this is an empty column
+     */
     column_view chars() const;
 
+    /**
+     * @brief Returns the number of bytes in the chars child column.
+     *
+     * This accounts for the offset of the strings' column_view and
+     * for empty columns.
+     */
+    size_type chars_size() const noexcept;
 };
 
 namespace strings
 {
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Prints the strings to stdout.
  *
  * @param strings Strings instance for this operation.
@@ -75,12 +86,12 @@ namespace strings
  *        Specify -1 to print all characters.
  * @param delimiter The chars to print between each string.
  *        Default is new-line character.
- *---------------------------------------------------------------------------**/
+ */
 void print( strings_column_view strings,
             size_type start=0, size_type end=-1,
             size_type max_width=-1, const char* delimiter = "\n" );
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Create output per Arrow strings format.
  * The return pair is the vector of chars and the vector of offsets.
  *
@@ -88,7 +99,7 @@ void print( strings_column_view strings,
  * @param stream CUDA stream to use kernels in this method.
  * @param mr Resource for allocating device memory.
  * @return Pair containing a vector of chars and a vector of offsets.
- *---------------------------------------------------------------------------**/
+ */
 std::pair<rmm::device_vector<char>, rmm::device_vector<size_type>>
     create_offsets( strings_column_view strings,
                     cudaStream_t stream=0,

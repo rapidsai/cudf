@@ -5,7 +5,7 @@
 [submodule "thirdparty/jitify"]
 	path = thirdparty/jitify
 	url = https://github.com/rapidsai/jitify.git
-	branch = feature/api_v2_v0.10
+	branch = cudf
 [submodule "thirdparty/libcudacxx"]
 	path = thirdparty/libcudacxx
 	url = https://github.com/rapidsai/thirdparty-freestanding.git

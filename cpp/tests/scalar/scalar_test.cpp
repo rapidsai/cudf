@@ -94,7 +94,7 @@ TEST_F(StringScalarTest, DefaultValidity) {
   auto s = cudf::string_scalar(value);
 
   EXPECT_TRUE(s.is_valid());
-  EXPECT_EQ(value, s.value());
+  EXPECT_EQ(value, s.to_string());
 }
 
 TEST_F(StringScalarTest, ConstructNull) {
@@ -109,7 +109,7 @@ TEST_F(StringScalarTest, CopyConstructor) {
   auto s2 = s;
 
   EXPECT_TRUE(s2.is_valid());
-  EXPECT_EQ(value, s2.value());
+  EXPECT_EQ(value, s2.to_string());
 }
 
 TEST_F(StringScalarTest, MoveConstructor) {

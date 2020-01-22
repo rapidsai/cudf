@@ -67,4 +67,12 @@ JNIEXPORT jint JNICALL Java_ai_rapids_cudf_Cuda_getDevice(JNIEnv *env, jclass) {
   return dev;
 }
 
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_setDevice(JNIEnv *env, jclass, jint dev) {
+  JNI_CUDA_TRY(env, , cudaSetDevice(dev));
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_freeZero(JNIEnv *env, jclass) {
+  JNI_CUDA_TRY(env, , cudaFree(0));
+}
+
 } // extern "C"

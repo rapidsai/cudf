@@ -172,7 +172,7 @@ gdf_error append_full_join_indices(
     rmm::device_vector<index_type> unmatched_indices =
         create_missing_indices(
                 *r_index_ptr, max_index_value, index_size, stream);
-    CUDA_CHECK_LAST()
+    CHECK_CUDA(stream);
 
     //Expand l_index_ptr and r_index_ptr if necessary
     size_type mismatch_index_size = unmatched_indices.size();
@@ -199,7 +199,7 @@ gdf_error append_full_join_indices(
     index_capacity = l_index_capacity;
     index_size = index_size + mismatch_index_size;
 
-    CUDA_CHECK_LAST()
+    CHECK_CUDA(stream);
     return GDF_SUCCESS;
 }
 

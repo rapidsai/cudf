@@ -309,6 +309,8 @@ struct reader_options {
   bool use_index = true;
   bool use_np_dtypes = true;
   gdf_time_unit timestamp_unit = TIME_UNIT_NONE;
+  bool decimals_as_float = true;
+  int forced_decimals_scale = -1;
 
   reader_options() = default;
   reader_options(reader_options const &) = default;
@@ -322,11 +324,14 @@ struct reader_options {
    * @param[in] timestamp_time_unit Resolution of timestamps; none for default
    *---------------------------------------------------------------------------**/
   reader_options(std::vector<std::string> cols, bool use_index_lookup,
-                 bool np_compat, gdf_time_unit timestamp_time_unit)
+                 bool np_compat, gdf_time_unit timestamp_time_unit,
+                 bool decimals_as_float_ = true, int forced_decimals_scale_ = -1)
       : columns(std::move(cols)),
         use_index(use_index_lookup),
         use_np_dtypes(np_compat),
-        timestamp_unit(timestamp_time_unit) {}
+        timestamp_unit(timestamp_time_unit),
+        decimals_as_float(decimals_as_float_),
+        forced_decimals_scale(forced_decimals_scale_) {}
 };
 
 /**---------------------------------------------------------------------------*

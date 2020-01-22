@@ -23,6 +23,7 @@
 
 #define BYTESTREAM_BFRSZ        (1 << LOG2_BYTESTREAM_BFRSZ)
 #define BYTESTREAM_BFRMASK32    ((BYTESTREAM_BFRSZ-1) >> 2)
+//TODO: Should be more efficient with 512 threads per block and circular queue for values
 #define LOG2_NWARPS             5   // Log2 of number of warps per threadblock
 #define LOG2_NTHREADS           (LOG2_NWARPS+5)
 #define NWARPS                  (1 << LOG2_NWARPS)
@@ -39,6 +40,13 @@ namespace orc {
 namespace gpu {
 
 static __device__ __constant__ int64_t kORCTimeToUTC = 1420070400; // Seconds from January 1st, 1970 to January 1st, 2015
+
+struct int128_s
+{
+    uint64_t lo;
+    int64_t hi;
+};
+
 
 struct orc_bytestream_s
 {
@@ -468,6 +476,37 @@ inline __device__ int decode_base128_varint(volatile orc_bytestream_s *bs, int p
     }
     result = v;
     return pos;
+}
+
+
+/**
+ * @brief Decodes a signed int128 encoded as base-128 varint (used for decimals)
+ **/
+inline __device__ int128_s decode_varint128(volatile orc_bytestream_s *bs, int pos)
+{
+    uint32_t b = bytestream_readbyte(bs, pos++);
+    int64_t sign_mask = -(int32_t)(b & 1);
+    uint64_t v = (b >> 1) & 0x3f;
+    uint32_t bitpos = 6;
+    uint64_t lo = v;
+    uint64_t hi = 0;
+    while (b > 0x7f && bitpos < 128)
+    {
+        b = bytestream_readbyte(bs, pos++);
+        v |= ((uint64_t)(b & 0x7f)) << (bitpos & 0x3f);
+        if (bitpos == 62) { // 6 + 7 * 8 = 62
+            lo = v;
+            v = (b & 0x7f) >> 2; // 64 - 62
+        }
+        bitpos += 7;
+    }
+    if (bitpos >= 64) {
+        hi = v;
+    }
+    else {
+        lo = v;
+    }
+    return { (uint64_t)(lo ^ sign_mask), (int64_t)(hi ^ sign_mask) };
 }
 
 
@@ -1040,7 +1079,6 @@ static __device__ uint32_t Byte_RLE(orc_bytestream_s *bs, volatile orc_byterle_s
  * @brief Powers of 10
  *
  **/
-#if DECIMALS_AS_FLOAT64
 static const __device__ __constant__ double kPow10[40] =
 {
     1.0,    1.e1,   1.e2,   1.e3,   1.e4,   1.e5,   1.e6,   1.e7,
@@ -1049,30 +1087,38 @@ static const __device__ __constant__ double kPow10[40] =
     1.e24,  1.e25,  1.e26,  1.e27,  1.e28,  1.e29,  1.e30,  1.e31,
     1.e32,  1.e33,  1.e34,  1.e35,  1.e36,  1.e37,  1.e38,  1.e39,
 };
-#else // DECIMALS_AS_FLOAT64
-static const __device__ __constant__ int64_t kPow10[19] =
+
+static const __device__ __constant__ int64_t kPow5i[28] =
 {
     1,
-    10,
-    100,
-    1000,
-    10000,
-    100000,
-    1000000,
-    10000000,
-    100000000,
-    1000000000,
-    10000000000ll,
-    100000000000ll,
-    1000000000000ll,
-    10000000000000ll,
-    100000000000000ll,
-    1000000000000000ll,
-    10000000000000000ll,
-    100000000000000000ll,
-    1000000000000000000ll
+    5,
+    25,
+    125,
+    625,
+    3125,
+    15625,
+    78125,
+    390625,
+    1953125,
+    9765625,
+    48828125,
+    244140625,
+    1220703125,
+    6103515625ll,
+    30517578125ll,
+    152587890625ll,
+    762939453125ll,
+    3814697265625ll,
+    19073486328125ll,
+    95367431640625ll,
+    476837158203125ll,
+    2384185791015625ll,
+    11920928955078125ll,
+    59604644775390625ll,
+    298023223876953125ll,
+    1490116119384765625ll,
+    7450580596923828125ll
 };
-#endif // DECIMALS_AS_FLOAT64
 
 /**
  * @brief ORC Decimal decoding (unbounded base-128 varints)
@@ -1087,11 +1133,6 @@ static const __device__ __constant__ int64_t kPow10[19] =
  **/
 static __device__ int Decode_Decimals(orc_bytestream_s *bs, volatile orc_byterle_state_s *scratch, volatile int64_t *vals, int val_scale, int numvals, int col_scale, int t)
 {
-#if DECIMALS_AS_FLOAT64
-    int scale = (t < numvals) ? val_scale : 0;
-#else
-    int scale = (t < numvals) ? col_scale - val_scale : 0;
-#endif
     if (t == 0)
     {
         uint32_t maxpos = min(bs->len, bs->pos + (BYTESTREAM_BFRSZ - 8u));
@@ -1114,24 +1155,50 @@ static __device__ int Decode_Decimals(orc_bytestream_s *bs, volatile orc_byterle
     if (t < numvals)
     {
         int pos = *(volatile int32_t *)&vals[t];
-        int64_t v;
-        decode_varint(bs, pos, v);
-#if DECIMALS_AS_FLOAT64
-        if (scale >= 0)
-            reinterpret_cast<volatile double *>(vals)[t] = __ll2double_rn(v) / kPow10[min(scale, 39)];
+        int128_s v = decode_varint128(bs, pos);
+
+        if (col_scale & ORC_DECIMAL2FLOAT64_SCALE)
+        {
+            double f = Int128ToDouble_rn(v.lo, v.hi);
+            int32_t scale = (t < numvals) ? val_scale : 0;
+            if (scale >= 0)
+                reinterpret_cast<volatile double *>(vals)[t] = f / kPow10[min(scale, 39)];
+            else
+                reinterpret_cast<volatile double *>(vals)[t] = f * kPow10[min(-scale, 39)];
+        }
         else
-            reinterpret_cast<volatile double *>(vals)[t] = __ll2double_rn(v) * kPow10[min(-scale, 39)];
-#else
-        if (scale > 0)
         {
-            v *= kPow10[min(scale, 18)];
+            int32_t scale = (t < numvals) ? (col_scale & ~ORC_DECIMAL2FLOAT64_SCALE) - val_scale : 0;
+            if (scale >= 0)
+            {
+                scale = min(scale, 27);
+                vals[t] = ((int64_t)v.lo * kPow5i[scale]) << scale;
+            }
+            else //if (scale < 0)
+            {
+                bool is_negative = (v.hi < 0);
+                uint64_t hi = v.hi, lo = v.lo;
+                scale = min(-scale, 27);
+                if (is_negative)
+                {
+                    hi = (~hi) + (lo == 0);
+                    lo = (~lo) + 1;
+                }
+                lo = (lo >> (uint32_t)scale) | ((uint64_t)hi << (64 - scale));
+                hi >>= (int32_t)scale;
+                if (hi != 0)
+                {
+                    // Use intermediate float
+                    lo = __double2ull_rn(Int128ToDouble_rn(lo, hi) / __ll2double_rn(kPow5i[scale]));
+                    hi = 0;
+                }
+                else
+                {
+                    lo /= kPow5i[scale];
+                }
+                vals[t] = (is_negative) ? -(int64_t)lo : (int64_t)lo;
+            }
         }
-        else if (scale < 0)
-        {
-            v /= kPow10[min(-scale, 18)];
-        }
-        vals[t] = v;
-#endif
     }
     return numvals;
 }

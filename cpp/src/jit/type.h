@@ -14,31 +14,38 @@
  * limitations under the License.
  */
 
-#include <cudf/utilities/type_dispatcher.hpp>
-#include <string>
+#pragma once
 
 namespace cudf {
 namespace jit {
 
-    /**
-     * @brief Maps a `cudf::data_type` to the name of its corresponding C++ type
-     * 
-     * When passed a `cudf::data_type`, returns the `std::string` name of the C++
-     * type used to represent the data.
-     * 
-     * Example:
-     * @code
-     *   auto d = data_type(type_id::INT32);
-     *   auto s = jit::getTypeName(d);
-     *   // s == std::string("int32_t")
-     * @endcode
-     * 
-     * @param type The data type
-     * @return std::string Name of the data type in string
-     */
-    std::string inline get_type_name(data_type type) {
-        return experimental::type_dispatcher(type, experimental::type_to_name{});
-    }
+/**
+ * @brief Get the raw pointer to data in a (mutable_)column_view
+ */
+const void* get_data_ptr(column_view const& view);
+
+/**
+ * @brief Get the raw pointer to data in a scalar
+ */
+const void* get_data_ptr(scalar const& s);
+
+/**
+ * @brief Maps a `cudf::data_type` to the name of its corresponding C++ type
+ * 
+ * When passed a `cudf::data_type`, returns the `std::string` name of the C++
+ * type used to represent the data.
+ * 
+ * Example:
+ * @code
+ *   auto d = data_type(type_id::INT32);
+ *   auto s = jit::getTypeName(d);
+ *   // s == std::string("int32_t")
+ * @endcode
+ * 
+ * @param type The data type
+ * @return std::string Name of the data type in string
+ */
+std::string get_type_name(data_type type);
  
 } // namespace jit
 } // namespace cudf
