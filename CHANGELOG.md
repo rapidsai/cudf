@@ -42,6 +42,7 @@
 - PR #3620 Add stream parameter to unary ops detail API
 - PR #3593 Adding begin/end for mutable_column_device_view
 - PR #3587 Merge CHECK_STREAM & CUDA_CHECK_LAST to CHECK_CUDA
+- PR #3733 Rework `hash_partition` API
 - PR #3655 Use move with make_pair to avoid copy construction
 - PR #3402 Define and implement new quantiles APIs
 - PR #3612 Add ability to customize the JIT kernel cache path
@@ -65,6 +66,7 @@
 - PR #3805 Avoid CuPy 7.1.0 for now
 - PR #3758 detail::scatter variant with map iterator support
 - PR #2438 Build GBench Benchmarks in CI
+- PR #3713 Adding aggregation support to rolling_window
 
 ## Bug Fixes
 
