@@ -16,17 +16,13 @@
 
 #include <limits>
 #include <memory>
-#include <tests/utilities/cudf_gtest.hpp>
 #include <tests/utilities/base_fixture.hpp>
+#include <tests/utilities/column_wrapper.hpp>
+#include <tests/utilities/cudf_gtest.hpp>
+#include <tests/utilities/table_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
 #include <cudf/copying.hpp>
-#include <gtest/gtest-typed-test.h>
-#include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/table_utilities.hpp>
 #include <cudf/scalar/scalar.hpp>
-#include "cudf/scalar/scalar_device_view.cuh"
-#include "cudf/scalar/scalar_factories.hpp"
-#include "cudf/types.hpp"
 
 using cudf::test::fixed_width_column_wrapper;
 using TestTypes = cudf::test::Types<int32_t>;
