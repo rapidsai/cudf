@@ -296,7 +296,7 @@ class MultiIndex(Index):
             else:
                 name = index.names[k]
             out_index.add_column(
-                name, index._source_data[index._source_data.columns[k]],
+                name, index._source_data[index._source_data.columns[k]]
             )
 
         if len(result) == 1 and size == 0 and slice_access is False:
@@ -670,6 +670,9 @@ class MultiIndex(Index):
                 self._source_data._columns, [1] * len(self.levels)
             )
         return self._is_monotonic_decreasing
+
+    def unique(self):
+        return MultiIndex.from_frame(self._source_data.drop_duplicates())
 
     def repeat(self, repeats, axis=None):
         assert axis in (None, 0)

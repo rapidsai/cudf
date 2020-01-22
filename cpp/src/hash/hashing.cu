@@ -89,7 +89,7 @@ hash_partition_table(table_view const& input,
   auto row_partition_numbers = rmm::device_vector<size_type>(num_rows);
 
   // Make an iterator to compute the hash over each row
-  auto const device_input = table_device_view::create(input, stream);
+  auto const device_input = table_device_view::create(table_to_hash, stream);
   auto const hasher = experimental::row_hasher<MurmurHash3_32, has_nulls>(*device_input);
   auto const hash_iterator = thrust::make_transform_iterator(
     thrust::make_counting_iterator(0), hasher);

@@ -22,6 +22,7 @@
 
 using cudf::test::fixed_width_column_wrapper;
 using cudf::test::strings_column_wrapper;
+using cudf::test::expect_columns_equal;
 using cudf::test::expect_tables_equal;
 
 // Transform vector of column wrappers to vector of column views
@@ -111,6 +112,31 @@ TEST_F(HashPartition, MixedColumnTypes)
   // Expect deterministic result from hashing the same input
   for (cudf::size_type i = 0; i < num_partitions; ++i) {
     expect_tables_equal(result1[i]->view(), result2[i]->view());
+  }
+}
+
+TEST_F(HashPartition, ColumnsToHash)
+{
+  fixed_width_column_wrapper<int32_t> to_hash({1, 2, 3, 4, 5, 6});
+  fixed_width_column_wrapper<int32_t> first_col({7, 8, 9, 10, 11, 12});
+  fixed_width_column_wrapper<int32_t> second_col({13, 14, 15, 16, 17, 18});
+  auto first_input = cudf::table_view({to_hash, first_col});
+  auto second_input = cudf::table_view({to_hash, second_col});
+
+  auto columns_to_hash = std::vector<cudf::size_type>({0});
+
+  cudf::size_type const num_partitions = 3;
+  auto first_result = cudf::hash_partition(first_input, columns_to_hash, num_partitions);
+  auto second_result = cudf::hash_partition(second_input, columns_to_hash, num_partitions);
+
+  // Expect output to have size num_partitions
+  EXPECT_EQ(static_cast<size_t>(num_partitions), first_result.size());
+  EXPECT_EQ(first_result.size(), second_result.size());
+
+  // Expect same result for the hashed columns
+  for (cudf::size_type i = 0; i < num_partitions; ++i) {
+    expect_columns_equal(first_result[i]->get_column(0).view(),
+      second_result[i]->get_column(0).view());
   }
 }
 

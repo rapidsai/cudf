@@ -15,7 +15,7 @@
  */
 
 #include <cudf/aggregation.hpp>
-#include <cudf/detail/aggregation.hpp>
+#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <memory>
@@ -43,6 +43,14 @@ std::unique_ptr<aggregation> make_count_aggregation() {
 std::unique_ptr<aggregation> make_mean_aggregation() {
   return std::make_unique<aggregation>(aggregation::MEAN);
 }
+/// Factory to create a VARIANCE aggregation
+std::unique_ptr<aggregation> make_variance_aggregation(size_type ddof) {
+  return std::make_unique<detail::std_var_aggregation>(aggregation::VARIANCE, ddof);
+};
+/// Factory to create a STD aggregation
+std::unique_ptr<aggregation> make_std_aggregation(size_type ddof) {
+  return std::make_unique<detail::std_var_aggregation>(aggregation::STD, ddof);
+};
 /// Factory to create a MEDIAN aggregation
 std::unique_ptr<aggregation> make_median_aggregation() {
   // TODO I think this should just return a quantile_aggregation?
@@ -51,32 +59,42 @@ std::unique_ptr<aggregation> make_median_aggregation() {
 /// Factory to create a QUANTILE aggregation
 std::unique_ptr<aggregation> make_quantile_aggregation(
     std::vector<double> const& q, interpolation i) {
-  aggregation* a = new detail::quantile_aggregation{q, i};
-  return std::unique_ptr<aggregation>(a);
+  return std::make_unique<detail::quantile_aggregation>(q, i);
+}
+/// Factory to create a ARGMAX aggregation
+std::unique_ptr<aggregation> make_argmax_aggregation() {
+  return std::make_unique<aggregation>(aggregation::ARGMAX);
+}
+/// Factory to create a ARGMIN aggregation
+std::unique_ptr<aggregation> make_argmin_aggregation() {
+  return std::make_unique<aggregation>(aggregation::ARGMIN);
 }
 
 namespace detail {
 namespace {
-template <typename SourceType>
-struct dispatch_aggregation_kind {
-  template <aggregation::Kind k>
+struct target_type_functor {
+  template <typename Source, aggregation::Kind k>
   constexpr data_type operator()() const noexcept {
-    return data_type{
-        cudf::experimental::type_to_id<target_type_t<SourceType, k>>()};
+    return data_type{type_to_id<target_type_t<Source, k>>()};
   }
 };
 
-struct dispatch_source_type {
-  template <typename SourceType>
-  constexpr data_type operator()(aggregation::Kind k) const noexcept {
-    return aggregation_dispatcher(k, dispatch_aggregation_kind<SourceType>{});
+struct is_valid_aggregation_impl {
+  template <typename Source, aggregation::Kind k>
+  constexpr bool operator()() const noexcept {
+    return is_valid_aggregation<Source, k>();
   }
 };
 }  // namespace
 
 // Return target data_type for the given source_type and aggregation
-data_type target_type(data_type source_type, aggregation::Kind k) {
-  return cudf::experimental::type_dispatcher(source_type, dispatch_source_type{}, k);
+data_type target_type(data_type source, aggregation::Kind k) {
+  return dispatch_type_and_aggregation(source, k, target_type_functor{});
+}
+
+// Verifies the aggregation `k` is valid on the type `source`
+bool is_valid_aggregation(data_type source, aggregation::Kind k) {
+  return dispatch_type_and_aggregation(source, k, is_valid_aggregation_impl{});
 }
 }  // namespace detail
 }  // namespace experimental

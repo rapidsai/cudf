@@ -14,7 +14,7 @@ class Buffer:
 
         Parameters
         ----------
-        data : array_like, int
+        data : Buffer, rmm._DevicePointer, array_like, int
             An array-like object or integer representing a
             device or host pointer to pre-allocated memory.
         size : int, optional
@@ -45,6 +45,12 @@ class Buffer:
                 self.ptr = 0
                 self.size = 0
             else:
+                if not isinstance(data, int):
+                    raise TypeError(
+                        "data must be Buffer, array-like or integer"
+                    )
+                if not isinstance(size, int):
+                    raise TypeError("size must be integer")
                 self.ptr = data
                 self.size = size
             self._owner = owner
@@ -84,6 +90,8 @@ class Buffer:
 
 def _buffer_data_from_array_interface(array_interface):
     ptr = array_interface["data"][0]
+    if ptr is None:
+        ptr = 0
     itemsize = np.dtype(array_interface["typestr"]).itemsize
     size = functools.reduce(operator.mul, array_interface["shape"])
     return ptr, size * itemsize

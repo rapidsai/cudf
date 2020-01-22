@@ -72,4 +72,12 @@ std::unique_ptr<scalar> make_string_scalar(
     cudaStream_t stream = 0,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/**
+ * @brief Constructs default constructed scalar of type `type` 
+ *
+ * @throws std::bad_alloc if device memory allocation fails
+ *
+ * @param type The desired element type
+ */
+std::unique_ptr<scalar> make_default_constructed_scalar(data_type type);
 }  // namespace cudf

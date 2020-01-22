@@ -80,7 +80,17 @@ public:
      * @param devmem True if results in device memory.
      * @return 0 if successful.
      */
-    static unsigned int token_count( NVStrings& strs, const char* delimiter, unsigned int* results, bool devmem=true );
+    static unsigned int token_count( const NVStrings& strs, const char* delimiter, unsigned int* results, bool devmem=true );
+
+     /**
+     * @brief Computes the number of tokens in each string.
+     * @param strs Strings to tokenize.
+     * @param delimiters NVStrings object containing strings or characters used to identify tokens.
+     * @param[in,out] results Array of counts, one per string.
+     * @param devmem True if results in device memory.
+     * @return 0 if successful.
+     */
+    static unsigned int token_count( const NVStrings& strs, const NVStrings& delimiters, unsigned int* results, bool devmem=true );
 
     /**
      * @brief Fills a matrix of boolean values indicating the corresponding token appears in that string.

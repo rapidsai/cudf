@@ -150,17 +150,17 @@ __device__ inline string_view::const_iterator string_view::const_iterator::opera
     return tmp;
 }
 
-__device__ inline string_view::const_iterator& string_view::const_iterator::operator-=(string_view::const_iterator::difference_type off)
+__device__ inline string_view::const_iterator& string_view::const_iterator::operator-=(string_view::const_iterator::difference_type offset)
 {
-    while(off-- > 0)
+    while(offset-- > 0)
         operator--();
     return *this;
 }
 
-__device__ inline string_view::const_iterator string_view::const_iterator::operator-(string_view::const_iterator::difference_type off)
+__device__ inline string_view::const_iterator string_view::const_iterator::operator-(string_view::const_iterator::difference_type offset)
 {
     string_view::const_iterator tmp(*this);
-    while(off-- > 0)
+    while(offset-- > 0)
         --tmp;
     return tmp;
 }
