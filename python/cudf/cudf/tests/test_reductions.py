@@ -29,6 +29,15 @@ def test_sum(dtype, nelem):
     np.testing.assert_approx_equal(expect, got, significant=significant)
 
 
+def test_sum_string():
+    s = Series(["Hello","there","World"])
+
+    got = s.sum()
+    expected = "HellothereWorld"
+
+    assert got==expected
+
+
 @pytest.mark.parametrize("dtype,nelem", params)
 def test_product(dtype, nelem):
     if np.dtype(dtype).kind == "i":
