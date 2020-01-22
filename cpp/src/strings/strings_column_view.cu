@@ -20,7 +20,6 @@
 #include <cudf/utilities/error.hpp>
 
 #include <iostream>
-
 #include <thrust/for_each.h>
 #include <thrust/transform_scan.h>
 #include <thrust/transform.h>
@@ -146,7 +145,8 @@ std::pair<rmm::device_vector<char>, rmm::device_vector<size_type> >
                     rmm::mr::device_memory_resource* mr )
 {
     size_type count = strings.size();
-    const int32_t* d_offsets = strings.offsets().data<int32_t>() + strings.offset();
+    const int32_t* d_offsets = strings.offsets().data<int32_t>();
+    d_offsets += strings.offset(); // nvbug-2808421 : do not combine with the previous line
     int32_t first = 0;
     CUDA_TRY(cudaMemcpyAsync( &first, d_offsets, sizeof(int32_t), cudaMemcpyDeviceToHost, stream));
     rmm::device_vector<size_type> offsets(count+1);
