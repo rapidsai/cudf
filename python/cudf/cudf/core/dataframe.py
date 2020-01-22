@@ -443,7 +443,7 @@ class DataFrame(Table):
                 df[k] = col[arg]
             return df
         elif isinstance(
-            arg, (list, np.ndarray, pd.Series, Series, Index, pd.Index)
+            arg, (list, cupy.ndarray, np.ndarray, pd.Series, Series, Index, pd.Index)
         ):
             mask = arg
             if isinstance(mask, list):

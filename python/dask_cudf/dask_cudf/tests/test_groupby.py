@@ -241,3 +241,19 @@ def test_groupby_string_index_name(myindex):
     gdf = ddf.groupby("index").agg({"data": "count"})
 
     assert gdf.compute().index.name == gdf.index.name
+
+
+def test_groupby_split_out_multiindex():
+    import cudf
+    import dask.dataframe as dd
+    import dask_cudf
+    import numpy as np
+
+    df = cudf.DataFrame(
+        {"a": np.arange(100), "b": np.arange(100), "c": np.random.random(100)}
+    )
+    ddf = dask_cudf.from_cudf(df, 5)
+    pddf = dd.from_pandas(df.to_pandas(), 5)
+    gr = ddf.groupby(["a", "b"]).agg({"c": "count"}, split_out=2)
+    pr = pddf.groupby(["a", "b"]).agg({"c": "count"}, split_out=2)
+    dd.assert_eq(gr.compute(), pr.compute())
