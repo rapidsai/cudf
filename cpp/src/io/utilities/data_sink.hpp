@@ -25,7 +25,7 @@ namespace cudf {
 namespace io {
 
 /**
- * @brief TODO
+ * @brief Interface class for storing the output data from the writers
  **/
 class data_sink {
  public:
@@ -49,28 +49,28 @@ class data_sink {
   virtual ~data_sink(){};
 
   /**
-   * @brief TODO
+   * @brief Append the buffer content to the sink
    *
-   * @param[in] data TODO
-   * @param[in] size Bytes to write
+   * @param[in] data Pointer to the buffer to be written into the sink object
+   * @param[in] size Number of bytes to write
    *
    * @return void
    **/
   virtual void write(void const* data, size_t size) = 0;
 
   /**
-   * @brief TODO
+   * @brief Flush the data written into the sink
    * 
    * @return void
    */
   virtual void flush() = 0;
   
   /**
-   * @brief TODO
+   * @brief Returns the total number of bytes written into this sink
    *
-   * @return size_t TODO
+   * @return size_t Total number of bytes written into this sink
    **/
-  virtual size_t position() = 0;
+  virtual size_t bytes_written() = 0;
 };
 
 }  // namespace io

@@ -957,7 +957,7 @@ void writer::impl::write(table_view const &table, const table_metadata *metadata
   size_t group = 0;
   for (size_t stripe_id = 0; stripe_id < stripes.size(); stripe_id++) {
     auto groups_in_stripe = div_by_rowgroups(stripes[stripe_id].numberOfRows);
-    stripes[stripe_id].offset = out_sink_->position();
+    stripes[stripe_id].offset = out_sink_->bytes_written();
 
     // Column (skippable) index streams appear at the start of the stripe
     stripes[stripe_id].indexLength = 0;
@@ -1012,7 +1012,7 @@ void writer::impl::write(table_view const &table, const table_metadata *metadata
   // Write filefooter metadata
   FileFooter ff;
   ff.headerLength = std::strlen(MAGIC);
-  ff.contentLength = out_sink_->position();
+  ff.contentLength = out_sink_->bytes_written();
   ff.stripes = std::move(stripes);
   ff.numberOfRows = num_rows;
   ff.rowIndexStride = row_index_stride_;

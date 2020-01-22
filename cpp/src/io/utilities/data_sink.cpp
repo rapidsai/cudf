@@ -25,7 +25,7 @@ namespace cudf {
 namespace io {
 
 /**
- * @brief TODO
+ * @brief Implementation class for storing data into a local file.
  * 
  */
 class file_sink : public data_sink {
@@ -48,7 +48,7 @@ class file_sink : public data_sink {
     outfile_.flush();
   }
 
-  size_t position() override {
+  size_t bytes_written() override {
     return outfile_.tellp();
   }
 
@@ -57,7 +57,7 @@ class file_sink : public data_sink {
 };
 
 /**
- * @brief TODO
+ * @brief Implementation class for storing data into a std::vector.
  * 
  */
 class host_buffer_sink : public data_sink {
@@ -77,7 +77,7 @@ class host_buffer_sink : public data_sink {
 
   void flush() override {}
 
-  size_t position() override {
+  size_t bytes_written() override {
     return buffer_->size();
   }
 
