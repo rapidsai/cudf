@@ -22,6 +22,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/detail/scatter.hpp>
+#include <cudf/detail/scatter.cuh>
 
 #include <thrust/tabulate.h>
 
@@ -322,8 +323,6 @@ struct move_to_output_buffer_dispatcher{
                   rmm::mr::device_memory_resource* mr,
                   cudaStream_t stream)
   {
-    CUDF_EXPECTS(input.null_mask() == nullptr, "null input column unsupported");
-
     rmm::device_buffer output(input.size() * sizeof(DataType), stream, mr);
 
     int const smem = BLOCK_SIZE * ROWS_PER_THREAD * sizeof(DataType)
@@ -467,6 +466,17 @@ hash_partition_table(table_view const& input,
           scanned_block_partition_sizes_ptr,
           grid_size, mr, stream);
       });
+
+    if (has_nulls) {
+      compute_row_output_locations
+          <<<grid_size, BLOCK_SIZE, num_partitions * sizeof(size_type), stream>>>
+              (row_partition_numbers_ptr, num_rows, num_partitions, scanned_block_partition_sizes_ptr);
+
+      // Convert scatter map to gather map for bitmask support
+      auto gather_map = experimental::detail::make_gather_map<size_type>(
+        row_partition_numbers.begin(), row_partition_numbers.end(), num_rows, stream);
+      experimental::detail::gather_bitmask(input, gather_map.begin(), output_cols, mr, stream);
+    }
 
     auto output {std::make_unique<experimental::table>(std::move(output_cols))};
     return std::make_pair(std::move(output), std::move(partition_offsets));

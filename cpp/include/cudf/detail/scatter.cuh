@@ -32,7 +32,6 @@ namespace cudf {
 namespace experimental {
 namespace detail {
 
-namespace {
 template <typename T, typename MapIterator>
 rmm::device_vector<T> make_gather_map(MapIterator scatter_map_begin,
     MapIterator scatter_map_end, size_type gather_rows,
@@ -137,8 +136,6 @@ struct column_scatterer {
     return strings::detail::scatter(begin, end, scatter_map_begin, target, mr, stream);
   }
 };
-
-} //namespace
 
 /**
  * @brief Scatters the rows of the source table into a copy of the target table
