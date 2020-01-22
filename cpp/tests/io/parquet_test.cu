@@ -354,9 +354,9 @@ TEST_F(ParquetWriterTest, Strings) {
 }
 
 TEST_F(ParquetWriterTest, HostBuffer) {
-  const auto num_rows = 10;
-  auto seq_col = random_values<int>(num_rows);
-  auto validity = cudf::test::make_counting_transform_iterator(
+  constexpr auto num_rows = 100 << 10;
+  const auto seq_col = random_values<int>(num_rows);
+  const auto validity = cudf::test::make_counting_transform_iterator(
       0, [](auto i) { return true; });
   column_wrapper<int> col{seq_col.begin(), seq_col.end(), validity};
 
@@ -365,7 +365,7 @@ TEST_F(ParquetWriterTest, HostBuffer) {
 
   std::vector<std::unique_ptr<column>> cols;
   cols.push_back(col.release());
-  auto expected = std::make_unique<table>(std::move(cols));
+  const auto expected = std::make_unique<table>(std::move(cols));
   EXPECT_EQ(1, expected->num_columns());
 
   std::vector<char> out_buffer;
@@ -373,7 +373,7 @@ TEST_F(ParquetWriterTest, HostBuffer) {
                                        expected->view(), &expected_metadata};
   cudf_io::write_parquet(out_args);
   cudf_io::read_parquet_args in_args{cudf_io::source_info(out_buffer.data(), out_buffer.size())};
-  auto result = cudf_io::read_parquet(in_args);
+  const auto result = cudf_io::read_parquet(in_args);
 
   expect_tables_equal(expected->view(), result.tbl->view());
   EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);

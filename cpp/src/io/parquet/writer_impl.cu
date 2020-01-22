@@ -669,7 +669,7 @@ void writer::impl::write(table_view const &table, const table_metadata *metadata
         md.row_groups[r].columns[i].meta_data.dictionary_page_offset = (ck->has_dictionary) ? current_chunk_offset : 0;
         md.row_groups[r].columns[i].meta_data.total_uncompressed_size = ck->bfr_size;
         md.row_groups[r].columns[i].meta_data.total_compressed_size = ck->compressed_size;
-        out_sink_->write(reinterpret_cast<const char *>(host_bfr.get() + ck->ck_stat_size), ck->compressed_size);
+        out_sink_->write(host_bfr.get() + ck->ck_stat_size, ck->compressed_size);
         if (ck->ck_stat_size != 0) {
           md.row_groups[r].columns[i].meta_data.statistics_blob.resize(ck->ck_stat_size);
           memcpy(md.row_groups[r].columns[i].meta_data.statistics_blob.data(), host_bfr.get(), ck->ck_stat_size);
@@ -683,8 +683,8 @@ void writer::impl::write(table_view const &table, const table_metadata *metadata
   file_ender_s fendr;
   fendr.footer_len = (uint32_t)cpw.write(&md);
   fendr.magic = PARQUET_MAGIC;
-  out_sink_->write(reinterpret_cast<char *>(buffer_.data()), buffer_.size());
-  out_sink_->write(reinterpret_cast<char *>(&fendr), sizeof(fendr));
+  out_sink_->write(buffer_.data(), buffer_.size());
+  out_sink_->write(&fendr, sizeof(fendr));
   out_sink_->flush();
 }
 

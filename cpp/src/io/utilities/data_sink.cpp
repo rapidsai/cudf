@@ -48,7 +48,9 @@ class file_sink : public data_sink {
     outfile_.flush();
   }
 
-  size_t position() override { return outfile_.tellp(); }
+  size_t position() override {
+    return outfile_.tellp();
+  }
 
  private:
   std::ofstream outfile_;
@@ -67,7 +69,7 @@ class host_buffer_sink : public data_sink {
   virtual ~host_buffer_sink() {
     flush();
   }
-  // TODO optimize
+
   void write(void const* data, size_t size) override {
     char const* char_array = reinterpret_cast<char const*>(data);
     buffer_->insert(buffer_->end(), char_array, char_array + size);
@@ -75,7 +77,9 @@ class host_buffer_sink : public data_sink {
 
   void flush() override {}
 
-  size_t position() override { return buffer_->size(); }
+  size_t position() override {
+    return buffer_->size();
+  }
 
  private:
   std::vector<char>* buffer_;

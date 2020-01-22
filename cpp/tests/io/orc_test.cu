@@ -363,9 +363,9 @@ TEST_F(OrcWriterTest, Strings) {
 }
 
 TEST_F(OrcWriterTest, HostBuffer) {
-  const auto num_rows = 10;
-  auto seq_col = random_values<int>(num_rows);
-  auto validity = cudf::test::make_counting_transform_iterator(
+  constexpr auto num_rows = 100 << 10;
+  const auto seq_col = random_values<int>(num_rows);
+  const auto validity = cudf::test::make_counting_transform_iterator(
       0, [](auto i) { return true; });
   column_wrapper<int> col{seq_col.begin(), seq_col.end(), validity};
 
@@ -374,15 +374,17 @@ TEST_F(OrcWriterTest, HostBuffer) {
 
   std::vector<std::unique_ptr<column>> cols;
   cols.push_back(col.release());
-  auto expected = std::make_unique<table>(std::move(cols));
+  const auto expected = std::make_unique<table>(std::move(cols));
   EXPECT_EQ(1, expected->num_columns());
 
   std::vector<char> out_buffer;
   cudf_io::write_orc_args out_args{cudf_io::sink_info(&out_buffer),
                                        expected->view(), &expected_metadata};
   cudf_io::write_orc(out_args);
+
   cudf_io::read_orc_args in_args{cudf_io::source_info(out_buffer.data(), out_buffer.size())};
-  auto result = cudf_io::read_orc(in_args);
+  in_args.use_index = false;
+  const auto result = cudf_io::read_orc(in_args);
 
   expect_tables_equal(expected->view(), result.tbl->view());
   EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
