@@ -55,10 +55,9 @@
 - PR #3673 Parquet reader: improve rounding of timestamp conversion to seconds 
 - PR #3699 Stringify libcudacxx headers for binary op JIT
 - PR #3697 Improve column insert performance for wide frames
-- PR #3716 Update cudf.to_parquet to use new GPU accelerated Parquet writer
-- PR #3616 Add aggregation infrastructure for argmax/argmin.
 - PR #3653 Make `gather_bitmask_kernel` more reusable.
 - PR #3710 Remove multiple CMake configuration steps from root build script
+- PR #3716 Update cudf.to_parquet to use new GPU accelerated Parquet writer
 - PR #3657 Define and implement compiled binops for string column comparisons
 - PR #3520 Change read_parquet defaults and add warnings
 - PR #3780 Java APIs for selecting a GPU
