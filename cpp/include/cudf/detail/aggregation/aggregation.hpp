@@ -43,6 +43,8 @@ class aggregation {
     MAX,       ///< max reduction
     COUNT,     ///< count number of elements
     MEAN,      ///< arithmetic mean reduction
+    VARIANCE,  ///< groupwise variance
+    STD,       ///< groupwise standard deviation
     MEDIAN,    ///< median reduction
     QUANTILE,  ///< compute specified quantile(s)
     ARGMAX,    ///< Index of max element
@@ -51,6 +53,8 @@ class aggregation {
 
   aggregation(aggregation::Kind a) : kind{a} {}
   Kind kind;  ///< The aggregation to perform
+
+  bool operator==(aggregation const& other) const { return kind == other.kind; }
 };
 namespace detail {
 /**
@@ -62,6 +66,27 @@ struct quantile_aggregation : aggregation {
       : aggregation{QUANTILE}, _quantiles{q}, _interpolation{i} {}
   std::vector<double> _quantiles;              ///< Desired quantile(s)
   experimental::interpolation _interpolation;  ///< Desired interpolation
+
+  bool operator==(quantile_aggregation const& other) const {
+    return aggregation::operator==(other)
+       and _interpolation == other._interpolation 
+       and std::equal(_quantiles.begin(), _quantiles.end(),
+                      other._quantiles.begin());
+  }
+};
+
+/**
+ * @brief Derived class for specifying a standard deviation/variance aggregation
+ */
+struct std_var_aggregation : aggregation {
+  std_var_aggregation(aggregation::Kind k, size_type ddof)
+      : aggregation{k}, _ddof{ddof} {}
+  size_type _ddof;              ///< Delta degrees of freedom
+
+  bool operator==(std_var_aggregation const& other) const {
+    return aggregation::operator==(other)
+       and _ddof == other._ddof;
+  }
 };
 
 /**
@@ -110,6 +135,7 @@ struct target_type_impl<Source, aggregation::COUNT> {
 };
 
 // Always use `double` for MEAN
+// TODO (dm): Except for timestamp where result is timestamp. (Use FloorDiv)
 template <typename Source>
 struct target_type_impl<Source, aggregation::MEAN> {
   using type = double;
@@ -137,6 +163,18 @@ struct target_type_impl<Source, aggregation::SUM,
   using type = Source;
 };
 
+// Always use `double` for VARIANCE
+template <typename SourceType>
+struct target_type_impl<SourceType, aggregation::VARIANCE> {
+  using type = double;
+};
+
+// Always use `double` for STD
+template <typename SourceType>
+struct target_type_impl<SourceType, aggregation::STD> {
+  using type = double;
+};
+
 // Always use `double` for quantile
 template <typename Source>
 struct target_type_impl<Source, aggregation::QUANTILE> {
@@ -146,7 +184,7 @@ struct target_type_impl<Source, aggregation::QUANTILE> {
 // MEDIAN is a special case of a QUANTILE
 template <typename Source>
 struct target_type_impl<Source, aggregation::MEDIAN> {
-  using type = target_type_impl<Source, aggregation::QUANTILE>;
+  using type = typename target_type_impl<Source, aggregation::QUANTILE>::type;
 };
 
 // Always use `size_type` for ARGMAX index
@@ -170,6 +208,26 @@ struct target_type_impl<Source, aggregation::ARGMIN> {
  */
 template <typename Source, aggregation::Kind k>
 using target_type_t = typename target_type_impl<Source, k>::type;
+
+template <aggregation::Kind k>
+struct kind_to_type_impl {
+  using type = aggregation;
+};
+
+template <aggregation::Kind k>
+using kind_to_type = typename kind_to_type_impl<k>::type;
+
+#ifndef AGG_KIND_MAPPING
+#define AGG_KIND_MAPPING(k, Type)               \
+  template <>                                   \
+  struct kind_to_type_impl<k> {                 \
+    using type = Type;                          \
+  }
+#endif
+
+AGG_KIND_MAPPING(aggregation::QUANTILE, quantile_aggregation);
+AGG_KIND_MAPPING(aggregation::STD, std_var_aggregation);
+AGG_KIND_MAPPING(aggregation::VARIANCE, std_var_aggregation);
 
 /**
  * @brief Dispatches `k` as a non-type template parameter to a callable,  `f`.
@@ -197,6 +255,12 @@ CUDA_HOST_DEVICE_CALLABLE decltype(auto) aggregation_dispatcher(
           std::forward<Ts>(args)...);
     case aggregation::MEAN:
       return f.template operator()<aggregation::MEAN>(
+          std::forward<Ts>(args)...);
+    case aggregation::VARIANCE:
+      return f.template operator()<aggregation::VARIANCE>(
+          std::forward<Ts>(args)...);
+    case aggregation::STD:
+      return f.template operator()<aggregation::STD>(
           std::forward<Ts>(args)...);
     case aggregation::MEDIAN:
       return f.template operator()<aggregation::MEDIAN>(

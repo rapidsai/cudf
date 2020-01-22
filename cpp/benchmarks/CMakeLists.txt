@@ -1,4 +1,4 @@
-﻿cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
 project(CUDF_BENCHS LANGUAGES C CXX CUDA)
 
@@ -118,6 +118,14 @@ set(LEGACY_QUANTILES_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/legacy/group_quantiles_benchmark.cu")
 
 ConfigureBench(LEGACY_QUANTILES_BENCH "${LEGACY_QUANTILES_BENCH_SRC}")
+
+###################################################################################################
+# - groupby benchmark -----------------------------------------------------------------------------
+
+set(GROUPBY_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_sum_benchmark.cu")
+
+ConfigureBench(GROUPBY_BENCH "${GROUPBY_BENCH_SRC}")
 
 ###################################################################################################
 # - stack benchmark -------------------------------------------------------------------------------
