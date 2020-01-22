@@ -66,6 +66,7 @@
 - PR #3805 Avoid CuPy 7.1.0 for now
 - PR #3758 detail::scatter variant with map iterator support
 - PR #2438 Build GBench Benchmarks in CI
+- PR #3713 Adding aggregation support to rolling_window
 
 ## Bug Fixes
 
