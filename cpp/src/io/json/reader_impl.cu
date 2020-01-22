@@ -28,7 +28,8 @@
 #include <cudf/detail/utilities/trie.cuh>
 
 #include <io/comp/io_uncomp.h>
-#include <io/utilities/legacy/parsing_utils.cuh>
+#include <io/utilities/parsing_utils.cuh>
+#include <io/utilities/type_conversion.cuh>
 
 #include <cudf/table/table.hpp>
 
@@ -38,93 +39,19 @@ namespace io {
 namespace detail {
 namespace json {
 
-// using namespace cudf::io::json;
 using namespace cudf::io;
 
 namespace {
 
-std::string infer_compression_type(
-    const compression_type &compression_arg, const std::string &filename,
-    const std::vector<std::pair<std::string, std::string>> &ext_to_comp_map) {
-  auto str_tolower = [](const auto &begin, const auto &end) {
-    std::string out;
-    std::transform(begin, end, std::back_inserter(out), ::tolower);
-    return out;
-  };
-
-  // Attempt to infer from user-supplied argument
-  if (compression_arg != compression_type::AUTO) {
-    switch (compression_arg) {
-      case compression_type::GZIP:
-        return "gzip";
-      case compression_type::BZIP2:
-        return "bz2";
-      case compression_type::ZIP:
-        return "zip";
-      case compression_type::XZ:
-        return "xz";
-      default:
-        break;
-    }
-  }
-
-  // Attempt to infer from the file extension
-  const auto pos = filename.find_last_of('.');
-  if (pos != std::string::npos) {
-    const auto ext = str_tolower(filename.begin() + pos + 1, filename.end());
-    for (const auto &mapping : ext_to_comp_map) {
-      if (mapping.first == ext) {
-        return mapping.second;
-      }
-    }
-  }
-
-  return "none";
-}
-
-data_type convertStringToDtype(const std::string &dtype) {
-  if (dtype == "str") return data_type(cudf::type_id::STRING);
-  if (dtype == "timestamp[s]")
-    return data_type(cudf::type_id::TIMESTAMP_SECONDS);
-  // backwards compat: "timestamp" defaults to milliseconds
-  if (dtype == "timestamp[ms]" || dtype == "timestamp")
-    return data_type(cudf::type_id::TIMESTAMP_MILLISECONDS);
-  if (dtype == "timestamp[us]")
-    return data_type(cudf::type_id::TIMESTAMP_MICROSECONDS);
-  if (dtype == "timestamp[ns]")
-    return data_type(cudf::type_id::TIMESTAMP_NANOSECONDS);
-  if (dtype == "category") return data_type(cudf::type_id::CATEGORY);
-  if (dtype == "date32") return data_type(cudf::type_id::TIMESTAMP_DAYS);
-  if (dtype == "bool" || dtype == "boolean")
-    return data_type(cudf::type_id::BOOL8);
-  if (dtype == "date" || dtype == "date64")
-    return data_type(cudf::type_id::TIMESTAMP_MILLISECONDS);
-  if (dtype == "float" || dtype == "float32")
-    return data_type(cudf::type_id::FLOAT32);
-  if (dtype == "double" || dtype == "float64")
-    return data_type(cudf::type_id::FLOAT64);
-  if (dtype == "byte" || dtype == "int8") return data_type(cudf::type_id::INT8);
-  if (dtype == "short" || dtype == "int16")
-    return data_type(cudf::type_id::INT16);
-  if (dtype == "int" || dtype == "int32")
-    return data_type(cudf::type_id::INT32);
-  if (dtype == "long" || dtype == "int64")
-    return data_type(cudf::type_id::INT64);
-
-  return data_type(cudf::type_id::EMPTY);
-}
-
-}  // namespace
-
-/**---------------------------------------------------------------------------*
+/**
  * @brief Extract value names from a JSON object
  *
  * @param[in] json_obj Host vector containing the JSON object
  * @param[in] opts Parsing options (e.g. delimiter and quotation character)
  *
  * @return std::vector<std::string> names of JSON object values
- *---------------------------------------------------------------------------**/
-std::vector<std::string> getNamesFromJsonObject(const std::vector<char> &json_obj, const ParseOptions &opts) {
+ **/
+std::vector<std::string> get_names_from_json_object(const std::vector<char> &json_obj, const ParseOptions &opts) {
   enum class ParseState { preColName, colName, postColName };
   std::vector<std::string> names;
   bool quotation = false;
@@ -157,7 +84,7 @@ std::vector<std::string> getNamesFromJsonObject(const std::vector<char> &json_ob
   return names;
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Estimates the maximum expected length or a row, based on the number
  * of columns
  *
@@ -167,8 +94,8 @@ std::vector<std::string> getNamesFromJsonObject(const std::vector<char> &json_ob
  * @param[in] num_columns Number of columns in the JSON file (optional)
  *
  * @return Estimated maximum size of a row, in bytes
- *---------------------------------------------------------------------------**/
-constexpr size_t calculateMaxRowSize(int num_columns = 0) noexcept {
+ **/
+constexpr size_t calculate_max_row_size(int num_columns = 0) noexcept {
   constexpr size_t max_row_bytes = 16 * 1024; // 16KB
   constexpr size_t column_bytes = 64;
   constexpr size_t base_padding = 1024; // 1KB
@@ -181,12 +108,22 @@ constexpr size_t calculateMaxRowSize(int num_columns = 0) noexcept {
   }
 }
 
+}  // anonymous namespace
 
-
+/**
+ * @brief Ingest input JSON file/buffer, without decompression
+ *
+ * Sets the source_, byte_range_offset_, and byte_range_size_ data members
+ *
+ * @param[in] range_offset Number of bytes offset from the start
+ * @param[in] range_size Bytes to read; use `0` for all remaining data
+ *
+ * @return void
+ **/
 void reader::impl::ingest_raw_input(size_t range_offset, size_t range_size) {
   size_t map_range_size = 0;
   if (range_size != 0) {
-    map_range_size = range_size + calculateMaxRowSize(args_.dtype.size());
+    map_range_size = range_size + calculate_max_row_size(args_.dtype.size());
   }
 
   // Support delayed opening of the file if using memory mapping datasource
@@ -205,6 +142,13 @@ void reader::impl::ingest_raw_input(size_t range_offset, size_t range_size) {
   byte_range_size_ = range_size;
 }
 
+/**
+ * @brief Decompress the input data, if needed
+ *
+ * Sets the uncomp_data_ and uncomp_size_ data members
+ *
+ * @return void
+ **/
 void reader::impl::decompress_input() {
   const auto compression_type = infer_compression_type(
       args_.compression, filepath_,
@@ -224,6 +168,13 @@ void reader::impl::decompress_input() {
   }
 }
 
+/**
+ * @brief Finds all record starts in the file and stores them in rec_starts_
+ *
+ * Does not upload the entire file to the GPU
+ *
+ * @return void
+ **/
 void reader::impl::set_record_starts() {
   std::vector<char> chars_to_count{'\n'};
   // Currently, ignoring lineterminations within quotes is handled by recording the records of both,
@@ -233,7 +184,7 @@ void reader::impl::set_record_starts() {
   }
   // If not starting at an offset, add an extra row to account for the first row in the file
   const auto prefilter_count =
-      countAllFromSet(uncomp_data_, uncomp_size_, chars_to_count) + ((byte_range_offset_ == 0) ? 1 : 0);
+      count_all_from_set(uncomp_data_, uncomp_size_, chars_to_count) + ((byte_range_offset_ == 0) ? 1 : 0);
 
   rec_starts_.resize(prefilter_count);
 
@@ -249,7 +200,7 @@ void reader::impl::set_record_starts() {
     chars_to_find.push_back('\"');
   }
   // Passing offset = 1 to return positions AFTER the found character
-  findAllFromSet(uncomp_data_, uncomp_size_, chars_to_find, 1, find_result_ptr);
+  find_all_from_set(uncomp_data_, uncomp_size_, chars_to_find, 1, find_result_ptr);
 
   // Previous call stores the record pinput_file.typeositions as encountered by all threads
   // Sort the record positions as subsequent processing may require filtering
@@ -285,6 +236,15 @@ void reader::impl::set_record_starts() {
   rec_starts_.resize(filtered_count);
 }
 
+/**
+ * @brief Uploads the relevant segment of the input json data onto the GPU.
+ *
+ * Sets the d_data_ data member.
+ * Only rows that need to be parsed are copied, based on the byte range
+ * Also updates the array of record starts to match the device data offset.
+ *
+ * @return void
+ **/
 void reader::impl::upload_data_to_device() {
   size_t start_offset = 0;
   size_t end_offset = uncomp_size_;
@@ -319,6 +279,13 @@ void reader::impl::upload_data_to_device() {
   data_ = rmm::device_buffer(uncomp_data_ + start_offset, bytes_to_upload);
 }
 
+/**
+ * @brief Parse the first row to set the column name
+ *
+ * Sets the column_names_ data member
+ *
+ * @return void
+ **/
 void reader::impl::set_column_names() {
   // If file only contains one row, use the file size for the row size
   uint64_t first_row_len = data_.size() / sizeof(char);
@@ -344,7 +311,7 @@ void reader::impl::set_column_names() {
   // If the first opening bracket is '{', assume object format
   const bool is_object = first_curly_bracket < first_square_bracket;
   if (is_object) {
-    metadata.column_names = getNamesFromJsonObject(first_row, opts_);
+    metadata.column_names = get_names_from_json_object(first_row, opts_);
   } else {
     int cols_found = 0;
     bool quotation = false;
@@ -361,7 +328,16 @@ void reader::impl::set_column_names() {
   }
 }
 
-void reader::impl::set_data_types() {  
+/**
+ * @brief Set the data type array data member
+ *
+ * If user does not pass the data types, deduces types from the file content
+ * 
+ * @param[in] stream Cuda stream to run kernels on
+ *
+ * @return void
+ **/
+void reader::impl::set_data_types(cudaStream_t stream) {  
   if (!args_.dtype.empty()) {
     CUDF_EXPECTS(args_.dtype.size() == metadata.column_names.size(), "Need to specify the type of each column.\n");
     // Assume that the dtype is in dictionary format only if all elements contain a colon
@@ -381,7 +357,7 @@ void reader::impl::set_data_types() {
           col_type_info_map[col_name]
         ) = convertStringToDtype(type_str);
         */
-       col_type_map[col_name] = convertStringToDtype(type_str);
+       col_type_map[col_name] = convert_string_to_dtype(type_str);
       }
 
       // Using the map here allows O(n log n) complexity
@@ -394,7 +370,7 @@ void reader::impl::set_data_types() {
       // auto dtype_info_ = std::back_inserter(dtypes_extra_info_);
       for (size_t col = 0; col < args_.dtype.size(); ++col) {
         // std::tie(dtype_, dtype_info_) = convertStringToDtype(args_.dtype[col]);
-        dtype_ = convertStringToDtype(args_.dtype[col]);
+        dtype_ = convert_string_to_dtype(args_.dtype[col]);
       }
     }
   } else {
@@ -403,19 +379,12 @@ void reader::impl::set_data_types() {
 
     // dtypes_extra_info_ = std::vector<gdf_dtype_extra_info>(num_columns, gdf_dtype_extra_info{ TIME_UNIT_NONE });
 
-    rmm::device_vector<ColumnInfo> d_column_infos(num_columns, ColumnInfo{});
-    gpu::DetectDataTypes(d_column_infos.data().get(),
+    rmm::device_vector<cudf::experimental::io::json::ColumnInfo> d_column_infos(num_columns, cudf::experimental::io::json::ColumnInfo{});
+    cudf::experimental::io::json::gpu::detect_data_types(d_column_infos.data().get(),
                          static_cast<const char*>(data_.data()), data_.size(), 
                          opts_, num_columns,
-                         rec_starts_.data().get(), rec_starts_.size());
-    thrust::host_vector<ColumnInfo> h_column_infos = d_column_infos;
-
-    /*
-     detectJsonDataTypes <<< grid_size, block_size >>> (
-      static_cast<char *>(data_.data()), data_.size(), opts_,
-      column_names_.size(), rec_starts_.data().get(), rec_starts_.size(),
-      column_infos);
-    */
+                         rec_starts_.data().get(), rec_starts_.size(), stream);
+    thrust::host_vector<cudf::experimental::io::json::ColumnInfo> h_column_infos = d_column_infos;    
 
     for (const auto &cinfo : h_column_infos) {
       if (cinfo.null_count == static_cast<int>(rec_starts_.size())) {
@@ -438,6 +407,13 @@ void reader::impl::set_data_types() {
   }  
 }
 
+/**
+ * @brief Parse the input data and store results a table
+ *       
+ * @param[in] stream Cuda stream to run kernels on
+ *
+ * @return table_with_metadata struct
+ **/
 table_with_metadata reader::impl::convert_data_to_table(cudaStream_t stream) {  
   const auto num_columns = dtypes_.size();
   const auto num_records = rec_starts_.size();
@@ -463,12 +439,11 @@ table_with_metadata reader::impl::convert_data_to_table(cudaStream_t stream) {
   rmm::device_vector<cudf::bitmask_type *> d_valid = h_valid;
   rmm::device_vector<cudf::size_type> d_valid_counts(num_columns, 0);
 
-  gpu::convertJsonToColumns( data_, d_dtypes.data().get(), d_data.data().get(),
+  cudf::experimental::io::json::gpu::convert_json_to_columns( data_, d_dtypes.data().get(), d_data.data().get(),
                         num_records, num_columns, 
                         rec_starts_.data().get(),
                         d_valid.data().get(), d_valid_counts.data().get(), 
-                        opts_);
-  // convertJsonToColumns(d_dtypes.data().get(), d_data.data().get(), d_valid.data().get(), d_valid_counts.data().get());
+                        opts_, stream);  
   CUDA_TRY(cudaDeviceSynchronize());
   CUDA_TRY(cudaGetLastError());
 
@@ -480,16 +455,9 @@ table_with_metadata reader::impl::convert_data_to_table(cudaStream_t stream) {
 
     out_columns.emplace_back(make_column(dtypes_[i], num_records, out_buffers[i]));
   }   
-
-  /*
-  // Perform any final column preparation (may reference decoded data)
-  for (auto &column : columns_) {
-    column.finalize();
-  } 
-  */ 
-  // CUDF_EXPECTS(!columns_.empty(), "Error converting json input into gdf columns.\n");
-
-  // return { std::make_unique<table>(std::move(out_columns)), std::move(metadata) };
+  
+  CUDF_EXPECTS(!out_columns.empty(), "Error converting json input into gdf columns.\n");
+  
   return table_with_metadata{std::make_unique<table>(std::move(out_columns)), metadata};  
 }
 
@@ -508,6 +476,15 @@ reader::impl::impl(std::unique_ptr<datasource> source, std::string filepath,
   opts_.naValuesTrie = d_na_trie_.data().get();
 }
 
+/**
+ * @brief Read an entire set or a subset of data from the source
+ *
+ * @param[in] range_offset Number of bytes offset from the start
+ * @param[in] range_size Bytes to read; use `0` for all remaining data
+ * @param[in] stream Cuda stream to execute gpu operations on
+ *
+ * @return Unique pointer to the table data
+ **/
 table_with_metadata reader::impl::read(size_t range_offset, size_t range_size, cudaStream_t stream) {
   ingest_raw_input(range_offset, range_size);
   CUDF_EXPECTS(buffer_ != nullptr, "Ingest failed: input data is null.\n");
@@ -525,22 +502,10 @@ table_with_metadata reader::impl::read(size_t range_offset, size_t range_size, c
   set_column_names();
   CUDF_EXPECTS(!metadata.column_names.empty(), "Error determining column names.\n");
   
-  set_data_types();
+  set_data_types(stream);
   CUDF_EXPECTS(!dtypes_.empty(), "Error in data type detection.\n");
 
-  return convert_data_to_table(stream);
-
-  /*
-  CUDF_EXPECTS(!columns_.empty(), "Error converting json input into gdf columns.\n");
-
-  // Transfer ownership to raw pointer output
-  std::vector<gdf_column *> out_cols(columns_.size());
-  for (size_t i = 0; i < columns_.size(); ++i) {
-    out_cols[i] = columns_[i].release();
-  }
-
-  return table(out_cols.data(), out_cols.size());
-  */ 
+  return convert_data_to_table(stream); 
 }
 
 // Forward to implementation

@@ -41,10 +41,10 @@ namespace json {
 using namespace cudf::io::json;
 using namespace cudf::io;
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Class used to parse Json input and convert it into gdf columns
  *
- *---------------------------------------------------------------------------**/
+ **/
 class reader::impl {
 public:
 private:
@@ -66,12 +66,10 @@ private:
 
   size_t byte_range_offset_ = 0;
   size_t byte_range_size_ = 0;
-
-  //std::vector<std::string> column_names_;
+  
   table_metadata         metadata;
   std::vector<data_type> dtypes_;
-  //std::vector<gdf_dtype_extra_info> dtypes_extra_info_;
-  //std::vector<gdf_column_wrapper> columns_;
+  //std::vector<gdf_dtype_extra_info> dtypes_extra_info_;  
 
   // parsing options
   const bool allow_newlines_in_strings_ = false;
@@ -80,7 +78,7 @@ private:
   thrust::device_vector<SerialTrieNode> d_false_trie_;
   thrust::device_vector<SerialTrieNode> d_na_trie_;
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Ingest input JSON file/buffer, without decompression
    *
    * Sets the source_, byte_range_offset_, and byte_range_size_ data members
@@ -89,28 +87,28 @@ private:
    * @param[in] range_size Bytes to read; use `0` for all remaining data
    *
    * @return void
-   *---------------------------------------------------------------------------**/
+   **/
   void ingest_raw_input(size_t range_offset, size_t range_size);
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Decompress the input data, if needed
    *
    * Sets the uncomp_data_ and uncomp_size_ data members
    *
    * @return void
-   *---------------------------------------------------------------------------**/
+   **/
   void decompress_input();
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Finds all record starts in the file and stores them in rec_starts_
    *
    * Does not upload the entire file to the GPU
    *
    * @return void
-   *---------------------------------------------------------------------------**/
+   **/
   void set_record_starts();
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Uploads the relevant segment of the input json data onto the GPU.
    *
    * Sets the d_data_ data member.
@@ -118,42 +116,36 @@ private:
    * Also updates the array of record starts to match the device data offset.
    *
    * @return void
-   *---------------------------------------------------------------------------**/
+   **/
   void upload_data_to_device();
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Parse the first row to set the column name
    *
    * Sets the column_names_ data member
    *
    * @return void
-   *---------------------------------------------------------------------------**/
+   **/
   void set_column_names();
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Set the data type array data member
    *
    * If user does not pass the data types, deduces types from the file content
+   * 
+   * @param[in] stream Cuda stream to run kernels on
    *
    * @return void
-   *---------------------------------------------------------------------------**/
-  void set_data_types();
+   **/
+  void set_data_types(cudaStream_t stream);
 
-  /**---------------------------------------------------------------------------*
-   * @brief Set up and launches JSON data type detect CUDA kernel.
-   *
-   * @param[out] column_infos The count for each column data type
-   *
-   * @return void
-   *---------------------------------------------------------------------------**/
-  void detect_data_types(ColumnInfo *column_infos);
-
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Parse the input data and store results a table
-   *   
+   *       
+   * @param[in] stream Cuda stream to run kernels on
    *
-   * @return Unique pointer to the table data
-   *---------------------------------------------------------------------------**/
+   * @return table_with_metadata struct
+   **/
   table_with_metadata convert_data_to_table(cudaStream_t stream);
   
  public:

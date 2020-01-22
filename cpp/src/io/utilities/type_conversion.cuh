@@ -18,23 +18,20 @@
 
 #include <cudf/cudf.h>
 
-class SerialTrieNode;
-
 namespace cudf {
 namespace experimental {
 namespace io {
-namespace json {
 
-struct ColumnInfo {
-  cudf::size_type float_count;
-  cudf::size_type datetime_count;
-  cudf::size_type string_count;
-  cudf::size_type int_count;
-  cudf::size_type bool_count;
-  cudf::size_type null_count;
-};
+/**
+ * @brief Convert a string to a cuDF data_type
+ * 
+ * @param[in] dtype The string to be converted
+ * 
+ * @return data_type The converted data type
+ */
+data_type convert_string_to_dtype(const std::string &dtype);
 
-}  // namespace json
-}  // namespace io
-}  // namespace experimental
-}  // namespace cudf
+} // namespace io
+} // namespace experimental
+} // namespace cudf
+

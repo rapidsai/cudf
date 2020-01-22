@@ -25,57 +25,16 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/detail/utilities/trie.cuh>
 
+#include <io/utilities/parsing_utils.cuh>
+
 #include <cuda_runtime.h>
+
+using namespace::cudf::experimental::io;
 
 namespace cudf {
 namespace io {
 namespace csv {
 namespace gpu {
-
-/**
- * @brief CUDA kernel iterates over the data until the end of the current field
- *
- * Also iterates over (one or more) delimiter characters after the field.
- * Function applies to formats with field delimiters and line terminators.
- *
- * @param data The entire plain text data to read
- * @param opts A set of parsing options
- * @param pos Offset to start the seeking from
- * @param stop Offset of the end of the row
- *
- * @return long The position of the last character in the field, including the
- *  delimiter(s) following the field data
- */
-__device__ __inline__ long seek_field_end(const char *data,
-                                          ParseOptions const &opts, long pos,
-                                          long stop) {
-  bool quotation = false;
-  while (true) {
-    // Use simple logic to ignore control chars between any quote seq
-    // Handles nominal cases including doublequotes within quotes, but
-    // may not output exact failures as PANDAS for malformed fields
-    if (data[pos] == opts.quotechar) {
-      quotation = !quotation;
-    } else if (quotation == false) {
-      if (data[pos] == opts.delimiter) {
-        while (opts.multi_delimiter && pos < stop &&
-               data[pos + 1] == opts.delimiter) {
-          ++pos;
-        }
-        break;
-      } else if (data[pos] == opts.terminator) {
-        break;
-      } else if (data[pos] == '\r' &&
-                 (pos + 1 < stop && data[pos + 1] == '\n')) {
-        stop--;
-        break;
-      }
-    }
-    if (pos >= stop) break;
-    pos++;
-  }
-  return pos;
-}
 
 /**
  * @brief Checks whether the given character is a whitespace character.
@@ -256,7 +215,7 @@ __global__ void dataTypeDetection(const char *raw_csv, const ParseOptions opts,
       break;
     }
 
-    pos = seek_field_end(raw_csv, opts, pos, stop);
+    pos = cudf::experimental::io::gpu::seek_field_end(raw_csv, opts, pos, stop);
 
     // Checking if this is a column that the user wants --- user can filter
     // columns
@@ -670,7 +629,7 @@ __global__ void convertCsvToGdf(const char *raw_csv, const ParseOptions opts,
   while (col < num_columns) {
     if (start > stop) break;
 
-    pos = seek_field_end(raw_csv, opts, pos, stop);
+    pos = cudf::experimental::io::gpu::seek_field_end(raw_csv, opts, pos, stop);
 
     if (flags[col] & column_parse::enabled) {
       // check if the entire field is a NaN string - consistent with pandas

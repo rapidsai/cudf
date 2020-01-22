@@ -54,8 +54,7 @@ struct JsonReaderTest : public cudf::test::BaseFixture {};
 
 TEST_F(JsonReaderTest, BasicJsonLines) {
   std::string data = "[1, 1.1]\n[2, 2.2]\n[3, 3.3]\n";
-  
-  // const auto df = cudf::read_json(args);
+    
   cudf_io::read_json_args in_args{cudf_io::source_info{data.data(), data.size()}};
   in_args.lines = true;
   in_args.dtype = {"int", "float64"};
@@ -135,8 +134,7 @@ TEST_F(JsonReaderTest, JsonLinesFileInput) {
   const std::string fname = temp_env->get_temp_dir() + "JsonLinesFileTest.json";
   std::ofstream outfile(fname, std::ofstream::out);
   outfile << "[11, 1.1]\n[22, 2.2]";
-  outfile.close();
-  // ASSERT_TRUE(checkFile(fname));
+  outfile.close();  
 
   cudf_io::read_json_args in_args{cudf_io::source_info{fname}};  
   in_args.lines = true;
@@ -163,8 +161,7 @@ TEST_F(JsonReaderTest, JsonLinesByteRange) {
   const std::string fname = temp_env->get_temp_dir() + "JsonLinesByteRangeTest.json";
   std::ofstream outfile(fname, std::ofstream::out);
   outfile << "[1000]\n[2000]\n[3000]\n[4000]\n[5000]\n[6000]\n[7000]\n[8000]\n[9000]\n";
-  outfile.close();
-  // ASSERT_TRUE(checkFile(fname));
+  outfile.close();  
 
   cudf_io::read_json_args in_args{cudf_io::source_info{fname}};  
   in_args.lines = true;
@@ -189,8 +186,7 @@ TEST_F(JsonReaderTest, JsonLinesObjects) {
   const std::string fname = temp_env->get_temp_dir() + "JsonLinesObjectsTest.json";
   std::ofstream outfile(fname, std::ofstream::out);
   outfile << " {\"co\\\"l1\" : 1, \"col2\" : 2.0} \n";
-  outfile.close();
-  // ASSERT_TRUE(checkFile(fname));
+  outfile.close();  
 
   cudf_io::read_json_args in_args{cudf_io::source_info{fname}};  
   in_args.lines = true;
@@ -245,8 +241,7 @@ TEST_F(JsonReaderTest, ArrowFileSource) {
 
   std::ofstream outfile(fname, std::ofstream::out);
   outfile << "[9]\n[8]\n[7]\n[6]\n[5]\n[4]\n[3]\n[2]\n";
-  outfile.close();
-  // ASSERT_TRUE(checkFile(fname));
+  outfile.close();  
 
   std::shared_ptr<arrow::io::ReadableFile> infile;
   ASSERT_TRUE(arrow::io::ReadableFile::Open(fname, &infile).ok());

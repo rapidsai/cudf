@@ -524,6 +524,8 @@ add_library(cudf
             src/io/functions.cpp
             src/io/statistics/column_stats.cu
             src/io/utilities/datasource.cpp
+            src/io/utilities/parsing_utils.cu
+            src/io/utilities/type_conversion.cu
             src/io/utilities/legacy/parsing_utils.cu
             src/utilities/legacy/cuda_utils.cu
             src/copying/gather.cu
