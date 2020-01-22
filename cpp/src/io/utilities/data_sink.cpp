@@ -16,11 +16,7 @@
 
 #include "data_sink.hpp"
 
-#include <fcntl.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <unistd.h>
+#include <fstream>
 
 #include <cudf/cudf.h>
 #include <cudf/utilities/error.hpp>
@@ -35,23 +31,27 @@ namespace io {
 class file_sink : public data_sink {
 
  public:
-  explicit file_sink(const std::string& filepath): filepath_(filepath){
-
+  explicit file_sink(const std::string& filepath){
+    outfile_.open(filepath, std::ios::out | std::ios::binary | std::ios::trunc);
+    CUDF_EXPECTS(outfile_.is_open(), "Cannot open output file");
   }
 
   virtual ~file_sink() {
+    flush();
   }
 
-  void write(void* data, size_t size) override {
+  void write(void const* data, size_t size) override {
+    outfile_.write(reinterpret_cast<char const*>(data), size);
   }
 
-  size_t get_position() const override { return 0; }
+  void flush() override {
+    outfile_.flush();
+  }
+
+  size_t position() override { return outfile_.tellp(); }
 
  private:
-  
-
- private:
-  std::string filepath_;
+  std::ofstream outfile_;
 };
 
 std::unique_ptr<data_sink> data_sink::create(const std::string& filepath) {

@@ -30,6 +30,7 @@
 #include <cudf/io/writers.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
+#include <io/utilities/data_sink.hpp>
 
 #include <fstream>
 #include <memory>
@@ -68,11 +69,11 @@ class writer::impl {
   /**
    * @brief Constructor with writer options.
    *
-   * @param filepath Filepath if storing dataset to a file
+   * @param sink Output sink
    * @param options Settings for controlling behavior
    * @param mr Resource to use for device memory allocation
    **/
-  explicit impl(std::string filepath, writer_options const& options,
+  explicit impl(std::unique_ptr<data_sink> sink, writer_options const& options,
                 rmm::mr::device_memory_resource* mr);
 
   /**
@@ -257,7 +258,7 @@ class writer::impl {
   bool enable_dictionary_ = true;
 
   std::vector<uint8_t> buffer_;
-  std::ofstream outfile_;
+  std::unique_ptr<data_sink> out_sink_;
 };
 
 }  // namespace orc

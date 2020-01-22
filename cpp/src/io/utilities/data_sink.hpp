@@ -16,12 +16,7 @@
 
 #pragma once
 
-#include <arrow/buffer.h>
-#include <arrow/io/file.h>
-#include <arrow/io/interfaces.h>
-#include <arrow/io/memory.h>
 
-#include <algorithm>
 #include <memory>
 #include <string>
 
@@ -48,19 +43,26 @@ class data_sink {
   /**
    * @brief TODO
    *
-   * @param[in] offset TODO
+   * @param[in] data TODO
    * @param[in] size Bytes to write
    *
    * @return void
    **/
-  virtual void write(void* data, size_t size) = 0;
+  virtual void write(void const* data, size_t size) = 0;
 
+  /**
+   * @brief TODO
+   * 
+   * @return void
+   */
+  virtual void flush() = 0;
+  
   /**
    * @brief TODO
    *
    * @return size_t TODO
    **/
-  virtual size_t get_position() const = 0;
+  virtual size_t position() = 0;
 };
 
 }  // namespace io
