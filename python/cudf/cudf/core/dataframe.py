@@ -1479,6 +1479,7 @@ class DataFrame(Table):
         if not drop:
             if isinstance(self.index, cudf.core.multiindex.MultiIndex):
                 framed = self.index.to_frame()
+                name = framed.columns
                 for col_name, col_value in framed._data.items():
                     out[col_name] = col_value
             else:
@@ -1489,8 +1490,9 @@ class DataFrame(Table):
             for col_name, col_value in self._data.items():
                 out[col_name] = col_value
             if isinstance(self.columns, cudf.core.multiindex.MultiIndex):
-                # could also be multi index
-                top = DataFrame([name] + (len(self.columns) - 1) * [""])
+                ncols = self.shape[1]
+                mi_columns = dict(zip(range(ncols), [name, len(name) * [""]]))
+                top = DataFrame(mi_columns)
                 bottom = self.columns.to_frame().reset_index(drop=True)
                 index_frame = cudf.concat([top, bottom])
                 mc_df = DataFrame()

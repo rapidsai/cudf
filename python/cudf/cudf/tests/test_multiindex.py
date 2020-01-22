@@ -717,6 +717,17 @@ def test_multicolumn_reset_index():
     assert_eq(pdg.reset_index(), gdg.reset_index(), check_dtype=False)
 
 
+def test_multiindex_multicolumn_reset_index():
+    gdf = cudf.DataFrame({"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5], "z": [1, 2, 3, 4, 5]})
+    pdf = gdf.to_pandas()
+    gdg = gdf.groupby(["x", "y"]).agg({"y": ["count", "mean"]})
+    pdg = pdf.groupby(["x", "y"]).agg({"y": ["count", "mean"]})
+    assert_eq(pdg.reset_index(), gdg.reset_index(), check_dtype=False)
+    gdg = gdf.groupby(["x", "z"]).agg({"y": ["count", "mean"]})
+    pdg = pdf.groupby(["x", "z"]).agg({"y": ["count", "mean"]})
+    assert_eq(pdg.reset_index(), gdg.reset_index(), check_dtype=False)
+
+
 def test_multiindex_columns_from_pandas(pdf, pdfIndex):
     pdf.index = pdfIndex
     pdfT = pdf.T
