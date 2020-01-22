@@ -75,9 +75,20 @@ class writer {
    * @param mr Optional resource to use for device memory allocation
    */
   explicit writer(
-      std::string filepath, writer_options const& options,
+      std::string const& filepath, writer_options const& options,
       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-
+  
+  /**
+   * @brief Constructor for output to host buffer.
+   *
+   * @param buffer TODO
+   * @param options Settings for controlling writing behavior
+   * @param mr Optional resource to use for device memory allocation
+   */
+  explicit writer(
+      std::vector<char>* buffer, writer_options const& options,
+      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+    
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header
    */
@@ -139,7 +150,9 @@ class writer {
   explicit writer(
       std::string const& filepath, writer_options const& options,
       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-
+  explicit writer(
+      std::vector<char>* buffer, writer_options const &options,
+      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header
    */

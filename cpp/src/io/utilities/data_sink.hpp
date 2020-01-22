@@ -18,6 +18,7 @@
 
 
 #include <memory>
+#include <vector>
 #include <string>
 
 namespace cudf {
@@ -34,6 +35,13 @@ class data_sink {
    * @param[in] filepath Path to the file to use
    **/
   static std::unique_ptr<data_sink> create(const std::string& filepath);
+
+  /**
+   * @brief Create a sink from a std::vector
+   *
+   * @param[in,out] buffer Pointer to the output vector
+   **/
+  static std::unique_ptr<data_sink> create(std::vector<char>* buffer);
 
   /**
    * @brief Base class destructor

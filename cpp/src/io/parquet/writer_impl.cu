@@ -689,9 +689,13 @@ void writer::impl::write(table_view const &table, const table_metadata *metadata
 }
 
 // Forward to implementation
-writer::writer(std::string const& filepath, writer_options const &options,
+writer::writer(std::string const& filepath, writer_options const& options,
                rmm::mr::device_memory_resource *mr)
     : _impl(std::make_unique<impl>(data_sink::create(filepath), options, mr)) {}
+
+writer::writer(std::vector<char>* buffer, writer_options const& options,
+      rmm::mr::device_memory_resource *mr)
+: _impl(std::make_unique<impl>(data_sink::create(buffer), options, mr)) {}
 
 // Destructor within this translation unit
 writer::~writer() = default;

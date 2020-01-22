@@ -31,7 +31,7 @@ namespace io {
 class file_sink : public data_sink {
 
  public:
-  explicit file_sink(const std::string& filepath){
+  explicit file_sink(std::string const& filepath){
     outfile_.open(filepath, std::ios::out | std::ios::binary | std::ios::trunc);
     CUDF_EXPECTS(outfile_.is_open(), "Cannot open output file");
   }
@@ -54,8 +54,39 @@ class file_sink : public data_sink {
   std::ofstream outfile_;
 };
 
+/**
+ * @brief TODO
+ * 
+ */
+class host_buffer_sink : public data_sink {
+
+ public:
+  explicit host_buffer_sink(std::vector<char>* buffer)
+      : buffer_(buffer) {}
+
+  virtual ~host_buffer_sink() {
+    flush();
+  }
+  // TODO optimize
+  void write(void const* data, size_t size) override {
+    char const* char_array = reinterpret_cast<char const*>(data);
+    buffer_->insert(buffer_->end(), char_array, char_array + size);
+  }
+
+  void flush() override {}
+
+  size_t position() override { return buffer_->size(); }
+
+ private:
+  std::vector<char>* buffer_;
+};
+
 std::unique_ptr<data_sink> data_sink::create(const std::string& filepath) {
-  return std::make_unique<file_sink>(filepath.c_str());
+  return std::make_unique<file_sink>(filepath);
+}
+
+std::unique_ptr<data_sink> data_sink::create(std::vector<char>* buffer) {
+  return std::make_unique<host_buffer_sink>(buffer);
 }
 
 }  // namespace io
