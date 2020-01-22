@@ -32,7 +32,6 @@
 #include <cudf/utilities/error.hpp>
 #include <io/utilities/data_sink.hpp>
 
-#include <fstream>
 #include <memory>
 #include <string>
 #include <vector>
