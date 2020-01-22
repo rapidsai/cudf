@@ -72,16 +72,14 @@ std::unique_ptr<cudf::column> clamp_string_column (strings_column_view const& in
                                                    rmm::mr::device_memory_resource* mr,
                                                    cudaStream_t stream) {
 
-    auto input_device_column = column_device_view::create(input.parent(),stream);
+    auto input_device_column = column_device_view::create(input.parent(), stream);
     auto d_input = *input_device_column;
-    auto d_lo = (*lo_itr).first;
-    auto d_hi = (*hi_itr).first;
-    auto d_lo_replace = (*lo_replace_itr).first;
-    auto d_hi_replace = (*hi_replace_itr).first;
-    auto lo_valid = (*lo_itr).second;
-    auto hi_valid = (*hi_itr).second;
-    auto strings_count = input.size();
-    auto exec = rmm::exec_policy(stream);
+    const auto d_lo = (*lo_itr).first;
+    const auto d_hi = (*hi_itr).first;
+    const auto d_lo_replace = (*lo_replace_itr).first;
+    const auto d_hi_replace = (*hi_replace_itr).first;
+    const auto lo_valid = (*lo_itr).second;
+    const auto hi_valid = (*hi_itr).second;
 
     // build offset column
     auto offsets_transformer = [d_lo, lo_valid, d_lo_replace, d_hi, hi_valid, d_hi_replace] __device__ (string_view element, bool is_valid=true) {
@@ -120,9 +118,11 @@ std::unique_ptr<cudf::column> clamp_string_column (strings_column_view const& in
             memcpy(d_chars + d_offsets[idx], input_element.data(), input_element.size_bytes() );
         }
     };
-    thrust::for_each_n(exec->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count, copy_transformer);
 
-    return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
+    auto exec = rmm::exec_policy(stream);
+    thrust::for_each_n(exec->on(stream), thrust::make_counting_iterator<size_type>(0), input.size(), copy_transformer);
+
+    return make_strings_column(input.size(), std::move(offsets_column), std::move(chars_column),
             input.null_count(), std::move(copy_bitmask(input.parent())), stream, mr);
 }
 
