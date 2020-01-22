@@ -116,6 +116,7 @@
 - PR #3858 Fixes the broken debug build after #3728
 - PR #3850 Fix merge typecast scope issue and resulting memory leak
 - PR #3855 Fix MultiColumn recreation with reset_index
+- PR #3868 Fix apply_grouped moving average example 
 
 
 # cuDF 0.11.0 (11 Dec 2019)
