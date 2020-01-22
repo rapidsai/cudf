@@ -55,7 +55,7 @@ class ColumnBase(Column):
     def __reduce__(self):
         return (
             build_column,
-            (self.data, self.dtype, self.mask, self.offset, self.children,),
+            (self.data, self.dtype, self.mask, self.offset, self.children),
         )
 
     @property
@@ -834,7 +834,7 @@ class ColumnBase(Column):
                 __cuda_array_interface__={
                     "shape": (len(self),),
                     "typestr": "<t1",
-                    "data": (self.mask.ptr, True,),
+                    "data": (self.mask.ptr, True),
                     "version": 1,
                 }
             )
@@ -942,7 +942,7 @@ def column_empty(row_count, dtype="object", masked=False):
 
 
 def build_column(
-    data, dtype, mask=None, offset=0, children=(), categories=None,
+    data, dtype, mask=None, offset=0, children=(), categories=None
 ):
     """
     Build a Column of the appropriate type from the given parameters
@@ -977,12 +977,10 @@ def build_column(
         if not isinstance(children[0], ColumnBase):
             raise TypeError("children must be a tuple of Columns")
         return CategoricalColumn(
-            dtype=dtype, mask=mask, offset=offset, children=children,
+            dtype=dtype, mask=mask, offset=offset, children=children
         )
     elif dtype.type is np.datetime64:
-        return DatetimeColumn(
-            data=data, dtype=dtype, mask=mask, offset=offset,
-        )
+        return DatetimeColumn(data=data, dtype=dtype, mask=mask, offset=offset)
     elif dtype.type in (np.object_, np.str_):
         return StringColumn(mask=mask, offset=offset, children=children)
     else:
@@ -992,7 +990,7 @@ def build_column(
 
 
 def build_categorical_column(
-    categories, codes, mask=None, offset=0, ordered=None,
+    categories, codes, mask=None, offset=0, ordered=None
 ):
     """
     Build a CategoricalColumn
@@ -1119,7 +1117,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
                 null,
             )
             data = datetime.DatetimeColumn(
-                data=Buffer(arbitrary), dtype=data.dtype, mask=col.mask,
+                data=Buffer(arbitrary), dtype=data.dtype, mask=col.mask
             )
 
     elif hasattr(arbitrary, "__cuda_array_interface__"):
@@ -1187,7 +1185,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
             else:
                 categories = as_column(arbitrary.dictionary)
             dtype = CategoricalDtype(
-                categories=categories, ordered=arbitrary.type.ordered,
+                categories=categories, ordered=arbitrary.type.ordered
             )
             data = categorical.CategoricalColumn(
                 dtype=dtype, mask=codes.mask, children=(codes,)
@@ -1197,13 +1195,13 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
             pamask, padata, _ = buffers_from_pyarrow(arbitrary, dtype=dtype)
 
             data = datetime.DatetimeColumn(
-                data=padata, mask=pamask, dtype=dtype,
+                data=padata, mask=pamask, dtype=dtype
             )
         elif isinstance(arbitrary, pa.Date64Array):
             raise NotImplementedError
             pamask, padata, _ = buffers_from_pyarrow(arbitrary, dtype="M8[ms]")
             data = datetime.DatetimeColumn(
-                data=padata, mask=pamask, dtype=np.dtype("M8[ms]"),
+                data=padata, mask=pamask, dtype=np.dtype("M8[ms]")
             )
         elif isinstance(arbitrary, pa.Date32Array):
             # No equivalent np dtype and not yet supported
@@ -1224,7 +1222,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
                 arbitrary = pa.array([], type=pa.int8())
             pamask, padata, _ = buffers_from_pyarrow(arbitrary, dtype=dtype)
             data = numerical.NumericalColumn(
-                data=padata, mask=pamask, dtype=dtype,
+                data=padata, mask=pamask, dtype=dtype
             )
         else:
             pamask, padata, _ = buffers_from_pyarrow(arbitrary)

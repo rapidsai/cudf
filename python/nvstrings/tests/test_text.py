@@ -65,6 +65,26 @@ def test_token_count():
     expected = [10, 9, 0, 0, 5]
     assert np.array_equal(outcome_darray.copy_to_host(), expected)
 
+    # test multi char delimiter
+    got = nvtext.token_count(strs, delimiter=["a", "e", "i", "o", "u"])
+    expected = [14, 15, 0, 0, 6]
+    assert got == expected
+
+    # test empty list of delimiter
+    got = nvtext.token_count(strs, delimiter=[])
+    expected = [10, 9, 0, 0, 5]
+    assert got == expected
+
+    # test device pointer
+    got_darray = rmm.device_array(strs.size(), dtype=np.int32)
+    nvtext.token_count(
+        strs,
+        delimiter=["a", "e", "i", "o"],
+        devptr=got_darray.device_ctypes_pointer.value,
+    )
+    expected = [12, 13, 0, 0, 6]
+    assert np.array_equal(got_darray.copy_to_host(), expected)
+
 
 def test_unique_tokens():
     # default space delimiter

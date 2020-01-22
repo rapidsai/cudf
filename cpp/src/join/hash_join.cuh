@@ -291,6 +291,7 @@ get_base_hash_join_indices(
 
   rmm::device_vector<size_type> left_indices;
   rmm::device_vector<size_type> right_indices;
+  auto current_estimated_size = estimated_size;
   do {
     left_indices.resize(estimated_size);
     right_indices.resize(estimated_size);
@@ -322,8 +323,9 @@ get_base_hash_join_indices(
     CHECK_CUDA(stream);
 
     join_size = write_index.value();
+    current_estimated_size = estimated_size;
     estimated_size *= 2;
-  } while (estimated_size < join_size) ;
+  } while ((current_estimated_size < join_size)) ;
 
   left_indices.resize(join_size);
   right_indices.resize(join_size);

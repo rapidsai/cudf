@@ -66,21 +66,21 @@ TEST_F(BasicDatetimeOpsTest, TestExtractingDatetimeComponents) {
   using namespace simt::std::chrono;
 
   auto timestamps_D = fixed_width_column_wrapper<cudf::timestamp_D>{
-      -1528,  // 1965-10-26
-      17716,  // 2018-07-04
-      19382,  // 2023-01-25
+      -1528,  // 1965-10-26 GMT
+      17716,  // 2018-07-04 GMT
+      19382,  // 2023-01-25 GMT
   };
 
   auto timestamps_s = fixed_width_column_wrapper<cudf::timestamp_s>{
-      -131968728,  // 1965-10-26 14:01:12
-      1530705600,  // 2018-07-04 12:00:00
-      1674631932,  // 2023-01-25 07:32:12
+      -131968728,  // 1965-10-26 14:01:12 GMT
+      1530705600,  // 2018-07-04 12:00:00 GMT
+      1674631932,  // 2023-01-25 07:32:12 GMT
   };
 
   auto timestamps_ms = fixed_width_column_wrapper<cudf::timestamp_ms>{
-      -131968727238,  // 1965-10-26 14:01:12.762
-      1530705600000,  // 2018-07-04 12:00:00.000
-      1674631932929,  // 2023-01-25 07:32:12.929
+      -131968727238,  // 1965-10-26 14:01:12.762 GMT
+      1530705600000,  // 2018-07-04 12:00:00.000 GMT
+      1674631932929,  // 2023-01-25 07:32:12.929 GMT
   };
 
   expect_columns_equal(*extract_year(timestamps_D),
@@ -192,13 +192,8 @@ TYPED_TEST(TypedDatetimeOpsTest, TestExtractingGeneratedDatetimeComponents) {
   auto expected_seconds =
       fixed_width_column_wrapper<int16_t>{20, 40, 0, 20, 40, 0, 20, 40, 0, 20};
 
-  // Special cases for timestamp_D: zero out the hh/mm/ss cols and +1 the
-  // expected weekdays
+  // Special cases for timestamp_D: zero out the expected hh/mm/ss cols
   if (std::is_same<TypeParam, cudf::timestamp_D>::value) {
-    expected_days = fixed_width_column_wrapper<int16_t>{12, 17, 21, 25, 27,
-                                                        1,  5,  9,  14, 18};
-    expected_weekdays =
-        fixed_width_column_wrapper<int16_t>{7, 5, 3, 1, 6, 4, 2, 7, 5, 3};
     expected_hours =
         fixed_width_column_wrapper<int16_t>{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     expected_minutes =
@@ -250,15 +245,8 @@ TYPED_TEST(TypedDatetimeOpsTest,
       {20, 40, 0, 20, 40, 0, 20, 40, 0, 20},
       {true, false, true, false, true, false, true, false, true, false}};
 
-  // Special cases for timestamp_D: zero out the hh/mm/ss cols and +1 the
-  // expected weekdays
+  // Special cases for timestamp_D: zero out the expected hh/mm/ss cols
   if (std::is_same<TypeParam, cudf::timestamp_D>::value) {
-    expected_days = fixed_width_column_wrapper<int16_t>{
-        {12, 17, 21, 25, 27, 1, 5, 9, 14, 18},
-        {true, false, true, false, true, false, true, false, true, false}};
-    expected_weekdays = fixed_width_column_wrapper<int16_t>{
-        {7, 5, 3, 1, 6, 4, 2, 7, 5, 3},
-        {true, false, true, false, true, false, true, false, true, false}};
     expected_hours = fixed_width_column_wrapper<int16_t>{
         {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
         {true, false, true, false, true, false, true, false, true, false}};

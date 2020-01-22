@@ -47,7 +47,7 @@ def from_dlpack(pycapsule_obj):
             mask = Buffer(valids[idx])
         cols.append(
             column.build_column(
-                Buffer(res[idx]), dtype=res[idx].dtype, mask=mask,
+                Buffer(res[idx]), dtype=res[idx].dtype, mask=mask
             )
         )
     if len(cols) == 1:
