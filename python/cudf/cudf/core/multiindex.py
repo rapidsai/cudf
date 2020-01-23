@@ -244,7 +244,7 @@ class MultiIndex(Index):
 
         lookup = DataFrame()
         for idx, row in enumerate(row_tuple):
-            if row == slice(None):
+            if isinstance(row, slice) and row == slice(None):
                 continue
             lookup[index._source_data.columns[idx]] = Series(row)
         data_table = concat(
@@ -357,6 +357,9 @@ class MultiIndex(Index):
 
     def _get_row_major(self, df, row_tuple):
         from cudf import Series
+
+        if pd.api.types.is_bool_dtype(row_tuple):
+            return df[row_tuple]
 
         valid_indices = self._get_valid_indices_by_tuple(
             df.index, row_tuple, len(df.index)
