@@ -543,6 +543,10 @@ class StringColumn(column.ColumnBase):
             self._indices = out_dev_arr
         return self._indices
 
+    @property
+    def _nbytes(self):
+        return self.children[0][-1]
+
     def as_numerical_column(self, dtype, **kwargs):
 
         mem_dtype = np.dtype(dtype)

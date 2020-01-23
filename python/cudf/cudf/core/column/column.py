@@ -14,6 +14,7 @@ import rmm
 
 import cudf
 import cudf._lib as libcudf
+import cudf._libxx as libcudfxx
 from cudf._lib.stream_compaction import nunique as cpp_unique_count
 from cudf._libxx.column import Column
 from cudf.core.buffer import Buffer
@@ -227,15 +228,23 @@ class ColumnBase(Column):
             if not (obj.dtype == head.dtype):
                 raise ValueError("All series must be of same type")
 
+        newsize = sum(map(len, objs))
+        if newsize > libcudfxx.MAX_COLUMN_SIZE:
+            raise MemoryError("Result of concat cannot have size > INT32_MAX")
+
         # Handle strings separately
         if all(isinstance(o, StringColumn) for o in objs):
+            result_nbytes = [o._nbytes for o in objs]
+            if result_nbytes > libcudfxx.MAX_STRING_COLUMN_BYTES:
+                raise MemoryError(
+                    "Result of concat cannot have > INT32_MAX bytes"
+                )
             objs = [o.nvstrings for o in objs]
             return as_column(nvstrings.from_strings(*objs))
 
         # Filter out inputs that have 0 length
         objs = [o for o in objs if len(o) > 0]
         nulls = any(col.nullable for col in objs)
-        newsize = sum(map(len, objs))
 
         if is_categorical_dtype(head):
             data = None
@@ -1074,8 +1083,8 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
         byte_count = arbitrary.byte_count()
         if byte_count > np.iinfo(np.int32).max:
             raise MemoryError(
-                "Cannot operate on string columns "
-                "containing > (2**31 - 1) bytes. "
+                "Cannot construct string columns "
+                "containing > INT32_MAX bytes. "
                 "Consider using dask_cudf to partition "
                 "your data."
             )
