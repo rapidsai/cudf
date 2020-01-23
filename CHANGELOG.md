@@ -3,6 +3,7 @@
 ## New Features
 
 ## Improvements
+- PR #3880 Add aggregation infrastructure support for reduction
 
 ## Bug Fixes
 
