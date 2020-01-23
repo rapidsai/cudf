@@ -357,9 +357,13 @@ ConfigureTest(REPLACE_NULLS_TEST "${REPLACE_NULLS_TEST_SRC}")
 
 set(NORMALIZE_REPLACE_TEST_SRC
 	"${CMAKE_CURRENT_SOURCE_DIR}/replace/normalize_replace_tests.cu")
-	
+
 ConfigureTest(NORMALIZE_REPLACE_TEST "${NORMALIZE_REPLACE_TEST_SRC}")
 
+set(CLAMP_TEST_SRC
+	"${CMAKE_CURRENT_SOURCE_DIR}/replace/clamp_test.cpp")
+
+ConfigureTest(CLAMP_TEST "${CLAMP_TEST_SRC}")
 ###################################################################################################
 # - unary tests -----------------------------------------------------------------------------------
 
