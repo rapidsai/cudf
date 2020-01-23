@@ -18,6 +18,7 @@
 - PR #3690 Add bools_to_mask
 - PR #3683 Added support for multiple delimiters in `nvtext.token_count()`
 - PR #3792 Adding is_nan and is_notnan
+- PR #3594 Adding clamp support to libcudf++
 
 ## Improvements
 
@@ -43,6 +44,7 @@
 - PR #3620 Add stream parameter to unary ops detail API
 - PR #3593 Adding begin/end for mutable_column_device_view
 - PR #3587 Merge CHECK_STREAM & CUDA_CHECK_LAST to CHECK_CUDA
+- PR #3733 Rework `hash_partition` API
 - PR #3655 Use move with make_pair to avoid copy construction
 - PR #3402 Define and implement new quantiles APIs
 - PR #3612 Add ability to customize the JIT kernel cache path
@@ -62,8 +64,12 @@
 - PR #3657 Define and implement compiled binops for string column comparisons
 - PR #3520 Change read_parquet defaults and add warnings
 - PR #3780 Java APIs for selecting a GPU
+- PR #3796 Improve on round-robin with the case when number partitions greater than number of rows.
 - PR #3805 Avoid CuPy 7.1.0 for now
 - PR #3758 detail::scatter variant with map iterator support
+- PR #2438 Build GBench Benchmarks in CI
+- PR #3713 Adding aggregation support to rolling_window
+- PR # 3875 Add abstract sink for IO writers, used by ORC and Parquet writers for now
 
 ## Bug Fixes
 
@@ -83,6 +89,7 @@
 - PR #3663 Fix libcudf++ ORC reader microseconds and milliseconds conversion
 - PR #3668 Fixing CHECK_CUDA debug build issue
 - PR #3684 Fix ends_with logic for matching string case
+- PR #3691 Fix create_offsets to handle offset correctly
 - PR #3687 Fixed bug while passing input GPU memory pointer in `nvtext.scatter_count()`
 - PR #3701 Fix hash_partition hashing all columns instead of columns_to_hash
 - PR #3694 Allow for null columns parameter in `csv_writer`
@@ -110,6 +117,12 @@
 - PR #3821 Fix OOB read in gpuinflate prefetcher
 - PR #3829 Parquet writer: fix empty dataframe causing cuda launch errors
 - PR #3835 Fix memory leak in Cython when dealing with nulls in string columns
+- PR #3866 Remove unnecessary if check in NVStrings.create_offsets
+- PR #3858 Fixes the broken debug build after #3728
+- PR #3850 Fix merge typecast scope issue and resulting memory leak
+- PR #3855 Fix MultiColumn recreation with reset_index
+- PR #3869 Fixed size calculation in NVStrings::byte_count()
+- PR #3868 Fix apply_grouped moving average example 
 
 
 # cuDF 0.11.0 (11 Dec 2019)
@@ -293,6 +306,7 @@
 - PR #3500 cudf::fill()/cudf::repeat() support for strings columns.
 - PR #3438 Update scalar and scalar_device_view to better support strings
 - PR #3414 Add copy_range function for strings column
+- PR #3471 Add scalar/column, column/scalar and scalar/scalar overloads to copy_if_else.
 - PR #3451 Add support for implicit typecasting of join columns
 
 ## Bug Fixes

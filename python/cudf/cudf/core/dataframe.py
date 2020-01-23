@@ -1479,6 +1479,7 @@ class DataFrame(Table):
         if not drop:
             if isinstance(self.index, cudf.core.multiindex.MultiIndex):
                 framed = self.index.to_frame()
+                name = framed.columns
                 for col_name, col_value in framed._data.items():
                     out[col_name] = col_value
             else:
@@ -1488,6 +1489,17 @@ class DataFrame(Table):
                 out[name] = self.index._values
             for col_name, col_value in self._data.items():
                 out[col_name] = col_value
+            if isinstance(self.columns, cudf.core.multiindex.MultiIndex):
+                ncols = self.shape[1]
+                mi_columns = dict(zip(range(ncols), [name, len(name) * [""]]))
+                top = DataFrame(mi_columns)
+                bottom = self.columns.to_frame().reset_index(drop=True)
+                index_frame = cudf.concat([top, bottom])
+                mc_df = DataFrame()
+                for idx, key in enumerate(out._data):
+                    mc_df[idx] = out[key]
+                mc_df.columns = cudf.MultiIndex.from_frame(index_frame)
+                out = mc_df
         else:
             out = self
         if inplace is True:
@@ -2324,7 +2336,7 @@ class DataFrame(Table):
         return melt(self, **kwargs)
 
     def _typecast_before_merge(self, lhs, rhs, left_on, right_on, how):
-        def casting_rules(dtype_l, dtype_r, how):
+        def casting_rules(lhs, rhs, dtype_l, dtype_r, how):
             cast_warn = "can't safely cast column {} from {} with type \
                          {} to {}, upcasting to {}"
             ctgry_err = "can't implicitly cast column {0} to categories \
@@ -2341,7 +2353,7 @@ class DataFrame(Table):
 
                 check_col = rhs._data[rcol].fillna(0)
                 if not check_col.can_cast_safely(dtype_l):
-                    rtn = casting_rules(dtype_l, dtype_r, "inner")
+                    rtn = casting_rules(lhs, rhs, dtype_l, dtype_r, "inner")
                     warnings.warn(
                         cast_warn.format(rcol, "right", dtype_r, dtype_l, rtn)
                     )
@@ -2350,7 +2362,7 @@ class DataFrame(Table):
             elif how == "right":
                 check_col = lhs._data[lcol].fillna(0)
                 if not check_col.can_cast_safely(dtype_r):
-                    rtn = casting_rules(dtype_l, dtype_r, "inner")
+                    rtn = casting_rules(lhs, rhs, dtype_l, dtype_r, "inner")
                     warnings.warn(
                         cast_warn.format(lcol, "left", dtype_l, dtype_r, rtn)
                     )
@@ -2396,7 +2408,7 @@ class DataFrame(Table):
             if pd.api.types.is_dtype_equal(dtype_l, dtype_r):
                 continue
 
-            to_dtype = casting_rules(dtype_l, dtype_r, how)
+            to_dtype = casting_rules(lhs, rhs, dtype_l, dtype_r, how)
 
             if to_dtype is not None:
                 lhs[lcol] = lhs[lcol].astype(to_dtype)
