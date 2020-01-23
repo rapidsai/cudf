@@ -63,6 +63,7 @@
 - PR #3780 Java APIs for selecting a GPU
 - PR #3805 Avoid CuPy 7.1.0 for now
 - PR #3758 detail::scatter variant with map iterator support
+- PR #3882 Fail loudly when creating a StringColumn from nvstrings with > MAX_VAL(int32) bytes
 
 ## Bug Fixes
 
