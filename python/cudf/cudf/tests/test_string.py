@@ -59,7 +59,7 @@ def test_from_nvstrings_nbytes(mock_byte_count, nbytes):
     mock_byte_count.return_value = nbytes
     expectation = raise_builder([nbytes > np.iinfo(np.int32).max], MemoryError)
     with expectation:
-        x = Series(nvstrings.to_device([""]))
+        Series(nvstrings.to_device([""]))
 
 
 @pytest.mark.parametrize("construct", [list, np.array, pd.Series, pa.array])
