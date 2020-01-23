@@ -24,7 +24,7 @@ struct FixedPointTest : public cudf::test::BaseFixture {};
 TEST_F(FixedPointTest, SimpleDecimal32Construction) {
 
     using namespace cudf::fp;
-    using decimal32 = fixed_point<int32_t, 10>;
+    using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
 
     decimal32 num0{1.234567, scale_type{0}};
     decimal32 num1{1.234567, scale_type{1}};
@@ -47,7 +47,7 @@ TEST_F(FixedPointTest, SimpleDecimal32Construction) {
 TEST_F(FixedPointTest, SimpleBinaryFPConstruction) {
 
     using namespace cudf::fp;
-    using binary_fp32 = fixed_point<int32_t, 2>;
+    using binary_fp32 = fixed_point<int32_t, Radix::BASE_2>;
 
     binary_fp32 num0{10, scale_type{ 0}};
     binary_fp32 num1{10, scale_type{-1}};
