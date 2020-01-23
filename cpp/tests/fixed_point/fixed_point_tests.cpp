@@ -26,13 +26,13 @@ TEST_F(FixedPointTest, SimpleDecimal32Construction) {
     using namespace cudf::fp;
     using decimal32 = fixed_point<int32_t, 10>;
 
-    decimal32 num0{1.234567, 0};
-    decimal32 num1{1.234567, 1};
-    decimal32 num2{1.234567, 2};
-    decimal32 num3{1.234567, 3};
-    decimal32 num4{1.234567, 4};
-    decimal32 num5{1.234567, 5};
-    decimal32 num6{1.234567, 6};
+    decimal32 num0{1.234567, scale_type{0}};
+    decimal32 num1{1.234567, scale_type{1}};
+    decimal32 num2{1.234567, scale_type{2}};
+    decimal32 num3{1.234567, scale_type{3}};
+    decimal32 num4{1.234567, scale_type{4}};
+    decimal32 num5{1.234567, scale_type{5}};
+    decimal32 num6{1.234567, scale_type{6}};
 
     EXPECT_EQ(1,        num0.get());
     EXPECT_EQ(1.2,      num1.get());
@@ -49,11 +49,11 @@ TEST_F(FixedPointTest, SimpleBinaryFPConstruction) {
     using namespace cudf::fp;
     using binary_fp32 = fixed_point<int32_t, 2>;
 
-    binary_fp32 num0{10,  0};
-    binary_fp32 num1{10, -1};
-    binary_fp32 num2{10, -2};
-    binary_fp32 num3{10, -3};
-    binary_fp32 num4{10, -4};
+    binary_fp32 num0{10, scale_type{ 0}};
+    binary_fp32 num1{10, scale_type{-1}};
+    binary_fp32 num2{10, scale_type{-2}};
+    binary_fp32 num3{10, scale_type{-3}};
+    binary_fp32 num4{10, scale_type{-4}};
 
     EXPECT_EQ(10, num0.get());
     EXPECT_EQ(10, num1.get());

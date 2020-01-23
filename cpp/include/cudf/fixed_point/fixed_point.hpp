@@ -17,33 +17,39 @@
 #include <cmath>
 #include <limits>
 #include <functional>
+#include <boost/serialization/strong_typedef.hpp>
 
 namespace cudf {
 namespace fp {
 
-using scale_type = int32_t;
+BOOST_STRONG_TYPEDEF(int32_t, scale_type)
 
 template <typename Rep, int Radix>
 class fixed_point;
 
 namespace detail {
+    // helper function to negate strongly typed scale_type
+    auto negate(scale_type const& scale) -> scale_type{
+        return scale_type{-1 * scale};
+    }
+
     // perform this operation when constructing with - scale (after negating scale)
     template <int Radix, typename T>
     constexpr auto right_shift(T const& val, scale_type const& scale) {
-        return val / std::pow(Radix, scale);
+        return val / std::pow(Radix, static_cast<int32_t>(scale));
     }
 
     // perform this operation when constructing with + scale
     template <int Radix, typename T>
     constexpr auto left_shift(T const& val, scale_type const& scale) {
-        return val * std::pow(Radix, scale);
+        return val * std::pow(Radix, static_cast<int32_t>(scale));
     }
 
     // convenience generic shift function
     template <int Radix, typename T>
     constexpr auto shift(T const& val, scale_type const& scale) {
-        return scale < 0 ? right_shift<Radix>(val, -scale)
-                         : left_shift <Radix>(val,  scale);
+        return scale < 0 ? right_shift<Radix>(val, negate(scale))
+                         : left_shift <Radix>(val, scale);
     }
 
     // forward declare TODO might be unnecessary one file restructure is done
@@ -91,12 +97,13 @@ public:
     // EXPLICIT CONVERSION OPERATOR
     template <typename U> // TODO SFINAE to make sure it is not a fixed_point type
     explicit constexpr operator U() const {
-        return detail::shift<Radix>(static_cast<U>(_value), -_scale);
+        return detail::shift<Radix>(static_cast<U>(_value), detail::negate(_scale));
     }
 
     auto get() const noexcept {
-        int  const rounded_val          = _value / std::pow(Radix, _scale);
-        bool const needs_floating_point = rounded_val * Radix * _scale != _value;
+        auto const underlying_scale     = static_cast<int32_t>(_scale);
+        int  const rounded_val          = _value / std::pow(Radix, underlying_scale);
+        bool const needs_floating_point = rounded_val * Radix * underlying_scale != _value;
         return needs_floating_point ? static_cast<double>(*this) : static_cast<Rep>(*this);
     }
 
