@@ -34,6 +34,7 @@ namespace experimental {
  * return = [A1, B1, A2, B2, A3, B3]
  * ```
  *
+ * @throws cudf::logic_error if input contains no columns.
  * @throws cudf::logic_error if input columns dtypes are not identical.
  *
  * @param[in] input Table containing columns to interleave.
