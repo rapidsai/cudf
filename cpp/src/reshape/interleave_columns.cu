@@ -108,11 +108,9 @@ interleave_columns(table_view const& input,
         output_needs_mask |= col.nullable();
     }
 
-    auto out = type_dispatcher(dtype, detail::interleave_columns_functor{},
-                               input, output_needs_mask,
-                               mr);
-
-    return out;
+    return type_dispatcher(dtype, detail::interleave_columns_functor{},
+                           input, output_needs_mask,
+                           mr);
 }
 
 } // namespace experimental
