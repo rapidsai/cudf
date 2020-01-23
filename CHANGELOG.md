@@ -27,6 +27,7 @@
 - PR #3761 Introduce a Frame class and make Index, DataFrame and Series subclasses
 - PR #3683 Added support for multiple delimiters in `nvtext.token_count()`
 - PR #3792 Adding is_nan and is_notnan
+- PR #3594 Adding clamp support to libcudf++
 
 ## Improvements
 
