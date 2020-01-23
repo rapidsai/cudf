@@ -39,9 +39,9 @@ namespace experimental {
 namespace detail {
 
 namespace { // anonymous
-
+// Meant for only count operation
 template <typename InputType, typename OutputType, typename agg_op, aggregation::Kind op, bool has_nulls>
-std::enable_if_t<std::is_same<agg_op, cudf::DeviceCount>::value, bool>
+std::enable_if_t<op == aggregation::COUNT, bool>
 __device__
 specific_rolling_kernel(column_device_view input,
                         mutable_column_device_view output,
@@ -67,9 +67,9 @@ specific_rolling_kernel(column_device_view input,
     return output_is_valid;
 }
 
+// Meant for only ArgMin and ArgMax for string_view
 template <typename InputType, typename OutputType, typename agg_op, aggregation::Kind op, bool has_nulls>
-std::enable_if_t<(std::is_same<agg_op, cudf::DeviceMin>::value or std::is_same<agg_op, cudf::DeviceMax>::value) and
-                 (op == aggregation::ARGMIN  or op == aggregation::ARGMAX) and
+std::enable_if_t<(op == aggregation::ARGMIN  or op == aggregation::ARGMAX) and
                  std::is_same<InputType, cudf::string_view>::value, bool>
 __device__
 specific_rolling_kernel(column_device_view input,
@@ -105,6 +105,7 @@ specific_rolling_kernel(column_device_view input,
     return output_is_valid;
 }
 
+// Rest of the operators and for fixed width types
 template <typename InputType, typename OutputType, typename agg_op, aggregation::Kind op, bool has_nulls>
 std::enable_if_t<!std::is_same<InputType, cudf::string_view>::value and !(op == aggregation::COUNT), bool>
 __device__
@@ -142,10 +143,12 @@ specific_rolling_kernel(column_device_view input,
 /**
  * @brief Computes the rolling window function
  *
- * @tparam ColumnType  Datatype of values pointed to by the pointers
+ * @tparam InputType  Datatype of `input`
+ * @tparam OutputType  Datatype of `output`
  * @tparam agg_op  A functor that defines the aggregation operation
- * @tparam is_mean Compute mean=sum/count across all valid elements in the window
+ * @tparam op The aggreagtion expected to be carried out
  * @tparam block_size CUDA block size for the kernel
+ * @tparam arg_min_max `true` if `op` is `ARGMIN` or `ARGMAX` else false
  * @tparam has_nulls true if the input column has nulls
  * @tparam WindowIterator iterator type (inferred)
  * @param input Input column device view
@@ -157,6 +160,7 @@ specific_rolling_kernel(column_device_view input,
  *                in_col[i+following_window] inclusive
  * @param min_periods[in]  Minimum number of observations in window required to
  *                have a value, otherwise 0 is stored in the valid bit mask
+ * @param identity identity value of `InputType`
  */
 template <typename InputType, typename OutputType, typename agg_op, aggregation::Kind op, 
          int block_size, bool arg_min_max, bool has_nulls, typename WindowIterator>
@@ -304,6 +308,8 @@ struct rolling_window_launcher
 
       cudf::mutable_column_view output_view = output->mutable_view();
 
+      // Passing the agg_op and aggregation::Kind as constant to group them in pair, else it
+      // evolves to error when try to use agg_op as compiler tries different combinations
       if(op == aggregation::MIN) {
           kernel_launcher<T, DeviceMin, aggregation::ARGMIN, WindowIterator, true>(input, output_view, preceding_window_begin,
                   following_window_begin, min_periods, aggr, DeviceMin::template identity<T>(), stream);
@@ -362,6 +368,7 @@ struct rolling_window_launcher
               stream);
   }
 
+  // This variant is just to handle mean
   template<aggregation::Kind op, typename WindowIterator>
   std::enable_if_t<(op == aggregation::MEAN), std::unique_ptr<column>>
   operator()(column_view const& input,
@@ -404,7 +411,18 @@ struct dispatch_rolling {
 
 } // namespace anonymous
 
-// Applies a rolling window function to the values in a column.
+/**
+* @copydoc cudf::experimental::rolling_window(
+*                                  column_view const& input,
+*                                  WindowIterator preceding_window_begin,
+*                                  WindowIterator following_window_begin,
+*                                  size_type min_periods,
+*                                  std::unique_ptr<aggregation> const& aggr,
+*                                  rmm::mr::device_memory_resource* mr)
+*
+* @param stream The stream to use for CUDA operations
+*/
+
 template <typename WindowIterator>
 std::unique_ptr<column> rolling_window(column_view const& input,
                                        WindowIterator preceding_window_begin,
