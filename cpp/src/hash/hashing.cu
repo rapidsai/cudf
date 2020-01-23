@@ -236,9 +236,9 @@ void compute_row_output_locations(size_type * __restrict__ row_partition_numbers
  * @param[in] scanned_block_partition_sizes The scan of block_partition_sizes
  */
 /* ----------------------------------------------------------------------------*/
-template <typename DataType>
+template <typename InputIter, typename DataType>
 __global__
-void move_to_output_buffer(DataType const *input_buf,
+void move_to_output_buffer(InputIter input_iter,
                            DataType *output_buf,
                            const size_type num_rows,
                            const size_type num_partitions,
@@ -282,7 +282,7 @@ void move_to_output_buffer(DataType const *input_buf,
 
     block_output[
       partition_offset_shared[ipartition] + row_partition_offset[row_number]
-    ] = input_buf[row_number];
+    ] = input_iter[row_number];
 
     row_number += blockDim.x * gridDim.x;
   }
@@ -310,6 +310,31 @@ void move_to_output_buffer(DataType const *input_buf,
   }
 }
 
+rmm::device_vector<size_type> compute_gather_map(
+  size_type num_rows,
+  size_type num_partitions,
+  size_type * row_partition_numbers,
+  size_type * row_partition_offset,
+  size_type * block_partition_sizes,
+  size_type * scanned_block_partition_sizes,
+  size_type grid_size,
+  cudaStream_t stream)
+{
+  rmm::device_vector<size_type> gather_map(num_rows);
+  auto iter = thrust::make_counting_iterator(0);
+
+  int const smem = BLOCK_SIZE * ROWS_PER_THREAD * sizeof(size_type)
+    + (num_partitions + 1) * sizeof(size_type) * 2;
+  move_to_output_buffer
+    <<<grid_size, BLOCK_SIZE, smem, stream>>>(
+      iter, gather_map.data().get(), num_rows,
+      num_partitions, row_partition_numbers, row_partition_offset,
+      block_partition_sizes, scanned_block_partition_sizes
+  );
+
+  return gather_map;
+}
+
 struct move_to_output_buffer_dispatcher{
   template <typename DataType,
       std::enable_if_t<is_fixed_width<DataType>()>* = nullptr>
@@ -327,7 +352,7 @@ struct move_to_output_buffer_dispatcher{
 
     int const smem = BLOCK_SIZE * ROWS_PER_THREAD * sizeof(DataType)
       + (num_partitions + 1) * sizeof(size_type) * 2;
-    move_to_output_buffer<DataType>
+    move_to_output_buffer
       <<<grid_size, BLOCK_SIZE, smem, stream>>>(
         input.data<DataType>(), static_cast<DataType*>(output.data()), input.size(),
         num_partitions, row_partition_numbers, row_partition_offset,
@@ -353,7 +378,7 @@ struct move_to_output_buffer_dispatcher{
   }
 };
 
-template <bool has_nulls>
+template <bool hash_nulls>
 std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>>
 hash_partition_table(table_view const& input,
                      table_view const &table_to_hash,
@@ -384,7 +409,7 @@ hash_partition_table(table_view const& input,
   auto row_partition_offset = rmm::device_vector<size_type>(num_rows);
 
   auto const device_input = table_device_view::create(table_to_hash, stream);
-  auto const hasher = experimental::row_hasher<MurmurHash3_32, has_nulls>(*device_input);
+  auto const hasher = experimental::row_hasher<MurmurHash3_32, hash_nulls>(*device_input);
 
   // If the number of partitions is a power of two, we can compute the partition 
   // number of each row more efficiently with bitwise operations
@@ -467,14 +492,10 @@ hash_partition_table(table_view const& input,
           grid_size, mr, stream);
       });
 
-    if (has_nulls) {
-      compute_row_output_locations
-          <<<grid_size, BLOCK_SIZE, num_partitions * sizeof(size_type), stream>>>
-              (row_partition_numbers_ptr, num_rows, num_partitions, scanned_block_partition_sizes_ptr);
-
-      // Convert scatter map to gather map for bitmask support
-      auto gather_map = experimental::detail::make_gather_map<size_type>(
-        row_partition_numbers.begin(), row_partition_numbers.end(), num_rows, stream);
+    if (has_nulls(input)) {
+      auto gather_map = compute_gather_map(num_rows, num_partitions, row_partition_numbers_ptr,
+        row_partition_offset_ptr, block_partition_sizes_ptr, scanned_block_partition_sizes_ptr,
+          grid_size, stream);
       experimental::detail::gather_bitmask(input, gather_map.begin(), output_cols, mr, stream);
     }
 
@@ -490,8 +511,8 @@ hash_partition_table(table_view const& input,
         <<<grid_size, BLOCK_SIZE, num_partitions * sizeof(size_type), stream>>>
             (row_output_locations, num_rows, num_partitions, scanned_block_partition_sizes_ptr);
 
-    auto scatter_map = column_view{data_type{INT32}, num_rows, row_output_locations};
-    auto output = experimental::detail::scatter(input, scatter_map, input, false, mr, stream);
+    auto output = experimental::detail::scatter<size_type>(input, row_partition_numbers.begin(),
+      row_partition_numbers.end(), input, false, mr, stream);
 
     return std::make_pair(std::move(output), std::move(partition_offsets));
   }
