@@ -1,6 +1,6 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
-
 from contextlib import ExitStack as does_not_raise
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
@@ -8,6 +8,7 @@ import pyarrow as pa
 import pytest
 from numba import cuda
 
+import nvstrings
 import rmm
 
 from cudf import concat
@@ -50,6 +51,15 @@ def ps_gs(data, index):
     ps = pd.Series(data, index=index, dtype="str", name="nice name")
     gs = Series(data, index=index, dtype="str", name="nice name")
     return (ps, gs)
+
+
+@pytest.mark.parametrize("nbytes", [0, 2 ** 10, 2 ** 31 - 1, 2 ** 31, 2 ** 32])
+@patch.object(nvstrings.nvstrings, "byte_count")
+def test_from_nvstrings_nbytes(mock_byte_count, nbytes):
+    mock_byte_count.return_value = nbytes
+    expectation = raise_builder([nbytes > np.iinfo(np.int32).max], MemoryError)
+    with expectation:
+        x = Series(nvstrings.to_device([""]))
 
 
 @pytest.mark.parametrize("construct", [list, np.array, pd.Series, pa.array])

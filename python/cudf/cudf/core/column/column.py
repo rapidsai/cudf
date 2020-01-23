@@ -1071,6 +1071,14 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
         if dtype is not None:
             data = data.astype(dtype)
     elif isinstance(arbitrary, nvstrings.nvstrings):
+        byte_count = arbitrary.byte_count()
+        if byte_count > np.iinfo(np.int32).max:
+            raise MemoryError(
+                "Cannot operate on string columns "
+                "containing > (2**31 - 1) bytes. "
+                "Consider using dask_cudf to partition "
+                "your data."
+            )
         sbuf = Buffer.empty(arbitrary.byte_count())
         obuf = Buffer.empty(
             (arbitrary.size() + 1) * np.dtype("int32").itemsize
