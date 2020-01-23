@@ -230,14 +230,19 @@ class ColumnBase(Column):
 
         newsize = sum(map(len, objs))
         if newsize > libcudfxx.MAX_COLUMN_SIZE:
-            raise MemoryError("Result of concat cannot have size > INT32_MAX")
+            raise MemoryError(
+                "Result of concat cannot have "
+                "size > {}".format(libcudfxx.MAX_COLUMN_SIZE_STR)
+            )
 
         # Handle strings separately
         if all(isinstance(o, StringColumn) for o in objs):
             result_nbytes = [o._nbytes for o in objs]
             if result_nbytes > libcudfxx.MAX_STRING_COLUMN_BYTES:
                 raise MemoryError(
-                    "Result of concat cannot have > INT32_MAX bytes"
+                    "Result of concat cannot have > {}  bytes".format(
+                        libcudfxx.MAX_STRING_COLUMN_BYTES_STR
+                    )
                 )
             objs = [o.nvstrings for o in objs]
             return as_column(nvstrings.from_strings(*objs))
@@ -1084,9 +1089,9 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
         if byte_count > libcudfxx.MAX_STRING_COLUMN_BYTES:
             raise MemoryError(
                 "Cannot construct string columns "
-                "containing > INT32_MAX bytes. "
+                "containing > {} bytes. "
                 "Consider using dask_cudf to partition "
-                "your data."
+                "your data.".format(libcudfxx.MAX_STRING_COLUMN_BYTES_STR)
             )
         sbuf = Buffer.empty(arbitrary.byte_count())
         obuf = Buffer.empty(

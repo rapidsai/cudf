@@ -85,8 +85,9 @@ cdef class Column:
 
         if size > libcudfxx.MAX_COLUMN_SIZE:
             raise MemoryError(
-                "Cannot create columns of size > INT32_MAX. "
-                "Consider using dask_cudf to partition your data"
+                "Cannot create columns of size > {}. "
+                "Consider using dask_cudf to partition your data".format(
+                    libcudfxx.MAX_COLUMN_SIZE_STR)
             )
 
         self._data = data
