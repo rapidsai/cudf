@@ -123,6 +123,7 @@
 - PR #3855 Fix MultiColumn recreation with reset_index
 - PR #3869 Fixed size calculation in NVStrings::byte_count()
 - PR #3868 Fix apply_grouped moving average example 
+- PR #3871 Fix `split_out` error
 - PR #3886 Fix string column materialization from column view
 
 

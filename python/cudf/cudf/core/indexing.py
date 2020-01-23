@@ -106,7 +106,7 @@ class _DataFrameIndexer(object):
             # tuple arguments into MultiIndex dataframes.
             try:
                 return self._getitem_tuple_arg(arg)
-            except (TypeError, KeyError, IndexError):
+            except (TypeError, KeyError, IndexError, ValueError):
                 return self._getitem_tuple_arg((arg, slice(None)))
         else:
             if not isinstance(arg, tuple):
