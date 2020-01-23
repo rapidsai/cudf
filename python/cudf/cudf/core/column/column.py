@@ -234,7 +234,7 @@ class ColumnBase(Column):
 
         # Handle strings separately
         if all(isinstance(o, StringColumn) for o in objs):
-            result_nbytes = [o._nbytes for o in objs]
+            result_nbytes = sum(o._nbytes for o in objs)
             if result_nbytes > libcudfxx.MAX_STRING_COLUMN_BYTES:
                 raise MemoryError(
                     "Result of concat cannot have > INT32_MAX bytes"
