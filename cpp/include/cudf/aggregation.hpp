@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,6 +38,11 @@ namespace experimental {
  */
 class aggregation;
 
+enum class udf_type : bool {
+   CUDA,
+   PTX
+};
+
 /// Factory to create a SUM aggregation
 std::unique_ptr<aggregation> make_sum_aggregation();
 
@@ -53,6 +58,22 @@ std::unique_ptr<aggregation> make_count_aggregation();
 /// Factory to create a MEAN aggregation
 std::unique_ptr<aggregation> make_mean_aggregation();
 
+/**
+ * @brief Factory to create a VARIANCE aggregation
+ * 
+ * @param ddof Delta degrees of freedom. The divisor used in calculation of 
+ *             `variance` is `N - ddof`, where `N` is the population size.
+ */
+std::unique_ptr<aggregation> make_variance_aggregation(size_type ddof = 1);
+
+/**
+ * @brief Factory to create a STD aggregation
+ * 
+ * @param ddof Delta degrees of freedom. The divisor used in calculation of 
+ *             `std` is `N - ddof`, where `N` is the population size.
+ */
+std::unique_ptr<aggregation> make_std_aggregation(size_type ddof = 1);
+
 /// Factory to create a MEDIAN aggregation
 std::unique_ptr<aggregation> make_median_aggregation();
 
@@ -63,7 +84,7 @@ std::unique_ptr<aggregation> make_median_aggregation();
  * @param interpolation The desired interpolation
  */
 std::unique_ptr<aggregation> make_quantile_aggregation(
-    std::vector<double> const& q, interpolation i);
+    std::vector<double> const& q, interpolation i = interpolation::LINEAR);
 
 /**
  * @brief Factory to create an `argmax` aggregation
@@ -72,7 +93,6 @@ std::unique_ptr<aggregation> make_quantile_aggregation(
 */
 std::unique_ptr<aggregation> make_argmax_aggregation();
 
-
 /**
  * @brief Factory to create an `argmin` aggregation
  * 
@@ -80,8 +100,18 @@ std::unique_ptr<aggregation> make_argmax_aggregation();
 */
 std::unique_ptr<aggregation> make_argmin_aggregation();
 
-
-
+/**
+ * @brief Factory to create a aggregation base on UDF for PTX or CUDA
+ *
+ * @param[in] type: either udf_type::PTX or udf_type::CUDA
+ * @param[in] user_defined_aggregator A string containing the aggregator code
+ * @param[in] output_type expected output type
+ *
+ * @return aggregation unique pointer housing user_defined_aggregator string.
+ */
+std::unique_ptr<aggregation> make_udf_aggregation(udf_type type,
+                                                  std::string const& user_defined_aggregator,
+                                                  data_type output_type);
 
 }  // namespace experimental
 }  // namespace cudf
