@@ -57,7 +57,7 @@ namespace detail {
                           : left_shift <Rad>(val, negate(scale));
     }
 
-    // forward declare TODO might be unnecessary one file restructure is done
+    // forward declare
     template <typename Rep1, Radix Rad1,
               typename Rep2, Radix Rad2, typename Binop>
     fixed_point<Rep1, Rad1> max_exponent_binop(fixed_point<Rep1, Rad1> const& lhs,
@@ -100,7 +100,9 @@ public:
     }
 
     // EXPLICIT CONVERSION OPERATOR
-    template <typename U> // TODO SFINAE to make sure it is not a fixed_point type
+    template <typename U,
+              typename std::enable_if_t<(std::numeric_limits<U>::is_integer
+                                      || std::is_floating_point<U>::value)>* = nullptr>
     explicit constexpr operator U() const {
         return detail::shift<Rad>(static_cast<U>(_value), detail::negate(_scale));
     }
@@ -162,7 +164,7 @@ namespace detail {
     // fixed_point in order to have the same exponent
     template<typename Rep1, Radix Rad1,
              typename Rep2, Radix Rad2, typename Binop>
-    fixed_point<Rep1, Rad1> max_exponent_binop(fixed_point<Rep1, Rad1>  const& lhs,
+    fixed_point<Rep1, Rad1> max_exponent_binop(fixed_point<Rep1, Rad1> const& lhs,
                                                fixed_point<Rep2, Rad2> const& rhs,
                                                Binop binop) {
 
