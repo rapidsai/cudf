@@ -136,13 +136,6 @@ protected:
     std::cout << "\n";
 #endif
 
-#if 0 
-    std::cout<<"Output"<<std::endl;
-    cudf::test::print(*output);
-    std::cout<<"\n"<<std::endl;
-    std::cout<<"Reference"<<std::endl;
-    cudf::test::print(*reference);
-#endif
     cudf::test::expect_columns_equal(*output, *reference);
   }
 
