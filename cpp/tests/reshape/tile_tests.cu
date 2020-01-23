@@ -22,6 +22,7 @@
 
 #include <cudf/reshape.hpp>
 #include <cudf/table/table.hpp>
+#include "cudf/utilities/error.hpp"
 
 using namespace cudf::test;
 
@@ -37,6 +38,7 @@ TYPED_TEST(TileTest, NoColumns)
     cudf::table_view in (std::vector<cudf::column_view>{ });
 
     auto expected = in;
+
     auto actual = cudf::experimental::tile(in, 10);
 
     cudf::test::expect_tables_equal(expected, actual->view());
@@ -47,10 +49,10 @@ TYPED_TEST(TileTest, NoRows)
     using T = TypeParam;
 
     fixed_width_column_wrapper<T> in_a({ });
-
     cudf::table_view in (std::vector<cudf::column_view>{ in_a });
 
     auto expected = in;
+
     auto actual = cudf::experimental::tile(in, 10);
 
     cudf::test::expect_tables_equal(expected, actual->view());
@@ -62,11 +64,9 @@ TYPED_TEST(TileTest, OneColumn)
     using T = TypeParam;
 
     fixed_width_column_wrapper<T> in_a({ -1, 0, 1 });
-
     cudf::table_view in (std::vector<cudf::column_view>{ in_a });
 
     fixed_width_column_wrapper<T> expected_a({ -1, 0, 1, -1, 0, 1 });
-
     cudf::table_view expected (std::vector<cudf::column_view>{ expected_a });
 
     auto actual = cudf::experimental::tile(in, 2);
@@ -79,14 +79,38 @@ TYPED_TEST(TileTest, OneColumnNullable)
     using T = TypeParam;
 
     fixed_width_column_wrapper<T> in_a({ -1, 0, 1 }, { 1, 0, 0 });
-
     cudf::table_view in (std::vector<cudf::column_view>{ in_a });
 
     fixed_width_column_wrapper<T> expected_a({ -1, 0, 1, -1, 0, 1 }, { 1, 0, 0, 1, 0, 0 });
-
     cudf::table_view expected (std::vector<cudf::column_view>{ expected_a });
 
     auto actual = cudf::experimental::tile(in, 2);
+
+    cudf::test::expect_tables_equal(expected, actual->view());
+}
+
+TYPED_TEST(TileTest, OneColumnNegativeCount)
+{
+    using T = TypeParam;
+
+    fixed_width_column_wrapper<T> in_a({ -1, 0, 1 }, { 1, 0, 0 });
+    cudf::table_view in (std::vector<cudf::column_view>{ in_a });
+
+    EXPECT_THROW(cudf::experimental::tile(in, -1), cudf::logic_error);
+}
+
+TYPED_TEST(TileTest, OneColumnZeroCount)
+{
+    using T = TypeParam;
+
+    fixed_width_column_wrapper<T> in_a({ -1, 0, 1 }, { 1, 0, 0 });
+    cudf::table_view in (std::vector<cudf::column_view>{ in_a });
+
+    fixed_width_column_wrapper<T> expected_a({ }, { });
+
+    cudf::table_view expected (std::vector<cudf::column_view>{ expected_a });
+
+    auto actual = cudf::experimental::tile(in, 0);
 
     cudf::test::expect_tables_equal(expected, actual->view());
 }
