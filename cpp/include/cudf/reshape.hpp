@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,16 +25,16 @@ namespace cudf {
 namespace experimental {
 
 /**
- * @brief Interleave columns of a table in to a single column.
+ * @brief Interleave columns of a table into a single column.
  *
- * Converts the column major table @p in into a row major column.
+ * Converts the column major table `input` into a row major column.
  * Example:
  * ```
  * in     = [[A1, A2, A3], [B1, B2, B3]]
  * return = [A1, B1, A2, B2, A3, B3]
  * ```
  *
- * @note: The dtype of all columns in @p in should be the same.
+ * @throws cudf::logic_error if input columns dtypes are not identical.
  *
  * @param[in] input Table containing columns to interleave.
  *
@@ -58,7 +58,7 @@ interleave_columns(table_view const& input,
  * @param[in] input Table containing rows to be repeated.
  * @param[in] count Number of times to tile "rows". Must be non-negative.
  *
- * @return          The table containing the tiled "rows".
+ * @return The table containing the tiled "rows".
  */
 std::unique_ptr<table>
 tile(table_view const& input,
