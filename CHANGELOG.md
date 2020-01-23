@@ -63,6 +63,7 @@
 - PR #3780 Java APIs for selecting a GPU
 - PR #3805 Avoid CuPy 7.1.0 for now
 - PR #3758 detail::scatter variant with map iterator support
+- PR #3897 Port cuIO JSON reader to cudf::column types
 
 ## Bug Fixes
 
