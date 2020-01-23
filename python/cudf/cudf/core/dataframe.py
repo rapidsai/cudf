@@ -23,6 +23,7 @@ import rmm
 
 import cudf
 import cudf._lib as libcudf
+import cudf._libxx as libcudfxx
 from cudf.core import column
 from cudf.core._sort import get_sorted_inds
 from cudf.core.column import (
@@ -31,10 +32,10 @@ from cudf.core.column import (
     as_column,
     column_empty,
 )
+from cudf.core.frame import Frame
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
 from cudf.core.series import Series
-from cudf.core.table import Table
 from cudf.core.window import Rolling
 from cudf.utils import applyutils, cudautils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
@@ -90,7 +91,7 @@ def _reverse_op(fn):
     }[fn]
 
 
-class DataFrame(Table):
+class DataFrame(Frame):
     """
     A GPU Dataframe object.
 
@@ -167,6 +168,9 @@ class DataFrame(Table):
         super().__init__()
 
         self._columns_name = None
+
+        if isinstance(data, libcudfxx.Table):
+            return DataFrame._from_table(data)
 
         if isinstance(columns, cudf.MultiIndex):
             self.multi_cols = columns
@@ -251,6 +255,10 @@ class DataFrame(Table):
 
         for (i, col_name) in enumerate(data):
             self.insert(i, col_name, data[col_name])
+
+    @classmethod
+    def _from_table(cls, table):
+        return cls(data=table._data, index=Index._from_table(table._index))
 
     @staticmethod
     def _align_input_series_indices(data, index):
@@ -339,7 +347,7 @@ class DataFrame(Table):
     def shape(self):
         """Returns a tuple representing the dimensionality of the DataFrame.
         """
-        return len(self._index), len(self._data)
+        return self._num_rows, self._num_columns
 
     @property
     def ndim(self):
@@ -1296,13 +1304,6 @@ class DataFrame(Table):
             if hasattr(columns, "name"):
                 self._columns_name = columns.name
 
-    @property
-    def _columns(self):
-        """
-        Return a list of Column objects backing this dataframe
-        """
-        return list(self._data.values())
-
     def _rename_columns(self, new_names):
         old_cols = iter(self._data.keys())
         l_old_cols = len(self._data)
@@ -1510,15 +1511,19 @@ class DataFrame(Table):
         else:
             return out.set_index(RangeIndex(len(self)))
 
-    def take(self, positions, ignore_index=False):
-        if ignore_index:
-            index = RangeIndex(len(positions))
-        else:
-            index = self.index.take(positions)
+    def take(self, positions):
+        positions = as_column(positions)
+        if pd.api.types.is_bool_dtype(positions):
+            return self._apply_boolean_mask(positions,)
+        out = self.gather(positions)
+        return out
+
+    def _apply_boolean_mask(self, mask):
+        index = self.index.take(mask)
         out = DataFrame()
         if self._data:
             for i, col_name in enumerate(self._data.keys()):
-                out[col_name] = self._data[col_name][positions]
+                out[col_name] = self._data[col_name][mask]
         return out.set_index(index)
 
     def _take_columns(self, positions):
@@ -1576,6 +1581,9 @@ class DataFrame(Table):
         if memo is None:
             memo = {}
         return self.copy(deep=True)
+
+    def __reduce__(self):
+        return (DataFrame, (self._data, self.index))
 
     def insert(self, loc, name, value):
         """ Add a column to DataFrame at the index specified by loc.
@@ -1770,7 +1778,7 @@ class DataFrame(Table):
         if isinstance(in_index, cudf.core.multiindex.MultiIndex):
             in_index = RangeIndex(len(in_index), name=in_index.name)
         out_cols, new_index = libcudf.stream_compaction.drop_duplicates(
-            [in_index.as_column()], in_cols, subset_cols, keep
+            [in_index._values], in_cols, subset_cols, keep
         )
         new_index = as_index(new_index, name=self.index.name)
         if isinstance(self.index, cudf.core.multiindex.MultiIndex):
@@ -1835,9 +1843,9 @@ class DataFrame(Table):
         if isinstance(self.index, cudf.MultiIndex):
             index_cols.extend(self.index._source_data._columns)
         else:
-            index_cols.append(self.index.as_column())
+            index_cols.append(self.index._values)
 
-        input_cols = index_cols + data_cols
+        input_cols = index_cols + list(data_cols)
 
         if subset is not None:
             subset = self._columns_view(subset)._columns
@@ -2817,8 +2825,8 @@ class DataFrame(Table):
 
         else:
             idx_col_names.append(str(uuid.uuid4()))
-            lhs[idx_col_names[0]] = self.index.as_column()
-            rhs[idx_col_names[0]] = other.index.as_column()
+            lhs[idx_col_names[0]] = self.index._values
+            rhs[idx_col_names[0]] = other.index._values
 
         for name, col in self._data.items():
             lhs[name] = col
@@ -4329,7 +4337,7 @@ class DataFrame(Table):
                 index = self.index.to_frame()._columns
                 index_names = self.index.to_frame().columns.to_list()
             else:
-                index = [self.index.as_column()]
+                index = [self.index._values]
                 index_names = [self.index.name]
         else:
             index = None

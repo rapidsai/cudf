@@ -32,9 +32,10 @@ class MultiIndex(Index):
     ):
         from cudf.core.series import Series
 
-        self.name = None
-        self.names = names
-        self._source_data = None
+        super().__init__()
+
+        self._name = None
+
         column_names = []
         if labels:
             warnings.warn(
@@ -46,7 +47,9 @@ class MultiIndex(Index):
 
         # early termination enables lazy evaluation of codes
         if "source_data" in kwargs:
-            self._source_data = kwargs["source_data"].reset_index(drop=True)
+            source_data = kwargs["source_data"].reset_index(drop=True)
+            self.names = names
+            self._data = source_data._data
             self._codes = codes
             self._levels = levels
             return
@@ -96,7 +99,7 @@ class MultiIndex(Index):
         self._levels = [Series(level) for level in levels]
         self._validate_levels_and_codes(self._levels, self._codes)
 
-        self._source_data = DataFrame()
+        source_data = DataFrame()
         for i, name in enumerate(self._codes.columns):
             codes = as_index(self._codes[name]._column)
             if -1 in self._codes[name].values:
@@ -108,9 +111,31 @@ class MultiIndex(Index):
             else:
                 level = DataFrame({name: self._levels[i]})
             level = DataFrame(index=codes).join(level)
-            self._source_data[name] = level[name].reset_index(drop=True)
+            source_data[name] = level[name].reset_index(drop=True)
 
+        self._data = source_data._data
         self.names = [None] * len(self._levels) if names is None else names
+
+    @classmethod
+    def _from_table(cls, table):
+        df = cudf.DataFrame(table._data)
+        return MultiIndex.from_frame(df, names=df.columns)
+
+    @property
+    def _source_data(self):
+        return cudf.DataFrame(self._data)
+
+    @_source_data.setter
+    def _source_data(self, value):
+        self._data = value._data
+
+    @property
+    def name(self):
+        return self._name
+
+    @name.setter
+    def name(self, value):
+        self._name = value
 
     def _validate_levels_and_codes(self, levels, codes):
         if len(levels) != len(codes.columns):
@@ -397,7 +422,7 @@ class MultiIndex(Index):
             return tuples, slice(None)
 
     def __len__(self):
-        return len(self._source_data)
+        return len(next(iter(self._data.values())))
 
     def equals(self, other):
         if self is other:
