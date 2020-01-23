@@ -65,9 +65,7 @@ struct ParquetWriterTimestampTypeTest : public ParquetWriterTest {
 
 // Declare typed test cases
 TYPED_TEST_CASE(ParquetWriterNumericTypeTest, cudf::test::NumericTypes);
-using SupportedTimestampTypes = cudf::test::RemoveIf<
-    cudf::test::ContainedIn<cudf::test::Types<cudf::timestamp_s>>,
-    cudf::test::TimestampTypes>;
+using SupportedTimestampTypes = cudf::test::TimestampTypes;
 TYPED_TEST_CASE(ParquetWriterTimestampTypeTest, SupportedTimestampTypes);
 
 namespace {
@@ -350,6 +348,32 @@ TEST_F(ParquetWriterTest, Strings) {
 
   cudf_io::read_parquet_args in_args{cudf_io::source_info{filepath}};
   auto result = cudf_io::read_parquet(in_args);
+
+  expect_tables_equal(expected->view(), result.tbl->view());
+  EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
+}
+
+TEST_F(ParquetWriterTest, HostBuffer) {
+  constexpr auto num_rows = 100 << 10;
+  const auto seq_col = random_values<int>(num_rows);
+  const auto validity = cudf::test::make_counting_transform_iterator(
+      0, [](auto i) { return true; });
+  column_wrapper<int> col{seq_col.begin(), seq_col.end(), validity};
+
+  cudf_io::table_metadata expected_metadata;
+  expected_metadata.column_names.emplace_back("col_other");
+
+  std::vector<std::unique_ptr<column>> cols;
+  cols.push_back(col.release());
+  const auto expected = std::make_unique<table>(std::move(cols));
+  EXPECT_EQ(1, expected->num_columns());
+
+  std::vector<char> out_buffer;
+  cudf_io::write_parquet_args out_args{cudf_io::sink_info(&out_buffer),
+                                       expected->view(), &expected_metadata};
+  cudf_io::write_parquet(out_args);
+  cudf_io::read_parquet_args in_args{cudf_io::source_info(out_buffer.data(), out_buffer.size())};
+  const auto result = cudf_io::read_parquet(in_args);
 
   expect_tables_equal(expected->view(), result.tbl->view());
   EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);

@@ -97,7 +97,7 @@ constexpr type_id to_type_id(parquet::Type physical,
     case parquet::BYTE_ARRAY:
     case parquet::FIXED_LEN_BYTE_ARRAY:
       // Can be mapped to GDF_CATEGORY (32-bit hash) or GDF_STRING (nvstring)
-      return strings_to_categorical ? type_id::CATEGORY : type_id::STRING;
+      return strings_to_categorical ? type_id::INT32 : type_id::STRING;
     case parquet::INT96:
       return (timestamp_type_id != type_id::EMPTY)
                  ? timestamp_type_id
@@ -146,7 +146,7 @@ std::tuple<int32_t, int32_t, int8_t> conversion_info(type_id column_type_id,
     type_width = 1;  // I32 -> I8
   } else if (column_type_id == type_id::INT16) {
     type_width = 2;  // I32 -> I16
-  } else if (column_type_id == type_id::CATEGORY) {
+  } else if (column_type_id == type_id::INT32) {
     type_width = 4;  // str -> hash32
   } else if (is_timestamp(data_type{column_type_id})) {
     clock_rate = to_clockrate(timestamp_type_id);

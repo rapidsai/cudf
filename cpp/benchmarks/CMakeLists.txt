@@ -1,4 +1,4 @@
-﻿cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
 project(CUDF_BENCHS LANGUAGES C CXX CUDA)
 
@@ -87,6 +87,14 @@ set(JOIN_BENCH_SRC
 ConfigureBench(JOIN_BENCH "${JOIN_BENCH_SRC}")
 
 ###################################################################################################
+# - iterator benchmark ------------------------------------------------------------------------------
+
+set(ITERATOR_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/iterator/iterator_benchmark.cu")
+
+ConfigureBench(ITERATOR_BENCH "${ITERATOR_BENCH_SRC}")
+
+###################################################################################################
 # - search benchmark ------------------------------------------------------------------------------
 
 set(SEARCH_BENCH_SRC
@@ -112,9 +120,33 @@ set(LEGACY_QUANTILES_BENCH_SRC
 ConfigureBench(LEGACY_QUANTILES_BENCH "${LEGACY_QUANTILES_BENCH_SRC}")
 
 ###################################################################################################
+# - groupby benchmark -----------------------------------------------------------------------------
+
+set(GROUPBY_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_sum_benchmark.cu")
+
+ConfigureBench(GROUPBY_BENCH "${GROUPBY_BENCH_SRC}")
+
+###################################################################################################
 # - stack benchmark -------------------------------------------------------------------------------
 
 set(LEGACY_STACK_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/reshape/legacy/stack_benchmark.cu")
 
 ConfigureBench(LEGACY_STACK_BENCH "${LEGACY_STACK_BENCH_SRC}")
+
+###################################################################################################
+# - legacy hashing benchmark -----------------------------------------------------------------------------
+
+set(LEGACY_HASHING_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/hashing/legacy/hashing_benchmark.cu")
+
+ConfigureBench(LEGACY_HASHING_BENCH "${LEGACY_HASHING_BENCH_SRC}")
+
+###################################################################################################
+# - hashing benchmark -----------------------------------------------------------------------------
+
+set(HASHING_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/hashing/hashing_benchmark.cpp")
+
+ConfigureBench(HASHING_BENCH "${HASHING_BENCH_SRC}")
