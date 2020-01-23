@@ -360,6 +360,19 @@ std::unique_ptr<column> boolean_mask_scatter(
     return std::make_unique<column>(std::move(output_table->get_column(0)));
 }
 
+std::unique_ptr<column> boolean_mask_scatter(
+    scalar const& source, column_view const& target,
+    column_view const& boolean_mask,
+    rmm::mr::device_memory_resource *mr,
+    cudaStream_t stream) {
+
+    CUDF_EXPECTS(boolean_mask.size() == target.size(), "Boolean mask size mismatch with traget size");
+    CUDF_EXPECTS(boolean_mask.type().id() == BOOL8, "Mask must be Boolean type");
+    CUDF_EXPECTS(source.type().id() == target.type().id(), "Type mismatch for source and target");
+
+    return detail::copy_if_else(source, target, boolean_mask, mr, stream);
+}
+
 }  // namespace detail
 
 std::unique_ptr<table> scatter(
@@ -387,6 +400,14 @@ std::vector<std::unique_ptr<table>> scatter_to_tables(
 
 std::unique_ptr<column> boolean_mask_scatter(
     column_view const& source, column_view const& target,
+    column_view const& boolean_mask,
+    rmm::mr::device_memory_resource *mr)
+{
+    return detail::boolean_mask_scatter(source, target, boolean_mask, mr);
+}
+
+std::unique_ptr<column> boolean_mask_scatter(
+    scalar const& source, column_view const& target,
     column_view const& boolean_mask,
     rmm::mr::device_memory_resource *mr)
 {
