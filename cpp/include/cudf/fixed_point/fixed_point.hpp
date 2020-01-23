@@ -169,7 +169,7 @@ namespace detail {
                                                Binop binop) {
 
         static_assert(std::is_same<Rep1, Rep2>::value, "Represenation types should be the same");
-        static_assert(Rad1 == Rad2,                "Radix types should be the same");
+        static_assert(Rad1 == Rad2,                    "Radix types should be the same");
 
         // if exponents (aka scales) are different
         if (lhs._scale > rhs._scale) {
@@ -208,7 +208,7 @@ fixed_point<Rep1, Rad1> operator*(fixed_point<Rep1, Rad1> const& lhs,
                                   fixed_point<Rep2, Rad2> const& rhs) {
 
     static_assert(std::is_same<Rep1, Rep2>::value, "Represenation types should be the same");
-    static_assert(Rad1 == Rad2,                "Radix types should be the same");
+    static_assert(Rad1 == Rad2,                    "Radix types should be the same");
 
     return fixed_point<Rep1, Rad1>{scaled_integer<Rep1>(lhs._value * rhs._value, lhs._scale + rhs._scale)};
 }
@@ -220,7 +220,7 @@ fixed_point<Rep1, Rad1> operator/(fixed_point<Rep1, Rad1> const& lhs,
                                   fixed_point<Rep2, Rad2> const& rhs) {
 
     static_assert(std::is_same<Rep1, Rep2>::value, "Represenation types should be the same");
-    static_assert(Rad1 == Rad2,                "Radix types should be the same");
+    static_assert(Rad1 == Rad2,                    "Radix types should be the same");
 
     return fixed_point<Rep1, Rad1>{scaled_integer<Rep1>(lhs._value / rhs._value, lhs._scale - rhs._scale)};
 }
