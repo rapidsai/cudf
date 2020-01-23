@@ -59,6 +59,27 @@ TYPED_TEST(SliceTest, NumericColumnsWithNulls) {
     }
 }
 
+TYPED_TEST(SliceTest, NumericColumnsWithNullsAsColumn) {
+    using T = TypeParam;
+
+    cudf::size_type start = 0;
+    cudf::size_type size = 10;
+    auto valids = cudf::test::make_counting_transform_iterator(start, [](auto i) { return i%2==0? true:false; });
+
+    cudf::test::fixed_width_column_wrapper<T> col = create_fixed_columns<T>(start, size, valids);
+
+    std::vector<cudf::size_type> indices{1, 3, 2, 2, 5, 9};
+    std::vector<cudf::test::fixed_width_column_wrapper<T>> expected = create_expected_columns<T>(indices, true);
+    std::vector<cudf::column_view> result = cudf::experimental::slice(col, indices);
+
+    EXPECT_EQ(expected.size(), result.size());
+
+    for (unsigned long index = 0; index < result.size(); index++) {
+        auto col = cudf::column(result[index]);
+        cudf::test::expect_columns_equal(expected[index], col);
+    }
+}
+
 struct SliceStringTest : public SliceTest <std::string>{};
 
 TEST_F(SliceStringTest, StringWithNulls) {
@@ -78,7 +99,7 @@ TEST_F(SliceStringTest, StringWithNulls) {
     }
 }
 
-TEST_F(SliceStringTest, StringWithNullsColumn) {
+TEST_F(SliceStringTest, StringWithNullsAsColumn) {
     std::vector<std::string> strings{"", "this", "is", "a", "column", "of", "strings", "with", "in", "valid"};
     auto valids = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i%2==0? true:false; });
     cudf::test::strings_column_wrapper s(strings.begin(), strings.end(), valids);
