@@ -97,6 +97,7 @@
 - PR #3663 Fix libcudf++ ORC reader microseconds and milliseconds conversion
 - PR #3668 Fixing CHECK_CUDA debug build issue
 - PR #3684 Fix ends_with logic for matching string case
+- PR #3691 Fix create_offsets to handle offset correctly
 - PR #3687 Fixed bug while passing input GPU memory pointer in `nvtext.scatter_count()`
 - PR #3701 Fix hash_partition hashing all columns instead of columns_to_hash
 - PR #3694 Allow for null columns parameter in `csv_writer`
@@ -127,6 +128,7 @@
 - PR #3866 Remove unnecessary if check in NVStrings.create_offsets
 - PR #3858 Fixes the broken debug build after #3728
 - PR #3850 Fix merge typecast scope issue and resulting memory leak
+- PR #3855 Fix MultiColumn recreation with reset_index
 - PR #3869 Fixed size calculation in NVStrings::byte_count()
 - PR #3868 Fix apply_grouped moving average example 
 
