@@ -389,6 +389,7 @@ add_library(cudf
             src/strings/nvcategory_util.cpp
             src/join/legacy/joining.cu
             src/join/join.cu
+            src/join/semi_join.cu
             src/orderby/legacy/orderby.cu
             src/predicates/legacy/is_sorted.cu
             src/sort/is_sorted.cu
@@ -467,12 +468,14 @@ add_library(cudf
             src/reductions/scan.cu
             src/replace/legacy/replace.cu
             src/replace/replace.cu
+            src/replace/clamp.cu
             src/reshape/legacy/stack.cu
             src/transpose/transpose.cu
             src/transpose/legacy/transpose.cu
             src/merge/legacy/merge.cu
             src/unary/cast_ops.cu
             src/unary/null_ops.cu
+            src/unary/nan_ops.cu
             src/unary/legacy/math_ops.cu
             src/unary/legacy/cast_ops.cu
             src/unary/legacy/null_ops.cu
@@ -521,6 +524,7 @@ add_library(cudf
             src/io/functions.cpp
             src/io/statistics/column_stats.cu
             src/io/utilities/datasource.cpp
+            src/io/utilities/data_sink.cpp
             src/io/utilities/legacy/parsing_utils.cu
             src/utilities/legacy/cuda_utils.cu
             src/copying/gather.cu
@@ -576,11 +580,15 @@ add_library(cudf
             src/strings/copying/copying.cu
             src/strings/extract.cu
             src/strings/find.cu
+            src/strings/findall.cu
             src/strings/find_multiple.cu
             src/strings/filling/fill.cu
             src/strings/padding.cu
             src/strings/regex/regcomp.cpp
             src/strings/regex/regexec.cu
+            src/strings/replace/replace_re.cu
+            src/strings/replace/backref_re.cu
+            src/strings/replace/multi_re.cu
             src/strings/replace/replace.cu
             src/strings/sorting/sorting.cu
             src/strings/split/partition.cu
@@ -597,6 +605,14 @@ add_library(cudf
             src/groupby/groupby.cu
             src/groupby/hash/groupby.cu
             src/groupby/sort/groupby.cu
+            src/groupby/sort/sort_helper.cu
+            src/groupby/sort/result_cache.cpp
+            src/groupby/sort/group_sum.cu
+            src/groupby/sort/group_min.cu
+            src/groupby/sort/group_max.cu
+            src/groupby/sort/group_count.cu
+            src/groupby/sort/group_std.cu
+            src/groupby/sort/group_quantiles.cu
             src/aggregation/aggregation.cpp
 )
 

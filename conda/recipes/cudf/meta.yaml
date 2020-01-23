@@ -31,7 +31,7 @@ requirements:
   run:
     - python
     - pandas>=0.24.2,<0.25
-    - cupy >=6.6.0,<8.0.0a0
+    - cupy >=6.6.0,<8.0.0a0,!=7.1.0
     - numba >=0.46.0
     - pyarrow 0.15.0.*
     - fastavro >=0.22.0
