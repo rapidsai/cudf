@@ -25,13 +25,13 @@
 #include "parquet_gpu.h"
 
 #include <io/utilities/hostdevice_vector.hpp>
+#include <io/utilities/data_sink.hpp>
 
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/io/writers.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <fstream>
 #include <memory>
 #include <string>
 #include <vector>
@@ -67,7 +67,7 @@ class writer::impl {
    * @param options Settings for controlling behavior
    * @param mr Resource to use for device memory allocation
    **/
-  explicit impl(std::string filepath, writer_options const& options,
+  explicit impl(std::unique_ptr<data_sink> sink, writer_options const& options,
                 rmm::mr::device_memory_resource* mr);
 
   /**
@@ -182,7 +182,7 @@ class writer::impl {
   statistics_freq stats_granularity_ = statistics_freq::STATISTICS_NONE;
 
   std::vector<uint8_t> buffer_;
-  std::ofstream outfile_;
+  std::unique_ptr<data_sink> out_sink_;
 };
 
 }  // namespace parquet
