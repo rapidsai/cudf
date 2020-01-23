@@ -84,7 +84,7 @@ class Buffer:
 
     @classmethod
     def empty(cls, size):
-        dbuf = DeviceBuffer(ptr=0, size=size)
+        dbuf = DeviceBuffer(size=size)
         return Buffer(dbuf)
 
 
