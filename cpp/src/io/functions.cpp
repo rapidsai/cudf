@@ -77,7 +77,7 @@ table_with_metadata read_json(read_json_args const& args,
                                 rmm::mr::device_memory_resource* mr) {
   namespace json = cudf::experimental::io::detail::json;
 
-  json::reader_options options{args.lines, args.compression, args.dtype};
+  json::reader_options options{args.lines, args.compression, args.dtype, args.dayfirst};
   auto reader = make_reader<json::reader>(args.source, options, mr);
 
    if (args.byte_range_offset != 0 || args.byte_range_size != 0) {

@@ -113,6 +113,9 @@ struct read_json_args {
   ///< Bytes to read; always reads complete rows
   size_t byte_range_size = 0;
 
+   /// Whether to parse dates as DD/MM versus MM/DD
+  bool dayfirst = false;
+
   explicit read_json_args(const source_info& src) : source(src) {}
 };
 

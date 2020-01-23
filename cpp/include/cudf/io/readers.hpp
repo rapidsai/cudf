@@ -153,6 +153,7 @@ namespace json {
     compression_type compression = compression_type::AUTO;
     /// Per-column types; disables type inference on those columns
     std::vector<std::string> dtype;
+    bool dayfirst = false;
 
     reader_options() = default;
     reader_options(reader_options const &) = default;
@@ -165,8 +166,8 @@ namespace json {
      * @param[in] dtype Ordered list of data types; deduced from dataset if empty
      *---------------------------------------------------------------------------**/
     reader_options(bool lines, compression_type compression,
-                    std::vector<std::string> dtype)
-        : lines(lines), compression(compression), dtype(std::move(dtype)) {}
+                    std::vector<std::string> dtype, bool dayfirst)
+        : lines(lines), compression(compression), dtype(std::move(dtype)), dayfirst(dayfirst) {}
     };
 
   /**

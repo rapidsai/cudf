@@ -474,6 +474,8 @@ reader::impl::impl(std::unique_ptr<datasource> source, std::string filepath,
 
   d_na_trie_ = createSerializedTrie({"null"});
   opts_.naValuesTrie = d_na_trie_.data().get();
+
+  opts_.dayfirst = options.dayfirst;
 }
 
 /**

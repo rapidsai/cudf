@@ -94,111 +94,6 @@ __device__ long seek_field_name_end(const char *data, const ParseOptions opts, l
 }
 
 /**
- * @brief Returns the numeric value of an ASCII/UTF-8 character. Specialization
- * for integral types. Handles hexadecimal digits, both uppercase and lowercase.
- * If the character is not a valid numeric digit then `0` is returned.
- *
- * @param c ASCII or UTF-8 character
- *
- * @return uint8_t Numeric value of the character, or `0`
- */
-template <typename T,
-          typename std::enable_if_t<std::is_integral<T>::value> * = nullptr>
-__device__ __forceinline__ uint8_t decode_digit(char c) {
-  if (c >= '0' && c <= '9') return c - '0';
-  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-  return 0;
-}
-
-/**
- * @brief Returns the numeric value of an ASCII/UTF-8 character. Specialization
- * for non-integral types. Handles only decimal digits. Does not check if
- * character is a valid numeric value.
- *
- * @param c ASCII or UTF-8 character
- *
- * @return uint8_t Numeric value of the character, or `0`
- */
-template <typename T,
-          typename std::enable_if_t<!std::is_integral<T>::value> * = nullptr>
-__device__ __forceinline__ uint8_t decode_digit(char c) {
-  return c - '0';
-}
-
-/**
- * @brief Parses a character string and returns its numeric value.
- *
- * @param data The character string for parse
- * @param start The index within data to start parsing from
- * @param end The end index within data to end parsing
- * @param opts The global parsing behavior options
- * @param base Base (radix) to use for conversion
- *
- * @return The parsed and converted value
- */
-template <typename T>
-__inline__ __device__ T parse_numeric(const char *data, long start, long end,
-                                      ParseOptions const &opts, int base = 10) {
-  T value = 0;
-
-  // Handle negative values if necessary
-  int32_t sign = 1;
-  if (data[start] == '-') {
-    sign = -1;
-    start++;
-  }
-
-  // Handle the whole part of the number
-  long index = start;
-  while (index <= end) {
-    if (data[index] == opts.decimal) {
-      ++index;
-      break;
-    } else if (base == 10 && (data[index] == 'e' || data[index] == 'E')) {
-      break;
-    } else if (data[index] != opts.thousands && data[index] != '+') {
-      value = (value * base) + decode_digit<T>(data[index]);
-    }
-    ++index;
-  }
-
-  if (std::is_floating_point<T>::value) {
-    // Handle fractional part of the number if necessary
-    double divisor = 1;
-    while (index <= end) {
-      if (data[index] == 'e' || data[index] == 'E') {
-        ++index;
-        break;
-      } else if (data[index] != opts.thousands && data[index] != '+') {
-        divisor /= base;
-        value += decode_digit<T>(data[index]) * divisor;
-      }
-      ++index;
-    }
-
-    // Handle exponential part of the number if necessary
-    int32_t exponent = 0;
-    int32_t exponentsign = 1;
-    while (index <= end) {
-      if (data[index] == '-') {
-        exponentsign = -1;
-      } else if (data[index] == '+') {
-        exponentsign = 1;
-      } else {
-        exponent = (exponent * 10) + (data[index] - '0');
-      }
-      ++index;
-    }
-    if (exponent != 0) {
-      value *= exp10(double(exponent * exponentsign));
-    }
-  }
-
-  return value * sign;
-}
-
-/**
  * @brief Decodes a numeric value base on templated cudf type T with specified
  * base.
  * 
@@ -212,7 +107,7 @@ __inline__ __device__ T parse_numeric(const char *data, long start, long end,
 template <typename T, int base>
 __inline__ __device__ T decode_value(const char *data, long start, long end,
                                      ParseOptions const &opts) {
-  return parse_numeric<T>(data, start, end, opts, base);
+  return cudf::experimental::io::gpu::parse_numeric<T>(data, start, end, opts, base);
 }
 
 /**
@@ -228,7 +123,7 @@ __inline__ __device__ T decode_value(const char *data, long start, long end,
 template <typename T>
 __inline__ __device__ T decode_value(const char *data, long start, long end,
                                      ParseOptions const &opts) {
-  return parse_numeric<T>(data, start, end, opts);
+  return cudf::experimental::io::gpu::parse_numeric<T>(data, start, end, opts);
 }
 
 
@@ -246,7 +141,7 @@ template <>
 __inline__ __device__ cudf::experimental::bool8 decode_value(
     const char *data, long start, long end, ParseOptions const &opts) {
   using value_type = typename cudf::experimental::bool8::value_type;
-  return (parse_numeric<value_type>(data, start, end, opts) != 0)
+  return (cudf::experimental::io::gpu::parse_numeric<value_type>(data, start, end, opts) != 0)
              ? cudf::experimental::true_v
              : cudf::experimental::false_v;
 }
@@ -299,6 +194,7 @@ __inline__ __device__ cudf::timestamp_s decode_value(const char *data,
 template <>
 __inline__ __device__ cudf::timestamp_ms decode_value(
     const char *data, long start, long end, ParseOptions const &opts) {
+  
   auto milli = parseDateTimeFormat(data, start, end, opts.dayfirst);
   return milli;
 }
@@ -358,7 +254,7 @@ struct ConvertFunctor {
    * is used by other types (ex. timestamp) that aren't 'booleable'.
    **/
   template <typename T, typename std::enable_if_t<std::is_integral<T>::value> * = nullptr>
-  __host__ __device__ __forceinline__ void operator()(const char *data, void *output_columns, long row, long start,
+  __host__ __device__ __forceinline__ bool operator()(const char *data, void *output_columns, long row, long start,
                                                       long end, const ParseOptions &opts) {
     T &value{static_cast<T *>(output_columns)[row]};
 
@@ -372,18 +268,37 @@ struct ConvertFunctor {
     } else {
       value = decode_value<T>(data, start, end, opts);
     }
+
+    return true;
+  }
+
+  /**
+   * @brief Dispatch for floating points, which are set to NaN if the input 
+   * is not valid. In such case, the validity mask is set to zero too.
+   */
+   template <typename T,
+             typename std::enable_if_t<std::is_floating_point<T>::value> * = nullptr>
+  __host__ __device__ __forceinline__ bool operator()(
+      const char *data, void *out_buffer, size_t row, long start, long end,
+      ParseOptions const &opts) {
+    auto &value{static_cast<T *>(out_buffer)[row]};    
+    value = decode_value<T>(data, start, end, opts);
+    return !std::isnan(value);
   }
 
   /**
    * @brief Default template operator() dispatch specialization all data types
    * (including wrapper types) that is not covered by above.
    **/
-  template <typename T, typename std::enable_if_t<!std::is_integral<T>::value> * = nullptr>
-  __host__ __device__ __forceinline__ void operator()(const char *data, void *output_columns, long row, long start,
+  template <typename T, typename std::enable_if_t<!std::is_floating_point<T>::value and
+                                                  !std::is_integral<T>::value> * = nullptr>
+  __host__ __device__ __forceinline__ bool operator()(const char *data, void *output_columns, long row, long start,
                                                       long end, const ParseOptions &opts) {
     T &value{static_cast<T *>(output_columns)[row]};
     value = decode_value<T>(data, start, end, opts);
-  }
+
+    return true;
+  }   
 };
 
 /**
@@ -518,20 +433,22 @@ __global__ void convert_json_to_columns_kernel(const char *data, size_t data_siz
     trim_field_start_end(data, &start, &field_data_last, opts.quotechar);
     // Empty fields are not legal values
     if (start <= field_data_last && !serializedTrieContains(opts.naValuesTrie, data + start, field_end - start)) {
-      // Type dispatcher does not handle GDF_STRINGS
+      // Type dispatcher does not handle strings
       if (dtypes[col].id() == STRING) {
         auto str_list = static_cast<string_pair *>(output_columns[col]);
         str_list[rec_id].first = data + start;
-        str_list[rec_id].second = field_data_last - start + 1;
-      } else {
-        cudf::experimental::type_dispatcher(dtypes[col], ConvertFunctor{}, data, output_columns[col], rec_id, start, field_data_last,
-                              opts);        
-      }
+        str_list[rec_id].second = field_data_last - start + 1;        
 
-      // set the valid bitmap - all bits were set to 0 to start
-      // setBitmapBit(valid_fields[col], rec_id);
-      set_bit(valid_fields[col], rec_id);
-      atomicAdd(&num_valid_fields[col], 1);
+        // set the valid bitmap - all bits were set to 0 to start      
+        set_bit(valid_fields[col], rec_id);
+        atomicAdd(&num_valid_fields[col], 1);
+      } else {
+        if(cudf::experimental::type_dispatcher(dtypes[col], ConvertFunctor{}, data, output_columns[col], rec_id, start, field_data_last, opts)){
+          // set the valid bitmap - all bits were set to 0 to start      
+          set_bit(valid_fields[col], rec_id);
+          atomicAdd(&num_valid_fields[col], 1);
+        } 
+      }      
     } else if (dtypes[col].id() == STRING) {
       auto str_list = static_cast<string_pair *>(output_columns[col]);
       str_list[rec_id].first = nullptr;

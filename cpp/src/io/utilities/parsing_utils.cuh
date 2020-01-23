@@ -90,6 +90,121 @@ __device__ __inline__ long seek_field_end(const char *data,
   return pos;
 }
 
+/**
+ * @brief Returns the numeric value of an ASCII/UTF-8 character. Specialization
+ * for integral types. Handles hexadecimal digits, both uppercase and lowercase.
+ * If the character is not a valid numeric digit then `0` is returned and
+ * valid_flag is set to false.
+ *
+ * @param c ASCII or UTF-8 character
+ * @param valid_flag Set to false if input is not valid. Unchanged otherwise.
+ *
+ * @return uint8_t Numeric value of the character, or `0`
+ */
+template <typename T,
+          typename std::enable_if_t<std::is_integral<T>::value> * = nullptr>
+__device__ __forceinline__ uint8_t decode_digit(char c, bool* valid_flag) {
+  if (c >= '0' && c <= '9') return c - '0';
+  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+
+  *valid_flag = false;
+  return 0;
+}
+
+/**
+ * @brief Returns the numeric value of an ASCII/UTF-8 character. Specialization
+ * for non-integral types. Handles only decimal digits. If the character is not
+ * a valid numeric digit then `0` is returned and valid_flag is set to false.
+ *
+ * @param c ASCII or UTF-8 character
+ * @param valid_flag Set to false if input is not valid. Unchanged otherwise.
+ *
+ * @return uint8_t Numeric value of the character, or `0`
+ */
+template <typename T,
+          typename std::enable_if_t<!std::is_integral<T>::value> * = nullptr>
+__device__ __forceinline__ uint8_t decode_digit(char c, bool* valid_flag) {
+  if (c >= '0' && c <= '9') return c - '0';
+
+  *valid_flag = false;
+  return 0;
+}
+
+/**
+ * @brief Parses a character string and returns its numeric value.
+ *
+ * @param data The character string for parse
+ * @param start The index within data to start parsing from
+ * @param end The end index within data to end parsing
+ * @param opts The global parsing behavior options
+ * @param base Base (radix) to use for conversion
+ *
+ * @return The parsed and converted value
+ */
+template <typename T>
+__inline__ __device__ T parse_numeric(const char *data, long start, long end,
+                                      ParseOptions const &opts, int base = 10) {
+  T value = 0;
+  bool all_digits_valid = true;
+
+  // Handle negative values if necessary
+  int32_t sign = 1;
+  if (data[start] == '-') {
+    sign = -1;
+    start++;
+  }
+
+  // Handle the whole part of the number
+  long index = start;
+  while (index <= end) {
+    if (data[index] == opts.decimal) {
+      ++index;
+      break;
+    } else if (base == 10 && (data[index] == 'e' || data[index] == 'E')) {
+      break;
+    } else if (data[index] != opts.thousands && data[index] != '+') {
+      value = (value * base) + decode_digit<T>(data[index], &all_digits_valid);
+    }
+    ++index;
+  }
+
+  if (std::is_floating_point<T>::value) {
+    // Handle fractional part of the number if necessary
+    double divisor = 1;
+    while (index <= end) {
+      if (data[index] == 'e' || data[index] == 'E') {
+        ++index;
+        break;
+      } else if (data[index] != opts.thousands && data[index] != '+') {
+        divisor /= base;
+        value += decode_digit<T>(data[index], &all_digits_valid) * divisor;
+      }
+      ++index;
+    }
+
+    // Handle exponential part of the number if necessary
+    if (index <= end) {
+      const int32_t exponent_sign = data[index] == '-' ? -1 : 1;
+      if (data[index] == '-' || data[index] == '+') {
+        ++index;
+      }
+      int32_t exponent = 0;
+      while (index <= end) {
+          exponent = (exponent * 10) + decode_digit<T>(data[index++], &all_digits_valid);
+      }
+      if (exponent != 0) {
+        value *= exp10(double(exponent * exponent_sign));
+      }
+    }
+  }
+  if (!all_digits_valid){
+    return std::numeric_limits<T>::quiet_NaN();
+  }
+
+  return value * sign;
+}
+
 } // namespace gpu
 
 /**
