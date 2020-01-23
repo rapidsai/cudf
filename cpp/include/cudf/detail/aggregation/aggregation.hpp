@@ -39,9 +39,13 @@ class aggregation {
    */
   enum Kind {
     SUM,       ///< sum reduction
+    PRODUCT,   ///< product reduction
     MIN,       ///< min reduction
     MAX,       ///< max reduction
     COUNT,     ///< count number of elements
+    ANY,       ///< any reduction
+    ALL,       ///< all reduction
+    SUM_OF_SQUARES, ///< sum of squares reduction
     MEAN,      ///< arithmetic mean reduction
     VARIANCE,  ///< groupwise variance
     STD,       ///< groupwise standard deviation
@@ -149,6 +153,18 @@ struct target_type_impl<Source, aggregation::COUNT> {
   using type = cudf::size_type;
 };
 
+// Computing ANY of any type, use bool accumulator
+template <typename Source>
+struct target_type_impl<Source, aggregation::ANY> {
+  using type = bool8;
+};
+
+// Computing ALL of any type, use bool accumulator
+template <typename Source>
+struct target_type_impl<Source, aggregation::ALL> {
+  using type = bool8;
+};
+
 // Always use `double` for MEAN
 // TODO (dm): Except for timestamp where result is timestamp. (Use FloorDiv)
 template <typename Source>
@@ -156,25 +172,31 @@ struct target_type_impl<Source, aggregation::MEAN> {
   using type = double;
 };
 
-// Summing integers of any type, always use int64_t accumulator
-template <typename Source>
-struct target_type_impl<Source, aggregation::SUM,
-                        std::enable_if_t<std::is_integral<Source>::value>> {
+constexpr bool is_sum_product_agg(aggregation::Kind k) {
+  return (k == aggregation::SUM) ||
+         (k == aggregation::PRODUCT) ||
+         (k == aggregation::SUM_OF_SQUARES);
+}
+
+// Summing/Multiplying integers of any type, always use int64_t accumulator
+template <typename Source, aggregation::Kind k>
+struct target_type_impl<Source, k,
+                        std::enable_if_t<std::is_integral<Source>::value && is_sum_product_agg(k)>> {
   using type = int64_t;
 };
 
-// Summing float/doubles, use same type accumulator
-template <typename Source>
+// Summing/Multiplying float/doubles, use same type accumulator
+template <typename Source, aggregation::Kind k>
 struct target_type_impl<
-    Source, aggregation::SUM,
-    std::enable_if_t<std::is_floating_point<Source>::value>> {
+    Source, k,
+    std::enable_if_t<std::is_floating_point<Source>::value && is_sum_product_agg(k)>> {
   using type = Source;
 };
 
-// Summing timestamps, use same type accumulator
-template <typename Source>
-struct target_type_impl<Source, aggregation::SUM,
-                        std::enable_if_t<is_timestamp<Source>()>> {
+// Summing/Multiplying timestamps, use same type accumulator
+template <typename Source, aggregation::Kind k>
+struct target_type_impl<Source, k,
+                        std::enable_if_t<is_timestamp<Source>() && is_sum_product_agg(k)>> {
   using type = Source;
 };
 
@@ -261,6 +283,8 @@ CUDA_HOST_DEVICE_CALLABLE decltype(auto) aggregation_dispatcher(
   switch (k) {
     case aggregation::SUM:
       return f.template operator()<aggregation::SUM>(std::forward<Ts>(args)...);
+    case aggregation::PRODUCT:
+      return f.template operator()<aggregation::PRODUCT>(std::forward<Ts>(args)...);
     case aggregation::MIN:
       return f.template operator()<aggregation::MIN>(std::forward<Ts>(args)...);
     case aggregation::MAX:
@@ -268,6 +292,12 @@ CUDA_HOST_DEVICE_CALLABLE decltype(auto) aggregation_dispatcher(
     case aggregation::COUNT:
       return f.template operator()<aggregation::COUNT>(
           std::forward<Ts>(args)...);
+    case aggregation::ANY:
+      return f.template operator()<aggregation::ANY>(std::forward<Ts>(args)...);
+    case aggregation::ALL:
+      return f.template operator()<aggregation::ALL>(std::forward<Ts>(args)...);
+    case aggregation::SUM_OF_SQUARES:
+      return f.template operator()<aggregation::SUM_OF_SQUARES>(std::forward<Ts>(args)...);
     case aggregation::MEAN:
       return f.template operator()<aggregation::MEAN>(
           std::forward<Ts>(args)...);
