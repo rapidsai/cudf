@@ -250,11 +250,6 @@ def test_groupby_string_index_name(myindex):
     lambda gb: gb.c.count(split_out=2),
 ])
 def test_groupby_split_out_multiindex(agg_func):
-    import cudf
-    import dask.dataframe as dd
-    import dask_cudf
-    import numpy as np
-
     df = cudf.DataFrame(
         {"a": np.arange(100), "b": np.arange(100), "c": np.random.random(100)}
     )
