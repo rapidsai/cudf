@@ -21,6 +21,7 @@
 #include <tests/utilities/type_lists.hpp>
 
 #include <cudf/reshape.hpp>
+#include <type_traits>
 
 using namespace cudf::test;
 
@@ -156,33 +157,18 @@ TYPED_TEST(InterleaveColumnsTest, ThreeColumnsNullable)
     cudf::test::expect_columns_equal(expected, actual->view());
 }
 
-
-struct InterleaveColumnsMismatchedDtypeTest : public BaseFixture {};
-
-TEST(InterleaveColumnsMismatchedDtypeTest, MismatchedDtypes)
+TYPED_TEST(InterleaveColumnsTest, MismatchedDtypes)
 {
+    using T = TypeParam;
 
-    fixed_width_column_wrapper<int>   input_a({ 1, 4, 7 }, { 1, 0, 1 });
-    fixed_width_column_wrapper<float> input_b({ 2, 5, 8 }, { 0, 1, 0 });
+    if (std::is_same<int, T>::value) {
+        return;
+    }
 
+    fixed_width_column_wrapper<int> input_a({ 1, 4, 7 }, { 1, 0, 1 });
+    fixed_width_column_wrapper<T>   input_b({ 2, 5, 8 }, { 0, 1, 0 });
 
     cudf::table_view input (std::vector<cudf::column_view>{ input_a, input_b });
 
     EXPECT_THROW(cudf::experimental::interleave_columns(input), cudf::logic_error);
 }
-
-// TYPED_TEST(InterleaveColumnsTest, MismatchedDtypes)
-// {
-//     using T = TypeParam;
-
-//     fixed_width_column_wrapper<T> a({ 1, 4, 7 }, { 1, 0, 1 });
-//     fixed_width_column_wrapper<T> b({ 2, 5, 8 }, { 0, 1, 0 });
-//     fixed_width_column_wrapper<T> c({ 3, 6, 9 }, { 1, 0, 1 });
-
-//     cudf::table_view in (std::vector<cudf::column_view>{ a, b, c });
-
-//     auto expected = fixed_width_column_wrapper<T>({ 1, 0, 3, 0, 5, 0, 7, 0, 9 }, { 1, 0, 1, 0, 1, 0, 1, 0, 1 });
-//     auto actual = cudf::experimental::interleave_columns(in);
-
-//     cudf::test::expect_columns_equal(expected, actual->view());
-// }
