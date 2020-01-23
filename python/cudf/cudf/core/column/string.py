@@ -545,7 +545,7 @@ class StringColumn(column.ColumnBase):
 
     @property
     def _nbytes(self):
-        return self.children[0][-1]
+        return self.children[1].size
 
     def as_numerical_column(self, dtype, **kwargs):
 
