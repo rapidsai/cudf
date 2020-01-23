@@ -6,6 +6,8 @@
 
 ## Bug Fixes
 
+- PR #3888 Pass `0` to `ptr` of `DeviceBuffer`
+
 
 # cuDF 0.12.0 (Date TBD)
 
