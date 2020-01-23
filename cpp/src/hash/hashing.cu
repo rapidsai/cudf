@@ -374,7 +374,11 @@ struct move_to_output_buffer_dispatcher{
                   rmm::mr::device_memory_resource* mr,
                   cudaStream_t stream)
   {
-    CUDF_FAIL("non-fixed width types unsupported");
+    auto gather_map = compute_gather_map(input.size(), num_partitions, row_partition_numbers,
+        row_partition_offset, block_partition_sizes, scanned_block_partition_sizes,
+        grid_size, stream);
+    return experimental::type_dispatcher(input.type(), experimental::detail::column_gatherer{},
+        input, gather_map.begin(), gather_map.end(), false, mr, stream);
   }
 };
 
