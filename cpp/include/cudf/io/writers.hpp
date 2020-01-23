@@ -81,7 +81,7 @@ class writer {
   /**
    * @brief Constructor for output to host buffer.
    *
-   * @param buffer TODO
+   * @param buffer Pointer to the output vector
    * @param options Settings for controlling writing behavior
    * @param mr Optional resource to use for device memory allocation
    */
