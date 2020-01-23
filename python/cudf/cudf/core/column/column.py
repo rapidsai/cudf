@@ -1081,7 +1081,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
             data = data.astype(dtype)
     elif isinstance(arbitrary, nvstrings.nvstrings):
         byte_count = arbitrary.byte_count()
-        if byte_count > np.iinfo(np.int32).max:
+        if byte_count > libcudfxx.MAX_STRING_COLUMN_BYTES:
             raise MemoryError(
                 "Cannot construct string columns "
                 "containing > INT32_MAX bytes. "
