@@ -53,8 +53,8 @@ namespace detail {
     // convenience generic shift function
     template <Radix Rad, typename T>
     constexpr auto shift(T const& val, scale_type const& scale) {
-        return scale < 0 ? right_shift<Rad>(val, negate(scale))
-                         : left_shift <Rad>(val, scale);
+        return scale >= 0 ? right_shift<Rad>(val, scale)
+                          : left_shift <Rad>(val, negate(scale));
     }
 
     // forward declare TODO might be unnecessary one file restructure is done
