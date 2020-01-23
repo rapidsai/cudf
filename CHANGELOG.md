@@ -25,6 +25,7 @@
 - PR #3667 Define and implement round-robin partition API.
 - PR #3690 Add bools_to_mask
 - PR #3761 Introduce a Frame class and make Index, DataFrame and Series subclasses
+- PR #3538 Define and implement left semi join and left anti join
 - PR #3683 Added support for multiple delimiters in `nvtext.token_count()`
 - PR #3792 Adding is_nan and is_notnan
 - PR #3594 Adding clamp support to libcudf++
