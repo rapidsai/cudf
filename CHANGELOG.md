@@ -1,6 +1,7 @@
 # cuDF 0.12.0 (Date TBD)
 
 ## New Features
+
 - PR #3759 Updated 10 Minutes with clarification on how `dask_cudf` uses `cudf` API
 - PR #3224 Define and implement new join APIs.
 - PR #3284 Add gpu-accelerated parquet writer
