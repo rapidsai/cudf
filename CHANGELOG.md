@@ -67,6 +67,7 @@
 - PR #3758 detail::scatter variant with map iterator support
 - PR #2438 Build GBench Benchmarks in CI
 - PR #3713 Adding aggregation support to rolling_window
+- PR # 3875 Add abstract sink for IO writers, used by ORC and Parquet writers for now
 
 ## Bug Fixes
 
