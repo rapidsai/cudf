@@ -251,7 +251,7 @@ def test_groupby_string_index_name(myindex):
 ])
 def test_groupby_split_out_multiindex(agg_func):
     df = cudf.DataFrame(
-        {"a": np.arange(100), "b": np.arange(100), "c": np.random.random(100)}
+        {"a": np.random.randint(0, 10, 100), "b": np.random.randint(0, 5, 100), "c": np.random.random(100)}
     )
     ddf = dask_cudf.from_cudf(df, 5)
     pddf = dd.from_pandas(df.to_pandas(), 5)
