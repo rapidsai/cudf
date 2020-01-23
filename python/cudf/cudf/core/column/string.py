@@ -154,7 +154,7 @@ class StringMethods(object):
             others = others._column.nvstrings
         elif isinstance(others, Index):
             assert others.dtype == np.dtype("object")
-            others = others.as_column().nvstrings
+            others = others._values.nvstrings
         elif isinstance(others, StringMethods):
             """
             If others is a StringMethods then
@@ -329,7 +329,7 @@ class StringMethods(object):
             mask = self._parent.mask
 
         col = column.build_column(
-            Buffer(out_dev_arr), dtype=np.dtype("bool"), mask=mask,
+            Buffer(out_dev_arr), dtype=np.dtype("bool"), mask=mask
         )
 
         return Series(col, index=self._index, name=self._name)
@@ -453,20 +453,19 @@ class StringColumn(column.ColumnBase):
             Two non-null columns containing the string data and offsets
             respectively
         """
-
         data = Buffer.empty(0)
         dtype = np.dtype("object")
 
-        if children[0].size == 0:
+        if len(children) == 0:
+            size = 0
+        elif children[0].size == 0:
             size = 0
         else:
             # one less because the last element of offsets is the number of
             # bytes in the data buffer
             size = children[0].size - 1
 
-        super().__init__(
-            data, size, dtype, mask=mask, children=children,
-        )
+        super().__init__(data, size, dtype, mask=mask, children=children)
 
         self._nvstrings = None
         self._nvcategory = None

@@ -481,9 +481,8 @@ class Groupby(object):
             # sliding window
             def rolling_avg(val, avg):
                 win_size = 3
-                for row, i in enumerate(range(cuda.threadIdx.x,
-                                              len(val), cuda.blockDim.x)):
-                    if row < win_size - 1:
+                for i in range(cuda.threadIdx.x, len(val), cuda.blockDim.x):
+                    if i < win_size - 1:
                         # If there is not enough data to fill the window,
                         # take the average to be NaN
                         avg[i] = np.nan

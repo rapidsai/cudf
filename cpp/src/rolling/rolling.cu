@@ -18,18 +18,16 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
-#include <cudf/detail/gather.hpp>
 #include <cudf/detail/aggregation/aggregation.cuh>
 #include <cudf/aggregation.hpp>
-#include <rolling/rolling_detail.hpp>
-#include <cudf/rolling.hpp>
-#include <cudf/detail/utilities/device_operators.cuh>
+#include <cudf/detail/gather.hpp>
 #include <cudf/utilities/nvtx_utils.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/copying.hpp>
+#include <rolling/rolling_detail.hpp>
+#include <cudf/rolling.hpp>
 
 #include <rmm/device_scalar.hpp>
 
@@ -42,20 +40,116 @@ namespace detail {
 
 namespace { // anonymous
 
+template <typename InputType, typename OutputType, typename agg_op, aggregation::Kind op, bool has_nulls>
+std::enable_if_t<std::is_same<agg_op, cudf::DeviceCount>::value, bool>
+__device__
+specific_rolling_kernel(column_device_view input,
+                        mutable_column_device_view output,
+                        size_type start_index,
+                        size_type end_index,
+                        size_type current_index,
+                        size_type min_periods,
+                        InputType identity) {
+
+    // declare this as volatile to avoid some compiler optimizations that lead to incorrect results
+    // for CUDA 10.0 and below (fixed in CUDA 10.1)
+    volatile cudf::size_type count = 0;
+    
+    for (size_type j = start_index; j < end_index; j++) {
+        if (!has_nulls || input.is_valid(j)) {
+            count++;
+        }
+    }
+   
+    bool output_is_valid = (count >= min_periods);
+    output.element<OutputType>(current_index) = count;
+
+    return output_is_valid;
+}
+
+template <typename InputType, typename OutputType, typename agg_op, aggregation::Kind op, bool has_nulls>
+std::enable_if_t<(std::is_same<agg_op, cudf::DeviceMin>::value or std::is_same<agg_op, cudf::DeviceMax>::value) and
+                 (op == aggregation::ARGMIN  or op == aggregation::ARGMAX) and
+                 std::is_same<InputType, cudf::string_view>::value, bool>
+__device__
+specific_rolling_kernel(column_device_view input,
+                        mutable_column_device_view output,
+                        size_type start_index,
+                        size_type end_index,
+                        size_type current_index,
+                        size_type min_periods,
+                        InputType identity) {
+
+    // declare this as volatile to avoid some compiler optimizations that lead to incorrect results
+    // for CUDA 10.0 and below (fixed in CUDA 10.1)
+    volatile cudf::size_type count = 0;
+    InputType val = identity;
+    OutputType val_index = (op == aggregation::ARGMIN)? ARGMIN_SENTINEL : ARGMAX_SENTINEL;
+
+    for (size_type j = start_index; j < end_index; j++) {
+        if (!has_nulls || input.is_valid(j)) {
+            InputType element = input.element<InputType>(j);
+            val = agg_op{}(element, val);
+            if (val == element) {
+                val_index = j;
+            }
+            count++;
+        }
+    }
+
+    bool output_is_valid = (count >= min_periods);
+    // -1 will help identify null elements while gathering for Min and Max
+    // In case of count, this would be null, so doesn't matter.
+    output.element<OutputType>(current_index) = (output_is_valid)? val_index : -1;
+
+    return output_is_valid;
+}
+
+template <typename InputType, typename OutputType, typename agg_op, aggregation::Kind op, bool has_nulls>
+std::enable_if_t<!std::is_same<InputType, cudf::string_view>::value and !(op == aggregation::COUNT), bool>
+__device__
+specific_rolling_kernel(column_device_view input,
+                        mutable_column_device_view output,
+                        size_type start_index,
+                        size_type end_index,
+                        size_type current_index,
+                        size_type min_periods,
+                        InputType identity) {
+
+    // declare this as volatile to avoid some compiler optimizations that lead to incorrect results
+    // for CUDA 10.0 and below (fixed in CUDA 10.1)
+    volatile cudf::size_type count = 0;
+    OutputType val = agg_op::template identity<OutputType>();
+
+    for (size_type j = start_index; j < end_index; j++) {
+        if (!has_nulls || input.is_valid(j)) {
+            OutputType element = input.element<InputType>(j);
+            val = agg_op{}(element, val);
+            count++;
+        }
+    }
+
+    bool output_is_valid = (count >= min_periods);
+
+    // store the output value, one per thread
+    if (output_is_valid)
+        cudf::detail::store_output_functor<OutputType, op == aggregation::MEAN>{}(output.element<OutputType>(current_index),
+                val, count);
+
+    return output_is_valid;
+}
+
 /**
- * @brief Computes the rolling window function for non sting_view
+ * @brief Computes the rolling window function
  *
- * @tparam InputType  Datatype of values pointed to by the pointers
- * @tparam OutputType Datatype of values expected at the end
+ * @tparam ColumnType  Datatype of values pointed to by the pointers
  * @tparam agg_op  A functor that defines the aggregation operation
- * @tparam op The aggreagtion expected to be carried out
+ * @tparam is_mean Compute mean=sum/count across all valid elements in the window
  * @tparam block_size CUDA block size for the kernel
- * @tparam is_count_op true if op == aggregation::COUNT, else false
- * @tparam source_has_nulls true if the input column has nulls
+ * @tparam has_nulls true if the input column has nulls
  * @tparam WindowIterator iterator type (inferred)
  * @param input Input column device view
  * @param output Output column device view
- *
  * @param preceding_window_begin[in] Rolling window size iterator, accumulates from
  *                in_col[i-preceding_window] to in_col[i] inclusive
  * @param following_window_begin[in] Rolling window size iterator in the forward
@@ -63,324 +157,194 @@ namespace { // anonymous
  *                in_col[i+following_window] inclusive
  * @param min_periods[in]  Minimum number of observations in window required to
  *                have a value, otherwise 0 is stored in the valid bit mask
- * @param identity Identity value with InputType
  */
- template <typename InputType, typename OutputType, typename agg_op, aggregation::Kind op, int block_size, bool is_count_op, bool source_has_nulls,
-           typename WindowIterator, std::enable_if_t<!std::is_same<InputType, cudf::string_view>::value>* = nullptr>
- __launch_bounds__(block_size)
- __global__
- void gpu_rolling(column_device_view input,
-         mutable_column_device_view output,
-         size_type * __restrict__ output_valid_count,
-         WindowIterator preceding_window_begin,
-         WindowIterator following_window_begin,
-         size_type min_periods,
-         InputType identity)
- {
-     size_type i = blockIdx.x * block_size + threadIdx.x;
-     size_type stride = block_size * gridDim.x;
-
-     size_type warp_valid_count{0};
-
-     auto active_threads = __ballot_sync(0xffffffff, i < input.size());
-     while(i < input.size())
-     {
-         OutputType val = agg_op::template identity<OutputType>();
-         // declare this as volatile to avoid some compiler optimizations that lead to incorrect results
-         // for CUDA 10.0 and below (fixed in CUDA 10.1)
-         volatile cudf::size_type count = 0;
-
-         size_type preceding_window = preceding_window_begin[i];
-         size_type following_window = following_window_begin[i];
-
-         // compute bounds
-         size_type start_index = max(0, i - preceding_window);
-         size_type end_index = min(input.size(), i + following_window + 1); // exclusive
-
-         // aggregate
-         // TODO: We should explore using shared memory to avoid redundant loads.
-         //       This might require separating the kernel into a special version
-         //       for dynamic and static sizes.
-         for (size_type j = start_index; j < end_index; j++) {
-             if (!source_has_nulls || input.is_valid(j)) {
-                 // Element type and output type are different for COUNT
-                 OutputType element = (op == aggregation::COUNT) ? InputType{0} : input.element<InputType>(j);
-                 val = agg_op{}(element, val);
-                 count++;
-             }
-         }
-
-         // check if we have enough input samples
-         bool output_is_valid = (count >= min_periods);
-
-         // set the mask
-         cudf::bitmask_type result_mask{__ballot_sync(active_threads, output_is_valid)};
-
-         // only one thread writes the mask
-         if (0 == threadIdx.x % cudf::experimental::detail::warp_size) {
-             output.set_mask_word(cudf::word_index(i), result_mask);
-             warp_valid_count += __popc(result_mask);
-         }
-
-         // store the output value, one per thread
-         if (output_is_valid)
-             cudf::detail::store_output_functor<OutputType, op == aggregation::MEAN>{}(output.element<OutputType>(i),
-                     val, count);
-
-         // process next element 
-         i += stride;
-         active_threads = __ballot_sync(active_threads, i < input.size());
-     }
-
-     // sum the valid counts across the whole block  
-     size_type block_valid_count = 
-         cudf::experimental::detail::single_lane_block_sum_reduce<block_size, 0>(warp_valid_count);
-
-     if(threadIdx.x == 0) {
-         atomicAdd(output_valid_count, block_valid_count);
-     }
- }
-
-/**
- * @brief Computes the rolling window function for string_view
- *
- * For Min and Max, this generates gather_map rather than actual
- * output
- *
- * @tparam InputType  Datatype of values pointed to by the pointers
- * @tparam OutputType Datatype of values expected at the end
- * @tparam agg_op  A functor that defines the aggregation operation
- * @tparam op The aggreagtion expected to be carried out
- * @tparam block_size CUDA block size for the kernel
- * @tparam is_count_op true if op == aggregation::COUNT, else false
- * @tparam source_has_nulls true if the input column has nulls
- * @tparam WindowIterator iterator type (inferred)
- * @param input Input column device view
- * @param output Output column device view
- *
- * @param preceding_window_begin[in] Rolling window size iterator, accumulates from
- *                in_col[i-preceding_window] to in_col[i] inclusive
- * @param following_window_begin[in] Rolling window size iterator in the forward
- *                direction, accumulates from in_col[i] to
- *                in_col[i+following_window] inclusive
- * @param min_periods[in]  Minimum number of observations in window required to
- *                have a value, otherwise 0 is stored in the valid bit mask
- * @param identity Identity value with InputType
- */
-template <typename InputType, typename OutputType, typename agg_op, aggregation::Kind op, int block_size, bool is_count_op, bool source_has_nulls,
-          typename WindowIterator, std::enable_if_t<std::is_same<InputType, cudf::string_view>::value>* = nullptr>
+template <typename InputType, typename OutputType, typename agg_op, aggregation::Kind op, 
+         int block_size, bool arg_min_max, bool has_nulls, typename WindowIterator>
 __launch_bounds__(block_size)
 __global__
 void gpu_rolling(column_device_view input,
-        mutable_column_device_view output,
-        size_type * __restrict__ output_valid_count,
-        WindowIterator preceding_window_begin,
-        WindowIterator following_window_begin,
-        size_type min_periods,
-        InputType identity)
-{
-    size_type i = blockIdx.x * block_size + threadIdx.x;
-    size_type stride = block_size * gridDim.x;
-
-    size_type warp_valid_count{0};
-
-    auto active_threads = __ballot_sync(0xffffffff, i < input.size());
-    while(i < input.size())
-    {
-        InputType val = identity;
-        OutputType val_index = (op == aggregation::ARGMIN)? ARGMIN_SENTINEL : ARGMAX_SENTINEL;
-        // declare this as volatile to avoid some compiler optimizations that lead to incorrect results
-        // for CUDA 10.0 and below (fixed in CUDA 10.1)
-        volatile cudf::size_type count = 0;
-
-        size_type preceding_window = preceding_window_begin[i];
-        size_type following_window = following_window_begin[i];
-
-        // compute bounds
-        size_type start_index = max(0, i - preceding_window);
-        size_type end_index = min(input.size(), i + following_window + 1); // exclusive
-
-        // aggregate
-        // TODO: We should explore using shared memory to avoid redundant loads.
-        //       This might require separating the kernel into a special version
-        //       for dynamic and static sizes.
-        for (size_type j = start_index; j < end_index; j++) {
-            if (!source_has_nulls || input.is_valid(j)) {
-                if (is_count_op) {
-                    count++;
-                } else {
-                    // Element type and output type are different for COUNT
-                    InputType element = input.element<InputType>(j);
-                    val = agg_op{}(element, val);
-                    if (val == element) {
-                        val_index = j;
-                    }
-                    count++;
-                }
-            }
-        }
-
-        // check if we have enough input samples
-        bool output_is_valid = (count >= min_periods);
-
-        // set the mask
-        // We can't have gather map being created for Min and Max for string_view to be null
-        cudf::bitmask_type result_mask{__ballot_sync(active_threads, (is_count_op)? output_is_valid: true)};
-
-        // only one thread writes the mask
-        if (0 == threadIdx.x % cudf::experimental::detail::warp_size) {
-            output.set_mask_word(cudf::word_index(i), result_mask);
-            warp_valid_count += __popc(result_mask);
-        }
-
-        // store the output value, one per thread
-        if (output_is_valid) {
-            output.element<OutputType>(i) = (is_count_op)? count: val_index;
-        } else {
-            // This will help identify null elements while gathering for Min and Max
-            // In case of count, this would be null, so doesn't matter.
-            output.element<OutputType>(i) = -1;
-        }
-
-        // process next element 
-        i += stride;
-        active_threads = __ballot_sync(active_threads, i < input.size());
-    }
-
-    // sum the valid counts across the whole block  
-    size_type block_valid_count = 
-        cudf::experimental::detail::single_lane_block_sum_reduce<block_size, 0>(warp_valid_count);
-
-    if(threadIdx.x == 0) {
-        atomicAdd(output_valid_count, block_valid_count);
-    }
-}
-
-struct rolling_window_launcher
-{
-    template<typename InputType, typename agg_op, aggregation::Kind op, typename WindowIterator, bool is_count_op=false>
-    void launch(column_view const& input,
-                 mutable_column_view& output,
+                 mutable_column_device_view output,
+                 size_type * __restrict__ output_valid_count,
                  WindowIterator preceding_window_begin,
                  WindowIterator following_window_begin,
                  size_type min_periods,
-                 cudaStream_t stream) 
-        {
-        constexpr cudf::size_type block_size = 256;
-        cudf::experimental::detail::grid_1d grid(input.size(), block_size);
+                 InputType identity)
+{
+  size_type i = blockIdx.x * block_size + threadIdx.x;
+  size_type stride = block_size * gridDim.x;
 
-        auto input_device_view = column_device_view::create(input, stream);
-        auto output_device_view = mutable_column_device_view::create(output, stream);
+  size_type warp_valid_count{0};
 
-        rmm::device_scalar<size_type> device_valid_count{0, stream};
+  auto active_threads = __ballot_sync(0xffffffff, i < input.size());
+  while(i < input.size())
+  {
 
+    size_type preceding_window = preceding_window_begin[i];
+    size_type following_window = following_window_begin[i];
 
-        if (input.has_nulls()) {
-                gpu_rolling<InputType, target_type_t<InputType, op>, agg_op, op, block_size, is_count_op, true><<<grid.num_blocks, block_size, 0, stream>>>
-                    (*input_device_view, *output_device_view, device_valid_count.data(),
-                     preceding_window_begin, following_window_begin, min_periods, agg_op::template identity<InputType>());
-        } else {
-                gpu_rolling<InputType, target_type_t<InputType, op>, agg_op, op, block_size, is_count_op, false><<<grid.num_blocks, block_size, 0, stream>>>
-                    (*input_device_view, *output_device_view, device_valid_count.data(),
-                     preceding_window_begin, following_window_begin, min_periods, agg_op::template identity<InputType>());
-        }
+    // compute bounds
+    size_type start_index = max(0, i - preceding_window);
+    size_type end_index = min(input.size(), i + following_window + 1); // exclusive
 
-        output.set_null_count(output.size() - device_valid_count.value(stream));
+    // aggregate
+    // TODO: We should explore using shared memory to avoid redundant loads.
+    //       This might require separating the kernel into a special version
+    //       for dynamic and static sizes.
+
+    bool output_is_valid = specific_rolling_kernel<InputType, OutputType, agg_op,
+                           op, has_nulls>(input, output, start_index, end_index, i, min_periods, identity); 
+
+    // set the mask
+    // We can't have gather map being created for Min and Max for string_view to be null
+    cudf::bitmask_type result_mask{__ballot_sync(active_threads, arg_min_max? true : output_is_valid)};
+
+    // only one thread writes the mask
+    if (0 == threadIdx.x % cudf::experimental::detail::warp_size) {
+      output.set_mask_word(cudf::word_index(i), result_mask);
+      warp_valid_count += __popc(result_mask);
     }
 
-  template<typename T, typename agg_op, aggregation::Kind op, typename WindowIterator,
-    std::enable_if_t<cudf::detail::is_supported<T, agg_op,
-                                                 op == aggregation::MEAN>()>* = nullptr>
-  std::unique_ptr<column> dispatch_aggregation_type(column_view const& input,
-                                                    WindowIterator preceding_window_begin,
-                                                    WindowIterator following_window_begin,
-                                                    size_type min_periods,
-                                                    rmm::mr::device_memory_resource *mr,
-                                                    cudaStream_t stream)
-  {
-    if (input.is_empty()) return empty_like(input);
-
-    cudf::nvtx::range_push("CUDF_ROLLING_WINDOW", cudf::nvtx::color::ORANGE);
-
-    auto output = make_fixed_width_column(target_type(input.type(), op), input.size(),
-          UNINITIALIZED, stream, mr);
-
-    cudf::mutable_column_view output_view = output->mutable_view();
-    launch<T, agg_op, op, WindowIterator>(input, output_view, preceding_window_begin,
-                                                following_window_begin, min_periods, stream);
-
-    // check the stream for debugging
-    CHECK_CUDA(stream);
-
-    cudf::nvtx::range_pop();
-
-    return output;
+    // process next element 
+    i += stride;
+    active_threads = __ballot_sync(active_threads, i < input.size());
   }
 
-  template<typename T, typename agg_op, aggregation::Kind op, typename WindowIterator,
-    std::enable_if_t<cudf::detail::is_string_supported<T, op>()>* = nullptr>
-  std::unique_ptr<column> dispatch_aggregation_type(column_view const& input,
-                                                    WindowIterator preceding_window_begin,
-                                                    WindowIterator following_window_begin,
-                                                    size_type min_periods,
-                                                    rmm::mr::device_memory_resource *mr,
-                                                    cudaStream_t stream)
-  {
-    auto output = make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<size_type>()},
+  // sum the valid counts across the whole block  
+  size_type block_valid_count = 
+    cudf::experimental::detail::single_lane_block_sum_reduce<block_size, 0>(warp_valid_count);
+  
+  if(threadIdx.x == 0) {
+    atomicAdd(output_valid_count, block_valid_count);
+  }
+}
+
+template <typename InputType>
+struct rolling_window_launcher
+{
+
+  template <typename T, typename agg_op, aggregation::Kind op, typename WindowIterator, bool op_argmin_agrmax=false>
+  void kernel_launcher(column_view const& input,
+                       mutable_column_view& output,
+                       WindowIterator preceding_window_begin,
+                       WindowIterator following_window_begin,
+                       size_type min_periods,
+                       std::unique_ptr<aggregation> const& aggr,
+                       T identity,
+                       cudaStream_t stream) {
+      
+      cudf::nvtx::range_push("CUDF_ROLLING_WINDOW", cudf::nvtx::color::ORANGE);
+
+      constexpr cudf::size_type block_size = 256;
+      cudf::experimental::detail::grid_1d grid(input.size(), block_size);
+
+      auto input_device_view = column_device_view::create(input, stream);
+      auto output_device_view = mutable_column_device_view::create(output, stream);
+
+      rmm::device_scalar<size_type> device_valid_count{0, stream};
+
+      if (input.has_nulls()) {
+          gpu_rolling<T, target_type_t<InputType, op>, agg_op, op, block_size, op_argmin_agrmax, true><<<grid.num_blocks, block_size, 0, stream>>>
+              (*input_device_view, *output_device_view, device_valid_count.data(),
+               preceding_window_begin, following_window_begin, min_periods, identity);
+      } else {
+          gpu_rolling<T, target_type_t<InputType, op>, agg_op, op, block_size, op_argmin_agrmax, false><<<grid.num_blocks, block_size, 0, stream>>>
+              (*input_device_view, *output_device_view, device_valid_count.data(),
+               preceding_window_begin, following_window_begin, min_periods, identity);
+      }
+
+      output.set_null_count(output.size() - device_valid_count.value(stream));
+
+      // check the stream for debugging
+      CHECK_CUDA(stream);
+      
+      cudf::nvtx::range_pop();
+
+  }
+
+  template <typename T, typename agg_op, aggregation::Kind op, typename WindowIterator>
+  std::enable_if_t<(cudf::detail::is_supported<T, agg_op,
+                                  op, op == aggregation::MEAN>()) and
+                   !(cudf::detail::is_string_supported<T, agg_op, op>()), std::unique_ptr<column>>
+  launch(column_view const& input,
+         WindowIterator preceding_window_begin,
+         WindowIterator following_window_begin,
+         size_type min_periods,
+         std::unique_ptr<aggregation> const& aggr,
+         rmm::mr::device_memory_resource *mr,
+         cudaStream_t stream) {
+
+      if (input.is_empty()) return empty_like(input);
+
+      auto output = make_fixed_width_column(target_type(input.type(), op), input.size(),
+              UNINITIALIZED, stream, mr);
+
+      cudf::mutable_column_view output_view = output->mutable_view();
+      kernel_launcher<T, agg_op, op, WindowIterator>(input, output_view, preceding_window_begin,
+              following_window_begin, min_periods, aggr, agg_op::template identity<T>(), stream);
+
+      return output;
+  }
+
+  template <typename T, typename agg_op, aggregation::Kind op, typename WindowIterator>
+  std::enable_if_t<!(cudf::detail::is_supported<T, agg_op,
+                                  op, op == aggregation::MEAN>()) and
+                   (cudf::detail::is_string_supported<T, agg_op, op>()), std::unique_ptr<column>>
+  launch(column_view const& input,
+         WindowIterator preceding_window_begin,
+         WindowIterator following_window_begin,
+         size_type min_periods,
+         std::unique_ptr<aggregation> const& aggr,
+         rmm::mr::device_memory_resource *mr,
+         cudaStream_t stream) {
+
+      if (input.is_empty()) return empty_like(input);
+
+      auto output = make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<size_type>()},
             input.size(), cudf::UNINITIALIZED, stream, mr);
 
-    cudf::mutable_column_view output_view = output->mutable_view();
-    if(op == aggregation::MIN) {
-        launch<T, agg_op, aggregation::ARGMIN, WindowIterator>(input, output_view, preceding_window_begin,
-                                                    following_window_begin, min_periods, stream);
-    } else if(op == aggregation::MAX) {
-        launch<T, agg_op, aggregation::ARGMAX, WindowIterator>(input, output_view, preceding_window_begin,
-                                                    following_window_begin, min_periods, stream);
-    } else {
-        launch<T, agg_op, aggregation::COUNT, WindowIterator, true>(input, output_view, preceding_window_begin,
-                                                    following_window_begin, min_periods, stream);
-    }
+      cudf::mutable_column_view output_view = output->mutable_view();
 
-    // check the stream for debugging
-    CHECK_CUDA(stream);
+      if(op == aggregation::MIN) {
+          kernel_launcher<T, DeviceMin, aggregation::ARGMIN, WindowIterator, true>(input, output_view, preceding_window_begin,
+                  following_window_begin, min_periods, aggr, DeviceMin::template identity<T>(), stream);
+      } else if(op == aggregation::MAX) {
+          kernel_launcher<T, DeviceMax, aggregation::ARGMAX, WindowIterator, true>(input, output_view, preceding_window_begin,
+                  following_window_begin, min_periods, aggr, DeviceMax::template identity<T>(), stream);
+      } else {
+          kernel_launcher<T, DeviceCount, aggregation::COUNT, WindowIterator>(input, output_view, preceding_window_begin,
+                  following_window_begin, min_periods, aggr, string_view{}, stream);
+      }
 
-    cudf::nvtx::range_pop();
+      // If aggregation operation is MIN or MAX, then the output we got is a scatter map
+      if((op == aggregation::MIN) or (op == aggregation::MAX)) {
+          // The rows that represent null elements will be having negative values in gather map,
+          // and that's why nullify_out_of_bounds/ignore_out_of_bounds is true.
+          auto output_table = detail::gather(table_view{{input}}, output->view(), false, true, false, mr, stream);
+          return std::make_unique<cudf::column>(std::move(output_table->get_column(0)));;
+      }
 
-    // If aggregation operation is MIN or MAX, then the output we got is a scatter map
-    if((op == aggregation::MIN) or (op == aggregation::MAX)) {
-        // The rows that represent null elements will be having negative values in gather map,
-        // and that's why nullify_out_of_bounds/ignore_out_of_bounds is true.
-        auto output_table = detail::gather(table_view{{input}}, output->view(), false, true, false, mr, stream);
-        return std::make_unique<cudf::column>(std::move(output_table->get_column(0)));;
-    }
-    
-    return output;
+      return output;
   }
 
-  /**
-   * @brief If we cannot perform aggregation on this type then throw an error
-   */
-  template<typename T, typename agg_op, aggregation::Kind op, typename WindowIterator,
-    std::enable_if_t<!cudf::detail::is_supported<T, agg_op,
-                                                 op == aggregation::MEAN>() and !cudf::detail::is_string_supported<T, op>()>* = nullptr>
-  std::unique_ptr<column> dispatch_aggregation_type(column_view const& input,
-                                                    WindowIterator preceding_window_begin,
-                                                    WindowIterator following_window_begin,
-                                                    size_type min_periods,
-                                                    rmm::mr::device_memory_resource *mr,
-                                                    cudaStream_t stream)
-  {
-    CUDF_FAIL("Unsupported column type/operation combo. Only `min` and `max` are supported for "
-              "non-arithmetic types for aggregations.");
+  template <typename T, typename agg_op, aggregation::Kind op, typename WindowIterator>
+  std::enable_if_t<!(cudf::detail::is_supported<T, agg_op,
+                                  op, op == aggregation::MEAN>()) and
+                   !(cudf::detail::is_string_supported<T, agg_op, op>()), std::unique_ptr<column>>
+  launch(column_view const& input,
+         WindowIterator preceding_window_begin,
+         WindowIterator following_window_begin,
+         size_type min_periods,
+         std::unique_ptr<aggregation> const& aggr,
+         rmm::mr::device_memory_resource *mr,
+         cudaStream_t stream) {
+
+      CUDF_FAIL("Aggregation operator and/or input type combination is invalid");
   }
 
-  /**
-   * @brief Helper function for gdf_rolling. Deduces the type of the
-   * aggregation column and type and calls another function to invoke the
-   * rolling window kernel.
-   */
-  template <typename T, typename WindowIterator>
-  std::unique_ptr<column> operator()(column_view const& input,
+
+  template<aggregation::Kind op, typename WindowIterator>
+  std::enable_if_t<!(op == aggregation::MEAN), std::unique_ptr<column>>
+  operator()(column_view const& input,
                                      WindowIterator preceding_window_begin,
                                      WindowIterator following_window_begin,
                                      size_type min_periods,
@@ -388,38 +352,54 @@ struct rolling_window_launcher
                                      rmm::mr::device_memory_resource *mr,
                                      cudaStream_t stream)
   {
-    switch (aggr->kind) {
-    case aggregation::SUM:
-      return dispatch_aggregation_type<T, corresponding_operator<aggregation::SUM>::type,
-                                       aggregation::SUM>(input, preceding_window_begin,
-                                                               following_window_begin, min_periods,
-                                                               mr, stream);
-    case aggregation::MIN:
-      return dispatch_aggregation_type<T, corresponding_operator<aggregation::MIN>::type,
-                                       aggregation::MIN>(input, preceding_window_begin,
-                                                              following_window_begin, min_periods,
-                                                              mr, stream);
-    case aggregation::MAX:
-      return dispatch_aggregation_type<T, corresponding_operator<aggregation::MAX>::type,
-                                       aggregation::MAX>(input, preceding_window_begin,
-                                                              following_window_begin, min_periods,
-                                                              mr, stream);
-    case aggregation::COUNT:
-      // for count, use size_type rather than the input type (never load the input)
-      return dispatch_aggregation_type<cudf::size_type, cudf::DeviceCount,
-                                       aggregation::COUNT>(input, preceding_window_begin,
-                                                                following_window_begin, min_periods,
-                                                                mr, stream);
-    case aggregation::MEAN:
-      return dispatch_aggregation_type<T, corresponding_operator<aggregation::SUM>::type,
-                                       aggregation::MEAN>(input, preceding_window_begin,
-                                                               following_window_begin, min_periods,
-                                                               mr, stream);
-    default:
-      // TODO: need a nice way to convert enums to strings, same would be useful for groupby
-      CUDF_FAIL("Rolling aggregation function not implemented");
-    }
+      return launch <InputType, typename corresponding_operator<op>::type, op, WindowIterator> (
+              input,
+              preceding_window_begin,
+              following_window_begin,
+              min_periods,
+              aggr,
+              mr,
+              stream);
   }
+
+  template<aggregation::Kind op, typename WindowIterator>
+  std::enable_if_t<(op == aggregation::MEAN), std::unique_ptr<column>>
+  operator()(column_view const& input,
+                                     WindowIterator preceding_window_begin,
+                                     WindowIterator following_window_begin,
+                                     size_type min_periods,
+                                     std::unique_ptr<aggregation> const& aggr,
+                                     rmm::mr::device_memory_resource *mr,
+                                     cudaStream_t stream) {
+
+      return launch <InputType, cudf::DeviceSum, op, WindowIterator> (
+              input,
+              preceding_window_begin,
+              following_window_begin,
+              min_periods,
+              aggr,
+              mr,
+              stream);
+  }
+
+
+};
+
+struct dispatch_rolling {
+    template <typename T, typename WindowIterator>
+    std::unique_ptr<column> operator()(column_view const& input,
+                                     WindowIterator preceding_window_begin,
+                                     WindowIterator following_window_begin,
+                                     size_type min_periods,
+                                     std::unique_ptr<aggregation> const& aggr,
+                                     rmm::mr::device_memory_resource *mr,
+                                     cudaStream_t stream) {
+
+        return aggregation_dispatcher(aggr->kind, rolling_window_launcher<T>{},
+                                      input,
+                                      preceding_window_begin, following_window_begin,
+                                      min_periods, aggr, mr, stream);
+    }
 };
 
 } // namespace anonymous
@@ -435,7 +415,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        cudaStream_t stream = 0)
 {
   return cudf::experimental::type_dispatcher(input.type(),
-                                             rolling_window_launcher{},
+                                             dispatch_rolling{},
                                              input, preceding_window_begin, following_window_begin,
                                              min_periods, aggr, mr, stream);
 }
