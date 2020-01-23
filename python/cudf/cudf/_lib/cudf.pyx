@@ -345,12 +345,14 @@ cdef Column gdf_column_to_column(gdf_column* c_col):
 
     gdf_dtype = c_col.dtype
     data_ptr = int(<uintptr_t>c_col.data)
+    mask_ptr = int(<uintptr_t>c_col.valid)
 
     if gdf_dtype == GDF_STRING:
         data = nvstrings.bind_cpointer(data_ptr)
         result = as_column(data)
     elif gdf_dtype == GDF_STRING_CATEGORY:
         c_free(<void*><uintptr_t>data_ptr, <cudaStream_t><uintptr_t>0)
+        c_free(<void*><uintptr_t>mask_ptr, <cudaStream_t><uintptr_t>0)
 
         if c_col.size == 0:
             data = nvstrings.to_device([])
@@ -366,8 +368,8 @@ cdef Column gdf_column_to_column(gdf_column* c_col):
         data = Buffer(dptr, dtype.itemsize*c_col.size)
 
         mask = None
-        if c_col.valid is not NULL:
-            mptr = rmm._DevicePointer(int(<uintptr_t>c_col.valid))
+        if mask_ptr != 0:
+            mptr = rmm._DevicePointer(mask_ptr)
             mask = Buffer(mptr, size=calc_chunk_size(c_col.size, mask_bitsize))
 
         result = build_column(data=data,

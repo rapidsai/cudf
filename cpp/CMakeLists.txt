@@ -467,6 +467,7 @@ add_library(cudf
             src/reductions/scan.cu
             src/replace/legacy/replace.cu
             src/replace/replace.cu
+            src/replace/clamp.cu
             src/reshape/legacy/stack.cu
             src/transpose/transpose.cu
             src/transpose/legacy/transpose.cu
@@ -522,6 +523,7 @@ add_library(cudf
             src/io/functions.cpp
             src/io/statistics/column_stats.cu
             src/io/utilities/datasource.cpp
+            src/io/utilities/data_sink.cpp
             src/io/utilities/legacy/parsing_utils.cu
             src/utilities/legacy/cuda_utils.cu
             src/copying/gather.cu
@@ -602,6 +604,14 @@ add_library(cudf
             src/groupby/groupby.cu
             src/groupby/hash/groupby.cu
             src/groupby/sort/groupby.cu
+            src/groupby/sort/sort_helper.cu
+            src/groupby/sort/result_cache.cpp
+            src/groupby/sort/group_sum.cu
+            src/groupby/sort/group_min.cu
+            src/groupby/sort/group_max.cu
+            src/groupby/sort/group_count.cu
+            src/groupby/sort/group_std.cu
+            src/groupby/sort/group_quantiles.cu
             src/aggregation/aggregation.cpp
 )
 
