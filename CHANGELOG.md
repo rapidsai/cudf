@@ -300,6 +300,7 @@
 - PR #3500 cudf::fill()/cudf::repeat() support for strings columns.
 - PR #3438 Update scalar and scalar_device_view to better support strings
 - PR #3414 Add copy_range function for strings column
+- PR #3471 Add scalar/column, column/scalar and scalar/scalar overloads to copy_if_else.
 - PR #3451 Add support for implicit typecasting of join columns
 
 ## Bug Fixes
