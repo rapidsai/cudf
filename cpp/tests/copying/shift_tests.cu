@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,19 +64,6 @@ TYPED_TEST(ShiftTest, OneColumnEmpty)
     using T =  TypeParam;
 
     fixed_width_column_wrapper<T> a{};
-
-    cudf::table_view input{ { a } };
-    std::vector<std::unique_ptr<cudf::scalar>> fills{};
-    fills.push_back(make_scalar<T>());
-    cudf::experimental::shift(input, 5, fills);
-}
-
-TYPED_TEST(ShiftTest, MisMatchFillValueCount)
-{
-    using T = TypeParam;
-
-    fixed_width_column_wrapper<T> a{};
-
     cudf::table_view input{ { a } };
 
     std::vector<std::unique_ptr<cudf::scalar>> fills{};
@@ -89,14 +76,21 @@ TYPED_TEST(ShiftTest, TwoColumnsEmpty)
 {
     using T =  TypeParam;
 
-    fixed_width_column_wrapper<T> a{};
-    fixed_width_column_wrapper<T> b{};
+    fixed_width_column_wrapper<T> input_a({}, {});
+    fixed_width_column_wrapper<T> input_b{};
+    cudf::table_view input{ { input_a, input_b } };
 
-    cudf::table_view input{ { a, b } };
+    fixed_width_column_wrapper<T> expected_a({}, {});
+    fixed_width_column_wrapper<T> expected_b{};
+    cudf::table_view expected{ { input_a, input_b } };
+
     std::vector<std::unique_ptr<cudf::scalar>> fills{};
     fills.push_back(make_scalar<T>());
     fills.push_back(make_scalar<T>());
-    cudf::experimental::shift(input, 5, fills);
+
+    auto actual = cudf::experimental::shift(input, 5, fills);
+
+    cudf::test::expect_tables_equal(expected, *actual);
 }
 
 TYPED_TEST(ShiftTest, OneColumn)
@@ -172,4 +166,21 @@ TYPED_TEST(ShiftTest, TwoColumnsNullableInput)
     auto actual = cudf::experimental::shift(input, 2, fills);
 
     cudf::test::expect_tables_equal(expected, *actual);
+}
+
+TYPED_TEST(ShiftTest, MisMatchFillValueCount)
+{
+    using T = TypeParam;
+
+    fixed_width_column_wrapper<T> a{};
+    fixed_width_column_wrapper<T> b{};
+    cudf::table_view input{ { a, b } };
+
+    std::vector<std::unique_ptr<cudf::scalar>> fills{};
+    fills.push_back(make_scalar<T>());
+
+    std::unique_ptr<cudf::experimental::table> output;
+
+    EXPECT_THROW(output = cudf::experimental::shift(input, 5, fills),
+                 cudf::logic_error);
 }

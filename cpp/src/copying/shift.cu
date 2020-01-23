@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <algorithm>
+#include <iterator>
 #include <memory>
 #include <thrust/copy.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -148,12 +150,15 @@ std::unique_ptr<table> shift(table_view const& input,
 
     auto output_columns = std::vector<std::unique_ptr<column>>{};
 
-    for (auto col = 0; col < input.num_columns(); col++) {
-        auto input_column = input.column(col);
-        output_columns.push_back(type_dispatcher(input_column.type(), functor{},
-                                                 input_column, offset, *fill_values[col],
-                                                 mr, stream));
-    }
+    std::transform(input.begin(),
+                   input.end(),
+                   fill_values.begin(),
+                   std::back_inserter(output_columns),
+                   [offset, mr, stream] (auto const& input_column, auto const& fill_value) {
+                       return type_dispatcher(input_column.type(), functor{},
+                                              input_column, offset, *fill_value,
+                                              mr, stream);
+                   });
 
     return std::make_unique<table>(std::move(output_columns));
 }
