@@ -56,8 +56,12 @@ def ps_gs(data, index):
 @pytest.mark.parametrize("nbytes", [0, 2 ** 10, 2 ** 31 - 1, 2 ** 31, 2 ** 32])
 @patch.object(nvstrings.nvstrings, "byte_count")
 def test_from_nvstrings_nbytes(mock_byte_count, nbytes):
+    import cudf._libxx as libcudfxx
+
     mock_byte_count.return_value = nbytes
-    expectation = raise_builder([nbytes > np.iinfo(np.int32).max], MemoryError)
+    expectation = raise_builder(
+        [nbytes > libcudfxx.MAX_STRING_COLUMN_BYTES], MemoryError
+    )
     with expectation:
         Series(nvstrings.to_device([""]))
 
