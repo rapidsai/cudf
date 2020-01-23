@@ -83,3 +83,17 @@ TEST_F(FixedPointTest, SimpleDecimal32Math) {
     EXPECT_EQ(SIX   / TWO, THREE);
 
 }
+
+TEST_F(FixedPointTest, OverflowDecimal32) {
+
+    #if defined(__CUDACC_DEBUG__)
+
+    using namespace cudf::fp;
+    using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
+
+    decimal32 num{2, scale_type{-9}};
+
+    EXPECT_THROW(num + num, cudf::logic_error);
+
+    #endif
+}

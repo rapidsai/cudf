@@ -29,9 +29,6 @@ enum Radix : int32_t {
     BASE_10 = 10
 };
 
-template <typename Rep, Radix Rad>
-class fixed_point;
-
 namespace detail {
     // helper function to negate strongly typed scale_type
     auto negate(scale_type const& scale) -> scale_type{
@@ -56,13 +53,6 @@ namespace detail {
         return scale >= 0 ? right_shift<Rad>(val, scale)
                           : left_shift <Rad>(val, negate(scale));
     }
-
-    // forward declare
-    template <typename Rep1, Radix Rad1,
-              typename Rep2, Radix Rad2, typename Binop>
-    fixed_point<Rep1, Rad1> max_exponent_binop(fixed_point<Rep1, Rad1> const& lhs,
-                                               fixed_point<Rep2, Rad2> const& rhs,
-                                               Binop binop);
 }
 
 // helper struct for constructing fixed_point when value is already shifted
@@ -140,10 +130,15 @@ public:
 
     // enable access to _value & _scale
     template <typename Rep1, Radix Rad1,
-              typename Rep2, Radix Rad2, typename Binop>
-    friend fixed_point<Rep1, Rad1> detail::max_exponent_binop(fixed_point<Rep1, Rad1> const& lhs,
-                                                              fixed_point<Rep2, Rad2> const& rhs,
-                                                              Binop binop);
+              typename Rep2, Radix Rad2>
+    friend fixed_point<Rep1, Rad1> operator+(fixed_point<Rep1, Rad1> const& lhs,
+                                             fixed_point<Rep2, Rad2> const& rhs);
+
+    // enable access to _value & _scale
+    template <typename Rep1, Radix Rad1,
+              typename Rep2, Radix Rad2>
+    friend fixed_point<Rep1, Rad1> operator-(fixed_point<Rep1, Rad1> const& lhs,
+                                             fixed_point<Rep2, Rad2> const& rhs);
 
     // enable access to _value & _scale
     template <typename Rep1, Radix Rad1,
@@ -158,31 +153,25 @@ public:
                                              fixed_point<Rep2, Rad2> const& rhs);
 };
 
-namespace detail {
-    // this function is for binary operations like + and - which when the exponent (scale)
-    // differ for lhs and rhs, you take the max exponent of the two and shift the other
-    // fixed_point in order to have the same exponent
-    template<typename Rep1, Radix Rad1,
-             typename Rep2, Radix Rad2, typename Binop>
-    fixed_point<Rep1, Rad1> max_exponent_binop(fixed_point<Rep1, Rad1> const& lhs,
-                                               fixed_point<Rep2, Rad2> const& rhs,
-                                               Binop binop) {
+template <typename Rep>
+auto print_rep() -> std::string {
+    if      (std::is_same<Rep, int8_t >::value) return "int8_t";
+    else if (std::is_same<Rep, int16_t>::value) return "int16_t";
+    else if (std::is_same<Rep, int32_t>::value) return "int32_t";
+    else if (std::is_same<Rep, int64_t>::value) return "int64_t";
+    else                                        return "unknown type";
+}
 
-        static_assert(std::is_same<Rep1, Rep2>::value, "Represenation types should be the same");
-        static_assert(Rad1 == Rad2,                    "Radix types should be the same");
+template <typename Rep, typename T>
+auto addition_overflow(T lhs, T rhs) -> bool {
+    return rhs > 0 ? lhs > std::numeric_limits<Rep>::max() - rhs
+                   : lhs < std::numeric_limits<Rep>::max() - rhs;
+}
 
-        // if exponents (aka scales) are different
-        if (lhs._scale > rhs._scale) {
-            auto const rhs_shifted_value = detail::shift<Rad1>(rhs._value, scale_type{lhs._scale - rhs._scale});
-            return fixed_point<Rep1, Rad1>{scaled_integer<Rep1>(binop(lhs._value, rhs_shifted_value), lhs._scale)};
-        } else if (rhs._scale > lhs._scale) {
-            auto lhs_shifted_value = detail::shift<Rad1>(lhs._value, scale_type{rhs._scale - lhs._scale});
-            return fixed_point<Rep1, Rad1>{scaled_integer<Rep1>(binop(lhs_shifted_value, rhs._value), rhs._scale)};
-        }
-
-        // if exponents (aka scales) are the same
-        return fixed_point<Rep1, Rad1>{scaled_integer<Rep1>(binop(lhs._value, rhs._value), lhs._scale)};
-    }
+template <typename Rep, typename T>
+auto subtraction_overflow(T lhs, T rhs) -> bool {
+    return rhs > 0 ? lhs > std::numeric_limits<Rep>::max() + rhs
+                   : lhs < std::numeric_limits<Rep>::max() + rhs;
 }
 
 // PLUS Operation
@@ -190,7 +179,22 @@ template<typename Rep1, Radix Rad1,
          typename Rep2, Radix Rad2>
 fixed_point<Rep1, Rad1> operator+(fixed_point<Rep1, Rad1> const& lhs,
                                   fixed_point<Rep2, Rad2> const& rhs) {
-    return detail::max_exponent_binop(lhs, rhs, std::plus<>());
+
+    static_assert(std::is_same<Rep1, Rep2>::value, "Represenation types should be the same");
+    static_assert(Rad1 == Rad2,                    "Radix types should be the same");
+
+    auto const rhsv  = lhs._scale > rhs._scale ? detail::shift<Rad1>(rhs._value, scale_type{lhs._scale - rhs._scale}) : rhs._value;
+    auto const lhsv  = lhs._scale < rhs._scale ? detail::shift<Rad1>(lhs._value, scale_type{rhs._scale - lhs._scale}) : lhs._value;
+    auto const scale = lhs._scale > rhs._scale ? lhs._scale : rhs._scale;
+
+    #if defined(__CUDACC_DEBUG__)
+
+    if (addition_overflow<Rep1>(rhsv, lhsv))
+        CUDF_FAIL("fixed_point overflow of underlying represenation type " + print_rep<Rep1>());
+
+    // #endif
+
+    return fixed_point<Rep1, Rad1>{scaled_integer<Rep1>(lhsv + rhsv, scale)};
 }
 
 // MINUS Operation
@@ -198,7 +202,22 @@ template<typename Rep1, Radix Rad1,
          typename Rep2, Radix Rad2>
 fixed_point<Rep1, Rad1> operator-(fixed_point<Rep1, Rad1> const& lhs,
                                   fixed_point<Rep2, Rad2> const& rhs) {
-    return detail::max_exponent_binop(lhs, rhs, std::minus<>());
+
+    static_assert(std::is_same<Rep1, Rep2>::value, "Represenation types should be the same");
+    static_assert(Rad1 == Rad2,                    "Radix types should be the same");
+
+    auto const rhsv  = lhs._scale > rhs._scale ? detail::shift<Rad1>(rhs._value, scale_type{lhs._scale - rhs._scale}) : rhs._value;
+    auto const lhsv  = lhs._scale < rhs._scale ? detail::shift<Rad1>(lhs._value, scale_type{rhs._scale - lhs._scale}) : lhs._value;
+    auto const scale = lhs._scale > rhs._scale ? lhs._scale : rhs._scale;
+
+    #if defined(__CUDACC_DEBUG__)
+
+    if (subtraction_overflow<Rep1>(lhsv, rhsv))
+        CUDF_FAIL("fixed_point overflow of underlying represenation type " + print_rep<Rep1>());
+
+    #endif
+
+    return fixed_point<Rep1, Rad1>{scaled_integer<Rep1>(lhsv - rhsv, scale)};
 }
 
 // MULTIPLIES Operation
