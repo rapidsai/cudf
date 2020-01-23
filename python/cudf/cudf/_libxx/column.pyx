@@ -84,9 +84,9 @@ cdef class Column:
                 )
 
         if size > np.iinfo(np.int32).max:
-            raise MemoryError("Cannot create columns of "
-                              "size > (2**31 - 1). "
-                              "Consider using dask_cudf to partition your data")
+            raise MemoryError(
+                "Cannot create columns of size > (2**31 - 1). "
+                "Consider using dask_cudf to partition your data")
         self._data = data
         self.size = size
         self.dtype = dtype
