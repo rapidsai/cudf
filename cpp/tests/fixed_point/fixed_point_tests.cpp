@@ -62,3 +62,24 @@ TEST_F(FixedPointTest, SimpleBinaryFPConstruction) {
     EXPECT_EQ(0,  num4.get());
 
 }
+
+TEST_F(FixedPointTest, SimpleDecimal32Math) {
+
+    using namespace cudf::fp;
+    using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
+
+    decimal32 ONE  {1, scale_type{-2}};
+    decimal32 TWO  {2, scale_type{-2}};
+    decimal32 THREE{3, scale_type{-2}};
+    decimal32 SIX  {6, scale_type{-2}};
+
+    EXPECT_TRUE(ONE + ONE == TWO);
+
+    EXPECT_EQ(ONE   + ONE, TWO);
+    EXPECT_EQ(ONE   * TWO, TWO);
+    EXPECT_EQ(THREE * TWO, SIX);
+    EXPECT_EQ(THREE - TWO, ONE);
+    EXPECT_EQ(TWO   / ONE, TWO);
+    EXPECT_EQ(SIX   / TWO, THREE);
+
+}

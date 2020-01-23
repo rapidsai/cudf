@@ -173,10 +173,10 @@ namespace detail {
 
         // if exponents (aka scales) are different
         if (lhs._scale > rhs._scale) {
-            auto const rhs_shifted_value = detail::shift<Rad1>(rhs._value, lhs._scale - rhs._scale);
+            auto const rhs_shifted_value = detail::shift<Rad1>(rhs._value, scale_type{lhs._scale - rhs._scale});
             return fixed_point<Rep1, Rad1>{scaled_integer<Rep1>(binop(lhs._value, rhs_shifted_value), lhs._scale)};
         } else if (rhs._scale > lhs._scale) {
-            auto lhs_shifted_value = detail::shift<Rad1>(lhs._value, rhs._scale - lhs._scale);
+            auto lhs_shifted_value = detail::shift<Rad1>(lhs._value, scale_type{rhs._scale - lhs._scale});
             return fixed_point<Rep1, Rad1>{scaled_integer<Rep1>(binop(lhs_shifted_value, rhs._value), rhs._scale)};
         }
 
@@ -210,7 +210,7 @@ fixed_point<Rep1, Rad1> operator*(fixed_point<Rep1, Rad1> const& lhs,
     static_assert(std::is_same<Rep1, Rep2>::value, "Represenation types should be the same");
     static_assert(Rad1 == Rad2,                    "Radix types should be the same");
 
-    return fixed_point<Rep1, Rad1>{scaled_integer<Rep1>(lhs._value * rhs._value, lhs._scale + rhs._scale)};
+    return fixed_point<Rep1, Rad1>{scaled_integer<Rep1>(lhs._value * rhs._value, scale_type{lhs._scale + rhs._scale})};
 }
 
 // DIVISION Operation
@@ -222,7 +222,15 @@ fixed_point<Rep1, Rad1> operator/(fixed_point<Rep1, Rad1> const& lhs,
     static_assert(std::is_same<Rep1, Rep2>::value, "Represenation types should be the same");
     static_assert(Rad1 == Rad2,                    "Radix types should be the same");
 
-    return fixed_point<Rep1, Rad1>{scaled_integer<Rep1>(lhs._value / rhs._value, lhs._scale - rhs._scale)};
+    return fixed_point<Rep1, Rad1>{scaled_integer<Rep1>(lhs._value / rhs._value, scale_type{lhs._scale - rhs._scale})};
+}
+
+// EQUALITY COMPARISON Operation
+template<typename Rep1, Radix Rad1,
+         typename Rep2, Radix Rad2>
+bool operator==(fixed_point<Rep1, Rad1> const& lhs,
+                fixed_point<Rep2, Rad2> const& rhs) {
+    return lhs.get() == rhs.get();
 }
 
 template <typename Rep, Radix Radix>
