@@ -88,7 +88,7 @@ cdef class Column:
                 "Cannot create columns of size > INT32_MAX. "
                 "Consider using dask_cudf to partition your data"
             )
-        
+
         self._data = data
         self.size = size
         self.dtype = dtype
