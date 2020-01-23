@@ -6,6 +6,8 @@
 
 ## Bug Fixes
 
+- PR #3888 Drop `ptr=None` from `DeviceBuffer` call
+
 
 # cuDF 0.12.0 (Date TBD)
 
