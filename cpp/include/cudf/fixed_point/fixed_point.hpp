@@ -174,6 +174,11 @@ auto subtraction_overflow(T lhs, T rhs) -> bool {
                    : lhs < std::numeric_limits<Rep>::max() + rhs;
 }
 
+template <typename Rep, typename T>
+auto division_overflow(T lhs, T rhs) -> bool {
+    return lhs == std::numeric_limits<Rep>::min() && rhs == -1;
+}
+
 // PLUS Operation
 template<typename Rep1, Radix Rad1,
          typename Rep2, Radix Rad2>
@@ -189,10 +194,10 @@ fixed_point<Rep1, Rad1> operator+(fixed_point<Rep1, Rad1> const& lhs,
 
     #if defined(__CUDACC_DEBUG__)
 
-    if (addition_overflow<Rep1>(rhsv, lhsv))
+    if (addition_overflow<Rep1>(lhsv, rhsv))
         CUDF_FAIL("fixed_point overflow of underlying represenation type " + print_rep<Rep1>());
 
-    // #endif
+    #endif
 
     return fixed_point<Rep1, Rad1>{scaled_integer<Rep1>(lhsv + rhsv, scale)};
 }
@@ -240,6 +245,13 @@ fixed_point<Rep1, Rad1> operator/(fixed_point<Rep1, Rad1> const& lhs,
 
     static_assert(std::is_same<Rep1, Rep2>::value, "Represenation types should be the same");
     static_assert(Rad1 == Rad2,                    "Radix types should be the same");
+
+    #if defined(__CUDACC_DEBUG__)
+
+    if (division_overflow<Rep1>(lhs._value, rhs._value))
+        CUDF_FAIL("fixed_point overflow of underlying represenation type " + print_rep<Rep1>());
+
+    #endif
 
     return fixed_point<Rep1, Rad1>{scaled_integer<Rep1>(lhs._value / rhs._value, scale_type{lhs._scale - rhs._scale})};
 }

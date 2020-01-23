@@ -91,9 +91,16 @@ TEST_F(FixedPointTest, OverflowDecimal32) {
     using namespace cudf::fp;
     using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
 
-    decimal32 num{2, scale_type{-9}};
+    decimal32 num0{ 2, scale_type{-9}};
+    decimal32 num1{-2, scale_type{-9}};
 
-    EXPECT_THROW(num + num, cudf::logic_error);
+    EXPECT_THROW(num0 + num0, cudf::logic_error);
+    EXPECT_THROW(num0 - num1, cudf::logic_error);
+
+    decimal32 num2{std::numeric_limits<int32_t>::min(), scale_type{0}};
+    decimal32 num3{-1, scale_type{0}};
+
+    EXPECT_THROW(num2 / num3, cudf::logic_error);
 
     #endif
 }
