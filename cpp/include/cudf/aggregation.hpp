@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,11 @@ namespace experimental {
  * @brief Base class for abstract representation of an aggregation.
  */
 class aggregation;
+
+enum class udf_type : bool {
+   CUDA,
+   PTX
+};
 
 /// Factory to create a SUM aggregation
 std::unique_ptr<aggregation> make_sum_aggregation();
@@ -94,6 +99,19 @@ std::unique_ptr<aggregation> make_argmax_aggregation();
  * `argmin` returns the index of the minimum element.
 */
 std::unique_ptr<aggregation> make_argmin_aggregation();
+
+/**
+ * @brief Factory to create a aggregation base on UDF for PTX or CUDA
+ *
+ * @param[in] type: either udf_type::PTX or udf_type::CUDA
+ * @param[in] user_defined_aggregator A string containing the aggregator code
+ * @param[in] output_type expected output type
+ *
+ * @return aggregation unique pointer housing user_defined_aggregator string.
+ */
+std::unique_ptr<aggregation> make_udf_aggregation(udf_type type,
+                                                  std::string const& user_defined_aggregator,
+                                                  data_type output_type);
 
 }  // namespace experimental
 }  // namespace cudf

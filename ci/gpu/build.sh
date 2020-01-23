@@ -83,7 +83,7 @@ conda list
 ################################################################################
 
 logger "Build libcudf..."
-$WORKSPACE/build.sh clean libnvstrings nvstrings libcudf cudf dask_cudf
+$WORKSPACE/build.sh clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks
 
 ################################################################################
 # TEST - Run GoogleTest and py.tests for libnvstrings, nvstrings, libcudf, and
