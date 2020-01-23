@@ -165,18 +165,27 @@ auto print_rep() -> std::string {
 template <typename Rep, typename T>
 auto addition_overflow(T lhs, T rhs) -> bool {
     return rhs > 0 ? lhs > std::numeric_limits<Rep>::max() - rhs
-                   : lhs < std::numeric_limits<Rep>::max() - rhs;
+                   : lhs < std::numeric_limits<Rep>::min() - rhs;
 }
 
 template <typename Rep, typename T>
 auto subtraction_overflow(T lhs, T rhs) -> bool {
-    return rhs > 0 ? lhs > std::numeric_limits<Rep>::max() + rhs
-                   : lhs < std::numeric_limits<Rep>::max() + rhs;
+    return rhs > 0 ? lhs < std::numeric_limits<Rep>::min() + rhs
+                   : lhs > std::numeric_limits<Rep>::max() + rhs;
 }
 
 template <typename Rep, typename T>
 auto division_overflow(T lhs, T rhs) -> bool {
     return lhs == std::numeric_limits<Rep>::min() && rhs == -1;
+}
+
+template <typename Rep, typename T>
+auto multiplication_overflow(T lhs, T rhs) -> bool {
+    auto const min = std::numeric_limits<Rep>::min();
+    auto const max = std::numeric_limits<Rep>::max();
+    if      (rhs >  0) return lhs > max / rhs || lhs < min / rhs;
+    else if (rhs < -1) return lhs > min / rhs || lhs < max / rhs;
+    else               return rhs == -1 && lhs == min;
 }
 
 // PLUS Operation
@@ -233,6 +242,13 @@ fixed_point<Rep1, Rad1> operator*(fixed_point<Rep1, Rad1> const& lhs,
 
     static_assert(std::is_same<Rep1, Rep2>::value, "Represenation types should be the same");
     static_assert(Rad1 == Rad2,                    "Radix types should be the same");
+
+    #if defined(__CUDACC_DEBUG__)
+
+    if (multiplication_overflow<Rep1>(lhs._value, rhs._value))
+        CUDF_FAIL("fixed_point overflow of underlying represenation type " + print_rep<Rep1>());
+
+    #endif
 
     return fixed_point<Rep1, Rad1>{scaled_integer<Rep1>(lhs._value * rhs._value, scale_type{lhs._scale + rhs._scale})};
 }

@@ -95,12 +95,21 @@ TEST_F(FixedPointTest, OverflowDecimal32) {
     decimal32 num1{-2, scale_type{-9}};
 
     EXPECT_THROW(num0 + num0, cudf::logic_error);
-    EXPECT_THROW(num0 - num1, cudf::logic_error);
+    EXPECT_THROW(num1 - num0, cudf::logic_error);
 
-    decimal32 num2{std::numeric_limits<int32_t>::min(), scale_type{0}};
-    decimal32 num3{-1, scale_type{0}};
+    decimal32 min{std::numeric_limits<int32_t>::min(), scale_type{0}};
+    decimal32 max{std::numeric_limits<int32_t>::max(), scale_type{0}};
+    decimal32 NEG_ONE{-1, scale_type{0}};
+    decimal32 ONE{1, scale_type{0}};
+    decimal32 TWO{2, scale_type{0}};
 
-    EXPECT_THROW(num2 / num3, cudf::logic_error);
+    EXPECT_THROW(min / NEG_ONE, cudf::logic_error);
+    EXPECT_THROW(max * TWO,     cudf::logic_error);
+    EXPECT_THROW(min * TWO,     cudf::logic_error);
+    EXPECT_THROW(max + ONE,     cudf::logic_error);
+    EXPECT_THROW(max - NEG_ONE, cudf::logic_error);
+    EXPECT_THROW(min - ONE,     cudf::logic_error);
+    EXPECT_THROW(max - NEG_ONE, cudf::logic_error);
 
     #endif
 }
