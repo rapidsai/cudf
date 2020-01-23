@@ -35,8 +35,8 @@ namespace cudf {
 namespace test {
 
 // Property comparison
-template <bool check_exact_equality>
-void column_property_comparison(cudf::column_view const& lhs, cudf::column_view const& rhs) {
+template <bool check_exact_equality, class T, class K>
+void column_property_comparison(T const& lhs, K const& rhs) {
   EXPECT_EQ(lhs.type(), rhs.type());
   EXPECT_EQ(lhs.size(), rhs.size());
   EXPECT_EQ(lhs.null_count(), rhs.null_count());
@@ -47,7 +47,12 @@ void column_property_comparison(cudf::column_view const& lhs, cudf::column_view 
 }
 
 void expect_column_properties_equal(column_view const& lhs, column_view const& rhs) {
+  auto lhs_col = cudf::column(lhs);
+  auto rhs_col = cudf::column(rhs);
   column_property_comparison<true>(lhs, rhs);
+  column_property_comparison<true>(lhs_col, rhs);
+  column_property_comparison<true>(lhs, rhs_col);
+  column_property_comparison<true>(lhs_col, rhs_col);
 }
 
 void expect_column_properties_equivalent(column_view const& lhs, column_view const& rhs) {
