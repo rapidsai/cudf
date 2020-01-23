@@ -295,6 +295,12 @@ namespace completely_different {
   //    4) left/right columns output identifies specific columns (and order)
   //       for output.  All left columns would before all right columns specified.
   //       Similar to columns_in_common, but offers a bit more control
+  //       *** REVERTED TO columns_in_common, this change can be considered
+  //       separately.  I worked through the code for constructing the output and
+  //       now understand why columns_in_common might be slightly better in the case
+  //       of a full join.  But I do wonder why we need this complexity.  And if we do,
+  //       couldn't we just figure out what columns_in_common should be from the
+  //       join parameters?
   //    5) This interface would support inequality joins, although we could first
   //       implement only equijoins.
   //       *** eventually if we need to support complex and/or/not expressions
@@ -314,8 +320,6 @@ namespace completely_different {
   //  base_right_on: { 0 }
   //  primary_join_ops: { {EQUAL, 0, 0 } }
   //  secondary_join_ops: {}
-  //  left_columns_output: { 0 }
-  //  right_columns_output: {}
   //
   //  # Option 1
   //  cudf::join::inner_join::hash(left, right, columns_in_common, base_left_on, base_right_on, IdentityFilter{})
@@ -326,7 +330,7 @@ namespace completely_different {
   //  # Option 3
   //  cudf::join::completely_different::join(join_kind::INNER_JOIN, join_implementation::HASH,
   //                                         left, right, primary_join_ops, secondary_join_ops,
-  //                                         left_columns_output, right_columns_output);
+  //                                         columns_in_common);
   //
   //
   std::unique_ptr<table> join(cudf::experimental::detail::join_kind kind,
@@ -335,10 +339,76 @@ namespace completely_different {
                               cudf::table_view const& right,
                               std::vector<join_operation> const& primary_join_ops,
                               std::vector<join_operation> const& secondary_join_ops,
-                              std::vector<cudf::size_type> const& left_columns_output,
-                              std::vector<cudf::size_type> const& right_columns_output,
+                              std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-}
+
+namespace nested_loop {
+  std::unique_ptr<table> inner_join(cudf::table_view const& left,
+                                    cudf::table_view const& right,
+                                    std::vector<join_operation> const& join_ops,
+                                    std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+                                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+  std::unique_ptr<table> left_join(cudf::table_view const& left,
+                                   cudf::table_view const& right,
+                                   std::vector<join_operation> const& join_ops,
+                                   std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+                                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+  std::unique_ptr<table> full_join(cudf::table_view const& left,
+                                   cudf::table_view const& right,
+                                   std::vector<join_operation> const& join_ops,
+                                   std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+                                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+} //namespace nested_loop
+
+namespace sort_merge {
+  std::unique_ptr<table> inner_join(cudf::table_view const& left,
+                                    cudf::table_view const& right,
+                                    std::vector<join_operation> const& primary_join_ops,
+                                    std::vector<join_operation> const& secondary_join_ops,
+                                    std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+                                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+  std::unique_ptr<table> left_join(cudf::table_view const& left,
+                                   cudf::table_view const& right,
+                                   std::vector<join_operation> const& primary_join_ops,
+                                   std::vector<join_operation> const& secondary_join_ops,
+                                   std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+                                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+  std::unique_ptr<table> full_join(cudf::table_view const& left,
+                                   cudf::table_view const& right,
+                                   std::vector<join_operation> const& primary_join_ops,
+                                   std::vector<join_operation> const& secondary_join_ops,
+                                   std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+                                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+} //namespace sort_merge
+  
+namespace hash {
+  std::unique_ptr<table> inner_join(cudf::table_view const& left,
+                                    cudf::table_view const& right,
+                                    std::vector<join_operation> const& primary_join_ops,
+                                    std::vector<join_operation> const& secondary_join_ops,
+                                    std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+                                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+  std::unique_ptr<table> left_join(cudf::table_view const& left,
+                                   cudf::table_view const& right,
+                                   std::vector<join_operation> const& primary_join_ops,
+                                   std::vector<join_operation> const& secondary_join_ops,
+                                   std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+                                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+  std::unique_ptr<table> full_join(cudf::table_view const& left,
+                                   cudf::table_view const& right,
+                                   std::vector<join_operation> const& primary_join_ops,
+                                   std::vector<join_operation> const& secondary_join_ops,
+                                   std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+                                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+} //namespace hash
+  
+} //namespace completely_different
 
 } //namespace join
 
