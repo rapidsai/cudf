@@ -21,46 +21,14 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/gather.cuh>
 
+#include <join/join_common_utils.hpp>
 #include <join/hash_join.cuh>
-#include <algorithm>
-#include <iterator>
 
 namespace cudf {
 
 namespace experimental {
 
 namespace detail {
-
-bool is_trivial_join(
-                     table_view const& left,
-                     table_view const& right,
-                     std::vector<size_type> const& left_on,
-                     std::vector<size_type> const& right_on,
-                     join_kind JoinKind) {
-  // If there is nothing to join, then send empty table with all columns
-  if (left_on.empty() || right_on.empty()) {
-      return true;
-  }
-
-  // If the inputs are empty, immediately return
-  if ((0 == left.num_rows()) && (0 == right.num_rows())) {
-      return true;
-  }
-
-  // If left join and the left table is empty, return immediately
-  if ((join_kind::LEFT_JOIN == JoinKind) && (0 == left.num_rows())) {
-      return true;
-  }
-
-  // If Inner Join and either table is empty, return immediately
-  if ((join_kind::INNER_JOIN == JoinKind) &&
-      ((0 == left.num_rows()) || (0 == right.num_rows()))) {
-      return true;
-  }
-
-  return false;
-}
-
 
 /**---------------------------------------------------------------------------*
  * @brief Returns a vector with non-common indices which is set difference

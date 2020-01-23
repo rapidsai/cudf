@@ -389,6 +389,7 @@ add_library(cudf
             src/strings/nvcategory_util.cpp
             src/join/legacy/joining.cu
             src/join/join.cu
+            src/join/semi_join.cu
             src/orderby/legacy/orderby.cu
             src/predicates/legacy/is_sorted.cu
             src/sort/is_sorted.cu
@@ -523,6 +524,7 @@ add_library(cudf
             src/io/functions.cpp
             src/io/statistics/column_stats.cu
             src/io/utilities/datasource.cpp
+            src/io/utilities/data_sink.cpp
             src/io/utilities/legacy/parsing_utils.cu
             src/utilities/legacy/cuda_utils.cu
             src/copying/gather.cu

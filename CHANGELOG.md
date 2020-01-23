@@ -16,6 +16,7 @@
 - PR #3667 Define and implement round-robin partition API.
 - PR #3690 Add bools_to_mask
 - PR #3662 Define and implement `shift`.
+- PR #3538 Define and implement left semi join and left anti join
 - PR #3683 Added support for multiple delimiters in `nvtext.token_count()`
 - PR #3792 Adding is_nan and is_notnan
 - PR #3594 Adding clamp support to libcudf++
@@ -69,6 +70,7 @@
 - PR #3758 detail::scatter variant with map iterator support
 - PR #2438 Build GBench Benchmarks in CI
 - PR #3713 Adding aggregation support to rolling_window
+- PR # 3875 Add abstract sink for IO writers, used by ORC and Parquet writers for now
 
 ## Bug Fixes
 
