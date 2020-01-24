@@ -103,10 +103,12 @@ private:
    * @brief Finds all record starts in the file and stores them in rec_starts_
    *
    * Does not upload the entire file to the GPU
+   * 
+   * @param[in] stream Cuda stream to execute gpu operations on
    *
    * @return void
    **/
-  void set_record_starts();
+  void set_record_starts(cudaStream_t stream);
 
   /**
    * @brief Uploads the relevant segment of the input json data onto the GPU.
@@ -123,17 +125,19 @@ private:
    * @brief Parse the first row to set the column name
    *
    * Sets the column_names_ data member
+   * 
+   * @param[in] stream Cuda stream to execute gpu operations on
    *
    * @return void
    **/
-  void set_column_names();
+  void set_column_names(cudaStream_t stream);
 
   /**
    * @brief Set the data type array data member
    *
    * If user does not pass the data types, deduces types from the file content
    * 
-   * @param[in] stream Cuda stream to run kernels on
+   * @param[in] stream Cuda stream to execute gpu operations on
    *
    * @return void
    **/
@@ -142,7 +146,7 @@ private:
   /**
    * @brief Parse the input data and store results a table
    *       
-   * @param[in] stream Cuda stream to run kernels on
+   * @param[in] stream Cuda stream to execute gpu operations on
    *
    * @return table_with_metadata struct
    **/

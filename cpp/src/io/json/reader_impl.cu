@@ -172,10 +172,12 @@ void reader::impl::decompress_input() {
  * @brief Finds all record starts in the file and stores them in rec_starts_
  *
  * Does not upload the entire file to the GPU
+ * 
+ * @param[in] stream Cuda stream to execute gpu operations on
  *
  * @return void
  **/
-void reader::impl::set_record_starts() {
+void reader::impl::set_record_starts(cudaStream_t stream) {
   std::vector<char> chars_to_count{'\n'};
   // Currently, ignoring lineterminations within quotes is handled by recording the records of both,
   // and then filtering out the records that is a quotechar or a linetermination within a quotechar pair.
@@ -192,7 +194,7 @@ void reader::impl::set_record_starts() {
   // Manually adding an extra row to account for the first row in the file
   if (byte_range_offset_ == 0) {
     find_result_ptr++;
-    CUDA_TRY(cudaMemsetAsync(rec_starts_.data().get(), 0ull, sizeof(uint64_t)));
+    CUDA_TRY(cudaMemsetAsync(rec_starts_.data().get(), 0ull, sizeof(uint64_t), stream));
   }
 
   std::vector<char> chars_to_find{'\n'};
@@ -283,22 +285,24 @@ void reader::impl::upload_data_to_device() {
  * @brief Parse the first row to set the column name
  *
  * Sets the column_names_ data member
+ * 
+ * @param[in] stream Cuda stream to execute gpu operations on
  *
  * @return void
  **/
-void reader::impl::set_column_names() {
+void reader::impl::set_column_names(cudaStream_t stream) {
   // If file only contains one row, use the file size for the row size
   uint64_t first_row_len = data_.size() / sizeof(char);
   if (rec_starts_.size() > 1) {
     // Set first_row_len to the offset of the second row, if it exists
     CUDA_TRY(cudaMemcpyAsync(&first_row_len, rec_starts_.data().get() + 1,
-                             sizeof(uint64_t), cudaMemcpyDeviceToHost));
+                             sizeof(uint64_t), cudaMemcpyDeviceToHost, stream));
   }
   std::vector<char> first_row(first_row_len);
   CUDA_TRY(cudaMemcpyAsync(first_row.data(), data_.data(),
                            first_row_len * sizeof(char),
-                           cudaMemcpyDeviceToHost));
-  CUDA_TRY(cudaStreamSynchronize(0));
+                           cudaMemcpyDeviceToHost, stream));
+  CUDA_TRY(cudaStreamSynchronize(stream));
 
   // Determine the row format between:
   //   JSON array - [val1, val2, ...] and
@@ -333,7 +337,7 @@ void reader::impl::set_column_names() {
  *
  * If user does not pass the data types, deduces types from the file content
  * 
- * @param[in] stream Cuda stream to run kernels on
+ * @param[in] stream Cuda stream to execute gpu operations on
  *
  * @return void
  **/
@@ -410,7 +414,7 @@ void reader::impl::set_data_types(cudaStream_t stream) {
 /**
  * @brief Parse the input data and store results a table
  *       
- * @param[in] stream Cuda stream to run kernels on
+ * @param[in] stream Cuda stream to execute gpu operations on
  *
  * @return table_with_metadata struct
  **/
@@ -444,7 +448,7 @@ table_with_metadata reader::impl::convert_data_to_table(cudaStream_t stream) {
                         rec_starts_.data().get(),
                         d_valid.data().get(), d_valid_counts.data().get(), 
                         opts_, stream);  
-  CUDA_TRY(cudaDeviceSynchronize());
+  CUDA_TRY(cudaStreamSynchronize(stream));
   CUDA_TRY(cudaGetLastError());
 
   // postprocess columns
@@ -495,13 +499,13 @@ table_with_metadata reader::impl::read(size_t range_offset, size_t range_size, c
   CUDF_EXPECTS(uncomp_data_ != nullptr, "Ingest failed: uncompressed input data is null.\n");
   CUDF_EXPECTS(uncomp_size_ != 0, "Ingest failed: uncompressed input data has zero size.\n");
 
-  set_record_starts();
+  set_record_starts(stream);
   CUDF_EXPECTS(!rec_starts_.empty(), "Error enumerating records.\n");
 
   upload_data_to_device();
   CUDF_EXPECTS(data_.size() != 0, "Error uploading input data to the GPU.\n");
 
-  set_column_names();
+  set_column_names(stream);
   CUDF_EXPECTS(!metadata.column_names.empty(), "Error determining column names.\n");
   
   set_data_types(stream);
