@@ -84,7 +84,6 @@ namespace join {
 //  Option 1: namespace by type of join
 //
 namespace inner_join {
-  template <typename Filter>
   std::unique_ptr<experimental::table> nested_loop(cudf::table_view const& left,
                                                    cudf::table_view const& right,
                                                    std::vector<join_operation> const& join_ops,
@@ -97,14 +96,12 @@ namespace inner_join {
    *
    * nested_loop_join above has no base join, we only apply the filter.
    */
-  template <typename Filter>
   std::unique_ptr<experimental::table> sort_merge(cudf::table_view const& left,
                                                   cudf::table_view const& right,
                                                   std::vector<join_operation> const& primary_join_ops,
                                                   std::vector<join_operation> const& secondary_join_ops,
                                                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-template <typename Filter>
 std::unique_ptr<experimental::table> hash(cudf::table_view const& left,
                                           cudf::table_view const& right,
                                           std::vector<join_operation> const& primary_join_ops,
@@ -114,7 +111,6 @@ std::unique_ptr<experimental::table> hash(cudf::table_view const& left,
 } //namespace inner_join
 
 namespace left_join {
-  template <typename Filter>
   std::unique_ptr<experimental::table> nested_loop(cudf::table_view const& left,
                                                    cudf::table_view const& right,
                                                    std::vector<join_operation> const& join_ops,
@@ -127,7 +123,6 @@ namespace left_join {
    *
    * nested_loop_join above has no base join, we only apply the filter.
    */
-  template <typename Filter>
   std::unique_ptr<experimental::table> sort_merge(cudf::table_view const& left,
                                                   cudf::table_view const& right,
                                                   std::vector<join_operation> const& primary_join_ops,
@@ -135,7 +130,6 @@ namespace left_join {
                                                   std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
                                                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-template <typename Filter>
 std::unique_ptr<experimental::table> hash(cudf::table_view const& left,
                                           cudf::table_view const& right,
                                           std::vector<join_operation> const& primary_join_ops,
@@ -145,7 +139,6 @@ std::unique_ptr<experimental::table> hash(cudf::table_view const& left,
 } //namespace left_join
 
 namespace full_join {
-  template <typename Filter>
   std::unique_ptr<experimental::table> nested_loop(cudf::table_view const& left,
                                                    cudf::table_view const& right,
                                                    std::vector<join_operation> const& join_ops,
@@ -158,7 +151,6 @@ namespace full_join {
    *
    * nested_loop_join above has no base join, we only apply the filter.
    */
-  template <typename Filter>
   std::unique_ptr<experimental::table> sort_merge(cudf::table_view const& left,
                                                   cudf::table_view const& right,
                                                   std::vector<join_operation> const& primary_join_ops,
@@ -166,7 +158,6 @@ namespace full_join {
                                                   std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
                                                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-template <typename Filter>
 std::unique_ptr<experimental::table> hash(cudf::table_view const& left,
                                           cudf::table_view const& right,
                                           std::vector<join_operation> const& primary_join_ops,

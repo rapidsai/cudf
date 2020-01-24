@@ -232,6 +232,11 @@ set(JOIN_TEST_SRC
 
 ConfigureTest(JOIN_TEST "${JOIN_TEST_SRC}")
 
+set(JOIN_TEST_NEW_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/join/join_tests_new.cu")
+
+ConfigureTest(JOIN_TEST_NEW "${JOIN_TEST_NEW_SRC}")
+
 ###################################################################################################
 # - orderby tests ---------------------------------------------------------------------------------
 
