@@ -91,6 +91,8 @@ public:
     {
     }
 
+    fixed_point() = default; // _value & _scale = 0
+
     // EXPLICIT CONVERSION OPERATOR
     template <typename U,
               typename std::enable_if_t<(std::numeric_limits<U>::is_integer
@@ -124,6 +126,11 @@ public:
     template <typename Rep2, Radix Rad2>
     fixed_point<Rep2, Rad2>& operator/=(fixed_point<Rep2, Rad2> const& rhs) {
         *this = *this / rhs;
+        return *this;
+    }
+
+    fixed_point<Rep, Rad>& operator++() {
+        *this = *this + fixed_point<Rep, Rad>{1, scale_type{_scale}};
         return *this;
     }
 

@@ -171,16 +171,10 @@ void vector_test(ValueType const initial_value,
     using namespace cudf::fp;
     using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
 
-    std::vector<decimal32> vec1;
+    std::vector<decimal32> vec1(size);
     std::vector<ValueType> vec2(size);
 
-    std::generate_n(
-        std::back_inserter(vec1),
-        size,
-        [i = initial_value - 1, scale] () mutable {
-            ++i; return decimal32{i, scale_type{scale}};
-        });
-
+    std::iota(std::begin(vec1), std::end(vec1), decimal32{initial_value, scale_type{0}});
     std::iota(std::begin(vec2), std::end(vec2), initial_value);
 
     auto const res1 = std::accumulate(
