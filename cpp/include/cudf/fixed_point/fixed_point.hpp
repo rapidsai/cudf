@@ -100,10 +100,7 @@ public:
     }
 
     auto get() const noexcept {
-        auto const underlying_scale     = static_cast<int32_t>(_scale);
-        int  const rounded_val          = _value / std::pow(static_cast<int32_t>(Rad), underlying_scale);
-        bool const needs_floating_point = rounded_val * Rad * underlying_scale != _value;
-        return needs_floating_point ? static_cast<double>(*this) : static_cast<Rep>(*this);
+        return static_cast<double>(*this);
     }
 
     template <typename Rep2, Radix Rad2>
