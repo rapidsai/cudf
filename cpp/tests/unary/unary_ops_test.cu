@@ -326,6 +326,21 @@ TYPED_TEST(cudf_math_with_floating_point_test, SimpleCEIL) {
   cudf::test::expect_columns_equal(expected, output->view());
 }
 
+TYPED_TEST(cudf_math_with_floating_point_test, SimpleRINT) {
+  cudf::test::fixed_width_column_wrapper<TypeParam> input{{1.5, 3.5, -1.5, -3.5, 0.0, NAN}};
+  cudf::test::fixed_width_column_wrapper<TypeParam> expected{
+      {2.0, 4.0, -2.0, -4.0, 0.0, NAN}};
+  auto output = cudf::experimental::unary_operation(
+      input, cudf::experimental::unary_op::RINT);
+  cudf::test::expect_columns_equal(expected, output->view());
+}
+
+TYPED_TEST(cudf_math_with_floating_point_test, RINTNonFloatingFail) {
+  cudf::test::fixed_width_column_wrapper<int64_t> input{{1, 2, 3, 4, 5}};
+  EXPECT_THROW(cudf::experimental::unary_operation(input,
+                cudf::experimental::unary_op::RINT), cudf::logic_error);
+}
+
 TYPED_TEST(cudf_math_with_floating_point_test, IntegralTypeFail) {
   cudf::test::fixed_width_column_wrapper<TypeParam> input{1.0};
   EXPECT_THROW(auto output = cudf::experimental::unary_operation(

@@ -200,6 +200,24 @@ struct DeviceAbs {
     }
 };
 
+struct DeviceRInt {
+    template<typename T>
+    std::enable_if_t<std::is_floating_point<T>::value, T>
+    __device__
+   operator()(T data) {
+        return std::rint(data);
+    }
+
+    // Dummy to handle other types, will never be executed
+    template<typename T>
+    std::enable_if_t<!std::is_floating_point<T>::value, T>
+    __device__
+   operator()(T data) {
+       return data;
+    }
+};
+
+
 // bitwise op
 
 struct DeviceInvert {
@@ -381,7 +399,6 @@ unary_operation(cudf::column_view const& input,
                 input.type(),
                 detail::MathOpDispatcher<detail::DeviceArcTanH>{},
                 input, op, mr, stream);
-
         case cudf::experimental::unary_op::EXP:
             return cudf::experimental::type_dispatcher(
                 input.type(),
@@ -416,6 +433,13 @@ unary_operation(cudf::column_view const& input,
             return cudf::experimental::type_dispatcher(
                 input.type(),
                 detail::MathOpDispatcher<detail::DeviceAbs>{},
+                input, op, mr, stream);
+        case cudf::experimental::unary_op::RINT:
+            CUDF_EXPECTS((input.type().id() == FLOAT32) or (input.type().id() == FLOAT64),
+                    "rint expects floating point values");
+            return cudf::experimental::type_dispatcher(
+                input.type(),
+                detail::MathOpDispatcher<detail::DeviceRInt>{},
                 input, op, mr, stream);
         case cudf::experimental::unary_op::BIT_INVERT:
             return cudf::experimental::type_dispatcher(

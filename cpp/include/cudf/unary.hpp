@@ -42,6 +42,7 @@ enum class unary_op {
   CEIL,         // < Smallest integer value not less than arg
   FLOOR,        // < largest integer value not greater than arg
   ABS,          // < Absolute value
+  RINT,         // < Rounds the floating-point argument arg to an integer value
   BIT_INVERT,   // < Bitwise Not (~)
   NOT,          // < Logical Not (!)
 };
