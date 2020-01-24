@@ -113,7 +113,7 @@ void BM_contiguous_split_strings(benchmark::State& state)
    for(int64_t idx=0; idx<num_cols; idx++){
       // fill in a random set of strings
       for(int64_t s_idx=0; s_idx<num_rows; s_idx++){
-         one_col[s_idx] = h_strings[0 /*rand_range(h_strings.size())*/]; 
+         one_col[s_idx] = h_strings[rand_range(h_strings.size())]; 
       }
       if(include_validity){
          src_cols.push_back(cudf::test::strings_column_wrapper(one_col.begin(), one_col.end(), valids));

@@ -119,8 +119,8 @@ void copy_in_place_kernel( column_device_view const in,
  * @brief Copies contents of one string column to another.  Copies validity if present
  * but does not compute null count.  
  * 
- * This purpose of this kernel as a standlone is to reduce the # of
- * kernel calls for copying a string column from 2 to 1, since # of kernel calls is the
+ * This purpose of this kernel as a standlone is to reduce the number of
+ * kernel calls for copying a string column from 2 to 1, since number of kernel calls is the
  * dominant factor in large scale contiguous_split() calls.  To do this, the kernel is
  * invoked with using max(num_chars, num_offsets) threads and then doing seperate 
  * bounds checking on offset, chars and validity indices.
@@ -159,7 +159,7 @@ void copy_in_place_kernel( column_device_view const in,
  * @param in validity_in pointer to incoming validity vector to be copied
  * @param out validity_out pointer to output validity vector
  * @param in offset_shift value to shift copied offsets down by
- * @param in num_chars # of chars to copy
+ * @param in num_chars number of chars to copy
  * @param in chars_in input chars to be copied
  * @param out chars_out output chars to be copied.
  */
@@ -172,9 +172,7 @@ void copy_in_place_strings_kernel(size_type                        num_strings,
                                   size_type                        validity_in_offset,
                                   bitmask_type const* __restrict__ validity_in,
                                   bitmask_type* __restrict__       validity_out,
-
                                   size_type                        offset_shift,
-
                                   size_type                        num_chars,
                                   char const* __restrict__         chars_in,
                                   char* __restrict__               chars_out)
@@ -244,7 +242,7 @@ struct column_split_info {
    size_type   validity_buf_size;// validity vector size (including padding)
    
    size_type   offsets_buf_size; // (strings only) size of offset column (including padding)
-   size_type   num_chars;        // (strings only) # of chars in the column
+   size_type   num_chars;        // (strings only) number of chars in the column
    size_type   chars_offset;     // (strings only) offset from head of chars data
 };
 
@@ -291,23 +289,14 @@ struct column_copy_functor {
       // offsets column.
       strings_column_view strings_c(in);
       column_view in_offsets = strings_c.offsets();
+      // note, incoming columns are sliced, so their size is fundamentally different from their child offset columns, which
+      // are unsliced.
       size_type num_offsets = in.size() + 1;
-      cudf::size_type num_threads = cudf::util::round_up_safe(std::max(split_info.num_chars, num_offsets), cudf::experimental::detail::warp_size);
+      cudf::size_type num_threads = cudf::util::round_up_safe(std::max(split_info.num_chars, num_offsets), cudf::experimental::detail::warp_size);      
+      column_view in_chars = strings_c.chars();
 
-      // get the chars column directly instead of calling .chars(), since .chars() will end up
-      // doing gpu work we specifically want to avoid.
-      column_view in_chars = in.child(strings_column_view::chars_column_index);
-
-      // no work to do. I -think- this cannot happen as a string column with 0 strings in it will still have
-      // a single terminating offset. leaving this in just in case
-      if(num_offsets == 0){    
-         column_view out_offsets{in_offsets.type(), 0, nullptr};
-         column_view out_chars{in_chars.type(), 0, nullptr};         
-         out_cols.push_back(column_view(  in.type(), 0, nullptr,
-                                          nullptr, 0, 0,
-                                          { out_offsets, out_chars }));
-         return;
-      }
+      // a column with no strings will still have a single offset.
+      CUDF_EXPECTS(num_offsets > 0, "Invalid offsets child column");
       
       // 1 combined kernel call that copies chars, offsets and validity in one pass. see notes on why
       // this exists in the kernel brief.    
@@ -321,9 +310,7 @@ struct column_copy_functor {
                            in.offset(),                                          // validity_in_offset
                            in.null_mask(),                                       // validity_in
                            validity_buf,                                         // validity_out
-
                            split_info.chars_offset,                              // offset_shift
-
                            split_info.num_chars,                                 // num_chars
                            in_chars.head<char>() + split_info.chars_offset,      // chars_in
                            chars_buf);                                                      
@@ -335,9 +322,7 @@ struct column_copy_functor {
                            0,                                                    // validity_in_offset
                            nullptr,                                              // validity_in
                            nullptr,                                              // validity_out
-
                            split_info.chars_offset,                              // offset_shift
-
                            split_info.num_chars,                                 // num_chars
                            in_chars.head<char>() + split_info.chars_offset,      // chars_in
                            chars_buf);                                                      
@@ -381,24 +366,24 @@ struct column_copy_functor {
       // b.) the count recompute involves tons of device allocs and memcopies.
       //
       // so to get around this, I am manually constructing a fake-ish view here where the null
-      // count is arbitrarily bashed to 0.            
+      // count is arbitrarily bashed to 0.
       //            
       // Remove this hack once rapidsai/cudf#3600 is fixed.
       column_view   in_wrapped{in.type(), in.size(), in.head<T>(), 
                                in.null_mask(), in.null_mask() == nullptr ? UNKNOWN_NULL_COUNT : 0,
                                in.offset() };
       mutable_column_view  mcv{in.type(), in.size(), data, 
-                               validity, validity == nullptr ? UNKNOWN_NULL_COUNT : 0 };      
-      if(in.nullable()){               
+                               validity, validity == nullptr ? UNKNOWN_NULL_COUNT : 0 };
+      if(in.nullable()){
          copy_in_place_kernel<block_size, T, true><<<grid.num_blocks, block_size, 0, 0>>>(
-                           *column_device_view::create(in_wrapped),                            
-                           *mutable_column_device_view::create(mcv));         
+                           *column_device_view::create(in_wrapped),
+                           *mutable_column_device_view::create(mcv));
       } else {
          copy_in_place_kernel<block_size, T, false><<<grid.num_blocks, block_size, 0, 0>>>(
-                           *column_device_view::create(in_wrapped),                            
+                           *column_device_view::create(in_wrapped),
                            *mutable_column_device_view::create(mcv));
       }
-      mcv.set_null_count(cudf::UNKNOWN_NULL_COUNT);                 
+      mcv.set_null_count(cudf::UNKNOWN_NULL_COUNT);
 
       out_cols.push_back(mcv);
    }
@@ -513,7 +498,7 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
 {   
    auto subtables = cudf::experimental::split(input, splits);
 
-   // optimization : for large #'s of splits this allocation can dominate total time
+   // optimization : for large numbers of splits this allocation can dominate total time
    //                spent if done inside alloc_and_copy().  so we'll allocate it once
    //                and reuse it.
    // 
