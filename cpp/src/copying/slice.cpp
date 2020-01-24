@@ -42,11 +42,12 @@ std::vector<column_view> slice(column_view const& input,
   auto null_counts = cudf::detail::segmented_count_unset_bits(input.null_mask(),
                                                               indices, stream);
 
+  std::vector<column_view> children{};
+  for (size_type i = 0; i < input.num_children(); i++) {
+    children.push_back(input.child(i));
+  }
+
   for (size_t i = 0; i < indices.size() / 2; i++) {
-    std::vector<column_view> children{};
-    for (size_type j = 0; j < input.num_children(); j++) {
-        children.push_back(input.child(j));
-    }
     auto begin = indices[2 * i];
     auto end = indices[2 * i + 1];
     CUDF_EXPECTS(begin >= 0, "Starting index cannot be negative.");
@@ -54,7 +55,7 @@ std::vector<column_view> slice(column_view const& input,
     CUDF_EXPECTS(end <= input.size(), "Slice range out of bounds.");
     result.emplace_back(input.type(), end - begin, input.head(),
                         input.null_mask(), null_counts[i],
-                        input.offset() + begin, std::move(children));
+                        input.offset() + begin, children);
   }
 
   return result;
