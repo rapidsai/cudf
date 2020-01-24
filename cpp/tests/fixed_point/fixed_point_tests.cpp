@@ -84,6 +84,26 @@ TEST_F(FixedPointTest, SimpleDecimal32Math) {
 
 }
 
+TEST_F(FixedPointTest, Decimal32TrickyDivision) {
+
+    decimal32 ONE_1  {1,  scale_type{1}};
+    decimal32 SIX_1  {6,  scale_type{1}};
+    decimal32 TEN_0  {10, scale_type{0}};
+    decimal32 TEN_1  {10, scale_type{0}};
+    decimal32 SIXTY_1{60, scale_type{1}};
+
+    decimal32 ZERO = ONE_1;
+
+    EXPECT_EQ(ONE_1.get(),    0); // 1 / 10 = 0
+    EXPECT_EQ(SIX_1.get(),    0); // 6 / 10 = 0
+    EXPECT_EQ(TEN_0.get(),   10);
+    EXPECT_EQ(SIXTY_1.get(), 60);
+
+    EXPECT_EQ(SIXTY_1 / TEN_0, ZERO);
+    EXPECT_EQ(SIXTY_1 / TEN_1, SIX_1);
+
+}
+
 TEST_F(FixedPointTest, OverflowDecimal32) {
 
     #if defined(__CUDACC_DEBUG__)
@@ -109,6 +129,7 @@ TEST_F(FixedPointTest, OverflowDecimal32) {
     ASSERT_NO_THROW(max - NEG_ONE);
 
     #endif
+
 }
 
 template<typename ValueType,
