@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2019, NVIDIA CORPORATION.
+* Copyright (c) 2019-2020, NVIDIA CORPORATION.
 *
 * Licensed under the Apache License, Version 2.0 (the "License");
 * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #define __IO_ORC_GPU_H__
 
 #include <io/comp/gpuinflate.h>
+#include <io/statistics/column_stats.h>
 
 namespace cudf {
 namespace io {
@@ -356,6 +357,36 @@ cudaError_t InitDictionaryIndices(DictionaryChunk *chunks, uint32_t num_columns,
  **/
 cudaError_t BuildStripeDictionaries(StripeDictionary *stripes_dev, StripeDictionary *stripes_host, DictionaryChunk *chunks,
                                     uint32_t num_stripes, uint32_t num_rowgroups, uint32_t num_columns, cudaStream_t stream = (cudaStream_t)0);
+
+
+/**
+ * @brief Launches kernels to initialize statistics collection
+ *
+ * @param[out] groups Statistics groups (rowgroup-level)
+ * @param[in] cols Column descriptors
+ * @param[in] num_columns Number of columns
+ * @param[in] num_rowgroups Number of rowgroups
+ * @param[in] row_index_stride Rowgroup size in rows
+ * @param[in] stream CUDA stream to use, default 0
+ *
+ * @return cudaSuccess if successful, a CUDA error code otherwise
+ **/
+cudaError_t OrcInitStatisticsGroups(statistics_group *groups, const stats_column_desc *cols, uint32_t num_columns,
+                                    uint32_t num_rowgroups, uint32_t row_index_stride, cudaStream_t stream = (cudaStream_t)0);
+
+/**
+ * @brief Launches kernels to return statistics buffer offsets and sizes
+ *
+ * @param[in,out] groups Statistics merge groups
+ * @param[in] chunks Satistics chunks
+ * @param[in] statistics_count Number of statistics buffers to encode
+ * @param[in] stream CUDA stream to use, default 0
+ *
+ * @return cudaSuccess if successful, a CUDA error code otherwise
+ **/
+cudaError_t OrcInitStatisticsBufferSize(statistics_merge_group *groups, const statistics_chunk *chunks,
+                                        uint32_t statistics_count, cudaStream_t stream = (cudaStream_t)0);
+
 
 } // namespace gpu
 } // namespace orc
