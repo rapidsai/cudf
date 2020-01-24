@@ -37,6 +37,13 @@ def test_sum_string():
 
     assert got==expected
 
+    s = Series(["Hello", None, "World"])
+
+    got = s.sum()
+    expected = "HelloWorld"
+
+    assert got==expected
+
 
 @pytest.mark.parametrize("dtype,nelem", params)
 def test_product(dtype, nelem):
