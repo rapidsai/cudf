@@ -38,8 +38,8 @@ public class Date32ColumnVectorTest extends CudfTestBase {
 
   @Test
   public void getYear() {
-    try (ColumnVector date32ColumnVector = ColumnVector.datesFromInts(DATES);
-         ColumnVector result = date32ColumnVector.year()) {
+    try (ColumnVector daysColumnVector = ColumnVector.daysFromInts(DATES);
+         ColumnVector result = daysColumnVector.year()) {
       result.ensureOnHost();
       int expected = 2019;
       for (int i = 0; i < DATES.length; i++) {
@@ -50,8 +50,8 @@ public class Date32ColumnVectorTest extends CudfTestBase {
 
   @Test
   public void getMonth() {
-    try (ColumnVector date32ColumnVector = ColumnVector.datesFromInts(DATES);
-         ColumnVector result = date32ColumnVector.month()) {
+    try (ColumnVector daysColumnVector = ColumnVector.daysFromInts(DATES);
+         ColumnVector result = daysColumnVector.month()) {
       result.ensureOnHost();
       for (int i = 0; i < DATES.length; i++) {
         assertEquals(1, result.getShort(i)); //Jan of every year
@@ -61,25 +61,12 @@ public class Date32ColumnVectorTest extends CudfTestBase {
 
   @Test
   public void getDay() {
-    try (ColumnVector date32ColumnVector = ColumnVector.datesFromInts(DATES_2);
-         ColumnVector result = date32ColumnVector.day()) {
+    try (ColumnVector daysColumnVector = ColumnVector.daysFromInts(DATES_2);
+         ColumnVector result = daysColumnVector.day()) {
       result.ensureOnHost();
       for (int i = 0; i < DATES_2.length; i++) {
         assertEquals(i + 1, result.getShort(i)); //1 to 5
       }
-    }
-  }
-
-  @Test
-  public void castToDate32() {
-    try (ColumnVector intColumnVector = ColumnVector.fromInts(DATES);
-         ColumnVector date32ColumnVector = intColumnVector.asDate32()) {
-      date32ColumnVector.ensureOnHost();
-      assertEquals(17897, date32ColumnVector.getInt(0));
-      assertEquals(17532, date32ColumnVector.getInt(1));
-      assertEquals(17167, date32ColumnVector.getInt(2));
-      assertEquals(16802, date32ColumnVector.getInt(3));
-      assertEquals(16437, date32ColumnVector.getInt(4));
     }
   }
 }

@@ -29,7 +29,7 @@ public class Date64ColumnVectorTest extends CudfTestBase {
 
   @Test
   public void getYear() {
-    try (ColumnVector date64ColumnVector = ColumnVector.datesFromLongs(DATES);
+    try (ColumnVector date64ColumnVector = ColumnVector.timestampMilliSecondsFromLongs(DATES);
          ColumnVector result = date64ColumnVector.year()) {
       result.ensureOnHost();
       assertEquals(1965, result.getShort(0));
@@ -40,7 +40,7 @@ public class Date64ColumnVectorTest extends CudfTestBase {
 
   @Test
   public void getMonth() {
-    try (ColumnVector date64ColumnVector = ColumnVector.datesFromLongs(DATES);
+    try (ColumnVector date64ColumnVector = ColumnVector.timestampMilliSecondsFromLongs(DATES);
          ColumnVector result = date64ColumnVector.month()) {
       result.ensureOnHost();
       assertEquals(10, result.getShort(0));
@@ -51,7 +51,7 @@ public class Date64ColumnVectorTest extends CudfTestBase {
 
   @Test
   public void getDay() {
-    try (ColumnVector date64ColumnVector = ColumnVector.datesFromLongs(DATES);
+    try (ColumnVector date64ColumnVector = ColumnVector.timestampMilliSecondsFromLongs(DATES);
          ColumnVector result = date64ColumnVector.day()) {
       result.ensureOnHost();
       assertEquals(26, result.getShort(0));
@@ -62,7 +62,7 @@ public class Date64ColumnVectorTest extends CudfTestBase {
 
   @Test
   public void getHour() {
-    try (ColumnVector date64ColumnVector = ColumnVector.datesFromLongs(DATES);
+    try (ColumnVector date64ColumnVector = ColumnVector.timestampMilliSecondsFromLongs(DATES);
          ColumnVector result = date64ColumnVector.hour()) {
       result.ensureOnHost();
       assertEquals(14, result.getShort(0));
@@ -73,7 +73,7 @@ public class Date64ColumnVectorTest extends CudfTestBase {
 
   @Test
   public void getMinute() {
-    try (ColumnVector date64ColumnVector = ColumnVector.datesFromLongs(DATES);
+    try (ColumnVector date64ColumnVector = ColumnVector.timestampMilliSecondsFromLongs(DATES);
          ColumnVector result = date64ColumnVector.minute()) {
       result.ensureOnHost();
       assertEquals(1, result.getShort(0));
@@ -84,7 +84,7 @@ public class Date64ColumnVectorTest extends CudfTestBase {
 
   @Test
   public void getSecond() {
-    try (ColumnVector date64ColumnVector = ColumnVector.datesFromLongs(DATES);
+    try (ColumnVector date64ColumnVector = ColumnVector.timestampMilliSecondsFromLongs(DATES);
          ColumnVector result = date64ColumnVector.second()) {
       result.ensureOnHost();
       assertEquals(12, result.getShort(0));

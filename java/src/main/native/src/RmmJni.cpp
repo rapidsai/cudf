@@ -59,6 +59,12 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_free(JNIEnv *env, jclass clazz, j
   JNI_RMM_TRY(env, , RMM_FREE(cptr, c_stream));
 }
 
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_freeDeviceBuffer(JNIEnv *env, jclass clazz,
+                                                                jlong ptr) {
+  rmm::device_buffer *cptr = reinterpret_cast<rmm::device_buffer *>(ptr);
+  delete cptr;
+}
+
 JNIEXPORT jstring JNICALL Java_ai_rapids_cudf_Rmm_getLog(JNIEnv *env, jclass clazz, jlong size,
                                                       jlong stream) {
   size_t amount = rmmLogSize();
