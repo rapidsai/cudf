@@ -715,6 +715,12 @@ def test_multicolumn_reset_index():
     gdg = gdf.groupby(["x"]).agg({"y": ["count", "mean"]})
     pdg = pdf.groupby(["x"]).agg({"y": ["count", "mean"]})
     assert_eq(pdg.reset_index(), gdg.reset_index(), check_dtype=False)
+    gdg = gdf.groupby(["x"]).agg({"y": ["count"]})
+    pdg = pdf.groupby(["x"]).agg({"y": ["count"]})
+    assert_eq(pdg.reset_index(), gdg.reset_index(), check_dtype=False)
+    gdg = gdf.groupby(["x"]).agg({"y": "count"})
+    pdg = pdf.groupby(["x"]).agg({"y": "count"})
+    assert_eq(pdg.reset_index(), gdg.reset_index(), check_dtype=False)
 
 
 def test_multiindex_multicolumn_reset_index():

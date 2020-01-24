@@ -352,6 +352,7 @@ class _GroupbyHelper(object):
         """
         Computes the groupby result
         """
+        self.original_aggs = agg
         self.normalize_agg(agg)
         self.normalize_values()
         aggs_as_list = self.get_aggs_as_list()
@@ -520,7 +521,9 @@ class _GroupbyHelper(object):
             else:
                 return aggs_as_list
         else:
-            if len(aggs_as_list) == len(self.aggs):
+            if len(aggs_as_list) == len(self.aggs) and not isinstance(
+                list(self.original_aggs.values())[0], collections.abc.Sequence
+            ):
                 return value_names
             else:
                 return MultiIndex.from_tuples(zip(value_names, aggs_as_list))
