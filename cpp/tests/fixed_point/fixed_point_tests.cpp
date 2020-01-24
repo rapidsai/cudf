@@ -18,13 +18,17 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
+#include <vector>
+#include <algorithm> // transform, generate_n
+#include <numeric>   // iota, accumulate
+#include <limits>
 
 struct FixedPointTest : public cudf::test::BaseFixture {};
 
-TEST_F(FixedPointTest, SimpleDecimal32Construction) {
+using namespace cudf::fp;
+using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
 
-    using namespace cudf::fp;
-    using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
+TEST_F(FixedPointTest, SimpleDecimal32Construction) {
 
     decimal32 num0{1.234567, scale_type{ 0}};
     decimal32 num1{1.234567, scale_type{-1}};
@@ -46,7 +50,6 @@ TEST_F(FixedPointTest, SimpleDecimal32Construction) {
 
 TEST_F(FixedPointTest, SimpleBinaryFPConstruction) {
 
-    using namespace cudf::fp;
     using binary_fp32 = fixed_point<int32_t, Radix::BASE_2>;
 
     binary_fp32 num0{10, scale_type{0}};
@@ -64,9 +67,6 @@ TEST_F(FixedPointTest, SimpleBinaryFPConstruction) {
 }
 
 TEST_F(FixedPointTest, SimpleDecimal32Math) {
-
-    using namespace cudf::fp;
-    using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
 
     decimal32 ONE  {1, scale_type{-2}};
     decimal32 TWO  {2, scale_type{-2}};
@@ -87,9 +87,6 @@ TEST_F(FixedPointTest, SimpleDecimal32Math) {
 TEST_F(FixedPointTest, OverflowDecimal32) {
 
     #if defined(__CUDACC_DEBUG__)
-
-    using namespace cudf::fp;
-    using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
 
     decimal32 num0{ 2, scale_type{-9}};
     decimal32 num1{-2, scale_type{-9}};
@@ -112,4 +109,86 @@ TEST_F(FixedPointTest, OverflowDecimal32) {
     EXPECT_THROW(max - NEG_ONE, cudf::logic_error);
 
     #endif
+}
+
+template<typename ValueType,
+         typename std::enable_if_t<std::numeric_limits<ValueType>::is_integer>* = nullptr>
+void transform_test(std::vector<decimal32> const& vec1,
+                    std::vector<ValueType> const& vec2) {
+
+    std::vector<ValueType> vec3(vec1.size());
+
+    std::transform(
+        std::cbegin(vec1),
+        std::cend(vec1),
+        std::begin(vec3),
+        [] (auto const& e) { return e.get(); });
+
+    EXPECT_EQ(vec2, vec3);
+}
+
+template<typename ValueType,
+         typename std::enable_if_t<!std::numeric_limits<ValueType>::is_integer>* = nullptr>
+void transform_test(std::vector<decimal32> const& vec1,
+                    std::vector<ValueType> const& vec2) {
+
+    auto equal = std::equal(
+        std::cbegin(vec1),
+        std::cend(vec1),
+        std::cbegin(vec2),
+        [] (auto const& a, auto const& b) {
+            return a.get() == b;
+        });
+
+    EXPECT_TRUE(equal);
+}
+
+template<typename ValueType, typename Binop>
+void vector_test(ValueType const initial_value,
+                 int32_t   const size,
+                 int32_t   const scale, Binop binop) {
+    using namespace cudf::fp;
+    using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
+
+    std::vector<decimal32> vec1;
+    std::vector<ValueType> vec2(size);
+
+    std::generate_n(
+        std::back_inserter(vec1),
+        size,
+        [i = initial_value - 1, scale] () mutable {
+            ++i; return decimal32{i, scale_type{scale}};
+        });
+
+    std::iota(std::begin(vec2), std::end(vec2), initial_value);
+
+    auto const res1 = std::accumulate(
+        std::cbegin(vec1),
+        std::cend(vec1),
+        decimal32{0, scale_type{scale}});
+
+    auto const res2 = std::accumulate(
+        std::cbegin(vec2),
+        std::cend(vec2),
+        static_cast<ValueType>(0));
+
+    EXPECT_EQ(res1.get(), res2);
+    EXPECT_EQ(res1.get() - res2, 0);
+
+    transform_test(vec1, vec2);
+}
+
+TEST_F(FixedPointTest, Decimal32VectorAddition) {
+
+    vector_test(0,   10,   -2, std::plus<>());
+    vector_test(0,   1000, -2, std::plus<>());
+    vector_test(0.0, 1000, -2, std::plus<>());
+    vector_test(0.1, 1000, -2, std::plus<>()); // currently FAILS
+
+}
+
+TEST_F(FixedPointTest, Decimal32VectorMultiplication) {
+
+    vector_test(1, 10, 0, std::multiplies<>());
+
 }
