@@ -533,22 +533,22 @@ segmented_count_set_bits(bitmask_type const* bitmask,
   // first allocate temporary memroy
 
   size_t temp_storage_bytes{0};
-  cub::DeviceSegmentedReduce::Sum(nullptr, temp_storage_bytes,
-                                  word_elements,
-                                  d_null_counts.begin(),
-                                  num_ranges,
-                                  first_word_indices, last_word_indices,
-                                  stream);
+  CUDA_TRY(cub::DeviceSegmentedReduce::Sum(
+    nullptr, temp_storage_bytes,
+    word_elements, d_null_counts.begin(), num_ranges,
+    first_word_indices, last_word_indices,
+    stream)
+  );
   rmm::device_buffer d_temp_storage(temp_storage_bytes, stream);
 
   // second perform segmented reduction
 
-  cub::DeviceSegmentedReduce::Sum(d_temp_storage.data(), temp_storage_bytes,
-                                  word_elements,
-                                  d_null_counts.begin(),
-                                  num_ranges,
-                                  first_word_indices, last_word_indices,
-                                  stream);
+  CUDA_TRY(cub::DeviceSegmentedReduce::Sum(
+    d_temp_storage.data(), temp_storage_bytes,
+    word_elements, d_null_counts.begin(), num_ranges,
+    first_word_indices, last_word_indices,
+    stream)
+  );
 
   CHECK_CUDA(stream);
 
