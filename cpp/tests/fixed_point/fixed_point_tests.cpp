@@ -103,10 +103,12 @@ TEST_F(FixedPointTest, Decimal32TrickyDivision) {
     EXPECT_EQ(SIXTY_1 / TEN_0, ZERO);
     EXPECT_EQ(SIXTY_1 / TEN_1, SIX_0);
 
-    decimal32 A{34.56,  scale_type{-2}};
-    decimal32 B{1.234,  scale_type{-3}};
+    decimal32 A{34.56, scale_type{-2}};
+    decimal32 B{1.234, scale_type{-3}};
+    decimal32 C{1,     scale_type{-2}};
 
-    EXPECT_EQ((A / B).get(), 20);
+    EXPECT_EQ((A / B).get(),       20);
+    EXPECT_EQ(((A * C) / B).get(), 28);
 
 }
 
