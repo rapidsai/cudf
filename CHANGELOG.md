@@ -125,6 +125,8 @@
 - PR #3850 Fix merge typecast scope issue and resulting memory leak
 - PR #3855 Fix MultiColumn recreation with reset_index
 - PR #3869 Fixed size calculation in NVStrings::byte_count()
+- PR #3868 Fix apply_grouped moving average example
+- PR #3900 Properly link `NVStrings` and `NVCategory` into tests
 - PR #3868 Fix apply_grouped moving average example 
 - PR #3871 Fix `split_out` error
 - PR #3886 Fix string column materialization from column view
