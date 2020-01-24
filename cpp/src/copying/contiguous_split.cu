@@ -406,7 +406,7 @@ struct column_preprocess_info {
 /**
  * @brief Preprocess information about all strings columns in a table view.
  * 
- * In order to minimize how often we touch the cpu, we need to preprocess various pieces of information
+ * In order to minimize how often we touch the gpu, we need to preprocess various pieces of information
  * about the string columns in a table as a batch process.  This function builds a list of the offset
  * columns for all input string columns and computes this information with a single thrust call.  In addition,
  * the vector returned is allocated for -all- columns in the table so further processing of non-string columns
