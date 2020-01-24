@@ -34,6 +34,10 @@ namespace cudf {
 namespace experimental {
 namespace {
 
+inline bool __device__ out_of_bounds(size_type size, size_type idx) {
+    return idx < 0 || idx >= size;
+}
+
 template<typename T>
 struct value_functor {
     column_device_view const input;
@@ -43,7 +47,7 @@ struct value_functor {
 
     T __device__ operator()(size_type idx) {
         auto src_idx = idx - offset;
-        return src_idx < 0 || src_idx >= size
+        return out_of_bounds(size, src_idx)
             ? *fill
             : input.element<T>(src_idx);
     }
@@ -57,7 +61,7 @@ struct validity_functor {
 
     bool __device__ operator()(size_type idx) {
         auto src_idx = idx - offset;
-        return src_idx < 0 || src_idx >= size
+        return out_of_bounds(size, src_idx)
             ? *fill
             : input.is_valid(src_idx);
     }
@@ -105,7 +109,6 @@ struct functor {
 
             return output;
         }
-
 
         auto func_validity = validity_functor{*device_input,
                                               input.size(),
