@@ -511,7 +511,7 @@ segmented_count_set_bits(bitmask_type const* bitmask,
   rmm::device_vector<size_type> d_last_indices = h_last_indices;
   rmm::device_vector<size_type> d_null_counts(num_ranges, 0);
 
-  auto word_elements =
+  auto word_num_set_bits =
     thrust::make_transform_iterator(
       thrust::make_counting_iterator(0),
       [bitmask] __device__ (auto i) {
@@ -535,7 +535,7 @@ segmented_count_set_bits(bitmask_type const* bitmask,
   size_t temp_storage_bytes{0};
   CUDA_TRY(cub::DeviceSegmentedReduce::Sum(
     nullptr, temp_storage_bytes,
-    word_elements, d_null_counts.begin(), num_ranges,
+    word_num_set_bits, d_null_counts.begin(), num_ranges,
     first_word_indices, last_word_indices,
     stream)
   );
@@ -545,7 +545,7 @@ segmented_count_set_bits(bitmask_type const* bitmask,
 
   CUDA_TRY(cub::DeviceSegmentedReduce::Sum(
     d_temp_storage.data(), temp_storage_bytes,
-    word_elements, d_null_counts.begin(), num_ranges,
+    word_num_set_bits, d_null_counts.begin(), num_ranges,
     first_word_indices, last_word_indices,
     stream)
   );
