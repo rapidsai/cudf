@@ -826,7 +826,8 @@ ConfigureTest(BITMASK_TEST "${BITMASK_TEST_SRC}")
 
 set(DICTIONARY_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/factories_test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/encode_test.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/encode_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/remove_keys_test.cpp")
 
 ConfigureTest(DICTIONARY_TEST "${DICTIONARY_TEST_SRC}")
 
