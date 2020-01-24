@@ -1,4 +1,5 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+
 from contextlib import ExitStack as does_not_raise
 from unittest.mock import patch
 
