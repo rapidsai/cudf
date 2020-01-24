@@ -92,6 +92,54 @@ struct DeviceArcTan {
     }
 };
 
+struct DeviceSinH {
+    template<typename T>
+    __device__
+    T operator()(T data) {
+        return normalized_unary_op(data, [] (auto e) { return std::sinh(e); });
+    }
+};
+
+struct DeviceCosH {
+    template<typename T>
+    __device__
+    T operator()(T data) {
+        return normalized_unary_op(data, [] (auto e) { return std::cosh(e); });
+    }
+};
+
+struct DeviceTanH {
+    template<typename T>
+    __device__
+    T operator()(T data) {
+        return normalized_unary_op(data, [] (auto e) { return std::tanh(e); });
+    }
+};
+
+struct DeviceArcSinH {
+    template<typename T>
+    __device__
+    T operator()(T data) {
+        return normalized_unary_op(data, [] (auto e) { return std::asinh(e); });
+    }
+};
+
+struct DeviceArcCosH {
+    template<typename T>
+    __device__
+    T operator()(T data) {
+        return normalized_unary_op(data, [] (auto e) { return std::acosh(e); });
+    }
+};
+
+struct DeviceArcTanH {
+    template<typename T>
+    __device__
+    T operator()(T data) {
+        return normalized_unary_op(data, [] (auto e) { return std::atanh(e); });
+    }
+};
+
 // exponential functions
 
 struct DeviceExp {
@@ -115,6 +163,14 @@ struct DeviceSqrt {
     __device__
     T operator()(T data) {
         return normalized_unary_op(data, [] (auto e) { return std::sqrt(e); });
+    }
+};
+
+struct DeviceCbrt {
+    template<typename T>
+    __device__
+    T operator()(T data) {
+        return normalized_unary_op(data, [] (auto e) { return std::cbrt(e); });
     }
 };
 
@@ -295,6 +351,37 @@ unary_operation(cudf::column_view const& input,
                 input.type(),
                 detail::MathOpDispatcher<detail::DeviceArcTan>{},
                 input, op, mr, stream);
+        case cudf::experimental::unary_op::SINH:
+            return cudf::experimental::type_dispatcher(
+                input.type(),
+                detail::MathOpDispatcher<detail::DeviceSinH>{},
+                input, op, mr, stream);
+        case cudf::experimental::unary_op::COSH:
+            return cudf::experimental::type_dispatcher(
+                input.type(),
+                detail::MathOpDispatcher<detail::DeviceCosH>{},
+                input, op, mr, stream);
+        case cudf::experimental::unary_op::TANH:
+            return cudf::experimental::type_dispatcher(
+                input.type(),
+                detail::MathOpDispatcher<detail::DeviceTanH>{},
+                input, op, mr, stream);
+        case cudf::experimental::unary_op::ARCSINH:
+            return cudf::experimental::type_dispatcher(
+                input.type(),
+                detail::MathOpDispatcher<detail::DeviceArcSinH>{},
+                input, op, mr, stream);
+        case cudf::experimental::unary_op::ARCCOSH:
+            return cudf::experimental::type_dispatcher(
+                input.type(),
+                detail::MathOpDispatcher<detail::DeviceArcCosH>{},
+                input, op, mr, stream);
+        case cudf::experimental::unary_op::ARCTANH:
+            return cudf::experimental::type_dispatcher(
+                input.type(),
+                detail::MathOpDispatcher<detail::DeviceArcTanH>{},
+                input, op, mr, stream);
+
         case cudf::experimental::unary_op::EXP:
             return cudf::experimental::type_dispatcher(
                 input.type(),
@@ -309,6 +396,11 @@ unary_operation(cudf::column_view const& input,
             return cudf::experimental::type_dispatcher(
                 input.type(),
                 detail::MathOpDispatcher<detail::DeviceSqrt>{},
+                input, op, mr, stream);
+        case cudf::experimental::unary_op::CBRT:
+            return cudf::experimental::type_dispatcher(
+                input.type(),
+                detail::MathOpDispatcher<detail::DeviceCbrt>{},
                 input, op, mr, stream);
         case cudf::experimental::unary_op::CEIL:
             return cudf::experimental::type_dispatcher(
