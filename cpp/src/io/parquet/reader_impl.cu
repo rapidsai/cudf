@@ -205,8 +205,10 @@ struct metadata : public FileMetaData {
 
   std::vector<std::string> get_column_names() {
     std::vector<std::string> all_names;
-    for (const auto &chunk : row_groups[0].columns) {
-      all_names.emplace_back(get_column_name(chunk.meta_data.path_in_schema));
+    if (row_groups.size() != 0) {
+      for (const auto &chunk : row_groups[0].columns) {
+        all_names.emplace_back(get_column_name(chunk.meta_data.path_in_schema));
+      }
     }
     return all_names;
   }

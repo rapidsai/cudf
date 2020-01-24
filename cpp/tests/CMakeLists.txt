@@ -227,7 +227,8 @@ ConfigureTest(LEGACY_JOIN_TEST "${LEGACY_JOIN_TEST_SRC}")
 # - join tests ------------------------------------------------------------------------------------
 
 set(JOIN_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/join/join_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/join/join_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/join/semi_join_tests.cpp")
 
 ConfigureTest(JOIN_TEST "${JOIN_TEST_SRC}")
 
@@ -379,6 +380,10 @@ set(NORMALIZE_REPLACE_TEST_SRC
 
 ConfigureTest(NORMALIZE_REPLACE_TEST "${NORMALIZE_REPLACE_TEST_SRC}")
 
+set(CLAMP_TEST_SRC
+	"${CMAKE_CURRENT_SOURCE_DIR}/replace/clamp_test.cpp")
+
+ConfigureTest(CLAMP_TEST "${CLAMP_TEST_SRC}")
 ###################################################################################################
 # - unary tests -----------------------------------------------------------------------------------
 
@@ -760,6 +765,12 @@ ConfigureTest(SEARCH_TEST "${SEARCH_TEST_SRC}")
 
 ###################################################################################################
 # - reshape test ----------------------------------------------------------------------------------
+
+set(RESHAPE_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/reshape/interleave_columns_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/reshape/tile_tests.cu")
+
+ConfigureTest(RESHAPE_TEST "${RESHAPE_TEST_SRC}")
 
 set(LEGACY_RESHAPE_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/reshape/legacy/stack_test.cu")
