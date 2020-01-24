@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#pragma once
 
 #include <cudf/column/column.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
@@ -37,9 +36,10 @@ std::unique_ptr<column> remove_keys( dictionary_column_view const& dictionary_co
                                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                      cudaStream_t stream = 0)
 {
+    CUDF_EXPECTS( !keys_to_remove.has_nulls(), "keys_to_remove must not have nulls" );
     auto keys_view = dictionary_column.dictionary_keys();
-    auto device_view = column_device_view::create(dictionary_column.parent());
-    auto indices_view = device_view->child(0);
+    CUDF_EXPECTS( keys_view.type()==keys_to_remove.type(), "keys types must match");
+    auto indices_view = dictionary_column.indices();
     auto count = indices_view.size();
     auto execpol = rmm::exec_policy(stream);
     // locate keys to remove by searching the keys column
@@ -52,14 +52,16 @@ std::unique_ptr<column> remove_keys( dictionary_column_view const& dictionary_co
     // copy the non-removed keys ( d_matches: true=remove, false=keep )
     auto table_keys = experimental::detail::copy_if( table_view{{keys_view, keys_indices_view}},
         [d_matches]__device__(size_type idx) { return !d_matches[idx]; }, mr, stream )->release();
+    keys_indices_view = table_keys[1]->view();
     rmm::device_vector<int32_t> map_indices(count,-1); // init -1 to identify new nulls
     // build indices mapper; example scatter([0,1,2][0,2,4][-1,-1,-1,-1,-1]) => [0,-1,1,-1,2]
     thrust::scatter( execpol->on(stream), thrust::make_counting_iterator<int32_t>(0),
-                     thrust::make_counting_iterator<int32_t>(keys_indices.size()),
+                     thrust::make_counting_iterator<int32_t>(keys_indices_view.size()),
                      keys_indices_view.begin<int32_t>(), map_indices.begin() );
     // create new indices column
     auto indices_column = make_numeric_column( data_type{INT32}, count, cudf::mask_state::UNALLOCATED, stream, mr);
     auto d_new_indices = indices_column->mutable_view().data<int32_t>();
+    auto device_view = column_device_view::create(dictionary_column.parent());
     auto d_column = *device_view; // this has the null mask
     auto d_map_indices = map_indices.data().get(); // mapping old indices to new values
     auto d_old_indices = indices_view.data<int32_t>();
@@ -67,10 +69,11 @@ std::unique_ptr<column> remove_keys( dictionary_column_view const& dictionary_co
     thrust::transform( execpol->on(stream), thrust::make_counting_iterator<size_type>(0),
                        thrust::make_counting_iterator<size_type>(count), d_new_indices,
                        [d_column, d_old_indices, d_map_indices] __device__ (size_type idx) {
-                           if( d_column.is_null(idx) )
+                            if( d_column.is_null(idx) )
                                 return -1; // this value can be anything
-                           return d_map_indices[d_old_indices[idx]]; // get the new index
+                            return d_map_indices[d_old_indices[idx]]; // get the new index
                        });
+    indices_column->set_null_count(0);
     // compute new nulls -- this one too
     auto new_nulls = experimental::detail::valid_if( thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(count),
