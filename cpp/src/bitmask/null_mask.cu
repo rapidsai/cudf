@@ -482,7 +482,7 @@ segmented_count_set_bits(bitmask_type const* bitmask,
   for (size_t i = 0; i < indices.size() / 2; i++) {
     auto begin = indices[i * 2];
     auto end = indices[i * 2 + 1];
-    CUDF_EXPECTS(begin >= 0, "Invalid range.");
+    CUDF_EXPECTS(begin >= 0, "Starting index cannot be negative.");
     CUDF_EXPECTS(end >= begin, "Invalid range.");
   }
 
