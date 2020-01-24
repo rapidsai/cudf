@@ -478,12 +478,12 @@ std::vector<size_type>
 segmented_count_set_bits(bitmask_type const* bitmask,
                          std::vector<size_type> const& indices,
                          cudaStream_t stream) {
-  CUDF_EXPECTS(indices.size() % 2 == 0, "Invalid ranges.");
+  CUDF_EXPECTS(indices.size() % 2 == 0, "Array of indices needs to have an even number of elements.");
   for (size_t i = 0; i < indices.size() / 2; i++) {
     auto begin = indices[i * 2];
     auto end = indices[i * 2 + 1];
-    CUDF_EXPECTS(begin >= 0, "Invalid range.");
-    CUDF_EXPECTS(end >= begin, "Invalid range.");
+    CUDF_EXPECTS(begin >= 0, "Starting index cannot be negative.");
+    CUDF_EXPECTS(end >= begin, "End index cannot be smaller than the starting index.");
   }
 
   if (indices.size() == 0) {
@@ -588,7 +588,7 @@ segmented_count_unset_bits(bitmask_type const* bitmask,
   }
 
   auto ret = segmented_count_set_bits(bitmask, indices, stream);
-  for (size_type i = 0; i < static_cast<size_type>(ret.size()); i++) {
+  for (size_t i = 0; i < ret.size(); i++) {
     auto begin = indices[i * 2];
     auto end = indices[i * 2 + 1];
     ret[i] = (end - begin) - ret[i];
