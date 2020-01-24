@@ -51,8 +51,9 @@ namespace detail {
     // convenience generic shift function
     template <Radix Rad, typename T>
     constexpr auto shift(T const& val, scale_type const& scale) {
-        return scale >= 0 ? right_shift<Rad>(val, scale)
-                          : left_shift <Rad>(val, negate(scale));
+        if      (scale == 0) return static_cast<double>(val);
+        else if (scale >= 0) return right_shift<Rad>(val, scale);
+        else                 return left_shift <Rad>(val, negate(scale));
     }
 }
 
