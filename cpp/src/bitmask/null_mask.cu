@@ -588,7 +588,7 @@ segmented_count_unset_bits(bitmask_type const* bitmask,
   }
 
   auto ret = segmented_count_set_bits(bitmask, indices, stream);
-  for (size_type i = 0; i < static_cast<size_type>(ret.size()); i++) {
+  for (size_t i = 0; i < ret.size(); i++) {
     auto begin = indices[i * 2];
     auto end = indices[i * 2 + 1];
     ret[i] = (end - begin) - ret[i];
