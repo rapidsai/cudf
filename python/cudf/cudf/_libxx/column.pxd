@@ -10,6 +10,6 @@ cdef class Column:
     cdef mutable_column_view mutable_view(self) except *
 
     @staticmethod
-    cdef Column from_ptr(unique_ptr[column] c_col)
+    cdef Column from_unique_ptr(unique_ptr[column] c_col)
 
     cdef size_type compute_null_count(self) except? 0
