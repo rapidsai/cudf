@@ -15,6 +15,7 @@
  */
 
 #include <cmath>
+#include <cassert>
 #include <limits>
 #include <functional>
 #include <boost/serialization/strong_typedef.hpp>
@@ -203,8 +204,8 @@ fixed_point<Rep1, Rad1> operator+(fixed_point<Rep1, Rad1> const& lhs,
 
     #if defined(__CUDACC_DEBUG__)
 
-    if (addition_overflow<Rep1>(lhsv, rhsv))
-        CUDF_FAIL("fixed_point overflow of underlying represenation type " + print_rep<Rep1>());
+    assert(!addition_overflow<Rep1>(lhsv, rhsv) &&
+        "fixed_point overflow of underlying represenation type " + print_rep<Rep1>());
 
     #endif
 
@@ -226,8 +227,8 @@ fixed_point<Rep1, Rad1> operator-(fixed_point<Rep1, Rad1> const& lhs,
 
     #if defined(__CUDACC_DEBUG__)
 
-    if (subtraction_overflow<Rep1>(lhsv, rhsv))
-        CUDF_FAIL("fixed_point overflow of underlying represenation type " + print_rep<Rep1>());
+    assert(!subtraction_overflow<Rep1>(lhsv, rhsv) &&
+        "fixed_point overflow of underlying represenation type " + print_rep<Rep1>());
 
     #endif
 
@@ -245,8 +246,8 @@ fixed_point<Rep1, Rad1> operator*(fixed_point<Rep1, Rad1> const& lhs,
 
     #if defined(__CUDACC_DEBUG__)
 
-    if (multiplication_overflow<Rep1>(lhs._value, rhs._value))
-        CUDF_FAIL("fixed_point overflow of underlying represenation type " + print_rep<Rep1>());
+    assert(!multiplication_overflow<Rep1>(lhs._value, rhs._value) &&
+        "fixed_point overflow of underlying represenation type " + print_rep<Rep1>());
 
     #endif
 
@@ -264,8 +265,8 @@ fixed_point<Rep1, Rad1> operator/(fixed_point<Rep1, Rad1> const& lhs,
 
     #if defined(__CUDACC_DEBUG__)
 
-    if (division_overflow<Rep1>(lhs._value, rhs._value))
-        CUDF_FAIL("fixed_point overflow of underlying represenation type " + print_rep<Rep1>());
+    assert(!division_overflow<Rep1>(lhs._value, rhs._value) &&
+        "fixed_point overflow of underlying represenation type " + print_rep<Rep1>());
 
     #endif
 
