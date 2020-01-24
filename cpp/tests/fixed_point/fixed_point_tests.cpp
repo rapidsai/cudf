@@ -87,9 +87,10 @@ TEST_F(FixedPointTest, SimpleDecimal32Math) {
 TEST_F(FixedPointTest, Decimal32TrickyDivision) {
 
     decimal32 ONE_1  {1,  scale_type{1}};
+    decimal32 SIX_0  {6,  scale_type{0}};
     decimal32 SIX_1  {6,  scale_type{1}};
     decimal32 TEN_0  {10, scale_type{0}};
-    decimal32 TEN_1  {10, scale_type{0}};
+    decimal32 TEN_1  {10, scale_type{1}};
     decimal32 SIXTY_1{60, scale_type{1}};
 
     decimal32 ZERO = ONE_1;
@@ -100,7 +101,7 @@ TEST_F(FixedPointTest, Decimal32TrickyDivision) {
     EXPECT_EQ(SIXTY_1.get(), 60);
 
     EXPECT_EQ(SIXTY_1 / TEN_0, ZERO);
-    EXPECT_EQ(SIXTY_1 / TEN_1, SIX_1);
+    EXPECT_EQ(SIXTY_1 / TEN_1, SIX_0);
 
 }
 
@@ -174,7 +175,7 @@ void vector_test(ValueType const initial_value,
     std::vector<decimal32> vec1(size);
     std::vector<ValueType> vec2(size);
 
-    std::iota(std::begin(vec1), std::end(vec1), decimal32{initial_value, scale_type{0}});
+    std::iota(std::begin(vec1), std::end(vec1), decimal32{initial_value, scale_type{scale}});
     std::iota(std::begin(vec2), std::end(vec2), initial_value);
 
     auto const res1 = std::accumulate(
