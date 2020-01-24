@@ -52,7 +52,7 @@ def test_serialize(df):
     # Indices etc. will not be DeviceNDArray
     # but data should be...
     if hasattr(df, "_cols"):
-        assert ndevice >= len(df._cols)
+        assert ndevice >= len(df._data)
     else:
         assert ndevice > 0
 

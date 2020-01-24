@@ -149,3 +149,28 @@ TYPED_TEST(HashTestTyped, EqualityNulls)
   EXPECT_EQ(input1.num_rows(), output1->size());
   expect_columns_equal(output1->view(), output2->view());
 }
+
+template <typename T>
+class HashTestFloatTyped : public cudf::test::BaseFixture {};
+
+TYPED_TEST_CASE(HashTestFloatTyped, cudf::test::FloatingPointTypes);
+
+TYPED_TEST(HashTestFloatTyped, TestExtremes)
+{
+  TypeParam min = std::numeric_limits<TypeParam>::min();
+  TypeParam max = std::numeric_limits<TypeParam>::max();
+  TypeParam nan = std::numeric_limits<TypeParam>::quiet_NaN();
+  TypeParam inf = std::numeric_limits<TypeParam>::infinity();
+  
+  fixed_width_column_wrapper<TypeParam> const col1( {  0.0, 100.0, -100.0, min, max,  nan, inf, -inf } );
+  fixed_width_column_wrapper<TypeParam> const col2( { -0.0, 100.0, -100.0, min, max, -nan, inf, -inf } );
+
+  auto const input1 = cudf::table_view({col1});
+  auto const input2 = cudf::table_view({col2});
+
+  auto const output1 = cudf::hash(input1);
+  auto const output2 = cudf::hash(input2);
+
+  expect_columns_equal(output1->view(), output2->view(), true);
+}
+

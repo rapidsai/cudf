@@ -196,14 +196,14 @@ def test_index_rename_inplace():
 
     # inplace=False should yield a deep copy
     gds_renamed_deep = gds.rename("new_name", inplace=False)
-    gds._values.data.mem = GenericIndex([2, 3, 4])._values.data.mem
+    gds._values.data = GenericIndex([2, 3, 4])._values.data
 
     assert (gds_renamed_deep.values == [1, 2, 3]).all()
 
     # inplace=True returns none
     gds_to_rename = gds
     gds.rename("new_name", inplace=True)
-    gds._values.data.mem = GenericIndex([3, 4, 5])._values.data.mem
+    gds._values.data = GenericIndex([3, 4, 5])._values.data
 
     assert (gds_to_rename.values == [3, 4, 5]).all()
 
@@ -286,3 +286,21 @@ def test_rangeindex_slice_attr_name():
     rg = RangeIndex(start, stop, "myindex")
     sliced_rg = rg[0:9]
     assert_eq(rg.name, sliced_rg.name)
+
+
+def test_from_pandas_str():
+    idx = ["a", "b", "c"]
+    pidx = pd.Index(idx, name="idx")
+    gidx_1 = cudf.core.index.StringIndex(idx, name="idx")
+    gidx_2 = cudf.from_pandas(pidx)
+
+    assert_eq(gidx_1, gidx_2)
+
+
+def test_from_pandas_gen():
+    idx = [2, 4, 6]
+    pidx = pd.Index(idx, name="idx")
+    gidx_1 = cudf.core.index.GenericIndex(idx, name="idx")
+    gidx_2 = cudf.from_pandas(pidx)
+
+    assert_eq(gidx_1, gidx_2)

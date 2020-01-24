@@ -189,7 +189,7 @@ auto make_chars_and_offsets(StringsIterator begin, StringsIterator end,
     chars.insert(chars.end(), std::cbegin(tmp), std::cend(tmp));
     offsets.push_back(offsets.back() + tmp.length());
   }
-  return std::make_pair(chars, offsets);
+  return std::make_pair(std::move(chars), std::move(offsets));
 };
 }  // namespace detail
 

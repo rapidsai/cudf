@@ -187,4 +187,20 @@ rmm::device_buffer concatenate_masks(std::vector<column_view> const &views,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
     cudaStream_t stream = 0);
 
+/**
+ * @brief Returns a bitwise AND of the bitmasks of columns of a table
+ * 
+ * If any of the columns isn't nullable, it is considered all valid. 
+ * If no column in the table is nullable, an empty bitmask is returned.
+ * 
+ * @param view The table of columns
+ * @param stream CUDA stream on which to execute kernels 
+ * @param mr Memory resource for allocating output bitmask
+ * @return rmm::device_buffer Output bitmask
+ */
+rmm::device_buffer bitmask_and(
+    table_view const& view,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+    cudaStream_t stream = 0);
+
 }  // namespace cudf

@@ -50,6 +50,7 @@ struct InsertTest : public GdfTest {
                                        std::numeric_limits<key_type>::max());
     pairs.resize(input_size);
     map = std::move(map_type::create(compute_hash_table_size(size)));
+    CUDA_TRY(cudaStreamSynchronize(0));
   }
 
   const cudf::size_type size{10000};

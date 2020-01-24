@@ -8,6 +8,8 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core.column import as_column
+from cudf.core.index import as_index
 from cudf.tests.utils import assert_eq, assert_neq
 
 
@@ -93,7 +95,7 @@ def test_multiindex_series_assignment():
 
 
 def test_string_index():
-    from cudf.core.index import StringIndex, StringColumn
+    from cudf.core.index import StringIndex
 
     pdf = pd.DataFrame(np.random.rand(5, 5))
     gdf = cudf.from_pandas(pdf)
@@ -109,7 +111,7 @@ def test_string_index():
     pdf.index = stringIndex
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
-    stringIndex = StringColumn(["a", "b", "c", "d", "e"], name="name")
+    stringIndex = as_index(as_column(["a", "b", "c", "d", "e"]), name="name")
     pdf.index = stringIndex
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
@@ -705,6 +707,27 @@ def test_multiindex_groupby_reset_index():
     gdg = gdf.groupby(["x", "y"]).sum()
     pdg = pdf.groupby(["x", "y"]).sum()
     assert_eq(pdg.reset_index(), gdg.reset_index())
+
+
+def test_multicolumn_reset_index():
+    gdf = cudf.DataFrame({"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5]})
+    pdf = gdf.to_pandas()
+    gdg = gdf.groupby(["x"]).agg({"y": ["count", "mean"]})
+    pdg = pdf.groupby(["x"]).agg({"y": ["count", "mean"]})
+    assert_eq(pdg.reset_index(), gdg.reset_index(), check_dtype=False)
+
+
+def test_multiindex_multicolumn_reset_index():
+    gdf = cudf.DataFrame(
+        {"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5], "z": [1, 2, 3, 4, 5]}
+    )
+    pdf = gdf.to_pandas()
+    gdg = gdf.groupby(["x", "y"]).agg({"y": ["count", "mean"]})
+    pdg = pdf.groupby(["x", "y"]).agg({"y": ["count", "mean"]})
+    assert_eq(pdg.reset_index(), gdg.reset_index(), check_dtype=False)
+    gdg = gdf.groupby(["x", "z"]).agg({"y": ["count", "mean"]})
+    pdg = pdf.groupby(["x", "z"]).agg({"y": ["count", "mean"]})
+    assert_eq(pdg.reset_index(), gdg.reset_index(), check_dtype=False)
 
 
 def test_multiindex_columns_from_pandas(pdf, pdfIndex):

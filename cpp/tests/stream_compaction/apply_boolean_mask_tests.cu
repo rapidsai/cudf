@@ -107,3 +107,29 @@ TEST_F(ApplyBooleanMask, StringColumnTest) {
     cudf::test::expect_tables_equal(expected, got->view());
 }
 
+TEST_F(ApplyBooleanMask, withoutNullString)
+{
+    cudf::test::strings_column_wrapper col1({"d", "e", "a", "d", "k", "d", "l"});
+    cudf::table_view cudf_table_in_view {{col1}};
+
+    cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> bool_filter{{1, 1, 0, 0, 1, 0, 0}};
+    cudf::column_view bool_filter_col(bool_filter);
+
+    std::unique_ptr<cudf::experimental::table> filteredTable = cudf::experimental::apply_boolean_mask(cudf_table_in_view,bool_filter_col);
+    cudf::table_view tableView = filteredTable->view();
+
+    cudf::test::strings_column_wrapper expect_col1({"d", "e", "k"});
+    cudf::table_view expect_cudf_table_view {{expect_col1}};
+
+    cudf::test::expect_tables_equal(expect_cudf_table_view, tableView);
+}
+
+TEST_F(ApplyBooleanMask, NoNullInput) {
+  cudf::test::fixed_width_column_wrapper<int> col(                        {9668,  9590, 9526,  9205,  9434, 9347,  9160, 9569,  9143, 9807,  9606,  9446, 9279,  9822, 9691});
+  cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> mask({false, false, true, false, false, true, false, true, false, true, false, false, true, false, true});
+  cudf::table_view input({col});
+  cudf::test::fixed_width_column_wrapper<int> col_expected({9526,9347,9569,9807,9279,9691});
+  cudf::table_view expected({col_expected});
+  auto got = cudf::experimental::apply_boolean_mask(input, mask);
+  cudf::test::expect_tables_equal(expected, got->view());
+}

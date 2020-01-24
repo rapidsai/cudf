@@ -224,7 +224,7 @@ compute_joined_indices(const JoinBounds<index_type>& bounds,
     RMM_TRY( RMM_ALLOC((void**)&r_ptr, join_size*sizeof(index_type), stream));
     create_load_balanced_tuple(scanned_sizes, l_ptr, r_ptr, join_size,
             stream);
-    CUDA_CHECK_LAST()
+    CHECK_CUDA(stream);
     if (join_type == JoinType::INNER_JOIN) {
         thrust::transform(
                 rmm::exec_policy(stream)->on(stream),
@@ -244,7 +244,7 @@ compute_joined_indices(const JoinBounds<index_type>& bounds,
                 r_ptr,
                 JoinConditionalAdd<index_type>(static_cast<index_type>(JoinNoneValue)));
     }
-    CUDA_CHECK_LAST()
+    CHECK_CUDA(stream);
     cudf::size_type final_join_size = static_cast<cudf::size_type>(join_size);
     if (join_type == JoinType::FULL_JOIN) {
         cudf::size_type join_column_capacity = final_join_size;
@@ -295,10 +295,10 @@ gdf_error sort_join_typed(
                 static_cast<column_type*>(leftcol->data), leftcol->size,
                 static_cast<column_type*>(rightcol->data), rightcol->size,
                 stream);
-    CUDA_CHECK_LAST()
+    CHECK_CUDA(stream);
     rmm::device_vector<index_type> scanned_sizes =
         scan_join_bounds<join_type, index_type>(bounds, stream);
-    CUDA_CHECK_LAST()
+    CHECK_CUDA(stream);
     std::pair<gdf_column, gdf_column> join_result;
     gdf_error err = compute_joined_indices<join_type, index_type>(
             bounds, leftcol, rightcol,

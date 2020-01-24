@@ -118,7 +118,7 @@ static PyObject* n_unique_tokens( PyObject* self, PyObject* args )
     if( strs==0 )
         Py_RETURN_NONE;
 
-    const char* delimiter = " ";
+    const char* delimiter = nullptr;
     PyObject* argDelim = PyTuple_GetItem(args,1);
     if( argDelim != Py_None )
         delimiter = PyUnicode_AsUTF8(argDelim);
@@ -155,7 +155,7 @@ static PyObject* n_token_count( PyObject* self, PyObject* args )
     if( strs==0 )
         Py_RETURN_NONE;
 
-    const char* delimiter = " ";
+    const char* delimiter = nullptr;
     PyObject* argDelim = PyTuple_GetItem(args,1);
     if( argDelim != Py_None )
         delimiter = PyUnicode_AsUTF8(argDelim);
@@ -177,6 +177,43 @@ static PyObject* n_token_count( PyObject* self, PyObject* args )
     unsigned int* rtn = new unsigned int[count];
     Py_BEGIN_ALLOW_THREADS
     NVText::token_count(*strs,delimiter,rtn,false);
+    Py_END_ALLOW_THREADS
+    for(unsigned int idx=0; idx < count; idx++)
+        PyList_SetItem(ret, idx, PyLong_FromLong((long)rtn[idx]));
+    delete rtn;
+    return ret;
+}
+
+//
+static PyObject* n_token_count_multi(PyObject* self, PyObject* args )
+{
+    PyObject* pystrs = PyTuple_GetItem(args,0);
+    NVStrings* strs = strings_from_object(pystrs);
+    if( strs==0 )
+        Py_RETURN_NONE;
+
+    PyObject* pydelims = PyTuple_GetItem(args,1);
+    NVStrings* delims = strings_from_object(pydelims);
+    if( delims==0 )
+        Py_RETURN_NONE;
+
+    unsigned int* devptr = (unsigned int*)PyLong_AsVoidPtr(PyTuple_GetItem(args,2));
+    if( devptr )
+    {
+        unsigned int rtn = 0;
+        Py_BEGIN_ALLOW_THREADS
+        rtn = NVText::token_count(*strs, *delims, devptr);
+        Py_END_ALLOW_THREADS
+        return PyLong_FromLong((long)rtn);
+    }
+    //
+    unsigned int count = strs->size();
+    PyObject* ret = PyList_New(count);
+    if( count==0 )
+        return ret;
+    unsigned int* rtn = new unsigned int[count];
+    Py_BEGIN_ALLOW_THREADS
+    NVText::token_count(*strs, *delims, rtn, false);
     Py_END_ALLOW_THREADS
     for(unsigned int idx=0; idx < count; idx++)
         PyList_SetItem(ret, idx, PyLong_FromLong((long)rtn[idx]));
@@ -397,7 +434,7 @@ static PyObject* n_tokens_counts( PyObject* self, PyObject* args )
         Py_RETURN_NONE;
     }
 
-    const char* delimiter = " ";
+    const char* delimiter = nullptr;
     PyObject* argDelim = PyTuple_GetItem(args,2);
     if( argDelim != Py_None )
         delimiter = PyUnicode_AsUTF8(argDelim);
@@ -683,6 +720,36 @@ static PyObject* n_create_ngrams( PyObject* self, PyObject* args )
     return PyLong_FromVoidPtr((void*)strs);
 }
 
+static PyObject* n_ngrams_tokenize( PyObject* self, PyObject* args )
+{
+    PyObject* pystrs = PyTuple_GetItem(args,0);
+    NVStrings* strs = strings_from_object(pystrs);
+    if( strs==0 )
+        Py_RETURN_NONE;
+
+    const char* delimiter = " ";
+    PyObject* argDelim = PyTuple_GetItem(args,1);
+    if( argDelim != Py_None )
+        delimiter = PyUnicode_AsUTF8(argDelim);
+
+    unsigned int ngrams = 0;
+    PyObject* pyngrams = PyTuple_GetItem(args,2);
+    if( pyngrams != Py_None )
+        ngrams = (unsigned int)PyLong_AsLong(pyngrams);
+
+    const char* separator = " ";
+    PyObject* pysep = PyTuple_GetItem(args,3);
+    if( pysep != Py_None )
+        separator = PyUnicode_AsUTF8(pysep);
+
+    Py_BEGIN_ALLOW_THREADS
+    strs = NVText::ngrams_tokenize(*strs,delimiter,ngrams,separator);
+    Py_END_ALLOW_THREADS
+    if( strs==0 )
+        Py_RETURN_NONE;
+    return PyLong_FromVoidPtr((void*)strs);
+}
+
 static PyObject* n_scatter_count( PyObject* self, PyObject* args )
 {
     PyObject* pystrs = PyTuple_GetItem(args,0);
@@ -708,6 +775,8 @@ static PyObject* n_scatter_count( PyObject* self, PyObject* args )
                 counts[idx] = (unsigned int)PyLong_AsLong(pyidx);
         }
     }
+    else
+        counts = (unsigned int*)PyLong_AsVoidPtr(pycounts);
 
     Py_BEGIN_ALLOW_THREADS
     strs = NVText::scatter_count(*strs,counts,bdevmem);
@@ -845,6 +914,7 @@ static PyMethodDef s_Methods[] = {
     { "n_unique_tokens", n_unique_tokens, METH_VARARGS, "" },
     { "n_character_tokenize", n_character_tokenize, METH_VARARGS, "" },
     { "n_token_count", n_token_count, METH_VARARGS, "" },
+    { "n_token_count_multi", n_token_count_multi, METH_VARARGS, "" },
     { "n_contains_strings", n_contains_strings, METH_VARARGS, "" },
     { "n_strings_counts", n_strings_counts, METH_VARARGS, "" },
     { "n_tokens_counts", n_tokens_counts, METH_VARARGS, "" },
@@ -853,6 +923,7 @@ static PyMethodDef s_Methods[] = {
     { "n_edit_distance", n_edit_distance, METH_VARARGS, "" },
     { "n_edit_distance_matrix", n_edit_distance_matrix, METH_VARARGS, "" },
     { "n_create_ngrams", n_create_ngrams, METH_VARARGS, "" },
+    { "n_ngrams_tokenize", n_ngrams_tokenize, METH_VARARGS, "" },
     { "n_scatter_count", n_scatter_count, METH_VARARGS, "" },
     { "n_porter_stemmer_measure", n_porter_stemmer_measure, METH_VARARGS, "" },
     { "n_is_letter", n_is_letter, METH_VARARGS, "" },

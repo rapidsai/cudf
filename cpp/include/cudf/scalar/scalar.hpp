@@ -127,6 +127,11 @@ class fixed_width_scalar : public scalar {
   }
 
   /**
+   * @brief Implicit conversion operator to get the value of the scalar on the host
+   */
+  explicit operator value_type() const { return this->value(0); }
+
+  /**
    * @brief Get the value of the scalar
    * 
    * @param stream The CUDA stream to do the operation in
@@ -146,7 +151,7 @@ class fixed_width_scalar : public scalar {
  protected:
   rmm::device_scalar<T> _data{};  ///< device memory containing the value
 
-  fixed_width_scalar() = default;
+  fixed_width_scalar() : scalar(data_type(experimental::type_to_id<T>())) {}
 
   /**
    * @brief Construct a new fixed width scalar object
@@ -161,6 +166,17 @@ class fixed_width_scalar : public scalar {
    : scalar(data_type(experimental::type_to_id<T>()), is_valid, stream, mr)
    , _data(value, stream, mr)
   {}
+
+  /**---------------------------------------------------------------------------*
+   * @brief Construct a new fixed width scalar object from existing device memory.
+   *
+   * @param[in] data The scalar's data in device memory
+   * @param[in] is_valid Whether the value held by the scalar is valid
+   *---------------------------------------------------------------------------**/
+  fixed_width_scalar(rmm::device_scalar<T>&& data, bool is_valid = true, cudaStream_t stream = 0,
+      rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource())
+      : scalar(data_type(experimental::type_to_id<T>()), is_valid, stream, mr),
+        _data{std::forward<rmm::device_scalar<T>>(data)} {}
 };
 
 } // namespace detail
@@ -194,6 +210,17 @@ class numeric_scalar : public detail::fixed_width_scalar<T> {
       rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource())
    : detail::fixed_width_scalar<T>(value, is_valid, stream, mr)
   {}
+
+  /**---------------------------------------------------------------------------*
+   * @brief Construct a new numeric scalar object from existing device memory.
+   *
+   * @param[in] data The scalar's data in device memory
+   * @param[in] is_valid Whether the value held by the scalar is valid
+   *---------------------------------------------------------------------------**/
+  numeric_scalar(rmm::device_scalar<T>&& data, bool is_valid = true, cudaStream_t stream = 0,
+      rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource())
+   : detail::fixed_width_scalar<T>(std::forward<rmm::device_scalar<T>>(data), is_valid, stream, mr)
+  {}
 };
 
 /**
@@ -203,7 +230,7 @@ class string_scalar : public scalar {
  public:
   using value_type = cudf::string_view;
 
-  string_scalar() = default;
+  string_scalar() : scalar(data_type(STRING)) {}
   ~string_scalar() = default;
   string_scalar(string_scalar&& other) = default;
   string_scalar(string_scalar const& other) = default;
@@ -224,6 +251,41 @@ class string_scalar : public scalar {
    : scalar(data_type(STRING), is_valid)
    , _data(string.data(), string.size(), stream, mr)
   {}
+
+  /**
+   * @brief Construct a new string scalar object from string_view
+   * Note that this function copies the data pointed by string_view.
+   * 
+   * @param source string_view pointing string value to copy
+   * @param is_valid Whether the value held by the scalar is valid
+   * @param stream The CUDA stream to do the allocation in
+   * @param mr The memory resource to use for allocation
+   */
+  string_scalar(value_type const& source, bool is_valid = true, 
+      cudaStream_t stream = 0,
+      rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource())
+   : scalar(data_type(STRING), is_valid)
+   , _data(source.data(), source.size_bytes(), stream, mr)
+  {}
+
+  /**
+   * @brief Construct a new string scalar object from string_view in device memory
+   * Note that this function copies the data pointed by string_view.
+   * 
+   * @param data device_scalar string_view pointing string value to copy
+   * @param is_valid Whether the value held by the scalar is valid
+   * @param stream The CUDA stream to do the allocation in
+   * @param mr The memory resource to use for allocation
+   */
+  string_scalar(rmm::device_scalar<value_type>& data, bool is_valid = true, cudaStream_t stream = 0,
+      rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource())
+   : string_scalar(data.value(), is_valid, stream, mr)
+  { }
+
+  /**
+   * @brief Implicit conversion operator to get the value of the scalar in a host std::string
+   */
+  explicit operator std::string() const { return this->to_string(0); }
 
   /**
    * @brief Get the value of the scalar in a host std::string
@@ -281,6 +343,17 @@ class timestamp_scalar : public detail::fixed_width_scalar<T> {
   timestamp_scalar(T value, bool is_valid = true, cudaStream_t stream = 0,
       rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource())
    : detail::fixed_width_scalar<T>(value, is_valid, stream, mr)
+  {}
+
+  /**---------------------------------------------------------------------------*
+   * @brief Construct a new timestamp scalar object from existing device memory.
+   *
+   * @param[in] data The scalar's data in device memory
+   * @param[in] is_valid Whether the value held by the scalar is valid
+   *---------------------------------------------------------------------------**/
+  timestamp_scalar(rmm::device_scalar<T>&& data, bool is_valid = true, cudaStream_t stream = 0,
+      rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource())
+   : detail::fixed_width_scalar<T>(std::forward<rmm::device_scalar<T>>(data), is_valid, stream, mr)
   {}
 };
 
