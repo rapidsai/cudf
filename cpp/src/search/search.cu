@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,13 +21,15 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
+
 #include <hash/unordered_multiset.cuh>
+#include <cudf/detail/iterator.cuh>
+#include <cudf/detail/search.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <strings/utilities.hpp>
 
 #include <thrust/binary_search.h>
-#include <thrust/device_vector.h>
 #include <thrust/logical.h>
 
 namespace cudf {
@@ -62,7 +64,6 @@ void launch_search(DataIterator it_data,
 
 } // namespace
 
-namespace detail {
 
 std::unique_ptr<column> search_ordered(table_view const& t,
                                        table_view const& values,
@@ -122,80 +123,38 @@ std::unique_ptr<column> search_ordered(table_view const& t,
   return result;
 }
 
-template <typename Element, bool nullable = true>
-struct compare_with_value{
-  compare_with_value(column_device_view c, Element val, bool val_is_valid, bool nulls_are_equal)
-
-    : col{c}, value{val}, val_is_valid{val_is_valid}, nulls_are_equal{nulls_are_equal} {}
-
-  __device__ bool operator()(size_type i) noexcept {
-    if (nullable) {
-      bool const col_is_null{col.nullable() and col.is_null(i)};
-      if (col_is_null and not val_is_valid)
-        return nulls_are_equal;
-      else if (col_is_null == val_is_valid)
-        return false;
-    }
-    
-    return equality_compare<Element>(col.element<Element>(i), value);
-  }
-
-  column_device_view        col;
-  Element                   value;
-  bool val_is_valid;
-  bool nulls_are_equal;
-};
-
-template <typename Element>
-void populate_element(scalar const& value, Element &e) {
-  using ScalarType = cudf::experimental::scalar_type_t<Element>;
-  auto s1 = static_cast<const ScalarType *>(&value);
-
-  e = s1->value();
-}
-
-template <>
-void populate_element<string_view>(scalar const& value, string_view &e) {
-  using ScalarType = cudf::experimental::scalar_type_t<string_view>;
-  auto s1 = static_cast<const ScalarType *>(&value);
-
-  e = string_view{s1->data(), s1->size()};
-}
-  
 struct contains_scalar_dispatch {
   template <typename Element>
   bool operator()(column_view const& col, scalar const& value,
-                  cudaStream_t stream,
-                  rmm::mr::device_memory_resource *mr) {
+                  cudaStream_t stream, rmm::mr::device_memory_resource *mr) {
 
+    using ScalarType = cudf::experimental::scalar_type_t<Element>;
     auto d_col = column_device_view::create(col, stream);
-    auto data_it = thrust::make_counting_iterator<size_type>(0);
-
-    bool    element_is_valid{value.is_valid()};
-    Element element;
-
-    populate_element(value, element);
+    auto s = static_cast<const ScalarType *>(&value);
 
     if (col.has_nulls()) {
-      auto eq_op = compare_with_value<Element, true>(*d_col, element, element_is_valid, true);
+      auto found_iter = thrust::find(rmm::exec_policy(stream)->on(stream),
+                                     d_col->pair_begin<Element, true>(),
+                                     d_col->pair_end<Element, true>(),
+                                     thrust::make_pair(s->value(), true));
 
-      return thrust::any_of(rmm::exec_policy(stream)->on(stream),
-                            data_it, data_it + col.size(),
-                            eq_op);
+      return found_iter != d_col->pair_end<Element, true>();
     } else {
-      auto eq_op = compare_with_value<Element, false>(*d_col, element, element_is_valid, true);
+      auto found_iter =  thrust::find(rmm::exec_policy(stream)->on(stream),
+                                      d_col->begin<Element>(),
+                                      d_col->end<Element>(), s->value());
 
-      return thrust::any_of(rmm::exec_policy(stream)->on(stream),
-                            data_it, data_it + col.size(),
-                            eq_op);
+      return found_iter != d_col->end<Element>();
     }
   }
 };
+
+namespace detail {
 
 bool contains(column_view const& col,
               scalar const& value,
               rmm::mr::device_memory_resource *mr,
-              cudaStream_t stream = 0)
+              cudaStream_t stream)
 {
   CUDF_EXPECTS(col.type() == value.type(), "DTYPE mismatch");
 
@@ -269,7 +228,7 @@ struct multi_contains_dispatch {
 std::unique_ptr<column> contains(column_view const& haystack,
                                  column_view const& needles,
                                  rmm::mr::device_memory_resource* mr,
-                                 cudaStream_t stream = 0) {
+                                 cudaStream_t stream) {
 
   CUDF_EXPECTS(haystack.type() == needles.type(), "DTYPE mismatch");
 
@@ -277,7 +236,30 @@ std::unique_ptr<column> contains(column_view const& haystack,
                                              multi_contains_dispatch{},
                                              haystack, needles, mr, stream);
 }
+
+std::unique_ptr<column> lower_bound(table_view const& t,
+                                    table_view const& values,
+                                    std::vector<order> const& column_order,
+                                    std::vector<null_order> const& null_precedence,
+                                    rmm::mr::device_memory_resource *mr,
+                                    cudaStream_t stream)
+{
+  return search_ordered(t, values, true, column_order, null_precedence, mr, stream);
+}
+
+std::unique_ptr<column> upper_bound(table_view const& t,
+                                    table_view const& values,
+                                    std::vector<order> const& column_order,
+                                    std::vector<null_order> const& null_precedence,
+                                    rmm::mr::device_memory_resource *mr,
+                                    cudaStream_t stream)
+{
+  return search_ordered(t, values, false, column_order, null_precedence, mr, stream);
+}
+
 } // namespace detail
+
+// external APIs
 
 std::unique_ptr<column> lower_bound(table_view const& t,
                                     table_view const& values,
@@ -285,7 +267,7 @@ std::unique_ptr<column> lower_bound(table_view const& t,
                                     std::vector<null_order> const& null_precedence,
                                     rmm::mr::device_memory_resource *mr)
 {
-  return detail::search_ordered(t, values, true, column_order, null_precedence, mr);
+  return detail::lower_bound(t, values, column_order, null_precedence, mr);
 }
 
 std::unique_ptr<column> upper_bound(table_view const& t,
@@ -294,7 +276,7 @@ std::unique_ptr<column> upper_bound(table_view const& t,
                                     std::vector<null_order> const& null_precedence,
                                     rmm::mr::device_memory_resource *mr)
 {
-  return detail::search_ordered(t, values, false, column_order, null_precedence, mr);
+  return detail::upper_bound(t, values, column_order, null_precedence, mr);
 }
 
 bool contains(column_view const& col, scalar const& value, rmm::mr::device_memory_resource *mr)

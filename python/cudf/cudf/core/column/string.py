@@ -1,4 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
 import functools
 import pickle
@@ -329,7 +329,7 @@ class StringMethods(object):
             mask = self._parent.mask
 
         col = column.build_column(
-            Buffer(out_dev_arr), dtype=np.dtype("bool"), mask=mask,
+            Buffer(out_dev_arr), dtype=np.dtype("bool"), mask=mask
         )
 
         return Series(col, index=self._index, name=self._name)
@@ -464,9 +464,7 @@ class StringColumn(column.ColumnBase):
             # bytes in the data buffer
             size = children[0].size - 1
 
-        super().__init__(
-            data, size, dtype, mask=mask, children=children,
-        )
+        super().__init__(data, size, dtype, mask=mask, children=children)
 
         self._nvstrings = None
         self._nvcategory = None
@@ -544,6 +542,10 @@ class StringColumn(column.ColumnBase):
             self.nvcategory.values(devptr=ptr)
             self._indices = out_dev_arr
         return self._indices
+
+    @property
+    def _nbytes(self):
+        return self.children[1].size
 
     def as_numerical_column(self, dtype, **kwargs):
 

@@ -801,12 +801,8 @@ def test_join_multi(how, column_a, column_b, column_c):
     )
 
 
-@pytest.mark.parametrize(
-    "dtype_l", ["int8", "int16", "int32", "int64"],
-)
-@pytest.mark.parametrize(
-    "dtype_r", ["int8", "int16", "int32", "int64"],
-)
+@pytest.mark.parametrize("dtype_l", ["int8", "int16", "int32", "int64"])
+@pytest.mark.parametrize("dtype_r", ["int8", "int16", "int32", "int64"])
 def test_typecast_on_join_int_to_int(dtype_l, dtype_r):
     other_data = ["a", "b", "c"]
 
