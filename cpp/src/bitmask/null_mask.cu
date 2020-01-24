@@ -478,7 +478,7 @@ std::vector<size_type>
 segmented_count_set_bits(bitmask_type const* bitmask,
                          std::vector<size_type> const& indices,
                          cudaStream_t stream) {
-  CUDF_EXPECTS(indices.size() % 2 == 0, "Invalid ranges.");
+  CUDF_EXPECTS(indices.size() % 2 == 0, "Array of indices needs to have an even number of elements.");
   for (size_t i = 0; i < indices.size() / 2; i++) {
     auto begin = indices[i * 2];
     auto end = indices[i * 2 + 1];
