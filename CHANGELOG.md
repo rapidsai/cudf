@@ -10,6 +10,7 @@
 - PR #3619 Support CuPy 7
 - PR #3604 Add nvtext ngrams-tokenize function
 - PR #3610 Add memory_usage to DataFrame and Series APIs
+- PR #3403 Define and implement new stack + tile APIs
 - PR #3627 Adding cudf::sort and cudf::sort_by_key
 - PR #3597 Implement new sort based groupby
 - PR #3776 Add column equivalence comparator (using epsilon for float equality)
@@ -124,6 +125,8 @@
 - PR #3855 Fix MultiColumn recreation with reset_index
 - PR #3869 Fixed size calculation in NVStrings::byte_count()
 - PR #3868 Fix apply_grouped moving average example 
+- PR #3871 Fix `split_out` error
+- PR #3886 Fix string column materialization from column view
 
 
 # cuDF 0.11.0 (11 Dec 2019)
