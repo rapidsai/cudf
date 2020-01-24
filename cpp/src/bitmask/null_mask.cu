@@ -407,8 +407,8 @@ rmm::device_buffer bitmask_and(std::vector<bitmask_type const*> const& masks,
 // convert [first_bit_index,last_bit_index) to
 // [first_word_index,last_word_index)
 struct to_word_index : public thrust::unary_function<size_type, size_type> {
-  bool _inclusive = false;
-  size_type const* _d_bit_indices = nullptr;
+  const bool _inclusive = false;
+  size_type const* const _d_bit_indices = nullptr;
 
   /**
    * @brief Constructor of a functor that converts bit indices to bitmask word
@@ -423,13 +423,7 @@ struct to_word_index : public thrust::unary_function<size_type, size_type> {
 
   __device__ size_type operator()(const size_type& i) const {
     auto bit_index = _d_bit_indices[i];
-    if (_inclusive) {
-      return word_index(bit_index);
-    }
-    else {  // exclusive
-      return intra_word_index(bit_index) == 0 ?
-        word_index(bit_index) : word_index(bit_index) + 1;
-    }
+    return word_index(bit_index) + ((_inclusive || intra_word_index(bit_index) == 0) ? 0 : 1);
   }
 };
 
