@@ -104,7 +104,7 @@ __host__ __device__ inline bool string_view::is_null() const
 
 // the custom iterator knows about UTF8 encoding
 __device__ inline string_view::const_iterator::const_iterator(const string_view& str, size_type pos)
-    : cpos{pos}, p{str.data()}, offset{str.byte_offset(pos)}
+    : p{str.data()}, cpos{pos}, offset{str.byte_offset(pos)}
 {}
 
 __device__ inline string_view::const_iterator& string_view::const_iterator::operator++()
@@ -210,7 +210,7 @@ __device__ inline string_view::const_iterator string_view::end() const
 
 __device__ inline char_utf8 string_view::operator[](size_type pos) const
 {
-    unsigned int offset = byte_offset(pos);
+    size_type offset = byte_offset(pos);
     if(offset >= _bytes)
         return 0;
     char_utf8 chr = 0;
@@ -294,12 +294,12 @@ __device__ inline bool string_view::operator>=(const string_view& rhs) const
     return (rc == 0) || (rc > 0);
 }
 
-__device__ inline size_type string_view::find(const string_view& str, size_type pos, int count) const
+__device__ inline size_type string_view::find(const string_view& str, size_type pos, size_type count) const
 {
     return find(str.data(), str.size_bytes(), pos, count);
 }
 
-__device__ inline size_type string_view::find(const char* str, size_type bytes, size_type pos, int count) const
+__device__ inline size_type string_view::find(const char* str, size_type bytes, size_type pos, size_type count) const
 {
     const char* sptr = data();
     if(!str || !bytes)
@@ -330,24 +330,23 @@ __device__ inline size_type string_view::find(const char* str, size_type bytes, 
     return -1;
 }
 
-__device__ inline size_type string_view::find(char_utf8 chr, size_type pos, int count) const
+__device__ inline size_type string_view::find(char_utf8 chr, size_type pos, size_type count) const
 {
     char str[sizeof(char_utf8)];
     size_type chwidth = strings::detail::from_char_utf8(chr,str);
     return find(str,chwidth,pos,count);
 }
 
-__device__ inline size_type string_view::rfind(const string_view& str, size_type pos, int count) const
+__device__ inline size_type string_view::rfind(const string_view& str, size_type pos, size_type count) const
 {
     return rfind(str.data(), str.size_bytes(), pos, count);
 }
 
-__device__ inline size_type string_view::rfind(const char* str, size_type bytes, size_type pos, int count) const
+__device__ inline size_type string_view::rfind(const char* str, size_type bytes, size_type pos, size_type count) const
 {
     const char* sptr = data();
     if(!str || !bytes)
         return -1;
-    size_type sz = size_bytes();
     size_type nchars = length();
     size_type end = pos + count;
     if(end < 0 || end > nchars)
@@ -372,7 +371,7 @@ __device__ inline size_type string_view::rfind(const char* str, size_type bytes,
     return -1;
 }
 
-__device__ inline size_type string_view::rfind(char_utf8 chr, size_type pos, int count) const
+__device__ inline size_type string_view::rfind(char_utf8 chr, size_type pos, size_type count) const
 {
     char str[sizeof(char_utf8)];
     size_type chwidth = strings::detail::from_char_utf8(chr,str);
