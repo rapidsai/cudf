@@ -23,6 +23,7 @@
 #include <tests/utilities/type_lists.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <type_traits>
 
 using cudf::test::fixed_width_column_wrapper;
 using TestTypes = cudf::test::Types<int32_t>;
@@ -168,7 +169,7 @@ TYPED_TEST(ShiftTest, TwoColumnsNullableInput)
     cudf::test::expect_tables_equal(expected, *actual);
 }
 
-TYPED_TEST(ShiftTest, MisMatchFillValueCount)
+TYPED_TEST(ShiftTest, MismatchFillValueCount)
 {
     using T = TypeParam;
 
@@ -178,6 +179,26 @@ TYPED_TEST(ShiftTest, MisMatchFillValueCount)
 
     std::vector<std::unique_ptr<cudf::scalar>> fills{};
     fills.push_back(make_scalar<T>());
+
+    std::unique_ptr<cudf::experimental::table> output;
+
+    EXPECT_THROW(output = cudf::experimental::shift(input, 5, fills),
+                 cudf::logic_error);
+}
+
+TYPED_TEST(ShiftTest, MismatchFillValueDtypes)
+{
+    using T = TypeParam;
+
+    if (std::is_same<T, int>::value) {
+        return;
+    }
+
+    fixed_width_column_wrapper<T> a{};
+    cudf::table_view input{ { a } };
+
+    std::vector<std::unique_ptr<cudf::scalar>> fills{};
+    fills.push_back(make_scalar<int>());
 
     std::unique_ptr<cudf::experimental::table> output;
 
