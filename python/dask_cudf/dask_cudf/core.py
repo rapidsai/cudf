@@ -622,6 +622,7 @@ def reduction(
         meta_chunk = _emulate(apply, chunk, args, chunk_kwargs)
         meta = _emulate(apply, aggregate, [[meta_chunk]], aggregate_kwargs)
     meta = dd.core.make_meta(meta)
+    breakpoint()
 
     for arg in args:
         if isinstance(arg, _Frame):

@@ -393,9 +393,8 @@ def test_multiindex_index_and_columns():
         levels=[["val"], ["mean", "min"]], codes=[[0, 0], [0, 1]]
     )
     gdf.columns = mc
-    pdf.index = mi
-    pdf.index.names = ["x", "y"]
-    pdf.columns = mc
+    pdf.index = mi.to_pandas()
+    pdf.columns = mc.to_pandas()
     assert_eq(pdf, gdf)
 
 
