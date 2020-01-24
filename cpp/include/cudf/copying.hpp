@@ -486,12 +486,11 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
  *          
  * @throws cudf::logic_error if lhs and rhs are not of the same type
  * @throws cudf::logic_error if lhs and rhs are not of the same length 
- * @throws cudf::logic_error if boolean_mask contains nulls
  * @throws cudf::logic_error if boolean mask is not of type bool8
  * @throws cudf::logic_error if boolean mask is not of the same length as lhs and rhs  
  * @param[in] left-hand column_view
  * @param[in] right-hand column_view
- * @param[in] Non-nullable column of `BOOL8` elements that control selection from `lhs` or `rhs`
+ * @param[in] column of `BOOL8` elements that control selection from `lhs` or `rhs`
  * @param[in] mr resource for allocating device memory
  *
  * @returns new column with the selected elements
