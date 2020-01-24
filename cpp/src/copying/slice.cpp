@@ -49,8 +49,8 @@ std::vector<column_view> slice(column_view const& input,
     }
     auto begin = indices[2 * i];
     auto end = indices[2 * i + 1];
-    CUDF_EXPECTS(begin >= 0, "Invalid beginning of range.");
-    CUDF_EXPECTS(end >= begin, "Invalid end of range.");
+    CUDF_EXPECTS(begin >= 0, "Starting index cannot be negative.");
+    CUDF_EXPECTS(end >= begin, "End index cannot be smaller than the starting index.");
     CUDF_EXPECTS(end <= input.size(), "Slice range out of bounds.");
     result.emplace_back(input.type(), end - begin, input.head(),
                         input.null_mask(), null_counts[i],
