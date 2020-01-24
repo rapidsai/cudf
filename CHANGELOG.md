@@ -68,9 +68,10 @@
 - PR #3796 Improve on round-robin with the case when number partitions greater than number of rows.
 - PR #3805 Avoid CuPy 7.1.0 for now
 - PR #3758 detail::scatter variant with map iterator support
+- PR #3823 Add header file for detail search functions
 - PR #2438 Build GBench Benchmarks in CI
 - PR #3713 Adding aggregation support to rolling_window
-- PR # 3875 Add abstract sink for IO writers, used by ORC and Parquet writers for now
+- PR #3875 Add abstract sink for IO writers, used by ORC and Parquet writers for now
 
 ## Bug Fixes
 
