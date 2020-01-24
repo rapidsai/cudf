@@ -1,4 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
 import functools
 import pickle
@@ -542,6 +542,10 @@ class StringColumn(column.ColumnBase):
             self.nvcategory.values(devptr=ptr)
             self._indices = out_dev_arr
         return self._indices
+
+    @property
+    def _nbytes(self):
+        return self.children[1].size
 
     def as_numerical_column(self, dtype, **kwargs):
 
