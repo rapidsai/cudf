@@ -50,6 +50,8 @@ std::unique_ptr<writer> make_writer(sink_info const& sink,
                                     rmm::mr::device_memory_resource* mr) {
   if (sink.type == io_type::FILEPATH) {
     return std::make_unique<writer>(sink.filepath, options, mr);
+  } if (sink.type == io_type::HOST_BUFFER) {
+    return std::make_unique<writer>(sink.buffer, options, mr);
   } else {
     CUDF_FAIL("Unsupported sink type");
   }
