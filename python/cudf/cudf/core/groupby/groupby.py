@@ -237,6 +237,7 @@ class _GroupbyHelper(object):
         self.sort = sort
         self.dropna = dropna
         self.normalize_keys()
+        self.original_aggs = None
 
     def serialize(self):
         header = {}
@@ -352,7 +353,10 @@ class _GroupbyHelper(object):
         """
         Computes the groupby result
         """
-        self.original_aggs = agg
+        if hasattr(agg, "copy"):
+            self.original_aggs = agg.copy()
+        else:
+            self.original_aggs = agg
         self.normalize_agg(agg)
         self.normalize_values()
         aggs_as_list = self.get_aggs_as_list()
@@ -521,12 +525,25 @@ class _GroupbyHelper(object):
             else:
                 return aggs_as_list
         else:
-            if len(aggs_as_list) == len(self.aggs) and not isinstance(
-                list(self.original_aggs.values())[0], collections.abc.Sequence
+            if (
+                isinstance(self.original_aggs, collections.abc.Mapping)
+                and len(self.original_aggs) == 1
             ):
-                return value_names
+                if not isinstance(list(self.original_aggs.values())[0], str):
+                    return MultiIndex.from_tuples(
+                        zip(value_names, aggs_as_list)
+                    )
+                else:
+                    return value_names
             else:
-                return MultiIndex.from_tuples(zip(value_names, aggs_as_list))
+                if len(aggs_as_list) == len(self.aggs) or isinstance(
+                    self.original_aggs, str
+                ):
+                    return value_names
+                else:
+                    return MultiIndex.from_tuples(
+                        zip(value_names, aggs_as_list)
+                    )
 
     def get_aggs_as_list(self):
         """

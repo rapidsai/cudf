@@ -1297,7 +1297,7 @@ class DataFrame(Table):
             """
             self.multi_cols = columns
         elif isinstance(columns, pd.MultiIndex):
-            # breakpoint()
+            breakpoint()
             self.multi_cols = cudf.MultiIndex.from_pandas(columns)
         else:
             if hasattr(self, "multi_cols"):
@@ -1499,23 +1499,25 @@ class DataFrame(Table):
                 out[name] = self.index._values
             for col_name, col_value in self._data.items():
                 out[col_name] = col_value
-            if isinstance(self.columns, cudf.core.multiindex.MultiIndex):
-                if len(list(self.columns)) == 1:
+            if isinstance(self.columns, (cudf.core.multiindex.MultiIndex)):
+                """
+                if len(list(self.columns)) <= 1:
                     out[list(self.columns)[0]] = out[0]
                     out = out.drop(0)
                 else:
-                    ncols = len(self.columns.levels)
-                    mi_columns = dict(
-                        zip(range(ncols), [name, len(name) * [""]])
-                    )
-                    top = DataFrame(mi_columns)
-                    bottom = self.columns.to_frame().reset_index(drop=True)
-                    index_frame = cudf.concat([top, bottom])
-                    mc_df = DataFrame()
-                    for idx, key in enumerate(out._data):
-                        mc_df[idx] = out[key]
-                    mc_df.columns = cudf.MultiIndex.from_frame(index_frame)
-                    out = mc_df
+                """
+                ncols = len(self.columns.levels)
+                mi_columns = dict(zip(range(ncols), [name, len(name) * [""]]))
+                top = DataFrame(mi_columns)
+                bottom = self.columns.to_frame().reset_index(drop=True)
+                if isinstance(bottom, pd.DataFrame):
+                    bottom = cudf.from_pandas(bottom)
+                index_frame = cudf.concat([top, bottom])
+                mc_df = DataFrame()
+                for idx, key in enumerate(out._data):
+                    mc_df[idx] = out[key]
+                mc_df.columns = cudf.MultiIndex.from_frame(index_frame)
+                out = mc_df
         else:
             out = self
         if inplace is True:
