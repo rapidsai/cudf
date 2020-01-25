@@ -531,7 +531,7 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs, column_view const& 
 */
 std::unique_ptr<table> shift(table_view const& input,
                              size_type offset,
-                             std::vector<std::unique_ptr<scalar>> const& fill_values = {},
+                             std::vector<std::unique_ptr<scalar>> const& fill_values,
                              rmm::mr::device_memory_resource *mr =
                                rmm::mr::get_default_resource(),
                              cudaStream_t stream = 0);

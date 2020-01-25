@@ -99,33 +99,33 @@ struct functor {
                                            offset,
                                            scalar.data() };
 
-        if (scalar.is_valid() && not input.nullable())
-        {
-            thrust::transform(rmm::exec_policy(stream)->on(stream),
-                              index_begin,
-                              index_end,
-                              device_output->data<T>(),
-                              func_value);
+        if (input.nullable() || not scalar.is_valid()) {
+            auto func_validity = validity_functor{*device_input,
+                                                  input.size(),
+                                                  offset,
+                                                  scalar.validity_data()};
 
-            return output;
+            auto mask_pair = detail::valid_if(index_begin, index_end, func_validity);
+
+            output->set_null_mask(std::move(std::get<0>(mask_pair)));
+            output->set_null_count(std::get<1>(mask_pair));
         }
 
-        auto func_validity = validity_functor{*device_input,
-                                              input.size(),
-                                              offset,
-                                              scalar.validity_data()};
+        // avoid transforming elements we know to be invalid.
+        if (not scalar.is_valid()) {
+            if (offset > 0) {
+                index_begin = thrust::make_counting_iterator(offset);
+            }
+            if (offset < 0) {
+                index_end = thrust::make_counting_iterator(input.size() - offset);
+            }
+        }
 
-        thrust::transform_if(rmm::exec_policy(stream)->on(stream),
-                             index_begin,
-                             index_end,
-                             device_output->data<T>(),
-                             func_value,
-                             func_validity);
-
-        auto mask_pair = detail::valid_if(index_begin, index_end, func_validity);
-
-        output->set_null_mask(std::move(std::get<0>(mask_pair)));
-        output->set_null_count(std::get<1>(mask_pair));
+        thrust::transform(rmm::exec_policy(stream)->on(stream),
+                          index_begin,
+                          index_end,
+                          device_output->data<T>(),
+                          func_value);
 
         return output;
     }
