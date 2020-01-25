@@ -1,15 +1,8 @@
-import array as arr
-import operator
-
-import cupy
-import numpy as np
 import pandas as pd
 import pytest
 
 import cudf
-from cudf.core.dataframe import DataFrame, Series
-from cudf.tests import utils
-from cudf.tests.utils import assert_eq, does_not_raise, gen_rand
+from cudf.tests.utils import assert_eq
 
 
 @pytest.mark.parametrize("axis", [0, 1])

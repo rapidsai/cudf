@@ -2178,49 +2178,46 @@ class Series(Frame):
         scaled = cudautils.compute_scale(gpuarr, vmin, vmax)
         return self._copy_construct(data=scaled)
 
-    # `idxmin` and `idxmax` are stubbed here for writing expected tests.
-    # After feedback from the etl team on the libcudf API they will be replaced.
+    # `idxmin` and `idxmax` are stubbed here for writing expected
+    # tests. After feedback from the etl team on the libcudf API
+    # they will be replaced.
     def idxmin(self, axis=0, skipna=True):
         """
         Return the row label of the minimum value.
 
-        If multiple values equal the minimum, the first row label with that value is returned.
-        
-        Parameters: 
-            skipna : bool, default True
-                Exclude NA/null values. If the entire Series is NA, the result will be NA.
-            axis : int, default 0
-                For compatibility with DataFrame.idxmix. Redundant for application on Series.
-        """
-        # Changing None to numpy.nan so it can be compatible with
-        # numpy.argmin for implimentation reference
-        if skipna:
-            _sr = self.fillna(np.nan)
-            argmin = _sr.values.argmin()
+        If multiple values equal the minimum, the first row label with
+        that value is returned.
 
-        # Returning pandas.Series.idxmax value until libcudf API requirements established.
+        Parameters:
+            skipna : bool, default True
+                Exclude NA/null values. If the entire Series is NA, the
+                result will be NA.
+            axis : int, default 0
+                For compatibility with DataFrame.idxmix. Redundant for
+                application on Series.
+        """
+        # Returning pandas.Series.idxmax value until libcudf API
+        # requirements established.
         return self.to_pandas().idxmin(axis=axis, skipna=skipna)
 
     def idxmax(self, axis=0, skipna=True):
         """
         Return the row label of the maximum value.
 
-        If multiple values equal the maximum, the first row label with that value is returned.
-        
-        Parameters: 
+        If multiple values equal the maximum, the first row label
+        with that value is returned.
+
+        Parameters:
             skipna : bool, default True
-                Exclude NA/null values. If the entire Series is NA, the result will be NA.
+                Exclude NA/null values. If the entire Series is NA,
+                the result will be NA.
             axis : int, default 0
-                For compatibility with DataFrame.idxmix. Redundant for application on Series.
+                For compatibility with DataFrame.idxmix. Redundant
+                for application on Series.
 
         """
-        # Changing None to numpy.nan so it can be compatible with
-        # numpy.argmax for implimentation reference
-        if skipna:
-            _sr = self.fillna(np.nan)
-            argmax = _sr.values.argmax()
-
-        # Returning pandas.Series.idxmax value until libcudf API requirements established.
+        # Returning pandas.Series.idxmax value until libcudf API
+        # requirements established.
         return self.to_pandas().idxmax(axis=axis, skipna=skipna)
 
     # Absolute

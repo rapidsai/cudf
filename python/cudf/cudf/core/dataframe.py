@@ -3519,48 +3519,55 @@ class DataFrame(Frame):
         """
         return self.notna()
 
-    # `idxmin` and `idxmax` are stubbed here for writing expected tests.
-    # After feedback from the etl team on the libcudf API they will be replaced.
+    # `idxmin` and `idxmax` are stubbed here for writing expected
+    # tests. After feedback from the etl team on the libcudf API
+    # they will be replaced.
     def idxmin(self, axis=0, skipna=True):
         """
-        Return index of first occurrence of minimum over requested axis. NA/null values are excluded.
+        Return index of first occurrence of minimum over requested axis.
+        NA/null values are excluded.
 
-        Parameters:	
+        Parameters:
             axis : {0 or ‘index’, 1 or ‘columns’}, default 0
                 0 or ‘index’ for row-wise, 1 or ‘columns’ for column-wise
             skipna : boolean, default True
-                Exclude NA/null values. If an entire row/column is NA, the result will be NA.
+                Exclude NA/null values. If an entire row/column is NA,
+                the result will be NA.
 
-        Returns:	
+        Returns:
             Series
                 Indexes of minima along the specified axis.
 
-        Raises:	
+        Raises:
             ValueError
                 If the row/column is empty
         """
-        # Returning pandas.Series.idxmax value until libcudf API requirements established.
+        # Returning pandas.Series.idxmax value until libcudf API
+        # requirements established.
         return self.to_pandas().idxmin(axis=axis, skipna=skipna)
 
     def idxmax(self, axis=0, skipna=True):
         """
-        Return index of first occurrence of maximum over requested axis. NA/null values are excluded.
+        Return index of first occurrence of maximum over requested axis.
+        NA/null values are excluded.
 
-        Parameters:	
+        Parameters:
             axis : {0 or ‘index’, 1 or ‘columns’}, default 0
                 0 or ‘index’ for row-wise, 1 or ‘columns’ for column-wise
             skipna : boolean, default True
-                Exclude NA/null values. If an entire row/column is NA, the result will be NA.
+                Exclude NA/null values. If an entire row/column is NA,
+                the result will be NA.
 
-        Returns:	
+        Returns:
             Series
                 Indexes of minima along the specified axis.
 
-        Raises:	
+        Raises:
             ValueError
                 If the row/column is empty
         """
-        # Returning pandas.Series.idxmax value until libcudf API requirements established.
+        # Returning pandas.Series.idxmax value until libcudf API
+        # requirements established.
         return self.to_pandas().idxmax(axis=axis, skipna=skipna)
 
     def to_pandas(self):
