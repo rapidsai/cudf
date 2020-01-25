@@ -238,94 +238,92 @@ void compute_row_output_locations(size_type * __restrict__ row_partition_numbers
 /* ----------------------------------------------------------------------------*/
 template <typename InputIter, typename DataType>
 __global__
-void move_to_output_buffer(InputIter input_iter,
-                           DataType *output_buf,
-                           const size_type num_rows,
-                           const size_type num_partitions,
-                           size_type * __restrict__ row_partition_numbers,
-                           size_type * __restrict__ row_partition_offset,
-                           size_type * __restrict__ block_partition_sizes,
-                           size_type * __restrict__ scanned_block_partition_sizes)
+void copy_block_partitions(
+    InputIter input_iter,
+    DataType * __restrict__ output_buf,
+    const size_type num_rows,
+    const size_type num_partitions,
+    size_type const * __restrict__ row_partition_numbers,
+    size_type const * __restrict__ row_partition_offset,
+    size_type const * __restrict__ block_partition_sizes,
+    size_type const * __restrict__ scanned_block_partition_sizes)
 {
   extern __shared__ char shared_memory[];
   DataType *block_output = (DataType *)shared_memory;
   size_type *partition_offset_shared = (size_type *)(block_output + BLOCK_SIZE * ROWS_PER_THREAD);
   size_type *partition_offset_global = (size_type *)(partition_offset_shared + num_partitions + 1);
 
-  size_type ipartition;
-
   // Calculate the offset in shared memory of each partition in this thread block
   if (threadIdx.x == 0) {
     // TODO: could use a block scan instead of serialization
     partition_offset_shared[0] = 0;
 
-    for (ipartition = 0; ipartition < num_partitions; ipartition ++) {
+    for (size_type ipartition = 0; ipartition < num_partitions; ipartition ++) {
       partition_offset_shared[ipartition + 1] = partition_offset_shared[ipartition]
         + block_partition_sizes[ipartition * gridDim.x + blockIdx.x];
     }
   }
 
   // Fetch the offset in the output buffer of each partition in this thread block
-  ipartition = threadIdx.x;
-  while (ipartition < num_partitions) {
-    partition_offset_global[ipartition] = scanned_block_partition_sizes[ipartition * gridDim.x + blockIdx.x];
-    ipartition += blockDim.x;
+  for (size_type ipartition = threadIdx.x; ipartition < num_partitions;
+       ipartition += blockDim.x) {
+    partition_offset_global[ipartition]
+      = scanned_block_partition_sizes[ipartition * gridDim.x + blockIdx.x];
   }
 
   __syncthreads();
 
-  size_type row_number = threadIdx.x + blockIdx.x * blockDim.x;
-
   // Fetch the input data to shared memory
-  while ( row_number < num_rows ) {
-    ipartition = row_partition_numbers[row_number];
+  for (size_type row_number = threadIdx.x + blockIdx.x * blockDim.x;
+       row_number < num_rows; row_number += blockDim.x * gridDim.x) {
+    size_type const ipartition = row_partition_numbers[row_number];
 
     block_output[
       partition_offset_shared[ipartition] + row_partition_offset[row_number]
     ] = input_iter[row_number];
-
-    row_number += blockDim.x * gridDim.x;
   }
 
   __syncthreads();
 
-  // Copy data from shared memory to output buffer
-
-  constexpr int nthreads_partition = 16; // Use 16 threads to copy each partition, assume BLOCK_SIZE
-                                         // is divisible by 16
+  // Copy data from shared memory to output using 16 threads for each partition
+  constexpr int nthreads_partition = 16;
+  static_assert(BLOCK_SIZE % nthreads_partition == 0,
+    "BLOCK_SIZE must be divisible by number of threads");
   
-  for (ipartition = threadIdx.x / nthreads_partition;
-       ipartition < num_partitions;
-       ipartition += BLOCK_SIZE / nthreads_partition) {
-    
-    size_type row_offset = threadIdx.x % nthreads_partition;
-    size_type nelements_partition = partition_offset_shared[ipartition + 1] - partition_offset_shared[ipartition];
+  for (size_type ipartition = threadIdx.x / nthreads_partition;
+       ipartition < num_partitions; ipartition += BLOCK_SIZE / nthreads_partition) {
+    size_type const nelements_partition = partition_offset_shared[ipartition + 1]
+      - partition_offset_shared[ipartition];
 
-    while (row_offset < nelements_partition) {
+    for (size_type row_offset = threadIdx.x % nthreads_partition;
+         row_offset < nelements_partition; row_offset += nthreads_partition) {
       output_buf[partition_offset_global[ipartition] + row_offset]
         = block_output[partition_offset_shared[ipartition] + row_offset];
-      
-      row_offset += nthreads_partition;
     }
   }
 }
 
 rmm::device_vector<size_type> compute_gather_map(
-  size_type num_rows,
-  size_type num_partitions,
-  size_type * row_partition_numbers,
-  size_type * row_partition_offset,
-  size_type * block_partition_sizes,
-  size_type * scanned_block_partition_sizes,
-  size_type grid_size,
-  cudaStream_t stream)
+    size_type num_rows,
+    size_type num_partitions,
+    size_type const * row_partition_numbers,
+    size_type const * row_partition_offset,
+    size_type const * block_partition_sizes,
+    size_type const * scanned_block_partition_sizes,
+    size_type grid_size,
+    cudaStream_t stream)
 {
+  // We need 3 chunks of shared memory:
+  // 1. BLOCK_SIZE * ROWS_PER_THREAD elements of size_type for copying to output
+  // 2. num_partitions + 1 elements of size_type for per-block partition offsets
+  // 3. num_partitions + 1 elements of size_type for global partition offsets
+  int const smem = BLOCK_SIZE * ROWS_PER_THREAD * sizeof(size_type)
+    + (num_partitions + 1) * sizeof(size_type) * 2;
+
   rmm::device_vector<size_type> gather_map(num_rows);
   auto iter = thrust::make_counting_iterator(0);
 
-  int const smem = BLOCK_SIZE * ROWS_PER_THREAD * sizeof(size_type)
-    + (num_partitions + 1) * sizeof(size_type) * 2;
-  move_to_output_buffer
+  copy_block_partitions
     <<<grid_size, BLOCK_SIZE, smem, stream>>>(
       iter, gather_map.data().get(), num_rows,
       num_partitions, row_partition_numbers, row_partition_offset,
@@ -335,24 +333,30 @@ rmm::device_vector<size_type> compute_gather_map(
   return gather_map;
 }
 
-struct move_to_output_buffer_dispatcher{
+struct copy_block_partitions_dispatcher{
   template <typename DataType,
       std::enable_if_t<is_fixed_width<DataType>()>* = nullptr>
-  std::unique_ptr<column> operator()(column_view const& input,
-                  const size_type num_partitions,
-                  size_type * row_partition_numbers,
-                  size_type * row_partition_offset,
-                  size_type * block_partition_sizes,
-                  size_type * scanned_block_partition_sizes,
-                  size_type grid_size,
-                  rmm::mr::device_memory_resource* mr,
-                  cudaStream_t stream)
+  std::unique_ptr<column> operator()(
+      column_view const& input,
+      const size_type num_partitions,
+      size_type const * row_partition_numbers,
+      size_type const * row_partition_offset,
+      size_type const * block_partition_sizes,
+      size_type const * scanned_block_partition_sizes,
+      size_type grid_size,
+      rmm::mr::device_memory_resource* mr,
+      cudaStream_t stream)
   {
-    rmm::device_buffer output(input.size() * sizeof(DataType), stream, mr);
-
+    // We need 3 chunks of shared memory:
+    // 1. BLOCK_SIZE * ROWS_PER_THREAD elements of DataType for copying to output
+    // 2. num_partitions + 1 elements of size_type for per-block partition offsets
+    // 3. num_partitions + 1 elements of size_type for global partition offsets
     int const smem = BLOCK_SIZE * ROWS_PER_THREAD * sizeof(DataType)
       + (num_partitions + 1) * sizeof(size_type) * 2;
-    move_to_output_buffer
+
+    rmm::device_buffer output(input.size() * sizeof(DataType), stream, mr);
+
+    copy_block_partitions
       <<<grid_size, BLOCK_SIZE, smem, stream>>>(
         input.data<DataType>(), static_cast<DataType*>(output.data()), input.size(),
         num_partitions, row_partition_numbers, row_partition_offset,
@@ -364,25 +368,30 @@ struct move_to_output_buffer_dispatcher{
 
   template <typename DataType,
       std::enable_if_t<not is_fixed_width<DataType>()>* = nullptr>
-  std::unique_ptr<column> operator()(column_view const& input,
-                  const size_type num_partitions,
-                  size_type * row_partition_numbers,
-                  size_type * row_partition_offset,
-                  size_type * block_partition_sizes,
-                  size_type * scanned_block_partition_sizes,
-                  size_type grid_size,
-                  rmm::mr::device_memory_resource* mr,
-                  cudaStream_t stream)
+  std::unique_ptr<column> operator()(
+      column_view const& input,
+      const size_type num_partitions,
+      size_type const * row_partition_numbers,
+      size_type const * row_partition_offset,
+      size_type const * block_partition_sizes,
+      size_type const * scanned_block_partition_sizes,
+      size_type grid_size,
+      rmm::mr::device_memory_resource* mr,
+      cudaStream_t stream)
   {
+    // Use move_to_output_buffer to create an equivalent gather map
     auto gather_map = compute_gather_map(input.size(), num_partitions, row_partition_numbers,
         row_partition_offset, block_partition_sizes, scanned_block_partition_sizes,
         grid_size, stream);
+
+    // Use gather instead for non-fixed width types
     return experimental::type_dispatcher(input.type(), experimental::detail::column_gatherer{},
         input, gather_map.begin(), gather_map.end(), false, mr, stream);
   }
 };
 
-template <bool hash_nulls>
+// NOTE hash_has_nulls must be true if table_to_hash has nulls
+template <bool hash_has_nulls>
 std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>>
 hash_partition_table(table_view const& input,
                      table_view const &table_to_hash,
@@ -413,7 +422,7 @@ hash_partition_table(table_view const& input,
   auto row_partition_offset = rmm::device_vector<size_type>(num_rows);
 
   auto const device_input = table_device_view::create(table_to_hash, stream);
-  auto const hasher = experimental::row_hasher<MurmurHash3_32, hash_nulls>(*device_input);
+  auto const hasher = experimental::row_hasher<MurmurHash3_32, hash_has_nulls>(*device_input);
 
   // If the number of partitions is a power of two, we can compute the partition 
   // number of each row more efficiently with bitwise operations
@@ -473,20 +482,24 @@ hash_partition_table(table_view const& input,
                            num_partitions * sizeof(size_type),
                            cudaMemcpyDeviceToHost,
                            stream));
-                           
-  if (num_partitions <= 1024) {
+
+  // When the number of partitions is less than 512, we can apply an optimization
+  // using shared memory to copy values to the output buffer. For greater number of
+  // partitions, it is more efficient to fallback to using scatter.
+  if (num_partitions <= 512) {
     std::vector<std::unique_ptr<column>> output_cols(input.num_columns());
 
-    // Move data from input table to hashed table
-    auto row_partition_numbers_ptr {row_partition_numbers.data().get()};
-    auto row_partition_offset_ptr {row_partition_offset.data().get()};
-    auto block_partition_sizes_ptr {block_partition_sizes.data().get()};
-    auto scanned_block_partition_sizes_ptr {scanned_block_partition_sizes.data().get()};
+    auto const row_partition_numbers_ptr {row_partition_numbers.data().get()};
+    auto const row_partition_offset_ptr {row_partition_offset.data().get()};
+    auto const block_partition_sizes_ptr {block_partition_sizes.data().get()};
+    auto const scanned_block_partition_sizes_ptr {scanned_block_partition_sizes.data().get()};
+
+    // Copy input to output by partition per column
     std::transform(input.begin(), input.end(), output_cols.begin(),
       [=](auto const& col) {
         return cudf::experimental::type_dispatcher(
           col.type(),
-          move_to_output_buffer_dispatcher{},
+          copy_block_partitions_dispatcher{},
           col,
           num_partitions,
           row_partition_numbers_ptr,
@@ -497,9 +510,12 @@ hash_partition_table(table_view const& input,
       });
 
     if (has_nulls(input)) {
+      // Use copy_block_partitions to compute a gather map
       auto gather_map = compute_gather_map(num_rows, num_partitions, row_partition_numbers_ptr,
         row_partition_offset_ptr, block_partition_sizes_ptr, scanned_block_partition_sizes_ptr,
           grid_size, stream);
+
+      // Handle bitmask using gather to take advantage of ballot_sync
       experimental::detail::gather_bitmask(input, gather_map.begin(), output_cols, mr, stream);
     }
 
@@ -507,14 +523,15 @@ hash_partition_table(table_view const& input,
     return std::make_pair(std::move(output), std::move(partition_offsets));
   }
   else {
-    // Compute the output location for each row in-place based on it's 
-    // partition number such that each partition will be contiguous in memory
+    // Compute a scatter map from input to output such that the output rows are
+    // sorted by partition number
     auto row_output_locations {row_partition_numbers.data().get()};
     auto scanned_block_partition_sizes_ptr {scanned_block_partition_sizes.data().get()};
     compute_row_output_locations
         <<<grid_size, BLOCK_SIZE, num_partitions * sizeof(size_type), stream>>>
             (row_output_locations, num_rows, num_partitions, scanned_block_partition_sizes_ptr);
 
+    // Use the resulting scatter map to materialize the output
     auto output = experimental::detail::scatter<size_type>(input, row_partition_numbers.begin(),
       row_partition_numbers.end(), input, false, mr, stream);
 
