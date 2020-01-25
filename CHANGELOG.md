@@ -1,6 +1,7 @@
 # cuDF 0.13.0 (Date TBD)
 
 ## New Features
+- PR #3914 Implimenting `idxmin` and `idxmax` for `Series` and `Dataframe`
 
 ## Improvements
 

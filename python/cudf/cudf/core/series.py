@@ -2196,7 +2196,7 @@ class Series(Frame):
         # numpy.argmin for implimentation reference
         if skipna:
             _sr = self.fillna(np.nan)
-            argmax = _sr.values.argmax()
+            argmin = _sr.values.argmin()
 
         # Returning pandas.Series.idxmax value until libcudf API requirements established.
         return self.to_pandas().idxmin(axis=axis, skipna=skipna)
