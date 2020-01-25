@@ -118,7 +118,6 @@ struct functor {
             if (offset > 0) {
                 index_begin = thrust::make_counting_iterator<size_type>(offset);
                 data = data + offset;
-
             } else  if (offset < 0) {
                 index_end = thrust::make_counting_iterator<size_type>(input.size() + offset);
             }
