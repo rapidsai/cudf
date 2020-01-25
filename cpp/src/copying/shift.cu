@@ -111,20 +111,23 @@ struct functor {
             output->set_null_count(std::get<1>(mask_pair));
         }
 
-        // avoid transforming elements we know to be invalid.
+        auto data = device_output->data<T>();
+
+        // avoid assigning elements we know to be invalid.
         if (not scalar.is_valid()) {
             if (offset > 0) {
-                index_begin = thrust::make_counting_iterator(offset);
-            }
-            if (offset < 0) {
-                index_end = thrust::make_counting_iterator(input.size() - offset);
+                index_begin = thrust::make_counting_iterator<size_type>(offset);
+                data = data + offset;
+
+            } else  if (offset < 0) {
+                index_end = thrust::make_counting_iterator<size_type>(input.size() + offset);
             }
         }
 
         thrust::transform(rmm::exec_policy(stream)->on(stream),
                           index_begin,
                           index_end,
-                          device_output->data<T>(),
+                          data,
                           func_value);
 
         return output;
