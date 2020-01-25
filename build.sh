@@ -18,8 +18,8 @@ ARGS=$*
 # script, and that this script resides in the repo dir!
 REPODIR=$(cd $(dirname $0); pwd)
 
-VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks kafka_tests -v -g -n --allgpuarch -h"
-HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [kafka_tests] [-v] [-g] [-n] [-h]
+VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks external -v -g -n --allgpuarch -h"
+HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [external] [-v] [-g] [-n] [-h]
    clean        - remove all existing build artifacts and configuration (start
                   over)
    libnvstrings - build the nvstrings C++ code only
@@ -28,7 +28,7 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [kafka_tests] [-v] [-
    cudf         - build the cudf Python package
    dask_cudf    - build the dask_cudf Python package
    benchmarks   - build benchmarks
-   kafka_tests  - enable kafka integration tests
+   external     - build external datasources
    -v           - verbose build mode
    -g           - build for debug
    -n           - no install step
@@ -39,6 +39,7 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [kafka_tests] [-v] [-
    'nvstrings' then 'libcudf' then 'cudf' then 'dask_cudf' targets
 "
 LIB_BUILD_DIR=${REPODIR}/cpp/build
+EXTERNAL_BUILD_DIR=${REPODIR}/external/build
 NVSTRINGS_BUILD_DIR=${REPODIR}/python/nvstrings/build
 CUDF_BUILD_DIR=${REPODIR}/python/cudf/build
 DASK_CUDF_BUILD_DIR=${REPODIR}/python/dask_cudf/build
@@ -49,7 +50,7 @@ VERBOSE=""
 BUILD_TYPE=Release
 INSTALL_TARGET=install
 BENCHMARKS=OFF
-ENABLE_KAFKA_TESTS=OFF
+BUILD_EXTERNAL_DATASOURCES=OFF
 BUILD_ALL_GPU_ARCH=0
 
 # Set defaults for vars that may not have been defined externally
@@ -97,8 +98,8 @@ fi
 if hasArg benchmarks; then
     BENCHMARKS=ON
 fi
-if hasArg kafka_tests; then
-    ENABLE_KAFKA_TESTS="ON"
+if hasArg external; then
+    BUILD_EXTERNAL_DATASOURCES="ON"
 fi
 
 # If clean given, run it prior to any other steps
@@ -193,3 +194,15 @@ if buildAll || hasArg dask_cudf; then
         python setup.py build_ext --inplace
     fi
 fi
+
+# Build and install the external datasources
+if buildAll || hasArg external; then
+
+    mkdir -p ${EXTERNAL_BUILD_DIR}
+    cd ${EXTERNAL_BUILD_DIR}
+    cmake -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
+          -DCMAKE_CXX11_ABI=ON \
+          -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ..
+
+    # build the external datasource project
+    make -j${PARALLEL_LEVEL} external VERBOSE=${VERBOSE}
