@@ -1523,7 +1523,7 @@ class DataFrame(Frame):
     def take(self, positions):
         positions = as_column(positions)
         if pd.api.types.is_bool_dtype(positions):
-            return self._apply_boolean_mask(positions,)
+            return self._apply_boolean_mask(positions)
         out = self.gather(positions)
         return out
 
@@ -3518,6 +3518,50 @@ class DataFrame(Frame):
         """Identify non-missing values in a DataFrame. Alias for notna.
         """
         return self.notna()
+
+    # `idxmin` and `idxmax` are stubbed here for writing expected tests.
+    # After feedback from the etl team on the libcudf API they will be replaced.
+    def idxmin(self, axis=0, skipna=True):
+        """
+        Return index of first occurrence of minimum over requested axis. NA/null values are excluded.
+
+        Parameters:	
+            axis : {0 or ‘index’, 1 or ‘columns’}, default 0
+                0 or ‘index’ for row-wise, 1 or ‘columns’ for column-wise
+            skipna : boolean, default True
+                Exclude NA/null values. If an entire row/column is NA, the result will be NA.
+
+        Returns:	
+            Series
+                Indexes of minima along the specified axis.
+
+        Raises:	
+            ValueError
+                If the row/column is empty
+        """
+        # Returning pandas.Series.idxmax value until libcudf API requirements established.
+        return self.to_pandas().idxmin(axis=axis, skipna=skipna)
+
+    def idxmax(self, axis=0, skipna=True):
+        """
+        Return index of first occurrence of maximum over requested axis. NA/null values are excluded.
+
+        Parameters:	
+            axis : {0 or ‘index’, 1 or ‘columns’}, default 0
+                0 or ‘index’ for row-wise, 1 or ‘columns’ for column-wise
+            skipna : boolean, default True
+                Exclude NA/null values. If an entire row/column is NA, the result will be NA.
+
+        Returns:	
+            Series
+                Indexes of minima along the specified axis.
+
+        Raises:	
+            ValueError
+                If the row/column is empty
+        """
+        # Returning pandas.Series.idxmax value until libcudf API requirements established.
+        return self.to_pandas().idxmax(axis=axis, skipna=skipna)
 
     def to_pandas(self):
         """
