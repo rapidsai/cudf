@@ -5,6 +5,7 @@
 ## Improvements
 
 - PR #3748 Optimize hash_partition using shared memory
+- PR #3909 Move java backend to libcudf++
 
 ## Bug Fixes
 

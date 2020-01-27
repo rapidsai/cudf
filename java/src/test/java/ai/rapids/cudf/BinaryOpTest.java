@@ -146,13 +146,15 @@ public class BinaryOpTest extends CudfTestBase {
         assertColumnsAreEqual(addIntFirst, addDoubleFirst, "int + double vs double + int");
       }
 
-      try (ColumnVector add = lcv1.add(Scalar.fromFloat(1.1f));
+      try (Scalar s = Scalar.fromFloat(1.1f);
+           ColumnVector add = lcv1.add(s);
            ColumnVector expected = forEachS(DType.FLOAT32, lcv1, 1.1f,
                    (b, l, r, i) -> b.append(l.getLong(i) + r))) {
         assertColumnsAreEqual(expected, add, "int64 + scalar float");
       }
 
-      try (ColumnVector add = Scalar.fromShort((short) 100).add(bcv1);
+      try (Scalar s = Scalar.fromShort((short) 100);
+           ColumnVector add = s.add(bcv1);
            ColumnVector expected = forEachS(DType.INT16, (short) 100,  bcv1,
                    (b, l, r, i) -> b.append((short)(l + r.getByte(i))))) {
         assertColumnsAreEqual(expected, add, "scalar short + byte");
@@ -219,13 +221,15 @@ public class BinaryOpTest extends CudfTestBase {
         assertColumnsAreEqual(expected, sub, "double - int");
       }
 
-      try (ColumnVector sub = lcv1.sub(Scalar.fromFloat(1.1f));
+      try (Scalar s = Scalar.fromFloat(1.1f);
+           ColumnVector sub = lcv1.sub(s);
            ColumnVector expected = forEachS(DType.FLOAT32, lcv1, 1.1f,
                    (b, l, r, i) -> b.append(l.getLong(i) - r))) {
         assertColumnsAreEqual(expected, sub, "int64 - scalar float");
       }
 
-      try (ColumnVector sub = Scalar.fromShort((short) 100).sub(bcv1);
+      try (Scalar s = Scalar.fromShort((short) 100);
+           ColumnVector sub = s.sub(bcv1);
            ColumnVector expected = forEachS(DType.INT16, (short) 100,  bcv1,
                    (b, l, r, i) -> b.append((short)(l - r.getByte(i))))) {
         assertColumnsAreEqual(expected, sub, "scalar short - byte");
@@ -247,13 +251,15 @@ public class BinaryOpTest extends CudfTestBase {
         assertColumnsAreEqual(expected, answer, "int32 * double");
       }
 
-      try (ColumnVector answer = icv.mul(Scalar.fromFloat(1.1f));
+      try (Scalar s = Scalar.fromFloat(1.1f);
+           ColumnVector answer = icv.mul(s);
            ColumnVector expected = forEachS(DType.FLOAT32, icv, 1.1f,
                    (b, l, r, i) -> b.append(l.getInt(i) * r))) {
         assertColumnsAreEqual(expected, answer, "int64 * scalar float");
       }
 
-      try (ColumnVector answer = Scalar.fromShort((short) 100).mul(icv);
+      try (Scalar s = Scalar.fromShort((short) 100);
+           ColumnVector answer = s.mul(icv);
            ColumnVector expected = forEachS(DType.INT32, (short) 100,  icv,
                    (b, l, r, i) -> b.append(l * r.getInt(i)))) {
         assertColumnsAreEqual(expected, answer, "scalar short * int32");
@@ -271,13 +277,15 @@ public class BinaryOpTest extends CudfTestBase {
         assertColumnsAreEqual(expected, answer, "int32 / double");
       }
 
-      try (ColumnVector answer = icv.div(Scalar.fromFloat(1.1f));
+      try (Scalar s = Scalar.fromFloat(1.1f);
+           ColumnVector answer = icv.div(s);
            ColumnVector expected = forEachS(DType.FLOAT32, icv, 1.1f,
                    (b, l, r, i) -> b.append(l.getInt(i) / r))) {
         assertColumnsAreEqual(expected, answer, "int64 / scalar float");
       }
 
-      try (ColumnVector answer = Scalar.fromShort((short) 100).div(icv);
+      try (Scalar s = Scalar.fromShort((short) 100);
+           ColumnVector answer = s.div(icv);
            ColumnVector expected = forEachS(DType.INT32, (short) 100,  icv,
                    (b, l, r, i) -> b.append(l / r.getInt(i)))) {
         assertColumnsAreEqual(expected, answer, "scalar short / int32");
@@ -295,13 +303,15 @@ public class BinaryOpTest extends CudfTestBase {
         assertColumnsAreEqual(expected, answer, "int32 / double");
       }
 
-      try (ColumnVector answer = icv.trueDiv(Scalar.fromFloat(1.1f));
+      try (Scalar s = Scalar.fromFloat(1.1f);
+           ColumnVector answer = icv.trueDiv(s);
            ColumnVector expected = forEachS(DType.FLOAT32, icv, 1.1f,
                    (b, l, r, i) -> b.append(l.getInt(i) / r))) {
         assertColumnsAreEqual(expected, answer, "int64 / scalar float");
       }
 
-      try (ColumnVector answer = Scalar.fromShort((short) 100).trueDiv(icv);
+      try (Scalar s = Scalar.fromShort((short) 100);
+           ColumnVector answer = s.trueDiv(icv);
            ColumnVector expected = forEachS(DType.INT32, (short) 100,  icv,
                    (b, l, r, i) -> b.append(l / r.getInt(i)))) {
         assertColumnsAreEqual(expected, answer, "scalar short / int32");
@@ -319,13 +329,15 @@ public class BinaryOpTest extends CudfTestBase {
         assertColumnsAreEqual(expected, answer, "int32 / double");
       }
 
-      try (ColumnVector answer = icv.floorDiv(Scalar.fromFloat(1.1f));
+      try (Scalar s = Scalar.fromFloat(1.1f);
+           ColumnVector answer = icv.floorDiv(s);
            ColumnVector expected = forEachS(DType.FLOAT32, icv, 1.1f,
                    (b, l, r, i) -> b.append((float)Math.floor(l.getInt(i) / r)))) {
         assertColumnsAreEqual(expected, answer, "int64 / scalar float");
       }
 
-      try (ColumnVector answer = Scalar.fromShort((short) 100).floorDiv(icv);
+      try (Scalar s = Scalar.fromShort((short) 100);
+           ColumnVector answer = s.floorDiv(icv);
            ColumnVector expected = forEachS(DType.INT32, (short) 100,  icv,
                    (b, l, r, i) -> b.append(l / r.getInt(i)))) {
         assertColumnsAreEqual(expected, answer, "scalar short / int32");
@@ -343,13 +355,15 @@ public class BinaryOpTest extends CudfTestBase {
         assertColumnsAreEqual(expected, answer, "int32 % double");
       }
 
-      try (ColumnVector answer = icv.mod(Scalar.fromFloat(1.1f));
+      try (Scalar s = Scalar.fromFloat(1.1f);
+           ColumnVector answer = icv.mod(s);
            ColumnVector expected = forEachS(DType.FLOAT32, icv, 1.1f,
                    (b, l, r, i) -> b.append(l.getInt(i) % r))) {
         assertColumnsAreEqual(expected, answer, "int64 % scalar float");
       }
 
-      try (ColumnVector answer = Scalar.fromShort((short) 100).mod(icv);
+      try (Scalar s = Scalar.fromShort((short) 100);
+           ColumnVector answer = s.mod(icv);
            ColumnVector expected = forEachS(DType.INT32, (short) 100,  icv,
                    (b, l, r, i) -> b.append(l % r.getInt(i)))) {
         assertColumnsAreEqual(expected, answer, "scalar short % int32");
@@ -367,13 +381,15 @@ public class BinaryOpTest extends CudfTestBase {
         assertColumnsAreEqual(expected, answer, "int32 pow double");
       }
 
-      try (ColumnVector answer = icv.pow(Scalar.fromFloat(1.1f));
+      try (Scalar s = Scalar.fromFloat(1.1f);
+           ColumnVector answer = icv.pow(s);
            ColumnVector expected = forEachS(DType.FLOAT32, icv, 1.1f,
                    (b, l, r, i) -> b.append((float)Math.pow(l.getInt(i), r)))) {
         assertColumnsAreEqual(expected, answer, "int64 pow scalar float");
       }
 
-      try (ColumnVector answer = Scalar.fromShort((short) 100).pow(icv);
+      try (Scalar s = Scalar.fromShort((short) 100);
+           ColumnVector answer = s.pow(icv);
            ColumnVector expected = forEachS(DType.INT32, (short) 100,  icv,
                    (b, l, r, i) -> b.append((int)Math.pow(l, r.getInt(i))))) {
         assertColumnsAreEqual(expected, answer, "scalar short pow int32");
@@ -391,13 +407,15 @@ public class BinaryOpTest extends CudfTestBase {
         assertColumnsAreEqual(expected, answer, "int32 == double");
       }
 
-      try (ColumnVector answer = icv.equalTo(Scalar.fromFloat(1.0f));
+      try (Scalar s = Scalar.fromFloat(1.0f);
+           ColumnVector answer = icv.equalTo(s);
            ColumnVector expected = forEachS(DType.BOOL8, icv, 1.0f,
                    (b, l, r, i) -> b.append(l.getInt(i) == r))) {
         assertColumnsAreEqual(expected, answer, "int64 == scalar float");
       }
 
-      try (ColumnVector answer = Scalar.fromShort((short) 100).equalTo(icv);
+      try (Scalar s = Scalar.fromShort((short) 100);
+           ColumnVector answer = s.equalTo(icv);
            ColumnVector expected = forEachS(DType.BOOL8, (short) 100,  icv,
                    (b, l, r, i) -> b.append(l == r.getInt(i)))) {
         assertColumnsAreEqual(expected, answer, "scalar short == int32");
@@ -406,11 +424,11 @@ public class BinaryOpTest extends CudfTestBase {
   }
 
   @Test
-  public void testStringCategoryEqualScalar() {
-    try (ColumnVector a = ColumnVector.categoryFromStrings("a", "b", "c", "d");
-         ColumnVector b = ColumnVector.categoryFromStrings("a", "b", "b", "a");
-         ColumnVector c = ColumnVector.categoryFromStrings("a", null, "b", null)) {
-      Scalar s = Scalar.fromString("b");
+  public void testStringEqualScalar() {
+    try (ColumnVector a = ColumnVector.fromStrings("a", "b", "c", "d");
+         ColumnVector b = ColumnVector.fromStrings("a", "b", "b", "a");
+         ColumnVector c = ColumnVector.fromStrings("a", null, "b", null);
+         Scalar s = Scalar.fromString("b")) {
 
       try (ColumnVector answer = a.equalTo(s);
            ColumnVector expected = ColumnVector.fromBoxedBooleans(false, true, false, false)) {
@@ -430,10 +448,10 @@ public class BinaryOpTest extends CudfTestBase {
   }
 
   @Test
-  public void testStringCategoryEqualScalarNotPresent() {
-    try (ColumnVector a = ColumnVector.categoryFromStrings("a", "b", "c", "d");
-         ColumnVector b = ColumnVector.categoryFromStrings("a", null, "b", null)) {
-      Scalar s = Scalar.fromString("boo");
+  public void testStringEqualScalarNotPresent() {
+    try (ColumnVector a = ColumnVector.fromStrings("a", "b", "c", "d");
+         ColumnVector b = ColumnVector.fromStrings("a", null, "b", null);
+         Scalar s = Scalar.fromString("boo")) {
 
       try (ColumnVector answer = a.equalTo(s);
            ColumnVector expected = ColumnVector.fromBoxedBooleans(false, false, false, false)) {
@@ -457,13 +475,15 @@ public class BinaryOpTest extends CudfTestBase {
         assertColumnsAreEqual(expected, answer, "int32 != double");
       }
 
-      try (ColumnVector answer = icv.notEqualTo(Scalar.fromFloat(1.0f));
+      try (Scalar s = Scalar.fromFloat(1.0f);
+           ColumnVector answer = icv.notEqualTo(s);
            ColumnVector expected = forEachS(DType.BOOL8, icv, 1.0f,
                    (b, l, r, i) -> b.append(l.getInt(i) != r))) {
         assertColumnsAreEqual(expected, answer, "int64 != scalar float");
       }
 
-      try (ColumnVector answer = Scalar.fromShort((short) 100).notEqualTo(icv);
+      try (Scalar s = Scalar.fromShort((short) 100);
+           ColumnVector answer = s.notEqualTo(icv);
            ColumnVector expected = forEachS(DType.BOOL8, (short) 100,  icv,
                    (b, l, r, i) -> b.append(l != r.getInt(i)))) {
         assertColumnsAreEqual(expected, answer, "scalar short != int32");
@@ -472,11 +492,11 @@ public class BinaryOpTest extends CudfTestBase {
   }
 
   @Test
-  public void testStringCategoryNotEqualScalar() {
-    try (ColumnVector a = ColumnVector.categoryFromStrings("a", "b", "c", "d");
-         ColumnVector b = ColumnVector.categoryFromStrings("a", "b", "b", "a");
-         ColumnVector c = ColumnVector.categoryFromStrings("a", null, "b", null)) {
-      Scalar s = Scalar.fromString("b");
+  public void testStringNotEqualScalar() {
+    try (ColumnVector a = ColumnVector.fromStrings("a", "b", "c", "d");
+         ColumnVector b = ColumnVector.fromStrings("a", "b", "b", "a");
+         ColumnVector c = ColumnVector.fromStrings("a", null, "b", null);
+         Scalar s = Scalar.fromString("b")) {
 
       try (ColumnVector answer = a.notEqualTo(s);
            ColumnVector expected = ColumnVector.fromBoxedBooleans(true, false, true, true)) {
@@ -496,10 +516,10 @@ public class BinaryOpTest extends CudfTestBase {
   }
 
   @Test
-  public void testStringCategoryNotEqualScalarNotPresent() {
-    try (ColumnVector a = ColumnVector.categoryFromStrings("a", "b", "c", "d");
-         ColumnVector b = ColumnVector.categoryFromStrings("a", null, "b", null)) {
-      Scalar s = Scalar.fromString("abc");
+  public void testStringNotEqualScalarNotPresent() {
+    try (ColumnVector a = ColumnVector.fromStrings("a", "b", "c", "d");
+         ColumnVector b = ColumnVector.fromStrings("a", null, "b", null);
+         Scalar s = Scalar.fromString("abc")) {
 
       try (ColumnVector answer = a.notEqualTo(s);
            ColumnVector expected = ColumnVector.fromBoxedBooleans(true, true, true, true)) {
@@ -523,13 +543,15 @@ public class BinaryOpTest extends CudfTestBase {
         assertColumnsAreEqual(expected, answer, "int32 < double");
       }
 
-      try (ColumnVector answer = icv.lessThan(Scalar.fromFloat(1.0f));
+      try (Scalar s = Scalar.fromFloat(1.0f);
+           ColumnVector answer = icv.lessThan(s);
            ColumnVector expected = forEachS(DType.BOOL8, icv, 1.0f,
                    (b, l, r, i) -> b.append(l.getInt(i) < r))) {
         assertColumnsAreEqual(expected, answer, "int64 < scalar float");
       }
 
-      try (ColumnVector answer = Scalar.fromShort((short) 100).lessThan(icv);
+      try (Scalar s = Scalar.fromShort((short) 100);
+           ColumnVector answer = s.lessThan(icv);
            ColumnVector expected = forEachS(DType.BOOL8, (short) 100,  icv,
                    (b, l, r, i) -> b.append(l < r.getInt(i)))) {
         assertColumnsAreEqual(expected, answer, "scalar short < int32");
@@ -538,11 +560,11 @@ public class BinaryOpTest extends CudfTestBase {
   }
 
   @Test
-  public void testStringCategoryLessThanScalar() {
-    try (ColumnVector a = ColumnVector.categoryFromStrings("a", "b", "c", "d");
-         ColumnVector b = ColumnVector.categoryFromStrings("a", "b", "b", "a");
-         ColumnVector c = ColumnVector.categoryFromStrings("a", null, "b", null)) {
-      Scalar s = Scalar.fromString("b");
+  public void testStringLessThanScalar() {
+    try (ColumnVector a = ColumnVector.fromStrings("a", "b", "c", "d");
+         ColumnVector b = ColumnVector.fromStrings("a", "b", "b", "a");
+         ColumnVector c = ColumnVector.fromStrings("a", null, "b", null);
+         Scalar s = Scalar.fromString("b")) {
 
       try (ColumnVector answer = a.lessThan(s);
            ColumnVector expected = ColumnVector.fromBoxedBooleans(true, false, false, false)) {
@@ -563,11 +585,11 @@ public class BinaryOpTest extends CudfTestBase {
 
 
   @Test
-  public void testStringCategoryLessThanScalarNotPresent() {
-    try (ColumnVector a = ColumnVector.categoryFromStrings("a", "b", "c", "d");
-         ColumnVector b = ColumnVector.categoryFromStrings("a", "b", "b", "a");
-         ColumnVector c = ColumnVector.categoryFromStrings("a", null, "b", null)) {
-      Scalar s = Scalar.fromString("abc");
+  public void testStringLessThanScalarNotPresent() {
+    try (ColumnVector a = ColumnVector.fromStrings("a", "b", "c", "d");
+         ColumnVector b = ColumnVector.fromStrings("a", "b", "b", "a");
+         ColumnVector c = ColumnVector.fromStrings("a", null, "b", null);
+         Scalar s = Scalar.fromString("abc")) {
 
       try (ColumnVector answer = a.lessThan(s);
            ColumnVector expected = ColumnVector.fromBoxedBooleans(true, false, false, false)) {
@@ -596,13 +618,15 @@ public class BinaryOpTest extends CudfTestBase {
         assertColumnsAreEqual(expected, answer, "int32 > double");
       }
 
-      try (ColumnVector answer = icv.greaterThan(Scalar.fromFloat(1.0f));
+      try (Scalar s = Scalar.fromFloat(1.0f);
+           ColumnVector answer = icv.greaterThan(s);
            ColumnVector expected = forEachS(DType.BOOL8, icv, 1.0f,
                    (b, l, r, i) -> b.append(l.getInt(i) > r))) {
         assertColumnsAreEqual(expected, answer, "int64 > scalar float");
       }
 
-      try (ColumnVector answer = Scalar.fromShort((short) 100).greaterThan(icv);
+      try (Scalar s = Scalar.fromShort((short) 100);
+           ColumnVector answer = s.greaterThan(icv);
            ColumnVector expected = forEachS(DType.BOOL8, (short) 100,  icv,
                    (b, l, r, i) -> b.append(l > r.getInt(i)))) {
         assertColumnsAreEqual(expected, answer, "scalar short > int32");
@@ -611,11 +635,11 @@ public class BinaryOpTest extends CudfTestBase {
   }
 
   @Test
-  public void testStringCategoryGreaterThanScalar() {
-    try (ColumnVector a = ColumnVector.categoryFromStrings("a", "b", "c", "d");
-         ColumnVector b = ColumnVector.categoryFromStrings("a", "b", "b", "a");
-         ColumnVector c = ColumnVector.categoryFromStrings("a", null, "b", null)) {
-      Scalar s = Scalar.fromString("b");
+  public void testStringGreaterThanScalar() {
+    try (ColumnVector a = ColumnVector.fromStrings("a", "b", "c", "d");
+         ColumnVector b = ColumnVector.fromStrings("a", "b", "b", "a");
+         ColumnVector c = ColumnVector.fromStrings("a", null, "b", null);
+         Scalar s = Scalar.fromString("b")) {
 
       try (ColumnVector answer = a.greaterThan(s);
            ColumnVector expected = ColumnVector.fromBoxedBooleans(false, false, true, true)) {
@@ -635,11 +659,11 @@ public class BinaryOpTest extends CudfTestBase {
   }
 
   @Test
-  public void testStringCategoryGreaterThanScalarNotPresent() {
-    try (ColumnVector a = ColumnVector.categoryFromStrings("a", "b", "c", "d");
-         ColumnVector b = ColumnVector.categoryFromStrings("a", "b", "b", "a");
-         ColumnVector c = ColumnVector.categoryFromStrings("a", null, "b", null)) {
-      Scalar s = Scalar.fromString("boo");
+  public void testStringGreaterThanScalarNotPresent() {
+    try (ColumnVector a = ColumnVector.fromStrings("a", "b", "c", "d");
+         ColumnVector b = ColumnVector.fromStrings("a", "b", "b", "a");
+         ColumnVector c = ColumnVector.fromStrings("a", null, "b", null);
+         Scalar s = Scalar.fromString("boo")) {
 
       try (ColumnVector answer = a.greaterThan(s);
            ColumnVector expected = ColumnVector.fromBoxedBooleans(false, false, true, true)) {
@@ -668,13 +692,15 @@ public class BinaryOpTest extends CudfTestBase {
         assertColumnsAreEqual(expected, answer, "int32 <= double");
       }
 
-      try (ColumnVector answer = icv.lessOrEqualTo(Scalar.fromFloat(1.0f));
+      try (Scalar s = Scalar.fromFloat(1.0f);
+           ColumnVector answer = icv.lessOrEqualTo(s);
            ColumnVector expected = forEachS(DType.BOOL8, icv, 1.0f,
                    (b, l, r, i) -> b.append(l.getInt(i) <= r))) {
         assertColumnsAreEqual(expected, answer, "int64 <= scalar float");
       }
 
-      try (ColumnVector answer = Scalar.fromShort((short) 100).lessOrEqualTo(icv);
+      try (Scalar s = Scalar.fromShort((short) 100);
+           ColumnVector answer = s.lessOrEqualTo(icv);
            ColumnVector expected = forEachS(DType.BOOL8, (short) 100,  icv,
                    (b, l, r, i) -> b.append(l <= r.getInt(i)))) {
         assertColumnsAreEqual(expected, answer, "scalar short <= int32");
@@ -683,11 +709,11 @@ public class BinaryOpTest extends CudfTestBase {
   }
 
   @Test
-  public void testStringCategoryLessOrEqualToScalar() {
-    try (ColumnVector a = ColumnVector.categoryFromStrings("a", "b", "c", "d");
-         ColumnVector b = ColumnVector.categoryFromStrings("a", "b", "b", "a");
-         ColumnVector c = ColumnVector.categoryFromStrings("a", null, "b", null)) {
-      Scalar s = Scalar.fromString("b");
+  public void testStringLessOrEqualToScalar() {
+    try (ColumnVector a = ColumnVector.fromStrings("a", "b", "c", "d");
+         ColumnVector b = ColumnVector.fromStrings("a", "b", "b", "a");
+         ColumnVector c = ColumnVector.fromStrings("a", null, "b", null);
+         Scalar s = Scalar.fromString("b")) {
 
       try (ColumnVector answer = a.lessOrEqualTo(s);
            ColumnVector expected = ColumnVector.fromBoxedBooleans(true, true, false, false)) {
@@ -707,11 +733,11 @@ public class BinaryOpTest extends CudfTestBase {
   }
 
   @Test
-  public void testStringCategoryLessOrEqualToScalarNotPresent() {
-    try (ColumnVector a = ColumnVector.categoryFromStrings("a", "b", "c", "d");
-         ColumnVector b = ColumnVector.categoryFromStrings("a", "b", "b", "a");
-         ColumnVector c = ColumnVector.categoryFromStrings("a", null, "b", null)) {
-      Scalar s = Scalar.fromString("boo");
+  public void testStringLessOrEqualToScalarNotPresent() {
+    try (ColumnVector a = ColumnVector.fromStrings("a", "b", "c", "d");
+         ColumnVector b = ColumnVector.fromStrings("a", "b", "b", "a");
+         ColumnVector c = ColumnVector.fromStrings("a", null, "b", null);
+         Scalar s = Scalar.fromString("boo")) {
 
       try (ColumnVector answer = a.lessOrEqualTo(s);
            ColumnVector expected = ColumnVector.fromBoxedBooleans(true, true, false, false)) {
@@ -740,13 +766,15 @@ public class BinaryOpTest extends CudfTestBase {
         assertColumnsAreEqual(expected, answer, "int32 >= double");
       }
 
-      try (ColumnVector answer = icv.greaterOrEqualTo(Scalar.fromFloat(1.0f));
+      try (Scalar s = Scalar.fromFloat(1.0f);
+           ColumnVector answer = icv.greaterOrEqualTo(s);
            ColumnVector expected = forEachS(DType.BOOL8, icv, 1.0f,
                    (b, l, r, i) -> b.append(l.getInt(i) >= r))) {
       assertColumnsAreEqual(expected, answer, "int64 >= scalar float");
       }
 
-      try (ColumnVector answer = Scalar.fromShort((short) 100).greaterOrEqualTo(icv);
+      try (Scalar s = Scalar.fromShort((short) 100);
+           ColumnVector answer = s.greaterOrEqualTo(icv);
            ColumnVector expected = forEachS(DType.BOOL8, (short) 100,  icv,
                    (b, l, r, i) -> b.append(l >= r.getInt(i)))) {
         assertColumnsAreEqual(expected, answer, "scalar short >= int32");
@@ -755,11 +783,11 @@ public class BinaryOpTest extends CudfTestBase {
   }
 
   @Test
-  public void testStringCategoryGreaterOrEqualToScalar() {
-    try (ColumnVector a = ColumnVector.categoryFromStrings("a", "b", "c", "d");
-         ColumnVector b = ColumnVector.categoryFromStrings("a", "b", "b", "a");
-         ColumnVector c = ColumnVector.categoryFromStrings("a", null, "b", null)) {
-      Scalar s = Scalar.fromString("b");
+  public void testStringGreaterOrEqualToScalar() {
+    try (ColumnVector a = ColumnVector.fromStrings("a", "b", "c", "d");
+         ColumnVector b = ColumnVector.fromStrings("a", "b", "b", "a");
+         ColumnVector c = ColumnVector.fromStrings("a", null, "b", null);
+         Scalar s = Scalar.fromString("b")) {
 
       try (ColumnVector answer = a.greaterOrEqualTo(s);
            ColumnVector expected = ColumnVector.fromBoxedBooleans(false, true, true, true)) {
@@ -779,11 +807,11 @@ public class BinaryOpTest extends CudfTestBase {
   }
 
   @Test
-  public void testStringCategoryGreaterOrEqualToScalarNotPresent() {
-    try (ColumnVector a = ColumnVector.categoryFromStrings("a", "b", "c", "d");
-         ColumnVector b = ColumnVector.categoryFromStrings("a", "b", "b", "a");
-         ColumnVector c = ColumnVector.categoryFromStrings("a", null, "b", null)) {
-      Scalar s = Scalar.fromString("abc");
+  public void testStringGreaterOrEqualToScalarNotPresent() {
+    try (ColumnVector a = ColumnVector.fromStrings("a", "b", "c", "d");
+         ColumnVector b = ColumnVector.fromStrings("a", "b", "b", "a");
+         ColumnVector c = ColumnVector.fromStrings("a", null, "b", null);
+         Scalar s = Scalar.fromString("abc")) {
 
       try (ColumnVector answer = a.greaterOrEqualTo(s);
            ColumnVector expected = ColumnVector.fromBoxedBooleans(false, true, true, true)) {
@@ -812,13 +840,15 @@ public class BinaryOpTest extends CudfTestBase {
         assertColumnsAreEqual(expected, answer, "int32 & int32");
       }
 
-      try (ColumnVector answer = icv1.bitAnd(Scalar.fromInt(0x01));
+      try (Scalar s = Scalar.fromInt(0x01);
+           ColumnVector answer = icv1.bitAnd(s);
            ColumnVector expected = forEachS(DType.INT32, icv1, 0x01,
                    (b, l, r, i) -> b.append(l.getInt(i) & r))) {
         assertColumnsAreEqual(expected, answer, "int32 & scalar int32");
       }
 
-      try (ColumnVector answer = Scalar.fromShort((short) 100).bitAnd(icv1);
+      try (Scalar s = Scalar.fromShort((short) 100);
+           ColumnVector answer = s.bitAnd(icv1);
            ColumnVector expected = forEachS(DType.INT32, (short) 100,  icv1,
                    (b, l, r, i) -> b.append(l & r.getInt(i)))) {
         assertColumnsAreEqual(expected, answer, "scalar short & int32");
@@ -836,13 +866,15 @@ public class BinaryOpTest extends CudfTestBase {
         assertColumnsAreEqual(expected, answer, "int32 | int32");
       }
 
-      try (ColumnVector answer = icv1.bitOr(Scalar.fromInt(0x01));
+      try (Scalar s = Scalar.fromInt(0x01);
+           ColumnVector answer = icv1.bitOr(s);
            ColumnVector expected = forEachS(DType.INT32, icv1, 0x01,
                    (b, l, r, i) -> b.append(l.getInt(i) | r))) {
         assertColumnsAreEqual(expected, answer, "int32 | scalar int32");
       }
 
-      try (ColumnVector answer = Scalar.fromShort((short) 100).bitOr(icv1);
+      try (Scalar s = Scalar.fromShort((short) 100);
+           ColumnVector answer = s.bitOr(icv1);
            ColumnVector expected = forEachS(DType.INT32, (short) 100,  icv1,
                    (b, l, r, i) -> b.append(l | r.getInt(i)))) {
         assertColumnsAreEqual(expected, answer, "scalar short | int32");
@@ -860,13 +892,15 @@ public class BinaryOpTest extends CudfTestBase {
         assertColumnsAreEqual(expected, answer, "int32 ^ int32");
       }
 
-      try (ColumnVector answer = icv1.bitXor(Scalar.fromInt(0x01));
+      try (Scalar s = Scalar.fromInt(0x01);
+           ColumnVector answer = icv1.bitXor(s);
            ColumnVector expected = forEachS(DType.INT32, icv1, 0x01,
                    (b, l, r, i) -> b.append(l.getInt(i) ^ r))) {
         assertColumnsAreEqual(expected, answer, "int32 ^ scalar int32");
       }
 
-      try (ColumnVector answer = Scalar.fromShort((short) 100).bitXor(icv1);
+      try (Scalar s = Scalar.fromShort((short) 100);
+           ColumnVector answer = s.bitXor(icv1);
            ColumnVector expected = forEachS(DType.INT32, (short) 100,  icv1,
                    (b, l, r, i) -> b.append(l ^ r.getInt(i)))) {
         assertColumnsAreEqual(expected, answer, "scalar short ^ int32");
@@ -884,25 +918,29 @@ public class BinaryOpTest extends CudfTestBase {
         assertColumnsAreEqual(expected, answer, "boolean AND boolean");
       }
 
-      try (ColumnVector answer = icv1.and(Scalar.fromBool(true));
+      try (Scalar s = Scalar.fromBool(true);
+           ColumnVector answer = icv1.and(s);
            ColumnVector expected = forEachS(DType.BOOL8, icv1, true,
                (b, l, r, i) -> b.append(l.getBoolean(i) && r))) {
         assertColumnsAreEqual(expected, answer, "boolean AND true");
       }
 
-      try (ColumnVector answer = icv1.and(Scalar.fromBool(false));
+      try (Scalar s = Scalar.fromBool(false);
+           ColumnVector answer = icv1.and(s);
            ColumnVector expected = forEachS(DType.BOOL8, icv1, false,
                    (b, l, r, i) -> b.append(l.getBoolean(i) && r))) {
         assertColumnsAreEqual(expected, answer, "boolean AND false");
       }
 
-      try (ColumnVector answer = icv1.and(Scalar.fromBool(true));
+      try (Scalar s = Scalar.fromBool(true);
+           ColumnVector answer = icv1.and(s);
            ColumnVector expected = forEachS(DType.BOOL8, true, icv1,
                (b, l, r, i) -> b.append(l && r.getBoolean(i)))) {
         assertColumnsAreEqual(expected, answer, "true AND boolean");
       }
 
-      try (ColumnVector answer = icv1.and(Scalar.fromBool(false));
+      try (Scalar s = Scalar.fromBool(false);
+           ColumnVector answer = icv1.and(s);
            ColumnVector expected = forEachS(DType.BOOL8, false, icv1,
                    (b, l, r, i) -> b.append(l && r.getBoolean(i)))) {
         assertColumnsAreEqual(expected, answer, "false AND boolean");
@@ -920,25 +958,29 @@ public class BinaryOpTest extends CudfTestBase {
         assertColumnsAreEqual(expected, answer, "boolean OR boolean");
       }
 
-      try (ColumnVector answer = icv1.or(Scalar.fromBool(true));
+      try (Scalar s = Scalar.fromBool(true);
+           ColumnVector answer = icv1.or(s);
            ColumnVector expected = forEachS(DType.BOOL8, icv1, true,
                    (b, l, r, i) -> b.append(l.getBoolean(i) || r))) {
         assertColumnsAreEqual(expected, answer, "boolean OR true");
       }
 
-      try (ColumnVector answer = icv1.or(Scalar.fromBool(false));
+      try (Scalar s = Scalar.fromBool(false);
+           ColumnVector answer = icv1.or(s);
            ColumnVector expected = forEachS(DType.BOOL8, icv1, false,
                (b, l, r, i) -> b.append(l.getBoolean(i) || r))) {
         assertColumnsAreEqual(expected, answer, "boolean OR false");
       }
 
-      try (ColumnVector answer = icv1.or(Scalar.fromBool(true));
+      try (Scalar s = Scalar.fromBool(true);
+           ColumnVector answer = icv1.or(s);
            ColumnVector expected = forEachS(DType.BOOL8, true, icv1,
                    (b, l, r, i) -> b.append(l || r.getBoolean(i)))) {
         assertColumnsAreEqual(expected, answer, "true OR boolean");
       }
 
-      try (ColumnVector answer = icv1.or(Scalar.fromBool(false));
+      try (Scalar s = Scalar.fromBool(false);
+           ColumnVector answer = icv1.or(s);
            ColumnVector expected = forEachS(DType.BOOL8, false, icv1,
                (b, l, r, i) -> b.append(l || r.getBoolean(i)))) {
         assertColumnsAreEqual(expected, answer, "false OR boolean");
