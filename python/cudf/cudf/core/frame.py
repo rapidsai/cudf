@@ -17,7 +17,7 @@ class Frame(libcudfxx.Table):
         A Frame representing the (optional) index columns.
     """
 
-    def gather(self, gather_map):
+    def _gather(self, gather_map):
         if not pd.api.types.is_integer_dtype(gather_map.dtype):
             gather_map = gather_map.astype("int32")
         result = self._from_table(

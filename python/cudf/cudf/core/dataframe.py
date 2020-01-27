@@ -1524,7 +1524,7 @@ class DataFrame(Frame):
         positions = as_column(positions)
         if pd.api.types.is_bool_dtype(positions):
             return self._apply_boolean_mask(positions,)
-        out = self.gather(positions)
+        out = self._gather(positions)
         return out
 
     def _apply_boolean_mask(self, mask):
