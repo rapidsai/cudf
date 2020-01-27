@@ -73,6 +73,6 @@ TEST_F(DictionaryRemoveKeysTest, WithNull)
     cudf::test::fixed_width_column_wrapper<int64_t> keys_expected{ 222,333,444 };
     cudf::test::expect_columns_equal(view.dictionary_keys(), keys_expected);
 
-    cudf::test::fixed_width_column_wrapper<int32_t> expected{{2,-1,1,-1,0,-1,0,2,-1}};
+    cudf::test::fixed_width_column_wrapper<int32_t> expected{2,-1,1,-1,0,0,0,2,-1};
     cudf::test::expect_columns_equal(view.indices(), expected);
 }

@@ -18,6 +18,7 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/update_keys.hpp>
 #include <cudf/detail/copy_if.cuh>
+#include <cudf/detail/gather.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/search.hpp>
 #include <cudf/table/table.hpp>
@@ -53,35 +54,25 @@ std::unique_ptr<column> remove_keys( dictionary_column_view const& dictionary_co
     auto table_keys = experimental::detail::copy_if( table_view{{keys_view, keys_indices_view}},
         [d_matches]__device__(size_type idx) { return !d_matches[idx]; }, mr, stream )->release();
     keys_indices_view = table_keys[1]->view();
-    rmm::device_vector<int32_t> map_indices(count,-1); // init -1 to identify new nulls
+    rmm::device_vector<int32_t> map_indices(keys_view.size(),-1); // init -1 to identify new nulls
     // build indices mapper; example scatter([0,1,2][0,2,4][-1,-1,-1,-1,-1]) => [0,-1,1,-1,2]
     thrust::scatter( execpol->on(stream), thrust::make_counting_iterator<int32_t>(0),
                      thrust::make_counting_iterator<int32_t>(keys_indices_view.size()),
                      keys_indices_view.begin<int32_t>(), map_indices.begin() );
     // create new indices column
-    auto indices_column = make_numeric_column( data_type{INT32}, count, cudf::mask_state::UNALLOCATED, stream, mr);
-    auto d_new_indices = indices_column->mutable_view().data<int32_t>();
-    auto device_view = column_device_view::create(dictionary_column.parent());
-    auto d_column = *device_view; // this has the null mask
-    auto d_map_indices = map_indices.data().get(); // mapping old indices to new values
-    auto d_old_indices = indices_view.data<int32_t>();
-    // map old indices to new indices -- this will probably become a utility method
-    thrust::transform( execpol->on(stream), thrust::make_counting_iterator<size_type>(0),
-                       thrust::make_counting_iterator<size_type>(count), d_new_indices,
-                       [d_column, d_old_indices, d_map_indices] __device__ (size_type idx) {
-                            if( d_column.is_null(idx) )
-                                return -1; // this value can be anything
-                            return d_map_indices[d_old_indices[idx]]; // get the new index
-                       });
-    indices_column->set_null_count(0);
-    // compute new nulls -- this one too
+    // gather([4,0,3,1,2,2,2,4,0],[0,-1,1,-1,2]) => [2,0,-1,-1,1,1,1,2,0]
+    column_view map_indices_view( data_type{INT32}, keys_view.size(), map_indices.data().get() );
+    auto table_indices = experimental::detail::gather( table_view{{map_indices_view}},
+                    indices_view, false, false, false, mr, stream )->release();
+    std::unique_ptr<column> indices_column(std::move(table_indices[0]));
+
+    // compute new nulls -- merge the current nulls with the newly created ones (value<0)
+    auto d_null_mask = dictionary_column.null_mask();
+    auto d_indices = indices_column->view().data<int32_t>();
     auto new_nulls = experimental::detail::valid_if( thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(count),
-                    [d_column, d_old_indices, d_map_indices] __device__ (size_type idx) {
-                        if( d_column.is_null(idx) )
-                            return false; // old nulls are unchanged
-                        // new nulls identified by negative map values
-                        return d_map_indices[d_old_indices[idx]] >=0;
+                    [d_null_mask, d_indices] __device__ (size_type idx) {
+                        return (d_indices[idx] >= 0) && (d_null_mask ? bit_is_set(d_null_mask,idx) : true);
                     }, stream, mr);
 
     std::shared_ptr<const column> keys_column(std::move(table_keys[0]));
