@@ -3,6 +3,7 @@
 ## New Features
 
 ## Improvements
+
 - PR #3911 Adding null boolean handling for copy_if_else
 
 ## Bug Fixes
