@@ -16,55 +16,64 @@
 
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/encode.hpp>
+#include <cudf/dictionary/update_keys.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 
 #include <vector>
 
-struct DictionaryEncodeTest : public cudf::test::BaseFixture {};
+struct DictionaryAddKeysTest : public cudf::test::BaseFixture {};
 
-TEST_F(DictionaryEncodeTest, EncodeStringColumn)
+TEST_F(DictionaryAddKeysTest, StringsColumn)
 {
-    std::vector<const char*> h_strings{ "eee", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "eee", "aaa" };
+    std::vector<const char*> h_strings{ "fff", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "fff", "aaa" };
     cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end() );
+    std::vector<const char*> h_add_keys{ "ddd", "bbb", "eee" };
+    cudf::test::strings_column_wrapper add_keys( h_add_keys.begin(), h_add_keys.end() );
 
     auto dictionary = cudf::dictionary::encode( strings );
-    cudf::dictionary_column_view view(dictionary->view());
+    auto result = cudf::dictionary::add_keys( cudf::dictionary_column_view(dictionary->view()), add_keys );
 
-    std::vector<const char*> h_keys{ "aaa", "bbb", "ccc", "ddd", "eee" };
+    cudf::dictionary_column_view view(result->view());
+
+    std::vector<const char*> h_keys{ "aaa", "bbb", "ccc", "ddd", "eee", "fff" };
     cudf::test::strings_column_wrapper keys_expected( h_keys.begin(), h_keys.end() );
     cudf::test::expect_columns_equal(view.dictionary_keys(), keys_expected);
 
-    std::vector<int32_t> h_expected{4,0,3,1,2,2,2,4,0};
+    std::vector<int32_t> h_expected{5,0,3,1,2,2,2,5,0};
     cudf::test::fixed_width_column_wrapper<int32_t> indices_expected( h_expected.begin(), h_expected.end() );
     cudf::test::expect_columns_equal(view.indices(), indices_expected);
 }
 
-TEST_F(DictionaryEncodeTest, EncodeFloat)
+TEST_F(DictionaryAddKeysTest, FloatColumn)
 {
     cudf::test::fixed_width_column_wrapper<float> input{ 4.25, 7.125, 0.5, -11.75, 7.125, 0.5 };
+    cudf::test::fixed_width_column_wrapper<float> add_keys{ 4.25, -11.75, 5.0 };
 
     auto dictionary = cudf::dictionary::encode( input );
-    cudf::dictionary_column_view view(dictionary->view());
+    auto result = cudf::dictionary::add_keys( cudf::dictionary_column_view(dictionary->view()), add_keys );
+    cudf::dictionary_column_view view(result->view());
 
-    cudf::test::fixed_width_column_wrapper<float> keys_expected{ -11.75, 0.5, 4.25, 7.125 };
+    cudf::test::fixed_width_column_wrapper<float> keys_expected{ -11.75, 0.5, 4.25, 5.0, 7.125 };
     cudf::test::expect_columns_equal(view.dictionary_keys(), keys_expected);
 
-    cudf::test::fixed_width_column_wrapper<int32_t> expected{2,3,1,0,3,1};
+    cudf::test::fixed_width_column_wrapper<int32_t> expected{ 2,4,1,0,4,1};
     cudf::test::expect_columns_equal(view.indices(), expected);
 }
 
-TEST_F(DictionaryEncodeTest, EncodeWithNull)
+TEST_F(DictionaryAddKeysTest, WithNull)
 {
-    cudf::test::fixed_width_column_wrapper<int64_t> input{ { 444,0,333,111,222,222,222,444,000 }, {1,1,1,1,1,0,1,1,1}};
+    cudf::test::fixed_width_column_wrapper<int64_t> input{ { 444,0,333,111,222,222,222,444,0 }, {1,1,1,1,1,0,1,1,1}};
+    cudf::test::fixed_width_column_wrapper<int64_t> add_keys{ 0, 111, 555 };
 
     auto dictionary = cudf::dictionary::encode( input );
-    cudf::dictionary_column_view view(dictionary->view());
+    auto result = cudf::dictionary::add_keys( cudf::dictionary_column_view(dictionary->view()), add_keys );
+    cudf::dictionary_column_view view(result->view());
 
-    cudf::test::fixed_width_column_wrapper<int64_t> keys_expected{ 0,111,222,333,444 };
+    cudf::test::fixed_width_column_wrapper<int64_t> keys_expected{ 0,111,222,333,444,555 };
     cudf::test::expect_columns_equal(view.dictionary_keys(), keys_expected);
 
-    cudf::test::fixed_width_column_wrapper<int32_t> expected{4,0,3,1,2,2,2,4,0};
+    cudf::test::fixed_width_column_wrapper<int32_t> expected{{4,0,3,1,2,2,2,4,0}};
     cudf::test::expect_columns_equal(view.indices(), expected);
 }

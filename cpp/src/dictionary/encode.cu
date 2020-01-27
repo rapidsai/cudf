@@ -65,12 +65,6 @@ std::unique_ptr<column> encode( column_view const& input_column,
                     std::vector<null_order>{null_order::AFTER},
                     mr );
 
-    if( input_column.has_nulls() )
-    {
-        // copy the null mask -- this should match the input column
-        indices_column->set_null_mask( copy_bitmask(input_column,stream,mr), input_column.null_count() );
-    }
-
     // create column with keys_column and indices_column
     std::vector<std::unique_ptr<column>> children;
     children.emplace_back(std::move(indices_column));
