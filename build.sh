@@ -43,7 +43,7 @@ EXTERNAL_BUILD_DIR=${REPODIR}/external/build
 NVSTRINGS_BUILD_DIR=${REPODIR}/python/nvstrings/build
 CUDF_BUILD_DIR=${REPODIR}/python/cudf/build
 DASK_CUDF_BUILD_DIR=${REPODIR}/python/dask_cudf/build
-BUILD_DIRS="${LIB_BUILD_DIR} ${NVSTRINGS_BUILD_DIR} ${CUDF_BUILD_DIR} ${DASK_CUDF_BUILD_DIR}"
+BUILD_DIRS="${LIB_BUILD_DIR} ${NVSTRINGS_BUILD_DIR} ${CUDF_BUILD_DIR} ${DASK_CUDF_BUILD_DIR} ${EXTERNAL_BUILD_DIR}"
 
 # Set defaults for vars modified by flags to this script
 VERBOSE=""
@@ -127,14 +127,14 @@ fi
 ################################################################################
 # Configure, build, and install libnvstrings
 
-if buildAll || hasArg libnvstrings || hasArg libcudf; then
+if buildAll || hasArg libnvstrings || hasArg libcudf || hasArg external; then
 
     mkdir -p ${LIB_BUILD_DIR}
     cd ${LIB_BUILD_DIR}
     cmake -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
           -DCMAKE_CXX11_ABI=ON \
           ${GPU_ARCH} \
-          -DENABLE_KAFKA_TESTS=${ENABLE_KAFKA_TESTS} \
+          -DBUILD_EXTERNAL_DATASOURCES=${BUILD_EXTERNAL_DATASOURCES} \
           -DBUILD_BENCHMARKS=${BENCHMARKS} \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ..
 fi
@@ -206,3 +206,4 @@ if buildAll || hasArg external; then
 
     # build the external datasource project
     make -j${PARALLEL_LEVEL} external VERBOSE=${VERBOSE}
+fi
