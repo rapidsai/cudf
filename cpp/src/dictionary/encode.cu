@@ -18,7 +18,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/detail/stream_compaction.hpp>
-#include <cudf/search.hpp>
+#include <cudf/detail/search.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/dictionary/encode.hpp>
@@ -58,18 +58,12 @@ std::unique_ptr<column> encode( column_view const& input_column,
     std::shared_ptr<const column> keys_column(keys.release());
 
     // this returns a column with no null entries
-    // - it actually appears to ignore the null entries and tries to place the value regardless
-    auto indices_column = cudf::experimental::lower_bound(table_view{{*keys_column}},
+    // - it appears to ignore the null entries in the input and tries to place the value regardless
+    auto indices_column = cudf::experimental::detail::lower_bound(table_view{{*keys_column}},
                     table_view{{input_column}},
                     std::vector<order>{order::ASCENDING},
                     std::vector<null_order>{null_order::AFTER},
-                    mr );
-
-    if( input_column.has_nulls() )
-    {
-        // copy the null mask -- this should match the input column
-        indices_column->set_null_mask( copy_bitmask(input_column,stream,mr), input_column.null_count() );
-    }
+                    mr, stream );
 
     // create column with keys_column and indices_column
     std::vector<std::unique_ptr<column>> children;

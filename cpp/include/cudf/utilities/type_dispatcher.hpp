@@ -150,6 +150,12 @@ struct type_to_scalar_type_impl<cudf::string_view> {
   using ScalarDeviceType = cudf::string_scalar_device_view;
 };
 
+template <> // TODO: this is a temporary solution for make_pair_iterator
+struct type_to_scalar_type_impl<cudf::dictionary32> {
+  using ScalarType = cudf::numeric_scalar<int32_t>;
+  using ScalarDeviceType = cudf::numeric_scalar_device_view<int32_t>;
+};
+
 #ifndef MAP_TIMESTAMP_SCALAR
 #define MAP_TIMESTAMP_SCALAR(Type)                  \
 template <>                                         \
