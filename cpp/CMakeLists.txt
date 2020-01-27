@@ -132,6 +132,7 @@ set(CMAKE_EXE_LINKER_FLAGS "-Wl,--disable-new-dtags")
 option(BUILD_SHARED_LIBS "Build shared libraries" ON)
 option(BUILD_TESTS "Configure CMake to build tests" ON)
 option(BUILD_BENCHMARKS "Configure CMake to build (google) benchmarks" OFF)
+option(BUILD_EXTERNAL_DATASOURCE "Configure CMake to build support for external datasources" OFF)
 
 ###################################################################################################
 # - cmake modules ---------------------------------------------------------------------------------
@@ -168,27 +169,6 @@ if(ARROW_FOUND)
 else()
     message(FATAL_ERROR "Apache Arrow not found, please check your settings.")
 endif(ARROW_FOUND)
-
-###################################################################################################
-# - find librdkafka ------------------------------------------------------------------------------------
-
-find_path(RDKAFKA_INCLUDE "librdkafka"
-        HINTS "$ENV{RDKAFKA_ROOT}/include")
-find_library(RDKAFKA_LIBRARY "rdkafka"
-        HINTS "$ENV{RDKAFKA_ROOT}/lib" "$ENV{RDKAFKA_ROOT}/build")
-find_library(RDKAFKA++_LIBRARY "rdkafka++"
-        HINTS "$ENV{RDKAFKA_ROOT}/lib" "$ENV{RDKAFKA_ROOT}/build")
-
-message(STATUS "RDKAFKA: RDKAFKA_LIBRARY set to ${RDKAFKA_LIBRARY}")
-message(STATUS "RDKAFKA: RDKAFKA++_LIBRARY set to ${RDKAFKA++_LIBRARY}")
-message(STATUS "RDKAFKA: RDKAFKA_INCLUDE set to ${RDKAFKA_INCLUDE}")
-
-add_library(rdkafka SHARED IMPORTED ${RDKAFKA_LIBRARY})
-add_library(rdkafka++ SHARED IMPORTED ${RDKAFKA++_LIBRARY})
-if(RDKAFKA_INCLUDE AND RDKAFKA_LIBRARY)
-    set_target_properties(rdkafka PROPERTIES IMPORTED_LOCATION ${RDKAFKA_LIBRARY})
-    set_target_properties(rdkafka++ PROPERTIES IMPORTED_LOCATION ${RDKAFKA++_LIBRARY})
-endif(RDKAFKA_INCLUDE AND RDKAFKA_LIBRARY)
 
 ###################################################################################################
 # - clone libcu++ ------------------------------------------------------------------------------------
@@ -491,6 +471,7 @@ add_library(cudf
             src/replace/replace.cu
             src/replace/clamp.cu
             src/reshape/legacy/stack.cu
+            src/reshape/interleave_columns.cu
             src/transpose/transpose.cu
             src/transpose/legacy/transpose.cu
             src/merge/legacy/merge.cu
@@ -572,6 +553,7 @@ add_library(cudf
             src/filling/legacy/repeat.cu
             src/filling/repeat.cu
             src/filling/legacy/tile.cu
+            src/reshape/tile.cu
             src/search/legacy/search.cu
             src/search/search.cu
             src/column/column.cu
@@ -636,10 +618,6 @@ add_library(cudf
             src/groupby/sort/group_quantiles.cu
             src/aggregation/aggregation.cpp
 )
-
-# Include librdkafka exclusively for libcudf
-target_include_directories(cudf PUBLIC "${RDKAFKA_INCLUDE}")
-target_link_directories(cudf PUBLIC "${RDKAFKA_LIBRARY}")
 
 # Rename installation to proper names for later finding
 set_target_properties(libNVStrings PROPERTIES OUTPUT_NAME "NVStrings")
@@ -782,7 +760,7 @@ target_link_libraries(libNVCategory libNVStrings rmm cudart cuda)
 target_link_libraries(libNVText libNVStrings rmm cudart cuda)
 
 # link targets for cuDF
-target_link_libraries(cudf NVCategory NVStrings rmm ${ARROW_CUDA_LIB_LINK} ${ARROW_LIB} rdkafka rdkafka++ nvrtc cudart cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+target_link_libraries(cudf NVCategory NVStrings rmm ${ARROW_CUDA_LIB_LINK} ${ARROW_LIB} nvrtc cudart cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
