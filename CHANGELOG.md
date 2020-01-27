@@ -3,6 +3,7 @@
 ## New Features
 
 ## Improvements
+
 - PR #3910 Adding sinh, cosh, tanh, asinh, acosh, atanh cube root and rint unary support.
 
 ## Bug Fixes
