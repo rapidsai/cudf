@@ -699,6 +699,15 @@ class MultiIndex(Index):
         """ the array interface, return my values """
         return np.array(list(self), dtype="object")
 
+    def difference(self, other, sort=None):
+        temp_self = self
+        temp_other = other
+        if hasattr(self, "to_pandas"):
+            temp_self = self.to_pandas()
+        if hasattr(other, "to_pandas"):
+            temp_other = self.to_pandas()
+        return temp_self.difference(temp_other, sort)
+
     def nan_to_num(*args, **kwargs):
         return args[0]
 
@@ -719,7 +728,7 @@ class MultiIndex(Index):
 
         fname = func.__name__
 
-        handled_types = [cudf_df_module]
+        handled_types = [cudf_df_module, np.ndarray]
 
         for t in types:
             if t not in handled_types:

@@ -1486,6 +1486,8 @@ class DataFrame(Table):
 
     def reset_index(self, drop=False, inplace=False):
         out = DataFrame()
+        if isinstance(self.columns, pd.MultiIndex):
+            self.columns = cudf.MultiIndex.from_pandas(self.columns)
         if not drop:
             if isinstance(self.index, cudf.core.multiindex.MultiIndex):
                 framed = self.index.to_frame()
