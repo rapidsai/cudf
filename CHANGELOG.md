@@ -131,6 +131,7 @@
 - PR #3871 Fix `split_out` error
 - PR #3886 Fix string column materialization from column view
 - PR #3893 Parquet reader: fix segfault reading empty parquet file
+- PR #3931 Groupby agg structure regression affecting dask
 
 
 # cuDF 0.11.0 (11 Dec 2019)

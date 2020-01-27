@@ -1297,7 +1297,7 @@ class DataFrame(Table):
             """
             self.multi_cols = columns
         elif isinstance(columns, pd.MultiIndex):
-            self.multi_cols = cudf.MultiIndex.from_pandas(columns)
+            self.columns = cudf.MultiIndex.from_pandas(columns)
         else:
             if hasattr(self, "multi_cols"):
                 delattr(self, "multi_cols")
@@ -1500,13 +1500,11 @@ class DataFrame(Table):
                 out[name] = self.index._values
             for col_name, col_value in self._data.items():
                 out[col_name] = col_value
-            if isinstance(self.columns, (cudf.core.multiindex.MultiIndex)):
+            if isinstance(self.columns, cudf.core.multiindex.MultiIndex):
                 ncols = len(self.columns.levels)
                 mi_columns = dict(zip(range(ncols), [name, len(name) * [""]]))
                 top = DataFrame(mi_columns)
                 bottom = self.columns.to_frame().reset_index(drop=True)
-                if isinstance(bottom, pd.DataFrame):
-                    bottom = cudf.from_pandas(bottom)
                 index_frame = cudf.concat([top, bottom])
                 mc_df = DataFrame()
                 for idx, key in enumerate(out._data):

@@ -695,10 +695,6 @@ class MultiIndex(Index):
                 n += col._memory_usage(deep=deep)
         return n
 
-    def __array__(self, dtype=None) -> np.ndarray:
-        """ the array interface, return my values """
-        return np.array(list(self), dtype="object")
-
     def difference(self, other, sort=None):
         temp_self = self
         temp_other = other
