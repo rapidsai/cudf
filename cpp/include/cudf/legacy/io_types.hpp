@@ -25,8 +25,6 @@
 #include <cudf/legacy/table.hpp>
 #include <cudf/legacy/io_types.h>
 
-#include <librdkafka/rdkafkacpp.h>
-
 // Forward declarations
 namespace arrow { namespace io {  class RandomAccessFile; } }
 
@@ -41,21 +39,11 @@ struct source_info {
   std::pair<const char*, size_t> buffer;
   std::shared_ptr<arrow::io::RandomAccessFile> file;
 
-  // Kafka source information
-  std::unique_ptr<RdKafka::Conf> kafka_conf_;
-  std::vector<std::string> kafka_topics;
-
   explicit source_info(const source_info& source)
       : type(source.type),
         filepath(source.filepath),
         buffer(source.buffer),
-        file(source.file),
-        kafka_topics(source.kafka_topics) {}
-  explicit source_info(std::unique_ptr<RdKafka::Conf> &kafka_conf,
-                       std::vector<std::string> kafka_topics)
-      : type(KAFKA_TOPIC),
-        kafka_conf_(std::move(kafka_conf)),
-        kafka_topics(kafka_topics) {}
+        file(source.file) {}
   explicit source_info(const std::string& file_path)
       : type(FILE_PATH), filepath(file_path) {}
   explicit source_info(const char* host_buffer, size_t size)
@@ -181,9 +169,6 @@ struct csv_read_arg {
   size_t byte_range_offset = 0;             ///< Bytes to skip from the start
   size_t byte_range_size = 0;               ///< Bytes to read; always reads complete rows
   gdf_time_unit out_time_unit = TIME_UNIT_NONE; ///< The output resolution for date32, date64, and timestamp columns
-
-  int64_t kafka_start_offset;               ///< Kafka offset where the consumption should begin, inclusive. Set to 0 for "from beginning"
-  int32_t kafka_batch_size;                 ///< Number of messages that should be read from the start_offset forward.
 
   explicit csv_read_arg(const source_info& src) : source(src) {}
 };

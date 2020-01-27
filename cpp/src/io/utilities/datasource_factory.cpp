@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,36 +14,19 @@
  * limitations under the License.
  */
 
-#pragma once
-
-#include <arrow/buffer.h>
-#include <arrow/io/file.h>
-#include <arrow/io/interfaces.h>
-#include <arrow/io/memory.h>
-
-#include <algorithm>
-#include <memory>
-#include <string>
-#include "datasource.hpp"
+#include "datasource_factory.hpp"
 
 namespace cudf {
 namespace io {
 
-/**
- * @brief Class for reading from a datasource external to the cuDF codebase.
- **/
-class external_datasource : datasource {
- public:
-
-  /**
-   * @brief Base class destructor
-   **/
-  virtual ~external_datasource(){};
-
- public:
-  std::string DATASOURCE_ID;  // The unique ID the datasource will be referenced by to directly access it.
-  
-};
+datasource_factory::datasource_factory() {
+  std::cout << "Creating datasource_factory instance!!!!!!!" << std::endl;
+  read_directory();
+  std::cout << "Looping through all of the lib directories found" << std::endl;
+  for(int i=0; i < libs.size(); i++){
+    std::cout << libs[i] << std::endl;
+  }
+}
 
 }  // namespace io
 }  // namespace cudf

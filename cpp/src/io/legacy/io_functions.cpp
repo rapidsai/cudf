@@ -83,14 +83,6 @@ table read_csv(csv_read_arg const &args) {
                                            args.source.buffer.second, options);
     } else if (args.source.type == ARROW_RANDOM_ACCESS_FILE) {
       return std::make_unique<csv::reader>(args.source.file, options);
-    } else if (args.source.type == KAFKA_TOPIC) {
-      options.kafka_start_offset = args.kafka_start_offset;
-      options.kafka_batch_size = args.kafka_batch_size;
-      return std::make_unique<csv::reader>(args.source.kafka_conf_,
-                                           args.source.kafka_topics,
-                                           args.kafka_start_offset,
-                                           args.kafka_batch_size,
-                                           options);
     } else {
       CUDF_FAIL("Unsupported source type");
     }

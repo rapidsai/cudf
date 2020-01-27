@@ -205,5 +205,5 @@ if buildAll || hasArg external; then
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ..
 
     # build the external datasource project
-    make -j${PARALLEL_LEVEL} external VERBOSE=${VERBOSE}
+    make -j${PARALLEL_LEVEL} VERBOSE=${VERBOSE}
 fi

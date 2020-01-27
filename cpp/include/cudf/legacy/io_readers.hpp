@@ -25,8 +25,6 @@
 #include <cudf/types.hpp>
 #include <cudf/legacy/table.hpp>
 
-#include <librdkafka/rdkafkacpp.h>
-
 // Forward declarations
 namespace arrow { namespace io {  class RandomAccessFile; } }
 
@@ -233,9 +231,6 @@ struct reader_options {
 
   gdf_time_unit out_time_unit = TIME_UNIT_NONE; ///< Defines the output resolution for date32, date64, and timestamp columns
 
-  int64_t kafka_start_offset;               ///< Kafka offset where the consumption should begin, inclusive. Set to 0 for "from beginning"
-  int32_t kafka_batch_size;                 ///< Number of messages that should be read from the start_offset forward.
-
   reader_options() = default;
 };
 
@@ -248,15 +243,6 @@ class reader {
   std::unique_ptr<Impl> impl_;
 
  public:
- /**---------------------------------------------------------------------------*
-   * @brief Constructor for a Kafka source.
-   *---------------------------------------------------------------------------**/
-  explicit reader(std::unique_ptr<RdKafka::Conf> const &kafka_configs,
-                  std::vector<std::string> kafka_topics,
-                  int64_t kafka_start_offset,
-                  int32_t kafka_batch_size,
-                  reader_options const &options);
-
   /**---------------------------------------------------------------------------*
    * @brief Constructor for a file path source.
    *---------------------------------------------------------------------------**/
