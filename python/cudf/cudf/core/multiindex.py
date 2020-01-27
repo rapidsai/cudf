@@ -712,11 +712,9 @@ class MultiIndex(Index):
         return args[0]
 
     def array_equal(*args, **kwargs):
-        breakpoint()
         return args[0] == args[1]
 
     def __array_function__(self, func, types, args, kwargs):
-        breakpoint()
         cudf_df_module = MultiIndex
 
         for submodule in func.__module__.split(".")[1:]:

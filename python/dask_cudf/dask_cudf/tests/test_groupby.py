@@ -246,6 +246,7 @@ def test_groupby_string_index_name(myindex):
 @pytest.mark.parametrize(
     "agg_func",
     [
+        lambda gb: gb.agg({"c": ["count"]}, split_out=2),
         lambda gb: gb.agg({"c": "count"}, split_out=2),
         lambda gb: gb.agg({"c": ["count", "sum"]}, split_out=2),
         lambda gb: gb.count(split_out=2),

@@ -1297,7 +1297,6 @@ class DataFrame(Table):
             """
             self.multi_cols = columns
         elif isinstance(columns, pd.MultiIndex):
-            breakpoint()
             self.multi_cols = cudf.MultiIndex.from_pandas(columns)
         else:
             if hasattr(self, "multi_cols"):
@@ -1485,9 +1484,9 @@ class DataFrame(Table):
             return df
 
     def reset_index(self, drop=False, inplace=False):
-        out = DataFrame()
         if isinstance(self.columns, pd.MultiIndex):
             self.columns = cudf.MultiIndex.from_pandas(self.columns)
+        out = DataFrame()
         if not drop:
             if isinstance(self.index, cudf.core.multiindex.MultiIndex):
                 framed = self.index.to_frame()
