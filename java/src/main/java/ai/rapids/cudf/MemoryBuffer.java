@@ -79,22 +79,36 @@ abstract class MemoryBuffer implements AutoCloseable {
    * not be printed when this happens.
    */
   public void noWarnLeakExpected() {
-    cleaner.noWarnLeakExpected();
+    if (cleaner != null) {
+      cleaner.noWarnLeakExpected();
+    }
   }
 
   /**
-   * Public constructor
+   * Constructor
    * @param address location in memory
    * @param length  size of this buffer
+   * @param cleaner used to clean up the memory. May be null if no cleanup is needed.
    */
   protected MemoryBuffer(long address, long length, MemoryBufferCleaner cleaner) {
     this.address = address;
     this.length = length;
     this.cleaner = cleaner;
-    cleaner.setId(id);
-    refCount++;
-    cleaner.addRef();
-    MemoryCleaner.register(this, cleaner);
+    if (cleaner != null) {
+      cleaner.setId(id);
+      refCount++;
+      cleaner.addRef();
+      MemoryCleaner.register(this, cleaner);
+    }
+  }
+
+  /**
+   * Constructor
+   * @param address location in memory
+   * @param length  size of this buffer
+   */
+  protected MemoryBuffer(long address, long length) {
+    this(address, length, (MemoryBufferCleaner)null);
   }
 
   /**
@@ -104,13 +118,7 @@ abstract class MemoryBuffer implements AutoCloseable {
    * @param parent the buffer that should be closed instead of closing this one.
    */
   protected MemoryBuffer(long address, long length, MemoryBuffer parent) {
-    this.address = address;
-    this.length = length;
-    this.cleaner = new SlicedBufferCleaner(parent);
-    cleaner.setId(id);
-    refCount++;
-    cleaner.addRef();
-    MemoryCleaner.register(this, cleaner);
+    this(address, length, new SlicedBufferCleaner(parent));
   }
 
   /**
@@ -141,16 +149,18 @@ abstract class MemoryBuffer implements AutoCloseable {
   /**
    * Close this buffer and free memory
    */
-  public final void close() {
-    refCount--;
-    cleaner.delRef();
-    if (refCount == 0) {
-      cleaner.clean(false);
-      closed = true;
-    } else if (refCount < 0) {
-      log.error("Close called too many times on {}", this);
-      cleaner.logRefCountDebug("double free " + this);
-      throw new IllegalStateException("Close called too many times");
+  public void close() {
+    if (cleaner != null) {
+      refCount--;
+      cleaner.delRef();
+      if (refCount == 0) {
+        cleaner.clean(false);
+        closed = true;
+      } else if (refCount < 0) {
+        log.error("Close called too many times on {}", this);
+        cleaner.logRefCountDebug("double free " + this);
+        throw new IllegalStateException("Close called too many times");
+      }
     }
   }
 

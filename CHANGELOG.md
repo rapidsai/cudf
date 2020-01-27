@@ -6,6 +6,8 @@
 
 ## Improvements
 
+- PR #3909 Move java backend to libcudf++
+
 ## Bug Fixes
 
 - PR #3888 Drop `ptr=None` from `DeviceBuffer` call
