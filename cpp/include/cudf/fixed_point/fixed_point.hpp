@@ -16,7 +16,6 @@
 
 #include <cmath>
 #include <cassert>
-#include <limits>
 #include <functional>
 #include <boost/serialization/strong_typedef.hpp>
 
@@ -33,7 +32,7 @@ enum Radix : int32_t {
 namespace detail {
     // helper function to negate strongly typed scale_type
     auto negate(scale_type const& scale) -> scale_type {
-        return scale_type{-1 * scale};
+        return scale_type{-scale};
     }
 
     // perform this operation when constructing with - scale (after negating scale)
@@ -77,7 +76,7 @@ public:
 
     // CONSTRUCTORS
     template <typename T = Rep,
-              typename std::enable_if_t<(std::numeric_limits<T>::is_integer
+              typename std::enable_if_t<(std::is_integral      <T>::value
                                       || std::is_floating_point<T>::value)>* = nullptr>
     explicit fixed_point(T const& value, scale_type const& scale) :
         _value(detail::shift<Rad>(value, scale)),
