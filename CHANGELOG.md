@@ -3,6 +3,7 @@
 ## New Features
 
 ## Improvements
+- PR #3698 Add count_(un)set_bits functions taking multiple ranges and updated slice to compute null counts at once.
 
 ## Bug Fixes
 
@@ -82,7 +83,6 @@
 - PR #2438 Build GBench Benchmarks in CI
 - PR #3713 Adding aggregation support to rolling_window
 - PR #3875 Add abstract sink for IO writers, used by ORC and Parquet writers for now
-- PR #3698 Add count_(un)set_bits functions taking multiple ranges and updated slice to compute null counts at once.
 
 ## Bug Fixes
 
