@@ -4,7 +4,6 @@ from __future__ import division, print_function
 
 import functools
 import pickle
-from copy import copy, deepcopy
 
 import numpy as np
 import pandas as pd
@@ -23,9 +22,11 @@ from cudf.core.column import (
     StringColumn,
     column,
 )
+from cudf.core.frame import Frame
 from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import is_categorical_dtype, is_scalar, min_signed_type
+from cudf.utils.utils import cached_property
 
 
 def _to_frame(this_index, index=True, name=None):
@@ -54,11 +55,11 @@ def _to_frame(this_index, index=True, name=None):
         col_name = this_index.name
 
     return DataFrame(
-        {col_name: this_index.as_column()}, index=this_index if index else None
+        {col_name: this_index._values}, index=this_index if index else None
     )
 
 
-class Index(object):
+class Index(Frame):
     """The root interface for all Series indexes.
     """
 
@@ -93,6 +94,15 @@ class Index(object):
         index = col_typ.deserialize(h, frames[: header["frame_count"]])
         return idx_typ(index, name=name)
 
+    @property
+    def name(self):
+        return next(iter(self._data.keys()))
+
+    @name.setter
+    def name(self, value):
+        col = self._data.pop(self.name)
+        self._data[value] = col
+
     def take(self, indices):
         """Gather only the specific subset of indices
 
@@ -103,19 +113,19 @@ class Index(object):
         return self[indices]
 
     def argsort(self, ascending=True):
-        indices = self.as_column().argsort(ascending=ascending)
+        indices = self._values.argsort(ascending=ascending)
         indices.name = self.name
         return indices
 
     @property
     def values(self):
-        return np.asarray([i for i in self.as_column()])
+        return np.asarray([i for i in self._values])
 
     def to_pandas(self):
-        return pd.Index(self.as_column().to_pandas(), name=self.name)
+        return pd.Index(self._values.to_pandas(), name=self.name)
 
     def to_arrow(self):
-        return self.as_column().to_arrow()
+        return self._values.to_arrow()
 
     @ioutils.doc_to_dlpack()
     def to_dlpack(self):
@@ -126,16 +136,16 @@ class Index(object):
 
     @property
     def gpu_values(self):
-        return self.as_column().data_array_view
+        return self._values.data_array_view
 
     def min(self):
-        return self.as_column().min()
+        return self._values.min()
 
     def max(self):
-        return self.as_column().max()
+        return self._values.max()
 
     def sum(self):
-        return self.as_column().sum()
+        return self._values.sum()
 
     def find_segments(self):
         """Return the beginning index for segments
@@ -156,7 +166,7 @@ class Index(object):
 
     @classmethod
     def _concat(cls, objs):
-        data = ColumnBase._concat([o.as_column() for o in objs])
+        data = ColumnBase._concat([o._values for o in objs])
         names = {obj.name for obj in objs}
         if len(names) == 1:
             [name] = names
@@ -266,8 +276,8 @@ class Index(object):
                 return result._values.all()
 
     def join(self, other, method, how="left", return_indexers=False):
-        column_join_res = self.as_column().join(
-            other.as_column(),
+        column_join_res = self._values.join(
+            other._values,
             how=how,
             return_indexers=return_indexers,
             method=method,
@@ -343,7 +353,7 @@ class Index(object):
     def isnull(self):
         """Identify missing values in an Index.
         """
-        return as_index(self.as_column().isnull(), name=self.name)
+        return as_index(self._values.isnull(), name=self.name)
 
     def isna(self):
         """Identify missing values in an Index. Alias for isnull.
@@ -353,7 +363,7 @@ class Index(object):
     def notna(self):
         """Identify non-missing values in an Index.
         """
-        return as_index(self.as_column().notna(), name=self.name)
+        return as_index(self._values.notna(), name=self.name)
 
     def notnull(self):
         """Identify non-missing values in an Index. Alias for notna.
@@ -437,6 +447,18 @@ class Index(object):
         ind.name = index.name
         return ind
 
+    @classmethod
+    def _from_table(cls, table):
+        if table._num_columns == 0:
+            raise ValueError("Cannot construct Index from any empty Table")
+        if table._num_columns == 1:
+            return as_index(
+                next(iter(table._data.values())),
+                name=next(iter(table._data.keys())),
+            )
+        else:
+            return cudf.MultiIndex._from_table(table)
+
 
 class RangeIndex(Index):
     """An iterable integer index defined by a starting value and ending value.
@@ -466,8 +488,31 @@ class RangeIndex(Index):
             start, stop = 0, start
         self._start = int(start)
         self._stop = int(stop)
-        self.name = name
         self._cached_values = None
+        self._index = None
+        self._name = name
+
+    @property
+    def name(self):
+        return self._name
+
+    @name.setter
+    def name(self, value):
+        self._name = value
+
+    @cached_property
+    def _values(self):
+        if len(self) > 0:
+            vals = cudautils.arange(self._start, self._stop, dtype=self.dtype)
+            return column.as_column(vals)
+        else:
+            return column.column_empty(0, masked=False, dtype=self.dtype)
+
+    @property
+    def _data(self):
+        from cudf.utils.utils import OrderedColumnDict
+
+        return OrderedColumnDict({self.name: self._values})
 
     def __contains__(self, item):
         if not isinstance(
@@ -482,12 +527,7 @@ class RangeIndex(Index):
             return False
 
     def copy(self, deep=True):
-        if deep:
-            result = deepcopy(self)
-        else:
-            result = copy(self)
-        result.name = self.name
-        return result
+        return RangeIndex(start=self._start, stop=self._stop, name=self.name)
 
     def __repr__(self):
         return (
@@ -534,10 +574,13 @@ class RangeIndex(Index):
                 index = min_signed_type(index)(index)
             index = column.as_column(index)
 
-        return as_index(self.as_column()[index], name=self.name)
+        return as_index(self._values[index], name=self.name)
 
     def __eq__(self, other):
         return super(type(self), self).__eq__(other)
+
+    def __reduce__(self):
+        return (RangeIndex, (self._start, self._stop, self.name))
 
     def equals(self, other):
         if self is other:
@@ -584,12 +627,6 @@ class RangeIndex(Index):
         return np.dtype(np.int64)
 
     @property
-    def _values(self):
-        if self._cached_values is None:
-            self._cached_values = self.as_column()
-        return self._cached_values
-
-    @property
     def is_contiguous(self):
         return True
 
@@ -617,19 +654,12 @@ class RangeIndex(Index):
         # shift to index
         return begin - self._start, end - self._start
 
-    def as_column(self):
-        if len(self) > 0:
-            vals = cudautils.arange(self._start, self._stop, dtype=self.dtype)
-        else:
-            vals = rmm.device_array(0, dtype=self.dtype)
-        return column.build_column(data=Buffer(vals), dtype=vals.dtype)
-
     @copy_docstring(_to_frame)
     def to_frame(self, index=True, name=None):
         return _to_frame(self, index, name)
 
     def to_gpu_array(self):
-        return self.as_column().to_gpu_array()
+        return self._values.to_gpu_array()
 
     def to_pandas(self):
         return pd.RangeIndex(
@@ -717,13 +747,15 @@ class GenericIndex(Index):
             values = column.as_column(values)
             assert isinstance(values, (NumericalColumn, StringColumn))
 
-        self._values = values
-        self._name = kwargs.get("name")
+        name = kwargs.get("name")
+        super().__init__({name: values})
 
-        assert isinstance(values, column.ColumnBase), type(values)
+    @property
+    def _values(self):
+        return next(iter(self._data.values()))
 
     def copy(self, deep=True):
-        result = as_index(self.as_column().copy(deep=deep))
+        result = as_index(self._values.copy(deep=deep))
         result.name = self.name
         return result
 
@@ -755,7 +787,7 @@ class GenericIndex(Index):
         )
 
     def __getitem__(self, index):
-        res = self.as_column()[index]
+        res = self._values[index]
         if not isinstance(index, int):
             res = as_index(res)
             res.name = self.name
@@ -763,24 +795,9 @@ class GenericIndex(Index):
         else:
             return res
 
-    def as_column(self):
-        """Convert the index as a Series.
-        """
-        col = self._values
-        col.name = self.name
-        return col
-
     @copy_docstring(_to_frame)
     def to_frame(self, index=True, name=None):
         return _to_frame(self, index, name)
-
-    @property
-    def name(self):
-        return self._name
-
-    @name.setter
-    def name(self, name):
-        self._name = name
 
     @property
     def dtype(self):
@@ -899,7 +916,7 @@ class DatetimeIndex(GenericIndex):
         return self.get_dt_field("weekday")
 
     def to_pandas(self):
-        nanos = self.as_column().astype("datetime64[ns]")
+        nanos = self._values.astype("datetime64[ns]")
         return pd.DatetimeIndex(nanos.to_pandas(), name=self.name)
 
     def get_dt_field(self, field):
