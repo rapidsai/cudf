@@ -85,6 +85,7 @@
 - PR #2438 Build GBench Benchmarks in CI
 - PR #3713 Adding aggregation support to rolling_window
 - PR #3875 Add abstract sink for IO writers, used by ORC and Parquet writers for now
+- PR #3916 Refactor gather bindings
 
 ## Bug Fixes
 
