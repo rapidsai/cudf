@@ -251,15 +251,8 @@ struct column_split_info {
  * memory buffer size needed to allocate a contiguous copy of all columns within
  * a source table. 
  */
-struct column_buffer_size_functor {
-   template <typename T, std::enable_if_t<not is_fixed_width<T>()>* = nullptr>
-   size_t operator()(column_view const& c, column_split_info &split_info)
-   {
-      // this has already been precomputed in an earlier step. return the sum.
-      return split_info.data_buf_size + split_info.validity_buf_size + split_info.offsets_buf_size;
-   }
-
-   template <typename T, std::enable_if_t<is_fixed_width<T>()>* = nullptr>
+struct column_buffer_size_functor {   
+   template <typename T>
    size_t operator()(column_view const& c, column_split_info &split_info)
    {      
       split_info.data_buf_size = cudf::util::round_up_safe(c.size() * sizeof(T), split_align);  
@@ -267,6 +260,12 @@ struct column_buffer_size_functor {
       return split_info.data_buf_size + split_info.validity_buf_size;
    }
 };
+template <>
+size_t column_buffer_size_functor::operator()<string_view>(column_view const& c, column_split_info &split_info)
+{
+   // this has already been precomputed in an earlier step. return the sum.
+   return split_info.data_buf_size + split_info.validity_buf_size + split_info.offsets_buf_size;
+}
 
 /**
  * @brief Functor called by the `type_dispatcher` to copy a column into a contiguous
@@ -274,71 +273,8 @@ struct column_buffer_size_functor {
  * 
  * Used for copying each column in a source table into one contiguous buffer of memory.
  */
-struct column_copy_functor {
-   template <typename T, std::enable_if_t<not is_fixed_width<T>()>* = nullptr>
-   void operator()(column_view const& in, column_split_info const& split_info, char*& dst, std::vector<column_view>& out_cols)
-   {       
-      // outgoing pointers
-      char* chars_buf = dst;
-      bitmask_type* validity_buf = split_info.validity_buf_size == 0 ? nullptr : reinterpret_cast<bitmask_type*>(dst + split_info.data_buf_size);
-      size_type* offsets_buf = reinterpret_cast<size_type*>(dst + split_info.data_buf_size + split_info.validity_buf_size);
-
-      // increment working buffer
-      dst += (split_info.data_buf_size + split_info.validity_buf_size + split_info.offsets_buf_size);
-
-      // offsets column.
-      strings_column_view strings_c(in);
-      column_view in_offsets = strings_c.offsets();
-      // note, incoming columns are sliced, so their size is fundamentally different from their child offset columns, which
-      // are unsliced.
-      size_type num_offsets = in.size() + 1;
-      cudf::size_type num_threads = cudf::util::round_up_safe(std::max(split_info.num_chars, num_offsets), cudf::experimental::detail::warp_size);      
-      column_view in_chars = strings_c.chars();
-
-      // a column with no strings will still have a single offset.
-      CUDF_EXPECTS(num_offsets > 0, "Invalid offsets child column");
-      
-      // 1 combined kernel call that copies chars, offsets and validity in one pass. see notes on why
-      // this exists in the kernel brief.    
-      constexpr int block_size = 256;
-      cudf::experimental::detail::grid_1d grid{num_threads, block_size, 1};            
-      if(in.nullable()){
-         copy_in_place_strings_kernel<block_size, true><<<grid.num_blocks, block_size, 0, 0>>>(
-                           in.size(),                                            // num_rows
-                           in_offsets.head<size_type>() + in.offset(),           // offsets_in
-                           offsets_buf,                                          // offsets_out
-                           in.offset(),                                          // validity_in_offset
-                           in.null_mask(),                                       // validity_in
-                           validity_buf,                                         // validity_out
-                           split_info.chars_offset,                              // offset_shift
-                           split_info.num_chars,                                 // num_chars
-                           in_chars.head<char>() + split_info.chars_offset,      // chars_in
-                           chars_buf);                                                      
-      } else {                                       
-         copy_in_place_strings_kernel<block_size, false><<<grid.num_blocks, block_size, 0, 0>>>(
-                           in.size(),                                            // num_rows
-                           in_offsets.head<size_type>() + in.offset(),           // offsets_in
-                           offsets_buf,                                          // offsets_out
-                           0,                                                    // validity_in_offset
-                           nullptr,                                              // validity_in
-                           nullptr,                                              // validity_out
-                           split_info.chars_offset,                              // offset_shift
-                           split_info.num_chars,                                 // num_chars
-                           in_chars.head<char>() + split_info.chars_offset,      // chars_in
-                           chars_buf);                                                      
-      }       
-
-      // output child columns      
-      column_view out_offsets{in_offsets.type(), num_offsets, offsets_buf};
-      column_view out_chars{in_chars.type(), static_cast<size_type>(split_info.num_chars), chars_buf};
-
-      // result
-      out_cols.push_back(column_view(in.type(), in.size(), nullptr,
-                                     validity_buf, UNKNOWN_NULL_COUNT, 0,
-                                     { out_offsets, out_chars }));
-   }
-
-   template <typename T, std::enable_if_t<is_fixed_width<T>()>* = nullptr>
+struct column_copy_functor {   
+   template <typename T>
    void operator()(column_view const& in, column_split_info const& split_info, char*& dst, std::vector<column_view>& out_cols)
    {     
       // outgoing pointers
@@ -388,6 +324,68 @@ struct column_copy_functor {
       out_cols.push_back(mcv);
    }
 };
+template <>
+void column_copy_functor::operator()<string_view>(column_view const& in, column_split_info const& split_info, char*& dst, std::vector<column_view>& out_cols)
+{       
+   // outgoing pointers
+   char* chars_buf = dst;
+   bitmask_type* validity_buf = split_info.validity_buf_size == 0 ? nullptr : reinterpret_cast<bitmask_type*>(dst + split_info.data_buf_size);
+   size_type* offsets_buf = reinterpret_cast<size_type*>(dst + split_info.data_buf_size + split_info.validity_buf_size);
+
+   // increment working buffer
+   dst += (split_info.data_buf_size + split_info.validity_buf_size + split_info.offsets_buf_size);
+
+   // offsets column.
+   strings_column_view strings_c(in);
+   column_view in_offsets = strings_c.offsets();
+   // note, incoming columns are sliced, so their size is fundamentally different from their child offset columns, which
+   // are unsliced.
+   size_type num_offsets = in.size() + 1;
+   cudf::size_type num_threads = cudf::util::round_up_safe(std::max(split_info.num_chars, num_offsets), cudf::experimental::detail::warp_size);      
+   column_view in_chars = strings_c.chars();
+
+   // a column with no strings will still have a single offset.
+   CUDF_EXPECTS(num_offsets > 0, "Invalid offsets child column");
+   
+   // 1 combined kernel call that copies chars, offsets and validity in one pass. see notes on why
+   // this exists in the kernel brief.    
+   constexpr int block_size = 256;
+   cudf::experimental::detail::grid_1d grid{num_threads, block_size, 1};            
+   if(in.nullable()){
+      copy_in_place_strings_kernel<block_size, true><<<grid.num_blocks, block_size, 0, 0>>>(
+                        in.size(),                                            // num_rows
+                        in_offsets.head<size_type>() + in.offset(),           // offsets_in
+                        offsets_buf,                                          // offsets_out
+                        in.offset(),                                          // validity_in_offset
+                        in.null_mask(),                                       // validity_in
+                        validity_buf,                                         // validity_out
+                        split_info.chars_offset,                              // offset_shift
+                        split_info.num_chars,                                 // num_chars
+                        in_chars.head<char>() + split_info.chars_offset,      // chars_in
+                        chars_buf);                                                      
+   } else {                                       
+      copy_in_place_strings_kernel<block_size, false><<<grid.num_blocks, block_size, 0, 0>>>(
+                        in.size(),                                            // num_rows
+                        in_offsets.head<size_type>() + in.offset(),           // offsets_in
+                        offsets_buf,                                          // offsets_out
+                        0,                                                    // validity_in_offset
+                        nullptr,                                              // validity_in
+                        nullptr,                                              // validity_out
+                        split_info.chars_offset,                              // offset_shift
+                        split_info.num_chars,                                 // num_chars
+                        in_chars.head<char>() + split_info.chars_offset,      // chars_in
+                        chars_buf);                                                      
+   }       
+
+   // output child columns      
+   column_view out_offsets{in_offsets.type(), num_offsets, offsets_buf};
+   column_view out_chars{in_chars.type(), static_cast<size_type>(split_info.num_chars), chars_buf};
+
+   // result
+   out_cols.push_back(column_view(in.type(), in.size(), nullptr,
+                                    validity_buf, UNKNOWN_NULL_COUNT, 0,
+                                    { out_offsets, out_chars }));
+}
 
 /**
  * @brief Information about a string column in a table view.
@@ -402,6 +400,24 @@ struct column_preprocess_info {
    bool                       nullable;      
    cudf::column_device_view   offsets;
 };
+
+/**
+ * @brief Functor called by the `type_dispatcher` to collect string columns.
+ */
+struct string_column_collector {
+   template <typename T>
+   void operator()(cudf::column_view const& c, thrust::host_vector<column_preprocess_info>& offset_columns, size_type column_index){}   
+};
+template<>
+void string_column_collector::operator()<string_view>(cudf::column_view const& c, thrust::host_vector<column_preprocess_info>& offset_columns, size_type column_index)
+{
+   // constructing device view from the offsets column only, because doing so for the entire
+   // strings_column_view will result in memory allocation/cudaMemcpy() calls, which would
+   // defeat the whole purpose of this step.
+   cudf::column_device_view cdv((strings_column_view(c)).offsets(), 0, 0);
+   offset_columns.push_back(column_preprocess_info{column_index, c.offset(), c.size(), c.nullable(), cdv});      
+}
+
 
 /**
  * @brief Preprocess information about all strings columns in a table view.
@@ -422,14 +438,10 @@ thrust::host_vector<column_split_info> preprocess_string_column_info(cudf::table
    thrust::host_vector<column_preprocess_info> offset_columns;
    offset_columns.reserve(t.num_columns());  // worst case
    size_type column_index = 0;
-   std::for_each(t.begin(), t.end(), [&offset_columns, &column_index](cudf::column_view const& c){
-      if(c.type().id() == STRING){
-         // constructing device view from the offsets column only, because doing so for the entire
-         // strings_column_view will result in memory allocation/cudaMemcpy() calls, which would
-         // defeat the whole purpose of this step.
-         cudf::column_device_view cdv((strings_column_view(c)).offsets(), 0, 0);
-         offset_columns.push_back(column_preprocess_info{column_index, c.offset(), c.size(), c.nullable(), cdv});
-      }
+
+   // collect only string columns
+   std::for_each(t.begin(), t.end(), [&offset_columns, &column_index](cudf::column_view const& c){      
+      cudf::experimental::type_dispatcher(c.type(), string_column_collector{}, c, offset_columns, column_index);
       column_index++;
    });   
    thrust::device_vector<column_preprocess_info> device_offset_columns = offset_columns;
