@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <memory>
-
 #include "jni_utils.hpp"
 
 namespace cudf {

@@ -4,7 +4,7 @@
 
 ## Improvements
 
-- PR #3909 Mova java backend to libcudf++
+- PR #3909 Move java backend to libcudf++
 
 ## Bug Fixes
 

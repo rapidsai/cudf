@@ -14,26 +14,13 @@
  * limitations under the License.
  */
 
-#include <cstring>
-#include <map>
-
-#include <unordered_set>
-
-#include <cudf/aggregation.hpp>
-#include <cudf/copying.hpp>
-#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/hashing.hpp>
 #include <cudf/io/functions.hpp>
 #include <cudf/join.hpp>
-#include <cudf/stream_compaction.hpp>
-#include <cudf/table/table.hpp>
-
 #include <cudf/search.hpp>
-#include <cudf/types.hpp>
-#include <cudf/column/column.hpp>
 #include <cudf/sorting.hpp>
-#include <cudf/table/table_view.hpp>
+#include <cudf/stream_compaction.hpp>
 
 #include "jni_utils.hpp"
 

@@ -16,10 +16,7 @@
 
 #include <cudf/aggregation.hpp>
 #include <cudf/binaryop.hpp>
-#include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/column/column_view.hpp>
-#include <cudf/copying.hpp>
 #include <cudf/datetime.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/quantiles.hpp>
@@ -29,10 +26,8 @@
 #include <cudf/search.hpp>
 #include <cudf/strings/attributes.hpp>
 #include <cudf/strings/case.hpp>
-#include <cudf/strings/find.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/strings/combine.hpp>
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/find.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/unary.hpp>

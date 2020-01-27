@@ -14,10 +14,6 @@
  * limitations under the License.
  */
 
-#include <stddef.h>
-
-#include <rmm/rmm.hpp>
-
 #include "jni_utils.hpp"
 
 extern "C" {

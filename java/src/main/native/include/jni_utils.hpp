@@ -15,17 +15,12 @@
  */
 #pragma once
 
-#include <string>
-#include <utility>
-
 #include <jni.h>
 
 #include <rmm/rmm.h>
 
-#include <cudf/aggregation.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
-#include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/error.hpp>
 
 namespace cudf {
