@@ -1,3 +1,16 @@
+# cuDF 0.13.0 (Date TBD)
+
+## New Features
+
+- PR #3577 Add initial dictionary support to column classes
+
+## Improvements
+
+## Bug Fixes
+
+- PR #3888 Drop `ptr=None` from `DeviceBuffer` call
+
+
 # cuDF 0.12.0 (Date TBD)
 
 ## New Features
@@ -10,12 +23,13 @@
 - PR #3619 Support CuPy 7
 - PR #3604 Add nvtext ngrams-tokenize function
 - PR #3610 Add memory_usage to DataFrame and Series APIs
+- PR #3403 Define and implement new stack + tile APIs
 - PR #3627 Adding cudf::sort and cudf::sort_by_key
 - PR #3597 Implement new sort based groupby
 - PR #3776 Add column equivalence comparator (using epsilon for float equality)
 - PR #3667 Define and implement round-robin partition API.
 - PR #3690 Add bools_to_mask
-- PR #3577 Add initial dictionary support to column classes
+- PR #3761 Introduce a Frame class and make Index, DataFrame and Series subclasses
 - PR #3538 Define and implement left semi join and left anti join
 - PR #3683 Added support for multiple delimiters in `nvtext.token_count()`
 - PR #3792 Adding is_nan and is_notnan
@@ -68,9 +82,11 @@
 - PR #3796 Improve on round-robin with the case when number partitions greater than number of rows.
 - PR #3805 Avoid CuPy 7.1.0 for now
 - PR #3758 detail::scatter variant with map iterator support
+- PR #3882 Fail loudly when creating a StringColumn from nvstrings with > MAX_VAL(int32) bytes
+- PR #3823 Add header file for detail search functions
 - PR #2438 Build GBench Benchmarks in CI
 - PR #3713 Adding aggregation support to rolling_window
-- PR # 3875 Add abstract sink for IO writers, used by ORC and Parquet writers for now
+- PR #3875 Add abstract sink for IO writers, used by ORC and Parquet writers for now
 
 ## Bug Fixes
 
@@ -123,7 +139,12 @@
 - PR #3850 Fix merge typecast scope issue and resulting memory leak
 - PR #3855 Fix MultiColumn recreation with reset_index
 - PR #3869 Fixed size calculation in NVStrings::byte_count()
+- PR #3868 Fix apply_grouped moving average example
+- PR #3900 Properly link `NVStrings` and `NVCategory` into tests
 - PR #3868 Fix apply_grouped moving average example 
+- PR #3871 Fix `split_out` error
+- PR #3886 Fix string column materialization from column view
+- PR #3893 Parquet reader: fix segfault reading empty parquet file
 
 
 # cuDF 0.11.0 (11 Dec 2019)

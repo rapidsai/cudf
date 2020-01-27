@@ -65,6 +65,6 @@ TEST_F(DictionaryEncodeTest, EncodeWithNull)
     cudf::test::fixed_width_column_wrapper<int64_t> keys_expected{ 0,111,222,333,444 };
     cudf::test::expect_columns_equal(view.dictionary_keys(), keys_expected);
 
-    cudf::test::fixed_width_column_wrapper<int32_t> expected{{4,0,3,1,2,2,2,4,0}, {1,1,1,1,1,0,1,1,1}};
+    cudf::test::fixed_width_column_wrapper<int32_t> expected{{4,0,3,1,2,2,2,4,0}};
     cudf::test::expect_columns_equal(view.indices(), expected);
 }

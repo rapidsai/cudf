@@ -15,7 +15,7 @@
 #=============================================================================
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
-project(CUDA_DATAFRAME VERSION 0.12.0 LANGUAGES C CXX CUDA)
+project(CUDA_DATAFRAME VERSION 0.13.0 LANGUAGES C CXX CUDA)
 
 if(NOT CMAKE_CUDA_COMPILER)
   message(SEND_ERROR "CMake cannot locate a CUDA compiler")
@@ -470,6 +470,7 @@ add_library(cudf
             src/replace/replace.cu
             src/replace/clamp.cu
             src/reshape/legacy/stack.cu
+            src/reshape/interleave_columns.cu
             src/transpose/transpose.cu
             src/transpose/legacy/transpose.cu
             src/merge/legacy/merge.cu
@@ -551,6 +552,7 @@ add_library(cudf
             src/filling/legacy/repeat.cu
             src/filling/repeat.cu
             src/filling/legacy/tile.cu
+            src/reshape/tile.cu
             src/search/legacy/search.cu
             src/search/search.cu
             src/column/column.cu
