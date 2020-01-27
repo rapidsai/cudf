@@ -1501,12 +1501,6 @@ class DataFrame(Table):
             for col_name, col_value in self._data.items():
                 out[col_name] = col_value
             if isinstance(self.columns, (cudf.core.multiindex.MultiIndex)):
-                """
-                if len(list(self.columns)) <= 1:
-                    out[list(self.columns)[0]] = out[0]
-                    out = out.drop(0)
-                else:
-                """
                 ncols = len(self.columns.levels)
                 mi_columns = dict(zip(range(ncols), [name, len(name) * [""]]))
                 top = DataFrame(mi_columns)
