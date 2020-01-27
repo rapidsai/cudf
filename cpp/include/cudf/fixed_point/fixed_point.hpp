@@ -261,7 +261,8 @@ fixed_point<Rep1, Rad1> operator/(fixed_point<Rep1, Rad1> const& lhs,
 template<typename Rep1, Radix Rad1>
 bool operator==(fixed_point<Rep1, Rad1> const& lhs,
                 fixed_point<Rep1, Rad1> const& rhs) {
-    return lhs.get() == rhs.get();
+    auto const delta = lhs.get() - rhs.get();
+    return delta < std::numeric_limits<decltype(delta)>::epsilon();
 }
 
 template <typename Rep, Radix Radix>
