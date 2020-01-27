@@ -86,7 +86,7 @@ public class Schema {
     }
     long total = 0;
     for (DType type: types) {
-      if (type == DType.STRING_CATEGORY || type == DType.STRING) {
+      if (type == DType.STRING) {
         total += avgStringSize * numRows;
         total += 4 * (numRows + 1); // Offsets
       } else {

@@ -24,7 +24,11 @@ public enum ReductionOp {
   MAX(2),
   PRODUCT(3),
   SUMOFSQUARES(4),
-  STD(7);
+  MEAN(5),
+  VAR(6),
+  STD(7),
+  ANY(8),
+  ALL(9);
 
   final int nativeId;
 
