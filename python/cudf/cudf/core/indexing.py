@@ -106,7 +106,7 @@ class _DataFrameIndexer(object):
             # tuple arguments into MultiIndex dataframes.
             try:
                 return self._getitem_tuple_arg(arg)
-            except (TypeError, KeyError, IndexError):
+            except (TypeError, KeyError, IndexError, ValueError):
                 return self._getitem_tuple_arg((arg, slice(None)))
         else:
             if not isinstance(arg, tuple):
@@ -330,9 +330,9 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             return df
         else:
             df = DataFrame()
-            for col_num in range(len(columns_df.columns)):
+            for i, col in enumerate(columns_df._columns):
                 # need Series() in case a scalar is returned
-                df[col_num] = Series(columns_df._columns[col_num][arg[0]])
+                df[i] = Series(col[arg[0]])
 
             df.index = as_index(columns_df.index[arg[0]])
             df.columns = columns_df.columns
