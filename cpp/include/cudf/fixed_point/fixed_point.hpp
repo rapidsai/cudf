@@ -32,7 +32,7 @@ enum Radix : int32_t {
 
 namespace detail {
     // helper function to negate strongly typed scale_type
-    auto negate(scale_type const& scale) -> scale_type{
+    auto negate(scale_type const& scale) -> scale_type {
         return scale_type{-1 * scale};
     }
 
@@ -105,26 +105,26 @@ public:
         return static_cast<double>(*this);
     }
 
-    template <typename Rep2, Radix Rad2>
-    fixed_point<Rep2, Rad2>& operator+=(fixed_point<Rep2, Rad2> const& rhs) {
+    template <typename Rep1, Radix Rad1>
+    fixed_point<Rep1, Rad1>& operator+=(fixed_point<Rep1, Rad1> const& rhs) {
         *this = *this + rhs;
         return *this;
     }
 
-    template <typename Rep2, Radix Rad2>
-    fixed_point<Rep2, Rad2>& operator*=(fixed_point<Rep2, Rad2> const& rhs) {
+    template <typename Rep1, Radix Rad1>
+    fixed_point<Rep1, Rad1>& operator*=(fixed_point<Rep1, Rad1> const& rhs) {
         *this = *this * rhs;
         return *this;
     }
 
-    template <typename Rep2, Radix Rad2>
-    fixed_point<Rep2, Rad2>& operator-=(fixed_point<Rep2, Rad2> const& rhs) {
+    template <typename Rep1, Radix Rad1>
+    fixed_point<Rep1, Rad1>& operator-=(fixed_point<Rep1, Rad1> const& rhs) {
         *this = *this - rhs;
         return *this;
     }
 
-    template <typename Rep2, Radix Rad2>
-    fixed_point<Rep2, Rad2>& operator/=(fixed_point<Rep2, Rad2> const& rhs) {
+    template <typename Rep1, Radix Rad1>
+    fixed_point<Rep1, Rad1>& operator/=(fixed_point<Rep1, Rad1> const& rhs) {
         *this = *this / rhs;
         return *this;
     }
@@ -135,28 +135,24 @@ public:
     }
 
     // enable access to _value & _scale
-    template <typename Rep1, Radix Rad1,
-              typename Rep2, Radix Rad2>
+    template <typename Rep1, Radix Rad1>
     friend fixed_point<Rep1, Rad1> operator+(fixed_point<Rep1, Rad1> const& lhs,
-                                             fixed_point<Rep2, Rad2> const& rhs);
+                                             fixed_point<Rep1, Rad1> const& rhs);
 
     // enable access to _value & _scale
-    template <typename Rep1, Radix Rad1,
-              typename Rep2, Radix Rad2>
+    template <typename Rep1, Radix Rad1>
     friend fixed_point<Rep1, Rad1> operator-(fixed_point<Rep1, Rad1> const& lhs,
-                                             fixed_point<Rep2, Rad2> const& rhs);
+                                             fixed_point<Rep1, Rad1> const& rhs);
 
     // enable access to _value & _scale
-    template <typename Rep1, Radix Rad1,
-              typename Rep2, Radix Rad2>
+    template <typename Rep1, Radix Rad1>
     friend fixed_point<Rep1, Rad1> operator*(fixed_point<Rep1, Rad1> const& lhs,
-                                             fixed_point<Rep2, Rad2> const& rhs);
+                                             fixed_point<Rep1, Rad1> const& rhs);
 
     // enable access to _value & _scale
-    template <typename Rep1, Radix Rad1,
-              typename Rep2, Radix Rad2>
+    template <typename Rep1, Radix Rad1>
     friend fixed_point<Rep1, Rad1> operator/(fixed_point<Rep1, Rad1> const& lhs,
-                                             fixed_point<Rep2, Rad2> const& rhs);
+                                             fixed_point<Rep1, Rad1> const& rhs);
 };
 
 template <typename Rep>
@@ -195,13 +191,9 @@ auto multiplication_overflow(T lhs, T rhs) -> bool {
 }
 
 // PLUS Operation
-template<typename Rep1, Radix Rad1,
-         typename Rep2, Radix Rad2>
+template<typename Rep1, Radix Rad1>
 fixed_point<Rep1, Rad1> operator+(fixed_point<Rep1, Rad1> const& lhs,
-                                  fixed_point<Rep2, Rad2> const& rhs) {
-
-    static_assert(std::is_same<Rep1, Rep2>::value, "Represenation types should be the same");
-    static_assert(Rad1 == Rad2,                    "Radix types should be the same");
+                                  fixed_point<Rep1, Rad1> const& rhs) {
 
     auto const rhsv  = lhs._scale > rhs._scale ? detail::shift<Rad1>(rhs._value, scale_type{lhs._scale - rhs._scale}) : rhs._value;
     auto const lhsv  = lhs._scale < rhs._scale ? detail::shift<Rad1>(lhs._value, scale_type{rhs._scale - lhs._scale}) : lhs._value;
@@ -218,13 +210,9 @@ fixed_point<Rep1, Rad1> operator+(fixed_point<Rep1, Rad1> const& lhs,
 }
 
 // MINUS Operation
-template<typename Rep1, Radix Rad1,
-         typename Rep2, Radix Rad2>
+template<typename Rep1, Radix Rad1>
 fixed_point<Rep1, Rad1> operator-(fixed_point<Rep1, Rad1> const& lhs,
-                                  fixed_point<Rep2, Rad2> const& rhs) {
-
-    static_assert(std::is_same<Rep1, Rep2>::value, "Represenation types should be the same");
-    static_assert(Rad1 == Rad2,                    "Radix types should be the same");
+                                  fixed_point<Rep1, Rad1> const& rhs) {
 
     auto const rhsv  = lhs._scale > rhs._scale ? detail::shift<Rad1>(rhs._value, scale_type{lhs._scale - rhs._scale}) : rhs._value;
     auto const lhsv  = lhs._scale < rhs._scale ? detail::shift<Rad1>(lhs._value, scale_type{rhs._scale - lhs._scale}) : lhs._value;
@@ -241,13 +229,9 @@ fixed_point<Rep1, Rad1> operator-(fixed_point<Rep1, Rad1> const& lhs,
 }
 
 // MULTIPLIES Operation
-template<typename Rep1, Radix Rad1,
-         typename Rep2, Radix Rad2>
+template<typename Rep1, Radix Rad1>
 fixed_point<Rep1, Rad1> operator*(fixed_point<Rep1, Rad1> const& lhs,
-                                  fixed_point<Rep2, Rad2> const& rhs) {
-
-    static_assert(std::is_same<Rep1, Rep2>::value, "Represenation types should be the same");
-    static_assert(Rad1 == Rad2,                    "Radix types should be the same");
+                                  fixed_point<Rep1, Rad1> const& rhs) {
 
     #if defined(__CUDACC_DEBUG__)
 
@@ -260,13 +244,9 @@ fixed_point<Rep1, Rad1> operator*(fixed_point<Rep1, Rad1> const& lhs,
 }
 
 // DIVISION Operation
-template<typename Rep1, Radix Rad1,
-         typename Rep2, Radix Rad2>
+template<typename Rep1, Radix Rad1>
 fixed_point<Rep1, Rad1> operator/(fixed_point<Rep1, Rad1> const& lhs,
-                                  fixed_point<Rep2, Rad2> const& rhs) {
-
-    static_assert(std::is_same<Rep1, Rep2>::value, "Represenation types should be the same");
-    static_assert(Rad1 == Rad2,                    "Radix types should be the same");
+                                  fixed_point<Rep1, Rad1> const& rhs) {
 
     #if defined(__CUDACC_DEBUG__)
 
@@ -279,10 +259,9 @@ fixed_point<Rep1, Rad1> operator/(fixed_point<Rep1, Rad1> const& lhs,
 }
 
 // EQUALITY COMPARISON Operation
-template<typename Rep1, Radix Rad1,
-         typename Rep2, Radix Rad2>
+template<typename Rep1, Radix Rad1>
 bool operator==(fixed_point<Rep1, Rad1> const& lhs,
-                fixed_point<Rep2, Rad2> const& rhs) {
+                fixed_point<Rep1, Rad1> const& rhs) {
     return lhs.get() == rhs.get();
 }
 
