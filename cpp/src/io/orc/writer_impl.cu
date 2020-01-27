@@ -766,7 +766,7 @@ void writer::impl::write_index_stream(
     buffer_[1] = static_cast<uint8_t>(uncomp_ix_len >> 8);
     buffer_[2] = static_cast<uint8_t>(uncomp_ix_len >> 16);
   }
-  outfile_.write(reinterpret_cast<char *>(buffer_.data()), buffer_.size());
+  out_sink_->write(buffer_.data(), buffer_.size());
   stripe.indexLength += buffer_.size();
 }
 
@@ -787,19 +787,16 @@ void writer::impl::write_data_stream(gpu::StripeStream const &strm_desc,
                              cudaMemcpyDeviceToHost, stream));
     CUDA_TRY(cudaStreamSynchronize(stream));
 
-    outfile_.write(reinterpret_cast<char *>(stream_out), length);
+    out_sink_->write(stream_out, length);
   }
   stripe.dataLength += length;
 }
 
-writer::impl::impl(std::string filepath, writer_options const &options,
-                   rmm::mr::device_memory_resource *mr)
-    : _mr(mr) {
-  compression_kind_ = to_orc_compression(options.compression);
-
-  outfile_.open(filepath, std::ios::out | std::ios::binary | std::ios::trunc);
-  CUDF_EXPECTS(outfile_.is_open(), "Cannot open output file");
-}
+writer::impl::impl(std::unique_ptr<data_sink> sink, writer_options const &options,
+  rmm::mr::device_memory_resource *mr):
+  compression_kind_(to_orc_compression(options.compression)), 
+  out_sink_(std::move(sink)),
+  _mr(mr) {}
 
 void writer::impl::write(table_view const &table, const table_metadata *metadata, cudaStream_t stream) {
   size_type num_columns = table.num_columns();
@@ -954,13 +951,13 @@ void writer::impl::write(table_view const &table, const table_metadata *metadata
   ProtobufWriter pbw_(&buffer_);
 
   // Write file header
-  outfile_.write(MAGIC, std::strlen(MAGIC));
+  out_sink_->write(MAGIC, std::strlen(MAGIC));
 
   // Write stripes
   size_t group = 0;
   for (size_t stripe_id = 0; stripe_id < stripes.size(); stripe_id++) {
     auto groups_in_stripe = div_by_rowgroups(stripes[stripe_id].numberOfRows);
-    stripes[stripe_id].offset = outfile_.tellp();
+    stripes[stripe_id].offset = out_sink_->bytes_written();
 
     // Column (skippable) index streams appear at the start of the stripe
     stripes[stripe_id].indexLength = 0;
@@ -1007,7 +1004,7 @@ void writer::impl::write(table_view const &table, const table_metadata *metadata
       buffer_[1] = static_cast<uint8_t>(uncomp_sf_len >> 8);
       buffer_[2] = static_cast<uint8_t>(uncomp_sf_len >> 16);
     }
-    outfile_.write(reinterpret_cast<char *>(buffer_.data()), buffer_.size());
+    out_sink_->write(buffer_.data(), buffer_.size());
 
     group += groups_in_stripe;
   }
@@ -1015,7 +1012,7 @@ void writer::impl::write(table_view const &table, const table_metadata *metadata
   // Write filefooter metadata
   FileFooter ff;
   ff.headerLength = std::strlen(MAGIC);
-  ff.contentLength = outfile_.tellp();
+  ff.contentLength = out_sink_->bytes_written();
   ff.stripes = std::move(stripes);
   ff.numberOfRows = num_rows;
   ff.rowIndexStride = row_index_stride_;
@@ -1054,14 +1051,18 @@ void writer::impl::write(table_view const &table, const table_metadata *metadata
   }
   const auto ps_length = static_cast<uint8_t>(pbw_.write(&ps));
   buffer_.push_back(ps_length);
-  outfile_.write(reinterpret_cast<char *>(buffer_.data()), buffer_.size());
-  outfile_.flush();
+  out_sink_->write(buffer_.data(), buffer_.size());
+  out_sink_->flush();
 }
 
 // Forward to implementation
-writer::writer(std::string filepath, writer_options const &options,
+writer::writer(std::string const& filepath, writer_options const& options,
                rmm::mr::device_memory_resource *mr)
-    : _impl(std::make_unique<impl>(filepath, options, mr)) {}
+    : _impl(std::make_unique<impl>(data_sink::create(filepath), options, mr)) {}
+
+writer::writer(std::vector<char>* buffer, writer_options const& options,
+                   rmm::mr::device_memory_resource *mr)
+        : _impl(std::make_unique<impl>(data_sink::create(buffer), options, mr)) {}
 
 // Destructor within this translation unit
 writer::~writer() = default;
