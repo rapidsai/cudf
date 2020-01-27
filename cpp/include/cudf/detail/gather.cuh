@@ -191,12 +191,15 @@ struct column_gatherer_impl<string_view, MapItType>
 
 };
 
+ /**
+  * @brief Column gather specialization for dictionary column type.
+  */
 template<typename MapItType>
 struct column_gatherer_impl<dictionary32, MapItType>
 {
  /**
   * @brief Type-dispatched function to gather from one column to another based
-  * on a `gather_map`. This handles dictionary column_views only.
+  * on a `gather_map`.
   *
   * @param source_column View into the column to gather from
   * @param gather_map_begin Beginning of iterator range of integral values representing the gather map
@@ -204,6 +207,7 @@ struct column_gatherer_impl<dictionary32, MapItType>
   * @param nullify_out_of_bounds Nullify values in `gather_map` that are out of bounds
   * @param mr Memory resource to use for all allocations
   * @param stream CUDA stream on which to execute kernels
+  * @return New dictionary column with gathered rows.
   */
   std::unique_ptr<column> operator()(column_view const& source_column,
                                      MapItType gather_map_begin,
@@ -234,7 +238,11 @@ struct column_gatherer_impl<dictionary32, MapItType>
       // reset null mask on indices column
       new_indices->set_null_mask( rmm::device_buffer{0,stream,mr}, 0 );
 
-      // somehow need to increment the shared-ptr count of the keys
+      // Cannot figure out a good way to update the shared-pointer for the keys column
+      // so we will copy the keys for now.
+      // Also, ideally we should remove any keys that are no longer referenced
+      // and then update the indices. We could call the remove_unused_keys
+      // before returning the column but seems there may be a more efficient solution.
       auto keys_copy = std::make_shared<column>(dictionary.dictionary_keys());
 
       std::vector<std::unique_ptr<column>> children;
@@ -244,7 +252,7 @@ struct column_gatherer_impl<dictionary32, MapItType>
           rmm::device_buffer{0,stream,mr},
           null_mask, null_count,
           std::move(children),
-          keys_copy);
+          std::move(keys_copy));
   }
 };
 
