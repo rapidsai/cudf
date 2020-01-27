@@ -302,7 +302,7 @@ class CategoricalColumn(column.ColumnBase):
 
     @property
     def categories(self):
-        return self.dtype.categories.as_column()
+        return self.dtype.categories._values
 
     @categories.setter
     def categories(self, value):
