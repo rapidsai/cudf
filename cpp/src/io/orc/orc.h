@@ -69,6 +69,8 @@ struct UserMetadataItem
     std::string value;                          // the user defined binary value as string
 };
 
+typedef std::vector<uint8_t> ColumnStatistics;  // Column statistics blob
+
 struct FileFooter
 {
     uint64_t headerLength = 0;                  // the length of the file header in bytes (always 3)
@@ -77,6 +79,7 @@ struct FileFooter
     std::vector<SchemaType> types;              // the schema information
     std::vector<UserMetadataItem> metadata;     // the user metadata that was added
     uint64_t numberOfRows = 0;                  // the total number of rows in the file
+    std::vector<ColumnStatistics> statistics;   // Column statistics blobs
     uint32_t rowIndexStride = 0;                // the maximum number of rows in each index entry
     // Helper methods
     std::string GetColumnName(uint32_t column_id); // return the column name
@@ -102,6 +105,15 @@ struct StripeFooter
     std::string writerTimezone = "";            // time zone of the writer
 };
 
+struct StripeStatistics
+{
+    std::vector<ColumnStatistics> colStats;     // Column statistics blobs
+};
+
+struct Metadata
+{
+    std::vector<StripeStatistics> stripeStats;
+};
 
 
 // Minimal protobuf reader for orc metadata
@@ -136,6 +148,8 @@ public:
     DECL_ORC_STRUCT(StripeFooter);
     DECL_ORC_STRUCT(Stream);
     DECL_ORC_STRUCT(ColumnEncoding);
+    DECL_ORC_STRUCT(StripeStatistics);
+    DECL_ORC_STRUCT(Metadata);
 protected:
     bool InitSchema(FileFooter *);
 

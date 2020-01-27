@@ -94,6 +94,12 @@ void ProtobufReader::skip_struct_field(int t)
                 s->m.resize(s->m.size() + 1); if (!read(&s->m.back(), n)) return false; \
                 break; }                        \
 
+#define ORC_FLD_REPEATED_STRUCT_BLOB(id, m)     \
+            case (id)*8+PB_TYPE_FIXEDLEN: {     \
+                uint32_t n = get_u32(); if (n > (size_t)(end - m_cur)) return false; \
+                s->m.resize(s->m.size() + 1); s->m.back().assign(m_cur, m_cur + n); m_cur += n; \
+                break; }                        \
+
 #define ORC_END_STRUCT_(postproccond)           \
             default: /*printf("unknown fld %d of type %d\n", fld >> 3, fld & 7);*/ skip_struct_field(fld & 7); \
             }                                   \
@@ -121,6 +127,7 @@ ORC_BEGIN_STRUCT(FileFooter)
     ORC_FLD_REPEATED_STRUCT(4, types)
     ORC_FLD_REPEATED_STRUCT(5, metadata)
     ORC_FLD_UINT64(6, numberOfRows)
+    ORC_FLD_REPEATED_STRUCT_BLOB(7, statistics)
     ORC_FLD_UINT32(8, rowIndexStride)
 ORC_END_STRUCT_POSTPROC(InitSchema)
 
@@ -161,6 +168,14 @@ ORC_END_STRUCT()
 ORC_BEGIN_STRUCT(ColumnEncoding)
     ORC_FLD_ENUM(1, kind, ColumnEncodingKind)
     ORC_FLD_UINT32(2, dictionarySize)
+ORC_END_STRUCT()
+
+ORC_BEGIN_STRUCT(StripeStatistics)
+    ORC_FLD_REPEATED_STRUCT_BLOB(1, colStats)
+ORC_END_STRUCT()
+
+ORC_BEGIN_STRUCT(Metadata)
+    ORC_FLD_REPEATED_STRUCT(1, stripeStats)
 ORC_END_STRUCT()
 
 
@@ -259,6 +274,14 @@ bool ProtobufReader::InitSchema(FileFooter *ff)
             putb(s->m[i]);                      \
         }
 
+#define PBW_FLD_BLOB(id, m) {                   \
+        size_t len = s->m.size();               \
+        struct_size += put_uint((id)*8+PB_TYPE_FIXEDLEN);\
+        struct_size += put_uint(len) + len;     \
+        for (size_t i = 0; i < len; i++)        \
+            putb(s->m[i]);                      \
+        }
+
 #define PBW_FLD_STRUCT(id, m) {                 \
         size_t sz, lpos;                        \
         struct_size += put_uint((id)*8+PB_TYPE_FIXEDLEN);\
@@ -280,6 +303,12 @@ bool ProtobufReader::InitSchema(FileFooter *ff)
         for (size_t k = 0; k < s->m.size(); k++) \
             PBW_FLD_STRUCT(id, m[k]);           \
         }
+
+#define PBW_FLD_REPEATED_STRUCT_BLOB(id, m) {   \
+        for (size_t k = 0; k < s->m.size(); k++) \
+            PBW_FLD_BLOB(id, m[k]);             \
+        }
+
 
 #define PBW_END_STRUCT()                        \
         return struct_size;                     \
@@ -357,6 +386,7 @@ PBW_BEGIN_STRUCT(FileFooter)
     PBW_FLD_REPEATED_STRUCT(4, types)
     PBW_FLD_REPEATED_STRUCT(5, metadata)
     PBW_FLD_UINT(6, numberOfRows)
+    PBW_FLD_REPEATED_STRUCT_BLOB(7, statistics)
     PBW_FLD_UINT(8, rowIndexStride)
 PBW_END_STRUCT()
 
