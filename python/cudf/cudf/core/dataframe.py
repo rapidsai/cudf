@@ -3853,9 +3853,8 @@ class DataFrame(Frame):
 
         df = DataFrame()
         data = cupy.asfortranarray(cupy.asarray(data))
-        
         for i, k in enumerate(names):
-            df[k] = Series(data[:,i], nan_as_null=nan_as_null)
+            df[k] = Series(data[:, i], nan_as_null=nan_as_null)
 
         if index is not None:
             indices = data[index]
