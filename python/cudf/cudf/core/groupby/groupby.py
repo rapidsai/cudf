@@ -353,10 +353,6 @@ class _GroupbyHelper(object):
         """
         Computes the groupby result
         """
-        if hasattr(agg, "copy"):
-            self.original_aggs = agg.copy()
-        else:
-            self.original_aggs = agg
         self.normalize_agg(agg)
         self.normalize_values()
         aggs_as_list = self.get_aggs_as_list()
@@ -385,6 +381,10 @@ class _GroupbyHelper(object):
 
         For a Series, the dictionary has a single key ``None``
         """
+        if hasattr(agg, "copy"):
+            self.original_aggs = agg.copy()
+        else:
+            self.original_aggs = agg
         if isinstance(agg, collections.abc.Mapping):
             for col_name, agg_name in agg.items():
                 if not isinstance(agg_name, list):
@@ -525,6 +525,20 @@ class _GroupbyHelper(object):
             else:
                 return aggs_as_list
         else:
+            return_multi_index = True
+            if isinstance(self.original_aggs, str):
+                return_multi_index = False
+            if isinstance(self.original_aggs, collections.abc.Mapping):
+                return_multi_index = False
+                for key in self.original_aggs:
+                    if not isinstance(self.original_aggs[key], str):
+                        return_multi_index = True
+                        break
+            if return_multi_index:
+                return MultiIndex.from_tuples(zip(value_names, aggs_as_list))
+            else:
+                return value_names
+            """
             if (
                 isinstance(self.original_aggs, collections.abc.Mapping)
                 and len(self.original_aggs) == 1
@@ -544,6 +558,7 @@ class _GroupbyHelper(object):
                     return MultiIndex.from_tuples(
                         zip(value_names, aggs_as_list)
                     )
+            """
 
     def get_aggs_as_list(self):
         """
