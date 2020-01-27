@@ -442,6 +442,13 @@ def test_multifile_warning(datadir):
 # Validates the integrity of the GPU accelerated parquet writer.
 def test_parquet_writer_gpu(tmpdir, gdf):
     gdf_fname = tmpdir.join("gdf.parquet")
+
+    # Adding a dummy column of "test_index" which is expected based
+    # off what pandas does today. If we do not add this 
+    # then comparisons currently fail
+    gdf = gdf.reset_index()
+    gdf.rename(columns={"index": "test_index"})
+
     gdf.to_parquet(gdf_fname.strpath, engine="cudf")
     assert os.path.exists(gdf_fname)
     expect = gdf
