@@ -558,63 +558,65 @@ std::unique_ptr<column> copy_if_else( scalar const& lhs, scalar const& rhs, colu
                                     rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Scatters dense buffer `source` of size N to `target` of size K (K >= N)
- * as per `boolean_mask` of size K.
+ * @brief Scatters dense `i`th buffer/column from `source` of size N to `i`th` target` column of
+ * size K (K >= N) as per `boolean_mask` of size K.
  *
  * `boolean_mask` should have N number of `true`s. If boolean mask is `true`,
- * corresponding value in target is updated with value from `source`, else it
- * is left untouched.
+ * corresponding value in target is updated with value from corresponding
+ * `source` column, else it is left untouched.
  *
  * Example:
- * source: {1, 5, 6, 8, 9}
+ * source: {{1, 5, 6, 8, 9}}
  * boolean_mask: {true, false, false, false, true, true, false, true, true, false}
- * target:       {   2,     2,     3,     4,    4,     7,    7,    7,    8,    10}
+ * target:       {{   2,     2,     3,     4,    4,     7,    7,    7,    8,    10}}
  *
- * output:       {   1,     2,     3,     4,    5,     6,    7,    8,    9,    10}
+ * output:       {{   1,     2,     3,     4,    5,     6,    7,    8,    9,    10}}
  *
- * @throws cudf::logic_error if source.type() != target.type()
+ * @throw  cudf::logic_error if source.num_columns() != target.num_columns()
+ * @throws cudf::logic_error if any `i`th source_column.type() != `i`th target_column.type()
  * @throws cudf::logic_error if boolean_mask.type() != bool
  * @throws cudf::logic_error if boolean_mask.size() != target.size()
  *
- * @param[in] source column_view (dense buffer) which gets scattered
- * @param[in] target column_view which gets updated with scattered values from `source`
+ * @param[in] source table_view (set of dense buffer) which gets scattered
+ * @param[in] target table_view which gets updated with scattered values from `source`
  * @param[in] boolean_mask column_view which is a scatter_map.
  * @param[in] mr Optional, The resource to use for all returned allocations
  *
- * @returns Returns a column_view by scattering `source` into `target` as per `boolean_mask`.
+ * @returns Returns a table by scattering `source` into `target` as per `boolean_mask`.
  */
-std::unique_ptr<column> boolean_mask_scatter(
-    column_view const& source, column_view const& target,
+std::unique_ptr<table> boolean_mask_scatter(
+    table_view const& source, table_view const& target,
     column_view const& boolean_mask,
     rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Scatters scalar value `source` to `target` of size K as per
+ * @brief Scatters scalar values from `source` to `target` of size K as per
  * `boolean_mask` of size K.
  *
  * If boolean mask is `true`, corresponding value in target is updated
  * with value from `source`, else it is left untouched.
  *
  * Example:
- * source: 11
+ * source: {11}
  * boolean_mask: {true, false, false, false, true, true, false, true, true, false}
- * target:       {   2,     2,     3,     4,    4,     7,    7,    7,    8,    10}
+ * target:       {{   2,     2,     3,     4,    4,     7,    7,    7,    8,    10}}
  *
- * output:       {   11,    2,     3,     4,   11,    11,    7,   11,   11,    10}
+ * output:       {{   11,    2,     3,     4,   11,    11,    7,   11,   11,    10}}
  *
- * @throws cudf::logic_error if source.type() != target.type()
+ * @throw  cudf::logic_error if source.size() != target.num_columns()
+ * @throws cudf::logic_error if any `i`th source_scalar.type() != `i`th target_column.type()
  * @throws cudf::logic_error if boolean_mask.type() != bool
  * @throws cudf::logic_error if boolean_mask.size() != target.size()
  *
  * @param[in] source scalar which gets scattered
- * @param[in] target column_view which gets updated with scattered value from `source`
+ * @param[in] target table_view which gets updated with scattered values from `source`
  * @param[in] boolean_mask column_view which is a scatter_map.
  * @param[in] mr Optional, The resource to use for all returned allocations
  *
- * @returns Returns a column_view by scattering `source` into `target` as per `boolean_mask`.
+ * @returns Returns a table by scattering `source` into `target` as per `boolean_mask`.
  */
-std::unique_ptr<column> boolean_mask_scatter(
-    scalar const& source, column_view const& target,
+ std::unique_ptr<table> boolean_mask_scatter(
+    std::vector<std::unique_ptr<scalar>> const& source, table_view const& target,
     column_view const& boolean_mask,
     rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
