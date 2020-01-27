@@ -107,12 +107,17 @@ std::unique_ptr<column> remove_unused_keys( dictionary_column_view const& dictio
  * d2 = set_keys(d1,["a","b","c"])
  * d2 is now {["a","b","c"],[null,0,2,0]}
  * ```
+ * 
+ * Existing null entries in the input column are merged with any new nulls
+ * created by removing keys referenced in the indices. If an index points
+ * to a key that has been removed, that index now becomes null.
  *
  * @throw cudf_logic_error if the keys type does not match the keys type in
  * the dictionary_column.
+ * @throw cudf_logic_error if the new keys contain nulls.
  *
  * @param dictionary_column Existing dictionary column.
- * @param keys New keys to use for the output column.
+ * @param keys New keys to use for the output column. Must not contain nulls.
  * @param mr Resource for allocating memory for the output.
  * @return New dictionary column.
  */
