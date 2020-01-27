@@ -259,7 +259,7 @@ fixed_point<Rep1, Rad1> operator/(fixed_point<Rep1, Rad1> const& lhs,
 
 // EQUALITY COMPARISON Operation
 template<typename Rep1, Radix Rad1,
-         typename Rep2, Radix Rad2>
+         typename Rep1, Radix Rad1>
 bool operator==(fixed_point<Rep1, Rad1> const& lhs,
                 fixed_point<Rep1, Rad1> const& rhs) {
     auto const delta = lhs.get() - rhs.get();
