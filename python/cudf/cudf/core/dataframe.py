@@ -430,13 +430,10 @@ class DataFrame(Table):
         >>> print(df[[True, False, True, False]]) # mask the entire dataframe,
         # returning the rows specified in the boolean mask
         """
-        if isinstance(
-            self.columns, cudf.core.multiindex.MultiIndex
-        ) and isinstance(arg, tuple):
-            return self.columns._get_column_major(self, arg)
         if is_scalar(arg) or isinstance(arg, tuple):
-            s = cudf.Series(self._data[arg], name=arg, index=self.index)
-            return s
+            if isinstance(self.columns, cudf.MultiIndex):
+                return self.columns._get_column_major(self, tuple(arg))
+            return cudf.Series(self._data[arg], name=arg, index=self.index)
         elif isinstance(arg, slice):
             df = DataFrame(index=self.index[arg])
             for k, col in self._data.items():
@@ -1297,7 +1294,7 @@ class DataFrame(Table):
             """
             self.multi_cols = columns
         elif isinstance(columns, pd.MultiIndex):
-            self.columns = cudf.MultiIndex.from_pandas(columns)
+            self.multi_cols = cudf.MultiIndex.from_pandas(columns)
         else:
             if hasattr(self, "multi_cols"):
                 delattr(self, "multi_cols")
@@ -1527,24 +1524,39 @@ class DataFrame(Table):
         else:
             index = self.index.take(positions)
         out = DataFrame()
-        if self._data:
-            for i, col_name in enumerate(self._data.keys()):
-                out[col_name] = self._data[col_name][positions]
-        return out.set_index(index)
+        for idx, (col_name, col_value) in enumerate(self._data.items()):
+            if isinstance(self.columns, cudf.MultiIndex):
+                out[idx] = col_value[positions]
+            else:
+                out[col_name] = col_value[positions]
+        out.columns = self.columns
+        out.index = index
+        return out
 
     def _take_columns(self, positions):
         positions = Series(positions)
-        column_names = list(self._data.keys())
+        columns = self.columns
         column_values = list(self._data.values())
+
+        # import pdb; pdb.set_trace()
+
         result = DataFrame()
         for idx in range(len(positions)):
-            if len(self) == 0:
-                result[idx] = as_column([])
+            if isinstance(columns, cudf.MultiIndex):
+                colname = positions[idx]
             else:
-                result[column_names[positions[idx]]] = column_values[
-                    positions[idx]
-                ]
+                colname = columns[positions[idx]]
+            if len(self) == 0:
+                result[colname] = as_column([])
+            else:
+                result[colname] = column_values[positions[idx]]
+
         result.index = self._index
+        if isinstance(columns, cudf.MultiIndex):
+            columns = columns.take(positions)
+        else:
+            columns = columns.take(positions.to_pandas())
+        result.columns = columns
         return result
 
     def copy(self, deep=True):

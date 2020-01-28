@@ -775,3 +775,13 @@ def test_multiindex_rows_with_wildcard(pdf, gdf, pdfIndex):
         pdf.loc[(slice(None), slice(None), slice(None), "smoke"), :],
         gdf.loc[(slice(None), slice(None), slice(None), "smoke"), :],
     )
+
+
+def test_multiindex_multicolumn_zero_row_slice():
+    gdf = cudf.DataFrame(
+        {"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5], "z": [1, 2, 3, 4, 5]}
+    )
+    pdf = gdf.to_pandas()
+    gdg = gdf.groupby(["x", "y"]).agg({"z": ["count"]}).iloc[:0]
+    pdg = pdf.groupby(["x", "y"]).agg({"z": ["count"]}).iloc[:0]
+    assert_eq(pdg, gdg, check_dtype=False)
