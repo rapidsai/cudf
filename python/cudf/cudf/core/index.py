@@ -1025,7 +1025,9 @@ def as_index(arbitrary, **kwargs):
 
     kwargs = _setdefault_name(arbitrary, kwargs)
 
-    if isinstance(arbitrary, Index):
+    if isinstance(arbitrary, cudf.MultiIndex):
+        return arbitrary
+    elif isinstance(arbitrary, Index):
         idx = arbitrary.copy(deep=False)
         idx.rename(**kwargs, inplace=True)
         return idx
@@ -1043,8 +1045,6 @@ def as_index(arbitrary, **kwargs):
         return RangeIndex(
             start=arbitrary._start, stop=arbitrary._stop, **kwargs
         )
-    elif isinstance(arbitrary, cudf.MultiIndex):
-        return arbitrary
     elif isinstance(arbitrary, pd.MultiIndex):
         return cudf.MultiIndex.from_pandas(arbitrary)
     else:
