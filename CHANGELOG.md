@@ -5,6 +5,7 @@
 ## Improvements
 
 - PR #3909 Move java backend to libcudf++
+- PR #3971 Adding `as_table` to convert Column to Table in python
 
 ## Bug Fixes
 
