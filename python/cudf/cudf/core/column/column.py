@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 import pickle
 import warnings
@@ -14,6 +14,7 @@ import rmm
 
 import cudf
 import cudf._lib as libcudf
+import cudf._libxx as libcudfxx
 from cudf._lib.stream_compaction import nunique as cpp_unique_count
 from cudf._libxx.column import Column
 from cudf.core.buffer import Buffer
@@ -227,15 +228,28 @@ class ColumnBase(Column):
             if not (obj.dtype == head.dtype):
                 raise ValueError("All series must be of same type")
 
+        newsize = sum(map(len, objs))
+        if newsize > libcudfxx.MAX_COLUMN_SIZE:
+            raise MemoryError(
+                "Result of concat cannot have "
+                "size > {}".format(libcudfxx.MAX_COLUMN_SIZE_STR)
+            )
+
         # Handle strings separately
         if all(isinstance(o, StringColumn) for o in objs):
+            result_nbytes = sum(o._nbytes for o in objs)
+            if result_nbytes > libcudfxx.MAX_STRING_COLUMN_BYTES:
+                raise MemoryError(
+                    "Result of concat cannot have > {}  bytes".format(
+                        libcudfxx.MAX_STRING_COLUMN_BYTES_STR
+                    )
+                )
             objs = [o.nvstrings for o in objs]
             return as_column(nvstrings.from_strings(*objs))
 
         # Filter out inputs that have 0 length
         objs = [o for o in objs if len(o) > 0]
         nulls = any(col.nullable for col in objs)
-        newsize = sum(map(len, objs))
 
         if is_categorical_dtype(head):
             data_dtype = head.codes.dtype
@@ -1068,6 +1082,14 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
         if dtype is not None:
             data = data.astype(dtype)
     elif isinstance(arbitrary, nvstrings.nvstrings):
+        byte_count = arbitrary.byte_count()
+        if byte_count > libcudfxx.MAX_STRING_COLUMN_BYTES:
+            raise MemoryError(
+                "Cannot construct string columns "
+                "containing > {} bytes. "
+                "Consider using dask_cudf to partition "
+                "your data.".format(libcudfxx.MAX_STRING_COLUMN_BYTES_STR)
+            )
         sbuf = Buffer.empty(arbitrary.byte_count())
         obuf = Buffer.empty(
             (arbitrary.size() + 1) * np.dtype("int32").itemsize
