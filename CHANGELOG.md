@@ -5,6 +5,8 @@
 ## Improvements
 
 - PR #3909 Move java backend to libcudf++
+- PR #3910 Adding sinh, cosh, tanh, asinh, acosh, atanh cube root and rint unary support.
+
 
 ## Bug Fixes
 
@@ -13,6 +15,7 @@
 - PR #3953 Fix overflow in column_buffer when computing the device buffer size
 - PR #3959 Add missing hash-dispatch function for cudf.Series
 - PR #3970 Fix for Series Pickle
+- PR #3964 Restore legacy NVStrings and NVCategory dependencies in Java jar
 
 
 # cuDF 0.12.0 (Date TBD)
