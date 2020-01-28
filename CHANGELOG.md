@@ -5,6 +5,7 @@
 ## Improvements
 
 - PR #3909 Move java backend to libcudf++
+- PR #3910 Adding sinh, cosh, tanh, asinh, acosh, atanh cube root and rint unary support.
 - PR #3911 Adding null boolean handling for copy_if_else
 
 ## Bug Fixes
@@ -12,6 +13,8 @@
 - PR #3888 Drop `ptr=None` from `DeviceBuffer` call
 - PR #3902 Fix conversion of large size GPU array to dataframe 
 - PR #3953 Fix overflow in column_buffer when computing the device buffer size
+- PR #3959 Add missing hash-dispatch function for cudf.Series
+- PR #3964 Restore legacy NVStrings and NVCategory dependencies in Java jar
 
 
 # cuDF 0.12.0 (Date TBD)
