@@ -20,7 +20,6 @@ namespace cudf {
 namespace io {
 
 datasource_factory::datasource_factory() {
-  std::cout << "Creating datasource_factory instance!!!!!!!" << std::endl;
   read_directory();
   std::cout << "Looping through all of the lib directories found" << std::endl;
   for(int i=0; i < libs.size(); i++){

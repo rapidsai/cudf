@@ -123,7 +123,7 @@ endif(CONDA_LINK_DIRS)
 ###################################################################################################
 # - library targets -------------------------------------------------------------------------------
 
-add_library(cudf_kafka
+add_library(cudf_kafka SHARED
             kafka/src/kafka_datasource.cpp
 )
 
