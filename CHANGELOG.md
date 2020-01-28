@@ -4,11 +4,16 @@
 
 ## Improvements
 
+- PR #3909 Move java backend to libcudf++
 - PR #3910 Adding sinh, cosh, tanh, asinh, acosh, atanh cube root and rint unary support.
+
 
 ## Bug Fixes
 
 - PR #3888 Drop `ptr=None` from `DeviceBuffer` call
+- PR #3902 Fix conversion of large size GPU array to dataframe 
+- PR #3953 Fix overflow in column_buffer when computing the device buffer size
+- PR #3959 Add missing hash-dispatch function for cudf.Series
 
 
 # cuDF 0.12.0 (Date TBD)
@@ -82,6 +87,7 @@
 - PR #3796 Improve on round-robin with the case when number partitions greater than number of rows.
 - PR #3805 Avoid CuPy 7.1.0 for now
 - PR #3758 detail::scatter variant with map iterator support
+- PR #3882 Fail loudly when creating a StringColumn from nvstrings with > MAX_VAL(int32) bytes
 - PR #3823 Add header file for detail search functions
 - PR #2438 Build GBench Benchmarks in CI
 - PR #3713 Adding aggregation support to rolling_window
@@ -138,6 +144,8 @@
 - PR #3850 Fix merge typecast scope issue and resulting memory leak
 - PR #3855 Fix MultiColumn recreation with reset_index
 - PR #3869 Fixed size calculation in NVStrings::byte_count()
+- PR #3868 Fix apply_grouped moving average example
+- PR #3900 Properly link `NVStrings` and `NVCategory` into tests
 - PR #3868 Fix apply_grouped moving average example 
 - PR #3871 Fix `split_out` error
 - PR #3886 Fix string column materialization from column view
