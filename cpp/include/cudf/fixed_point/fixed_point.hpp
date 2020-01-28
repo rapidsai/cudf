@@ -30,7 +30,7 @@ struct weak_typedef {
 
 using scale_type = weak_typedef<int32_t>;
 
-enum Radix : int32_t {
+enum class Radix : int32_t {
     BASE_2  = 2,
     BASE_10 = 10
 };
