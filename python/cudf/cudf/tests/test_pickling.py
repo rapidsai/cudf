@@ -1,11 +1,11 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 import pickle
-import pytest
 import sys
 
 import numpy as np
 import pandas as pd
+import pytest
 
 import rmm
 
