@@ -16,6 +16,7 @@
 
 #include <iostream>
 #include <vector>
+#include <map>
 
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/type_lists.hpp>
@@ -82,13 +83,11 @@ struct ReductionTest : public cudf::test::BaseFixture
     void reduction_test(
         const cudf::column_view underlying_column,
         T_out expected_value, bool succeeded_condition,
-        std::unique_ptr<aggregation> const &agg, cudf::data_type output_dtype = cudf::data_type{})
+        std::unique_ptr<aggregation> const &agg)
     {
-        if( cudf::data_type{} == output_dtype) output_dtype = underlying_column.type();
-
         auto statement = [&]() {
           std::unique_ptr<cudf::scalar> result
-                = cudf::experimental::reduce(underlying_column, agg, output_dtype);
+                = cudf::experimental::reduce(underlying_column, agg);
             using ScalarType = cudf::experimental::scalar_type_t<T_out>;
             auto result1 = static_cast<ScalarType *>(result.get());
             EXPECT_EQ(expected_value, result1->value());
@@ -311,7 +310,7 @@ TYPED_TEST(MultiStepReductionTest, Mean)
     cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
     double expected_value = calc_mean(v, v.size());
     this->reduction_test(col, expected_value, true,
-        cudf::experimental::make_mean_aggregation(), cudf::data_type(cudf::FLOAT64));
+        cudf::experimental::make_mean_aggregation());
 
     // test with nulls
     cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
@@ -320,7 +319,7 @@ TYPED_TEST(MultiStepReductionTest, Mean)
 
     double expected_value_nulls = calc_mean(replaced_array, valid_count);
     this->reduction_test(col_nulls, expected_value_nulls, true,
-        cudf::experimental::make_mean_aggregation(), cudf::data_type(cudf::FLOAT64));
+        cudf::experimental::make_mean_aggregation());
 }
 
 
@@ -353,8 +352,8 @@ TYPED_TEST(MultiStepReductionTest, var_std)
     auto var_agg = cudf::experimental::make_variance_aggregation(/*ddof =*/ 1);
     auto std_agg = cudf::experimental::make_std_aggregation(/*ddof =*/ 1);
 
-    this->reduction_test(col, var, true, var_agg, cudf::data_type(cudf::FLOAT64));
-    this->reduction_test(col, std, true, std_agg, cudf::data_type(cudf::FLOAT64));
+    this->reduction_test(col, var, true, var_agg);
+    this->reduction_test(col, std, true, std_agg);
 
     // test with nulls
     cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
@@ -364,8 +363,8 @@ TYPED_TEST(MultiStepReductionTest, var_std)
     double var_nulls = calc_var(replaced_array, valid_count);
     double std_nulls = std::sqrt(var_nulls);
 
-    this->reduction_test(col_nulls, var_nulls, true, var_agg, cudf::data_type(cudf::FLOAT64));
-    this->reduction_test(col_nulls, std_nulls, true, std_agg, cudf::data_type(cudf::FLOAT64));
+    this->reduction_test(col_nulls, var_nulls, true, var_agg);
+    this->reduction_test(col_nulls, std_nulls, true, std_agg);
 }
 
 // ----------------------------------------------------------------------------
@@ -378,14 +377,14 @@ struct ReductionMultiStepErrorCheck : public ReductionTest<T>
 
     void reduction_error_check(cudf::test::fixed_width_column_wrapper<T> &col,
         bool succeeded_condition,
-        std::unique_ptr<aggregation> const &agg, cudf::data_type output_dtype)
+        std::unique_ptr<aggregation> const &agg)
     {
         const cudf::column_view underlying_column = col;
         auto statement = [&]() {
-            cudf::experimental::reduce(underlying_column, agg, output_dtype);
+            cudf::experimental::reduce(underlying_column, agg);
         };
 
-        if( succeeded_condition ){
+        if( succeeded_condition) {
             CUDF_EXPECT_NO_THROW(statement());
         }else{
             EXPECT_ANY_THROW(statement());
@@ -405,168 +404,93 @@ TYPED_TEST(ReductionMultiStepErrorCheck, ErrorHandling)
     cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
     cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
 
-    bool is_input_accpetable = this->ret_non_arithmetic;
+    bool is_input_acceptable = this->ret_non_arithmetic;
+    bool expect_succeed = is_input_acceptable;
+    auto var_agg = cudf::experimental::make_variance_aggregation(/*ddof = 1*/);
+    auto std_agg = cudf::experimental::make_std_aggregation(/*ddof = 1*/);
+    this->reduction_error_check(col, expect_succeed, cudf::experimental::make_mean_aggregation());
+    this->reduction_error_check(col, expect_succeed, var_agg);
+    this->reduction_error_check(col, expect_succeed, std_agg);
 
-    std::vector<cudf::data_type> dtypes(cudf::NUM_TYPE_IDS+1);
-    int i=0;
-    std::generate(dtypes.begin(), dtypes.end(), [&](){ return cudf::data_type(static_cast<cudf::type_id>(i++)); });
-
-    auto is_supported_outdtype = [](cudf::data_type dtype) {
-      if (dtype == cudf::data_type(cudf::FLOAT32)) return true;
-      if (dtype == cudf::data_type(cudf::FLOAT64)) return true;
-      return false;
-    };
-
-    auto evaluate = [&](cudf::data_type dtype) mutable {
-        bool expect_succeed = is_input_accpetable & is_supported_outdtype(dtype);
-        auto var_agg = cudf::experimental::make_variance_aggregation(/*ddof = 1*/);
-        auto std_agg = cudf::experimental::make_std_aggregation(/*ddof = 1*/);
-        this->reduction_error_check(col, expect_succeed, cudf::experimental::make_mean_aggregation(), dtype);
-        this->reduction_error_check(col, expect_succeed, var_agg,  dtype);
-        this->reduction_error_check(col, expect_succeed, std_agg,  dtype);
-
-        this->reduction_error_check(col_nulls, expect_succeed, cudf::experimental::make_mean_aggregation(), dtype);
-        this->reduction_error_check(col_nulls, expect_succeed, var_agg,  dtype);
-        this->reduction_error_check(col_nulls, expect_succeed, std_agg,  dtype);
-        return;
-    };
-
-    std::for_each(dtypes.begin(), dtypes.end(), evaluate);
+    this->reduction_error_check(col_nulls, expect_succeed, cudf::experimental::make_mean_aggregation());
+    this->reduction_error_check(col_nulls, expect_succeed, var_agg);
+    this->reduction_error_check(col_nulls, expect_succeed, std_agg);
 }
 
 
 // ----------------------------------------------------------------------------
 
-struct ReductionDtypeTest : public cudf::test::BaseFixture
+template<typename T>
+struct ReductionDtypeTest : public ReductionTest<T>
 {
-    template <typename T_in, typename T_out>
-    void reduction_test(std::vector<int> & int_values,
-        T_out expected_value, bool succeeded_condition,
-        std::unique_ptr<aggregation> const &agg, cudf::data_type out_dtype,
-        bool expected_overflow = false)
-    {
-        std::vector<T_in> input_values = convert_values<T_in>(int_values);
-        cudf::test::fixed_width_column_wrapper<T_in> const col(input_values.begin(), input_values.end());
+    ReductionDtypeTest(){}
+    ~ReductionDtypeTest(){}
 
+    //reduction_error_check
+    void reduction_test(cudf::test::fixed_width_column_wrapper<T> &col,
+        std::string const& name,
+        std::unique_ptr<aggregation> const &agg,
+        bool succeeded_condition)
+    {
+        const cudf::column_view underlying_column = col;
         auto statement = [&]() {
-            std::unique_ptr<cudf::scalar> result = 
-                cudf::experimental::reduce(col, agg, out_dtype);
-            using ScalarType = cudf::experimental::scalar_type_t<T_out>;
-            auto result1 = static_cast<ScalarType *>(result.get());
-            if( result1->is_valid() && ! expected_overflow){
-                EXPECT_EQ(expected_value, result1->value());
-            }
+            cudf::experimental::reduce(underlying_column, agg);
         };
 
-        if( succeeded_condition ){
-            CUDF_EXPECT_NO_THROW(statement());
+        //std::cout<< name << ":" << std::endl;
+        if( succeeded_condition) {
+            EXPECT_NO_THROW(statement()) << name;
         }else{
-            EXPECT_ANY_THROW(statement());
+            EXPECT_ANY_THROW(statement()) << name;
         }
     }
 };
 
-// test case for different output precision
-TEST_F(ReductionDtypeTest, different_precision)
+TYPED_TEST_CASE(ReductionDtypeTest, cudf::test::AllTypes);
+
+// test case for only supported operations on different types
+TYPED_TEST(ReductionDtypeTest, supported_aggregations)
 {
-    constexpr bool expected_overflow = true;
+    using T = TypeParam;
+    //MIN, MAX - all
+    //ANY, ALL - all except string, timestamp
+    //SUM, MEAN, - all except string, timestamp
+    //PRODUCT, SUM_OF_SQUARES, STD, VAR - numeric types only.
     std::vector<int> int_values({6, -14, 13, 109, -13, -20, 0, 98, 122, 123});
-    int expected_value = std::accumulate(int_values.begin(), int_values.end(), 0);
-    auto sum_agg = cudf::experimental::make_sum_aggregation();
+    std::vector<bool> host_bools({1,  1,  0,    1,   1,  1, 0,  1,   1,   1});
 
-    // over flow
-    this->reduction_test<int8_t, int8_t>
-        (int_values, static_cast<int8_t>(expected_value), true,
-         sum_agg, cudf::data_type(cudf::INT8), expected_overflow);
+    std::vector<T> v = convert_values<T>(int_values);
+    cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
+    cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
 
-    this->reduction_test<int8_t, int64_t>
-        (int_values, static_cast<int64_t>(expected_value), true,
-         sum_agg, cudf::data_type(cudf::INT64));
+    // supported
+    std::map<std::string, std::unique_ptr<cudf::experimental::aggregation>> supported_aggs;
+    // unsupported
+    std::map<std::string, std::unique_ptr<cudf::experimental::aggregation>> unsupported_aggs;
+    supported_aggs["min"]=std::move(cudf::experimental::make_min_aggregation());
+    supported_aggs["max"]=std::move(cudf::experimental::make_max_aggregation());
+    supported_aggs["sum"]=std::move(cudf::experimental::make_sum_aggregation());
 
-    this->reduction_test<int8_t, double>
-        (int_values, static_cast<double>(expected_value), true,
-         sum_agg, cudf::data_type(cudf::FLOAT64));
+    (cudf::is_timestamp<T>() ? unsupported_aggs["any"] : supported_aggs["any"])
+     =std::move(cudf::experimental::make_any_aggregation());
+    (cudf::is_timestamp<T>() ? unsupported_aggs["all"] : supported_aggs["all"])
+     =std::move(cudf::experimental::make_all_aggregation());
+    (cudf::is_timestamp<T>() ? unsupported_aggs["mean"] : supported_aggs["mean"])
+     =std::move(cudf::experimental::make_mean_aggregation());
+    (cudf::is_timestamp<T>() ? unsupported_aggs["product"] : supported_aggs["product"])
+     =std::move(cudf::experimental::make_product_aggregation());
+    (cudf::is_timestamp<T>() ? unsupported_aggs["SoS"] : supported_aggs["SoS"])
+     =std::move(cudf::experimental::make_sum_of_squares_aggregation());
+    (cudf::is_timestamp<T>() ? unsupported_aggs["std"] : supported_aggs["std"])
+     =std::move(cudf::experimental::make_std_aggregation(1));
+    (cudf::is_timestamp<T>() ? unsupported_aggs["var"] : supported_aggs["var"])
+     =std::move(cudf::experimental::make_variance_aggregation(1));
 
-    // down cast (over flow)
-    this->reduction_test<double, int8_t>
-        (int_values, static_cast<int8_t>(expected_value), true,
-         sum_agg, cudf::data_type(cudf::INT8), expected_overflow);
-
-    // down cast (no over flow)
-    this->reduction_test<double, int16_t>
-        (int_values, static_cast<int16_t>(expected_value), true,
-         sum_agg, cudf::data_type(cudf::INT16));
-
-    // not supported case:
-    // wrapper classes other than cudf::experimental::bool8 are not convertible
-    this->reduction_test<cudf::timestamp_D, cudf::timestamp_s>
-        (int_values, static_cast<cudf::timestamp_s>(expected_value), false,
-         sum_agg, cudf::data_type(cudf::TIMESTAMP_SECONDS));
-
-    this->reduction_test<cudf::timestamp_s, cudf::timestamp_ns>
-        (int_values, static_cast<cudf::timestamp_ns>(expected_value), false,
-         sum_agg, cudf::data_type(cudf::TIMESTAMP_NANOSECONDS));
-
-    this->reduction_test<int8_t, cudf::timestamp_us>
-        (int_values, static_cast<cudf::timestamp_us>(expected_value), false,
-         sum_agg, cudf::data_type(cudf::TIMESTAMP_MICROSECONDS));
-
-    /*TODO enable after category support
-    this->reduction_test<cudf::timestamp_s, cudf::category>
-        (int_values, static_cast<cudf::category>(expected_value), false,
-         sum_agg, cudf::data_type(cudf::CATEGORY));
-
-    this->reduction_test<int8_t, cudf::category>
-        (int_values, static_cast<cudf::category>(expected_value), false,
-         sum_agg, cudf::data_type(cudf::CATEGORY));
-
-    this->reduction_test<cudf::experimental::bool8, cudf::date32>
-        (int_values, static_cast<cudf::date32>(expected_value), false,
-         sum_agg, cudf::data_type(cudf::CATEGORY));
-         )
-    this->reduction_test<int8_t, cudf::nvstring_category>
-        (int_values, static_cast<cudf::nvstring_category>(expected_value), false,
-           sum_agg, GDF_STRING_CATEGORY);
-     */
-
-    // supported case: cudf::experimental::bool8
-    std::vector<bool> v = convert_values<bool>(int_values);
-
-    // When summing bool8 values into an non-bool arithmetic type,
-    // it's an integer/float sum of ones and zeros.
-    int expected_bool8 = std::accumulate(v.begin(), v.end(), int{0});
-
-    this->reduction_test<cudf::experimental::bool8, int8_t>
-        (int_values, static_cast<int8_t>(expected_bool8), true,
-         sum_agg, cudf::data_type(cudf::INT8));
-    this->reduction_test<cudf::experimental::bool8, int16_t>
-        (int_values, static_cast<int16_t>(expected_bool8), true,
-         sum_agg, cudf::data_type(cudf::INT16));
-    this->reduction_test<cudf::experimental::bool8, int32_t>
-        (int_values, static_cast<int32_t>(expected_bool8), true,
-         sum_agg, cudf::data_type(cudf::INT32));
-    this->reduction_test<cudf::experimental::bool8, int64_t>
-        (int_values, static_cast<int64_t>(expected_bool8), true,
-         sum_agg, cudf::data_type(cudf::INT64));
-    this->reduction_test<cudf::experimental::bool8, float>
-        (int_values, static_cast<float>(expected_bool8), true,
-         sum_agg, cudf::data_type(cudf::FLOAT32));
-    this->reduction_test<cudf::experimental::bool8, double>
-        (int_values, static_cast<double>(expected_bool8), true,
-         sum_agg, cudf::data_type(cudf::FLOAT64));
-
-    // make sure boolean arithmetic semantics are obeyed when
-    // reducing to a bool
-    this->reduction_test<cudf::experimental::bool8, cudf::experimental::bool8>
-        (int_values, cudf::experimental::true_v, true, sum_agg, cudf::data_type(cudf::BOOL8));
-
-    this->reduction_test<int32_t, cudf::experimental::bool8>
-        (int_values, cudf::experimental::true_v, true, sum_agg, cudf::data_type(cudf::BOOL8));
-
-    // cudf::timestamp_s and int64_t are not convertible types.
-    this->reduction_test<cudf::timestamp_s, int64_t>
-        (int_values, static_cast<int64_t>(expected_value), false,
-         sum_agg, cudf::data_type(cudf::INT64));
+    for(auto& agg: supported_aggs)
+        this->reduction_test(col, agg.first, agg.second, true);
+        
+    for(auto& agg: unsupported_aggs)
+        this->reduction_test(col, agg.first, agg.second, false);
 }
 
 struct ReductionErrorTest : public cudf::test::BaseFixture {};
@@ -577,7 +501,7 @@ TEST_F(ReductionErrorTest, empty_column)
     using T = int32_t;
     auto statement = [](const cudf::column_view col) {
         std::unique_ptr<cudf::scalar> result =
-            cudf::experimental::reduce(col, cudf::experimental::make_sum_aggregation(), cudf::data_type(cudf::INT64));
+            cudf::experimental::reduce(col, cudf::experimental::make_sum_aggregation());
         EXPECT_EQ( result->is_valid(), false );
     };
 
@@ -642,8 +566,8 @@ TEST_P(ReductionParamTest, std_var)
     auto var_agg = cudf::experimental::make_variance_aggregation(/*ddof = 1*/ddof);
     auto std_agg = cudf::experimental::make_std_aggregation(/*ddof = 1*/ddof);
 
-    this->reduction_test(col, var, true, var_agg, cudf::data_type(cudf::FLOAT64));
-    this->reduction_test(col, std, true, std_agg, cudf::data_type(cudf::FLOAT64));
+    this->reduction_test(col, var, true, var_agg);
+    this->reduction_test(col, std, true, std_agg);
 
     // test with nulls
     cudf::test::fixed_width_column_wrapper<double> col_nulls = construct_null_column(int_values, host_bools);
@@ -653,8 +577,8 @@ TEST_P(ReductionParamTest, std_var)
     double var_nulls = calc_var(replaced_array, valid_count);
     double std_nulls = std::sqrt(var_nulls);
 
-    this->reduction_test(col_nulls, var_nulls, true, var_agg, cudf::data_type(cudf::FLOAT64));
-    this->reduction_test(col_nulls, std_nulls, true, std_agg, cudf::data_type(cudf::FLOAT64));
+    this->reduction_test(col_nulls, var_nulls, true, var_agg);
+    this->reduction_test(col_nulls, std_nulls, true, std_agg);
 }
 
 //-------------------------------------------------------------------
@@ -668,15 +592,11 @@ struct StringReductionTest : public cudf::test::BaseFixture,
 
   void reduction_test(const cudf::column_view underlying_column,
                       std::string expected_value, bool succeeded_condition,
-                      std::unique_ptr<aggregation> const &agg,
-                      cudf::data_type output_dtype = cudf::data_type{})
+                      std::unique_ptr<aggregation> const &agg)
   {
-    if (cudf::data_type{} == output_dtype)
-      output_dtype = underlying_column.type();
-
     auto statement = [&]() {
       std::unique_ptr<cudf::scalar> result =
-          cudf::experimental::reduce(underlying_column, agg, output_dtype);
+          cudf::experimental::reduce(underlying_column, agg);
       using ScalarType = cudf::experimental::scalar_type_t<cudf::string_view>;
       auto result1 = static_cast<ScalarType*>(result.get());
       EXPECT_TRUE(result1->is_valid());
@@ -746,12 +666,11 @@ TEST_F(StringReductionTest, AllNull)
 
   // string column with nulls
   cudf::test::strings_column_wrapper col_nulls(host_strings.begin(), host_strings.end(), host_bools.begin());
-  cudf::data_type output_dtype = cudf::column_view(col_nulls).type();
 
   //MIN
-  std::unique_ptr<cudf::scalar> minresult = cudf::experimental::reduce(col_nulls, cudf::experimental::make_min_aggregation(), output_dtype);
+  std::unique_ptr<cudf::scalar> minresult = cudf::experimental::reduce(col_nulls, cudf::experimental::make_min_aggregation());
   EXPECT_FALSE(minresult->is_valid());
   //MAX
-  std::unique_ptr<cudf::scalar> maxresult = cudf::experimental::reduce(col_nulls, cudf::experimental::make_max_aggregation(), output_dtype);
+  std::unique_ptr<cudf::scalar> maxresult = cudf::experimental::reduce(col_nulls, cudf::experimental::make_max_aggregation());
   EXPECT_FALSE(maxresult->is_valid());
 }

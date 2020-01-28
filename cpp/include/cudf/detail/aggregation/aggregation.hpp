@@ -193,10 +193,10 @@ struct target_type_impl<
   using type = Source;
 };
 
-// Summing/Multiplying timestamps, use same type accumulator
+// Summing timestamps, use same type accumulator
 template <typename Source, aggregation::Kind k>
 struct target_type_impl<Source, k,
-                        std::enable_if_t<is_timestamp<Source>() && is_sum_product_agg(k)>> {
+                        std::enable_if_t<is_timestamp<Source>() && k == aggregation::SUM>> {
   using type = Source;
 };
 

@@ -19,9 +19,9 @@
 #include "simple.cuh"
 
 std::unique_ptr<cudf::scalar> cudf::experimental::reduction::min(
-    column_view const& col, data_type const output_dtype,
+    column_view const& col, 
     rmm::mr::device_memory_resource* mr, cudaStream_t stream)
 {
-  using reducer = cudf::experimental::reduction::simple::element_type_dispatcher< cudf::experimental::reduction::op::min>;
-  return cudf::experimental::type_dispatcher(col.type(), reducer(), col, output_dtype, mr, stream);
+  using reducer = cudf::experimental::reduction::simple::element_type_dispatcher< cudf::experimental::reduction::op::min, cudf::experimental::aggregation::MIN>;
+  return cudf::experimental::type_dispatcher(col.type(), reducer(), col, mr, stream);
 }
