@@ -3,6 +3,7 @@
 ## New Features
 
 - PR #3577 Add initial dictionary support to column classes
+- PR #3778 Add support for dictionary column in sort
 
 ## Improvements
 
