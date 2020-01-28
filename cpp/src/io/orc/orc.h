@@ -183,6 +183,8 @@ public:
     DECL_PBW_STRUCT(StripeFooter);
     DECL_PBW_STRUCT(Stream);
     DECL_PBW_STRUCT(ColumnEncoding);
+    DECL_PBW_STRUCT(StripeStatistics);
+    DECL_PBW_STRUCT(Metadata);
 protected:
     std::vector<uint8_t> *m_buf;
 };

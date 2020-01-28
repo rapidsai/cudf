@@ -429,6 +429,15 @@ PBW_BEGIN_STRUCT(ColumnEncoding)
     if (s->kind == DICTIONARY || s->kind == DICTIONARY_V2) { PBW_FLD_UINT(2, dictionarySize) }
 PBW_END_STRUCT()
 
+PBW_BEGIN_STRUCT(StripeStatistics)
+    PBW_FLD_REPEATED_STRUCT_BLOB(1, colStats)
+PBW_END_STRUCT()
+
+PBW_BEGIN_STRUCT(Metadata)
+    PBW_FLD_REPEATED_STRUCT(1, stripeStats)
+PBW_END_STRUCT()
+
+
 /* ----------------------------------------------------------------------------*/
 /**
  * @Brief ORC decompression class
