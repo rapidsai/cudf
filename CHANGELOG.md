@@ -12,6 +12,7 @@
 - PR #3902 Fix conversion of large size GPU array to dataframe 
 - PR #3953 Fix overflow in column_buffer when computing the device buffer size
 - PR #3959 Add missing hash-dispatch function for cudf.Series
+- PR #3964 Restore legacy NVStrings and NVCategory dependencies in Java jar
 
 
 # cuDF 0.12.0 (Date TBD)
