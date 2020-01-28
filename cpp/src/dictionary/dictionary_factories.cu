@@ -47,18 +47,18 @@ std::unique_ptr<column> make_dictionary_column( column_view const& keys_column,
 std::unique_ptr<column> make_dictionary_column( std::shared_ptr<column>&& keys_column,
                                                 std::unique_ptr<column>&& indices_column,
                                                 rmm::device_buffer&& null_mask,
-                                                size_type null_count,
-                                                rmm::mr::device_memory_resource* mr,
-                                                cudaStream_t stream)
+                                                size_type null_count )
 {
     CUDF_EXPECTS( !keys_column->has_nulls(), "keys column must not have nulls" );
     CUDF_EXPECTS( !indices_column->has_nulls(), "indices column must not have nulls" );
+    CUDF_EXPECTS( indices_column->type().id()==cudf::type_id::INT32, "indices must be type INT32" );
 
+    auto count = indices_column->size();
     std::vector<std::unique_ptr<column>> children;
     children.emplace_back(std::move(indices_column));
     return std::make_unique<column>(
-        data_type{DICTIONARY32}, indices_column->size(),
-        rmm::device_buffer{0,stream,mr},
+        data_type{DICTIONARY32}, count,
+        rmm::device_buffer{0},
         null_mask, null_count,
         std::move(children),
         std::move(keys_column));
