@@ -25,7 +25,7 @@
 
 struct FixedPointTest : public cudf::test::BaseFixture {};
 
-using namespace cudf::fp;
+using namespace cudf::fixed_point;
 using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
 
 TEST_F(FixedPointTest, SimpleDecimal32Construction) {
@@ -176,7 +176,7 @@ template<typename ValueType, typename Binop>
 void vector_test(ValueType const initial_value,
                  int32_t   const size,
                  int32_t   const scale, Binop binop) {
-    using namespace cudf::fp;
+
     using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
 
     std::vector<decimal32> vec1(size);

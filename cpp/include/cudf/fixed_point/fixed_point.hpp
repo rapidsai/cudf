@@ -17,12 +17,18 @@
 #include <cmath>
 #include <cassert>
 #include <functional>
-#include <boost/serialization/strong_typedef.hpp>
 
 namespace cudf {
-namespace fp {
+namespace fixed_point {
 
-BOOST_STRONG_TYPEDEF(int32_t, scale_type)
+template <typename T>
+struct weak_typedef {
+    T _t;
+    explicit weak_typedef(T t) : _t(t) {}
+    operator T() const { return _t; }
+};
+
+using scale_type = weak_typedef<int32_t>;
 
 enum Radix : int32_t {
     BASE_2  = 2,
@@ -92,7 +98,12 @@ public:
     {
     }
 
-    fixed_point() = default; // _value & _scale = 0
+    // DEFAULT CONSTRUCTOR
+    fixed_point() :
+        _value(0),
+        _scale(scale_type{0})
+    {
+    }
 
     // EXPLICIT CONVERSION OPERATOR
     template <typename U,
@@ -272,5 +283,5 @@ std::ostream& operator<<(std::ostream& os, fixed_point<Rep, Radix> const& si) {
     return os << si.get();
 }
 
-} // namespace fp
+} // namespace fixed_point
 } // namespace cudf
