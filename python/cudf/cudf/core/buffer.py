@@ -51,7 +51,11 @@ class Buffer:
             self.size = 0
             self._owner = None
         else:
-            raise TypeError("data must be Buffer, array-like or integer")
+            try:
+                data = memoryview(data)
+            except TypeError:
+                raise TypeError("data must be Buffer, array-like or integer")
+            self._init_from_array_like(np.asarray(data))
 
     def __reduce__(self):
         return self.__class__, (self.to_host_array(),)
