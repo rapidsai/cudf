@@ -75,16 +75,11 @@ std::unique_ptr<column> make_dictionary_column( column_view const& keys_column,
  * @param indices_column Indices to use for the new dictionary column.
  * @param null_mask Null mask for the output column.
  * @param null_count Number of nulls for the output column.
- * @param mr Resource for allocating memory for the output.
- * @param stream Optional stream on which to issue all memory allocation and
- *               device kernels.
  * @return New dictionary column.
  */
 std::unique_ptr<column> make_dictionary_column( std::shared_ptr<column>&& keys_column,
                                                 std::unique_ptr<column>&& indices_column,
                                                 rmm::device_buffer&& null_mask,
-                                                size_type null_count,
-                                                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                                cudaStream_t stream = 0);
+                                                size_type null_count );
 
 }  // namespace cudf

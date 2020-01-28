@@ -29,6 +29,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/detail/gather.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
+#include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/detail/valid_if.cuh>
 
 #include <rmm/thrust_rmm_allocator.h>
@@ -244,15 +245,7 @@ struct column_gatherer_impl<dictionary32, MapItType>
       // and then update the indices. We could call the remove_unused_keys
       // before returning the column but seems there may be a more efficient solution.
       auto keys_copy = std::make_shared<column>(dictionary.dictionary_keys());
-
-      std::vector<std::unique_ptr<column>> children;
-      children.emplace_back(std::move(new_indices));
-      return std::make_unique<column>(
-          data_type{DICTIONARY32}, output_count,
-          rmm::device_buffer{0,stream,mr},
-          null_mask, null_count,
-          std::move(children),
-          std::move(keys_copy));
+      return make_dictionary_column( std::move(keys_copy), std::move(new_indices), std::move(null_mask), null_count );
   }
 };
 
