@@ -61,8 +61,9 @@ std::unique_ptr<column> add_keys( dictionary_column_view const& dictionary_colum
  * d2 is now {["a","d"],[1,0,null,0]}
  * ```
  *
- * @throw cudf_logic_error if the keys type does not match the keys type in
+ * @throw cudf_logic_error if the keys_to_remove type does not match the keys type in
  * the dictionary_column.
+ * @throw cudf_logic_error if keys_to_remove contains nulls
  *
  * @param dictionary_column Existing dictionary column.
  * @param keys_to_remove The keys to remove from the dictionary_column
