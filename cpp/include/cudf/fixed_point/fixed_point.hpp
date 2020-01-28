@@ -35,24 +35,26 @@ namespace detail {
         return scale_type{-scale};
     }
 
-    // perform this operation when constructing with - scale (after negating scale)
+    // perform this operation when constructing with positive scale
     template <Radix Rad, typename T>
-    constexpr auto right_shift(T const& val, scale_type const& scale) {
+    constexpr auto right_shift(T const& val, scale_type const& scale) -> double {
+        assert(scale > 0);
         return val / std::pow(static_cast<int32_t>(Rad), static_cast<int32_t>(scale));
     }
 
-    // perform this operation when constructing with + scale
+    // perform this operation when constructing with negative scale
     template <Radix Rad, typename T>
-    constexpr auto left_shift(T const& val, scale_type const& scale) {
-        return val * std::pow(static_cast<int32_t>(Rad), static_cast<int32_t>(scale));
+    constexpr auto left_shift(T const& val, scale_type const& scale) -> double {
+        assert(scale < 0);
+        return val * std::pow(static_cast<int32_t>(Rad), static_cast<int32_t>(negate(scale)));
     }
 
     // convenience generic shift function
     template <Radix Rad, typename T>
-    constexpr auto shift(T const& val, scale_type const& scale) {
+    constexpr auto shift(T const& val, scale_type const& scale) -> double {
         if      (scale == 0) return static_cast<double>(val);
-        else if (scale >= 0) return right_shift<Rad>(val, scale);
-        else                 return left_shift <Rad>(val, negate(scale));
+        else if (scale >  0) return right_shift<Rad>(val, scale);
+        else                 return left_shift <Rad>(val, scale);
     }
 }
 
@@ -258,8 +260,7 @@ fixed_point<Rep1, Rad1> operator/(fixed_point<Rep1, Rad1> const& lhs,
 }
 
 // EQUALITY COMPARISON Operation
-template<typename Rep1, Radix Rad1,
-         typename Rep1, Radix Rad1>
+template<typename Rep1, Radix Rad1>
 bool operator==(fixed_point<Rep1, Rad1> const& lhs,
                 fixed_point<Rep1, Rad1> const& rhs) {
     auto const delta = lhs.get() - rhs.get();
