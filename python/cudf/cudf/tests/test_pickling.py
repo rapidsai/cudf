@@ -8,7 +8,7 @@ import pandas as pd
 
 import rmm
 
-from cudf.core import DataFrame, GenericIndex
+from cudf.core import DataFrame, GenericIndex, Series
 from cudf.core.buffer import Buffer
 
 
@@ -83,3 +83,16 @@ def test_pickle_buffer():
     unpacked = pickle.loads(pickled)
     # Check that unpacked capacity equals buf.size
     assert unpacked.size == arr.nbytes
+
+
+@pytest.mark.parametrize('named', [True, False])
+def test_pickle_series(named):
+    np.random.seed(0)
+    if named:
+        ser = Series(np.random.random(10), name='a')
+    else:
+        ser = Series(np.random.random(10))
+
+    pickled = pickle.dumps(ser)
+    out = pickle.loads(pickled)
+    assert (ser == out).all()
