@@ -7,6 +7,7 @@
 ## Bug Fixes
 
 - PR #3888 Drop `ptr=None` from `DeviceBuffer` call
+- PR #3976 Fix string serialization and memory_usage method to be consistent
 
 
 # cuDF 0.12.0 (Date TBD)
