@@ -21,6 +21,44 @@ def datadir(datadir):
 
 
 @pytest.fixture(params=[0, 1, 10, 100])
+def simple_pdf(request):
+    types = [
+        "int8",
+        "int16",
+        "int32",
+    ]
+    renamer = {
+        "C_l0_g" + str(idx): "col_" + val for (idx, val) in enumerate(types)
+    }
+    typer = {"col_" + val: val for val in types}
+    ncols = len(types)
+    nrows = request.param
+
+    # Create a pandas dataframe with random data of mixed types
+    test_pdf = pd.util.testing.makeCustomDataframe(
+        nrows=nrows, ncols=ncols, data_gen_f=lambda r, c: r, r_idx_type="i"
+    )
+    # Delete the name of the column index, and rename the row index
+    del test_pdf.columns.name
+    test_pdf.index.name = "test_index"
+
+    # Cast all the column dtypes to objects, rename them, and then cast to
+    # appropriate types
+    test_pdf = test_pdf.astype("object").rename(renamer, axis=1).astype(typer)
+
+    # Create non-numeric categorical data otherwise parquet may typecast it
+    data = [ascii_letters[np.random.randint(0, 52)] for i in range(nrows)]
+    test_pdf["col_category"] = pd.Series(data, dtype="category")
+
+    return test_pdf
+
+
+@pytest.fixture
+def simple_gdf(simple_pdf):
+    return cudf.DataFrame.from_pandas(simple_pdf)
+
+
+@pytest.fixture(params=[0, 1, 10, 100])
 def pdf(request):
     types = [
         "bool",
@@ -440,18 +478,15 @@ def test_multifile_warning(datadir):
 
 
 # Validates the integrity of the GPU accelerated parquet writer.
-def test_parquet_writer_gpu(tmpdir, gdf):
+def test_parquet_writer_gpu(tmpdir, simple_gdf):
     gdf_fname = tmpdir.join("gdf.parquet")
 
-    # Adding a dummy column of "test_index" which is expected based
-    # off what pandas does today. If we do not add this
-    # then comparisons currently fail
-    gdf = gdf.reset_index()
-    gdf.rename(columns={"index": "test_index"})
-
-    gdf.to_parquet(gdf_fname.strpath, engine="cudf")
+    simple_gdf.to_parquet(gdf_fname.strpath, engine="cudf")
     assert os.path.exists(gdf_fname)
-    expect = gdf
+    expect = simple_gdf
     got = cudf.read_parquet(gdf_fname)
 
-    assert_eq(expect, got)
+    print(expect)
+    print(got)
+
+    assert_eq(expect, got, check_categorical=False)
