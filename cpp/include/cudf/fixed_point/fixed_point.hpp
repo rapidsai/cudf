@@ -17,6 +17,8 @@
 #include <cmath>
 #include <cassert>
 #include <functional>
+#include <iostream>
+#include <limits>
 
 namespace cudf {
 namespace fixed_point {
@@ -64,51 +66,61 @@ namespace detail {
     }
 }
 
+template <typename T>
+constexpr inline auto is_supported_representation_type() -> bool {
+  return std::is_same<T, int32_t>::value;
+}
+
+template <typename T>
+constexpr inline auto is_supported_construction_value_type() -> bool {
+  return std::is_integral      <T>::value
+      || std::is_floating_point<T>::value;
+}
+
 // helper struct for constructing fixed_point when value is already shifted
-template <typename Rep>
+template <typename Rep,
+          typename std::enable_if_t<is_supported_representation_type<Rep>()>* = nullptr>
 struct scaled_integer{
     Rep value;
     scale_type scale;
     explicit scaled_integer(Rep v, scale_type s) : value(v), scale(s) {}
 };
 
-
 // Rep = representative type
 template <typename Rep, Radix Rad>
 class fixed_point {
 
-    scale_type _scale;
     Rep        _value;
+    scale_type _scale;
 
 public:
 
     // CONSTRUCTORS
-    template <typename T = Rep,
-              typename std::enable_if_t<(std::is_integral      <T>::value
-                                      || std::is_floating_point<T>::value)>* = nullptr>
+    template <typename T,
+              typename std::enable_if_t<is_supported_construction_value_type<T>()
+                                     && is_supported_representation_type<Rep>()>* = nullptr>
     explicit fixed_point(T const& value, scale_type const& scale) :
-        _value(detail::shift<Rad>(value, scale)),
-        _scale(scale)
+        _value{static_cast<Rep>(detail::shift<Rad>(value, scale))},
+        _scale{scale}
     {
     }
 
     explicit fixed_point(scaled_integer<Rep> s) :
-        _value(s.value),
-        _scale(s.scale)
+        _value{s.value},
+        _scale{s.scale}
     {
     }
 
     // DEFAULT CONSTRUCTOR
     fixed_point() :
-        _value(0),
-        _scale(scale_type{0})
+        _value{0},
+        _scale{scale_type{0}}
     {
     }
 
     // EXPLICIT CONVERSION OPERATOR
     template <typename U,
-              typename std::enable_if_t<(std::numeric_limits<U>::is_integer
-                                      || std::is_floating_point<U>::value)>* = nullptr>
+              typename std::enable_if_t<is_supported_construction_value_type<U>()>* = nullptr>
     explicit constexpr operator U() const {
         return detail::shift<Rad>(static_cast<U>(_value), detail::negate(_scale));
     }
