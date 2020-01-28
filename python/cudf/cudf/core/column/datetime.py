@@ -89,7 +89,7 @@ class DatetimeColumn(column.ColumnBase):
             )
             mask = col.mask
 
-        return cls(data=Buffer(array), mask=mask, dtype=array.dtype,)
+        return cls(data=Buffer(array), mask=mask, dtype=array.dtype)
 
     @property
     def time_unit(self):

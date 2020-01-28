@@ -7,6 +7,7 @@ from libc.stdint cimport uintptr_t
 from libcpp.pair cimport pair
 from libcpp cimport bool
 
+import cudf._libxx as libcudfxx
 from cudf._libxx.lib cimport *
 from cudf.core.buffer import Buffer
 from libc.stdlib cimport malloc, free
@@ -58,7 +59,6 @@ cdef class Column:
 
     The *dtype* indicates the Column's element type.
     """
-
     def __init__(self, data, size, dtype, mask=None, offset=0, children=()):
         if not isinstance(data, Buffer):
             raise TypeError("Expected a Buffer for data, got " +
@@ -82,6 +82,13 @@ cdef class Column:
                     "Expected each of children to be a  Column, got " +
                     type(child).__name__
                 )
+
+        if size > libcudfxx.MAX_COLUMN_SIZE:
+            raise MemoryError(
+                "Cannot create columns of size > {}. "
+                "Consider using dask_cudf to partition your data".format(
+                    libcudfxx.MAX_COLUMN_SIZE_STR)
+            )
 
         self._data = data
         self.size = size
@@ -209,7 +216,7 @@ cdef class Column:
             children)
 
     @staticmethod
-    cdef Column from_ptr(unique_ptr[column] c_col):
+    cdef Column from_unique_ptr(unique_ptr[column] c_col):
         from cudf.core.column import build_column
 
         size = c_col.get()[0].size()
@@ -229,9 +236,9 @@ cdef class Column:
             mask = None
 
         cdef vector[unique_ptr[column]] c_children = move(contents.children)
-        children = None
+        children = ()
         if c_children.size() != 0:
-            children = tuple(Column.from_ptr(move(c_children[i]))
+            children = tuple(Column.from_unique_ptr(move(c_children[i]))
                              for i in range(c_children.size()))
 
         return build_column(data, dtype=dtype, mask=mask, children=children)

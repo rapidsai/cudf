@@ -173,8 +173,9 @@ def test_groupby_split_out(split_out, column):
             "c": [0, 1] * 4,
             "d": ["dog", "cat", "cat", "dog", "dog", "dog", "cat", "bird"],
         }
-    )
+    ).fillna(0)
     df["e"] = df["d"].astype("category")
+
     gdf = cudf.from_pandas(df)
 
     ddf = dd.from_pandas(df, npartitions=3)
@@ -240,3 +241,27 @@ def test_groupby_string_index_name(myindex):
     gdf = ddf.groupby("index").agg({"data": "count"})
 
     assert gdf.compute().index.name == gdf.index.name
+
+
+@pytest.mark.parametrize(
+    "agg_func",
+    [
+        lambda gb: gb.agg({"c": "count"}, split_out=2),
+        lambda gb: gb.agg({"c": ["count", "sum"]}, split_out=2),
+        lambda gb: gb.count(split_out=2),
+        lambda gb: gb.c.count(split_out=2),
+    ],
+)
+def test_groupby_split_out_multiindex(agg_func):
+    df = cudf.DataFrame(
+        {
+            "a": np.random.randint(0, 10, 100),
+            "b": np.random.randint(0, 5, 100),
+            "c": np.random.random(100),
+        }
+    )
+    ddf = dask_cudf.from_cudf(df, 5)
+    pddf = dd.from_pandas(df.to_pandas(), 5)
+    gr = agg_func(ddf.groupby(["a", "b"]))
+    pr = agg_func(pddf.groupby(["a", "b"]))
+    dd.assert_eq(gr.compute(), pr.compute())
