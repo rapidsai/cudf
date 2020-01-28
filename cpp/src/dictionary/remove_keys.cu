@@ -14,17 +14,18 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
+#include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/dictionary/update_keys.hpp>
 #include <cudf/detail/copy_if.cuh>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/valid_if.cuh>
-#include <cudf/search.hpp>
+#include <cudf/detail/search.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
 #include <thrust/sequence.h>
+#include <thrust/scatter.h>
 
 namespace cudf
 {
@@ -44,7 +45,7 @@ std::unique_ptr<column> remove_keys( dictionary_column_view const& dictionary_co
     auto count = indices_view.size();
     auto execpol = rmm::exec_policy(stream);
     // locate keys to remove by searching the keys column
-    auto matches = experimental::contains( keys_view, keys_to_remove, mr ); // TODO: need detail version of this API from PR 3823
+    auto matches = experimental::detail::contains( keys_view, keys_to_remove, mr, stream);
     auto d_matches = matches->view().data<experimental::bool8>();
     // create keys indices column to identify original key positions after removing they keys
     rmm::device_vector<int32_t> keys_indices(keys_view.size()); // needed for remapping indices
@@ -75,16 +76,10 @@ std::unique_ptr<column> remove_keys( dictionary_column_view const& dictionary_co
                         return (d_indices[idx] >= 0) && (d_null_mask ? bit_is_set(d_null_mask,idx) : true);
                     }, stream, mr);
 
-    std::shared_ptr<const column> keys_column(std::move(table_keys[0]));
+    std::shared_ptr<column> keys_column(std::move(table_keys[0]));
     // create column with keys_column and indices_column
-    std::vector<std::unique_ptr<column>> children;
-    children.emplace_back(std::move(indices_column));
-    return std::make_unique<column>(
-        data_type{DICTIONARY32}, count,
-        rmm::device_buffer{0,stream,mr}, // no data in the parent
-        new_nulls.first, new_nulls.second,
-        std::move(children),
-        std::move(keys_column));
+    return make_dictionary_column( std::move(keys_column), std::move(indices_column), 
+                                   std::move(new_nulls.first), new_nulls.second );
 }
 
 std::unique_ptr<column> remove_unused_keys( dictionary_column_view const& dictionary_column,
@@ -103,7 +98,7 @@ std::unique_ptr<column> remove_unused_keys( dictionary_column_view const& dictio
     column_view indices_view( data_type{INT32}, indices.size(), indices.data<int32_t>(),
         dictionary_column.null_mask(), dictionary_column.null_count() );
     // search the indices values with key indices to look for any holes
-    auto matches = experimental::contains( keys_indices_view, indices_view, mr ); // TODO: need detail version of this API from PR 3823
+    auto matches = experimental::detail::contains( keys_indices_view, indices_view, mr, stream);
     auto d_matches = matches->view().data<experimental::bool8>();
     // copy any keys that are not found
     auto table_keys = experimental::detail::copy_if( table_view{{keys}},
