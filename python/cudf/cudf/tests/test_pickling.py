@@ -86,11 +86,11 @@ def test_pickle_buffer():
     assert unpacked.size == arr.nbytes
 
 
-@pytest.mark.parametrize('named', [True, False])
+@pytest.mark.parametrize("named", [True, False])
 def test_pickle_series(named):
     np.random.seed(0)
     if named:
-        ser = Series(np.random.random(10), name='a')
+        ser = Series(np.random.random(10), name="a")
     else:
         ser = Series(np.random.random(10))
 
