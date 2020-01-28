@@ -131,6 +131,91 @@ gpuInitStatisticsBufferSize(statistics_merge_group *groups, const statistics_chu
 }
 
 
+struct stats_state_s {
+  uint8_t *base;              ///< Output buffer start
+  uint8_t *cur;               ///< Output buffer current write position
+  uint8_t *end;               ///< Output buffer end
+  statistics_chunk ck;
+  statistics_merge_group grp;
+  stats_column_desc col;
+  // ORC stats
+  uint64_t numberOfValues;
+  uint8_t hasNull;
+};
+
+
+// Protobuf varint encoding for unsigned int
+__device__ inline uint8_t *pb_encode_uint(uint8_t *p, uint64_t v) {
+  while (v > 0x7f) {
+    *p++ = ((uint32_t)v | 0x80);
+    v >>= 7;
+  }
+  *p++ = v;
+  return p;
+}
+
+// Protobuf field encoding for unsigned int
+__device__ inline uint8_t *pb_put_uint(uint8_t *p, uint32_t id, uint64_t v) {
+  p[0] = id * 8 + PB_TYPE_VARINT; // NOTE: Assumes id < 16
+  return pb_encode_uint(p + 1, v);
+}
+
+// Protobuf field encoding for signed int
+__device__ inline uint8_t *pb_put_int(uint8_t *p, uint32_t id, int64_t v) {
+  int64_t s = (v < 0);
+  return pb_put_uint(p, id, (v ^ -s) * 2 + s);
+}
+
+// Protobuf field encoding for binary/string
+__device__ inline uint8_t *pb_put_binary(uint8_t *p, uint32_t id, const uint8_t *bytes, uint32_t len) {
+  p[0] = id * 8 + PB_TYPE_FIXEDLEN;
+  p = pb_encode_uint(p + 1, len);
+  memcpy(p, bytes, len);
+  return p + len;
+}
+
+
+/**
+ * @brief Encode statistics in ORC protobuf format
+ *
+ * @param[in,out] groups Statistics merge groups
+ * @param[in,out] chunks Statistics data
+ * @param[in] statistics_count Number of statistics buffers
+ *
+ **/
+// blockDim {128,1,1}
+__global__ void __launch_bounds__(128)
+gpuEncodeStatistics(uint8_t *blob_bfr, statistics_merge_group *groups, const statistics_chunk *chunks,
+                    uint32_t statistics_count) {
+  __shared__ __align__(8) stats_state_s state_g[4];
+  uint32_t t = threadIdx.x & 0x1f;
+  uint32_t idx = blockIdx.x * 4 + (threadIdx.x >> 5);
+  stats_state_s * const s = &state_g[threadIdx.x >> 5];
+  if (idx < statistics_count) {
+    if (t < sizeof(statistics_chunk) / sizeof(uint32_t)) {
+      reinterpret_cast<uint32_t *>(&s->ck)[t] = reinterpret_cast<const uint32_t *>(&chunks[idx])[t];
+    }
+    if (t < sizeof(statistics_merge_group) / sizeof(uint32_t)) {
+      reinterpret_cast<uint32_t *>(&s->grp)[t] = reinterpret_cast<uint32_t *>(&groups[idx])[t];
+    }
+  }
+  __syncthreads();
+  if (idx < statistics_count) {
+    if (t < sizeof(stats_column_desc) / sizeof(uint32_t)) {
+      reinterpret_cast<uint32_t *>(&s->col)[t] = reinterpret_cast<const uint32_t *>(s->grp.col)[t];
+    }
+    if (t == 0) {
+      s->cur = s->base = blob_bfr + s->grp.start_chunk;
+      s->end = blob_bfr + s->grp.start_chunk + s->grp.num_chunks;
+    }
+  }
+  __syncthreads();
+  // Update actual bfr size
+  if (idx < statistics_count && t == 0) {
+    groups[idx].num_chunks = static_cast<uint32_t>(s->cur - s->base);
+  }
+}
+
 
 /**
  * @brief Launches kernels to initialize statistics collection
@@ -168,10 +253,26 @@ cudaError_t OrcInitStatisticsBufferSize(statistics_merge_group *groups, const st
                                         uint32_t statistics_count, cudaStream_t stream)
 {
     gpuInitStatisticsBufferSize <<< 1, 1024, 0, stream >>>(groups, chunks, statistics_count);
-
     return cudaSuccess;
 }
 
+
+/**
+ * @brief Launches kernel to encode statistics in ORC protobuf format
+ *
+ * @param[out] blob_bfr Output buffer for statistics blobs
+ * @param[in,out] groups Statistics merge groups
+ * @param[in,out] chunks Statistics data
+ * @param[in] statistics_count Number of statistics buffers
+ *
+ * @return cudaSuccess if successful, a CUDA error code otherwise
+ **/
+cudaError_t OrcEncodeStatistics(uint8_t *blob_bfr, statistics_merge_group *groups, const statistics_chunk *chunks,
+                                uint32_t statistics_count, cudaStream_t stream)
+{
+    gpuEncodeStatistics <<< (statistics_count + 3) >> 2, 128, 0, stream >>>(blob_bfr, groups, chunks, statistics_count);
+    return cudaSuccess;
+}
 
 
 } // namespace gpu

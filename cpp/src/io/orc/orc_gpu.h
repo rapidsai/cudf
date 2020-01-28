@@ -378,7 +378,7 @@ cudaError_t OrcInitStatisticsGroups(statistics_group *groups, const stats_column
  * @brief Launches kernels to return statistics buffer offsets and sizes
  *
  * @param[in,out] groups Statistics merge groups
- * @param[in] chunks Satistics chunks
+ * @param[in] chunks Statistics chunks
  * @param[in] statistics_count Number of statistics buffers to encode
  * @param[in] stream CUDA stream to use, default 0
  *
@@ -386,6 +386,19 @@ cudaError_t OrcInitStatisticsGroups(statistics_group *groups, const stats_column
  **/
 cudaError_t OrcInitStatisticsBufferSize(statistics_merge_group *groups, const statistics_chunk *chunks,
                                         uint32_t statistics_count, cudaStream_t stream = (cudaStream_t)0);
+
+/**
+ * @brief Launches kernel to encode statistics in ORC protobuf format
+ *
+ * @param[out] blob_bfr Output buffer for statistics blobs
+ * @param[in,out] groups Statistics merge groups
+ * @param[in,out] chunks Statistics data
+ * @param[in] statistics_count Number of statistics buffers
+ *
+ * @return cudaSuccess if successful, a CUDA error code otherwise
+ **/
+cudaError_t OrcEncodeStatistics(uint8_t *blob_bfr, statistics_merge_group *groups, const statistics_chunk *chunks,
+                                uint32_t statistics_count, cudaStream_t stream = (cudaStream_t)0);
 
 
 } // namespace gpu
