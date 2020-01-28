@@ -6,6 +6,7 @@
 
 - PR #3909 Move java backend to libcudf++
 - PR #3910 Adding sinh, cosh, tanh, asinh, acosh, atanh cube root and rint unary support.
+- PR #3975 Simplify and generalize data handling in `Buffer`
 
 
 ## Bug Fixes
