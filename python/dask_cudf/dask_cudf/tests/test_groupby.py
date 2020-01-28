@@ -307,6 +307,4 @@ def test_groupby_reset_index_multiindex(groupby_keys, agg_func):
     pr = agg_func(pddf.groupby(groupby_keys)).reset_index()
     gf = gr.compute().sort_values(groupby_keys).reset_index(drop=True)
     pf = pr.compute().sort_values(groupby_keys).reset_index(drop=True)
-    print(gf)
-    print(pf)
     dd.assert_eq(gf, pf)
