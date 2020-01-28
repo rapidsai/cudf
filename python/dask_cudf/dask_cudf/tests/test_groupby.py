@@ -280,13 +280,7 @@ def test_groupby_multiindex_reset_index():
 
 
 @pytest.mark.parametrize(
-    "groupby_keys",
-    [
-        ["a"],
-        ["a", "b"],
-        ["a", "b", "d"],
-        ["a", "d", "b"],
-    ],
+    "groupby_keys", [["a"], ["a", "b"], ["a", "b", "d"], ["a", "d", "b"],],
 )
 @pytest.mark.parametrize(
     "agg_func",
