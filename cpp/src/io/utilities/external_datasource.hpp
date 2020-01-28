@@ -36,6 +36,13 @@ class external_datasource : datasource {
  public:
 
   /**
+   * Returns the unique identifier for the external datasource. 
+   * This value is used in the python/cython layer to specify
+   * which external datasource should be used on invocation.
+   */
+  virtual std::string datasource_identifier() = 0;
+
+  /**
    * @brief Base class destructor
    **/
   virtual ~external_datasource(){};

@@ -136,14 +136,3 @@ target_link_directories(cudf_kafka PUBLIC "${RDKAFKA_LIBRARY}")
 
 # link targets for cudf_kafka
 target_link_libraries(cudf_kafka rdkafka rdkafka++)
-
-###################################################################################################
-# - install targets -------------------------------------------------------------------------------
-
-# install targets for cuDF
-install(TARGETS cudf_kafka
-        DESTINATION lib
-        COMPONENT cudf_kafka)
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf_kafka
-        DESTINATION include
-        COMPONENT cudf_kafka)

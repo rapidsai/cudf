@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <sys/types.h>
 #include <dirent.h>
 #include <vector>
+#include <dlfcn.h>
 
 #include "external_datasource.hpp"
 
@@ -44,17 +45,29 @@ class datasource_factory {
   virtual ~datasource_factory(){};
  
  private:
-  void read_directory() {
+  void list_external_libs() {
     DIR* dirp = opendir(EXTERNAL_LIB_DIR.c_str());
     struct dirent * dp;
     while ((dp = readdir(dirp)) != NULL) {
-        libs.push_back(dp->d_name);
+      if (has_suffix(dp->d_name, EXTERNAL_LIB_SUFFIX)) {
+        std::string filename(EXTERNAL_LIB_DIR);
+        filename.append("/");
+        filename.append(dp->d_name);
+        libs.push_back(filename);
+      }
     }
     closedir(dirp);
   }
 
+  bool has_suffix(const std::string &str, const std::string &suffix)
+  {
+    return str.size() >= suffix.size() &&
+      str.compare(str.size() - suffix.size(), suffix.size(), suffix) == 0;
+  }
+
  private:
   std::string EXTERNAL_LIB_DIR = "/home/jdyer/Development/cudf/external/build";
+  std::string EXTERNAL_LIB_SUFFIX = ".so";     // Currently only support .so files.
   std::vector<std::string> libs;
   std::vector<cudf::io::external_datasource> dss;
 };
