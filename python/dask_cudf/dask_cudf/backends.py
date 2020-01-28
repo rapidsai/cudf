@@ -51,6 +51,23 @@ try:
                 frame[col] = out_col
         return frame.hash_columns()
 
+    def _string_safe_hash_series(s):
+        series = s.copy(deep=False)
+        if isinstance(series._column, StringColumn):
+            out_col = column.column_empty(
+                len(series), dtype="int32", masked=False
+            )
+            ptr = out_col.data.ptr
+            series._column.data_array_view.hash(devptr=ptr)
+            series = out_col
+        return series.hash_values()
+
+    @hash_object_dispatch.register(cudf.Series)
+    def hash_object_cudf_series(frame, index=True):
+        if index:
+            return _string_safe_hash(frame.reset_index())
+        return _string_safe_hash_series(frame)
+
     @hash_object_dispatch.register(cudf.DataFrame)
     def hash_object_cudf(frame, index=True):
         if index:
