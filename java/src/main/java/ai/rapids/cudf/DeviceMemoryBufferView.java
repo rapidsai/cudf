@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2019, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -19,22 +19,13 @@
 package ai.rapids.cudf;
 
 /**
- * Aggregate operations on a column
+ * This class represents data in some form on the GPU. The memory pointed at by this buffer is
+ * not owned by this buffer.  So you have to be sure that this buffer does not outlive the buffer
+ * that is backing it.
  */
-enum AggregateOp {
-  SUM(0),
-  MIN(1),
-  MAX(2),
-  COUNT(3),
-  MEAN(4),
-  MEDIAN(5);
-  // TODO Quantile
-  // ARGMAX(7),
-  // ARGMIN(8);
-  // PTX and CUDA are the others...
-  // There are others too stddev, we need to look at what is the correct API to support these...
-
-  final int nativeId;
-
-  AggregateOp(int nativeId) {this.nativeId = nativeId;}
+public class DeviceMemoryBufferView extends BaseDeviceMemoryBuffer {
+  DeviceMemoryBufferView(long address, long lengthInBytes) {
+    // Set the cleaner to null so we don't end up releasing anything
+    super(address, lengthInBytes, (MemoryBufferCleaner) null);
+  }
 }
