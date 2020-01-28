@@ -28,27 +28,25 @@
 #include <cudf/cudf.h>
 #include <librdkafka/rdkafkacpp.h>
 
-extern "C" std::string libcudf_datasource_identifier() {
-  return "this is wrong";
-}
-
 namespace cudf {
 namespace io {
 namespace external {
-namespace kafka {
 
 /**
  * @brief External Datasource for Apache Kafka
  **/
-class kafka_datasource : external_datasource {
+class kafka_datasource : public external_datasource {
  public:
 
   kafka_datasource() {
-    std::cout << "Creating kafka_datasource!!!" << std::endl;
     DATASOURCE_ID = "librdkafka-1.2.2";
+
+    // Construct the RdKafka::Conf object
+
+    KafkaRebalanceCB rebalance_cb(kafka_start_offset_);
   }
 
-  std::string datasource_identifier() {
+  std::string libcudf_datasource_identifier() {
     return DATASOURCE_ID;
   }
 
@@ -202,7 +200,14 @@ class kafka_datasource : external_datasource {
     std::string buffer_;
 };
 
-}  // namespace kafka
+extern "C" external_datasource* libcudf_external_datasource_load() {
+  return new kafka_datasource;
+}
+
+extern "C" void libcudf_external_datasource_destroy(external_datasource* eds) {
+  delete eds;
+}
+
 }  // namespace external
 }  // namespace io
 }  // namespace cudf

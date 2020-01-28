@@ -43,5 +43,5 @@ struct CsvTest : public GdfTest {};
 
 TEST_F(CsvTest, Basic)
 {
-    cudf::io::datasource_factory dfs;
+    cudf::io::external::datasource_factory dfs;
 }

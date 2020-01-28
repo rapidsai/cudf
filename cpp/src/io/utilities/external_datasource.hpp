@@ -28,6 +28,7 @@
 
 namespace cudf {
 namespace io {
+namespace external {
 
 /**
  * @brief Class for reading from a datasource external to the cuDF codebase.
@@ -40,7 +41,7 @@ class external_datasource : datasource {
    * This value is used in the python/cython layer to specify
    * which external datasource should be used on invocation.
    */
-  virtual std::string datasource_identifier() = 0;
+  virtual std::string libcudf_datasource_identifier() = 0;
 
   /**
    * @brief Base class destructor
@@ -52,5 +53,6 @@ class external_datasource : datasource {
   
 };
 
+}  // namespace external
 }  // namespace io
 }  // namespace cudf

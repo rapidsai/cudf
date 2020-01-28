@@ -27,6 +27,7 @@
 
 namespace cudf {
 namespace io {
+namespace external {
 
 /**
  * @brief Factory class for creating and managing instances of external datasources
@@ -69,8 +70,9 @@ class datasource_factory {
   std::string EXTERNAL_LIB_DIR = "/home/jdyer/Development/cudf/external/build";
   std::string EXTERNAL_LIB_SUFFIX = ".so";     // Currently only support .so files.
   std::vector<std::string> libs;
-  std::vector<cudf::io::external_datasource> dss;
+  std::vector<cudf::io::external::external_datasource> dss;
 };
 
+}  // namespace external
 }  // namespace io
 }  // namespace cudf
