@@ -460,14 +460,14 @@ class DataFrame(Table):
                 # New df-wide index
                 index = self.index.take(mask)
                 for col in self._data:
-                    df[col] = self._data[col][arg]
+                    df[col] = self[col][arg]
                 df = df.set_index(index)
             else:
                 if len(arg) == 0:
                     df.index = self.index
                     return df
                 for col in arg:
-                    df[col] = self._data[col]
+                    df[col] = self[col]
                 df.index = self.index
             return df
         elif isinstance(arg, DataFrame):
@@ -1537,8 +1537,6 @@ class DataFrame(Table):
         positions = Series(positions)
         columns = self.columns
         column_values = list(self._data.values())
-
-        # import pdb; pdb.set_trace()
 
         result = DataFrame()
         for idx in range(len(positions)):

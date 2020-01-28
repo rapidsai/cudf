@@ -277,3 +277,42 @@ def test_groupby_multiindex_reset_index():
     gr = ddf.groupby(["a", "c"]).agg({"b": ["count"]}).reset_index()
     pr = pddf.groupby(["a", "c"]).agg({"b": ["count"]}).reset_index()
     dd.assert_eq(gr.compute(), pr.compute())
+
+
+@pytest.mark.parametrize(
+    "groupby_keys",
+    [
+        ["a"],
+        ["a", "b"],
+        ["a", "b", "d"],
+        ["a", "d", "b"],
+    ],
+)
+@pytest.mark.parametrize(
+    "agg_func",
+    [
+        lambda gb: gb.agg({"c": ["count"]}),
+        lambda gb: gb.agg({"c": "count"}),
+        lambda gb: gb.agg({"c": ["count", "sum"]}),
+        lambda gb: gb.count(),
+        lambda gb: gb.c.count(),
+    ],
+)
+def test_groupby_reset_index_multiindex(groupby_keys, agg_func):
+    df = cudf.DataFrame(
+        {
+            "a": np.random.randint(0, 10, 10),
+            "b": np.random.randint(0, 5, 10),
+            "c": np.random.randint(0, 5, 10),
+            "d": np.random.randint(0, 5, 10),
+        }
+    )
+    ddf = dask_cudf.from_cudf(df, 5)
+    pddf = dd.from_pandas(df.to_pandas(), 5)
+    gr = agg_func(ddf.groupby(groupby_keys)).reset_index()
+    pr = agg_func(pddf.groupby(groupby_keys)).reset_index()
+    gf = gr.compute().sort_values(groupby_keys).reset_index(drop=True)
+    pf = pr.compute().sort_values(groupby_keys).reset_index(drop=True)
+    print(gf)
+    print(pf)
+    dd.assert_eq(gf, pf)
