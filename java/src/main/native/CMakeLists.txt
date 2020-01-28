@@ -96,7 +96,9 @@ include(CheckLibraryExists)
 
 set(CUDF_INCLUDE "${PROJECT_SOURCE_DIR}/../../../../cpp/include"
                  "${PROJECT_SOURCE_DIR}/../../../../cpp/src/"
-                 "${PROJECT_SOURCE_DIR}/../../../../cpp/thirdparty/cub")
+                 "${PROJECT_SOURCE_DIR}/../../../../cpp/thirdparty/cub"
+                 "${PROJECT_SOURCE_DIR}/../../../../cpp/thirdparty/libcudacxx/include")
+                 
 
 find_library(CUDF_LIBRARY "cudf"
     HINTS "$ENV{CUDF_ROOT}/lib"
@@ -131,35 +133,6 @@ add_library(rmm SHARED IMPORTED ${RMM_LIBRARY})
 if (RMM_INCLUDE AND RMM_LIBRARY)
     set_target_properties(rmm PROPERTIES IMPORTED_LOCATION ${RMM_LIBRARY})
 endif (RMM_INCLUDE AND RMM_LIBRARY)
-
-###################################################################################################
-# - NVStrings -------------------------------------------------------------------------------------
-
-# NVSTRING_INCLUDE is the same as CUDF_INCLUDE
-
-find_library(NVSTRINGS_LIBRARY "NVStrings"
-             HINTS "$ENV{NVSTRINGS_ROOT}/lib"
-                   "$ENV{CONDA_PREFIX}/lib"
-                   "../../../../cpp/build")
-
-find_library(NVCATEGORY_LIBRARY "NVCategory"
-             HINTS "$ENV{NVSTRINGS_ROOT}/lib"
-                   "$ENV{CONDA_PREFIX}/lib"
-                   "../../../../cpp/build")
-
-message(STATUS "NVSTRINGS: NVSTRINGS_LIBRARY set to ${NVSTRINGS_LIBRARY}")
-message(STATUS "NVSTRINGS: NVCATEGORY_LIBRARY set to ${NVCATEGORY_LIBRARY}")
-
-add_library(NVStrings SHARED IMPORTED ${NVSTRINGS_LIBRARY})
-if (NVSTRINGS_LIBRARY)
-    set_target_properties(NVStrings PROPERTIES IMPORTED_LOCATION ${NVSTRINGS_LIBRARY})
-endif (NVSTRINGS_LIBRARY)
-
-add_library(NVCategory SHARED IMPORTED ${NVCATEGORY_LIBRARY})
-if (NVCATEGORY_LIBRARY)
-    set_target_properties(NVCategory PROPERTIES IMPORTED_LOCATION ${NVCATEGORY_LIBRARY})
-endif (NVCATEGORY_LIBRARY)
-
 
 ###################################################################################################
 # - find JNI -------------------------------------------------------------------------------------
@@ -201,6 +174,7 @@ set(SOURCE_FILES
     "src/ColumnVectorJni.cpp"
     "src/NvtxRangeJni.cpp"
     "src/RmmJni.cpp"
+    "src/ScalarJni.cpp"
     "src/TableJni.cpp")
 add_library(cudfjni SHARED ${SOURCE_FILES})
 
@@ -221,7 +195,7 @@ endif(USE_NVTX)
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(cudfjni cudf rmm cudart cuda NVCategory NVStrings nvrtc)
+target_link_libraries(cudfjni cudf rmm cudart cuda nvrtc)
 
 
 

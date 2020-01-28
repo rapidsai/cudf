@@ -65,6 +65,11 @@ column_device_view::column_device_view( column_view source, ptrdiff_t h_ptr, ptr
       h_end += col_child_data_size;
       d_end += col_child_data_size;
     }
+    // add dictionary column if there is one
+    if( source.dictionary_keys().type().id() != cudf::type_id::EMPTY )
+    {
+      new(h_column) column_device_view(source.dictionary_keys(),reinterpret_cast<ptrdiff_t>(h_end),reinterpret_cast<ptrdiff_t>(d_end));
+    }
   }
 }
 
@@ -108,6 +113,8 @@ std::unique_ptr<column_device_view, std::function<void(column_device_view*)>> co
 
 size_type column_device_view::extent(column_view source) {
   size_type data_size = sizeof(column_device_view);
+  if( source.dictionary_keys().type().id() != cudf::type_id::EMPTY )
+    data_size += sizeof(column_device_view);
   for( size_type idx=0; idx < source.num_children(); ++idx )
     data_size += extent(source.child(idx));
   return data_size;
