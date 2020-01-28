@@ -39,46 +39,34 @@ try:
     from dask.dataframe.utils import group_split_dispatch, hash_object_dispatch
     from cudf.core.column import column, CategoricalColumn, StringColumn
 
-    def _string_safe_hash(df):
-        frame = df.copy(deep=False)
-        for col in frame.columns:
-            if isinstance(frame[col]._column, StringColumn):
-                out_col = column.column_empty(
-                    len(frame), dtype="int32", masked=False
-                )
-                ptr = out_col.data.ptr
-                frame[col]._column.data_array_view.hash(devptr=ptr)
-                frame[col] = out_col
-        return frame.hash_columns()
-
-    def _string_safe_hash_series(s):
-        series = s.copy(deep=False)
-        if isinstance(series._column, StringColumn):
-            out_col = column.column_empty(
-                len(series), dtype="int32", masked=False
-            )
+    def _handle_string(s):
+        if isinstance(s._column, StringColumn):
+            out_col = column.column_empty(len(s), dtype="int32", masked=False)
             ptr = out_col.data.ptr
-            series._column.data_array_view.hash(devptr=ptr)
-            series = out_col
-        return series.hash_values()
+            s._column.data_array_view.hash(devptr=ptr)
+            s = out_col
+        return s
 
-    @hash_object_dispatch.register(cudf.Series)
-    def hash_object_cudf_series(frame, index=True):
-        if index:
-            return _string_safe_hash(frame.reset_index())
-        return _string_safe_hash_series(frame)
+    def safe_hash(df):
+        frame = df.copy(deep=False)
+        if isinstance(frame, cudf.DataFrame):
+            for col in frame.columns:
+                frame[col] = _handle_string(frame[col])
+            return frame.hash_columns()
+        else:
+            return _handle_string(frame)
 
-    @hash_object_dispatch.register(cudf.DataFrame)
+    @hash_object_dispatch.register((cudf.DataFrame, cudf.Series))
     def hash_object_cudf(frame, index=True):
         if index:
-            return _string_safe_hash(frame.reset_index())
-        return _string_safe_hash(frame)
+            return safe_hash(frame.reset_index())
+        return safe_hash(frame)
 
     @hash_object_dispatch.register(cudf.Index)
     def hash_object_cudf_index(ind, index=None):
 
         if isinstance(ind, cudf.MultiIndex):
-            return _string_safe_hash(ind.to_frame(index=False))
+            return safe_hash(ind.to_frame(index=False))
 
         col = column.as_column(ind)
         if isinstance(col, StringColumn):
