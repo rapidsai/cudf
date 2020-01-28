@@ -504,10 +504,10 @@ hash_partition_table(table_view const& input,
                            cudaMemcpyDeviceToHost,
                            stream));
 
-  // When the number of partitions is less than 512, we can apply an optimization
-  // using shared memory to copy values to the output buffer. For greater number of
-  // partitions, it is more efficient to fallback to using scatter.
-  if (num_partitions <= 512) {
+  // When the number of partitions is less than 1024, we can apply an optimization
+  // using shared memory to copy values to the output buffer. Otherwise, fall back
+  // to using scatter to materialize the output.
+  if (num_partitions <= 1024) {
     std::vector<std::unique_ptr<column>> output_cols(input.num_columns());
 
     auto const row_partition_numbers_ptr {row_partition_numbers.data().get()};
