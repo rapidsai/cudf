@@ -1,4 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
 import functools
 import pickle
@@ -154,7 +154,7 @@ class StringMethods(object):
             others = others._column.nvstrings
         elif isinstance(others, Index):
             assert others.dtype == np.dtype("object")
-            others = others.as_column().nvstrings
+            others = others._values.nvstrings
         elif isinstance(others, StringMethods):
             """
             If others is a StringMethods then
@@ -453,11 +453,12 @@ class StringColumn(column.ColumnBase):
             Two non-null columns containing the string data and offsets
             respectively
         """
-
         data = Buffer.empty(0)
         dtype = np.dtype("object")
 
-        if children[0].size == 0:
+        if len(children) == 0:
+            size = 0
+        elif children[0].size == 0:
             size = 0
         else:
             # one less because the last element of offsets is the number of
@@ -542,6 +543,10 @@ class StringColumn(column.ColumnBase):
             self.nvcategory.values(devptr=ptr)
             self._indices = out_dev_arr
         return self._indices
+
+    @property
+    def _nbytes(self):
+        return self.children[1].size
 
     def as_numerical_column(self, dtype, **kwargs):
 

@@ -20,222 +20,158 @@ package ai.rapids.cudf;
 
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
 
-public class ScalarTest {
+public class ScalarTest extends CudfTestBase {
+
+  @Test
+  public void testDoubleClose() {
+    Scalar s = Scalar.fromNull(DType.INT32);
+    s.close();
+    assertThrows(IllegalStateException.class, s::close);
+  }
+
+  @Test
+  public void testIncRef() {
+    Scalar s = Scalar.fromNull(DType.INT32);
+    try (Scalar ignored1 = s) {
+      try (Scalar ignored2 = s.incRefCount()) {
+        try (Scalar ignored3 = s.incRefCount()) {
+        }
+      }
+    }
+    assertThrows(IllegalStateException.class, s::close);
+  }
 
   @Test
   public void testNull() {
-    assert !Scalar.NULL.isValid();
-    for (DType type: DType.values()) {
-      Scalar n = Scalar.fromNull(type);
-      assert !n.isValid();
-      assertEquals(type, n.getType());
+    for (DType type : DType.values()) {
+      if (type == DType.CATEGORY) {
+        assertThrows(IllegalArgumentException.class, () -> Scalar.fromNull(type));
+      } else {
+        try (Scalar s = Scalar.fromNull(type)) {
+          assertEquals(type, s.getType());
+          assertFalse(s.isValid(), "null validity for " + type);
+        }
+      }
     }
   }
 
   @Test
   public void testBool() {
-    Scalar s = Scalar.fromBool(false);
-    assertEquals(DType.BOOL8, s.getType());
-    assert s.isValid();
-
-    //values are automatically cast to the desired type
-    assertEquals(false, s.getBoolean());
-    assertEquals(0, s.getByte());
-    assertEquals(0, s.getShort());
-    assertEquals(0, s.getInt());
-    assertEquals(0L, s.getLong());
-    assertEquals(0.0f, s.getFloat());
-    assertEquals(0.0, s.getDouble());
-    assertEquals("0", s.getJavaString());
-    assertArrayEquals(new byte[]{'0'}, s.getUTF8());
+    try (Scalar s = Scalar.fromBool(false)) {
+      assertEquals(DType.BOOL8, s.getType());
+      assertTrue(s.isValid());
+      assertFalse(s.getBoolean());
+    }
   }
 
   @Test
   public void testByte() {
-    Scalar s = Scalar.fromByte((byte) 1);
-    assertEquals(DType.INT8, s.getType());
-    assert s.isValid();
-
-    //values are automatically cast to the desired type
-    assertEquals(true, s.getBoolean());
-    assertEquals(1, s.getByte());
-    assertEquals(1, s.getShort());
-    assertEquals(1, s.getInt());
-    assertEquals(1L, s.getLong());
-    assertEquals(1.0f, s.getFloat());
-    assertEquals(1.0, s.getDouble());
-    assertEquals("1", s.getJavaString());
-    assertArrayEquals(new byte[]{'1'}, s.getUTF8());
+    try (Scalar s = Scalar.fromByte((byte) 1)) {
+      assertEquals(DType.INT8, s.getType());
+      assertTrue(s.isValid());
+      assertEquals(1, s.getByte());
+    }
   }
 
   @Test
   public void testShort() {
-    Scalar s = Scalar.fromShort((short) 2);
-    assertEquals(DType.INT16, s.getType());
-    assert s.isValid();
-
-    //values are automatically cast to the desired type
-    assertEquals(true, s.getBoolean());
-    assertEquals(2, s.getByte());
-    assertEquals(2, s.getShort());
-    assertEquals(2, s.getInt());
-    assertEquals(2L, s.getLong());
-    assertEquals(2.0f, s.getFloat());
-    assertEquals(2.0, s.getDouble());
-    assertEquals("2", s.getJavaString());
-    assertArrayEquals(new byte[]{'2'}, s.getUTF8());
+    try (Scalar s = Scalar.fromShort((short) 2)) {
+      assertEquals(DType.INT16, s.getType());
+      assertTrue(s.isValid());
+      assertEquals(2, s.getShort());
+    }
   }
 
   @Test
   public void testInt() {
-    Scalar s = Scalar.fromInt(3);
-    assertEquals(DType.INT32, s.getType());
-    assert s.isValid();
-
-    //values are automatically cast to the desired type
-    assertEquals(true, s.getBoolean());
-    assertEquals(3, s.getByte());
-    assertEquals(3, s.getShort());
-    assertEquals(3, s.getInt());
-    assertEquals(3L, s.getLong());
-    assertEquals(3.0f, s.getFloat());
-    assertEquals(3.0, s.getDouble());
-    assertEquals("3", s.getJavaString());
-    assertArrayEquals(new byte[]{'3'}, s.getUTF8());
+    try (Scalar s = Scalar.fromInt(3)) {
+      assertEquals(DType.INT32, s.getType());
+      assertTrue(s.isValid());
+      assertEquals(3, s.getInt());
+    }
   }
 
   @Test
   public void testLong() {
-    Scalar s = Scalar.fromLong(4);
-    assertEquals(DType.INT64, s.getType());
-    assert s.isValid();
-
-    //values are automatically cast to the desired type
-    assertEquals(true, s.getBoolean());
-    assertEquals(4, s.getByte());
-    assertEquals(4, s.getShort());
-    assertEquals(4, s.getInt());
-    assertEquals(4L, s.getLong());
-    assertEquals(4.0f, s.getFloat());
-    assertEquals(4.0, s.getDouble());
-    assertEquals("4", s.getJavaString());
-    assertArrayEquals(new byte[]{'4'}, s.getUTF8());
+    try (Scalar s = Scalar.fromLong(4)) {
+      assertEquals(DType.INT64, s.getType());
+      assertTrue(s.isValid());
+      assertEquals(4L, s.getLong());
+    }
   }
 
   @Test
   public void testFloat() {
-    Scalar s = Scalar.fromFloat(5.1f);
-    assertEquals(DType.FLOAT32, s.getType());
-    assert s.isValid();
-
-    //values are automatically cast to the desired type
-    assertEquals(true, s.getBoolean());
-    assertEquals(5, s.getByte());
-    assertEquals(5, s.getShort());
-    assertEquals(5, s.getInt());
-    assertEquals(5L, s.getLong());
-    assertEquals(5.1f, s.getFloat());
-    assertEquals(5.1, s.getDouble(), 0.000001);
-    assertEquals("5.1", s.getJavaString());
-    assertArrayEquals(new byte[]{'5', '.', '1'}, s.getUTF8());
+    try (Scalar s = Scalar.fromFloat(5.1f)) {
+      assertEquals(DType.FLOAT32, s.getType());
+      assertTrue(s.isValid());
+      assertEquals(5.1f, s.getFloat());
+    }
   }
 
   @Test
   public void testDouble() {
-    Scalar s = Scalar.fromDouble(6.2);
-    assertEquals(DType.FLOAT64, s.getType());
-    assert s.isValid();
-
-    //values are automatically cast to the desired type
-    assertEquals(true, s.getBoolean());
-    assertEquals(6, s.getByte());
-    assertEquals(6, s.getShort());
-    assertEquals(6, s.getInt());
-    assertEquals(6L, s.getLong());
-    assertEquals(6.2f, s.getFloat());
-    assertEquals(6.2, s.getDouble());
-    assertEquals("6.2", s.getJavaString());
-    assertArrayEquals(new byte[]{'6', '.', '2'}, s.getUTF8());
+    try (Scalar s = Scalar.fromDouble(6.2)) {
+      assertEquals(DType.FLOAT64, s.getType());
+      assertTrue(s.isValid());
+      assertEquals(6.2, s.getDouble());
+    }
   }
 
   @Test
-  public void testDate32() {
-    Scalar s = Scalar.dateFromInt(7);
-    assertEquals(DType.DATE32, s.getType());
-    assert s.isValid();
-
-    //values are automatically cast to the desired type
-    assertEquals(true, s.getBoolean());
-    assertEquals(7, s.getByte());
-    assertEquals(7, s.getShort());
-    assertEquals(7, s.getInt());
-    assertEquals(7L, s.getLong());
-    assertEquals(7.0f, s.getFloat());
-    assertEquals(7.0, s.getDouble());
-    assertEquals("7", s.getJavaString());
-    assertArrayEquals(new byte[]{'7'}, s.getUTF8());
+  public void testTimestampDays() {
+    try (Scalar s = Scalar.timestampDaysFromInt(7)) {
+      assertEquals(DType.TIMESTAMP_DAYS, s.getType());
+      assertTrue(s.isValid());
+      assertEquals(7, s.getInt());
+    }
   }
 
   @Test
-  public void testDate64() {
-    Scalar s = Scalar.dateFromLong(8);
-    assertEquals(DType.DATE64, s.getType());
-    assert s.isValid();
+  public void testTimestampSeconds() {
+    try (Scalar s = Scalar.timestampFromLong(DType.TIMESTAMP_SECONDS, 8)) {
+      assertEquals(DType.TIMESTAMP_SECONDS, s.getType());
+      assertTrue(s.isValid());
+      assertEquals(8L, s.getLong());
+    }
+  }
 
-    //values are automatically cast to the desired type
-    assertEquals(true, s.getBoolean());
-    assertEquals(8, s.getByte());
-    assertEquals(8, s.getShort());
-    assertEquals(8, s.getInt());
-    assertEquals(8L, s.getLong());
-    assertEquals(8.0f, s.getFloat());
-    assertEquals(8.0, s.getDouble());
-    assertEquals("8", s.getJavaString());
-    assertArrayEquals(new byte[]{'8'}, s.getUTF8());
+  @Test
+  public void testTimestampMilliseconds() {
+    try (Scalar s = Scalar.timestampFromLong(DType.TIMESTAMP_MILLISECONDS, 9)) {
+      assertEquals(DType.TIMESTAMP_MILLISECONDS, s.getType());
+      assertTrue(s.isValid());
+      assertEquals(9L, s.getLong());
+    }
+  }
+
+  @Test
+  public void testTimestampMicroseconds() {
+    try (Scalar s = Scalar.timestampFromLong(DType.TIMESTAMP_MICROSECONDS, 10)) {
+      assertEquals(DType.TIMESTAMP_MICROSECONDS, s.getType());
+      assertTrue(s.isValid());
+      assertEquals(10L, s.getLong());
+    }
+  }
+
+  @Test
+  public void testTimestampNanoseconds() {
+    try (Scalar s = Scalar.timestampFromLong(DType.TIMESTAMP_NANOSECONDS, 11)) {
+      assertEquals(DType.TIMESTAMP_NANOSECONDS, s.getType());
+      assertTrue(s.isValid());
+      assertEquals(11L, s.getLong());
+    }
   }
 
   @Test
   public void testString() {
-    Scalar s = Scalar.fromString("TEST");
-    assertEquals(DType.STRING, s.getType());
-    assert s.isValid();
-
-    //values are automatically cast to the desired type
-    assertEquals(false, s.getBoolean());
-    assertThrows(NumberFormatException.class, () -> s.getByte());
-    assertThrows(NumberFormatException.class, () -> s.getShort());
-    assertThrows(NumberFormatException.class, () -> s.getInt());
-    assertThrows(NumberFormatException.class, () -> s.getLong());
-    assertThrows(NumberFormatException.class, () -> s.getFloat());
-    assertThrows(NumberFormatException.class, () -> s.getDouble());
-    assertEquals("TEST", s.getJavaString());
-    assertArrayEquals(new byte[]{'T', 'E', 'S', 'T'}, s.getUTF8());
-  }
-
-  @Test
-  public void testStringNumber() {
-    Scalar s = Scalar.fromString("100");
-    assertEquals(DType.STRING, s.getType());
-    assert s.isValid();
-
-    assertEquals(100, s.getByte());
-    assertEquals(100, s.getShort());
-    assertEquals(100, s.getInt());
-    assertEquals(100, s.getLong());
-    assertEquals(100f, s.getFloat());
-    assertEquals(100.0, s.getDouble());
-  }
-
-  @Test
-  public void testStringBool() {
-    Scalar s = Scalar.fromString("true");
-    assertEquals(DType.STRING, s.getType());
-    assert s.isValid();
-
-    assertEquals(true, s.getBoolean());
+    try (Scalar s = Scalar.fromString("TEST")) {
+      assertEquals(DType.STRING, s.getType());
+      assertTrue(s.isValid());
+      assertEquals("TEST", s.getJavaString());
+      assertArrayEquals(new byte[]{'T', 'E', 'S', 'T'}, s.getUTF8());
+    }
   }
 }

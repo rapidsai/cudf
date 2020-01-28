@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -68,6 +68,15 @@ std::unique_ptr<aggregation> make_argmax_aggregation() {
 /// Factory to create a ARGMIN aggregation
 std::unique_ptr<aggregation> make_argmin_aggregation() {
   return std::make_unique<aggregation>(aggregation::ARGMIN);
+}
+/// Factory to create a UDF aggregation
+std::unique_ptr<aggregation> make_udf_aggregation(udf_type type,
+                                                  std::string const& user_defined_aggregator,
+                                                  data_type output_type) {
+  aggregation* a = new detail::udf_aggregation{type == udf_type::PTX? aggregation::PTX : aggregation::CUDA,
+                                               user_defined_aggregator,
+                                               output_type};
+ return std::unique_ptr<aggregation>(a);
 }
 
 namespace detail {
