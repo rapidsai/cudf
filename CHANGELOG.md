@@ -3,6 +3,7 @@
 ## New Features
 
 - PR #3577 Add initial dictionary support to column classes
+- PR #3917 Add dictionary add_keys function
 
 ## Improvements
 
