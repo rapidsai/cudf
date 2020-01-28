@@ -3852,9 +3852,9 @@ class DataFrame(Frame):
             raise ValueError(msg.format(data.shape[0], len(index)))
 
         df = DataFrame()
-        data = data.transpose()  # to mimic the pandas behaviour
+        data = cupy.asfortranarray(cupy.asarray(data))
         for i, k in enumerate(names):
-            df[k] = Series(data[i], nan_as_null=nan_as_null)
+            df[k] = Series(data[:, i], nan_as_null=nan_as_null)
 
         if index is not None:
             indices = data[index]

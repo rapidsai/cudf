@@ -461,10 +461,21 @@ def test_memory_usage(gdf, gddf, index, deep):
 @pytest.mark.parametrize("index", [True, False])
 def test_hash_object_dispatch(index):
     obj = cudf.DataFrame(
-        {"x": ["a", "b", "c"], "y": [1, 2, 3]}, index=[2, 4, 6]
+        {"x": ["a", "b", "c"], "y": [1, 2, 3], "z": [1, 1, 0]}, index=[2, 4, 6]
     )
 
+    # DataFrame
     result = dd.utils.hash_object_dispatch(obj, index=index)
     expected = dgd.backends.hash_object_cudf(obj, index=index)
+    dd.assert_eq(cudf.Series(result), cudf.Series(expected))
 
+    # Series
+    result = dd.utils.hash_object_dispatch(obj["x"], index=index)
+    expected = dgd.backends.hash_object_cudf(obj["x"], index=index)
+    dd.assert_eq(cudf.Series(result), cudf.Series(expected))
+
+    # DataFrame with MultiIndex
+    obj_multi = obj.set_index(["x", "z"], drop=True)
+    result = dd.utils.hash_object_dispatch(obj_multi, index=index)
+    expected = dgd.backends.hash_object_cudf(obj_multi, index=index)
     dd.assert_eq(cudf.Series(result), cudf.Series(expected))
