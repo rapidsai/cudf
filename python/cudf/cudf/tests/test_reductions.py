@@ -30,19 +30,19 @@ def test_sum(dtype, nelem):
 
 
 def test_sum_string():
-    s = Series(["Hello","there","World"])
+    s = Series(["Hello", "there", "World"])
 
     got = s.sum()
     expected = "HellothereWorld"
 
-    assert got==expected
+    assert got == expected
 
     s = Series(["Hello", None, "World"])
 
     got = s.sum()
     expected = "HelloWorld"
 
-    assert got==expected
+    assert got == expected
 
 
 @pytest.mark.parametrize("dtype,nelem", params)
