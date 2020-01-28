@@ -38,6 +38,7 @@ namespace dictionary
  *
  * @throw cudf_logic_error if the keys type does not match the keys type in
  * the dictionary_column.
+ * @throw cudf_logic_error if the keys contains nulls.
  *
  * @param dictionary_column Existing dictionary column.
  * @param keys New keys to incorporate into the dictionary_column
