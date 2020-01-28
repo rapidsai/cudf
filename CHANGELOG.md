@@ -4,10 +4,13 @@
 
 ## Improvements
 
+- PR #3909 Move java backend to libcudf++
+
 ## Bug Fixes
 
 - PR #3888 Drop `ptr=None` from `DeviceBuffer` call
 - PR #3902 Fix conversion of large size GPU array to dataframe 
+- PR #3953 Fix overflow in column_buffer when computing the device buffer size
 
 
 # cuDF 0.12.0 (Date TBD)
