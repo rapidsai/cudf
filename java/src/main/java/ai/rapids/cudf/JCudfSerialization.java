@@ -25,6 +25,8 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
+import java.util.Optional;
 
 /**
  * Serialize and deserialize CUDF tables and columns using a custom format.  The goal of this is
@@ -93,7 +95,6 @@ public class JCudfSerialization {
 
     private DType[] types;
     private long[] nullCounts;
-    private TimeUnit[] tu;
     long dataLen;
 
     private boolean initialized = false;
@@ -103,7 +104,7 @@ public class JCudfSerialization {
       readFrom(din);
     }
 
-    SerializedTableHeader(int numRows, DType[] types, long[] nullCounts, TimeUnit[] tu, long dataLen) {
+    SerializedTableHeader(int numRows, DType[] types, long[] nullCounts, long dataLen) {
       this.numRows = numRows;
       if (types != null) {
         numColumns = types.length;
@@ -112,7 +113,6 @@ public class JCudfSerialization {
       }
       this.types = types;
       this.nullCounts = nullCounts;
-      this.tu = tu;
       this.dataLen = dataLen;
       initialized = true;
       dataRead = true;
@@ -181,11 +181,9 @@ public class JCudfSerialization {
 
       types = new DType[numColumns];
       nullCounts = new long[numColumns];
-      tu = new TimeUnit[numColumns];
       for (int i = 0; i < numColumns; i++) {
         types[i] = DType.fromNative(din.readInt());
         nullCounts[i] = din.readInt();
-        tu[i] = TimeUnit.fromNative(din.readInt());
       }
 
       dataLen = din.readLong();
@@ -203,7 +201,6 @@ public class JCudfSerialization {
       for (int i = 0; i < numColumns; i++) {
         dout.writeInt(types[i].nativeId);
         dout.writeInt((int) nullCounts[i]);
-        dout.writeInt(tu[i].getNativeId());
       }
       dout.writeLong(dataLen);
     }
@@ -223,8 +220,6 @@ public class JCudfSerialization {
     public abstract long getEndStringOffset(long index);
 
     public abstract long getRowCount();
-
-    public abstract TimeUnit getTimeUnit();
 
     public void ensureOnHost() {
       // Noop by default
@@ -277,11 +272,6 @@ public class JCudfSerialization {
     }
 
     @Override
-    public TimeUnit getTimeUnit() {
-      return column.getTimeUnit();
-    }
-
-    @Override
     public void ensureOnHost() {
       column.ensureOnHost();
     }
@@ -330,11 +320,6 @@ public class JCudfSerialization {
     }
 
     @Override
-    public TimeUnit getTimeUnit() {
-      return header.tu[columnIndex];
-    }
-
-    @Override
     public HostMemoryBuffer getHostBufferFor(ColumnVector.BufferType buffType) {
       return buffer;
     }
@@ -355,14 +340,14 @@ public class JCudfSerialization {
 
     @Override
     public long getStartStringOffset(long index) {
-      assert getType() == DType.STRING_CATEGORY || getType() == DType.STRING;
+      assert getType() == DType.STRING;
       assert (index >= 0 && index < getRowCount()) : "index is out of range 0 <= " + index + " < " + getRowCount();
       return buffer.getInt(offsets.offsets + (index * 4));
     }
 
     @Override
     public long getEndStringOffset(long index) {
-      assert getType() == DType.STRING_CATEGORY || getType() == DType.STRING;
+      assert getType() == DType.STRING;
       assert (index >= 0 && index < getRowCount()) : "index is out of range 0 <= " + index + " < " + getRowCount();
       // The offsets has one more entry than there are rows.
       return buffer.getInt(offsets.offsets + ((index + 1) * 4));
@@ -379,6 +364,8 @@ public class JCudfSerialization {
     public abstract void writeShort(short s) throws IOException;
 
     public abstract void writeInt(int i) throws IOException;
+
+    public abstract void writeIntNativeOrder(int i) throws IOException;
 
     public abstract void writeLong(long val) throws IOException;
 
@@ -429,6 +416,13 @@ public class JCudfSerialization {
     @Override
     public void writeInt(int i) throws IOException {
       dout.writeInt(i);
+    }
+
+    @Override
+    public void writeIntNativeOrder(int i) throws IOException {
+      // TODO this only works on Little Endian Architectures, x86.  If we need
+      // to support others we need to detect the endianess and switch on the right implementation.
+      writeInt(Integer.reverseBytes(i));
     }
 
     @Override
@@ -483,6 +477,12 @@ public class JCudfSerialization {
     public void writeInt(int i) {
       buffer.setInt(offset, i);
       offset += 4;
+    }
+
+    @Override
+    public void writeIntNativeOrder(int i) {
+      // This is already in the native order...
+      writeInt(i);
     }
 
     @Override
@@ -545,7 +545,7 @@ public class JCudfSerialization {
       if (column.getNullCount() > 0) {
         totalDataSize += padFor64byteAlignment(BitVectorHelper.getValidityLengthInBytes(numRows));
       }
-      if (type == DType.STRING || type == DType.STRING_CATEGORY) {
+      if (type == DType.STRING) {
         // offsets
         totalDataSize += padFor64byteAlignment((numRows + 1) * 4);
 
@@ -569,7 +569,7 @@ public class JCudfSerialization {
       if (nullCounts[col] > 0) {
         totalDataSize += padFor64byteAlignment(BitVectorHelper.getValidityLengthInBytes(numRows));
       }
-      if (type == DType.STRING || type == DType.STRING_CATEGORY) {
+      if (type == DType.STRING) {
         // offsets
         totalDataSize += padFor64byteAlignment((numRows + 1) * 4);
 
@@ -628,20 +628,20 @@ public class JCudfSerialization {
         bufferOffset += validityLen;
       }
 
-      if (type == DType.STRING || type == DType.STRING_CATEGORY) {
-        offsetsLen = padFor64byteAlignment((numRows + 1) * 4);
+      if (type == DType.STRING) {
+        offsetsLen = (numRows + 1) * 4;
         offsets = bufferOffset;
         int startStringOffset = buffer.getInt(bufferOffset);
         int endStringOffset = buffer.getInt(bufferOffset + (numRows * 4));
-        bufferOffset += offsetsLen;
+        bufferOffset += padFor64byteAlignment(offsetsLen);
 
-        dataLen = padFor64byteAlignment(endStringOffset - startStringOffset);
+        dataLen = endStringOffset - startStringOffset;
         data = bufferOffset;
-        bufferOffset += dataLen;
+        bufferOffset += padFor64byteAlignment(dataLen);
       } else {
-        dataLen = padFor64byteAlignment(type.sizeInBytes * numRows);
+        dataLen = type.sizeInBytes * numRows;
         data = bufferOffset;
-        bufferOffset += dataLen;
+        bufferOffset += padFor64byteAlignment(dataLen);
       }
       ret[column] = new ColumnOffsets(validity, validityLen,
           offsets, offsetsLen,
@@ -715,15 +715,13 @@ public class JCudfSerialization {
                                                   int numRows) {
     DType[] types = new DType[columns.length];
     long[] nullCount = new long[columns.length];
-    TimeUnit[] tu = new TimeUnit[columns.length];
     for (int i = 0; i < columns.length; i++) {
       types[i] = columns[i].getType();
       nullCount[i] = columns[i].getNullCount();
-      tu[i] = columns[i].getTimeUnit();
     }
 
     long dataLength = getSlicedSerializedDataSizeInBytes(columns, rowOffset, numRows);
-    return new SerializedTableHeader(numRows, types, nullCount, tu, dataLength);
+    return new SerializedTableHeader(numRows, types, nullCount, dataLength);
   }
 
   /**
@@ -736,18 +734,15 @@ public class JCudfSerialization {
     // verify that all of the columns can be concated, we also need to verify that the sizes are going to work....
     int numColumns = 0;
     DType[] types;
-    TimeUnit[] tu;
     long[] nullCounts;
     long numRows = 0;
     if (columnsForEachBatch.length > 0) {
       ColumnBufferProvider[] providers = columnsForEachBatch[0];
       numColumns = providers.length;
       types = new DType[numColumns];
-      tu = new TimeUnit[numColumns];
       nullCounts = new long[numColumns];
       for (int i = 0; i < providers.length; i++) {
         types[i] = providers[i].getType();
-        tu[i] = providers[i].getTimeUnit();
         nullCounts[i] = providers[i].getNullCount();
       }
       if (numColumns > 0) {
@@ -755,7 +750,6 @@ public class JCudfSerialization {
       }
     } else {
       types = new DType[0];
-      tu = new TimeUnit[0];
       nullCounts = new long[0];
     }
 
@@ -770,9 +764,6 @@ public class JCudfSerialization {
           throw new IllegalArgumentException("Type mismatch for column " + col);
         }
 
-        if (providers[col].getTimeUnit() != tu[col]) {
-          throw new IllegalArgumentException("TimeUnit mismatch for column " + col);
-        }
         nullCounts[col] += providers[col].getNullCount();
       }
       if (numColumns > 0) {
@@ -786,7 +777,7 @@ public class JCudfSerialization {
 
     long totalDataSize = getConcatedSerializedDataSizeInBytes(numColumns, nullCounts, (int)numRows, types,
         columnsForEachBatch);
-    return new SerializedTableHeader((int)numRows, types, nullCounts, tu, totalDataSize);
+    return new SerializedTableHeader((int)numRows, types, nullCounts, totalDataSize);
   }
 
   /////////////////////////////////////////////
@@ -1037,11 +1028,31 @@ public class JCudfSerialization {
 
   private static long copySlicedOffsets(DataWriter out, ColumnBufferProvider column, long rowOffset,
                                         long numRows) throws IOException {
-    // If an offset is copied over as a part of a slice the first entry may be non-zero.  This is
-    // okay because we fix them up when they are deserialized
     long bytesToCopy = (numRows + 1) * 4;
     long srcOffset = rowOffset * 4;
-    return copySlicedAndPad(out, column, ColumnVector.BufferType.OFFSET, srcOffset, bytesToCopy);
+    if (rowOffset == 0) {
+      return copySlicedAndPad(out, column, ColumnVector.BufferType.OFFSET, srcOffset, bytesToCopy);
+    }
+    HostMemoryBuffer buff = column.getHostBufferFor(ColumnVector.BufferType.OFFSET);
+    long startOffset = column.getBufferStartOffset(ColumnVector.BufferType.OFFSET) + srcOffset;
+    if (bytesToCopy >= Integer.MAX_VALUE) {
+      throw new IllegalStateException("Copy is too large, need to do chunked copy");
+    }
+    ByteBuffer bb = buff.asByteBuffer(startOffset, (int)bytesToCopy);
+    int start = 0;
+    if (numRows > 0) {
+      start = bb.getInt();
+    }
+    out.writeIntNativeOrder(0);
+    long total = 4;
+    for (int i = 1; i < (numRows + 1); i++) {
+      int offset = bb.getInt();
+      out.writeIntNativeOrder(offset - start);
+      total += 4;
+    }
+    assert total == bytesToCopy;
+    long ret = padFor64byteAlignment(out, total);
+    return ret;
   }
 
   private static int[] copyConcateOffsets(DataWriter out,
@@ -1052,7 +1063,7 @@ public class JCudfSerialization {
     int offsetToAdd = 0;
 
     // First offset is always 0
-    out.writeInt(0);
+    out.writeIntNativeOrder(0);
     totalCopied += 4;
 
     for (int batchIndex = 0; batchIndex < providers.length; batchIndex++) {
@@ -1134,7 +1145,7 @@ public class JCudfSerialization {
     }
 
     DType type = combinedHeader.types[columnIndex];
-    if (type == DType.STRING || type == DType.STRING_CATEGORY) {
+    if (type == DType.STRING) {
       // Get the actual lengths for each section...
       int dataLens[] = copyConcateOffsets(out, columnIndex, providers);
       copyConcateStringData(out, columnIndex, dataLens, providers);
@@ -1156,7 +1167,7 @@ public class JCudfSerialization {
     }
 
     DType type = column.getType();
-    if (type == DType.STRING || type == DType.STRING_CATEGORY) {
+    if (type == DType.STRING) {
       try (NvtxRange range = new NvtxRange("Write String Data", NvtxColor.RED)) {
         copySlicedOffsets(out, column, rowOffset, numRows);
         copySlicedStringData(out, column, rowOffset, numRows);
@@ -1255,26 +1266,24 @@ public class JCudfSerialization {
       ColumnOffsets[] columnOffsets = buildIndex(header, combinedBufferOnHost);
       DType[] dataTypes = header.types;
       long[] nullCounts = header.nullCounts;
-      TimeUnit[] timeUnits = header.tu;
       long numRows = header.getNumRows();
       int numColumns = dataTypes.length;
       ColumnVector[] vectors = new ColumnVector[numColumns];
       DeviceMemoryBuffer validity = null;
       DeviceMemoryBuffer data = null;
-      HostMemoryBuffer offsets = null;
+      DeviceMemoryBuffer offsets = null;
       try {
         for (int column = 0; column < numColumns; column++) {
           DType type = dataTypes[column];
           long nullCount = nullCounts[column];
-          TimeUnit tu = timeUnits[column];
           ColumnOffsets offsetInfo = columnOffsets[column];
 
           if (nullCount > 0) {
             validity = combinedBuffer.slice(offsetInfo.validity, offsetInfo.validityLen);
           }
 
-          if (type == DType.STRING || type == DType.STRING_CATEGORY) {
-            offsets = combinedBufferOnHost.slice(offsetInfo.offsets, offsetInfo.offsetsLen);
+          if (type == DType.STRING) {
+            offsets = combinedBuffer.slice(offsetInfo.offsets, offsetInfo.offsetsLen);
           }
 
           if (offsetInfo.dataLen == 0) {
@@ -1285,7 +1294,7 @@ public class JCudfSerialization {
             data = combinedBuffer.slice(offsetInfo.data, offsetInfo.dataLen);
           }
 
-          vectors[column] = new ColumnVector(type, tu, numRows, nullCount, data, validity, offsets, true);
+          vectors[column] = new ColumnVector(type, numRows, Optional.of(nullCount), data, validity, offsets);
           validity = null;
           data = null;
           offsets = null;
