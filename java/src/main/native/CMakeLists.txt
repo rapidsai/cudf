@@ -96,7 +96,9 @@ include(CheckLibraryExists)
 
 set(CUDF_INCLUDE "${PROJECT_SOURCE_DIR}/../../../../cpp/include"
                  "${PROJECT_SOURCE_DIR}/../../../../cpp/src/"
-                 "${PROJECT_SOURCE_DIR}/../../../../cpp/thirdparty/cub")
+                 "${PROJECT_SOURCE_DIR}/../../../../cpp/thirdparty/cub"
+                 "${PROJECT_SOURCE_DIR}/../../../../cpp/thirdparty/libcudacxx/include")
+                 
 
 find_library(CUDF_LIBRARY "cudf"
     HINTS "$ENV{CUDF_ROOT}/lib"
@@ -201,6 +203,7 @@ set(SOURCE_FILES
     "src/ColumnVectorJni.cpp"
     "src/NvtxRangeJni.cpp"
     "src/RmmJni.cpp"
+    "src/ScalarJni.cpp"
     "src/TableJni.cpp")
 add_library(cudfjni SHARED ${SOURCE_FILES})
 
@@ -221,7 +224,7 @@ endif(USE_NVTX)
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(cudfjni cudf rmm cudart cuda NVCategory NVStrings nvrtc)
+target_link_libraries(cudfjni cudf rmm cudart cuda nvrtc)
 
 
 
