@@ -409,12 +409,20 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
     return d_children[child_index];
   }
 
+  /**
+   * @brief Returns the dictionary keys column.
+   */
+  __device__ column_device_view* dictionary_keys(size_type child_index) const noexcept {
+    return d_dictionary_keys;
+  }
+
  protected:
-  column_device_view* d_children{};  ///< Array of `column_device_view`
-                                     ///< objects in device memory.
-                                     ///< Based on element type, children
-                                     ///< may contain additional data
-  size_type _num_children{};         ///< The number of child columns
+  column_device_view* d_dictionary_keys{}; ///< Keys column for dictionary types.
+  column_device_view* d_children{};        ///< Array of `column_device_view`
+                                           ///< objects in device memory.
+                                           ///< Based on element type, children
+                                           ///< may contain additional data
+  size_type _num_children{};               ///< The number of child columns
 
   /**---------------------------------------------------------------------------*
    * @brief Construct's a `column_device_view` from a `column_view` populating
@@ -694,8 +702,8 @@ __device__ inline string_view const column_device_view::element<string_view>(
  * @brief Returns `dictionary32` element at the specified index for a
  * dictionary column.
  *
- * If the element at the specified index is NULL, i.e., `is_null(element_index)
- *== true`, then any attempt to use the result will lead to undefined behavior.
+ * If the element at the specified index is NULL, i.e., `is_null(element_index) == true`,
+ * then any attempt to use the result will lead to undefined behavior.
  *
  * This function accounts for the offset.
  *
