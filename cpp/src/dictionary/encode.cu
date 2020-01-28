@@ -22,6 +22,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/dictionary/encode.hpp>
+#include <cudf/dictionary/dictionary_factories.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 
@@ -39,6 +40,8 @@ std::unique_ptr<column> encode( column_view const& input_column,
                                 rmm::mr::device_memory_resource* mr,
                                 cudaStream_t stream)
 {
+    CUDF_EXPECTS( indices_type.id()==INT32, "only INT32 type for indices");
+
     // side effects of this function were are now dependent on:
     // - resulting column elements are sorted ascending
     // - nulls are sorted to the beginning
@@ -55,7 +58,7 @@ std::unique_ptr<column> encode( column_view const& input_column,
         keys = std::make_unique<column>(experimental::slice(*keys, std::vector<size_type>{1,keys->size()})[0],stream,mr);
         keys->set_null_mask( rmm::device_buffer{0,stream,mr}, 0 ); // remove the null-mask
     }
-    std::shared_ptr<const column> keys_column(keys.release());
+    std::shared_ptr<column> keys_column(keys.release());
 
     // this returns a column with no null entries
     // - it appears to ignore the null entries in the input and tries to place the value regardless
@@ -64,16 +67,12 @@ std::unique_ptr<column> encode( column_view const& input_column,
                     std::vector<order>{order::ASCENDING},
                     std::vector<null_order>{null_order::AFTER},
                     mr, stream );
+    // we should probably copy/cast to INT32 type if different
+    CUDF_EXPECTS( indices_column->type() == indices_type, "expecting int32 indices type" );
 
     // create column with keys_column and indices_column
-    std::vector<std::unique_ptr<column>> children;
-    children.emplace_back(std::move(indices_column));
-    return std::make_unique<column>(
-        data_type{DICTIONARY32}, input_column.size(),
-        rmm::device_buffer{0,stream,mr}, // no data in the parent
-        copy_bitmask( input_column, stream, mr), input_column.null_count(),
-        std::move(children),
-        std::move(keys_column));
+    return make_dictionary_column( std::move(keys_column), std::move(indices_column),
+                                   copy_bitmask( input_column, stream, mr), input_column.null_count() );
 }
 
 } // namespace dictionary
