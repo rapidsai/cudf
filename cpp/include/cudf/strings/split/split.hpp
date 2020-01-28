@@ -94,7 +94,7 @@ std::unique_ptr<experimental::table> rsplit( strings_column_view const& strings,
 struct contiguous_split_record_result {
   std::vector<column_view> column_views;
   std::unique_ptr<rmm::device_buffer> all_data;
-}
+};
 
 /**
  * @brief Splits each element of the input column to a column of tokens storing
