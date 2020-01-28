@@ -538,27 +538,6 @@ class _GroupbyHelper(object):
                 return MultiIndex.from_tuples(zip(value_names, aggs_as_list))
             else:
                 return value_names
-            """
-            if (
-                isinstance(self.original_aggs, collections.abc.Mapping)
-                and len(self.original_aggs) == 1
-            ):
-                if not isinstance(list(self.original_aggs.values())[0], str):
-                    return MultiIndex.from_tuples(
-                        zip(value_names, aggs_as_list)
-                    )
-                else:
-                    return value_names
-            else:
-                if len(aggs_as_list) == len(self.aggs) or isinstance(
-                    self.original_aggs, str
-                ):
-                    return value_names
-                else:
-                    return MultiIndex.from_tuples(
-                        zip(value_names, aggs_as_list)
-                    )
-            """
 
     def get_aggs_as_list(self):
         """
