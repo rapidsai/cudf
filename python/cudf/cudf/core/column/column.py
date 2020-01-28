@@ -15,7 +15,7 @@ import rmm
 import cudf
 import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
-from cudf._lib.stream_compaction import nunique as cpp_unique_count
+from cudf._libxx.stream_compaction import unique_count as cpp_unique_count
 from cudf._libxx.column import Column
 from cudf.core.buffer import Buffer
 from cudf.core.dtypes import CategoricalDtype
@@ -58,6 +58,12 @@ class ColumnBase(Column):
             build_column,
             (self.data, self.dtype, self.mask, self.offset, self.children),
         )
+
+    def as_table(self, name=None):
+        """
+        Converts a Column to Table
+        """
+        return libcudfxx.Table({name: self.copy(deep=False)})
 
     @property
     def data_array_view(self):
@@ -276,13 +282,8 @@ class ColumnBase(Column):
         return col
 
     def dropna(self):
-        dropped_col = libcudf.stream_compaction.drop_nulls([self])
-        if not dropped_col:
-            return column_empty_like(self, newsize=0)
-        else:
-            dropped_col = dropped_col[0]
-            dropped_col.mask = None
-            return dropped_col
+        dropped_col = libcudfxx.drop_nulls(self.as_table())[None]
+        return dropped_col
 
     def _get_mask_as_column(self):
         data = Buffer(cudautils.ones(len(self), dtype=np.bool_))
@@ -814,12 +815,8 @@ class ColumnBase(Column):
 
     def apply_boolean_mask(self, mask):
         mask = as_column(mask, dtype="bool")
-        data = libcudf.stream_compaction.apply_boolean_mask([self], mask)
-        if not data:
-            return column_empty_like(self, newsize=0)
-        else:
-            result = data[0]
-            return result
+        result = libcudfxx.apply_boolean_mask(self.as_table(), mask)[None]
+        return result
 
     def argsort(self, ascending):
         _, inds = self.sort_by_values(ascending=ascending)

@@ -26,6 +26,45 @@ class Frame(libcudfxx.Table):
         result._copy_categories(self)
         return result
 
+    def drop_nulls(self, how="any", keys=None, thresh=None):
+        """
+        Drops null rows from `self` depending on key columns.
+        """
+        result = self._from_table(
+            libcudfxx.drop_nulls(self, how, keys, thresh)
+        )
+        result._copy_categories(self)
+        return result
+
+    def apply_boolean_mask(self, boolean_mask):
+        """
+        Applies boolean mask to each row of `self`, rows corresponding to `False`
+        is dropped
+        """
+        result = self._from_table(
+            libcudfxx.apply_boolean_mask(self, as_column(boolean_mask))
+        )
+        result._copy_categories(self)
+        return result
+
+    def frame_drop_duplicates(self, keys=None, keep='first', nulls_are_equal=True):
+        """
+        Drops rows in frame as per duplicate rows in `keys` columns.
+        """
+        result = self._from_table(
+            libcudfxx.drop_duplicates(self, keys, keep, nulls_are_equal)
+        )
+
+        result._copy_categories(self)
+        return result
+
+    def unique_count(self, ignore_nulls=True, nan_as_null=False):
+        """
+        Finds number of unique rows in `source_table`
+        """
+
+        return libcudfxx.unique_count(self, ignore_nulls, nan_as_null)
+
     def _copy_categories(self, other, include_index=True):
         """
         Utility that copies category information from `other`

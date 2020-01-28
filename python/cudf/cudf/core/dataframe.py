@@ -1528,12 +1528,7 @@ class DataFrame(Frame):
         return out
 
     def _apply_boolean_mask(self, mask):
-        index = self.index.take(mask)
-        out = DataFrame()
-        if self._data:
-            for i, col_name in enumerate(self._data.keys()):
-                out[col_name] = self._data[col_name][mask]
-        return out.set_index(index)
+        return self.apply_boolean_mask(mask)
 
     def _take_columns(self, positions):
         positions = Series(positions)
@@ -1781,22 +1776,9 @@ class DataFrame(Frame):
         if len(diff) != 0:
             raise KeyError("columns {!r} do not exist".format(diff))
         subset_cols = [
-            col for name, col in self._data.items() if name in subset
+            name for name, col in self._data.items() if name in subset
         ]
-        in_index = self.index
-        if isinstance(in_index, cudf.core.multiindex.MultiIndex):
-            in_index = RangeIndex(len(in_index), name=in_index.name)
-        out_cols, new_index = libcudf.stream_compaction.drop_duplicates(
-            [in_index._values], in_cols, subset_cols, keep
-        )
-        new_index = as_index(new_index, name=self.index.name)
-        if isinstance(self.index, cudf.core.multiindex.MultiIndex):
-            new_index = self.index.take(new_index)
-
-        outdf = DataFrame()
-        for k, new_col in zip(self._data, out_cols):
-            outdf[k] = new_col
-        outdf = outdf.set_index(new_index)
+        out_df = self.frame_drop_duplicates(subset_cols, keep)
 
         return self._mimic_inplace(outdf, inplace=inplace)
 
@@ -1846,45 +1828,25 @@ class DataFrame(Frame):
         """
         Drop rows containing nulls.
         """
-        data_cols = self._columns
-
-        index_cols = []
-        if isinstance(self.index, cudf.MultiIndex):
-            index_cols.extend(self.index._source_data._columns)
-        else:
-            index_cols.append(self.index._values)
-
-        input_cols = index_cols + list(data_cols)
-
-        if subset is not None:
-            subset = self._columns_view(subset)._columns
-        else:
-            subset = self._columns
-
         if len(subset) == 0:
             return self
+        if subset is None:
+            subset = self._data
+        elif (
+            not np.iterable(subset)
+            or isinstance(subset, str)
+            or isinstance(subset, tuple)
+            and subset in self.columns
+        ):
+            subset = (subset,)
+        diff = set(subset) - set(self._data)
+        if len(diff) != 0:
+            raise KeyError("columns {!r} do not exist".format(diff))
+        subset_cols = [
+            name for name, col in self._data.items() if name in subset
+        ]
 
-        result_cols = libcudf.stream_compaction.drop_nulls(
-            input_cols, how=how, subset=subset, thresh=thresh
-        )
-
-        result_index_cols, result_data_cols = (
-            result_cols[: len(index_cols)],
-            result_cols[len(index_cols) :],
-        )
-
-        if isinstance(self.index, cudf.MultiIndex):
-            result_index = cudf.MultiIndex.from_frame(
-                DataFrame._from_columns(result_index_cols),
-                names=self.index.names,
-            )
-        else:
-            result_index = cudf.core.index.as_index(result_index_cols[0])
-
-        df = DataFrame._from_columns(
-            result_data_cols, index=result_index, columns=self.columns
-        )
-        return df
+        return self.drop_nulls(how=how, keys=subset, thresh=thresh)
 
     def _drop_na_columns(self, how="any", subset=None, thresh=None):
         """

@@ -1198,22 +1198,8 @@ class Series(Frame):
         """
         Return Series with duplicate values removed
         """
-        in_cols = [self._column]
-        in_index = self.index
-        from cudf.core.multiindex import MultiIndex
-
-        if isinstance(in_index, MultiIndex):
-            in_index = RangeIndex(len(in_index))
-        out_cols, new_index = libcudf.stream_compaction.drop_duplicates(
-            [in_index._values], in_cols, None, keep
-        )
-        new_index = as_index(new_index)
-        if self.index.equals(new_index):
-            new_index = self.index
-        if isinstance(self.index, MultiIndex):
-            new_index = self.index.take(new_index)
-
-        result = Series(out_cols[0], index=new_index, name=self.name)
+        result = self.frame_drop_duplicate(self, None, keep)
+        
         return self._mimic_inplace(result, inplace=inplace)
 
     def _mimic_inplace(self, result, inplace=False):
@@ -2149,7 +2135,6 @@ class Series(Frame):
         if self.null_count == len(self):
             return 0
         return self._column.unique_count(method=method, dropna=dropna)
-        # return len(self._column.unique())
 
     def value_counts(self, sort=True):
         """Returns unique values of this Series.
