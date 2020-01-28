@@ -132,7 +132,7 @@ std::unique_ptr<column> copy_if_else( Left const& lhs,
    auto bool_mask_device_p = column_device_view::create(boolean_mask);
    column_device_view bool_mask_device = *bool_mask_device_p;                                    
   
-   if (boolean_mask.nullable() and boolean_mask.has_nulls()) { 
+   if (boolean_mask.has_nulls()) { 
        auto filter = [bool_mask_device] __device__ (cudf::size_type i) { 
            return bool_mask_device.is_valid_nocheck(i) and 
                bool_mask_device.element<cudf::experimental::bool8>(i);};
