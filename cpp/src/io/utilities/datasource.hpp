@@ -33,7 +33,6 @@ namespace io {
  **/
 class datasource {
  public:
-
   /**
    * @brief Create a source from a file path
    *

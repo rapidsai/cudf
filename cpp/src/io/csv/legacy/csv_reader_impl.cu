@@ -194,7 +194,6 @@ void reader::Impl::setColumnNamesFromCsv() {
 table reader::Impl::read(size_t range_offset, size_t range_size,
                          cudf::size_type skip_rows, cudf::size_type skip_end_rows,
                          cudf::size_type num_rows) {
-
   if (range_offset > 0 || range_size > 0) {
     CUDF_EXPECTS(compression_type_ == "none",
                  "Reading compressed data using `byte range` is unsupported");

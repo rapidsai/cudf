@@ -2,7 +2,7 @@
  * Copyright (c) 2019, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
+	 * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
@@ -29,7 +29,7 @@ table read_avro(avro_read_arg const &args) {
       return std::make_unique<avro::reader>(args.source.filepath, options);
     } else if (args.source.type == HOST_BUFFER) {
       return std::make_unique<avro::reader>(args.source.buffer.first,
-                                            args.source.buffer.second, options);
+                                           args.source.buffer.second, options);
     } else if (args.source.type == ARROW_RANDOM_ACCESS_FILE) {
       return std::make_unique<avro::reader>(args.source.file, options);
     } else {
@@ -91,7 +91,8 @@ table read_csv(csv_read_arg const &args) {
   if (args.byte_range_offset != 0 || args.byte_range_size != 0) {
     return reader->read_byte_range(args.byte_range_offset,
                                    args.byte_range_size);
-  } else if (args.skiprows != -1 || args.skipfooter != -1 || args.nrows != -1) {
+  } else if (args.skiprows != -1 || args.skipfooter != -1 ||
+             args.nrows != -1) {
     return reader->read_rows(args.skiprows, args.skipfooter, args.nrows);
   } else {
     return reader->read();

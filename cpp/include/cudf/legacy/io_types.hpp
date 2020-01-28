@@ -39,11 +39,6 @@ struct source_info {
   std::pair<const char*, size_t> buffer;
   std::shared_ptr<arrow::io::RandomAccessFile> file;
 
-  explicit source_info(const source_info& source)
-      : type(source.type),
-        filepath(source.filepath),
-        buffer(source.buffer),
-        file(source.file) {}
   explicit source_info(const std::string& file_path)
       : type(FILE_PATH), filepath(file_path) {}
   explicit source_info(const char* host_buffer, size_t size)
