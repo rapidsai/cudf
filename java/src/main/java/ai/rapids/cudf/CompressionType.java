@@ -18,13 +18,37 @@
 
 package ai.rapids.cudf;
 
-public enum HashFunction {
-  MURMUR3(0),
-  IDENTITY(1);
+/**
+ * Enumeration of compression formats.
+ */
+public enum CompressionType {
+  /** No compression */
+  NONE(0),
+
+  /** Automatically detect or select the compression codec */
+  AUTO(1),
+
+  /** Snappy format using byte-oriented LZ77 */
+  SNAPPY(2),
+
+  /** GZIP format using the DEFLATE algorithm */
+  GZIP(3),
+
+  /** BZIP2 format using Burrows-Wheeler transform */
+  BZIP2(4),
+
+  /** BROTLI format using LZ77 + Huffman + 2nd order context modeling */
+  BROTLI(5),
+
+  /** ZIP format using DEFLATE algorithm */
+  ZIP(6),
+
+  /** XZ format using LZMA(2) algorithm */
+  XZ(7);
 
   final int nativeId;
 
-  HashFunction(int nativeId) {
+  CompressionType(int nativeId) {
     this.nativeId = nativeId;
   }
 }
