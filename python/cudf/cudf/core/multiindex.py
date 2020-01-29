@@ -694,3 +694,46 @@ class MultiIndex(Index):
             for col in self._codes._columns:
                 n += col._memory_usage(deep=deep)
         return n
+
+    def difference(self, other, sort=None):
+        temp_self = self
+        temp_other = other
+        if hasattr(self, "to_pandas"):
+            temp_self = self.to_pandas()
+        if hasattr(other, "to_pandas"):
+            temp_other = self.to_pandas()
+        return temp_self.difference(temp_other, sort)
+
+    def nan_to_num(*args, **kwargs):
+        return args[0]
+
+    def array_equal(*args, **kwargs):
+        return args[0] == args[1]
+
+    def __array_function__(self, func, types, args, kwargs):
+        cudf_df_module = MultiIndex
+
+        for submodule in func.__module__.split(".")[1:]:
+            # point cudf to the correct submodule
+            if hasattr(cudf_df_module, submodule):
+                cudf_df_module = getattr(cudf_df_module, submodule)
+            else:
+                return NotImplemented
+
+        fname = func.__name__
+
+        handled_types = [cudf_df_module, np.ndarray]
+
+        for t in types:
+            if t not in handled_types:
+                return NotImplemented
+
+        if hasattr(cudf_df_module, fname):
+            cudf_func = getattr(cudf_df_module, fname)
+            # Handle case if cudf_func is same as numpy function
+            if cudf_func is func:
+                return NotImplemented
+            else:
+                return cudf_func(*args, **kwargs)
+        else:
+            return NotImplemented
