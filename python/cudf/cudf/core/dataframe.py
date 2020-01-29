@@ -439,6 +439,8 @@ class DataFrame(Table):
         """
         if is_scalar(arg) or isinstance(arg, tuple):
             if isinstance(self.columns, cudf.MultiIndex):
+                if is_scalar(arg):
+                    arg = [arg]
                 return self.columns._get_column_major(self, tuple(arg))
             return cudf.Series(self._data[arg], name=arg, index=self.index)
         elif isinstance(arg, slice):
@@ -1495,6 +1497,7 @@ class DataFrame(Table):
             if isinstance(self.index, cudf.core.multiindex.MultiIndex):
                 framed = self.index.to_frame()
                 name = framed.columns
+                name_len = len(name)
                 for col_name, col_value in framed._data.items():
                     out[col_name] = col_value
             else:
@@ -1502,11 +1505,12 @@ class DataFrame(Table):
                 if self.index.name is not None:
                     name = self.index.name
                 out[name] = self.index._values
+                name_len = 1
             for col_name, col_value in self._data.items():
                 out[col_name] = col_value
             if isinstance(self.columns, cudf.core.multiindex.MultiIndex):
                 ncols = len(self.columns.levels)
-                mi_columns = dict(zip(range(ncols), [name, len(name) * [""]]))
+                mi_columns = dict(zip(range(ncols), [name, name_len * [""]]))
                 top = DataFrame(mi_columns)
                 bottom = self.columns.to_frame().reset_index(drop=True)
                 index_frame = cudf.concat([top, bottom])

@@ -280,7 +280,7 @@ def test_groupby_multiindex_reset_index():
 
 
 @pytest.mark.parametrize(
-    "groupby_keys", [["a"], ["a", "b"], ["a", "b", "d"], ["a", "d", "b"]],
+    "groupby_keys", [["a"], ["a", "b"], ["a", "b", "dd"], ["a", "dd", "b"]],
 )
 @pytest.mark.parametrize(
     "agg_func",
@@ -298,7 +298,7 @@ def test_groupby_reset_index_multiindex(groupby_keys, agg_func):
             "a": np.random.randint(0, 10, 10),
             "b": np.random.randint(0, 5, 10),
             "c": np.random.randint(0, 5, 10),
-            "d": np.random.randint(0, 5, 10),
+            "dd": np.random.randint(0, 5, 10),
         }
     )
     ddf = dask_cudf.from_cudf(df, 5)
