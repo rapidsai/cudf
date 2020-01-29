@@ -38,11 +38,17 @@ column_view dictionary_column_view::indices() const
     return child(0);
 }
 
+column_view dictionary_column_view::keys() const
+{
+    CUDF_EXPECTS( num_children()>0, "dictionary column has no children" );
+    return child(1);
+}
+
 size_type dictionary_column_view::keys_size() const noexcept
 {
     if( size()==0 )
         return 0;
-    return dictionary_keys().size();
+    return keys().size();
 }
 
 } // namespace cudf

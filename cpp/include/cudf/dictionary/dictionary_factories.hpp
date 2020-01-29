@@ -43,6 +43,7 @@ namespace cudf
  * ```
  *
  * @throw cudf::logic_error if keys_column contains nulls
+ * @throw cudf::logic_error if indices_column is not INT32
  *
  * @param keys_column Column of unique, ordered values to use as the new dictionary column's keys.
  * @param indices_column Indices to use for the new dictionary column.
@@ -70,6 +71,7 @@ std::unique_ptr<column> make_dictionary_column( column_view const& keys_column,
  * The null_mask and null count for the output column are copied from the indices column.
  *
  * @throw cudf::logic_error if keys_column or indices_column contains nulls
+ * @throw cudf::logic_error if indices_column is not INT32
  *
  * @param keys_column Column of unique, ordered values to use as the new dictionary column's keys.
  * @param indices_column Indices to use for the new dictionary column.
@@ -77,8 +79,8 @@ std::unique_ptr<column> make_dictionary_column( column_view const& keys_column,
  * @param null_count Number of nulls for the output column.
  * @return New dictionary column.
  */
-std::unique_ptr<column> make_dictionary_column( std::shared_ptr<column>&& keys_column,
-                                                std::unique_ptr<column>&& indices_column,
+std::unique_ptr<column> make_dictionary_column( std::unique_ptr<column> keys_column,
+                                                std::unique_ptr<column> indices_column,
                                                 rmm::device_buffer&& null_mask,
                                                 size_type null_count );
 
