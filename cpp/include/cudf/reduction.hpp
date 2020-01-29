@@ -37,6 +37,7 @@ enum class scan_op {
 /** --------------------------------------------------------------------------*
  * @brief  Computes the reduction of the values in all rows of a column.
  * This function does not detect overflows in reductions.
+ * Using a higher precision `data_type` may prevent overflow.
  * Only `min` and `max` ops are supported for reduction of non-arithmetic
  * types (timestamp, string...).
  * The null values are skipped for the operation.
@@ -46,15 +47,15 @@ enum class scan_op {
  * @throws `cudf::logic_error` if reduction is called for non-arithmetic output
  * type and operator other than `min` and `max`.
  * @throws `cudf::logic_error` if input column data type is not convertible to
- * output data type of the aggregation.
- * //TODO document aggregation return type rules separately.
- * If the input column has arithmetic type, returned scalar type is same type.
- * type. For `mean`, `var` and `std` ops, returned scalar type is double.
- * If the input column has non-arithmetic type,  eg.(timestamp, string...),
- * returned scalar type is same type.
+ * output data type.
+ * If the input column has arithmetic type, output_dtype can be any arithmetic
+ * type. For `mean`, `var` and `std` ops, a floating point output type must be 
+ * specified. If the input column has non-arithmetic type
+ *   eg.(timestamp, string...), the same type must be specified.
  *
  * @param[in] col Input column view
  * @param[in] agg unique_ptr of the aggregation operator applied by the reduction
+ * @param[in] output_dtype  The computation and output precision.
  * @params[in] mr The resource to use for all allocations
  * @returns  cudf::scalar the result value
  * If the reduction fails, the member is_valid of the output scalar
@@ -63,6 +64,7 @@ enum class scan_op {
 std::unique_ptr<scalar> reduce(
     const column_view& col, 
     std::unique_ptr<aggregation> const &agg,
+    data_type output_dtype,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /** --------------------------------------------------------------------------*

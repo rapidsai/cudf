@@ -21,7 +21,6 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
-#include <cudf/detail/aggregation/aggregation.hpp>
 
 namespace cudf {
 namespace experimental {
@@ -44,6 +43,7 @@ namespace simple {
  * ----------------------------------------------------------------------------**/
 template <typename ElementType, typename ResultType, typename Op>
 std::unique_ptr<scalar> simple_reduction(column_view const& col,
+                                         data_type const output_dtype,
                                          rmm::mr::device_memory_resource* mr,
                                          cudaStream_t stream)
 {
@@ -68,40 +68,68 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
   return result;
 };
 
-// @brief input column element type dispatcher for simple reduction (a.k.a. sum, prod, min...)
-template <typename Op, cudf::experimental::aggregation::Kind k>
-struct element_type_dispatcher {
+// @brief result type dispatcher for simple reduction (a.k.a. sum, prod, min...)
+template <typename ElementType, typename Op>
+struct result_type_dispatcher {
 private:
-  template <typename ElementType>
+    template <typename ResultType>
     static constexpr bool is_supported_v()
     {
-      using ResultType = cudf::experimental::detail::target_type_t<ElementType, k>;
-      // allow only for convertible types
-      // disable for string ElementType except for operators min, max
-      return !(std::is_same<ResultType, void>::value) &&
-             std::is_convertible<ElementType, ResultType>::value &&
-             !(std::is_same<ElementType, cudf::string_view>::value &&
-               !(std::is_same<Op, cudf::experimental::reduction::op::min>::value ||
-                 std::is_same<Op, cudf::experimental::reduction::op::max>::value));
+      // for single step reductions,
+      // the available combination of input and output dtypes are
+      //  - same dtypes (including cudf::wrappers)
+      //  - any arithmetic dtype to any arithmetic dtype
+      //  - cudf::experimental::bool8 to/from any arithmetic dtype
+      return std::is_convertible<ElementType, ResultType>::value &&
+             (std::is_arithmetic<ResultType>::value ||
+              std::is_same<Op, cudf::experimental::reduction::op::min>::value ||
+              std::is_same<Op, cudf::experimental::reduction::op::max>::value);
+    }
+
+public:
+    template <typename ResultType, std::enable_if_t<is_supported_v<ResultType>()>* = nullptr>
+    std::unique_ptr<scalar> operator()(column_view const& col, data_type const output_dtype,
+    rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+    {
+      return simple_reduction<ElementType, ResultType, Op>(col, output_dtype, mr, stream);
+    }
+
+    template <typename ResultType, std::enable_if_t<not is_supported_v<ResultType>()>* = nullptr>
+    std::unique_ptr<scalar> operator()(column_view const& col, data_type const output_dtype,
+    rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+    {
+        CUDF_FAIL("input data type is not convertible to output data type");
+    }
+};
+
+// @brief input column element for simple reduction (a.k.a. sum, prod, min...)
+template <typename Op>
+struct element_type_dispatcher {
+private:
+    // return true if ElementType is arithmetic type or bool8, or
+    // Op is DeviceMin or DeviceMax for wrapper (non-arithmetic) types
+    template <typename ElementType>
+    static constexpr bool is_supported_v()
+    {
+      // disable only for string ElementType except for operators min, max
+      return  !( std::is_same<ElementType, cudf::string_view>::value &&
+              !( std::is_same<Op, cudf::experimental::reduction::op::min>::value ||
+                 std::is_same<Op, cudf::experimental::reduction::op::max>::value ));
     }
 
 public:
     template <typename ElementType, std::enable_if_t<is_supported_v<ElementType>()>* = nullptr>
-    std::unique_ptr<scalar> operator()(column_view const& col,
+    std::unique_ptr<scalar> operator()(column_view const& col, data_type const output_dtype,
     rmm::mr::device_memory_resource* mr, cudaStream_t stream)
     {
-        using ResultType = cudf::experimental::detail::target_type_t<ElementType, k>;
-        return simple_reduction<ElementType, ResultType, Op>(col, mr, stream);
+        return cudf::experimental::type_dispatcher(output_dtype,
+            result_type_dispatcher<ElementType, Op>(), col, output_dtype, mr, stream);
     }
 
     template <typename ElementType, std::enable_if_t<not is_supported_v<ElementType>()>* = nullptr>
-    std::unique_ptr<scalar> operator()(column_view const& col,
+    std::unique_ptr<scalar> operator()(column_view const& col, data_type const output_dtype,
     rmm::mr::device_memory_resource* mr, cudaStream_t stream)
     {
-      using ResultType = cudf::experimental::detail::target_type_t<ElementType, k>;
-      if(!std::is_convertible<ElementType, ResultType>::value)
-        CUDF_FAIL("input data type is not convertible to output data type");
-      else
         CUDF_FAIL("Reduction operators other than `min` and `max`"
                   " are not supported for non-arithmetic types");
     }
