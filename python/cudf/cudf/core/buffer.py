@@ -58,7 +58,10 @@ class Buffer:
             self._init_from_array_like(np.asarray(data))
 
     def __reduce__(self):
-        return self.__class__, (self.to_host_array(),)
+        try:
+            return self.__class__, (bytes(self._owner),)
+        except TypeError:
+            return self.__class__, (self.to_host_array(),)
 
     def to_host_array(self):
         return rmm.device_array_from_ptr(
