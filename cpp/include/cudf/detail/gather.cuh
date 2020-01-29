@@ -218,7 +218,6 @@ struct column_gatherer_impl<dictionary32, MapItType>
                                      cudaStream_t stream) {
       dictionary_column_view dictionary(source_column);
       auto output_count = std::distance(gather_map_begin, gather_map_end);
-      auto elements_count = dictionary.size();
       if( output_count == 0 )
           return make_empty_column(data_type{DICTIONARY32});
 
@@ -233,19 +232,15 @@ struct column_gatherer_impl<dictionary32, MapItType>
                                          nullify_out_of_bounds, mr, stream);
       // copy null mask for the output parent
       auto null_count = new_indices->null_count();
-      rmm::device_buffer null_mask;
+      rmm::device_buffer null_mask{};
       if( null_count )
           null_mask = copy_bitmask(new_indices->view(),stream,mr);
       // reset null mask on indices column
-      new_indices->set_null_mask( rmm::device_buffer{0,stream,mr}, 0 );
-
-      // Cannot figure out a good way to update the shared-pointer for the keys column
-      // so we will copy the keys for now.
-      // Also, ideally we should remove any keys that are no longer referenced
-      // and then update the indices. We could call the remove_unused_keys
-      // before returning the column but seems there may be a more efficient solution.
-      auto keys_copy = std::make_shared<column>(dictionary.dictionary_keys());
-      return make_dictionary_column( std::move(keys_copy), std::move(new_indices), std::move(null_mask), null_count );
+      new_indices->set_null_mask( rmm::device_buffer{}, 0 );
+      // we decided we will copy the keys for gather
+      auto keys_copy = std::make_unique<column>(dictionary.keys());
+      return make_dictionary_column( std::move(keys_copy), std::move(new_indices),
+                                     std::move(null_mask), null_count );
   }
 };
 
