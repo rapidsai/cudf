@@ -233,7 +233,9 @@ public class HostMemoryBuffer extends MemoryBuffer {
     assert srcOffset >= 0;
     long requestedAddress = this.address + offset;
     addressOutOfBoundsCheck(requestedAddress, len, "setBytes");
-    UnsafeMemoryAccessor.setBytes(requestedAddress, data, srcOffset, len);
+    if (len > 0) {
+      UnsafeMemoryAccessor.setBytes(requestedAddress, data, srcOffset, len);
+    }
   }
 
   /**
@@ -265,11 +267,13 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param srcOffset index in data to start at.
    */
   final void setShorts(long offset, short[] data, long srcOffset, long len) {
-    assert len > 0;
+    assert len >= 0 : "length is not allowed " + len;
     assert len <= data.length - srcOffset;
     long requestedAddress = this.address + offset;
     addressOutOfBoundsCheck(requestedAddress, len * 2, "setShorts");
-    UnsafeMemoryAccessor.setShorts(requestedAddress, data, srcOffset, len);
+    if (length > 0) {
+      UnsafeMemoryAccessor.setShorts(requestedAddress, data, srcOffset, len);
+    }
   }
 
   /**
@@ -301,11 +305,13 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param srcOffset index into data to start at
    */
   final void setInts(long offset, int[] data, long srcOffset, long len) {
-    assert len > 0;
+    assert len >= 0 : "length is not allowed " + len;
     assert len <= data.length - srcOffset;
     long requestedAddress = this.address + offset;
     addressOutOfBoundsCheck(requestedAddress, len * 4, "setInts");
-    UnsafeMemoryAccessor.setInts(requestedAddress, data, srcOffset, len);
+    if (len > 0) {
+      UnsafeMemoryAccessor.setInts(requestedAddress, data, srcOffset, len);
+    }
   }
 
   /**
@@ -337,11 +343,13 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param srcOffset index into data to start at.
    */
   final void setLongs(long offset, long[] data, long srcOffset, long len) {
-    assert len > 0;
+    assert len >= 0 : "length is not allowed " + len;
     assert len <= data.length - srcOffset;
     long requestedAddress = this.address + offset;
     addressOutOfBoundsCheck(requestedAddress, len * 8, "setLongs");
-    UnsafeMemoryAccessor.setLongs(requestedAddress, data, srcOffset, len);
+    if (len > 0) {
+      UnsafeMemoryAccessor.setLongs(requestedAddress, data, srcOffset, len);
+    }
   }
 
   /**
@@ -373,11 +381,13 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param srcOffset index into data to start at
    */
   final void setFloats(long offset, float[] data, long srcOffset, long len) {
-    assert len > 0;
+    assert len >= 0 : "length is not allowed " + len;
     assert len <= data.length - srcOffset;
     long requestedAddress = this.address + offset;
     addressOutOfBoundsCheck(requestedAddress, len * 4, "setFloats");
-    UnsafeMemoryAccessor.setFloats(requestedAddress, data, srcOffset, len);
+    if (len > 0) {
+      UnsafeMemoryAccessor.setFloats(requestedAddress, data, srcOffset, len);
+    }
   }
 
   /**
@@ -409,11 +419,13 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param srcOffset index into data to start at
    */
   final void setDoubles(long offset, double[] data, long srcOffset, long len) {
-    assert len > 0;
+    assert len >= 0 : "length is not allowed " + len;
     assert len <= data.length - srcOffset;
     long requestedAddress = this.address + offset;
     addressOutOfBoundsCheck(requestedAddress, len * 8, "setDoubles");
-    UnsafeMemoryAccessor.setDoubles(requestedAddress, data, srcOffset, len);
+    if (len > 0) {
+      UnsafeMemoryAccessor.setDoubles(requestedAddress, data, srcOffset, len);
+    }
   }
 
   /**
