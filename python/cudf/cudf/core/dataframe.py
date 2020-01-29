@@ -1521,10 +1521,41 @@ class DataFrame(Frame):
             return out.set_index(RangeIndex(len(self)))
 
     def take(self, positions):
+        """
+        Return a new DataFrame containing the rows specified by *positions*
+
+        Parameters
+        ----------
+        positions : array-like
+            Integer or boolean array-like specifying the rows of the output.
+            If integer, each element represents the integer index of a row.
+            If boolean, *positions* must be of the same length as *self*,
+            and represents a boolean mask.
+
+        Returns
+        -------
+        out : DataFrame
+            New DataFrame
+
+        Examples
+        --------
+        >>> a = cudf.DataFrame({'a': [1.0, 2.0, 3.0],
+                                'b': pd.Series(['a', 'b', 'c'])})
+        >>> a.take([0, 2, 2])
+             a  b
+        0  1.0  a
+        2  3.0  c
+        2  3.0  c
+        >>> a.take([True, False, True])
+             a  b
+        0  1.0  a
+        2  3.0  c
+        """
         positions = as_column(positions)
         if pd.api.types.is_bool_dtype(positions):
             return self._apply_boolean_mask(positions,)
-        out = self.gather(positions)
+        out = self._gather(positions)
+        out.columns = self.columns
         return out
 
     def _apply_boolean_mask(self, mask):
