@@ -17,7 +17,6 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 
 namespace cudf
 {

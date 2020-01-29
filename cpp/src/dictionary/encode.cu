@@ -25,8 +25,6 @@
 #include <cudf/dictionary/detail/encode.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
 
-//#include <rmm/thrust_rmm_allocator.h>
-
 namespace cudf
 {
 namespace dictionary
@@ -71,7 +69,7 @@ std::unique_ptr<column> encode( column_view const& input_column,
                     std::vector<null_order>{null_order::AFTER},
                     mr, stream );
     // we should probably copy/cast to INT32 type if different
-    CUDF_EXPECTS( indices_column->type() == indices_type, "expecting int32 indices type" );
+    CUDF_EXPECTS( indices_column->type() == indices_type, "expecting INT32 indices type" );
 
     // create column with keys_column and indices_column
     return make_dictionary_column( std::move(keys_column), std::move(indices_column),
