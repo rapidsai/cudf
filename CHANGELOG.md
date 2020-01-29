@@ -8,6 +8,7 @@
 - PR #3909 Move java backend to libcudf++
 - PR #3971 Adding `as_table` to convert Column to Table in python
 - PR #3910 Adding sinh, cosh, tanh, asinh, acosh, atanh cube root and rint unary support.
+- PR #3972 Add Java bindings for left_semi_join and left_anti_join
 - PR #3975 Simplify and generalize data handling in `Buffer`
 
 ## Bug Fixes
