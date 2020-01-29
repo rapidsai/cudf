@@ -18,7 +18,9 @@ def test_sort_values(nelem, nparts, by):
     ddf = dd.from_pandas(df, npartitions=nparts)
 
     with dask.config.set(scheduler="single-threaded"):
-        got = ddf.sort_values(by=by).compute().to_pandas()
+        got = (
+            ddf.sort_values(by=by).compute().to_pandas().reset_index(drop=True)
+        )
     expect = df.sort_values(by=by).to_pandas().reset_index(drop=True)
     pd.util.testing.assert_frame_equal(got, expect)
 
