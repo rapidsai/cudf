@@ -59,6 +59,12 @@ class ColumnBase(Column):
             (self.data, self.dtype, self.mask, self.offset, self.children),
         )
 
+    def as_table(self, name=None):
+        """
+        Converts a Column to Table
+        """
+        return libcudfxx.Table({name: self.copy(deep=False)})
+
     @property
     def data_array_view(self):
         """
