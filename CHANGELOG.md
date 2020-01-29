@@ -20,6 +20,7 @@
 - PR #3959 Add missing hash-dispatch function for cudf.Series
 - PR #3970 Fix for Series Pickle
 - PR #3964 Restore legacy NVStrings and NVCategory dependencies in Java jar
+- PR #3982 Fix java unary op enum and add missing ops
 
 
 # cuDF 0.12.0 (Date TBD)
