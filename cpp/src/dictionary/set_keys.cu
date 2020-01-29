@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column.hpp>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/copying.hpp>
 #include <cudf/stream_compaction.hpp>
@@ -26,6 +26,7 @@
 #include <cudf/dictionary/encode.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
+#include <thrust/binary_search.h>
 
 namespace cudf
 {
@@ -45,33 +46,94 @@ struct dictionary_resolver
     {
         if( d_dictionary.is_null(idx) )
             return Element{};
-
+        
         column_device_view d_indices = d_dictionary.child(0);
-        column_device_view d_keys = d_dictionary.dictionary_keys();
-
+        column_device_view* d_keys = d_dictionary.dictionary_keys();
         auto index = d_indices.element<int32_t>(idx + d_dictionary.offset());
-        return d_keys.element<Element>(index);
+        printf("     keys=%p,%d; index=%d\n", d_keys, (int)d_keys->size(), (int)index);
+        return d_keys->element<Element>(index);
     }
 };
 
-struct dispatch_dictionary_resolver
+template<>
+__device__ string_view dictionary_resolver<string_view>::operator()(size_type idx)
 {
-    template<typename Element>
-    std::unique_ptr<column> operator()( dictionary_column_view const& input, column_view const& new_keys,
-                                        rmm::mr::device_memory_resource* mr, cudaStream_t stream )
-    {
-        column_device_view d_dictionary = column_device_view::create(input.parent());
-        auto transformer_itr = thrust::make_transform_iterator( thrust::make_counting_iterator<int32_t>(0),
-                                                                dictionary_resolver<Element>{*d_dictionary} );
-        
-        auto result = make_numeric_column(data_type{INT32}, input.size(),
-                                          mask_state::UNALLOCATED, stream, mr);
-        auto result_view = result->mutable_view();
-        auto execpol = rmm::exec_policy(stream);
-        thrust::lower_bound( execpol->on(stream), new_keys.begin<Element>(), new_keys.end<Element>(), 
-                             transformer_itr, transformer_itr + input.keys_size(),
-                             result_view.begin<int32_t>(), thrust::less<Element>() );
+        column_device_view d_indices = d_dictionary.child(0);
+        column_device_view* d_keys = d_dictionary.dictionary_keys();
+        auto index = d_indices.element<int32_t>(idx + d_dictionary.offset());
+        printf(":keys=%p,%d; index=%d\n", d_keys, (int)d_keys->size(), (int)index);
+        string_view rtn = d_keys->element<string_view>(index);
+        printf(":string_view=%p,%d\n", rtn.data(), (int)rtn.size_bytes() );
+        return rtn;
+}
 
+template<typename Element>
+struct less_operator
+{
+    column_device_view d_dictionary;
+    column_device_view d_keys;
+
+    __device__ Element resolve_dictionary_element(size_type idx)
+    {
+//        if( d_dictionary.is_null(idx) )
+//            return Element{};
+        column_device_view d_indices = d_dictionary.child(0);
+        column_device_view* d_keys = d_dictionary.dictionary_keys();
+        auto index = d_indices.element<int32_t>(idx + d_dictionary.offset());
+        printf("     keys=%p,%d; index=%d\n", d_keys, (int)d_keys->size(), (int)index);
+        return d_keys->element<Element>(index);
+    }
+
+    __device__ bool operator()(size_type lhs_index, size_type rhs_index) const
+    {
+        Element lhs = d_keys.element<Element>(lhs_index);
+        Element rhs = resolve_dictionary_element(rhs_index);
+        return lhs < rhs;
+    }
+};
+
+template<>
+__device__ bool less_operator<string_view>::operator()(size_type lhs_index, size_type rhs_index) const
+{
+    string_view lhs = d_keys.element<string_view>(lhs_index);
+    printf(":lhs=(%p,%d)\n", lhs.data(), (int)lhs.size_bytes() );
+
+//    string_view rhs = resolve_dictionary_element<string_view>(rhs_index);
+    column_device_view d_indices = d_dictionary.child(0);
+    column_device_view* d_keys = d_dictionary.dictionary_keys();
+    auto index = d_indices.element<int32_t>(rhs_index + d_dictionary.offset());
+    printf(":keys=%p,%d; index=%d\n", d_keys, (int)d_keys->size(), (int)index);
+    string_view rhs = d_keys->element<string_view>(index);
+    printf(":rhs=%p,%d\n", rhs.data(), (int)rhs.size_bytes() );
+    
+    return lhs < rhs;
+}                                                               <- 
+                                                                 |
+struct dispatch_compute_indices                                  |
+{                                                                |
+    template<typename Element>                                   |
+    std::unique_ptr<column> operator()( dictionary_column_view co|nst& input, column_view const& new_keys,
+                                        rmm::mr::device_memory_re|source* mr, cudaStream_t stream )
+    {                                                            |
+        auto d_dictionary = column_device_view::create(input.pare|nt());
+        auto transformer_itr = thrust::make_transform_iterator(  | thrust::make_counting_iterator<int32_t>(0),
+                                                                 | dictionary_resolver<Element>{*d_dictionary} );
+                                                                 | 
+        auto result = make_numeric_column(data_type{INT32},      |input.size(),
+                                         mask_state::UNALLOCATED,|stream, mr);
+        auto d_result = result->mutable_view().data<int32_t>();  |
+        auto execpol = rmm::exec_policy(stream);                 |
+        printf("before lower_bound\n");                          |
+        //                                                       |
+        // THIS IS FAILING WITH cudaErrorIllegalAddress          |
+        // need to investigate this with a standalone program -- |lower_bound may only work with numerics
+        // if so, look at launch_search in search.cu to see how  |they use index iterators instead of element ones
+        // (some of that is started above in the less_operator)--/
+        thrust::lower_bound( execpol->on(stream), new_keys.begin<Element>(), new_keys.end<Element>(), 
+                             transformer_itr, transformer_itr + input.size(),
+                             d_result, less_operator<Element>{} );//thrust::less<Element>() );
+        printf("after lower_bound\n");
+        result->set_null_count(0);
         return result;
     }
 };
@@ -91,12 +153,13 @@ std::unique_ptr<column> set_keys( dictionary_column_view const& dictionary_colum
     auto keys = dictionary_column.dictionary_keys();
     CUDF_EXPECTS( keys.type()==new_keys.type(), "keys types must match");
 
-    std::shared_ptr<const column> keys_column = std::make_shared<column>();
-
-
-    auto indices_column = experimental::type_dispatcher( new_keys.type(), dispatch_dictionary_resolver{}, 
+    // copy the keys
+    std::shared_ptr<const column> keys_column = std::make_shared<column>(new_keys);
+    // compute the new indices
+    auto indices_column = experimental::type_dispatcher( new_keys.type(), dispatch_compute_indices{}, 
         dictionary_column, new_keys, mr, stream );
 
+    // compute the new nulls
     auto matches = experimental::detail::contains( keys, new_keys, mr, stream );
     auto d_matches = matches->view().data<experimental::bool8>();
     auto d_null_mask = dictionary_column.null_mask();

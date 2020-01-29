@@ -412,7 +412,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   /**
    * @brief Returns the dictionary keys column.
    */
-  __device__ column_device_view* dictionary_keys(size_type child_index) const noexcept {
+  __device__ column_device_view* dictionary_keys() const noexcept {
     return d_dictionary_keys;
   }
 
