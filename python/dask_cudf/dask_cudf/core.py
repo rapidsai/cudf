@@ -218,13 +218,13 @@ class DataFrame(_Frame, dd.core.DataFrame):
             df = sorting.sort_values_experimental(
                 self, by, ignore_index=ignore_index
             )
-            if ignore_index:
-                return df.reset_index(drop=True)
         else:
             # Legacy sorting algorithm based on "batcher-sortnet"
             parts = self.to_delayed()
             sorted_parts = sorting.sort_delayed_frame(parts, by)
             df = from_delayed(sorted_parts, meta=self._meta)
+        if ignore_index:
+            return df.reset_index()
         return df
 
     def sort_values_binned(self, by):
