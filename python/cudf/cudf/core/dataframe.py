@@ -249,8 +249,15 @@ class DataFrame(Table):
         else:
             self._index = as_index(index)
 
-        for (i, col_name) in enumerate(data):
-            self.insert(i, col_name, data[col_name])
+        if len(data.keys()) != 0 and all(
+            isinstance(key, tuple) for key in data.keys()
+        ):
+            for (i, col_name) in enumerate(data):
+                self.insert(i, i, data[col_name])
+            self.columns = cudf.MultiIndex.from_tuples(data.keys())
+        else:
+            for (i, col_name) in enumerate(data):
+                self.insert(i, col_name, data[col_name])
 
     @staticmethod
     def _align_input_series_indices(data, index):
@@ -1274,7 +1281,7 @@ class DataFrame(Table):
             return self.multi_cols
         else:
             name = self._columns_name
-            return pd.Index(self._data.keys(), name=name)
+            return pd.Index(self._data.keys(), name=name, tupleize_cols=False)
 
     @columns.setter
     def columns(self, columns):

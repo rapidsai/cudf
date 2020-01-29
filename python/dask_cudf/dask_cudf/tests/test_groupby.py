@@ -308,3 +308,16 @@ def test_groupby_reset_index_multiindex(groupby_keys, agg_func):
     gf = gr.compute().sort_values(groupby_keys).reset_index(drop=True)
     pf = pr.compute().sort_values(groupby_keys).reset_index(drop=True)
     dd.assert_eq(gf, pf)
+
+
+def test_groupby_reset_index_drop_True():
+    df = cudf.DataFrame(
+        {"a": np.random.randint(0, 10, 10), "b": np.random.randint(0, 5, 10)}
+    )
+    ddf = dask_cudf.from_cudf(df, 5)
+    pddf = dd.from_pandas(df.to_pandas(), 5)
+    gr = ddf.groupby(["a"]).agg({"b": ["count"]}).reset_index(drop=True)
+    pr = pddf.groupby(["a"]).agg({"b": ["count"]}).reset_index(drop=True)
+    gf = gr.compute()
+    pf = pr.compute()
+    dd.assert_eq(gf, pf)
