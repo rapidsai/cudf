@@ -23,7 +23,7 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <rmm/device_scalar.hpp>
-#include <rmm/mr/device_memory_resource.hpp>
+#include <rmm/mr/device/device_memory_resource.hpp>
 
 #include <cub/cub.cuh>
 

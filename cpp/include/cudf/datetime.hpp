@@ -16,9 +16,7 @@
 
 #pragma once
 
-#include <cudf/column/column.hpp>
-#include <cudf/column/column_view.hpp>
-#include <rmm/mr/default_memory_resource.hpp>
+#include <cudf/types.hpp>
 
 namespace cudf {
 namespace datetime {

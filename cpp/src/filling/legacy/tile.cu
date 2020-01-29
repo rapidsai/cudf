@@ -17,7 +17,7 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/legacy/copying.hpp>
 #include "cudf/types.hpp"
-#include "rmm/mr/device_memory_resource.hpp"
+#include "rmm/mr/device/device_memory_resource.hpp"
 
 #include <cudf/cudf.h>
 #include <cudf/types.h>
