@@ -73,7 +73,7 @@ def is_categorical_dtype(obj):
     is a pandas CategoricalDtype.
     """
     from cudf.core import Series, Index
-    from cudf.core.column import Column, CategoricalColumn
+    from cudf.core.column import ColumnBase, CategoricalColumn
     from cudf.core.index import CategoricalIndex
 
     if obj is None:
@@ -101,7 +101,7 @@ def is_categorical_dtype(obj):
     ):
         return True
     if isinstance(
-        obj, (Index, Series, Column, pd.Index, pd.Series, np.ndarray)
+        obj, (Index, Series, ColumnBase, pd.Index, pd.Series, np.ndarray)
     ):
         return is_categorical_dtype(obj.dtype)
 
@@ -129,7 +129,7 @@ def is_scalar(val):
         or isinstance(val, numbers.Number)
         or np.isscalar(val)
         or isinstance(val, pd.Timestamp)
-        or isinstance(val, pd.Categorical)
+        or (isinstance(val, pd.Categorical) and len(val) == 1)
     )
 
 

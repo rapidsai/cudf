@@ -9,8 +9,7 @@ import numpy as np
 import rmm
 
 import cudf._lib as libcudf
-from cudf.core.buffer import Buffer
-from cudf.core.column import Column, column
+from cudf.core.column import ColumnBase, column
 from cudf.utils import cudautils
 
 logging.basicConfig(format="%(levelname)s:%(message)s")
@@ -38,12 +37,10 @@ def get_sorted_inds(by, ascending=True, na_position="last"):
           * Not supporting: inplace, kind
           * Ascending can be a list of bools to control per column
     """
-    if isinstance(by, (Column)):
+    if isinstance(by, (ColumnBase)):
         by = [by]
 
-    inds = Buffer(cudautils.arange(len(by[0])))
-    # This is due to current limitation in libcudf of using int32
-    col_inds = column.as_column(inds).astype("int32")
+    col_inds = column.as_column(cudautils.arange(len(by[0]), dtype="int32"))
 
     # This needs to be updated to handle list of bools for ascending
     if ascending is True:

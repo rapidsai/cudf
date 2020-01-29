@@ -16,8 +16,7 @@
 
 #pragma once
 
-#include <cudf/cudf.h>
-#include <cudf/types.hpp>
+#include <cudf/unary.hpp>
 #include <cudf/column/column_factories.hpp>
 
 namespace cudf {
@@ -33,8 +32,8 @@ namespace detail{
  * @param begin Begining of the sequence of elements
  * @param end End of the sequence of elements
  * @param p Predicate to be applied to each element in `[begin,end)`
- * @param[in] mr Optional, The resource to use for all allocations
- * @param[in] stream Optional CUDA stream on which to execute kernels
+ * @param mr Optional, The resource to use for all allocations
+ * @param stream Optional CUDA stream on which to execute kernels
  *
  * @returns std::unique_ptr<cudf::column> A column of type `BOOL8,` with `true` representing predicate is satisfied.
  */
@@ -54,6 +53,40 @@ std::unique_ptr<column> true_if(InputIterator begin, InputIterator end,
     return output;
 }
 
+/**
+ * @brief Performs unary op on all values in column
+ *
+ * @param input A `column_view` as input
+ * @param op operation to perform
+ * @param mr Optional, The resource to use for all allocations
+ * @param stream Optional CUDA stream on which to execute kernels
+ *
+ * @returns std::unique_ptr<cudf::column> Result of the operation
+ */
+std::unique_ptr<cudf::column> unary_operation(cudf::column_view const& input,
+                                              cudf::experimental::unary_op op,
+                                              rmm::mr::device_memory_resource* mr =
+                                              rmm::mr::get_default_resource(),
+                                              cudaStream_t stream = 0);
+
+
+/**
+ * @brief  Casts data from dtype specified in input to dtype specified in output.
+ * Supports only fixed-width types.
+ *
+ * @param column_view Input column
+ * @param out_type Desired datatype of output column
+ * @param mr Optional, The resource to use for all allocations
+ * @param stream Optional CUDA stream on which to execute kernels
+ *
+ * @returns unique_ptr<column> Result of the cast operation
+ * @throw cudf::logic_error if `out_type` is not a fixed-width type
+ */
+std::unique_ptr<column> cast(column_view const& input,
+                             data_type type,
+                             rmm::mr::device_memory_resource* mr =
+                                rmm::mr::get_default_resource(),
+                             cudaStream_t stream = 0);
 
 } // namespace detail
 } // namespace experimental

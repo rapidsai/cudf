@@ -388,6 +388,119 @@ TEST_F(BinaryOperationIntegrationTest, Greater_Vector_Vector_B8_TSMS_TSS) {
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, GREATER());
 }
 
+TEST_F(BinaryOperationIntegrationTest, Less_Scalar_Vector_B8_STR_STR) {
+  using TypeOut = cudf::experimental::bool8;
+  using TypeLhs = std::string;
+  using TypeRhs = std::string;
+
+  using LESS = cudf::library::operation::Less<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = cudf::string_scalar("eee");
+  auto rhs = cudf::test::strings_column_wrapper({ "ééé", "bbb", "aa", "", "<null>", "bb", "eee" });
+  auto out = cudf::experimental::binary_operation(
+      lhs, rhs, cudf::experimental::binary_operator::LESS,
+      data_type(experimental::type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LESS());
+}
+
+TEST_F(BinaryOperationIntegrationTest, Less_Vector_Scalar_B8_STR_STR) {
+  using TypeOut = cudf::experimental::bool8;
+  using TypeLhs = std::string;
+  using TypeRhs = std::string;
+
+  using LESS = cudf::library::operation::Less<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = cudf::test::strings_column_wrapper({ "ééé", "bbb", "aa", "", "<null>", "bb", "eee" });
+  auto rhs = cudf::string_scalar("eee");
+  auto out = cudf::experimental::binary_operation(
+      lhs, rhs, cudf::experimental::binary_operator::LESS,
+      data_type(experimental::type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LESS());
+}
+
+TEST_F(BinaryOperationIntegrationTest, Less_Vector_Vector_B8_STR_STR) {
+  using TypeOut = cudf::experimental::bool8;
+  using TypeLhs = std::string;
+  using TypeRhs = std::string;
+
+  using LESS = cudf::library::operation::Less<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = cudf::test::strings_column_wrapper({ "eee", "bb", "<null>", "", "aa", "bbb", "ééé" });
+  auto rhs = cudf::test::strings_column_wrapper({ "ééé", "bbb", "aa", "", "<null>", "bb", "eee" });
+  auto out = cudf::experimental::binary_operation(
+      lhs, rhs, cudf::experimental::binary_operator::LESS,
+      data_type(experimental::type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LESS());
+}
+
+TEST_F(BinaryOperationIntegrationTest, Greater_Vector_Vector_B8_STR_STR) {
+  using TypeOut = cudf::experimental::bool8;
+  using TypeLhs = std::string;
+  using TypeRhs = std::string;
+
+  using GREATER = cudf::library::operation::Greater<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = cudf::test::strings_column_wrapper({ "eee", "bb", "<null>", "", "aa", "bbb", "ééé" });
+  auto rhs = cudf::test::strings_column_wrapper({ "ééé", "bbb", "aa", "", "<null>", "bb", "eee" });
+  auto out = cudf::experimental::binary_operation(
+      lhs, rhs, cudf::experimental::binary_operator::GREATER,
+      data_type(experimental::type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, GREATER());
+}
+
+TEST_F(BinaryOperationIntegrationTest, Equal_Vector_Vector_B8_STR_STR) {
+  using TypeOut = cudf::experimental::bool8;
+  using TypeLhs = std::string;
+  using TypeRhs = std::string;
+
+  using EQUAL = cudf::library::operation::Equal<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = cudf::test::strings_column_wrapper({ "eee", "bb", "<null>", "", "aa", "bbb", "ééé" });
+  auto rhs = cudf::test::strings_column_wrapper({ "ééé", "bbb", "aa", "", "<null>", "bb", "eee" });
+  auto out = cudf::experimental::binary_operation(
+      lhs, rhs, cudf::experimental::binary_operator::EQUAL,
+      data_type(experimental::type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, EQUAL());
+}
+
+TEST_F(BinaryOperationIntegrationTest, LessEqual_Vector_Vector_B8_STR_STR) {
+  using TypeOut = cudf::experimental::bool8;
+  using TypeLhs = std::string;
+  using TypeRhs = std::string;
+
+  using LESS_EQUAL = cudf::library::operation::LessEqual<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = cudf::test::strings_column_wrapper({ "eee", "bb", "<null>", "", "aa", "bbb", "ééé" });
+  auto rhs = cudf::test::strings_column_wrapper({ "ééé", "bbb", "aa", "", "<null>", "bb", "eee" });
+  auto out = cudf::experimental::binary_operation(
+      lhs, rhs, cudf::experimental::binary_operator::LESS_EQUAL,
+      data_type(experimental::type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LESS_EQUAL());
+}
+
+TEST_F(BinaryOperationIntegrationTest, GreaterEqual_Vector_Vector_B8_STR_STR) {
+  using TypeOut = cudf::experimental::bool8;
+  using TypeLhs = std::string;
+  using TypeRhs = std::string;
+
+  using GREATER_EQUAL = cudf::library::operation::GreaterEqual<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = cudf::test::strings_column_wrapper({ "eee", "bb", "<null>", "", "aa", "bbb", "ééé" });
+  auto rhs = cudf::test::strings_column_wrapper({ "ééé", "bbb", "aa", "", "<null>", "bb", "eee" });
+  auto out = cudf::experimental::binary_operation(
+      lhs, rhs, cudf::experimental::binary_operator::GREATER_EQUAL,
+      data_type(experimental::type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, GREATER_EQUAL());
+}
+
+
 }  // namespace binop
 }  // namespace test
 }  // namespace cudf

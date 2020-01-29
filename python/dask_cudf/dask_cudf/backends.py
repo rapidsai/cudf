@@ -38,31 +38,35 @@ try:
 
     from dask.dataframe.utils import group_split_dispatch, hash_object_dispatch
     from cudf.core.column import column, CategoricalColumn, StringColumn
-    import rmm
-    import cudf._lib as libcudf
-    from cudf.core.buffer import Buffer
 
-    def _string_safe_hash(df):
+    def _handle_string(s):
+        if isinstance(s._column, StringColumn):
+            out_col = column.column_empty(len(s), dtype="int32", masked=False)
+            ptr = out_col.data.ptr
+            s._column.data_array_view.hash(devptr=ptr)
+            s = out_col
+        return s
+
+    def safe_hash(df):
         frame = df.copy(deep=False)
-        for col in frame.columns:
-            if isinstance(frame[col]._column, StringColumn):
-                out_dev_arr = rmm.device_array(len(frame), dtype="int32")
-                ptr = libcudf.cudf.get_ctype_ptr(out_dev_arr)
-                frame[col]._column.data.hash(devptr=ptr)
-                frame[col] = cudf.Series(Buffer(out_dev_arr))
-        return frame.hash_columns()
+        if isinstance(frame, cudf.DataFrame):
+            for col in frame.columns:
+                frame[col] = _handle_string(frame[col])
+            return frame.hash_columns()
+        else:
+            return _handle_string(frame)
 
-    @hash_object_dispatch.register(cudf.DataFrame)
+    @hash_object_dispatch.register((cudf.DataFrame, cudf.Series))
     def hash_object_cudf(frame, index=True):
         if index:
-            return _string_safe_hash(frame.reset_index)
-        return _string_safe_hash(frame)
+            return safe_hash(frame.reset_index())
+        return safe_hash(frame)
 
     @hash_object_dispatch.register(cudf.Index)
     def hash_object_cudf_index(ind, index=None):
 
         if isinstance(ind, cudf.MultiIndex):
-            return _string_safe_hash(ind.to_frame(index=False))
+            return safe_hash(ind.to_frame(index=False))
 
         col = column.as_column(ind)
         if isinstance(col, StringColumn):

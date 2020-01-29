@@ -2,8 +2,10 @@
 
 import numpy as np
 
-from cudf.core import Buffer, DataFrame, Index, MultiIndex, Series
-from cudf.core.column import CategoricalColumn
+import cudf
+from cudf.core import DataFrame, Index, MultiIndex, RangeIndex, Series
+from cudf.core.column import build_categorical_column
+from cudf.core.index import as_index
 from cudf.utils import cudautils
 from cudf.utils.dtypes import is_categorical_dtype, is_list_like
 
@@ -36,6 +38,12 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
     if len(objs) == 1:
         return objs[0]
 
+    # convert any RangeIndex
+    objs = [
+        as_index(obj._values) if isinstance(obj, RangeIndex) else obj
+        for obj in objs
+    ]
+
     typs = set(type(o) for o in objs)
     allowed_typs = {Series, DataFrame}
 
@@ -54,20 +62,24 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
         assert typs.issubset(allowed_typs)
         df = DataFrame()
         for idx, o in enumerate(objs):
+            if idx == 0:
+                df.index = o.index
             if isinstance(o, Series):
                 name = o.name
                 if o.name is None:
                     # pandas uses 0-offset
                     name = idx - 1
-                df[name] = o
+                df[name] = o._column
             else:
                 for col in o.columns:
-                    df[col] = o[col]
+                    df[col] = o[col]._column
         if isinstance(objs[0], DataFrame) and isinstance(
             objs[0].columns, MultiIndex
         ):
             df.columns = MultiIndex._concat([obj.columns for obj in objs])
         return df
+
+    typ = list(typs)[0]
 
     if len(typs) > 1:
         raise ValueError(
@@ -80,6 +92,8 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
         return DataFrame._concat(objs, axis=axis, ignore_index=ignore_index)
     elif typ is Series:
         return Series._concat(objs, axis=axis)
+    elif typ is cudf.MultiIndex:
+        return cudf.MultiIndex._concat(objs)
     elif issubclass(typ, Index):
         return Index._concat(objs)
     else:
@@ -208,7 +222,7 @@ def melt(
         if reps > 0:
             return Series._concat(objs=series_list, index=None)
         else:
-            return Series(Buffer.null(dtype=A.dtype))
+            return Series([], dtype=A.dtype)
 
     # Step 1: tile id_vars
     mdata = collections.OrderedDict()
@@ -218,17 +232,15 @@ def melt(
     # Step 2: add variable
     var_cols = []
     for i, var in enumerate(value_vars):
-        var_cols.append(
-            Series(Buffer(cudautils.full(size=N, value=i, dtype=np.int8)))
-        )
+        var_cols.append(Series(cudautils.full(size=N, value=i, dtype=np.int8)))
     temp = Series._concat(objs=var_cols, index=None)
 
     if not var_name:
         var_name = "variable"
 
     mdata[var_name] = Series(
-        CategoricalColumn(
-            categories=value_vars, data=temp._column.data, ordered=False
+        build_categorical_column(
+            categories=value_vars, codes=temp._column, ordered=False
         )
     )
 

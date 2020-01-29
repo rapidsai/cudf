@@ -225,9 +225,7 @@ class Groupby(object):
         segs = sr_segs.to_array()
 
         for k in self._by:
-            outdf[k] = (
-                grouped_df[k].take(sr_segs.data.mem).reset_index(drop=True)
-            )
+            outdf[k] = grouped_df[k].take(sr_segs).reset_index(drop=True)
 
         size = len(outdf)
 
@@ -242,7 +240,7 @@ class Groupby(object):
                     dev_out = rmm.device_array(size, dtype=np.float64)
                     if size > 0:
                         group_mean.forall(size)(
-                            sr.data.mem, dev_begins, dev_out
+                            sr._column.data_array_view, dev_begins, dev_out
                         )
                     values[newk] = dev_out
 
@@ -251,7 +249,7 @@ class Groupby(object):
                     dev_out = rmm.device_array(size, dtype=sr.dtype)
                     if size > 0:
                         group_max.forall(size)(
-                            sr.data.mem, dev_begins, dev_out
+                            sr._column.data_array_view, dev_begins, dev_out
                         )
                     values[newk] = dev_out
 
@@ -260,7 +258,7 @@ class Groupby(object):
                     dev_out = rmm.device_array(size, dtype=sr.dtype)
                     if size > 0:
                         group_min.forall(size)(
-                            sr.data.mem, dev_begins, dev_out
+                            sr._column.data_array_view, dev_begins, dev_out
                         )
                     values[newk] = dev_out
                 else:
@@ -483,9 +481,8 @@ class Groupby(object):
             # sliding window
             def rolling_avg(val, avg):
                 win_size = 3
-                for row, i in enumerate(range(cuda.threadIdx.x,
-                                              len(val), cuda.blockDim.x)):
-                    if row < win_size - 1:
+                for i in range(cuda.threadIdx.x, len(val), cuda.blockDim.x):
+                    if i < win_size - 1:
                         # If there is not enough data to fill the window,
                         # take the average to be NaN
                         avg[i] = np.nan

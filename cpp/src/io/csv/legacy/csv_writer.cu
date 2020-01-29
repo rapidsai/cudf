@@ -240,7 +240,7 @@ gdf_error write_csv(csv_write_arg* args)
     // when args becomes a struct/class these can be modified
     auto columns = args->columns;
     int count = args->num_cols;
-    cudf::size_type total_rows = columns[0]->size;
+    cudf::size_type total_rows = columns ? columns[0]->size : 0;
     const char* filepath = args->filepath;
     char delimiter[2] = {',','\0'};
     if( args->delimiter )
@@ -257,8 +257,9 @@ gdf_error write_csv(csv_write_arg* args)
 
     // check for issues here
     CUDF_EXPECTS( filepath!=nullptr, "write_csv: filepath not specified" );
-    CUDF_EXPECTS( count!=0, "write_csv: num_cols is required" );
-    CUDF_EXPECTS( columns!=0, "write_csv: invalid data values" );
+    CUDF_EXPECTS( count>=0, "write_csv: num_cols is required" );
+    if( count > 0 )
+        CUDF_EXPECTS( columns!=0, "write_csv: invalid data values" );
 
     // check all columns are the same size
     const bool all_sizes_match = std::all_of( columns, columns+count,

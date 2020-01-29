@@ -131,7 +131,7 @@ __global__ void scatter_kernel(cudf::mutable_column_device_view output_view,
       temp_data[local_index] = input_view.data<T>()[tid]; // scatter data to shared
 
       // scatter validity mask to shared memory
-      if (input_view.is_valid(tid)) {
+      if (has_validity and input_view.is_valid(tid)) {
         // determine aligned offset for this warp's output
         const cudf::size_type aligned_offset = block_offset % cudf::experimental::detail::warp_size;
         temp_valids[local_index + aligned_offset] = true;

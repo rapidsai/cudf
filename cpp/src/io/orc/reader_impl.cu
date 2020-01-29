@@ -98,9 +98,9 @@ constexpr int32_t to_clockrate(type_id timestamp_type_id) {
   switch (timestamp_type_id) {
     case type_id::TIMESTAMP_SECONDS:
       return 1;
-    case type_id::TIMESTAMP_MICROSECONDS:
-      return 1000;
     case type_id::TIMESTAMP_MILLISECONDS:
+      return 1000;
+    case type_id::TIMESTAMP_MICROSECONDS:
       return 1000000;
     case type_id::TIMESTAMP_NANOSECONDS:
       return 1000000000;

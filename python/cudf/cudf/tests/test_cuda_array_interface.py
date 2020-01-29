@@ -183,6 +183,6 @@ def test_column_from_ephemeral_cupy_try_lose_reference():
     assert_eq(pd.Series([1, 2, 3]), a.to_pandas())
 
     a = cudf.Series(cupy.asarray([1, 2, 3]))._column
-    a = a.replace(name="b")
+    a.name = "b"
     b = cupy.asarray([1, 1, 1])  # noqa: F841
     assert_eq(pd.Series([1, 2, 3]), a.to_pandas())

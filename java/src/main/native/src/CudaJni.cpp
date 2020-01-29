@@ -50,8 +50,8 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_freePinned(JNIEnv *env, jclass, 
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_memcpy(JNIEnv *env, jclass, jlong dst, jlong src,
                                                        jlong count, jint kind) {
-  JNI_NULL_CHECK(env, dst, "dst memory pointer is null", );
-  JNI_NULL_CHECK(env, src, "src memory pointer is null", );
+  JNI_ARG_CHECK(env, (dst != 0 || count == 0), "dst memory pointer is null", );
+  JNI_ARG_CHECK(env, (src != 0 || count == 0), "src memory pointer is null", );
   JNI_CUDA_TRY(env, , cudaMemcpy((void *)dst, (const void *)src, count, (cudaMemcpyKind)kind));
 }
 
@@ -65,6 +65,14 @@ JNIEXPORT jint JNICALL Java_ai_rapids_cudf_Cuda_getDevice(JNIEnv *env, jclass) {
   jint dev;
   JNI_CUDA_TRY(env, -2, cudaGetDevice(&dev));
   return dev;
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_setDevice(JNIEnv *env, jclass, jint dev) {
+  JNI_CUDA_TRY(env, , cudaSetDevice(dev));
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_freeZero(JNIEnv *env, jclass) {
+  JNI_CUDA_TRY(env, , cudaFree(0));
 }
 
 } // extern "C"
