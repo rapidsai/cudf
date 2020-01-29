@@ -258,6 +258,12 @@ public final class Table implements AutoCloseable {
   private static native long[] innerJoin(long leftTable, int[] leftJoinCols, long rightTable,
                                          int[] rightJoinCols) throws CudfException;
 
+  private static native long[] leftSemiJoin(long leftTable, int[] leftJoinCols, long rightTable,
+      int[] rightJoinCols) throws CudfException;
+
+  private static native long[] leftAntiJoin(long leftTable, int[] leftJoinCols, long rightTable,
+      int[] rightJoinCols) throws CudfException;
+
   private static native long[] concatenate(long[] cudfTablePointers) throws CudfException;
 
   private static native long[] filter(long input, long mask);
@@ -1055,6 +1061,40 @@ public final class Table implements AutoCloseable {
       try (DevicePrediction prediction = new DevicePrediction(operation.table.getDeviceMemorySize() +
           rightJoinIndices.operation.table.getDeviceMemorySize(), "innerJoin")) {
         return new Table(Table.innerJoin(operation.table.nativeHandle, operation.indices,
+            rightJoinIndices.operation.table.nativeHandle, rightJoinIndices.operation.indices));
+      }
+    }
+
+    /**
+     * Performs a semi-join between a left table and a right table, returning only the rows from
+     * the left table that match rows in the right table on the join keys.
+     * Usage:
+     * Table t1 ...
+     * Table t2 ...
+     * Table result = t1.onColumns(0,1).leftSemiJoin(t2.onColumns(2,3));
+     * @param rightJoinIndices - Indices of the right table to join on
+     * @return the left semi-joined table.
+     */
+    public Table leftSemiJoin(TableOperation rightJoinIndices) {
+      try (DevicePrediction ignored = new DevicePrediction(operation.table.getDeviceMemorySize(), "leftSemiJoin")) {
+        return new Table(Table.leftSemiJoin(operation.table.nativeHandle, operation.indices,
+            rightJoinIndices.operation.table.nativeHandle, rightJoinIndices.operation.indices));
+      }
+    }
+
+    /**
+     * Performs an anti-join between a left table and a right table, returning only the rows from
+     * the left table that do not match rows in the right table on the join keys.
+     * Usage:
+     * Table t1 ...
+     * Table t2 ...
+     * Table result = t1.onColumns(0,1).leftAntiJoin(t2.onColumns(2,3));
+     * @param rightJoinIndices - Indices of the right table to join on
+     * @return the left anti-joined table.
+     */
+    public Table leftAntiJoin(TableOperation rightJoinIndices) {
+      try (DevicePrediction ignored = new DevicePrediction(operation.table.getDeviceMemorySize(), "leftSemiJoin")) {
+        return new Table(Table.leftAntiJoin(operation.table.nativeHandle, operation.indices,
             rightJoinIndices.operation.table.nativeHandle, rightJoinIndices.operation.indices));
       }
     }

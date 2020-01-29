@@ -8,11 +8,13 @@
 - PR #3909 Move java backend to libcudf++
 - PR #3971 Adding `as_table` to convert Column to Table in python
 - PR #3910 Adding sinh, cosh, tanh, asinh, acosh, atanh cube root and rint unary support.
+- PR #3972 Add Java bindings for left_semi_join and left_anti_join
 - PR #3975 Simplify and generalize data handling in `Buffer`
 
 ## Bug Fixes
 
 - PR #3888 Drop `ptr=None` from `DeviceBuffer` call
+- PR #3976 Fix string serialization and memory_usage method to be consistent
 - PR #3902 Fix conversion of large size GPU array to dataframe
 - PR #3953 Fix overflow in column_buffer when computing the device buffer size
 - PR #3959 Add missing hash-dispatch function for cudf.Series
