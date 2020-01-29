@@ -90,7 +90,7 @@ struct scaled_integer{
     explicit scaled_integer(Rep v, scale_type s) : value(v), scale(s) {}
 };
 
-// Rep = representative type
+// Rep = representation type
 template <typename Rep, Radix Rad>
 class fixed_point {
 
