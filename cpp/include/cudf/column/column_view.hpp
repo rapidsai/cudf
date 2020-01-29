@@ -17,7 +17,6 @@
 
 #include <cudf/types.hpp>
 #include <vector>
-#include <memory>
 
 namespace cudf {
 namespace detail {
@@ -308,13 +307,11 @@ class column_view : public detail::column_view_base {
    * @param offset optional, index of the first element
    * @param children optional, depending on the element type, child columns may
    * contain additional data
-   * @param dictionary_keys optional, keys for dictionary column
-   */
+   *---------------------------------------------------------------------------**/
   column_view(data_type type, size_type size, void const* data,
               bitmask_type const* null_mask = nullptr,
               size_type null_count = UNKNOWN_NULL_COUNT, size_type offset = 0,
-              std::vector<column_view> const& children = {},
-              column_view* dictionary_keys = {} );
+              std::vector<column_view> const& children = {});
 
   /**---------------------------------------------------------------------------*
    * @brief Returns the specified child
@@ -326,11 +323,6 @@ class column_view : public detail::column_view_base {
     return _children[child_index];
   }
 
-  /**
-   * @brief Returns the dictionary_keys column.
-   */
-  column_view dictionary_keys() const noexcept;
-
   /**---------------------------------------------------------------------------*
    * @brief Returns the number of child columns.
    *---------------------------------------------------------------------------**/
@@ -339,8 +331,7 @@ class column_view : public detail::column_view_base {
  private:
   std::vector<column_view> _children{};  ///< Based on element type, children
                                          ///< may contain additional data
-  column_view* _dictionary_keys;         ///< Keys for dictionary column
-};
+};                                       // namespace cudf
 
 /**---------------------------------------------------------------------------*
  * @brief A non-owning, mutable view of device data as a column of elements,
@@ -507,18 +498,8 @@ class mutable_column_view : public detail::column_view_base {
    *---------------------------------------------------------------------------**/
   operator column_view() const;
 
-  /**
-   * @brief Returns the dictionary_keys column.
-   */
-  column_view dictionary_keys() const noexcept {
-    if( _dictionary_keys )
-      return *_dictionary_keys;
-    return column_view{};
-  }
-
  private:
   std::vector<mutable_column_view> mutable_children;
-  column_view* _dictionary_keys;         ///< Keys for dictionary column
 };
 
 /**---------------------------------------------------------------------------*

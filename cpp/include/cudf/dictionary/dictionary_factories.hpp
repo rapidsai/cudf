@@ -77,8 +77,8 @@ std::unique_ptr<column> make_dictionary_column( column_view const& keys_column,
  * @param null_count Number of nulls for the output column.
  * @return New dictionary column.
  */
-std::unique_ptr<column> make_dictionary_column( std::shared_ptr<column>&& keys_column,
-                                                std::unique_ptr<column>&& indices_column,
+std::unique_ptr<column> make_dictionary_column( std::unique_ptr<column> keys_column,
+                                                std::unique_ptr<column> indices_column,
                                                 rmm::device_buffer&& null_mask,
                                                 size_type null_count );
 

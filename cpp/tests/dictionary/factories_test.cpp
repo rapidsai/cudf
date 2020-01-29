@@ -23,7 +23,7 @@
 
 struct DictionaryFactoriesTest : public cudf::test::BaseFixture {};
 
-TEST_F(DictionaryFactoriesTest, CreateFromColumns)
+TEST_F(DictionaryFactoriesTest, CreateFromColumnViews)
 {
     std::vector<const char*> h_keys{ "aaa", "ccc", "ddd", "www" };
     cudf::test::strings_column_wrapper keys_strings( h_keys.begin(), h_keys.end() );
@@ -33,6 +33,34 @@ TEST_F(DictionaryFactoriesTest, CreateFromColumns)
     auto dictionary = cudf::make_dictionary_column( keys_strings, values );
     cudf::dictionary_column_view view(dictionary->view());
 
-    cudf::test::expect_columns_equal(view.dictionary_keys(), keys_strings);
+    cudf::test::expect_columns_equal(view.keys(), keys_strings);
     cudf::test::expect_columns_equal(view.indices(), values);
+}
+
+TEST_F(DictionaryFactoriesTest, ColumnViewsWithNulls)
+{
+}
+
+TEST_F(DictionaryFactoriesTest, CreateFromColumns)
+{
+    std::vector<std::string> h_keys{ "pear", "apple", "fruit", "macintosh" };
+    cudf::test::strings_column_wrapper keys( h_keys.begin(), h_keys.end() );
+    std::vector<int32_t> h_values{2,0,3,1,2,2,2,3,0};
+    cudf::test::fixed_width_column_wrapper<int32_t> values( h_values.begin(), h_values.end() );
+
+    auto dictionary = cudf::make_dictionary_column( keys.release(), values.release(), rmm::device_buffer{0}, 0 );
+    cudf::dictionary_column_view view(dictionary->view());
+
+    cudf::test::strings_column_wrapper keys_expected( h_keys.begin(), h_keys.end() );
+    cudf::test::fixed_width_column_wrapper<int32_t> values_expected( h_values.begin(), h_values.end() );
+    cudf::test::expect_columns_equal(view.keys(), keys_expected);
+    cudf::test::expect_columns_equal(view.indices(), values_expected);
+}
+
+TEST_F(DictionaryFactoriesTest, ColumnsWithNulls)
+{
+}
+
+TEST_F(DictionaryFactoriesTest, KeysAndIndicesWithNulls)
+{
 }

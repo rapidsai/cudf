@@ -43,7 +43,6 @@ public:
     using column_view::null_count;
     using column_view::has_nulls;
     using column_view::offset;
-    using column_view::dictionary_keys;
 
     /**
      * @brief Returns the parent column.
@@ -54,6 +53,11 @@ public:
      * @brief Returns the column of indices
      */
     column_view indices() const;
+
+    /**
+     * @brief Returns the column of keys
+     */
+    column_view keys() const;
 
     /**
      * @brief Returns the number of rows in the keys column.

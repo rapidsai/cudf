@@ -40,8 +40,7 @@ column::column(column const &other)
       _size{other._size},
       _data{other._data},
       _null_mask{other._null_mask},
-      _null_count{other._null_count},
-      _dictionary_keys{other._dictionary_keys} {
+      _null_count{other._null_count} {
   _children.reserve(other.num_children());
   for (auto const &c : other._children) {
     _children.emplace_back(std::make_unique<column>(*c));
@@ -55,8 +54,7 @@ column::column(column const &other, cudaStream_t stream,
       _size{other._size},
       _data{other._data, stream, mr},
       _null_mask{other._null_mask, stream, mr},
-      _null_count{other._null_count},
-      _dictionary_keys{other._dictionary_keys} {
+      _null_count{other._null_count} {
   _children.reserve(other.num_children());
   for (auto const &c : other._children) {
     _children.emplace_back(std::make_unique<column>(*c, stream, mr));
@@ -70,12 +68,10 @@ column::column(column &&other) noexcept
       _data{std::move(other._data)},
       _null_mask{std::move(other._null_mask)},
       _null_count{other._null_count},
-      _children{std::move(other._children)},
-      _dictionary_keys{std::move(other._dictionary_keys)} {
+      _children{std::move(other._children)} {
   other._size = 0;
   other._null_count = 0;
   other._type = data_type{EMPTY};
-  other._dictionary_keys_view = column_view{};
 }
 
 // Release contents
@@ -83,11 +79,10 @@ column::contents column::release() noexcept {
   _size = 0;
   _null_count = 0;
   _type = data_type{EMPTY};
-  _dictionary_keys_view = column_view{};
   return column::contents{
       std::make_unique<rmm::device_buffer>(std::move(_data)),
       std::make_unique<rmm::device_buffer>(std::move(_null_mask)),
-      std::move(_children), std::move(_dictionary_keys)};
+      std::move(_children)};
 }
 
 // Create immutable view
@@ -99,16 +94,11 @@ column_view column::view() const {
     child_views.emplace_back(*c);
   }
 
-  // we store the keys' view here so that column_view's do not
-  // have to manage the memory for it
-  if( _dictionary_keys )
-    _dictionary_keys_view = _dictionary_keys->view();
-
   return column_view{
       type(),       size(),
       _data.data(), static_cast<bitmask_type const *>(_null_mask.data()),
       null_count(), 0,
-      child_views, &_dictionary_keys_view};
+      child_views};
 }
 
 // Create mutable view
@@ -196,7 +186,7 @@ struct create_column_from_view {
  std::unique_ptr<column> operator()() {
    CUDF_FAIL("dictionary not supported yet");
  }
-
+ 
  template <typename ColumnType,
            std::enable_if_t<cudf::is_fixed_width<ColumnType>()>* = nullptr>
  std::unique_ptr<column> operator()() {

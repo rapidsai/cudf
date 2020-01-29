@@ -49,16 +49,16 @@ std::unique_ptr<column> encode( column_view const& input_column,
                         std::vector<size_type>{0},
                         experimental::duplicate_keep_option::KEEP_FIRST,
                         true, mr, stream )->release(); // true == nulls are equal
-    std::unique_ptr<column> keys(std::move(table_keys[0]));
+    std::unique_ptr<column> keys_column(std::move(table_keys[0]));
 
     if( input_column.has_nulls() )
     {
         // the single null entry should be at the beginning -- side effect from drop_duplicates
         // copy the column without the null entry
-        keys = std::make_unique<column>(experimental::slice(*keys, std::vector<size_type>{1,keys->size()})[0],stream,mr);
-        keys->set_null_mask( rmm::device_buffer{0,stream,mr}, 0 ); // remove the null-mask
+        keys_column = std::make_unique<column>(experimental::slice(*keys_column,
+                            std::vector<size_type>{1,keys_column->size()})[0],stream,mr);
+        keys_column->set_null_mask( rmm::device_buffer{0,stream,mr}, 0 ); // remove the null-mask
     }
-    std::shared_ptr<column> keys_column(keys.release());
 
     // this returns a column with no null entries
     // - it appears to ignore the null entries in the input and tries to place the value regardless
