@@ -202,18 +202,23 @@ class DataFrame(_Frame, dd.core.DataFrame):
         else:
             return self.map_partitions(M.reset_index, drop=drop)
 
-    def sort_values(self, by, ignore_index=False):
+    def sort_values(self, by, ignore_index=False, legacy=True):
         """Sort by the given column
 
         Parameter
         ---------
         by : str
         """
-        parts = self.to_delayed()
-        sorted_parts = batcher_sortnet.sort_delayed_frame(parts, by)
-        return from_delayed(sorted_parts, meta=self._meta).reset_index(
-            force=not ignore_index
-        )
+        if legacy:
+            parts = self.to_delayed()
+            sorted_parts = batcher_sortnet.sort_delayed_frame(parts, by)
+            return from_delayed(sorted_parts, meta=self._meta).reset_index(
+                force=not ignore_index
+            )
+        else:
+            return batcher_sortnet.sort_values_new(
+                self, by, ignore_index=ignore_index
+            )
 
     def sort_values_binned(self, by):
         """Sorty by the given column and ensure that the same key
