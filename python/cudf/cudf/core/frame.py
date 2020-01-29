@@ -17,11 +17,34 @@ class Frame(libcudfxx.Table):
         A Frame representing the (optional) index columns.
     """
 
-    def gather(self, gather_map):
+    @classmethod
+    def _from_table(cls, table):
+        return cls(table._data, index=table._index)
+
+    def as_column(self):
+        return next(iter(self._data.values()))
+
+    def _gather(self, gather_map):
+        """
+        Gather values from `self` according to `gather_map`
+        """
         if not pd.api.types.is_integer_dtype(gather_map.dtype):
             gather_map = gather_map.astype("int32")
         result = self._from_table(
             libcudfxx.gather(self, as_column(gather_map))
+        )
+        result._copy_categories(self)
+        return result
+
+    def _scatter(self, values, scatter_map):
+        """
+        Scatter the values from the table `values` to `self`,
+        according to `scatter_map`.
+        """
+        if not pd.api.types.is_integer_dtype(scatter_map.dtype):
+            scatter_map = scatter_map.astype("int32")
+        result = self.__class__._from_table(
+            libcudfxx.scatter(values, as_column(scatter_map), self)
         )
         result._copy_categories(self)
         return result

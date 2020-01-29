@@ -100,6 +100,11 @@ class ColumnBase(Column):
     def __len__(self):
         return self.size
 
+    def as_frame(self, name=None):
+        from cudf.core.frame import Frame
+
+        return Frame({name: self.copy(deep=False)})
+
     def to_pandas(self):
         arr = self.data_array_view
         sr = pd.Series(arr.copy_to_host())
@@ -554,7 +559,9 @@ class ColumnBase(Column):
             )
         else:
             try:
-                out = libcudf.copying.scatter(value, key, self)
+                out = (
+                    self.as_frame()._scatter(value.as_frame(), key).as_column()
+                )
             except RuntimeError as e:
                 if "out of bounds" in str(e):
                     raise IndexError(

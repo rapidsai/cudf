@@ -206,6 +206,7 @@ def test_misc_quantiles(data, q):
     utils.assert_eq(expected, actual)
 
 
+@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/3986")
 @pytest.mark.parametrize(
     "data",
     [
@@ -238,6 +239,7 @@ def test_kurtosis(data, null_flag):
     np.testing.assert_array_almost_equal(got, expected)
 
 
+@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/3986")
 @pytest.mark.parametrize(
     "data",
     [

@@ -45,7 +45,9 @@ cdef class Table:
 
     @property
     def _index_names(self):
-        return tuple(self._index._data.keys())
+        if self._index is None:
+            return None
+        return tuple(self._index._column_names)
 
     @property
     def _columns(self):
@@ -53,6 +55,12 @@ cdef class Table:
         Return a list of Column objects backing this dataframe
         """
         return tuple(self._data.values())
+
+    @property
+    def _index_columns(self):
+        if self._index is None:
+            return None
+        return tuple(self._index._columns)
 
     @staticmethod
     cdef Table from_unique_ptr(unique_ptr[table] c_tbl,
