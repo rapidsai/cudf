@@ -19,28 +19,54 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/null_mask.hpp>
+
 #include <algorithm>
 
 namespace cudf {
-
 namespace experimental {
 
-std::vector<cudf::column_view> slice(cudf::column_view const& input,
-                                                std::vector<size_type> const& indices){
+namespace detail {
 
-    CUDF_EXPECTS(indices.size()%2 == 0, "indices size must be even");
-    std::vector<cudf::column_view> result{};
+std::vector<column_view> slice(column_view const& input,
+                               std::vector<size_type> const& indices,
+                               cudaStream_t stream){
+  CUDF_EXPECTS(indices.size() % 2 == 0, "indices size must be even");
 
-    if(indices.size() == 0 or input.size() == 0) {
-        return result;
-    }
+  std::vector<column_view> result{};
 
-    for(size_t i = 0; i < indices.size(); i+=2){
-        result.emplace_back(detail::slice(input, indices[i], indices[i+1]));
-    }
-
+  if(indices.size() == 0 or input.size() == 0) {
     return result;
-};
+  }
+
+  auto null_counts = cudf::detail::segmented_count_unset_bits(input.null_mask(),
+                                                              indices, stream);
+
+  std::vector<column_view> children{};
+  for (size_type i = 0; i < input.num_children(); i++) {
+    children.push_back(input.child(i));
+  }
+
+  for (size_t i = 0; i < indices.size() / 2; i++) {
+    auto begin = indices[2 * i];
+    auto end = indices[2 * i + 1];
+    CUDF_EXPECTS(begin >= 0, "Starting index cannot be negative.");
+    CUDF_EXPECTS(end >= begin, "End index cannot be smaller than the starting index.");
+    CUDF_EXPECTS(end <= input.size(), "Slice range out of bounds.");
+    result.emplace_back(input.type(), end - begin, input.head(),
+                        input.null_mask(), null_counts[i],
+                        input.offset() + begin, children);
+  }
+
+  return result;
+}
+
+}  // detail
+
+std::vector<cudf::column_view> slice(cudf::column_view const& input,
+                                     std::vector<size_type> const& indices){
+  return detail::slice(input, indices, 0);
+}
 
 std::vector<cudf::table_view> slice(cudf::table_view const& input,
                                                 std::vector<size_type> const& indices){

@@ -3,6 +3,7 @@
 ## New Features
 
 ## Improvements
+- PR #3698 Add count_(un)set_bits functions taking multiple ranges and updated slice to compute null counts at once.
 
 - PR #3909 Move java backend to libcudf++
 - PR #3910 Adding sinh, cosh, tanh, asinh, acosh, atanh cube root and rint unary support.
