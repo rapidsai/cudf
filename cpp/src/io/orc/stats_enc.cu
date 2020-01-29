@@ -133,7 +133,6 @@ gpuInitStatisticsBufferSize(statistics_merge_group *groups, const statistics_chu
 
 struct stats_state_s {
   uint8_t *base;              ///< Output buffer start
-  uint8_t *cur;               ///< Output buffer current write position
   uint8_t *end;               ///< Output buffer end
   statistics_chunk ck;
   statistics_merge_group grp;
@@ -166,13 +165,29 @@ __device__ inline uint8_t *pb_put_int(uint8_t *p, uint32_t id, int64_t v) {
   return pb_put_uint(p, id, (v ^ -s) * 2 + s);
 }
 
+// Protobuf field encoding for 'packed' unsigned int (single value)
+__device__ inline uint8_t *pb_put_packed_uint(uint8_t *p, uint32_t id, uint64_t v) {
+  uint8_t *p2 = pb_encode_uint(p + 2, v);
+  p[0] = id * 8 + PB_TYPE_FIXEDLEN;
+  p[1] = static_cast<uint8_t>(p2 - (p + 2));
+  return p2;
+}
+
 // Protobuf field encoding for binary/string
-__device__ inline uint8_t *pb_put_binary(uint8_t *p, uint32_t id, const uint8_t *bytes, uint32_t len) {
+__device__ inline uint8_t *pb_put_binary(uint8_t *p, uint32_t id, const void *bytes, uint32_t len) {
   p[0] = id * 8 + PB_TYPE_FIXEDLEN;
   p = pb_encode_uint(p + 1, len);
   memcpy(p, bytes, len);
   return p + len;
 }
+
+// Protobuf field encoding for 64-bit raw encoding (double)
+__device__ inline uint8_t *pb_put_fixed64(uint8_t *p, uint32_t id, const void *raw64) {
+  p[0] = id * 8 + PB_TYPE_FIXED64;
+  memcpy(p + 1, raw64, 8);
+  return p + 9;
+}
+
 
 
 /**
@@ -205,14 +220,98 @@ gpuEncodeStatistics(uint8_t *blob_bfr, statistics_merge_group *groups, const sta
       reinterpret_cast<uint32_t *>(&s->col)[t] = reinterpret_cast<const uint32_t *>(s->grp.col)[t];
     }
     if (t == 0) {
-      s->cur = s->base = blob_bfr + s->grp.start_chunk;
+      s->base = blob_bfr + s->grp.start_chunk;
       s->end = blob_bfr + s->grp.start_chunk + s->grp.num_chunks;
     }
   }
   __syncthreads();
-  // Update actual bfr size
+  // Encode and update actual bfr size
   if (idx < statistics_count && t == 0) {
-    groups[idx].num_chunks = static_cast<uint32_t>(s->cur - s->base);
+    uint8_t *cur = pb_put_uint(s->base, 1, s->ck.non_nulls);
+    uint8_t *fld_start = cur;
+    switch(s->col.stats_dtype) {
+    case dtype_int8:
+    case dtype_int16:
+    case dtype_int32:
+    case dtype_int64:
+      // IntegerStatistics = 2
+      if (s->ck.has_minmax || s->ck.has_sum) {
+        *cur = 2 * 8 + PB_TYPE_FIXEDLEN;
+        cur += 2;
+        if (s->ck.has_minmax) {
+          cur = pb_put_int(cur, 1, s->ck.min_value.i_val);
+          cur = pb_put_int(cur, 2, s->ck.max_value.i_val);
+        }
+        if (s->ck.has_sum) {
+          cur = pb_put_int(cur, 3, s->ck.sum.i_val);
+        }
+        fld_start[1] = cur - (fld_start + 2);
+      }
+      break;
+    case dtype_float32:
+    case dtype_float64:
+      // DoubleStatistics = 3
+      if (s->ck.has_minmax) {
+        *cur = 3 * 8 + PB_TYPE_FIXEDLEN;
+        cur += 2;
+        cur = pb_put_fixed64(cur, 1, &s->ck.min_value.fp_val);
+        cur = pb_put_fixed64(cur, 2, &s->ck.max_value.fp_val);
+        fld_start[1] = cur - (fld_start + 2);
+      }
+      break;
+    case dtype_string:
+      // StringStatistics = 4
+      if (s->ck.has_minmax && s->ck.has_sum) {
+        uint32_t sz = (pb_put_uint(cur, 3, s->ck.sum.i_val) - cur)
+                    + (pb_put_uint(cur, 1, s->ck.min_value.str_val.length) - cur)
+                    + (pb_put_uint(cur, 2, s->ck.max_value.str_val.length) - cur)
+                    + s->ck.min_value.str_val.length + s->ck.max_value.str_val.length;
+        cur[0] = 4 * 8 + PB_TYPE_FIXEDLEN;
+        cur = pb_encode_uint(cur + 1, sz);
+        cur = pb_put_binary(cur, 1, s->ck.min_value.str_val.ptr, s->ck.min_value.str_val.length);
+        cur = pb_put_binary(cur, 2, s->ck.max_value.str_val.ptr, s->ck.max_value.str_val.length);
+        cur = pb_put_uint(cur, 3, s->ck.sum.i_val);
+      }
+      break;
+    case dtype_bool8:
+      // BucketStatistics = 5
+      if (s->ck.has_sum) { // Sum is equal to the number of 'true' values
+        cur[0] = 5 * 8 + PB_TYPE_FIXEDLEN;
+        cur = pb_put_packed_uint(cur + 2, 1, s->ck.sum.i_val);
+        fld_start[1] = cur - (fld_start + 2);
+      }
+      break;
+    case dtype_decimal64:
+    case dtype_decimal128:
+      // DecimalStatistics = 6
+      if (s->ck.has_minmax) {
+        // TODO: Decimal support (decimal min/max stored as strings)
+      }
+      break;
+    case dtype_date32:
+      // DateStatistics = 7
+      if (s->ck.has_minmax) {
+        cur[0] = 7 * 8 + PB_TYPE_FIXEDLEN;
+        cur += 2;
+        cur = pb_put_int(cur, 1, s->ck.min_value.i_val);
+        cur = pb_put_int(cur, 2, s->ck.max_value.i_val);
+        fld_start[1] = cur - (fld_start + 2);
+      }      
+      break;
+    case dtype_timestamp64:
+      // TimestampStatistics = 9
+      if (s->ck.has_minmax) {
+        cur[0] = 7 * 8 + PB_TYPE_FIXEDLEN;
+        cur += 2;
+        cur = pb_put_int(cur, 3, s->ck.min_value.i_val); // minimumUtc
+        cur = pb_put_int(cur, 4, s->ck.max_value.i_val); // maximumUtc
+        fld_start[1] = cur - (fld_start + 2);
+      }      
+      break;
+    default:
+      break;
+    }
+    groups[idx].num_chunks = static_cast<uint32_t>(cur - s->base);
   }
 }
 
