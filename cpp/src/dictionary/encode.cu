@@ -22,13 +22,16 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/dictionary/encode.hpp>
+#include <cudf/dictionary/detail/encode.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
+//#include <rmm/thrust_rmm_allocator.h>
 
 namespace cudf
 {
 namespace dictionary
+{
+namespace detail
 {
 
 /**
@@ -73,6 +76,17 @@ std::unique_ptr<column> encode( column_view const& input_column,
     // create column with keys_column and indices_column
     return make_dictionary_column( std::move(keys_column), std::move(indices_column),
                                    copy_bitmask( input_column, stream, mr), input_column.null_count() );
+}
+
+} // namespace detail
+
+// external API
+
+std::unique_ptr<column> encode( column_view const& input_column,
+                                data_type indices_type,
+                                rmm::mr::device_memory_resource* mr )
+{
+    return detail::encode( input_column, indices_type, mr );
 }
 
 } // namespace dictionary
