@@ -482,7 +482,7 @@ class StringColumn(column.ColumnBase):
         return StringMethods(self, index=index, name=name)
 
     def __sizeof__(self):
-        n = self.nvstrings.device_memory()
+        n = self.children[0].__sizeof__() + self.children[1].__sizeof__()
         if self.mask:
             n += self.mask.size
         return n
@@ -665,11 +665,14 @@ class StringColumn(column.ColumnBase):
             nbuf=libcudf.cudf.get_ctype_ptr(nbuf),
             bdevmem=True,
         )
-        for item in [nbuf, sbuf, obuf]:
+        for item in [sbuf, obuf]:
             sheader = item.__cuda_array_interface__.copy()
             sheader["dtype"] = item.dtype.str
             sub_headers.append(sheader)
             frames.append(item)
+
+        if self.null_count > 0:
+            frames.append(nbuf)
 
         header["nvstrings"] = len(self.nvstrings)
         header["subheaders"] = sub_headers
@@ -690,14 +693,19 @@ class StringColumn(column.ColumnBase):
 
             arrays.append(libcudf.cudf.get_ctype_ptr(each_frame))
 
+        if header["null_count"] > 0:
+            nbuf = arrays[2]
+        else:
+            nbuf = None
+
         # Use from_offsets to get nvstring data.
         # Note: array items = [nbuf, sbuf, obuf]
         scount = header["nvstrings"]
         data = nvstrings.from_offsets(
+            arrays[0],
             arrays[1],
-            arrays[2],
             scount,
-            nbuf=arrays[0],
+            nbuf=nbuf,
             ncount=header["null_count"],
             bdevmem=True,
         )
