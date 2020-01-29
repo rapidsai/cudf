@@ -70,10 +70,13 @@ std::unique_ptr<column> encode(
  *
  * @param dictionary_column Existing dictionary column.
  * @param mr Resource for allocating memory for the output.
+ * @param stream Optional stream on which to issue all memory allocation and
+ *               device kernels.
  * @return New column with type matching the dictionary_column's keys.
  */
 std::unique_ptr<column> decode( dictionary_column_view const& dictionary_column,
-                                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+                                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                cudaStream_t stream = 0);
 
 } // namespace dictionary
 } // namespace cudf
