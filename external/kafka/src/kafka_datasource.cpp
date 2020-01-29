@@ -21,6 +21,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <map>
 
 #include <chrono>
 #include <thread>
@@ -38,12 +39,35 @@ namespace external {
 class kafka_datasource : public external_datasource {
  public:
 
+  kafka_datasource(std::unique_ptr<RdKafka::Conf> const &kafka_conf_,
+                   std::vector<std::string> kafka_topics,
+                   int64_t kafka_start_offset,
+                   int32_t kafka_batch_size) : topics_(kafka_topics), kafka_start_offset_(kafka_start_offset), kafka_batch_size_(kafka_batch_size) {
+    conf_res = kafka_conf_->get("group.id", conf_val);
+
+    // Kafka 0.9 > requires at least a group.id in the configuration so lets
+    // make sure that is present.
+    conf_res = kafka_conf_->get("group.id", conf_val);
+
+    // Create the Rebalance callback so Partition Offsets can be assigned.
+    KafkaRebalanceCB rebalance_cb(kafka_start_offset_);
+    kafka_conf_->set("rebalance_cb", &rebalance_cb, errstr_);
+
+    std::unique_ptr<RdKafka::KafkaConsumer> con(RdKafka::KafkaConsumer::create(kafka_conf_.get(), errstr_));
+    consumer_ = std::move(con);
+
+    err = consumer_->subscribe(topics_);
+    consume_messages(kafka_conf_);
+  }
+
   kafka_datasource() {
+    DATASOURCE_ID = "librdkafka-1.2.2";  
+  }
+
+  kafka_datasource(std::map<std::string, std::string> configs) {
     DATASOURCE_ID = "librdkafka-1.2.2";
 
     // Construct the RdKafka::Conf object
-
-    KafkaRebalanceCB rebalance_cb(kafka_start_offset_);
   }
 
   std::string libcudf_datasource_identifier() {
@@ -56,37 +80,6 @@ class kafka_datasource : public external_datasource {
   }
 
   size_t size() const override { return buffer_.size(); }
-
-  // explicit kafka_io_source(std::unique_ptr<RdKafka::Conf> const &kafka_conf_,
-  //                          std::vector<std::string> kafka_topics,
-  //                          int64_t kafka_start_offset,
-  //                          int32_t kafka_batch_size)
-  //     : topics_(kafka_topics), kafka_start_offset_(kafka_start_offset), kafka_batch_size_(kafka_batch_size) {
-  //   // Kafka 0.9 > requires at least a group.id in the configuration so lets
-  //   // make sure that is present.
-  //   conf_res = kafka_conf_->get("group.id", conf_val);
-  //   CUDF_EXPECTS(
-  //       (conf_res == RdKafka::Conf::ConfResult::CONF_OK && !conf_val.empty()),
-  //       "Kafka requires 'group.id' configuration value be present. Please "
-  //       "ensure Kafka configuration contains 'group.id'");
-
-  //   // Create the Rebalance callback so Partition Offsets can be assigned.
-  //   KafkaRebalanceCB rebalance_cb(kafka_start_offset_);
-  //   kafka_conf_->set("rebalance_cb", &rebalance_cb, errstr_);
-
-  //   std::unique_ptr<RdKafka::KafkaConsumer> con(RdKafka::KafkaConsumer::create(kafka_conf_.get(), errstr_));
-  //   consumer_ = std::move(con);
-  //   CUDF_EXPECTS(consumer_, "Failed to create Kafka consumer");
-
-  //   err = consumer_->subscribe(topics_);
-  //   CUDF_EXPECTS(err == RdKafka::ErrorCode::ERR_NO_ERROR,
-  //                "Failed to subscribe to Kafka Topics");
-
-  //   // The csv_reader implementation will call 'empty()' to determine how maby
-  //   // bytes are available. With files this works, with Kafka we don't yet have
-  //   // the messages at this point so we need to get those messages now.
-  //   consume_messages(kafka_conf_);
-  // }
 
   /**
    * @brief Base class destructor
@@ -202,6 +195,10 @@ class kafka_datasource : public external_datasource {
 
 extern "C" external_datasource* libcudf_external_datasource_load() {
   return new kafka_datasource;
+}
+
+extern "C" external_datasource* libcudf_external_datasource_load_from_conf(std::map<std::string, std::string>& configs) {
+  return new kafka_datasource(configs);
 }
 
 extern "C" void libcudf_external_datasource_destroy(external_datasource* eds) {

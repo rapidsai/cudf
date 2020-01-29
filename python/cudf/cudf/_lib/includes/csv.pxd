@@ -7,29 +7,9 @@
 
 from cudf._lib.cudf cimport *
 from cudf._lib.includes.io cimport *
-from libc.stdint cimport *
 
 from libcpp.string cimport string
 from libcpp.vector cimport vector
-from libcpp.memory cimport unique_ptr
-
-cdef extern from "cudf/cudf.h" namespace "RdKafka" nogil:
-
-    cdef cppclass Conf:
-
-        enum ConfType:
-            CONF_GLOBAL "RdKafka::Conf::CONF_GLOBAL",
-            CONF_TOPIC "RdKafka::Conf::CONF_TOPIC",
-
-        enum ConfResult:
-            CONF_UNKNOWN = -2,
-            CONF_INVALID = -1,
-            CONF_OK = 0,
-
-        @staticmethod
-        Conf *create(ConfType) except +
-
-        ConfResult set(string &name, string &value, string &errstr) except +
 
 cdef extern from "cudf/cudf.h" namespace "cudf::io::csv" nogil:
 
@@ -68,21 +48,9 @@ cdef extern from "cudf/cudf.h" namespace "cudf::io::csv" nogil:
         quote_style         quoting
         bool                doublequote
 
-        int64_t             kafka_start_offset
-        int32_t             kafka_batch_size
-
         gdf_time_unit       out_time_unit
 
     cdef cppclass reader:
-
-        reader(
-            unique_ptr[Conf] &kafka_conf,
-            vector[string] topics,
-            int64_t start_offset,
-            int16_t batch_size,
-            const reader_options &options
-        ) except +
-
         reader(
             string filepath,
             const reader_options &options

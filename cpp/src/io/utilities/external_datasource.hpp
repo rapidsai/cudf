@@ -33,7 +33,7 @@ namespace external {
 /**
  * @brief Class for reading from a datasource external to the cuDF codebase.
  **/
-class external_datasource : datasource {
+class external_datasource : public datasource {
  public:
 
   /**

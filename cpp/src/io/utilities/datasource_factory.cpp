@@ -15,59 +15,15 @@
  */
 
 #include "datasource_factory.hpp"
+#include <string>
+#include <map>
 
 namespace cudf {
 namespace io {
 namespace external {
 
-datasource_factory::datasource_factory() {
-  list_external_libs();
-
-  // Open each one of the external libraries and query for its unique identifier and print
-  for(int i=0; i < libs.size(); i++) {
-    // std::cout << libs[i] << std::endl;
-    // void *handle;
-    // std::string (*identifier)();
-    // char *error;
-
-    // handle = dlopen(libs[i].c_str(), RTLD_LAZY);
-    // if (!handle) {
-    //   fputs (dlerror(), stderr);
-    //   exit(1);
-    // }
-
-    // identifier = (std::string *) dlsym(handle, "hello");
-    // if ((error = dlerror()) != NULL)  {
-    //   fputs(error, stderr);
-    //   exit(1);
-    // }
-
-    // printf("About to print the identifier .....\n");
-    // printf ("%s\n", (*identifier).c_str());
-    // dlclose(handle);
-
-    std::cout << libs[i] << std::endl;
-    void *handle;
-    typedef external_datasource* (*ex_ds_t)();
-    char *error;
-
-    handle = dlopen(libs[i].c_str(), RTLD_LAZY);
-    if (!handle) {
-      fputs (dlerror(), stderr);
-      exit(1);
-    }
-
-    ex_ds_t ex_ds = (ex_ds_t) dlsym(handle, "libcudf_external_datasource_load");
-    if ((error = dlerror()) != NULL)  {
-      fputs(error, stderr);
-      exit(1);
-    }
-
-    printf("About to print the identifier .....\n");
-    external_datasource *result = ex_ds();
-    printf("Result %s\n", result->libcudf_datasource_identifier().c_str());
-    dlclose(handle);
-  }
+datasource_factory::datasource_factory(std::string external_lib_dir) : EXTERNAL_LIB_DIR(external_lib_dir) {
+  load_external_libs();
 }
 
 }  // namespace external

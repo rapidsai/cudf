@@ -11,7 +11,6 @@ from cudf._lib.utils cimport *
 from cudf._lib.utils import *
 from cudf._lib.nvtx import nvtx_range_push, nvtx_range_pop
 from cudf._lib.includes.csv cimport (
-    Conf as KafkaConf,
     reader as csv_reader,
     reader_options as csv_reader_options
 )
@@ -20,7 +19,6 @@ from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 
-from libc.stdint cimport *
 from cudf._lib.includes.io cimport *
 
 import numpy as np
@@ -73,9 +71,6 @@ cpdef read_csv(
     na_filter=True,
     prefix=None,
     index_col=None,
-    kafka_configs=None,
-    kafka_start_offset=0,
-    kafka_batch_size=10000,
 ):
     """
     Cython function to call into libcudf API, see `read_csv`.
@@ -193,67 +188,30 @@ cpdef read_csv(
     if prefix is not None:
         args.prefix = prefix.encode()
 
-    # Kafka execution path variables
-    cdef KafkaConf.ConfType gk = KafkaConf.ConfType.CONF_GLOBAL
-    cdef unique_ptr[KafkaConf] kafka_conf
-    cdef vector[string] topics
-    cdef int64_t kafka_start_offset_ = kafka_start_offset
-    cdef int32_t kafka_batch_size_ = kafka_batch_size
-
-    args.kafka_start_offset = kafka_start_offset
-    args.kafka_batch_size = kafka_batch_size
-
-    # Regular execution path variables
-    cdef const unsigned char[::1] buffer
-    cdef string filepath
-
     # Create reader from source
-    if kafka_configs is not None:
-        errstr=""
-        kafka_conf = unique_ptr[KafkaConf](KafkaConf.create(KafkaConf.ConfType.CONF_GLOBAL))
-
-        for kafka_conf_key in kafka_configs:
-            if kafka_conf_key == 'cudf.topic.list':
-                tops = kafka_configs[kafka_conf_key].split(',')
-                for t in tops:
-                    topics.push_back(t.encode())
-            else:
-                kafka_conf.get().set(kafka_conf_key.encode(),
-                        kafka_configs[kafka_conf_key].encode(),
-                        errstr.encode())
-    else:
-        buffer = view_of_buffer(filepath_or_buffer)
-        if buffer is None:
-            if not os.path.isfile(filepath_or_buffer):
-                raise FileNotFoundError(
-                    errno.ENOENT, os.strerror(errno.ENOENT), filepath_or_buffer
-                )
-            filepath = <string>str(filepath_or_buffer).encode()
+    cdef const unsigned char[::1] buffer = view_of_buffer(filepath_or_buffer)
+    cdef string filepath
+    if buffer is None:
+        if not os.path.isfile(filepath_or_buffer):
+            raise FileNotFoundError(
+                errno.ENOENT, os.strerror(errno.ENOENT), filepath_or_buffer
+            )
+        filepath = <string>str(filepath_or_buffer).encode()
 
     cdef unique_ptr[csv_reader] reader
-
     with nogil:
-        if kafka_configs is not None:
+        if buffer is None:
             reader = unique_ptr[csv_reader](
-                new csv_reader(kafka_conf,
-                               topics,
-                               kafka_start_offset_,
-                               kafka_batch_size_,
-                               args)
+                new csv_reader(filepath, args)
+            )
+        elif buffer.shape[0] != 0:
+            reader = unique_ptr[csv_reader](
+                new csv_reader(<char *>&buffer[0], buffer.shape[0], args)
             )
         else:
-            if buffer is None:
-                reader = unique_ptr[csv_reader](
-                    new csv_reader(filepath, args)
-                )
-            elif buffer.shape[0] != 0:
-                reader = unique_ptr[csv_reader](
-                    new csv_reader(<char *>&buffer[0], buffer.shape[0], args)
-                )
-            else:
-                reader = unique_ptr[csv_reader](
-                    new csv_reader(<char *>NULL, 0, args)
-                )
+            reader = unique_ptr[csv_reader](
+                new csv_reader(<char *>NULL, 0, args)
+            )
 
     # Read data into columns
     cdef cudf_table c_out_table
@@ -262,7 +220,6 @@ cpdef read_csv(
     cdef size_type c_skiprows = skiprows if skiprows is not None else 0
     cdef size_type c_skipend = skipfooter if skipfooter is not None else 0
     cdef size_type c_nrows = nrows if nrows is not None else -1
-
     with nogil:
         if c_range_offset !=0 or c_range_size != 0:
             c_out_table = reader.get().read_byte_range(
@@ -285,6 +242,7 @@ cpdef read_csv(
             df = df.set_index(df.columns[index_col])
         else:
             df = df.set_index(index_col)
+
     nvtx_range_pop()
 
     return df
