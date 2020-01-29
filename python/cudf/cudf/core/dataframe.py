@@ -1535,6 +1535,8 @@ class DataFrame(Frame):
         if pd.api.types.is_bool_dtype(positions):
             return self._apply_boolean_mask(positions)
         out = self.gather(positions)
+        if isinstance(self.columns, cudf.MultiIndex):
+            out.columns = self.columns
         return out
 
     def _apply_boolean_mask(self, mask):
