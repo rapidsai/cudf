@@ -20,20 +20,5 @@
 #ifndef GDF_BINARY_OPERATION_JIT_UTIL_TYPE_H
 #define GDF_BINARY_OPERATION_JIT_UTIL_TYPE_H
 
-#include <cudf/types.h>
-#include <cudf/rolling.hpp>
-#include <string>
-
-namespace cudf {
-namespace rolling {
-namespace jit {
-
-std::string get_operator_name(cudf::experimental::rolling_operator op);
-
-std::string get_function_name(cudf::experimental::rolling_operator op);
-
-}
-}
-}
 
 #endif
