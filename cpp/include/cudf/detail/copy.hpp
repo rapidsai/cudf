@@ -31,12 +31,12 @@ namespace detail {
  * @note It is the caller's responsibility to ensure that the returned view
  * does not outlive the viewed device memory.
  *
- * @throws `cudf::logic_error` if `begin < 0`, `end < begin` or
+ * @throws cudf::logic_error if `begin < 0`, `end < begin` or
  * `end > input.size()`.
  *
- * @param input View of input column to slice
- * @param begin Index of the first desired element in the slice (inclusive).
- * @param end Index of the last desired element in the slice (exclusive).
+ * @param[in] input View of input column to slice
+ * @param[in] begin Index of the first desired element in the slice (inclusive).
+ * @param[in] end Index of the last desired element in the slice (exclusive).
  *
  * @return ColumnView View of the elements `[begin,end)` from `input`.
  *---------------------------------------------------------------------------**/
@@ -62,6 +62,15 @@ ColumnView slice(ColumnView const& input,
                      cudf::UNKNOWN_NULL_COUNT,
                      input.offset() + begin, children);
 }
+
+/**
+ * @copydoc cudf::experimental::slice(column_view const&,std::vector<size_type> const&)
+ *
+ * @param stream Optional CUDA stream on which to execute kernels
+ */
+std::vector<column_view> slice(column_view const& input,
+                               std::vector<size_type> const& indices,
+                               cudaStream_t stream = 0);
 
 /**
  * @copydoc cudf::experimental::contiguous_split
