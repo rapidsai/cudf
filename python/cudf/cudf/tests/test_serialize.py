@@ -233,3 +233,14 @@ def test_serialize_all_null_string():
 
     recreated = cudf.Series.deserialize(*gd_series.serialize())
     assert_eq(recreated, pd_series)
+
+
+def test_serialize_seriesgroupby_agg():
+    gdf = cudf.DataFrame({"a": [1, 2, 3, 4], "b": [5, 1, 2, 5]})
+    gb = gdf.groupby(["a"]).b
+
+    # (De)serialize roundtrip
+    recreated = cudf.core.groupby.groupby._Groupby.deserialize(*gb.serialize())
+
+    # Check
+    assert_eq(recreated.sum(), gb.sum())
