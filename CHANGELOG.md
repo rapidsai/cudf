@@ -10,6 +10,7 @@
 - PR #3910 Adding sinh, cosh, tanh, asinh, acosh, atanh cube root and rint unary support.
 - PR #3972 Add Java bindings for left_semi_join and left_anti_join
 - PR #3975 Simplify and generalize data handling in `Buffer`
+- PR #3985 Update RMM include files and remove extraneously included header files.
 
 ## Bug Fixes
 
