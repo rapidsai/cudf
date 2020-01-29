@@ -415,7 +415,7 @@ hash_partition_table(table_view const& input,
     ? OPTIMIZED_ROWS_PER_THREAD : FALLBACK_ROWS_PER_THREAD;
 
   auto const rows_per_block = block_size * rows_per_thread;
-  auto const grid_size = util::div_rounding_up_safe(num_rows, rows_per_block);
+  auto grid_size = util::div_rounding_up_safe(num_rows, rows_per_block);
 
   // Allocate array to hold which partition each row belongs to
   auto row_partition_numbers = rmm::device_vector<size_type>(num_rows);
