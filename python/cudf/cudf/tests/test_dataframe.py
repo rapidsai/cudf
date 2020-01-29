@@ -4391,3 +4391,19 @@ def test_setitem_diff_size_series(series_input, key):
     got = got.astype("float64")
 
     assert_eq(expect, got)
+
+
+def test_tupleize_cols_False_set():
+    pdf = pd.DataFrame()
+    gdf = DataFrame()
+    pdf[("a", "b")] = [1]
+    gdf[("a", "b")] = [1]
+    assert_eq(pdf, gdf)
+    assert_eq(pdf.columns, gdf.columns)
+
+
+def test_init_multiindex_from_dict():
+    pdf = pd.DataFrame({("a", "b"): [1]})
+    gdf = DataFrame({("a", "b"): [1]})
+    assert_eq(pdf, gdf)
+    assert_eq(pdf.columns, gdf.columns)
