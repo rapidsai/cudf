@@ -238,13 +238,14 @@ def test_serialize_all_null_string():
 def test_serialize_named_series():
     gdf = cudf.DataFrame({"a": [1, 2, 3, 4], "b": [5, 1, 2, 5]})
 
-    # Test basic named-series round trip
     ser = gdf["b"]
     recreated = cudf.Series.deserialize(*ser.serialize())
     assert_eq(recreated, ser)
 
-    # Test seriesgroupby
-    # (Same as a named series - See github issue #3913)
+
+def test_serialize_seriesgroupby():
+    gdf = cudf.DataFrame({"a": [1, 2, 3, 4], "b": [5, 1, 2, 5]})
+
     gb = gdf.groupby(["a"]).b
     recreated = cudf.core.groupby.groupby._Groupby.deserialize(*gb.serialize())
     assert_eq(recreated.sum(), gb.sum())
