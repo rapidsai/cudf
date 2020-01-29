@@ -458,7 +458,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * Method to copy from a DeviceMemoryBuffer to a HostMemoryBuffer
    * @param deviceMemoryBuffer - Buffer to copy data from
    */
-  final void copyFromDeviceBuffer(DeviceMemoryBuffer deviceMemoryBuffer) {
+  final void copyFromDeviceBuffer(BaseDeviceMemoryBuffer deviceMemoryBuffer) {
     addressOutOfBoundsCheck(address, deviceMemoryBuffer.length, "copy range dest");
     assert !deviceMemoryBuffer.closed;
     Cuda.memcpy(address, deviceMemoryBuffer.address, deviceMemoryBuffer.length,

@@ -299,7 +299,7 @@ class Rolling:
                 ) from e
 
             window = cudautils.window_sizes_from_offset(
-                self.obj.index.as_column().data_array_view, window
+                self.obj.index._values.data_array_view, window
             )
             if self.min_periods is None:
                 min_periods = 1
