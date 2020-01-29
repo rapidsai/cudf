@@ -395,7 +395,7 @@ template <bool hash_has_nulls>
 std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>>
 hash_partition_table(table_view const& input,
                      table_view const &table_to_hash,
-                     const size_type num_partitions,
+                     size_type num_partitions,
                      rmm::mr::device_memory_resource* mr,
                      cudaStream_t stream)
 {
@@ -489,10 +489,10 @@ hash_partition_table(table_view const& input,
   if (num_partitions <= 512) {
     std::vector<std::unique_ptr<column>> output_cols(input.num_columns());
 
-    auto const row_partition_numbers_ptr {row_partition_numbers.data().get()};
-    auto const row_partition_offset_ptr {row_partition_offset.data().get()};
-    auto const block_partition_sizes_ptr {block_partition_sizes.data().get()};
-    auto const scanned_block_partition_sizes_ptr {scanned_block_partition_sizes.data().get()};
+    auto row_partition_numbers_ptr {row_partition_numbers.data().get()};
+    auto row_partition_offset_ptr {row_partition_offset.data().get()};
+    auto block_partition_sizes_ptr {block_partition_sizes.data().get()};
+    auto scanned_block_partition_sizes_ptr {scanned_block_partition_sizes.data().get()};
 
     // Copy input to output by partition per column
     std::transform(input.begin(), input.end(), output_cols.begin(),
