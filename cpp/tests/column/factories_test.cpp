@@ -21,8 +21,6 @@
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/type_lists.hpp>
 
-#include <rmm/mr/device/default_memory_resource.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
 
 #include <gmock/gmock.h>
 

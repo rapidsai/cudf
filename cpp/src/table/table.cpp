@@ -16,7 +16,6 @@
 
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
 #include <cudf/utilities/error.hpp>
 
 namespace cudf {

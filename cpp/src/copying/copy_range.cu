@@ -26,7 +26,6 @@
 #include <cudf/strings/detail/copy_range.cuh>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 

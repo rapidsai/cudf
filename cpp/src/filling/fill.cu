@@ -25,7 +25,6 @@
 #include <cudf/strings/detail/fill.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
 
 #include <cuda_runtime.h>
 
