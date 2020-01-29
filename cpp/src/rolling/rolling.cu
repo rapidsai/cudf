@@ -32,7 +32,6 @@
 #include <jit/launcher.h>
 #include <jit/parser.h>
 #include <rolling/jit/code/code.h>
-#include <rolling/jit/util/type.h>
 
 #include <types.hpp.jit>
 #include <bit.hpp.jit>
