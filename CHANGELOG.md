@@ -17,6 +17,7 @@
 - PR #3959 Add missing hash-dispatch function for cudf.Series
 - PR #3970 Fix for Series Pickle
 - PR #3964 Restore legacy NVStrings and NVCategory dependencies in Java jar
+- PR #3979 Add `name` to Series serialize and deserialize
 
 
 # cuDF 0.12.0 (Date TBD)
