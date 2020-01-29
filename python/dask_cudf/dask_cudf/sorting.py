@@ -1,8 +1,6 @@
-"""
-Batcher's Odd-even sorting network
-Adapted from https://en.wikipedia.org/wiki/Batcher_odd%E2%80%93even_mergesort
-"""
+# Copyright (c) 2020, NVIDIA CORPORATION.
 import math
+import warnings
 from operator import getitem
 
 import numpy as np
@@ -11,13 +9,18 @@ import toolz
 from dask import compute, delayed
 from dask.base import tokenize
 from dask.dataframe.core import DataFrame, _concat
-from dask.dataframe.partitionquantiles import partition_quantiles
 from dask.dataframe.shuffle import set_partitions_pre, shuffle_group_get
 from dask.dataframe.utils import group_split_dispatch
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import M, digit, insert
 
 import cudf as gd
+
+
+"""
+Batcher's Odd-even sorting network
+Adapted from https://en.wikipedia.org/wiki/Batcher_odd%E2%80%93even_mergesort
+"""
 
 
 def get_oversized(length):
@@ -289,35 +292,47 @@ def rearrange_by_divisions(df, column: str, divisions: list, max_branch=None):
     return df3
 
 
-def sort_values_new(df, by, ignore_index=False):
+def sort_values_experimental(df, by, ignore_index=False):
+    """ Experimental sort_values implementation.
 
+    Sort by the given column name or list/tuple of column names.
+
+    Parameter
+    ---------
+    by : list, tuple, str
+    """
+    npartitions = df.npartitions
     if isinstance(by, str):
         by = [by]
     elif isinstance(by, tuple):
         by = list(by)
 
-    # Only handle single column (for now)
-    #     Note: How can we map multiple columns onto
-    #     a single `partitions` column?
+    # Step 1 - Pre-sort each partition
+    df2 = df.map_partitions(M.sort_values, by)
+    if npartitions == 1:
+        return df2
+
+    # Only handle single-column partitioning (for now)
+    #     TODO: Handle partitioning on multiple columns?
     if len(by) > 1:
-        return df.sort_values(by, ignore_index=ignore_index, legacy=True)
+        warnings.warn(
+            "Using experimental version of sort_values."
+            " Only `by[0]` will be used for partitioning."
+        )
     index = by[0]
 
-    # Step 1 - Pre-sort each partition
-    df2 = df.map_partitions(M.sort_values, index)
-
     # Step 2 - Calculate new divisions
-    npartitions = df.npartitions
     divisions = (
-        partition_quantiles(df2[index], npartitions, upsample=1.0)
+        df2[index]
+        ._repartition_quantiles(npartitions, upsample=1.0)
         .compute()
         .to_list()
     )
 
-    # Step 3 - Perform shuffle
+    # Step 3 - Perform repartitioning shuffle
     df3 = rearrange_by_divisions(df2, index, divisions)
     df3.divisions = (None,) * (npartitions + 1)
 
     # Step 4 - Return final sorted df
-    #          (No sort needed after k-way merging parts)
-    return df3.map_partitions(M.sort_values, index)
+    #          (Can remove after k-way merge added)
+    return df3.map_partitions(M.sort_values, by)

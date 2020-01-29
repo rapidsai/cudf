@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2020, NVIDIA CORPORATION.
 import warnings
 
 import numpy as np
@@ -23,7 +23,7 @@ from dask.utils import M, OperatorMethodMixin, derived_from, funcname
 import cudf
 import cudf._lib as libcudf
 
-from dask_cudf import batcher_sortnet
+from dask_cudf import sorting
 from dask_cudf.accessor import (
     CachedAccessor,
     CategoricalAccessor,
@@ -202,23 +202,30 @@ class DataFrame(_Frame, dd.core.DataFrame):
         else:
             return self.map_partitions(M.reset_index, drop=drop)
 
-    def sort_values(self, by, ignore_index=False, legacy=True):
+    def sort_values(self, by, ignore_index=False, experimental=False):
         """Sort by the given column
 
         Parameter
         ---------
         by : str
         """
-        if legacy:
-            parts = self.to_delayed()
-            sorted_parts = batcher_sortnet.sort_delayed_frame(parts, by)
-            return from_delayed(sorted_parts, meta=self._meta).reset_index(
-                force=not ignore_index
-            )
-        else:
-            return batcher_sortnet.sort_values_new(
+        if experimental:
+            # Experimental aglorithm (mostly) matches
+            # the set_index sorting procedure used in Dask.
+            # Note that, if len(by)>1, only the first column
+            # is used for repartitioning.  All columns are
+            # used for intra-partition sorting.
+            df = sorting.sort_values_experimental(
                 self, by, ignore_index=ignore_index
             )
+            if ignore_index:
+                return df.reset_index(drop=True)
+        else:
+            # Legacy sorting algorithm based on "batcher-sortnet"
+            parts = self.to_delayed()
+            sorted_parts = sorting.sort_delayed_frame(parts, by)
+            df = from_delayed(sorted_parts, meta=self._meta)
+        return df
 
     def sort_values_binned(self, by):
         """Sorty by the given column and ensure that the same key
