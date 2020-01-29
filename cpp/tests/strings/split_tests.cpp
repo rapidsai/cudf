@@ -160,6 +160,39 @@ TEST_F(StringsSplitTest, AllNullsCase)
     EXPECT_TRUE( column.null_count()==column.size() );
 }
 
+TEST_F(StringsSplitTest, SplitRecord)
+{
+    std::vector<const char*> h_strings{ "Héllo thesé", nullptr, "are some", "tést String", "" };
+    cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end(),
+        thrust::make_transform_iterator(h_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+    cudf::strings_column_view strings_view(strings);
+
+    std::vector<const char*> h_expected1{ "Héllo", "thesé" };
+    cudf::test::strings_column_wrapper expected1(h_expected1.begin(), h_expected1.end());
+    std::vector<const char*> h_expected2{};
+    cudf::test::strings_column_wrapper expected2(h_expected2.begin(), h_expected2.end());
+    std::vector<const char*> h_expected3{ "are", "some" };
+    cudf::test::strings_column_wrapper expected3(h_expected3.begin(), h_expected3.end());
+    std::vector<const char*> h_expected4{ "tést", "String" };
+    cudf::test::strings_column_wrapper expected4(h_expected4.begin(), h_expected4.end());
+    std::vector<const char*> h_expected5{ "" };
+    cudf::test::strings_column_wrapper expected5(h_expected5.begin(), h_expected5.end());
+
+    std::vector<std::unique_ptr<cudf::column>> expected_columns;
+    expected_columns.push_back(expected1.release());
+    expected_columns.push_back(expected2.release());
+    expected_columns.push_back(expected3.release());
+    expected_columns.push_back(expected4.release());
+    expected_columns.push_back(expected5.release());
+
+    auto result = cudf::strings::contiguous_split_record(strings_view, cudf::string_scalar(" "));
+    EXPECT_TRUE(result.column_views.size() == expected_columns.size());
+    for (size_t i = 0; i < result.column_views.size(); ++i) {
+      cudf::test::expect_columns_equal(result.column_views[i], *expected_columns[i]);
+    }
+}
+
 TEST_F(StringsSplitTest, Partition)
 {
     std::vector<const char*> h_strings{   "héllo", nullptr, "a_bc_déf", "a__bc", "_ab_cd", "ab_cd_", "", " a b " };
