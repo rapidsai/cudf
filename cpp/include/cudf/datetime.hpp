@@ -18,6 +18,8 @@
 
 #include <cudf/types.hpp>
 
+#include <memory>
+
 namespace cudf {
 namespace datetime {
 namespace detail {
