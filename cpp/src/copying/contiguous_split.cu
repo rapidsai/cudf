@@ -21,6 +21,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/detail/null_mask.hpp>
 
 #include <numeric>
 
@@ -31,30 +32,6 @@ namespace experimental {
 namespace detail {
 
 namespace {
-
-// TODO : this is copy of round_up_safe() that removes the exception throwing so that it can be used in a kernel.
-//        where should this ultimately live?
-template <typename S>
-__device__ inline S round_up_safe_nothrow(S number_to_round, S modulus) {
-    auto remainder = number_to_round % modulus;
-    if (remainder == 0) { return number_to_round; }
-    auto rounded_up = number_to_round - remainder + modulus;    
-    return rounded_up;
-}
-
-// TODO : this is copy of bitmask_allocation_size_bytes() that removes the exception throwing so that it can be used in a kernel.
-//        where should this ultimately live?
-__device__ std::size_t bitmask_allocation_size_bytes_nothrow(size_type number_of_bits,
-                                          std::size_t padding_boundary) {  
-  auto necessary_bytes =
-      cudf::util::div_rounding_up_safe<size_type>(number_of_bits, CHAR_BIT);
-
-  auto padded_bytes =
-      padding_boundary * cudf::util::div_rounding_up_safe<size_type>(
-                             necessary_bytes, padding_boundary);
-  return padded_bytes;
-}
-
 
 /**
  * @brief Copies contents of `in` to `out`.  Copies validity if present
@@ -119,7 +96,7 @@ void copy_in_place_kernel( column_device_view const in,
  * @brief Copies contents of one string column to another.  Copies validity if present
  * but does not compute null count.  
  * 
- * This purpose of this kernel as a standlone is to reduce the number of
+ * The purpose of this kernel is to reduce the number of
  * kernel calls for copying a string column from 2 to 1, since number of kernel calls is the
  * dominant factor in large scale contiguous_split() calls.  To do this, the kernel is
  * invoked with using max(num_chars, num_offsets) threads and then doing seperate 
@@ -238,10 +215,10 @@ static constexpr size_t split_align = 64;
  *        into a struct because tuples were getting pretty unreadable. 
  */
 struct column_split_info {
-   size_type   data_buf_size;    // size of the data (including padding)
-   size_type   validity_buf_size;// validity vector size (including padding)
+   size_t      data_buf_size;    // size of the data (including padding)
+   size_t      validity_buf_size;// validity vector size (including padding)
    
-   size_type   offsets_buf_size; // (strings only) size of offset column (including padding)
+   size_t      offsets_buf_size; // (strings only) size of offset column (including padding)
    size_type   num_chars;        // (strings only) number of chars in the column
    size_type   chars_offset;     // (strings only) offset from head of chars data
 };
@@ -418,7 +395,6 @@ void string_column_collector::operator()<string_view>(cudf::column_view const& c
    offset_columns.push_back(column_preprocess_info{column_index, c.offset(), c.size(), c.nullable(), cdv});      
 }
 
-
 /**
  * @brief Preprocess information about all strings columns in a table view.
  * 
@@ -440,22 +416,20 @@ thrust::host_vector<column_split_info> preprocess_string_column_info(cudf::table
    size_type column_index = 0;
 
    // collect only string columns
-   std::for_each(t.begin(), t.end(), [&offset_columns, &column_index](cudf::column_view const& c){      
+   std::for_each(t.begin(), t.end(), [&offset_columns, &column_index](cudf::column_view const& c){
       cudf::experimental::type_dispatcher(c.type(), string_column_collector{}, c, offset_columns, column_index);
       column_index++;
-   });   
+   });
    thrust::device_vector<column_preprocess_info> device_offset_columns = offset_columns;
-     
-    // compute column split info for all string columns   
-   auto *sizes_p = device_split_info.data().get();   
+
+   // compute column split info for all string columns   
+   auto *sizes_p = device_split_info.data().get();
    thrust::for_each(rmm::exec_policy(stream)->on(stream), device_offset_columns.begin(), device_offset_columns.end(),
-      [sizes_p] __device__ (column_preprocess_info cpi){          
+      [sizes_p] __device__ (column_preprocess_info cpi){
          auto num_chars = cpi.offsets.head<int32_t>()[cpi.offset + cpi.size] - cpi.offsets.head<int32_t>()[cpi.offset];
-         sizes_p[cpi.index].data_buf_size = round_up_safe_nothrow(static_cast<size_t>(num_chars), split_align);         
-         // can't use cudf::bitmask_allocation_size_bytes() because it throws
-         sizes_p[cpi.index].validity_buf_size = cpi.nullable ? bitmask_allocation_size_bytes_nothrow(cpi.size, split_align) : 0;                  
-         // can't use cudf::util::round_up_safe() because it throws
-         sizes_p[cpi.index].offsets_buf_size = round_up_safe_nothrow((cpi.size+1) * sizeof(size_type), split_align);
+         sizes_p[cpi.index].data_buf_size = round_up_pow2(static_cast<size_t>(num_chars), split_align);         
+         sizes_p[cpi.index].validity_buf_size = cpi.nullable ? cudf::detail::bitmask_allocation_size_bytes_nocheck(cpi.size, split_align) : 0;         
+         sizes_p[cpi.index].offsets_buf_size = round_up_pow2((cpi.size+1) * sizeof(size_type), split_align);
          sizes_p[cpi.index].num_chars = num_chars;
          sizes_p[cpi.index].chars_offset = cpi.offsets.head<int32_t>()[cpi.offset];
       }
