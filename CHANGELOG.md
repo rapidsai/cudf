@@ -11,9 +11,10 @@
 ## Bug Fixes
 
 - PR #3888 Drop `ptr=None` from `DeviceBuffer` call
-- PR #3902 Fix conversion of large size GPU array to dataframe 
+- PR #3902 Fix conversion of large size GPU array to dataframe
 - PR #3953 Fix overflow in column_buffer when computing the device buffer size
 - PR #3959 Add missing hash-dispatch function for cudf.Series
+- PR #3970 Fix for Series Pickle
 - PR #3964 Restore legacy NVStrings and NVCategory dependencies in Java jar
 
 
@@ -76,7 +77,7 @@
 - PR #3639 Define and implement `nans_to_nulls`
 - PR #3561 Rework contains implementation in search
 - PR #3616 Add aggregation infrastructure for argmax/argmin.
-- PR #3673 Parquet reader: improve rounding of timestamp conversion to seconds 
+- PR #3673 Parquet reader: improve rounding of timestamp conversion to seconds
 - PR #3699 Stringify libcudacxx headers for binary op JIT
 - PR #3697 Improve column insert performance for wide frames
 - PR #3616 Add aggregation infrastructure for argmax/argmin.
@@ -104,7 +105,7 @@
 - PR #3563 Use `__cuda_array_interface__` for serialization
 - PR #3564 Fix cuda memory access error in gather_bitmask_kernel
 - PR #3548 Replaced CUDA_RT_CALL with CUDA_TRY
-- PR #3486 Pandas > 0.25 compatability 
+- PR #3486 Pandas > 0.25 compatability
 - PR #3622 Fix new warnings and errors when building with gcc-8
 - PR #3588 Remove avro reader column order reversal
 - PR #3629 Fix hash map test failure
@@ -132,7 +133,7 @@
 - PR #3769 Don't look for a `name` attribute in column
 - PR #3783 Bind cuDF operators to Dask Dataframe
 - PR #3775 Fix segfault when reading compressed CSV files larger than 4GB
-- PR #3799 Align indices of Series inputs when adding as columns to DataFrame 
+- PR #3799 Align indices of Series inputs when adding as columns to DataFrame
 - PR #3803 Keep name when unpickling Index objects
 - PR #3804 Fix cuda crash in AVRO reader
 - PR #3766 Remove references to cudf::type_id::CATEGORY from IO code
@@ -147,7 +148,7 @@
 - PR #3869 Fixed size calculation in NVStrings::byte_count()
 - PR #3868 Fix apply_grouped moving average example
 - PR #3900 Properly link `NVStrings` and `NVCategory` into tests
-- PR #3868 Fix apply_grouped moving average example 
+- PR #3868 Fix apply_grouped moving average example
 - PR #3871 Fix `split_out` error
 - PR #3886 Fix string column materialization from column view
 - PR #3893 Parquet reader: fix segfault reading empty parquet file
