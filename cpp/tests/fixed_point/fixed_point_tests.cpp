@@ -18,6 +18,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
+#include <type_traits>
 #include <vector>
 #include <algorithm> // transform, generate_n
 #include <numeric>   // iota, accumulate
@@ -140,42 +141,10 @@ TEST_F(FixedPointTest, OverflowDecimal32) {
 
 }
 
-template<typename ValueType,
-         typename std::enable_if_t<std::numeric_limits<ValueType>::is_integer>* = nullptr>
-void transform_test(std::vector<decimal32> const& vec1,
-                    std::vector<ValueType> const& vec2) {
-
-    std::vector<ValueType> vec3(vec1.size());
-
-    std::transform(
-        std::cbegin(vec1),
-        std::cend(vec1),
-        std::begin(vec3),
-        [] (auto const& e) { return e.get(); });
-
-    EXPECT_EQ(vec2, vec3);
-}
-
-template<typename ValueType,
-         typename std::enable_if_t<!std::numeric_limits<ValueType>::is_integer>* = nullptr>
-void transform_test(std::vector<decimal32> const& vec1,
-                    std::vector<ValueType> const& vec2) {
-
-    auto equal = std::equal(
-        std::cbegin(vec1),
-        std::cend(vec1),
-        std::cbegin(vec2),
-        [] (auto const& a, auto const& b) {
-            return a.get() == b;
-        });
-
-    EXPECT_TRUE(equal);
-}
-
 template<typename ValueType, typename Binop>
-void vector_test(ValueType const initial_value,
-                 int32_t   const size,
-                 int32_t   const scale, Binop binop) {
+void integer_vector_test(ValueType const initial_value,
+                         int32_t   const size,
+                         int32_t   const scale, Binop binop) {
 
     using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
 
@@ -196,22 +165,58 @@ void vector_test(ValueType const initial_value,
         static_cast<ValueType>(0));
 
     EXPECT_EQ(res1.get(), res2);
-    EXPECT_EQ(res1.get() - res2, 0);
 
-    transform_test(vec1, vec2);
+    std::vector<ValueType> vec3(vec1.size());
+
+    std::transform(
+        std::cbegin(vec1),
+        std::cend(vec1),
+        std::begin(vec3),
+        [] (auto const& e) { return e.get(); });
+
+    EXPECT_EQ(vec2, vec3);
 }
 
-TEST_F(FixedPointTest, Decimal32VectorAddition) {
+TEST_F(FixedPointTest, Decimal32IntVector) {
 
-    vector_test(0,   10,   -2, std::plus<>());
-    vector_test(0,   1000, -2, std::plus<>());
-    vector_test(0.0, 1000, -2, std::plus<>());
-    // vector_test(0.1, 1000, -2, std::plus<>()); // currently FAILS
+    integer_vector_test(0,   10,   -2, std::plus<>());
+    integer_vector_test(0,   1000, -2, std::plus<>());
+
+    integer_vector_test(1, 10, 0, std::multiplies<>());
+    integer_vector_test(2, 20, 0, std::multiplies<>());
 
 }
 
-TEST_F(FixedPointTest, Decimal32VectorMultiplication) {
+template<typename ValueType, typename Binop>
+void float_vector_test(ValueType const initial_value,
+                         int32_t   const size,
+                         int32_t   const scale, Binop binop) {
 
-    vector_test(1, 10, 0, std::multiplies<>());
+    using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
+
+    std::vector<decimal32> vec1(size);
+    std::vector<ValueType> vec2(size);
+
+    std::iota(std::begin(vec1), std::end(vec1), decimal32{initial_value, scale_type{scale}});
+    std::iota(std::begin(vec2), std::end(vec2), initial_value);
+
+    auto equal = std::equal(
+        std::cbegin(vec1),
+        std::cend(vec1),
+        std::cbegin(vec2),
+        [] (auto const& a, auto const& b) {
+            return a.get() - b <= std::numeric_limits<ValueType>::epsilon();
+        });
+
+    EXPECT_TRUE(equal);
+}
+
+TEST_F(FixedPointTest, Decimal32FloatVector) {
+
+    float_vector_test(0.1,  1000, -2, std::plus<>());
+    float_vector_test(0.15, 1000, -2, std::plus<>());
+
+    float_vector_test(0.1,  10, -2, std::multiplies<>());
+    float_vector_test(0.15, 20, -2, std::multiplies<>());
 
 }

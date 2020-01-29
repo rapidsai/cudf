@@ -59,10 +59,14 @@ namespace detail {
 
     // convenience generic shift function
     template <Radix Rad, typename T>
-    constexpr auto shift(T const& val, scale_type const& scale) -> double {
-        if      (scale == 0) return static_cast<double>(val);
-        else if (scale >  0) return right_shift<Rad>(val, scale);
-        else                 return left_shift <Rad>(val, scale);
+    constexpr auto shift(T const& val, scale_type const& scale) -> T {
+        // TODO sort out casting
+        // situation where you are constructing with floating point type makes val float/double
+        // scale will be int32_t
+        // and the Rep (which is what we want at the end of the day) is either int32_t or int64_t
+        if      (scale == 0) return val;
+        else if (scale >  0) return static_cast<T>(right_shift<Rad>(val, scale));
+        else                 return static_cast<T>(left_shift <Rad>(val, scale));
     }
 }
 
@@ -177,6 +181,10 @@ public:
     template <typename Rep1, Radix Rad1>
     friend fixed_point<Rep1, Rad1> operator/(fixed_point<Rep1, Rad1> const& lhs,
                                              fixed_point<Rep1, Rad1> const& rhs);
+
+    template<typename Rep1, Radix Rad1>
+    friend bool operator==(fixed_point<Rep1, Rad1> const& lhs,
+                           fixed_point<Rep1, Rad1> const& rhs);
 };
 
 template <typename Rep>
@@ -286,8 +294,9 @@ fixed_point<Rep1, Rad1> operator/(fixed_point<Rep1, Rad1> const& lhs,
 template<typename Rep1, Radix Rad1>
 bool operator==(fixed_point<Rep1, Rad1> const& lhs,
                 fixed_point<Rep1, Rad1> const& rhs) {
-    auto const delta = std::fabs(lhs.get() - rhs.get());
-    return delta < std::numeric_limits<decltype(delta)>::epsilon();
+    auto const rhsv = lhs._scale > rhs._scale ? detail::shift<Rad1>(rhs._value, scale_type{lhs._scale - rhs._scale}) : rhs._value;
+    auto const lhsv = lhs._scale < rhs._scale ? detail::shift<Rad1>(lhs._value, scale_type{rhs._scale - lhs._scale}) : lhs._value;
+    return rhsv == lhsv;
 }
 
 template <typename Rep, Radix Radix>
