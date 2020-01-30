@@ -1114,7 +1114,40 @@ void writer::impl::write(table_view const &table, const table_metadata *metadata
   }
 
   // Write filefooter metadata
+  Metadata md;
   FileFooter ff;
+  PostScript ps;
+
+  if (column_stats.size() != 0) {
+    // File-level statistics
+    ff.statistics.resize(1 + num_columns);
+    // First entry contains total number of rows
+    buffer_.resize(0);
+    pbw_.putb(1 * 8 + PB_TYPE_VARINT);
+    pbw_.put_uint(num_rows);
+    ff.statistics[0] = std::move(buffer_);
+    for (int i = 0; i < num_columns; i++) {
+      size_t idx = stripe_list.size() * num_columns + i;
+      if (idx < column_stats.size()) {
+        ff.statistics[1 + i] = std::move(column_stats[idx]);
+      }
+    }
+    // Stripe-level statistics
+    md.stripeStats.resize(stripe_list.size());
+    for (size_t stripe_id = 0; stripe_id < stripe_list.size(); stripe_id++) {
+      md.stripeStats[stripe_id].colStats.resize(1 + num_columns);
+      buffer_.resize(0);
+      pbw_.putb(1 * 8 + PB_TYPE_VARINT);
+      pbw_.put_uint(stripes[stripe_id].numberOfRows);
+      md.stripeStats[stripe_id].colStats[0] = std::move(buffer_);
+      for (int i = 0; i < num_columns; i++) {
+        size_t idx = stripe_list.size() * i + stripe_id;
+        if (idx < column_stats.size()) {
+          md.stripeStats[stripe_id].colStats[1 + i] = std::move(column_stats[idx]);
+        }
+      }
+    }
+  }
   ff.headerLength = std::strlen(MAGIC);
   ff.contentLength = out_sink_->bytes_written();
   ff.stripes = std::move(stripes);
@@ -1134,16 +1167,30 @@ void writer::impl::write(table_view const &table, const table_metadata *metadata
       ff.metadata.push_back({it->first, it->second});
     }
   }
+  // Write statistics metadata
+  if (md.stripeStats.size() != 0) {
+    buffer_.resize((compression_kind_ != NONE) ? 3 : 0);
+    pbw_.write(&md);
+    ps.metadataLength = buffer_.size();
+    if (compression_kind_ != NONE) {
+      uint32_t uncomp_md_len = (uint32_t)(ps.metadataLength - 3) * 2 + 1;
+      buffer_[0] = static_cast<uint8_t>(uncomp_md_len >> 0);
+      buffer_[1] = static_cast<uint8_t>(uncomp_md_len >> 8);
+      buffer_[2] = static_cast<uint8_t>(uncomp_md_len >> 16);
+    }
+    out_sink_->write(buffer_.data(), buffer_.size());
+  }
+  else {
+    ps.metadataLength = 0;
+  }
   buffer_.resize((compression_kind_ != NONE) ? 3 : 0);
   pbw_.write(&ff);
 
   // Write postscript metadata
-  PostScript ps;
   ps.footerLength = buffer_.size();
   ps.compression = compression_kind_;
   ps.compressionBlockSize = compression_blocksize_;
   ps.version = {0, 12};
-  ps.metadataLength = 0;  // TODO: Write stripe statistics
   ps.magic = MAGIC;
   if (compression_kind_ != NONE) {
     // TODO: If the file footer ends up larger than the compression block
