@@ -52,27 +52,6 @@ struct stats {
 };
 }  // namespace column_parse
 
-/**
- * @brief Structure for holding various options used when parsing and
- * converting CSV data to cuDF data type values.
- */
-struct ParseOptions {
-  char delimiter;
-  char terminator;
-  char quotechar;
-  char decimal;
-  char thousands;
-  char comment;
-  bool keepquotes;
-  bool doublequote;
-  bool dayfirst;
-  bool skipblanklines;
-  SerialTrieNode* trueValuesTrie;
-  SerialTrieNode* falseValuesTrie;
-  SerialTrieNode* naValuesTrie;
-  bool multi_delimiter;
-};
-
 }  // namespace csv
 }  // namespace io
 }  // namespace cudf
