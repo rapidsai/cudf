@@ -152,7 +152,7 @@ if buildAll || hasArg nvstrings; then
         python setup.py build_ext
         python setup.py install --single-version-externally-managed --record=record.txt
     else
-        python setup.py build_ext --build-lib=build/ --library-dir=${LIBNVSTRINGS_BUILD_DIR}
+        python setup.py build_ext --build-lib=${PWD} --library-dir=${LIBNVSTRINGS_BUILD_DIR}
     fi
 fi
 
