@@ -1,10 +1,9 @@
 import asyncio
 
+from dask_cuda.explicit_comms import comms
 from distributed.protocol import to_serialize
 
 import cudf
-
-from dask_cudf.explicit_comms import comms
 
 
 async def send_df(ep, df):

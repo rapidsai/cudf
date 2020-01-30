@@ -17,7 +17,7 @@ from dask.utils import M, digit, insert
 import cudf as gd
 
 try:
-    from .explicit_sorting import explicit_sorted_shuffle
+    from .explicit_shuffle import explicit_sorted_shuffle
 
     explicit_comms = True
 except ImportError:
