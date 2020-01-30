@@ -196,7 +196,9 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 "Dask-cudf only supports task based shuffling, got %s"
                 % kwargs["shuffle"]
             )
-        return super().set_index(other, shuffle="tasks", **kwargs)
+        return super().set_index(
+            other, sorted=sorted, shuffle="tasks", **kwargs
+        )
 
     def reset_index(self, force=False, drop=False):
         """Reset index to range based
