@@ -62,11 +62,22 @@ struct CountBitmaskTest : public cudf::test::BaseFixture {};
 
 TEST_F(CountBitmaskTest, NullMask) {
   EXPECT_EQ(0, cudf::count_set_bits(nullptr, 0, 32));
+
+  std::vector<cudf::size_type> indices = {0, 32, 7, 25};
+  auto counts = cudf::segmented_count_set_bits(nullptr, indices);
+  EXPECT_EQ(indices.size(), counts.size() * 2);
+  for (size_t i = 0; i < counts.size(); i++) {
+    EXPECT_EQ(indices[2 * i + 1] - indices[2 * i], counts[i]);
+  }
 }
 
 TEST_F(CountBitmaskTest, NegativeStart) {
   thrust::device_vector<cudf::bitmask_type> mask(1, 0);
   EXPECT_THROW(cudf::count_set_bits(mask.data().get(), -1, 32),
+               cudf::logic_error);
+
+  std::vector<cudf::size_type> indices = {0, 16, -1, 32};
+  EXPECT_THROW(cudf::segmented_count_set_bits(mask.data().get(), indices),
                cudf::logic_error);
 }
 
@@ -74,76 +85,136 @@ TEST_F(CountBitmaskTest, StartLargerThanStop) {
   thrust::device_vector<cudf::bitmask_type> mask(1, 0);
   EXPECT_THROW(cudf::count_set_bits(mask.data().get(), 32, 31),
                cudf::logic_error);
+
+  std::vector<cudf::size_type> indices = {0, 16, 31, 30};
+  EXPECT_THROW(cudf::segmented_count_set_bits(mask.data().get(), indices),
+               cudf::logic_error);
 }
 
 TEST_F(CountBitmaskTest, EmptyRange) {
   thrust::device_vector<cudf::bitmask_type> mask(1, 0);
   EXPECT_EQ(0, cudf::count_set_bits(mask.data().get(), 17, 17));
+
+  std::vector<cudf::size_type> indices = {0, 0, 17, 17};
+  auto counts = cudf::segmented_count_set_bits(mask.data().get(), indices);
+  EXPECT_THAT(counts, testing::ContainerEq(std::vector<cudf::size_type>{0, 0}));
 }
 
 TEST_F(CountBitmaskTest, SingleWordAllZero) {
   thrust::device_vector<cudf::bitmask_type> mask(1, 0);
   EXPECT_EQ(0, cudf::count_set_bits(mask.data().get(), 0, 32));
+
+  std::vector<cudf::size_type> indices = {0, 32, 0, 32};
+  auto counts = cudf::segmented_count_set_bits(mask.data().get(), indices);
+  EXPECT_THAT(counts, testing::ContainerEq(std::vector<cudf::size_type>{0, 0}));
 }
 
 TEST_F(CountBitmaskTest, SingleBitAllZero) {
   thrust::device_vector<cudf::bitmask_type> mask(1, 0);
   EXPECT_EQ(0, cudf::count_set_bits(mask.data().get(), 17, 18));
+
+  std::vector<cudf::size_type> indices = {17, 18, 7, 8};
+  auto counts = cudf::segmented_count_set_bits(mask.data().get(), indices);
+  EXPECT_THAT(counts, testing::ContainerEq(std::vector<cudf::size_type>{0, 0}));
 }
 
 TEST_F(CountBitmaskTest, SingleBitAllSet) {
   thrust::device_vector<cudf::bitmask_type> mask(1, ~cudf::bitmask_type{0});
   EXPECT_EQ(1, cudf::count_set_bits(mask.data().get(), 13, 14));
+
+  std::vector<cudf::size_type> indices = {13, 14, 0, 1};
+  auto counts = cudf::segmented_count_set_bits(mask.data().get(), indices);
+  EXPECT_THAT(counts, testing::ContainerEq(std::vector<cudf::size_type>{1, 1}));
 }
 
 TEST_F(CountBitmaskTest, SingleWordAllBitsSet) {
   thrust::device_vector<cudf::bitmask_type> mask(1, ~cudf::bitmask_type{0});
   EXPECT_EQ(32, cudf::count_set_bits(mask.data().get(), 0, 32));
+
+  std::vector<cudf::size_type> indices = {0, 32, 0, 32};
+  auto counts = cudf::segmented_count_set_bits(mask.data().get(), indices);
+  EXPECT_THAT(counts, testing::ContainerEq(std::vector<cudf::size_type>{32, 32}));
 }
 
 TEST_F(CountBitmaskTest, SingleWordPreSlack) {
   thrust::device_vector<cudf::bitmask_type> mask(1, ~cudf::bitmask_type{0});
   EXPECT_EQ(25, cudf::count_set_bits(mask.data().get(), 7, 32));
+
+  std::vector<cudf::size_type> indices = {7, 32, 8, 32};
+  auto counts = cudf::segmented_count_set_bits(mask.data().get(), indices);
+  EXPECT_THAT(counts, testing::ContainerEq(std::vector<cudf::size_type>{25, 24}));
 }
 
 TEST_F(CountBitmaskTest, SingleWordPostSlack) {
   thrust::device_vector<cudf::bitmask_type> mask(1, ~cudf::bitmask_type{0});
   EXPECT_EQ(17, cudf::count_set_bits(mask.data().get(), 0, 17));
+
+  std::vector<cudf::size_type> indices = {0, 17, 0, 18};
+  auto counts = cudf::segmented_count_set_bits(mask.data().get(), indices);
+  EXPECT_THAT(counts, testing::ContainerEq(std::vector<cudf::size_type>{17, 18}));
 }
 
 TEST_F(CountBitmaskTest, SingleWordSubset) {
   thrust::device_vector<cudf::bitmask_type> mask(1, ~cudf::bitmask_type{0});
   EXPECT_EQ(30, cudf::count_set_bits(mask.data().get(), 1, 31));
+
+  std::vector<cudf::size_type> indices = {1, 31, 7, 17};
+  auto counts = cudf::segmented_count_set_bits(mask.data().get(), indices);
+  EXPECT_THAT(counts, testing::ContainerEq(std::vector<cudf::size_type>{30, 10}));
 }
 
 TEST_F(CountBitmaskTest, SingleWordSubset2) {
   thrust::device_vector<cudf::bitmask_type> mask(1, ~cudf::bitmask_type{0});
   EXPECT_EQ(28, cudf::count_set_bits(mask.data().get(), 2, 30));
+
+  std::vector<cudf::size_type> indices = {4, 16, 2, 30};
+  auto counts = cudf::segmented_count_set_bits(mask.data().get(), indices);
+  EXPECT_THAT(counts, testing::ContainerEq(std::vector<cudf::size_type>{12, 28}));
 }
 
 TEST_F(CountBitmaskTest, MultipleWordsAllBits) {
   thrust::device_vector<cudf::bitmask_type> mask(10, ~cudf::bitmask_type{0});
   EXPECT_EQ(320, cudf::count_set_bits(mask.data().get(), 0, 320));
+
+  std::vector<cudf::size_type> indices = {0, 320, 0, 320};
+  auto counts = cudf::segmented_count_set_bits(mask.data().get(), indices);
+  EXPECT_THAT(counts, testing::ContainerEq(std::vector<cudf::size_type>{320, 320}));
 }
 
 TEST_F(CountBitmaskTest, MultipleWordsSubsetWordBoundary) {
   thrust::device_vector<cudf::bitmask_type> mask(10, ~cudf::bitmask_type{0});
   EXPECT_EQ(256, cudf::count_set_bits(mask.data().get(), 32, 288));
+
+  std::vector<cudf::size_type> indices = {32, 192, 32, 288};
+  auto counts = cudf::segmented_count_set_bits(mask.data().get(), indices);
+  EXPECT_THAT(counts, testing::ContainerEq(std::vector<cudf::size_type>{160, 256}));
 }
 
 TEST_F(CountBitmaskTest, MultipleWordsSplitWordBoundary) {
   thrust::device_vector<cudf::bitmask_type> mask(10, ~cudf::bitmask_type{0});
   EXPECT_EQ(2, cudf::count_set_bits(mask.data().get(), 31, 33));
+
+  std::vector<cudf::size_type> indices = {31, 33, 60, 67};
+  auto counts = cudf::segmented_count_set_bits(mask.data().get(), indices);
+  EXPECT_THAT(counts, testing::ContainerEq(std::vector<cudf::size_type>{2, 7}));
 }
 
 TEST_F(CountBitmaskTest, MultipleWordsSubset) {
   thrust::device_vector<cudf::bitmask_type> mask(10, ~cudf::bitmask_type{0});
   EXPECT_EQ(226, cudf::count_set_bits(mask.data().get(), 67, 293));
+
+  std::vector<cudf::size_type> indices = {67, 293, 37, 319};
+  auto counts = cudf::segmented_count_set_bits(mask.data().get(), indices);
+  EXPECT_THAT(counts, testing::ContainerEq(std::vector<cudf::size_type>{226, 282}));
 }
 
 TEST_F(CountBitmaskTest, MultipleWordsSingleBit) {
   thrust::device_vector<cudf::bitmask_type> mask(10, ~cudf::bitmask_type{0});
   EXPECT_EQ(1, cudf::count_set_bits(mask.data().get(), 67, 68));
+
+  std::vector<cudf::size_type> indices = {67, 68, 31, 32, 192, 193};
+  auto counts = cudf::segmented_count_set_bits(mask.data().get(), indices);
+  EXPECT_THAT(counts, testing::ContainerEq(std::vector<cudf::size_type>{1, 1, 1}));
 }
 
 using CountUnsetBitsTest = CountBitmaskTest;
@@ -151,60 +222,111 @@ using CountUnsetBitsTest = CountBitmaskTest;
 TEST_F(CountUnsetBitsTest, SingleBitAllSet) {
   thrust::device_vector<cudf::bitmask_type> mask(1, ~cudf::bitmask_type{0});
   EXPECT_EQ(0, cudf::count_unset_bits(mask.data().get(), 13, 14));
+
+  std::vector<cudf::size_type> indices = {13, 14, 31, 32};
+  auto counts = cudf::segmented_count_unset_bits(mask.data().get(), indices);
+  EXPECT_THAT(counts, testing::ContainerEq(std::vector<cudf::size_type>{0, 0}));
 }
 
 TEST_F(CountUnsetBitsTest, NullMask) {
   EXPECT_EQ(0, cudf::count_unset_bits(nullptr, 0, 32));
+
+  std::vector<cudf::size_type> indices = {0, 32, 7, 25};
+  auto counts = cudf::segmented_count_unset_bits(nullptr, indices);
+  EXPECT_EQ(indices.size(), counts.size() * 2);
+  for (size_t i = 0; i < counts.size(); i++) {
+    EXPECT_EQ(0, counts[i]);
+  }
 }
 
 TEST_F(CountUnsetBitsTest, SingleWordAllBits) {
   thrust::device_vector<cudf::bitmask_type> mask(1, cudf::bitmask_type{0});
   EXPECT_EQ(32, cudf::count_unset_bits(mask.data().get(), 0, 32));
+
+  std::vector<cudf::size_type> indices = {0, 32, 0, 32};
+  auto counts = cudf::segmented_count_unset_bits(mask.data().get(), indices);
+  EXPECT_THAT(counts, testing::ContainerEq(std::vector<cudf::size_type>{32, 32}));
 }
 
 TEST_F(CountUnsetBitsTest, SingleWordPreSlack) {
   thrust::device_vector<cudf::bitmask_type> mask(1, cudf::bitmask_type{0});
   EXPECT_EQ(25, cudf::count_unset_bits(mask.data().get(), 7, 32));
+
+  std::vector<cudf::size_type> indices = {7, 32, 8, 32};
+  auto counts = cudf::segmented_count_unset_bits(mask.data().get(), indices);
+  EXPECT_THAT(counts, testing::ContainerEq(std::vector<cudf::size_type>{25, 24}));
 }
 
 TEST_F(CountUnsetBitsTest, SingleWordPostSlack) {
   thrust::device_vector<cudf::bitmask_type> mask(1, cudf::bitmask_type{0});
   EXPECT_EQ(17, cudf::count_unset_bits(mask.data().get(), 0, 17));
+
+  std::vector<cudf::size_type> indices = {0, 17, 0, 18};
+  auto counts = cudf::segmented_count_unset_bits(mask.data().get(), indices);
+  EXPECT_THAT(counts, testing::ContainerEq(std::vector<cudf::size_type>{17, 18}));
 }
 
 TEST_F(CountUnsetBitsTest, SingleWordSubset) {
   thrust::device_vector<cudf::bitmask_type> mask(1, cudf::bitmask_type{0});
   EXPECT_EQ(30, cudf::count_unset_bits(mask.data().get(), 1, 31));
+
+  std::vector<cudf::size_type> indices = {1, 31, 7, 17};
+  auto counts = cudf::segmented_count_unset_bits(mask.data().get(), indices);
+  EXPECT_THAT(counts, testing::ContainerEq(std::vector<cudf::size_type>{30, 10}));
 }
 
 TEST_F(CountUnsetBitsTest, SingleWordSubset2) {
   thrust::device_vector<cudf::bitmask_type> mask(1, cudf::bitmask_type{0});
   EXPECT_EQ(28, cudf::count_unset_bits(mask.data().get(), 2, 30));
+
+  std::vector<cudf::size_type> indices = {4, 16, 2, 30};
+  auto counts = cudf::segmented_count_unset_bits(mask.data().get(), indices);
+  EXPECT_THAT(counts, testing::ContainerEq(std::vector<cudf::size_type>{12, 28}));
 }
 
 TEST_F(CountUnsetBitsTest, MultipleWordsAllBits) {
   thrust::device_vector<cudf::bitmask_type> mask(10, cudf::bitmask_type{0});
   EXPECT_EQ(320, cudf::count_unset_bits(mask.data().get(), 0, 320));
+
+  std::vector<cudf::size_type> indices = {0, 320, 0, 320};
+  auto counts = cudf::segmented_count_unset_bits(mask.data().get(), indices);
+  EXPECT_THAT(counts, testing::ContainerEq(std::vector<cudf::size_type>{320, 320}));
 }
 
 TEST_F(CountUnsetBitsTest, MultipleWordsSubsetWordBoundary) {
   thrust::device_vector<cudf::bitmask_type> mask(10, cudf::bitmask_type{0});
   EXPECT_EQ(256, cudf::count_unset_bits(mask.data().get(), 32, 288));
+
+  std::vector<cudf::size_type> indices = {32, 192, 32, 288};
+  auto counts = cudf::segmented_count_unset_bits(mask.data().get(), indices);
+  EXPECT_THAT(counts, testing::ContainerEq(std::vector<cudf::size_type>{160, 256}));
 }
 
 TEST_F(CountUnsetBitsTest, MultipleWordsSplitWordBoundary) {
   thrust::device_vector<cudf::bitmask_type> mask(10, cudf::bitmask_type{0});
   EXPECT_EQ(2, cudf::count_unset_bits(mask.data().get(), 31, 33));
+
+  std::vector<cudf::size_type> indices = {31, 33, 60, 67};
+  auto counts = cudf::segmented_count_unset_bits(mask.data().get(), indices);
+  EXPECT_THAT(counts, ::testing::ContainerEq(std::vector<cudf::size_type>{2, 7}));
 }
 
 TEST_F(CountUnsetBitsTest, MultipleWordsSubset) {
   thrust::device_vector<cudf::bitmask_type> mask(10, cudf::bitmask_type{0});
   EXPECT_EQ(226, cudf::count_unset_bits(mask.data().get(), 67, 293));
+
+  std::vector<cudf::size_type> indices = {67, 293, 37, 319};
+  auto counts = cudf::segmented_count_unset_bits(mask.data().get(), indices);
+  EXPECT_THAT(counts, ::testing::ContainerEq(std::vector<cudf::size_type>{226, 282}));
 }
 
 TEST_F(CountUnsetBitsTest, MultipleWordsSingleBit) {
   thrust::device_vector<cudf::bitmask_type> mask(10, cudf::bitmask_type{0});
   EXPECT_EQ(1, cudf::count_unset_bits(mask.data().get(), 67, 68));
+
+  std::vector<cudf::size_type> indices = {67, 68, 31, 32, 192, 193};
+  auto counts = cudf::segmented_count_unset_bits(mask.data().get(), indices);
+  EXPECT_THAT(counts, ::testing::ContainerEq(std::vector<cudf::size_type>{1, 1, 1}));
 }
 
 struct CopyBitmaskTest : public cudf::test::BaseFixture,

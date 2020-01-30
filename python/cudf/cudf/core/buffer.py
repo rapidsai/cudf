@@ -40,20 +40,22 @@ class Buffer:
             self._init_from_array_like(data)
         elif isinstance(data, memoryview):
             self._init_from_array_like(np.asarray(data))
-        else:
-            if data is None:
-                self.ptr = 0
-                self.size = 0
-            else:
-                if not isinstance(data, int):
-                    raise TypeError(
-                        "data must be Buffer, array-like or integer"
-                    )
-                if not isinstance(size, int):
-                    raise TypeError("size must be integer")
-                self.ptr = data
-                self.size = size
+        elif isinstance(data, int):
+            if not isinstance(size, int):
+                raise TypeError("size must be integer")
+            self.ptr = data
+            self.size = size
             self._owner = owner
+        elif data is None:
+            self.ptr = 0
+            self.size = 0
+            self._owner = None
+        else:
+            try:
+                data = memoryview(data)
+            except TypeError:
+                raise TypeError("data must be Buffer, array-like or integer")
+            self._init_from_array_like(np.asarray(data))
 
     def __reduce__(self):
         return self.__class__, (self.to_host_array(),)
