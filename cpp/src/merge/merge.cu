@@ -414,6 +414,40 @@ std::unique_ptr<cudf::experimental::table> merge(cudf::table_view const& left_ta
     return std::make_unique<cudf::experimental::table>(std::move(v_merged_cols));
 }
 
+
+std::unique_ptr<cudf::experimental::table> merge(std::vector<table_view> const& tables_to_merge,
+                                                 std::vector<cudf::size_type> const& key_cols,
+                                                 std::vector<cudf::order> const& column_order,
+                                                 std::vector<cudf::null_order> const& null_precedence,
+                                                 rmm::mr::device_memory_resource* mr,
+                                                 cudaStream_t stream = 0) {
+    CUDF_EXPECTS(!tables_to_merge.empty(), "Need to pass at least one table");
+
+    auto const& first_table = tables_to_merge.front();
+    if (tables_to_merge.size() == 1) {
+      return std::make_unique<cudf::experimental::table>(first_table);
+    }
+
+    const auto n_cols = first_table.num_columns();
+    for (auto const& table: tables_to_merge) {
+      CUDF_EXPECTS(n_cols == table.num_columns(), "Mismatched number of columns");
+    }
+    if (first_table.num_columns() == 0) {
+      return cudf::experimental::empty_like(first_table);
+    }
+
+    for (auto const& table: tables_to_merge) {
+      CUDF_EXPECTS(cudf::have_same_types(first_table, table), "Mismatched column types");
+    }
+
+    auto result = cudf::experimental::empty_like(first_table);
+    for (auto const& table: tables_to_merge) {
+      result = merge(result->view(), table, key_cols, column_order, null_precedence, mr, stream);
+    }
+
+    return std::move(result);
+}
+
 }  // namespace detail
 
 std::unique_ptr<cudf::experimental::table> merge(table_view const& left_table,
@@ -423,6 +457,15 @@ std::unique_ptr<cudf::experimental::table> merge(table_view const& left_table,
                                                  std::vector<cudf::null_order> const& null_precedence,
                                                  rmm::mr::device_memory_resource* mr){
   return detail::merge(left_table, right_table, key_cols, column_order, null_precedence, mr);
+}
+
+
+std::unique_ptr<cudf::experimental::table> merge(std::vector<table_view> const& tables_to_merge,
+                                                 std::vector<cudf::size_type> const& key_cols,
+                                                 std::vector<cudf::order> const& column_order,
+                                                 std::vector<cudf::null_order> const& null_precedence,
+                                                 rmm::mr::device_memory_resource* mr){
+  return detail::merge(tables_to_merge, key_cols, column_order, null_precedence, mr);
 }
 
 }  // namespace experimental

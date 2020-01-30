@@ -597,3 +597,69 @@ TYPED_TEST(MergeTest_, Merge2KeyNullColumns) {
     cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
 }
 
+TYPED_TEST(MergeTest_, NMerge1KeyColumns) {
+  using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam>;
+  
+  cudf::size_type inputRows = 64;
+  
+  auto sequence0 = cudf::test::make_counting_transform_iterator(0, [](auto row) {
+      if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8)
+        return 0;
+      else
+        return row; });
+      
+  auto sequence1 = cudf::test::make_counting_transform_iterator(0, [inputRows](auto row) {
+      if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8)
+        return 1;
+      else
+        return inputRows - row; });
+
+  columnFactoryT leftColWrap1(sequence0, sequence0+inputRows);
+  columnFactoryT leftColWrap2(sequence1, sequence1+inputRows);
+
+  columnFactoryT rightColWrap1(sequence0, sequence0+inputRows);
+  columnFactoryT rightColWrap2(sequence1, sequence1+inputRows);//<- confirmed I can reuse a sequence, wo/ creating overlapping columns!
+
+  std::vector<cudf::table_view> tables{cudf::table_view{{leftColWrap1, leftColWrap2}}, 
+                                       cudf::table_view{{rightColWrap1, rightColWrap2}}};
+  
+  std::vector<cudf::size_type> key_cols{0};
+  std::vector<cudf::order> column_order {cudf::order::ASCENDING};
+  std::vector<cudf::null_order> null_precedence{};
+
+  std::unique_ptr<cudf::experimental::table> p_outputTable;
+  EXPECT_NO_THROW(p_outputTable = cudf::experimental::merge(tables,
+                                                            key_cols,
+                                                            column_order,
+                                                            null_precedence));
+
+  cudf::column_view const& a_left_tbl_cview{static_cast<cudf::column_view const&>(leftColWrap1)};
+  cudf::column_view const& a_right_tbl_cview{static_cast<cudf::column_view const&>(rightColWrap1)};
+  const cudf::size_type outputRows = a_left_tbl_cview.size() + a_right_tbl_cview.size();
+  
+  auto seq_out1 = cudf::test::make_counting_transform_iterator(0, [](auto row) {
+      if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8)
+        {
+          return static_cast<TypeParam>(0);
+        }
+      else
+        return static_cast<TypeParam>(row/2);
+    });
+  columnFactoryT expectedDataWrap1(seq_out1, seq_out1+outputRows);
+
+  auto seq_out2 = cudf::test::make_counting_transform_iterator(0, [inputRows](auto row) {
+      if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8)
+        return 1;
+      else
+        return inputRows - row / 2; });
+  columnFactoryT expectedDataWrap2(seq_out2, seq_out2+outputRows);
+
+  auto expected_column_view1{static_cast<cudf::column_view const&>(expectedDataWrap1)};
+  auto expected_column_view2{static_cast<cudf::column_view const&>(expectedDataWrap2)};
+
+  auto output_column_view1{p_outputTable->view().column(0)};
+  auto output_column_view2{p_outputTable->view().column(1)};    
+
+  cudf::test::expect_columns_equal(expected_column_view1, output_column_view1);
+  cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
+}
