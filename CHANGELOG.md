@@ -10,6 +10,7 @@
 - PR #3972 Add Java bindings for left_semi_join and left_anti_join
 - PR #3975 Simplify and generalize data handling in `Buffer`
 - PR #3911 Adding null boolean handling for copy_if_else
+- PR #4002 Adding to_frame and fix for categorical column issue
 
 - PR #3897 Port cuIO JSON reader to cudf::column types
 
