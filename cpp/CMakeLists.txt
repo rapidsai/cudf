@@ -470,6 +470,7 @@ add_library(cudf
             src/replace/replace.cu
             src/replace/clamp.cu
             src/reshape/legacy/stack.cu
+            src/reshape/interleave_columns.cu
             src/transpose/transpose.cu
             src/transpose/legacy/transpose.cu
             src/merge/legacy/merge.cu
@@ -496,6 +497,8 @@ add_library(cudf
             src/io/csv/csv_gpu.cu
             src/io/csv/reader_impl.cu
             src/io/json/legacy/json_reader_impl.cu
+            src/io/json/reader_impl.cu
+            src/io/json/json_gpu.cu
             src/io/orc/legacy/orc_reader_impl.cu
             src/io/orc/legacy/orc_writer_impl.cu
             src/io/orc/orc.cpp
@@ -524,6 +527,8 @@ add_library(cudf
             src/io/functions.cpp
             src/io/statistics/column_stats.cu
             src/io/utilities/datasource.cpp
+            src/io/utilities/parsing_utils.cu
+            src/io/utilities/type_conversion.cu
             src/io/utilities/data_sink.cpp
             src/io/utilities/legacy/parsing_utils.cu
             src/utilities/legacy/cuda_utils.cu
@@ -551,6 +556,7 @@ add_library(cudf
             src/filling/legacy/repeat.cu
             src/filling/repeat.cu
             src/filling/legacy/tile.cu
+            src/reshape/tile.cu
             src/search/legacy/search.cu
             src/search/search.cu
             src/column/column.cu

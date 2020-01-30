@@ -246,6 +246,7 @@ def test_groupby_string_index_name(myindex):
 @pytest.mark.parametrize(
     "agg_func",
     [
+        lambda gb: gb.agg({"c": ["count"]}, split_out=2),
         lambda gb: gb.agg({"c": "count"}, split_out=2),
         lambda gb: gb.agg({"c": ["count", "sum"]}, split_out=2),
         lambda gb: gb.count(split_out=2),
@@ -265,3 +266,58 @@ def test_groupby_split_out_multiindex(agg_func):
     gr = agg_func(ddf.groupby(["a", "b"]))
     pr = agg_func(pddf.groupby(["a", "b"]))
     dd.assert_eq(gr.compute(), pr.compute())
+
+
+def test_groupby_multiindex_reset_index():
+    df = cudf.DataFrame(
+        {"a": [1, 1, 2, 3, 4], "b": [5, 2, 1, 2, 5], "c": [1, 2, 2, 3, 5]}
+    )
+    ddf = dask_cudf.from_cudf(df, npartitions=1)
+    pddf = dd.from_pandas(df.to_pandas(), npartitions=1)
+    gr = ddf.groupby(["a", "c"]).agg({"b": ["count"]}).reset_index()
+    pr = pddf.groupby(["a", "c"]).agg({"b": ["count"]}).reset_index()
+    dd.assert_eq(gr.compute(), pr.compute())
+
+
+@pytest.mark.parametrize(
+    "groupby_keys", [["a"], ["a", "b"], ["a", "b", "dd"], ["a", "dd", "b"]],
+)
+@pytest.mark.parametrize(
+    "agg_func",
+    [
+        lambda gb: gb.agg({"c": ["count"]}),
+        lambda gb: gb.agg({"c": "count"}),
+        lambda gb: gb.agg({"c": ["count", "sum"]}),
+        lambda gb: gb.count(),
+        lambda gb: gb.c.count(),
+    ],
+)
+def test_groupby_reset_index_multiindex(groupby_keys, agg_func):
+    df = cudf.DataFrame(
+        {
+            "a": np.random.randint(0, 10, 10),
+            "b": np.random.randint(0, 5, 10),
+            "c": np.random.randint(0, 5, 10),
+            "dd": np.random.randint(0, 5, 10),
+        }
+    )
+    ddf = dask_cudf.from_cudf(df, 5)
+    pddf = dd.from_pandas(df.to_pandas(), 5)
+    gr = agg_func(ddf.groupby(groupby_keys)).reset_index()
+    pr = agg_func(pddf.groupby(groupby_keys)).reset_index()
+    gf = gr.compute().sort_values(groupby_keys).reset_index(drop=True)
+    pf = pr.compute().sort_values(groupby_keys).reset_index(drop=True)
+    dd.assert_eq(gf, pf)
+
+
+def test_groupby_reset_index_drop_True():
+    df = cudf.DataFrame(
+        {"a": np.random.randint(0, 10, 10), "b": np.random.randint(0, 5, 10)}
+    )
+    ddf = dask_cudf.from_cudf(df, 5)
+    pddf = dd.from_pandas(df.to_pandas(), 5)
+    gr = ddf.groupby(["a"]).agg({"b": ["count"]}).reset_index(drop=True)
+    pr = pddf.groupby(["a"]).agg({"b": ["count"]}).reset_index(drop=True)
+    gf = gr.compute()
+    pf = pr.compute()
+    dd.assert_eq(gf, pf)

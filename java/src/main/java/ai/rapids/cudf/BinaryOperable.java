@@ -29,14 +29,11 @@ public interface BinaryOperable {
    * INT16/short >
    * INT8/byte/char
    * <p>
-   * Currently TIMESTAMP and DATE64 are treated the same as INT64. DATE32 is treated the same
-   * as INT32.  TimeUnit conversion is not taken into account when doing operations on these
-   * objects. This may change in the future, but for now the types returned will be stripped of
-   * time units.  You can still get the desired behavior by casting the things involved to the
-   * same time units doing the math, and casting it to a result with the desired time units.
+   * Currently most TIMESTAMPs are treated the same as INT64. TIMESTAMP_DAYS is treated the same
+   * as INT32. All time information is stripped from them.  This may change in the future.
    * <p>
    * BOOL8 is treated like an INT8.  Math on boolean operations makes little sense.  If
-   * you want to to stay as a BOOL8 you will need to explicitly specify the output type.
+   * you want to stay as a BOOL8 you will need to explicitly specify the output type.
    */
   static DType implicitConversion(BinaryOperable lhs, BinaryOperable rhs) {
     DType a = lhs.getType();
@@ -48,12 +45,14 @@ public interface BinaryOperable {
       return DType.FLOAT32;
     }
     if (a == DType.INT64 || b == DType.INT64 ||
-        a == DType.DATE64 || b == DType.DATE64 ||
-        a == DType.TIMESTAMP || b == DType.TIMESTAMP) {
+        a == DType.TIMESTAMP_MILLISECONDS || b == DType.TIMESTAMP_MILLISECONDS ||
+        a == DType.TIMESTAMP_MICROSECONDS || b == DType.TIMESTAMP_MICROSECONDS ||
+        a == DType.TIMESTAMP_SECONDS || b == DType.TIMESTAMP_SECONDS ||
+        a == DType.TIMESTAMP_NANOSECONDS || b == DType.TIMESTAMP_NANOSECONDS) {
       return DType.INT64;
     }
     if (a == DType.INT32 || b == DType.INT32 ||
-        a == DType.DATE32 || b == DType.DATE32) {
+        a == DType.TIMESTAMP_DAYS || b == DType.TIMESTAMP_DAYS) {
       return DType.INT32;
     }
     if (a == DType.INT16 || b == DType.INT16) {

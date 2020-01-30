@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -18,30 +18,54 @@
 
 package ai.rapids.cudf;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
-import java.io.*;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.LongStream;
 
 import static ai.rapids.cudf.Aggregate.max;
-import static ai.rapids.cudf.Table.*;
-import static org.junit.jupiter.api.Assertions.*;
+import static ai.rapids.cudf.Table.TestBuilder;
+import static ai.rapids.cudf.Table.count;
+import static ai.rapids.cudf.Table.mean;
+import static ai.rapids.cudf.Table.min;
+import static ai.rapids.cudf.Table.sum;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TableTest extends CudfTestBase {
   private static final File TEST_PARQUET_FILE = new File("src/test/resources/acq.parquet");
   private static final File TEST_ORC_FILE = new File("src/test/resources/TestOrcFile.orc");
   private static final File TEST_ORC_TIMESTAMP_DATE_FILE = new File(
       "src/test/resources/timestamp-date-test.orc");
+
   private static final Schema CSV_DATA_BUFFER_SCHEMA = Schema.builder()
       .column(DType.INT32, "A")
       .column(DType.FLOAT64, "B")
       .column(DType.INT64, "C")
       .build();
+
   private static final byte[] CSV_DATA_BUFFER = ("A|B|C\n" +
       "'0'|'110.0'|'120'\n" +
       "1|111.0|121\n" +
@@ -66,7 +90,6 @@ public class TableTest extends CudfTestBase {
     } else {
       // TODO add in a proper check when null counts are supported by serializing a partitioned column
     }
-    assertEquals(expected.getTimeUnit(), cv.getTimeUnit(), "TimeUnit for Column " + colName);
     expected.ensureOnHost();
     cv.ensureOnHost();
     DType type = expected.getType();
@@ -86,13 +109,15 @@ public class TableTest extends CudfTestBase {
                 "Column " + colName + " Row " + tableRow);
             break;
           case INT32: // fall through
-          case DATE32:
+          case TIMESTAMP_DAYS:
             assertEquals(expected.getInt(expectedRow), cv.getInt(tableRow),
                 "Column " + colName + " Row " + tableRow);
             break;
           case INT64: // fall through
-          case DATE64: // fall through
-          case TIMESTAMP:
+          case TIMESTAMP_MICROSECONDS: // fall through
+          case TIMESTAMP_MILLISECONDS: // fall through
+          case TIMESTAMP_NANOSECONDS: // fall through
+          case TIMESTAMP_SECONDS:
             assertEquals(expected.getLong(expectedRow), cv.getLong(tableRow),
                 "Column " + colName + " Row " + tableRow);
             break;
@@ -104,9 +129,8 @@ public class TableTest extends CudfTestBase {
             assertEquals(expected.getDouble(expectedRow), cv.getDouble(tableRow), 0.0001,
                 "Column " + colName + " Row " + tableRow);
             break;
-          case STRING: // fall through
-          case STRING_CATEGORY:
-            assertEquals(expected.getJavaString(expectedRow), cv.getJavaString(tableRow),
+          case STRING:
+            assertArrayEquals(expected.getUTF8(expectedRow), cv.getUTF8(tableRow),
                 "Column " + colName + " Row " + tableRow);
             break;
           default:
@@ -185,7 +209,7 @@ public class TableTest extends CudfTestBase {
              .column(2, 1, 4, 3, 5)
              .column(9, 7, 5, 3, 1)
              .build();
-         Table sortedTable = table.orderBy(false, Table.asc(0), Table.desc(1))) {
+         Table sortedTable = table.orderBy(Table.asc(0), Table.desc(1))) {
       assertTablesAreEqual(expected, sortedTable);
     }
   }
@@ -202,7 +226,7 @@ public class TableTest extends CudfTestBase {
              .column(5, 4, 3, 2, 1)
              .column(1, 5, 3, 9, 7)
              .build();
-         Table sortedTable = table.orderBy(false, Table.desc(0), Table.desc(1))) {
+         Table sortedTable = table.orderBy(Table.desc(0), Table.desc(1))) {
       assertTablesAreEqual(expected, sortedTable);
     }
   }
@@ -212,16 +236,16 @@ public class TableTest extends CudfTestBase {
     try (Table table = new Table.TestBuilder()
         .column(5, null, 3, 1, 1)
         .column(5, 3, 4, null, null)
-	.categoryColumn("4", "3", "2", "1", "0")
+        .column("4", "3", "2", "1", "0")
         .column(1, 3, 5, 7, 9)
         .build();
          Table expected = new Table.TestBuilder()
              .column(1, 1, 3, 5, null)
              .column(null, null, 4, 5, 3)
-	     .categoryColumn("1", "0", "2", "4", "3")
+             .column("1", "0", "2", "4", "3")
              .column(7, 9, 5, 1, 3)
              .build();
-         Table sortedTable = table.orderBy(false, Table.asc(0), Table.desc(1))) {
+         Table sortedTable = table.orderBy(Table.asc(0), Table.desc(1))) {
       assertTablesAreEqual(expected, sortedTable);
     }
   }
@@ -229,18 +253,18 @@ public class TableTest extends CudfTestBase {
   @Test
   void testOrderByWithNullsAndStrings() {
     try (Table table = new Table.TestBuilder()
-	.categoryColumn("4", "3", "2", "1", "0")
+        .column("4", "3", "2", "1", "0")
         .column(5, null, 3, 1, 1)
         .column(5, 3, 4, null, null)
         .column(1, 3, 5, 7, 9)
         .build();
          Table expected = new Table.TestBuilder()
-	     .categoryColumn("0", "1", "2", "3", "4")
+             .column("0", "1", "2", "3", "4")
              .column(1, 1, 3, null, 5)
              .column(null, null, 4, 3, 5)
              .column(9, 7, 5, 3, 1)
              .build();
-         Table sortedTable = table.orderBy(false, Table.asc(0))) {
+         Table sortedTable = table.orderBy(Table.asc(0))) {
       assertTablesAreEqual(expected, sortedTable);
     }
   }
@@ -489,8 +513,8 @@ public class TableTest extends CudfTestBase {
           DType.FLOAT64, // orig_interest_rate
           DType.INT32, // orig_upb
           DType.INT32, // orig_loan_term
-          DType.DATE32, // orig_date
-          DType.DATE32, // first_pay_date
+          DType.TIMESTAMP_DAYS, // orig_date
+          DType.TIMESTAMP_DAYS, // first_pay_date
           DType.FLOAT64, // orig_ltv
           DType.FLOAT64, // orig_cltv
           DType.FLOAT64, // num_borrowers
@@ -573,36 +597,36 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testReadORCNumPyTypes() {
-    // by default ORC will promote DATE32 to DATE64
-    // and TIMESTAMP is kept as it is
+    // by default ORC will promote TIMESTAMP_DAYS to TIMESTAMP_MILLISECONDS
+    DType found;
     try (Table table = Table.readORC(TEST_ORC_TIMESTAMP_DATE_FILE)) {
       assertEquals(2, table.getNumberOfColumns());
-      assertEquals(DType.TIMESTAMP, table.getColumn(0).getType());
-      assertEquals(DType.DATE64, table.getColumn(1).getType());
+      found = table.getColumn(0).getType();
+      assertTrue(found.isTimestamp());
+      assertEquals(DType.TIMESTAMP_MILLISECONDS, table.getColumn(1).getType());
     }
 
-    // specifying no NumPy types should load them as DATE32 and TIMESTAMP
+    // specifying no NumPy types should load them as TIMESTAMP_DAYS
     ORCOptions opts = ORCOptions.builder().withNumPyTypes(false).build();
     try (Table table = Table.readORC(opts, TEST_ORC_TIMESTAMP_DATE_FILE)) {
       assertEquals(2, table.getNumberOfColumns());
-      assertEquals(DType.TIMESTAMP, table.getColumn(0).getType());
-      assertEquals(DType.DATE32, table.getColumn(1).getType());
+      assertEquals(found, table.getColumn(0).getType());
+      assertEquals(DType.TIMESTAMP_DAYS, table.getColumn(1).getType());
     }
   }
 
   @Test
   void testReadORCTimeUnit() {
-    // specifying no NumPy types should load them as DATE32 and TIMESTAMP
-    // specifying TimeUnit will return the result in that unit
+    // specifying no NumPy types should load them as TIMESTAMP_DAYS.
+    // specifying a specific type will return the result in that unit
     ORCOptions opts = ORCOptions.builder()
         .withNumPyTypes(false)
-        .withTimeUnit(TimeUnit.SECONDS)
+        .withTimeUnit(DType.TIMESTAMP_SECONDS)
         .build();
     try (Table table = Table.readORC(opts, TEST_ORC_TIMESTAMP_DATE_FILE)) {
       assertEquals(2, table.getNumberOfColumns());
-      assertEquals(DType.TIMESTAMP, table.getColumn(0).getType());
-      assertEquals(DType.DATE32, table.getColumn(1).getType());
-      assertEquals(TimeUnit.SECONDS,table.getColumn(0).getTimeUnit());
+      assertEquals(DType.TIMESTAMP_SECONDS, table.getColumn(0).getType());
+      assertEquals(DType.TIMESTAMP_DAYS, table.getColumn(1).getType());
     }
   }
 
@@ -622,7 +646,7 @@ public class TableTest extends CudfTestBase {
              .column(null, null, 203, null, null, null, null, 201, 202, 204) // right
              .build();
          Table joinedTable = leftTable.onColumns(0).leftJoin(rightTable.onColumns(0));
-         Table orderedJoinedTable = joinedTable.orderBy(true, Table.asc(1))) {
+         Table orderedJoinedTable = joinedTable.orderBy(Table.asc(1, true))) {
       assertTablesAreEqual(expected, orderedJoinedTable);
     }
   }
@@ -638,7 +662,7 @@ public class TableTest extends CudfTestBase {
              .column( 20,  21,  22,  23,  24,  25,  26,  27,  28,  29)
              .build();
          Table joinedTable = leftTable.onColumns(0).leftJoin(rightTable.onColumns(new int[]{0}));
-         Table orderedJoinedTable = joinedTable.orderBy(true, Table.asc(1));
+         Table orderedJoinedTable = joinedTable.orderBy(Table.asc(1, true));
          Table expected = new Table.TestBuilder()
              .column(360, 326, 254, 306, 109, 361, 251, 335, 301, 317) // common
              .column( 10,  11,  12,  13,  14,  15,  16,  17,  18,  19) // left
@@ -664,7 +688,7 @@ public class TableTest extends CudfTestBase {
              .column(202, 200, 201, 203) // right
              .build();
          Table joinedTable = leftTable.onColumns(0).innerJoin(rightTable.onColumns(0));
-         Table orderedJoinedTable = joinedTable.orderBy(true, Table.asc(1))) {
+         Table orderedJoinedTable = joinedTable.orderBy(Table.asc(1, true))) {
       assertTablesAreEqual(expected, orderedJoinedTable);
     }
   }
@@ -680,11 +704,95 @@ public class TableTest extends CudfTestBase {
              .column(200, 201, 202, 203, 204, 205, 206, 207, 208, 209)
              .build();
          Table joinedTable = leftTable.onColumns(0).innerJoin(rightTable.onColumns(new int[]{0}));
-         Table orderedJoinedTable = joinedTable.orderBy(true, Table.asc(1));
+         Table orderedJoinedTable = joinedTable.orderBy(Table.asc(1, true));
          Table expected = new Table.TestBuilder()
              .column(360, 326, 254, 306, 109, 361, 251, 335, 301, 317) // common
              .column(100, 101, 102, 103, 104, 105, 106, 107, 108, 109) // left
              .column(202, 209, 205, 200, 203, 207, 208, 204, 201, 206) // right
+             .build()) {
+      assertTablesAreEqual(expected, orderedJoinedTable);
+    }
+  }
+
+  @Test
+  void testLeftSemiJoin() {
+    try (Table leftTable = new Table.TestBuilder()
+        .column(  2,   3,   9,   0,   1,   7,   4,   6,   5,   8)
+        .column(100, 101, 102, 103, 104, 105, 106, 107, 108, 109)
+        .build();
+         Table rightTable = new Table.TestBuilder()
+             .column(  6,   5,   9,   8,  10,  32)
+             .column(201, 202, 203, 204, 205, 206)
+             .build();
+         Table expected = new Table.TestBuilder()
+             .column(  9,   6,   5,   8)
+             .column(102, 107, 108, 109)
+             .build();
+         Table joinedTable = leftTable.onColumns(0).leftSemiJoin(rightTable.onColumns(0));
+         Table orderedJoinedTable = joinedTable.orderBy(Table.asc(1, true))) {
+      assertTablesAreEqual(expected, orderedJoinedTable);
+    }
+  }
+
+  @Test
+  void testLeftSemiJoinWithNulls() {
+    try (Table leftTable = new Table.TestBuilder()
+        .column( 360,  326, null,  306, null,  254,  251,  361,  301,  317)
+        .column(  10,   11, null,   13,   14, null,   16,   17,   18,   19)
+        .column("20", "29", "22", "23", "24", "25", "26", "27", "28", "29")
+        .build();
+         Table rightTable = new Table.TestBuilder()
+             .column( 306,  301,  360,  109,  335,  254,  317,  361,  251,  326)
+             .column("20", "21", "22", "23", "24", "25", "26", "27", "28", "29")
+             .build();
+         Table joinedTable = leftTable.onColumns(0, 2).leftSemiJoin(rightTable.onColumns(0, 1));
+         Table orderedJoinedTable = joinedTable.orderBy(Table.asc(0, true));
+         Table expected = new Table.TestBuilder()
+             .column(254,   326,   361)
+             .column(null,   11,    17)
+             .column("25", "29",  "27")
+             .build()) {
+      assertTablesAreEqual(expected, orderedJoinedTable);
+    }
+  }
+
+  @Test
+  void testLeftAntiJoin() {
+    try (Table leftTable = new Table.TestBuilder()
+        .column(  2,   3,   9,   0,   1,   7,   4,   6,   5,   8)
+        .column(100, 101, 102, 103, 104, 105, 106, 107, 108, 109)
+        .build();
+         Table rightTable = new Table.TestBuilder()
+             .column(  6,   5,   9,   8,  10,  32)
+             .column(201, 202, 203, 204, 205, 206)
+             .build();
+         Table expected = new Table.TestBuilder()
+             .column(  2,   3,   0,   1,   7,   4)
+             .column(100, 101, 103, 104, 105, 106)
+             .build();
+         Table joinedTable = leftTable.onColumns(0).leftAntiJoin(rightTable.onColumns(0));
+         Table orderedJoinedTable = joinedTable.orderBy(Table.asc(1, true))) {
+      assertTablesAreEqual(expected, orderedJoinedTable);
+    }
+  }
+
+  @Test
+  void testLeftAntiJoinWithNulls() {
+    try (Table leftTable = new Table.TestBuilder()
+        .column( 360,  326, null,  306, null,  254,  251,  361,  301,  317)
+        .column(  10,   11, null,   13,   14, null,   16,   17,   18,   19)
+        .column("20", "21", "22", "23", "24", "25", "26", "27", "28", "29")
+        .build();
+         Table rightTable = new Table.TestBuilder()
+             .column( 306,  301,  360,  109,  335,  254,  317,  361,  251,  326)
+             .column("20", "21", "22", "23", "24", "25", "26", "27", "28", "29")
+             .build();
+         Table joinedTable = leftTable.onColumns(0, 2).leftAntiJoin(rightTable.onColumns(0, 1));
+         Table orderedJoinedTable = joinedTable.orderBy(Table.asc(2, true));
+         Table expected = new Table.TestBuilder()
+             .column( 360,  326, null,  306, null,  251,  301,  317)
+             .column(  10,   11, null,   13,   14,   16,   18,   19)
+             .column("20", "21", "22", "23", "24", "26", "28", "29")
              .build()) {
       assertTablesAreEqual(expected, orderedJoinedTable);
     }
@@ -720,14 +828,9 @@ public class TableTest extends CudfTestBase {
             .column(120)
             .column(.3)
             .column(.7)
-            .build();
-        ColumnVector expected = ColumnVector.fromBoxedInts(2)) {
-      try (ColumnVector columnVector = getBoundsCv(descFlags, true, table, values)) {
-        assertColumnsAreEqual(expected, columnVector);
-      }
-      try (ColumnVector columnVector = getBoundsCv(descFlags, false, table, values)) {
-        assertColumnsAreEqual(expected, columnVector);
-      }
+            .build()) {
+      assertThrows(CudfException.class, () -> getBoundsCv(descFlags, true, table, values));
+      assertThrows(CudfException.class, () ->  getBoundsCv(descFlags, false, table, values));
     }
   }
 
@@ -742,28 +845,25 @@ public class TableTest extends CudfTestBase {
         Table values = new TestBuilder()
             .column(120)
             .column(.3)
-            .build();
-        ColumnVector expected = ColumnVector.fromBoxedInts(2)) {
-      try (ColumnVector columnVector = getBoundsCv(descFlags, true, table, values)) {
-        assertColumnsAreEqual(expected, columnVector);
-      }
-      try (ColumnVector columnVector = getBoundsCv(descFlags, false, table, values)) {
-        assertColumnsAreEqual(expected, columnVector);
-      }
+            .build()) {
+      assertThrows(CudfException.class, () -> getBoundsCv(descFlags, true, table, values));
+      assertThrows(CudfException.class, () -> getBoundsCv(descFlags, false, table, values));
     }
   }
 
   @Test
   void testBoundsMultiCol() {
-    boolean[] descFlags = new boolean[3];
+    boolean[] descFlags = new boolean[4];
     try (Table table = new TestBuilder()
             .column(10, 20, 20, 20, 20)
             .column(5.0, .5, .5, .7, .7)
+            .column("1","2","3","4","4")
             .column(90, 77, 78, 61, 61)
             .build();
         Table values = new TestBuilder()
             .column(20)
             .column(0.7)
+            .column("4")
             .column(61)
             .build()) {
       try (ColumnVector columnVector = getBoundsCv(descFlags, true, table, values);
@@ -798,7 +898,7 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testBoundsFloatsSingleCol() {
-    boolean[] descFlags = new boolean[3];
+    boolean[] descFlags = {false};
     try(Table table = new TestBuilder()
             .column(10.0, 20.6, 20.7)
             .build();
@@ -876,24 +976,24 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
-  void testBoundsStringCategories() {
+  void testBoundsString() {
     boolean[] descFlags = new boolean[1];
-    try (ColumnVector cIn = ColumnVector.build(DType.STRING_CATEGORY, 4, (b) -> {
+    try (ColumnVector cIn = ColumnVector.build(DType.STRING, 4, (b) -> {
            for (int i = 0; i < 4; i++) {
              b.appendUTF8String(String.valueOf(i).getBytes());
            }
         });
         Table table = new Table(cIn);
-        ColumnVector cVal = ColumnVector.build(DType.STRING_CATEGORY, 2, (b) -> {
-          for (int i = 0; i < 2; i++) {
-            b.appendUTF8String(String.valueOf(i).getBytes());
-          }
-        });
+        ColumnVector cVal = ColumnVector.fromStrings("0");
         Table values = new Table(cVal)) {
-      assertThrows(AssertionError.class,
-          () -> getBoundsCv(descFlags, true, table, values).close());
-      assertThrows(AssertionError.class,
-          () -> getBoundsCv(descFlags, false, table, values).close());
+      try (ColumnVector cv = getBoundsCv(descFlags, true, table, values);
+           ColumnVector expected = ColumnVector.fromInts(1)) {
+        assertColumnsAreEqual(expected, cv);
+      }
+      try (ColumnVector cv = getBoundsCv(descFlags, false, table, values);
+           ColumnVector expected = ColumnVector.fromInts(0)) {
+        assertColumnsAreEqual(expected, cv);
+      }
     }
   }
 
@@ -901,7 +1001,7 @@ public class TableTest extends CudfTestBase {
   void testBoundsEmptyValues() {
     boolean[] descFlags = new boolean[1];
     try (ColumnVector cv = new ColumnVector(DType.INT64,
-          TimeUnit.NONE, 0, 0, null, null);
+        0, Optional.of(0L), null, null);
         Table table = new TestBuilder()
             .column(10, 20, 20, 20, 20)
             .build();
@@ -917,7 +1017,7 @@ public class TableTest extends CudfTestBase {
   void testBoundsEmptyInput() {
     boolean[] descFlags = new boolean[1];
     try (ColumnVector cv = new ColumnVector(DType.INT64,
-          TimeUnit.NONE, 0, 0, null, null);
+        0, Optional.of(0L), null, null);
         Table table = new Table(cv);
         Table values = new TestBuilder()
             .column(20)
@@ -931,33 +1031,35 @@ public class TableTest extends CudfTestBase {
 
   private ColumnVector getBoundsCv(boolean[] descFlags, boolean isUpperBound,
       Table table, Table values) {
+    boolean[] nullsAreSmallest = new boolean[descFlags.length];
+    Arrays.fill(nullsAreSmallest, true);
     return isUpperBound ?
-        table.upperBound(true, values, descFlags) :
-        table.lowerBound(true, values, descFlags);
+        table.upperBound(nullsAreSmallest, values, descFlags) :
+        table.lowerBound(nullsAreSmallest, values, descFlags);
   }
 
   @Test
   void testConcatNoNulls() {
     try (Table t1 = new Table.TestBuilder()
         .column(1, 2, 3)
-        .categoryColumn("1", "2", "3")
-        .timestampColumn(TimeUnit.MICROSECONDS, 1L, 2L, 3L)
+        .column("1", "2", "3")
+        .timestampMicrosecondsColumn(1L, 2L, 3L)
         .column(11.0, 12.0, 13.0).build();
          Table t2 = new Table.TestBuilder()
              .column(4, 5)
-             .categoryColumn("4", "3")
-             .timestampColumn(TimeUnit.MICROSECONDS, 4L, 3L)
+             .column("4", "3")
+             .timestampMicrosecondsColumn(4L, 3L)
              .column(14.0, 15.0).build();
          Table t3 = new Table.TestBuilder()
              .column(6, 7, 8, 9)
-             .categoryColumn("4", "1", "2", "2")
-             .timestampColumn(TimeUnit.MICROSECONDS, 4L, 1L, 2L, 2L)
+             .column("4", "1", "2", "2")
+             .timestampMicrosecondsColumn(4L, 1L, 2L, 2L)
              .column(16.0, 17.0, 18.0, 19.0).build();
          Table concat = Table.concatenate(t1, t2, t3);
          Table expected = new Table.TestBuilder()
              .column(1, 2, 3, 4, 5, 6, 7, 8, 9)
-             .categoryColumn("1", "2", "3", "4", "3", "4", "1", "2", "2")
-             .timestampColumn(TimeUnit.MICROSECONDS, 1L, 2L, 3L, 4L, 3L, 4L, 1L, 2L, 2L)
+             .column("1", "2", "3", "4", "3", "4", "1", "2", "2")
+             .timestampMicrosecondsColumn(1L, 2L, 3L, 4L, 3L, 4L, 1L, 2L, 2L)
              .column(11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0).build()) {
       assertTablesAreEqual(expected, concat);
     }
@@ -983,7 +1085,89 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
-  void testMurmur3BasedPartition() {
+  void testContiguousSplit() {
+    ContiguousTable[] splits = null;
+    try (Table t1 = new Table.TestBuilder()
+        .column(10, 12, 14, 16, 18, 20, 22, 24, null, 28)
+        .column(50, 52, 54, 56, 58, 60, 62, 64, 66, null)
+        .build()) {
+      splits = t1.contiguousSplit(2, 5, 9);
+      assertEquals(4, splits.length);
+      assertEquals(2, splits[0].getTable().getRowCount());
+      assertEquals(3, splits[1].getTable().getRowCount());
+      assertEquals(4, splits[2].getTable().getRowCount());
+      assertEquals(1, splits[3].getTable().getRowCount());
+    } finally {
+      if (splits != null) {
+        for (int i = 0; i < splits.length; i++) {
+          splits[i].close();
+        }
+      }
+    }
+  }
+
+  @Disabled
+  @Test
+  void testContiguousSplitWithStrings() {
+    ContiguousTable[] splits = null;
+    try (Table t1 = new Table.TestBuilder()
+        .column(10, 12, 14, 16, 18, 20, 22, 24, null, 28)
+        .column(50, 52, 54, 56, 58, 60, 62, 64, 66, null)
+        .column("A", "B", "C", "D", "E", "F", "G", "H", "I", "J")
+        .build()) {
+      splits = t1.contiguousSplit(2, 5, 9);
+      assertEquals(4, splits.length);
+      assertEquals(2, splits[0].getTable().getRowCount());
+      assertEquals(3, splits[1].getTable().getRowCount());
+      assertEquals(4, splits[2].getTable().getRowCount());
+      assertEquals(1, splits[3].getTable().getRowCount());
+    } finally {
+      if (splits != null) {
+        for (int i = 0; i < splits.length; i++) {
+          splits[i].close();
+        }
+      }
+    }
+  }
+
+  void testPartStability() {
+    final int PARTS = 5;
+    int expectedPart = -1;
+    try (Table start = new Table.TestBuilder().column(0).build();
+         PartitionedTable out = start.onColumns(0).partition(PARTS)) {
+      // Lets figure out what partitions this is a part of.
+      int[] parts = out.getPartitions();
+      for (int i = 0; i < parts.length; i++) {
+        if (parts[i] > 0) {
+          expectedPart = i;
+        }
+      }
+    }
+    final int COUNT = 20;
+    for (int numEntries = 1; numEntries < COUNT; numEntries++) {
+      try (ColumnVector data = ColumnVector.build(DType.INT32, numEntries, Range.appendInts(0, numEntries));
+           Table t = new Table(data);
+           PartitionedTable out = t.onColumns(0).partition(PARTS)) {
+        ColumnVector tmp = out.getColumn(0);
+        tmp.ensureOnHost();
+        // Now we need to get the range out for the partition we expect
+        int[] parts = out.getPartitions();
+        int start = expectedPart == 0 ? 0 : parts[expectedPart - 1];
+        int end = parts[expectedPart];
+        boolean found = false;
+        for (int i = start; i < end; i++) {
+          if (tmp.getInt(i) == 0) {
+            found = true;
+            break;
+          }
+        }
+        assertTrue(found);
+      }
+    }
+  }
+
+  @Test
+  void testPartition() {
     final int count = 1024 * 1024;
     try (ColumnVector aIn = ColumnVector.build(DType.INT64, count, Range.appendLongs(count));
          ColumnVector bIn = ColumnVector.build(DType.INT32, count, (b) -> {
@@ -991,7 +1175,7 @@ public class TableTest extends CudfTestBase {
              b.append(i / 2);
            }
          });
-         ColumnVector cIn = ColumnVector.build(DType.STRING_CATEGORY, count, (b) -> {
+         ColumnVector cIn = ColumnVector.build(DType.STRING, count, (b) -> {
            for (int i = 0; i < count; i++) {
              b.appendUTF8String(String.valueOf(i).getBytes());
            }
@@ -1002,7 +1186,7 @@ public class TableTest extends CudfTestBase {
         expected.add(i);
       }
       try (Table input = new Table(new ColumnVector[]{aIn, bIn, cIn});
-           PartitionedTable output = input.onColumns(0).partition(5, HashFunction.MURMUR3)) {
+           PartitionedTable output = input.onColumns(0).partition(5)) {
         int[] parts = output.getPartitions();
         assertEquals(5, parts.length);
         assertEquals(0, parts[0]);
@@ -1037,18 +1221,18 @@ public class TableTest extends CudfTestBase {
   @Test
   void testSerializationRoundTripConcatHostSide() throws IOException {
     try (Table t = new Table.TestBuilder()
-        .column(     100,      202,     3003,    40004,        5,      -60,    1, null,    3,  null,     5, null,    7, null,   9,   null,    11, null,   13, null,  15)
-        .column(    true,     true,    false,    false,     true,     null, true, true, null, false, false, null, true, true, null, false, false, null, true, true, null)
-        .column( (byte)1,  (byte)2,     null,  (byte)4,  (byte)5,  (byte)6, (byte)1, (byte)2, (byte)3, null, (byte)5, (byte)6, (byte)7, null, (byte)9, (byte)10, (byte)11, null, (byte)13, (byte)14, (byte)15)
-        .column((short)6, (short)5, (short)4,     null, (short)2, (short)1, (short)1, (short)2, (short)3, null, (short)5, (short)6, (short)7, null, (short)9, (short)10, null, (short)12, (short)13, (short)14, null)
-        .column(      1L,     null,    1001L,      50L,   -2000L,     null, 1L, 2L, 3L, 4L, null, 6L, 7L, 8L, 9L, null, 11L, 12L, 13L, 14L, null)
-        .column(   10.1f,      20f,Float.NaN,  3.1415f,     -60f,     null, 1f, 2f, 3f, 4f, 5f, null, 7f, 8f, 9f, 10f, 11f, null, 13f, 14f, 15f)
-        .column(    10.1,     20.0,     33.1,   3.1415,    -60.5,     null, 1., 2., 3., 4., 5., 6., null, 8., 9., 10., 11., 12., null, 14., 15.)
-        .date32Column(99,      100,      101,      102,      103,      104, 1, 2, 3, 4, 5, 6, 7, null, 9, 10, 11, 12, 13, null, 15)
-        .date64Column(9L,    1006L,     101L,    5092L,     null,      88L, 1L, 2L, 3L, 4L, 5L ,6L, 7L, 8L, null, 10L, 11L, 12L, 13L, 14L, 15L)
-        .timestampColumn(TimeUnit.SECONDS, 1L, null, 3L, 4L, 5L, 6L, 1L, 2L, 3L, 4L, 5L ,6L, 7L, 8L, 9L, null, 11L, 12L, 13L, 14L, 15L)
+        .column(     100,      202,      3003,    40004,        5,      -60,    1, null,    3,  null,     5, null,    7, null,   9,   null,    11, null,   13, null,  15)
+        .column(    true,     true,     false,    false,     true,     null, true, true, null, false, false, null, true, true, null, false, false, null, true, true, null)
+        .column( (byte)1,  (byte)2,      null,  (byte)4,  (byte)5,  (byte)6, (byte)1, (byte)2, (byte)3, null, (byte)5, (byte)6, (byte)7, null, (byte)9, (byte)10, (byte)11, null, (byte)13, (byte)14, (byte)15)
+        .column((short)6, (short)5,  (short)4,     null, (short)2, (short)1, (short)1, (short)2, (short)3, null, (short)5, (short)6, (short)7, null, (short)9, (short)10, null, (short)12, (short)13, (short)14, null)
+        .column(      1L,     null,     1001L,      50L,   -2000L,     null, 1L, 2L, 3L, 4L, null, 6L, 7L, 8L, 9L, null, 11L, 12L, 13L, 14L, null)
+        .column(   10.1f,      20f, Float.NaN,  3.1415f,     -60f,     null, 1f, 2f, 3f, 4f, 5f, null, 7f, 8f, 9f, 10f, 11f, null, 13f, 14f, 15f)
+        .column(    10.1,     20.0,      33.1,   3.1415,    -60.5,     null, 1., 2., 3., 4., 5., 6., null, 8., 9., 10., 11., 12., null, 14., 15.)
+        .timestampDayColumn(99,      100,      101,      102,      103,      104, 1, 2, 3, 4, 5, 6, 7, null, 9, 10, 11, 12, 13, null, 15)
+        .timestampMillisecondsColumn(9L,    1006L,     101L,    5092L,     null,      88L, 1L, 2L, 3L, 4L, 5L ,6L, 7L, 8L, null, 10L, 11L, 12L, 13L, 14L, 15L)
+        .timestampSecondsColumn(1L, null, 3L, 4L, 5L, 6L, 1L, 2L, 3L, 4L, 5L ,6L, 7L, 8L, 9L, null, 11L, 12L, 13L, 14L, 15L)
         .column(     "A",      "B",      "C",      "D",     null,   "TESTING", "1", "2", "3", "4", "5", "6", "7", null, "9", "10", "11", "12", "13", null, "15")
-        .categoryColumn(     "A",      "A",      "C",      "C",     null,   "TESTING", "1", "2", "3", "4", "5", "6", "7", null, "9", "10", "11", "12", "13", null, "15")
+        .column(     "A",      "A",      "C",      "C",     null,   "TESTING", "1", "2", "3", "4", "5", "6", "7", null, "9", "10", "11", "12", "13", null, "15")
         .build()) {
       for (int sliceAmount = 1; sliceAmount < t.getRowCount(); sliceAmount ++) {
         ByteArrayOutputStream bout = new ByteArrayOutputStream();
@@ -1136,11 +1320,11 @@ public class TableTest extends CudfTestBase {
         .column(      1L,     null,    1001L,      50L,   -2000L,     null, 1L, 2L, 3L, 4L, null, 6L, 7L, 8L, 9L, null, 11L, 12L, 13L, 14L, null)
         .column(   10.1f,      20f,Float.NaN,  3.1415f,     -60f,     null, 1f, 2f, 3f, 4f, 5f, null, 7f, 8f, 9f, 10f, 11f, null, 13f, 14f, 15f)
         .column(    10.1,     20.0,     33.1,   3.1415,    -60.5,     null, 1., 2., 3., 4., 5., 6., null, 8., 9., 10., 11., 12., null, 14., 15.)
-        .date32Column(99,      100,      101,      102,      103,      104, 1, 2, 3, 4, 5, 6, 7, null, 9, 10, 11, 12, 13, null, 15)
-        .date64Column(9L,    1006L,     101L,    5092L,     null,      88L, 1L, 2L, 3L, 4L, 5L ,6L, 7L, 8L, null, 10L, 11L, 12L, 13L, 14L, 15L)
-        .timestampColumn(TimeUnit.SECONDS, 1L, null, 3L, 4L, 5L, 6L, 1L, 2L, 3L, 4L, 5L ,6L, 7L, 8L, 9L, null, 11L, 12L, 13L, 14L, 15L)
+        .timestampDayColumn(99,      100,      101,      102,      103,      104, 1, 2, 3, 4, 5, 6, 7, null, 9, 10, 11, 12, 13, null, 15)
+        .timestampMillisecondsColumn(9L,    1006L,     101L,    5092L,     null,      88L, 1L, 2L, 3L, 4L, 5L ,6L, 7L, 8L, null, 10L, 11L, 12L, 13L, 14L, 15L)
+        .timestampSecondsColumn(1L, null, 3L, 4L, 5L, 6L, 1L, 2L, 3L, 4L, 5L ,6L, 7L, 8L, 9L, null, 11L, 12L, 13L, 14L, 15L)
         .column(     "A",      "B",      "C",      "D",     null,   "TESTING", "1", "2", "3", "4", "5", "6", "7", null, "9", "10", "11", "12", "13", null, "15")
-        .categoryColumn(     "A",      "A",      "C",      "C",     null,   "TESTING", "1", "2", "3", "4", "5", "6", "7", null, "9", "10", "11", "12", "13", null, "15")
+        .column(     "A",      "A",      "C",      "C",     null,   "TESTING", "1", "2", "3", "4", "5", "6", "7", null, "9", "10", "11", "12", "13", null, "15")
         .build()) {
       for (int sliceAmount = 1; sliceAmount < t.getRowCount(); sliceAmount ++) {
         ByteArrayOutputStream bout = new ByteArrayOutputStream();
@@ -1196,11 +1380,11 @@ public class TableTest extends CudfTestBase {
         .column(      1L,     null,    1001L,      50L,   -2000L,     null, 1L, 2L, 3L, 4L, null, 6L, 7L, 8L, 9L, null, 11L, 12L, 13L, 14L, null)
         .column(   10.1f,      20f,Float.NaN,  3.1415f,     -60f,     null, 1f, 2f, 3f, 4f, 5f, null, 7f, 8f, 9f, 10f, 11f, null, 13f, 14f, 15f)
         .column(    10.1,     20.0,     33.1,   3.1415,    -60.5,     null, 1., 2., 3., 4., 5., 6., null, 8., 9., 10., 11., 12., null, 14., 15.)
-        .date32Column(99,      100,      101,      102,      103,      104, 1, 2, 3, 4, 5, 6, 7, null, 9, 10, 11, 12, 13, null, 15)
-        .date64Column(9L,    1006L,     101L,    5092L,     null,      88L, 1L, 2L, 3L, 4L, 5L ,6L, 7L, 8L, null, 10L, 11L, 12L, 13L, 14L, 15L)
-        .timestampColumn(TimeUnit.SECONDS, 1L, null, 3L, 4L, 5L, 6L, 1L, 2L, 3L, 4L, 5L ,6L, 7L, 8L, 9L, null, 11L, 12L, 13L, 14L, 15L)
+        .timestampDayColumn(99,      100,      101,      102,      103,      104, 1, 2, 3, 4, 5, 6, 7, null, 9, 10, 11, 12, 13, null, 15)
+        .timestampMillisecondsColumn(9L,    1006L,     101L,    5092L,     null,      88L, 1L, 2L, 3L, 4L, 5L ,6L, 7L, 8L, null, 10L, 11L, 12L, 13L, 14L, 15L)
+        .timestampSecondsColumn(1L, null, 3L, 4L, 5L, 6L, 1L, 2L, 3L, 4L, 5L ,6L, 7L, 8L, 9L, null, 11L, 12L, 13L, 14L, 15L)
         .column(     "A",      "B",      "C",      "D",     null,   "TESTING", "1", "2", "3", "4", "5", "6", "7", null, "9", "10", "11", "12", "13", null, "15")
-        .categoryColumn(     "A",      "A",      "C",      "C",     null,   "TESTING", "1", "2", "3", "4", "5", "6", "7", null, "9", "10", "11", "12", "13", null, "15")
+        .column(     "A",      "A",      "C",      "C",     null,   "TESTING", "1", "2", "3", "4", "5", "6", "7", null, "9", "10", "11", "12", "13", null, "15")
         .build()) {
       for (int sliceAmount = 1; sliceAmount < t.getRowCount(); sliceAmount ++) {
         for (int i = 0; i < t.getRowCount(); i += sliceAmount) {
@@ -1229,7 +1413,7 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testGroupByCount() {
-    try (Table t1 = new Table.TestBuilder().column(   1,    1,    1,    1,    1,    1)
+    try (Table t1 = new Table.TestBuilder().column( "1",  "1",  "1",  "1",  "1",  "1")
                                            .column(   1,    3,    3,    5,    5,    0)
                                            .column(12.0, 14.0, 13.0, 17.0, 17.0, 17.0)
                                            .build()) {
@@ -1266,8 +1450,8 @@ public class TableTest extends CudfTestBase {
                                            .column(   1,    1, null, null,    1,    1)
                                            .column(   1,    1,    1, null,    1,    1)
                                            .build()) {
-      try (Table t3 = t1.groupBy(0).aggregate(count(1), count(2), count(3))
-            .orderBy(true, Table.asc(0))) {
+      try (Table tmp = t1.groupBy(0).aggregate(count(1), count(2), count(3));
+            Table t3 = tmp.orderBy(Table.asc(0, true))) {
         // verify t3
         assertEquals(2, t3.getRowCount());
 
@@ -1314,8 +1498,8 @@ public class TableTest extends CudfTestBase {
           .withIgnoreNullKeys(true)
           .build();
 
-      try (Table t3 = t1.groupBy(options, 0).aggregate(count(1), count(2), count(3))
-          .orderBy(true, Table.asc(0))) {
+      try (Table tmp = t1.groupBy(options, 0).aggregate(count(1), count(2), count(3));
+          Table t3 = tmp.orderBy(Table.asc(0, true))) {
         // (null, 1) => became (1) because we are ignoring nulls
         assertEquals(1, t3.getRowCount());
 
@@ -1379,6 +1563,34 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testGroupByMinBool() {
+    try (Table t1 = new Table.TestBuilder()
+        .column(true, null, false, true, null, null)
+        .column(   1,    1,     2,    2,    3,    3).build();
+         Table other = t1.groupBy(1).aggregate(min(0));
+         Table expected = new Table.TestBuilder()
+             .column(1, 2, 3)
+             .column (true, false, null)
+             .build()) {
+      assertTablesAreEqual(expected, other);
+    }
+  }
+
+  @Test
+  void testGroupByMaxBool() {
+    try (Table t1 = new Table.TestBuilder()
+        .column(false, null, false, true, null, null)
+        .column(   1,    1,     2,    2,    3,    3).build();
+         Table other = t1.groupBy(1).aggregate(max(0));
+         Table expected = new Table.TestBuilder()
+             .column(1, 2, 3)
+             .column (false, true, null)
+             .build()) {
+      assertTablesAreEqual(expected, other);
+    }
+  }
+
+  @Test
   void testGroupByDuplicateAggregates() {
     try (Table t1 = new Table.TestBuilder().column(   1,    1,    1,    1,    1,    1)
                                            .column(   1,    3,    3,    5,    5,    0)
@@ -1391,10 +1603,11 @@ public class TableTest extends CudfTestBase {
              .column(12.0, 13.0, 15.0, 18.0)
              .column(12.0, 13.0, 15.0, 18.0)
              .column(12.0, 14.0, 17.0, 18.0)
-             .column(12.0, 13.0, 15.0, 18.0).build()) {
+             .column(12.0, 13.0, 15.0, 18.0)
+             .column(   1,    2,    2,    1).build()) {
       try (Table t3 = t1.groupBy(0, 1)
-          .aggregate(max(2), min(2), min(2), max(2), min(2));
-          Table t4 = t3.orderBy(false, Table.asc(2))) {
+          .aggregate(max(2), min(2), min(2), max(2), min(2), count(1));
+          Table t4 = t3.orderBy(Table.asc(2))) {
         // verify t4
         assertEquals(4, t4.getRowCount());
         assertTablesAreEqual(t4, expected);
@@ -1588,6 +1801,49 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testSumWithStrings() {
+    try (Table t = new Table.TestBuilder()
+        .column("1-URGENT", "3-MEDIUM", "1-URGENT", "3-MEDIUM")
+        .column(5289L, 5203L, 5303L, 5206L)
+        .build();
+         Table result = t.groupBy(0).aggregate(Table.sum(1));
+         Table expected = new Table.TestBuilder()
+             .column("1-URGENT", "3-MEDIUM")
+             .column(5289L + 5303L, 5203L + 5206L)
+             .build()) {
+      assertTablesAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testGroupByNoAggs() {
+    try (Table t1 = new Table.TestBuilder().column(   1,    1,    1,    1,    1,    1)
+        .column(   1,    3,    3,    5,    5,    0)
+        .column(  12,   14,   13,   17,   17,   17)
+        .build()) {
+      try (Table t3 = t1.groupBy(0, 1).aggregate()) {
+        // verify t3
+        assertEquals(4, t3.getRowCount());
+      }
+    }
+  }
+
+
+  @Test
+  void testMaskWithoutValidity() {
+    try (ColumnVector mask = ColumnVector.fromBoxedBooleans(true, false, true, false, true);
+         ColumnVector fromInts = ColumnVector.fromInts(1, 2, 3, 4, 5);
+         ColumnVector fromStrings = ColumnVector.fromStrings("1", "2", "3", "4", "5");
+         Table input = new Table(fromInts, fromStrings);
+         Table filteredTable = input.filter(mask);
+         ColumnVector expectedInts = ColumnVector.fromInts(1, 3, 5);
+         ColumnVector expectedStrings = ColumnVector.fromStrings("1", "3", "5");
+         Table expected = new Table(expectedInts, expectedStrings)) {
+      assertTablesAreEqual(expected, filteredTable);
+    }
+  }
+
+  @Test
   void testMaskWithValidity() {
     final int numRows = 5;
     try (ColumnVector.Builder builder = ColumnVector.builder(DType.BOOL8, numRows)) {
@@ -1664,7 +1920,7 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
-  void testMismatchedSizes() {
+  void testMismatchedSizesForFilter() {
     Boolean[] maskVals = new Boolean[3];
     Arrays.fill(maskVals, true);
     try (ColumnVector mask = ColumnVector.fromBoxedBooleans(maskVals);
@@ -1679,138 +1935,13 @@ public class TableTest extends CudfTestBase {
     byte[] maskVals = new byte[]{0, 1, 0, 1, 1};
     try (ColumnVector mask = ColumnVector.boolFromBytes(maskVals);
          ColumnVector fromInts = ColumnVector.fromBoxedInts(1, null, 2, 3, null);
-         ColumnVector fromStrings = ColumnVector.categoryFromStrings("one", "two", "three", null, "five");
+         ColumnVector fromStrings = ColumnVector.fromStrings("one", "two", "three", null, "five");
          Table input = new Table(fromInts, fromStrings);
          Table filtered = input.filter(mask);
          ColumnVector expectedFromInts = ColumnVector.fromBoxedInts(null, 3, null);
-         ColumnVector expectedFromStrings = ColumnVector.categoryFromStrings("two", null, "five");
+         ColumnVector expectedFromStrings = ColumnVector.fromStrings("two", null, "five");
          Table expected = new Table(expectedFromInts, expectedFromStrings)) {
-      assertTablesAreEqual(filtered, expected);
-    }
-  }
-
-  @Test
-  void testStringsAreNotSupported() {
-    Boolean[] maskVals = new Boolean[5];
-    Arrays.fill(maskVals, true);
-    try (ColumnVector mask = ColumnVector.fromBoxedBooleans(maskVals);
-         ColumnVector fromStrings = ColumnVector.fromStrings("1","2","3","4","5");
-         Table input = new Table(fromStrings)) {
-      assertThrows(AssertionError.class, () -> input.filter(mask).close());
-    }
-  }
-
-  final byte[] jsonData = ("[1, 1.1, \"a\"]\n" +
-      "[3, 4.2, \"hello\"]\n" +
-      "[7, 1.3, \"seven\u24E1\u25B6\"]").getBytes(StandardCharsets.UTF_8);
-
-  private File createTempFile(byte[] jsonData) throws IOException {
-    File tempFile = File.createTempFile("test", ".json");
-    try (OutputStream out = new FileOutputStream(tempFile)) {
-      out.write(jsonData);
-    }
-    tempFile.deleteOnExit();
-    return tempFile;
-  }
-
-  @Test
-  void testJSONReadWithFilePath() throws IOException {
-    File tempFile = createTempFile(jsonData);
-
-    try (Table t = Table.readJSON(tempFile);
-    Table expectedTable = new Table.TestBuilder()
-        .column( 1l,      3l,                 7l)
-        .column(1.1,     4.2,                1.3)
-        .column("a", "hello", "seven\u24E1\u25B6")
-        .build()) {
-      assertTablesAreEqual(expectedTable, t);
-    }
-  }
-
-  @Test
-  void testJSONReadWithFilePathAndDataTypes() throws IOException {
-    File tempFile = createTempFile(jsonData);
-    Schema schema = Schema.builder().column(DType.INT32, "0")
-        .column(DType.FLOAT64, "1").column(DType.STRING, "2").build();
-    try (Table t = Table.readJSON(schema, tempFile);
-         Table expectedTable = new Table.TestBuilder()
-             .column(  1,       3,                  7)
-             .column(1.1,     4.2,                1.3)
-             .column("a", "hello", "seven\u24E1\u25B6")
-             .build()) {
-      assertTablesAreEqual(expectedTable, t);
-    }
-  }
-
-  @Test
-  void testJSONReadBuffer() {
-    try (Table t = Table.readJSON(jsonData);
-         Table expectedTable = new Table.TestBuilder()
-             .column( 1l,      3l,                 7l)
-             .column(1.1,     4.2,                1.3)
-             .column("a", "hello", "seven\u24E1\u25B6")
-             .build()) {
-      assertTablesAreEqual(expectedTable, t);
-    }
-  }
-
-  @Test
-  void testJSONReadBufferWithDataTypes() {
-    Schema schema = Schema.builder().column(DType.INT32, "0")
-        .column(DType.FLOAT32, "1").column(DType.STRING, "2").build();
-    try (Table t = Table.readJSON(schema, jsonData);
-         Table expectedTable = new Table.TestBuilder()
-             .column(  1,       3,                  7)
-             .column(1.1f,     4.2f,                1.3f)
-             .column("a", "hello", "seven\u24E1\u25B6")
-             .build()) {
-      assertTablesAreEqual(expectedTable, t);
-    }
-  }
-
-  @Test
-  void testJSONReadBufferWithRange() {
-    try (Table t = Table.readJSON(Schema.INFERRED, JSONOptions.DEFAULT, jsonData, 14, 17);
-         Table expectedTable = new Table.TestBuilder().column(3l).column(4.2).column("hello")
-             .build()) {
-      assertTablesAreEqual(expectedTable, t);
-    }
-  }
-
-  @Test
-  void testJSONReadBufferFilterColumnsWithNames() {
-    // the schema can't skip any column
-    final byte[] jsonDataWithNames = ("{\"col1\": 1, \"col2\": 1.1, \"col3\": \"a\"}\n" +
-        "{\"col1\": 3, \"col2\": 4.2, \"col3\": \"hello\"}\n" +
-        "{\"col1\": 7, \"col2\": 1.3, \"col3\": \"seven\u24E1\u25B6\"}")
-        .getBytes(StandardCharsets.UTF_8);
-
-    Schema schema = Schema.builder().column(DType.FLOAT32, "col2")
-        .column(DType.INT64, "col1").column(DType.STRING, "col3").build();
-    JSONOptions opts = JSONOptions.builder().includeColumn("col1", "col3").build();
-    try (Table t = Table.readJSON(schema, opts, jsonDataWithNames);
-         Table expectedTable = new Table.TestBuilder()
-             .column(  1l,       3l,                  7l)
-             .column("a", "hello", "seven\u24E1\u25B6")
-             .build()) {
-      assertTablesAreEqual(expectedTable, t);
-    }
-  }
-
-  @Test
-  void testJSONReadBufferFilterWithoutNames() {
-    // the schema can't skip any column and since we are using json without explicit names provided
-    // in the json file we will have to set the data types using the column names that will be used
-    // by the libcudf API i.e. 0, 1, 2 ... 
-    Schema schema = Schema.builder().column(DType.FLOAT32, "1")
-        .column(DType.INT32, "0").column(DType.STRING, "2").build();
-    JSONOptions opts = JSONOptions.builder().includeColumn("0", "2").build();
-    try (Table t = Table.readJSON(schema, opts, jsonData);
-         Table expectedTable = new Table.TestBuilder()
-             .column(  1,       3,                  7)
-             .column("a", "hello", "seven\u24E1\u25B6")
-             .build()) {
-      assertTablesAreEqual(expectedTable, t);
+      assertTablesAreEqual(expected, filtered);
     }
   }
 
@@ -1827,6 +1958,73 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testParquetWriteToFileNoNames() throws IOException {
+    File tempFile = File.createTempFile("test-nonames", ".parquet");
+    try (Table table0 = getExpectedFileTable()) {
+      table0.writeParquet(tempFile.getAbsoluteFile());
+      try (Table table1 = Table.readParquet(tempFile.getAbsoluteFile())) {
+        assertTablesAreEqual(table0, table1);
+      }
+    } finally {
+      tempFile.delete();
+    }
+  }
+
+  @Test
+  void testParquetWriteToFileWithNames() throws IOException {
+    File tempFile = File.createTempFile("test-names", ".parquet");
+    try (Table table0 = getExpectedFileTable()) {
+      ParquetWriterOptions options = ParquetWriterOptions.builder()
+          .withColumnNames("first", "second", "third", "fourth", "fifth", "sixth")
+          .withCompressionType(CompressionType.NONE)
+          .withStatisticsFrequency(ParquetWriterOptions.StatisticsFrequency.NONE)
+          .build();
+      table0.writeParquet(options, tempFile.getAbsoluteFile());
+      try (Table table2 = Table.readParquet(tempFile.getAbsoluteFile())) {
+        assertTablesAreEqual(table0, table2);
+      }
+    } finally {
+      tempFile.delete();
+    }
+  }
+
+  @Test
+  void testParquetWriteToFileWithNamesAndMetadata() throws IOException {
+    File tempFile = File.createTempFile("test-names-metadata", ".parquet");
+    try (Table table0 = getExpectedFileTable()) {
+      ParquetWriterOptions options = ParquetWriterOptions.builder()
+          .withColumnNames("first", "second", "third", "fourth", "fifth", "sixth")
+          .withMetadata("somekey", "somevalue")
+          .withCompressionType(CompressionType.NONE)
+          .withStatisticsFrequency(ParquetWriterOptions.StatisticsFrequency.NONE)
+          .build();
+      table0.writeParquet(options, tempFile.getAbsoluteFile());
+      try (Table table2 = Table.readParquet(tempFile.getAbsoluteFile())) {
+        assertTablesAreEqual(table0, table2);
+      }
+    } finally {
+      tempFile.delete();
+    }
+  }
+
+  @Test
+  void testParquetWriteToFileUncompressedNoStats() throws IOException {
+    File tempFile = File.createTempFile("test-uncompressed", ".parquet");
+    try (Table table0 = getExpectedFileTable()) {
+      ParquetWriterOptions options = ParquetWriterOptions.builder()
+          .withCompressionType(CompressionType.NONE)
+          .withStatisticsFrequency(ParquetWriterOptions.StatisticsFrequency.NONE)
+          .build();
+      table0.writeParquet(options, tempFile.getAbsoluteFile());
+      try (Table table2 = Table.readParquet(tempFile.getAbsoluteFile())) {
+        assertTablesAreEqual(table0, table2);
+      }
+    } finally {
+      tempFile.delete();
+    }
+  }
+
+  @Test
   void testORCWriteToFile() throws IOException {
     File tempFile = File.createTempFile("test", ".orc");
     try (Table table0 = getExpectedFileTable()) {
@@ -1840,10 +2038,29 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testORCWriteToFileWithColNames() throws IOException {
+    File tempFile = File.createTempFile("test", ".orc");
+    final String[] colNames = new String[]{"bool", "int", "byte","long","str","float","double"};
+    try (Table table0 = getExpectedFileTable()) {
+      ORCWriterOptions options = ORCWriterOptions.builder()
+          .withColumnNames(colNames)
+          .withMetadata("somekey", "somevalue")
+          .build();
+      table0.writeORC(options, tempFile.getAbsoluteFile());
+      ORCOptions opts = ORCOptions.builder().includeColumn(colNames).build();
+      try (Table table1 = Table.readORC(opts, tempFile.getAbsoluteFile())) {
+        assertTablesAreEqual(table0, table1);
+      }
+    } finally {
+      tempFile.delete();
+    }
+  }
+
+  @Test
   void testORCWriteToFileUncompressed() throws IOException {
     File tempFileUncompressed = File.createTempFile("test-uncompressed", ".orc");
     try (Table table0 = getExpectedFileTable()) {
-      table0.writeORC(ORCWriterOptions.builder().withCompression(ORCWriterOptions.CompressionType.NONE).build(), tempFileUncompressed.getAbsoluteFile());
+      table0.writeORC(ORCWriterOptions.builder().withCompressionType(CompressionType.NONE).build(), tempFileUncompressed.getAbsoluteFile());
       try (Table table2 = Table.readORC(tempFileUncompressed.getAbsoluteFile())) {
         assertTablesAreEqual(table0, table2);
       }
