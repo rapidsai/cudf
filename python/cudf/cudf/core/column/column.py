@@ -59,6 +59,14 @@ class ColumnBase(Column):
             (self.data, self.dtype, self.mask, self.offset, self.children),
         )
 
+    def as_frame(self, name=None):
+        from cudf.core.frame import Frame
+
+        """
+        Converts a Column to Frame
+        """
+        return Frame({name: self.copy(deep=False)})
+
     @property
     def data_array_view(self):
         """

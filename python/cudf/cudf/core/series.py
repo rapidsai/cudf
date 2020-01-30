@@ -148,9 +148,6 @@ class Series(Frame):
     def __contains__(self, item):
         return item in self._index
 
-    def __reduce__(self):
-        return (Series, (self._data, self.index))
-
     @classmethod
     def from_pandas(cls, s, nan_as_null=True):
         return cls(s, nan_as_null=nan_as_null)
