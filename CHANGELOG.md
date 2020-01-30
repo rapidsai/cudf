@@ -4,6 +4,8 @@
 
 ## Improvements
 
+- PR #3897 Port cuIO JSON reader to cudf::column types
+
 ## Bug Fixes
 
 - PR #3888 Drop `ptr=None` from `DeviceBuffer` call
@@ -80,7 +82,6 @@
 - PR #3796 Improve on round-robin with the case when number partitions greater than number of rows.
 - PR #3805 Avoid CuPy 7.1.0 for now
 - PR #3758 detail::scatter variant with map iterator support
-- PR #3897 Port cuIO JSON reader to cudf::column types
 - PR #3882 Fail loudly when creating a StringColumn from nvstrings with > MAX_VAL(int32) bytes
 - PR #3823 Add header file for detail search functions
 - PR #2438 Build GBench Benchmarks in CI
