@@ -386,17 +386,12 @@ struct whitespace_rsplit_tokenizer_fn
     }
 };
 
-#if 1  // SK
-// TODO: copied from cuDF PR 3685 (should include instead of duplicating)
+// TODO: copied from cuDF PR 3685 (should include instead of duplicating once
+// PR 3685 is merged)
 #if 1
-// TODO : this is copy of round_up_safe() that removes the exception throwing so that it can be used in a kernel.
-//        where should this ultimately live?
-template <typename S>
-__device__ inline S round_up_safe_nothrow(S number_to_round, S modulus) {
-    auto remainder = number_to_round % modulus;
-    if (remainder == 0) { return number_to_round; }
-    auto rounded_up = number_to_round - remainder + modulus;
-    return rounded_up;
+template <typename T>
+__device__ inline T round_up_pow2(T number_to_round, T modulus) {
+    return (number_to_round + (modulus - 1)) & -modulus;
 }
 
 // align all column size allocations to this boundary so that all output column buffers
@@ -405,8 +400,8 @@ static constexpr size_type split_align = 64;
 #endif
 
 /**
- * @brief Compute the number of tokens and the total byte sizes of the tokens in
- * the `idx'th` string element of `d_strings`.
+ * @brief Compute the number of tokens, the total byte sizes of the tokens, and
+ * required memory size for the `idx'th` string element of `d_strings`.
  */
 template <bool forward>
 struct token_reader_fn {
@@ -415,6 +410,8 @@ struct token_reader_fn {
   size_type const max_tokens = std::numeric_limits<size_type>::max();
   bool const has_validity = false;
 
+  // returns a tuple of token count, sum of token sizes in bytes, and required
+  // memory block size
   __device__ thrust::tuple<size_type, size_type, size_type>
   operator()(size_type idx) const {
     if (has_validity && d_strings.is_null(idx)) {
@@ -455,8 +452,8 @@ struct token_reader_fn {
                 d_str.byte_offset(end_pos);
 
     auto memory_size =
-      round_up_safe_nothrow(token_size_sum, split_align) +
-      round_up_safe_nothrow(
+      round_up_pow2(token_size_sum, split_align) +
+      round_up_pow2(
         (token_count + 1) * static_cast<size_type>(sizeof(size_type)),
         split_align);
 
@@ -465,6 +462,10 @@ struct token_reader_fn {
   }
 };
 
+/**
+ * @brief Copy the tokens from the `idx'th` string element of `d_strings` to
+ * the contiguous memory buffer.
+ */
 template <bool forward>
 struct token_copier_fn {
   column_device_view const d_strings;  // strings to split
@@ -485,7 +486,7 @@ struct token_copier_fn {
     auto memory_ptr =
       static_cast<char*>(idx_token_count_memory_ptr_token_size_sum.get<2>());
     auto token_size_sum = idx_token_count_memory_ptr_token_size_sum.get<3>();
-    auto char_buf_size = round_up_safe_nothrow(token_size_sum, split_align);
+    auto char_buf_size = round_up_pow2(token_size_sum, split_align);
 
     auto char_buf_ptr = memory_ptr;
     memory_ptr += char_buf_size;
@@ -558,8 +559,8 @@ struct token_copier_fn {
 };
 
 /**
- * @brief Compute the number of tokens and the total byte sizes of the tokens in
- * the `idx'th` string element of `d_strings`.
+ * @brief Compute the number of tokens, the total byte sizes of the tokens, and
+ * required memory size for the `idx'th` string element of `d_strings`.
  */
 template <bool forward>
 struct whitespace_token_reader_fn {
@@ -611,13 +612,15 @@ struct whitespace_token_reader_fn {
           d_str.byte_offset(to_token_pos + 1) - d_str.byte_offset(0);
     }
 
-    if (token_count == 0) {
+    if (token_count == 0) {  // note that pandas.Series.str.split("", pat=" ")
+                             // returns one token (i.e. "") while
+                             // pandas.Series.str.split("") returns 0 token.
       return thrust::make_tuple<size_type, size_type, size_type>(0, 0, 0);
     }
 
     auto memory_size =
-      round_up_safe_nothrow(token_size_sum, split_align) +
-      round_up_safe_nothrow(
+      round_up_pow2(token_size_sum, split_align) +
+      round_up_pow2(
         (token_count + 1) * static_cast<size_type>(sizeof(size_type)),
         split_align);
 
@@ -626,6 +629,10 @@ struct whitespace_token_reader_fn {
   }
 };
 
+/**
+ * @brief Copy the tokens from the `idx'th` string element of `d_strings` to
+ * the contiguous memory buffer.
+ */
 template <bool forward>
 struct whitespace_token_copier_fn {
   column_device_view const d_strings;  // strings to split
@@ -645,7 +652,7 @@ struct whitespace_token_copier_fn {
     auto memory_ptr =
       static_cast<char*>(idx_token_count_memory_ptr_token_size_sum.get<2>());
     auto token_size_sum = idx_token_count_memory_ptr_token_size_sum.get<3>();
-    auto char_buf_size = round_up_safe_nothrow(token_size_sum, split_align);
+    auto char_buf_size = round_up_pow2(token_size_sum, split_align);
 
     auto char_buf_ptr = memory_ptr;
     memory_ptr += char_buf_size;
@@ -720,7 +727,6 @@ struct whitespace_token_copier_fn {
     offset_buf_ptr[token_count] = token_size_sum;
   }
 };
-#endif
 
 // Generic split function used by split and rsplit
 template<typename TokenCounter, typename Tokenizer>
@@ -775,7 +781,6 @@ std::unique_ptr<experimental::table> split_fn( size_type strings_count,
     return std::make_unique<experimental::table>(std::move(results));
 }
 
-#if 1  // SK
 // Generic split function used by split_record and rsplit_record
 template<typename TokenReader, typename TokenCopier>
 contiguous_split_record_result contiguous_split_record_fn(
@@ -826,8 +831,7 @@ contiguous_split_record_result contiguous_split_record_fn(
     thrust::make_transform_iterator(
       thrust::make_counting_iterator(0),
       [d_all_data_ptr, d_token_counts_ptr, d_memory_offsets_ptr,
-       d_token_size_sums_ptr] __device__ (
-          auto i) {
+       d_token_size_sums_ptr] __device__ (auto i) {
         return thrust::make_tuple<size_type, size_type, void*, size_type>(
           i, d_token_counts_ptr[i], d_all_data_ptr + d_memory_offsets_ptr[i],
           d_token_size_sums_ptr[i]);
@@ -844,20 +848,14 @@ contiguous_split_record_result contiguous_split_record_fn(
   std::vector<column_view> column_views{};
   for (size_type i = 0; i < strings_count; ++i) {
     if (h_token_counts[i] == 0) {
-      // TODO: what do I get if I create a column_view from the output of
-      // make_empty_strings_column
       column_views.emplace_back(strings.parent().type(), 0, nullptr);
     }
     else {
       auto token_count = h_token_counts[i];
       auto memory_ptr =
         d_all_data_ptr + h_memory_offsets[i];
-      auto memory_size = h_memory_offsets[i + 1] - h_memory_offsets[i];
-      auto offset_buf_size =
-        cudf::util::round_up_safe(
-          (token_count + 1) * static_cast<size_type>(sizeof(size_type)),
-          split_align);
-      auto char_buf_size = memory_size - offset_buf_size;
+      auto char_buf_size =
+        cudf::util::round_up_safe(h_token_size_sums[i], split_align);
 
       auto char_buf_ptr = memory_ptr;
       memory_ptr += char_buf_size;
@@ -879,7 +877,6 @@ contiguous_split_record_result contiguous_split_record_fn(
   return contiguous_split_record_result{std::move(column_views),
                                         std::move(all_data_ptr)};
 }
-#endif
 
 } // namespace
 
@@ -940,7 +937,6 @@ std::unique_ptr<experimental::table> rsplit( strings_column_view const& strings,
                      mr, stream);
 }
 
-#if 1  // SK
 contiguous_split_record_result contiguous_split_record(
     strings_column_view const& strings,
     string_scalar const& delimiter = string_scalar(""),
@@ -1010,7 +1006,6 @@ contiguous_split_record_result contiguous_rsplit_record(
       mr, stream);
   }
 }
-#endif
 
 } // namespace detail
 
@@ -1032,7 +1027,6 @@ std::unique_ptr<experimental::table> rsplit( strings_column_view const& strings,
     return detail::rsplit( strings, delimiter, maxsplit, mr );
 }
 
-#if 1 // SK
 contiguous_split_record_result contiguous_split_record(
     strings_column_view const& strings,
     string_scalar const& delimiter,
@@ -1048,7 +1042,6 @@ contiguous_split_record_result contiguous_rsplit_record(
     rmm::mr::device_memory_resource* mr) {
   return detail::contiguous_rsplit_record(strings, delimiter, maxsplit, mr, 0);
 }
-#endif
 
 } // namespace strings
 } // namespace cudf
