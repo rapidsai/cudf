@@ -116,7 +116,12 @@ cpdef write_parquet(
         make_unique[table_metadata]()
 
     # Set the column names from the existing Table object
-    cdef vector[string] cols = [str.encode(s) for s in table._data.keys()]
+    output_cols = []
+    output_cols.append(table._index.name)
+    for s in table._data.keys():
+        output_cols.append(s)
+
+    cdef vector[string] cols = [str.encode(s) for s in output_cols]
     tbl_meta.get().column_names = cols
 
     cdef compression_type comp_type

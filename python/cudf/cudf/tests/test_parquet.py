@@ -481,12 +481,21 @@ def test_multifile_warning(datadir):
 def test_parquet_writer_gpu(tmpdir, simple_gdf):
     gdf_fname = tmpdir.join("gdf.parquet")
 
+    print("GDF Type: " + str(type(simple_gdf)))
+    print(simple_gdf.columns)
+
+    print("Expected GDF:")
+    print(simple_gdf)
     simple_gdf.to_parquet(gdf_fname.strpath, engine="cudf")
     assert os.path.exists(gdf_fname)
     expect = simple_gdf
     got = cudf.read_parquet(gdf_fname)
+    print("Got columns before droppping 'test_index': " + str(got.columns))
+    got = got.drop("test_index")
+    got.index.name = "test_index"
 
-    print(expect)
+    print("Got GDF:")
+    print(got.columns)
     print(got)
 
     assert_eq(expect, got, check_categorical=False)
