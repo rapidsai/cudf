@@ -48,7 +48,7 @@ namespace detail {
 inline rmm::device_buffer create_data(
     data_type type, size_type size, cudaStream_t stream = 0,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) {
-  size_type data_size = size_of(type) * size;
+  std::size_t data_size = size_of(type) * size;
 
   rmm::device_buffer data(data_size, stream, mr);
   CUDA_TRY(cudaMemsetAsync(data.data(), 0, data_size, stream));
