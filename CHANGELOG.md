@@ -11,6 +11,8 @@
 - PR #3975 Simplify and generalize data handling in `Buffer`
 - PR #3911 Adding null boolean handling for copy_if_else
 - PR #4003 Drop old `to_device` utility wrapper function
+- PR #4002 Adding to_frame and fix for categorical column issue
+- PR #3897 Port cuIO JSON reader to cudf::column types
 
 ## Bug Fixes
 
@@ -22,6 +24,7 @@
 - PR #3970 Fix for Series Pickle
 - PR #3964 Restore legacy NVStrings and NVCategory dependencies in Java jar
 - PR #3982 Fix java unary op enum and add missing ops
+- PR #4000 Fix dask_cudf sort_values performance for single partitions
 
 
 # cuDF 0.12.0 (Date TBD)
