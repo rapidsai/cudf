@@ -57,7 +57,7 @@ std::unique_ptr<column> encode( column_view const& input_column,
         // the single null entry should be at the beginning -- side effect from drop_duplicates
         // copy the column without the null entry
         keys_column = std::make_unique<column>(experimental::slice(*keys_column,
-                            std::vector<size_type>{1,keys_column->size()})[0],stream,mr);
+                            std::vector<size_type>{1,keys_column->size()}).front(),stream,mr);
         keys_column->set_null_mask( rmm::device_buffer{}, 0 ); // remove the null-mask
     }
 
