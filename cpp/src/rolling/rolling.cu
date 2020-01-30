@@ -153,7 +153,7 @@ struct rolling_window_launcher
          WindowIterator preceding_window_begin,
          WindowIterator following_window_begin,
          size_type min_periods,
-         std::unique_ptr<aggregation> const& aggr,
+         std::unique_ptr<aggregation> const& agg,
          rmm::mr::device_memory_resource *mr,
          cudaStream_t stream) {
 
@@ -219,7 +219,7 @@ struct rolling_window_launcher
           WindowIterator preceding_window_begin,
           WindowIterator following_window_begin,
           size_type min_periods,
-          std::unique_ptr<aggregation> const& aggr,
+          std::unique_ptr<aggregation> const& agg,
           rmm::mr::device_memory_resource *mr,
           cudaStream_t stream) {
       CUDF_FAIL("Aggregation operator and/or input type combination is invalid");
@@ -232,7 +232,7 @@ struct rolling_window_launcher
                                      WindowIterator preceding_window_begin,
                                      WindowIterator following_window_begin,
                                      size_type min_periods,
-                                     std::unique_ptr<aggregation> const& aggr,
+                                     std::unique_ptr<aggregation> const& agg,
                                      rmm::mr::device_memory_resource *mr,
                                      cudaStream_t stream)
   {
@@ -241,7 +241,7 @@ struct rolling_window_launcher
               preceding_window_begin,
               following_window_begin,
               min_periods,
-              aggr,
+              agg,
               mr,
               stream);
   }
@@ -252,7 +252,7 @@ struct rolling_window_launcher
                                      WindowIterator preceding_window_begin,
                                      WindowIterator following_window_begin,
                                      size_type min_periods,
-                                     std::unique_ptr<aggregation> const& aggr,
+                                     std::unique_ptr<aggregation> const& agg,
                                      rmm::mr::device_memory_resource *mr,
                                      cudaStream_t stream) {
 
@@ -261,7 +261,7 @@ struct rolling_window_launcher
               preceding_window_begin,
               following_window_begin,
               min_periods,
-              aggr,
+              agg,
               mr,
               stream);
   }
@@ -275,49 +275,28 @@ struct dispatch_rolling {
                                      WindowIterator preceding_window_begin,
                                      WindowIterator following_window_begin,
                                      size_type min_periods,
-                                     std::unique_ptr<aggregation> const& aggr,
+                                     std::unique_ptr<aggregation> const& agg,
                                      rmm::mr::device_memory_resource *mr,
                                      cudaStream_t stream) {
 
-        return aggregation_dispatcher(aggr->kind, rolling_window_launcher<T>{},
+        return aggregation_dispatcher(agg->kind, rolling_window_launcher<T>{},
                                       input,
                                       preceding_window_begin, following_window_begin,
-                                      min_periods, aggr, mr, stream);
+                                      min_periods, agg, mr, stream);
     }
 };
 
 } // namespace anonymous
 
-// Applies a rolling window function to the values in a column.
-template <typename WindowIterator>
-std::unique_ptr<column> rolling_window(column_view const& input,
-                                       WindowIterator preceding_window_begin,
-                                       WindowIterator following_window_begin,
-                                       size_type min_periods,
-                                       std::unique_ptr<aggregation> const& aggr,
-                                       rmm::mr::device_memory_resource* mr,
-                                       cudaStream_t stream = 0)
-{
-  static_assert(warp_size == cudf::detail::size_in_bits<cudf::bitmask_type>(),
-                "bitmask_type size does not match CUDA warp size");
-
-  return cudf::experimental::type_dispatcher(input.type(),
-                                             dispatch_rolling{},
-                                             input, preceding_window_begin, following_window_begin,
-                                             min_periods, aggr, mr, stream);
-}
-
 // Applies a user-defined rolling window function to the values in a column.
 template <bool static_window, typename WindowIterator>
-std::unique_ptr<column> rolling_window(column_view const &input,
-                                       WindowIterator preceding_window,
-                                       WindowIterator following_window,
-                                       size_type min_periods,
-                                       std::string const& user_defined_aggregator,
-                                       std::unique_ptr<aggregation> const& agg,
-                                       data_type output_type,
-                                       rmm::mr::device_memory_resource* mr,
-                                       cudaStream_t stream = 0)
+std::unique_ptr<column> rolling_window_udf(column_view const &input,
+                                           WindowIterator preceding_window,
+                                           WindowIterator following_window,
+                                           size_type min_periods,
+                                           std::unique_ptr<aggregation> const& agg,
+                                           rmm::mr::device_memory_resource* mr,
+                                           cudaStream_t stream = 0)
 {
   static_assert(warp_size == cudf::detail::size_in_bits<cudf::bitmask_type>(),
                 "bitmask_type size does not match CUDA warp size");
@@ -329,33 +308,30 @@ std::unique_ptr<column> rolling_window(column_view const &input,
 
   min_periods = std::max(min_periods, 1);
 
+  auto udf_agg = static_cast<udf_aggregation*>(agg.get());
+
   std::string hash = "prog_experimental_rolling." 
-    + std::to_string(std::hash<std::string>{}(user_defined_aggregator));
-
-  auto udf_agg =
-    static_cast<experimental::detail::udf_aggregation const*>(agg.get());
-
+    + std::to_string(std::hash<std::string>{}(udf_agg->_source));
+  
   std::string cuda_source;
-  switch(agg->kind){
+  switch(udf_agg->kind){
     case aggregation::Kind::PTX:
       cuda_source = cudf::experimental::rolling::jit::code::kernel_headers;
-      cuda_source += cudf::jit::parse_single_function_ptx(user_defined_aggregator, 
-                                                          udf_agg->_function_name,
-                                                          cudf::jit::get_type_name(output_type),
+      cuda_source += cudf::jit::parse_single_function_ptx(udf_agg->_source, udf_agg->_function_name,
+                                                          cudf::jit::get_type_name(udf_agg->_output_type),
                                                           {0, 5}); // args 0 and 5 are pointers.
       cuda_source += cudf::experimental::rolling::jit::code::kernel;
       break; 
     case aggregation::Kind::CUDA:
       cuda_source = cudf::experimental::rolling::jit::code::kernel_headers;
-      cuda_source += cudf::jit::parse_single_function_cuda(user_defined_aggregator,
-                                                           udf_agg->_function_name);
+      cuda_source += cudf::jit::parse_single_function_cuda(udf_agg->_source, udf_agg->_function_name);
       cuda_source += cudf::experimental::rolling::jit::code::kernel;
       break;
     default:
       CUDF_FAIL("Unsupported UDF type.");
   }
 
-  std::unique_ptr<column> output = make_numeric_column(output_type, input.size(),
+  std::unique_ptr<column> output = make_numeric_column(udf_agg->_output_type, input.size(),
                                                        cudf::UNINITIALIZED, stream, mr);
 
   auto output_view = output->mutable_view();
@@ -370,7 +346,7 @@ std::unique_ptr<column> rolling_window(column_view const &input,
                       { cudf::jit::get_type_name(input.type()), // list of template arguments
                         cudf::jit::get_type_name(output->type()),
                         udf_agg->_operator_name,
-                      static_window ? "cudf::size_type" : "cudf::size_type*"})
+                        static_window ? "cudf::size_type" : "cudf::size_type*"})
     .launch(input.size(), cudf::jit::get_data_ptr(input), input.null_mask(),
             cudf::jit::get_data_ptr(output_view), output_view.null_mask(),
             device_valid_count.data(), preceding_window, following_window, min_periods);
@@ -385,6 +361,28 @@ std::unique_ptr<column> rolling_window(column_view const &input,
   return output;
 }
 
+// Applies a rolling window function to the values in a column.
+template <typename WindowIterator>
+std::unique_ptr<column> rolling_window(column_view const& input,
+                                       WindowIterator preceding_window_begin,
+                                       WindowIterator following_window_begin,
+                                       size_type min_periods,
+                                       std::unique_ptr<aggregation> const& agg,
+                                       rmm::mr::device_memory_resource* mr,
+                                       cudaStream_t stream = 0)
+{
+  static_assert(warp_size == cudf::detail::size_in_bits<cudf::bitmask_type>(),
+                "bitmask_type size does not match CUDA warp size");
+
+  return cudf::experimental::type_dispatcher(input.type(),
+                                             dispatch_rolling{},
+                                             input,
+                                             preceding_window_begin,
+                                             following_window_begin,
+                                             min_periods, agg, mr, stream);
+
+}
+
 } // namespace detail
 
 // Applies a fixed-size rolling window function to the values in a column.
@@ -397,11 +395,20 @@ std::unique_ptr<column> rolling_window(column_view const& input,
 {
   CUDF_EXPECTS((min_periods >= 0), "min_periods must be non-negative");
 
-  auto preceding_window_begin = thrust::make_constant_iterator(preceding_window);
-  auto following_window_begin = thrust::make_constant_iterator(following_window);
+  if (agg->kind == aggregation::CUDA || agg->kind == aggregation::PTX) {
+    return cudf::experimental::detail::rolling_window_udf<true>(input,
+                                                                preceding_window,
+                                                                following_window,
+                                                                min_periods, agg, mr, 0);
+  } else {
+    auto preceding_window_begin = thrust::make_constant_iterator(preceding_window);
+    auto following_window_begin = thrust::make_constant_iterator(following_window);
 
-  return cudf::experimental::detail::rolling_window(input, preceding_window_begin,
-                                                    following_window_begin, min_periods, agg, mr, 0);
+    return cudf::experimental::detail::rolling_window(input,
+                                                      preceding_window_begin,
+                                                      following_window_begin,
+                                                      min_periods, agg, mr, 0);
+  }
 }
 
 // Applies a variable-size rolling window function to the values in a column.
@@ -420,51 +427,17 @@ std::unique_ptr<column> rolling_window(column_view const& input,
   CUDF_EXPECTS(preceding_window.size() == input.size() && following_window.size() == input.size(),
                "preceding_window/following_window size must match input size");
 
-  return cudf::experimental::detail::rolling_window(input, preceding_window.begin<size_type>(),
-                                                    following_window.begin<size_type>(),
-                                                    min_periods, agg, mr, 0);
-}
-
-// Applies a fixed-size user-defined rolling window function to the values in a column.
-std::unique_ptr<column> rolling_window(column_view const &input,
-                                       size_type preceding_window,
-                                       size_type following_window,
-                                       size_type min_periods,
-                                       std::string const& user_defined_aggregator,
-                                       std::unique_ptr<aggregation> const& agg,
-                                       data_type output_type,
-                                       rmm::mr::device_memory_resource* mr)
-{
-  CUDF_EXPECTS((min_periods >= 0),"min_periods must be non-negative");
-
-  return cudf::experimental::detail::rolling_window<true>(input, preceding_window, following_window,
-                                                          min_periods, user_defined_aggregator, agg,
-                                                          output_type, mr, 0);
-}
-
-// Applies a variable-size user-defined rolling window function to the values in a column.
-std::unique_ptr<column> rolling_window(column_view const &input,
-                                       column_view const& preceding_window,
-                                       column_view const& following_window,
-                                       size_type min_periods,
-                                       std::string const& user_defined_aggregator,
-                                       std::unique_ptr<aggregation> const& agg,
-                                       data_type output_type,
-                                       rmm::mr::device_memory_resource* mr)
-{
-  if (preceding_window.size() == 0 || following_window.size() == 0) return empty_like(input);
-
-  CUDF_EXPECTS(preceding_window.type().id() == INT32 && following_window.type().id() == INT32,
-               "preceding_window/following_window must have INT32 type");
-
-  CUDF_EXPECTS(preceding_window.size() == input.size() && following_window.size() == input.size(),
-               "preceding_window/following_window size must match input size");
-
-  return cudf::experimental::detail::rolling_window<false>(input,
-                                                           preceding_window.begin<size_type>(),
-                                                           following_window.begin<size_type>(),
-                                                           min_periods, user_defined_aggregator, 
-                                                           agg, output_type, mr, 0);
+  if (agg->kind == aggregation::CUDA || agg->kind == aggregation::PTX) {
+    return cudf::experimental::detail::rolling_window_udf<false>(input,
+                                                                 preceding_window.begin<size_type>(),
+                                                                 following_window.begin<size_type>(),
+                                                                 min_periods, agg, mr, 0);
+  } else {
+    return cudf::experimental::detail::rolling_window(input, 
+                                                      preceding_window.begin<size_type>(),
+                                                      following_window.begin<size_type>(),
+                                                      min_periods, agg, mr, 0);
+  }
 }
 
 } // namespace experimental 
