@@ -106,7 +106,7 @@ struct contiguous_split_record_result {
  * number of tokens; the resulting columns wrapped in the returned object may
  * have different sizes.
  *
- * Splitting a null string element will result in a null output column.
+ * Splitting a null string element will result in an empty output column.
  *
  * @throws cudf:logic_error if `delimiter` is invalid.
  *
@@ -139,7 +139,7 @@ contiguous_split_record_result contiguous_split_record(
  * number of tokens; the resulting columns wrapped in the returned object may
  * have different sizes.
  *
- * Splitting a null string element will result in a null output column.
+ * Splitting a null string element will result in an empty output column.
  *
  * @throws cudf:logic_error if `delimiter` is invalid.
  *
