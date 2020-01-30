@@ -171,7 +171,25 @@ class DataFrame(_Frame, dd.core.DataFrame):
             on = list(on)
         return super().join(other, how=how, on=on, shuffle="tasks", **kwargs)
 
-    def set_index(self, other, **kwargs):
+    def set_index(
+        self,
+        other,
+        experimental=False,
+        sorted=False,
+        client=None,
+        explicit=False,
+        **kwargs,
+    ):
+        if experimental and not sorted:
+            # Use sort values for the shuffle
+            df = self.sort_values(
+                [other],
+                experimental=experimental,
+                client=client,
+                explicit=explicit,
+            )
+            # Use sorted=True with usual `set_index` API
+            return df.map_partitions(M.set_index, other)
         if kwargs.pop("shuffle", "tasks") != "tasks":
             raise ValueError(
                 "Dask-cudf only supports task based shuffling, got %s"

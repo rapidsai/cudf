@@ -316,10 +316,16 @@ def sort_values_experimental(
     elif isinstance(by, tuple):
         by = list(by)
 
+    # Make sure first column is numeric
+    # (Cannot handle string column here yet)
+    if isinstance(df[by[0]]._meta._column, gd.core.column.string.StringColumn):
+        return df.sort_values(
+            by, ignore_index=ignore_index, experimental=False
+        )
+
     # Step 1 - Pre-sort each partition
-    df2 = df.map_partitions(M.sort_values, by)
-    if npartitions == 1:
-        return df2
+    # df2 = df.map_partitions(M.sort_values, by)
+    df2 = df  # TODO: Use Presort when k-way merge/concat is avilable.
 
     # Only handle single-column partitioning (for now)
     #     TODO: Handle partitioning on multiple columns?
