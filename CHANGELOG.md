@@ -12,6 +12,7 @@
 - PR #4002 Adding to_frame and fix for categorical column issue
 - PR #3897 Port cuIO JSON reader to cudf::column types
 - PR #3911 Adding null boolean handling for copy_if_else
+- PR #3891 Port NVStrings (r)split_record to contiguous_(r)split_record
 
 ## Bug Fixes
 
