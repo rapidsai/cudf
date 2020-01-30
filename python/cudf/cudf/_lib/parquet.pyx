@@ -29,6 +29,7 @@ import os
 
 from cudf._libxx.table cimport *
 
+
 cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
                    skip_rows=None, num_rows=None,
                    strings_to_categorical=False, use_pandas_metadata=False):

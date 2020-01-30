@@ -91,6 +91,14 @@ def to_parquet(
                 + "gpu accelerated parquet writer"
             )
 
+        # Ensure that no columns dtype is 'category'
+        for col in df.columns:
+            if df[col].dtype.name == "category":
+                ValueError(
+                    "'category' column dtypes are currently not "
+                    + "supported by the gpu accelerated parquet writer"
+                )
+
         return libcudf.parquet.write_parquet(
             df, path, compression=compression, statistics=statistics
         )
