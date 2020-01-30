@@ -217,7 +217,6 @@ struct column_gatherer_impl<dictionary32, MapItType>
                                      cudaStream_t stream) {
       dictionary_column_view dictionary(source_column);
       auto output_count = std::distance(gather_map_begin, gather_map_end);
-      printf("gather for dictionary column (%d,%d)\n", (int)dictionary.size(), (int)output_count);
       if( output_count == 0 )
           return make_empty_column(data_type{DICTIONARY32});
       // we decided we will copy the keys for gather
