@@ -60,7 +60,7 @@ void gather_bitmask(table_view const& source, MapIterator gather_map,
   // Create null mask if source is nullable but target is not
   for (size_t i = 0; i < target.size(); ++i) {
     if (source.column(i).nullable() and not target[i]->nullable()) {
-      auto mask = create_null_mask(target.size(), mask_state::ALL_VALID, stream, mr);
+      auto mask = create_null_mask(target[i]->size(), mask_state::ALL_VALID, stream, mr);
       target[i]->set_null_mask(std::move(mask), 0);
     }
   }
