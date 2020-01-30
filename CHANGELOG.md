@@ -11,6 +11,8 @@
 - PR #3975 Simplify and generalize data handling in `Buffer`
 - PR #3911 Adding null boolean handling for copy_if_else
 
+- PR #3897 Port cuIO JSON reader to cudf::column types
+
 ## Bug Fixes
 
 - PR #3888 Drop `ptr=None` from `DeviceBuffer` call
