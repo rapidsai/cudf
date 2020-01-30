@@ -56,14 +56,14 @@ std::unique_ptr<column> encode( column_view const& input_column,
     {
         // the single null entry should be at the beginning -- side effect from drop_duplicates
         // copy the column without the null entry
-        keys_column = std::make_unique<column>(experimental::slice(*keys_column,
+        keys_column = std::make_unique<column>(experimental::slice(keys_column->view(),
                             std::vector<size_type>{1,keys_column->size()}).front(),stream,mr);
         keys_column->set_null_mask( rmm::device_buffer{}, 0 ); // remove the null-mask
     }
 
     // this returns a column with no null entries
     // - it appears to ignore the null entries in the input and tries to place the value regardless
-    auto indices_column = cudf::experimental::detail::lower_bound(table_view{{*keys_column}},
+    auto indices_column = cudf::experimental::detail::lower_bound(table_view{{keys_column->view()}},
                     table_view{{input_column}},
                     std::vector<order>{order::ASCENDING},
                     std::vector<null_order>{null_order::AFTER},
