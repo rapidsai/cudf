@@ -376,22 +376,9 @@ bool validate_host_masks(std::vector<bitmask_type> const& expected_mask,
                          std::vector<bitmask_type> const& got_mask,
                          size_type number_of_elements) {
 
-    std::vector<cudf::size_type> mask_index(expected_mask.size());
-    std::iota(mask_index.begin(), mask_index.end(), 0);
-    size_type bitmask_size = sizeof(bitmask_type) * 8;
-
-    return std::all_of(mask_index.begin(), mask_index.end(),
-            [&expected_mask, &got_mask, number_of_elements, bitmask_size](auto index){
-                if ((index+1)*bitmask_size <= number_of_elements){
-                    // All represent mask bits
-                    return expected_mask[index] == got_mask[index];
-                } else if (index*bitmask_size <= number_of_elements) {
-                    // Mix of padded and mask bits
-                    return expected_mask[index] == (got_mask[index] & (std::numeric_limits<bitmask_type>::max()>>((index+1)*sizeof(bitmask_type)-number_of_elements)));
-                } else {
-                    // Just padded bits
-                    return true;
-                }
+    return std::all_of(thrust::make_counting_iterator(0), thrust::make_counting_iterator(number_of_elements),
+            [&expected_mask, &got_mask](auto index){
+                return cudf::bit_is_set(expected_mask.data(), index) == cudf::bit_is_set(got_mask.data(), index);
             });
 }
 
