@@ -483,11 +483,13 @@ def test_parquet_writer_gpu(tmpdir, simple_gdf):
     expect = simple_gdf
 
     # Read the gdf back in using the reader
-    got = cudf.read_parquet(gdf_fname, columns=["col_int8", "col_int16", "col_int32"])
+    got = cudf.read_parquet(
+        gdf_fname, columns=["col_int8", "col_int16", "col_int32"]
+    )
 
-    # When "got" is read its index does not have a name since the gpu parquet writer
-    # does not write out index names(therefore not read in either). We need
-    # to manually set the index name here so that the comparison does not fail.
+    # When "got" is read its index does not have a name since the gpu
+    # parquet writer does not write out index names. We need to manually
+    # set the index name here so that the comparison does not fail.
     got.index.name = "test_index"
 
     assert_eq(expect, got, check_categorical=False)
