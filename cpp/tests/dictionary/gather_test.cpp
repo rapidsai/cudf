@@ -19,6 +19,7 @@
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/gather.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
@@ -31,18 +32,37 @@ TEST_F(DictionaryGatherTest, Gather)
 {
     std::vector<const char*> h_strings{ "eee", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "eee", "aaa" };
     cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end() );
-
+    cudf::test::fixed_width_column_wrapper<int32_t> input{9,8,7,6,5,4,3,2,1};
     auto dictionary = cudf::dictionary::encode( strings );
+    //dictionary = cudf::dictionary::encode( input );
+    //dictionary = cudf::dictionary::encode( strings );
+    //dictionary = cudf::dictionary::encode( input );
     cudf::dictionary_column_view view(dictionary->view());
 
-//    cudf::test::print( view.keys() );
-//    std::cout << std::endl;
-//    cudf::test::print( view.indices() );
-//    std::cout << std::endl;
+    {
+        auto test = cudf::make_dictionary_column( view.keys(), view.indices() );
+        cudf::dictionary_column_view test_view(test->view());
+        std::cout << "testing: ";
+        cudf::test::print( test_view.keys() );
+        std::cout << " : ";
+        cudf::test::print( test_view.indices() );
+        std::cout << std::endl;
+    }
 
-    cudf::test::fixed_width_column_wrapper<int32_t> gather_map{0, 1, 3, 4};
-//    auto table_result = cudf::experimental::gather(cudf::table_view{{dictionary->view()}}, gather_map);
-//    auto result = cudf::dictionary_column_view(table_result[0]->view());
+
+    cudf::test::print( view.keys() );
+    std::cout << " : ";
+    cudf::test::print( view.indices() );
+    std::cout << std::endl;
+
+    cudf::test::fixed_width_column_wrapper<int32_t> gather_map{0,4,3,1};
+    auto table_result = cudf::experimental::detail::gather(cudf::table_view{{view.parent()}}, gather_map)->release();
+//    auto table_result = cudf::experimental::detail::gather(cudf::table_view{{view.indices()}}, gather_map)->release();
+//    auto result = cudf::dictionary_column_view(table_result.front()->view());
+//    cudf::test::print( result.keys() );
+//    std::cout << " : ";
+//    cudf::test::print( result.indices() );
+//    std::cout << std::endl;
 
 //    cudf::test::print( result.keys() );
 //    std::cout << std::endl;

@@ -144,7 +144,6 @@ struct column_gatherer_impl
         thrust::gather(rmm::exec_policy(stream)->on(stream), gather_map_begin,
                        gather_map_end, source_data, destination_data);
       }
-
       return destination_column;
     }
   };
@@ -218,8 +217,11 @@ struct column_gatherer_impl<dictionary32, MapItType>
                                      cudaStream_t stream) {
       dictionary_column_view dictionary(source_column);
       auto output_count = std::distance(gather_map_begin, gather_map_end);
+      printf("gather for dictionary column (%d,%d)\n", (int)dictionary.size(), (int)output_count);
       if( output_count == 0 )
           return make_empty_column(data_type{DICTIONARY32});
+      // we decided we will copy the keys for gather
+      auto keys_copy = std::make_unique<column>( dictionary.keys(), stream, mr );
 
       // create view of the indices column combined with the null mask
       // in order to call gather on it
@@ -237,8 +239,6 @@ struct column_gatherer_impl<dictionary32, MapItType>
           null_mask = copy_bitmask(new_indices->view(),stream,mr);
       // reset null mask on indices column
       new_indices->set_null_mask( rmm::device_buffer{}, 0 );
-      // we decided we will copy the keys for gather
-      auto keys_copy = std::make_unique<column>(dictionary.keys());
       return make_dictionary_column( std::move(keys_copy), std::move(new_indices),
                                      std::move(null_mask), null_count );
   }
