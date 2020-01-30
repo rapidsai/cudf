@@ -684,6 +684,102 @@ std::vector<StripeInformation> writer::impl::gather_stripes(
   return stripes;
 }
 
+std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
+    orc_column_view const *columns,
+    size_t num_columns, size_t num_rows, size_t num_rowgroups,
+    std::vector<uint32_t> const& stripe_list,
+    std::vector<StripeInformation> const& stripes,
+    hostdevice_vector<gpu::EncChunk>& chunks,
+    cudaStream_t stream) {
+  size_t num_stat_blobs = (1 + stripe_list.size()) * num_columns;
+  size_t num_chunks = chunks.size();
+  std::vector<std::vector<uint8_t>> stat_blobs(num_stat_blobs);
+  hostdevice_vector<stats_column_desc> stat_desc(num_columns);
+  hostdevice_vector<statistics_merge_group> stat_merge(num_stat_blobs);
+  rmm::device_vector<statistics_chunk> stat_chunks(num_chunks + num_stat_blobs);
+  rmm::device_vector<statistics_group> stat_groups(num_chunks);
+
+  for (size_t i = 0; i < num_columns; i++) {
+    stats_column_desc *desc = &stat_desc[i]; 
+    switch(columns[i].orc_kind()) {
+      case TypeKind::BYTE:      desc->stats_dtype = dtype_int8; break;
+      case TypeKind::SHORT:     desc->stats_dtype = dtype_int16; break;
+      case TypeKind::INT:       desc->stats_dtype = dtype_int32; break;
+      case TypeKind::LONG:      desc->stats_dtype = dtype_int64; break;
+      case TypeKind::FLOAT:     desc->stats_dtype = dtype_float32; break;
+      case TypeKind::DOUBLE:    desc->stats_dtype = dtype_float64; break;
+      case TypeKind::BOOLEAN:   desc->stats_dtype = dtype_bool8; break;
+      case TypeKind::DATE:      desc->stats_dtype = dtype_int32; break;
+      case TypeKind::TIMESTAMP: desc->stats_dtype = dtype_timestamp64; break;
+      case TypeKind::STRING:    desc->stats_dtype = dtype_string; break;
+      default:                  desc->stats_dtype = dtype_none; break;
+    }
+    desc->num_rows = columns[i].data_count();
+    desc->valid_map_base = columns[i].nulls();
+    desc->column_data_base = columns[i].data();
+    if (desc->stats_dtype == dtype_timestamp64) {
+      // Timestamp statistics are in milliseconds
+      switch(columns[i].clockscale()) {
+      case 9:  desc->ts_scale = 1000; break;
+      case 6:  desc->ts_scale = 0; break;
+      case 3:  desc->ts_scale = -1000; break;
+      case 0:  desc->ts_scale = -1000000; break;
+      default: desc->ts_scale = 0; break;
+      }
+    } else {
+      desc->ts_scale = 0;
+    }
+    for (size_t k = 0, c = 0; k < stripe_list.size(); k++)
+    {
+      statistics_merge_group *grp = &stat_merge[i * stripe_list.size() + k];
+      grp->col = stat_desc.device_ptr(i);
+      grp->start_chunk = static_cast<uint32_t>(i * num_rowgroups + c);
+      grp->num_chunks = stripe_list[k];
+      c += stripe_list[k];
+    }
+    statistics_merge_group *col_stats = &stat_merge[stripe_list.size() * num_columns + i];
+    col_stats->col = stat_desc.device_ptr(i);
+    col_stats->start_chunk = static_cast<uint32_t>(i * stripe_list.size());
+    col_stats->num_chunks = static_cast<uint32_t>(stripe_list.size());
+  }
+  CUDA_TRY(cudaMemcpyAsync(stat_desc.device_ptr(), stat_desc.host_ptr(),
+                           stat_desc.memory_size(), cudaMemcpyHostToDevice, stream));
+  CUDA_TRY(cudaMemcpyAsync(stat_merge.device_ptr(), stat_merge.host_ptr(),
+                           stat_merge.memory_size(), cudaMemcpyHostToDevice, stream));
+  CUDA_TRY(gpu::OrcInitStatisticsGroups(stat_groups.data().get(), stat_desc.device_ptr(),
+                                        num_columns, num_rowgroups, row_index_stride_, stream));
+  CUDA_TRY(GatherColumnStatistics(stat_chunks.data().get(), stat_groups.data().get(),
+                                  num_chunks, stream));
+  CUDA_TRY(MergeColumnStatistics(stat_chunks.data().get() + num_chunks, stat_chunks.data().get(),
+                                 stat_merge.device_ptr(), stripe_list.size() * num_columns, stream));
+  CUDA_TRY(MergeColumnStatistics(stat_chunks.data().get() + num_chunks + stripe_list.size() * num_columns,
+                                 stat_chunks.data().get() + num_chunks,
+                                 stat_merge.device_ptr(stripe_list.size() * num_columns),
+                                 num_columns, stream));
+  CUDA_TRY(gpu::OrcInitStatisticsBufferSize(stat_merge.device_ptr(), stat_chunks.data().get() + num_chunks,
+                                            num_stat_blobs, stream));
+  CUDA_TRY(cudaMemcpyAsync(stat_merge.host_ptr(), stat_merge.device_ptr(),
+                           stat_merge.memory_size(), cudaMemcpyDeviceToHost, stream));
+  CUDA_TRY(cudaStreamSynchronize(stream));
+
+  hostdevice_vector<uint8_t> blobs(stat_merge[num_stat_blobs - 1].start_chunk + stat_merge[num_stat_blobs - 1].num_chunks);
+  CUDA_TRY(gpu::OrcEncodeStatistics(blobs.device_ptr(), stat_merge.device_ptr(),
+                                    stat_chunks.data().get() + num_chunks, num_stat_blobs, stream));
+  CUDA_TRY(cudaMemcpyAsync(stat_merge.host_ptr(), stat_merge.device_ptr(),
+                           stat_merge.memory_size(), cudaMemcpyDeviceToHost, stream));
+  CUDA_TRY(cudaMemcpyAsync(blobs.host_ptr(), blobs.device_ptr(),
+                           blobs.memory_size(), cudaMemcpyDeviceToHost, stream));
+  CUDA_TRY(cudaStreamSynchronize(stream));
+
+  for (size_t i = 0; i < num_stat_blobs; i++) {
+    const uint8_t *stat_begin = blobs.host_ptr(stat_merge[i].start_chunk);
+    const uint8_t *stat_end = stat_begin + stat_merge[i].num_chunks;
+    stat_blobs[i].assign(stat_begin, stat_end);
+  }
+
+  return stat_blobs;
+}
+
 void writer::impl::write_index_stream(
     int32_t stripe_id, int32_t stream_id, orc_column_view *columns,
     size_t num_columns, size_t num_data_streams, size_t group,
@@ -795,6 +891,7 @@ void writer::impl::write_data_stream(gpu::StripeStream const &strm_desc,
 writer::impl::impl(std::unique_ptr<data_sink> sink, writer_options const &options,
   rmm::mr::device_memory_resource *mr):
   compression_kind_(to_orc_compression(options.compression)), 
+  enable_statistics_(options.enable_statistics),
   out_sink_(std::move(sink)),
   _mr(mr) {}
 
@@ -891,6 +988,13 @@ void writer::impl::write(table_view const &table, const table_metadata *metadata
   auto stripes =
       gather_stripes(num_columns, num_rows, num_index_streams, num_data_streams,
                      stripe_list, chunks, strm_desc, stream);
+
+  // Gather column statistics
+  std::vector<std::vector<uint8_t>> column_stats;
+  if (enable_statistics_ && num_columns > 0 && num_rows > 0) {
+    column_stats = gather_statistic_blobs(orc_columns.data(), num_columns, num_rows,
+                                          num_rowgroups, stripe_list, stripes, chunks, stream);
+  }
 
   // Allocate intermediate output stream buffer
   size_t compressed_bfr_size = 0;

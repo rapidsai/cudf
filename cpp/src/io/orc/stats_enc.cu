@@ -82,7 +82,7 @@ gpuInitStatisticsBufferSize(statistics_merge_group *groups, const statistics_chu
       statistics_dtype dtype = col->stats_dtype;
       switch(dtype) {
       case dtype_bool8:
-        stats_len = 2 + 2 * 5;
+        stats_len = 12 + 1 + 1 + 10;
         break;
       case dtype_int8:
       case dtype_int16:
@@ -90,18 +90,18 @@ gpuInitStatisticsBufferSize(statistics_merge_group *groups, const statistics_chu
       case dtype_date32:
       case dtype_int64:
       case dtype_timestamp64:
-        stats_len = 2 + 3 * (2 + 10);
+        stats_len = 12 + 1 + 3 * (1 + 10);
         break;
       case dtype_float32:
       case dtype_float64:
-        stats_len = 2 + 3 * (2 + 8);
+        stats_len = 12 + 1 + 3 * (1 + 8);
         break;
       case dtype_decimal64:
       case dtype_decimal128:
-        stats_len = 2 + 3 * (2 + 40);
+        stats_len = 12 + 2 + 3 * (1 + 40);
         break;
       case dtype_string:
-        stats_len = 5 + 10 + chunks[idx].min_value.str_val.length + chunks[idx].max_value.str_val.length;
+        stats_len = 12 + 5 + 3 * (1 + 10) + chunks[idx].min_value.str_val.length + chunks[idx].max_value.str_val.length;
         break;
       default: break;
       }
