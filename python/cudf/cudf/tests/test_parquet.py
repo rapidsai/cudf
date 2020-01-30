@@ -483,14 +483,11 @@ def test_parquet_writer_gpu(tmpdir, simple_gdf):
     expect = simple_gdf
 
     # Read the gdf back in using the reader
-    got = cudf.read_parquet(gdf_fname)
+    got = cudf.read_parquet(gdf_fname, columns=["col_int8", "col_int16", "col_int32"])
 
-    # There is a special case in the reader that causes the 'test_index'
-    # Index used by Pandas to be read in as a normal data column.
-    # Therefore it must be removed here and the index name set to
-    # that to match the "expected" pdf
-    if "test_index" in got.columns:
-        got = got.drop("test_index")
+    # When "got" is read its index does not have a name since the gpu parquet writer
+    # does not write out index names(therefore not read in either). We need
+    # to manually set the index name here so that the comparison does not fail.
     got.index.name = "test_index"
 
     assert_eq(expect, got, check_categorical=False)
