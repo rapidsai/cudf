@@ -16,7 +16,7 @@ import cudf._lib as libcudf
 from cudf._lib.nvtx import nvtx_range_pop, nvtx_range_push
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
-from cudf.utils import cudautils, utils
+from cudf.utils import utils
 from cudf.utils.dtypes import is_list_like
 
 _str_to_numeric_typecast_functions = {
@@ -689,7 +689,7 @@ class StringColumn(column.ColumnBase):
                 each_frame = cuda.as_cuda_array(each_frame)
             elif isinstance(each_frame, memoryview):
                 each_frame = np.asarray(each_frame)
-                each_frame = cudautils.to_device(each_frame)
+                each_frame = rmm.to_device(each_frame)
 
             arrays.append(libcudf.cudf.get_ctype_ptr(each_frame))
 
