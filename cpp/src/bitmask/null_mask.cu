@@ -275,25 +275,19 @@ __global__ void subtract_set_bits_range_boundaries_kerenel(
  * @param source The mask to copy from
  * @param source_begin_bit The offset into `source` from which to begin the copy
  * @param source_end_bit   The offset into `source` till which copying is done
- * @param number_of_mask_words The number of `cudf::bitmask_type` words to copy,
- *        these are the words with actual masking bits, this number may not be
- *        equal to actual size of the mask which includes padding.
- * @param number_of_words The number of `cudf::bitmask_type` words including
- *        padding
+ * @param number_of_mask_words The number of `cudf::bitmask_type` words to copy
  *---------------------------------------------------------------------------**/
 // TODO: Also make binops test that uses offset in column_view
 __global__ void copy_offset_bitmask(bitmask_type *__restrict__ destination,
                                     bitmask_type const *__restrict__ source,
                                     size_type source_begin_bit,
                                     size_type source_end_bit,
-                                    size_type number_of_mask_words,
-                                    size_type number_of_words) {
+                                    size_type number_of_mask_words) {
   for (size_type destination_word_index = threadIdx.x + blockIdx.x * blockDim.x;
-       destination_word_index < number_of_words;
+       destination_word_index < number_of_mask_words;
        destination_word_index += blockDim.x * gridDim.x) {
     destination[destination_word_index] =
-        (destination_word_index< number_of_mask_words)?
-        get_mask_offset_word(source, destination_word_index, source_begin_bit, source_end_bit) : 0;
+        get_mask_offset_word(source, destination_word_index, source_begin_bit, source_end_bit);
   }
 }
 
@@ -681,7 +675,7 @@ rmm::device_buffer copy_bitmask(bitmask_type const *mask, size_type begin_bit,
     copy_offset_bitmask<<<config.num_blocks, config.num_threads_per_block, 0,
                           stream>>>(
         static_cast<bitmask_type *>(dest_mask.data()), mask, begin_bit, end_bit,
-        number_of_mask_words, num_bytes/sizeof(bitmask_type));
+        number_of_mask_words);
     CHECK_CUDA(stream);
   }
   return dest_mask;

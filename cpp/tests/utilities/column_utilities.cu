@@ -30,6 +30,7 @@
 #include <thrust/logical.h>
 
 #include <gmock/gmock.h>
+#include <numeric>
 
 namespace cudf {
 namespace test {
@@ -270,7 +271,7 @@ void expect_equal_buffers(void const* lhs, void const* rhs,
                             typed_rhs));
 }
 
-// copy column bitmask to host (used by to_host())
+// copy column bitbitmask to host (used by to_host())
 std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c) {
   if (c.nullable()) {
     auto num_bitmasks = bitmask_allocation_size_bytes(c.size()) / sizeof(bitmask_type);
@@ -369,6 +370,29 @@ std::string to_string(cudf::column_view const& col, std::string const& delimiter
 
 void print(cudf::column_view const& col, std::ostream &os, std::string const& delimiter) {
   os << to_string(col, delimiter);
+}
+
+bool validate_host_masks(std::vector<bitmask_type> const& expected_mask,
+                         std::vector<bitmask_type> const& got_mask,
+                         size_type number_of_elements) {
+
+    std::vector<cudf::size_type> mask_index(expected_mask.size());
+    std::iota(mask_index.begin(), mask_index.end(), 0);
+    size_type bitmask_size = sizeof(bitmask_type) * 8;
+
+    return std::all_of(mask_index.begin(), mask_index.end(),
+            [&expected_mask, &got_mask, number_of_elements, bitmask_size](auto index){
+                if ((index+1)*bitmask_size <= number_of_elements){
+                    // All represent mask bits
+                    return expected_mask[index] == got_mask[index];
+                } else if (index*bitmask_size <= number_of_elements) {
+                    // Mix of padded and mask bits
+                    return expected_mask[index] == (got_mask[index] & (std::numeric_limits<bitmask_type>::max()>>((index+1)*sizeof(bitmask_type)-number_of_elements)));
+                } else {
+                    // Just padded bits
+                    return true;
+                }
+            });
 }
 
 }  // namespace test
