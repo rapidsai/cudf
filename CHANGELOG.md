@@ -7,12 +7,15 @@
 
 ## Improvements
 - PR #3698 Add count_(un)set_bits functions taking multiple ranges and updated slice to compute null counts at once.
-
 - PR #3909 Move java backend to libcudf++
 - PR #3971 Adding `as_table` to convert Column to Table in python
 - PR #3910 Adding sinh, cosh, tanh, asinh, acosh, atanh cube root and rint unary support.
 - PR #3972 Add Java bindings for left_semi_join and left_anti_join
 - PR #3975 Simplify and generalize data handling in `Buffer`
+- PR #3911 Adding null boolean handling for copy_if_else
+- PR #4002 Adding to_frame and fix for categorical column issue
+
+- PR #3897 Port cuIO JSON reader to cudf::column types
 
 ## Bug Fixes
 
@@ -23,6 +26,9 @@
 - PR #3959 Add missing hash-dispatch function for cudf.Series
 - PR #3970 Fix for Series Pickle
 - PR #3964 Restore legacy NVStrings and NVCategory dependencies in Java jar
+- PR #3982 Fix java unary op enum and add missing ops
+- PR #4005 Fix null mask allocation bug in gather_bitmask
+- PR #4000 Fix dask_cudf sort_values performance for single partitions
 
 
 # cuDF 0.12.0 (Date TBD)
@@ -102,6 +108,7 @@
 - PR #2438 Build GBench Benchmarks in CI
 - PR #3713 Adding aggregation support to rolling_window
 - PR #3875 Add abstract sink for IO writers, used by ORC and Parquet writers for now
+- PR #3916 Refactor gather bindings
 
 ## Bug Fixes
 
@@ -160,6 +167,7 @@
 - PR #3871 Fix `split_out` error
 - PR #3886 Fix string column materialization from column view
 - PR #3893 Parquet reader: fix segfault reading empty parquet file
+- PR #3931 Dask-cudf groupby `.agg` multicolumn handling fix
 
 
 # cuDF 0.11.0 (11 Dec 2019)

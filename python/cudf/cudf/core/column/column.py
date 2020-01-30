@@ -59,11 +59,13 @@ class ColumnBase(Column):
             (self.data, self.dtype, self.mask, self.offset, self.children),
         )
 
-    def as_table(self, name=None):
+    def as_frame(self, name=None):
+        from cudf.core.frame import Frame
+
         """
-        Converts a Column to Table
+        Converts a Column to Frame
         """
-        return libcudfxx.Table({name: self.copy(deep=False)})
+        return Frame({name: self.copy(deep=False)})
 
     @property
     def data_array_view(self):

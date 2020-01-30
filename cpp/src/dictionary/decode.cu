@@ -47,14 +47,10 @@ std::unique_ptr<column> decode( dictionary_column_view const& source,
     // use gather to create the output column -- use ignore_out_of_bounds=true
     auto table_column = experimental::detail::gather( table_view{{keys}}, indices, // no nulls here
                                                       false, true, false, mr, stream )->release();
-    auto output_column = std::unique_ptr<column>(std::move(table_column[0]));
+    auto output_column = std::unique_ptr<column>(std::move(table_column.front()));
 
-    // apply the nulls to the output column
-    rmm::device_buffer null_mask;
-    auto null_count = source.null_count();
-    if( source.has_nulls() )
-        null_mask = copy_bitmask(source.parent(),stream,mr);
-    output_column->set_null_mask( null_mask, null_count );
+    // apply any nulls to the output column
+    output_column->set_null_mask( copy_bitmask(source.parent(),stream,mr), source.null_count() );
 
     return output_column;
 }

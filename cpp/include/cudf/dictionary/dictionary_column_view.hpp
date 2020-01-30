@@ -47,17 +47,17 @@ public:
     /**
      * @brief Returns the parent column.
      */
-    column_view parent() const;
+    column_view parent() const noexcept;
 
     /**
      * @brief Returns the column of indices
      */
-    column_view indices() const;
+    column_view indices() const noexcept;
 
     /**
      * @brief Returns the column of keys
      */
-    column_view keys() const;
+    column_view keys() const noexcept;
 
     /**
      * @brief Returns the number of rows in the keys column.

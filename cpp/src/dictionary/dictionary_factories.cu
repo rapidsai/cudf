@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cudf/column/column_view.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
 
@@ -32,21 +33,21 @@ std::unique_ptr<column> make_dictionary_column( column_view const& keys_column,
     CUDF_EXPECTS( indices_column.type().id()==cudf::type_id::INT32, "indices column must be INT32" );
 
     auto keys_copy = std::make_unique<column>( keys_column, stream, mr );
-    auto indices_copy = std::make_unique<column>( indices_column, stream, mr);
+    column_view indices_view{ indices_column.type(), indices_column.size(),
+                              indices_column.data<int32_t>(),
+                              nullptr, 0, indices_column.offset() };
+    auto indices_copy = std::make_unique<column>( indices_view, stream, mr);
     rmm::device_buffer null_mask;
     auto null_count = indices_column.null_count();
     if( null_count )
-    {
-        indices_copy->set_null_mask(null_mask,0);
         null_mask = copy_bitmask(indices_column,stream,mr);
-    }
 
     std::vector<std::unique_ptr<column>> children;
     children.emplace_back(std::move(indices_copy));
     children.emplace_back(std::move(keys_copy));
     return std::make_unique<column>(
         data_type{DICTIONARY32}, indices_column.size(),
-        rmm::device_buffer{0,stream,mr},
+        rmm::device_buffer{},
         null_mask, null_count,
         std::move(children));
 }
@@ -66,8 +67,8 @@ std::unique_ptr<column> make_dictionary_column( std::unique_ptr<column> keys_col
     children.emplace_back(std::move(keys_column));
     return std::make_unique<column>(
         data_type{DICTIONARY32}, count,
-        rmm::device_buffer{0},
-        null_mask, null_count,
+        rmm::device_buffer{},
+        std::move(null_mask), null_count,
         std::move(children));
 }
 
