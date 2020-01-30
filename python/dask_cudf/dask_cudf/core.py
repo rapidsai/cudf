@@ -202,7 +202,9 @@ class DataFrame(_Frame, dd.core.DataFrame):
         else:
             return self.map_partitions(M.reset_index, drop=drop)
 
-    def sort_values(self, by, ignore_index=False, experimental=False):
+    def sort_values(
+        self, by, ignore_index=False, experimental=False, **kwargs
+    ):
         """Sort by the given column
 
         Parameter
@@ -219,7 +221,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 # is used for repartitioning.  All columns are
                 # used for intra-partition sorting.
                 df = sorting.sort_values_experimental(
-                    self, by, ignore_index=ignore_index
+                    self, by, ignore_index=ignore_index, **kwargs
                 )
             else:
                 # Legacy sorting algorithm based on "batcher-sortnet"

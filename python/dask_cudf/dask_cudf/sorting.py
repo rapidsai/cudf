@@ -16,6 +16,13 @@ from dask.utils import M, digit, insert
 
 import cudf as gd
 
+try:
+    from .explicit_sorting import explicit_shuffle
+
+    explicit_comms = True
+except ImportError:
+    explicit_comms = False
+
 
 """
 Batcher's Odd-even sorting network
@@ -292,7 +299,9 @@ def rearrange_by_divisions(df, column: str, divisions: list, max_branch=None):
     return df3
 
 
-def sort_values_experimental(df, by, ignore_index=False):
+def sort_values_experimental(
+    df, by, ignore_index=False, client=None, explicit_workers=None
+):
     """ Experimental sort_values implementation.
 
     Sort by the given column name or list/tuple of column names.
@@ -321,6 +330,11 @@ def sort_values_experimental(df, by, ignore_index=False):
         )
     index = by[0]
 
+    # Check if we are using explicit comms
+    use_explicit = explicit_comms and explicit_workers and client
+    if use_explicit:
+        npartitions = explicit_workers
+
     # Step 2 - Calculate new divisions
     divisions = (
         df2[index]
@@ -330,8 +344,11 @@ def sort_values_experimental(df, by, ignore_index=False):
     )
 
     # Step 3 - Perform repartitioning shuffle
-    df3 = rearrange_by_divisions(df2, index, divisions)
-    df3.divisions = (None,) * (npartitions + 1)
+    if use_explicit:
+        df3 = explicit_shuffle(df2, index, divisions, sorted_split=False)
+    else:
+        df3 = rearrange_by_divisions(df2, index, divisions)
+        df3.divisions = (None,) * (npartitions + 1)
 
     # Step 4 - Return final sorted df
     #          (Can remove after k-way merge added)
