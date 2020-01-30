@@ -21,6 +21,7 @@
 - PR #3970 Fix for Series Pickle
 - PR #3964 Restore legacy NVStrings and NVCategory dependencies in Java jar
 - PR #3982 Fix java unary op enum and add missing ops
+- PR #4007 Fix for copy_bitmask issue with uninitialized device_buffer
 
 
 # cuDF 0.12.0 (Date TBD)
