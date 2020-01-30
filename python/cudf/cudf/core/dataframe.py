@@ -2642,9 +2642,8 @@ class DataFrame(Frame):
             lhs, rhs, left_on, right_on, how
         )
         # Compute merge
-        gdf_result = libcudf.join.join(
-            lhs._data, rhs._data, left_on, right_on, how, method
-        )
+        from cudf._libxx.join import join
+        gdf_result = list(join(lhs, rhs, left_on, right_on, how, method)._data.items())
 
         # Let's sort the columns of the GDF result. NB: Pandas doc says
         # that it sorts when how='outer' but this is NOT the case.
@@ -2682,12 +2681,12 @@ class DataFrame(Frame):
         else:
             for org_name in org_names:
                 for i in range(len(gdf_result)):
-                    if gdf_result[i][1] == org_name:
+                    if gdf_result[i][0] == org_name:
                         result.append(gdf_result.pop(i))
                         break
             for cat_name in to_categorical:
                 for i in range(len(gdf_result)):
-                    if gdf_result[i][1] == cat_name + "_codes":
+                    if gdf_result[i][0] == cat_name + "_codes":
                         cat_codes.append(gdf_result.pop(i))
             assert len(gdf_result) == 0
 
@@ -2696,7 +2695,7 @@ class DataFrame(Frame):
         # Build a new data frame based on the merged columns from GDF
 
         df = DataFrame()
-        for col, name in result:
+        for name, col in result:
             if is_string_dtype(col):
                 df[name] = col
             elif is_categorical_dtype(categorical_dtypes.get(name, col.dtype)):
