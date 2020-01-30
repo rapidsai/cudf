@@ -143,13 +143,14 @@ cdef extern from "cudf/copying.hpp" namespace "cudf::experimental" nogil:
         column_view gather_map,
         bool check_bounds
     ) except +
+    
     cdef unique_ptr[table] cpp_scatter "cudf::experimental::scatter" (
         table_view source_table,
         column_view scatter_map,
         table_view target_table,
         bool check_bounds,
     ) except +
-    
+
 cdef extern from "<utility>" namespace "std" nogil:
     cdef unique_ptr[column] move(unique_ptr[column])
     cdef unique_ptr[table] move(unique_ptr[table])

@@ -30,7 +30,7 @@ class Frame(libcudfxx.Table):
         """
         if not pd.api.types.is_integer_dtype(gather_map.dtype):
             gather_map = gather_map.astype("int32")
-        result = self._from_table(
+        result = self.__class__._from_table(
             libcudfxx.gather(self, as_column(gather_map))
         )
         result._copy_categories(self)
@@ -54,13 +54,17 @@ class Frame(libcudfxx.Table):
         Utility that copies category information from `other`
         to `self`.
         """
-        for name, col in other._data.items():
-            if is_categorical_dtype(col.dtype):
+        for name, col, other_col in zip(
+            self._column_names, self._columns, other._columns
+        ):
+            if is_categorical_dtype(other_col) and not is_categorical_dtype(
+                col
+            ):
                 self._data[name] = build_categorical_column(
-                    categories=col.categories,
-                    codes=self._data[name],
-                    mask=self._data[name].mask,
-                    ordered=col.ordered,
+                    categories=other_col.categories,
+                    codes=col,
+                    mask=col.mask,
+                    ordered=other_col.ordered,
                 )
         if include_index:
             if self._index is not None:

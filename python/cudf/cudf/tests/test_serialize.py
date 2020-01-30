@@ -233,3 +233,11 @@ def test_serialize_all_null_string():
 
     recreated = cudf.Series.deserialize(*gd_series.serialize())
     assert_eq(recreated, pd_series)
+
+
+def test_serialize_string_check_buffer_sizes():
+    df = cudf.DataFrame({"a": ["a", "b", "cd", None]})
+    expect = df.memory_usage(deep=True).loc["a"]
+    header, frames = df.serialize()
+    got = sum(b.nbytes for b in frames)
+    assert expect == got

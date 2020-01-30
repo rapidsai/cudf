@@ -1,9 +1,8 @@
 import pandas as pd
 
-from cudf._libxx.column cimport *
-from cudf._libxx.table cimport *
-
-cimport cudf._libxx.lib as libcudf
+from cudf._libxx.lib cimport *
+from cudf._libxx.column cimport Column
+from cudf._libxx.table cimport Table
 
 
 def gather(Table source_table, Column gather_map, bool check_bounds=True):
