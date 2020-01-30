@@ -22,11 +22,7 @@ def datadir(datadir):
 
 @pytest.fixture(params=[1, 5, 10, 100])
 def simple_pdf(request):
-    types = [
-        "int8",
-        "int16",
-        "int32",
-    ]
+    types = ["int8", "int16", "int32"]
     renamer = {
         "C_l0_g" + str(idx): "col_" + val for (idx, val) in enumerate(types)
     }
@@ -486,10 +482,5 @@ def test_parquet_writer_gpu(tmpdir, simple_gdf):
     got = cudf.read_parquet(
         gdf_fname, columns=["col_int8", "col_int16", "col_int32"]
     )
-
-    # When "got" is read its index does not have a name since the gpu
-    # parquet writer does not write out index names. We need to manually
-    # set the index name here so that the comparison does not fail.
-    got.index.name = "test_index"
 
     assert_eq(expect, got, check_categorical=False)
