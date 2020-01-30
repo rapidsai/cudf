@@ -413,8 +413,9 @@ hash_partition_table(table_view const& input,
     ? OPTIMIZED_BLOCK_SIZE : FALLBACK_BLOCK_SIZE;
   auto const rows_per_thread = use_optimization
     ? OPTIMIZED_ROWS_PER_THREAD : FALLBACK_ROWS_PER_THREAD;
-
   auto const rows_per_block = block_size * rows_per_thread;
+
+  // NOTE grid_size is non-const to workaround lambda capture bug in gcc 5.4
   auto grid_size = util::div_rounding_up_safe(num_rows, rows_per_block);
 
   // Allocate array to hold which partition each row belongs to
@@ -502,6 +503,7 @@ hash_partition_table(table_view const& input,
   if (use_optimization) {
     std::vector<std::unique_ptr<column>> output_cols(input.num_columns());
 
+    // NOTE these pointers are non-const to workaround lambda capture bug in gcc 5.4
     auto row_partition_numbers_ptr {row_partition_numbers.data().get()};
     auto row_partition_offset_ptr {row_partition_offset.data().get()};
     auto block_partition_sizes_ptr {block_partition_sizes.data().get()};
