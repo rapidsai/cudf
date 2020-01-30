@@ -8,7 +8,7 @@ import dask.dataframe as dd
 import cudf
 
 
-@pytest.mark.parametrize("by", ["a", "b"])
+@pytest.mark.parametrize("by", ["a", "b", ["a", "b"]])
 @pytest.mark.parametrize("nelem", [10, 100, 1000])
 @pytest.mark.parametrize("nparts", [1, 2, 5, 10])
 def test_sort_values(nelem, nparts, by):
@@ -18,7 +18,9 @@ def test_sort_values(nelem, nparts, by):
     ddf = dd.from_pandas(df, npartitions=nparts)
 
     with dask.config.set(scheduler="single-threaded"):
-        got = ddf.sort_values(by=by).compute().to_pandas()
+        got = (
+            ddf.sort_values(by=by).compute().to_pandas().reset_index(drop=True)
+        )
     expect = df.sort_values(by=by).to_pandas().reset_index(drop=True)
     pd.util.testing.assert_frame_equal(got, expect)
 
@@ -51,3 +53,17 @@ def test_sort_binned_meta():
     ddf = dd.from_pandas(df, npartitions=2).persist()
 
     ddf.sort_values_binned(by="b")
+
+
+@pytest.mark.parametrize("by", ["a", "b", ["a", "b"]])
+def test_sort_values_single_partition(by):
+    df = cudf.DataFrame()
+    nelem = 1000
+    df["a"] = np.ascontiguousarray(np.arange(nelem)[::-1])
+    df["b"] = np.arange(100, nelem + 100)
+    ddf = dd.from_pandas(df, npartitions=1)
+
+    with dask.config.set(scheduler="single-threaded"):
+        got = ddf.sort_values(by=by)
+    expect = df.sort_values(by=by)
+    dd.assert_eq(got, expect)
