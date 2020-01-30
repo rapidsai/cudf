@@ -183,7 +183,9 @@ def shuffle_group_divs_2(df, divisions, col):
     return result2, df.iloc[:0]
 
 
-def rearrange_by_divisions(df, column: str, divisions: list, max_branch=None):
+def rearrange_by_division_list(
+    df, column: str, divisions: list, max_branch=None
+):
     npartitions = len(divisions) - 1
     max_branch = max_branch or 32
     n = df.npartitions
@@ -299,7 +301,9 @@ def rearrange_by_divisions(df, column: str, divisions: list, max_branch=None):
     return df3
 
 
-def sort_values_experimental(df, by, ignore_index=False, explicit_client=None):
+def sort_values_experimental(
+    df, by, ignore_index=False, explicit_client=None, max_branch=None
+):
     """ Experimental sort_values implementation.
 
     Sort by the given column name or list/tuple of column names.
@@ -356,7 +360,9 @@ def sort_values_experimental(df, by, ignore_index=False, explicit_client=None):
         df3.divisions = (None,) * (npartitions + 1)
         return df3
     else:
-        df3 = rearrange_by_divisions(df2, index, divisions)
+        df3 = rearrange_by_division_list(
+            df2, index, divisions, max_branch=max_branch
+        )
         df3.divisions = (None,) * (npartitions + 1)
 
         # Step 4 - Return final sorted df
