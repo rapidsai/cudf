@@ -1,6 +1,5 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
-import ctypes
 import functools
 import pickle
 import warnings
@@ -683,7 +682,7 @@ class StringColumn(column.ColumnBase):
     def deserialize(cls, header, frames):
         # Deserialize the mask, value, and offset frames
         buffers = [Buffer(each_frame) for each_frame in frames]
-        ptrs = [ctypes.c_uint64(buf.ptr) for buf in buffers]
+        ptrs = [int(buf.ptr) for buf in buffers]
 
         if header["null_count"] > 0:
             nbuf = ptrs[2]
