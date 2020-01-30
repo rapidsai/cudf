@@ -20,7 +20,7 @@ def datadir(datadir):
     return datadir / "parquet"
 
 
-@pytest.fixture(params=[0, 1, 10, 100])
+@pytest.fixture(params=[1, 5, 10, 100])
 def simple_pdf(request):
     types = [
         "int8",
@@ -45,10 +45,6 @@ def simple_pdf(request):
     # Cast all the column dtypes to objects, rename them, and then cast to
     # appropriate types
     test_pdf = test_pdf.astype("object").rename(renamer, axis=1).astype(typer)
-
-    # Create non-numeric categorical data otherwise parquet may typecast it
-    data = [ascii_letters[np.random.randint(0, 52)] for i in range(nrows)]
-    test_pdf["col_category"] = pd.Series(data, dtype="category")
 
     return test_pdf
 
@@ -481,21 +477,20 @@ def test_multifile_warning(datadir):
 def test_parquet_writer_gpu(tmpdir, simple_gdf):
     gdf_fname = tmpdir.join("gdf.parquet")
 
-    print("GDF Type: " + str(type(simple_gdf)))
-    print(simple_gdf.columns)
-
-    print("Expected GDF:")
-    print(simple_gdf)
+    # Write out the gdf using the GPU accelerated writer
     simple_gdf.to_parquet(gdf_fname.strpath, engine="cudf")
     assert os.path.exists(gdf_fname)
     expect = simple_gdf
-    got = cudf.read_parquet(gdf_fname)
-    print("Got columns before droppping 'test_index': " + str(got.columns))
-    got = got.drop("test_index")
-    got.index.name = "test_index"
 
-    print("Got GDF:")
-    print(got.columns)
-    print(got)
+    # Read the gdf back in using the reader
+    got = cudf.read_parquet(gdf_fname)
+
+    # There is a special case in the reader that causes the 'test_index'
+    # Index used by Pandas to be read in as a normal data column.
+    # Therefore it must be removed here and the index name set to
+    # that to match the "expected" pdf
+    if "test_index" in got.columns:
+        got = got.drop("test_index")
+    got.index.name = "test_index"
 
     assert_eq(expect, got, check_categorical=False)

@@ -115,7 +115,7 @@ cpdef write_parquet(
     cdef unique_ptr[table_metadata] tbl_meta = \
         make_unique[table_metadata]()
 
-    # Set the column names from the existing Table object
+    # Set the column names from the existing Table object, including the index
     output_cols = []
     output_cols.append(table._index.name)
     for s in table._data.keys():
