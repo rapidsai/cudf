@@ -63,7 +63,7 @@ def partition_by_column(df, column, n_chunks):
 
 
 async def distributed_shuffle(
-    n_chunks, rank, eps, table, partitions, index, sorted_split
+    n_chunks, rank, eps, table, partitions, index, sort_by, sorted_split
 ):
     if sorted_split:
         parts = [
@@ -72,11 +72,11 @@ async def distributed_shuffle(
         ]
     else:
         parts = partition_by_column(table, partitions, n_chunks)
-    return await exchange_and_concat_parts(rank, eps, parts, sort=index)
+    return await exchange_and_concat_parts(rank, eps, parts, sort=sort_by)
 
 
-async def _aggregated_shuffle(
-    s, df_nparts, df_parts, index, divisions, sorted_split
+async def _explicit_shuffle(
+    s, df_nparts, df_parts, index, divisions, sort_by, sorted_split
 ):
     def df_concat(df_parts):
         """Making sure df_parts is a single dataframe or None"""
@@ -97,7 +97,7 @@ async def _aggregated_shuffle(
         # (Can just use iloc to split into groups)
         if len(df_parts) > 1:
             # Need to sort again after concatenation
-            df = df.sort_values(index)
+            df = df.sort_values(sort_by)
         splits = df[index].searchsorted(divisions, side="left")
         splits[-1] = len(df[index])
         partitions = splits.tolist()
@@ -109,16 +109,25 @@ async def _aggregated_shuffle(
 
     # Run distributed shuffle and set_index algorithm
     return await distributed_shuffle(
-        s["nworkers"], s["rank"], s["eps"], df, partitions, index, sorted_split
+        s["nworkers"],
+        s["rank"],
+        s["eps"],
+        df,
+        partitions,
+        index,
+        sort_by,
+        sorted_split,
     )
 
 
-def explicit_shuffle(df, index, divisions, sorted_split=False, **kwargs):
-
-    # Explict-comms shuffle and local set_index
+def explicit_sorted_shuffle(
+    df, index, divisions, sort_by, sorted_split=False, **kwargs
+):
+    # Explict-comms shuffle
     # TODO: Fast repartition back to df.npartitions using views...
+    df.persist()
     return comms.default_comms().dataframe_operation(
-        _aggregated_shuffle,
+        _explicit_shuffle,
         df_list=(df,),
-        extra_args=(index, divisions, sorted_split),
+        extra_args=(index, divisions, sort_by, sorted_split),
     )

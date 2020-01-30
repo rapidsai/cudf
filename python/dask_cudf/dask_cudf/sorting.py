@@ -17,7 +17,7 @@ from dask.utils import M, digit, insert
 import cudf as gd
 
 try:
-    from .explicit_sorting import explicit_shuffle
+    from .explicit_sorting import explicit_sorted_shuffle
 
     explicit_comms = True
 except ImportError:
@@ -346,11 +346,15 @@ def sort_values_experimental(
     # Step 3 - Perform repartitioning shuffle
     if use_explicit:
         warnings.warn("Using explicit comms - This is an advanced feature.")
-        df3 = explicit_shuffle(df2, index, divisions, sorted_split=False)
+        df3 = explicit_sorted_shuffle(
+            df2, index, divisions, sort_by=by, sorted_split=False
+        )
+        df3.divisions = (None,) * (npartitions + 1)
+        return df3
     else:
         df3 = rearrange_by_divisions(df2, index, divisions)
-    df3.divisions = (None,) * (npartitions + 1)
+        df3.divisions = (None,) * (npartitions + 1)
 
-    # Step 4 - Return final sorted df
-    #          (Can remove after k-way merge added)
-    return df3.map_partitions(M.sort_values, by)
+        # Step 4 - Return final sorted df
+        #          (Can remove after k-way merge added)
+        return df3.map_partitions(M.sort_values, by)
