@@ -1,5 +1,6 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
+import ctypes
 import functools
 import pickle
 import warnings
@@ -682,19 +683,11 @@ class StringColumn(column.ColumnBase):
     @classmethod
     def deserialize(cls, header, frames):
         # Deserialize the mask, value, and offset frames
-        arrays = []
-
-        for each_frame in frames:
-            if hasattr(each_frame, "__cuda_array_interface__"):
-                each_frame = cuda.as_cuda_array(each_frame)
-            elif isinstance(each_frame, memoryview):
-                each_frame = np.asarray(each_frame)
-                each_frame = rmm.to_device(each_frame)
-
-            arrays.append(libcudf.cudf.get_ctype_ptr(each_frame))
+        buffers = [Buffer(each_frame) for each_frame in frames]
+        ptrs = [ctypes.c_uint64(buf.ptr) for buf in buffers]
 
         if header["null_count"] > 0:
-            nbuf = arrays[2]
+            nbuf = ptrs[2]
         else:
             nbuf = None
 
@@ -702,8 +695,8 @@ class StringColumn(column.ColumnBase):
         # Note: array items = [nbuf, sbuf, obuf]
         scount = header["nvstrings"]
         data = nvstrings.from_offsets(
-            arrays[0],
-            arrays[1],
+            ptrs[0],
+            ptrs[1],
             scount,
             nbuf=nbuf,
             ncount=header["null_count"],
