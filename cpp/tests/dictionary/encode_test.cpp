@@ -65,13 +65,13 @@ TEST_F(DictionaryEncodeTest, EncodeWithNull)
     cudf::test::fixed_width_column_wrapper<int64_t> keys_expected{ 0,111,222,333,444 };
     cudf::test::expect_columns_equal(view.keys(), keys_expected);
 
-    cudf::test::fixed_width_column_wrapper<int32_t> expected{{4,0,3,1,2,2,2,4,0}};
+    cudf::test::fixed_width_column_wrapper<int32_t> expected{4,0,3,1,2,2,2,4,0};
     cudf::test::expect_columns_equal(view.indices(), expected);
 }
 
 TEST_F(DictionaryEncodeTest, InvalidEncode)
 {
-    cudf::test::fixed_width_column_wrapper<int16_t> input{{ 0,1,2,3,-1,-2,-3 }};
+    cudf::test::fixed_width_column_wrapper<int16_t> input{ 0,1,2,3,-1,-2,-3 };
 
     EXPECT_THROW( cudf::dictionary::encode(input, cudf::data_type{cudf::type_id::INT16}), cudf::logic_error );
 }

@@ -47,7 +47,7 @@ std::unique_ptr<column> decode( dictionary_column_view const& source,
     // use gather to create the output column -- use ignore_out_of_bounds=true
     auto table_column = experimental::detail::gather( table_view{{keys}}, indices, // no nulls here
                                                       false, true, false, mr, stream )->release();
-    auto output_column = std::unique_ptr<column>(std::move(table_column[0]));
+    auto output_column = std::unique_ptr<column>(std::move(table_column.front()));
 
     // apply any nulls to the output column
     output_column->set_null_mask( copy_bitmask(source.parent(),stream,mr), source.null_count() );

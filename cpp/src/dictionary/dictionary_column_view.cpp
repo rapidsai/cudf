@@ -25,22 +25,22 @@ dictionary_column_view::dictionary_column_view( column_view const& dictionary_co
     : column_view(dictionary_column)
 {
     CUDF_EXPECTS( type().id()==DICTIONARY32, "dictionary_column_view only supports DICTIONARY type");
+    if( size() > 0 )
+        CUDF_EXPECTS( num_children()==2, "dictionary column has no children");
 }
 
-column_view dictionary_column_view::parent() const
+column_view dictionary_column_view::parent() const noexcept
 {
     return static_cast<column_view>(*this);
 }
 
-column_view dictionary_column_view::indices() const
+column_view dictionary_column_view::indices() const noexcept
 {
-    CUDF_EXPECTS( num_children()>0, "dictionary column has no children" );
     return child(0);
 }
 
-column_view dictionary_column_view::keys() const
+column_view dictionary_column_view::keys() const noexcept
 {
-    CUDF_EXPECTS( num_children()>0, "dictionary column has no children" );
     return child(1);
 }
 
