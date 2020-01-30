@@ -271,7 +271,7 @@ void expect_equal_buffers(void const* lhs, void const* rhs,
                             typed_rhs));
 }
 
-// copy column bitbitmask to host (used by to_host())
+// copy column bitmask to host (used by to_host())
 std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c) {
   if (c.nullable()) {
     auto num_bitmasks = bitmask_allocation_size_bytes(c.size()) / sizeof(bitmask_type);
