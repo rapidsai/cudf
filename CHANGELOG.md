@@ -11,7 +11,7 @@
 - PR #3975 Simplify and generalize data handling in `Buffer`
 - PR #3911 Adding null boolean handling for copy_if_else
 - PR #4002 Adding to_frame and fix for categorical column issue
-
+- PR #4016 Adding experimental code path for dask_cudf sorting
 - PR #3897 Port cuIO JSON reader to cudf::column types
 
 ## Bug Fixes
