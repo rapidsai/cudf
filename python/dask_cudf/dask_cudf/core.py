@@ -188,8 +188,11 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 client=client,
                 explicit=explicit,
             )
-            # Use sorted=True with usual `set_index` API
-            return df.map_partitions(M.set_index, other)
+            # Set index and repartition
+            npartitions = kwargs.get("npartitions", self.npartitions)
+            return df.map_partitions(M.set_index, other).repartition(
+                npartitions=npartitions
+            )
         if kwargs.pop("shuffle", "tasks") != "tasks":
             raise ValueError(
                 "Dask-cudf only supports task based shuffling, got %s"
