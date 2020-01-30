@@ -209,22 +209,25 @@ class DataFrame(_Frame, dd.core.DataFrame):
         ---------
         by : str
         """
-        if experimental:
-            # Experimental aglorithm (mostly) matches
-            # the set_index sorting procedure used in Dask.
-            # Note that, if len(by)>1, only the first column
-            # is used for repartitioning.  All columns are
-            # used for intra-partition sorting.
-            df = sorting.sort_values_experimental(
-                self, by, ignore_index=ignore_index
-            )
+        if self.npartitions == 1:
+            df = self.map_partitions(M.sort_values, by)
         else:
-            # Legacy sorting algorithm based on "batcher-sortnet"
-            parts = self.to_delayed()
-            sorted_parts = sorting.sort_delayed_frame(parts, by)
-            df = from_delayed(sorted_parts, meta=self._meta)
+            if experimental:
+                # Experimental aglorithm (mostly) matches
+                # the set_index sorting procedure used in Dask.
+                # Note that, if len(by)>1, only the first column
+                # is used for repartitioning.  All columns are
+                # used for intra-partition sorting.
+                df = sorting.sort_values_experimental(
+                    self, by, ignore_index=ignore_index
+                )
+            else:
+                # Legacy sorting algorithm based on "batcher-sortnet"
+                parts = self.to_delayed()
+                sorted_parts = sorting.sort_delayed_frame(parts, by)
+                df = from_delayed(sorted_parts, meta=self._meta)
         if ignore_index:
-            return df.reset_index()
+            return df.reset_index(drop=True)
         return df
 
     def sort_values_binned(self, by):
