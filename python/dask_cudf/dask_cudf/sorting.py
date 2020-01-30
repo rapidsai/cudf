@@ -299,9 +299,7 @@ def rearrange_by_divisions(df, column: str, divisions: list, max_branch=None):
     return df3
 
 
-def sort_values_experimental(
-    df, by, ignore_index=False, client=None, explicit=False
-):
+def sort_values_experimental(df, by, ignore_index=False, explicit_client=None):
     """ Experimental sort_values implementation.
 
     Sort by the given column name or list/tuple of column names.
@@ -337,9 +335,9 @@ def sort_values_experimental(
     index = by[0]
 
     # Check if we are using explicit comms
-    use_explicit = explicit_comms and explicit and client
+    use_explicit = explicit_comms and explicit_client
     if use_explicit:
-        npartitions = len(client.cluster.workers)
+        npartitions = len(explicit_client.cluster.workers)
 
     # Step 2 - Calculate new divisions
     divisions = (

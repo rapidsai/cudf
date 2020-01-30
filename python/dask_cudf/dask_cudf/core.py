@@ -176,8 +176,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
         other,
         experimental=False,
         sorted=False,
-        client=None,
-        explicit=False,
+        explicit_client=None,
         **kwargs,
     ):
         if experimental and not sorted:
@@ -185,8 +184,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
             df = self.sort_values(
                 [other],
                 experimental=experimental,
-                client=client,
-                explicit=explicit,
+                explicit_client=explicit_client,
             )
             # Set index and repartition
             npartitions = kwargs.get("npartitions", self.npartitions)
@@ -224,7 +222,12 @@ class DataFrame(_Frame, dd.core.DataFrame):
             return self.map_partitions(M.reset_index, drop=drop)
 
     def sort_values(
-        self, by, ignore_index=False, experimental=False, **kwargs
+        self,
+        by,
+        ignore_index=False,
+        experimental=False,
+        explicit_client=None,
+        **kwargs,
     ):
         """Sort by the given column
 
@@ -242,7 +245,10 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 # is used for repartitioning.  All columns are
                 # used for intra-partition sorting.
                 df = sorting.sort_values_experimental(
-                    self, by, ignore_index=ignore_index, **kwargs
+                    self,
+                    by,
+                    ignore_index=ignore_index,
+                    explicit_client=explicit_client,
                 )
             else:
                 # Legacy sorting algorithm based on "batcher-sortnet"
