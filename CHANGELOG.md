@@ -21,6 +21,7 @@
 - PR #3970 Fix for Series Pickle
 - PR #3964 Restore legacy NVStrings and NVCategory dependencies in Java jar
 - PR #3982 Fix java unary op enum and add missing ops
+- PR #4005 Fix null mask allocation bug in gather_bitmask
 
 
 # cuDF 0.12.0 (Date TBD)
