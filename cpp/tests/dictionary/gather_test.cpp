@@ -14,12 +14,9 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column_factories.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
-#include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/detail/gather.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
@@ -30,53 +27,19 @@ struct DictionaryGatherTest : public cudf::test::BaseFixture {};
 
 TEST_F(DictionaryGatherTest, Gather)
 {
-    std::vector<const char*> h_strings{ "eee", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "eee", "aaa" };
-    cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end() );
-    cudf::test::fixed_width_column_wrapper<int32_t> input{9,8,7,6,5,4,3,2,1};
+    cudf::test::strings_column_wrapper strings{ "eee", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "eee", "aaa" };
     auto dictionary = cudf::dictionary::encode( strings );
-    //dictionary = cudf::dictionary::encode( input );
-    //dictionary = cudf::dictionary::encode( strings );
-    //dictionary = cudf::dictionary::encode( input );
     cudf::dictionary_column_view view(dictionary->view());
 
-    {
-        auto test = cudf::make_dictionary_column( view.keys(), view.indices() );
-        cudf::dictionary_column_view test_view(test->view());
-        std::cout << "testing: ";
-        cudf::test::print( test_view.keys() );
-        std::cout << " : ";
-        cudf::test::print( test_view.indices() );
-        std::cout << std::endl;
-    }
-
-
-    cudf::test::print( view.keys() );
-    std::cout << " : ";
-    cudf::test::print( view.indices() );
-    std::cout << std::endl;
-
     cudf::test::fixed_width_column_wrapper<int32_t> gather_map{0,4,3,1};
-    auto table_result = cudf::experimental::detail::gather(cudf::table_view{{view.parent()}}, gather_map)->release();
-//    auto table_result = cudf::experimental::detail::gather(cudf::table_view{{view.indices()}}, gather_map)->release();
-//    auto result = cudf::dictionary_column_view(table_result.front()->view());
-//    cudf::test::print( result.keys() );
-//    std::cout << " : ";
-//    cudf::test::print( result.indices() );
-//    std::cout << std::endl;
+    auto table_result = cudf::experimental::gather(cudf::table_view{{view.parent()}}, gather_map)->release();
+    auto result = cudf::dictionary_column_view(table_result.front()->view());
 
-//    cudf::test::print( result.keys() );
-//    std::cout << std::endl;
-//
-//    cudf::test::fixed_width_column_wrapper<int32_t> expected{4,0,1,2};
-//    cudf::test::expect_columns_equal(result.indices(), expected);
-//
-//    cudf::test::print( result.indices() );
-//    std::cout << std::endl;
-//
-//    cudf::test::expect_columns_equal(result.keys(), view.keys());
+    cudf::test::strings_column_wrapper expected{ "eee", "ccc", "bbb", "aaa" };
+    auto decoded = cudf::dictionary::decode(result);
+    cudf::test::expect_columns_equal(expected,decoded->view());
 }
 
-#if 0
 TEST_F(DictionaryGatherTest, GatherWithNulls)
 {
     cudf::test::fixed_width_column_wrapper<int64_t> data{ {1,5,5,3,7,1},{0,1,0,1,1,1} };
@@ -90,6 +53,5 @@ TEST_F(DictionaryGatherTest, GatherWithNulls)
 
     cudf::test::fixed_width_column_wrapper<int64_t> expected{ {7,5,5,7},{1,1,0,1} };
     auto result_decoded = cudf::dictionary::decode(result);
-    cudf::test::expect_columns_equal( expected, *result_decoded );
+    cudf::test::expect_columns_equal( expected, result_decoded->view() );
 }
-#endif
