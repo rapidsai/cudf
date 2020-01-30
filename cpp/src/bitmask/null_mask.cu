@@ -287,7 +287,7 @@ __global__ void copy_offset_bitmask(bitmask_type *__restrict__ destination,
        destination_word_index < number_of_mask_words;
        destination_word_index += blockDim.x * gridDim.x) {
     destination[destination_word_index] =
-        get_mask_offset_word(source, destination_word_index, source_begin_bit, source_end_bit);
+      get_mask_offset_word(source, destination_word_index, source_begin_bit, source_end_bit);
   }
 }
 
