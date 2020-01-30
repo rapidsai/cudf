@@ -300,7 +300,7 @@ def rearrange_by_divisions(df, column: str, divisions: list, max_branch=None):
 
 
 def sort_values_experimental(
-    df, by, ignore_index=False, client=None, explicit_workers=None
+    df, by, ignore_index=False, client=None, explicit=False
 ):
     """ Experimental sort_values implementation.
 
@@ -331,9 +331,9 @@ def sort_values_experimental(
     index = by[0]
 
     # Check if we are using explicit comms
-    use_explicit = explicit_comms and explicit_workers and client
+    use_explicit = explicit_comms and explicit and client
     if use_explicit:
-        npartitions = explicit_workers
+        npartitions = len(client.cluster.workers)
 
     # Step 2 - Calculate new divisions
     divisions = (
@@ -345,10 +345,11 @@ def sort_values_experimental(
 
     # Step 3 - Perform repartitioning shuffle
     if use_explicit:
+        warnings.warn("Using explicit comms - This is an advanced feature.")
         df3 = explicit_shuffle(df2, index, divisions, sorted_split=False)
     else:
         df3 = rearrange_by_divisions(df2, index, divisions)
-        df3.divisions = (None,) * (npartitions + 1)
+    df3.divisions = (None,) * (npartitions + 1)
 
     # Step 4 - Return final sorted df
     #          (Can remove after k-way merge added)
