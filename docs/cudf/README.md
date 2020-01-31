@@ -21,7 +21,6 @@ First navigate to "/build/html/" folder, i.e., `cd build/html` and then run the 
 
 ```
 python -m http.server
-
 ```
 Open a browser and type <host-ip>:8000. 
 
