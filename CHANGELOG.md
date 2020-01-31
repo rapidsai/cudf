@@ -9,6 +9,7 @@
 - PR #3910 Adding sinh, cosh, tanh, asinh, acosh, atanh cube root and rint unary support.
 - PR #3972 Add Java bindings for left_semi_join and left_anti_join
 - PR #3975 Simplify and generalize data handling in `Buffer`
+- PR #---- Change quantiles signature for clarity.
 - PR #3911 Adding null boolean handling for copy_if_else
 - PR #4002 Adding to_frame and fix for categorical column issue
 - PR #4009 build script update to enable cudf build without installing
