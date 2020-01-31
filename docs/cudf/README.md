@@ -7,15 +7,15 @@ In order to build the docs, we need the conda dev environment from cudf and buil
 
 1. Create a conda env and  build cudf from source. The dependencies are installed to build rapids from source in that conda environment, then rapids is built and installed into the same environment.
 
-2. Once cudf is built from source, navigate to "/cudf/docs/cudf/", i.e., `cd cudf/docs/cudf` and run makefile:
+2. Once cudf is built from source, navigate to "/cudf/docs/cudf/", i.e., `cd cudf/docs/cudf`. If you have your documentation written and want to turn it into HTML, run makefile:
 
 ```bash
 make html
 ```
-Outputs to `build/html/index.html`
+This should run Sphinx in your shell, and outputs to `build/html/index.html`.
 
 
-## View docs html page:
+## View docs web page by opening HTML in browser:
 
 First navigate to "/build/html/" folder, i.e., `cd build/html` and then run the following command:
 
@@ -27,3 +27,4 @@ Then, navigate a web browser to the IP address or hostname of the host machine a
 ```
 https://<host IP-Address>:8000
 ```
+Now you can check if your docs edits formatted correctly. 
