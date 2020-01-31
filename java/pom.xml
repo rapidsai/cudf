@@ -454,6 +454,8 @@
                                     <directory>${native.cudf.path}</directory>
                                     <includes>
                                         <include>libcudf.so</include>
+                                        <include>libNVCategory.so</include>
+                                        <include>libNVStrings.so</include>
                                     </includes>
                                 </resource>
                                 <resource>

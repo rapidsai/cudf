@@ -61,6 +61,7 @@ class ColumnBase(Column):
 
     def as_frame(self, name=None):
         from cudf.core.frame import Frame
+
         """
         Converts a Column to Frame
         """

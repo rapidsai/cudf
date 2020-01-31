@@ -148,9 +148,6 @@ class Series(Frame):
     def __contains__(self, item):
         return item in self._index
 
-    def __reduce__(self):
-        return (Series, (self._data, self.index))
-
     @classmethod
     def from_pandas(cls, s, nan_as_null=True):
         return cls(s, nan_as_null=nan_as_null)
@@ -190,6 +187,7 @@ class Series(Frame):
         header = {}
         frames = []
         header["index"], index_frames = self._index.serialize()
+        header["name"] = pickle.dumps(self.name)
         frames.extend(index_frames)
         header["index_frame_count"] = len(index_frames)
         header["column"], column_frames = self._column.serialize()
@@ -237,13 +235,15 @@ class Series(Frame):
         index_nframes = header["index_frame_count"]
         idx_typ = pickle.loads(header["index"]["type"])
         index = idx_typ.deserialize(header["index"], frames[:index_nframes])
+        name = pickle.loads(header["name"])
 
         frames = frames[index_nframes:]
 
         column_nframes = header["column_frame_count"]
         col_typ = pickle.loads(header["column"]["type"])
         column = col_typ.deserialize(header["column"], frames[:column_nframes])
-        return Series(column, index=index)
+
+        return Series(column, index=index, name=name)
 
     def _copy_construct_defaults(self):
         return dict(data=self._column, index=self._index, name=self.name)
