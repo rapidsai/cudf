@@ -38,35 +38,6 @@ inline bool __device__ out_of_bounds(size_type size, size_type idx) {
     return idx < 0 || idx >= size;
 }
 
-template<typename T>
-struct value_functor {
-    column_device_view const input;
-    size_type size;
-    size_type offset;
-    T const* fill;
-
-    T __device__ operator()(size_type idx) {
-        auto src_idx = idx - offset;
-        return out_of_bounds(size, src_idx)
-            ? *fill
-            : input.element<T>(src_idx);
-    }
-};
-
-struct validity_functor {
-    column_device_view const input;
-    size_type size;
-    size_type offset;
-    bool const* fill;
-
-    bool __device__ operator()(size_type idx) {
-        auto src_idx = idx - offset;
-        return out_of_bounds(size, src_idx)
-            ? *fill
-            : input.is_valid(src_idx);
-    }
-};
-
 struct functor {
 
     template<typename T, typename... Args>
@@ -91,19 +62,20 @@ struct functor {
         auto output = allocate_like(input, mask_allocation_policy::NEVER);
         auto device_output = mutable_column_device_view::create(*output);
 
+        auto size = input.size();
         auto index_begin = thrust::make_counting_iterator<size_type>(0);
-        auto index_end = thrust::make_counting_iterator<size_type>(input.size());
-
-        auto func_value = value_functor<T>{*device_input,
-                                           input.size(),
-                                           offset,
-                                           scalar.data() };
+        auto index_end = thrust::make_counting_iterator<size_type>(size);
 
         if (input.nullable() || not scalar.is_valid()) {
-            auto func_validity = validity_functor{*device_input,
-                                                  input.size(),
-                                                  offset,
-                                                  scalar.validity_data()};
+
+            auto func_validity =
+                [size, offset, fill=scalar.validity_data(), input=*device_input]
+                __device__ (size_type idx) {
+                    auto src_idx = idx - offset;
+                    return out_of_bounds(size, src_idx)
+                        ? *fill
+                        : input.is_valid(src_idx);
+                };
 
             auto mask_pair = detail::valid_if(index_begin, index_end, func_validity);
 
@@ -119,9 +91,18 @@ struct functor {
                 index_begin = thrust::make_counting_iterator<size_type>(offset);
                 data = data + offset;
             } else  if (offset < 0) {
-                index_end = thrust::make_counting_iterator<size_type>(input.size() + offset);
+                index_end = thrust::make_counting_iterator<size_type>(size + offset);
             }
         }
+
+        auto func_value =
+            [size, offset, fill=scalar.data(), input=*device_input]
+            __device__ (size_type idx) {
+                auto src_idx = idx - offset;
+                return out_of_bounds(size, src_idx)
+                    ? *fill
+                    : input.element<T>(src_idx);
+            };
 
         thrust::transform(rmm::exec_policy(stream)->on(stream),
                           index_begin,
