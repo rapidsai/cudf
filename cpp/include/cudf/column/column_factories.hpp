@@ -236,12 +236,12 @@ std::unique_ptr<column> make_strings_column(
  * bytes. Use the strings_column_view class to perform strings operations on
  * this type of column.
  *
- * @note `null_count()` and `null_bitmask` are determined if a string_view is
- * a `null_placeholder` string_view. That is, for each string_view, if `.data()`
- * is `null_placeholder.data()`, that string is considered null. Likewise, a
- * string is considered empty (not null) if `.data()` is not
- * `null_placeholder.data()` and `.size_bytes()` is 0. Otherwise the `.data()`
- * must be a valid device address pointing to `.size_bytes()` consecutive bytes.
+ * @note For each string_view, if `.data()` is `null_placeholder.data()`, that
+ * string is considered null. Likewise, a string is considered empty (not null)
+ * if `.data()` is not `null_placeholder.data()` and `.size_bytes()` is 0.
+ * Otherwise the `.data()` must be a valid device address pointing to
+ * `.size_bytes()` consecutive bytes. The `null_count()` for the output column
+ * will be equal to the number of input `string_view`s that are null.
  *
  * @throws std::bad_alloc if device memory allocation fails
  *
@@ -249,6 +249,8 @@ std::unique_ptr<column> make_strings_column(
  *                Each string_view must point to a device memory address or
  * `null_placeholder` (indicating a null string). The size must be the number of
  * bytes.
+ * @param null_placeholder string_view indicating null string in given list of
+ * string_views.
  * @param stream Optional stream for use with all memory allocation
  *               and device kernels
  * @param mr Optional resource to use for device memory
