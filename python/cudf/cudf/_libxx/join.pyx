@@ -55,85 +55,39 @@ cpdef join(lhs, rhs, left_on, right_on, how, method):
            and (left_on.index(name) == right_on.index(name))):
             result_col_names.append(name)
 
-    cdef Table result
+    cdef unique_ptr[table] c_result
+    cdef Table c_lhs = lhs
+    cdef Table c_rhs = rhs
+    cdef table_view lhs_view = c_lhs.data_view()
+    cdef table_view rhs_view = c_rhs.data_view()
+    # data_view comes from self._data.values()
 
-    if how == 'inner':
-        result = inner_join(
-            lhs, 
-            rhs, 
-            left_on_ind,
-            right_on_ind,
-            columns_in_common,
-            result_col_names,
-            lhs._index._column_names
-        )
-    elif how == 'left':
-        result = left_join(
-            lhs, 
-            rhs, 
-            left_on_ind,
-            right_on_ind,
-            columns_in_common,
-            result_col_names,
-            lhs._index._column_names
-        )
-    elif how == 'full':
-        result = full_join(
-            lhs, 
-            rhs, 
-            left_on_ind,
-            right_on_ind,
-            columns_in_common,
-            result_col_names,
-            lhs._index._column_names
-        )
-
-    return result
-
-def inner_join(Table left, Table right, vector[int] left_on, vector[int] right_on, vector[pair[int, int]] columns_in_common, result_cols, result_index_cols):
-    cdef unique_ptr[table] c_result = (
-        cpp_inner_join(
-            left.view(),
-            right.view(),
-            left_on,
-            right_on,
-            columns_in_common
-        )
-    )
-    return Table.from_unique_ptr(
+    with nogil:
+        if how == 'inner':
+            c_result = move(cpp_inner_join(
+                lhs_view,
+                rhs_view,
+                left_on_ind,
+                right_on_ind,
+                columns_in_common
+            ))
+        elif how == 'left':
+            c_result = move(cpp_left_join(
+                lhs_view,
+                rhs_view,
+                left_on_ind,
+                right_on_ind,
+                columns_in_common
+            ))
+        elif how == 'outer':
+            c_result = move(cpp_full_join(
+                lhs_view,
+                rhs_view,
+                left_on_ind,
+                right_on_ind,
+                columns_in_common
+            ))
+    py_result = Table.from_unique_ptr(
         move(c_result),
-        column_names = result_cols,
-        index_names = result_index_cols
-    )
-
-def left_join(Table left, Table right, vector[int] left_on, vector[int] right_on, vector[pair[int, int]] columns_in_common, result_cols, result_index_cols):
-    cdef unique_ptr[table] c_result = (
-        cpp_left_join(
-            left.view(),
-            right.view(),
-            left_on,
-            right_on,
-            columns_in_common
-        )
-    )
-    return Table.from_unique_ptr(
-        move(c_result),
-        column_names = result_cols,
-        index_names = result_index_cols
-    )
-
-def full_join(Table left, Table right, vector[int] left_on, vector[int] right_on, vector[pair[int, int]] columns_in_common, result_cols, result_index_cols):
-    cdef unique_ptr[table] c_result = (
-        cpp_full_join(
-            left.view(),
-            right.view(),
-            left_on,
-            right_on,
-            columns_in_common
-        )
-    )
-    return Table.from_unique_ptr(
-        move(c_result),
-        column_names = result_cols,
-        index_names = result_index_cols
-    )
+        column_names = result_col_names)
+    return py_result
