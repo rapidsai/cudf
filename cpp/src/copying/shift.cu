@@ -73,7 +73,7 @@ struct functor {
     std::enable_if_t<not cudf::is_fixed_width<T>(), std::unique_ptr<column>>
     operator()(Args&&... args)
     {
-        throw cudf::logic_error("shift does not support non-fixed-width types.");
+        CUDF_FAIL("shift does not support non-fixed-width types.");
     }
 
     template<typename T>
