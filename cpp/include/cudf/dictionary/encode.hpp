@@ -37,7 +37,7 @@ namespace dictionary
  *
  * The null_mask and null count are copied from the input column to the output column.
  *
- * @throw cudf::logic_error - only INT32 is supported for the indices type.
+ * @throw cudf::logic_error if indices type is not INT32
  *
  * ```
  * c = [429,111,213,111,213,429,213]
