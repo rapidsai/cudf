@@ -178,14 +178,14 @@ std::unique_ptr<column> rolling_window(column_view const& input,
 
   auto preceding_calculator = [offsets_begin, offsets_end, preceding_window] __device__ (size_type idx) {
     // `upper_bound()` cannot return `offsets_end`, since it is capped with `input.size()`.
-    auto group_end = thrust::upper_bound(thrust::device, offsets_begin, offsets_end, idx);
+    auto group_end = thrust::upper_bound(thrust::seq, offsets_begin, offsets_end, idx);
     auto group_start = group_end - 1; // The previous offset identifies the start of the group.
     return thrust::minimum<size_type>{}(preceding_window, idx - (*group_start));
   };
  
   auto following_calculator = [offsets_begin, offsets_end, following_window] __device__ (size_type idx) {
     // `upper_bound()` cannot return `offsets_end`, since it is capped with `input.size()`.
-    auto group_end = thrust::upper_bound(thrust::device, offsets_begin, offsets_end, idx);
+    auto group_end = thrust::upper_bound(thrust::seq, offsets_begin, offsets_end, idx);
     return thrust::minimum<size_type>{}(following_window, (*group_end - 1) - idx);
   };
   
