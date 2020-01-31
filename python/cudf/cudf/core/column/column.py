@@ -79,7 +79,7 @@ class ColumnBase(Column):
         if is_categorical_dtype(self.dtype):
             return self.codes.data_array_view
 
-        result = cp.asarray(self.data)
+        result = cp.asarray(self.data).view(self.dtype)
         return result
 
     @property
