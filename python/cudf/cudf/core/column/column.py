@@ -77,12 +77,8 @@ class ColumnBase(Column):
 
         if is_categorical_dtype(self.dtype):
             return self.codes.data_array_view
-        else:
-            dtype = self.dtype
 
-        result = rmm.device_array_from_ptr(
-            ptr=self.data.ptr, nelem=len(self), dtype=dtype
-        )
+        result = cuda.as_cuda_array(self.data)
         result.gpu_data._obj = self
         return result
 
@@ -91,11 +87,7 @@ class ColumnBase(Column):
         """
         View the mask as a device array
         """
-        result = rmm.device_array_from_ptr(
-            ptr=self.mask.ptr,
-            nelem=calc_chunk_size(len(self), mask_bitsize),
-            dtype=np.int8,
-        )
+        result = cuda.as_cuda_array(self.mask)
         result.gpu_data._obj = self
         return result
 
