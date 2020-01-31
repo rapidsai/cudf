@@ -10,7 +10,9 @@
 - PR #3972 Add Java bindings for left_semi_join and left_anti_join
 - PR #3975 Simplify and generalize data handling in `Buffer`
 - PR #3911 Adding null boolean handling for copy_if_else
+- PR #4003 Drop old `to_device` utility wrapper function
 - PR #4002 Adding to_frame and fix for categorical column issue
+- PR #4009 build script update to enable cudf build without installing
 - PR #3897 Port cuIO JSON reader to cudf::column types
 - PR #4008 Eliminate extra copy in column constructor
 
@@ -24,7 +26,10 @@
 - PR #3970 Fix for Series Pickle
 - PR #3964 Restore legacy NVStrings and NVCategory dependencies in Java jar
 - PR #3982 Fix java unary op enum and add missing ops
+- PR #3979 Add `name` to Series serialize and deserialize
+- PR #4005 Fix null mask allocation bug in gather_bitmask
 - PR #4000 Fix dask_cudf sort_values performance for single partitions
+- PR #4007 Fix for copy_bitmask issue with uninitialized device_buffer
 
 
 # cuDF 0.12.0 (Date TBD)

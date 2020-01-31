@@ -42,3 +42,16 @@ def test_merge():
 
             res = d1.merge(d2, left_on=["a3"], right_on=["b0"])
             assert len(res) == 4
+
+
+def test_ucx_seriesgroupby():
+    pytest.importorskip("ucp")
+
+    # Repro Issue#3913
+    with dask_cuda.LocalCUDACluster(n_workers=2, protocol="ucx") as cluster:
+        with Client(cluster):
+            df = cudf.DataFrame({"a": [1, 2, 3, 4], "b": [5, 1, 2, 5]})
+            dask_df = dask_cudf.from_cudf(df, npartitions=2)
+            dask_df_g = dask_df.groupby(["a"]).b.sum().compute()
+
+            assert dask_df_g.name == "b"
