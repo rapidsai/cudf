@@ -52,7 +52,7 @@ namespace testdata {
                  double higher, double lower, double linear, double midpoint, double nearest):
             quantile(quantile),
             higher(higher), lower(lower), linear(linear), midpoint(midpoint), nearest(nearest) { }
-    
+
         double quantile;
         q_res higher;
         q_res lower;
@@ -336,7 +336,7 @@ template<typename T>
 std::enable_if_t<cudf::is_boolean<T>(), test_case<T>>
 all_invalid() {
     return test_case<T> {
-        fixed_width_column_wrapper<T> ({ 1, 0, 1, 1, 0, 1, 0, 1, 1 }, 
+        fixed_width_column_wrapper<T> ({ 1, 0, 1, 1, 0, 1, 0, 1, 1 },
                                        { 0, 0, 0, 0, 0, 0, 0, 0, 0 }),
         {
             q_expect{ 0.7 }
@@ -458,24 +458,22 @@ template<typename T>
 void test(testdata::test_case<T> test_case) {
     using namespace cudf::experimental;
 
-    cudf::table_view in_table { { test_case.column } };
-
     for (auto & expected : test_case.expectations) {
 
-        auto actual_higher = quantiles(in_table, expected.quantile, interpolation::HIGHER, { test_case.column_order });
-        expect_scalars_equal(expected.higher, *actual_higher[0]);
+        auto actual_higher = quantile(test_case.column, expected.quantile, interpolation::HIGHER, test_case.column_order);
+        expect_scalars_equal(expected.higher, *actual_higher);
 
-        auto actual_lower = quantiles(in_table, expected.quantile, interpolation::LOWER, { test_case.column_order });
-        expect_scalars_equal(expected.lower, *actual_lower[0]);
+        auto actual_lower = quantile(test_case.column, expected.quantile, interpolation::LOWER, test_case.column_order);
+        expect_scalars_equal(expected.lower, *actual_lower);
 
-        auto actual_linear = quantiles(in_table, expected.quantile, interpolation::LINEAR, { test_case.column_order });
-        expect_scalars_equal(expected.linear, *actual_linear[0]);
+        auto actual_linear = quantile(test_case.column, expected.quantile, interpolation::LINEAR, test_case.column_order);
+        expect_scalars_equal(expected.linear, *actual_linear);
 
-        auto actual_midpoint = quantiles(in_table, expected.quantile, interpolation::MIDPOINT, { test_case.column_order });
-        expect_scalars_equal(expected.midpoint, *actual_midpoint[0]);
+        auto actual_midpoint = quantile(test_case.column, expected.quantile, interpolation::MIDPOINT, test_case.column_order);
+        expect_scalars_equal(expected.midpoint, *actual_midpoint);
 
-        auto actual_nearest = quantiles(in_table, expected.quantile, interpolation::NEAREST, { test_case.column_order });
-        expect_scalars_equal(expected.nearest, *actual_nearest[0]);
+        auto actual_nearest = quantile(test_case.column, expected.quantile, interpolation::NEAREST, test_case.column_order);
+        expect_scalars_equal(expected.nearest, *actual_nearest);
     }
 }
 
@@ -483,126 +481,103 @@ void test(testdata::test_case<T> test_case) {
 // ----- tests -----------------------------------------------------------------
 
 template <typename T>
-struct QuantilesTest : public BaseFixture {
+struct QuantileTest : public BaseFixture {
 };
 
 using TestTypes = NumericTypes;
-TYPED_TEST_CASE(QuantilesTest, TestTypes);
+TYPED_TEST_CASE(QuantileTest, TestTypes);
 
-TYPED_TEST(QuantilesTest, TestEmpty)
+TYPED_TEST(QuantileTest, TestEmpty)
 {
     test(testdata::empty<TypeParam>());
 }
 
-TYPED_TEST(QuantilesTest, TestSingle)
+TYPED_TEST(QuantileTest, TestSingle)
 {
     test(testdata::single<TypeParam>());
 }
 
-TYPED_TEST(QuantilesTest, TestSomeElementsInvalid)
+TYPED_TEST(QuantileTest, TestSomeElementsInvalid)
 {
     test(testdata::some_invalid<TypeParam>());
 }
 
-TYPED_TEST(QuantilesTest, TestAllElementsInvalid)
+TYPED_TEST(QuantileTest, TestAllElementsInvalid)
 {
     test(testdata::all_invalid<TypeParam>());
 }
 
-TYPED_TEST(QuantilesTest, TestUnsorted)
+TYPED_TEST(QuantileTest, TestUnsorted)
 {
     test(testdata::unsorted<TypeParam>());
 }
 
-TYPED_TEST(QuantilesTest, TestInterpolateCenter)
+TYPED_TEST(QuantileTest, TestInterpolateCenter)
 {
     test(testdata::interpolate_center<TypeParam>());
 }
 
-TYPED_TEST(QuantilesTest, TestInterpolateExtremaHigh)
+TYPED_TEST(QuantileTest, TestInterpolateExtremaHigh)
 {
     test(testdata::interpolate_extrema_high<TypeParam>());
 }
 
-TYPED_TEST(QuantilesTest, TestInterpolateExtremaLow)
+TYPED_TEST(QuantileTest, TestInterpolateExtremaLow)
 {
     test(testdata::interpolate_extrema_low<TypeParam>());
 }
 
-TYPED_TEST(QuantilesTest, TestSortedAscendingNullBefore)
+TYPED_TEST(QuantileTest, TestSortedAscendingNullBefore)
 {
     test(testdata::sorted_ascending_null_before<TypeParam>());
 }
 
-TYPED_TEST(QuantilesTest, TestSortedDescendingNullAfter)
+TYPED_TEST(QuantileTest, TestSortedDescendingNullAfter)
 {
     test(testdata::sorted_descending_null_after<TypeParam>());
 }
 
-TYPED_TEST(QuantilesTest, TestMismatchedSortOrderCount)
-{
-    fixed_width_column_wrapper<TypeParam> a ({});
-    fixed_width_column_wrapper<TypeParam> b ({});
-    cudf::table_view input{{ a, b }};
-
-    EXPECT_THROW(cudf::experimental::quantiles(input, 0, cudf::experimental::interpolation::LINEAR, { { false } }),
-                 cudf::logic_error);
-}
-
-TYPED_TEST(QuantilesTest, TestEmptyTable)
-{
-    std::vector<cudf::column_view> input_columns = {};
-    cudf::table_view input{ input_columns };
-    auto q_values = cudf::experimental::quantiles(input, 0);
-    EXPECT_EQ(0u, q_values.size());
-}
-
-TYPED_TEST(QuantilesTest, TestImplicitlyUnsortedInputs)
+TYPED_TEST(QuantileTest, TestImplicitlyUnsortedInputs)
 {
     auto a_val = std::numeric_limits<TypeParam>::lowest();
     auto b_val = std::numeric_limits<TypeParam>::max();
 
-    fixed_width_column_wrapper<TypeParam> a ({ b_val, a_val });
+    fixed_width_column_wrapper<TypeParam> input ({ b_val, a_val });
 
-    cudf::table_view input{{ a }};
-    std::vector<std::unique_ptr<cudf::scalar>> q_values{};
-    EXPECT_NO_THROW(q_values = cudf::experimental::quantiles(input, 0));
+    std::unique_ptr<cudf::scalar> q_actual;
+    EXPECT_NO_THROW(q_actual = cudf::experimental::quantile(input, 0));
     auto q_expected = q_res(a_val);
-    cudf::scalar * q_actual = q_values.at(0).get();
     expect_scalars_equal(q_expected, *q_actual);
 }
 
 template <typename T>
-struct QuantilesUnsupportedTypesTest : public BaseFixture {
+struct QuantileUnsupportedTypesTest : public BaseFixture {
 };
 
 using UnsupportedTestTypes = RemoveIf<ContainedIn<TestTypes>, AllTypes>;
-TYPED_TEST_CASE(QuantilesUnsupportedTypesTest, UnsupportedTestTypes);
+TYPED_TEST_CASE(QuantileUnsupportedTypesTest, UnsupportedTestTypes);
 
-TYPED_TEST(QuantilesUnsupportedTypesTest, TestZeroElements)
+TYPED_TEST(QuantileUnsupportedTypesTest, TestZeroElements)
 {
-    fixed_width_column_wrapper<TypeParam> a ({ });
-    cudf::table_view input{{ a }};
+    fixed_width_column_wrapper<TypeParam> input ({ });
 
-    EXPECT_THROW(cudf::experimental::quantiles(input, 0),
+    EXPECT_THROW(cudf::experimental::quantile(input, 0),
                  cudf::logic_error);
 }
 
-TYPED_TEST(QuantilesUnsupportedTypesTest, TestOneElements)
+TYPED_TEST(QuantileUnsupportedTypesTest, TestOneElements)
 {
-    fixed_width_column_wrapper<TypeParam> a ({ 0 });
-    cudf::table_view input{{ a }};
+    fixed_width_column_wrapper<TypeParam> input ({ 0 });
 
-    EXPECT_THROW(cudf::experimental::quantiles(input, 0),
+    EXPECT_THROW(cudf::experimental::quantile(input, 0),
                  cudf::logic_error);
 }
 
-TYPED_TEST(QuantilesUnsupportedTypesTest, TestMultipleElements)
+TYPED_TEST(QuantileUnsupportedTypesTest, TestMultipleElements)
 {
-    fixed_width_column_wrapper<TypeParam> a ({ 0, 1, 2 });
-    cudf::table_view input{{ a }};
+    fixed_width_column_wrapper<TypeParam> input ({ 0, 1, 2 });
 
-    EXPECT_THROW(cudf::experimental::quantiles(input, 0),
+    EXPECT_THROW(cudf::experimental::quantile(input, 0),
                  cudf::logic_error);
 }
 
