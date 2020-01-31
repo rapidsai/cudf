@@ -24,11 +24,6 @@ def optimal_block_count(minblkct):
     return min(16, max(1, minblkct))
 
 
-def to_device(ary):
-    dary, _ = rmm.auto_device(ary)
-    return dary
-
-
 # GPU array initializer
 
 

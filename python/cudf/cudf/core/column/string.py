@@ -7,7 +7,6 @@ import warnings
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from numba import cuda
 
 import nvstrings
 import rmm
@@ -16,7 +15,7 @@ import cudf._lib as libcudf
 from cudf._lib.nvtx import nvtx_range_pop, nvtx_range_push
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
-from cudf.utils import cudautils, utils
+from cudf.utils import utils
 from cudf.utils.dtypes import is_list_like
 
 _str_to_numeric_typecast_functions = {
@@ -682,19 +681,11 @@ class StringColumn(column.ColumnBase):
     @classmethod
     def deserialize(cls, header, frames):
         # Deserialize the mask, value, and offset frames
-        arrays = []
-
-        for each_frame in frames:
-            if hasattr(each_frame, "__cuda_array_interface__"):
-                each_frame = cuda.as_cuda_array(each_frame)
-            elif isinstance(each_frame, memoryview):
-                each_frame = np.asarray(each_frame)
-                each_frame = cudautils.to_device(each_frame)
-
-            arrays.append(libcudf.cudf.get_ctype_ptr(each_frame))
+        buffers = [Buffer(each_frame) for each_frame in frames]
+        ptrs = [int(buf.ptr) for buf in buffers]
 
         if header["null_count"] > 0:
-            nbuf = arrays[2]
+            nbuf = ptrs[2]
         else:
             nbuf = None
 
@@ -702,8 +693,8 @@ class StringColumn(column.ColumnBase):
         # Note: array items = [nbuf, sbuf, obuf]
         scount = header["nvstrings"]
         data = nvstrings.from_offsets(
-            arrays[0],
-            arrays[1],
+            ptrs[0],
+            ptrs[1],
             scount,
             nbuf=nbuf,
             ncount=header["null_count"],
