@@ -208,8 +208,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_quantile(JNIEnv *env, j
     cudf::column_view *n_input_column = reinterpret_cast<cudf::column_view *>(input_column);
     cudf::experimental::interpolation n_quantile_method =
         static_cast<cudf::experimental::interpolation>(quantile_method);
-    // The new API is a table level API. We don't really have many use cases for a table level
-    // API so for now lets keep it column level
     std::unique_ptr<cudf::scalar> result =
         cudf::experimental::quantile(*n_input_column, quantile, n_quantile_method);
     return reinterpret_cast<jlong>(result.release());
