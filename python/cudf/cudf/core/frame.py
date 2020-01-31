@@ -84,3 +84,15 @@ class Frame(libcudfxx.Table):
 
     def sqrt(self):
         return self._unaryop("sqrt")
+
+    def _repeat(self, count):
+        if not pd.api.types.is_integer_dtype(count.dtype):
+            count = count.astype("int32")
+
+        result = self.__class__._from_table(
+            libcudfxx.repeat(self, as_column(count))
+        )
+
+        result._copy_categories(self)
+
+        return result

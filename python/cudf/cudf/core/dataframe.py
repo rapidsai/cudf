@@ -4429,13 +4429,7 @@ class DataFrame(Frame):
         return tables
 
     def repeat(self, repeats, axis=None):
-        assert axis in (None, 0)
-        new_index = self.index.repeat(repeats)
-        cols = libcudf.filling.repeat(self._columns, repeats)
-        # to preserve col names, need to get it from old _cols dict
-        column_names = self._data.keys()
-        result = DataFrame(data=dict(zip(column_names, cols)))
-        return result.set_index(new_index)
+        return self._repeat(repeats)
 
     def tile(self, reps):
         """Construct a DataFrame by repeating this DataFrame the number of

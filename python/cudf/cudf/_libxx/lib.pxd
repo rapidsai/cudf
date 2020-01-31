@@ -147,3 +147,15 @@ cdef extern from "<utility>" namespace "std" nogil:
     cdef unique_ptr[column] move(unique_ptr[column])
     cdef unique_ptr[table] move(unique_ptr[table])
     cdef vector[unique_ptr[column]] move(vector[unique_ptr[column]])
+
+cdef extern from "cudf/filling.hpp" namespace "cudf::experimental" nogil:
+    cdef unique_ptr[table] cpp_repeat "cudf::experimental::repeat" (
+        table_view input_table,
+        column_view count,
+        bool check_count,
+    )
+
+    cdef unique_ptr[table] cpp_repeat "cudf::experimental::repeat" (
+        table_view input_table,
+        bool count,
+    )
