@@ -90,6 +90,8 @@ if hasArg -g; then
 fi
 if hasArg -n; then
     INSTALL_TARGET=""
+    LIBCUDF_BUILD_DIR=${LIB_BUILD_DIR}
+    LIBNVSTRINGS_BUILD_DIR=${LIB_BUILD_DIR}
 fi
 if hasArg --allgpuarch; then
     BUILD_ALL_GPU_ARCH=1
@@ -156,7 +158,7 @@ if buildAll || hasArg nvstrings; then
         python setup.py build_ext
         python setup.py install --single-version-externally-managed --record=record.txt
     else
-        python setup.py build_ext --library-dir=${LIBNVSTRINGS_BUILD_DIR}
+        python setup.py build_ext --build-lib=${PWD} --library-dir=${LIBNVSTRINGS_BUILD_DIR}
     fi
 fi
 

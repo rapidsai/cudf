@@ -93,40 +93,16 @@ struct quantile_functor
 };
 
 } // anonymous namespace
+} // namespace detail
 
 std::unique_ptr<scalar>
 quantile(column_view const& input,
-         double percent,
+         double q,
          interpolation interp,
          order_info column_order)
 {
         return type_dispatcher(input.type(), detail::quantile_functor{},
-                               input, percent, interp, column_order);
-}
-
-} // namspace detail
-
-std::vector<std::unique_ptr<scalar>>
-quantiles(table_view const& input,
-          double percent,
-          interpolation interp,
-          std::vector<order_info> column_order)
-{
-    if (column_order.size() == 0) {
-        column_order = std::vector<order_info>(input.num_columns(), { false });
-    } else {
-        CUDF_EXPECTS(column_order.size() == static_cast<uint32_t>(input.num_columns()),
-                     "Must provide order_info for each column.");
-    }
-
-    std::vector<std::unique_ptr<scalar>> out(input.num_columns());
-    for (size_type i = 0; i < input.num_columns(); i++) {
-        out[i] = detail::quantile(input.column(i),
-                                  percent,
-                                  interp,
-                                  column_order[i]);
-    }
-    return out;
+                               input, q, interp, column_order);
 }
 
 } // namespace experimental

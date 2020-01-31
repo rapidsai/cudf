@@ -95,7 +95,7 @@ public class ByteColumnVectorTest extends CudfTestBase {
 
     try (ColumnVector doubleColumnVector = ColumnVector.fromDoubles(new double[]{4.3, 3.8, 8});
          ColumnVector shortColumnVector = ColumnVector.fromShorts(new short[]{100});
-         ColumnVector dateColumnVector = ColumnVector.datesFromInts(DATES);
+         ColumnVector dateColumnVector = ColumnVector.daysFromInts(DATES);
          ColumnVector byteColumnVector1 = doubleColumnVector.asBytes();
          ColumnVector byteColumnVector2 = shortColumnVector.asBytes();
          ColumnVector byteColumnVector3 = dateColumnVector.asBytes()) {

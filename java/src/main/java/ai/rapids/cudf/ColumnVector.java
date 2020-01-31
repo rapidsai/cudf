@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -22,9 +22,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
-import java.util.stream.IntStream;
 
 /**
  * A Column Vector. This class represents the immutable vector of data.  This class holds
@@ -46,41 +46,22 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   private final DType type;
   private final OffHeapState offHeap = new OffHeapState();
-  // Time Unit of a TIMESTAMP vector
-  private TimeUnit tsTimeUnit;
   private long rows;
-  private long nullCount;
+  private Optional<Long> nullCount = Optional.empty();
   private int refCount;
   private final long internalId = idGen.incrementAndGet();
 
   /**
-   * Wrap an existing on device gdf_column with the corresponding ColumnVector.
+   * Wrap an existing on device cudf::column with the corresponding ColumnVector.
    */
   ColumnVector(long nativePointer) {
     assert nativePointer != 0;
     MemoryCleaner.register(this, offHeap);
     offHeap.internalId = internalId;
-    offHeap.nativeCudfColumnHandle = nativePointer;
-    this.type = getDType(nativePointer);
+    offHeap.cudfColumnHandle = new CudfColumn(nativePointer);
+    this.type = offHeap.cudfColumnHandle.getNativeType();
     offHeap.setHostData(null);
-    this.rows = getRowCount(nativePointer);
-    this.nullCount = getNullCount(nativePointer);
-    this.tsTimeUnit = getTimeUnit(nativePointer);
-    DeviceMemoryBuffer data = null;
-    // The data pointer for a STRING is a pointer to an NVStrings object
-    // it will be released when the gdf_column is released. We do not
-    // keep a reference to it in the java code.
-    if (type != DType.STRING) {
-      data = new DeviceMemoryBuffer(getDataPtr(nativePointer), this.rows * type.sizeInBytes);
-    }
-    DeviceMemoryBuffer valid = null;
-    long validPtr = getValidPtr(nativePointer);
-    if (validPtr != 0) {
-      // We are not using the BitVectorHelper.getValidityAllocationSizeInBytes() because
-      // cudfColumn was initialized by cudf and not by cudfjni
-      valid = new DeviceMemoryBuffer(validPtr, BitVectorHelper.getValidityLengthInBytes(rows));
-    }
-    this.offHeap.setDeviceData(new BufferEncapsulator<>(data, valid, null));
+    this.rows = offHeap.cudfColumnHandle.getNativeRowCount();
     this.refCount = 0;
     incRefCountInternal(true);
     MemoryListener.deviceAllocation(getDeviceMemorySize(), internalId);
@@ -89,49 +70,38 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   /**
    * Create a new column vector with data populated on the host.
    */
-  ColumnVector(DType type, TimeUnit tsTimeUnit, long rows, long nullCount,
+  ColumnVector(DType type, long rows, Optional<Long> nullCount,
                HostMemoryBuffer hostDataBuffer, HostMemoryBuffer hostValidityBuffer) {
-    this(type, tsTimeUnit, rows, nullCount, hostDataBuffer, hostValidityBuffer, null);
+    this(type, rows, nullCount, hostDataBuffer, hostValidityBuffer, null);
   }
 
   /**
    * Create a new column vector with data populated on the host.
    * @param type               the type of the vector
-   * @param tsTimeUnit         the time unit, only really applicable for DType.TIMESTAMP
    * @param rows               the number of rows in the vector.
    * @param nullCount          the number of nulls in the vector.
-   * @param hostDataBuffer     The host side data for the vector. In the case of STRING and
-   *                           STRING_CATEGORY this is the string data stored as bytes.
+   * @param hostDataBuffer     The host side data for the vector. In the case of STRING
+   *                           this is the string data stored as bytes.
    * @param hostValidityBuffer arrow like validity buffer 1 bit per row, with padding for
    *                           64-bit alignment.
-   * @param offsetBuffer       only valid for STRING and STRING_CATEGORY this is the offsets into
+   * @param offsetBuffer       only valid for STRING this is the offsets into
    *                           the hostDataBuffer indicating the start and end of a string
    *                           entry. It should be (rows + 1) ints.
    */
-  ColumnVector(DType type, TimeUnit tsTimeUnit, long rows, long nullCount,
+  ColumnVector(DType type, long rows, Optional<Long> nullCount,
                HostMemoryBuffer hostDataBuffer, HostMemoryBuffer hostValidityBuffer,
                HostMemoryBuffer offsetBuffer) {
-    if (nullCount > 0 && hostValidityBuffer == null) {
+    if (nullCount.isPresent() && nullCount.get() > 0 && hostValidityBuffer == null) {
       throw new IllegalStateException("Buffer cannot have a nullCount without a validity buffer");
     }
-    if (type == DType.STRING_CATEGORY || type == DType.STRING) {
-      assert offsetBuffer != null : "offsets must be provided for STRING and STRING_CATEGORY";
+    if (type == DType.STRING) {
+      assert offsetBuffer != null : "offsets must be provided for STRING";
     } else {
-      assert offsetBuffer == null : "offsets are only supported for STRING and STRING_CATEGORY";
-    }
-    if (type == DType.TIMESTAMP) {
-      if (tsTimeUnit == TimeUnit.NONE) {
-        this.tsTimeUnit = TimeUnit.MILLISECONDS;
-      } else {
-        this.tsTimeUnit = tsTimeUnit;
-      }
-    } else {
-      this.tsTimeUnit = TimeUnit.NONE;
+      assert offsetBuffer == null : "offsets are only supported for STRING";
     }
     MemoryCleaner.register(this, offHeap);
     offHeap.internalId = internalId;
     offHeap.setHostData(new BufferEncapsulator(hostDataBuffer, hostValidityBuffer, offsetBuffer));
-    offHeap.setDeviceData(null);
     this.rows = rows;
     this.nullCount = nullCount;
     this.type = type;
@@ -142,7 +112,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   /**
    * Create a new column vector based off of data already on the device.
    * @param type the type of the vector
-   * @param tsTimeUnit the unit of time for this vector
    * @param rows the number of rows in this vector.
    * @param nullCount the number of nulls in the dataset.
    * @param dataBuffer the data stored on the device.  The column vector takes ownership of the
@@ -153,69 +122,52 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @param offsetBuffer a host buffer required for strings and string categories. The column
    *                    vector takes ownership of the buffer. Do not use the buffer after calling
    *                    this.
-   * @param resetOffsetsFromFirst if true and type is a string or a string_category then when
-   *                              unpacking the offsets, the initial offset will be reset to
-   *                              0 and all other offsets will be updated to be relative to that
-   *                              new 0.  This is used after serializing a partition, when the
-   *                              offsets were not updated prior to the serialization.
    */
-  ColumnVector(DType type, TimeUnit tsTimeUnit, long rows,
-               long nullCount, DeviceMemoryBuffer dataBuffer, DeviceMemoryBuffer validityBuffer,
-               HostMemoryBuffer offsetBuffer, boolean resetOffsetsFromFirst) {
-    if (type == DType.STRING_CATEGORY || type == DType.STRING) {
-      assert offsetBuffer != null : "offsets must be provided for STRING and STRING_CATEGORY";
+  ColumnVector(DType type, long rows,
+               Optional<Long> nullCount, DeviceMemoryBuffer dataBuffer, DeviceMemoryBuffer validityBuffer,
+               DeviceMemoryBuffer offsetBuffer) {
+    if (type == DType.STRING) {
+      assert offsetBuffer != null : "offsets must be provided for STRING";
     } else {
-      assert offsetBuffer == null : "offsets are only supported for STRING and STRING_CATEGORY";
-    }
-
-    if (type == DType.TIMESTAMP) {
-      if (tsTimeUnit == TimeUnit.NONE) {
-        this.tsTimeUnit = TimeUnit.MILLISECONDS;
-      } else {
-        this.tsTimeUnit = tsTimeUnit;
-      }
-    } else {
-      this.tsTimeUnit = TimeUnit.NONE;
+      assert offsetBuffer == null : "offsets are only supported for STRING";
     }
 
     MemoryCleaner.register(this, offHeap);
     offHeap.internalId = internalId;
     offHeap.setHostData(null);
+    offHeap.cudfColumnHandle = new CudfColumn(type, (int) rows, nullCount, dataBuffer, validityBuffer, offsetBuffer);
     this.rows = rows;
     this.nullCount = nullCount;
     this.type = type;
-
-    if (type == DType.STRING || type == DType.STRING_CATEGORY) {
-      if (type == DType.STRING_CATEGORY) {
-        offHeap.setDeviceData(new BufferEncapsulator(DeviceMemoryBuffer.allocate(rows * type.sizeInBytes), validityBuffer, null));
-      } else {
-        offHeap.setDeviceData(new BufferEncapsulator(null, validityBuffer, null));
-      }
-
-      try (NvtxRange stringOps = new NvtxRange("cudfColumnViewStrings", NvtxColor.ORANGE)) {
-        // In the case of STRING and STRING_CATEGORY the gdf_column holds references
-        // to the device data that the java code does not, so we will not be lazy about
-        // creating the gdf_column instance.
-        offHeap.nativeCudfColumnHandle = allocateCudfColumn();
-
-        cudfColumnViewStrings(offHeap.nativeCudfColumnHandle,
-            dataBuffer.getAddress(),
-            false,
-            offsetBuffer.getAddress(),
-            resetOffsetsFromFirst,
-            nullCount > 0 ? offHeap.getDeviceData().valid.getAddress() : 0,
-            offHeap.getDeviceData().data == null ? 0 : offHeap.getDeviceData().data.getAddress(),
-            (int) rows, type.nativeId,
-            (int) getNullCount());
-      }
-      dataBuffer.close();
-      offsetBuffer.close();
-    } else {
-      offHeap.setDeviceData(new BufferEncapsulator(dataBuffer, validityBuffer, null));
-    }
-    refCount = 0;
+    this.refCount = 0;
     incRefCountInternal(true);
     MemoryListener.deviceAllocation(getDeviceMemorySize(), internalId);
+  }
+
+  /**
+   * This is a very special constructor that should only ever be called by
+   * fromViewWithContiguousAllocation.  It takes a cudf::column_view * instead of a cudf::column *.
+   * But to maintain memory ownership properly we need to slice the memory in the view off from
+   * a separate buffer that actually owns the memory allocation.
+   * @param viewAddress the address of the cudf::column_view
+   * @param contiguousBuffer the buffer that this is based off of.
+   */
+  private ColumnVector(long viewAddress, DeviceMemoryBuffer contiguousBuffer) {
+    MemoryCleaner.register(this, offHeap);
+    offHeap.internalId = internalId;
+    offHeap.setHostData(null);
+    offHeap.cudfColumnHandle = new CudfColumn(viewAddress, contiguousBuffer);
+    this.type = offHeap.cudfColumnHandle.getNativeType();
+    this.rows = offHeap.cudfColumnHandle.getNativeRowCount();
+    // TODO we may want to ask for the null count anyways...
+    this.nullCount = Optional.empty();
+    this.refCount = 0;
+    incRefCountInternal(true);
+    MemoryListener.deviceAllocation(getDeviceMemorySize(), internalId);
+  }
+
+  static ColumnVector fromViewWithContiguousAllocation(long columnViewAddress, DeviceMemoryBuffer buffer) {
+    return new ColumnVector(columnViewAddress, buffer);
   }
 
   /**
@@ -229,8 +181,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     if (offHeap.getHostData() != null) {
       offHeap.getHostData().noWarnLeakExpected();
     }
-    if (offHeap.getDeviceData() != null) {
-      offHeap.getDeviceData().noWarnLeakExpected();
+    if (offHeap.cudfColumnHandle != null) {
+      offHeap.cudfColumnHandle.noWarnLeakExpected();
     }
   }
 
@@ -256,15 +208,31 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
         "rows=" + rows +
         ", type=" + type +
         ", hostData=" + offHeap.getHostData() +
-        ", deviceData=" + offHeap.getDeviceData() +
         ", nullCount=" + nullCount +
-        ", cudfColumn=" + offHeap.nativeCudfColumnHandle +
+        ", cudfColumn=" + offHeap.cudfColumnHandle +
         '}';
   }
 
   /////////////////////////////////////////////////////////////////////////////
   // METADATA ACCESS
   /////////////////////////////////////////////////////////////////////////////
+
+  static long predictSizeFor(long baseSize, long rows, boolean includeValidity) {
+    long total = baseSize * rows;
+    if (includeValidity) {
+      total += BitVectorHelper.getValidityAllocationSizeInBytes(rows);
+    }
+    return total;
+  }
+
+  long predictSizeFor(DType type) {
+    return predictSizeFor(type.sizeInBytes, rows, hasValidityVector());
+  }
+
+  private long predictSizeForRowMult(long baseSize, double rowMult) {
+    long rowGuess = (long)(rows * rowMult);
+    return predictSizeFor(baseSize, rowGuess, hasValidityVector());
+  }
 
   /**
    * Increment the reference count for this column.  You need to call close on this
@@ -295,62 +263,14 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * Returns the amount of device memory used.
    */
   public long getDeviceMemorySize() {
-    return offHeap != null ? offHeap.getDeviceMemoryLength(type, false) : 0;
+    return offHeap != null ? offHeap.getDeviceMemorySize() : 0;
   }
 
   /**
    * Returns the amount of host memory used to store column/validity data (not metadata).
    */
   public long getHostMemorySize() {
-    return offHeap != null ? offHeap.getHostMemoryLength() : 0;
-  }
-
-  /**
-   * Retrieve the number of characters in each string. Null strings will have value of null.
-   *
-   * @return ColumnVector holding length of string at index 'i' in the original vector
-   */
-  public ColumnVector getLengths() {
-    assert DType.STRING == type : "length only available for String type";
-    return new ColumnVector(cudfLengths(getNativeCudfColumnAddress()));
-  }
-
-  /**
-   * Compute the 32 bit hash of a vector.
-   *
-   * @return the 32 bit hash.
-   */
-  public ColumnVector hash() {
-    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT32), "hash")) {
-      return new ColumnVector(hash(getNativeCudfColumnAddress(), HashFunction.MURMUR3.nativeId));
-    }
-  }
-
-  /**
-   * Compute a specific hash of a vector. String are not supported, if you need a hash of a string,
-   * you can use the generic hash, which does not guarantee what kind of hash is used.
-   * @param func the has function to use.
-   * @return the 32 bit hash.
-   */
-  public ColumnVector hash(HashFunction func) {
-    assert type != DType.STRING && type != DType.STRING_CATEGORY : "Strings are not supported for specific hash functions";
-    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT32), "hash")) {
-      return new ColumnVector(hash(getNativeCudfColumnAddress(), func.nativeId));
-    }
-  }
-
-  /**
-   * Compute the MURMUR3 hash of the column. Strings are not supported.
-   */
-  public ColumnVector murmur3() {
-    return hash(HashFunction.MURMUR3);
-  }
-
-  /**
-   * Compute the IDENTITY hash of the column. Strings are not supported.
-   */
-  public ColumnVector identityHash() {
-    return hash(HashFunction.IDENTITY);
+    return offHeap != null ? offHeap.getHostMemorySize() : 0;
   }
 
   /**
@@ -362,10 +282,19 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Returns the number of nulls in the data.
+   * Returns the number of nulls in the data. Note that this might end up
+   * being a very expensive operation because if the null count is not
+   * known it will be calculated.
    */
   public long getNullCount() {
-    return nullCount;
+    if (!nullCount.isPresent()) {
+      if (offHeap.cudfColumnHandle != null) {
+        nullCount = Optional.of(offHeap.cudfColumnHandle.getNativeNullCount());
+      } else {
+        throw new IllegalStateException("Calculating an unknown null count on the host is not currently supported");
+      }
+    }
+    return nullCount.get();
   }
 
   /**
@@ -376,45 +305,25 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Retrieve the number of bytes for each string. Null strings will have value of null.
-   *
-   * @return ColumnVector, where each element at i = byte count of string at index 'i' in the original vector
-   */
-  public ColumnVector getByteCount() {
-    assert type == DType.STRING : "type has to be a String";
-    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT32), "byteCount")) {
-      return new ColumnVector(cudfByteCount(getNativeCudfColumnAddress()));
-    }
-  }
-
-  /**
    * Returns if the vector has a validity vector allocated or not.
    */
   public boolean hasValidityVector() {
     boolean ret;
-    if (offHeap.getHostData() != null) {
-      ret = (offHeap.getHostData().valid != null);
+    if (offHeap.hostData != null) {
+      ret = (offHeap.hostData.valid != null);
     } else {
-      ret = (offHeap.getDeviceData().valid != null);
+      ret = (offHeap.cudfColumnHandle.getValid() != null);
     }
     return ret;
   }
 
   /**
-   * Returns if the vector has nulls.
+   * Returns if the vector has nulls.  Note that this might end up
+   * being a very expensive operation because if the null count is not
+   * known it will be calculated.
    */
   public boolean hasNulls() {
     return getNullCount() > 0;
-  }
-
-  /**
-   * For vector types that support a TimeUnit (TIMESTAMP),
-   * get the unit of time. Will be NONE for vectors that
-   * did not have one set.  For a TIMESTAMP NONE is the default
-   * unit which should be the same as MILLISECONDS.
-   */
-  public TimeUnit getTimeUnit() {
-    return tsTimeUnit;
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -427,7 +336,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * still return true.
    */
   public boolean hasDeviceData() {
-    return offHeap.getDeviceData() != null || rows == 0;
+    return offHeap.cudfColumnHandle != null;
   }
 
   /**
@@ -474,19 +383,11 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public final void dropDeviceData() {
     ensureOnHost();
-    if (offHeap.deviceData != null) {
+    if (offHeap.cudfColumnHandle != null) {
       long amount = getDeviceMemorySize();
-      offHeap.deviceData.close();
-      offHeap.deviceData = null;
+      offHeap.cudfColumnHandle.close();
+      offHeap.cudfColumnHandle = null;
       MemoryListener.deviceDeallocation(amount, internalId);
-      // Just do it to make sure the cache is updated
-      offHeap.getDeviceMemoryLength(type, true);
-      // We have to free the cudf column to handle Strings properly
-      if (offHeap.nativeCudfColumnHandle != 0) {
-        freeCudfColumn(offHeap.nativeCudfColumnHandle, false);
-        offHeap.nativeCudfColumnHandle = 0;
-      }
-
     }
   }
 
@@ -494,70 +395,27 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * Be sure the data is on the device.
    */
   public final void ensureOnDevice() {
-    if (offHeap.getDeviceData() == null && rows != 0) {
+    if (offHeap.cudfColumnHandle == null) {
+      if (rows == 0) {
+        offHeap.cudfColumnHandle = new CudfColumn(type);
+        MemoryListener.deviceAllocation(getDeviceMemorySize(), internalId);
+        return;
+      }
       checkHasHostData();
 
-      if (type == DType.STRING || type == DType.STRING_CATEGORY) {
-        assert (offHeap.getHostData().offsets != null);
-      }
+      assert type != DType.STRING || offHeap.getHostData().offsets != null;
 
       try (DevicePrediction prediction =
                new DevicePrediction(getHostMemorySize(), "ensureOnDevice");
            NvtxRange toDev = new NvtxRange("ensureOnDevice", NvtxColor.BLUE)) {
-        DeviceMemoryBuffer deviceDataBuffer = null;
-        DeviceMemoryBuffer deviceValidityBuffer = null;
 
-        // for type == DType.STRING the data buffer in the string is an instance of NVStrings
-        // and is allocated/populated later in the call to cudfColumnViewStrings
-        if (type == DType.STRING_CATEGORY) {
-          // The data buffer holds the indexes into the strings dictionary which is
-          // allocated in the call to cudfColumnViewStrings.
-          deviceDataBuffer = DeviceMemoryBuffer.allocate(rows * type.sizeInBytes);
-        } else if (type != DType.STRING) {
-          deviceDataBuffer = DeviceMemoryBuffer.allocate(offHeap.getHostData().data.getLength());
-        }
+        offHeap.cudfColumnHandle = new CudfColumn(type, (int) rows, nullCount, offHeap.hostData.data,
+            offHeap.hostData.valid, offHeap.hostData.offsets);
 
-        boolean needsCleanup = true;
-        try {
-          if (hasNulls()) {
-            deviceValidityBuffer = DeviceMemoryBuffer.allocate(offHeap.getHostData().valid.getLength());
-          }
-          offHeap.setDeviceData(new BufferEncapsulator(deviceDataBuffer, deviceValidityBuffer, null));
-          needsCleanup = false;
-        } finally {
-          if (needsCleanup) {
-            if (deviceDataBuffer != null) {
-              deviceDataBuffer.close();
-            }
-            if (deviceValidityBuffer != null) {
-              deviceValidityBuffer.close();
-            }
-          }
+        if (offHeap.isLeakExpected()) {
+          offHeap.cudfColumnHandle.noWarnLeakExpected();
         }
-
-        if (offHeap.getDeviceData().valid != null) {
-          offHeap.getDeviceData().valid.copyFromHostBuffer(offHeap.getHostData().valid);
-        }
-
-        if (type == DType.STRING || type == DType.STRING_CATEGORY) {
-          try (NvtxRange stringOps = new NvtxRange("cudfColumnViewStrings", NvtxColor.ORANGE)) {
-            // In the case of STRING and STRING_CATEGORY the gdf_column holds references
-            // to the device data that the java code does not, so we will not be lazy about
-            // creating the gdf_column instance.
-            offHeap.nativeCudfColumnHandle = allocateCudfColumn();
-            cudfColumnViewStrings(offHeap.nativeCudfColumnHandle,
-                offHeap.getHostData().data.getAddress(),
-                true, offHeap.getHostData().offsets.getAddress(),
-                false, offHeap.getHostData().valid == null ? 0 : offHeap.getDeviceData().valid.getAddress(),
-                offHeap.getDeviceData().data == null ? 0 : offHeap.getDeviceData().data.getAddress(),
-                (int) rows, type.nativeId,
-                (int) getNullCount());
-          }
-        } else {
-          offHeap.getDeviceData().data.copyFromHostBuffer(offHeap.getHostData().data);
-        }
-        // Be sure that we update the cache for the size of this
-        MemoryListener.deviceAllocation(offHeap.getDeviceMemoryLength(type, true), internalId);
+        MemoryListener.deviceAllocation(getDeviceMemorySize(), internalId);
       }
     }
   }
@@ -571,23 +429,24 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
       try (HostPrediction prediction =
                new HostPrediction(getDeviceMemorySize(), "ensureOnHost");
-          NvtxRange toHost = new NvtxRange("ensureOnHost", NvtxColor.BLUE)) {
+           NvtxRange toHost = new NvtxRange("ensureOnHost", NvtxColor.BLUE)) {
         HostMemoryBuffer hostDataBuffer = null;
         HostMemoryBuffer hostValidityBuffer = null;
         HostMemoryBuffer hostOffsetsBuffer = null;
+        BaseDeviceMemoryBuffer valid = offHeap.cudfColumnHandle.getValid();
+        BaseDeviceMemoryBuffer offsets = offHeap.cudfColumnHandle.getOffsets();
+        BaseDeviceMemoryBuffer data = offHeap.cudfColumnHandle.getData();
         boolean needsCleanup = true;
         try {
-          if (offHeap.getDeviceData().valid != null) {
-            hostValidityBuffer = HostMemoryBuffer.allocate(offHeap.getDeviceData().valid.getLength());
+          if (valid != null) {
+            hostValidityBuffer = HostMemoryBuffer.allocate(valid.getLength());
           }
-          if (type == DType.STRING || type == DType.STRING_CATEGORY) {
-            try (NvtxRange range = new NvtxRange("getStringDataAndOffsetsBack", NvtxColor.ORANGE)) {
-              long[] vals = getStringDataAndOffsetsBack(getNativeCudfColumnAddress());
-              hostDataBuffer = new HostMemoryBuffer(vals[0], vals[1]);
-              hostOffsetsBuffer = new HostMemoryBuffer(vals[2], vals[3]);
-            }
-          } else {
-            hostDataBuffer = HostMemoryBuffer.allocate(offHeap.getDeviceData().data.getLength());
+          if (offsets != null) {
+            hostOffsetsBuffer = HostMemoryBuffer.allocate(offsets.length);
+          }
+          // If a strings column is all null values there is no data buffer allocated
+          if (data != null) {
+            hostDataBuffer = HostMemoryBuffer.allocate(data.length);
           }
 
           offHeap.setHostData(new BufferEncapsulator(hostDataBuffer, hostValidityBuffer,
@@ -595,6 +454,9 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
           needsCleanup = false;
         } finally {
           if (needsCleanup) {
+            if (hostOffsetsBuffer != null) {
+              hostOffsetsBuffer.close();
+            }
             if (hostDataBuffer != null) {
               hostDataBuffer.close();
             }
@@ -603,11 +465,14 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
             }
           }
         }
-        if (type != DType.STRING && type != DType.STRING_CATEGORY) {
-          offHeap.getHostData().data.copyFromDeviceBuffer(offHeap.getDeviceData().data);
+        if (offHeap.hostData.data != null) {
+          offHeap.hostData.data.copyFromDeviceBuffer(data);
         }
-        if (offHeap.getHostData().valid != null) {
-          offHeap.getHostData().valid.copyFromDeviceBuffer(offHeap.getDeviceData().valid);
+        if (offHeap.hostData.valid != null) {
+          offHeap.hostData.valid.copyFromDeviceBuffer(valid);
+        }
+        if (offHeap.hostData.offsets != null) {
+          offHeap.hostData.offsets.copyFromDeviceBuffer(offsets);
         }
       }
     }
@@ -622,7 +487,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public boolean isNull(long index) {
     assert (index >= 0 && index < rows) : "index is out of range 0 <= " + index + " < " + rows;
-    if (hasNulls()) {
+    if (hasValidityVector()) {
+      if (nullCount.isPresent() && !hasNulls()) {
+        return false;
+      }
       checkHasHostData();
       return BitVectorHelper.isNull(offHeap.getHostData().valid, index);
     }
@@ -639,7 +507,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     long maxNullRow = BitVectorHelper.getValidityAllocationSizeInBytes(rows) * 8;
     assert (index >= 0 && index < maxNullRow) : "TEST: index is out of range 0 <= " + index + " <" +
         " " + maxNullRow;
-    if (hasNulls()) {
+    if (hasValidityVector()) {
+      if (nullCount.isPresent() && !hasNulls()) {
+        return false;
+      }
       checkHasHostData();
       return BitVectorHelper.isNull(offHeap.getHostData().valid, index);
     }
@@ -666,7 +537,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   public HostMemoryBuffer getHostBufferFor(BufferType type) {
     checkHasHostData();
     HostMemoryBuffer srcBuffer = null;
-    BufferEncapsulator<HostMemoryBuffer> host = offHeap.getHostData();
+    BufferEncapsulator host = offHeap.getHostData();
     switch(type) {
       case VALIDITY:
         if (host != null) {
@@ -701,24 +572,22 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * Please note that if the column is empty there may be no buffers at all associated with the
    * column.
    */
-  public DeviceMemoryBuffer getDeviceBufferFor(BufferType type) {
-    assert this.type != DType.STRING && this.type != DType.STRING_CATEGORY;
+  public BaseDeviceMemoryBuffer getDeviceBufferFor(BufferType type) {
     checkHasDeviceData();
-    DeviceMemoryBuffer srcBuffer = null;
-    BufferEncapsulator<DeviceMemoryBuffer> dev = offHeap.getDeviceData();
+    BaseDeviceMemoryBuffer srcBuffer = null;
     switch(type) {
       case VALIDITY:
-        if (dev != null) {
-          srcBuffer = dev.valid;
-        }
+        srcBuffer = offHeap.cudfColumnHandle.getValid();
         break;
       case DATA:
-        if (dev != null) {
-          srcBuffer = dev.data;
-        }
+        srcBuffer = offHeap.cudfColumnHandle.getData();
+        break;
+      case OFFSET:
+        srcBuffer = offHeap.cudfColumnHandle.getOffsets();
         break;
       default:
         throw new IllegalArgumentException(type + " is not a supported buffer type.");
+
     }
     return srcBuffer;
   }
@@ -736,128 +605,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
         + srcOffset + " + " + length + " > " + srcBuffer.length;
     UnsafeMemoryAccessor.getBytes(dst, dstOffset,
         srcBuffer.getAddress() + srcOffset, length);
-  }
-
-  /**
-   * Returns a Boolean vector with the same number of rows as this instance, that has
-   * TRUE for any entry that is not null, and FALSE for any null entry (as per the validity mask)
-   *
-   * @return - Boolean vector
-   */
-  public ColumnVector isNotNull() {
-    // Prediction handled by validityAsBooleanVector
-    return validityAsBooleanVector();
-  }
-
-  /**
-   * Returns a vector with all values "oldValues[i]" replaced with "newValues[i]".
-   * Warning:
-   *    Currently this function doesn't work for Strings or StringCategories.
-   *    NaNs can't be replaced in the original vector but regular values can be replaced with NaNs
-   *    Nulls can't be replaced in the original vector but regular values can be replaced with Nulls
-   *    Mixing of types isn't allowed, the resulting vector will be the same type as the original.
-   *      e.g. You can't replace an integer vector with values from a long vector
-   *
-   * Usage:
-   *    this = {1, 4, 5, 1, 5}
-   *    oldValues = {1, 5, 7}
-   *    newValues = {2, 6, 9}
-   *
-   *    result = this.findAndReplaceAll(oldValues, newValues);
-   *    result = {2, 4, 6, 2, 6}  (1 and 5 replaced with 2 and 6 but 7 wasn't found so no change)
-   *
-   * @param oldValues - A vector containing values that should be replaced
-   * @param newValues - A vector containing new values
-   * @return - A new vector containing the old values replaced with new values
-   */
-  public ColumnVector findAndReplaceAll(ColumnVector oldValues, ColumnVector newValues) {
-    assert this.type != DType.STRING_CATEGORY : "STRING_CATEGORY isn't supported at this time";
-    try (DevicePrediction prediction = new DevicePrediction(getDeviceMemorySize(), "findAndReplace")) {
-      return new ColumnVector(findAndReplaceAll(oldValues.getNativeCudfColumnAddress(), newValues.getNativeCudfColumnAddress(), this.getNativeCudfColumnAddress()));
-    }
-  }
-
-  /**
-   * Returns a Boolean vector with the same number of rows as this instance, that has
-   * FALSE for any entry that is not null, and TRUE for any null entry (as per the validity mask)
-   *
-   * @return - Boolean vector
-   */
-  public ColumnVector isNull() {
-    ColumnVector res = null;
-    // No prediction is possible because it is built up from other operators
-    try (ColumnVector boolValidity = validityAsBooleanVector()) {
-      res = boolValidity.not();
-    }
-    return res;
-  }
-
-  /**
-   * Returns a ColumnVector with any null values replaced with a scalar.
-   *
-   * @param scalar - Scalar value to use as replacement
-   * @return - ColumnVector with nulls replaced by scalar
-   */
-  public ColumnVector replaceNulls(Scalar scalar) {
-    try (DevicePrediction prediction = new DevicePrediction(getDeviceMemorySize(), "replaceNulls")) {
-      return new ColumnVector(Cudf.replaceNulls(this, scalar));
-    }
-  }
-
-  /*
-   * Returns the validity mask as a boolean vector with FALSE for nulls, 
-   * and TRUE otherwise.
-   */
-  private ColumnVector validityAsBooleanVector() {
-    if (getRowCount() == 0) {
-      return ColumnVector.fromBoxedBooleans();
-    }
-
-    ColumnVector cv = ColumnVector.fromScalar(Scalar.fromBool(true), (int)getRowCount());
-
-    if (getNullCount() == 0) {
-      // we are done, all not null
-      return cv;
-    }
-
-    ColumnVector result = null;
-
-    try {
-      // we are using the device validity bitmask, lets check
-      // we are in the device 
-      checkHasDeviceData();
-
-      // Apply the validity mask to cv's native column vector
-      // Warning: This is sharing the validity vector from the current column
-      // with the new column created with fromScalar temporarily.
-      cudfColumnViewAugmented(
-          cv.offHeap.nativeCudfColumnHandle,
-          cv.offHeap.getDeviceData().data.address,
-          this.offHeap.getDeviceData().valid.address,
-          (int) this.getRowCount(),
-          DType.BOOL8.nativeId,
-          (int) getNullCount(),
-          TimeUnit.NONE.getNativeId());
-
-      // just to keep java in-sync
-      cv.nullCount = getNullCount();
-
-      // replace nulls with FALSE
-      result = cv.replaceNulls(Scalar.fromBool(false));
-    } finally {
-      // cleanup
-      if (cv != null) {
-        if (cv.offHeap.getDeviceData().data != null) {
-          long amount = cv.offHeap.getDeviceMemoryLength(cv.type, true);
-          cv.offHeap.getDeviceData().data.close(); // don't need this anymore
-          MemoryListener.deviceDeallocation(amount, cv.internalId);
-        }
-        cv.offHeap.setDeviceData(null); // .valid is managed by the current column vector, so
-                                      // don't let it get closed
-        cv.close(); // clean up other resources
-      }
-    }
-    return result;
   }
 
   /**
@@ -892,7 +639,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * Get the value at index.
    */
   public final int getInt(long index) {
-    assert type == DType.INT32 || type == DType.DATE32;
+    assert type == DType.INT32 || type == DType.TIMESTAMP_DAYS;
     assertsForGet(index);
     return offHeap.getHostData().data.getInt(index * type.sizeInBytes);
   }
@@ -901,7 +648,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * Get the starting byte offset for the string at index
    */
   long getStartStringOffset(long index) {
-    assert type == DType.STRING_CATEGORY || type == DType.STRING;
+    assert type == DType.STRING;
     assert (index >= 0 && index < rows) : "index is out of range 0 <= " + index + " < " + rows;
     assert offHeap.getHostData() != null : "data is not on the host";
     return offHeap.getHostData().offsets.getInt(index * 4);
@@ -911,7 +658,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * Get the ending byte offset for the string at index.
    */
   long getEndStringOffset(long index) {
-    assert type == DType.STRING_CATEGORY || type == DType.STRING;
+    assert type == DType.STRING;
     assert (index >= 0 && index < rows) : "index is out of range 0 <= " + index + " < " + rows;
     assert offHeap.getHostData() != null : "data is not on the host";
     // The offsets has one more entry than there are rows.
@@ -922,7 +669,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * Get the value at index.
    */
   public final long getLong(long index) {
-    assert type == DType.INT64 || type == DType.DATE64 || type == DType.TIMESTAMP;
+    // Timestamps with time values are stored as longs
+    assert type == DType.INT64 || type.hasTimeResolution();
     assertsForGet(index);
     return offHeap.getHostData().data.getLong(index * type.sizeInBytes);
   }
@@ -955,11 +703,11 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Get the value at index.  This API is slow as it has to translate the
-   * string representation.  Please use it with caution.
+   * Get the raw UTF8 bytes at index.  This API is faster than getJavaString, but still not
+   * ideal because it is copying the data onto the heap.
    */
-  public String getJavaString(long index) {
-    assert type == DType.STRING || type == DType.STRING_CATEGORY;
+  public byte[] getUTF8(long index) {
+    assert type == DType.STRING;
     assertsForGet(index);
     int start = offHeap.getHostData().offsets.getInt(index * OFFSET_SIZE);
     int size = offHeap.getHostData().offsets.getInt((index + 1) * OFFSET_SIZE) - start;
@@ -967,226 +715,194 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     if (size > 0) {
       offHeap.getHostData().data.getBytes(rawData, 0, start, size);
     }
+    return rawData;
+  }
+
+  /**
+   * Get the value at index.  This API is slow as it has to translate the
+   * string representation.  Please use it with caution.
+   */
+  public String getJavaString(long index) {
+    byte[] rawData = getUTF8(index);
     return new String(rawData, StandardCharsets.UTF_8);
   }
 
   /////////////////////////////////////////////////////////////////////////////
-  // DATE/TIME
+  // DEVICE METADATA
   /////////////////////////////////////////////////////////////////////////////
 
   /**
-   * Get year from DATE32, DATE64, or TIMESTAMP
-   * <p>
-   * Postconditions - A new vector is allocated with the result. The caller owns the vector and
-   * is responsible for its lifecycle.
-   * @return - A new INT16 vector allocated on the GPU.
+   * Retrieve the number of characters in each string. Null strings will have value of null.
+   *
+   * @return ColumnVector holding length of string at index 'i' in the original vector
    */
-  public ColumnVector year() {
-    assert type == DType.DATE32 || type == DType.DATE64 || type == DType.TIMESTAMP;
-    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT16), "year")) {
-      return new ColumnVector(Cudf.gdfExtractDatetimeYear(this));
+  public ColumnVector getLengths() {
+    assert DType.STRING == type : "length only available for String type";
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT32), "getLengths")) {
+      return new ColumnVector(lengths(offHeap.cudfColumnHandle.getViewHandle()));
     }
   }
 
   /**
-   * Get month from DATE32, DATE64, or TIMESTAMP
-   * <p>
-   * Postconditions - A new vector is allocated with the result. The caller owns the vector and
-   * is responsible for its lifecycle.
-   * @return - A new INT16 vector allocated on the GPU.
+   * Retrieve the number of bytes for each string. Null strings will have value of null.
+   *
+   * @return ColumnVector, where each element at i = byte count of string at index 'i' in the original vector
    */
-  public ColumnVector month() {
-    assert type == DType.DATE32 || type == DType.DATE64 || type == DType.TIMESTAMP;
-    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT16), "month")) {
-      return new ColumnVector(Cudf.gdfExtractDatetimeMonth(this));
+  public ColumnVector getByteCount() {
+    assert type == DType.STRING : "type has to be a String";
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT32), "byteCount")) {
+      return new ColumnVector(byteCount(offHeap.cudfColumnHandle.getViewHandle()));
     }
   }
 
   /**
-   * Get day from DATE32, DATE64, or TIMESTAMP
-   * <p>
-   * Postconditions - A new vector is allocated with the result. The caller owns the vector and
-   * is responsible for its lifecycle.
-   * @return - A new INT16 vector allocated on the GPU.
+   * Returns a Boolean vector with the same number of rows as this instance, that has
+   * TRUE for any entry that is not null, and FALSE for any null entry (as per the validity mask)
+   *
+   * @return - Boolean vector
    */
-  public ColumnVector day() {
-    assert type == DType.DATE32 || type == DType.DATE64 || type == DType.TIMESTAMP;
-    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT16), "day")) {
-      return new ColumnVector(Cudf.gdfExtractDatetimeDay(this));
+  public ColumnVector isNotNull() {
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.BOOL8), "isNotNull")) {
+      return new ColumnVector(isNotNullNative(offHeap.cudfColumnHandle.getViewHandle()));
     }
   }
 
   /**
-   * Get hour from DATE64 or TIMESTAMP
-   * <p>
-   * Postconditions - A new vector is allocated with the result. The caller owns the vector and
-   * is responsible for its lifecycle.
-   * @return - A new INT16 vector allocated on the GPU.
+   * Returns a Boolean vector with the same number of rows as this instance, that has
+   * FALSE for any entry that is not null, and TRUE for any null entry (as per the validity mask)
+   *
+   * @return - Boolean vector
    */
-  public ColumnVector hour() {
-    assert type == DType.DATE64 || type == DType.TIMESTAMP;
-    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT16), "hour")) {
-      return new ColumnVector(Cudf.gdfExtractDatetimeHour(this));
-    }
-  }
-
-  /**
-   * Get minute from DATE64 or TIMESTAMP
-   * <p>
-   * Postconditions - A new vector is allocated with the result. The caller owns the vector and
-   * is responsible for its lifecycle.
-   * @return - A new INT16 vector allocated on the GPU.
-   */
-  public ColumnVector minute() {
-    assert type == DType.DATE64 || type == DType.TIMESTAMP;
-    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT16), "minute")) {
-      return new ColumnVector(Cudf.gdfExtractDatetimeMinute(this));
-    }
-  }
-
-  /**
-   * Get second from DATE64 or TIMESTAMP
-   * <p>
-   * Postconditions - A new vector is allocated with the result. The caller owns the vector and
-   * is responsible for its lifecycle.
-   * @return - A new INT16 vector allocated on the GPU.
-   */
-  public ColumnVector second() {
-    assert type == DType.DATE64 || type == DType.TIMESTAMP;
-    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT16), "second")) {
-      return new ColumnVector(Cudf.gdfExtractDatetimeSecond(this));
+  public ColumnVector isNull() {
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.BOOL8),"isNull")) {
+      return new ColumnVector(isNullNative(offHeap.cudfColumnHandle.getViewHandle()));
     }
   }
 
   /////////////////////////////////////////////////////////////////////////////
-  // ARITHMETIC
+  // Replacement
   /////////////////////////////////////////////////////////////////////////////
 
   /**
-   * Multiple different unary operations. The output is the same type as input.
-   * @param op      the operation to perform
-   * @return the result
+   * Returns a vector with all values "oldValues[i]" replaced with "newValues[i]".
+   * Warning:
+   *    Currently this function doesn't work for Strings or StringCategories.
+   *    NaNs can't be replaced in the original vector but regular values can be replaced with NaNs
+   *    Nulls can't be replaced in the original vector but regular values can be replaced with Nulls
+   *    Mixing of types isn't allowed, the resulting vector will be the same type as the original.
+   *      e.g. You can't replace an integer vector with values from a long vector
+   *
+   * Usage:
+   *    this = {1, 4, 5, 1, 5}
+   *    oldValues = {1, 5, 7}
+   *    newValues = {2, 6, 9}
+   *
+   *    result = this.findAndReplaceAll(oldValues, newValues);
+   *    result = {2, 4, 6, 2, 6}  (1 and 5 replaced with 2 and 6 but 7 wasn't found so no change)
+   *
+   * @param oldValues - A vector containing values that should be replaced
+   * @param newValues - A vector containing new values
+   * @return - A new vector containing the old values replaced with new values
    */
-  public ColumnVector unaryOp(UnaryOp op) {
-    try (DevicePrediction prediction = new DevicePrediction(getDeviceMemorySize(), "unaryOp")) {
-      return new ColumnVector(Cudf.gdfUnaryMath(this, op, type));
+  public ColumnVector findAndReplaceAll(ColumnVector oldValues, ColumnVector newValues) {
+    try (DevicePrediction prediction = new DevicePrediction(getDeviceMemorySize(), "findAndReplace")) {
+      return new ColumnVector(findAndReplaceAll(oldValues.getNativeView(), newValues.getNativeView(), this.getNativeView()));
     }
   }
 
   /**
-   * Calculate the sin, output is the same type as input.
+   * Returns a ColumnVector with any null values replaced with a scalar.
+   * The types of the input ColumnVector and Scalar must match, else an error is thrown.
+   *
+   * @param scalar - Scalar value to use as replacement
+   * @return - ColumnVector with nulls replaced by scalar
    */
-  public ColumnVector sin() {
-    return unaryOp(UnaryOp.SIN);
-  }
-
-  /**
-   * Calculate the cos, output is the same type as input.
-   */
-  public ColumnVector cos() {
-    return unaryOp(UnaryOp.COS);
-  }
-
-  /**
-   * Calculate the tan, output is the same type as input.
-   */
-  public ColumnVector tan() {
-    return unaryOp(UnaryOp.TAN);
-  }
-
-  /**
-   * Calculate the arcsin, output is the same type as input.
-   */
-  public ColumnVector arcsin() {
-    return unaryOp(UnaryOp.ARCSIN);
-  }
-
-  /**
-   * Calculate the arccos, output is the same type as input.
-   */
-  public ColumnVector arccos() {
-    return unaryOp(UnaryOp.ARCCOS);
-  }
-
-  /**
-   * Calculate the arctan, output is the same type as input.
-   */
-  public ColumnVector arctan() {
-    return unaryOp(UnaryOp.ARCTAN);
-  }
-
-  /**
-   * Calculate the exp, output is the same type as input.
-   */
-  public ColumnVector exp() {
-    return unaryOp(UnaryOp.EXP);
-  }
-
-  /**
-   * Calculate the log, output is the same type as input.
-   */
-  public ColumnVector log() {
-    return unaryOp(UnaryOp.LOG);
-  }
-
-  /**
-   * Calculate the sqrt, output is the same type as input.
-   */
-  public ColumnVector sqrt() {
-    return unaryOp(UnaryOp.SQRT);
-  }
-
-  /**
-   * Calculate the ceil, output is the same type as input.
-   */
-  public ColumnVector ceil() {
-    return unaryOp(UnaryOp.CEIL);
-  }
-
-  /**
-   * Calculate the floor, output is the same type as input.
-   */
-  public ColumnVector floor() {
-    return unaryOp(UnaryOp.FLOOR);
-  }
-
-  /**
-   * Calculate the abs, output is the same type as input.
-   */
-  public ColumnVector abs() {
-    return unaryOp(UnaryOp.ABS);
-  }
-
-  /**
-   * invert the bits, output is the same type as input.
-   */
-  public ColumnVector bitInvert() {
-    return unaryOp(UnaryOp.BIT_INVERT);
-  }
-
-  /**
-   * Multiple different binary operations.
-   * @param op      the operation to perform
-   * @param rhs     the rhs of the operation
-   * @param outType the type of output you want.
-   * @return the result
-   */
-  @Override
-  public ColumnVector binaryOp(BinaryOp op, BinaryOperable rhs, DType outType) {
-    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(outType), "binaryOp")) {
-      if (rhs instanceof ColumnVector) {
-        ColumnVector cvRhs = (ColumnVector) rhs;
-        assert rows == cvRhs.getRowCount();
-        return new ColumnVector(Cudf.gdfBinaryOp(this, cvRhs, op, outType));
-      } else if (rhs instanceof Scalar) {
-        Scalar sRhs = (Scalar) rhs;
-        return new ColumnVector(Cudf.gdfBinaryOp(this, sRhs, op, outType));
-      } else {
-        throw new IllegalArgumentException(rhs.getClass() + " is not supported as a binary op" +
-            " with ColumnVector");
-      }
+  public ColumnVector replaceNulls(Scalar scalar) {
+    try (DevicePrediction prediction = new DevicePrediction(getDeviceMemorySize(), "replaceNulls")) {
+      return new ColumnVector(replaceNulls(getNativeView(), scalar.getScalarHandle()));
     }
   }
+
+  /**
+   * For a BOOL8 vector, computes a vector whose rows are selected from two other vectors
+   * based on the boolean value of this vector in the corresponding row.
+   * If the boolean value in a row is true, the corresponding row is selected from trueValues
+   * otherwise the corresponding row from falseValues is selected.
+   * Note that trueValues and falseValues vectors must be the same length as this vector,
+   * and trueValues and falseValues must have the same data type.
+   * @param trueValues the values to select if a row in this column is true
+   * @param falseValues the values to select if a row in this column is not true
+   * @return the computed vector
+   */
+  public ColumnVector ifElse(ColumnVector trueValues, ColumnVector falseValues) {
+    if (type != DType.BOOL8) {
+      throw new IllegalArgumentException("Cannot select with a predicate vector of type " + type);
+    }
+    long result = ifElseVV(getNativeView(), trueValues.getNativeView(), falseValues.getNativeView());
+    return new ColumnVector(result);
+  }
+
+  /**
+   * For a BOOL8 vector, computes a vector whose rows are selected from two other inputs
+   * based on the boolean value of this vector in the corresponding row.
+   * If the boolean value in a row is true, the corresponding row is selected from trueValues
+   * otherwise the value from falseValue is selected.
+   * Note that trueValues must be the same length as this vector,
+   * and trueValues and falseValue must have the same data type.
+   * Note that the trueValues vector and falseValue scalar must have the same data type.
+   * @param trueValues the values to select if a row in this column is true
+   * @param falseValue the value to select if a row in this column is not true
+   * @return the computed vector
+   */
+  public ColumnVector ifElse(ColumnVector trueValues, Scalar falseValue) {
+    if (type != DType.BOOL8) {
+      throw new IllegalArgumentException("Cannot select with a predicate vector of type " + type);
+    }
+    long result = ifElseVS(getNativeView(), trueValues.getNativeView(), falseValue.getScalarHandle());
+    return new ColumnVector(result);
+  }
+
+  /**
+   * For a BOOL8 vector, computes a vector whose rows are selected from two other inputs
+   * based on the boolean value of this vector in the corresponding row.
+   * If the boolean value in a row is true, the value from trueValue is selected
+   * otherwise the corresponding row from falseValues is selected.
+   * Note that falseValues must be the same length as this vector,
+   * and trueValue and falseValues must have the same data type.
+   * Note that the trueValue scalar and falseValues vector must have the same data type.
+   * @param trueValue the value to select if a row in this column is true
+   * @param falseValues the values to select if a row in this column is not true
+   * @return the computed vector
+   */
+  public ColumnVector ifElse(Scalar trueValue, ColumnVector falseValues) {
+    if (type != DType.BOOL8) {
+      throw new IllegalArgumentException("Cannot select with a predicate vector of type " + type);
+    }
+    long result = ifElseSV(getNativeView(), trueValue.getScalarHandle(), falseValues.getNativeView());
+    return new ColumnVector(result);
+  }
+
+  /**
+   * For a BOOL8 vector, computes a vector whose rows are selected from two other inputs
+   * based on the boolean value of this vector in the corresponding row.
+   * If the boolean value in a row is true, the value from trueValue is selected
+   * otherwise the value from falseValue is selected.
+   * Note that the trueValue and falseValue scalars must have the same data type.
+   * @param trueValue the value to select if a row in this column is true
+   * @param falseValue the value to select if a row in this column is not true
+   * @return the computed vector
+   */
+  public ColumnVector ifElse(Scalar trueValue, Scalar falseValue) {
+    if (type != DType.BOOL8) {
+      throw new IllegalArgumentException("Cannot select with a predicate vector of type " + type);
+    }
+    long result = ifElseSS(getNativeView(), trueValue.getScalarHandle(), falseValue.getScalarHandle());
+    return new ColumnVector(result);
+  }
+
+  /////////////////////////////////////////////////////////////////////////////
+  // Slice/Split and Concatenate
+  /////////////////////////////////////////////////////////////////////////////
 
   /**
    * Slices a column (including null values) into a set of columns
@@ -1218,47 +934,33 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return A new ColumnVector array with slices from the original ColumnVector
    */
   public ColumnVector[] slice(int... indices) {
-    try (ColumnVector cv = ColumnVector.fromInts(indices)) {
-      return slice(cv);
+    try (DevicePrediction prediction = new DevicePrediction(getDeviceMemorySize(), "slice")) {
+      long[] nativeHandles = slice(this.getNativeView(), indices);
+      ColumnVector[] columnVectors = new ColumnVector[nativeHandles.length];
+      for (int i = 0; i < nativeHandles.length; i++) {
+        columnVectors[i] = new ColumnVector(nativeHandles[i]);
+      }
+      return columnVectors;
     }
   }
 
   /**
-   * Slices a column (including null values) into a set of columns
-   * according to a set of indices. The caller owns the ColumnVectors and is responsible
-   * closing them
-   *
-   * The "slice" function divides part of the input column into multiple intervals
-   * of rows using the indices values and it stores the intervals into the output
-   * columns. Regarding the interval of indices, a pair of values are taken from
-   * the indices array in a consecutive manner. The pair of indices are left-closed
-   * and right-open.
-   *
-   * The pairs of indices in the array are required to comply with the following
-   * conditions:
-   * a, b belongs to Range[0, input column size]
-   * a <= b, where the position of a is less or equal to the position of b.
-   *
-   * Exceptional cases for the indices array are:
-   * When the values in the pair are equal, the function returns an empty column.
-   * When the values in the pair are 'strictly decreasing', the outcome is
-   * undefined.
-   * When any of the values in the pair don't belong to the range[0, input column
-   * size), the outcome is undefined.
-   * When the indices array is empty, an empty vector of columns is returned.
-   *
-   * The caller owns the output ColumnVectors and is responsible for closing them.
-   *
-   * @param indices
-   * @return A new ColumnVector array with slices from the original ColumnVector
+   * Return a subVector from start inclusive to the end of the vector.
+   * @param start the index to start at.
    */
-  public ColumnVector[] slice(ColumnVector indices) {
-    try (DevicePrediction prediction = new DevicePrediction(getDeviceMemorySize(), "slice")) {
-      long[] nativeHandles = cudfSlice(this.getNativeCudfColumnAddress(), indices.getNativeCudfColumnAddress());
-      ColumnVector[] columnVectors = new ColumnVector[nativeHandles.length];
-      IntStream.range(0, nativeHandles.length).forEach(i -> columnVectors[i] = new ColumnVector(nativeHandles[i]));
-      return columnVectors;
-    }
+  public ColumnVector subVector(int start) {
+    return subVector(start, (int)rows);
+  }
+
+  /**
+   * Return a subVector.
+   * @param start the index to start at (inclusive).
+   * @param end the index to end at (exclusive).
+   */
+  public ColumnVector subVector(int start, int end) {
+    ColumnVector [] tmp = slice(start, end);
+    assert tmp.length == 1;
+    return tmp[0];
   }
 
   /**
@@ -1305,57 +1007,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return A new ColumnVector array with slices from the original ColumnVector
    */
   public ColumnVector[] split(int... indices) {
-    try (ColumnVector cv = ColumnVector.fromInts(indices)) {
-      return split(cv);
-    }
-  }
-
-  /**
-   * Splits a column (including null values) into a set of columns
-   * according to a set of indices. The caller owns the ColumnVectors and is responsible
-   * closing them.
-   *
-   * The "split" function divides the input column into multiple intervals
-   * of rows using the splits indices values and it stores the intervals into the
-   * output columns. Regarding the interval of indices, a pair of values are taken
-   * from the indices array in a consecutive manner. The pair of indices are
-   * left-closed and right-open.
-   *
-   * The indices array ('splits') is require to be a monotonic non-decreasing set.
-   * The indices in the array are required to comply with the following conditions:
-   * a, b belongs to Range[0, input column size]
-   * a <= b, where the position of a is less or equal to the position of b.
-   *
-   * The split function will take a pair of indices from the indices array
-   * ('splits') in a consecutive manner. For the first pair, the function will
-   * take the value 0 and the first element of the indices array. For the last pair,
-   * the function will take the last element of the indices array and the size of
-   * the input column.
-   *
-   * Exceptional cases for the indices array are:
-   * When the values in the pair are equal, the function return an empty column.
-   * When the values in the pair are 'strictly decreasing', the outcome is
-   * undefined.
-   * When any of the values in the pair don't belong to the range[0, input column
-   * size), the outcome is undefined.
-   * When the indices array is empty, an empty vector of columns is returned.
-   *
-   * The input columns may have different sizes. The number of
-   * columns must be equal to the number of indices in the array plus one.
-   *
-   * Example:
-   * input:   {10, 12, 14, 16, 18, 20, 22, 24, 26, 28}
-   * splits: {2, 5, 9}
-   * output:  {{10, 12}, {14, 16, 18}, {20, 22, 24, 26}, {28}}
-   *
-   * Note that this is very similar to the output from a PartitionedTable.
-   *
-   * @param indices the indexes to split with
-   * @return A new ColumnVector array with slices from the original ColumnVector
-   */
-  public ColumnVector[] split(ColumnVector indices) {
     try (DevicePrediction prediction = new DevicePrediction(getDeviceMemorySize(), "split")) {
-      long[] nativeHandles = split(this.getNativeCudfColumnAddress(), indices.getNativeCudfColumnAddress());
+      long[] nativeHandles = split(this.getNativeView(), indices);
       ColumnVector[] columnVectors = new ColumnVector[nativeHandles.length];
       for (int i = 0; i < nativeHandles.length; i++) {
         columnVectors[i] = new ColumnVector(nativeHandles[i]);
@@ -1365,110 +1018,340 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Fill the current vector (note this is in-place) with a Scalar value.
-   *
-   * String categories are not supported by cudf::fill. Additionally, Scalar
-   * does not support Strings either.
-   *
-   * @param scalar - Scalar value to replace row with
-   * @throws IllegalArgumentException
+   * Create a new vector of length rows, where each row is filled with the Scalar's
+   * value
+   * @param scalar - Scalar to use to fill rows
+   * @param rows - Number of rows in the new ColumnVector
+   * @return - new ColumnVector
    */
-  // package private for testing
-  void fill(Scalar scalar) throws IllegalArgumentException {
-    assert scalar.getType() == this.getType();
-
-    if (this.getType() == DType.STRING || this.getType() == DType.STRING_CATEGORY){
-      throw new IllegalStateException("DType of STRING, or STRING_CATEGORY not supported");
+  public static ColumnVector fromScalar(Scalar scalar, int rows) {
+    long amount = predictSizeFor(scalar.getType().sizeInBytes, rows, !scalar.isValid());
+    try (DevicePrediction ignored = new DevicePrediction(amount, "fromScalar")) {
+      long columnHandle = fromScalar(scalar.getScalarHandle(), rows);
+      return new ColumnVector(columnHandle);
     }
+  }
 
-    if (this.getRowCount() == 0) {
-      return; // no rows to fill
+  /**
+   * Create a new vector by concatenating multiple columns together.
+   * Note that all columns must have the same type.
+   */
+  public static ColumnVector concatenate(ColumnVector... columns) {
+    if (columns.length < 2) {
+      throw new IllegalArgumentException("Concatenate requires 2 or more columns");
     }
+    long total = 0;
+    for (ColumnVector cv: columns) {
+      total += cv.getDeviceMemorySize();
+    }
+    try (DevicePrediction prediction = new DevicePrediction(total, "concatenate")) {
+      long[] columnHandles = new long[columns.length];
+      for (int i = 0; i < columns.length; ++i) {
+        columnHandles[i] = columns[i].getNativeView();
+      }
+      return new ColumnVector(concatenate(columnHandles));
+    }
+  }
 
-    checkHasDeviceData();
+  /////////////////////////////////////////////////////////////////////////////
+  // DATE/TIME
+  /////////////////////////////////////////////////////////////////////////////
 
-    BufferEncapsulator<DeviceMemoryBuffer> newDeviceData = null;
-    boolean needsCleanup = true;
+  /**
+   * Get year from a timestamp.
+   * <p>
+   * Postconditions - A new vector is allocated with the result. The caller owns the vector and
+   * is responsible for its lifecycle.
+   * @return - A new INT16 vector allocated on the GPU.
+   */
+  public ColumnVector year() {
+    assert type.isTimestamp();
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT16), "year")) {
+      return new ColumnVector(year(offHeap.cudfColumnHandle.getViewHandle()));
+    }
+  }
 
-    try {
-      if (!scalar.isValid()) {
-        if (getNullCount() == getRowCount()) {
-          //current vector has all nulls, and we are trying to set it to null.
-          return;
-        }
-        this.nullCount = rows;
+  /**
+   * Get month from a timestamp.
+   * <p>
+   * Postconditions - A new vector is allocated with the result. The caller owns the vector and
+   * is responsible for its lifecycle.
+   * @return - A new INT16 vector allocated on the GPU.
+   */
+  public ColumnVector month() {
+    assert type.isTimestamp();
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT16), "month")) {
+      return new ColumnVector(month(offHeap.cudfColumnHandle.getViewHandle()));
+    }
+  }
 
-        if (offHeap.getDeviceData().valid == null) {
-          long validitySizeInBytes = BitVectorHelper.getValidityAllocationSizeInBytes(rows);
-          // scalar is null and vector doesn't have a validity mask. Create a validity mask.
-          newDeviceData = new BufferEncapsulator<DeviceMemoryBuffer>(
-              this.offHeap.getDeviceData().data,
-              DeviceMemoryBuffer.allocate(validitySizeInBytes),
-              null);
-          this.offHeap.setDeviceData(newDeviceData);
-        } else {
-          newDeviceData = this.offHeap.getDeviceData();
-        }
+  /**
+   * Get day from a timestamp.
+   * <p>
+   * Postconditions - A new vector is allocated with the result. The caller owns the vector and
+   * is responsible for its lifecycle.
+   * @return - A new INT16 vector allocated on the GPU.
+   */
+  public ColumnVector day() {
+    assert type.isTimestamp();
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT16), "day")) {
+      return new ColumnVector(day(offHeap.cudfColumnHandle.getViewHandle()));
+    }
+  }
 
-        // the buffer encapsulator is the owner of newDeviceData, no need to clear
-        needsCleanup = false;
+  /**
+   * Get hour from a timestamp with time resolution.
+   * <p>
+   * Postconditions - A new vector is allocated with the result. The caller owns the vector and
+   * is responsible for its lifecycle.
+   * @return - A new INT16 vector allocated on the GPU.
+   */
+  public ColumnVector hour() {
+    assert type.hasTimeResolution();
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT16), "hour")) {
+      return new ColumnVector(hour(offHeap.cudfColumnHandle.getViewHandle()));
+    }
+  }
 
-        Cuda.memset(newDeviceData.valid.getAddress(), (byte) 0x00,
-            BitVectorHelper.getValidityLengthInBytes(rows));
+  /**
+   * Get minute from a timestamp with time resolution.
+   * <p>
+   * Postconditions - A new vector is allocated with the result. The caller owns the vector and
+   * is responsible for its lifecycle.
+   * @return - A new INT16 vector allocated on the GPU.
+   */
+  public ColumnVector minute() {
+    assert type.hasTimeResolution();
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT16), "minute")) {
+      return new ColumnVector(minute(offHeap.cudfColumnHandle.getViewHandle()));
+    }
+  }
 
-        // set the validity pointer
-        cudfColumnViewAugmented(
-            this.getNativeCudfColumnAddress(),
-            newDeviceData.data.address,
-            newDeviceData.valid.address,
-            (int) this.getRowCount(),
-            this.getType().nativeId,
-            (int) this.nullCount,
-            this.getTimeUnit().getNativeId());
+  /**
+   * Get second from a timestamp with time resolution.
+   * <p>
+   * Postconditions - A new vector is allocated with the result. The caller owns the vector and
+   * is responsible for its lifecycle.
+   * @return - A new INT16 vector allocated on the GPU.
+   */
+  public ColumnVector second() {
+    assert type.hasTimeResolution();
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT16), "second")) {
+      return new ColumnVector(second(offHeap.cudfColumnHandle.getViewHandle()));
+    }
+  }
 
+  /////////////////////////////////////////////////////////////////////////////
+  // ARITHMETIC
+  /////////////////////////////////////////////////////////////////////////////
+
+  /**
+   * Transform a vector using a custom function.  Be careful this is not
+   * simple to do.  You need to be positive you know what type of data you are
+   * processing and how the data is laid out.  This also only works on fixed
+   * length types.
+   * @param udf This function will be applied to every element in the vector
+   * @param isPtx is the code of the function ptx? true or C/C++ false.
+   */
+  public ColumnVector transform(String udf, boolean isPtx) {
+    return new ColumnVector(transform(getNativeView(), udf, isPtx));
+  }
+
+  /**
+   * Multiple different unary operations. The output is the same type as input.
+   * @param op      the operation to perform
+   * @return the result
+   */
+  public ColumnVector unaryOp(UnaryOp op) {
+    try (DevicePrediction prediction = new DevicePrediction(getDeviceMemorySize(), "unaryOp")) {
+      return new ColumnVector(unaryOperation(offHeap.cudfColumnHandle.getViewHandle(), op.nativeId));
+    }
+  }
+
+  /**
+   * Calculate the sin, output is the same type as input.
+   */
+  public ColumnVector sin() {
+    return unaryOp(UnaryOp.SIN);
+  }
+
+  /**
+   * Calculate the cos, output is the same type as input.
+   */
+  public ColumnVector cos() {
+    return unaryOp(UnaryOp.COS);
+  }
+
+  /**
+   * Calculate the tan, output is the same type as input.
+   */
+  public ColumnVector tan() {
+    return unaryOp(UnaryOp.TAN);
+  }
+
+  /**
+   * Calculate the arcsin, output is the same type as input.
+   */
+  public ColumnVector arcsin() {
+    return unaryOp(UnaryOp.ARCSIN);
+  }
+
+  /**
+   * Calculate the arccos, output is the same type as input.
+   */
+  public ColumnVector arccos() {
+    return unaryOp(UnaryOp.ARCCOS);
+  }
+
+  /**
+   * Calculate the arctan, output is the same type as input.
+   */
+  public ColumnVector arctan() {
+    return unaryOp(UnaryOp.ARCTAN);
+  }
+
+  /**
+   * Calculate the hyperbolic sin, output is the same type as input.
+   */
+  public ColumnVector sinh() {
+    return unaryOp(UnaryOp.SINH);
+  }
+
+  /**
+   * Calculate the hyperbolic cos, output is the same type as input.
+   */
+  public ColumnVector cosh() {
+    return unaryOp(UnaryOp.COSH);
+  }
+
+  /**
+   * Calculate the hyperbolic tan, output is the same type as input.
+   */
+  public ColumnVector tanh() {
+    return unaryOp(UnaryOp.TANH);
+  }
+
+  /**
+   * Calculate the hyperbolic arcsin, output is the same type as input.
+   */
+  public ColumnVector arcsinh() {
+    return unaryOp(UnaryOp.ARCSINH);
+  }
+
+  /**
+   * Calculate the hyperbolic arccos, output is the same type as input.
+   */
+  public ColumnVector arccosh() {
+    return unaryOp(UnaryOp.ARCCOSH);
+  }
+
+  /**
+   * Calculate the hyperbolic arctan, output is the same type as input.
+   */
+  public ColumnVector arctanh() {
+    return unaryOp(UnaryOp.ARCTANH);
+  }
+
+  /**
+   * Calculate the exp, output is the same type as input.
+   */
+  public ColumnVector exp() {
+    return unaryOp(UnaryOp.EXP);
+  }
+
+  /**
+   * Calculate the log, output is the same type as input.
+   */
+  public ColumnVector log() {
+    return unaryOp(UnaryOp.LOG);
+  }
+
+  /**
+   * Calculate the sqrt, output is the same type as input.
+   */
+  public ColumnVector sqrt() {
+    return unaryOp(UnaryOp.SQRT);
+  }
+
+  /**
+   * Calculate the cube root, output is the same type as input.
+   */
+  public ColumnVector cbrt() {
+    return unaryOp(UnaryOp.CBRT);
+  }
+
+  /**
+   * Calculate the ceil, output is the same type as input.
+   */
+  public ColumnVector ceil() {
+    return unaryOp(UnaryOp.CEIL);
+  }
+
+  /**
+   * Calculate the floor, output is the same type as input.
+   */
+  public ColumnVector floor() {
+    return unaryOp(UnaryOp.FLOOR);
+  }
+
+  /**
+   * Calculate the abs, output is the same type as input.
+   */
+  public ColumnVector abs() {
+    return unaryOp(UnaryOp.ABS);
+  }
+
+  /**
+   * Rounds a floating-point argument to the closest integer value, but returns it as a float.
+   */
+  public ColumnVector rint() {
+    return unaryOp(UnaryOp.RINT);
+  }
+
+  /**
+   * invert the bits, output is the same type as input.
+   */
+  public ColumnVector bitInvert() {
+    return unaryOp(UnaryOp.BIT_INVERT);
+  }
+
+  /**
+   * Multiple different binary operations.
+   * @param op      the operation to perform
+   * @param rhs     the rhs of the operation
+   * @param outType the type of output you want.
+   * @return the result
+   */
+  @Override
+  public ColumnVector binaryOp(BinaryOp op, BinaryOperable rhs, DType outType) {
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(outType), "binaryOp")) {
+      if (rhs instanceof ColumnVector) {
+        ColumnVector cvRhs = (ColumnVector) rhs;
+        assert rows == cvRhs.getRowCount();
+        return new ColumnVector(binaryOp(this, cvRhs, op, outType));
+      } else if (rhs instanceof Scalar) {
+        Scalar sRhs = (Scalar) rhs;
+        return new ColumnVector(binaryOp(this, sRhs, op, outType));
       } else {
-        this.nullCount = 0;
-        newDeviceData = this.offHeap.getDeviceData();
-        needsCleanup = false; // the data came from upstream
-
-        // if we are now setting the vector to a non-null, we need to
-        // close out the validity vector
-        if (newDeviceData.valid != null){
-          newDeviceData.valid.close();
-          newDeviceData = new BufferEncapsulator<DeviceMemoryBuffer>(
-              newDeviceData.data, null, null);
-          this.offHeap.setDeviceData(newDeviceData);
-        }
-
-        // set the validity pointer
-        cudfColumnViewAugmented(
-            this.getNativeCudfColumnAddress(),
-            newDeviceData.data.address,
-            0,
-            (int) this.getRowCount(),
-            this.getType().nativeId,
-            (int) nullCount,
-            this.getTimeUnit().getNativeId());
-
-        Cudf.fill(this, scalar);
-      }
-
-      // at this stage, host offHeap is no longer meaningful
-      // if we had hostData, reset it with a fresh copy from device
-      if (this.offHeap.getHostData() != null) {
-        this.offHeap.getHostData().close();
-        this.offHeap.setHostData(null);
-        this.ensureOnHost();
-      }
-    } finally {
-      if (needsCleanup) {
-        if (newDeviceData != null) {
-          // we allocated a bit vector, but we errored out
-          newDeviceData.valid.close();
-        }
+        throw new IllegalArgumentException(rhs.getClass() + " is not supported as a binary op" +
+            " with ColumnVector");
       }
     }
   }
+
+  static long binaryOp(ColumnVector lhs, ColumnVector rhs, BinaryOp op, DType outputType) {
+    return binaryOpVV(lhs.getNativeView(), rhs.getNativeView(),
+        op.nativeId, outputType.nativeId);
+  }
+
+  static long binaryOp(ColumnVector lhs, Scalar rhs, BinaryOp op, DType outputType) {
+    return binaryOpVS(lhs.getNativeView(), rhs.getScalarHandle(),
+        op.nativeId, outputType.nativeId);
+  }
+
+  /////////////////////////////////////////////////////////////////////////////
+  // AGGREGATION
+  /////////////////////////////////////////////////////////////////////////////
 
   /**
    * Computes the sum of all values in the column, returning a scalar
@@ -1551,15 +1434,61 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Returns the arithmetic mean of all values in the column, returning a
+   * FLOAT64 scalar unless the column type is FLOAT32 then a FLOAT32 scalar is returned.
+   * Null values are skipped.
+   */
+  public Scalar mean() {
+    DType outType = DType.FLOAT64;
+    if (type == DType.FLOAT32) {
+      outType = type;
+    }
+    return mean(outType);
+  }
+
+  /**
+   * Returns the arithmetic mean of all values in the column, returning a
+   * scalar of the specified type.
+   * Null values are skipped.
+   */
+  public Scalar mean(DType outType) {
+    return reduce(ReductionOp.MEAN, outType);
+  }
+
+  /**
+   * Returns the variance of all values in the column, returning a
+   * FLOAT64 scalar unless the column type is FLOAT32 then a FLOAT32 scalar is returned.
+   * Null values are skipped.
+   */
+  public Scalar variance() {
+    DType outType = DType.FLOAT64;
+    if (type == DType.FLOAT32) {
+      outType = type;
+    }
+    return variance(outType);
+  }
+
+  /**
+   * Returns the variance of all values in the column, returning a
+   * scalar of the specified type.
+   * Null values are skipped.
+   */
+  public Scalar variance(DType outType) {
+    return reduce(ReductionOp.VAR, outType);
+  }
+
+  /**
    * Returns the sample standard deviation of all values in the column,
    * returning a FLOAT64 scalar unless the column type is FLOAT32 then
-   * a FLOAT32 scalaris returned. Null's are not counted as an element
+   * a FLOAT32 scalar is returned. Nulls are not counted as an element
    * of the column when calculating the standard deviation.
    */
   public Scalar standardDeviation() {
-    if(type != DType.FLOAT32)
-      standardDeviation(DType.FLOAT64);
-    return standardDeviation(type);
+    DType outType = DType.FLOAT64;
+    if (type == DType.FLOAT32) {
+      outType = type;
+    }
+    return standardDeviation(outType);
   }
 
   /**
@@ -1569,6 +1498,44 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public Scalar standardDeviation(DType outType) {
     return reduce(ReductionOp.STD, outType);
+  }
+
+  /**
+   * Returns a boolean scalar that is true if any of the elements in
+   * the column are true or non-zero otherwise false.
+   * Null values are skipped.
+   */
+  public Scalar any() {
+    return any(DType.BOOL8);
+  }
+
+  /**
+   * Returns a scalar is true or 1, depending on the specified type,
+   * if any of the elements in the column are true or non-zero
+   * otherwise false or 0.
+   * Null values are skipped.
+   */
+  public Scalar any(DType outType) {
+    return reduce(ReductionOp.ANY, outType);
+  }
+
+  /**
+   * Returns a boolean scalar that is true if all of the elements in
+   * the column are true or non-zero otherwise false.
+   * Null values are skipped.
+   */
+  public Scalar all() {
+    return all(DType.BOOL8);
+  }
+
+  /**
+   * Returns a scalar is true or 1, depending on the specified type,
+   * if all of the elements in the column are true or non-zero
+   * otherwise false or 0.
+   * Null values are skipped.
+   */
+  public Scalar all(DType outType) {
+    return reduce(ReductionOp.ALL, outType);
   }
 
   /**
@@ -1589,7 +1556,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * Computes the reduction of the values in all rows of a column.
    * Overflows in reductions are not detected. Specifying a higher precision
    * output type may prevent overflow. Only the MIN and MAX ops are
-   * supported for reduction of non-arithmetic types (DATE32, TIMESTAMP...)
+   * supported for reduction of non-arithmetic types (TIMESTAMP...)
    * The null values are skipped for the operation.
    * @param op      The reduction operation to perform
    * @param outType The type of scalar value to return
@@ -1598,15 +1565,43 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * {@link Scalar#isValid()} method of the result will return false.
    */
   public Scalar reduce(ReductionOp op, DType outType) {
-    return Cudf.reduce(this, op, outType);
+    return new Scalar(outType, reduce(offHeap.cudfColumnHandle.getViewHandle(), op.nativeId, outType.nativeId));
+  }
+
+  /**
+   * Calculate the quantile of this ColumnVector
+   * @param method   the method used to calculate the quantile
+   * @param quantile the quantile value [0,1]
+   * @return the quantile as double. The type can be changed in future
+   */
+  public Scalar quantile(QuantileMethod method, double quantile) {
+    return new Scalar(type, quantile(getNativeView(), method.nativeId, quantile));
+  }
+
+  /**
+   * This function aggregates values in a window around each element i of the input
+   * column. Please refer to WindowsOptions for various options that can be passed.
+   * @param op the operation to perform.
+   * @param options various window function arguments.
+   * @return Column containing aggregate function result.
+   */
+  public ColumnVector rollingWindow(AggregateOp op, WindowOptions options) {
+    return new ColumnVector(
+        rollingWindow(this.getNativeView(),
+            options.getMinPeriods(),
+            op.nativeId,
+            options.getPreceding(),
+            options.getFollowing(),
+            options.getPrecedingCol() == null ? 0 : options.getPrecedingCol().getNativeView(),
+            options.getFollowingCol() == null ? 0 : options.getFollowingCol().getNativeView()));
   }
 
   /////////////////////////////////////////////////////////////////////////////
   // LOGICAL
   /////////////////////////////////////////////////////////////////////////////
- 
+
   /**
-   * Returns a vector of the logical `not` of each value in the input 
+   * Returns a vector of the logical `not` of each value in the input
    * column (this)
    */
   public ColumnVector not() {
@@ -1614,43 +1609,65 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /////////////////////////////////////////////////////////////////////////////
-  // TYPE CAST
+  // SEARCH
   /////////////////////////////////////////////////////////////////////////////
 
-  static long predictSizeFor(long baseSize, long rows, boolean hasNulls) {
-    long total = baseSize * rows;
-    if (hasNulls) {
-      total += BitVectorHelper.getValidityAllocationSizeInBytes(rows);
-    }
-    return total;
+  /**
+   * Find if the `needle` is present in this col
+   *
+   * example:
+   *
+   *  Single Column:
+   *      idx      0   1   2   3   4
+   *      col = { 10, 20, 20, 30, 50 }
+   *  Scalar:
+   *   value = { 20 }
+   *   result = true
+   *
+   * @param needle
+   * @return true if needle is present else false
+   */
+  public boolean contains(Scalar needle) {
+    return containsScalar(offHeap.cudfColumnHandle.getViewHandle(), needle.getScalarHandle());
   }
 
-  long predictSizeFor(DType type) {
-    return predictSizeFor(type.sizeInBytes, rows, hasNulls());
+  /**
+   * Returns a new ColumnVector of {@link DType#BOOL8} elements containing true if the corresponding
+   * entry in haystack is contained in needles and false if it is not. The caller will be responsible
+   * for the lifecycle of the new vector.
+   *
+   * example:
+   *
+   *   haystack = { 10, 20, 30, 40, 50 }
+   *   needles  = { 20, 40, 60, 80 }
+   *
+   *   result = { false, true, false, true, false }
+   *
+   * @param needles
+   * @return A new ColumnVector of type {@link DType#BOOL8}
+   */
+  public ColumnVector contains(ColumnVector needles) {
+    return new ColumnVector(containsVector(offHeap.cudfColumnHandle.getViewHandle(), needles.offHeap.cudfColumnHandle.getViewHandle()));
   }
 
-  private long predictSizeForRowMult(long baseSize, double rowMult) {
-    long rowGuess = (long)(rows * rowMult);
-    return predictSizeFor(baseSize, rowGuess, hasNulls());
-  }
+  /////////////////////////////////////////////////////////////////////////////
+  // TYPE CAST
+  /////////////////////////////////////////////////////////////////////////////
 
   /**
    * Generic method to cast ColumnVector
    * When casting from a Date, Timestamp, or Boolean to a numerical type the underlying numerical
-   * representationof the data will be used for the cast. In the cast of Timestamp this means the
-   * TimeUnit is ignored and lost.
-   * When casting between Date32, Date64, and Timestamp the units of time are used.
+   * representation of the data will be used for the cast.
    * @param type type of the resulting ColumnVector
-   * @param unit the unit of time, really only applicable for TIMESTAMP.
    * @return A new vector allocated on the GPU
    */
-  public ColumnVector castTo(DType type, TimeUnit unit) {
-    if (this.type == type && this.tsTimeUnit == unit) {
+  public ColumnVector castTo(DType type) {
+    if (this.type == type) {
       // Optimization
       return incRefCount();
     }
     try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(type), "cast")) {
-      return new ColumnVector(Cudf.gdfCast(this, type, unit));
+      return new ColumnVector(castTo(offHeap.cudfColumnHandle.getViewHandle(), type.nativeId));
     }
   }
 
@@ -1662,7 +1679,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return A new vector allocated on the GPU
    */
   public ColumnVector asBytes() {
-    return castTo(DType.INT8, TimeUnit.NONE);
+    return castTo(DType.INT8);
   }
 
   /**
@@ -1673,7 +1690,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return A new vector allocated on the GPU
    */
   public ColumnVector asShorts() {
-    return castTo(DType.INT16, TimeUnit.NONE);
+    return castTo(DType.INT16);
   }
 
   /**
@@ -1684,7 +1701,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return A new vector allocated on the GPU
    */
   public ColumnVector asInts() {
-    return castTo(DType.INT32, TimeUnit.NONE);
+    return castTo(DType.INT32);
   }
 
   /**
@@ -1695,7 +1712,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return A new vector allocated on the GPU
    */
   public ColumnVector asLongs() {
-    return castTo(DType.INT64, TimeUnit.NONE);
+    return castTo(DType.INT64);
   }
 
   /**
@@ -1706,7 +1723,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return A new vector allocated on the GPU
    */
   public ColumnVector asFloats() {
-    return castTo(DType.FLOAT32, TimeUnit.NONE);
+    return castTo(DType.FLOAT32);
   }
 
   /**
@@ -1717,78 +1734,128 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return A new vector allocated on the GPU
    */
   public ColumnVector asDoubles() {
-    return castTo(DType.FLOAT64, TimeUnit.NONE);
+    return castTo(DType.FLOAT64);
   }
 
   /**
-   * Cast to Date32 - ColumnVector
-   * This method takes the value provided by the ColumnVector and casts to date32
+   * Cast to TIMESTAMP_DAYS - ColumnVector
+   * This method takes the value provided by the ColumnVector and casts to TIMESTAMP_DAYS
    * @return A new vector allocated on the GPU
    */
-  public ColumnVector asDate32() {
-    return castTo(DType.DATE32, TimeUnit.NONE);
-  }
-
-  /**
-   * Cast to Date64 - ColumnVector
-   * This method takes the value provided by the ColumnVector and casts to date64
-   * @return A new vector allocated on the GPU
-   */
-  public ColumnVector asDate64() {
-    return castTo(DType.DATE64, TimeUnit.NONE);
-  }
-
-  /**
-   * Cast to Timestamp - ColumnVector
-   * This method takes the value provided by the ColumnVectoor and casts to timestamp. Timestamp
-   * casting usually requires a time unit to be given as an argument, this defaults the
-   * argument to millisecond.
-   * @return A new vector allocoated on the GPU
-   */
-  public ColumnVector asTimestamp() {
-    return asTimestamp(TimeUnit.MILLISECONDS);
-  }
-
-  /**
-   * Cast to Timestamp - ColumnVector
-   * This method takes the value provided by the ColumnVector and casts to timestamp.
-   * When used to convert strings to timestamp, "%Y-%m-%dT%H:%M:%SZ%f" is the format string used to
-   * parse the time -- see NVString documentation for symbol meaning and alternative format options.
-   * https://github.com/rapidsai/custrings/blob/branch-0.10/docs/source/datetime.md
-   * Strings that fail to parse will default to 0, corresponding to 1970-01-01 00:00:00.000.
-   * @param unit time unit to parse the timestamp into.
-   * @return A new vector allocated on the GPU
-   */
-  public ColumnVector asTimestamp(TimeUnit unit) {
-    if (type == DType.STRING || type == DType.STRING_CATEGORY) {
-      return asTimestamp(unit, "%Y-%m-%dT%H:%M:%SZ%f");
+  public ColumnVector asTimestampDays() {
+    if (type == DType.STRING) {
+      return asTimestamp(DType.TIMESTAMP_DAYS, "%Y-%m-%dT%H:%M:%SZ%f");
     }
-    return castTo(DType.TIMESTAMP, unit);
+    return castTo(DType.TIMESTAMP_DAYS);
   }
 
   /**
-   * Native method to parse and convert a NVString column vector to unix timestamp. A unix
-   * timestamp is a long value representing how many units since 1970-01-01 00:00:00.000 in either
-   * positive or negative direction. This mirrors the functionality spark sql's to_unix_timestamp.
-   * Strings that fail to parse will default to 0. Supported time units are second, millisecond,
-   * microsecond, and nanosecond. Larger time units for column vectors are not supported yet in cudf.
-   * @param cudfColumnHandle native handle of the gdf_column being operated on.
-   * @param unit integer native ID of the time unit to parse the timestamp into.
-   * @param format strptime format specifier string of the timestamp. Used to parse and convert
-   *               the timestamp with. Supports %Y,%y,%m,%d,%H,%I,%p,%M,%S,%f,%z format specifiers.
-   *               See https://github.com/rapidsai/custrings/blob/branch-0.10/docs/source/datetime.md
-   *               for full parsing format specification and documentation.
-   * @return native handle of the resulting cudf column, used to construct the Java column vector
-   *         by the timestampToLong method.
+   * Cast to TIMESTAMP_DAYS - ColumnVector
+   * This method takes the string value provided by the ColumnVector and casts to TIMESTAMP_DAYS
+   * @param format timestamp string format specifier, ignored if the column type is not string
+   * @return A new vector allocated on the GPU
    */
-  private static native long stringTimestampToTimestamp(long cudfColumnHandle, int unit, String format);
+  public ColumnVector asTimestampDays(String format) {
+    assert type == DType.STRING : "A column of type string is required when using a format string";
+    return asTimestamp(DType.TIMESTAMP_DAYS, format);
+  }
 
   /**
-   * Wrap static native string timestamp to long conversion method. Retrieves the column vector's
-   * cudf native handle and uses it to invoke the native function that calls NVStrings'
-   * timestamp2long method. Strings that fail to parse will default to 0, corresponding
+   * Cast to TIMESTAMP_SECONDS - ColumnVector
+   * This method takes the value provided by the ColumnVector and casts to TIMESTAMP_SECONDS
+   * @return A new vector allocated on the GPU
+   */
+  public ColumnVector asTimestampSeconds() {
+    if (type == DType.STRING) {
+      return asTimestamp(DType.TIMESTAMP_SECONDS, "%Y-%m-%dT%H:%M:%SZ%f");
+    }
+    return castTo(DType.TIMESTAMP_SECONDS);
+  }
+
+  /**
+   * Cast to TIMESTAMP_SECONDS - ColumnVector
+   * This method takes the string value provided by the ColumnVector and casts to TIMESTAMP_SECONDS
+   * @param format timestamp string format specifier, ignored if the column type is not string
+   * @return A new vector allocated on the GPU
+   */
+  public ColumnVector asTimestampSeconds(String format) {
+    assert type == DType.STRING : "A column of type string is required when using a format string";
+    return asTimestamp(DType.TIMESTAMP_SECONDS, format);
+  }
+
+  /**
+   * Cast to TIMESTAMP_MICROSECONDS - ColumnVector
+   * This method takes the value provided by the ColumnVector and casts to TIMESTAMP_MICROSECONDS
+   * @return A new vector allocated on the GPU
+   */
+  public ColumnVector asTimestampMicroseconds() {
+    if (type == DType.STRING) {
+      return asTimestamp(DType.TIMESTAMP_MICROSECONDS, "%Y-%m-%dT%H:%M:%SZ%f");
+    }
+    return castTo(DType.TIMESTAMP_MICROSECONDS);
+  }
+
+  /**
+   * Cast to TIMESTAMP_MICROSECONDS - ColumnVector
+   * This method takes the string value provided by the ColumnVector and casts to TIMESTAMP_MICROSECONDS
+   * @param format timestamp string format specifier, ignored if the column type is not string
+   * @return A new vector allocated on the GPU
+   */
+  public ColumnVector asTimestampMicroseconds(String format) {
+    assert type == DType.STRING : "A column of type string is required when using a format string";
+    return asTimestamp(DType.TIMESTAMP_MICROSECONDS, format);
+  }
+
+  /**
+   * Cast to TIMESTAMP_MILLISECONDS - ColumnVector
+   * This method takes the value provided by the ColumnVector and casts to TIMESTAMP_MILLISECONDS.
+   * @return A new vector allocated on the GPU
+   */
+  public ColumnVector asTimestampMilliseconds() {
+    if (type == DType.STRING) {
+      return asTimestamp(DType.TIMESTAMP_MILLISECONDS, "%Y-%m-%dT%H:%M:%SZ%f");
+    }
+    return castTo(DType.TIMESTAMP_MILLISECONDS);
+  }
+
+  /**
+   * Cast to TIMESTAMP_MILLISECONDS - ColumnVector
+   * This method takes the string value provided by the ColumnVector and casts to TIMESTAMP_MILLISECONDS.
+   * @param format timestamp string format specifier, ignored if the column type is not string
+   * @return A new vector allocated on the GPU
+   */
+  public ColumnVector asTimestampMilliseconds(String format) {
+    assert type == DType.STRING : "A column of type string is required when using a format string";
+    return asTimestamp(DType.TIMESTAMP_MILLISECONDS, format);
+  }
+
+  /**
+   * Cast to TIMESTAMP_NANOSECONDS - ColumnVector
+   * This method takes the value provided by the ColumnVector and casts to TIMESTAMP_NANOSECONDS.
+   * @return A new vector allocated on the GPU
+   */
+  public ColumnVector asTimestampNanoseconds() {
+    if (type == DType.STRING) {
+      return asTimestamp(DType.TIMESTAMP_NANOSECONDS, "%Y-%m-%dT%H:%M:%SZ%f");
+    }
+    return castTo(DType.TIMESTAMP_NANOSECONDS);
+  }
+
+  /**
+   * Cast to TIMESTAMP_NANOSECONDS - ColumnVector
+   * This method takes the string value provided by the ColumnVector and casts to TIMESTAMP_NANOSECONDS.
+   * @param format timestamp string format specifier, ignored if the column type is not string
+   * @return A new vector allocated on the GPU
+   */
+  public ColumnVector asTimestampNanoseconds(String format) {
+    assert type == DType.STRING : "A column of type string is required when using a format string";
+    return asTimestamp(DType.TIMESTAMP_NANOSECONDS, format);
+  }
+
+  /**
+   * Parse a string to a timestamp. Strings that fail to parse will default to 0, corresponding
    * to 1970-01-01 00:00:00.000.
-   * @param unit time unit to parse the timestamp into.
+   * @param timestampType timestamp DType that includes the time unit to parse the timestamp into.
    * @param format strptime format specifier string of the timestamp. Used to parse and convert
    *               the timestamp with. Supports %Y,%y,%m,%d,%H,%I,%p,%M,%S,%f,%z format specifiers.
    *               See https://github.com/rapidsai/custrings/blob/branch-0.10/docs/source/datetime.md
@@ -1796,17 +1863,16 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return A new ColumnVector containing the long representations of the timestamps in the
    *         original column vector.
    */
-  public ColumnVector asTimestamp(TimeUnit unit, String format) {
-    assert type == DType.STRING  || type == DType.STRING_CATEGORY : "A column of type string " +
-                                  "is required for .timestampToLong() operation";
+  public ColumnVector asTimestamp(DType timestampType, String format) {
+    assert type == DType.STRING : "A column of type string " +
+                                  "is required for .to_timestamp() operation";
     assert format != null : "Format string may not be NULL";
-    if (unit == TimeUnit.NONE) {
-      unit = TimeUnit.MILLISECONDS;
-    }
+    assert timestampType.isTimestamp() : "unsupported conversion to non-timestamp DType";
+
     // Prediction could be better, but probably okay for now
     try (DevicePrediction prediction = new DevicePrediction(predictSizeForRowMult(format.length(), 2), "asTimestamp")) {
-      return new ColumnVector(stringTimestampToTimestamp(getNativeCudfColumnAddress(),
-          unit.getNativeId(), format));
+      return new ColumnVector(stringTimestampToTimestamp(getNativeView(),
+          timestampType.nativeId, format));
     }
   }
 
@@ -1815,224 +1881,378 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return A new vector allocated on the GPU.
    */
   public ColumnVector asStrings() {
-    return castTo(DType.STRING, TimeUnit.NONE);
-  }
-
-  /**
-   * Cast to String Categories.
-   * @return A new vector allocated on the GPU.
-   */
-  public ColumnVector asStringCategories() {
-    return castTo(DType.STRING_CATEGORY, TimeUnit.NONE);
+    return castTo(DType.STRING);
   }
 
   /////////////////////////////////////////////////////////////////////////////
-  // STRING CATEGORY METHODS
+  // STRINGS
   /////////////////////////////////////////////////////////////////////////////
 
   /**
-   * Returns the category index of the specified string scalar.
-   * @param s a {@link Scalar} of type {@link DType#STRING} to lookup
-   * @return an integer {@link Scalar} containing the category index or -1
-   * if the string was not found in the category.
+   * Convert a string to upper case.
    */
-  public Scalar getCategoryIndex(Scalar s) {
-    if (s.getType() != DType.STRING) {
-      throw new IllegalArgumentException("scalar must be a string type");
+  public ColumnVector upper() {
+    assert type == DType.STRING : "A column of type string is required for .upper() operation";
+    try (DevicePrediction prediction = new DevicePrediction(getDeviceMemorySize(), "upper")) {
+      return new ColumnVector(upperStrings(getNativeView()));
     }
-    return Scalar.fromInt(Cudf.getCategoryIndex(this, s));
   }
 
   /**
-   * Returns the value bounds of category index of the specified string scalar.
-   * @param s a {@link Scalar} of type {@link DType#STRING} to lookup
-   * @return a two-entry array containing the (lower, upper) category index
-   *         bounds of the specified scalar. If the two array entries are equal
-   *         then the specified scalar was present in the category.
+   * Convert a string to lower case.
    */
-  public int[] getCategoryBounds(Scalar s) {
-    if (s.getType() != DType.STRING) {
-      throw new IllegalArgumentException("scalar must be a string type");
+  public ColumnVector lower() {
+    assert type == DType.STRING : "A column of type string is required for .lower() operation";
+    try (DevicePrediction prediction = new DevicePrediction(getDeviceMemorySize(), "lower")) {
+      return new ColumnVector(lowerStrings(getNativeView()));
     }
-    return Cudf.getCategoryBounds(this, s);
   }
+
+  /**
+   * Concatenate columns of strings together, combining a corresponding row from each column
+   * into a single string row of a new column with no separator string inserted between each
+   * combined string and maintaining null values in combined rows.
+   * @param columns indefinite number of columns containing strings.
+   * @return A new java column vector containing the concatenated strings.
+   */
+  public ColumnVector stringConcatenate(ColumnVector... columns) {
+    try (Scalar emptyString = Scalar.fromString("");
+         Scalar nullString = Scalar.fromString(null)) {
+      return stringConcatenate(emptyString, nullString, columns);
+    }
+  }
+
+  /**
+   * Concatenate columns of strings together, combining a corresponding row from each column into
+   * a single string row of a new column.
+   * @param separator string scalar inserted between each string being merged.
+   * @param narep string scalar indicating null behavior. If set to null and any string in the row
+   *              is null the resulting string will be null. If not null, null values in any column
+   *              will be replaced by the specified string.
+   * @param columns indefinite number of columns containing strings, must be more than 2 columns
+   * @return A new java column vector containing the concatenated strings.
+   */
+  public static ColumnVector stringConcatenate(Scalar separator, Scalar narep, ColumnVector... columns) {
+    assert columns.length >= 2 : ".stringConcatenate() operation requires at least 2 columns";
+    assert separator != null : "separator scalar provided may not be null";
+    assert separator.getType() == DType.STRING : "separator scalar must be a string scalar";
+    assert separator.isValid() == true : "separator string scalar may not contain a null value";
+    assert narep != null : "narep scalar provided may not be null";
+    assert narep.getType() == DType.STRING : "narep scalar must be a string scalar";
+    long size = columns[0].getRowCount();
+    long[] column_views = new long[columns.length];
+    long deviceMemorySizeEstimate = 0;
+
+    for(int i = 0; i < columns.length; i++) {
+      assert columns[i] != null : "Column vectors passed may not be null";
+      assert columns[i].getType() == DType.STRING : "All columns must be of type string for .cat() operation";
+      assert columns[i].getRowCount() == size : "Row count mismatch, all columns must have the same number of rows";
+      column_views[i] = columns[i].getNativeView();
+      deviceMemorySizeEstimate += columns[i].getDeviceMemorySize();
+    }
+
+    try (DevicePrediction prediction = new DevicePrediction(deviceMemorySizeEstimate, "stringConcatenate")) {
+      return new ColumnVector(stringConcatenation(column_views, separator.getScalarHandle(), narep.getScalarHandle()));
+    }
+  }
+
+  /**
+   * Locates the starting index of the first instance of the given string in each row of a column.
+   * 0 indexing, returns -1 if the substring is not found. Overloading stringLocate to support
+   * default values for start (0) and end index.
+   * @param substring scalar containing the string to locate within each row.
+   */
+  public ColumnVector stringLocate(Scalar substring) {
+    return stringLocate(substring, 0);
+  }
+
+  /**
+   * Locates the starting index of the first instance of the given string in each row of a column.
+   * 0 indexing, returns -1 if the substring is not found. Overloading stringLocate to support
+   * default value for end index (-1, the end of each string).
+   * @param substring scalar containing the string to locate within each row.
+   * @param start character index to start the search from (inclusive).
+   */
+  public ColumnVector stringLocate(Scalar substring, int start) {
+    return stringLocate(substring, start, -1);
+  }
+
+  /**
+   * Locates the starting index of the first instance of the given string in each row of a column.
+   * 0 indexing, returns -1 if the substring is not found. Can be be configured to start or end
+   * the search mid string.
+   * @param substring scalar containing the string scalar to locate within each row.
+   * @param start character index to start the search from (inclusive).
+   * @param end character index to end the search on (exclusive).
+   */
+  public ColumnVector stringLocate(Scalar substring, int start, int end) {
+    assert type == DType.STRING : "column type must be a String";
+    assert substring != null : "target string may not be null";
+    assert substring.getType() == DType.STRING : "substring scalar must be a string scalar";
+    assert substring.isValid() == true : "substring string scalar may not contain a null value";
+    assert substring.getJavaString().isEmpty() == false : "substring string scalar may not be empty";
+    assert start >= 0 : "start index must be a positive value";
+    assert end >= start || end == -1 : "end index must be -1 or >= the start index";
+
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT32), "stringLocate")) {
+      return new ColumnVector(substringLocate(getNativeView(), substring.getScalarHandle(),
+          start, end));
+    }
+  }
+
+  /**
+   * Checks if each string in a column starts with a specified comparison string, resulting in a
+   * parallel column of the boolean results.
+   * @param pattern scalar containing the string being searched for at the beginning of the column's strings.
+   * @return A new java column vector containing the boolean results.
+   */
+  public ColumnVector startsWith(Scalar pattern) {
+    assert type == DType.STRING : "column type must be a String";
+    assert pattern != null : "pattern scalar may not be null";
+    assert pattern.getType() == DType.STRING : "pattern scalar must be a string scalar";
+    assert pattern.isValid() == true : "pattern string scalar may not contain a null value";
+    assert pattern.getJavaString().isEmpty() == false : "pattern string scalar may not be empty";
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.BOOL8), "startsWith")) {
+      return new ColumnVector(stringStartWith(getNativeView(), pattern.getScalarHandle()));
+    }
+  }
+
+  /**
+   * Checks if each string in a column ends with a specified comparison string, resulting in a
+   * parallel column of the boolean results.
+   * @param pattern scalar containing the string being searched for at the end of the column's strings.
+   * @return A new java column vector containing the boolean results.
+   */
+  public ColumnVector endsWith(Scalar pattern) {
+    assert type == DType.STRING : "column type must be a String";
+    assert pattern != null : "pattern scalar may not be null";
+    assert pattern.getType() == DType.STRING : "pattern scalar must be a string scalar";
+    assert pattern.isValid() == true : "pattern string scalar may not contain a null value";
+    assert pattern.getJavaString().isEmpty() == false : "pattern string scalar may not be empty";
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.BOOL8), "endsWith")) {
+      return new ColumnVector(stringEndWith(getNativeView(), pattern.getScalarHandle()));
+    }
+  }
+
 
   /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS
   /////////////////////////////////////////////////////////////////////////////
 
   /**
-   * USE WITH CAUTION: This method exposes the address of the native cudf_column.  This allows
+   * USE WITH CAUTION: This method exposes the address of the native cudf::column_view.  This allows
    * writing custom kernels or other cuda operations on the data.  DO NOT close this column
-   * vector until you are completely done using the native column.  DO NOT modify the column in
+   * vector until you are completely done using the native column_view.  DO NOT modify the column in
    * any way.  This should be treated as a read only data structure. This API is unstable as
    * the underlying C/C++ API is still not stabilized.  If the underlying data structure
    * is renamed this API may be replaced.  The underlying data structure can change from release
    * to release (it is not stable yet) so be sure that your native code is complied against the
    * exact same version of libcudf as this is released for.
    */
-  public final long getNativeCudfColumnAddress() {
-    if (offHeap.nativeCudfColumnHandle == 0) {
+  final long getNativeView() {
+    if (offHeap.cudfColumnHandle == null) {
+      //Data must have been dropped from device recreate it on device
       assert rows <= Integer.MAX_VALUE;
-      assert getNullCount() <= Integer.MAX_VALUE;
-      checkHasDeviceData();
-      offHeap.nativeCudfColumnHandle = allocateCudfColumn();
-      long dataAddr = 0;
-      long validAddr = 0;
-      if (rows != 0) {
-        dataAddr = offHeap.getDeviceData().data.getAddress();
-        if (offHeap.getDeviceData().valid != null) {
-          validAddr = offHeap.getDeviceData().valid.getAddress();
-        }
-      }
-      cudfColumnViewAugmented(offHeap.nativeCudfColumnHandle,
-          dataAddr, validAddr,
-          (int) rows, type.nativeId,
-          (int) getNullCount(), tsTimeUnit.getNativeId());
+      ensureOnDevice();
     }
-    return offHeap.nativeCudfColumnHandle;
+    return offHeap.cudfColumnHandle.getViewHandle();
   }
 
-  private static native long allocateCudfColumn() throws CudfException;
-
-  private native static long cudfByteCount(long cudfColumnHandle) throws CudfException;
+  /**
+   * Native method to parse and convert a NVString column vector to unix timestamp. A unix
+   * timestamp is a long value representing how many units since 1970-01-01 00:00:00.000 in either
+   * positive or negative direction. This mirrors the functionality spark sql's to_unix_timestamp.
+   * Strings that fail to parse will default to 0. Supported time units are second, millisecond,
+   * microsecond, and nanosecond. Larger time units for column vectors are not supported yet in cudf.
+   * @param unit integer native ID of the time unit to parse the timestamp into.
+   * @param format strptime format specifier string of the timestamp. Used to parse and convert
+   *               the timestamp with. Supports %Y,%y,%m,%d,%H,%I,%p,%M,%S,%f,%z format specifiers.
+   *               See https://github.com/rapidsai/custrings/blob/branch-0.10/docs/source/datetime.md
+   *               for full parsing format specification and documentation.
+   * @return native handle of the resulting cudf column, used to construct the Java column vector
+   *         by the timestampToLong method.
+   */
+  private static native long stringTimestampToTimestamp(long viewHandle, int unit, String format);
 
   /**
-   * Set a CuDF column given data and validity bitmask pointers, size, and datatype, and
-   * count of null (non-valid) elements
-   * @param cudfColumnHandle native handle of gdf_column.
-   * @param dataPtr          Pointer to data.
-   * @param valid            Pointer to validity bitmask for the data.
-   * @param size             Number of rows in the column.
-   * @param dtype            Data type of the column.
-   * @param null_count       The number of non-valid elements in the validity bitmask.
-   * @param timeUnit         {@link TimeUnit}
+   * Native method for locating the starting index of the first instance of a given substring
+   * in each string in the column. 0 indexing, returns -1 if the substring is not found. Can be
+   * be configured to start or end the search mid string.
+   * @param columnView native handle of the cudf::column_view containing strings being operated on.
+   * @param substringScalar string scalar handle containing the string to locate within each row.
+   * @param start character index to start the search from (inclusive).
+   * @param end character index to end the search on (exclusive).
    */
-  private static native void cudfColumnViewAugmented(long cudfColumnHandle, long dataPtr,
-                                                     long valid,
-                                                     int size, int dtype, int null_count,
-                                                     int timeUnit) throws CudfException;
-
-  private native long[] cudfSlice(long nativeHandle, long indices) throws CudfException;
-
-  private native long[] split(long nativeHandle, long indices) throws CudfException;
-
-  private native long findAndReplaceAll(long valuesHandle, long replaceHandle, long myself) throws CudfException;
+  private static native long substringLocate(long columnView, long substringScalar, int start, int end);
 
   /**
-   * Translate the host side string representation of strings into the device side representation
-   * and populate the cudfColumn with it.
-   * @param cudfColumnHandle native handle of gdf_column.
-   * @param dataPtr          Pointer to string data either on the host or the device.
-   * @param dataPtrOnHost    true if dataPtr is on the host. false if it is on the device.
-   * @param hostOffsetsPtr   Pointer to offsets data on the host.
-   * @param resetOffsetsToZero true if the offsets should be reset to start at 0.
-   * @param deviceValidPtr   Pointer to validity bitmask on the device.
-   * @param deviceOutputDataPtr Pointer to where the int category data will be stored for
-   *                            STRING_CATEGORY. Should be 0 for STRING.
-   * @param numRows          Number of rows in the column.
-   * @param dtype            Data type of the column. In this case must be STRING or
-   *                         STRING_CATEGORY
-   * @param nullCount        The number of non-valid elements in the validity bitmask.
+   * Native method for checking if strings in a column starts with a specified comparison string.
+   * @param cudfViewHandle native handle of the cudf::column_view being operated on.
+   * @param compString handle of scalar containing the string being searched for at the beginning
+  of each string in the column.
+   * @return native handle of the resulting cudf column containing the boolean results.
    */
-  private static native void cudfColumnViewStrings(long cudfColumnHandle, long dataPtr,
-                                                   boolean dataPtrOnHost, long hostOffsetsPtr,
-                                                   boolean resetOffsetsToZero, long deviceValidPtr,
-                                                   long deviceOutputDataPtr,
-                                                   int numRows, int dtype, int nullCount);
+  private static native long stringStartWith(long cudfViewHandle, long compString) throws CudfException;
+
+  /**
+   * Native method for checking if strings in a column ends with a specified comparison string.
+   * @param cudfViewHandle native handle of the cudf::column_view being operated on.
+   * @param compString handle of scalar containing the string being searched for at the end
+  of each string in the column.
+   * @return native handle of the resulting cudf column containing the boolean results.
+   */
+  private static native long stringEndWith(long cudfViewHandle, long compString) throws CudfException;
+
+  /**
+   * Native method to concatenate columns of strings together, combining a row from
+   * each colunm into a single string.
+   * @param columnViews array of longs holding the native handles of the column_views to combine.
+   * @param separator string scalar inserted between each string being merged, may not be null.
+   * @param narep string scalar indicating null behavior. If set to null and any string in the row is null
+   *              the resulting string will be null. If not null, null values in any column will be
+   *              replaced by the specified string. The underlying value in the string scalar may be null,
+   *              but the object passed in may not.
+   * @return native handle of the resulting cudf column, used to construct the Java column
+   *         by the stringConcatenate method.
+   */
+  private static native long stringConcatenation(long[] columnViews, long separator, long narep);
+
+  private static native long binaryOpVS(long lhs, long rhs, int op, int dtype);
+
+  private static native long binaryOpVV(long lhs, long rhs, int op, int dtype);
+
+  private static native long byteCount(long viewHandle) throws CudfException;
+
+  private static native long castTo(long nativeHandle, int type);
+
+  private static native long[] slice(long nativeHandle, int[] indices) throws CudfException;
+
+  private static native long[] split(long nativeHandle, int[] indices) throws CudfException;
+
+  private static native long findAndReplaceAll(long valuesHandle, long replaceHandle, long myself) throws CudfException;
 
   /**
    * Native method to switch all characters in a column of strings to lowercase characters.
-   * @param cudfColumnHandle native handle of the gdf_column being operated on.
+   * @param cudfViewHandle native handle of the cudf::column_view being operated on.
    * @return native handle of the resulting cudf column, used to construct the Java column
    *         by the lower method.
    */
-  private static native long lowerStrings(long cudfColumnHandle);
+  private static native long lowerStrings(long cudfViewHandle);
 
   /**
    * Native method to switch all characters in a column of strings to uppercase characters.
-   * @param cudfColumnHandle native handle of the gdf_column being operated on.
+   * @param cudfViewHandle native handle of the cudf::column_view being operated on.
    * @return native handle of the resulting cudf column, used to construct the Java column
    *         by the upper method.
    */
-  private static native long upperStrings(long cudfColumnHandle);
+  private static native long upperStrings(long cudfViewHandle);
+
+  private static native long quantile(long cudfColumnHandle, int quantileMethod, double quantile) throws CudfException;
+
+  private static native long rollingWindow(long viewHandle, int min_periods, int agg_type,
+                                           int preceding, int following,
+                                           long preceding_col, long following_col);
+
+  private static native long lengths(long viewHandle) throws CudfException;
+
+  private static native long concatenate(long[] viewHandles) throws CudfException;
+
+  private static native long fromScalar(long scalarHandle, int rowCount) throws CudfException;
+
+  private static native long replaceNulls(long viewHandle, long scalarHandle) throws CudfException;
+
+  private static native long ifElseVV(long predVec, long trueVec, long falseVec) throws CudfException;
+
+  private static native long ifElseVS(long predVec, long trueVec, long falseScalar) throws CudfException;
+
+  private static native long ifElseSV(long predVec, long trueScalar, long falseVec) throws CudfException;
+
+  private static native long ifElseSS(long predVec, long trueScalar, long falseScalar) throws CudfException;
+
+  private static native long reduce(long viewHandle, int reduceOp, int dtype) throws CudfException;
+
+  private static native long isNullNative(long viewHandle);
+
+  private static native long isNotNullNative(long viewHandle);
+
+  private static native long unaryOperation(long viewHandle, int op);
+  
+  private static native long year(long viewHandle) throws CudfException;
+
+  private static native long month(long viewHandle) throws CudfException;
+
+  private static native long day(long viewHandle) throws CudfException;
+
+  private static native long hour(long viewHandle) throws CudfException;
+
+  private static native long minute(long viewHandle) throws CudfException;
+
+  private static native long second(long viewHandle) throws CudfException;
+
+  private static native boolean containsScalar(long columnViewHaystack, long scalarHandle) throws CudfException;
+
+  private static native long containsVector(long columnViewHaystack, long columnViewNeedles) throws CudfException;
+  
+  private static native long transform(long viewHandle, String udf, boolean isPtx);
 
   /**
-   * Wrap static native string capitilization methods, retrieves the column vectors cudf native
-   * handle and uses it to invoke the native function that calls NVStrings' upper method. Does not
-   * support String categories yet.
-   * @return A new ColumnVector containing the upper case versions of the strings in the original
-   *         column vector.
+   * Get the number of bytes needed to allocate a validity buffer for the given number of rows.
    */
-  public ColumnVector upper() {
-    assert type == DType.STRING : "A column of type string is required for .upper() operation";
-    try (DevicePrediction prediction = new DevicePrediction(getDeviceMemorySize(), "upper")) {
-      return new ColumnVector(upperStrings(getNativeCudfColumnAddress()));
-    }
-  }
+  private static native long getNativeValidPointerSize(int size);
+
+  ////////
+  // Native cudf::column_view life cycle and metadata access methods. Life cycle methods
+  // should typically only be called from the CudfColumn inner class.
+  ////////
+
+  private static native int getNativeTypeId(long viewHandle) throws CudfException;
+
+  private static native int getNativeRowCount(long viewHandle) throws CudfException;
+
+  private static native int getNativeNullCount(long viewHandle) throws CudfException;
+
+  private static native void deleteColumnView(long viewHandle) throws CudfException;
+
+  private static native long[] getNativeDataPointer(long viewHandle) throws CudfException;
+
+  private static native long[] getNativeOffsetsPointer(long viewHandle) throws CudfException;
+
+  private static native long[] getNativeValidPointer(long viewHandle) throws CudfException;
+
+  private static native long makeCudfColumnView(int type, long data, long dataSize, long offsets, long valid, int nullCount, int size);
+
+  ////////
+  // Native methods specific to cudf::column. These either take or create a cudf::column
+  // instead of a cudf::column_view so they need to be used with caution. These should
+  // only be called from the CudfColumn child class.
+  ////////
 
   /**
-   * Wrap static native string capitilization methods, retrieves the column vectors cudf native
-   * handle and uses it to invoke the native function that calls NVStrings' lower method. Does not
-   * support String categories yet.
-   * @return A new ColumnVector containing the lower case versions of the strings in the original
-   *         column vector.
+   * Delete the column. This is not private because there are a few cases where Table
+   * may get back an array of columns pointers and we want to have best effort in cleaning them up
+   * on any failure.
    */
-  public ColumnVector lower() {
-    assert type == DType.STRING : "A column of type string is required for .lower() operation";
-    try (DevicePrediction prediction = new DevicePrediction(getDeviceMemorySize(), "lower")) {
-      return new ColumnVector(lowerStrings(getNativeCudfColumnAddress()));
-    }
-  }
+  static native void deleteCudfColumn(long cudfColumnHandle) throws CudfException;
 
-  private native Scalar exactQuantile(long cudfColumnHandle, int quantileMethod, double quantile) throws CudfException;
+  private static native int getNativeNullCountColumn(long cudfColumnHandle) throws CudfException;
 
-  private native Scalar approxQuantile(long cudfColumnHandle, double quantile) throws CudfException;
-
-  private static native long rollingWindow(long cudfColumnHandle, int window, int min_periods,
-                                           int forward_window, int agg_type, long window_col,
-                                           long min_periods_col, long forward_window_col);
-
-  private static native long cudfLengths(long cudfColumnHandle) throws CudfException;
-
-  private static native long hash(long cudfColumnHandle, int nativeHashId) throws CudfException;
+  private static native void setNativeNullCountColumn(long cudfColumnHandle, int nullCount) throws CudfException;
 
   /**
-   * Copy the string data to the host.  This is a little ugly because the addresses
-   * returned were allocated by native code but will be freed through java's Unsafe API.
-   * In practice this should work so long as we don't try to replace malloc, and java does not.
-   * If this does become a problem we can subclass HostMemoryBuffer and add in another JNI
-   * call to free using native code.
-   * @param cudfColumnHandle the device side cudf column.
-   * @return [data address, data length, offsets address, offsets length]
+   * Create a cudf::column_view from a cudf::column.
+   * @param cudfColumnHandle the pointer to the cudf::column
+   * @return a pointer to a cudf::column_view
+   * @throws CudfException on any error
    */
-  private static native long[] getStringDataAndOffsetsBack(long cudfColumnHandle);
+  private static native long getNativeColumnView(long cudfColumnHandle) throws CudfException;
 
-  static native void freeCudfColumn(long cudfColumnHandle, boolean isDeepClean) throws CudfException;
+  private static native long makeEmptyCudfColumn(int type);
 
-  private static native long getDataPtr(long cudfColumnHandle) throws CudfException;
+  private static native long makeNumericCudfColumn(int type, int rows, int maskState);
 
-  private static native long getValidPtr(long cudfColumnHandle) throws CudfException;
+  private static native long makeTimestampCudfColumn(int type, int rows, int maskState);
 
-  private static native int getRowCount(long cudfColumnHandle) throws CudfException;
-
-  private static DType getDType(long cudfColumnHandle) throws CudfException {
-    return DType.fromNative(getDTypeInternal(cudfColumnHandle));
-  }
-
-  private static native int getDTypeInternal(long cudfColumnHandle) throws CudfException;
-
-  private static TimeUnit getTimeUnit(long cudfColumnHandle) throws CudfException {
-    return TimeUnit.fromNative(getTimeUnitInternal(cudfColumnHandle));
-  }
-
-  private static native int getTimeUnitInternal(long cudfColumnHandle) throws CudfException;
-
-  private static native int getNullCount(long cudfColumnHandle) throws CudfException;
-
-  private static native int getDeviceMemoryStringSize(long cudfColumnHandle) throws CudfException;
-
-  private static native long concatenate(long[] columnHandles) throws CudfException;
+  private static native long makeStringCudfColumnHostSide(long charData, long offsetData, long validData, int nullCount, int size);
 
   /////////////////////////////////////////////////////////////////////////////
   // HELPER CLASSES
@@ -2041,12 +2261,12 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   /**
    * Encapsulator class to hold the two buffers as a cohesive object
    */
-  private static final class BufferEncapsulator<T extends MemoryBuffer> implements AutoCloseable {
-    public final T data;
-    public final T valid;
-    public final T offsets;
+  private static final class BufferEncapsulator implements AutoCloseable {
+    public final HostMemoryBuffer data;
+    public final HostMemoryBuffer valid;
+    public final HostMemoryBuffer offsets;
 
-    BufferEncapsulator(T data, T valid, T offsets) {
+    BufferEncapsulator(HostMemoryBuffer data, HostMemoryBuffer valid, HostMemoryBuffer offsets) {
       this.data = data;
       this.valid = valid;
       this.offsets = offsets;
@@ -2054,7 +2274,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
     @Override
     public String toString() {
-      T type = data == null ? valid : data;
+      HostMemoryBuffer type = data == null ? valid : data;
       type = type == null ? offsets : type;
       String t = "UNKNOWN";
       if (type != null) {
@@ -2103,10 +2323,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   protected static final class OffHeapState extends MemoryCleaner.Cleaner {
     private long internalId;
-    private BufferEncapsulator<HostMemoryBuffer> hostData;
-    private BufferEncapsulator<DeviceMemoryBuffer> deviceData;
-    private long deviceDataSize = 0;
-    private long nativeCudfColumnHandle = 0;
+    private BufferEncapsulator hostData;
+    private CudfColumn cudfColumnHandle = null;
 
     @Override
     protected boolean cleanImpl(boolean logErrorIfNotClean) {
@@ -2116,19 +2334,12 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
         setHostData(null);
         neededCleanup = true;
       }
-      BufferEncapsulator<DeviceMemoryBuffer> dd = getDeviceData();
-      if (dd != null) {
-        long deallocationSize = deviceDataSize;
-        dd.close();
-        deviceDataSize = 0;
-        setDeviceData(null);
-        MemoryListener.deviceDeallocation(deallocationSize, internalId);
+      if (cudfColumnHandle != null) {
+        long size = getDeviceMemorySize();
+        cudfColumnHandle.close();
+        cudfColumnHandle = null;
         neededCleanup = true;
-      }
-      if (nativeCudfColumnHandle != 0) {
-        freeCudfColumn(nativeCudfColumnHandle, false);
-        nativeCudfColumnHandle = 0;
-        neededCleanup = true;
+        MemoryListener.deviceDeallocation(size, internalId);
       }
       if (neededCleanup && logErrorIfNotClean) {
         log.error("YOU LEAKED A COLUMN VECTOR!!!!");
@@ -2137,49 +2348,33 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       return neededCleanup;
     }
 
-    public BufferEncapsulator<HostMemoryBuffer> getHostData() {
+    public BufferEncapsulator getHostData() {
       return hostData;
     }
 
-    public void setHostData(BufferEncapsulator<HostMemoryBuffer> hostData) {
+    public void setHostData(BufferEncapsulator hostData) {
       if (isLeakExpected() && hostData != null) {
         hostData.noWarnLeakExpected();
       }
       this.hostData = hostData;
     }
 
-    public BufferEncapsulator<DeviceMemoryBuffer> getDeviceData() {
-      return deviceData;
-    }
-
     /**
      * This returns total memory allocated in device for the ColumnVector.
-     * NOTE: If DType is STRING_CATEGORY, the size is estimated. The estimate assumes the length
-     * of strings to be 10 characters in each row and returns 24 bytes per dictionary entry.
-     * @param type the data type used to determine how to calculate the data.
      * @return number of device bytes allocated for this column
      */
-    public long getDeviceMemoryLength(DType type, boolean forceUpdate) {
-      if (!forceUpdate && deviceDataSize > 0) {
-        return deviceDataSize;
+    public long getDeviceMemorySize() {
+      long size = 0;
+      if (cudfColumnHandle != null) {
+        size = cudfColumnHandle.getDeviceMemorySize();
       }
-      if (deviceData != null) {
-        deviceDataSize = deviceData.valid != null ? deviceData.valid.getLength() : 0;
-        if (type == DType.STRING || type == DType.STRING_CATEGORY) {
-          deviceDataSize += getDeviceMemoryStringSize(nativeCudfColumnHandle);
-        } else {
-          deviceDataSize += deviceData.data != null ? deviceData.data.getLength() : 0;
-        }
-      } else {
-        deviceDataSize = 0;
-      }
-      return deviceDataSize;
+      return size;
     }
 
     /**
      * This returns total memory allocated on the host for the ColumnVector.
      */
-    public long getHostMemoryLength() {
+    public long getHostMemorySize() {
       long total = 0;
       if (hostData != null) {
         if (hostData.valid != null) {
@@ -2193,13 +2388,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
         }
       }
       return total;
-    }
-
-    public void setDeviceData(BufferEncapsulator<DeviceMemoryBuffer> deviceData) {
-      if (isLeakExpected() && deviceData != null) {
-        deviceData.noWarnLeakExpected();
-      }
-      this.deviceData = deviceData;
     }
   }
 
@@ -2216,19 +2404,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return the builder to use.
    */
   public static Builder builder(DType type, int rows) {
-    return new Builder(type, TimeUnit.NONE, rows, 0);
-  }
-
-  /**
-   * Create a new Builder to hold the specified number of rows.  Be sure to close the builder when
-   * done with it. Please try to use {@see #build(int, Consumer)} instead to avoid needing to
-   * close the builder.
-   * @param type the type of vector to build.
-   * @param rows the number of rows this builder can hold
-   * @return the builder to use.
-   */
-  public static Builder builder(DType type, TimeUnit tsTimeUnit, int rows) {
-    return new Builder(type, tsTimeUnit, rows, 0);
+    return new Builder(type, rows, 0);
   }
 
   /**
@@ -2241,39 +2417,26 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return the builder to use.
    */
   public static Builder builder(DType type, int rows, long stringBufferSize) {
-    assert type == DType.STRING_CATEGORY || type == DType.STRING;
-    return new Builder(type, TimeUnit.NONE, rows, stringBufferSize);
-  }
-
-  /**
-   * Create a new vector.
-   * @param type the type of vector to build.
-   * @param rows maximum number of rows that the vector can hold.
-   * @param init what will initialize the vector.
-   * @return the created vector.
-   */
-  public static ColumnVector build(DType type, int rows, Consumer<Builder> init) {
-    return build(type, TimeUnit.NONE, rows, init);
+    assert type == DType.STRING;
+    return new ColumnVector.Builder(type, rows, stringBufferSize);
   }
 
   /**
    * Create a new vector.
    * @param type       the type of vector to build.
-   * @param tsTimeUnit the unit of time, really only applicable for TIMESTAMP.
    * @param rows       maximum number of rows that the vector can hold.
    * @param init       what will initialize the vector.
    * @return the created vector.
    */
-  public static ColumnVector build(DType type, TimeUnit tsTimeUnit, int rows,
-                                   Consumer<Builder> init) {
-    try (Builder builder = builder(type, tsTimeUnit, rows)) {
+  public static ColumnVector build(DType type, int rows, Consumer<Builder> init) {
+    try (ColumnVector.Builder builder = builder(type, rows)) {
       init.accept(builder);
       return builder.build();
     }
   }
 
   public static ColumnVector build(DType type, int rows, long stringBufferSize, Consumer<Builder> init) {
-    try (Builder builder = builder(type, rows, stringBufferSize)) {
+    try (ColumnVector.Builder builder = builder(type, rows, stringBufferSize)) {
       init.accept(builder);
       return builder.build();
     }
@@ -2281,26 +2444,14 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   /**
    * Create a new vector without sending data to the device.
-   * @param type the type of vector to build.
-   * @param rows maximum number of rows that the vector can hold.
-   * @param init what will initialize the vector.
-   * @return the created vector.
-   */
-  public static ColumnVector buildOnHost(DType type, int rows, Consumer<Builder> init) {
-    return buildOnHost(type, TimeUnit.NONE, rows, init);
-  }
-
-  /**
-   * Create a new vector without sending data to the device.
    * @param type       the type of vector to build.
-   * @param tsTimeUnit the unit of time, really only applicable for TIMESTAMP.
    * @param rows       maximum number of rows that the vector can hold.
    * @param init       what will initialize the vector.
    * @return the created vector.
    */
-  public static ColumnVector buildOnHost(DType type, TimeUnit tsTimeUnit, int rows,
+  public static ColumnVector buildOnHost(DType type, int rows,
                                          Consumer<Builder> init) {
-    try (Builder builder = builder(type, tsTimeUnit, rows)) {
+    try (Builder builder = builder(type, rows)) {
       init.accept(builder);
       return builder.buildOnHost();
     }
@@ -2358,33 +2509,40 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   /**
    * Create a new vector from the given values.
    */
-  public static ColumnVector datesFromInts(int... values) {
-    return build(DType.DATE32, values.length, (b) -> b.appendArray(values));
+  public static ColumnVector daysFromInts(int... values) {
+    return build(DType.TIMESTAMP_DAYS, values.length, (b) -> b.appendArray(values));
   }
 
   /**
    * Create a new vector from the given values.
    */
-  public static ColumnVector datesFromLongs(long... values) {
-    return build(DType.DATE64, values.length, (b) -> b.appendArray(values));
+  public static ColumnVector timestampSecondsFromLongs(long... values) {
+    return build(DType.TIMESTAMP_SECONDS, values.length, (b) -> b.appendArray(values));
   }
 
   /**
    * Create a new vector from the given values.
    */
-  public static ColumnVector timestampsFromLongs(long... values) {
-    return build(DType.TIMESTAMP, values.length, (b) -> b.appendArray(values));
+  public static ColumnVector timestampMilliSecondsFromLongs(long... values) {
+    return build(DType.TIMESTAMP_MILLISECONDS, values.length, (b) -> b.appendArray(values));
   }
 
   /**
    * Create a new vector from the given values.
    */
-  public static ColumnVector timestampsFromLongs(TimeUnit tsTimeUnit, long... values) {
-    return build(DType.TIMESTAMP, tsTimeUnit, values.length, (b) -> b.appendArray(values));
+  public static ColumnVector timestampMicroSecondsFromLongs(long... values) {
+    return build(DType.TIMESTAMP_MICROSECONDS, values.length, (b) -> b.appendArray(values));
+  }
+
+  /**
+   * Create a new vector from the given values.
+   */
+  public static ColumnVector timestampNanoSecondsFromLongs(long... values) {
+    return build(DType.TIMESTAMP_NANOSECONDS, values.length, (b) -> b.appendArray(values));
   }
 
   private static ColumnVector fromStrings(DType type, String... values) {
-    assert type == DType.STRING || type == DType.STRING_CATEGORY;
+    assert type == DType.STRING;
     int rows = values.length;
     long nullCount = 0;
     // How many bytes do we need to hold the data.  Sorry this is really expensive
@@ -2404,15 +2562,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
         b.append(s);
       }
     });
-  }
-
-  /**
-   * Create a new category string vector from the given values.  This API
-   * supports inline nulls. This is really intended to be used only for testing as
-   * it is slow and memory intensive to translate between java strings and UTF8 strings.
-   */
-  public static ColumnVector categoryFromStrings(String... values) {
-    return fromStrings(DType.STRING_CATEGORY, values);
   }
 
   /**
@@ -2492,8 +2641,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * but is much slower than using a regular array and should really only be used
    * for tests.
    */
-  public static ColumnVector datesFromBoxedInts(Integer... values) {
-    return build(DType.DATE32, values.length, (b) -> b.appendBoxed(values));
+  public static ColumnVector timestampDaysFromBoxedInts(Integer... values) {
+    return build(DType.TIMESTAMP_DAYS, values.length, (b) -> b.appendBoxed(values));
   }
 
   /**
@@ -2501,8 +2650,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * but is much slower than using a regular array and should really only be used
    * for tests.
    */
-  public static ColumnVector datesFromBoxedLongs(Long... values) {
-    return build(DType.DATE64, values.length, (b) -> b.appendBoxed(values));
+  public static ColumnVector timestampSecondsFromBoxedLongs(Long... values) {
+    return build(DType.TIMESTAMP_SECONDS, values.length, (b) -> b.appendBoxed(values));
   }
 
   /**
@@ -2510,8 +2659,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * but is much slower than using a regular array and should really only be used
    * for tests.
    */
-  public static ColumnVector timestampsFromBoxedLongs(Long... values) {
-    return build(DType.TIMESTAMP, values.length, (b) -> b.appendBoxed(values));
+  public static ColumnVector timestampMilliSecondsFromBoxedLongs(Long... values) {
+    return build(DType.TIMESTAMP_MILLISECONDS, values.length, (b) -> b.appendBoxed(values));
   }
 
   /**
@@ -2519,124 +2668,17 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * but is much slower than using a regular array and should really only be used
    * for tests.
    */
-  public static ColumnVector timestampsFromBoxedLongs(TimeUnit tsTimeUnit, Long... values) {
-    return build(DType.TIMESTAMP, tsTimeUnit, values.length, (b) -> b.appendBoxed(values));
+  public static ColumnVector timestampMicroSecondsFromBoxedLongs(Long... values) {
+    return build(DType.TIMESTAMP_MICROSECONDS, values.length, (b) -> b.appendBoxed(values));
   }
 
   /**
-   * Create a new vector of length rows, where each row is filled with the Scalar's
-   * value
-   * @param scalar - Scalar to use to fill rows
-   * @param rows - Number of rows in the new ColumnVector
-   * @return - new ColumnVector
+   * Create a new vector from the given values.  This API supports inline nulls,
+   * but is much slower than using a regular array and should really only be used
+   * for tests.
    */
-  public static ColumnVector fromScalar(Scalar scalar, int rows) {
-    if (scalar.getType() == DType.STRING || scalar.getType() == DType.STRING_CATEGORY) {
-      throw new IllegalArgumentException("STRING and STRING_CATEGORY are not supported scalars");
-    }
-    DeviceMemoryBuffer dataBuffer = null;
-    ColumnVector cv = null;
-    boolean needsCleanup = true;
-
-    long amount = predictSizeFor(scalar.type.sizeInBytes, rows, !scalar.isValid);
-    try (DevicePrediction prediction = new DevicePrediction(amount, "fromScalar")) {
-      dataBuffer = DeviceMemoryBuffer.allocate(amount);
-
-      cv = new ColumnVector(
-          scalar.getType(),
-          scalar.getTimeUnit(),
-          rows,
-          0,
-          dataBuffer,
-          null,
-          null, false);
-
-      // null this out as cv is the owner, and will be closed
-      // when cv closes in case of failure
-      dataBuffer = null;
-
-      cudfColumnViewAugmented(
-          cv.getNativeCudfColumnAddress(),
-          cv.offHeap.getDeviceData().data.address,
-          0,
-          (int) cv.getRowCount(),
-          cv.getType().nativeId,
-          0,
-          cv.getTimeUnit().getNativeId());
-
-      cv.fill(scalar);
-
-      needsCleanup = false;
-      return cv;
-    } finally {
-      if (needsCleanup) {
-        if (dataBuffer != null) {
-          dataBuffer.close();
-        }
-        if (cv != null) {
-          cv.close();
-        }
-      }
-    }
-  }
-
-  /**
-   * Create a new vector by concatenating multiple columns together.
-   * Note that all columns must have the same type.
-   */
-  public static ColumnVector concatenate(ColumnVector... columns) {
-    if (columns.length < 2) {
-      throw new IllegalArgumentException("Concatenate requires 2 or more columns");
-    }
-    long total = 0;
-    for (ColumnVector cv: columns) {
-      total += cv.getDeviceMemorySize();
-    }
-    try (DevicePrediction prediction = new DevicePrediction(total, "concatenate")) {
-      long[] columnHandles = new long[columns.length];
-      for (int i = 0; i < columns.length; ++i) {
-        columnHandles[i] = columns[i].getNativeCudfColumnAddress();
-      }
-      return new ColumnVector(concatenate(columnHandles));
-    }
-  }
-
-  /**
-   * Calculate the quantile of this ColumnVector
-   * @param method   the method used to calculate the quantile
-   * @param quantile the quantile value [0,1]
-   * @return the quantile as double. The type can be changed in future
-   */
-  public Scalar exactQuantile(QuantileMethod method, double quantile) {
-    return exactQuantile(this.getNativeCudfColumnAddress(), method.nativeId, quantile);
-  }
-
-  /**
-   * Calculate the approximate quantile of this ColumnVector
-   * @param quantile the quantile value [0,1]
-   * @return the quantile, with the same type as this object
-   */
-  public Scalar approxQuantile(double quantile) {
-    return approxQuantile(this.getNativeCudfColumnAddress(), quantile);
-  }
-
-  /**
-   * This function aggregates values in a window around each element i of the input
-   * column. Please refer to WindowsOptions for various options that can be passed.
-   * @param opts various window function arguments.
-   * @return Column containing aggregate function result.
-   */
-  public ColumnVector rollingWindow(WindowOptions opts) {
-    return new ColumnVector(
-        rollingWindow(this.getNativeCudfColumnAddress(),
-            opts.getWindow() >= 0 ? opts.getWindow() : 0,
-            opts.getMinPeriods() >= 0 ? opts.getMinPeriods() : 0,
-            opts.getForwardWindow() >=0 ? opts.getForwardWindow() : 0,
-            opts.getAggType().nativeId,
-            opts.getWindowCol() == null ? 0 : opts.getWindowCol().getNativeCudfColumnAddress(),
-            opts.getMinPeriodsCol() == null ? 0 : opts.getMinPeriodsCol().getNativeCudfColumnAddress(),
-            opts.getForwardWindowCol() == null ? 0 :
-            opts.getForwardWindowCol().getNativeCudfColumnAddress()));
+  public static ColumnVector timestampNanoSecondsFromBoxedLongs(Long... values) {
+    return build(DType.TIMESTAMP_NANOSECONDS, values.length, (b) -> b.appendBoxed(values));
   }
 
   /**
@@ -2645,64 +2687,51 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   public static final class Builder implements AutoCloseable {
     private final long rows;
     private final DType type;
-    private final TimeUnit tsTimeUnit;
     private HostMemoryBuffer data;
     private HostMemoryBuffer valid;
     private HostMemoryBuffer offsets;
     private long currentIndex = 0;
     private long nullCount;
-    private long stringBufferSize = 0;
     private int currentStringByteIndex = 0;
     private boolean built;
 
     /**
      * Create a builder with a buffer of size rows
      * @param type       datatype
-     * @param tsTimeUnit for TIMESTAMP the unit of time it is storing.
      * @param rows       number of rows to allocate.
      * @param stringBufferSize the size of the string data buffer if we are
      *                         working with Strings.  It is ignored otherwise.
      */
-    Builder(DType type, TimeUnit tsTimeUnit, long rows, long stringBufferSize) {
+    Builder(DType type, long rows, long stringBufferSize) {
       this.type = type;
-      this.tsTimeUnit = tsTimeUnit;
       this.rows = rows;
-      if (type == DType.STRING || type == DType.STRING_CATEGORY) {
+      if (type == DType.STRING) {
         if (stringBufferSize <= 0) {
           // We need at least one byte or we will get NULL back for data
           stringBufferSize = 1;
         }
+        this.data = HostMemoryBuffer.allocate(stringBufferSize);
         // The offsets are ints and there is 1 more than the number of rows.
-        long offsetsLen = (rows + 1) * OFFSET_SIZE;
-        try (HostPrediction prediction = new HostPrediction(stringBufferSize + offsetsLen, "stringBuilder")) {
-          this.data = HostMemoryBuffer.allocate(stringBufferSize);
-          this.offsets = HostMemoryBuffer.allocate(offsetsLen);
-        }
+        this.offsets = HostMemoryBuffer.allocate((rows + 1) * OFFSET_SIZE);
         // The first offset is always 0
         this.offsets.setInt(0, 0);
-        this.stringBufferSize = stringBufferSize;
       } else {
-        long size = rows * type.sizeInBytes;
-        try (HostPrediction prediction = new HostPrediction(size, "Builder")) {
-          this.data = HostMemoryBuffer.allocate(size);
-        }
+        this.data = HostMemoryBuffer.allocate(rows * type.sizeInBytes);
       }
     }
 
     /**
      * Create a builder with a buffer of size rows (for testing ONLY).
      * @param type       datatype
-     * @param tsTimeUnit for TIMESTAMP the unit of time it is storing.
      * @param rows       number of rows to allocate.
      * @param testData   a buffer to hold the data (should be large enough to hold rows entries).
      * @param testValid  a buffer to hold the validity vector (should be large enough to hold
      *                   rows entries or is null).
      * @param testOffsets a buffer to hold the offsets for strings and string categories.
      */
-    Builder(DType type, TimeUnit tsTimeUnit, long rows, HostMemoryBuffer testData,
+    Builder(DType type, long rows, HostMemoryBuffer testData,
             HostMemoryBuffer testValid, HostMemoryBuffer testOffsets) {
       this.type = type;
-      this.tsTimeUnit = tsTimeUnit;
       this.rows = rows;
       this.data = testData;
       this.valid = testValid;
@@ -2741,7 +2770,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     }
 
     public final Builder append(int value) {
-      assert (type == DType.INT32 || type == DType.DATE32);
+      assert (type == DType.INT32 || type == DType.TIMESTAMP_DAYS);
       assert currentIndex < rows;
       data.setInt(currentIndex * type.sizeInBytes, value);
       currentIndex++;
@@ -2749,7 +2778,9 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     }
 
     public final Builder append(long value) {
-      assert type == DType.INT64 || type == DType.DATE64 || type == DType.TIMESTAMP;
+      assert type == DType.INT64 || type == DType.TIMESTAMP_MILLISECONDS ||
+          type == DType.TIMESTAMP_MICROSECONDS || type == DType.TIMESTAMP_NANOSECONDS ||
+          type == DType.TIMESTAMP_SECONDS;
       assert currentIndex < rows;
       data.setLong(currentIndex * type.sizeInBytes, value);
       currentIndex++;
@@ -2786,11 +2817,11 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       assert offset >= 0;
       assert length >= 0;
       assert value.length + offset <= length;
-      assert type == DType.STRING_CATEGORY || type == DType.STRING;
+      assert type == DType.STRING;
       assert currentIndex < rows;
       // just for strings we want to throw a real exception if we would overrun the buffer
       long oldLen = data.getLength();
-      long newLen = Math.max(oldLen, 1);
+      long newLen = oldLen;
       while (currentStringByteIndex + length > newLen) {
         newLen *= 2;
       }
@@ -2799,17 +2830,15 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       }
       if (newLen != oldLen) {
         // need to grow the size of the buffer.
-        try (HostPrediction prediciton = new HostPrediction(newLen, "growStringData")) {
-          HostMemoryBuffer newData = HostMemoryBuffer.allocate(newLen);
-          try {
-            newData.copyFromHostBuffer(0, data, 0, currentStringByteIndex);
-            data.close();
-            data = newData;
-            newData = null;
-          } finally {
-            if (newData != null) {
-              newData.close();
-            }
+        HostMemoryBuffer newData = HostMemoryBuffer.allocate(newLen);
+        try {
+          newData.copyFromHostBuffer(0, data, 0, currentStringByteIndex);
+          data.close();
+          data = newData;
+          newData = null;
+        } finally {
+          if (newData != null) {
+            newData.close();
           }
         }
       }
@@ -2839,7 +2868,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     }
 
     public Builder appendArray(int... values) {
-      assert (type == DType.INT32 || type == DType.DATE32);
+      assert (type == DType.INT32 || type == DType.TIMESTAMP_DAYS);
       assert (values.length + currentIndex) <= rows;
       data.setInts(currentIndex * type.sizeInBytes, values, 0, values.length);
       currentIndex += values.length;
@@ -2847,7 +2876,9 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     }
 
     public Builder appendArray(long... values) {
-      assert type == DType.INT64 || type == DType.DATE64 || type == DType.TIMESTAMP;
+      assert type == DType.INT64 || type == DType.TIMESTAMP_MILLISECONDS ||
+          type == DType.TIMESTAMP_MICROSECONDS || type == DType.TIMESTAMP_NANOSECONDS ||
+          type == DType.TIMESTAMP_SECONDS;
       assert (values.length + currentIndex) <= rows;
       data.setLongs(currentIndex * type.sizeInBytes, values, 0, values.length);
       currentIndex += values.length;
@@ -3009,14 +3040,14 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     /**
      * Append this vector to the end of this vector
      * @param columnVector - Vector to be added
-     * @return - The ColumnVector based on this builder values
+     * @return - The CudfColumn based on this builder values
      */
     public final Builder append(ColumnVector columnVector) {
       assert columnVector.rows <= (rows - currentIndex);
       assert columnVector.type == type;
       assert columnVector.offHeap.getHostData() != null;
 
-      if (type == DType.STRING_CATEGORY || type == DType.STRING) {
+      if (type == DType.STRING) {
         throw new UnsupportedOperationException(
             "Appending a string column vector client side is not currently supported");
       } else {
@@ -3025,25 +3056,25 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
             columnVector.getRowCount() * type.sizeInBytes);
       }
 
-      if (columnVector.nullCount != 0) {
+      //As this is doing the append on the host assume that a null count is available
+      long otherNc = columnVector.getNullCount();
+      if (otherNc != 0) {
         if (valid == null) {
           allocateBitmaskAndSetDefaultValues();
         }
-        //copy values from intColumnVector to this
+        //copy values from intCudfColumn to this
         BitVectorHelper.append(columnVector.offHeap.getHostData().valid, valid, currentIndex,
             columnVector.rows);
-        nullCount += columnVector.nullCount;
+        nullCount += otherNc;
       }
       currentIndex += columnVector.rows;
       return this;
     }
 
     private void allocateBitmaskAndSetDefaultValues() {
-      long bitmaskSize = BitVectorHelper.getValidityAllocationSizeInBytes(rows);
-      try (HostPrediction prediciton = new HostPrediction(bitmaskSize, "allocateValidity")) {
-        valid = HostMemoryBuffer.allocate(bitmaskSize);
-        valid.setMemory(0, bitmaskSize, (byte) 0xFF);
-      }
+      long bitmaskSize = getNativeValidPointerSize((int) rows);
+      valid = HostMemoryBuffer.allocate(bitmaskSize);
+      valid.setMemory(0, bitmaskSize, (byte) 0xFF);
     }
 
     /**
@@ -3052,7 +3083,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     public final Builder appendNull() {
       setNullAt(currentIndex);
       currentIndex++;
-      if (type == DType.STRING || type == DType.STRING_CATEGORY) {
+      if (type == DType.STRING) {
         offsets.setInt(currentIndex * OFFSET_SIZE, currentStringByteIndex);
       }
       return this;
@@ -3074,14 +3105,14 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     }
 
     /**
-     * Finish and create the immutable ColumnVector.
+     * Finish and create the immutable CudfColumn.
      */
     public final ColumnVector build() {
       if (built) {
         throw new IllegalStateException("Cannot reuse a builder.");
       }
-      ColumnVector cv = new ColumnVector(type, tsTimeUnit,
-          currentIndex, nullCount, data, valid, offsets);
+      ColumnVector cv = new ColumnVector(type,
+          currentIndex, Optional.of(nullCount), data, valid, offsets);
       try {
         cv.ensureOnDevice();
         built = true;
@@ -3094,20 +3125,20 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     }
 
     /**
-     * Finish and create the immutable ColumnVector.
+     * Finish and create the immutable CudfColumn.
      */
     public final ColumnVector buildOnHost() {
       if (built) {
         throw new IllegalStateException("Cannot reuse a builder.");
       }
-      ColumnVector cv = new ColumnVector(type, tsTimeUnit,
-          currentIndex, nullCount, data, valid, offsets);
+      ColumnVector cv = new ColumnVector(type,
+          currentIndex, Optional.of(nullCount), data, valid, offsets);
       built = true;
       return cv;
     }
 
     /**
-     * Close this builder and free memory if the ColumnVector wasn't generated. Verifies that
+     * Close this builder and free memory if the CudfColumn wasn't generated. Verifies that
      * the data was released even in the case of an error.
      */
     @Override
@@ -3138,6 +3169,229 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
           ", rows=" + rows +
           ", built=" + built +
           '}';
+    }
+  }
+
+  private static final class CudfColumn implements AutoCloseable {
+    // This must be kept in sync with the native code
+    public static final long UNKNOWN_NULL_COUNT = -1;
+    private long columnHandle;
+    private long viewHandle = 0;
+    private final BaseDeviceMemoryBuffer data;
+    private final BaseDeviceMemoryBuffer valid;
+    private final BaseDeviceMemoryBuffer offsets;
+
+    /**
+     * Make a column form an existing cudf::column *.
+     */
+    public CudfColumn(long columnHandle) {
+      this.columnHandle = columnHandle;
+      data = getNativeDataPointer();
+      valid = getNativeValidPointer();
+      offsets = getNativeOffsetsPointer();
+    }
+
+    /**
+     * Make a column form an existing cudf::column_view * and a buffer that holds the data.
+     */
+    public CudfColumn(long viewHandle, DeviceMemoryBuffer contiguousBuffer) {
+      assert viewHandle != 0;
+      this.viewHandle = viewHandle;
+
+      data = contiguousBuffer.sliceFrom(getNativeDataPointer());
+      valid = contiguousBuffer.sliceFrom(getNativeValidPointer());
+      offsets = contiguousBuffer.sliceFrom(getNativeOffsetsPointer());
+    }
+
+    /**
+     * Create an empty column
+     */
+    public CudfColumn(DType dtype) {
+      this.columnHandle = makeEmptyCudfColumn(dtype.nativeId);
+      data = null;
+      valid = null;
+      offsets = null;
+    }
+
+    /**
+     * Create a column from host side data.
+     */
+    public CudfColumn(DType type, int rows, Optional<Long> nullCount,
+                      HostMemoryBuffer data, HostMemoryBuffer valid, HostMemoryBuffer offset) {
+      assert (nullCount.isPresent() && nullCount.get() <= Integer.MAX_VALUE)
+          || !nullCount.isPresent();
+      int nc = nullCount.orElse(UNKNOWN_NULL_COUNT).intValue();
+      long vd = valid == null ? 0 : valid.address;
+      if (rows == 0) {
+        this.columnHandle = makeEmptyCudfColumn(type.nativeId);
+      } else if (type == DType.STRING) {
+        long cd = data == null ? 0 : data.address;
+        long od = offset == null ? 0 : offset.address;
+        this.columnHandle = makeStringCudfColumnHostSide(cd, od, vd, nc, rows);
+      } else {
+        MaskState maskState;
+        if (nc == 0 || (nc < 0 && vd == 0)) {
+          maskState = MaskState.UNALLOCATED;
+        } else {
+          maskState = MaskState.UNINITIALIZED;
+        }
+
+        if (type.isTimestamp()) {
+          this.columnHandle = makeTimestampCudfColumn(type.nativeId, rows, maskState.nativeId);
+        } else {
+          this.columnHandle = makeNumericCudfColumn(type.nativeId, rows, maskState.nativeId);
+        }
+        if (nc >= 0) {
+          setNativeNullCount(nc);
+        }
+
+        if (maskState == MaskState.UNINITIALIZED) {
+          DeviceMemoryBufferView validityView = getNativeValidPointer();
+          validityView.copyFromHostBuffer(valid, 0, validityView.length);
+        }
+
+        DeviceMemoryBufferView dataView = getNativeDataPointer();
+        // The host side data may be larger than the device side because we allocated more rows
+        // than needed
+        dataView.copyFromHostBuffer(data, 0, dataView.length);
+
+        // Offsets only applies to strings and was already copied in that path...
+      }
+      this.data = getNativeDataPointer();
+      this.valid = getNativeValidPointer();
+      this.offsets = getNativeOffsetsPointer();
+    }
+
+    /**
+     * Create a cudf::column_view from device side data.
+     */
+    public CudfColumn(DType type, int rows, Optional<Long> nullCount,
+                      DeviceMemoryBuffer data, DeviceMemoryBuffer valid, DeviceMemoryBuffer offsets) {
+      assert (nullCount.isPresent() && nullCount.get() <= Integer.MAX_VALUE)
+          || !nullCount.isPresent();
+      int nc = nullCount.orElse(UNKNOWN_NULL_COUNT).intValue();
+      this.data = data;
+      this.valid = valid;
+      this.offsets = offsets;
+
+      if (rows == 0) {
+        this.columnHandle = makeEmptyCudfColumn(type.nativeId);
+      } else {
+        long cd = data == null ? 0 : data.address;
+        long cdSize = data == null ? 0 : data.length;
+        long od = offsets == null ? 0 : offsets.address;
+        long vd = valid == null ? 0 : valid.address;
+        this.viewHandle = makeCudfColumnView(type.nativeId, cd, cdSize, od, vd, nc, rows);
+      }
+    }
+
+    public long getViewHandle() {
+      if (viewHandle == 0) {
+        viewHandle = getNativeColumnView(columnHandle);
+      }
+      return viewHandle;
+    }
+
+    public long getNativeRowCount() {
+      return ColumnVector.getNativeRowCount(getViewHandle());
+    }
+
+    public long getNativeNullCount() {
+      if (viewHandle != 0) {
+        return ColumnVector.getNativeNullCount(getViewHandle());
+      }
+      return getNativeNullCountColumn(columnHandle);
+    }
+
+    private void setNativeNullCount(int nullCount) throws CudfException {
+      assert viewHandle == 0 : "Cannot set the null count if a view has already been created";
+      assert columnHandle != 0;
+      setNativeNullCountColumn(columnHandle, nullCount);
+    }
+
+    private DeviceMemoryBufferView getNativeValidPointer() {
+      long[] values = ColumnVector.getNativeValidPointer(getViewHandle());
+      if (values[0] == 0) {
+        return null;
+      }
+      return new DeviceMemoryBufferView(values[0], values[1]);
+    }
+
+    private DeviceMemoryBufferView getNativeDataPointer() {
+      long[] values = ColumnVector.getNativeDataPointer(getViewHandle());
+      if (values[0] == 0) {
+        return null;
+      }
+      return new DeviceMemoryBufferView(values[0], values[1]);
+    }
+
+    private DeviceMemoryBufferView getNativeOffsetsPointer() {
+      long[] values = ColumnVector.getNativeOffsetsPointer(getViewHandle());
+      if (values[0] == 0) {
+        return null;
+      }
+      return new DeviceMemoryBufferView(values[0], values[1]);
+    }
+
+    public DType getNativeType() {
+      return DType.fromNative(getNativeTypeId(getViewHandle()));
+    }
+
+    public BaseDeviceMemoryBuffer getData() {
+      return data;
+    }
+
+    public BaseDeviceMemoryBuffer getValid() {
+      return valid;
+    }
+
+    public BaseDeviceMemoryBuffer getOffsets() {
+      return offsets;
+    }
+
+    public long getDeviceMemorySize() {
+      long size = valid != null ? valid.getLength() : 0;
+      size += offsets != null ? offsets.getLength() : 0;
+      size += data != null ? data.getLength() : 0;
+      return size;
+    }
+
+    public void noWarnLeakExpected() {
+      if (valid != null) {
+        valid.noWarnLeakExpected();
+      }
+      if (data != null) {
+        data.noWarnLeakExpected();
+      }
+      if(offsets != null) {
+        offsets.noWarnLeakExpected();
+      }
+    }
+
+    @Override
+    public void close() {
+      if (viewHandle != 0) {
+        deleteColumnView(viewHandle);
+        viewHandle = 0;
+      }
+      if (columnHandle != 0) {
+        deleteCudfColumn(columnHandle);
+        columnHandle = 0;
+      }
+      if (data != null) {
+        data.close();
+      }
+      if (valid != null) {
+        valid.close();
+      }
+      if (offsets != null) {
+        offsets.close();
+      }
+    }
+
+    @Override
+    public String toString() {
+      return String.valueOf(columnHandle == 0 ? viewHandle : columnHandle);
     }
   }
 }
