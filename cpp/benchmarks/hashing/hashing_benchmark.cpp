@@ -59,8 +59,17 @@ BENCHMARK_DEFINE_F(Hashing, hash_partition)
   BM_hash_partition<double>(state);
 }
 
+static void CustomRanges(benchmark::internal::Benchmark* b) {
+  for (int columns = 1; columns <= 256; columns *= 16) {
+    for (int partitions = 64; partitions <= 1024; partitions *= 2) {
+      for (int rows = 1<<17; rows <= 1<<21; rows *= 2) {
+        b->Args({rows, columns, partitions});
+      }
+    }
+  }
+}
+
 BENCHMARK_REGISTER_F(Hashing, hash_partition)
-  ->RangeMultiplier(2)
-  ->Ranges({{1<<17, 1<<21}, {32, 128}, {128, 1024}})
+  ->Apply(CustomRanges)
   ->Unit(benchmark::kMillisecond)
   ->UseManualTime();
