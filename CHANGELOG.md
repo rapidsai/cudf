@@ -5,6 +5,22 @@
 ## Improvements
 
 - PR #3525 build.sh option to disable nvtx
+- PR #3748 Optimize hash_partition using shared memory
+- PR #3698 Add count_(un)set_bits functions taking multiple ranges and updated slice to compute null counts at once.
+- PR #3909 Move java backend to libcudf++
+- PR #3971 Adding `as_table` to convert Column to Table in python
+- PR #3910 Adding sinh, cosh, tanh, asinh, acosh, atanh cube root and rint unary support.
+- PR #3972 Add Java bindings for left_semi_join and left_anti_join
+- PR #3975 Simplify and generalize data handling in `Buffer`
+- PR #4021 Change quantiles signature for clarity.
+- PR #3911 Adding null boolean handling for copy_if_else
+- PR #4003 Drop old `to_device` utility wrapper function
+- PR #4002 Adding to_frame and fix for categorical column issue
+- PR #4009 build script update to enable cudf build without installing
+- PR #3897 Port cuIO JSON reader to cudf::column types
+- PR #4008 Eliminate extra copy in column constructor
+- PR #4013 Add cython definition for io readers cudf/io/io_types.hpp
+- PR #4014 ORC/Parquet: add count parameter to stripe/rowgroup-based reader API
 
 ## Bug Fixes
 
