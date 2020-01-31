@@ -479,8 +479,6 @@ def test_parquet_writer_gpu(tmpdir, simple_gdf):
     expect = simple_gdf
 
     # Read the gdf back in using the reader
-    got = cudf.read_parquet(
-        gdf_fname, columns=["col_int8", "col_int16", "col_int32"]
-    )
+    got = cudf.read_parquet(gdf_fname)
 
     assert_eq(expect, got, check_categorical=False)
