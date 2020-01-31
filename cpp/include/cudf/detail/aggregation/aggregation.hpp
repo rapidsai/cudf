@@ -101,9 +101,8 @@ struct udf_aggregation : aggregation {
           data_type output_type): aggregation{type},
                                   _source{user_defined_aggregator}, 
                                   _operator_name{(type == aggregation::PTX) ? 
-                                                 "numba_rolling_udf" : "cuda_rolling_udf"},
-                                  _function_name{(type == aggregation::PTX) ? 
-                                                 "NUMBA_ROLLING_UDF" : "CUDA_ROLLING_UDF"},
+                                                 "rolling_udf_ptx" : "rolling_udf_cuda"},
+                                  _function_name{"rolling_udf"},
                                   _output_type{output_type} {}
   std::string const _source;
   std::string const _operator_name;

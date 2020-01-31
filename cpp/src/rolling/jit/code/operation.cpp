@@ -26,21 +26,21 @@ namespace code {
 const char* operation_h =
 R"***(operation.h
 #pragma once
-  struct numba_rolling_udf {
+  struct rolling_udf_ptx {
     template <typename OutType, typename InType>
     static OutType operate(const InType* in_col, cudf::size_type start, cudf::size_type count) {
       OutType ret;
-      NUMBA_ROLLING_UDF(
+      rolling_udf(
         &ret, 0, 0, 0, 0, &in_col[start], count, sizeof(InType));
       return ret;
     }
   };
 
-  struct cuda_rolling_udf {
+  struct rolling_udf_cuda {
     template <typename OutType, typename InType>
     static OutType operate(const InType* in_col, cudf::size_type start, cudf::size_type count) {
       OutType ret;
-      CUDA_ROLLING_UDF(
+      rolling_udf(
         &ret, in_col, start, count);
       return ret;
     }
