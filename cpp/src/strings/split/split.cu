@@ -486,7 +486,7 @@ struct token_copier_fn {
     auto memory_ptr =
       static_cast<char*>(idx_token_count_memory_ptr_token_size_sum.get<2>());
     auto token_size_sum = idx_token_count_memory_ptr_token_size_sum.get<3>();
-    auto char_buf_size = round_up_pow2(token_size_sum, split_align);
+    auto const char_buf_size = round_up_pow2(token_size_sum, split_align);
 
     auto char_buf_ptr = memory_ptr;
     memory_ptr += char_buf_size;
