@@ -132,7 +132,7 @@
 - PR #3886 Fix string column materialization from column view
 - PR #3893 Parquet reader: fix segfault reading empty parquet file
 - PR #3931 Dask-cudf groupby `.agg` multicolumn handling fix
-- PR #XXXX Fix memory leaks in `GDF_STRING` cython handling and `nans_to_nulls` cython
+- PR #4017 Fix memory leaks in `GDF_STRING` cython handling and `nans_to_nulls` cython
 
 
 # cuDF 0.11.0 (11 Dec 2019)
