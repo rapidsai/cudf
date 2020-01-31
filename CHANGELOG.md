@@ -2,6 +2,8 @@
 
 ## New Features
 
+- PR #4023 Add `__cuda_array_interface__` to `Buffer`
+
 ## Improvements
 
 - PR #3748 Optimize hash_partition using shared memory
