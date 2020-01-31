@@ -18,8 +18,6 @@
 
 #include <cudf/types.hpp>
 
-#include <cassert>
-
 /**
  * @file bit.hpp
  * @brief Utilities for bit and bitmask operations.
@@ -104,7 +102,7 @@ CUDA_HOST_DEVICE_CALLABLE bool bit_is_set(bitmask_type const* bitmask,
  * @return A bitmask word with `n` least significant bits set
  *---------------------------------------------------------------------------**/
 constexpr CUDA_HOST_DEVICE_CALLABLE bitmask_type set_least_significant_bits(size_type n) {
-  assert(0 < n < detail::size_in_bits<bitmask_type>());
+  assert(0 <= n && n < detail::size_in_bits<bitmask_type>());
   return ((bitmask_type{1} << n) - 1);
 }
 
@@ -118,7 +116,7 @@ constexpr CUDA_HOST_DEVICE_CALLABLE bitmask_type set_least_significant_bits(size
  *---------------------------------------------------------------------------**/
 constexpr CUDA_HOST_DEVICE_CALLABLE bitmask_type set_most_significant_bits(size_type n) {
   constexpr auto word_size{detail::size_in_bits<bitmask_type>()};
-  assert(0 < n < word_size);
+  assert(0 <= n && n < word_size);
   return ~((bitmask_type{1} << (word_size - n)) - 1);
 }
 
