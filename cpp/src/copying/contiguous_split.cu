@@ -102,32 +102,8 @@ void copy_in_place_kernel( column_device_view const in,
  * invoked with using max(num_chars, num_offsets) threads and then doing seperate 
  * bounds checking on offset, chars and validity indices.
  * 
- * Also handles the case unique to contiguous_split() where
- * the offsets in the output column need to be shifted by the position of the split. This
- * happens because the output columns from contiguous_split() are full copies of the 
- * source columns.  So if we had a 4 element string column of the form  
- * 
- * chars   { "a", "b", "c", "d" }
- * offsets {  0,   1,   2,   3,   4}
- * 
- * and we did a traditional split() on it in the middle, we would get two output columns 
- * pointing to the same in-memory chars and offsets data.
- * 
- * chars   { "a", "b" }
- * offsets {  0,   1,   2}
- * chars   { "c", "d" }
- * offsets {  2,   3,   4}
- * 
- * However in the case of a contiguous_split, the two new columns would both start from a 
- * unique base address, so the offsets have to be shifted down based on the split index
- * 
- * (shifted by 0) 
- * chars   { "a", "b" }
- * offsets {  0,   1,   2}
- * (shifted by 2)
- * chars   { "c", "d" }
- * offsets {  0,   1,   2}
- *
+ * Outgoing offset values are shifted down to account for the new base address
+ * each column gets as a result of the contiguous_split() process.
  *  
  * @param in num_strings number of strings (rows) in the column
  * @param in offsets_in pointer to incoming offsets to be copied
