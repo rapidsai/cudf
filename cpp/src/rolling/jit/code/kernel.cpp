@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -92,7 +92,6 @@ void gpu_rolling_new(cudf::size_type nrows,
     // set the mask
     const unsigned int result_mask = __ballot_sync(active_threads, output_is_valid);
 
-    // only one thread writes the mask
     // only one thread writes the mask
     if (0 == cudf::intra_word_index(i)) {
       out_col_valid[cudf::word_index(i)] = result_mask;
