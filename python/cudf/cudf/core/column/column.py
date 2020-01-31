@@ -95,10 +95,10 @@ class ColumnBase(Column):
 
     def to_pandas(self):
         arr = self.data_array_view
-        sr = pd.Series(cp.asnumpy(cp.asarray(arr)))
+        sr = pd.Series(cp.asnumpy(arr))
 
         if self.nullable:
-            mask_bits = cp.asnumpy(cp.asarray(self.mask_array_view))
+            mask_bits = cp.asnumpy(self.mask_array_view)
             mask_bytes = (
                 cudautils.expand_mask_bits(len(self), mask_bits)
                 .copy_to_host()
@@ -341,7 +341,7 @@ class ColumnBase(Column):
         if ``fillna`` is ``None``, null values are skipped.  Therefore, the
         output size could be smaller.
         """
-        return cp.asnumpy(cp.asarray(self.to_gpu_array(fillna=fillna)))
+        return cp.asnumpy(self.to_gpu_array(fillna=fillna))
 
     @property
     def valid_count(self):
