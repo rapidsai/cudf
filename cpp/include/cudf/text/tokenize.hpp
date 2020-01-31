@@ -28,8 +28,8 @@ namespace nvtext
  * @brief Returns a single column of strings by tokenizing the strings
  * in the given column using the provided characters as delimiters.
  *
- * As each string is tokenized, the tokens are appended to build the
- * output column.
+ * As each string is tokenized, the tokens are appended in row order
+ * to build the output column.
  *
  * Example:
  * ```
@@ -38,12 +38,11 @@ namespace nvtext
  * t is now ["a","b","c","d","e","f"]
  * ```
  *
- * Any input null string entries are ignored and the output contains
- * all valid rows.
+ * All null row entries are ignored and the output contains all valid rows.
  *
- * @param strings Strings instance for this operation.
+ * @param strings Strings column to use for this operation.
  * @param delimiter UTF-8 characters used to separate each string into tokens.
- *                  The default empty string will separate tokens using whitespace.
+ *                  The default of empty string will separate tokens using whitespace.
  * @param mr Resource for allocating device memory.
  * @return New strings columns of tokens.
  */
@@ -53,10 +52,10 @@ std::unique_ptr<column> tokenize( strings_column_view const& strings,
 
 /**
  * @brief Returns a single column of strings by tokenizing the strings
- * in the given column using multiple delimiters.
+ * in the given column using multiple strings delimiters.
  *
- * As each string is tokenized, the tokens are appended to build the
- * output column.
+ * As each string is tokenized, the tokens are appended in row order
+ * to build the output column.
  *
  * Example:
  * ```
@@ -66,13 +65,12 @@ std::unique_ptr<column> tokenize( strings_column_view const& strings,
  * t is now ["a","b c","d","e","f"]
  * ```
  *
- * Any input null string entries are ignored and the output contains
- * all valid rows.
+ * All null row entries are ignored and the output contains all valid rows.
+ * 
+ * @throw cudf::logic_error if the delimiters column is empty or contains nulls.
  *
- * @throw cudf::logic_error if delimiters column is empty or contains nulls.
- *
- * @param strings Strings instance for this operation.
- * @param delimiters Strings used to separate each string into tokens.
+ * @param strings Strings column to use for this operation.
+ * @param delimiters Strings used to separate individual strings into tokens.
  * @param mr Resource for allocating device memory.
  * @return New strings columns of tokens.
  */
@@ -90,22 +88,21 @@ std::unique_ptr<column> tokenize( strings_column_view const& strings,
  * t is now [1,2,0,3]
  * ```
  *
- * Any input null string entries are ignored and the output for that row
- * will be 0 tokens.
+ * All null row entries are ignored and the output contains all valid rows.
  *
- * @param strings Strings instance for this operation.
- * @param delimiter Strings used to separate each string into tokens
- *                  An empty column will separate tokens using whitespace.
+ * @param strings Strings column to use for this operation.
+ * @param delimiter Strings used to separate each string into tokens.
+ *                  The default of empty string will separate tokens using whitespace.
  * @param mr Resource for allocating device memory.
- * @return New INT32 column of counts.
+ * @return New INT32 column of token counts.
  */
 std::unique_ptr<column> token_count( strings_column_view const& strings,
                                      string_scalar const& delimiter = string_scalar{""},
                                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Returns the number of tokens in each string of a strings column
- * using multiple delimiters.
+ * @brief Returns the number of tokens in a strings column
+ * using multiple delimiters to tokenize each string.
  *
  * Example:
  * ```
@@ -115,13 +112,12 @@ std::unique_ptr<column> token_count( strings_column_view const& strings,
  * t is now [1,1,3]
  * ```
  *
- * Any input null string entries are ignored and the output for that row
- * will be 0 tokens.
+ * All null row entries are ignored and the output contains all valid rows.
  *
- * @throw cudf::logic_error if delimiters column is empty or contains nulls.
+ * @throw cudf::logic_error if the delimiters column is empty or contains nulls.
  *
- * @param strings Strings instance for this operation.
- * @param delimiters Strings used to separate each string into tokens
+ * @param strings Strings column to use for this operation.
+ * @param delimiters Strings used to separate each string into tokens.
  * @param mr Resource for allocating device memory.
  * @return New INT32 column of counts.
  */
