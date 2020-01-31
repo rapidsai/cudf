@@ -1,9 +1,10 @@
 # Building Documentation
 
-In order to build the docs, we need the conda dev environment from cudf and build cudf from source. 
-
+As a prerequisite, a RAPIDS compatible GPU is required to build the docs since the notebooks in the docs execute the code to generate the HTML output.
 
 ## Steps to follow:
+
+In order to build the docs, we need the conda dev environment from cudf and build cudf from source. 
 
 1. Create a conda env and  build cudf from source. The dependencies to build rapids from source are installed in that conda environment, and then rapids is built and installed into the same environment.
 
@@ -29,4 +30,4 @@ Then, navigate a web browser to the IP address or hostname of the host machine a
 ```
 https://<host IP-Address>:8000
 ```
-Now you can check if your docs edits formatted correctly. 
+Now you can check if your docs edits formatted correctly, and read well.
