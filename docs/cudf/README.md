@@ -22,5 +22,8 @@ First navigate to "/build/html/" folder, i.e., `cd build/html` and then run the 
 ```
 python -m http.server
 ```
-Open a browser and type <b><host-ip>:8000 </b>.
+Then, navigate a web browser to the IP address or hostname of the host machine at port 8000:
 
+```
+https://<host IP-Address>:8000
+```
