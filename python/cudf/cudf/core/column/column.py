@@ -4,6 +4,7 @@ import pickle
 import warnings
 from numbers import Number
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -78,8 +79,7 @@ class ColumnBase(Column):
         if is_categorical_dtype(self.dtype):
             return self.codes.data_array_view
 
-        result = cuda.as_cuda_array(self.data)
-        result.gpu_data._obj = self
+        result = cp.asarray(self.data)
         return result
 
     @property
@@ -87,8 +87,7 @@ class ColumnBase(Column):
         """
         View the mask as a device array
         """
-        result = cuda.as_cuda_array(self.mask)
-        result.gpu_data._obj = self
+        result = cp.asarray(self.mask)
         return result
 
     def __len__(self):
