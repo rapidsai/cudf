@@ -1528,7 +1528,7 @@ class DataFrame(Frame):
         return out
 
     def _apply_boolean_mask(self, mask):
-        return self.apply_boolean_mask(mask)
+        return self._frame_apply_boolean_mask(mask)
 
     def _take_columns(self, positions):
         positions = Series(positions)
@@ -1778,7 +1778,9 @@ class DataFrame(Frame):
         subset_cols = [
             name for name, col in self._data.items() if name in subset
         ]
-        out_df = self.frame_drop_duplicates(subset_cols, keep)
+        if(len(subset_cols) == 0):
+            return self.copy(deep=True)
+        outdf = self._drop_duplicates(subset_cols, keep)
 
         return self._mimic_inplace(outdf, inplace=inplace)
 
@@ -1828,8 +1830,6 @@ class DataFrame(Frame):
         """
         Drop rows containing nulls.
         """
-        if len(subset) == 0:
-            return self
         if subset is None:
             subset = self._data
         elif (
@@ -1846,7 +1846,10 @@ class DataFrame(Frame):
             name for name, col in self._data.items() if name in subset
         ]
 
-        return self.drop_nulls(how=how, keys=subset, thresh=thresh)
+        if(len(subset_cols) == 0):
+            return self.copy(deep=True)
+
+        return self._drop_nulls(how=how, keys=subset_cols, thresh=thresh)
 
     def _drop_na_columns(self, how="any", subset=None, thresh=None):
         """

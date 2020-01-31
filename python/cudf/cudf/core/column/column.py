@@ -59,11 +59,12 @@ class ColumnBase(Column):
             (self.data, self.dtype, self.mask, self.offset, self.children),
         )
 
-    def as_table(self, name=None):
+    def as_frame(self, name=None):
+        from cudf.core.frame import Frame
         """
         Converts a Column to Table
         """
-        return libcudfxx.Table({name: self.copy(deep=False)})
+        return Frame({name: self.copy(deep=False)})
 
     @property
     def data_array_view(self):
@@ -282,7 +283,8 @@ class ColumnBase(Column):
         return col
 
     def dropna(self):
-        dropped_col = libcudfxx.drop_nulls(self.as_table())[None]
+        print("RGSL : number of childrens in drop_null", len(self.children));
+        dropped_col = self.as_frame()._drop_nulls()._data[None].copy(deep=False)
         return dropped_col
 
     def _get_mask_as_column(self):
@@ -740,7 +742,7 @@ class ColumnBase(Column):
         if method != "sort":
             msg = "non sort based unique_count() not implemented yet"
             raise NotImplementedError(msg)
-        return cpp_unique_count(self, dropna)
+        return cpp_unique_count(self, ignore_nulls=dropna)
 
     def repeat(self, repeats, axis=None):
         assert axis in (None, 0)
@@ -815,7 +817,8 @@ class ColumnBase(Column):
 
     def apply_boolean_mask(self, mask):
         mask = as_column(mask, dtype="bool")
-        result = libcudfxx.apply_boolean_mask(self.as_table(), mask)[None]
+        print("RGSL : number of childrens in apply", len(self.children));
+        result = self.as_frame()._frame_apply_boolean_mask(boolean_mask=mask)._data[None].copy(deep=False)
         return result
 
     def argsort(self, ascending):
@@ -979,6 +982,7 @@ def build_column(
 
     if is_categorical_dtype(dtype):
         if not len(children) == 1:
+            print ("RGSL : Number of children is ", len(children))
             raise ValueError(
                 "Must specify exactly one child column for CategoricalColumn"
             )

@@ -492,15 +492,6 @@ class CategoricalColumn(column.ColumnBase):
         result.mask = None
         return self._mimic_inplace(result, inplace)
 
-    def apply_boolean_mask(self, mask):
-        codes = super().apply_boolean_mask(mask)
-        return column.build_categorical_column(
-            categories=self.dtype.categories,
-            codes=codes,
-            mask=codes.mask,
-            ordered=self.dtype.ordered,
-        )
-
     def find_first_value(self, value, closest=False):
         """
         Returns offset of first value that matches

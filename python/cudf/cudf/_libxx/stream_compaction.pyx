@@ -1,5 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+from __future__ import print_function
 import pandas as pd
 from cudf._libxx.column cimport *
 from cudf._libxx.table cimport *
@@ -33,13 +34,16 @@ def drop_nulls(Table source_table, how="any", keys=None, thresh=None):
     Table with null rows dropped
     """
 
-    cdef size_type c_keep_threshold = source_table._num_columns
+    print  ("In drop null")
+    num_index_columns = 0 if source_table._index is None else source_table._index._num_columns
+    # shifting the index number by number of index columns
+    cdef vector[size_type] cpp_keys = [num_index_columns+source_table._column_names.index(name) for name in keys] if keys is not None else range(num_index_columns, num_index_columns+source_table._num_columns)
+
+    cdef size_type c_keep_threshold = cpp_keys.size()
     if thresh is not  None:
         c_keep_threshold = thresh
     elif how == "all":
         c_keep_threshold = 1
-
-    cdef vector[size_type] cpp_keys = [source_table._column_names.index(name) for name in keys] if keys is not None else range(0, source_table._num_columns)
 
     cdef unique_ptr[table] c_result = (
         cpp_drop_nulls(source_table.view(),
@@ -51,7 +55,7 @@ def drop_nulls(Table source_table, how="any", keys=None, thresh=None):
     return Table.from_unique_ptr(
         move(c_result),
         column_names=source_table._column_names,
-        index_names=source_table._index._column_names
+        index_names=None if source_table._index is None else source_table._index._column_names
     )
 
 def apply_boolean_mask(Table source_table, Column boolean_mask):
@@ -68,6 +72,7 @@ def apply_boolean_mask(Table source_table, Column boolean_mask):
     Table obtained from applying mask
     """
 
+    print  ("In apply boolean mask")
     assert pd.api.types.is_bool_dtype(boolean_mask.dtype)
 
     cdef unique_ptr[table] c_result = (
@@ -79,7 +84,7 @@ def apply_boolean_mask(Table source_table, Column boolean_mask):
     return Table.from_unique_ptr(
         move(c_result),
         column_names=source_table._column_names,
-        index_names=source_table._index._column_names
+        index_names=None if source_table._index is None else source_table._index._column_names
     )
 
 def drop_duplicates(Table source_table, keys=None, keep='first', nulls_are_equal=True):
@@ -98,6 +103,7 @@ def drop_duplicates(Table source_table, keys=None, keep='first', nulls_are_equal
     Table with duplicate dropped
     """
 
+    print  ("In adrop duplicate")
     cdef duplicate_keep_option cpp_keep_option
 
     if keep == 'first':
@@ -109,7 +115,10 @@ def drop_duplicates(Table source_table, keys=None, keep='first', nulls_are_equal
     else:
         raise ValueError('keep must be either "first", "last" or False')
 
-    cdef vector[size_type] cpp_keys = [source_table.column_names.index(name) for name in keys] if keys is not None else range(0, source_table._num_columns)
+    num_index_columns = 0 if source_table._index is None else source_table._index._num_columns
+    # shifting the index number by number of index columns
+    cdef vector[size_type] cpp_keys = [num_index_columns+source_table._column_names.index(name) for name in keys] if keys is not None else range(num_index_columns, num_index_columns+source_table._num_columns)
+    print ("The keys are ", [num_index_columns+source_table._column_names.index(name) for name in keys] if keys is not None else range(num_index_columns, num_index_columns+source_table._num_columns))
     cdef cpp_nulls_are_equal = nulls_are_equal
 
     cdef unique_ptr[table] c_result = (
@@ -123,7 +132,7 @@ def drop_duplicates(Table source_table, keys=None, keep='first', nulls_are_equal
     return Table.from_unique_ptr(
         move(c_result),
         column_names=source_table._column_names,
-        index_names=source_table._index._column_names
+        index_names=None if source_table._index is None else source_table._index._column_names
     )
 
 def unique_count(Column source_column, ignore_nulls=True, nan_as_null=False):
@@ -143,6 +152,7 @@ def unique_count(Column source_column, ignore_nulls=True, nan_as_null=False):
     Count of number of unique rows in `source_column`
     """
 
+    print  ("In unique count")
     cdef cpp_ignore_nulls = ignore_nulls
     cdef cpp_nan_as_null = nan_as_null
 
@@ -152,15 +162,3 @@ def unique_count(Column source_column, ignore_nulls=True, nan_as_null=False):
         )
 
     return count
-
-        
-
-
-
-
-            
-
-
-
-
-

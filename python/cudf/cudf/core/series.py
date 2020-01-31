@@ -1198,7 +1198,8 @@ class Series(Frame):
         """
         Return Series with duplicate values removed
         """
-        result = self.frame_drop_duplicate(self, None, keep)
+        result = self._drop_duplicates(keys=None, keep=keep)
+        print (result)
         
         return self._mimic_inplace(result, inplace=inplace)
 
@@ -1218,8 +1219,9 @@ class Series(Frame):
         if not self.has_nulls:
             return self
         name = self.name
-        result = self.to_frame(name="_").dropna()
+        result = self.to_frame(name="_").dropna(subset=["_"])
         result = result["_"]
+        #result._update_index_name(self)
         result.name = name
         self.name = name
         return result
@@ -2134,7 +2136,7 @@ class Series(Frame):
             raise NotImplementedError(msg)
         if self.null_count == len(self):
             return 0
-        return self._column.unique_count(method=method, dropna=dropna)
+        return self._column.unique_count(method, dropna)
 
     def value_counts(self, sort=True):
         """Returns unique values of this Series.
