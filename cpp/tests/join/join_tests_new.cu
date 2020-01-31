@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,84 +31,59 @@
 #include <tests/utilities/type_lists.hpp>
 
 using cudf::test::fixed_width_column_wrapper;
-
-using strcol_wrapper = cudf::test::strings_column_wrapper;
-using CVector        = std::vector<std::unique_ptr<cudf::column>>;
-using Table          = cudf::experimental::table;
-using join_operator  = cudf::join::join_comparison_operator;
+using cudf::test::strings_column_wrapper;
+using cudf::experimental::table;
+using cudf::join::join_comparison_operator;
 
 struct JoinTest : public cudf::test::BaseFixture {};
 
+#if 0
 TEST_F(JoinTest, InvalidCommonColumnIndices)
 {
-  std::cout << "in test" << std::endl;
-  
-  try {
-    fixed_width_column_wrapper<int32_t> col0_0{3, 1, 2, 0, 3};
-    fixed_width_column_wrapper<int32_t> col0_1{0, 1, 2, 4, 1};
-
-    fixed_width_column_wrapper<int32_t> col1_0{2, 2, 0, 4, 3};
-    fixed_width_column_wrapper<int32_t> col1_1{1, 0, 1, 2, 1};
-  } catch (std::exception &ex) {
-    std::cout << "exception: " << ex.what() << std::endl;
-    void *array[10];
-    size_t size;
-    char **strings;
-
-    size = backtrace(array,10);
-    strings = backtrace_symbols(array,size);
-
-    std::cout << "stack frame" << std::endl;
-    for (size_t i = 0 ; i < size ; ++i)
-      std::cout << "  " << strings[i] << std::endl;
-
-    free(strings);
-  }
-
   fixed_width_column_wrapper<int32_t> col0_0{3, 1, 2, 0, 3};
   fixed_width_column_wrapper<int32_t> col0_1{0, 1, 2, 4, 1};
 
   fixed_width_column_wrapper<int32_t> col1_0{2, 2, 0, 4, 3};
   fixed_width_column_wrapper<int32_t> col1_1{1, 0, 1, 2, 1};
 
-  std::cout << "creating cols0" << std::endl;
-
-  CVector cols0, cols1;
+  std::vector<std::unique_ptr<cudf::column>>  cols0, cols1;
   cols0.push_back(col0_0.release());
   cols0.push_back(col0_1.release());
   cols1.push_back(col1_0.release());
   cols1.push_back(col1_1.release());
 
-  Table t0(std::move(cols0));
-  Table t1(std::move(cols1));
+  table t0(std::move(cols0));
+  table t1(std::move(cols1));
 
-  std::vector<cudf::join::join_operation> join_ops{ { join_operator::EQUAL, 0, 0},
-      { join_operator::EQUAL, 1, 1} };
+  //
+  // NOTE:  Not sure this should be a logic error.  columns_in_common - as implemented in both old and current join
+  //        is INDEPENDENT of the join specification.  While this could happen accidentally (and not checking it
+  //        would leave the user susecptible to such a careless error) it is not clear to me that specifying a columns_in_common
+  //        pair that is not part of the join operation is logically incorrect behavior.
+  //
+  //        Now... if the types don't match then the join will throw a logic_error.  Perhaps we should repurpose this test.
+  //
+  std::vector<cudf::join::join_operation> join_ops{ { join_comparison_operator::EQUAL, 0, 0}, { join_comparison_operator::EQUAL, 1, 1} };
 
   std::vector<std::pair<cudf::size_type, cudf::size_type>> columns_in_common{{0, 1}, {1, 0}};
 
-  std::cout << "call nested_loop" << std::endl;
   
-  EXPECT_THROW (
-                cudf::join::inner_join::nested_loop(t0,
-                                                    t1,
-                                                    join_ops,
-                                                    columns_in_common),
+  EXPECT_THROW (cudf::join::inner_join::nested_loop(t0, t1, join_ops, columns_in_common),
                 cudf::logic_error);
 }
+#endif
 
-#if 0
 TEST_F(JoinTest, FullJoinNoNulls)
 {
-  column_wrapper <int32_t> col0_0{{3, 1, 2, 0, 3}};
-  strcol_wrapper           col0_1({"s0", "s1", "s2", "s4", "s1"});
-  column_wrapper <int32_t> col0_2{{0, 1, 2, 4, 1}};
+  fixed_width_column_wrapper <int32_t> col0_0{{3, 1, 2, 0, 3}};
+  strings_column_wrapper               col0_1({"s0", "s1", "s2", "s4", "s1"});
+  fixed_width_column_wrapper <int32_t> col0_2{{0, 1, 2, 4, 1}};
 
-  column_wrapper <int32_t> col1_0{{2, 2, 0, 4, 3}};
-  strcol_wrapper           col1_1{{"s1", "s0", "s1", "s2", "s1"}};
-  column_wrapper <int32_t> col1_2{{1, 0, 1, 2, 1}};
+  fixed_width_column_wrapper <int32_t> col1_0{{2, 2, 0, 4, 3}};
+  strings_column_wrapper               col1_1{{"s1", "s0", "s1", "s2", "s1"}};
+  fixed_width_column_wrapper <int32_t> col1_2{{1, 0, 1, 2, 1}};
 
-  CVector cols0, cols1;
+  std::vector<std::unique_ptr<cudf::column>>  cols0, cols1;
   cols0.push_back(col0_0.release());
   cols0.push_back(col0_1.release());
   cols0.push_back(col0_2.release());
@@ -116,23 +91,28 @@ TEST_F(JoinTest, FullJoinNoNulls)
   cols1.push_back(col1_1.release());
   cols1.push_back(col1_2.release());
 
-  Table t0(std::move(cols0));
-  Table t1(std::move(cols1));
+  table t0(std::move(cols0));
+  table t1(std::move(cols1));
 
-  auto result = cudf::experimental::full_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1,1}});
+  std::vector<cudf::join::join_operation> join_ops{ { join_comparison_operator::EQUAL, 0, 0}, { join_comparison_operator::EQUAL, 1, 1} };
+  std::vector<std::pair<cudf::size_type, cudf::size_type>> columns_in_common{{0, 0}, {1, 1}};
+
+  auto result = cudf::join::full_join::nested_loop(t0, t1, join_ops, columns_in_common);
   auto result_sort_order = cudf::experimental::sorted_order(result->view());
   auto sorted_result = cudf::experimental::gather(result->view(), *result_sort_order);
 
-  column_wrapper <int32_t> col_gold_0{{2, 2, 0, 4, 3, 3, 1, 2, 0}};
-  strcol_wrapper           col_gold_1({"s1", "s0", "s1", "s2", "s1", "s0", "s1", "s2", "s4"});
-  column_wrapper <int32_t> col_gold_2{{-1, -1, -1, -1, 1, 0, 1, 2, 4}, {0, 0, 0, 0, 1, 1, 1, 1, 1}};
-  column_wrapper <int32_t> col_gold_3{{ 1, 0, 1, 2, 1, -1, -1, -1, -1}, {1, 1, 1, 1, 1, 0, 0, 0, 0}};
-  CVector cols_gold;
+  fixed_width_column_wrapper <int32_t> col_gold_0{{2, 2, 0, 4, 3, 3, 1, 2, 0}};
+  strings_column_wrapper               col_gold_1({"s1", "s0", "s1", "s2", "s1", "s0", "s1", "s2", "s4"});
+  fixed_width_column_wrapper <int32_t> col_gold_2{{-1, -1, -1, -1, 1, 0, 1, 2, 4}, {0, 0, 0, 0, 1, 1, 1, 1, 1}};
+  fixed_width_column_wrapper <int32_t> col_gold_3{{ 1, 0, 1, 2, 1, -1, -1, -1, -1}, {1, 1, 1, 1, 1, 0, 0, 0, 0}};
+
+  std::vector<std::unique_ptr<cudf::column>>  cols_gold;
   cols_gold.push_back(col_gold_0.release());
   cols_gold.push_back(col_gold_1.release());
   cols_gold.push_back(col_gold_2.release());
   cols_gold.push_back(col_gold_3.release());
-  Table gold(std::move(cols_gold));
+
+    table gold(std::move(cols_gold));
 
   auto gold_sort_order = cudf::experimental::sorted_order(gold.view());
   auto sorted_gold = cudf::experimental::gather(gold.view(), *gold_sort_order);
@@ -141,15 +121,15 @@ TEST_F(JoinTest, FullJoinNoNulls)
 
 TEST_F(JoinTest, FullJoinWithNulls)
 {
-  column_wrapper <int32_t> col0_0{{3, 1, 2, 0, 3}};
-  strcol_wrapper           col0_1({"s0", "s1", "s2", "s4", "s1"});
-  column_wrapper <int32_t> col0_2{{0, 1, 2, 4, 1}};
+  fixed_width_column_wrapper <int32_t> col0_0{{3, 1, 2, 0, 3}};
+  strings_column_wrapper               col0_1({"s0", "s1", "s2", "s4", "s1"});
+  fixed_width_column_wrapper <int32_t> col0_2{{0, 1, 2, 4, 1}};
 
-  column_wrapper <int32_t> col1_0{{2, 2, 0, 4, 3}, {1, 1, 1, 0, 1}};
-  strcol_wrapper           col1_1{{"s1", "s0", "s1", "s2", "s1"}};
-  column_wrapper <int32_t> col1_2{{1, 0, 1, 2, 1}};
+  fixed_width_column_wrapper <int32_t> col1_0{{2, 2, 0, 4, 3}, {1, 1, 1, 0, 1}};
+  strings_column_wrapper               col1_1{{"s1", "s0", "s1", "s2", "s1"}};
+  fixed_width_column_wrapper <int32_t> col1_2{{1, 0, 1, 2, 1}};
 
-  CVector cols0, cols1;
+  std::vector<std::unique_ptr<cudf::column>>  cols0, cols1;
   cols0.push_back(col0_0.release());
   cols0.push_back(col0_1.release());
   cols0.push_back(col0_2.release());
@@ -157,23 +137,28 @@ TEST_F(JoinTest, FullJoinWithNulls)
   cols1.push_back(col1_1.release());
   cols1.push_back(col1_2.release());
 
-  Table t0(std::move(cols0));
-  Table t1(std::move(cols1));
+  table t0(std::move(cols0));
+  table t1(std::move(cols1));
 
-  auto result = cudf::experimental::full_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1,1}});
+  std::vector<cudf::join::join_operation> join_ops{ { join_comparison_operator::EQUAL, 0, 0}, { join_comparison_operator::EQUAL, 1, 1} };
+  std::vector<std::pair<cudf::size_type, cudf::size_type>> columns_in_common{{0, 0}, {1, 1}};
+
+  auto result = cudf::join::full_join::nested_loop(t0, t1, join_ops, columns_in_common);
   auto result_sort_order = cudf::experimental::sorted_order(result->view());
   auto sorted_result = cudf::experimental::gather(result->view(), *result_sort_order);
 
-  column_wrapper <int32_t> col_gold_0{{2, 2, 0, -1, 3, 3, 1, 2, 0}, {1, 1, 1, 0, 1, 1, 1, 1, 1}};
-  strcol_wrapper           col_gold_1({"s1", "s0", "s1", "s2", "s1", "s0", "s1", "s2", "s4"});
-  column_wrapper <int32_t> col_gold_2{{-1, -1, -1, -1, 1, 0, 1, 2, 4}, {0, 0, 0, 0, 1, 1, 1, 1, 1}};
-  column_wrapper <int32_t> col_gold_3{{ 1, 0, 1, 2, 1, -1, -1, -1, -1}, {1, 1, 1, 1, 1, 0, 0, 0, 0}};
-  CVector cols_gold;
+  fixed_width_column_wrapper <int32_t> col_gold_0{{2, 2, 0, -1, 3, 3, 1, 2, 0}, {1, 1, 1, 0, 1, 1, 1, 1, 1}};
+  strings_column_wrapper               col_gold_1({"s1", "s0", "s1", "s2", "s1", "s0", "s1", "s2", "s4"});
+  fixed_width_column_wrapper <int32_t> col_gold_2{{-1, -1, -1, -1, 1, 0, 1, 2, 4}, {0, 0, 0, 0, 1, 1, 1, 1, 1}};
+  fixed_width_column_wrapper <int32_t> col_gold_3{{ 1, 0, 1, 2, 1, -1, -1, -1, -1}, {1, 1, 1, 1, 1, 0, 0, 0, 0}};
+
+  std::vector<std::unique_ptr<cudf::column>>  cols_gold;
   cols_gold.push_back(col_gold_0.release());
   cols_gold.push_back(col_gold_1.release());
   cols_gold.push_back(col_gold_2.release());
   cols_gold.push_back(col_gold_3.release());
-  Table gold(std::move(cols_gold));
+
+  table gold(std::move(cols_gold));
 
   auto gold_sort_order = cudf::experimental::sorted_order(gold.view());
   auto sorted_gold = cudf::experimental::gather(gold.view(), *gold_sort_order);
@@ -182,15 +167,15 @@ TEST_F(JoinTest, FullJoinWithNulls)
 
 TEST_F(JoinTest, LeftJoinNoNulls)
 {
-  column_wrapper <int32_t> col0_0{{3, 1, 2, 0, 3}};
-  strcol_wrapper           col0_1({"s0", "s1", "s2", "s4", "s1"});
-  column_wrapper <int32_t> col0_2{{0, 1, 2, 4, 1}};
+  fixed_width_column_wrapper <int32_t> col0_0{{3, 1, 2, 0, 3}};
+  strings_column_wrapper               col0_1({"s0", "s1", "s2", "s4", "s1"});
+  fixed_width_column_wrapper <int32_t> col0_2{{0, 1, 2, 4, 1}};
 
-  column_wrapper <int32_t> col1_0{{2, 2, 0, 4, 3}};
-  strcol_wrapper           col1_1({"s1", "s0", "s1", "s2", "s1"});
-  column_wrapper <int32_t> col1_2{{1, 0, 1, 2, 1}};
+  fixed_width_column_wrapper <int32_t> col1_0{{2, 2, 0, 4, 3}};
+  strings_column_wrapper               col1_1({"s1", "s0", "s1", "s2", "s1"});
+  fixed_width_column_wrapper <int32_t> col1_2{{1, 0, 1, 2, 1}};
 
-  CVector cols0, cols1;
+    std::vector<std::unique_ptr<cudf::column>>  cols0, cols1;
   cols0.push_back(col0_0.release());
   cols0.push_back(col0_1.release());
   cols0.push_back(col0_2.release());
@@ -198,23 +183,28 @@ TEST_F(JoinTest, LeftJoinNoNulls)
   cols1.push_back(col1_1.release());
   cols1.push_back(col1_2.release());
 
-  Table t0(std::move(cols0));
-  Table t1(std::move(cols1));
+  table t0(std::move(cols0));
+  table t1(std::move(cols1));
 
-  auto result = cudf::experimental::left_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1,1}});
+  std::vector<cudf::join::join_operation> join_ops{ { join_comparison_operator::EQUAL, 0, 0}, { join_comparison_operator::EQUAL, 1, 1} };
+  std::vector<std::pair<cudf::size_type, cudf::size_type>> columns_in_common{{0, 0}, {1, 1}};
+
+  auto result = cudf::join::left_join::nested_loop(t0, t1, join_ops, columns_in_common);
   auto result_sort_order = cudf::experimental::sorted_order(result->view());
   auto sorted_result = cudf::experimental::gather(result->view(), *result_sort_order);
 
-  column_wrapper <int32_t> col_gold_0{{3, 3, 1, 2, 0}, {1, 1, 1, 1, 1}};
-  strcol_wrapper           col_gold_1({"s1", "s0", "s1", "s2", "s4"}, {1, 1, 1, 1, 1, 1});
-  column_wrapper <int32_t> col_gold_2{{1, 0, 1, 2, 4}, {1, 1, 1, 1, 1}};
-  column_wrapper <int32_t> col_gold_3{{1, -1, -1, -1, -1}, {1, 0, 0, 0, 0}};
-  CVector cols_gold;
+  fixed_width_column_wrapper <int32_t> col_gold_0{{3, 3, 1, 2, 0}, {1, 1, 1, 1, 1}};
+  strings_column_wrapper               col_gold_1({"s1", "s0", "s1", "s2", "s4"}, {1, 1, 1, 1, 1, 1});
+  fixed_width_column_wrapper <int32_t> col_gold_2{{1, 0, 1, 2, 4}, {1, 1, 1, 1, 1}};
+  fixed_width_column_wrapper <int32_t> col_gold_3{{1, -1, -1, -1, -1}, {1, 0, 0, 0, 0}};
+
+  std::vector<std::unique_ptr<cudf::column>>  cols_gold;
   cols_gold.push_back(col_gold_0.release());
   cols_gold.push_back(col_gold_1.release());
   cols_gold.push_back(col_gold_2.release());
   cols_gold.push_back(col_gold_3.release());
-  Table gold(std::move(cols_gold));
+
+  table gold(std::move(cols_gold));
 
   auto gold_sort_order = cudf::experimental::sorted_order(gold.view());
   auto sorted_gold = cudf::experimental::gather(gold.view(), *gold_sort_order);
@@ -223,15 +213,15 @@ TEST_F(JoinTest, LeftJoinNoNulls)
 
 TEST_F(JoinTest, LeftJoinWithNulls)
 {
-  column_wrapper <int32_t> col0_0{{3, 1, 2, 0, 2}};
-  strcol_wrapper           col0_1({"s1", "s1", "s0", "s4", "s0"}, {1, 1, 0, 1, 1});
-  column_wrapper <int32_t> col0_2{{0, 1, 2, 4, 1}};
+  fixed_width_column_wrapper <int32_t> col0_0{{3, 1, 2, 0, 2}};
+  strings_column_wrapper               col0_1({"s1", "s1", "s0", "s4", "s0"}, {1, 1, 0, 1, 1});
+  fixed_width_column_wrapper <int32_t> col0_2{{0, 1, 2, 4, 1}};
 
-  column_wrapper <int32_t> col1_0{{2, 2, 0, 4, 3}};
-  strcol_wrapper           col1_1({"s1", "s0", "s1", "s2", "s1"});
-  column_wrapper <int32_t> col1_2{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
+  fixed_width_column_wrapper <int32_t> col1_0{{2, 2, 0, 4, 3}};
+  strings_column_wrapper               col1_1({"s1", "s0", "s1", "s2", "s1"});
+  fixed_width_column_wrapper <int32_t> col1_2{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
 
-  CVector cols0, cols1;
+  std::vector<std::unique_ptr<cudf::column>>  cols0, cols1;
   cols0.push_back(col0_0.release());
   cols0.push_back(col0_1.release());
   cols0.push_back(col0_2.release());
@@ -239,23 +229,28 @@ TEST_F(JoinTest, LeftJoinWithNulls)
   cols1.push_back(col1_1.release());
   cols1.push_back(col1_2.release());
 
-  Table t0(std::move(cols0));
-  Table t1(std::move(cols1));
+  table t0(std::move(cols0));
+  table t1(std::move(cols1));
 
-  auto result = cudf::experimental::left_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1,1}});
+  std::vector<cudf::join::join_operation> join_ops{ { join_comparison_operator::EQUAL, 0, 0}, { join_comparison_operator::EQUAL, 1, 1} };
+  std::vector<std::pair<cudf::size_type, cudf::size_type>> columns_in_common{{0, 0}, {1, 1}};
+
+  auto result = cudf::join::left_join::nested_loop(t0, t1, join_ops, columns_in_common);
   auto result_sort_order = cudf::experimental::sorted_order(result->view());
   auto sorted_result = cudf::experimental::gather(result->view(), *result_sort_order);
 
-  column_wrapper <int32_t> col_gold_0{{3, 2, 1, 2, 0}, {1, 1, 1, 1, 1}};
-  strcol_wrapper           col_gold_1({"s1", "s0", "s1", "", "s4"}, {1, 1, 1, 0, 1});
-  column_wrapper <int32_t> col_gold_2{{0, 1, 1, 2, 4}, {1, 1, 1, 1, 1}};
-  column_wrapper <int32_t> col_gold_3{{1, -1, -1, -1, -1}, {1, 0, 0, 0, 0}};
-  CVector cols_gold;
+  fixed_width_column_wrapper <int32_t> col_gold_0{{3, 2, 1, 2, 0}, {1, 1, 1, 1, 1}};
+  strings_column_wrapper               col_gold_1({"s1", "s0", "s1", "", "s4"}, {1, 1, 1, 0, 1});
+  fixed_width_column_wrapper <int32_t> col_gold_2{{0, 1, 1, 2, 4}, {1, 1, 1, 1, 1}};
+  fixed_width_column_wrapper <int32_t> col_gold_3{{1, -1, -1, -1, -1}, {1, 0, 0, 0, 0}};
+
+  std::vector<std::unique_ptr<cudf::column>>  cols_gold;
   cols_gold.push_back(col_gold_0.release());
   cols_gold.push_back(col_gold_1.release());
   cols_gold.push_back(col_gold_2.release());
   cols_gold.push_back(col_gold_3.release());
-  Table gold(std::move(cols_gold));
+
+  table gold(std::move(cols_gold));
 
   auto gold_sort_order = cudf::experimental::sorted_order(gold.view());
   auto sorted_gold = cudf::experimental::gather(gold.view(), *gold_sort_order);
@@ -264,15 +259,15 @@ TEST_F(JoinTest, LeftJoinWithNulls)
 
 TEST_F(JoinTest, InnerJoinNoNulls)
 {
-  column_wrapper <int32_t> col0_0{{3, 1, 2, 0, 2}};
-  strcol_wrapper           col0_1({"s1", "s1", "s0", "s4", "s0"});
-  column_wrapper <int32_t> col0_2{{0, 1, 2, 4, 1}};
+  fixed_width_column_wrapper <int32_t> col0_0{{3, 1, 2, 0, 2}};
+  strings_column_wrapper               col0_1({"s1", "s1", "s0", "s4", "s0"});
+  fixed_width_column_wrapper <int32_t> col0_2{{0, 1, 2, 4, 1}};
 
-  column_wrapper <int32_t> col1_0{{2, 2, 0, 4, 3}};
-  strcol_wrapper           col1_1({"s1", "s0", "s1", "s2", "s1"});
-  column_wrapper <int32_t> col1_2{{1, 0, 1, 2, 1}};
+  fixed_width_column_wrapper <int32_t> col1_0{{2, 2, 0, 4, 3}};
+  strings_column_wrapper               col1_1({"s1", "s0", "s1", "s2", "s1"});
+  fixed_width_column_wrapper <int32_t> col1_2{{1, 0, 1, 2, 1}};
 
-  CVector cols0, cols1;
+  std::vector<std::unique_ptr<cudf::column>>  cols0, cols1;
   cols0.push_back(col0_0.release());
   cols0.push_back(col0_1.release());
   cols0.push_back(col0_2.release());
@@ -280,23 +275,28 @@ TEST_F(JoinTest, InnerJoinNoNulls)
   cols1.push_back(col1_1.release());
   cols1.push_back(col1_2.release());
 
-  Table t0(std::move(cols0));
-  Table t1(std::move(cols1));
+  table t0(std::move(cols0));
+  table t1(std::move(cols1));
 
-  auto result = cudf::experimental::inner_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1,1}});
+  std::vector<cudf::join::join_operation> join_ops{ { join_comparison_operator::EQUAL, 0, 0}, { join_comparison_operator::EQUAL, 1, 1} };
+  std::vector<std::pair<cudf::size_type, cudf::size_type>> columns_in_common{{0, 0}, {1, 1}};
+
+  auto result = cudf::join::inner_join::nested_loop(t0, t1, join_ops, columns_in_common);
   auto result_sort_order = cudf::experimental::sorted_order(result->view());
   auto sorted_result = cudf::experimental::gather(result->view(), *result_sort_order);
 
-  column_wrapper <int32_t> col_gold_0{{3, 2, 2}};
-  strcol_wrapper           col_gold_1({"s1", "s0", "s0"});
-  column_wrapper <int32_t> col_gold_2{{0, 2, 1}};
-  column_wrapper <int32_t> col_gold_3{{1, 0, 0}};
-  CVector cols_gold;
+  fixed_width_column_wrapper <int32_t> col_gold_0{{3, 2, 2}};
+  strings_column_wrapper               col_gold_1({"s1", "s0", "s0"});
+  fixed_width_column_wrapper <int32_t> col_gold_2{{0, 2, 1}};
+  fixed_width_column_wrapper <int32_t> col_gold_3{{1, 0, 0}};
+
+  std::vector<std::unique_ptr<cudf::column>>  cols_gold;
   cols_gold.push_back(col_gold_0.release());
   cols_gold.push_back(col_gold_1.release());
   cols_gold.push_back(col_gold_2.release());
   cols_gold.push_back(col_gold_3.release());
-  Table gold(std::move(cols_gold));
+
+  table gold(std::move(cols_gold));
 
   auto gold_sort_order = cudf::experimental::sorted_order(gold.view());
   auto sorted_gold = cudf::experimental::gather(gold.view(), *gold_sort_order);
@@ -305,15 +305,15 @@ TEST_F(JoinTest, InnerJoinNoNulls)
 
 TEST_F(JoinTest, InnerJoinWithNulls)
 {
-  column_wrapper <int32_t> col0_0{{3, 1, 2, 0, 2}};
-  strcol_wrapper           col0_1({"s1", "s1", "s0", "s4", "s0"}, {1, 1, 0, 1, 1});
-  column_wrapper <int32_t> col0_2{{0, 1, 2, 4, 1}};
+  fixed_width_column_wrapper <int32_t> col0_0{{3, 1, 2, 0, 2}};
+  strings_column_wrapper               col0_1({"s1", "s1", "s0", "s4", "s0"}, {1, 1, 0, 1, 1});
+  fixed_width_column_wrapper <int32_t> col0_2{{0, 1, 2, 4, 1}};
 
-  column_wrapper <int32_t> col1_0{{2, 2, 0, 4, 3}};
-  strcol_wrapper           col1_1({"s1", "s0", "s1", "s2", "s1"});
-  column_wrapper <int32_t> col1_2{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
+  fixed_width_column_wrapper <int32_t> col1_0{{2, 2, 0, 4, 3}};
+  strings_column_wrapper               col1_1({"s1", "s0", "s1", "s2", "s1"});
+  fixed_width_column_wrapper <int32_t> col1_2{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
 
-  CVector cols0, cols1;
+  std::vector<std::unique_ptr<cudf::column>>  cols0, cols1;
   cols0.push_back(col0_0.release());
   cols0.push_back(col0_1.release());
   cols0.push_back(col0_2.release());
@@ -321,23 +321,28 @@ TEST_F(JoinTest, InnerJoinWithNulls)
   cols1.push_back(col1_1.release());
   cols1.push_back(col1_2.release());
 
-  Table t0(std::move(cols0));
-  Table t1(std::move(cols1));
+  table t0(std::move(cols0));
+  table t1(std::move(cols1));
 
-  auto result = cudf::experimental::inner_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1,1}});
+  std::vector<cudf::join::join_operation> join_ops{ { join_comparison_operator::EQUAL, 0, 0}, { join_comparison_operator::EQUAL, 1, 1} };
+  std::vector<std::pair<cudf::size_type, cudf::size_type>> columns_in_common{{0, 0}, {1, 1}};
+
+  auto result = cudf::join::inner_join::nested_loop(t0, t1, join_ops, columns_in_common);
   auto result_sort_order = cudf::experimental::sorted_order(result->view());
   auto sorted_result = cudf::experimental::gather(result->view(), *result_sort_order);
 
-  column_wrapper <int32_t> col_gold_0{{3, 2}};
-  strcol_wrapper           col_gold_1({"s1", "s0"}, {1, 1});
-  column_wrapper <int32_t> col_gold_2{{0, 1}};
-  column_wrapper <int32_t> col_gold_3{{1, -1}, {1, 0}};
-  CVector cols_gold;
+  fixed_width_column_wrapper <int32_t> col_gold_0{{3, 2}};
+  strings_column_wrapper               col_gold_1({"s1", "s0"}, {1, 1});
+  fixed_width_column_wrapper <int32_t> col_gold_2{{0, 1}};
+  fixed_width_column_wrapper <int32_t> col_gold_3{{1, -1}, {1, 0}};
+
+  std::vector<std::unique_ptr<cudf::column>>  cols_gold;
   cols_gold.push_back(col_gold_0.release());
   cols_gold.push_back(col_gold_1.release());
   cols_gold.push_back(col_gold_2.release());
   cols_gold.push_back(col_gold_3.release());
-  Table gold(std::move(cols_gold));
+
+  table gold(std::move(cols_gold));
 
   auto gold_sort_order = cudf::experimental::sorted_order(gold.view());
   auto sorted_gold = cudf::experimental::gather(gold.view(), *gold_sort_order);
@@ -347,192 +352,219 @@ TEST_F(JoinTest, InnerJoinWithNulls)
 //Empty Left Table
 TEST_F(JoinTest, EmptyLeftTableInnerJoin)
 {
-  column_wrapper <int32_t> col0_0;
-  column_wrapper <int32_t> col0_1;
+  fixed_width_column_wrapper <int32_t> col0_0;
+  fixed_width_column_wrapper <int32_t> col0_1;
 
-  column_wrapper <int32_t> col1_0{{2, 2, 0, 4, 3}};
-  column_wrapper <int32_t> col1_1{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
+  fixed_width_column_wrapper <int32_t> col1_0{{2, 2, 0, 4, 3}};
+  fixed_width_column_wrapper <int32_t> col1_1{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
 
-  CVector cols0, cols1;
+  std::vector<std::unique_ptr<cudf::column>>  cols0, cols1;
   cols0.push_back(col0_0.release());
   cols0.push_back(col0_1.release());
   cols1.push_back(col1_0.release());
   cols1.push_back(col1_1.release());
 
-  Table empty0(std::move(cols0));
-  Table t1(std::move(cols1));
+  table empty0(std::move(cols0));
+  table t1(std::move(cols1));
 
-  auto result = cudf::experimental::inner_join(empty0, t1, {0, 1}, {0, 1}, {{0, 0}, {1,1}});
+  std::vector<cudf::join::join_operation> join_ops{ { join_comparison_operator::EQUAL, 0, 0}, { join_comparison_operator::EQUAL, 1, 1} };
+  std::vector<std::pair<cudf::size_type, cudf::size_type>> columns_in_common{{0, 0}, {1, 1}};
+
+  auto result = cudf::join::inner_join::nested_loop(empty0, t1, join_ops, columns_in_common);
   cudf::test::expect_tables_equal(empty0, *result);
 }
 
 TEST_F(JoinTest, EmptyLeftTableLeftJoin)
 {
-  column_wrapper <int32_t> col0_0;
-  column_wrapper <int32_t> col0_1;
+  fixed_width_column_wrapper <int32_t> col0_0;
+  fixed_width_column_wrapper <int32_t> col0_1;
 
-  column_wrapper <int32_t> col1_0{{2, 2, 0, 4, 3}};
-  column_wrapper <int32_t> col1_1{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
+  fixed_width_column_wrapper <int32_t> col1_0{{2, 2, 0, 4, 3}};
+  fixed_width_column_wrapper <int32_t> col1_1{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
 
-  CVector cols0, cols1;
+  std::vector<std::unique_ptr<cudf::column>>  cols0, cols1;
   cols0.push_back(col0_0.release());
   cols0.push_back(col0_1.release());
   cols1.push_back(col1_0.release());
   cols1.push_back(col1_1.release());
 
-  Table empty0(std::move(cols0));
-  Table t1(std::move(cols1));
+  table empty0(std::move(cols0));
+  table t1(std::move(cols1));
 
-  auto result = cudf::experimental::left_join(empty0, t1, {0, 1}, {0, 1}, {{0, 0}, {1,1}});
+  std::vector<cudf::join::join_operation> join_ops{ { join_comparison_operator::EQUAL, 0, 0}, { join_comparison_operator::EQUAL, 1, 1} };
+  std::vector<std::pair<cudf::size_type, cudf::size_type>> columns_in_common{{0, 0}, {1, 1}};
+
+  auto result = cudf::join::left_join::nested_loop(empty0, t1, join_ops, columns_in_common);
   cudf::test::expect_tables_equal(empty0, *result);
 }
 
 TEST_F(JoinTest, EmptyLeftTableFullJoin)
 {
-  column_wrapper <int32_t> col0_0;
-  column_wrapper <int32_t> col0_1;
+  fixed_width_column_wrapper <int32_t> col0_0;
+  fixed_width_column_wrapper <int32_t> col0_1;
 
-  column_wrapper <int32_t> col1_0{{2, 2, 0, 4, 3}};
-  column_wrapper <int32_t> col1_1{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
+  fixed_width_column_wrapper <int32_t> col1_0{{2, 2, 0, 4, 3}};
+  fixed_width_column_wrapper <int32_t> col1_1{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
 
-  CVector cols0, cols1;
+  std::vector<std::unique_ptr<cudf::column>>  cols0, cols1;
   cols0.push_back(col0_0.release());
   cols0.push_back(col0_1.release());
   cols1.push_back(col1_0.release());
   cols1.push_back(col1_1.release());
 
-  Table empty0(std::move(cols0));
-  Table t1(std::move(cols1));
+  table empty0(std::move(cols0));
+  table t1(std::move(cols1));
 
-  auto result = cudf::experimental::full_join(empty0, t1, {0, 1}, {0, 1}, {{0, 0}, {1,1}});
+  std::vector<cudf::join::join_operation> join_ops{ { join_comparison_operator::EQUAL, 0, 0}, { join_comparison_operator::EQUAL, 1, 1} };
+  std::vector<std::pair<cudf::size_type, cudf::size_type>> columns_in_common{{0, 0}, {1, 1}};
+
+  auto result = cudf::join::full_join::nested_loop(empty0, t1, join_ops, columns_in_common);
   cudf::test::expect_tables_equal(t1, *result);
 }
 
 //Empty Right Table
 TEST_F(JoinTest, EmptyRightTableInnerJoin)
 {
-  column_wrapper <int32_t> col0_0{{2, 2, 0, 4, 3}};
-  column_wrapper <int32_t> col0_1{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
+  fixed_width_column_wrapper <int32_t> col0_0{{2, 2, 0, 4, 3}};
+  fixed_width_column_wrapper <int32_t> col0_1{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
 
-  column_wrapper <int32_t> col1_0;
-  column_wrapper <int32_t> col1_1;
+  fixed_width_column_wrapper <int32_t> col1_0;
+  fixed_width_column_wrapper <int32_t> col1_1;
 
-  CVector cols0, cols1;
+  std::vector<std::unique_ptr<cudf::column>>  cols0, cols1;
   cols0.push_back(col0_0.release());
   cols0.push_back(col0_1.release());
   cols1.push_back(col1_0.release());
   cols1.push_back(col1_1.release());
 
-  Table t0(std::move(cols0));
-  Table empty1(std::move(cols1));
+  table t0(std::move(cols0));
+  table empty1(std::move(cols1));
 
-  auto result = cudf::experimental::inner_join(t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1,1}});
+  std::vector<cudf::join::join_operation> join_ops{ { join_comparison_operator::EQUAL, 0, 0}, { join_comparison_operator::EQUAL, 1, 1} };
+  std::vector<std::pair<cudf::size_type, cudf::size_type>> columns_in_common{{0, 0}, {1, 1}};
+
+  auto result = cudf::join::inner_join::nested_loop(t0, empty1, join_ops, columns_in_common);
   cudf::test::expect_tables_equal(empty1, *result);
 }
 
 TEST_F(JoinTest, EmptyRightTableLeftJoin)
 {
-  column_wrapper <int32_t> col0_0{{2, 2, 0, 4, 3}, {1, 1, 1, 1, 1}};
-  column_wrapper <int32_t> col0_1{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
+  fixed_width_column_wrapper <int32_t> col0_0{{2, 2, 0, 4, 3}, {1, 1, 1, 1, 1}};
+  fixed_width_column_wrapper <int32_t> col0_1{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
 
-  column_wrapper <int32_t> col1_0;
-  column_wrapper <int32_t> col1_1;
+  fixed_width_column_wrapper <int32_t> col1_0;
+  fixed_width_column_wrapper <int32_t> col1_1;
 
-  CVector cols0, cols1;
+  std::vector<std::unique_ptr<cudf::column>>  cols0, cols1;
   cols0.push_back(col0_0.release());
   cols0.push_back(col0_1.release());
   cols1.push_back(col1_0.release());
   cols1.push_back(col1_1.release());
 
-  Table t0(std::move(cols0));
-  Table empty1(std::move(cols1));
+  table t0(std::move(cols0));
+  table empty1(std::move(cols1));
 
-  auto result = cudf::experimental::left_join(t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1,1}});
+  std::vector<cudf::join::join_operation> join_ops{ { join_comparison_operator::EQUAL, 0, 0}, { join_comparison_operator::EQUAL, 1, 1} };
+  std::vector<std::pair<cudf::size_type, cudf::size_type>> columns_in_common{{0, 0}, {1, 1}};
+
+  auto result = cudf::join::left_join::nested_loop(t0, empty1, join_ops, columns_in_common);
   cudf::test::expect_tables_equal(t0, *result);
 }
 
 TEST_F(JoinTest, EmptyRightTableFullJoin)
 {
-  column_wrapper <int32_t> col0_0{{2, 2, 0, 4, 3}};
-  column_wrapper <int32_t> col0_1{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
+  fixed_width_column_wrapper <int32_t> col0_0{{2, 2, 0, 4, 3}};
+  fixed_width_column_wrapper <int32_t> col0_1{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
 
-  column_wrapper <int32_t> col1_0;
-  column_wrapper <int32_t> col1_1;
+  fixed_width_column_wrapper <int32_t> col1_0;
+  fixed_width_column_wrapper <int32_t> col1_1;
 
-  CVector cols0, cols1;
+  std::vector<std::unique_ptr<cudf::column>>  cols0, cols1;
   cols0.push_back(col0_0.release());
   cols0.push_back(col0_1.release());
   cols1.push_back(col1_0.release());
   cols1.push_back(col1_1.release());
 
-  Table t0(std::move(cols0));
-  Table empty1(std::move(cols1));
+  table t0(std::move(cols0));
+  table empty1(std::move(cols1));
 
-  auto result = cudf::experimental::full_join(t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1,1}});
+  std::vector<cudf::join::join_operation> join_ops{ { join_comparison_operator::EQUAL, 0, 0}, { join_comparison_operator::EQUAL, 1, 1} };
+  std::vector<std::pair<cudf::size_type, cudf::size_type>> columns_in_common{{0, 0}, {1, 1}};
+
+  auto result = cudf::join::full_join::nested_loop(t0, empty1, join_ops, columns_in_common);
   cudf::test::expect_tables_equal(t0, *result);
 }
 
 //Both tables empty
 TEST_F(JoinTest, BothEmptyInnerJoin)
 {
-  column_wrapper <int32_t> col0_0;
-  column_wrapper <int32_t> col0_1;
+  fixed_width_column_wrapper <int32_t> col0_0;
+  fixed_width_column_wrapper <int32_t> col0_1;
 
-  column_wrapper <int32_t> col1_0;
-  column_wrapper <int32_t> col1_1;
+  fixed_width_column_wrapper <int32_t> col1_0;
+  fixed_width_column_wrapper <int32_t> col1_1;
 
-  CVector cols0, cols1;
+  std::vector<std::unique_ptr<cudf::column>>  cols0, cols1;
   cols0.push_back(col0_0.release());
   cols0.push_back(col0_1.release());
   cols1.push_back(col1_0.release());
   cols1.push_back(col1_1.release());
 
-  Table t0(std::move(cols0));
-  Table empty1(std::move(cols1));
+  table t0(std::move(cols0));
+  table empty1(std::move(cols1));
 
-  auto result = cudf::experimental::inner_join(t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1,1}});
+  std::vector<cudf::join::join_operation> join_ops{ { join_comparison_operator::EQUAL, 0, 0}, { join_comparison_operator::EQUAL, 1, 1} };
+  std::vector<std::pair<cudf::size_type, cudf::size_type>> columns_in_common{{0, 0}, {1, 1}};
+
+  auto result = cudf::join::inner_join::nested_loop(t0, empty1, join_ops, columns_in_common);
   cudf::test::expect_tables_equal(empty1, *result);
 }
 
 TEST_F(JoinTest, BothEmptyLeftJoin)
 {
-  column_wrapper <int32_t> col0_0;
-  column_wrapper <int32_t> col0_1;
+  fixed_width_column_wrapper <int32_t> col0_0;
+  fixed_width_column_wrapper <int32_t> col0_1;
 
-  column_wrapper <int32_t> col1_0;
-  column_wrapper <int32_t> col1_1;
+  fixed_width_column_wrapper <int32_t> col1_0;
+  fixed_width_column_wrapper <int32_t> col1_1;
 
-  CVector cols0, cols1;
+  std::vector<std::unique_ptr<cudf::column>>  cols0, cols1;
   cols0.push_back(col0_0.release());
   cols0.push_back(col0_1.release());
   cols1.push_back(col1_0.release());
   cols1.push_back(col1_1.release());
 
-  Table t0(std::move(cols0));
-  Table empty1(std::move(cols1));
+  table t0(std::move(cols0));
+  table empty1(std::move(cols1));
 
-  auto result = cudf::experimental::left_join(t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1,1}});
+  std::vector<cudf::join::join_operation> join_ops{ { join_comparison_operator::EQUAL, 0, 0}, { join_comparison_operator::EQUAL, 1, 1} };
+  std::vector<std::pair<cudf::size_type, cudf::size_type>> columns_in_common{{0, 0}, {1, 1}};
+
+  auto result = cudf::join::left_join::nested_loop(t0, empty1, join_ops, columns_in_common);
   cudf::test::expect_tables_equal(empty1, *result);
 }
 
 TEST_F(JoinTest, BothEmptyFullJoin)
 {
-  column_wrapper <int32_t> col0_0;
-  column_wrapper <int32_t> col0_1;
+  fixed_width_column_wrapper <int32_t> col0_0;
+  fixed_width_column_wrapper <int32_t> col0_1;
 
-  column_wrapper <int32_t> col1_0;
-  column_wrapper <int32_t> col1_1;
+  fixed_width_column_wrapper <int32_t> col1_0;
+  fixed_width_column_wrapper <int32_t> col1_1;
 
-  CVector cols0, cols1;
+  std::vector<std::unique_ptr<cudf::column>>  cols0, cols1;
   cols0.push_back(col0_0.release());
   cols0.push_back(col0_1.release());
   cols1.push_back(col1_0.release());
   cols1.push_back(col1_1.release());
 
-  Table t0(std::move(cols0));
-  Table empty1(std::move(cols1));
+  table t0(std::move(cols0));
+  table empty1(std::move(cols1));
 
-  auto result = cudf::experimental::full_join(t0, empty1, {0, 1}, {0, 1}, {{0, 0}, {1,1}});
+  std::vector<cudf::join::join_operation> join_ops{ { join_comparison_operator::EQUAL, 0, 0}, { join_comparison_operator::EQUAL, 1, 1} };
+  std::vector<std::pair<cudf::size_type, cudf::size_type>> columns_in_common{{0, 0}, {1, 1}};
+
+  auto result = cudf::join::full_join::nested_loop(t0, empty1, join_ops, columns_in_common);
   cudf::test::expect_tables_equal(empty1, *result);
 }
 
@@ -540,114 +572,134 @@ TEST_F(JoinTest, BothEmptyFullJoin)
 
 TEST_F(JoinTest, EqualValuesInnerJoin)
 {
-  column_wrapper <int32_t> col0_0{{0, 0}};
-  strcol_wrapper           col0_1({"s0", "s0"});
+  fixed_width_column_wrapper <int32_t> col0_0{{0, 0}};
+  strings_column_wrapper               col0_1({"s0", "s0"});
 
-  column_wrapper <int32_t> col1_0{{0, 0}};
-  strcol_wrapper           col1_1({"s0", "s0"});
+  fixed_width_column_wrapper <int32_t> col1_0{{0, 0}};
+  strings_column_wrapper               col1_1({"s0", "s0"});
 
-  CVector cols0, cols1;
+  std::vector<std::unique_ptr<cudf::column>>  cols0, cols1;
   cols0.push_back(col0_0.release());
   cols0.push_back(col0_1.release());
   cols1.push_back(col1_0.release());
   cols1.push_back(col1_1.release());
 
-  Table t0(std::move(cols0));
-  Table t1(std::move(cols1));
+  table t0(std::move(cols0));
+  table t1(std::move(cols1));
 
-  auto result = cudf::experimental::inner_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1,1}});
+  std::vector<cudf::join::join_operation> join_ops{ { join_comparison_operator::EQUAL, 0, 0}, { join_comparison_operator::EQUAL, 1, 1} };
+  std::vector<std::pair<cudf::size_type, cudf::size_type>> columns_in_common{{0, 0}, {1, 1}};
 
-  column_wrapper <int32_t> col_gold_0{{0, 0, 0, 0}};
-  strcol_wrapper           col_gold_1({"s0", "s0", "s0", "s0"});
-  CVector cols_gold;
+  auto result = cudf::join::inner_join::nested_loop(t0, t1, join_ops, columns_in_common);
+
+  fixed_width_column_wrapper <int32_t> col_gold_0{{0, 0, 0, 0}};
+  strings_column_wrapper               col_gold_1({"s0", "s0", "s0", "s0"});
+
+  std::vector<std::unique_ptr<cudf::column>>  cols_gold;
   cols_gold.push_back(col_gold_0.release());
   cols_gold.push_back(col_gold_1.release());
-  Table gold(std::move(cols_gold));
+
+  table gold(std::move(cols_gold));
 
   cudf::test::expect_tables_equal(gold, *result);
 }
 
 TEST_F(JoinTest, EqualValuesLeftJoin)
 {
-  column_wrapper <int32_t> col0_0{{0, 0}};
-  strcol_wrapper           col0_1({"s0", "s0"});
+  fixed_width_column_wrapper <int32_t> col0_0{{0, 0}};
+  strings_column_wrapper               col0_1({"s0", "s0"});
 
-  column_wrapper <int32_t> col1_0{{0, 0}};
-  strcol_wrapper           col1_1({"s0", "s0"});
+  fixed_width_column_wrapper <int32_t> col1_0{{0, 0}};
+  strings_column_wrapper               col1_1({"s0", "s0"});
 
-  CVector cols0, cols1;
+  std::vector<std::unique_ptr<cudf::column>>  cols0, cols1;
   cols0.push_back(col0_0.release());
   cols0.push_back(col0_1.release());
   cols1.push_back(col1_0.release());
   cols1.push_back(col1_1.release());
 
-  Table t0(std::move(cols0));
-  Table t1(std::move(cols1));
+  table t0(std::move(cols0));
+  table t1(std::move(cols1));
 
-  auto result = cudf::experimental::left_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1,1}});
+  std::vector<cudf::join::join_operation> join_ops{ { join_comparison_operator::EQUAL, 0, 0}, { join_comparison_operator::EQUAL, 1, 1} };
+  std::vector<std::pair<cudf::size_type, cudf::size_type>> columns_in_common{{0, 0}, {1, 1}};
 
-  column_wrapper <int32_t> col_gold_0{{0, 0, 0, 0}, {1, 1, 1, 1}};
-  strcol_wrapper           col_gold_1({"s0", "s0", "s0", "s0"}, {1, 1, 1, 1});
-  CVector cols_gold;
+  auto result = cudf::join::left_join::nested_loop(t0, t1, join_ops, columns_in_common);
+
+  fixed_width_column_wrapper <int32_t> col_gold_0{{0, 0, 0, 0}, {1, 1, 1, 1}};
+  strings_column_wrapper               col_gold_1({"s0", "s0", "s0", "s0"}, {1, 1, 1, 1});
+
+  std::vector<std::unique_ptr<cudf::column>>  cols_gold;
   cols_gold.push_back(col_gold_0.release());
   cols_gold.push_back(col_gold_1.release());
-  Table gold(std::move(cols_gold));
+
+  table gold(std::move(cols_gold));
 
   cudf::test::expect_tables_equal(gold, *result);
 }
 
 TEST_F(JoinTest, EqualValuesFullJoin)
 {
-  column_wrapper <int32_t> col0_0{{0, 0}};
-  strcol_wrapper           col0_1({"s0", "s0"});
+  fixed_width_column_wrapper <int32_t> col0_0{{0, 0}};
+  strings_column_wrapper               col0_1({"s0", "s0"});
 
-  column_wrapper <int32_t> col1_0{{0, 0}};
-  strcol_wrapper           col1_1({"s0", "s0"});
+  fixed_width_column_wrapper <int32_t> col1_0{{0, 0}};
+  strings_column_wrapper               col1_1({"s0", "s0"});
 
-  CVector cols0, cols1;
+  std::vector<std::unique_ptr<cudf::column>>  cols0, cols1;
   cols0.push_back(col0_0.release());
   cols0.push_back(col0_1.release());
   cols1.push_back(col1_0.release());
   cols1.push_back(col1_1.release());
 
-  Table t0(std::move(cols0));
-  Table t1(std::move(cols1));
+  table t0(std::move(cols0));
+  table t1(std::move(cols1));
 
-  auto result = cudf::experimental::full_join(t0, t1, {0, 1}, {0, 1}, {{0, 0}, {1,1}});
+  std::vector<cudf::join::join_operation> join_ops{ { join_comparison_operator::EQUAL, 0, 0}, { join_comparison_operator::EQUAL, 1, 1} };
+  std::vector<std::pair<cudf::size_type, cudf::size_type>> columns_in_common{{0, 0}, {1, 1}};
 
-  column_wrapper <int32_t> col_gold_0{{0, 0, 0, 0}};
-  strcol_wrapper           col_gold_1({"s0", "s0", "s0", "s0"});
-  CVector cols_gold;
+  auto result = cudf::join::full_join::nested_loop(t0, t1, join_ops, columns_in_common);
+
+  fixed_width_column_wrapper <int32_t> col_gold_0{{0, 0, 0, 0}};
+  strings_column_wrapper               col_gold_1({"s0", "s0", "s0", "s0"});
+
+  std::vector<std::unique_ptr<cudf::column>>  cols_gold;
   cols_gold.push_back(col_gold_0.release());
   cols_gold.push_back(col_gold_1.release());
-  Table gold(std::move(cols_gold));
+
+  table gold(std::move(cols_gold));
 
   cudf::test::expect_tables_equal(gold, *result);
 }
 
 TEST_F(JoinTest, InnerJoinCornerCase)
 {
-  column_wrapper <int64_t> col0_0{{4, 1, 3, 2, 2, 2, 2}};
-  column_wrapper <int64_t> col1_0{{2}};
+  fixed_width_column_wrapper <int64_t> col0_0{{4, 1, 3, 2, 2, 2, 2}};
+  fixed_width_column_wrapper <int64_t> col1_0{{2}};
 
-  CVector cols0, cols1;
+  std::vector<std::unique_ptr<cudf::column>>  cols0, cols1;
   cols0.push_back(col0_0.release());
   cols1.push_back(col1_0.release());
 
-  Table t0(std::move(cols0));
-  Table t1(std::move(cols1));
+  table t0(std::move(cols0));
+  table t1(std::move(cols1));
 
-  auto result = cudf::experimental::inner_join(t0, t1, {0}, {0}, {{0, 0}});
+  std::vector<cudf::join::join_operation> join_ops{ { join_comparison_operator::EQUAL, 0, 0} };
+  std::vector<std::pair<cudf::size_type, cudf::size_type>> columns_in_common{{0, 0}};
+
+  auto result = cudf::join::inner_join::nested_loop(t0, t1, join_ops, columns_in_common);
+
   auto result_sort_order = cudf::experimental::sorted_order(result->view());
   auto sorted_result = cudf::experimental::gather(result->view(), *result_sort_order);
 
-  column_wrapper <int64_t> col_gold_0{{2, 2, 2, 2}};
-  CVector cols_gold;
+  fixed_width_column_wrapper <int64_t> col_gold_0{{2, 2, 2, 2}};
+
+  std::vector<std::unique_ptr<cudf::column>>  cols_gold;
   cols_gold.push_back(col_gold_0.release());
-  Table gold(std::move(cols_gold));
+
+  table gold(std::move(cols_gold));
 
   auto gold_sort_order = cudf::experimental::sorted_order(gold.view());
   auto sorted_gold = cudf::experimental::gather(gold.view(), *gold_sort_order);
   cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
 }
-#endif

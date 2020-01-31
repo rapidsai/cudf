@@ -22,44 +22,13 @@
 #include <cudf/detail/gather.cuh>
 
 #include <join/join_common_utils.hpp>
+#include <join/nested_loop_join.cuh>
 
 namespace cudf {
 
 namespace join {
 
 namespace detail {
-
-  using VectorPair = std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>>;
-  constexpr size_type JoinNoneValue = -1;
-
-  enum class join_kind {
-    INNER_JOIN,
-    LEFT_JOIN,
-    FULL_JOIN
-  };
-
-  template <typename T>
-  struct valid_range {
-    T start, stop;
-    __host__ __device__
-    valid_range(const T begin,
-                const T end) :
-      start(begin), stop(end) {}
-
-    __host__ __device__ __forceinline__
-    bool operator()(const T index) {
-      return ((index >= start) && (index < stop));
-    }
-  };
-  
-  //
-  //  temporary... To let us stub out things not implemented
-  //
-  VectorPair empty_indices() {
-      rmm::device_vector<size_type> left_indices;
-      rmm::device_vector<size_type> right_indices;
-      return std::make_pair(std::move(left_indices), std::move(right_indices));
-  }
 
   // TODO:
   //  nested_join_indices      - my function/kernel
@@ -68,23 +37,22 @@ namespace detail {
   //  filter_join_indices      - new function/kernel
   //
   struct nested_loop_join {
-    VectorPair operator()(table_view const& left,
-                          table_view const& right,
-                          std::vector<join_operation> const& primary_join_ops,
-                          std::vector<join_operation> const& secondary_join_ops,
-                          cudaStream_t stream) {
+    rmm::device_vector<int64_t> operator()(table_view const& left,
+                                           table_view const& right,
+                                           std::vector<join_operation> const& primary_join_ops,
+                                           std::vector<join_operation> const& secondary_join_ops,
+                                           cudaStream_t stream) {
 
-      //return nested_join_indices(left, right, primary_join_ops, stream);
-      return empty_indices();
+      return nested_join_indices(left, right, primary_join_ops, stream);
     }
   };
 
   struct sort_merge_join {
-    VectorPair operator()(table_view const& left,
-                          table_view const& right,
-                          std::vector<join_operation> const& primary_join_ops,
-                          std::vector<join_operation> const& secondary_join_ops,
-                          cudaStream_t stream) {
+    rmm::device_vector<int64_t> operator()(table_view const& left,
+                                           table_view const& right,
+                                           std::vector<join_operation> const& primary_join_ops,
+                                           std::vector<join_operation> const& secondary_join_ops,
+                                           cudaStream_t stream) {
 
       /*
       auto joined_indices = sort_merge_join_indices(left, right, primary_join_ops, stream);
@@ -95,16 +63,16 @@ namespace detail {
 
       return filter_join_indices(left, right, joined_indices, secondary_join_ops, stream);
       */
-      return empty_indices();
+      return rmm::device_vector<int64_t>{};
     }
   };
 
   struct hash_join {
-    VectorPair operator()(table_view const& left,
-                          table_view const& right,
-                          std::vector<join_operation> const& primary_join_ops,
-                          std::vector<join_operation> const& secondary_join_ops,
-                          cudaStream_t stream) {
+    rmm::device_vector<int64_t> operator()(table_view const& left,
+                                           table_view const& right,
+                                           std::vector<join_operation> const& primary_join_ops,
+                                           std::vector<join_operation> const& secondary_join_ops,
+                                           cudaStream_t stream) {
 
       /*
       auto joined_indices = hash_join_indices(left, right, primary_join_ops, stream);
@@ -115,7 +83,7 @@ namespace detail {
 
       return filter_join_indices(left, right, joined_indices, secondary_join_ops, stream);
       */
-      return empty_indices();
+      return rmm::device_vector<int64_t>{};
     }
   };
     
@@ -192,91 +160,46 @@ namespace detail {
     return std::make_unique<experimental::table>(tmp_table);
   }
   
-  /**
-   * @brief  Creates a table containing the complement of left join indices.
-   * This table has two columns. The first one is filled with JoinNoneValue(-1)
-   * and the second one contains values from 0 to right_table_row_count - 1
-   * excluding those found in the right_indices column.
-   *
-   * @Param right_indices Vector of indices
-   * @Param left_table_row_count Number of rows of left table
-   * @Param right_table_row_count Number of rows of right table
-   * @param stream Stream on which all memory allocations and copies
-   * will be performed
-   *
-   * @Returns  Pair of vectors containing the left join indices complement
-   */
-  VectorPair get_left_join_indices_complement(rmm::device_vector<size_type>& right_indices,
-                                              size_type left_table_row_count,
-                                              size_type right_table_row_count,
-                                              cudaStream_t stream) {
+  template <typename iterator>
+  rmm::device_vector<cudf::size_type> get_indices_complement(iterator indices_begin,
+                                                             cudf::size_type join_size,
+                                                             cudf::size_type row_count,
+                                                             cudaStream_t stream) {
 
-    //Get array of indices that do not appear in right_indices
+    //Get array of indices that do not appear in indices
 
     //Vector allocated for unmatched result
-    rmm::device_vector<size_type> right_indices_complement(right_table_row_count);
+    rmm::device_vector<cudf::size_type> indices_complement(row_count);
 
-    //If left table is empty in a full join call then all rows of the right table
-    //should be represented in the joined indices. This is an optimization since
-    //if left table is empty and full join is called all the elements in
-    //right_indices will be JoinNoneValue, i.e. -1. This if path should
-    //produce exactly the same result as the else path but will be faster.
-    if (left_table_row_count == 0) {
-      thrust::sequence(rmm::exec_policy(stream)->on(stream),
-                       right_indices_complement.begin(),
-                       right_indices_complement.end(),
-                       0);
-    } else {
-      //Assume all the indices in invalid_index_map are invalid
-      rmm::device_vector<size_type> invalid_index_map(right_table_row_count, 1);
-      //Functor to check for index validity since left joins can create invalid indices
-      valid_range<size_type> valid(0, right_table_row_count);
+    //
+    // NOTE:  In this implementation, the indices_begin and indices_end
+    //        iterators point to a range of elements from an INNER_JOIN,
+    //        meaning they only include valid values within the table
+    //
+    rmm::device_vector<cudf::size_type> invalid_index_map(row_count, 1);
 
-      //invalid_index_map[index_ptr[i]] = 0 for i = 0 to right_table_row_count
-      //Thus specifying that those locations are valid
-      thrust::scatter_if(rmm::exec_policy(stream)->on(stream),
-                         thrust::make_constant_iterator(0),
-                         thrust::make_constant_iterator(0) + right_indices.size(),
-                         right_indices.begin(),//Index locations
-                         right_indices.begin(),//Stencil - Check if index location is valid
-                         invalid_index_map.begin(),//Output indices
-                         valid);//Stencil Predicate
+    //invalid_index_map[index_ptr[i]] = 0 for i = 0 to row_count
+    //Thus specifying that those locations are valid
+    thrust::scatter(rmm::exec_policy(stream)->on(stream),
+                    thrust::make_constant_iterator(0),
+                    thrust::make_constant_iterator(0) + join_size,
+                    indices_begin,                      //Index locations
+                    invalid_index_map.begin());         //Output indices
 
-      size_type begin_counter = static_cast<size_type>(0);
-      size_type end_counter = static_cast<size_type>(right_table_row_count);
+    //Create list of indices that have been marked as invalid
+    auto copy_end = thrust::copy_if(rmm::exec_policy(stream)->on(stream),
+                                    thrust::make_counting_iterator<cudf::size_type>(0),
+                                    thrust::make_counting_iterator<cudf::size_type>(row_count),
+                                    invalid_index_map.begin(),
+                                    indices_complement.begin(),
+                                    thrust::identity<size_type>());
 
-      //Create list of indices that have been marked as invalid
-      size_type indices_count = thrust::copy_if(rmm::exec_policy(stream)->on(stream),
-                                                thrust::make_counting_iterator(begin_counter),
-                                                thrust::make_counting_iterator(end_counter),
-                                                invalid_index_map.begin(),
-                                                right_indices_complement.begin(),
-                                                thrust::identity<size_type>()) -
-        right_indices_complement.begin();
-      right_indices_complement.resize(indices_count);
-    }
+    cudf::size_type indices_count = thrust::distance(indices_complement.begin(), copy_end);
 
-    rmm::device_vector<size_type> left_invalid_indices(right_indices_complement.size(), JoinNoneValue);
-
-    return std::make_pair(std::move(left_invalid_indices), std::move(right_indices_complement));
+    indices_complement.resize(indices_count);
+    return indices_complement;
   }
-  
-  VectorPair concatenate_vector_pairs(VectorPair& a, VectorPair& b) {
-    CUDF_EXPECTS((a.first.size() == a.second.size()), "Mismatch between sizes of vectors in vector pair");
-    CUDF_EXPECTS((b.first.size() == b.second.size()), "Mismatch between sizes of vectors in vector pair");
-    if (a.first.size() == 0) {
-      return b;
-    } else if (b.first.size() == 0) {
-      return a;
-    }
-    auto original_size = a.first.size();
-    a.first.resize(a.first.size() + b.first.size());
-    a.second.resize(a.second.size() + b.second.size());
-    thrust::copy(b.first.begin(), b.first.end(), a.first.begin() + original_size);
-    thrust::copy(b.second.begin(), b.second.end(), a.second.begin() + original_size);
-    return a;
-  }
-  
+
   std::vector<std::unique_ptr<column>> combine_join_columns(std::vector<std::unique_ptr<column>>&& left_noncommon_cols,
                                                             std::vector<size_type> const& left_noncommon_col_indices,
                                                             std::vector<std::unique_ptr<column>>&& left_common_cols,
@@ -295,6 +218,76 @@ namespace detail {
                          std::make_move_iterator(right_noncommon_cols.end()));
     return combined_cols;
   }
+
+  // TODO:  Idea is to use this function and make_transform_iterator to
+  //        do the proper gather.
+    //  THINKING ABOUT THIS...
+    //     seems like my best option is to create a custom iterator
+    //     (the current CUSTOM_ITERATOR) would just divide and modulo
+    //     by the number of rows in right table.
+    //
+    //     I would need another custom iterator that iterates over
+    //     3 data structures:  joined_indices, left_indices_complement
+    //     and right_indices_complement.  While we're in inner_join
+    //     it does what the original custom iterator did.  Once
+    //     we reach the end of that we iterate over left.  If we're
+    //     computing right then we return JoinNoneValue.  If we're
+    //     computing left then we return the value.  Finally we iterate
+    //     over left doing the reverse.
+    //
+    //     This would allow us to only use O(n+m) extra memory for the
+    //     indices complement arrays and use this new custom iterator
+    //     in the gather phase at the end.
+    //
+  template <bool left_index>
+  struct join_output_iterator {
+    __host__ join_output_iterator(rmm::device_vector<int64_t> &joined_indices,
+                                  rmm::device_vector<cudf::size_type> &left_complement,
+                                  rmm::device_vector<cudf::size_type> &right_complement,
+                                  cudf::size_type right_num_rows):
+      _joined_indices(joined_indices.data().get()),
+      _left_complement(left_complement.data().get()),
+      _right_complement(right_complement.data().get()),
+      _joined_indices_size(joined_indices.size()),
+      _left_complement_size(left_complement.size()),
+      _right_complement_size(right_complement.size()),
+      _right_num_rows(right_num_rows)  {}
+    
+    __device__ cudf::size_type operator()(cudf::size_type index) {
+      if (index < _joined_indices_size) {
+        if (left_index) {
+          return _joined_indices[index] / _right_num_rows;
+        } else {
+          return _joined_indices[index] % _right_num_rows;
+        }
+      }
+
+      index -= _joined_indices_size;
+      if (index < _left_complement_size) {
+        if (left_index) {
+          return _left_complement[index];
+        } else {
+          return JoinNoneValue;
+        }
+      }
+
+      index -= _left_complement_size;
+      if (left_index) {
+        return JoinNoneValue;
+      } else {
+        return _right_complement[index];
+      }
+    }
+
+  private:
+    int64_t          *_joined_indices;
+    cudf::size_type  *_left_complement;
+    cudf::size_type  *_right_complement;
+    cudf::size_type   _joined_indices_size;
+    cudf::size_type   _left_complement_size;
+    cudf::size_type   _right_complement_size;
+    cudf::size_type   _right_num_rows;
+  };
   
   /**
    * @brief  Gathers rows from `left` and `right` table and combines them into a
@@ -321,10 +314,15 @@ namespace detail {
   template <join_kind JoinKind>
   std::unique_ptr<experimental::table> construct_join_output_df(table_view const& left,
                                                                 table_view const& right,
-                                                                VectorPair& joined_indices,
+                                                                rmm::device_vector<int64_t> & joined_indices,
                                                                 std::vector<std::pair<size_type, size_type>> const& columns_in_common,
                                                                 rmm::mr::device_memory_resource* mr,
                                                                 cudaStream_t stream) {
+
+    if ((join_kind::INNER_JOIN == JoinKind) && (joined_indices.size() == 0)) {
+      return get_empty_joined_table(left, right, columns_in_common);
+    }
+    
     std::vector<size_type> left_common_col;
     left_common_col.reserve(columns_in_common.size());
     std::vector<size_type> right_common_col;
@@ -336,42 +334,81 @@ namespace detail {
     std::vector<size_type> left_noncommon_col = non_common_column_indices(left.num_columns(), left_common_col);
     std::vector<size_type> right_noncommon_col = non_common_column_indices(right.num_columns(), right_common_col);
 
+    //
+    //   inner_join_indices only gives us part of the solution if we want
+    //   left join or right join.  So we need to get what we need for the output
+    //   dataframe.
+    //
+    rmm::device_vector<cudf::size_type> left_indices_complement{};
+    rmm::device_vector<cudf::size_type> right_indices_complement{};
+
+    join_output_iterator<true>  left_iterator(joined_indices, left_indices_complement, right_indices_complement, right.num_rows());
+    join_output_iterator<false> right_iterator(joined_indices, left_indices_complement, right_indices_complement, right.num_rows());
+    
+    cudf::size_type output_size = joined_indices.size();
+
     bool const nullify_out_of_bounds{ JoinKind != join_kind::INNER_JOIN };
 
+    if (join_kind::LEFT_JOIN == JoinKind) {
+      left_indices_complement = get_indices_complement(thrust::make_transform_iterator(thrust::make_counting_iterator<cudf::size_type>(0), left_iterator),
+                                                       output_size,
+                                                       left.num_rows(),
+                                                       stream);
+      output_size += left_indices_complement.size();
+    }
+
+    if (join_kind::FULL_JOIN == JoinKind) {
+      left_indices_complement = get_indices_complement(thrust::make_transform_iterator(thrust::make_counting_iterator<cudf::size_type>(0), left_iterator),
+                                                       output_size,
+                                                       left.num_rows(),
+                                                       stream);
+      right_indices_complement = get_indices_complement(thrust::make_transform_iterator(thrust::make_counting_iterator<cudf::size_type>(0), right_iterator),
+                                                        output_size,
+                                                        right.num_rows(),
+                                                        stream);
+
+      output_size += left_indices_complement.size() + right_indices_complement.size();
+    }
+
     std::unique_ptr<experimental::table> common_table;
+
+    //
+    //  Update in case they changed above
+    //
+    left_iterator = join_output_iterator<true>(joined_indices, left_indices_complement, right_indices_complement, right.num_rows());
+    right_iterator = join_output_iterator<false>(joined_indices, left_indices_complement, right_indices_complement, right.num_rows());
 
     // Construct the joined columns
     if (not columns_in_common.empty()) {
       if (join_kind::FULL_JOIN == JoinKind) {
-        auto complement_indices = get_left_join_indices_complement(joined_indices.second, left.num_rows(), right.num_rows(), stream);
         auto common_from_right = experimental::detail::gather(right.select(right_common_col),
-                                                              complement_indices.second.begin(),
-                                                              complement_indices.second.end(),
+                                                              right_indices_complement.begin(),
+                                                              right_indices_complement.end(),
                                                               false, nullify_out_of_bounds);
         auto common_from_left = experimental::detail::gather(left.select(left_common_col),
-                                                             joined_indices.first.begin(),
-                                                             joined_indices.first.end(),
+                                                             thrust::make_transform_iterator(thrust::make_counting_iterator<cudf::size_type>(0), left_iterator),
+                                                             thrust::make_transform_iterator(thrust::make_counting_iterator<cudf::size_type>(joined_indices.size() + left_indices_complement.size()), left_iterator),
                                                              false, nullify_out_of_bounds);
-        common_table = experimental::concatenate({common_from_right->view(), common_from_left->view()});
-        joined_indices = concatenate_vector_pairs(complement_indices, joined_indices);
+
+        common_table = experimental::concatenate({common_from_left->view(), common_from_right->view()});
       } else {
         common_table = experimental::detail::gather(left.select(left_common_col),
-                                                    joined_indices.first.begin(),
-                                                    joined_indices.first.end(),
+                                                    thrust::make_transform_iterator(thrust::make_counting_iterator<cudf::size_type>(0), left_iterator),
+                                                    thrust::make_transform_iterator(thrust::make_counting_iterator<cudf::size_type>(output_size), left_iterator),
                                                     false, nullify_out_of_bounds);
       }
     }
 
     // Construct the left non common columns
-    std::unique_ptr<experimental::table> left_table = experimental::detail::gather(left.select(left_noncommon_col),
-                                                                                   joined_indices.first.begin(),
-                                                                                   joined_indices.first.end(),
-                                                                                   false, nullify_out_of_bounds);
+    auto left_table = experimental::detail::gather(left.select(left_noncommon_col),
+                                                   thrust::make_transform_iterator(thrust::make_counting_iterator<cudf::size_type>(0), left_iterator),
+                                                   thrust::make_transform_iterator(thrust::make_counting_iterator<cudf::size_type>(output_size), left_iterator),
+                                                   false, nullify_out_of_bounds);
 
-    std::unique_ptr<experimental::table> right_table = experimental::detail::gather(right.select(right_noncommon_col),
-                                                                                    joined_indices.second.begin(),
-                                                                                    joined_indices.second.end(),
-                                                                                    false, nullify_out_of_bounds);
+    auto right_table = experimental::detail::gather(right.select(right_noncommon_col),
+                                                    thrust::make_transform_iterator(thrust::make_counting_iterator<cudf::size_type>(0), right_iterator),
+                                                    thrust::make_transform_iterator(thrust::make_counting_iterator<cudf::size_type>(output_size), right_iterator),
+                                                    false, nullify_out_of_bounds);
 
     return std::make_unique<experimental::table>(combine_join_columns(left_table->release(), left_noncommon_col,
                                                                       common_table->release(), left_common_col,
@@ -391,20 +428,37 @@ namespace detail {
     CUDF_EXPECTS (0 != left.num_columns(), "Left table is empty");
     CUDF_EXPECTS (0 != right.num_columns(), "Right table is empty");
 
+    for (auto p : columns_in_common) {
+      CUDF_EXPECTS(left.column(p.first).type() == right.column(p.second).type(), "Mismatch in columns in common data types");
+    }
+
+    for (auto p : primary_join_ops) {
+      CUDF_EXPECTS(left.column(p.left_column_idx).type() == right.column(p.right_column_idx).type(), "Mismatch in primary_join_ops data types");
+    }
+
+    for (auto p : secondary_join_ops) {
+      CUDF_EXPECTS(left.column(p.left_column_idx).type() == right.column(p.right_column_idx).type(), "Mismatch in secondary_join_ops data types");
+    }
+
     if (is_trivial_join(left, right, primary_join_ops, secondary_join_ops, JoinKind)) {
       return get_empty_joined_table(left, right, columns_in_common);
     }
 
+    if ((join_kind::FULL_JOIN == JoinKind) && (0 == left.num_rows())) {
+      //
+      //  write this example.  Return a table with nulls for left columns and all of the
+      //  right columns
+      //
+    }
+
     //
-    //  Call nested_loop on join_ops to get joined_indices
+    //  Call the specific join implementation.  Note that in the new implementation join_indices_impl
+    //  only computes the INNER_JOIN.  If a LEFT_JOIN or FULL_JOIN is desired that is addressed
+    //  in construction the output data frame below.
     //
     auto joined_indices = join_indices_impl(left, right, primary_join_ops, secondary_join_ops, stream);
 
-    if (joined_indices.first.size() == 0) {
-      return get_empty_joined_table(left, right, columns_in_common);
-    } else {
-      return construct_join_output_df<JoinKind>(left, right, joined_indices, columns_in_common, mr, stream);
-    }
+    return construct_join_output_df<JoinKind>(left, right, joined_indices, columns_in_common, mr, stream);
   }
 } //namespace detail
 

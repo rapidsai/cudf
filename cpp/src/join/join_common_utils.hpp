@@ -28,6 +28,23 @@
 
 namespace cudf {
 
+namespace join {
+
+namespace detail {
+
+  constexpr cudf::size_type JoinNoneValue = -1;
+
+  enum class join_kind {
+    INNER_JOIN,
+    LEFT_JOIN,
+    FULL_JOIN
+  };
+}
+}
+}
+
+namespace cudf {
+
 namespace experimental {
 
 namespace detail {
