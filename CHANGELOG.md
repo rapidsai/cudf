@@ -7,7 +7,7 @@
 - PR #3909 Move java backend to libcudf++
 - PR #3910 Adding sinh, cosh, tanh, asinh, acosh, atanh cube root and rint unary support.
 - PR #3975 Simplify and generalize data handling in `Buffer`
-
+- PR #3601 Port UDF functionality for rolling windows to libcudf++
 
 ## Bug Fixes
 
@@ -67,7 +67,6 @@
 - PR #3608 Update OPS codeowner group name
 - PR #3431 Port NVStrings translate to cudf strings column
 - PR #3507 Define and implement new binary operation APIs
-- PR #3601 Port UDF functionality for rolling windows
 - PR #3620 Add stream parameter to unary ops detail API
 - PR #3593 Adding begin/end for mutable_column_device_view
 - PR #3587 Merge CHECK_STREAM & CUDA_CHECK_LAST to CHECK_CUDA
