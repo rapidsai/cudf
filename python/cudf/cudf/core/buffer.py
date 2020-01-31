@@ -2,8 +2,8 @@ import functools
 import operator
 
 import numpy as np
+from numba import cuda
 
-import rmm
 from rmm import DeviceBuffer, _DevicePointer
 
 
@@ -72,9 +72,7 @@ class Buffer:
         return intf
 
     def to_host_array(self):
-        return rmm.device_array_from_ptr(
-            self.ptr, nelem=self.size, dtype="int8"
-        ).copy_to_host()
+        return cuda.as_cuda_array(self).copy_to_host()
 
     def _init_from_array_like(self, data):
         if hasattr(data, "__cuda_array_interface__"):
