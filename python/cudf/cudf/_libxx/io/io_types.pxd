@@ -48,3 +48,11 @@ cdef extern from "cudf/io/types.hpp" \
     cdef cppclass table_with_metadata:
         unique_ptr[table] tbl
         table_metadata metadata
+
+    cdef cppclass source_info:
+        io_type type
+        string filepath
+
+    cdef cppclass sink_info:
+        io_type type
+        string filepath

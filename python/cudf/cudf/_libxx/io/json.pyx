@@ -7,7 +7,7 @@
 
 
 from cudf._libxx.lib cimport *
-from cudf._libxx.json cimport (
+from cudf._libxx.io.json cimport (
     reader as json_reader,
     reader_options as json_reader_options
 )

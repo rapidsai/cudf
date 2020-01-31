@@ -6,7 +6,8 @@
 # cython: language_level = 3
 
 from cudf._libxx.lib cimport *
-from cudf._libxx.io_types cimport *
+from cudf._libxx.io.io_types cimport *
+from cudf._libxx.io.io_functions cimport *
 
 from libcpp.string cimport string
 from libcpp.vector cimport vector
