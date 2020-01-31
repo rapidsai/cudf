@@ -67,13 +67,6 @@ class Frame(libcudfxx.Table):
         result._copy_categories(self)
         return result
 
-    def _unique_count(self, ignore_nulls=True, nan_as_null=False):
-        """
-        Finds number of unique rows in `source_table`
-        """
-
-        return libcudfxx.unique_count(self, ignore_nulls, nan_as_null)
-
     def _update_index_name(self, other):
         """
         Update index names

@@ -62,7 +62,7 @@ class ColumnBase(Column):
     def as_frame(self, name=None):
         from cudf.core.frame import Frame
         """
-        Converts a Column to Table
+        Converts a Column to Frame
         """
         return Frame({name: self.copy(deep=False)})
 
@@ -283,7 +283,6 @@ class ColumnBase(Column):
         return col
 
     def dropna(self):
-        print("RGSL : number of childrens in drop_null", len(self.children));
         dropped_col = self.as_frame()._drop_nulls()._data[None].copy(deep=False)
         return dropped_col
 
@@ -817,7 +816,6 @@ class ColumnBase(Column):
 
     def apply_boolean_mask(self, mask):
         mask = as_column(mask, dtype="bool")
-        print("RGSL : number of childrens in apply", len(self.children));
         result = self.as_frame()._frame_apply_boolean_mask(boolean_mask=mask)._data[None].copy(deep=False)
         return result
 
@@ -982,7 +980,6 @@ def build_column(
 
     if is_categorical_dtype(dtype):
         if not len(children) == 1:
-            print ("RGSL : Number of children is ", len(children))
             raise ValueError(
                 "Must specify exactly one child column for CategoricalColumn"
             )

@@ -1199,7 +1199,6 @@ class Series(Frame):
         Return Series with duplicate values removed
         """
         result = self._drop_duplicates(keys=None, keep=keep)
-        print (result)
         
         return self._mimic_inplace(result, inplace=inplace)
 
