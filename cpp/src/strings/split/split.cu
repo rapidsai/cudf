@@ -502,7 +502,7 @@ struct token_copier_fn {
         forward ? d_str.find(d_delimiter, start_pos) :
                   d_str.rfind(d_delimiter, start_pos, end_pos);
       if (delimiter_pos != -1) {
-        auto src_byte_offset =
+        auto const src_byte_offset =
           forward ? d_str.byte_offset(start_pos) :
                     d_str.byte_offset(delimiter_pos + d_delimiter.length());
         auto const token_char_bytes =
