@@ -17,6 +17,7 @@
 #include "column_utilities.hpp"
 
 #include <cudf/column/column_view.hpp>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/bit.hpp>
@@ -30,6 +31,7 @@
 #include <thrust/logical.h>
 
 #include <gmock/gmock.h>
+#include <numeric>
 
 namespace cudf {
 namespace test {
@@ -346,6 +348,18 @@ struct column_view_printer {
 
   template <typename Element, typename std::enable_if_t<std::is_same<Element, cudf::dictionary32>::value>* = nullptr>
   void operator()(cudf::column_view const& col, std::vector<std::string> & out) {
+    cudf::dictionary_column_view dictionary(col);
+    if( col.size()==0 )
+      return;
+    std::vector<std::string> keys = to_strings(dictionary.keys());
+    std::vector<std::string> indices = to_strings(dictionary.indices());
+    out.insert(out.end(),keys.begin(),keys.end());
+    if( !indices.empty() )
+    {
+      std::string first = "\x08 : " + indices.front(); // use : as delimiter
+      out.push_back(first);                            // between keys and indices
+      out.insert(out.end(),indices.begin()+1,indices.end());
+    }
   }
 };
 
@@ -364,15 +378,27 @@ std::string to_string(cudf::column_view const& col, std::string const& delimiter
 
   std::ostringstream buffer;
   std::vector<std::string> h_data = to_strings(col);
-
-  std::copy(h_data.begin(), h_data.end() - 1, std::ostream_iterator<std::string>(buffer, delimiter.c_str()));
-  buffer << h_data.back();
+  if( !h_data.empty() )
+  {
+    std::copy(h_data.begin(), h_data.end() - 1, std::ostream_iterator<std::string>(buffer, delimiter.c_str()));
+    buffer << h_data.back();
+  }
 
   return buffer.str();
 }
 
 void print(cudf::column_view const& col, std::ostream &os, std::string const& delimiter) {
   os << to_string(col, delimiter);
+}
+
+bool validate_host_masks(std::vector<bitmask_type> const& expected_mask,
+                         std::vector<bitmask_type> const& got_mask,
+                         size_type number_of_elements) {
+
+    return std::all_of(thrust::make_counting_iterator(0), thrust::make_counting_iterator(number_of_elements),
+            [&expected_mask, &got_mask](auto index){
+                return cudf::bit_is_set(expected_mask.data(), index) == cudf::bit_is_set(got_mask.data(), index);
+            });
 }
 
 }  // namespace test

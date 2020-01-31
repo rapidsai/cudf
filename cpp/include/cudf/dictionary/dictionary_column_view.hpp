@@ -26,7 +26,8 @@ namespace cudf
  *
  * A dictionary column contains a set of keys and a column of indices.
  * The keys are a sorted set of unique values for the column.
- * The indices values are position indices into the keys.
+ * The indices represent the corresponding positions of each element's
+ * value in the keys.
  */
 class dictionary_column_view : private column_view
 {

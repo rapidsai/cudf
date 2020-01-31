@@ -61,7 +61,7 @@ void compare_scalar_functor::operator()<double>(cudf::scalar const& lhs, cudf::s
 template<>
 void compare_scalar_functor::operator()<cudf::dictionary32>(cudf::scalar const& lhs, cudf::scalar const& rhs)
 {
-    // not supported yet
+    CUDF_FAIL("Unsupported scalar compare type: dictionary");
 }
 
 
