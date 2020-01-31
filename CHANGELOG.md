@@ -20,6 +20,7 @@
 - PR #4008 Eliminate extra copy in column constructor
 - PR #4013 Add cython definition for io readers cudf/io/io_types.hpp
 - PR #4014 ORC/Parquet: add count parameter to stripe/rowgroup-based reader API
+- PR #4029 Port streaming.pyx to use libcudf++ APIs
 
 ## Bug Fixes
 

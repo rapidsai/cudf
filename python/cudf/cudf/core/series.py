@@ -1199,7 +1199,7 @@ class Series(Frame):
         Return Series with duplicate values removed
         """
         result = self._drop_duplicates(keys=None, keep=keep)
-        
+
         return self._mimic_inplace(result, inplace=inplace)
 
     def _mimic_inplace(self, result, inplace=False):
@@ -1220,7 +1220,6 @@ class Series(Frame):
         name = self.name
         result = self.to_frame(name="_").dropna(subset=["_"])
         result = result["_"]
-        #result._update_index_name(self)
         result.name = name
         self.name = name
         return result

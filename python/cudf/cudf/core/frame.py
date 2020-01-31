@@ -44,8 +44,8 @@ class Frame(libcudfxx.Table):
 
     def _frame_apply_boolean_mask(self, boolean_mask):
         """
-        Applies boolean mask to each row of `self`, rows corresponding to `False`
-        is dropped
+        Applies boolean mask to each row of `self`,
+        rows corresponding to `False` is dropped
         """
         result = self._from_table(
             libcudfxx.apply_boolean_mask(self, as_column(boolean_mask))
@@ -54,11 +54,10 @@ class Frame(libcudfxx.Table):
         result._copy_categories(self)
         return result
 
-    def _drop_duplicates(self, keys=None, keep='first', nulls_are_equal=True):
+    def _drop_duplicates(self, keys=None, keep="first", nulls_are_equal=True):
         """
         Drops rows in frame as per duplicate rows in `keys` columns.
         """
-        print("coming to _drop_duplicates")
         result = self._from_table(
             libcudfxx.drop_duplicates(self, keys, keep, nulls_are_equal)
         )
@@ -71,7 +70,7 @@ class Frame(libcudfxx.Table):
         """
         Update index names
         """
-        if hasattr(other._index, 'names'):
+        if hasattr(other._index, "names"):
             if other._index.names is not None:
                 self._index.names = other._index.names.copy()
             else:

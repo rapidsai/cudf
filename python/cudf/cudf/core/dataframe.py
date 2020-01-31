@@ -1812,7 +1812,6 @@ class DataFrame(Frame):
         Return DataFrame with duplicate rows removed, optionally only
         considering certain subset of columns.
         """
-        in_cols = list(self._data.values())
         if subset is None:
             subset = self._data
         elif (
@@ -1828,7 +1827,7 @@ class DataFrame(Frame):
         subset_cols = [
             name for name, col in self._data.items() if name in subset
         ]
-        if(len(subset_cols) == 0):
+        if len(subset_cols) == 0:
             return self.copy(deep=True)
         outdf = self._drop_duplicates(subset_cols, keep)
 
@@ -1896,7 +1895,7 @@ class DataFrame(Frame):
             name for name, col in self._data.items() if name in subset
         ]
 
-        if(len(subset_cols) == 0):
+        if len(subset_cols) == 0:
             return self.copy(deep=True)
 
         return self._drop_nulls(how=how, keys=subset_cols, thresh=thresh)

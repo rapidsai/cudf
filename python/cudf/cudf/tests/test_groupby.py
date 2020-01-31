@@ -908,7 +908,8 @@ def test_groupby_dropna():
         {"a": [1, 1, 1, None], "b": [1, None, 1, None], "c": [1, 2, 3, 4]}
     )
     idx = cudf.MultiIndex.from_frame(
-        df[["a", "b"]].drop_duplicates().sort_values(["a", "b"]), names=["a", "b"]
+        df[["a", "b"]].drop_duplicates().sort_values(["a", "b"]),
+        names=["a", "b"],
     )
     expect = cudf.DataFrame({"c": [4, 2, 4]}, index=idx)
     got = df.groupby(["a", "b"], dropna=False).sum()

@@ -15,8 +15,8 @@ import rmm
 import cudf
 import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
-from cudf._libxx.stream_compaction import unique_count as cpp_unique_count
 from cudf._libxx.column import Column
+from cudf._libxx.stream_compaction import unique_count as cpp_unique_count
 from cudf.core.buffer import Buffer
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils import cudautils, ioutils, utils
@@ -284,7 +284,9 @@ class ColumnBase(Column):
         return col
 
     def dropna(self):
-        dropped_col = self.as_frame()._drop_nulls()._data[None].copy(deep=False)
+        dropped_col = (
+            self.as_frame()._drop_nulls()._data[None].copy(deep=False)
+        )
         return dropped_col
 
     def _get_mask_as_column(self):
@@ -817,7 +819,12 @@ class ColumnBase(Column):
 
     def apply_boolean_mask(self, mask):
         mask = as_column(mask, dtype="bool")
-        result = self.as_frame()._frame_apply_boolean_mask(boolean_mask=mask)._data[None].copy(deep=False)
+        result = (
+            self.as_frame()
+            ._frame_apply_boolean_mask(boolean_mask=mask)
+            ._data[None]
+            .copy(deep=False)
+        )
         return result
 
     def argsort(self, ascending):

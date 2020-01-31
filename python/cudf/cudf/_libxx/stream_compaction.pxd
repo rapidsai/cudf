@@ -3,7 +3,8 @@
 from cudf._libxx.lib import *
 from cudf._libxx.lib cimport *
 
-cdef extern from "cudf/stream_compaction.hpp" namespace "cudf::experimental" nogil:
+cdef extern from "cudf/stream_compaction.hpp" namespace "cudf::experimental" \
+        nogil:
     cdef enum duplicate_keep_option:
         KEEP_FIRST 'cudf::experimental::duplicate_keep_option::KEEP_FIRST'
         KEEP_LAST 'cudf::experimental::duplicate_keep_option::KEEP_LAST'
