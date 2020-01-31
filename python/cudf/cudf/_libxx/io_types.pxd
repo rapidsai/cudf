@@ -12,8 +12,8 @@ from libcpp.map cimport map
 from libcpp.vector cimport vector
 
 
-cdef extern from "cudf/io/types.h" \
-        namespace "cudf::experimental::io::detail::csv" nogil:
+cdef extern from "cudf/io/types.hpp" \
+        namespace "cudf::experimental::io" nogil:
 
     ctypedef enum quote_style:
         QUOTE_MINIMAL = 0,
@@ -22,14 +22,14 @@ cdef extern from "cudf/io/types.h" \
         QUOTE_NONE,
 
     ctypedef enum compression_type:
-        NONE,
-        AUTO,
-        SNAPPY,
-        GZIP,
-        BZIP2,
-        BROTLI,
-        ZIP,
-        XZ,
+        none "cudf::experimental::io::compression_type::NONE"
+        auto "cudf::experimental::io::compression_type::AUTO"
+        snappy "cudf::experimental::io::compression_type::SNAPPY"
+        gzip "cudf::experimental::io::compression_type::GZIP"
+        bzip2 "cudf::experimental::io::compression_type::BZIP2"
+        brotli "cudf::experimental::io::compression_type::BROTLI"
+        zip "cudf::experimental::io::compression_type::ZIP"
+        xz "cudf::experimental::io::compression_type::XZ"
 
     ctypedef enum io_type:
         FILEPATH,

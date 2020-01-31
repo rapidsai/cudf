@@ -1,4 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2020, NVIDIA CORPORATION.
 
 # cython: profile=False
 # distutils: language = c++
@@ -6,12 +6,13 @@
 # cython: language_level = 3
 
 
-from cudf._lib.cudf cimport *
-from cudf._lib.cudf import *
-from cudf._lib.includes.json cimport (
+from cudf._libxx.lib cimport *
+from cudf._libxx.json cimport (
     reader as json_reader,
     reader_options as json_reader_options
 )
+from cudf._libxx.table cimport *
+
 from libcpp.string cimport string
 from libcpp.memory cimport unique_ptr
 
@@ -20,14 +21,6 @@ from cudf._lib.utils import *
 
 import collections.abc as abc
 import os
-
-
-def is_file_like(obj):
-    if not (hasattr(obj, 'read') or hasattr(obj, 'write')):
-        return False
-    if not hasattr(obj, "__iter__"):
-        return False
-    return True
 
 
 cpdef read_json(filepath_or_buffer, dtype, lines, compression, byte_range):
@@ -41,10 +34,12 @@ cpdef read_json(filepath_or_buffer, dtype, lines, compression, byte_range):
     """
 
     # Setup arguments
-    cdef json_reader_options args = json_reader_options()
+    cdef reader_options args = reader_options()
     args.lines = lines
     if compression is not None:
-        args.compression = compression.encode()
+        args.compression = compression_type.auto
+    else:
+        args.compression = compression_type.none
     if dtype is False:
         raise ValueError("False value is unsupported for `dtype`")
     elif dtype is not True:
@@ -78,15 +73,16 @@ cpdef read_json(filepath_or_buffer, dtype, lines, compression, byte_range):
             )
 
     # Read data into columns
-    cdef cudf_table c_out_table
+    cdef table_with_metadata c_out_table
     cdef size_t c_range_offset = byte_range[0] if byte_range is not None else 0
     cdef size_t c_range_size = byte_range[1] if byte_range is not None else 0
     with nogil:
-        if c_range_offset !=0 or c_range_size != 0:
+        if c_range_offset != 0 or c_range_size != 0:
             c_out_table = reader.get().read_byte_range(
                 c_range_offset, c_range_size
             )
         else:
-            c_out_table = reader.get().read()
+            c_out_table = reader.get().read_all()
 
-    return table_to_dataframe(&c_out_table)
+    column_names = list(c_out_table.metadata.column_names)
+    return Table.from_unique_ptr(c_out_table.tbl, column_names=column_names)
