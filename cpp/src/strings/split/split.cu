@@ -486,7 +486,7 @@ struct token_copier_fn {
     auto memory_ptr =
       static_cast<char*>(idx_token_count_memory_ptr_token_size_sum.get<2>());
     auto token_size_sum = idx_token_count_memory_ptr_token_size_sum.get<3>();
-    auto char_buf_size = round_up_pow2(token_size_sum, split_align);
+    auto const char_buf_size = round_up_pow2(token_size_sum, split_align);
 
     auto char_buf_ptr = memory_ptr;
     memory_ptr += char_buf_size;
@@ -502,10 +502,10 @@ struct token_copier_fn {
         forward ? d_str.find(d_delimiter, start_pos) :
                   d_str.rfind(d_delimiter, start_pos, end_pos);
       if (delimiter_pos != -1) {
-        auto src_byte_offset =
+        auto const src_byte_offset =
           forward ? d_str.byte_offset(start_pos) :
                     d_str.byte_offset(delimiter_pos + d_delimiter.length());
-        auto token_char_bytes =
+        auto const token_char_bytes =
           forward ?
             d_str.byte_offset(delimiter_pos) - src_byte_offset :
             d_str.byte_offset(end_pos) - src_byte_offset;
