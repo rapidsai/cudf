@@ -244,12 +244,13 @@ struct metadata : public FileMetaData {
    * @brief Filters and reduces down to a selection of row groups
    *
    * @param row_group Index of the row group to select
+   * @param max_rowgroup_count Max number of consecutive row groups if > 0
    * @param row_start Starting row of the selection
    * @param row_count Total number of rows selected
    *
    * @return List of row group indexes and its starting row
    */
-  auto select_row_groups(int row_group, int &row_start, int &row_count) {
+  auto select_row_groups(int row_group, int max_rowgroup_count, int &row_start, int &row_count) {
     std::vector<std::pair<int, int>> selection;
 
     if (row_group != -1) {
@@ -257,8 +258,11 @@ struct metadata : public FileMetaData {
       for (int i = 0; i < row_group; ++i) {
         row_start += row_groups[i].num_rows;
       }
-      selection.emplace_back(row_group, row_start);
-      row_count = row_groups[row_group].num_rows;
+      row_count = 0;
+      do {
+        selection.emplace_back(row_group, row_start);
+        row_count += row_groups[row_group].num_rows;
+      } while (--max_rowgroup_count > 0 && ++row_group < get_num_row_groups());
     } else {
       row_start = std::max(row_start, 0);
       if (row_count == -1) {
@@ -561,13 +565,13 @@ reader::impl::impl(std::unique_ptr<datasource> source,
 }
 
 table_with_metadata reader::impl::read(int skip_rows, int num_rows, int row_group,
-                                       cudaStream_t stream) {
+                                       int max_rowgroup_count, cudaStream_t stream) {
   std::vector<std::unique_ptr<column>> out_columns;
   table_metadata out_metadata;
 
   // Select only row groups required
   const auto selected_row_groups =
-      _metadata->select_row_groups(row_group, skip_rows, num_rows);
+      _metadata->select_row_groups(row_group, max_rowgroup_count, skip_rows, num_rows);
 
   if (selected_row_groups.size() != 0 && _selected_columns.size() != 0) {
     // Get a list of column data types
@@ -729,20 +733,20 @@ std::string reader::get_pandas_index() { return _impl->get_pandas_index(); }
 
 // Forward to implementation
 table_with_metadata reader::read_all(cudaStream_t stream) {
-  return _impl->read(0, -1, -1, stream);
+  return _impl->read(0, -1, -1, -1, stream);
 }
 
 // Forward to implementation
-table_with_metadata reader::read_row_group(size_type row_group,
+table_with_metadata reader::read_row_group(size_type row_group, size_type row_group_count,
                                            cudaStream_t stream) {
-  return _impl->read(0, -1, row_group, stream);
+  return _impl->read(0, -1, row_group, row_group_count, stream);
 }
 
 // Forward to implementation
 table_with_metadata reader::read_rows(size_type skip_rows,
                                       size_type num_rows,
                                       cudaStream_t stream) {
-  return _impl->read(skip_rows, (num_rows != 0) ? num_rows : -1, -1, stream);
+  return _impl->read(skip_rows, (num_rows != 0) ? num_rows : -1, -1, -1, stream);
 }
 
 }  // namespace parquet
