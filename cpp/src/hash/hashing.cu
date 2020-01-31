@@ -292,8 +292,8 @@ void copy_block_partitions(
 
   __syncthreads();
 
-  // Copy data from shared memory to output using 16 threads for each partition
-  constexpr int nthreads_partition = 16;
+  // Copy data from shared memory to output using 32 threads for each partition
+  constexpr int nthreads_partition = 32;
   static_assert(OPTIMIZED_BLOCK_SIZE % nthreads_partition == 0,
     "BLOCK_SIZE must be divisible by number of threads");
   
