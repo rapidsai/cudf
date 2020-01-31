@@ -71,7 +71,7 @@ class ColumnBase(Column):
     @property
     def data_array_view(self):
         """
-        View the data as a device array or nvstrings object
+        View the data as a CuPy ndarray or nvstrings object
         """
         if self.dtype == "object":
             return self.nvstrings
@@ -85,7 +85,7 @@ class ColumnBase(Column):
     @property
     def mask_array_view(self):
         """
-        View the mask as a device array
+        View the mask as a CuPy ndarray
         """
         result = cp.asarray(self.mask)
         return result
@@ -151,8 +151,8 @@ class ColumnBase(Column):
 
     @staticmethod
     def from_mem_views(data_mem, mask_mem=None, null_count=None):
-        """Create a Column object from a data device array (or nvstrings
-           object), and an optional mask device array
+        """Create a Column object from a data CuPy ndarray (or nvstrings
+           object), and an optional mask CuPy ndarray
         """
         raise NotImplementedError
 
@@ -307,7 +307,7 @@ class ColumnBase(Column):
         return self.set_mask(mask=mask)
 
     def to_gpu_array(self, fillna=None):
-        """Get a dense numba device array for the data.
+        """Get a dense numba CuPy ndarray for the data.
 
         Parameters
         ----------
