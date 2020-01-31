@@ -26,7 +26,7 @@ namespace experimental {
 /* @brief Computes a value for a quantile by interpolating between the values on
  *        either side of the desired quantile.
  *
- * @param[in] input        Columns used to compute quantile values.
+ * @param[in] input        Column used to compute quantile values.
  * @param[in] q            Desired quantile in range [0, 1].
  * @param[in] interp       Strategy used to interpolate between the two values
  *                         on either side of the desired quantile.
