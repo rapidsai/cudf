@@ -5,6 +5,7 @@
 ## Improvements
 
 - PR #3909 Move java backend to libcudf++
+- PR #3781 Define new join API for nested_loop_join
 
 ## Bug Fixes
 
