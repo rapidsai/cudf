@@ -16,6 +16,7 @@
 - PR #4002 Adding to_frame and fix for categorical column issue
 - PR #4009 build script update to enable cudf build without installing
 - PR #3897 Port cuIO JSON reader to cudf::column types
+- PR #4008 Eliminate extra copy in column constructor
 - PR #4013 Add cython definition for io readers cudf/io/io_types.hpp
 - PR #4014 ORC/Parquet: add count parameter to stripe/rowgroup-based reader API
 
