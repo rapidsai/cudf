@@ -19,6 +19,7 @@
 #include <thrust/merge.h>
 
 #include <vector>
+#include <deque>
 
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -440,12 +441,31 @@ std::unique_ptr<cudf::experimental::table> merge(std::vector<table_view> const& 
       CUDF_EXPECTS(cudf::have_same_types(first_table, table), "Mismatched column types");
     }
 
-    auto result = cudf::experimental::empty_like(first_table);
+    using table_ptr_type = std::unique_ptr<cudf::experimental::table>;
+    std::deque<std::pair<table_view, table_ptr_type>> merge_queue;
     for (auto const& table: tables_to_merge) {
-      result = merge(result->view(), table, key_cols, column_order, null_precedence, mr, stream);
+      merge_queue.emplace_back(table, table_ptr_type());
     }
 
-    return std::move(result);
+    // If there is only one table in the queue, that's the final result
+    while (merge_queue.size() > 1){
+      const auto left_table = std::move(merge_queue.front());
+      merge_queue.pop_front();
+      const auto right_table = std::move(merge_queue.front());
+      merge_queue.pop_front();
+
+      auto merged_table = merge(left_table.first, 
+                                right_table.first, 
+                                key_cols, 
+                                column_order, 
+                                null_precedence, 
+                                mr, 
+                                stream);
+      const auto merged_table_view = merged_table->view();
+      merge_queue.emplace_back(merged_table_view, std::move(merged_table));
+    }    
+
+    return std::move(merge_queue.front().second);
 }
 
 }  // namespace detail
