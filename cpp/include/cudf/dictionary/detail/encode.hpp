@@ -31,7 +31,7 @@ namespace detail
  * @brief Construct a dictionary column by dictionary encoding an existing column.
  *
  * The output column is a DICTIONARY type with a keys column of non-null, unique values
- * that are in a strict, total order. Meaning, `keys[i]` is _ordered before
+ * that are in a strict, total order. Meaning, `keys[i]` is ordered before
  * `keys[i+1]` for all `i in [0,n-1)` where `n` is the number of keys.
 
  * The output column has a child indices column that is of integer type and with
@@ -39,7 +39,7 @@ namespace detail
  *
  * The null_mask and null count are copied from the input column to the output column.
  *
- * @throw cudf::logic_error - only INT32 is supported for the indices type.
+ * @throw cudf::logic_error if indices_type is not INT32
  *
  * ```
  * c = [429,111,213,111,213,429,213]
