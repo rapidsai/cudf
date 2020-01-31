@@ -310,7 +310,10 @@ void copy_block_partitions(
   }
 }
 
-rmm::device_vector<size_type> compute_gather_map(
+template <typename InputIter, typename OutputIter>
+void copy_block_partitions_impl(
+    InputIter const input,
+    OutputIter output,
     size_type num_rows,
     size_type num_partitions,
     size_type const * row_partition_numbers,
@@ -324,18 +327,33 @@ rmm::device_vector<size_type> compute_gather_map(
   // 1. BLOCK_SIZE * ROWS_PER_THREAD elements of size_type for copying to output
   // 2. num_partitions + 1 elements of size_type for per-block partition offsets
   // 3. num_partitions + 1 elements of size_type for global partition offsets
-  int const smem = OPTIMIZED_BLOCK_SIZE * OPTIMIZED_ROWS_PER_THREAD * sizeof(size_type)
+  int const smem = OPTIMIZED_BLOCK_SIZE * OPTIMIZED_ROWS_PER_THREAD * sizeof(*output)
     + (num_partitions + 1) * sizeof(size_type) * 2;
-
-  rmm::device_vector<size_type> gather_map(num_rows);
-  auto iter = thrust::make_counting_iterator(0);
 
   copy_block_partitions
     <<<grid_size, OPTIMIZED_BLOCK_SIZE, smem, stream>>>(
-      iter, gather_map.data().get(), num_rows,
-      num_partitions, row_partition_numbers, row_partition_offset,
+      input, output, num_rows, num_partitions,
+      row_partition_numbers, row_partition_offset,
       block_partition_sizes, scanned_block_partition_sizes
   );
+}
+
+rmm::device_vector<size_type> compute_gather_map(
+    size_type num_rows,
+    size_type num_partitions,
+    size_type const * row_partition_numbers,
+    size_type const * row_partition_offset,
+    size_type const * block_partition_sizes,
+    size_type const * scanned_block_partition_sizes,
+    size_type grid_size,
+    cudaStream_t stream)
+{
+  auto sequence = thrust::make_counting_iterator(0);
+  rmm::device_vector<size_type> gather_map(num_rows);
+
+  copy_block_partitions_impl(sequence, gather_map.data().get(), num_rows,
+    num_partitions, row_partition_numbers, row_partition_offset,
+    block_partition_sizes, scanned_block_partition_sizes, grid_size, stream);
 
   return gather_map;
 }
@@ -354,21 +372,12 @@ struct copy_block_partitions_dispatcher{
       rmm::mr::device_memory_resource* mr,
       cudaStream_t stream)
   {
-    // We need 3 chunks of shared memory:
-    // 1. BLOCK_SIZE * OPTIMIZED_ROWS_PER_THREAD elements of DataType for copying to output
-    // 2. num_partitions + 1 elements of size_type for per-block partition offsets
-    // 3. num_partitions + 1 elements of size_type for global partition offsets
-    int const smem = OPTIMIZED_BLOCK_SIZE * OPTIMIZED_ROWS_PER_THREAD * sizeof(DataType)
-      + (num_partitions + 1) * sizeof(size_type) * 2;
-
     rmm::device_buffer output(input.size() * sizeof(DataType), stream, mr);
 
-    copy_block_partitions
-      <<<grid_size, OPTIMIZED_BLOCK_SIZE, smem, stream>>>(
-        input.data<DataType>(), static_cast<DataType*>(output.data()), input.size(),
-        num_partitions, row_partition_numbers, row_partition_offset,
-        block_partition_sizes, scanned_block_partition_sizes
-    );
+    copy_block_partitions_impl(
+      input.data<DataType>(), static_cast<DataType*>(output.data()), input.size(),
+      num_partitions, row_partition_numbers, row_partition_offset,
+      block_partition_sizes, scanned_block_partition_sizes, grid_size, stream);
 
     return std::make_unique<column>(input.type(), input.size(), std::move(output));
   }
