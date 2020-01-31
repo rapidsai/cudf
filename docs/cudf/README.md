@@ -3,7 +3,7 @@
 In order to build the docs, we need the conda dev environment from cudf and build cudf from source. 
 
 
-# Steps to follow:
+## Steps to follow:
 
 1. Create a conda env and  build cudf from source. The dependencies are installed to build rapids from source in that conda environment, then rapids is built and installed into the same environment.
 
