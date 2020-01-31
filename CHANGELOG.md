@@ -3,6 +3,7 @@
 ## New Features
 
 ## Improvements
+
 - PR #3525 build.sh option to disable nvtx
 
 ## Bug Fixes
