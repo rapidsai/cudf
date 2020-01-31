@@ -1211,6 +1211,48 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Calculate the hyperbolic sin, output is the same type as input.
+   */
+  public ColumnVector sinh() {
+    return unaryOp(UnaryOp.SINH);
+  }
+
+  /**
+   * Calculate the hyperbolic cos, output is the same type as input.
+   */
+  public ColumnVector cosh() {
+    return unaryOp(UnaryOp.COSH);
+  }
+
+  /**
+   * Calculate the hyperbolic tan, output is the same type as input.
+   */
+  public ColumnVector tanh() {
+    return unaryOp(UnaryOp.TANH);
+  }
+
+  /**
+   * Calculate the hyperbolic arcsin, output is the same type as input.
+   */
+  public ColumnVector arcsinh() {
+    return unaryOp(UnaryOp.ARCSINH);
+  }
+
+  /**
+   * Calculate the hyperbolic arccos, output is the same type as input.
+   */
+  public ColumnVector arccosh() {
+    return unaryOp(UnaryOp.ARCCOSH);
+  }
+
+  /**
+   * Calculate the hyperbolic arctan, output is the same type as input.
+   */
+  public ColumnVector arctanh() {
+    return unaryOp(UnaryOp.ARCTANH);
+  }
+
+  /**
    * Calculate the exp, output is the same type as input.
    */
   public ColumnVector exp() {
@@ -1232,6 +1274,13 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Calculate the cube root, output is the same type as input.
+   */
+  public ColumnVector cbrt() {
+    return unaryOp(UnaryOp.CBRT);
+  }
+
+  /**
    * Calculate the ceil, output is the same type as input.
    */
   public ColumnVector ceil() {
@@ -1250,6 +1299,13 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector abs() {
     return unaryOp(UnaryOp.ABS);
+  }
+
+  /**
+   * Rounds a floating-point argument to the closest integer value, but returns it as a float.
+   */
+  public ColumnVector rint() {
+    return unaryOp(UnaryOp.RINT);
   }
 
   /**
