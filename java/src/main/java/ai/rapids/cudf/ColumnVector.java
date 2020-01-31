@@ -779,6 +779,30 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     }
   }
 
+  /**
+   * Returns a Boolean vector with the same number of rows as this instance, that has
+   * TRUE for any entry that is Nan, and FALSE otherwise
+   *
+   * @return - Boolean vector
+   */
+  public ColumnVector isNan() {
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.BOOL8),"isNan")) {
+      return new ColumnVector(isNanNative(offHeap.cudfColumnHandle.getViewHandle()));
+    }
+  }
+
+  /**
+   * Returns a Boolean vector with the same number of rows as this instance, that has
+   * TRUE for any entry that is not Nan, and FALSE otherwise
+   *
+   * @return - Boolean vector
+   */
+  public ColumnVector isNotNan() {
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.BOOL8),"isNan")) {
+      return new ColumnVector(isNotNanNative(offHeap.cudfColumnHandle.getViewHandle()));
+    }
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // Replacement
   /////////////////////////////////////////////////////////////////////////////
@@ -2172,6 +2196,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   private static native long reduce(long viewHandle, int reduceOp, int dtype) throws CudfException;
 
   private static native long isNullNative(long viewHandle);
+
+  private static native long isNanNative(long viewHandle);
+
+  private static native long isNotNanNative(long viewHandle);
 
   private static native long isNotNullNative(long viewHandle);
 

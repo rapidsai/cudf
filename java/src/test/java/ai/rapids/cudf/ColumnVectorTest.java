@@ -229,6 +229,78 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void isNanTest() {
+    try (ColumnVector v = ColumnVector.fromBoxedDoubles(1.0, 2.0, Double.NaN, 4.0, Double.NaN, 6.0);
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(false, false, true, false, true, false);
+         ColumnVector result = v.isNan()) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void isNanTestEmptyColumn() {
+    try (ColumnVector v = ColumnVector.fromBoxedDoubles();
+         ColumnVector expected = ColumnVector.fromBoxedBooleans();
+         ColumnVector result = v.isNan()) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void isNanTestAllNotNans() {
+    try (ColumnVector v = ColumnVector.fromBoxedDoubles(1.0, 2.0, 3.0, 4.0, 5.0, 6.0);
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(false, false, false, false, false, false);
+         ColumnVector result = v.isNan()) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void isNanTestAllNans() {
+    try (ColumnVector v = ColumnVector.fromBoxedDoubles(Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN);
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(true, true, true, true, true, true);
+         ColumnVector result = v.isNan()) {
+      assertColumnsAreEqual(result, expected);
+    }
+  }
+
+  @Test
+  void isNotNanTest() {
+    try (ColumnVector v = ColumnVector.fromBoxedDoubles(1.0, 2.0, Double.NaN, 4.0, Double.NaN, 6.0);
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(true, true, false, true, false, true);
+         ColumnVector result = v.isNotNan()) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void isNotNanTestEmptyColumn() {
+    try (ColumnVector v = ColumnVector.fromBoxedDoubles();
+         ColumnVector expected = ColumnVector.fromBoxedBooleans();
+         ColumnVector result = v.isNotNan()) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void isNotNanTestAllNotNans() {
+    try (ColumnVector v = ColumnVector.fromBoxedDoubles(1.0, 2.0, 3.0, 4.0, 5.0, 6.0);
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(true, true, true, true, true, true);
+         ColumnVector result = v.isNotNan()) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void isNotNanTestAllNans() {
+    try (ColumnVector v = ColumnVector.fromBoxedDoubles(Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN);
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(false, false, false, false, false, false);
+         ColumnVector result = v.isNotNan()) {
+      assertColumnsAreEqual(result, expected);
+    }
+  }
+
+  @Test
   void testGetDeviceMemorySizeNonStrings() {
     try (ColumnVector v0 = ColumnVector.fromBoxedInts(1, 2, 3, 4, 5, 6);
          ColumnVector v1 = ColumnVector.fromBoxedInts(1, 2, 3, null, null, 4, 5, 6)) {

@@ -370,6 +370,26 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_isNotNullNative(JNIEnv 
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_isNanNative(JNIEnv *env, jclass, jlong handle) {
+  JNI_NULL_CHECK(env, handle, "input column is null", 0);
+  try {
+    const cudf::column_view *input = reinterpret_cast<cudf::column_view *>(handle);
+    std::unique_ptr<cudf::column> ret = cudf::experimental::is_nan(*input);
+    return reinterpret_cast<jlong>(ret.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_isNotNanNative(JNIEnv *env, jclass, jlong handle) {
+  JNI_NULL_CHECK(env, handle, "input column is null", 0);
+  try {
+    const cudf::column_view *input = reinterpret_cast<cudf::column_view *>(handle);
+    std::unique_ptr<cudf::column> ret = cudf::experimental::is_not_nan(*input);
+    return reinterpret_cast<jlong>(ret.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_unaryOperation(JNIEnv *env, jclass,
         jlong input_ptr, jint int_op) {
   JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
