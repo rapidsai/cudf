@@ -1715,12 +1715,12 @@ def test_gpu_memory_usage_with_boolmask():
     cudaDF = cudaDF[boolmask]
 
     assert (
-        cudaDF.index._values.data_array_view.device_ctypes_pointer
-        == cudaDF["col0"].index._values.data_array_view.device_ctypes_pointer
+        cudaDF.index._values.ptr
+        == cudaDF["col0"].index._values.data_array_view.data.mem.ptr
     )
     assert (
-        cudaDF.index._values.data_array_view.device_ctypes_pointer
-        == cudaDF["col1"].index._values.data_array_view.device_ctypes_pointer
+        cudaDF.index._values.data_array_view.data.mem.ptr
+        == cudaDF["col1"].index._values.data_array_view.data.mem.ptr
     )
 
     assert memory_used == query_GPU_memory()
