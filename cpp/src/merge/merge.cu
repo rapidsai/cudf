@@ -460,11 +460,11 @@ table_ptr_type merge(std::vector<table_view> const& tables_to_merge,
 
 }  // namespace detail
 
-table_ptr_type merge(std::vector<table_view> const& tables_to_merge,
-                     std::vector<cudf::size_type> const& key_cols,
-                     std::vector<cudf::order> const& column_order,
-                     std::vector<cudf::null_order> const& null_precedence,
-                     rmm::mr::device_memory_resource* mr){
+std::unique_ptr<cudf::experimental::table> merge(std::vector<table_view> const& tables_to_merge,
+                                                 std::vector<cudf::size_type> const& key_cols,
+                                                 std::vector<cudf::order> const& column_order,
+                                                 std::vector<cudf::null_order> const& null_precedence,
+                                                 rmm::mr::device_memory_resource* mr){
   return detail::merge(tables_to_merge, 
                        key_cols, 
                        column_order, 
