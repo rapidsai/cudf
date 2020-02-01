@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 
 import cudf._libxx as libcudfxx
@@ -31,12 +32,40 @@ class Frame(libcudfxx.Table):
         result._copy_categories(self)
         return result
 
-    def _drop_nulls(self, how="any", keys=None, thresh=None):
+    def dropna(self, how="any", subset=None, thresh=None):
         """
-        Drops null rows from `self` depending on key columns.
+        Drops null rows from `self`.
+
+        how : {"any", "all"}, optional
+            Specifies how to decide whether to drop a row.
+            any (default) drops rows containing at least
+            one null value. all drops only rows containing
+            *all* null values.
+        subset : list, optional
+            List of columns to consider when dropping rows.
+        thresh: int, optional
+            If specified, then drops every row containing
+            less than `thresh` non-null values.
         """
-        result = self._from_table(
-            libcudfxx.drop_nulls(self, how=how, keys=keys, thresh=thresh)
+        if subset is None:
+            subset = self._data
+        elif (
+            not np.iterable(subset)
+            or isinstance(subset, str)
+            or isinstance(subset, tuple)
+            and subset in self.columns
+        ):
+            subset = (subset,)
+        diff = set(subset) - set(self._data)
+        if len(diff) != 0:
+            raise KeyError("columns {!r} do not exist".format(diff))
+        subset_cols = [
+            name for name, col in self._data.items() if name in subset
+        ]
+        if len(subset_cols) == 0:
+            return self.copy(deep=True)
+        result = self.__class__._from_table(
+            libcudfxx.drop_nulls(self, how=how, keys=subset, thresh=thresh)
         )
         result._update_index_name(self)
         result._copy_categories(self)
