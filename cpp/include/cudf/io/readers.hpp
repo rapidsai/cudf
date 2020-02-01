@@ -511,11 +511,12 @@ class reader {
    * @brief Reads and returns a specific stripe.
    *
    * @param stripe Index of the stripe
+   * @param stripe_count Number of stripes to read
    * @param stream Optional stream to use for device memory alloc and kernels
    *
    * @return The set of columns along with table metadata
    */
-  table_with_metadata read_stripe(size_type stripe,
+  table_with_metadata read_stripe(size_type stripe, size_type stripe_count = 1,
                                   cudaStream_t stream = 0);
 
   /**
@@ -633,11 +634,12 @@ class reader {
    * @brief Reads a specific group of rows.
    *
    * @param row_group Index of the row group
+   * @param row_group_count Number of row groups to read
    * @param stream Optional stream to use for device memory alloc and kernels
    *
    * @return The set of columns along with table metadata
    */
-  table_with_metadata read_row_group(size_type row_group,
+  table_with_metadata read_row_group(size_type row_group, size_type row_group_count = 1,
                                      cudaStream_t stream = 0);
 
   /**
