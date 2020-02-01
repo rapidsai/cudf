@@ -24,10 +24,10 @@ namespace cudf {
 namespace experimental {
 
 /**
- * @brief Merge two sorted tables.
+ * @brief Merge sorted tables.
  * 
- * Merges two sorted tables into one sorted table
- * containing data from both tables.
+ * Merges sorted tables into one sorted table
+ * containing data from all tables.
  *
  * Example 1:
  * input:
@@ -65,37 +65,18 @@ namespace experimental {
  *   Res0 = {0,1,1}
  *   Res1 = {'b', 'a', 'c'}
  *   Res2 = {GREEN, NULL, RED}
- *
- * @Param[in] left_table A sorted table to be merged
- * @Param[in] right_table A sorted table to be merged
- * @Param[in] key_cols Indices of left_cols and right_cols to be used
- *                     for comparison criteria
- * @Param[in] column_order Sort order types of columns indexed by key_cols
- * @Param[in] null_precedence Array indicating the order of nulls with respect to non-nulls for the indexing columns (key_cols)
- *
- * @Returns A table containing sorted data from left_table and right_table
- */
-std::unique_ptr<cudf::experimental::table> merge(table_view const& left_table,
-                                                 table_view const& right_table,
-                                                 std::vector<cudf::size_type> const& key_cols,
-                                                 std::vector<cudf::order> const& column_order,
-                                                 std::vector<cudf::null_order> const& null_precedence = {},
-                                                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-
-/**
- * @brief Merge sorted tables.
  * 
- * Merges two sorted tables into one sorted table
- * containing data from both tables.
- *
- * @Param[in] left_table A sorted table to be merged
- * @Param[in] right_table A sorted table to be merged
+ * 
+ * @throws cudf::logic_error if TODO
+ * 
+ * @Param[in] tables_to_merge Non-empty list of tables to be merged
  * @Param[in] key_cols Indices of left_cols and right_cols to be used
  *                     for comparison criteria
  * @Param[in] column_order Sort order types of columns indexed by key_cols
- * @Param[in] null_precedence Array indicating the order of nulls with respect to non-nulls for the indexing columns (key_cols)
+ * @Param[in] null_precedence Array indicating the order of nulls with respect
+ * to non-nulls for the indexing columns (key_cols)
  *
- * @Returns A table containing sorted data from left_table and right_table
+ * @Returns A table containing sorted data from all input tables
  */
 std::unique_ptr<cudf::experimental::table> merge(std::vector<table_view> const& tables_to_merge,
                                                  std::vector<cudf::size_type> const& key_cols,

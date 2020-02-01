@@ -150,3 +150,11 @@ set(HASHING_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/hashing/hashing_benchmark.cpp")
 
 ConfigureBench(HASHING_BENCH "${HASHING_BENCH_SRC}")
+
+###################################################################################################
+# - merge benchmark -----------------------------------------------------------------------------
+
+set(MERGE_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/merge/merge_benchmark.cu")
+
+ConfigureBench(MERGE_BENCH "${MERGE_BENCH_SRC}")

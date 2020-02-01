@@ -28,11 +28,11 @@
  
  // to enable, run cmake with -DBUILD_BENCHMARKS=ON
  
- class NwayMerge: public cudf::benchmark {};
+ class Merge: public cudf::benchmark {};
  
  using IntColWrap = cudf::test::fixed_width_column_wrapper<int32_t>;
 
- void BM_nway_merge(benchmark::State& state)
+ void BM_merge(benchmark::State& state)
  {   
     const cudf::size_type inputRows = state.range(0);
     const int num_tables = state.range(1);
@@ -65,12 +65,11 @@
  }
  
  
- #define NWMBM_BENCHMARK_DEFINE(name, size, num_tables)                 \
- BENCHMARK_DEFINE_F(NwayMerge, name)(::benchmark::State& state) {                       \
-    BM_nway_merge(state);                                                               \
+ #define MBM_BENCHMARK_DEFINE(name)                 \
+ BENCHMARK_DEFINE_F(Merge, name)(::benchmark::State& state) {                       \
+    BM_merge(state);                                                               \
  }                                                                                            \
- BENCHMARK_REGISTER_F(NwayMerge, name)->Args({size, num_tables}) \
-                                            ->Unit(benchmark::kNanosecond)->UseManualTime();
+ BENCHMARK_REGISTER_F(Merge, name)->Unit(benchmark::kNanosecond)->UseManualTime() \
+                                      ->RangeMultiplier(2)->Ranges({{1<<19, 1<<19},{2, 1<<7}});
                                                                        
- NWMBM_BENCHMARK_DEFINE(TwoTables, (int64_t)1024 * 1024, 2);
- NWMBM_BENCHMARK_DEFINE(ManyTables, (int64_t)1024 * 1024, 16);
+ MBM_BENCHMARK_DEFINE(pow2tables);
