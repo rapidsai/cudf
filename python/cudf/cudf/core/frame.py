@@ -138,7 +138,8 @@ class Frame(libcudfxx.Table):
 
     def drop_duplicates(self, subset=None, keep="first", nulls_are_equal=True):
         """
-        Drops rows in frame as per duplicate rows in `seubset` columns from self.
+        Drops rows in frame as per duplicate rows in `seubset` columns from
+        self.
 
         subset : list, optional
             List of columns to consider when dropping rows.
@@ -160,21 +161,18 @@ class Frame(libcudfxx.Table):
         diff = set(subset) - set(self._data)
         if len(diff) != 0:
             raise KeyError("columns {!r} do not exist".format(diff))
-        subset_cols = [
-            name for name in self._column_names if name in subset
-        ]
+        subset_cols = [name for name in self._column_names if name in subset]
         if len(subset_cols) == 0:
             return self.copy(deep=True)
 
         result = self._from_table(
-            libcudfxx.drop_duplicates(self, keys=subset, keep=keep,
-                nulls_are_equal=nulls_are_equal)
+            libcudfxx.drop_duplicates(
+                self, keys=subset, keep=keep, nulls_are_equal=nulls_are_equal
+            )
         )
 
         result._copy_categories(self)
         return result
-
-
 
     def _copy_categories(self, other, include_index=True):
         """

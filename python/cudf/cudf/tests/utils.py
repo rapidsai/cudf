@@ -46,12 +46,14 @@ def count_zero(arr):
     arr = np.asarray(arr)
     return np.count_nonzero(arr == 0)
 
+
 def update_multiindex_name(output, expected):
     if isinstance(output, pd.DataFrame) or isinstance(output, pd.Series):
         if isinstance(output.index, pd.MultiIndex):
             output.index.set_names(expected.index.names, inplace=True)
     elif isinstance(output, pd.MultiIndex):
         output.set_names(expected.names, inplace=True)
+
 
 def assert_eq(a, b, **kwargs):
     """ Assert that two cudf-like things are equivalent

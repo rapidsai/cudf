@@ -1194,6 +1194,12 @@ class Series(Frame):
     def has_nulls(self):
         return self._column.has_nulls
 
+    def dropna(self):
+        """
+        Return a Series with null values removed.
+        """
+        return super().dropna(subset=[self.name])
+
     def drop_duplicates(self, keep="first", inplace=False):
         """
         Return Series with duplicate values removed
