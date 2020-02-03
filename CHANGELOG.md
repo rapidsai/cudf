@@ -2,8 +2,11 @@
 
 ## New Features
 
+- PR #3861 Added Series.sum feature for String
+
 ## Improvements
 
+- PR #3525 build.sh option to disable nvtx
 - PR #3748 Optimize hash_partition using shared memory
 - PR #3698 Add count_(un)set_bits functions taking multiple ranges and updated slice to compute null counts at once.
 - PR #3909 Move java backend to libcudf++
@@ -20,6 +23,7 @@
 - PR #4008 Eliminate extra copy in column constructor
 - PR #4013 Add cython definition for io readers cudf/io/io_types.hpp
 - PR #4014 ORC/Parquet: add count parameter to stripe/rowgroup-based reader API
+- PR #3880 Add aggregation infrastructure support for reduction
 - PR #4021 Change quantiles signature for clarity.
 - PR #3891 Port NVStrings (r)split_record to contiguous_(r)split_record
 
