@@ -440,6 +440,7 @@ add_library(cudf
             src/hash/legacy/hashing.cu
             src/quantiles/legacy/quantiles.cu
             src/quantiles/quantile.cu
+            src/quantiles/quantiles.cu
             src/quantiles/legacy/group_quantiles.cu
             src/reductions/legacy/reductions.cu
             src/reductions/legacy/min.cu

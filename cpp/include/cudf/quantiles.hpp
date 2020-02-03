@@ -42,5 +42,24 @@ quantile(column_view const& input,
          interpolation interp = interpolation::LINEAR,
          order_info column_order = {});
 
+/* @brief Selects the rows corrosponding to a quantiles by interpolating between
+ *        the rows on either side of the desired quantiles.
+ *
+ * @param input           Table used to compute quantile rows.
+ * @param q               Desired quantiles in range [0, 1].
+ * @param interp          Strategy used to select between the two rows on either
+                          side of the desired quantile.
+ * @param column_order    The desired sort order for each column.
+ * @param null_precedence The desired order of null compared to other elements.
+ */
+std::unique_ptr<table>
+quantiles(table_view const& input,
+          std::vector<double> q,
+          interpolation interp = interpolation::NEAREST,
+          std::vector<order> const& column_order = {},
+          std::vector<null_order> const& null_precedence = {},
+          rmm::mr::device_memory_resource* mr =
+            rmm::mr::get_default_resource())
+
 } // namespace experimental
 } // namespace cudf
