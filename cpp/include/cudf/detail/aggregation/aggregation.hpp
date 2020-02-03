@@ -99,8 +99,14 @@ struct udf_aggregation : aggregation {
   udf_aggregation(aggregation::Kind type,
           std::string const& user_defined_aggregator,
           data_type output_type): aggregation{type},
-                                  source{user_defined_aggregator}, _output_type{output_type} {}
-  std::string const source;
+                                  _source{user_defined_aggregator}, 
+                                  _operator_name{(type == aggregation::PTX) ? 
+                                                 "rolling_udf_ptx" : "rolling_udf_cuda"},
+                                  _function_name{"rolling_udf"},
+                                  _output_type{output_type} {}
+  std::string const _source;
+  std::string const _operator_name;
+  std::string const _function_name;
   data_type _output_type;
 };
 
