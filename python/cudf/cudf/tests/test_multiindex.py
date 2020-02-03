@@ -393,9 +393,8 @@ def test_multiindex_index_and_columns():
         levels=[["val"], ["mean", "min"]], codes=[[0, 0], [0, 1]]
     )
     gdf.columns = mc
-    pdf.index = mi
-    pdf.index.names = ["x", "y"]
-    pdf.columns = mc
+    pdf.index = mi.to_pandas()
+    pdf.columns = mc.to_pandas()
     assert_eq(pdf, gdf)
 
 
@@ -709,6 +708,33 @@ def test_multiindex_groupby_reset_index():
     assert_eq(pdg.reset_index(), gdg.reset_index())
 
 
+def test_multicolumn_reset_index():
+    gdf = cudf.DataFrame({"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5]})
+    pdf = gdf.to_pandas()
+    gdg = gdf.groupby(["x"]).agg({"y": ["count", "mean"]})
+    pdg = pdf.groupby(["x"]).agg({"y": ["count", "mean"]})
+    assert_eq(pdg.reset_index(), gdg.reset_index(), check_dtype=False)
+    gdg = gdf.groupby(["x"]).agg({"y": ["count"]})
+    pdg = pdf.groupby(["x"]).agg({"y": ["count"]})
+    assert_eq(pdg.reset_index(), gdg.reset_index(), check_dtype=False)
+    gdg = gdf.groupby(["x"]).agg({"y": "count"})
+    pdg = pdf.groupby(["x"]).agg({"y": "count"})
+    assert_eq(pdg.reset_index(), gdg.reset_index(), check_dtype=False)
+
+
+def test_multiindex_multicolumn_reset_index():
+    gdf = cudf.DataFrame(
+        {"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5], "z": [1, 2, 3, 4, 5]}
+    )
+    pdf = gdf.to_pandas()
+    gdg = gdf.groupby(["x", "y"]).agg({"y": ["count", "mean"]})
+    pdg = pdf.groupby(["x", "y"]).agg({"y": ["count", "mean"]})
+    assert_eq(pdg.reset_index(), gdg.reset_index(), check_dtype=False)
+    gdg = gdf.groupby(["x", "z"]).agg({"y": ["count", "mean"]})
+    pdg = pdf.groupby(["x", "z"]).agg({"y": ["count", "mean"]})
+    assert_eq(pdg.reset_index(), gdg.reset_index(), check_dtype=False)
+
+
 def test_multiindex_columns_from_pandas(pdf, pdfIndex):
     pdf.index = pdfIndex
     pdfT = pdf.T
@@ -749,3 +775,13 @@ def test_multiindex_rows_with_wildcard(pdf, gdf, pdfIndex):
         pdf.loc[(slice(None), slice(None), slice(None), "smoke"), :],
         gdf.loc[(slice(None), slice(None), slice(None), "smoke"), :],
     )
+
+
+def test_multiindex_multicolumn_zero_row_slice():
+    gdf = cudf.DataFrame(
+        {"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5], "z": [1, 2, 3, 4, 5]}
+    )
+    pdf = gdf.to_pandas()
+    gdg = gdf.groupby(["x", "y"]).agg({"z": ["count"]}).iloc[:0]
+    pdg = pdf.groupby(["x", "y"]).agg({"z": ["count"]}).iloc[:0]
+    assert_eq(pdg, gdg, check_dtype=False)

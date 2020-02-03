@@ -113,6 +113,21 @@ void print(cudf::column_view const& col, std:: ostream &os = std::cout, std::str
  *---------------------------------------------------------------------------**/
 std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c);
 
+/**---------------------------------------------------------------------------*
+ * @brief Validates bitmask situated in host as per `number_of_elements`
+ *
+ * This takes care of padded bits
+ *
+ * @param        expected_mask A vector representing expected mask
+ * @param        got_mask A vector representing mask obtained from column
+ * @param        number_of_elements number of elements the mask represent
+ *
+ * @returns      true if both vector match till the `number_of_elements`
+ *---------------------------------------------------------------------------**/
+bool validate_host_masks(std::vector<bitmask_type> const& expected_mask,
+                         std::vector<bitmask_type> const& got_mask_begin,
+                         size_type number_of_elements);
+
 /**
  * @brief Copies the data and bitmask of a `column_view` to the host.
  *

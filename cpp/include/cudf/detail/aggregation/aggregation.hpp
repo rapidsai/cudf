@@ -48,7 +48,9 @@ class aggregation {
     MEDIAN,    ///< median reduction
     QUANTILE,  ///< compute specified quantile(s)
     ARGMAX,    ///< Index of max element
-    ARGMIN     ///< Index of min element
+    ARGMIN,    ///< Index of min element
+    PTX,       ///< PTX UDF based reduction
+    CUDA       ///< CUDA UDf based reduction
   };
 
   aggregation(aggregation::Kind a) : kind{a} {}
@@ -87,6 +89,25 @@ struct std_var_aggregation : aggregation {
     return aggregation::operator==(other)
        and _ddof == other._ddof;
   }
+};
+
+/**
+ * @brief Derived class for specifying a custom aggregation
+ * specified in udf
+ */
+struct udf_aggregation : aggregation {
+  udf_aggregation(aggregation::Kind type,
+          std::string const& user_defined_aggregator,
+          data_type output_type): aggregation{type},
+                                  _source{user_defined_aggregator}, 
+                                  _operator_name{(type == aggregation::PTX) ? 
+                                                 "rolling_udf_ptx" : "rolling_udf_cuda"},
+                                  _function_name{"rolling_udf"},
+                                  _output_type{output_type} {}
+  std::string const _source;
+  std::string const _operator_name;
+  std::string const _function_name;
+  data_type _output_type;
 };
 
 /**

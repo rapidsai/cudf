@@ -2,33 +2,73 @@
 
 ## New Features
 
+- PR #3861 Added Series.sum feature for String
+
 ## Improvements
 
-PR #4031 Docs build scripts and instructions update
+- PR #3525 build.sh option to disable nvtx
+- PR #3748 Optimize hash_partition using shared memory
+- PR #3698 Add count_(un)set_bits functions taking multiple ranges and updated slice to compute null counts at once.
+- PR #3909 Move java backend to libcudf++
+- PR #3971 Adding `as_table` to convert Column to Table in python
+- PR #3910 Adding sinh, cosh, tanh, asinh, acosh, atanh cube root and rint unary support.
+- PR #3972 Add Java bindings for left_semi_join and left_anti_join
+- PR #3975 Simplify and generalize data handling in `Buffer`
+- PR #3601 Port UDF functionality for rolling windows to libcudf++
+- PR #3911 Adding null boolean handling for copy_if_else
+- PR #4003 Drop old `to_device` utility wrapper function
+- PR #4002 Adding to_frame and fix for categorical column issue
+- PR #4009 build script update to enable cudf build without installing
+- PR #3897 Port cuIO JSON reader to cudf::column types
+- PR #4008 Eliminate extra copy in column constructor
+- PR #4013 Add cython definition for io readers cudf/io/io_types.hpp
+- PR #4014 ORC/Parquet: add count parameter to stripe/rowgroup-based reader API
+- PR #4021 Change quantiles signature for clarity.
+- PR #4031 Docs build scripts and instructions update
 
 ## Bug Fixes
+
+- PR #3888 Drop `ptr=None` from `DeviceBuffer` call
+- PR #3976 Fix string serialization and memory_usage method to be consistent
+- PR #3902 Fix conversion of large size GPU array to dataframe
+- PR #3953 Fix overflow in column_buffer when computing the device buffer size
+- PR #3959 Add missing hash-dispatch function for cudf.Series
+- PR #3970 Fix for Series Pickle
+- PR #3964 Restore legacy NVStrings and NVCategory dependencies in Java jar
+- PR #3982 Fix java unary op enum and add missing ops
+- PR #3979 Add `name` to Series serialize and deserialize
+- PR #4005 Fix null mask allocation bug in gather_bitmask
+- PR #4000 Fix dask_cudf sort_values performance for single partitions
+- PR #4007 Fix for copy_bitmask issue with uninitialized device_buffer
+- PR #4037 Fix JNI quantile compile issue
 
 
 # cuDF 0.12.0 (Date TBD)
 
 ## New Features
 
+- PR #3759 Updated 10 Minutes with clarification on how `dask_cudf` uses `cudf` API
 - PR #3224 Define and implement new join APIs.
 - PR #3284 Add gpu-accelerated parquet writer
 - PR #3254 Python redesign for libcudf++
 - PR #3336 Add `from_dlpack` and `to_dlpack`
 - PR #3555 Add column names support to libcudf++ io readers and writers
+- PR #3527 Add string functionality for merge API
+- PR #3610 Add memory_usage to DataFrame and Series APIs
+- PR #3557 Add contiguous_split() function. 
 - PR #3619 Support CuPy 7
 - PR #3604 Add nvtext ngrams-tokenize function
-- PR #3610 Add memory_usage to DataFrame and Series APIs
+- PR #3403 Define and implement new stack + tile APIs
 - PR #3627 Adding cudf::sort and cudf::sort_by_key
 - PR #3597 Implement new sort based groupby
 - PR #3776 Add column equivalence comparator (using epsilon for float equality)
 - PR #3667 Define and implement round-robin partition API.
 - PR #3690 Add bools_to_mask
 - PR #3761 Introduce a Frame class and make Index, DataFrame and Series subclasses
+- PR #3538 Define and implement left semi join and left anti join
 - PR #3683 Added support for multiple delimiters in `nvtext.token_count()`
 - PR #3792 Adding is_nan and is_notnan
+- PR #3594 Adding clamp support to libcudf++
 
 ## Improvements
 
@@ -51,9 +91,11 @@ PR #4031 Docs build scripts and instructions update
 - PR #3567 Include `strides` in `__cuda_array_interface__`
 - PR #3608 Update OPS codeowner group name
 - PR #3431 Port NVStrings translate to cudf strings column
+- PR #3507 Define and implement new binary operation APIs
 - PR #3620 Add stream parameter to unary ops detail API
 - PR #3593 Adding begin/end for mutable_column_device_view
 - PR #3587 Merge CHECK_STREAM & CUDA_CHECK_LAST to CHECK_CUDA
+- PR #3733 Rework `hash_partition` API
 - PR #3655 Use move with make_pair to avoid copy construction
 - PR #3402 Define and implement new quantiles APIs
 - PR #3612 Add ability to customize the JIT kernel cache path
@@ -64,7 +106,7 @@ PR #4031 Docs build scripts and instructions update
 - PR #3639 Define and implement `nans_to_nulls`
 - PR #3561 Rework contains implementation in search
 - PR #3616 Add aggregation infrastructure for argmax/argmin.
-- PR #3673 Parquet reader: improve rounding of timestamp conversion to seconds 
+- PR #3673 Parquet reader: improve rounding of timestamp conversion to seconds
 - PR #3699 Stringify libcudacxx headers for binary op JIT
 - PR #3697 Improve column insert performance for wide frames
 - PR #3616 Add aggregation infrastructure for argmax/argmin.
@@ -76,6 +118,12 @@ PR #4031 Docs build scripts and instructions update
 - PR #3796 Improve on round-robin with the case when number partitions greater than number of rows.
 - PR #3805 Avoid CuPy 7.1.0 for now
 - PR #3758 detail::scatter variant with map iterator support
+- PR #3882 Fail loudly when creating a StringColumn from nvstrings with > MAX_VAL(int32) bytes
+- PR #3823 Add header file for detail search functions
+- PR #2438 Build GBench Benchmarks in CI
+- PR #3713 Adding aggregation support to rolling_window
+- PR #3875 Add abstract sink for IO writers, used by ORC and Parquet writers for now
+- PR #3916 Refactor gather bindings
 
 ## Bug Fixes
 
@@ -87,7 +135,7 @@ PR #4031 Docs build scripts and instructions update
 - PR #3563 Use `__cuda_array_interface__` for serialization
 - PR #3564 Fix cuda memory access error in gather_bitmask_kernel
 - PR #3548 Replaced CUDA_RT_CALL with CUDA_TRY
-- PR #3486 Pandas > 0.25 compatability 
+- PR #3486 Pandas > 0.25 compatability
 - PR #3622 Fix new warnings and errors when building with gcc-8
 - PR #3588 Remove avro reader column order reversal
 - PR #3629 Fix hash map test failure
@@ -95,6 +143,7 @@ PR #4031 Docs build scripts and instructions update
 - PR #3663 Fix libcudf++ ORC reader microseconds and milliseconds conversion
 - PR #3668 Fixing CHECK_CUDA debug build issue
 - PR #3684 Fix ends_with logic for matching string case
+- PR #3691 Fix create_offsets to handle offset correctly
 - PR #3687 Fixed bug while passing input GPU memory pointer in `nvtext.scatter_count()`
 - PR #3701 Fix hash_partition hashing all columns instead of columns_to_hash
 - PR #3694 Allow for null columns parameter in `csv_writer`
@@ -114,7 +163,7 @@ PR #4031 Docs build scripts and instructions update
 - PR #3769 Don't look for a `name` attribute in column
 - PR #3783 Bind cuDF operators to Dask Dataframe
 - PR #3775 Fix segfault when reading compressed CSV files larger than 4GB
-- PR #3799 Align indices of Series inputs when adding as columns to DataFrame 
+- PR #3799 Align indices of Series inputs when adding as columns to DataFrame
 - PR #3803 Keep name when unpickling Index objects
 - PR #3804 Fix cuda crash in AVRO reader
 - PR #3766 Remove references to cudf::type_id::CATEGORY from IO code
@@ -122,7 +171,19 @@ PR #4031 Docs build scripts and instructions update
 - PR #3821 Fix OOB read in gpuinflate prefetcher
 - PR #3829 Parquet writer: fix empty dataframe causing cuda launch errors
 - PR #3835 Fix memory leak in Cython when dealing with nulls in string columns
+- PR #3866 Remove unnecessary if check in NVStrings.create_offsets
+- PR #3858 Fixes the broken debug build after #3728
 - PR #3850 Fix merge typecast scope issue and resulting memory leak
+- PR #3855 Fix MultiColumn recreation with reset_index
+- PR #3869 Fixed size calculation in NVStrings::byte_count()
+- PR #3868 Fix apply_grouped moving average example
+- PR #3900 Properly link `NVStrings` and `NVCategory` into tests
+- PR #3868 Fix apply_grouped moving average example
+- PR #3871 Fix `split_out` error
+- PR #3886 Fix string column materialization from column view
+- PR #3893 Parquet reader: fix segfault reading empty parquet file
+- PR #3931 Dask-cudf groupby `.agg` multicolumn handling fix
+- PR #4017 Fix memory leaks in `GDF_STRING` cython handling and `nans_to_nulls` cython
 
 
 # cuDF 0.11.0 (11 Dec 2019)
@@ -179,9 +240,6 @@ PR #4031 Docs build scripts and instructions update
 - PR #3490 Add pair iterators for columns
 - PR #3497 Add DataFrame.drop(..., inplace=False) argument
 - PR #3469 Add string functionality for replace API
-- PR #3527 Add string functionality for merge API
-- PR #3557 Add contiguous_split() function.
-- PR #3507 Define and implement new binary operation APIs
 - PR #3273 Define and implement new reduction APIs
 
 ## Improvements
@@ -306,6 +364,7 @@ PR #4031 Docs build scripts and instructions update
 - PR #3500 cudf::fill()/cudf::repeat() support for strings columns.
 - PR #3438 Update scalar and scalar_device_view to better support strings
 - PR #3414 Add copy_range function for strings column
+- PR #3471 Add scalar/column, column/scalar and scalar/scalar overloads to copy_if_else.
 - PR #3451 Add support for implicit typecasting of join columns
 
 ## Bug Fixes
