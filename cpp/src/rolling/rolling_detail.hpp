@@ -52,10 +52,8 @@ namespace detail
                                             comparable_countable_op or
                                             timestamp_mean);
 
-
     return is_valid_rolling_agg and
            cudf::experimental::detail::is_valid_aggregation<ColumnType, op>();
-    //return is_valid_rolling_agg;
   }
 
   // store functor
