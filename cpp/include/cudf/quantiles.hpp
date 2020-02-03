@@ -51,6 +51,9 @@ quantile(column_view const& input,
                           side of the desired quantile.
  * @param column_order    The desired sort order for each column.
  * @param null_precedence The desired order of null compared to other elements.
+ *
+ * @throws cudf::logic_error if `interp` is an arithmetic interpolation strategy
+ * @throws cudf::logic_error if `input` is empty
  */
 std::unique_ptr<table>
 quantiles(table_view const& input,
