@@ -2,6 +2,8 @@
 
 ## New Features
 
+- PR #3861 Added Series.sum feature for String
+
 ## Improvements
 
 - PR #3748 Optimize hash_partition using shared memory
