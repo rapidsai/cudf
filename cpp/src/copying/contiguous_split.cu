@@ -355,23 +355,6 @@ struct column_preprocess_info {
 };
 
 /**
- * @brief Functor called by the `type_dispatcher` to collect string columns.
- */
-struct string_column_collector {
-   template <typename T>
-   void operator()(cudf::column_view const& c, thrust::host_vector<column_preprocess_info>& offset_columns, size_type column_index){}   
-};
-template<>
-void string_column_collector::operator()<string_view>(cudf::column_view const& c, thrust::host_vector<column_preprocess_info>& offset_columns, size_type column_index)
-{
-   // constructing device view from the offsets column only, because doing so for the entire
-   // strings_column_view will result in memory allocation/cudaMemcpy() calls, which would
-   // defeat the whole purpose of this step.
-   cudf::column_device_view cdv((strings_column_view(c)).offsets(), 0, 0);
-   offset_columns.push_back(column_preprocess_info{column_index, c.offset(), c.size(), c.nullable(), cdv});      
-}
-
-/**
  * @brief Preprocess information about all strings columns in a table view.
  * 
  * In order to minimize how often we touch the gpu, we need to preprocess various pieces of information
@@ -389,29 +372,40 @@ thrust::host_vector<column_split_info> preprocess_string_column_info(cudf::table
    // build a list of all the offset columns and their indices for all input string columns and put them on the gpu   
    thrust::host_vector<column_preprocess_info> offset_columns;
    offset_columns.reserve(t.num_columns());  // worst case
-   size_type column_index = 0;
-
+   
    // collect only string columns
+   size_type column_index = 0;
    std::for_each(t.begin(), t.end(), [&offset_columns, &column_index](cudf::column_view const& c){
-      cudf::experimental::type_dispatcher(c.type(), string_column_collector{}, c, offset_columns, column_index);
+      if(c.type().id() == STRING){         
+         cudf::column_device_view cdv((strings_column_view(c)).offsets(), 0, 0);
+         offset_columns.push_back(column_preprocess_info{column_index, c.offset(), c.size(), c.nullable(), cdv});
+      }
       column_index++;
-   });
+   });   
    thrust::device_vector<column_preprocess_info> device_offset_columns = offset_columns;
-
-   // compute column split info for all string columns   
-   auto *sizes_p = device_split_info.data().get();
-   thrust::for_each(rmm::exec_policy(stream)->on(stream), device_offset_columns.begin(), device_offset_columns.end(),
-      [sizes_p] __device__ (column_preprocess_info cpi){
-         auto num_chars = cpi.offsets.head<int32_t>()[cpi.offset + cpi.size] - cpi.offsets.head<int32_t>()[cpi.offset];
-         sizes_p[cpi.index].data_buf_size = round_up_pow2(static_cast<size_t>(num_chars), split_align);         
-         sizes_p[cpi.index].validity_buf_size = cpi.nullable ? cudf::detail::bitmask_allocation_size_bytes_nocheck(cpi.size, split_align) : 0;         
-         sizes_p[cpi.index].offsets_buf_size = round_up_pow2((cpi.size+1) * sizeof(size_type), split_align);
-         sizes_p[cpi.index].num_chars = num_chars;
-         sizes_p[cpi.index].chars_offset = cpi.offsets.head<int32_t>()[cpi.offset];
+    
+   // compute column split information
+   thrust::device_vector<thrust::pair<size_type, size_type>> device_offsets(t.num_columns());
+   thrust::transform(rmm::exec_policy(stream)->on(stream), device_offset_columns.begin(), device_offset_columns.end(), device_offsets.begin(), 
+      [] __device__ (column_preprocess_info const& cpi){
+         return thrust::make_pair(cpi.offsets.head<int32_t>()[cpi.offset], cpi.offsets.head<int32_t>()[cpi.offset + cpi.size]);
       }
    );
-
-   return thrust::host_vector<column_split_info>(device_split_info);
+   thrust::host_vector<thrust::pair<size_type, size_type>> host_offsets(device_offsets);
+   thrust::host_vector<column_split_info> split_info(t.num_columns());    
+   std::for_each(offset_columns.begin(), offset_columns.end(),
+      [&split_info, &host_offsets] (column_preprocess_info const& cpi){
+         int32_t offset_start = host_offsets[cpi.index].first;
+         int32_t offset_end = host_offsets[cpi.index].second;         
+         auto num_chars = offset_end - offset_start;
+         split_info[cpi.index].data_buf_size = cudf::util::round_up_safe(static_cast<size_t>(num_chars), split_align);         
+         split_info[cpi.index].validity_buf_size = cpi.nullable ? cudf::bitmask_allocation_size_bytes(cpi.size, split_align) : 0;         
+         split_info[cpi.index].offsets_buf_size = cudf::util::round_up_safe((cpi.size+1) * sizeof(size_type), split_align);
+         split_info[cpi.index].num_chars = num_chars;
+         split_info[cpi.index].chars_offset = offset_start;
+      }
+   );
+   return split_info;   
 }
 
 /**

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 #pragma once
 
 #include <cudf/types.hpp>
-#include <cudf/detail/utilities/integer_utils.hpp>
 
 #include <vector>
 
@@ -58,32 +57,6 @@ segmented_count_unset_bits(bitmask_type const* bitmask,
 void concatenate_masks(std::vector<column_view> const &views,
     bitmask_type * dest_mask,
     cudaStream_t stream);
-
-/**
- * @brief Computes the required bytes necessary to represent the specified
- * number of bits with a given padding boundary. 
- * 
- * @note Does not throw when passed an invalid padding_boundary
- *
- * @note The Arrow specification for the null bitmask requires a 64B padding
- * boundary.
- *
- * @param number_of_bits The number of bits that need to be represented
- * @param padding_boundary The value returned will be rounded up to a multiple
- * of this value
- * @return std::size_t The necessary number of bytes
- **/
-CUDA_HOST_DEVICE_CALLABLE std::size_t bitmask_allocation_size_bytes_nocheck(size_type number_of_bits,
-                                          std::size_t padding_boundary = 64)
-{ 
-  auto necessary_bytes =
-      cudf::util::div_rounding_up_safe<size_type>(number_of_bits, CHAR_BIT);
-
-  auto padded_bytes =
-      padding_boundary * cudf::util::div_rounding_up_safe<size_type>(
-                             necessary_bytes, padding_boundary);
-  return padded_bytes;
-}
 
 }  // namespace detail
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -172,23 +172,6 @@ cudf::size_type elements_per_thread(Kernel kernel,
   CUDA_TRY(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, device));
   int per_thread = total_size / (max_blocks * num_sms * block_size);
   return std::max(1, std::min(per_thread, max_per_thread)); // switch to std::clamp with C++17
-}
-
-/**
- * @brief Finds the smallest value not less than `number_to_round` and modulo `modulus` is
- * zero. Expects modulus to be a power of 2.
- * 
- * @note Does not throw or otherwise verify the user has passed in a modulus that is a
- * power of 2.
- *  
- * @param[in] number_to_round The value to be rounded up
- * @param[in] modulus The modulus to be rounded up to.  Must be a power of 2.
- * 
- * @return cudf::size_type Elements per thread that can be processed for given specification.
-**/
-template <typename T>
-__device__ inline T round_up_pow2(T number_to_round, T modulus) {
-    return (number_to_round + (modulus - 1)) & -modulus;
 }
 
 }  // namespace detail
