@@ -24,6 +24,7 @@ import rmm
 import cudf
 import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
+from cudf._libxx.join import join
 from cudf.core import column
 from cudf.core._sort import get_sorted_inds
 from cudf.core.column import (
@@ -2642,7 +2643,7 @@ class DataFrame(Frame):
             lhs, rhs, left_on, right_on, how
         )
         # Compute merge
-        gdf_result = list(libcudfxx.join.join(lhs, rhs, left_on, right_on, how, method)._data.items())
+        gdf_result = list(join(lhs, rhs, left_on, right_on, how, method)._data.items())
         # Let's sort the columns of the GDF result. NB: Pandas doc says
         # that it sorts when how='outer' but this is NOT the case.
         result = []
