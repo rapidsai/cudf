@@ -22,7 +22,7 @@ This should run Sphinx in your shell, and outputs to `build/html/index.html`.
 
 First navigate to `/build/html/` folder, i.e., `cd build/html` and then run the following command:
 
-```
+```bash
 python -m http.server
 ```
 Then, navigate a web browser to the IP address or hostname of the host machine at port 8000:
