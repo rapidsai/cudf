@@ -118,7 +118,7 @@ struct functor {
 
 std::unique_ptr<table> shift(table_view const& input,
                              size_type offset,
-                             std::vector<std::unique_ptr<scalar>> const& fill_values,
+                             std::vector<std::reference_wrapper<scalar>> const& fill_values,
                              rmm::mr::device_memory_resource *mr,
                              cudaStream_t stream)
 {
@@ -126,7 +126,7 @@ std::unique_ptr<table> shift(table_view const& input,
                  "shift requires one fill value for each column.");
 
     for (size_type i = 0; i < input.num_columns(); ++i) {
-        CUDF_EXPECTS(input.column(i).type() == fill_values[i]->type(),
+        CUDF_EXPECTS(input.column(i).type() == fill_values[i].get().type(),
                      "shift requires each fill value type to match the corrosponding column type.");
     }
 
@@ -142,7 +142,7 @@ std::unique_ptr<table> shift(table_view const& input,
                    std::back_inserter(output_columns),
                    [offset, mr, stream] (auto const& input_column, auto const& fill_value) {
                        return type_dispatcher(input_column.type(), functor{},
-                                              input_column, offset, *fill_value,
+                                              input_column, offset, fill_value,
                                               mr, stream);
                    });
 

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <functional>
 #include <limits>
 #include <memory>
 #include <tests/utilities/base_fixture.hpp>
@@ -67,8 +68,8 @@ TYPED_TEST(ShiftTest, OneColumnEmpty)
     fixed_width_column_wrapper<T> a{};
     cudf::table_view input{ { a } };
 
-    std::vector<std::unique_ptr<cudf::scalar>> fills{};
-    fills.push_back(make_scalar<T>());
+    auto fill = make_scalar<T>();
+    std::vector<std::reference_wrapper<cudf::scalar>> fills{ *fill };
 
     cudf::experimental::shift(input, 5, fills);
 }
@@ -85,9 +86,9 @@ TYPED_TEST(ShiftTest, TwoColumnsEmpty)
     fixed_width_column_wrapper<T> expected_b{};
     cudf::table_view expected{ { input_a, input_b } };
 
-    std::vector<std::unique_ptr<cudf::scalar>> fills{};
-    fills.push_back(make_scalar<T>());
-    fills.push_back(make_scalar<T>());
+    auto fill_a = make_scalar<T>();
+    auto fill_b = make_scalar<T>();
+    std::vector<std::reference_wrapper<cudf::scalar>> fills{ *fill_a, *fill_b };
 
     auto actual = cudf::experimental::shift(input, 5, fills);
 
@@ -104,8 +105,8 @@ TYPED_TEST(ShiftTest, OneColumn)
     auto expected_a = fixed_width_column_wrapper<T>{ 7, 7, lowest<T>, 1, 2, 3, 4 };
     auto expected = cudf::table_view{ { expected_a } };
 
-    std::vector<std::unique_ptr<cudf::scalar>> fills {};
-    fills.push_back(make_scalar<T>(7));
+    auto fill = make_scalar<T>(7);
+    std::vector<std::reference_wrapper<cudf::scalar>> fills { *fill };
 
     auto actual = cudf::experimental::shift(input, 2, fills);
 
@@ -122,8 +123,8 @@ TYPED_TEST(ShiftTest, OneColumnNegativeShift)
     auto expected_a = fixed_width_column_wrapper<T>{ 4, 5, highest<T>, 7, 7, 7, 7 };
     auto expected = cudf::table_view{ { expected_a } };
 
-    std::vector<std::unique_ptr<cudf::scalar>> fills {};
-    fills.push_back(make_scalar<T>(7));
+    auto fill = make_scalar<T>(7);
+    std::vector<std::reference_wrapper<cudf::scalar>> fills { *fill };
 
     auto actual = cudf::experimental::shift(input, -4, fills);
 
@@ -140,8 +141,9 @@ TYPED_TEST(ShiftTest, OneColumnNullFill)
     auto expected_a = fixed_width_column_wrapper<T>({ 0, 0, lowest<T>, 5, 0, 3, 0 }, { 0, 0, 1, 1, 1, 1, 1 });
     auto expected = cudf::table_view{ { expected_a } };
 
-    std::vector<std::unique_ptr<cudf::scalar>> fills {};
-    fills.push_back(make_scalar<T>());
+    auto fill = make_scalar<T>();
+
+    std::vector<std::reference_wrapper<cudf::scalar>> fills { *fill };
 
     auto actual = cudf::experimental::shift(input, 2, fills);
 
@@ -160,9 +162,9 @@ TYPED_TEST(ShiftTest, TwoColumnsNullableInput)
     auto expected_b = fixed_width_column_wrapper<T>({ 7, 7, 5, 4, 3 }, { 0, 0, 1, 0, 1});
     auto expected = cudf::table_view{ { expected_a, expected_b } };
 
-    std::vector<std::unique_ptr<cudf::scalar>> fills {};
-    fills.push_back(make_scalar<T>(7));
-    fills.push_back(make_scalar<T>());
+    auto fill_a = make_scalar<T>(7);
+    auto fill_b = make_scalar<T>();
+    std::vector<std::reference_wrapper<cudf::scalar>> fills { *fill_a, *fill_b };
 
     auto actual = cudf::experimental::shift(input, 2, fills);
 
@@ -177,8 +179,8 @@ TYPED_TEST(ShiftTest, MismatchFillValueCount)
     fixed_width_column_wrapper<T> b{};
     cudf::table_view input{ { a, b } };
 
-    std::vector<std::unique_ptr<cudf::scalar>> fills{};
-    fills.push_back(make_scalar<T>());
+    auto fill = make_scalar<T>();
+    std::vector<std::reference_wrapper<cudf::scalar>> fills{ *fill };
 
     std::unique_ptr<cudf::experimental::table> output;
 
@@ -197,8 +199,9 @@ TYPED_TEST(ShiftTest, MismatchFillValueDtypes)
     fixed_width_column_wrapper<T> a{};
     cudf::table_view input{ { a } };
 
-    std::vector<std::unique_ptr<cudf::scalar>> fills{};
-    fills.push_back(make_scalar<int>());
+    auto fill = make_scalar<int>();
+
+    std::vector<std::reference_wrapper<cudf::scalar>> fills{ *fill };
 
     std::unique_ptr<cudf::experimental::table> output;
 

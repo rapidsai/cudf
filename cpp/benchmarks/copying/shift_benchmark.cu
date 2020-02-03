@@ -10,7 +10,7 @@
 #include <tests/utilities/column_wrapper.hpp>
 #include <cudf/copying.hpp>
 #include <memory>
-#include "cudf/utilities/error.hpp"
+#include <cudf/utilities/error.hpp>
 
 template<typename T,
          typename ScalarType = cudf::experimental::scalar_type_t<T>>
@@ -77,10 +77,11 @@ static void BM_shift(benchmark::State& state)
 
     cudf::table_view input{ { input_a } };
 
-    std::vector<std::unique_ptr<cudf::scalar>> fills{};
-    fills.push_back(use_validity
-                    ? make_scalar<int>()
-                    : make_scalar<int>(777));
+    auto fill = use_validity
+        ? make_scalar<int>()
+        : make_scalar<int>(777);
+
+    std::vector<std::reference_wrapper<cudf::scalar>> fills{ *fill };
 
     for (auto _ : state)
     {
