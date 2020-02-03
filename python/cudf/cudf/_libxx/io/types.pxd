@@ -34,7 +34,8 @@ cdef extern from "cudf/io/types.hpp" \
     ctypedef enum io_type:
         FILEPATH "cudf::experimental::io::io_type::FILEPATH"
         HOST_BUFFER "cudf::experimental::io::io_type::HOST_BUFFER"
-        ARROW_RANDOM_ACCESS_FILE "cudf::experimental::io::io_type::ARROW_RANDOM_ACCESS_FILE"
+        ARROW_RANDOM_ACCESS_FILE \
+            "cudf::experimental::io::io_type::ARROW_RANDOM_ACCESS_FILE"
 
     ctypedef enum statistics_freq:
         STATISTICS_NONE = 0,
