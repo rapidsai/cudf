@@ -31,6 +31,18 @@ class Frame(libcudfxx.Table):
         result._copy_categories(self)
         return result
 
+    def _as_column(self):
+        """
+        _as_column : Converts a single columned Frame to Column
+        """
+        assert (
+            len(self._data) == 1
+            and not hasattr(self, "index")
+            and list(self._data)[0] is None
+        ), "There should be only one data column, no index and None as the name to use this method"
+
+        return self._data[None].copy(deep=False)
+
     def dropna(self, axis=0, how="any", subset=None, thresh=None):
         """
         Drops rows (or columns) containing nulls from a Column.

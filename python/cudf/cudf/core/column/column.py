@@ -59,13 +59,13 @@ class ColumnBase(Column):
             (self.data, self.dtype, self.mask, self.offset, self.children),
         )
 
-    def as_frame(self, name=None):
+    def as_frame(self):
         from cudf.core.frame import Frame
 
         """
         Converts a Column to Frame
         """
-        return Frame({name: self.copy(deep=False)})
+        return Frame({None: self.copy(deep=False)})
 
     @property
     def data_array_view(self):
@@ -284,7 +284,7 @@ class ColumnBase(Column):
         return col
 
     def dropna(self):
-        dropped_col = self.as_frame().dropna()._data[None].copy(deep=False)
+        dropped_col = self.as_frame().dropna()._as_column()
         return dropped_col
 
     def _get_mask_as_column(self):
@@ -820,8 +820,7 @@ class ColumnBase(Column):
         result = (
             self.as_frame()
             ._apply_boolean_mask(boolean_mask=mask)
-            ._data[None]
-            .copy(deep=False)
+            ._as_column()
         )
         return result
 
