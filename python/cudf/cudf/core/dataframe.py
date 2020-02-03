@@ -1809,24 +1809,8 @@ class DataFrame(Frame):
         Return DataFrame with duplicate rows removed, optionally only
         considering certain subset of columns.
         """
-        if subset is None:
-            subset = self._data
-        elif (
-            not np.iterable(subset)
-            or isinstance(subset, str)
-            or isinstance(subset, tuple)
-            and subset in self.columns
-        ):
-            subset = (subset,)
-        diff = set(subset) - set(self._data)
-        if len(diff) != 0:
-            raise KeyError("columns {!r} do not exist".format(diff))
-        subset_cols = [
-            name for name in self._column_names if name in subset
-        ]
-        if len(subset_cols) == 0:
-            return self.copy(deep=True)
-        outdf = DataFrame(super().drop_duplicates(subset_cols, keep))
+
+        outdf = super().drop_duplicates(subset=subset, keep=keep)
 
         return self._mimic_inplace(outdf, inplace=inplace)
 
@@ -1839,68 +1823,6 @@ class DataFrame(Frame):
             self._columns_name = result._columns_name
         else:
             return result
-
-    def dropna(self, axis=0, how="any", subset=None, thresh=None):
-        """
-        Drops rows (or columns) containing nulls from a Column.
-
-        Parameters
-        ----------
-        axis : {0, 1}, optional
-            Whether to drop rows (axis=0, default) or columns (axis=1)
-            containing nulls.
-        how : {"any", "all"}, optional
-            Specifies how to decide whether to drop a row (or column).
-            any (default) drops rows (or columns) containing at least
-            one null value. all drops only rows (or columns) containing
-            *all* null values.
-        subset : list, optional
-            List of columns to consider when dropping rows (all columns
-            are considered by default). Alternatively, when dropping
-            columns, subset is a list of rows to consider.
-        thresh: int, optional
-            If specified, then drops every row (or column) containing
-            less than `thresh` non-null values
-
-
-        Returns
-        -------
-        Copy of the DataFrame with rows/columns containing nulls dropped.
-        """
-        if axis == 0:
-            return self._drop_na_rows(how=how, subset=subset, thresh=thresh)
-        else:
-            return self._drop_na_columns(how=how, subset=subset, thresh=thresh)
-
-    def _drop_na_rows(self, how="any", subset=None, thresh=None):
-        """
-        Drop rows containing nulls.
-        """
-        return super().dropna(how=how, subset=subset, thresh=thresh)
-
-    def _drop_na_columns(self, how="any", subset=None, thresh=None):
-        """
-        Drop columns containing nulls
-        """
-        out_cols = []
-
-        if subset is None:
-            df = self
-        else:
-            df = self.take(subset)
-
-        if thresh is None:
-            if how == "all":
-                thresh = 1
-            else:
-                thresh = len(df)
-
-        for col in self.columns:
-            if (len(df[col]) - df[col].null_count) < thresh:
-                continue
-            out_cols.append(col)
-
-        return self[out_cols]
 
     def pop(self, item):
         """Return a column and drop it from the DataFrame.

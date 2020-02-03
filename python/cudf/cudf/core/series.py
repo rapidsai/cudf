@@ -1198,7 +1198,7 @@ class Series(Frame):
         """
         Return Series with duplicate values removed
         """
-        result = self.__class__(super.drop_duplicates(keys=[self.name], keep=keep))
+        result = super().drop_duplicates(subset=[self.name], keep=keep)
 
         return self._mimic_inplace(result, inplace=inplace)
 

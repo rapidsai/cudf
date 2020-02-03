@@ -46,6 +46,12 @@ def count_zero(arr):
     arr = np.asarray(arr)
     return np.count_nonzero(arr == 0)
 
+def update_multiindex_name(output, expected):
+    if isinstance(output, pd.DataFrame) or isinstance(output, pd.Series):
+        if isinstance(output.index, pd.MultiIndex):
+            output.index.set_names(expected.index.names, inplace=True)
+    elif isinstance(output, pd.MultiIndex):
+        output.set_names(expected.names, inplace=True)
 
 def assert_eq(a, b, **kwargs):
     """ Assert that two cudf-like things are equivalent
@@ -56,18 +62,19 @@ def assert_eq(a, b, **kwargs):
     functions.
     """
     __tracebackhide__ = True
+
     if hasattr(a, "to_pandas"):
         a = a.to_pandas()
     if hasattr(b, "to_pandas"):
         b = b.to_pandas()
+
+    update_multiindex_name(a, b)
     if isinstance(a, pd.DataFrame):
         tm.assert_frame_equal(a, b, **kwargs)
     elif isinstance(a, pd.Series):
         tm.assert_series_equal(a, b, **kwargs)
     elif isinstance(a, pd.Index):
         tm.assert_index_equal(a, b, **kwargs)
-    elif isinstance(a, pd.MultiIndex):
-        tm.assert_index_equal(a, b, **kwargs, check_names = False)
     elif isinstance(a, np.ndarray) and isinstance(b, np.ndarray):
         if np.issubdtype(a.dtype, np.floating) and np.issubdtype(
             b.dtype, np.floating
