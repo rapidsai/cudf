@@ -18,7 +18,7 @@
 
 #include <cudf/filling.hpp>
 #include <cudf/types.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/mr/device_memory_resource.hpp>
 
 #include <cuda_runtime.h>
 
