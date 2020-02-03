@@ -14,6 +14,7 @@
 - PR #3910 Adding sinh, cosh, tanh, asinh, acosh, atanh cube root and rint unary support.
 - PR #3972 Add Java bindings for left_semi_join and left_anti_join
 - PR #3975 Simplify and generalize data handling in `Buffer`
+- PR #3985 Update RMM include files and remove extraneously included header files.
 - PR #3601 Port UDF functionality for rolling windows to libcudf++
 - PR #3911 Adding null boolean handling for copy_if_else
 - PR #4003 Drop old `to_device` utility wrapper function
