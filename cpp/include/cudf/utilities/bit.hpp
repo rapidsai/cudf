@@ -18,8 +18,6 @@
 
 #include <cudf/types.hpp>
 
-#include <cassert>
-
 /**
  * @file bit.hpp
  * @brief Utilities for bit and bitmask operations.
@@ -28,6 +26,18 @@
 
 namespace cudf {
 namespace detail {
+
+// Work around a bug in NVRTC that fails to compile assert() in constexpr functions
+// (fixed after CUDA 11.0)
+#if defined __GNUC__
+# define LIKELY(EXPR)  __builtin_expect(!!(EXPR), 1)
+#else
+# define LIKELY(EXPR)  (!!(EXPR))
+#endif
+ 
+# define constexpr_assert(CHECK) \
+    ( LIKELY(CHECK) ?  void(0) : []{assert(!#CHECK);}() )
+
 template <typename T>
 constexpr CUDA_HOST_DEVICE_CALLABLE std::size_t size_in_bits() {
   static_assert(CHAR_BIT == 8, "Size of a byte must be 8 bits.");
@@ -104,7 +114,7 @@ CUDA_HOST_DEVICE_CALLABLE bool bit_is_set(bitmask_type const* bitmask,
  * @return A bitmask word with `n` least significant bits set
  *---------------------------------------------------------------------------**/
 constexpr CUDA_HOST_DEVICE_CALLABLE bitmask_type set_least_significant_bits(size_type n) {
-  assert(0 < n < detail::size_in_bits<bitmask_type>());
+  constexpr_assert(0 <= n && n < static_cast<size_type>(detail::size_in_bits<bitmask_type>()));
   return ((bitmask_type{1} << n) - 1);
 }
 
@@ -117,8 +127,8 @@ constexpr CUDA_HOST_DEVICE_CALLABLE bitmask_type set_least_significant_bits(size
  * @return A bitmask word with `n` most significant bits set
  *---------------------------------------------------------------------------**/
 constexpr CUDA_HOST_DEVICE_CALLABLE bitmask_type set_most_significant_bits(size_type n) {
-  constexpr auto word_size{detail::size_in_bits<bitmask_type>()};
-  assert(0 < n < word_size);
+  constexpr size_type word_size{detail::size_in_bits<bitmask_type>()};
+  constexpr_assert(0 <= n && n < word_size);
   return ~((bitmask_type{1} << (word_size - n)) - 1);
 }
 
