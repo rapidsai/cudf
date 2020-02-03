@@ -37,10 +37,10 @@ void BM_setnullmask(benchmark::State& state){
   state.SetBytesProcessed(static_cast<int64_t>(state.iterations())*size/8);
 }
 
-#define GBM_BENCHMARK_DEFINE(name)                      \
+#define NBM_BENCHMARK_DEFINE(name)                                     \
 BENCHMARK_DEFINE_F(SetNullmask, name)(::benchmark::State& state) {     \
-  BM_setnullmask(state);                                \
+  BM_setnullmask(state);                                               \
 }                                                                      \
 BENCHMARK_REGISTER_F(SetNullmask, name)->RangeMultiplier(1<<10)->Range(1<<10,1<<30)->UseManualTime();
 
-GBM_BENCHMARK_DEFINE(SetNullMaskKernel);
+NBM_BENCHMARK_DEFINE(SetNullMaskKernel);

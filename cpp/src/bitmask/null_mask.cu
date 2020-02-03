@@ -445,27 +445,6 @@ void concatenate_masks(std::vector<column_view> const &views,
     dest_mask, number_of_mask_bits);
 }
 
-// set bits [0, false_begin_bit) as true, set bits [false_begin_bit, size) as false
-void clear_bits_from(bitmask_type* mask, size_type size,
-    size_type false_begin_bit, cudaStream_t stream)
-{
-  // true only bytes
-  size_type partition0 = false_begin_bit / CHAR_BIT;
-  // false only bytes
-  size_type partition1 = cudf::util::div_rounding_up_safe<size_type>(false_begin_bit, CHAR_BIT);
-  size_type intra_byte_position = false_begin_bit % CHAR_BIT;
-
-  if (partition0 != 0)
-    CUDA_TRY(cudaMemsetAsync(mask, 0xff, partition0, stream));
-  if (intra_byte_position != 0)
-    CUDA_TRY(cudaMemsetAsync(reinterpret_cast<uint8_t*>(mask) + partition0,
-          ~(0xff << intra_byte_position),
-          1, stream));
-  if (partition1 < size)
-    CUDA_TRY(cudaMemsetAsync(reinterpret_cast<uint8_t*>(mask) + partition1, 0x00,
-          size - partition1, stream));
-}
-
 }  // namespace detail
 
 // Count non-zero bits in the specified range

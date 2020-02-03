@@ -12,8 +12,6 @@
 #include <cudf/reduction.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/null_mask.hpp>
-#include <cudf/detail/null_mask.hpp>
-
 
 namespace cudf {
 namespace experimental {
