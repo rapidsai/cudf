@@ -36,13 +36,14 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         data_type(type_id id)
         type_id id()
 
-    cdef enum order:
-        ASCENDING = 0
-        DECENDING = 1
+    ctypedef enum order:
+        ASCENDING "cudf::order::ASCENDING"
+        DESCENDING "cudf::order::DESCENDING"
 
-    cdef enum null_order:
-        AFTER = 0
-        BEFORE = 1
+    ctypedef enum null_order:
+        AFTER "cudf::null_order::AFTER"
+        BEFORE "cudf::null_order::BEFORE"
+
 
 cdef extern from "cudf/column/column.hpp" namespace "cudf" nogil:
     cdef cppclass column_contents "cudf::column::contents":
@@ -169,7 +170,7 @@ cdef extern from "cudf/search.hpp" namespace "cudf::experimental" nogil:
         vector[order] column_order,
         vector[null_order] null_precedence,
     )
-    cdef unique_ptr[column] cpp_contains "cudf::experimental::contains" (
-        column_view col,
-        scalar value,
-    )
+    # cdef unique_ptr[column] cpp_contains "cudf::experimental::contains" (
+    #     column_view col,
+    #     scalar value,
+    # )

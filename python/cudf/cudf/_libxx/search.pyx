@@ -23,24 +23,18 @@ def search_sorted(Table table, Table values, side):
     cdef vector[order] c_column_order
     cdef vector[null_order] c_null_precedence
 
-    for i in table._num_columns:
-        c_column_order.push_back(ASCENDING)
-        c_null_precedence.push_back(AFTER)
-
     if side == 'left':
-        with nogil:
-            c_result = cpp_lower_bound(
-                table.view(),
-                values.view(),
-                c_column_order,
-                c_null_precedence,
-            )
+        c_result = cpp_lower_bound(
+            table.view(),
+            values.view(),
+            c_column_order,
+            c_null_precedence,
+        )
     elif side == 'right':
-        with nogil:
-            c_result = cpp_upper_bound(
-                table.view(),
-                values.view(),
-                c_column_order,
-                c_null_precedence,
-            )
+        c_result = cpp_upper_bound(
+            table.view(),
+            values.view(),
+            c_column_order,
+            c_null_precedence,
+        )
     return Column.from_unique_ptr(move(c_result))
