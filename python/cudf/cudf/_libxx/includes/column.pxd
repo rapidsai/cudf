@@ -1,7 +1,7 @@
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 
-from cudf._libxx.lib cimport *
+from cudf._libxx.includes.lib cimport *
 
 cdef class Column:
     cdef dict __dict__

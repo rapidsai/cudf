@@ -1,7 +1,7 @@
 from libcpp.memory cimport unique_ptr
 
-from cudf._libxx.lib cimport *
-from cudf._libxx.column cimport *
+from cudf._libxx.includes.lib cimport *
+from cudf._libxx.includes.column cimport *
 
 
 cdef class Table:

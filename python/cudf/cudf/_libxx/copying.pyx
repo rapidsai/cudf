@@ -1,9 +1,14 @@
 import pandas as pd
 
-from cudf._libxx.lib cimport *
-from cudf._libxx.column cimport Column
-from cudf._libxx.table cimport Table
+from cudf._libxx.includes.lib cimport *
+from cudf._libxx.includes.column cimport Column
+from cudf._libxx.includes.table cimport Table
 
+cdef extern from "cudf/copying.hpp" namespace "cudf::experimental" nogil:
+    cdef unique_ptr[table] cpp_gather "cudf::experimental::gather" (
+        table_view source_table,
+        column_view gather_map
+    )
 
 def gather(Table source_table, Column gather_map):
     assert pd.api.types.is_integer_dtype(gather_map.dtype)

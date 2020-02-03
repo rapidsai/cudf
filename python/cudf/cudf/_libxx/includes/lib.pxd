@@ -137,12 +137,6 @@ cdef extern from "cudf/table/table.hpp" namespace "cudf::experimental" nogil:
         mutable_table_view mutable_view()
         vector[unique_ptr[column]] release()
 
-cdef extern from "cudf/copying.hpp" namespace "cudf::experimental" nogil:
-    cdef unique_ptr[table] cpp_gather "cudf::experimental::gather" (
-        table_view source_table,
-        column_view gather_map
-    )
-
 cdef extern from "<utility>" namespace "std" nogil:
     cdef unique_ptr[column] move(unique_ptr[column])
     cdef unique_ptr[table] move(unique_ptr[table])
