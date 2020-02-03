@@ -22,19 +22,19 @@ cdef extern from "cudf/io/types.hpp" \
         QUOTE_NONE,
 
     ctypedef enum compression_type:
-        none "cudf::experimental::io::compression_type::NONE"
-        auto "cudf::experimental::io::compression_type::AUTO"
-        snappy "cudf::experimental::io::compression_type::SNAPPY"
-        gzip "cudf::experimental::io::compression_type::GZIP"
-        bzip2 "cudf::experimental::io::compression_type::BZIP2"
-        brotli "cudf::experimental::io::compression_type::BROTLI"
-        zip "cudf::experimental::io::compression_type::ZIP"
-        xz "cudf::experimental::io::compression_type::XZ"
+        NONE "cudf::experimental::io::compression_type::NONE"
+        AUTO "cudf::experimental::io::compression_type::AUTO"
+        SNAPPY "cudf::experimental::io::compression_type::SNAPPY"
+        GZIP "cudf::experimental::io::compression_type::GZIP"
+        BZIP2 "cudf::experimental::io::compression_type::BZIP2"
+        BROTLI "cudf::experimental::io::compression_type::BROTLI"
+        ZIP "cudf::experimental::io::compression_type::ZIP"
+        XZ "cudf::experimental::io::compression_type::XZ"
 
     ctypedef enum io_type:
-        FILEPATH,
-        HOST_BUFFER,
-        ARROW_RANDOM_ACCESS_FILE,
+        FILEPATH "cudf::experimental::io::io_type::FILEPATH"
+        HOST_BUFFER "cudf::experimental::io::io_type::HOST_BUFFER"
+        ARROW_RANDOM_ACCESS_FILE "cudf::experimental::io::io_type::ARROW_RANDOM_ACCESS_FILE"
 
     ctypedef enum statistics_freq:
         STATISTICS_NONE = 0,
