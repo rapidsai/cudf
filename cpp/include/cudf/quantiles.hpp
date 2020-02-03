@@ -59,7 +59,7 @@ quantiles(table_view const& input,
           std::vector<order> const& column_order = {},
           std::vector<null_order> const& null_precedence = {},
           rmm::mr::device_memory_resource* mr =
-            rmm::mr::get_default_resource())
+            rmm::mr::get_default_resource());
 
 } // namespace experimental
 } // namespace cudf
