@@ -27,6 +27,10 @@ namespace experimental {
 std::unique_ptr<aggregation> make_sum_aggregation() {
   return std::make_unique<aggregation>(aggregation::SUM);
 }
+/// Factory to create a PRODUCT aggregation
+std::unique_ptr<aggregation> make_product_aggregation() {
+  return std::make_unique<aggregation>(aggregation::PRODUCT);
+}
 /// Factory to create a MIN aggregation
 std::unique_ptr<aggregation> make_min_aggregation() {
   return std::make_unique<aggregation>(aggregation::MIN);
@@ -38,6 +42,18 @@ std::unique_ptr<aggregation> make_max_aggregation() {
 /// Factory to create a COUNT aggregation
 std::unique_ptr<aggregation> make_count_aggregation() {
   return std::make_unique<aggregation>(aggregation::COUNT);
+}
+/// Factory to create a ANY aggregation
+std::unique_ptr<aggregation> make_any_aggregation() {
+  return std::make_unique<aggregation>(aggregation::ANY);
+}
+/// Factory to create a ALL aggregation
+std::unique_ptr<aggregation> make_all_aggregation() {
+  return std::make_unique<aggregation>(aggregation::ALL);
+}
+/// Factory to create a SUM_OF_SQUARES aggregation
+std::unique_ptr<aggregation> make_sum_of_squares_aggregation() {
+  return std::make_unique<aggregation>(aggregation::SUM_OF_SQUARES);
 }
 /// Factory to create a MEAN aggregation
 std::unique_ptr<aggregation> make_mean_aggregation() {

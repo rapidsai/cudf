@@ -89,7 +89,6 @@ struct column_buffer_size_functor {
    std::pair<size_t, size_t> operator()(std::pair<size_t, size_t> sizes, column_view const& c)
    {
       CUDF_FAIL("contiguous_split for strings not implemented yet");
-      return std::pair<size_t, size_t>(0, 0);
    }
 
    template <typename T, std::enable_if_t<is_fixed_width<T>()>* = nullptr>
