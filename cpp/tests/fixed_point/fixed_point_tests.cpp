@@ -126,6 +126,40 @@ TYPED_TEST(FixedPointTestBothReps, DecimalXXTrickyDivision) {
 
 }
 
+TYPED_TEST(FixedPointTestBothReps, DecimalXXThrust) {
+
+   using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
+
+    std::vector<decimalXX> vec1(1000);
+    std::vector<int32_t>   vec2(1000);
+
+    std::iota(std::begin(vec1), std::end(vec1), decimalXX{0, scale_type{-2}});
+    std::iota(std::begin(vec2), std::end(vec2), 0);
+
+    auto const res1 = thrust::reduce(
+        std::cbegin(vec1),
+        std::cend(vec1),
+        decimalXX{0, scale_type{-2}});
+
+    auto const res2 = std::accumulate(
+        std::cbegin(vec2),
+        std::cend(vec2),
+        0);
+
+    EXPECT_EQ(res1.get(), res2);
+
+    std::vector<int32_t> vec3(vec1.size());
+
+    thrust::transform(
+        std::cbegin(vec1),
+        std::cend(vec1),
+        std::begin(vec3),
+        [] (auto const& e) { return e.get(); });
+
+    EXPECT_EQ(vec2, vec3);
+
+}
+
 TEST_F(FixedPointTest, OverflowDecimal32) {
 
     using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
@@ -143,6 +177,36 @@ TEST_F(FixedPointTest, OverflowDecimal32) {
     decimal32 NEG_ONE{-1, scale_type{0}};
     decimal32 ONE{1, scale_type{0}};
     decimal32 TWO{2, scale_type{0}};
+
+    ASSERT_NO_THROW(min / NEG_ONE);
+    ASSERT_NO_THROW(max * TWO);
+    ASSERT_NO_THROW(min * TWO);
+    ASSERT_NO_THROW(max + ONE);
+    ASSERT_NO_THROW(max - NEG_ONE);
+    ASSERT_NO_THROW(min - ONE);
+    ASSERT_NO_THROW(max - NEG_ONE);
+
+    #endif
+
+}
+
+TEST_F(FixedPointTest, OverflowDecimal64) {
+
+    using decimal64 = fixed_point<int64_t, Radix::BASE_10>;
+
+    #if defined(__CUDACC_DEBUG__)
+
+    decimal64 num0{ 5, scale_type{-18}};
+    decimal64 num1{-5, scale_type{-18}};
+
+    ASSERT_NO_THROW(num0 + num0);
+    ASSERT_NO_THROW(num1 - num0);
+
+    decimal64 min{std::numeric_limits<int64_t>::min(), scale_type{0}};
+    decimal64 max{std::numeric_limits<int64_t>::max(), scale_type{0}};
+    decimal64 NEG_ONE{-1, scale_type{0}};
+    decimal64 ONE{1, scale_type{0}};
+    decimal64 TWO{2, scale_type{0}};
 
     ASSERT_NO_THROW(min / NEG_ONE);
     ASSERT_NO_THROW(max * TWO);
