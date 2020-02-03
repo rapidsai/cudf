@@ -31,11 +31,14 @@ namespace join {
 namespace detail {
 
   // TODO:
-  //  nested_join_indices      - my function/kernel
   //  sort_merge_join_indices  - Kumar
   //  hash_join_indices        - rework current hash mechanism
-  //  filter_join_indices      - new function/kernel
+  //  filter_join_indices      - new function/kernel shared by sort_merge and hash
   //
+
+  /**
+   * @brief Defines nested loop join implementation
+   */
   struct nested_loop_join {
     rmm::device_vector<int64_t> operator()(table_view const& left,
                                            table_view const& right,
@@ -47,6 +50,9 @@ namespace detail {
     }
   };
 
+  /**
+   * @brief Defines sort merge join implementation
+   */
   struct sort_merge_join {
     rmm::device_vector<int64_t> operator()(table_view const& left,
                                            table_view const& right,
@@ -67,6 +73,9 @@ namespace detail {
     }
   };
 
+  /**
+   * @brief Defines hash join implementation
+   */
   struct hash_join {
     rmm::device_vector<int64_t> operator()(table_view const& left,
                                            table_view const& right,
@@ -87,6 +96,21 @@ namespace detail {
     }
   };
     
+  /**
+   * @brief determine if the specified join is a trivial join resulting in
+   * an empty table.
+   *
+   * Checks for simple edge conditions that can short-circuit the expensive join
+   * computations (e.g. empty inputs).
+   *
+   * @param[in] left                The left table
+   * @param[in] right               The right table
+   * @param[in] primary_join_ops    Vector of join operations used as the primary join
+   * @param[in] secondary_join_ops  Vector of join operations used as the secondary join
+   * @param[in] JoinKind            Type of join (INNER_JOIN, LEFT_JOIN, FULL_JOIN)
+   *
+   * @return true if the result is trivial, false if it needs to be computed
+   */
   bool is_trivial_join(table_view const& left,
                        table_view const& right,
                        std::vector<join_operation> const& primary_join_ops,
@@ -117,17 +141,17 @@ namespace detail {
     return false;
   }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Returns a vector with non-common indices which is set difference
    * between `[0, num_columns)` and index values in common_column_indices
    *
-   * @param num_columns The number of columns , which represents column indices
-   * from `[0, num_columns)` in a table
-   * @param common_column_indices A vector of common indices which needs to be
-   * excluded from `[0, num_columns)`
-   * @return vector A vector containing only the indices which are not present in
-   * `common_column_indices`
-   *---------------------------------------------------------------------------**/
+   * @param num_columns           The number of columns, which represents column
+   *                              indices from `[0, num_columns)` in a table
+   * @param common_column_indices Vector of common indices which needs to be
+   *                              excluded from `[0, num_columns)`
+   * @return vector               Vector containing only the indices which are
+   *                              not present in `common_column_indices`
+   */
   auto non_common_column_indices(size_type num_columns,
                                  std::vector<size_type> const& common_column_indices) {
     CUDF_EXPECTS(common_column_indices.size() <= static_cast<unsigned long>(num_columns),
@@ -144,6 +168,15 @@ namespace detail {
     return non_common_column_indices;
   }
 
+  /**
+   * @brief  Construct an empty joined table of the proper structure.
+   *
+   * @param[in] left               The left table
+   * @param[in] right              The right table
+   * @param[in] columns_in_common  List of columns in common, only return one of these.
+   *
+   * @return table with proper structure but no rows.
+   */
   std::unique_ptr<experimental::table> get_empty_joined_table(table_view const& left,
                                                               table_view const& right,
                                                               std::vector<std::pair<size_type, size_type>> const& columns_in_common) {
@@ -160,6 +193,25 @@ namespace detail {
     return std::make_unique<experimental::table>(tmp_table);
   }
   
+  /**
+   * @brief  Compute a list of indices that are not referenced in the join intermediate
+   *         output.  This will be used to populate portions of LEFT and FULL join
+   *         results.
+   *
+   *  The intermediate output of the joins is an INNER_JOIN.  In order to convert to
+   *  a LEFT_JOIN we need to identify which rows in the left table are not referenced.
+   *  In order to convert to a FULL_JOIN we need to identify which rows in the right
+   *  table are not referenced.
+   *
+   *  @tparam iterator      The type of the iterator
+   *
+   *  @param indices_begin   Iterator pointing to beginning of the used indices
+   *  @param join_size       Number of elements in the collection we're iterating over
+   *  @param row_count       Number of elements in the table we want to complement
+   *
+   *  @return                Device vector containing all row indices that are not
+   *                         referenced in the provided iterator.
+   */
   template <typename iterator>
   rmm::device_vector<cudf::size_type> get_indices_complement(iterator indices_begin,
                                                              cudf::size_type join_size,
@@ -200,6 +252,23 @@ namespace detail {
     return indices_complement;
   }
 
+  /**
+   * @brief  Combines the non common left, common left and non common right
+   *         columns in the correct order to form the join output table.
+   *
+   * @param[in] left_noncommon_cols        Columns obtained by gathering non common left
+   *                                       columns.
+   * @param[in] left_noncommon_col_indices Output locations of non common left columns
+   *                                       in the final table output
+   * @param[in] left_common_cols           Columns obtained by gathering common left
+   *                                       columns.
+   * @param[in] left_common_col_indices    Output locations of common left columns in the
+   *                                       final table output
+   * @param[in] right_noncommon_cols       Table obtained by gathering non common right
+   *                                       columns.
+   *
+   * @return  table containing rearranged columns.
+   */
   std::vector<std::unique_ptr<column>> combine_join_columns(std::vector<std::unique_ptr<column>>&& left_noncommon_cols,
                                                             std::vector<size_type> const& left_noncommon_col_indices,
                                                             std::vector<std::unique_ptr<column>>&& left_common_cols,
@@ -219,28 +288,51 @@ namespace detail {
     return combined_cols;
   }
 
-  // TODO:  Idea is to use this function and make_transform_iterator to
-  //        do the proper gather.
-    //  THINKING ABOUT THIS...
-    //     seems like my best option is to create a custom iterator
-    //     (the current CUSTOM_ITERATOR) would just divide and modulo
-    //     by the number of rows in right table.
-    //
-    //     I would need another custom iterator that iterates over
-    //     3 data structures:  joined_indices, left_indices_complement
-    //     and right_indices_complement.  While we're in inner_join
-    //     it does what the original custom iterator did.  Once
-    //     we reach the end of that we iterate over left.  If we're
-    //     computing right then we return JoinNoneValue.  If we're
-    //     computing left then we return the value.  Finally we iterate
-    //     over left doing the reverse.
-    //
-    //     This would allow us to only use O(n+m) extra memory for the
-    //     indices complement arrays and use this new custom iterator
-    //     in the gather phase at the end.
-    //
+  /**
+   * @brief Iterator that allows us to convert a device vector of int64_t
+   *        generated by the join functions into left and right row offsets.
+   *
+   * This iterator can operate on just the inner join, or it can operate on
+   * the inner join and the appropriate complement sets.  It will return the
+   * JoinNoneValue when in the left and right complement sets as appropriate.
+   *
+   * The order of rows is as follows:
+   *
+   *    1) The first range of elements is from the inner join.  This is always
+   *       present.
+   *    2) The second range of elements is from left_complement.  If we're doing
+   *       a left join or a full join, this range will be specified.  Any
+   *       reference in this range of elements will return the left offset
+   *       from the left_complement vector or it will return JoinNoneValue if
+   *       we want the right offset.
+   *    3) The third range of elements is from right_complement.  If we're
+   *       doing a full join, this range will be specified.  Any reference in
+   *       this range will return the right offset from the right complement vector
+   *       or it will return JoinNoneValue if we want the left offset.
+   *
+   * Note that left_complement and right_complement can be empty either because we
+   * don't want them or because there are no values.  This class doesn't care.
+   *
+   * @tparam  left_index     true if we want the left row offset,
+   *                         false if we want the right row offset
+   *
+   */
   template <bool left_index>
   struct join_output_iterator {
+    /**
+     *  @brief   Host-side constructor
+     *
+     *  @param joined_indices    Vector of joined indices.  Each index is encoded as:
+     *                           (left_offset * right_num_rows) + right_offset
+     *  @param left_complement   Vector of offsets in left that are not referenced
+     *                           in the inner join.  Should be empty if we want
+     *                           an inner join.
+     *  @param right_complement  Vector of offsets in right that are not referenced
+     *                           in the inner join.  Should be empty unless we want
+     *                           a full join.
+     *  @param right_num_rows    The number of rows in the right table (used to
+     *                           decode the joined index).
+     */
     __host__ join_output_iterator(rmm::device_vector<int64_t> &joined_indices,
                                   rmm::device_vector<cudf::size_type> &left_complement,
                                   rmm::device_vector<cudf::size_type> &right_complement,
@@ -253,6 +345,9 @@ namespace detail {
       _right_complement_size(right_complement.size()),
       _right_num_rows(right_num_rows)  {}
     
+    /**
+     *  @brief Device-side operator to return the proper result.
+     */
     __device__ cudf::size_type operator()(cudf::size_type index) {
       if (index < _joined_indices_size) {
         if (left_index) {
@@ -415,6 +510,37 @@ namespace detail {
                                                                       right_table->release()));
   }
   
+  /**
+   *  @brief  Core join implementation.
+   *
+   *  Provides the basic structure of the join implementation for INNER_JOIN, LEFT_JOIN and FULL_JOIN.
+   *
+   *  @tparam JoinKind            The type of join (INNER_JOIN, LEFT_JOIN, FULL_JOIN)
+   *  @tparam join_indices_type   A class defining a functor implementing the desired join
+   *
+   * @param[in] left               The left table
+   * @param[in] right              The right table
+   * @param[in] primary_join_ops   The primary join operations.  Each join operation identifies a
+   *                               comparison operator and a pair of columns.  The join operations in the
+   *                               vector are logically combined with an AND.  The primary_join_ops
+   *                               is used as the sort/merge key for creating an intermediate result.
+   * @param[in] secondary_join_ops The secondary join operations.  Each join operation identifies a
+   *                               comparison operator and a pair of columns.  The join operations in the
+   *                               vector are logically combined with an AND.  The secondary_join_ops
+   *                               is used as a filter on the intermediate result to create the final result.
+   * @param[in] columns_in_common  A vector of pairs of column indices into `left` and `right`,
+   *                               respectively, that are "in common". For "common" columns, only a
+   *                               single output column will be produced, which is gathered from `left_on`
+   *                               columns.  Columns from left and right which are not identified within
+   *                               columns_in_common will also be output.
+   * @param[in] join_indices_impl  Object defining the implementation of the desired join.
+   * @param[in] mr                 Memory resource used to allocate the returned table and columns
+   * @param[in] stream             Cuda stream
+   *
+   * @returns                      Result of joining `left` and `right` tables on the columns
+   *                               specified by join_ops.  The resulting table will be joined columns of
+   *                               `left(common columns)+left(excluding common columns)+right(excluding common columns)`.
+   */
   template <join_kind JoinKind, typename join_indices_type>
   std::unique_ptr<experimental::table> join(cudf::table_view const& left,
                                             cudf::table_view const& right,
