@@ -107,12 +107,12 @@ __global__ void set_null_mask_kernel(bitmask_type *__restrict__ destination,
        destination_word_index < number_of_mask_words;
        destination_word_index += blockDim.x * gridDim.x) {
     if (destination_word_index == 0 || destination_word_index == last_word) {
-      bitmask_type mask = 0xffffffff;
+      bitmask_type mask = ~bitmask_type{0};
       if (destination_word_index == 0) {
-        mask = (0xffffffff << intra_word_index(begin_bit));
+        mask = ~(set_least_significant_bits(intra_word_index(begin_bit)));
       }
       if (destination_word_index == last_word) {
-        mask = mask ^ (0xffffffff << intra_word_index(end_bit));
+        mask = mask & set_least_significant_bits(intra_word_index(end_bit));
       }
       x[destination_word_index] = (valid == true)
                                       ? x[destination_word_index] | mask
@@ -131,9 +131,7 @@ void set_null_mask(bitmask_type *bitmask, size_type begin_bit,
   CUDF_EXPECTS(begin_bit >= 0, "Invalid range.");
   CUDF_EXPECTS(begin_bit < end_bit, "Invalid bit range.");
   if (bitmask != nullptr) {
-    auto number_of_mask_words =
-        cudf::util::div_rounding_up_safe(static_cast<size_t>(end_bit),
-                                         detail::size_in_bits<bitmask_type>()) -
+    auto number_of_mask_words = num_bitmask_words(end_bit) - 
         begin_bit / detail::size_in_bits<bitmask_type>();
     cudf::experimental::detail::grid_1d config(number_of_mask_words, 256);
     set_null_mask_kernel<<<config.num_blocks, config.num_threads_per_block, 0,
