@@ -37,7 +37,7 @@ class Frame(libcudfxx.Table):
         """
         assert (
             self. _num_columns == 1
-            and not hasattr(self, "index")
+            and self._index is None
             and self._column_names[0] is None
         ), """There should be only one data column,
             no index and None as the name to use this method"""
