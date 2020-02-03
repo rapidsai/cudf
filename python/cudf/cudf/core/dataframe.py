@@ -1879,26 +1879,7 @@ class DataFrame(Frame):
         """
         Drop rows containing nulls.
         """
-        if subset is None:
-            subset = self._data
-        elif (
-            not np.iterable(subset)
-            or isinstance(subset, str)
-            or isinstance(subset, tuple)
-            and subset in self.columns
-        ):
-            subset = (subset,)
-        diff = set(subset) - set(self._data)
-        if len(diff) != 0:
-            raise KeyError("columns {!r} do not exist".format(diff))
-        subset_cols = [
-            name for name, col in self._data.items() if name in subset
-        ]
-
-        if len(subset_cols) == 0:
-            return self.copy(deep=True)
-
-        return self._drop_nulls(how=how, keys=subset_cols, thresh=thresh)
+        return super().dropna(how=how, subset=subset, thresh=thresh)
 
     def _drop_na_columns(self, how="any", subset=None, thresh=None):
         """
