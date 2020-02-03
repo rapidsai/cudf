@@ -30,6 +30,7 @@
 #include <thrust/logical.h>
 
 #include <gmock/gmock.h>
+#include <numeric>
 
 namespace cudf {
 namespace test {
@@ -369,6 +370,16 @@ std::string to_string(cudf::column_view const& col, std::string const& delimiter
 
 void print(cudf::column_view const& col, std::ostream &os, std::string const& delimiter) {
   os << to_string(col, delimiter);
+}
+
+bool validate_host_masks(std::vector<bitmask_type> const& expected_mask,
+                         std::vector<bitmask_type> const& got_mask,
+                         size_type number_of_elements) {
+
+    return std::all_of(thrust::make_counting_iterator(0), thrust::make_counting_iterator(number_of_elements),
+            [&expected_mask, &got_mask](auto index){
+                return cudf::bit_is_set(expected_mask.data(), index) == cudf::bit_is_set(got_mask.data(), index);
+            });
 }
 
 }  // namespace test

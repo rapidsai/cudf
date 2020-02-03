@@ -100,7 +100,7 @@ TYPED_TEST(ColumnUtilitiesTest, NullableToHostWithOffset) {
 
   auto masks = cudf::test::detail::make_null_mask_vector(valid + split, valid + size);
 
-  EXPECT_TRUE(std::equal(masks.begin(), masks.end(), host_data.second.begin()));
+  EXPECT_TRUE(cudf::test::validate_host_masks(masks, host_data.second, expected_data.size()));
 }
 
 TYPED_TEST(ColumnUtilitiesTest, NullableToHostAllValid) {
