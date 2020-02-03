@@ -8,7 +8,7 @@ In order to build the docs, we need the conda dev environment from cudf and buil
 
 1. Create a conda env and  build cudf from source. The dependencies to build rapids from source are installed in that conda environment, and then rapids is built and installed into the same environment.
 
-2. Once cudf is built from source, navigate to "../docs/cudf/". If you have your documentation written and want to turn it into HTML, run makefile:
+2. Once cudf is built from source, navigate to `../docs/cudf/`. If you have your documentation written and want to turn it into HTML, run makefile:
 
 
 ```
