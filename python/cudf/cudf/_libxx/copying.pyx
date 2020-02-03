@@ -5,6 +5,7 @@ from cudf._libxx.includes.column cimport Column
 from cudf._libxx.includes.table cimport Table
 cimport cudf._libxx.includes.copying as cpp_copying
 
+
 def gather(Table source_table, Column gather_map):
     assert pd.api.types.is_integer_dtype(gather_map.dtype)
     cdef unique_ptr[table] c_result = (
