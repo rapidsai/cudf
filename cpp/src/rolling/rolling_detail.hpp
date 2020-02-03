@@ -32,7 +32,7 @@ namespace detail
   template <typename ColumnType, class AggOp, cudf::experimental::aggregation::Kind op, bool is_mean>
   static constexpr bool is_supported()
   {
-    constexpr bool comparable_countable_op =
+    constexpr bool is_comparable_countable_op =
       std::is_same<AggOp, DeviceMin>::value ||
       std::is_same<AggOp, DeviceMax>::value ||
       std::is_same<AggOp, DeviceCount>::value;
@@ -44,23 +44,26 @@ namespace detail
     constexpr bool timestamp_sum =
         std::is_same<AggOp, DeviceSum>::value &&
         cudf::is_timestamp<ColumnType>();
-
-
-    constexpr bool is_valid_rolling_agg = !std::is_same<ColumnType, cudf::string_view>::value and
-                                          !timestamp_mean and
-                                          !timestamp_sum and
-                                            ((op == experimental::aggregation::SUM) or
+    
+    constexpr bool is_operation_supported == (op == experimental::aggregation::SUM) or
                                              (op == experimental::aggregation::MIN) or
                                              (op == experimental::aggregation::MAX) or
                                              (op == experimental::aggregation::COUNT) or
-                                             (op == experimental::aggregation::MEAN)) and
-                                           (cudf::is_numeric<ColumnType>() or
-                                            comparable_countable_op);
+                                             (op == experimental::aggregation::MEAN)
+
+    constexpr bool is_valid_timestamp_agg = !timestamp_mean and !timestamp_sum and cudf::is_timestamp<ColumnType>();
+
+
+    constexpr bool is_valid_numeric_agg = cudf::is_numeric<ColumnType>() and
+                                          comparable_countable_op and 
+                                          is_operation_supported
+
+    constexpr bool is_valid_rolling_agg = !std::is_same<ColumnType, cudf::string_view>::value and
+                                          (is_valid_timestamp_agg or is_valid_numeric_agg)
 
 
     return is_valid_rolling_agg and
            cudf::experimental::detail::is_valid_aggregation<ColumnType, op>();
-    //return is_valid_rolling_agg;
   }
 
   template <typename ColumnType, class AggOp, cudf::experimental::aggregation::Kind Op>

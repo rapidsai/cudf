@@ -47,7 +47,7 @@ namespace { // anonymous
 template <typename InputType, typename OutputType, typename agg_op, aggregation::Kind op, bool has_nulls>
 std::enable_if_t<op == aggregation::COUNT, bool>
 __device__
-specific_rolling_kernel(column_device_view input,
+process_rolling_window(column_device_view input,
                         mutable_column_device_view output,
                         size_type start_index,
                         size_type end_index,
@@ -80,7 +80,7 @@ template <typename InputType, typename OutputType, typename agg_op, aggregation:
 std::enable_if_t<(op == aggregation::ARGMIN  or op == aggregation::ARGMAX) and
                  std::is_same<InputType, cudf::string_view>::value, bool>
 __device__
-specific_rolling_kernel(column_device_view input,
+process_rolling_window(column_device_view input,
                         mutable_column_device_view output,
                         size_type start_index,
                         size_type end_index,
@@ -120,7 +120,7 @@ specific_rolling_kernel(column_device_view input,
 template <typename InputType, typename OutputType, typename agg_op, aggregation::Kind op, bool has_nulls>
 std::enable_if_t<!std::is_same<InputType, cudf::string_view>::value and !(op == aggregation::COUNT), bool>
 __device__
-specific_rolling_kernel(column_device_view input,
+process_rolling_window(column_device_view input,
                         mutable_column_device_view output,
                         size_type start_index,
                         size_type end_index,
@@ -157,7 +157,7 @@ specific_rolling_kernel(column_device_view input,
  * @tparam InputType  Datatype of `input`
  * @tparam OutputType  Datatype of `output`
  * @tparam agg_op  A functor that defines the aggregation operation
- * @tparam op The aggreagtion expected to be carried out
+ * @tparam op The aggregation operator (enum value)
  * @tparam block_size CUDA block size for the kernel
  * @tparam arg_min_max `true` if `op` is `ARGMIN` or `ARGMAX` else false
  * @tparam has_nulls true if the input column has nulls
@@ -206,7 +206,7 @@ void gpu_rolling(column_device_view input,
     //       This might require separating the kernel into a special version
     //       for dynamic and static sizes.
 
-    bool output_is_valid = specific_rolling_kernel<InputType, OutputType, agg_op,
+    bool output_is_valid = process_rolling_window<InputType, OutputType, agg_op,
                            op, has_nulls>(input, output, start_index, end_index, i, min_periods, identity); 
 
     // set the mask
@@ -276,6 +276,7 @@ struct rolling_window_launcher
 
   }
 
+  // This launch is only for fixed width columns with valid aggregation option
   template <typename T, typename agg_op, aggregation::Kind op, typename WindowIterator>
   std::enable_if_t<(cudf::detail::is_supported<T, agg_op,
                                   op, op == aggregation::MEAN>()) and
@@ -300,6 +301,7 @@ struct rolling_window_launcher
       return output;
   }
 
+  // This launch is only for string columns with valid aggregation option
   template <typename T, typename agg_op, aggregation::Kind op, typename WindowIterator>
   std::enable_if_t<!(cudf::detail::is_supported<T, agg_op,
                                   op, op == aggregation::MEAN>()) and
@@ -332,7 +334,7 @@ struct rolling_window_launcher
                   following_window_begin, min_periods, aggr, string_view{}, stream);
       }
 
-      // If aggregation operation is MIN or MAX, then the output we got is a scatter map
+      // If aggregation operation is MIN or MAX, then the output we got is a gather map
       if((op == aggregation::MIN) or (op == aggregation::MAX)) {
           // The rows that represent null elements will be having negative values in gather map,
           // and that's why nullify_out_of_bounds/ignore_out_of_bounds is true.
@@ -343,6 +345,7 @@ struct rolling_window_launcher
       return output;
   }
 
+  // Deals with invalid column and/or aggregation options
   template <typename T, typename agg_op, aggregation::Kind op, typename WindowIterator>
   std::enable_if_t<!(cudf::detail::is_supported<T, agg_op,
                                   op, op == aggregation::MEAN>()) and
