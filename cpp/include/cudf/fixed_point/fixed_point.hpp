@@ -72,7 +72,8 @@ namespace detail {
 
 template <typename T>
 constexpr inline auto is_supported_representation_type() -> bool {
-  return std::is_same<T, int32_t>::value;
+  return std::is_same<T, int32_t>::value
+      || std::is_same<T, int64_t>::value;
 }
 
 template <typename T>

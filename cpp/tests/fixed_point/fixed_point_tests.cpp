@@ -16,28 +16,37 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <tests/utilities/base_fixture.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
+#include <tests/utilities/base_fixture.hpp>
+#include <tests/utilities/type_lists.hpp>
 #include <type_traits>
 #include <vector>
-#include <algorithm> // transform, generate_n
-#include <numeric>   // iota, accumulate
+#include <algorithm>
+#include <numeric>
 #include <limits>
 
-struct FixedPointTest : public cudf::test::BaseFixture {};
-
 using namespace cudf::fixed_point;
-using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
 
-TEST_F(FixedPointTest, SimpleDecimal32Construction) {
+struct FixedPointTest         : public cudf::test::BaseFixture {};
 
-    decimal32 num0{1.234567, scale_type{ 0}};
-    decimal32 num1{1.234567, scale_type{-1}};
-    decimal32 num2{1.234567, scale_type{-2}};
-    decimal32 num3{1.234567, scale_type{-3}};
-    decimal32 num4{1.234567, scale_type{-4}};
-    decimal32 num5{1.234567, scale_type{-5}};
-    decimal32 num6{1.234567, scale_type{-6}};
+template <typename T>
+struct FixedPointTestBothReps : public cudf::test::BaseFixture {};
+
+using RepresentationTypes = ::testing::Types<int32_t, int64_t>;
+
+TYPED_TEST_CASE(FixedPointTestBothReps, RepresentationTypes);
+
+TYPED_TEST(FixedPointTestBothReps, SimpleDecimalXXConstruction) {
+
+    using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
+
+    decimalXX num0{1.234567, scale_type{ 0}};
+    decimalXX num1{1.234567, scale_type{-1}};
+    decimalXX num2{1.234567, scale_type{-2}};
+    decimalXX num3{1.234567, scale_type{-3}};
+    decimalXX num4{1.234567, scale_type{-4}};
+    decimalXX num5{1.234567, scale_type{-5}};
+    decimalXX num6{1.234567, scale_type{-6}};
 
     EXPECT_EQ(1,        num0.get());
     EXPECT_EQ(1.2,      num1.get());
@@ -49,15 +58,15 @@ TEST_F(FixedPointTest, SimpleDecimal32Construction) {
 
 }
 
-TEST_F(FixedPointTest, SimpleBinaryFPConstruction) {
+TYPED_TEST(FixedPointTestBothReps, SimpleBinaryFPConstruction) {
 
-    using binary_fp32 = fixed_point<int32_t, Radix::BASE_2>;
+    using binary_fp = fixed_point<TypeParam, Radix::BASE_2>;
 
-    binary_fp32 num0{10, scale_type{0}};
-    binary_fp32 num1{10, scale_type{1}};
-    binary_fp32 num2{10, scale_type{2}};
-    binary_fp32 num3{10, scale_type{3}};
-    binary_fp32 num4{10, scale_type{4}};
+    binary_fp num0{10, scale_type{0}};
+    binary_fp num1{10, scale_type{1}};
+    binary_fp num2{10, scale_type{2}};
+    binary_fp num3{10, scale_type{3}};
+    binary_fp num4{10, scale_type{4}};
 
     EXPECT_EQ(10, num0.get());
     EXPECT_EQ(10, num1.get());
@@ -67,12 +76,14 @@ TEST_F(FixedPointTest, SimpleBinaryFPConstruction) {
 
 }
 
-TEST_F(FixedPointTest, SimpleDecimal32Math) {
+TYPED_TEST(FixedPointTestBothReps, SimpleDecimalXXMath) {
 
-    decimal32 ONE  {1, scale_type{-2}};
-    decimal32 TWO  {2, scale_type{-2}};
-    decimal32 THREE{3, scale_type{-2}};
-    decimal32 SIX  {6, scale_type{-2}};
+    using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
+
+    decimalXX ONE  {1, scale_type{-2}};
+    decimalXX TWO  {2, scale_type{-2}};
+    decimalXX THREE{3, scale_type{-2}};
+    decimalXX SIX  {6, scale_type{-2}};
 
     EXPECT_TRUE(ONE + ONE == TWO);
 
@@ -85,16 +96,18 @@ TEST_F(FixedPointTest, SimpleDecimal32Math) {
 
 }
 
-TEST_F(FixedPointTest, Decimal32TrickyDivision) {
+TYPED_TEST(FixedPointTestBothReps, DecimalXXTrickyDivision) {
 
-    decimal32 ONE_1  {1,  scale_type{1}};
-    decimal32 SIX_0  {6,  scale_type{0}};
-    decimal32 SIX_1  {6,  scale_type{1}};
-    decimal32 TEN_0  {10, scale_type{0}};
-    decimal32 TEN_1  {10, scale_type{1}};
-    decimal32 SIXTY_1{60, scale_type{1}};
+    using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
 
-    decimal32 ZERO = ONE_1;
+    decimalXX ONE_1  {1,  scale_type{1}};
+    decimalXX SIX_0  {6,  scale_type{0}};
+    decimalXX SIX_1  {6,  scale_type{1}};
+    decimalXX TEN_0  {10, scale_type{0}};
+    decimalXX TEN_1  {10, scale_type{1}};
+    decimalXX SIXTY_1{60, scale_type{1}};
+
+    decimalXX ZERO = ONE_1;
 
     EXPECT_EQ(ONE_1.get(),    0); // 1 / 10 = 0
     EXPECT_EQ(SIX_1.get(),    0); // 6 / 10 = 0
@@ -104,9 +117,9 @@ TEST_F(FixedPointTest, Decimal32TrickyDivision) {
     EXPECT_EQ(SIXTY_1 / TEN_0, ZERO);
     EXPECT_EQ(SIXTY_1 / TEN_1, SIX_0);
 
-    decimal32 A{34.56, scale_type{-2}};
-    decimal32 B{1.234, scale_type{-3}};
-    decimal32 C{1,     scale_type{-2}};
+    decimalXX A{34.56, scale_type{-2}};
+    decimalXX B{1.234, scale_type{-3}};
+    decimalXX C{1,     scale_type{-2}};
 
     EXPECT_EQ((A / B).get(),       20);
     EXPECT_EQ(((A * C) / B).get(), 28);
@@ -114,6 +127,8 @@ TEST_F(FixedPointTest, Decimal32TrickyDivision) {
 }
 
 TEST_F(FixedPointTest, OverflowDecimal32) {
+
+    using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
 
     #if defined(__CUDACC_DEBUG__)
 
@@ -189,8 +204,8 @@ TEST_F(FixedPointTest, Decimal32IntVector) {
 
 template<typename ValueType, typename Binop>
 void float_vector_test(ValueType const initial_value,
-                         int32_t   const size,
-                         int32_t   const scale, Binop binop) {
+                       int32_t   const size,
+                       int32_t   const scale, Binop binop) {
 
     using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
 
