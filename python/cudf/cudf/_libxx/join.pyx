@@ -15,7 +15,7 @@ cpdef join(lhs, rhs, left_on, right_on, how, method):
       Call libcudf++ join for full outer, inner and left joins.
       Returns a list of tuples [(column, valid, name), ...]
     """
-    if how not in ['left', 'inner', 'outer', 'leftanti']:
+    if how not in ['left', 'inner', 'outer']:
         msg = "new join api only supports left, inner or outer"
         raise ValueError(msg)
 
