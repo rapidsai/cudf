@@ -47,7 +47,7 @@ cpdef join(lhs, rhs, left_on, right_on, how, method):
     for name in right_on:
         # This will ensure that the column name is valid
         rhs._data[name]
-        right_on_ind.push_back(list(lhs._data.keys()).index(name))
+        right_on_ind.push_back(list(rhs._data.keys()).index(name))
 
     for name, col in rhs._data.items():
         check_gdf_compatibility(col)
@@ -60,7 +60,6 @@ cpdef join(lhs, rhs, left_on, right_on, how, method):
     cdef Table c_rhs = rhs
     cdef table_view lhs_view = c_lhs.data_view()
     cdef table_view rhs_view = c_rhs.data_view()
-    # data_view comes from self._data.values()
 
     with nogil:
         if how == 'inner':
