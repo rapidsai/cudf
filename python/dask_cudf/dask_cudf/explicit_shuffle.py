@@ -78,6 +78,7 @@ async def _explicit_shuffle(s, df_nparts, df_parts, index, divisions):
     # Concatenate all parts owned by this worker into
     # a single cudf DataFrame
     df = df_concat(df_parts[0])
+    del df_parts
 
     # Calculate new partition mapping
     if df:
