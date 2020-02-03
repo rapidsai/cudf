@@ -1211,15 +1211,6 @@ class Series(Frame):
         else:
             return result
 
-    def dropna(self):
-        """
-        Return a Series with null values removed.
-        """
-        if not self.has_nulls:
-            return self
-
-        return cls(super().drop_nulls(keys=[self.name]))
-
     def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
         """Fill null values with ``value``.
 

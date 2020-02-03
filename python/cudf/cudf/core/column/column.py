@@ -284,9 +284,7 @@ class ColumnBase(Column):
         return col
 
     def dropna(self):
-        dropped_col = (
-            self.as_frame().drop_nulls()._data[None].copy(deep=False)
-        )
+        dropped_col = self.as_frame().dropna()._data[None].copy(deep=False)
         return dropped_col
 
     def _get_mask_as_column(self):
