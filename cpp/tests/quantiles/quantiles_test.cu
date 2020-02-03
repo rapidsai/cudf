@@ -26,11 +26,11 @@ TYPED_TEST(QuantilesTest, TestMulticolumn) {
     using T = TypeParam;
 
     auto input_a = fixed_width_column_wrapper<T>(
-        { 0, 1, 2, 3, 4 },
+        { 4, 3, 2, 1, 0 },
         { 1, 1, 1, 1, 1 });
 
     auto inut_b = strings_column_wrapper(
-        { "a", "b", "c", "d", "e" },
+        { "e", "d", "c", "b", "a" },
         {  1,   1,   1,   1,   1  });
 
     auto input = cudf::table_view({ input_a, inut_b });
