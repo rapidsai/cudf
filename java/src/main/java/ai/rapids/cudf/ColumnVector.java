@@ -781,8 +781,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   /**
    * Returns a Boolean vector with the same number of rows as this instance, that has
-   * TRUE for any entry that is Nan, and FALSE otherwise
-   *
+   * TRUE for any entry that is NaN, and FALSE if null or a valid floating point value
    * @return - Boolean vector
    */
   public ColumnVector isNan() {
@@ -793,8 +792,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   /**
    * Returns a Boolean vector with the same number of rows as this instance, that has
-   * TRUE for any entry that is not Nan, and FALSE otherwise
-   *
+   * TRUE for any entry that is null or a valid floating point value, FALSE otherwise
    * @return - Boolean vector
    */
   public ColumnVector isNotNan() {

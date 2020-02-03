@@ -291,8 +291,8 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector expected = ColumnVector.fromBoxedBooleans(true, true, true, true, true, true);
          ColumnVector result = v.isNan();
          ColumnVector resultF = vF.isNan()) {
-      assertColumnsAreEqual(result, expected);
-      assertColumnsAreEqual(resultF, expected);
+      assertColumnsAreEqual(expected, result);
+      assertColumnsAreEqual(expected, resultF);
     }
   }
 
