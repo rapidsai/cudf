@@ -23,7 +23,6 @@
 class SetNullmask: public cudf::benchmark {
 };
 
-template<bool kernel_memset>
 void BM_setnullmask(benchmark::State& state){
   const cudf::size_type size{(cudf::size_type)state.range(0)};
   rmm::device_buffer mask=cudf::create_null_mask(size, cudf::mask_state::UNINITIALIZED);
@@ -31,22 +30,17 @@ void BM_setnullmask(benchmark::State& state){
 
   for(auto _ : state) {
     cuda_event_timer raii(state, true); // flush_l2_cache = true, stream = 0
-    if(kernel_memset)
     cudf::set_null_mask(static_cast<cudf::bitmask_type*>(mask.data()),
                         begin, end, true, 0);
-    else
-    cudf::set_bitmask(static_cast<cudf::bitmask_type*>(mask.data()),
-        begin, end, true, 0);
   }
 
   state.SetBytesProcessed(static_cast<int64_t>(state.iterations())*size/8);
 }
 
-#define GBM_BENCHMARK_DEFINE(name, kernel_memset)                      \
+#define GBM_BENCHMARK_DEFINE(name)                      \
 BENCHMARK_DEFINE_F(SetNullmask, name)(::benchmark::State& state) {     \
-  BM_setnullmask<kernel_memset>(state);                                \
+  BM_setnullmask(state);                                \
 }                                                                      \
 BENCHMARK_REGISTER_F(SetNullmask, name)->RangeMultiplier(1<<10)->Range(1<<10,1<<30)->UseManualTime();
 
-GBM_BENCHMARK_DEFINE(Kernel, true);
-GBM_BENCHMARK_DEFINE(Memset,false);
+GBM_BENCHMARK_DEFINE(SetNullMaskKernel);

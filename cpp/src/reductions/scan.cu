@@ -97,9 +97,8 @@ struct ScanDispatcher {
       rmm::exec_policy(stream)->on(stream),
       v, v + input_view.size(), 
       thrust::identity<bool>{}) -  v;
-    cudf::detail::clear_bits_from(static_cast<bitmask_type *>(mask.data()),
-                                  input_view.size(), first_null_position, 
-                                  stream);
+    cudf::set_null_mask(static_cast<cudf::bitmask_type*>(mask.data()), 0, first_null_position, true);
+    cudf::set_null_mask(static_cast<cudf::bitmask_type*>(mask.data()), first_null_position, input_view.size(), false);
     return mask;
   }
 

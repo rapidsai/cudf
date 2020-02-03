@@ -144,50 +144,6 @@ void set_null_mask(bitmask_type *bitmask, size_type begin_bit,
   }
 }
 
-void read_and_set_mask(uint8_t* byte_address, bool valid, uint8_t mask, cudaStream_t stream) {
-    uint8_t read_value;
-    CUDA_TRY(cudaMemcpyAsync(&read_value, byte_address, 1, cudaMemcpyDeviceToHost, stream));
-    CHECK_CUDA(stream);
-    uint8_t fill_value = (valid == true)
-                              ? read_value | mask
-                              : read_value & ~mask;
-    CUDA_TRY(cudaMemsetAsync(byte_address, fill_value, 1, stream));
-}
-
-void set_bitmask(bitmask_type *bitmask, size_type begin_bit, size_type end_bit,
-                 bool valid, cudaStream_t stream) {
-  CUDF_EXPECTS(begin_bit >= 0, "Invalid range.");
-  CUDF_EXPECTS(begin_bit < end_bit, "Invalid bit range.");
-  constexpr auto BYTE_LEN = detail::size_in_bits<uint8_t>();
-  auto number_of_mask_words =
-      cudf::util::div_rounding_up_safe(static_cast<size_t>(end_bit), BYTE_LEN) -
-      begin_bit / BYTE_LEN;
-  uint8_t *destination = reinterpret_cast<uint8_t *>(bitmask);
-  auto x = destination + begin_bit / BYTE_LEN;
-  const auto last_word = (end_bit / BYTE_LEN) - (begin_bit / BYTE_LEN);
-  unsigned finished_bytes = 0;
-  {
-    // begin byte
-    uint8_t mask = (0xff << (begin_bit % BYTE_LEN));
-    if (0 == last_word) {
-      mask = mask ^ (0xff << (end_bit % BYTE_LEN));
-      // 1 write only (begin+end) x[0]
-    } else if (number_of_mask_words - 1 == last_word) {
-      uint8_t mask_end = 0xff ^ (0xff << (end_bit % BYTE_LEN));
-      // 2 writes (end, begin) (x[last_word], x[0])
-      read_and_set_mask(x + last_word, valid, mask_end, stream);
-      finished_bytes++;
-    }
-    // write begin x[0]
-    read_and_set_mask(x, valid, mask, stream);
-    finished_bytes++;
-  }
-  auto mask_size = number_of_mask_words - finished_bytes;
-  uint8_t fill_value = (valid == true) ? 0xff : 0x00;
-  if (number_of_mask_words > finished_bytes)
-    CUDA_TRY(cudaMemsetAsync(x + 1, fill_value, mask_size, stream));
-}
-
 namespace {
 
 /**---------------------------------------------------------------------------*
