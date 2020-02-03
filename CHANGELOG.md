@@ -6,6 +6,7 @@
 
 ## Improvements
 
+- PR #3525 build.sh option to disable nvtx
 - PR #3748 Optimize hash_partition using shared memory
 - PR #3698 Add count_(un)set_bits functions taking multiple ranges and updated slice to compute null counts at once.
 - PR #3909 Move java backend to libcudf++
