@@ -176,8 +176,7 @@ struct create_column_from_view {
            std::enable_if_t<std::is_same<ColumnType, cudf::string_view>::value>* = nullptr>
  std::unique_ptr<column> operator()() {
    cudf::strings_column_view sview(view);
-   auto col = cudf::strings::detail::slice(sview, 0, view.size(), 1, stream, mr); 
-   return col;
+   return cudf::strings::detail::slice(sview, 0, view.size(), 1, stream, mr);
  }
 
  template <typename ColumnType,
@@ -189,15 +188,13 @@ struct create_column_from_view {
      children.emplace_back(std::make_unique<column>(view.child(i), stream, mr));
    }
 
-   auto col = std::make_unique<column>(view.type(), view.size(),
+   return std::make_unique<column>(view.type(), view.size(),
        rmm::device_buffer{
        static_cast<const char*>(view.head()) +
        (view.offset() * cudf::size_of(view.type())),
        view.size() * cudf::size_of(view.type()), stream, mr},
        cudf::copy_bitmask(view, stream, mr),
        view.null_count(), std::move(children));
-
-   return col;
  }
 
 };
@@ -269,7 +266,10 @@ struct create_column_from_view_vector {
 // Copy from a view
 column::column(column_view view, cudaStream_t stream,
                rmm::mr::device_memory_resource *mr) :
-column( *cudf::experimental::type_dispatcher(view.type(), create_column_from_view{view, stream, mr})) {}
+  // Move is needed here because the dereference operator of unique_ptr returns
+  // an lvalue reference, which would otherwise dispatch to the copy constructor
+  column{std::move(*experimental::type_dispatcher(view.type(),
+                    create_column_from_view{view, stream, mr}))} {}
 
 // Concatenates the elements from a vector of column_views
 std::unique_ptr<column>
