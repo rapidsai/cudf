@@ -1568,9 +1568,6 @@ class DataFrame(Frame):
         out.columns = self.columns
         return out
 
-    def _apply_boolean_mask(self, mask):
-        return self._frame_apply_boolean_mask(mask)
-
     def _take_columns(self, positions):
         positions = Series(positions)
         columns = self.columns
@@ -1825,11 +1822,11 @@ class DataFrame(Frame):
         if len(diff) != 0:
             raise KeyError("columns {!r} do not exist".format(diff))
         subset_cols = [
-            name for name, col in self._data.items() if name in subset
+            name for name in self._column_names if name in subset
         ]
         if len(subset_cols) == 0:
             return self.copy(deep=True)
-        outdf = self._drop_duplicates(subset_cols, keep)
+        outdf = DataFrame(super().drop_duplicates(subset_cols, keep))
 
         return self._mimic_inplace(outdf, inplace=inplace)
 
@@ -1892,13 +1889,13 @@ class DataFrame(Frame):
         if len(diff) != 0:
             raise KeyError("columns {!r} do not exist".format(diff))
         subset_cols = [
-            name for name, col in self._data.items() if name in subset
+            name for name in self._column_names if name in subset
         ]
 
         if len(subset_cols) == 0:
             return self.copy(deep=True)
 
-        return self._drop_nulls(how=how, keys=subset_cols, thresh=thresh)
+        return DataFrame(super().drop_nulls(how=how, keys=subset_cols, thresh=thresh))
 
     def _drop_na_columns(self, how="any", subset=None, thresh=None):
         """

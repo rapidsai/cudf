@@ -66,7 +66,7 @@ def drop_nulls(Table source_table, how="any", keys=None, thresh=None):
         column_names=source_table._column_names,
         index_names=(
             None if source_table._index is None
-            else source_table._index._column_names)
+            else source_table._index_names)
     )
 
 
@@ -96,7 +96,7 @@ def apply_boolean_mask(Table source_table, Column boolean_mask):
         column_names=source_table._column_names,
         index_names=(
             None if source_table._index
-            is None else source_table._index._column_names)
+            is None else source_table._index_names)
     )
 
 
@@ -157,7 +157,7 @@ def drop_duplicates(Table source_table, keys=None,
         column_names=source_table._column_names,
         index_names=(
             None if source_table._index
-            is None else source_table._index._column_names)
+            is None else source_table._index_names)
     )
 
 

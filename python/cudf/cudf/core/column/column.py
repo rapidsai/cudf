@@ -285,7 +285,7 @@ class ColumnBase(Column):
 
     def dropna(self):
         dropped_col = (
-            self.as_frame()._drop_nulls()._data[None].copy(deep=False)
+            self.as_frame().drop_nulls()._data[None].copy(deep=False)
         )
         return dropped_col
 
@@ -821,7 +821,7 @@ class ColumnBase(Column):
         mask = as_column(mask, dtype="bool")
         result = (
             self.as_frame()
-            ._frame_apply_boolean_mask(boolean_mask=mask)
+            ._apply_boolean_mask(boolean_mask=mask)
             ._data[None]
             .copy(deep=False)
         )

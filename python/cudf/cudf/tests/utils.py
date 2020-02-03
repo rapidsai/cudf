@@ -64,8 +64,10 @@ def assert_eq(a, b, **kwargs):
         tm.assert_frame_equal(a, b, **kwargs)
     elif isinstance(a, pd.Series):
         tm.assert_series_equal(a, b, **kwargs)
-    elif isinstance(a, (pd.Index, pd.MultiIndex)):
+    elif isinstance(a, pd.Index):
         tm.assert_index_equal(a, b, **kwargs)
+    elif isinstance(a, pd.MultiIndex):
+        tm.assert_index_equal(a, b, **kwargs, check_names = False)
     elif isinstance(a, np.ndarray) and isinstance(b, np.ndarray):
         if np.issubdtype(a.dtype, np.floating) and np.issubdtype(
             b.dtype, np.floating

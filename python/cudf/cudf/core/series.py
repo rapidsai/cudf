@@ -1198,7 +1198,7 @@ class Series(Frame):
         """
         Return Series with duplicate values removed
         """
-        result = self._drop_duplicates(keys=None, keep=keep)
+        result = self.__class__(super.drop_duplicates(keys=[self.name], keep=keep))
 
         return self._mimic_inplace(result, inplace=inplace)
 
@@ -1217,12 +1217,8 @@ class Series(Frame):
         """
         if not self.has_nulls:
             return self
-        name = self.name
-        result = self.to_frame(name="_").dropna(subset=["_"])
-        result = result["_"]
-        result.name = name
-        self.name = name
-        return result
+
+        return cls(super().drop_nulls(keys=[self.name]))
 
     def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
         """Fill null values with ``value``.

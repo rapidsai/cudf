@@ -27,22 +27,20 @@ class Frame(libcudfxx.Table):
         result = self.__class__._from_table(
             libcudfxx.gather(self, as_column(gather_map))
         )
-        result._update_index_name(self)
         result._copy_categories(self)
         return result
 
-    def _drop_nulls(self, how="any", keys=None, thresh=None):
+    def drop_nulls(self, how="any", keys=None, thresh=None):
         """
         Drops null rows from `self` depending on key columns.
         """
         result = self._from_table(
             libcudfxx.drop_nulls(self, how=how, keys=keys, thresh=thresh)
         )
-        result._update_index_name(self)
         result._copy_categories(self)
         return result
 
-    def _frame_apply_boolean_mask(self, boolean_mask):
+    def _apply_boolean_mask(self, boolean_mask):
         """
         Applies boolean mask to each row of `self`,
         rows corresponding to `False` is dropped
@@ -50,11 +48,10 @@ class Frame(libcudfxx.Table):
         result = self._from_table(
             libcudfxx.apply_boolean_mask(self, as_column(boolean_mask))
         )
-        result._update_index_name(self)
         result._copy_categories(self)
         return result
 
-    def _drop_duplicates(self, keys=None, keep="first", nulls_are_equal=True):
+    def drop_duplicates(self, keys=None, keep="first", nulls_are_equal=True):
         """
         Drops rows in frame as per duplicate rows in `keys` columns.
         """
@@ -62,19 +59,8 @@ class Frame(libcudfxx.Table):
             libcudfxx.drop_duplicates(self, keys, keep, nulls_are_equal)
         )
 
-        result._update_index_name(self)
         result._copy_categories(self)
         return result
-
-    def _update_index_name(self, other):
-        """
-        Update index names
-        """
-        if hasattr(other._index, "names"):
-            if other._index.names is not None:
-                self._index.names = other._index.names.copy()
-            else:
-                self._index.names = None
 
     def _copy_categories(self, other, include_index=True):
         """
