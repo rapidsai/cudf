@@ -27,24 +27,24 @@ TYPED_TEST(QuantilesTest, TestMulticolumn) {
 
     auto input_a = fixed_width_column_wrapper<T>(
         { 0, 1, 2, 3, 4 },
-        { 0, 1, 0, 1, 0 });
+        { 1, 1, 1, 1, 1 });
 
     auto inut_b = strings_column_wrapper(
-        { "h", "what", "who", "da", "frufroo" },
-        {  1,   0,      1,     1,    1        });
+        { "a", "b", "c", "d", "e" },
+        {  1,   1,   1,   1,   1  });
 
     auto input = cudf::table_view({ input_a, inut_b });
 
-    auto actual = cudf::experimental::quantiles(input, { 0.0f, 1.0f });
+    auto actual = cudf::experimental::quantiles(input, { 0.0f, 0.5f, 0.5f, 1.0f });
 
     auto expected_a = fixed_width_column_wrapper<T>(
-        {},
-        {}
+        { 0, 2, 2, 4 },
+        { 1, 1, 1, 1 }
     );
 
     auto expected_b = strings_column_wrapper(
-        {},
-        {});
+        { "a", "c", "c", "e" },
+        {  1,   1,   1,   1    });
 
     auto expected = cudf::table_view({ expected_a, expected_b });
 
