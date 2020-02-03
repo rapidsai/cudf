@@ -364,7 +364,7 @@ std::vector<table_view> slice(table_view const& input,
  * The returned view's of `input` are constructed from vector of splits, which indicates
  * where the split should occur. The `i`th returned `column_view` is sliced as
  * `[0, splits[i])` if `i`=0, else `[splits[i], input.size())` if `i` is the last view and
- * `splits[i] != input.size()`, or `[splits[i-1], splits[i]]` otherwise.
+ * `[splits[i-1], splits[i]]` otherwise.
  *
  * For all `i` it is expected `splits[i] <= splits[i+1] <= input.size()`
  * For a `splits` size N, there will always be N+1 splits in the output
@@ -395,7 +395,7 @@ std::vector<column_view> split(column_view const& input,
  * The returned views of `input` are constructed from vector of splits, which indicates
  * where the split should occur. The `i`th returned `table_view` is sliced as
  * `[0, splits[i])` if `i`=0, else `[splits[i], input.size())` if `i` is the last view and
- * `splits[i] != input.size()`, or `[splits[i-1], splits[i]]` otherwise.
+ * `[splits[i-1], splits[i]]` otherwise.
  *
  * For all `i` it is expected `splits[i] <= splits[i+1] <= input.size()`
  * For a `splits` size N, there will always be N+1 splits in the output
@@ -449,7 +449,7 @@ struct contiguous_split_result {
  * The returned views of `input` are constructed from a vector of indices, that indicate
  * where each split should occur. The `i`th returned `table_view` is sliced as
  * `[0, splits[i])` if `i`=0, else `[splits[i], input.size())` if `i` is the last view and
- * `splits[i] != input.size()`, or `[splits[i-1], splits[i]]` otherwise.
+ * `[splits[i-1], splits[i]]` otherwise.
  *
  * For all `i` it is expected `splits[i] <= splits[i+1] <= input.size()`
  * For a `splits` size N, there will always be N+1 splits in the output
