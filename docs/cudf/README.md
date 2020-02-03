@@ -11,7 +11,7 @@ In order to build the docs, we need the conda dev environment from cudf and buil
 2. Once cudf is built from source, navigate to `../docs/cudf/`. If you have your documentation written and want to turn it into HTML, run makefile:
 
 
-```
+```bash
 #be in the same directory as your Makefile
 make html
 ```
