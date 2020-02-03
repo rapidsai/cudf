@@ -818,9 +818,7 @@ class ColumnBase(Column):
     def apply_boolean_mask(self, mask):
         mask = as_column(mask, dtype="bool")
         result = (
-            self.as_frame()
-            ._apply_boolean_mask(boolean_mask=mask)
-            ._as_column()
+            self.as_frame()._apply_boolean_mask(boolean_mask=mask)._as_column()
         )
         return result
 
