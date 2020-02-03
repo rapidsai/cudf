@@ -2,22 +2,45 @@
 
 ## New Features
 
-## Improvements
-- PR #3698 Add count_(un)set_bits functions taking multiple ranges and updated slice to compute null counts at once.
+- PR #3861 Added Series.sum feature for String
 
+## Improvements
+
+- PR #3525 build.sh option to disable nvtx
+- PR #3748 Optimize hash_partition using shared memory
+- PR #3698 Add count_(un)set_bits functions taking multiple ranges and updated slice to compute null counts at once.
 - PR #3909 Move java backend to libcudf++
 - PR #3971 Adding `as_table` to convert Column to Table in python
 - PR #3910 Adding sinh, cosh, tanh, asinh, acosh, atanh cube root and rint unary support.
+- PR #3972 Add Java bindings for left_semi_join and left_anti_join
 - PR #3975 Simplify and generalize data handling in `Buffer`
+- PR #3601 Port UDF functionality for rolling windows to libcudf++
+- PR #3911 Adding null boolean handling for copy_if_else
+- PR #4003 Drop old `to_device` utility wrapper function
+- PR #4002 Adding to_frame and fix for categorical column issue
+- PR #4009 build script update to enable cudf build without installing
+- PR #3897 Port cuIO JSON reader to cudf::column types
+- PR #4008 Eliminate extra copy in column constructor
+- PR #4013 Add cython definition for io readers cudf/io/io_types.hpp
+- PR #4014 ORC/Parquet: add count parameter to stripe/rowgroup-based reader API
+- PR #3880 Add aggregation infrastructure support for reduction
+- PR #4021 Change quantiles signature for clarity.
 
 ## Bug Fixes
 
 - PR #3888 Drop `ptr=None` from `DeviceBuffer` call
+- PR #3976 Fix string serialization and memory_usage method to be consistent
 - PR #3902 Fix conversion of large size GPU array to dataframe
 - PR #3953 Fix overflow in column_buffer when computing the device buffer size
 - PR #3959 Add missing hash-dispatch function for cudf.Series
 - PR #3970 Fix for Series Pickle
 - PR #3964 Restore legacy NVStrings and NVCategory dependencies in Java jar
+- PR #3982 Fix java unary op enum and add missing ops
+- PR #3979 Add `name` to Series serialize and deserialize
+- PR #4005 Fix null mask allocation bug in gather_bitmask
+- PR #4000 Fix dask_cudf sort_values performance for single partitions
+- PR #4007 Fix for copy_bitmask issue with uninitialized device_buffer
+- PR #4037 Fix JNI quantile compile issue
 
 
 # cuDF 0.12.0 (Date TBD)
@@ -30,9 +53,11 @@
 - PR #3254 Python redesign for libcudf++
 - PR #3336 Add `from_dlpack` and `to_dlpack`
 - PR #3555 Add column names support to libcudf++ io readers and writers
+- PR #3527 Add string functionality for merge API
+- PR #3610 Add memory_usage to DataFrame and Series APIs
+- PR #3557 Add contiguous_split() function. 
 - PR #3619 Support CuPy 7
 - PR #3604 Add nvtext ngrams-tokenize function
-- PR #3610 Add memory_usage to DataFrame and Series APIs
 - PR #3403 Define and implement new stack + tile APIs
 - PR #3627 Adding cudf::sort and cudf::sort_by_key
 - PR #3597 Implement new sort based groupby
@@ -66,6 +91,7 @@
 - PR #3567 Include `strides` in `__cuda_array_interface__`
 - PR #3608 Update OPS codeowner group name
 - PR #3431 Port NVStrings translate to cudf strings column
+- PR #3507 Define and implement new binary operation APIs
 - PR #3620 Add stream parameter to unary ops detail API
 - PR #3593 Adding begin/end for mutable_column_device_view
 - PR #3587 Merge CHECK_STREAM & CUDA_CHECK_LAST to CHECK_CUDA
@@ -97,6 +123,7 @@
 - PR #2438 Build GBench Benchmarks in CI
 - PR #3713 Adding aggregation support to rolling_window
 - PR #3875 Add abstract sink for IO writers, used by ORC and Parquet writers for now
+- PR #3916 Refactor gather bindings
 
 ## Bug Fixes
 
@@ -155,6 +182,8 @@
 - PR #3871 Fix `split_out` error
 - PR #3886 Fix string column materialization from column view
 - PR #3893 Parquet reader: fix segfault reading empty parquet file
+- PR #3931 Dask-cudf groupby `.agg` multicolumn handling fix
+- PR #4017 Fix memory leaks in `GDF_STRING` cython handling and `nans_to_nulls` cython
 
 
 # cuDF 0.11.0 (11 Dec 2019)
@@ -211,9 +240,6 @@
 - PR #3490 Add pair iterators for columns
 - PR #3497 Add DataFrame.drop(..., inplace=False) argument
 - PR #3469 Add string functionality for replace API
-- PR #3527 Add string functionality for merge API
-- PR #3557 Add contiguous_split() function.
-- PR #3507 Define and implement new binary operation APIs
 - PR #3273 Define and implement new reduction APIs
 
 ## Improvements
