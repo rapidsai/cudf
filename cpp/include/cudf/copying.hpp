@@ -367,6 +367,7 @@ std::vector<table_view> slice(table_view const& input,
  * `splits[i] != input.size()`, or `[splits[i-1], splits[i]]` otherwise.
  *
  * For all `i` it is expected `splits[i] <= splits[i+1] <= input.size()`
+ * For a `splits` size N, there will always be N+1 splits in the output
  *
  * @note It is the caller's responsibility to ensure that the returned views
  * do not outlive the viewed device memory.
@@ -397,6 +398,7 @@ std::vector<column_view> split(column_view const& input,
  * `splits[i] != input.size()`, or `[splits[i-1], splits[i]]` otherwise.
  *
  * For all `i` it is expected `splits[i] <= splits[i+1] <= input.size()`
+ * For a `splits` size N, there will always be N+1 splits in the output
  *
  * @note It is the caller's responsibility to ensure that the returned views
  * do not outlive the viewed device memory.
@@ -450,6 +452,7 @@ struct contiguous_split_result {
  * `splits[i] != input.size()`, or `[splits[i-1], splits[i]]` otherwise.
  *
  * For all `i` it is expected `splits[i] <= splits[i+1] <= input.size()`
+ * For a `splits` size N, there will always be N+1 splits in the output
  *
  * @note It is the caller's responsibility to ensure that the returned views
  * do not outlive the viewed device memory contained in the `all_data` field of the
