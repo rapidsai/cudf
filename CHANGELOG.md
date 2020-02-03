@@ -41,6 +41,7 @@
 - PR #4000 Fix dask_cudf sort_values performance for single partitions
 - PR #4007 Fix for copy_bitmask issue with uninitialized device_buffer
 - PR #4037 Fix JNI quantile compile issue
+- PR #4049 Fix `cudf::split` issue returning one less than expected column vectors
 
 
 # cuDF 0.12.0 (Date TBD)
