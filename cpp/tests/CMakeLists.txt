@@ -328,7 +328,7 @@ set(LEGACY_QUANTILES_TEST_SRC
 ConfigureTest(LEGACY_QUANTILES_TEST "${LEGACY_QUANTILES_TEST_SRC}")
 
 set(QUANTILES_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/quantiles_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/quantile_test.cu")
 
 ConfigureTest(QUANTILES_TEST "${QUANTILES_TEST_SRC}")
 
