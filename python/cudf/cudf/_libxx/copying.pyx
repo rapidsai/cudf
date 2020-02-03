@@ -3,17 +3,12 @@ import pandas as pd
 from cudf._libxx.includes.lib cimport *
 from cudf._libxx.includes.column cimport Column
 from cudf._libxx.includes.table cimport Table
-
-cdef extern from "cudf/copying.hpp" namespace "cudf::experimental" nogil:
-    cdef unique_ptr[table] cpp_gather "cudf::experimental::gather" (
-        table_view source_table,
-        column_view gather_map
-    )
+cimport cudf._libxx.includes.copying as cpp_copying
 
 def gather(Table source_table, Column gather_map):
     assert pd.api.types.is_integer_dtype(gather_map.dtype)
     cdef unique_ptr[table] c_result = (
-        cpp_gather(
+        cpp_copying.gather(
             source_table.view(),
             gather_map.view()
         )

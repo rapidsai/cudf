@@ -21,6 +21,7 @@
 - PR #4013 Add cython definition for io readers cudf/io/io_types.hpp
 - PR #4014 ORC/Parquet: add count parameter to stripe/rowgroup-based reader API
 - PR #4021 Change quantiles signature for clarity.
+- PR #4045 Reorganize `libxx` directory
 
 ## Bug Fixes
 
