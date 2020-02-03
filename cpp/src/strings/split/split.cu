@@ -1024,10 +1024,9 @@ contiguous_split_record_result contiguous_split_record(
     cudaStream_t stream = 0) {
   CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");
 
-  size_type max_tokens = std::numeric_limits<size_type>::max();
-  if (maxsplit > 0) {
-    max_tokens = maxsplit + 1;  // makes consistent with Pandas
-  }
+  // makes consistent with Pandas
+  size_type max_tokens = maxsplit > 0 ? maxsplit + 1 :
+                                        std::numeric_limits<size_type>::max();
   auto has_validity = strings.parent().nullable();
 
   auto d_strings_column_ptr =
