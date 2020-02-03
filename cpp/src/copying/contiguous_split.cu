@@ -128,34 +128,36 @@ struct column_copy_functor {
       // increment working buffer
       dst += (data_size + validity_size);
 
-      // custom copy kernel (which should probably just be an in-place copy() function in cudf.
-      cudf::size_type num_els = cudf::util::round_up_safe(in.size(), cudf::experimental::detail::warp_size);
-      constexpr int block_size = 256;
-      cudf::experimental::detail::grid_1d grid{num_els, block_size, 1};
-      
-      // so there's a significant performance issue that comes up. our incoming column_view objects
-      // are the result of a slice.  because of this, they have an UNKNOWN_NULL_COUNT.  because of that,
-      // calling column_device_view::create() will cause a recompute of the count, which ends up being
-      // extremely slow because a.) the typical use case here will involve huge numbers of calls and
-      // b.) the count recompute involves tons of device allocs and memcopies.
-      //
-      // so to get around this, I am manually constructing a fake-ish view here where the null
-      // count is arbitrarily bashed to 0.            
-      //            
-      // Remove this hack once rapidsai/cudf#3600 is fixed.
-      column_view   in_wrapped{in.type(), in.size(), in.head<T>(), 
-                               in.null_mask(), in.null_mask() == nullptr ? UNKNOWN_NULL_COUNT : 0,
-                               in.offset() };
       mutable_column_view  mcv{in.type(), in.size(), data, 
                                validity, validity == nullptr ? UNKNOWN_NULL_COUNT : 0 };      
-      if(in.nullable()){               
-         copy_in_place_kernel<block_size, T, true><<<grid.num_blocks, block_size, 0, 0>>>(
-                           *column_device_view::create(in_wrapped), 
-                           *mutable_column_device_view::create(mcv));         
-      } else {
-         copy_in_place_kernel<block_size, T, false><<<grid.num_blocks, block_size, 0, 0>>>(
-                           *column_device_view::create(in_wrapped), 
-                           *mutable_column_device_view::create(mcv));
+      if (in.size() != 0) {
+          // so there's a significant performance issue that comes up. our incoming column_view objects
+          // are the result of a slice.  because of this, they have an UNKNOWN_NULL_COUNT.  because of that,
+          // calling column_device_view::create() will cause a recompute of the count, which ends up being
+          // extremely slow because a.) the typical use case here will involve huge numbers of calls and
+          // b.) the count recompute involves tons of device allocs and memcopies.
+          //
+          // so to get around this, I am manually constructing a fake-ish view here where the null
+          // count is arbitrarily bashed to 0.
+          //
+          // Remove this hack once rapidsai/cudf#3600 is fixed.
+          column_view   in_wrapped{in.type(), in.size(), in.head<T>(),
+              in.null_mask(), in.null_mask() == nullptr ? UNKNOWN_NULL_COUNT : 0,
+              in.offset() };
+
+          // custom copy kernel (which should probably just be an in-place copy() function in cudf.
+          cudf::size_type num_els = cudf::util::round_up_safe(in.size(), cudf::experimental::detail::warp_size);
+          constexpr int block_size = 256;
+          cudf::experimental::detail::grid_1d grid{num_els, block_size, 1};
+          if(in.nullable()){
+              copy_in_place_kernel<block_size, T, true><<<grid.num_blocks, block_size, 0, 0>>>(
+                      *column_device_view::create(in_wrapped),
+                      *mutable_column_device_view::create(mcv));
+          } else {
+              copy_in_place_kernel<block_size, T, false><<<grid.num_blocks, block_size, 0, 0>>>(
+                      *column_device_view::create(in_wrapped),
+                      *mutable_column_device_view::create(mcv));
+          }
       }
       mcv.set_null_count(cudf::UNKNOWN_NULL_COUNT);                 
 
@@ -188,6 +190,7 @@ contiguous_split_result alloc_and_copy(cudf::table_view const& t, rmm::mr::devic
    // copy
    std::vector<column_view> out_cols;
    out_cols.reserve(t.num_columns());
+
    std::for_each(t.begin(), t.end(), [&out_cols, &buf](cudf::column_view const& c){
       cudf::experimental::type_dispatcher(c.type(), column_copy_functor{}, c, buf, out_cols);
    });
