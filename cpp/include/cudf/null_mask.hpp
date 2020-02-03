@@ -96,6 +96,8 @@ rmm::device_buffer create_null_mask(
 void set_null_mask(bitmask_type *bitmask, size_type begin_bit,
                    size_type end_bit, bool valid, cudaStream_t stream = 0);
 
+void set_bitmask(bitmask_type *bitmask, size_type begin_bit, size_type end_bit,
+                 bool valid, cudaStream_t stream = 0);
 /**---------------------------------------------------------------------------*
  * @brief Given a bitmask, counts the number of set (1) bits in the range
  * `[start, stop)`

@@ -150,3 +150,11 @@ set(HASHING_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/hashing/hashing_benchmark.cpp")
 
 ConfigureBench(HASHING_BENCH "${HASHING_BENCH_SRC}")
+
+###################################################################################################
+# - null_mask benchmark -----------------------------------------------------------------------------
+
+set(NULLMASK_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/null_mask/set_null_mask_benchmark.cpp")
+
+ConfigureBench(NULLMASK_BENCH "${NULLMASK_BENCH_SRC}")
