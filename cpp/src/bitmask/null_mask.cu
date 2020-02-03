@@ -472,9 +472,7 @@ rmm::device_buffer copy_bitmask(bitmask_type const *mask, size_type begin_bit,
     dest_mask = rmm::device_buffer{static_cast<void const *>(mask), num_bytes,
                                    stream, mr};
   } else {
-    auto number_of_mask_words = cudf::util::div_rounding_up_safe(
-        static_cast<size_t>(end_bit - begin_bit),
-        detail::size_in_bits<bitmask_type>());
+    auto number_of_mask_words = num_bitmask_words(end_bit - begin_bit);
     dest_mask = rmm::device_buffer{num_bytes, stream, mr};
     cudf::experimental::detail::grid_1d config(number_of_mask_words, 256);
     copy_offset_bitmask<<<config.num_blocks, config.num_threads_per_block, 0,
