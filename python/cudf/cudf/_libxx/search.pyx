@@ -38,3 +38,22 @@ def search_sorted(Table table, Table values, side):
             c_null_precedence,
         )
     return Column.from_unique_ptr(move(c_result))
+
+
+def contains (Column haystack, Column needles):
+    """Check whether column contains the value
+
+    Parameters
+    ----------
+    column : NumericalColumn
+        Column to search in
+    needles :
+        A column of values to search for
+    """
+    cdef unique_ptr[column] c_result
+
+    c_result = cpp_contains(
+        haystack.view(),
+        needles.view(),
+    )
+    return Column.from_unique_ptr(move(c_result))
