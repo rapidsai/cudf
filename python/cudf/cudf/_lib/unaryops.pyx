@@ -17,6 +17,7 @@ import rmm
 from rmm._lib.lib cimport cudaStream_t, c_free
 
 from cudf.utils import cudautils
+from cudf.core.buffer import Buffer
 
 from cudf._libxx.column cimport Column
 from cudf._lib.cudf cimport *
@@ -151,19 +152,19 @@ def nans_to_nulls(Column py_col):
     with nogil:
         result = cpp_unaryops.nans_to_nulls(c_col[0])
 
-    mask = None
+    mask_buf = None
     if result.second > 0:
-        mask_ptr = int(<uintptr_t>result.first)
-        mask_buf = rmm.DeviceBuffer(
-            ptr=mask_ptr,
-            size=calc_chunk_size(len(py_col), mask_bitsize)
+        mask_ptr = rmm._DevicePointer(int(<uintptr_t>result.first))
+        mask_buf = Buffer(
+            mask_ptr,
+            calc_chunk_size(len(py_col), mask_bitsize)
         )
-        mask = Buffer(mask_buf)
-        c_free(result.first, stream)
+    else:
+        c_free(<void*><uintptr_t>result.first, <cudaStream_t><uintptr_t>0)
 
     free_column(c_col)
 
-    return mask
+    return mask_buf
 
 
 def is_null(Column col):

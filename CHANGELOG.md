@@ -3,6 +3,8 @@
 ## New Features
 
 ## Improvements
+
+- PR #3748 Optimize hash_partition using shared memory
 - PR #3698 Add count_(un)set_bits functions taking multiple ranges and updated slice to compute null counts at once.
 - PR #3909 Move java backend to libcudf++
 - PR #3971 Adding `as_table` to convert Column to Table in python
@@ -15,6 +17,10 @@
 - PR #4002 Adding to_frame and fix for categorical column issue
 - PR #4009 build script update to enable cudf build without installing
 - PR #3897 Port cuIO JSON reader to cudf::column types
+- PR #4008 Eliminate extra copy in column constructor
+- PR #4013 Add cython definition for io readers cudf/io/io_types.hpp
+- PR #4014 ORC/Parquet: add count parameter to stripe/rowgroup-based reader API
+- PR #4021 Change quantiles signature for clarity.
 
 ## Bug Fixes
 
@@ -30,6 +36,7 @@
 - PR #4005 Fix null mask allocation bug in gather_bitmask
 - PR #4000 Fix dask_cudf sort_values performance for single partitions
 - PR #4007 Fix for copy_bitmask issue with uninitialized device_buffer
+- PR #4037 Fix JNI quantile compile issue
 
 
 # cuDF 0.12.0 (Date TBD)
@@ -172,6 +179,7 @@
 - PR #3886 Fix string column materialization from column view
 - PR #3893 Parquet reader: fix segfault reading empty parquet file
 - PR #3931 Dask-cudf groupby `.agg` multicolumn handling fix
+- PR #4017 Fix memory leaks in `GDF_STRING` cython handling and `nans_to_nulls` cython
 
 
 # cuDF 0.11.0 (11 Dec 2019)
