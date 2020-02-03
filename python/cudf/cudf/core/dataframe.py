@@ -2642,9 +2642,7 @@ class DataFrame(Frame):
             lhs, rhs, left_on, right_on, how
         )
         # Compute merge
-        from cudf._libxx.join import join
-        gdf_result = list(join(lhs, rhs, left_on, right_on, how, method)._data.items())
-
+        gdf_result = list(libcudfxx.join.join(lhs, rhs, left_on, right_on, how, method)._data.items())
         # Let's sort the columns of the GDF result. NB: Pandas doc says
         # that it sorts when how='outer' but this is NOT the case.
         result = []
