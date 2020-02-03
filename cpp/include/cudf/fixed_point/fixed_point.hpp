@@ -23,6 +23,10 @@
 namespace cudf {
 namespace fixed_point {
 
+// This is a wrapper struct that enforces "strong typing"
+// at the construction site of the type. No implicit
+// conversions will be allowed and you will need to use the
+// name of the type alias (i.e. scale_type{0})
 template <typename T>
 struct weak_typedef {
     T _t;
@@ -39,27 +43,27 @@ enum class Radix : int32_t {
 
 namespace detail {
     // helper function to negate strongly typed scale_type
-    auto negate(scale_type const& scale) -> scale_type {
+    auto negate(scale_type const& scale) {
         return scale_type{-scale};
     }
 
     // perform this operation when constructing with positive scale
     template <Radix Rad, typename T>
-    constexpr auto right_shift(T const& val, scale_type const& scale) -> double {
+    constexpr auto right_shift(T const& val, scale_type const& scale) {
         assert(scale > 0);
         return val / std::pow(static_cast<int32_t>(Rad), static_cast<int32_t>(scale));
     }
 
     // perform this operation when constructing with negative scale
     template <Radix Rad, typename T>
-    constexpr auto left_shift(T const& val, scale_type const& scale) -> double {
+    constexpr auto left_shift(T const& val, scale_type const& scale) {
         assert(scale < 0);
         return val * std::pow(static_cast<int32_t>(Rad), static_cast<int32_t>(negate(scale)));
     }
 
     // convenience generic shift function
     template <Radix Rad, typename T>
-    constexpr auto shift(T const& val, scale_type const& scale) -> T {
+    constexpr auto shift(T const& val, scale_type const& scale) {
         // TODO sort out casting
         // situation where you are constructing with floating point type makes val float/double
         // scale will be int32_t
@@ -71,13 +75,13 @@ namespace detail {
 }
 
 template <typename T>
-constexpr inline auto is_supported_representation_type() -> bool {
+constexpr inline auto is_supported_representation_type() {
   return std::is_same<T, int32_t>::value
       || std::is_same<T, int64_t>::value;
 }
 
 template <typename T>
-constexpr inline auto is_supported_construction_value_type() -> bool {
+constexpr inline auto is_supported_construction_value_type() {
   return std::is_integral      <T>::value
       || std::is_floating_point<T>::value;
 }
@@ -189,7 +193,7 @@ public:
 };
 
 template <typename Rep>
-auto print_rep() -> std::string {
+std::string print_rep() {
     if      (std::is_same<Rep, int8_t >::value) return "int8_t";
     else if (std::is_same<Rep, int16_t>::value) return "int16_t";
     else if (std::is_same<Rep, int32_t>::value) return "int32_t";
@@ -198,24 +202,24 @@ auto print_rep() -> std::string {
 }
 
 template <typename Rep, typename T>
-auto addition_overflow(T lhs, T rhs) -> bool {
+auto addition_overflow(T lhs, T rhs) {
     return rhs > 0 ? lhs > std::numeric_limits<Rep>::max() - rhs
                    : lhs < std::numeric_limits<Rep>::min() - rhs;
 }
 
 template <typename Rep, typename T>
-auto subtraction_overflow(T lhs, T rhs) -> bool {
+auto subtraction_overflow(T lhs, T rhs) {
     return rhs > 0 ? lhs < std::numeric_limits<Rep>::min() + rhs
                    : lhs > std::numeric_limits<Rep>::max() + rhs;
 }
 
 template <typename Rep, typename T>
-auto division_overflow(T lhs, T rhs) -> bool {
+auto division_overflow(T lhs, T rhs) {
     return lhs == std::numeric_limits<Rep>::min() && rhs == -1;
 }
 
 template <typename Rep, typename T>
-auto multiplication_overflow(T lhs, T rhs) -> bool {
+auto multiplication_overflow(T lhs, T rhs) {
     auto const min = std::numeric_limits<Rep>::min();
     auto const max = std::numeric_limits<Rep>::max();
     if      (rhs >  0) return lhs > max / rhs || lhs < min / rhs;
