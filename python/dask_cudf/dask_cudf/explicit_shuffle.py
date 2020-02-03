@@ -35,13 +35,10 @@ async def recv_parts(eps, parts):
     parts.extend(await asyncio.gather(*futures))
 
 
-async def exchange_and_concat_parts(rank, eps, parts, sort=False):
+async def exchange_and_concat_parts(rank, eps, parts):
     ret = [parts[rank]]
     await asyncio.gather(recv_parts(eps, ret), send_parts(eps, parts))
-    df = concat(list(filter(None, ret)))
-    if sort:
-        return df.sort_values(sort)
-    return df
+    return concat(list(filter(None, ret)))
 
 
 def concat(df_list):
@@ -53,30 +50,17 @@ def concat(df_list):
 def partition_by_column(df, column, n_chunks):
     if df is None:
         return [None] * n_chunks
-    elif hasattr(df, "scatter_by_map"):
+    else:
         return df.scatter_by_map(column, map_size=n_chunks)
-    else:
-        raise NotImplementedError(
-            "partition_by_column not yet implemented for pandas backend.\n"
-        )
 
 
-async def distributed_shuffle(
-    n_chunks, rank, eps, table, partitions, index, sort_by, sorted_split
-):
-    if sorted_split:
-        parts = [
-            table.iloc[partitions[i] : partitions[i + 1]]
-            for i in range(0, len(partitions) - 1)
-        ]
-    else:
-        parts = partition_by_column(table, partitions, n_chunks)
-    return await exchange_and_concat_parts(rank, eps, parts, sort=sort_by)
+async def distributed_shuffle(n_chunks, rank, eps, table, partitions):
+    parts = partition_by_column(table, partitions, n_chunks)
+    del table
+    return await exchange_and_concat_parts(rank, eps, parts)
 
 
-async def _explicit_shuffle(
-    s, df_nparts, df_parts, index, divisions, sort_by, sorted_split
-):
+async def _explicit_shuffle(s, df_nparts, df_parts, index, divisions):
     def df_concat(df_parts):
         """Making sure df_parts is a single dataframe or None"""
         if len(df_parts) == 0:
@@ -90,43 +74,26 @@ async def _explicit_shuffle(
     # a single cudf DataFrame
     df = df_concat(df_parts[0])
 
-    divisions = cudf.Series(divisions)
-    if sorted_split:
-        # Avoid `scatter_by_map` by sorting the dataframe here
-        # (Can just use iloc to split into groups)
-        if len(df_parts) > 1:
-            # Need to sort again after concatenation
-            df = df.sort_values(sort_by)
-        splits = df[index].searchsorted(divisions, side="left")
-        splits[-1] = len(df[index])
-        partitions = splits.tolist()
-    else:
+    # Calculate new partition mapping
+    if df:
+        divisions = cudf.Series(divisions)
         partitions = divisions.searchsorted(df[index], side="right") - 1
         partitions[(df[index] >= divisions.iloc[-1]).values] = (
             len(divisions) - 2
         )
+    else:
+        partitions = None
 
     # Run distributed shuffle and set_index algorithm
     return await distributed_shuffle(
-        s["nworkers"],
-        s["rank"],
-        s["eps"],
-        df,
-        partitions,
-        index,
-        sort_by,
-        sorted_split,
+        s["nworkers"], s["rank"], s["eps"], df, partitions
     )
 
 
-def explicit_sorted_shuffle(
-    df, index, divisions, sort_by, sorted_split=False, **kwargs
-):
+def explicit_sorted_shuffle(df, index, divisions, sort_by, client, **kwargs):
     # Explict-comms shuffle
     # TODO: Fast repartition back to df.npartitions using views...
-    df.persist()
+    client.rebalance(futures=df.to_delayed())
     return comms.default_comms().dataframe_operation(
-        _explicit_shuffle,
-        df_list=(df,),
-        extra_args=(index, divisions, sort_by, sorted_split),
+        _explicit_shuffle, df_list=(df,), extra_args=(index, divisions)
     )

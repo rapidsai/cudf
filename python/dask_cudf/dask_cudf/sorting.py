@@ -355,7 +355,7 @@ def sort_values_experimental(
     if use_explicit:
         warnings.warn("Using explicit comms - This is an advanced feature.")
         df3 = explicit_sorted_shuffle(
-            df2, index, divisions, sort_by=by, sorted_split=False
+            df2, index, divisions, by, explicit_client, sorted_split=False
         )
         df3.divisions = (None,) * (npartitions + 1)
         return df3
