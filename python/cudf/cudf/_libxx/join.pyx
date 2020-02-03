@@ -1,5 +1,3 @@
-# cudf/_libxx/copying.pyx
-
 import pandas as pd
 
 from cudf._libxx.lib cimport *
