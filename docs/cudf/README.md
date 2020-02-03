@@ -20,7 +20,7 @@ This should run Sphinx in your shell, and outputs to `build/html/index.html`.
 
 ## View docs web page by opening HTML in browser:
 
-First navigate to "/build/html/" folder, i.e., `cd build/html` and then run the following command:
+First navigate to `/build/html/` folder, i.e., `cd build/html` and then run the following command:
 
 ```
 python -m http.server
