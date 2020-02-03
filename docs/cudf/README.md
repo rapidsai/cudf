@@ -4,7 +4,7 @@ As a prerequisite, a RAPIDS compatible GPU is required to build the docs since t
 
 ## Steps to follow:
 
-In order to build the docs, we need the conda dev environment from cudf and build cudf from source. 
+In order to build the docs, we need the conda dev environment from cudf and build cudf from source. See build [instructions](https://github.com/rapidsai/cudf/blob/branch-0.13/CONTRIBUTING.md#setting-up-your-build-environment). 
 
 1. Create a conda env and build cudf from source. The dependencies to build rapids from source are installed in that conda environment, and then rapids is built and installed into the same environment.
 
