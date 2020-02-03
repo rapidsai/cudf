@@ -46,6 +46,9 @@ enum class udf_type : bool {
 /// Factory to create a SUM aggregation
 std::unique_ptr<aggregation> make_sum_aggregation();
 
+/// Factory to create a PRODUCT aggregation
+std::unique_ptr<aggregation> make_product_aggregation();
+
 /// Factory to create a MIN aggregation
 std::unique_ptr<aggregation> make_min_aggregation();
 
@@ -54,6 +57,15 @@ std::unique_ptr<aggregation> make_max_aggregation();
 
 /// Factory to create a COUNT aggregation
 std::unique_ptr<aggregation> make_count_aggregation();
+
+/// Factory to create a ANY aggregation
+std::unique_ptr<aggregation> make_any_aggregation();
+
+/// Factory to create a ALL aggregation
+std::unique_ptr<aggregation> make_all_aggregation();
+
+/// Factory to create a SUM_OF_SQUARES aggregation
+std::unique_ptr<aggregation> make_sum_of_squares_aggregation();
 
 /// Factory to create a MEAN aggregation
 std::unique_ptr<aggregation> make_mean_aggregation();
