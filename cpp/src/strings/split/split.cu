@@ -931,7 +931,6 @@ contiguous_split_record_result contiguous_split_record_fn(
       column_views.emplace_back(strings.parent().type(), 0, nullptr);
     }
     else {
-      auto token_count = h_token_counts[i];
       auto memory_ptr =
         d_all_data_ptr + h_memory_offsets[i];
       auto char_buf_size =
