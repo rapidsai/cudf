@@ -1383,7 +1383,8 @@ def column_applymap(udf, column, out_dtype):
 def _data_from_cuda_array_interface_desc(obj):
     desc = obj.__cuda_array_interface__
     ptr = desc["data"][0]
-    nelem = desc["shape"][0]
+    shape = desc["shape"]
+    nelem = shape[0] if shape else 1
     dtype = np.dtype(desc["typestr"])
 
     data = Buffer(data=ptr, size=nelem * dtype.itemsize, owner=obj)
