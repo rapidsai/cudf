@@ -81,7 +81,7 @@ class ColumnBase(Column):
             dtype = self.dtype
 
         result = rmm.device_array_from_ptr(
-            ptr=self.data.ptr, nelem=len(self), dtype=dtype
+            ptr=self.data_ptr, nelem=len(self), dtype=dtype
         )
         result.gpu_data._obj = self
         return result
@@ -92,7 +92,7 @@ class ColumnBase(Column):
         View the mask as a device array
         """
         result = rmm.device_array_from_ptr(
-            ptr=self.mask.ptr,
+            ptr=self.mask_ptr,
             nelem=calc_chunk_size(len(self), mask_bitsize),
             dtype=np.int8,
         )
@@ -839,7 +839,7 @@ class ColumnBase(Column):
             "shape": (len(self),),
             "strides": (self.dtype.itemsize,),
             "typestr": self.dtype.str,
-            "data": (self.data.ptr, True),
+            "data": (self.data_ptr, True),
             "version": 1,
         }
 
@@ -853,7 +853,7 @@ class ColumnBase(Column):
                 __cuda_array_interface__={
                     "shape": (len(self),),
                     "typestr": "<t1",
-                    "data": (self.mask.ptr, True),
+                    "data": (self.mask_ptr, True),
                     "version": 1,
                 }
             )

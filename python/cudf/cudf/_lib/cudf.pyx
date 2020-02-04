@@ -113,14 +113,6 @@ cpdef get_ctype_ptr(obj):
         return obj.device_ctypes_pointer.value
 
 
-cpdef get_column_data_ptr(obj):
-    return obj.data.ptr
-
-
-cpdef get_column_valid_ptr(obj):
-    return obj.mask.ptr
-
-
 cdef np_dtype_from_gdf_column(gdf_column* col):
     """Util to convert a gdf_column's dtype to a numpy dtype.
 
@@ -286,14 +278,14 @@ cdef gdf_column* column_view_from_column(Column col,
 
         if len(col) > 0:
             if is_categorical_dtype(col.dtype):
-                data_ptr = col.codes.data.ptr
+                data_ptr = col.codes.data_ptr
             else:
-                data_ptr = col.data.ptr
+                data_ptr = col.data_ptr
         else:
             data_ptr = 0
 
     if col.nullable:
-        valid_ptr = col.mask.ptr
+        valid_ptr = col.mask_ptr
     else:
         valid_ptr = 0
 
@@ -391,7 +383,7 @@ cdef gdf_column* column_view_from_string_column(
     cdef gdf_dtype c_dtype = GDF_STRING
 
     if col.nullable and col.has_nulls:
-        mask_ptr = col.mask.ptr
+        mask_ptr = col.mask_ptr
     else:
         mask_ptr = 0
 

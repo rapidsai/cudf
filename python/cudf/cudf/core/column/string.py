@@ -499,15 +499,15 @@ class StringColumn(column.ColumnBase):
     def nvstrings(self):
         if self._nvstrings is None:
             if self.nullable:
-                mask_ptr = self.mask.ptr
+                mask_ptr = self.mask_ptr
             else:
                 mask_ptr = None
             if self.size == 0:
                 self._nvstrings = nvstrings.to_device([])
             else:
                 self._nvstrings = nvstrings.from_offsets(
-                    self.children[1].data.ptr,
-                    self.children[0].data.ptr,
+                    self.children[1].data_ptr,
+                    self.children[0].data_ptr,
                     self.size,
                     mask_ptr,
                     ncount=self.null_count,
@@ -581,9 +581,7 @@ class StringColumn(column.ColumnBase):
             mask_size = utils.calc_chunk_size(
                 len(self.nvstrings), utils.mask_bitsize
             )
-            out_mask = column.column_empty(
-                mask_size, dtype="int8", masked=False
-            ).data
+            out_mask = Buffer.empty(mask_size)
             out_mask_ptr = out_mask.ptr
             self.nvstrings.set_null_bitmask(out_mask_ptr, bdevmem=True)
             out_col.mask = out_mask

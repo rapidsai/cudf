@@ -94,7 +94,7 @@ cdef class Column:
         self.size = size
         self.dtype = dtype
         self._mask = mask
-        self.offset = offset
+        self._offset = offset
         self.children = children
 
     @property
@@ -107,6 +107,13 @@ cdef class Column:
             if not isinstance(value, Buffer):
                 raise TypeError("data must be a Buffer or None")
         self._data = value
+
+    @property
+    def data_ptr(self):
+        """
+        Returns the pointer to the data buffer accounting for the offset
+        """
+        return self.data.ptr + (offset * self.dtype.itemsize)
 
     @property
     def nullable(self):
@@ -127,6 +134,19 @@ cdef class Column:
                 raise TypeError("mask must be a Buffer or None")
         self._set_mask(value)
 
+    @property
+    def mask_ptr(self):
+        """
+        Returns the pointer to the validity buffer accounting for the offset
+        """
+        if self.offset == 0 and self.mask is not None:
+            return self.mask.ptr
+        elif self.mask is None:
+            raise RuntimeError("No validity buffer is allocated")
+        raise RuntimeError(
+            "Cannot get the pointer to a mask with a nonzero offset"
+        )
+
     def _set_mask(self, value):
         self._mask = value
         if hasattr(self, "null_count"):
@@ -135,6 +155,17 @@ cdef class Column:
     @cached_property
     def null_count(self):
         return self.compute_null_count()
+
+    @property
+    def offset(self):
+        return self._offset
+
+    @offset.setter
+    def offset(self, offset):
+        if not pd.api.types.is_integer(offset):
+            raise TypeError("Expected an integer for offset, got " +
+                            type(offset).__name__)
+        self._offset = offset
 
     cdef size_type compute_null_count(self) except? 0:
         return self._view(UNKNOWN_NULL_COUNT).null_count()
@@ -152,7 +183,7 @@ cdef class Column:
         cdef vector[mutable_column_view] children
         cdef void* data
 
-        data = <void*><uintptr_t>(col.data.ptr)
+        data = <void*><uintptr_t>(col.data_ptr)
 
         cdef Column child_column
         if self.children:
@@ -161,7 +192,7 @@ cdef class Column:
 
         cdef bitmask_type* mask
         if self.nullable:
-            mask = <bitmask_type*><uintptr_t>(self.mask.ptr)
+            mask = <bitmask_type*><uintptr_t>(self.mask_ptr)
         else:
             mask = NULL
 
@@ -191,7 +222,7 @@ cdef class Column:
         cdef vector[column_view] children
         cdef void* data
 
-        data = <void*><uintptr_t>(col.data.ptr)
+        data = <void*><uintptr_t>(col.data_ptr)
 
         cdef Column child_column
         if self.children:
@@ -200,7 +231,7 @@ cdef class Column:
 
         cdef bitmask_type* mask
         if self.nullable:
-            mask = <bitmask_type*><uintptr_t>(self.mask.ptr)
+            mask = <bitmask_type*><uintptr_t>(self.mask_ptr)
         else:
             mask = NULL
 
