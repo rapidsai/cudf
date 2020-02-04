@@ -287,6 +287,8 @@ struct rolling_window_launcher
   }
 
   // This launch is only for fixed width columns with valid aggregation option
+  // MIN, MAX and COUNT are avilable to all fixed-width types, but SUM and MEAN are valid to
+  // all other types apart from timestamp
   template <typename T, typename agg_op, aggregation::Kind op, typename WindowIterator>
   std::enable_if_t<(cudf::detail::is_supported<T, agg_op,
                                   op, op == aggregation::MEAN>()) and
@@ -312,6 +314,7 @@ struct rolling_window_launcher
   }
 
   // This launch is only for string columns with valid aggregation option
+  // which limited to MIN, MAX and COUNT
   template <typename T, typename agg_op, aggregation::Kind op, typename WindowIterator>
   std::enable_if_t<!(cudf::detail::is_supported<T, agg_op,
                                   op, op == aggregation::MEAN>()) and
