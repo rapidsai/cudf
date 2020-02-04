@@ -187,6 +187,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 experimental=experimental,
                 explicit_client=explicit_client,
                 max_branch=max_branch,
+                divisions=kwargs.get("divisions", None),
             )
             # Set index and repartition
             npartitions = kwargs.get("npartitions", self.npartitions)

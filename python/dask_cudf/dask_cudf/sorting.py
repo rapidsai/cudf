@@ -3,6 +3,7 @@ import math
 import warnings
 from operator import getitem
 
+import cupy
 import numpy as np
 import toolz
 
@@ -15,6 +16,9 @@ from dask.highlevelgraph import HighLevelGraph
 from dask.utils import M, digit, insert
 
 import cudf as gd
+import rmm
+
+cupy.cuda.set_allocator(rmm.rmm_cupy_allocator)
 
 try:
     from .explicit_shuffle import explicit_sorted_shuffle
@@ -302,7 +306,12 @@ def rearrange_by_division_list(
 
 
 def sort_values_experimental(
-    df, by, ignore_index=False, explicit_client=None, max_branch=None
+    df,
+    by,
+    ignore_index=False,
+    explicit_client=None,
+    max_branch=None,
+    divisions=None,
 ):
     """ Experimental sort_values implementation.
 
@@ -343,13 +352,14 @@ def sort_values_experimental(
     if use_explicit:
         npartitions = len(explicit_client.cluster.workers)
 
-    # Step 2 - Calculate new divisions
-    divisions = (
-        df2[index]
-        ._repartition_quantiles(npartitions, upsample=1.0)
-        .compute()
-        .to_list()
-    )
+    # Step 2 - Calculate new divisions (if )
+    if not divisions or len(divisions) != npartitions + 1:
+        divisions = (
+            df2[index]
+            ._repartition_quantiles(npartitions, upsample=1.0)
+            .compute()
+            .to_list()
+        )
 
     # Step 3 - Perform repartitioning shuffle
     if use_explicit:
