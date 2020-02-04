@@ -22,7 +22,7 @@ def datadir(datadir):
 
 @pytest.fixture(params=[1, 5, 10, 100])
 def simple_pdf(request):
-    types = ["int8", "int16", "int32"]
+    types = ["bool", "int8", "int16", "int32", "int64", "float32", "float64"]
     renamer = {
         "C_l0_g" + str(idx): "col_" + val for (idx, val) in enumerate(types)
     }
@@ -470,15 +470,21 @@ def test_multifile_warning(datadir):
 
 
 # Validates the integrity of the GPU accelerated parquet writer.
-def test_parquet_writer_gpu(tmpdir, simple_gdf):
+def test_parquet_writer_gpu(tmpdir, simple_pdf, simple_gdf):
     gdf_fname = tmpdir.join("gdf.parquet")
 
     # Write out the gdf using the GPU accelerated writer
-    simple_gdf.to_parquet(gdf_fname.strpath, engine="cudf")
-    assert os.path.exists(gdf_fname)
+    simple_gdf.to_parquet(gdf_fname.strpath)
     expect = simple_gdf
+    assert os.path.exists(gdf_fname)
 
-    # Read the gdf back in using the reader
-    got = cudf.read_parquet(gdf_fname)
+    # Read the gdf back in using Pandas
+    got = pd.read_parquet(gdf_fname)
+
+    # Debugging logic, will remove later.
+    print("Expected:")
+    print(expect)
+    print("Got:")
+    print(got)
 
     assert_eq(expect, got, check_categorical=False)

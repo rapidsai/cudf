@@ -23,9 +23,12 @@ from cudf._lib.includes.parquet cimport (
 from libc.stdlib cimport free
 from libcpp.memory cimport unique_ptr, make_unique
 from libcpp.string cimport string
+from libcpp.map cimport map
 
 import errno
 import os
+import json
+import pandas as pd
 
 from cudf._libxx.table cimport *
 
@@ -100,6 +103,7 @@ cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
 cpdef write_parquet(
         Table table,
         path,
+        index=None,
         compression=None,
         statistics="ROWGROUP"):
     """
@@ -116,8 +120,56 @@ cpdef write_parquet(
     cdef unique_ptr[table_metadata] tbl_meta = \
         make_unique[table_metadata]()
 
-    cdef vector[string] cols = [str.encode(s) for s in table._data.keys()]
-    tbl_meta.get().column_names = cols
+    cdef vector[string] column_names
+    cdef map[string, string] user_data
+
+    for col_name in table._column_names:
+        column_names.push_back(str.encode(col_name))
+
+    # Construct Pandas metadata
+    column_metadata = []
+    for c in table._column_names:
+        col = table._data[c]
+        column_metadata.append({
+            "name": c,
+            "field_name": c,
+            "pandas_type": pd.api.types.pandas_dtype(col.dtype).name,
+            "numpy_type": np.dtype(col.dtype).name,
+            "metadata": None
+        })
+
+    # Append the index column
+    column_metadata.append({
+        "name": table._index.name,
+        "field_name": table._index.name,
+        "pandas_type": "int64",
+        "numpy_type": "int64",
+        "metadata": None
+    })
+
+    # add the index name to the list of output columns
+    column_names.push_back(str.encode(table._index.name))
+
+    pandas_metadata = {
+        "index_columns": [table._index.name],
+        "column_indexes": [],
+        "columns": column_metadata,
+        "pandas_version": "0.20.0",  # What do we really need to put here?
+        "creator": {
+            "library": "cudf",
+            "version": "0.13"   # What to place here??
+        }
+    }
+
+    json_str = json.dumps(pandas_metadata, indent=4)
+    print("Pandas Metadata:")
+    print(json_str)
+
+    user_data[str.encode("pandas")] = str.encode(json_str)
+
+    # Set the table_metadata
+    tbl_meta.get().column_names = column_names
+    tbl_meta.get().user_data = user_data
 
     cdef compression_type comp_type
     if compression is None:
@@ -138,7 +190,7 @@ cpdef write_parquet(
     else:
         raise ValueError("Unsupported `statistics_freq` type")
 
-    cdef table_view tv = table.view()
+    cdef table_view tv = table.data_view()
     cdef write_parquet_args args
 
     # Perform write
