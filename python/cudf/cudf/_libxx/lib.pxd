@@ -1,5 +1,6 @@
 from libc.stdint cimport int32_t, uint32_t
 from libcpp cimport bool
+from libcpp.pair cimport pair
 from libcpp.vector cimport vector
 from libcpp.memory cimport unique_ptr
 
@@ -141,6 +142,18 @@ cdef extern from "cudf/copying.hpp" namespace "cudf::experimental" nogil:
     cdef unique_ptr[table] cpp_gather "cudf::experimental::gather" (
         table_view source_table,
         column_view gather_map
+    )
+
+cdef extern from "cudf/hashing.hpp" namespace "cudf" nogil:
+    cdef pair[unique_ptr[table], vector[size_type]] cpp_hash_partition "cudf::hash_partition" (
+        table_view input,
+        vector[size_type] columns_to_hash,
+        int num_partitions
+    )
+
+    cdef unique_ptr[column] cpp_hash "cudf::hash" (
+        table_view input,
+        vector[uint32_t] initial_hash
     )
 
 cdef extern from "<utility>" namespace "std" nogil:
