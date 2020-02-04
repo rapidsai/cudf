@@ -61,18 +61,9 @@ column_device_view::column_device_view( column_view source, ptrdiff_t h_ptr, ptr
       new(h_column) column_device_view(child,reinterpret_cast<ptrdiff_t>(h_end),reinterpret_cast<ptrdiff_t>(d_end));
       h_column++; // adv to next child
       // update the pointers for holding this child column's child data
-      auto col_child_data_size = extent(child) - sizeof(child);
+      auto col_child_data_size = extent(child) - sizeof(column_device_view);
       h_end += col_child_data_size;
       d_end += col_child_data_size;
-    }
-    // add dictionary column if there is one
-    auto keys = source.dictionary_keys();
-    if( keys.type().id() != cudf::type_id::EMPTY )
-    {
-      d_dictionary_keys = reinterpret_cast<column_device_view*>(d_end);
-      auto col_data_size = sizeof(keys);
-      new(h_end) column_device_view(keys,reinterpret_cast<ptrdiff_t>(h_end+col_data_size),
-                                         reinterpret_cast<ptrdiff_t>(d_end+col_data_size));
     }
   }
 }
@@ -117,9 +108,6 @@ std::unique_ptr<column_device_view, std::function<void(column_device_view*)>> co
 
 size_type column_device_view::extent(column_view source) {
   size_type data_size = sizeof(column_device_view);
-  auto keys = source.dictionary_keys();
-  if( keys.type().id() != cudf::type_id::EMPTY )
-    data_size += extent(keys);
   for( size_type idx=0; idx < source.num_children(); ++idx )
     data_size += extent(source.child(idx));
   return data_size;

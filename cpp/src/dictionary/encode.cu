@@ -22,13 +22,14 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/dictionary/encode.hpp>
+#include <cudf/dictionary/detail/encode.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
-
-#include <rmm/thrust_rmm_allocator.h>
 
 namespace cudf
 {
 namespace dictionary
+{
+namespace detail
 {
 
 /**
@@ -49,30 +50,41 @@ std::unique_ptr<column> encode( column_view const& input_column,
                         std::vector<size_type>{0},
                         experimental::duplicate_keep_option::KEEP_FIRST,
                         true, mr, stream )->release(); // true == nulls are equal
-    std::unique_ptr<column> keys(std::move(table_keys[0]));
+    std::unique_ptr<column> keys_column(std::move(table_keys.front()));
 
     if( input_column.has_nulls() )
     {
         // the single null entry should be at the beginning -- side effect from drop_duplicates
         // copy the column without the null entry
-        keys = std::make_unique<column>(experimental::slice(*keys, std::vector<size_type>{1,keys->size()})[0],stream,mr);
-        keys->set_null_mask( rmm::device_buffer{0,stream,mr}, 0 ); // remove the null-mask
+        keys_column = std::make_unique<column>(experimental::slice(keys_column->view(),
+                            std::vector<size_type>{1,keys_column->size()}).front(),stream,mr);
+        keys_column->set_null_mask( rmm::device_buffer{}, 0 ); // remove the null-mask
     }
-    std::shared_ptr<column> keys_column(keys.release());
 
     // this returns a column with no null entries
     // - it appears to ignore the null entries in the input and tries to place the value regardless
-    auto indices_column = cudf::experimental::detail::lower_bound(table_view{{*keys_column}},
+    auto indices_column = cudf::experimental::detail::lower_bound(table_view{{keys_column->view()}},
                     table_view{{input_column}},
                     std::vector<order>{order::ASCENDING},
                     std::vector<null_order>{null_order::AFTER},
                     mr, stream );
     // we should probably copy/cast to INT32 type if different
-    CUDF_EXPECTS( indices_column->type() == indices_type, "expecting int32 indices type" );
+    CUDF_EXPECTS( indices_column->type() == indices_type, "expecting INT32 indices type" );
 
     // create column with keys_column and indices_column
     return make_dictionary_column( std::move(keys_column), std::move(indices_column),
                                    copy_bitmask( input_column, stream, mr), input_column.null_count() );
+}
+
+} // namespace detail
+
+// external API
+
+std::unique_ptr<column> encode( column_view const& input_column,
+                                data_type indices_type,
+                                rmm::mr::device_memory_resource* mr )
+{
+    return detail::encode( input_column, indices_type, mr );
 }
 
 } // namespace dictionary

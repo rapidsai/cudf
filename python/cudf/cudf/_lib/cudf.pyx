@@ -348,6 +348,7 @@ cdef Column gdf_column_to_column(gdf_column* c_col):
     mask_ptr = int(<uintptr_t>c_col.valid)
 
     if gdf_dtype == GDF_STRING:
+        c_free(<void*><uintptr_t>mask_ptr, <cudaStream_t><uintptr_t>0)
         data = nvstrings.bind_cpointer(data_ptr)
         result = as_column(data)
     elif gdf_dtype == GDF_STRING_CATEGORY:

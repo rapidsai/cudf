@@ -24,7 +24,7 @@ import org.junit.jupiter.api.Test;
 import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
 
 public class UnaryOpTest extends CudfTestBase {
-  private static final Double[] DOUBLES_1 = new Double[]{1.0, 10.0, -100.1, 5.3, 50.0, 100.0, null};
+  private static final Double[] DOUBLES_1 = new Double[]{1.0, 10.0, -100.1, 5.3, 50.0, 100.0, null, Double.NaN, Double.POSITIVE_INFINITY, 1/9.0, Double.NEGATIVE_INFINITY};
   private static final Integer[] INTS_1 = new Integer[]{1, 10, -100, 5, 50, 100, null};
   private static final Boolean[] BOOLEANS_1 = new Boolean[]{true, false, true, false, true, false, null};
 
@@ -167,6 +167,73 @@ public class UnaryOpTest extends CudfTestBase {
   }
 
   @Test
+  public void testSinh() {
+    try (ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
+         ColumnVector answer = dcv.sinh();
+         ColumnVector expected = forEach(dcv, doubleFun(Math::sinh))) {
+      assertColumnsAreEqual(expected, answer);
+    }
+  }
+
+  @Test
+  public void testCosh() {
+    try (ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
+         ColumnVector answer = dcv.cosh();
+         ColumnVector expected = forEach(dcv, doubleFun(Math::cosh))) {
+      assertColumnsAreEqual(expected, answer);
+    }
+  }
+
+  @Test
+  public void testTanh() {
+    try (ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
+         ColumnVector answer = dcv.tanh();
+         ColumnVector expected = forEach(dcv, doubleFun(Math::tanh))) {
+      assertColumnsAreEqual(expected, answer);
+    }
+  }
+
+  public static double asinh(double value) {
+    return value == Double.NEGATIVE_INFINITY ? Double.NEGATIVE_INFINITY :
+      java.lang.StrictMath.log(value + java.lang.Math.sqrt(value * value + 1.0));
+  }
+
+  @Test
+  public void testArcsinh() {
+    try (ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
+         ColumnVector answer = dcv.arcsinh();
+         ColumnVector expected = forEach(dcv, doubleFun(UnaryOpTest::asinh))) {
+      assertColumnsAreEqual(expected, answer);
+    }
+  }
+
+  public static double acosh(double value) {
+    return java.lang.StrictMath.log(value + java.lang.Math.sqrt(value * value - 1.0));
+  }
+
+  @Test
+  public void testArccosh() {
+    try (ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
+         ColumnVector answer = dcv.arccosh();
+         ColumnVector expected = forEach(dcv, doubleFun(UnaryOpTest::acosh))) {
+      assertColumnsAreEqual(expected, answer);
+    }
+  }
+
+  public static double atanh(double value) {
+    return 0.5 * (java.lang.StrictMath.log1p(value) - java.lang.StrictMath.log1p(- value));
+  }
+
+  @Test
+  public void testArctanh() {
+    try (ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
+         ColumnVector answer = dcv.arctanh();
+         ColumnVector expected = forEach(dcv, doubleFun(UnaryOpTest::atanh))) {
+      assertColumnsAreEqual(expected, answer);
+    }
+  }
+
+  @Test
   public void testExp() {
     try (ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
          ColumnVector answer = dcv.exp();
@@ -194,6 +261,15 @@ public class UnaryOpTest extends CudfTestBase {
   }
 
   @Test
+  public void testCbrt() {
+    try (ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
+         ColumnVector answer = dcv.cbrt();
+         ColumnVector expected = forEach(dcv, doubleFun(Math::cbrt))) {
+      assertColumnsAreEqual(expected, answer);
+    }
+  }
+
+  @Test
   public void testCeil() {
     try (ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
          ColumnVector answer = dcv.ceil();
@@ -216,6 +292,15 @@ public class UnaryOpTest extends CudfTestBase {
     try (ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
          ColumnVector answer = dcv.abs();
          ColumnVector expected = forEach(dcv, doubleFun(Math::abs))) {
+      assertColumnsAreEqual(expected, answer);
+    }
+  }
+
+  @Test
+  public void testRint() {
+    try (ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
+         ColumnVector answer = dcv.rint();
+         ColumnVector expected = forEach(dcv, doubleFun(Math::rint))) {
       assertColumnsAreEqual(expected, answer);
     }
   }

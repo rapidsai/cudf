@@ -142,6 +142,108 @@ class reader {
 
 }  // namespace avro
 
+//! JSON format
+namespace json {
+  /**
+   * @brief Options for the JSON reader.
+   */
+  struct reader_options {
+    bool lines = false;
+    /// Specify the compression format of the source or infer from file extension
+    compression_type compression = compression_type::AUTO;
+    /// Per-column types; disables type inference on those columns
+    std::vector<std::string> dtype;
+    bool dayfirst = false;
+
+    reader_options() = default;
+    reader_options(reader_options const &) = default;
+
+    /**---------------------------------------------------------------------------*
+     * @brief Constructor to populate reader options.
+     *
+     * @param[in] lines Restrict to `JSON Lines` format rather than full JSON
+     * @param[in] compression Compression type: "none", "infer", "gzip", "zip"
+     * @param[in] dtype Ordered list of data types; deduced from dataset if empty
+     *---------------------------------------------------------------------------**/
+    reader_options(bool lines, compression_type compression,
+                    std::vector<std::string> dtype, bool dayfirst)
+        : lines(lines), compression(compression), dtype(std::move(dtype)), dayfirst(dayfirst) {}
+    };
+
+  /**
+   * @brief Class to read JSON dataset data into columns.
+   */
+  class reader {
+  private:
+    class impl;
+    std::unique_ptr<impl> _impl;
+
+  public:
+    /**
+     * @brief Constructor for a filepath to dataset.
+     *
+     * @param filepath Path to whole dataset
+     * @param options Settings for controlling reading behavior
+     * @param mr Optional resource to use for device memory allocation
+     */
+    explicit reader(
+        std::string filepath, reader_options const &options,
+        rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+
+    /**
+     * @brief Constructor for a memory buffer to dataset.
+     *
+     * @param buffer Pointer to whole dataset
+     * @param length Host buffer size in bytes
+     * @param options Settings for controlling reading behavior
+     * @param mr Optional resource to use for device memory allocation
+     */
+    explicit reader(
+        const char *buffer, size_t length, reader_options const &options,
+        rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+
+    /**
+     * @brief Constructor for an Arrow file to dataset.
+     *
+     * @param file Arrow file object of dataset
+     * @param options Settings for controlling reading behavior
+     * @param mr Optional resource to use for device memory allocation
+     */
+    explicit reader(
+        std::shared_ptr<arrow::io::RandomAccessFile> file,
+        reader_options const &options,
+        rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+
+    /**
+     * @brief Destructor explicitly-declared to avoid inlined in header
+     */
+    ~reader();
+
+    /**---------------------------------------------------------------------------*
+     * @brief Reads and returns the entire data set.
+     *
+     * @return cudf::table object that contains the array of gdf_columns.
+     *---------------------------------------------------------------------------**/
+    table_with_metadata read_all(cudaStream_t stream = 0);
+
+    /**---------------------------------------------------------------------------*
+     * @brief Reads and returns all the rows within a byte range.
+     *
+     * The returned data includes the row that straddles the end of the range.
+     * In other words, a row is included as long as the row begins within the byte
+     * range.
+     *
+     * @param[in] offset Byte offset from the start
+     * @param[in] size Number of bytes from the offset; set to 0 for all remaining
+     *
+     * @return cudf::table object that contains the array of gdf_columns
+     *---------------------------------------------------------------------------**/
+    table_with_metadata read_byte_range(size_t offset, size_t size, cudaStream_t stream = 0);
+  };
+
+}  // namespace JSON
+
+
 //! CSV format
 namespace csv {
 
@@ -409,11 +511,12 @@ class reader {
    * @brief Reads and returns a specific stripe.
    *
    * @param stripe Index of the stripe
+   * @param stripe_count Number of stripes to read
    * @param stream Optional stream to use for device memory alloc and kernels
    *
    * @return The set of columns along with table metadata
    */
-  table_with_metadata read_stripe(size_type stripe,
+  table_with_metadata read_stripe(size_type stripe, size_type stripe_count = 1,
                                   cudaStream_t stream = 0);
 
   /**
@@ -531,11 +634,12 @@ class reader {
    * @brief Reads a specific group of rows.
    *
    * @param row_group Index of the row group
+   * @param row_group_count Number of row groups to read
    * @param stream Optional stream to use for device memory alloc and kernels
    *
    * @return The set of columns along with table metadata
    */
-  table_with_metadata read_row_group(size_type row_group,
+  table_with_metadata read_row_group(size_type row_group, size_type row_group_count = 1,
                                      cudaStream_t stream = 0);
 
   /**

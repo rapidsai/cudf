@@ -23,25 +23,24 @@
 namespace cudf {
 namespace experimental {
 
-/* @brief For each column, computes a value for a quantile by interpolating
- *        between the values on either side of the desired quantile.
+/* @brief Computes a value for a quantile by interpolating between the values on
+ *        either side of the desired quantile.
  *
- * @param[in] input        Table containing columns used to compute quantile
- *                         values.
+ * @param[in] input        Column used to compute quantile values.
  * @param[in] q            Desired quantile in range [0, 1].
  * @param[in] interp       Strategy used to interpolate between the two values
  *                         on either side of the desired quantile.
- * @param[in] column_order Indicates the sortedness of columns.
+ * @param[in] column_order Indicates the sortedness of the column.
  *
- * @returns Value of the desired quantile for each column, or null if the column
- *          has no valid elements.
+ * @returns Value of the desired quantile, or null if the column has no valid
+ *          elements.
  */
 
-std::vector<std::unique_ptr<scalar>>
-quantiles(table_view const& input,
-          double q,
-          interpolation interp = interpolation::LINEAR,
-          std::vector<order_info> column_order = {});
+std::unique_ptr<scalar>
+quantile(column_view const& input,
+         double q,
+         interpolation interp = interpolation::LINEAR,
+         order_info column_order = {});
 
 } // namespace experimental
 } // namespace cudf

@@ -32,7 +32,6 @@ namespace cudf {
 namespace experimental {
 namespace detail {
 
-namespace {
 template <typename T, typename MapIterator>
 rmm::device_vector<T> make_gather_map(MapIterator scatter_map_begin,
     MapIterator scatter_map_end, size_type gather_rows,
@@ -60,7 +59,7 @@ void gather_bitmask(table_view const& source, MapIterator gather_map,
   // Create null mask if source is nullable but target is not
   for (size_t i = 0; i < target.size(); ++i) {
     if (source.column(i).nullable() and not target[i]->nullable()) {
-      auto mask = create_null_mask(target.size(), mask_state::ALL_VALID, stream, mr);
+      auto mask = create_null_mask(target[i]->size(), mask_state::ALL_VALID, stream, mr);
       target[i]->set_null_mask(std::move(mask), 0);
     }
   }
@@ -137,8 +136,6 @@ struct column_scatterer {
     return strings::detail::scatter(begin, end, scatter_map_begin, target, mr, stream);
   }
 };
-
-} //namespace
 
 /**
  * @brief Scatters the rows of the source table into a copy of the target table
