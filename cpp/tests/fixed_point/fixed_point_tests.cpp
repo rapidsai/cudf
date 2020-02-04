@@ -16,7 +16,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <cudf/fixed_point/fixed_point.hpp>
+#include <fixed_point/fixed_point.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/type_lists.hpp>
 #include <type_traits>
@@ -25,7 +25,7 @@
 #include <numeric>
 #include <limits>
 
-using namespace cudf::fixed_point;
+using namespace fixpt;
 
 struct FixedPointTest         : public cudf::test::BaseFixture {};
 

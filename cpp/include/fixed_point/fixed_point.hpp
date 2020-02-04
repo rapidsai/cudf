@@ -20,8 +20,7 @@
 #include <iostream>
 #include <limits>
 
-namespace cudf {
-namespace fixed_point {
+namespace fixpt {
 
 // This is a wrapper struct that enforces "strong typing"
 // at the construction site of the type. No implicit
@@ -338,4 +337,3 @@ std::ostream& operator<<(std::ostream& os, fixed_point<Rep, Radix> const& fp) {
 }
 
 } // namespace fixed_point
-} // namespace cudf
