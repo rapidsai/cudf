@@ -1366,7 +1366,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * of the specified type.
    */
   public Scalar sum(DType outType) {
-    return reduce(ReductionOp.SUM, outType);
+    return reduce(AggregateOp.SUM, outType);
   }
 
   /**
@@ -1382,7 +1382,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * of the specified type.
    */
   public Scalar min(DType outType) {
-    return reduce(ReductionOp.MIN, outType);
+    return reduce(AggregateOp.MIN, outType);
   }
 
   /**
@@ -1398,7 +1398,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * of the specified type.
    */
   public Scalar max(DType outType) {
-    return reduce(ReductionOp.MAX, outType);
+    return reduce(AggregateOp.MAX, outType);
   }
 
   /**
@@ -1414,7 +1414,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * of the specified type.
    */
   public Scalar product(DType outType) {
-    return reduce(ReductionOp.PRODUCT, outType);
+    return reduce(AggregateOp.PRODUCT, outType);
   }
 
   /**
@@ -1430,7 +1430,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * scalar of the specified type.
    */
   public Scalar sumOfSquares(DType outType) {
-    return reduce(ReductionOp.SUMOFSQUARES, outType);
+    return reduce(AggregateOp.SUMOFSQUARES, outType);
   }
 
   /**
@@ -1452,7 +1452,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * Null values are skipped.
    */
   public Scalar mean(DType outType) {
-    return reduce(ReductionOp.MEAN, outType);
+    return reduce(AggregateOp.MEAN, outType);
   }
 
   /**
@@ -1474,7 +1474,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * Null values are skipped.
    */
   public Scalar variance(DType outType) {
-    return reduce(ReductionOp.VAR, outType);
+    return reduce(AggregateOp.VAR, outType);
   }
 
   /**
@@ -1497,7 +1497,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * an element of the column when calculating the standard deviation.
    */
   public Scalar standardDeviation(DType outType) {
-    return reduce(ReductionOp.STD, outType);
+    return reduce(AggregateOp.STD, outType);
   }
 
   /**
@@ -1516,7 +1516,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * Null values are skipped.
    */
   public Scalar any(DType outType) {
-    return reduce(ReductionOp.ANY, outType);
+    return reduce(AggregateOp.ANY, outType);
   }
 
   /**
@@ -1535,7 +1535,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * Null values are skipped.
    */
   public Scalar all(DType outType) {
-    return reduce(ReductionOp.ALL, outType);
+    return reduce(AggregateOp.ALL, outType);
   }
 
   /**
@@ -1548,7 +1548,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * empty or the reduction operation fails then the
    * {@link Scalar#isValid()} method of the result will return false.
    */
-  public Scalar reduce(ReductionOp op) {
+  public Scalar reduce(AggregateOp op) {
     return reduce(op, type);
   }
 
@@ -1564,7 +1564,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * empty or the reduction operation fails then the
    * {@link Scalar#isValid()} method of the result will return false.
    */
-  public Scalar reduce(ReductionOp op, DType outType) {
+  public Scalar reduce(AggregateOp op, DType outType) {
     return new Scalar(outType, reduce(offHeap.cudfColumnHandle.getViewHandle(), op.nativeId, outType.nativeId));
   }
 
