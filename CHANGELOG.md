@@ -2,6 +2,7 @@
 
 ## New Features
 
+- PR #3662 Define and implement `shift`.
 - PR #3861 Added Series.sum feature for String
 
 ## Improvements
@@ -43,7 +44,6 @@
 - PR #4007 Fix for copy_bitmask issue with uninitialized device_buffer
 - PR #4037 Fix JNI quantile compile issue
 - PR #4052 Fix for round-robin when num_partitions divides nrows.
-
 
 # cuDF 0.12.0 (Date TBD)
 
