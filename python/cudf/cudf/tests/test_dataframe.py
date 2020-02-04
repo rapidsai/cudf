@@ -4345,10 +4345,7 @@ def test_memory_usage_multi():
 def test_setitem_diff_size_list(list_input, key):
     gdf = gd.datasets.randomdata(5)
     with pytest.raises(
-        ValueError,
-        match=(
-            "Cannot insert Column of different length into OrderedColumnDict"
-        ),
+        ValueError, match=("All values must be of equal length"),
     ):
         gdf[key] = list_input
 
