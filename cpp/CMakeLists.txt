@@ -611,6 +611,10 @@ add_library(cudf
             src/strings/utilities.cu
             src/scalar/scalar.cpp
             src/scalar/scalar_factories.cpp
+            src/dictionary/dictionary_column_view.cpp
+            src/dictionary/dictionary_factories.cu
+            src/dictionary/encode.cu
+            src/dictionary/decode.cu
             src/groupby/groupby.cu
             src/groupby/hash/groupby.cu
             src/groupby/sort/groupby.cu
