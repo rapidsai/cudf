@@ -186,7 +186,8 @@ generate_merged_indices(table_view const& left_table,
     rmm::device_vector<order> d_column_order(column_order);
 
     auto exec_pol = rmm::exec_policy(stream);
-    if (nullable) {
+    if (nullable)
+    {
       rmm::device_vector<null_order> d_null_precedence(null_precedence);
 
       auto ineq_op =
@@ -194,7 +195,6 @@ generate_merged_indices(table_view const& left_table,
                                                                         *rhs_device_view,
                                                                         d_column_order.data().get(),
                                                                         d_null_precedence.data().get());
-
         thrust::merge(exec_pol->on(stream),
                       left_begin_zip_iterator,
                       left_end_zip_iterator,
@@ -202,24 +202,27 @@ generate_merged_indices(table_view const& left_table,
                       right_end_zip_iterator,
                       merged_indices.begin(),
                       ineq_op);
-    } else {
+    }
+    else
+    {
       auto ineq_op =
         experimental::detail::row_lexicographic_tagged_comparator<false>(*lhs_device_view,
                                                                          *rhs_device_view,
                                                                          d_column_order.data().get());
-      thrust::merge(exec_pol->on(stream),
-                    left_begin_zip_iterator,
-                    left_end_zip_iterator,
-                    right_begin_zip_iterator,
-                    right_end_zip_iterator,
-                    merged_indices.begin(),
-                    ineq_op);
+        thrust::merge(exec_pol->on(stream),
+                      left_begin_zip_iterator,
+                      left_end_zip_iterator,
+                      right_begin_zip_iterator,
+                      right_end_zip_iterator,
+                      merged_indices.begin(),
+                      ineq_op);
     }
 
     CHECK_CUDA(stream);
 
     return merged_indices;
 }
+
 
 } // anonym. namespace
 
@@ -236,8 +239,8 @@ struct column_merger
 {
   using index_vector = rmm::device_vector<index_type>;
   explicit column_merger(index_vector const& row_order,
-                         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                         cudaStream_t stream = nullptr):
+                        rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                        cudaStream_t stream = nullptr):
     dv_row_order_(row_order),
     mr_(mr),
     stream_(stream)
@@ -246,10 +249,9 @@ struct column_merger
 
   // column merger operator;
   //
-  template<typename Element>//required: column type
-  std::enable_if_t<cudf::is_fixed_width<Element>(),
-                   std::unique_ptr<cudf::column>>
-  operator()(cudf::column_view const& lcol, cudf::column_view const& rcol) const
+  template<typename Element> //required: column type
+  std::unique_ptr<column> operator()(column_view const& lcol,
+                                     column_view const& rcol) const
   {
     auto lsz = lcol.size();
     auto merged_size = lsz + rcol.size();
@@ -299,11 +301,11 @@ struct column_merger
                       dv_row_order_.begin(), dv_row_order_.end(),
                       merged_view.begin<Element>(),
                       [p_d_lcol, p_d_rcol] __device__ (index_type const& index_pair){
-                        auto side = thrust::get<0>(index_pair);
-                        auto index = thrust::get<1>(index_pair);
+                       auto side = thrust::get<0>(index_pair);
+                       auto index = thrust::get<1>(index_pair);
 
-                        Element val = (side == side::LEFT ? p_d_lcol[index] : p_d_rcol[index]);
-                        return val;
+                       Element val = (side == side::LEFT ? p_d_lcol[index] : p_d_rcol[index]);
+                       return val;
                       }
                      );
 
@@ -319,82 +321,101 @@ struct column_merger
     return p_merged_col;
   }
 
-  //specialization for strings
-  //
-  template<typename Element>//required: column type
-  std::enable_if_t<not cudf::is_fixed_width<Element>(),
-                   std::unique_ptr<cudf::column>>
-  operator()(cudf::column_view const& lcol, cudf::column_view const& rcol) const
-  {
-
-    auto column = strings::detail::merge<index_type>( strings_column_view(lcol),
-                                                      strings_column_view(rcol),
-                                                      dv_row_order_.begin(),
-                                                      dv_row_order_.end(),
-                                                      mr_,
-                                                      stream_);
-
-    if (lcol.has_nulls() || rcol.has_nulls()) {
-        auto merged_view = column->mutable_view();
-        materialize_bitmask(lcol,
-                            rcol,
-                            merged_view,
-                            dv_row_order_.data().get(),
-                            stream_);
-    }
-    return column;
-  }
-
 private:
   index_vector const& dv_row_order_;
   rmm::mr::device_memory_resource* mr_;
   cudaStream_t stream_;
 };
 
+// specialization for strings
+template<>
+std::unique_ptr<column> column_merger::operator()<cudf::string_view>(column_view const& lcol,
+                                                                     column_view const& rcol) const
+{
+  auto column = strings::detail::merge<index_type>( strings_column_view(lcol),
+                                                    strings_column_view(rcol),
+                                                    dv_row_order_.begin(),
+                                                    dv_row_order_.end(),
+                                                    mr_,
+                                                    stream_);
+  if (lcol.has_nulls() || rcol.has_nulls())
+    {
+      auto merged_view = column->mutable_view();
+      materialize_bitmask(lcol, rcol, merged_view, dv_row_order_.data().get(), stream_);
+    }
+  return column;
+}
+
+// specialization for dictionary
+template<>
+std::unique_ptr<column> column_merger::operator()<cudf::dictionary32>(column_view const& lcol,
+                                                                          column_view const& rcol) const
+{
+  CUDF_FAIL("dictionary not supported yet");
+}
+
 using table_ptr_type = std::unique_ptr<cudf::experimental::table>;
- 
-table_ptr_type merge(cudf::table_view const& left_table,
-                     cudf::table_view const& right_table,
-                     std::vector<cudf::size_type> const& key_cols,
-                     std::vector<cudf::order> const& column_order,
-                     std::vector<cudf::null_order> const& null_precedence,
-                     rmm::mr::device_memory_resource* mr,
-                     cudaStream_t stream = 0) {
+
+std::unique_ptr<cudf::experimental::table> merge(cudf::table_view const& left_table,
+                                                 cudf::table_view const& right_table,
+                                                 std::vector<cudf::size_type> const& key_cols,
+                                                 std::vector<cudf::order> const& column_order,
+                                                 std::vector<cudf::null_order> const& null_precedence,
+                                                 rmm::mr::device_memory_resource* mr,
+                                                 cudaStream_t stream = 0) {
+    auto n_cols = left_table.num_columns();
+    CUDF_EXPECTS( n_cols == right_table.num_columns(), "Mismatched number of columns");
+    if (left_table.num_columns() == 0) {
+      return cudf::experimental::empty_like(left_table);
+    }
+
+    CUDF_EXPECTS(cudf::have_same_types(left_table, right_table), "Mismatched column types");
+
+    auto keys_sz = key_cols.size();
+    CUDF_EXPECTS( keys_sz > 0, "Empty key_cols");
+    CUDF_EXPECTS( keys_sz <= static_cast<size_t>(left_table.num_columns()), "Too many values in key_cols");
+
+    CUDF_EXPECTS(keys_sz == column_order.size(), "Mismatched size between key_cols and column_order");
+
+    if (not column_order.empty())
+      {
+        CUDF_EXPECTS(column_order.size() <= static_cast<size_t>(left_table.num_columns()), "Too many values in column_order");
+      }
+
     //collect index columns for lhs, rhs, resp.
     //
-    const cudf::table_view index_left_view{left_table.select(key_cols)};
-    const cudf::table_view index_right_view{right_table.select(key_cols)};
-    const bool nullable = cudf::has_nulls(index_left_view) || 
-                          cudf::has_nulls(index_right_view);
-    const auto n_cols = left_table.num_columns();
+    cudf::table_view index_left_view{left_table.select(key_cols)};
+    cudf::table_view index_right_view{right_table.select(key_cols)};
+    bool nullable = cudf::has_nulls(index_left_view) || cudf::has_nulls(index_right_view);
 
     //extract merged row order according to indices:
     //
-    const auto merged_indices = generate_merged_indices(index_left_view,
-                                                        index_right_view,
-                                                        column_order,
-                                                        null_precedence,
-                                                        nullable);
+    rmm::device_vector<index_type>
+      merged_indices = generate_merged_indices(index_left_view, index_right_view, column_order, null_precedence, nullable);
+
     //create merged table:
     //
-    std::vector<std::unique_ptr<column>> merged_cols;
-    merged_cols.reserve(n_cols);
+    std::vector<std::unique_ptr<column>> v_merged_cols;
+    v_merged_cols.reserve(n_cols);
 
-    const column_merger merger{merged_indices, mr, stream};
-    transform(left_table.begin(), left_table.end(), 
-             right_table.begin(), 
-             std::back_inserter(merged_cols),
-             [&](auto& left_col, auto& right_col) {
-               return cudf::experimental::type_dispatcher(left_col.type(),
+    column_merger merger{merged_indices, mr, stream};
+
+    for(auto i=0;i<n_cols;++i)
+      {
+        const auto& left_col = left_table.column(i);
+        const auto& right_col= right_table.column(i);
+
+        auto merged = cudf::experimental::type_dispatcher(left_col.type(),
                                                           merger,
                                                           left_col,
                                                           right_col);
-               });
+        v_merged_cols.emplace_back(std::move(merged));
+      }
 
-    return std::make_unique<cudf::experimental::table>(std::move(merged_cols));
+    return std::make_unique<cudf::experimental::table>(std::move(v_merged_cols));
 }
 
- 
+
 class merge_queue_item {
 private:
   table_view view_;

@@ -233,12 +233,18 @@ __inline__ __device__ cudf::timestamp_ns decode_value(
   return milli * 1000000;
 }
 
-// The purpose of this is merely to allow compilation ONLY
+// The purpose of these is merely to allow compilation ONLY
 template <>
 __inline__ __device__ cudf::string_view decode_value(const char *data,
                                                      long start, long end,
                                                      ParseOptions const &opts) {
   return cudf::string_view{};
+}
+template <>
+__inline__ __device__ cudf::dictionary32 decode_value(const char *data,
+                                                     long start, long end,
+                                                     ParseOptions const &opts) {
+  return cudf::dictionary32{};
 }
 
 /**
