@@ -28,12 +28,26 @@ namespace detail
 
 using string_index_pair = thrust::pair<const char*,size_type>;
 
-// common code for tokenize, token-counters, normalize functions
-// with characters or whitespace delimiter
+/**
+ * @brief Base class for tokenize functions that use multi-character
+ * delimiters.
+ *
+ * This is common code for tokenize, token-counters, normalize functions.
+ * If an empty delimiter string is specified, then whitespace
+ * (code-point <= ' ') is used to identify tokens.
+ */
 struct base_tokenator
 {
-    string_view d_delimiter;
+    string_view d_delimiter; // zero or more delimiter characters
 
+    /**
+     * @brief Return true if the given character is a delimiter.
+     *
+     * For empty delimiter, whitespace code-point is checked.
+     *
+     * @param chr The character to test.
+     * @return true if the character is a delimiter
+     */
     __device__ bool is_delimiter(char_utf8 chr)
     {
         return d_delimiter.empty() ? (chr <= ' ') : // whitespace check
@@ -41,12 +55,31 @@ struct base_tokenator
                                [chr] __device__ (char_utf8 c) {return c==chr;});
     }
 
+    /**
+     * @brief Identifies the bounds of the next token in the given
+     * string at the specified iterator position.
+     *
+     * For empty delimiter, whitespace code-point is checked.
+     * Starting at the given iterator (itr) position, a token
+     * start position (spos) is identified when a delimiter is
+     * not found. Once found, the end position (epos) is identified
+     * when a delimiter or the end of the string is found.
+     *
+     * @param d_str String to tokenize.
+     * @param[in,out] spaces Identifies current character position
+     *                is a delimiter or not.
+     * @param[in,out] itr Current position in d_str to search for tokens.
+     * @param[in,out] spos Start character position of the token found.
+     * @param[in,out] epos End character position of the token found.
+     * @return true if a token was found, false if no more tokens
+     */
     __device__ bool next_token( string_view const& d_str, bool& spaces,
                                 string_view::const_iterator& itr,
                                 size_type& spos, size_type& epos )
     {
         if( spos >= d_str.length() )
             return false;
+        epos = d_str.length(); // init to the end
         for( ; itr != d_str.end(); ++itr )
         {
             char_utf8 ch = *itr;
@@ -69,12 +102,23 @@ struct base_tokenator
     }
 };
 
-// used for counting tokens and tokenizing characters or whitespace
+/**
+ * @brief Tokenizing function for multi-character delimiter.
+ *
+ * This is used for counting tokens and tokenizing strings.
+ * The functor will identify and place the token positions within each
+ * and place in the d_tokens member.
+ *
+ * This functor is called in two passes.
+ * The first pass simply counts the tokens so the size of the output
+ * vector can be calculated. The second pass will place the token
+ * positions into the d_tokens vector.
+ */
 struct tokenator_fn : base_tokenator
 {
-    column_device_view d_strings;
-    size_type* d_offsets{};
-    string_index_pair* d_tokens{};
+    column_device_view d_strings;   // strings to tokenize
+    size_type* d_offsets{};         // offsets into the d_tokens vector for each string
+    string_index_pair* d_tokens{};  // token positions in device memory
 
     tokenator_fn( column_device_view& d_strings, string_view& d_delimiter,
                   size_type* d_offsets=nullptr,
@@ -103,7 +147,7 @@ struct tokenator_fn : base_tokenator
                                                             (epos_bo-spos_bo) };
             }
             spos = epos + 1;
-            epos = d_str.length();
+            //epos = d_str.length();
             ++itr;
             ++token_idx;
         }
@@ -115,22 +159,19 @@ struct tokenator_fn : base_tokenator
 // delimiters' iterator = delimiterator
 using delimiterator = cudf::column_device_view::const_iterator<string_view>;
 
-// handles token counting and tokenizing
+/**
+ * @brief Tokenizes strings using multiple string delimiters.
+ *
+ * One or more strings are used as delimiters to identify tokens inside
+ * each string of a given strings column.
+ */
 struct multi_delimiter_tokenizer_fn
 {
-    column_device_view d_strings;
-    delimiterator delimiters_begin;
-    delimiterator delimiters_end;
-    size_type* d_offsets{};
-    string_index_pair* d_tokens{};
-
-    multi_delimiter_tokenizer_fn( column_device_view& d_strings,
-                                  delimiterator delimiters_begin,
-                                  delimiterator delimiters_end,
-                                  size_type* d_offsets=nullptr,
-                                  string_index_pair* d_tokens=nullptr )
-    : d_strings(d_strings), delimiters_begin(delimiters_begin), delimiters_end(delimiters_end),
-      d_offsets(d_offsets), d_tokens(d_tokens) {}
+    column_device_view d_strings;    // strings column to tokenize
+    delimiterator delimiters_begin;  // first delimiter
+    delimiterator delimiters_end;    // last delimiter
+    size_type* d_offsets{};          // offsets into the d_tokens output vector
+    string_index_pair* d_tokens{};   // token positions found for each string
 
     __device__ size_type operator()(size_type idx)
     {
