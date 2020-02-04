@@ -15,8 +15,6 @@
  */
 #pragma once
 
-#pragma once
-
 #include <cudf/types.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/utilities/bit.hpp>
@@ -144,6 +142,7 @@ struct column_gatherer_impl
         thrust::gather(rmm::exec_policy(stream)->on(stream), gather_map_begin,
                        gather_map_end, source_data, destination_data);
       }
+
       return destination_column;
     }
   };
