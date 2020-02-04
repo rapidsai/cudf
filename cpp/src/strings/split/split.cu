@@ -407,11 +407,23 @@ __device__ size_type compute_memory_size(
       split_align);
 }
 
+struct copy_info {
+  size_type idx{};
+  size_type token_count{};
+  size_type token_size_sum{};
+  void* memory_ptr{};
+};
+
+enum class Dir {
+  FORWARD,
+  BACKWARD
+};
+
 /**
  * @brief Compute the number of tokens, the total byte sizes of the tokens, and
  * required memory size for the `idx'th` string element of `d_strings`.
  */
-template <bool forward>
+template <Dir dir>
 struct token_reader_fn {
   column_device_view const d_strings;  // strings to split
   string_view const d_delimiter;  // delimiter for split
@@ -423,12 +435,12 @@ struct token_reader_fn {
       string_view const& d_str,
       size_type start_pos, size_type end_pos, size_type delimiter_pos) const {
     if (last) {
-       return forward ?
+       return dir == Dir::FORWARD ?
          d_str.byte_offset(end_pos) - d_str.byte_offset(start_pos) :
          d_str.byte_offset(end_pos);
     }
     else {
-      return forward ?
+      return dir == Dir::FORWARD ?
         d_str.byte_offset(delimiter_pos) - d_str.byte_offset(start_pos) :
         d_str.byte_offset(end_pos) -
           d_str.byte_offset(delimiter_pos + d_delimiter.length());
@@ -446,17 +458,17 @@ struct token_reader_fn {
     auto const d_str = d_strings.element<string_view>(idx);
     size_type token_count = 0;
     size_type token_size_sum = 0;
-    size_type start_pos = 0;  // updates only if forward is true
-    auto end_pos = d_str.length();  // updates only if forward is false
+    size_type start_pos = 0;  // updates only if moving forward
+    auto end_pos = d_str.length();  // updates only if moving backward
     while (token_count < max_tokens - 1) {
       auto const delimiter_pos =
-        forward ? d_str.find(d_delimiter, start_pos) :
-                  d_str.rfind(d_delimiter, start_pos, end_pos);
+        dir == Dir::FORWARD ? d_str.find(d_delimiter, start_pos) :
+                              d_str.rfind(d_delimiter, start_pos, end_pos);
       if (delimiter_pos != -1) {
         token_count++;
         token_size_sum += compute_token_char_bytes<false>(
                             d_str, start_pos, end_pos, delimiter_pos);
-        if (forward) {
+        if (dir == Dir::FORWARD) {
           start_pos = delimiter_pos + d_delimiter.length();
         }
         else {
@@ -482,7 +494,7 @@ struct token_reader_fn {
  * @brief Copy the tokens from the `idx'th` string element of `d_strings` to
  * the contiguous memory buffer.
  */
-template <bool forward>
+template <Dir dir>
 struct token_copier_fn {
   column_device_view const d_strings;  // strings to split
   string_view const d_delimiter;  // delimiter for split
@@ -494,9 +506,10 @@ struct token_copier_fn {
       string_view const& d_str,
       size_type start_pos, size_type end_pos, size_type delimiter_pos) const {
     if (last) {
-      auto const src_byte_offset = forward ? d_str.byte_offset(start_pos) : 0;
+      auto const src_byte_offset =
+        dir == Dir::FORWARD ? d_str.byte_offset(start_pos) : 0;
       auto const token_char_bytes =
-        forward ?
+        dir == Dir::FORWARD ?
           d_str.byte_offset(end_pos) - src_byte_offset :
           d_str.byte_offset(end_pos);
       return thrust::make_pair<size_type, size_type>(
@@ -504,10 +517,10 @@ struct token_copier_fn {
     }
     else {
       auto const src_byte_offset =
-        forward ? d_str.byte_offset(start_pos) :
-                  d_str.byte_offset(delimiter_pos + d_delimiter.length());
+        dir == Dir::FORWARD ? d_str.byte_offset(start_pos) :
+                              d_str.byte_offset(delimiter_pos + d_delimiter.length());
       auto const token_char_bytes =
-        forward ?
+        dir == Dir::FORWARD ?
           d_str.byte_offset(delimiter_pos) - src_byte_offset :
           d_str.byte_offset(end_pos) - src_byte_offset;
       return thrust::make_pair<size_type, size_type>(
@@ -516,40 +529,32 @@ struct token_copier_fn {
   }
 
   __device__ void
-  operator()(
-      thrust::tuple<size_type, size_type, void*, size_type>
-        idx_token_count_memory_ptr_token_size_sum) const {
-    auto const idx = idx_token_count_memory_ptr_token_size_sum.get<0>();
-    auto const token_count = idx_token_count_memory_ptr_token_size_sum.get<1>();
-
-    if (token_count == 0) {
+  operator()(copy_info const info) const {
+    if (info.token_count == 0) {
       return;
     }
 
-    auto memory_ptr =
-      static_cast<char*>(idx_token_count_memory_ptr_token_size_sum.get<2>());
-    auto const token_size_sum =
-      idx_token_count_memory_ptr_token_size_sum.get<3>();
+    auto memory_ptr = static_cast<char*>(info.memory_ptr);
 
-    auto const char_buf_size = round_up_pow2(token_size_sum, split_align);
+    auto const char_buf_size = round_up_pow2(info.token_size_sum, split_align);
     auto const char_buf_ptr = memory_ptr;
     memory_ptr += char_buf_size;
     auto const offset_buf_ptr = reinterpret_cast<size_type*>(memory_ptr);
 
-    auto const d_str = d_strings.element<string_view>(idx);
+    auto const d_str = d_strings.element<string_view>(info.idx);
     size_type token_idx = 0;
     size_type char_bytes_copied = 0;
-    size_type start_pos = 0;  // updates only if forward is true
-    auto end_pos = d_str.length();  // updates only if forward is false
-    while (token_idx < token_count - 1) {
+    size_type start_pos = 0;  // updates only if moving forward
+    auto end_pos = d_str.length();  // updates only if moving backward
+    while (token_idx < info.token_count - 1) {
       auto const delimiter_pos =
-        forward ? d_str.find(d_delimiter, start_pos) :
-                  d_str.rfind(d_delimiter, start_pos, end_pos);
+        dir == Dir::FORWARD ? d_str.find(d_delimiter, start_pos) :
+                              d_str.rfind(d_delimiter, start_pos, end_pos);
       if (delimiter_pos != -1) {
         auto const offset_size_pair =
           compute_src_byte_offset_and_token_char_bytes<false>(
             d_str, start_pos, end_pos, delimiter_pos);
-        if (forward) {
+        if (dir == Dir::FORWARD) {
           thrust::copy(
             thrust::seq,
             d_str.data() + offset_size_pair.first,
@@ -559,17 +564,17 @@ struct token_copier_fn {
         }
         else {
           auto const char_buf_offset =
-            token_size_sum - char_bytes_copied - offset_size_pair.second;
+            info.token_size_sum - char_bytes_copied - offset_size_pair.second;
           thrust::copy(
             thrust::seq,
             d_str.data() + offset_size_pair.first,
             d_str.data() + offset_size_pair.first + offset_size_pair.second,
             char_buf_ptr + char_buf_offset);
-          offset_buf_ptr[token_count - 1 - token_idx] = char_buf_offset;
+          offset_buf_ptr[info.token_count - 1 - token_idx] = char_buf_offset;
         }
         token_idx++;
         char_bytes_copied += offset_size_pair.second;
-        if (forward) {
+        if (dir == Dir::FORWARD) {
           start_pos = delimiter_pos + d_delimiter.length();
         }
         else {
@@ -584,7 +589,7 @@ struct token_copier_fn {
     auto const offset_size_pair =
       compute_src_byte_offset_and_token_char_bytes<true>(
         d_str, start_pos, end_pos, -1);
-    if (forward) {
+    if (dir == Dir::FORWARD) {
       thrust::copy(
         thrust::seq,
         d_str.data() + offset_size_pair.first,
@@ -598,7 +603,7 @@ struct token_copier_fn {
                    char_buf_ptr);
       offset_buf_ptr[0] = 0;
     }
-    offset_buf_ptr[token_count] = token_size_sum;
+    offset_buf_ptr[info.token_count] = info.token_size_sum;
   }
 };
 
@@ -606,7 +611,7 @@ struct token_copier_fn {
  * @brief Compute the number of tokens, the total byte sizes of the tokens, and
  * required memory size for the `idx'th` string element of `d_strings`.
  */
-template <bool forward>
+template <Dir dir>
 struct whitespace_token_reader_fn {
   column_device_view const d_strings;  // strings to split
   size_type const max_tokens = std::numeric_limits<size_type>::max();
@@ -617,12 +622,12 @@ struct whitespace_token_reader_fn {
       string_view const& d_str,
       size_type cur_pos, size_type to_token_pos) const {
     if (last) {
-      return forward ?
+      return dir == Dir::FORWARD ?
         d_str.byte_offset(d_str.length()) - d_str.byte_offset(to_token_pos) :
         d_str.byte_offset(to_token_pos + 1) - d_str.byte_offset(0);
     }
     else {
-      return forward ?
+      return dir == Dir::FORWARD ?
         d_str.byte_offset(cur_pos) - d_str.byte_offset(to_token_pos) :
         d_str.byte_offset(to_token_pos + 1) - d_str.byte_offset(cur_pos + 1);
     }
@@ -641,7 +646,7 @@ struct whitespace_token_reader_fn {
     auto reached_max_tokens = false;
     size_type to_token_pos = 0;
     for (size_type i = 0; i < d_str.length(); ++i) {
-      auto const cur_pos = forward ? i : d_str.length() - 1 - i;
+      auto const cur_pos = dir == Dir::FORWARD ? i : d_str.length() - 1 - i;
       auto const ch = d_str[cur_pos];
       if (spaces != (ch <= ' ')) {
         if (spaces) {  // from whitespace(s) to a new token
@@ -684,7 +689,7 @@ struct whitespace_token_reader_fn {
  * @brief Copy the tokens from the `idx'th` string element of `d_strings` to
  * the contiguous memory buffer.
  */
-template <bool forward>
+template <Dir dir>
 struct whitespace_token_copier_fn {
   column_device_view const d_strings;  // strings to split
   bool const has_validity = false;
@@ -698,17 +703,17 @@ struct whitespace_token_copier_fn {
     if (last) {
       auto const token_char_bytes = remaining_bytes;
       auto const src_byte_offset =
-        forward ? d_str.byte_offset(to_token_pos) :
-                  d_str.byte_offset(to_token_pos + 1) - token_char_bytes;
+        dir == Dir::FORWARD ? d_str.byte_offset(to_token_pos) :
+                              d_str.byte_offset(to_token_pos + 1) - token_char_bytes;
       return thrust::make_pair<size_type, size_type>(
         src_byte_offset, token_char_bytes);
     }
     else {
       auto const src_byte_offset =
-        forward ? d_str.byte_offset(to_token_pos) :
-          d_str.byte_offset(cur_pos + 1);
+        dir == Dir::FORWARD ? d_str.byte_offset(to_token_pos) :
+                              d_str.byte_offset(cur_pos + 1);
       auto const token_char_bytes =
-        forward ?
+        dir == Dir::FORWARD ?
           d_str.byte_offset(cur_pos) - src_byte_offset :
           d_str.byte_offset(to_token_pos + 1) - src_byte_offset;
       return thrust::make_pair<size_type, size_type>(
@@ -717,45 +722,37 @@ struct whitespace_token_copier_fn {
   }
 
   __device__ void
-  operator()(
-      thrust::tuple<size_type, size_type, void*, size_type>
-        idx_token_count_memory_ptr_token_size_sum) const {
-    auto const idx = idx_token_count_memory_ptr_token_size_sum.get<0>();
-    auto const token_count = idx_token_count_memory_ptr_token_size_sum.get<1>();
-
-    if (token_count == 0) {
+  operator()(copy_info const info) const {
+    if (info.token_count == 0) {
       return;
     }
 
-    auto memory_ptr =
-      static_cast<char*>(idx_token_count_memory_ptr_token_size_sum.get<2>());
-    auto const token_size_sum =
-      idx_token_count_memory_ptr_token_size_sum.get<3>();
+    auto memory_ptr = static_cast<char*>(info.memory_ptr);
 
-    auto const char_buf_size = round_up_pow2(token_size_sum, split_align);
+    auto const char_buf_size = round_up_pow2(info.token_size_sum, split_align);
     auto const char_buf_ptr = memory_ptr;
     memory_ptr += char_buf_size;
     auto const offset_buf_ptr = reinterpret_cast<size_type*>(memory_ptr);
 
-    auto const d_str = d_strings.element<string_view>(idx);
+    auto const d_str = d_strings.element<string_view>(info.idx);
     size_type token_idx = 0;
     size_type char_bytes_copied = 0;
     auto spaces = true;
     size_type to_token_pos = 0;
     for (size_type i = 0; i < d_str.length(); ++i) {
-      auto const cur_pos = forward ? i : d_str.length() - 1 - i;
+      auto const cur_pos = dir == Dir::FORWARD ? i : d_str.length() - 1 - i;
       auto const ch = d_str[cur_pos];
       if (spaces != (ch <= ' ')) {
         if (spaces) {  // from whitespace(s) to a new token
           to_token_pos = cur_pos;
         }
         else {  // from a token to whiltespace(s)
-          if (token_idx < token_count - 1) {
+          if (token_idx < info.token_count - 1) {
             auto const offset_size_pair =
               compute_src_byte_offset_and_token_char_bytes<false>(
                 d_str, cur_pos, to_token_pos,
-                token_size_sum - char_bytes_copied);
-            if (forward) {
+                info.token_size_sum - char_bytes_copied);
+            if (dir == Dir::FORWARD) {
               thrust::copy(
                 thrust::seq,
                 d_str.data() + offset_size_pair.first,
@@ -765,13 +762,13 @@ struct whitespace_token_copier_fn {
             }
             else {
               auto const char_buf_offset =
-                token_size_sum - char_bytes_copied - offset_size_pair.second;
+                info.token_size_sum - char_bytes_copied - offset_size_pair.second;
               thrust::copy(
                 thrust::seq,
                 d_str.data() + offset_size_pair.first,
                 d_str.data() + offset_size_pair.first + offset_size_pair.second,
                 char_buf_ptr + char_buf_offset);
-              offset_buf_ptr[token_count - 1 - token_idx] = char_buf_offset;
+              offset_buf_ptr[info.token_count - 1 - token_idx] = char_buf_offset;
             }
             token_idx++;
             char_bytes_copied += offset_size_pair.second;
@@ -783,11 +780,11 @@ struct whitespace_token_copier_fn {
         spaces = !spaces;
       }
     }
-    if (token_idx < token_count) {
+    if (token_idx < info.token_count) {
       auto const offset_size_pair =
         compute_src_byte_offset_and_token_char_bytes<true>(
-          d_str, -1, to_token_pos, token_size_sum - char_bytes_copied);
-      if (forward) {
+          d_str, -1, to_token_pos, info.token_size_sum - char_bytes_copied);
+      if (dir == Dir::FORWARD) {
         thrust::copy(
           thrust::seq,
           d_str.data() + offset_size_pair.first,
@@ -804,7 +801,7 @@ struct whitespace_token_copier_fn {
         offset_buf_ptr[0] = 0;
       }
     }
-    offset_buf_ptr[token_count] = token_size_sum;
+    offset_buf_ptr[info.token_count] = info.token_size_sum;
   }
 };
 
@@ -907,20 +904,20 @@ contiguous_split_record_result contiguous_split_record_fn(
   auto d_token_counts_ptr = d_token_counts.data().get();
   auto d_memory_offsets_ptr = d_memory_offsets.data().get();
   auto d_token_size_sums_ptr = d_token_size_sums.data().get();
-  auto idx_token_count_memory_ptr_token_size_sum_begin =
+  auto copy_info_begin =
     thrust::make_transform_iterator(
       thrust::make_counting_iterator(0),
       [d_all_data_ptr, d_token_counts_ptr, d_memory_offsets_ptr,
        d_token_size_sums_ptr] __device__ (auto i) {
-        return thrust::make_tuple<size_type, size_type, void*, size_type>(
-          i, d_token_counts_ptr[i], d_all_data_ptr + d_memory_offsets_ptr[i],
-          d_token_size_sums_ptr[i]);
+        return copy_info{i, d_token_counts_ptr[i],
+                         d_token_size_sums_ptr[i],
+                         d_all_data_ptr + d_memory_offsets_ptr[i]};
       });
 
   thrust::for_each(
     rmm::exec_policy(stream)->on(stream),
-    idx_token_count_memory_ptr_token_size_sum_begin,
-    idx_token_count_memory_ptr_token_size_sum_begin + strings_count,
+    copy_info_begin,
+    copy_info_begin + strings_count,
     copier);
 
   // update column_view objects
@@ -1016,6 +1013,7 @@ std::unique_ptr<experimental::table> rsplit( strings_column_view const& strings,
                      mr, stream);
 }
 
+template <Dir dir>
 contiguous_split_record_result contiguous_split_record(
     strings_column_view const& strings,
     string_scalar const& delimiter = string_scalar(""),
@@ -1034,53 +1032,18 @@ contiguous_split_record_result contiguous_split_record(
   if (delimiter.size() == 0) {
     return contiguous_split_record_fn(
       strings,
-      whitespace_token_reader_fn<true>{
+      whitespace_token_reader_fn<dir>{
         *d_strings_column_ptr, max_tokens, has_validity},
-      whitespace_token_copier_fn<true>{*d_strings_column_ptr, has_validity},
+      whitespace_token_copier_fn<dir>{*d_strings_column_ptr, has_validity},
       mr, stream);
   }
   else {
     string_view d_delimiter(delimiter.data(), delimiter.size());
     return contiguous_split_record_fn(
       strings,
-      token_reader_fn<true>{
+      token_reader_fn<dir>{
         *d_strings_column_ptr, d_delimiter, max_tokens, has_validity},
-      token_copier_fn<true>{*d_strings_column_ptr, d_delimiter, has_validity},
-      mr, stream);
-  }
-}
-
-contiguous_split_record_result contiguous_rsplit_record(
-    strings_column_view const& strings,
-    string_scalar const& delimiter = string_scalar(""),
-    size_type maxsplit = -1,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0) {
-  CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");
-
-  size_type max_tokens = std::numeric_limits<size_type>::max();
-  if (maxsplit > 0) {
-    max_tokens = maxsplit + 1;  // makes consistent with Pandas
-  }
-  auto has_validity = strings.parent().nullable();
-
-  auto d_strings_column_ptr =
-    column_device_view::create(strings.parent(),stream);
-  if (delimiter.size() == 0) {
-    return contiguous_split_record_fn(
-      strings,
-      whitespace_token_reader_fn<false>{
-        *d_strings_column_ptr, max_tokens, has_validity},
-      whitespace_token_copier_fn<false>{*d_strings_column_ptr, has_validity},
-      mr, stream);
-  }
-  else {
-    string_view d_delimiter(delimiter.data(), delimiter.size());
-    return contiguous_split_record_fn(
-      strings,
-      token_reader_fn<false>{
-        *d_strings_column_ptr, d_delimiter, max_tokens, has_validity},
-      token_copier_fn<false>{*d_strings_column_ptr, d_delimiter, has_validity},
+      token_copier_fn<dir>{*d_strings_column_ptr, d_delimiter, has_validity},
       mr, stream);
   }
 }
@@ -1110,7 +1073,7 @@ contiguous_split_record_result contiguous_split_record(
     string_scalar const& delimiter,
     size_type maxsplit,
     rmm::mr::device_memory_resource* mr) {
-  return detail::contiguous_split_record(strings, delimiter, maxsplit, mr, 0);
+  return detail::contiguous_split_record<detail::Dir::FORWARD>(strings, delimiter, maxsplit, mr, 0);
 }
 
 contiguous_split_record_result contiguous_rsplit_record(
@@ -1118,7 +1081,7 @@ contiguous_split_record_result contiguous_rsplit_record(
     string_scalar const& delimiter,
     size_type maxsplit,
     rmm::mr::device_memory_resource* mr) {
-  return detail::contiguous_rsplit_record(strings, delimiter, maxsplit, mr, 0);
+  return detail::contiguous_split_record<detail::Dir::BACKWARD>(strings, delimiter, maxsplit, mr, 0);
 }
 
 } // namespace strings
