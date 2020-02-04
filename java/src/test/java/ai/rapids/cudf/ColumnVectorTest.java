@@ -20,7 +20,10 @@ package ai.rapids.cudf;
 
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Array;
 import java.util.Arrays;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static ai.rapids.cudf.QuantileMethod.*;
@@ -1097,7 +1100,7 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testCast() {
+  void testFixedWidthCast() {
     int[] values = new int[]{1,3,4,5,2};
     long[] longValues = Arrays.stream(values).asLongStream().toArray();
     double[] doubleValues = Arrays.stream(values).asDoubleStream().toArray();
@@ -1141,6 +1144,53 @@ public class ColumnVectorTest extends CudfTestBase {
       assertColumnsAreEqual(expectedMs, ms);
       assertColumnsAreEqual(expectedNs, ns);
       assertColumnsAreEqual(expectedS, s);
+    }
+  }
+
+  @Test
+  void testStringCast() {
+    Integer[] integerArray = {1, 2, 3, 7, 8};
+
+    Short[] shortValues = Arrays.stream(integerArray).map(i -> i.shortValue()).collect(Collectors.toList()).toArray(new Short[integerArray.length]);
+    String[] stringShortValues = Arrays.stream(shortValues).map(i -> String.valueOf(i)).collect(Collectors.toList()).toArray(new String[shortValues.length]);
+
+    testCastFixedWidthToStringsAndBack(DType.INT16, () -> ColumnVector.fromBoxedShorts(shortValues), () -> ColumnVector.fromStrings(stringShortValues));
+
+    String[] stringIntValues = Arrays.asList(integerArray).stream().map(i -> String.valueOf(i)).collect(Collectors.toList()).toArray(new String[integerArray.length]);
+
+    testCastFixedWidthToStringsAndBack(DType.INT32, () -> ColumnVector.fromBoxedInts(integerArray), () -> ColumnVector.fromStrings(stringIntValues));
+
+    Long[] longValues = Arrays.stream(integerArray).map(i -> i.longValue()).collect(Collectors.toList()).toArray(new Long[integerArray.length]);
+    String[] stringLongValues = Arrays.stream(longValues).map(i -> String.valueOf(i)).collect(Collectors.toList()).toArray(new String[longValues.length]);
+
+    testCastFixedWidthToStringsAndBack(DType.INT64, () -> ColumnVector.fromBoxedLongs(longValues), () -> ColumnVector.fromStrings(stringLongValues));
+
+    Float[] floatValues = Arrays.stream(integerArray).map(i -> i.floatValue()).collect(Collectors.toList()).toArray(new Float[integerArray.length]);
+    String[] stringFloatValues = Arrays.stream(floatValues).map(i -> String.valueOf(i)).collect(Collectors.toList()).toArray(new String[floatValues.length]);
+
+    testCastFixedWidthToStringsAndBack(DType.FLOAT32, () -> ColumnVector.fromBoxedFloats(floatValues), () -> ColumnVector.fromStrings(stringFloatValues));
+
+    Double[] doubleValues = Arrays.stream(integerArray).map(i -> i.doubleValue()).collect(Collectors.toList()).toArray(new Double[integerArray.length]);
+    String[] stringDoubleValues = Arrays.stream(doubleValues).map(i -> String.valueOf(i)).collect(Collectors.toList()).toArray(new String[doubleValues.length]);
+
+    testCastFixedWidthToStringsAndBack(DType.FLOAT64, () -> ColumnVector.fromBoxedDoubles(doubleValues), () -> ColumnVector.fromStrings(stringDoubleValues));
+
+    Boolean[] booleans = {true, false, false};
+    String[] stringBools = Arrays.stream(booleans).map(i -> String.valueOf(i)).collect(Collectors.toList()).toArray(new String[booleans.length]);
+
+    testCastFixedWidthToStringsAndBack(DType.BOOL8, () -> ColumnVector.fromBoxedBooleans(booleans), () -> ColumnVector.fromStrings(stringBools));
+  }
+
+
+
+  private void testCastFixedWidthToStringsAndBack(DType type, Supplier<ColumnVector> fixedWidthSupplier,
+                                                  Supplier<ColumnVector> stringColumnSupplier) {
+    try (ColumnVector fixedWidthColumn = fixedWidthSupplier.get();
+         ColumnVector stringColumn = stringColumnSupplier.get();
+         ColumnVector fixedWidthCastedToString = fixedWidthColumn.castTo(DType.STRING);
+         ColumnVector stringCastedToFixedWidth = stringColumn.castTo(type)) {
+      assertColumnsAreEqual(stringColumn, fixedWidthCastedToString);
+      assertColumnsAreEqual(fixedWidthColumn, stringCastedToFixedWidth);
     }
   }
 
