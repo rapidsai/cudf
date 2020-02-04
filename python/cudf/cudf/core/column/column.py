@@ -56,7 +56,7 @@ class ColumnBase(Column):
     def __reduce__(self):
         return (
             build_column,
-            (self.data, self.dtype, self.mask, self.offset, self.children),
+            (self.data, self.dtype, self.mask, self.offset, self._children),
         )
 
     def as_frame(self, name=None):
@@ -155,7 +155,7 @@ class ColumnBase(Column):
             self.dtype,
             mask=mask,
             offset=self.offset,
-            children=self.children,
+            children=self._children,
         )
 
     @staticmethod
@@ -385,7 +385,7 @@ class ColumnBase(Column):
                 self.dtype,
                 mask=self.mask,
                 offset=self.offset,
-                children=self.children,
+                children=self._children,
             )
 
     def view(self, newcls, **kwargs):
@@ -766,8 +766,8 @@ class ColumnBase(Column):
             self.dtype = result.dtype
             self.size = result.size
             self.offset = result.offset
-            if hasattr(result, "children"):
-                self.children = result.children
+            if hasattr(result, "_children"):
+                self._children = result._children
                 if is_string_dtype(self):
                     # force recomputation of nvstrings/nvcategory
                     self._nvstrings = None

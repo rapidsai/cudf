@@ -20,7 +20,7 @@ from cudf.core.buffer import Buffer
 from libc.stdlib cimport malloc, free
 
 from cudf.utils.dtypes import is_categorical_dtype
-from cudf.utils.utils import cached_property
+from cudf.utils.utils import cached_property, calc_chunk_size, mask_bitsize
 
 
 np_to_cudf_types = {
@@ -67,42 +67,31 @@ cdef class Column:
     The *dtype* indicates the Column's element type.
     """
     def __init__(self, data, size, dtype, mask=None, offset=0, children=()):
-        if not isinstance(data, Buffer):
-            raise TypeError("Expected a Buffer for data, got " +
-                            type(data).__name__)
-        if mask is not None and not isinstance(mask, Buffer):
-            raise TypeError("Expected a Buffer for mask, got " +
-                            type(mask).__name__)
-        if not pd.api.types.is_integer(size):
+        self.offset = offset
+        self.size = size
+        self.dtype = dtype
+        self.data = data
+        self.mask = mask
+        self.children = children
+
+    @property
+    def size(self):
+        return self._size
+
+    @size.setter
+    def size(self, value):
+        if not pd.api.types.is_integer(value):
             raise TypeError("Expected an integer for size, got " +
-                            type(size).__name__)
-        if not pd.api.types.is_integer(offset):
-            raise TypeError("Expected an integer for offset, got " +
-                            type(offset).__name__)
-        if not isinstance(children, tuple):
-            raise TypeError("Expected a tuple of Columns for children, got " +
-                            type(children).__name__)
+                            type(value).__name__)
 
-        for child in children:
-            if not isinstance(child, Column):
-                raise TypeError(
-                    "Expected each of children to be a  Column, got " +
-                    type(child).__name__
-                )
-
-        if size > libcudfxx.MAX_COLUMN_SIZE:
+        if value > libcudfxx.MAX_COLUMN_SIZE:
             raise MemoryError(
                 "Cannot create columns of size > {}. "
                 "Consider using dask_cudf to partition your data".format(
                     libcudfxx.MAX_COLUMN_SIZE_STR)
             )
 
-        self._data = data
-        self.size = size
-        self.dtype = dtype
-        self._mask = mask
-        self._offset = offset
-        self.children = children
+        self._size = value
 
     @property
     def data(self):
@@ -110,9 +99,9 @@ cdef class Column:
 
     @data.setter
     def data(self, value):
-        if value is not None:
-            if not isinstance(value, Buffer):
-                raise TypeError("data must be a Buffer or None")
+        if value is not None and not isinstance(value, Buffer):
+            raise TypeError("Expected a Buffer or None for data, got " +
+                            type(value).__name__)
         self._data = value
 
     @property
@@ -138,10 +127,31 @@ cdef class Column:
 
     @mask.setter
     def mask(self, value):
-        if value is not None:
-            if not isinstance(value, Buffer):
-                raise TypeError("mask must be a Buffer or None")
         self._set_mask(value)
+
+    def _set_mask(self, value):
+        if value is not None and not isinstance(value, Buffer):
+            raise TypeError("Expected a Buffer or None for mask, got " +
+                            type(value).__name__)
+        if value is not None:
+            offsetted_size = self.size + self.offset
+            required_size = -(-self.size // mask_bitsize)  # ceiling divide
+            if value.size < required_size:
+                error_msg = (
+                    "The Buffer for mask is smaller than expected, got " +
+                    str(value.size) + " bytes, expected " + str(required_size)
+                    + " bytes."
+                )
+                if self.offset != 0:
+                    error_msg += (
+                        " Note: the column has a non-zero offset and the mask "
+                        "is expected to be sized according to the base "
+                        "allocation as opposed to the offsetted allocation."
+                    )
+                raise RuntimeError(error_msg)
+        self._mask = value
+        if hasattr(self, "null_count"):
+            del self.null_count
 
     @property
     def mask_ptr(self):
@@ -157,11 +167,6 @@ cdef class Column:
                 "Cannot get the pointer to a mask with a nonzero offset"
             )
 
-    def _set_mask(self, value):
-        self._mask = value
-        if hasattr(self, "null_count"):
-            del self.null_count
-
     @cached_property
     def null_count(self):
         return self.compute_null_count()
@@ -171,11 +176,30 @@ cdef class Column:
         return self._offset
 
     @offset.setter
-    def offset(self, offset):
-        if not pd.api.types.is_integer(offset):
+    def offset(self, value):
+        if not pd.api.types.is_integer(value):
             raise TypeError("Expected an integer for offset, got " +
-                            type(offset).__name__)
-        self._offset = offset
+                            type(value).__name__)
+        self._offset = value
+
+    @property
+    def children(self):
+        return self._children
+
+    @children.setter
+    def children(self, value):
+        if not isinstance(value, tuple):
+            raise TypeError("Expected a tuple of Columns for children, got " +
+                            type(value).__name__)
+
+        for child in value:
+            if not isinstance(child, Column):
+                raise TypeError(
+                    "Expected each of children to be a  Column, got " +
+                    type(child).__name__
+                )
+
+        self._children = value
 
     cdef size_type compute_null_count(self) except? 0:
         return self._view(UNKNOWN_NULL_COUNT).null_count()
@@ -196,8 +220,8 @@ cdef class Column:
         data = <void*><uintptr_t>(col.data_ptr)
 
         cdef Column child_column
-        if self.children:
-            for child_column in self.children:
+        if self._children:
+            for child_column in self._children:
                 children.push_back(child_column.mutable_view())
 
         cdef bitmask_type* mask
@@ -235,8 +259,8 @@ cdef class Column:
         data = <void*><uintptr_t>(col.data_ptr)
 
         cdef Column child_column
-        if self.children:
-            for child_column in self.children:
+        if self._children:
+            for child_column in self._children:
                 children.push_back(child_column.view())
 
         cdef bitmask_type* mask
@@ -283,3 +307,51 @@ cdef class Column:
                              for i in range(c_children.size()))
 
         return build_column(data, dtype=dtype, mask=mask, children=children)
+
+    @staticmethod
+    cdef Column from_column_view(column_view cv, Column owner):
+        from cudf.core.column import build_column
+
+        size = cv.size()
+        dtype = cudf_to_np_types[cv.type().id()]
+
+        data_ptr = <uintptr_t>(cv.head[void]())
+        data = None
+        if data_ptr:
+            data = Buffer(
+                data=data_ptr,
+                size=size * dtype.itemsize,
+                owner=owner.data
+            )
+
+        mask_ptr = <uintptr_t>(cv.null_mask())
+        mask = None
+        if mask_ptr:
+            mask = Buffer(
+                mask=mask_ptr,
+                size=calc_chunk_size(size, mask_bitsize),
+                owner=owner.mask
+            )
+
+        offset = cv.offset()
+
+        children = []
+        for child_index in range(cv.num_children()):
+            children.append(
+                Column.from_column_view(
+                    cv.child(child_index),
+                    owner._children[child_index]
+                )
+            )
+        children = tuple(children)
+
+        result = build_column(
+            data,
+            dtype,
+            mask,
+            offset,
+            tuple(children)
+        )
+        result.size = size
+
+        return result

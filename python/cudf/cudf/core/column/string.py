@@ -481,7 +481,7 @@ class StringColumn(column.ColumnBase):
         return StringMethods(self, index=index, name=name)
 
     def __sizeof__(self):
-        n = self.children[0].__sizeof__() + self.children[1].__sizeof__()
+        n = self._children[0].__sizeof__() + self._children[1].__sizeof__()
         if self.mask:
             n += self.mask.size
         return n
@@ -506,8 +506,8 @@ class StringColumn(column.ColumnBase):
                 self._nvstrings = nvstrings.to_device([])
             else:
                 self._nvstrings = nvstrings.from_offsets(
-                    self.children[1].data_ptr,
-                    self.children[0].data_ptr,
+                    self._children[1].data_ptr,
+                    self._children[0].data_ptr,
                     self.size,
                     mask_ptr,
                     ncount=self.null_count,
@@ -545,7 +545,7 @@ class StringColumn(column.ColumnBase):
 
     @property
     def _nbytes(self):
-        return self.children[1].size
+        return self._children[1].size
 
     def as_numerical_column(self, dtype, **kwargs):
 

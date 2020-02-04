@@ -205,7 +205,7 @@ class CategoricalAccessor(object):
             self._parent.data = None
             self._parent.mask = new_codes.mask
             self._parent.dtype = new_dtype
-            self._parent.children = (new_codes,)
+            self._parent._children = (new_codes,)
             return None
 
         return column.build_column(
@@ -312,7 +312,7 @@ class CategoricalColumn(column.ColumnBase):
 
     @property
     def codes(self):
-        return self.children[0].set_mask(self.mask)
+        return self._children[0].set_mask(self.mask)
 
     @property
     def ordered(self):
