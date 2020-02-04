@@ -1219,6 +1219,65 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testSerializationRoundTripEmpty() throws IOException {
+    try (ColumnVector emptyInt = ColumnVector.fromInts();
+         ColumnVector emptyDouble = ColumnVector.fromDoubles();
+         ColumnVector emptyString = ColumnVector.fromStrings();
+         Table t = new Table(emptyInt, emptyInt, emptyDouble, emptyString)) {
+      ByteArrayOutputStream bout = new ByteArrayOutputStream();
+      JCudfSerialization.writeToStream(t, bout, 0, 0);
+      ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
+      DataInputStream din = new DataInputStream(bin);
+      try (Table result = JCudfSerialization.readTableFrom(din)) {
+        assertTablesAreEqual(t, result);
+      }
+    }
+  }
+
+  @Test
+  void testSerializationRoundTripConcatOnHostEmpty() throws IOException {
+    try (ColumnVector emptyInt = ColumnVector.fromInts();
+         ColumnVector emptyDouble = ColumnVector.fromDoubles();
+         ColumnVector emptyString = ColumnVector.fromStrings();
+         Table t = new Table(emptyInt, emptyInt, emptyDouble, emptyString)) {
+      ByteArrayOutputStream bout = new ByteArrayOutputStream();
+      JCudfSerialization.writeToStream(t, bout, 0, 0);
+      JCudfSerialization.writeToStream(t, bout, 0, 0);
+      ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
+      DataInputStream din = new DataInputStream(bin);
+
+      ArrayList<JCudfSerialization.SerializedTableHeader> headers = new ArrayList<>();
+      List<HostMemoryBuffer> buffers = new ArrayList<>();
+      try {
+        JCudfSerialization.SerializedTableHeader head;
+        long numRows = 0;
+        do {
+          head = new JCudfSerialization.SerializedTableHeader(din);
+          if (head.wasInitialized()) {
+            HostMemoryBuffer buff = HostMemoryBuffer.allocate(head.dataLen);
+            buffers.add(buff);
+            JCudfSerialization.readTableIntoBuffer(din, head, buff);
+            assert head.wasDataRead();
+            numRows += head.getNumRows();
+            assert numRows <= Integer.MAX_VALUE;
+            headers.add(head);
+          }
+        } while (head.wasInitialized());
+        assert numRows == t.getRowCount();
+        try (Table found = JCudfSerialization.readAndConcat(
+            headers.toArray(new JCudfSerialization.SerializedTableHeader[headers.size()]),
+            buffers.toArray(new HostMemoryBuffer[buffers.size()]))) {
+          assertTablesAreEqual(t, found);
+        }
+      } finally {
+        for (HostMemoryBuffer buff: buffers) {
+          buff.close();
+        }
+      }
+    }
+  }
+
+  @Test
   void testSerializationRoundTripConcatHostSide() throws IOException {
     try (Table t = new Table.TestBuilder()
         .column(     100,      202,      3003,    40004,        5,      -60,    1, null,    3,  null,     5, null,    7, null,   9,   null,    11, null,   13, null,  15)
@@ -1254,10 +1313,10 @@ public class TableTest extends CudfTestBase {
               buffers.add(buff);
               JCudfSerialization.readTableIntoBuffer(din, head, buff);
               assert head.wasDataRead();
+              numRows += head.getNumRows();
+              assert numRows <= Integer.MAX_VALUE;
+              headers.add(head);
             }
-            numRows += head.getNumRows();
-            assert numRows <= Integer.MAX_VALUE;
-            headers.add(head);
           } while (head.wasInitialized());
           assert numRows == t.getRowCount();
           try (Table found = JCudfSerialization.readAndConcat(
