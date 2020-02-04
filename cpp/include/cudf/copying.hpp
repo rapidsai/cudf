@@ -607,27 +607,27 @@ std::unique_ptr<column> copy_if_else( scalar const& lhs, scalar const& rhs, colu
  *
  * `boolean_mask` should have N number of `true`s. If boolean mask is `true`,
  * corresponding value in target is updated with value from corresponding
- * `source` column, else it is left untouched.
+ * `input` column, else it is left untouched.
  *
  * Example:
- * source: {{1, 5, 6, 8, 9}}
+ * input: {{1, 5, 6, 8, 9}}
  * boolean_mask: {true, false, false, false, true, true, false, true, true, false}
  * target:       {{   2,     2,     3,     4,    4,     7,    7,    7,    8,    10}}
  *
  * output:       {{   1,     2,     3,     4,    5,     6,    7,    8,    9,    10}}
  *
- * @throw  cudf::logic_error if source.num_columns() != target.num_columns()
- * @throws cudf::logic_error if any `i`th source_column.type() != `i`th target_column.type()
+ * @throw  cudf::logic_error if input.num_columns() != target.num_columns()
+ * @throws cudf::logic_error if any `i`th input_column type != `i`th target_column type
  * @throws cudf::logic_error if boolean_mask.type() != bool
  * @throws cudf::logic_error if boolean_mask.size() != target.num_rows()
- * @throws cudf::logic_error if number of `true` in `boolean_mask` > source.num_rows()
+ * @throws cudf::logic_error if number of `true` in `boolean_mask` > input.num_rows()
  *
  * @param[in] input table_view (set of dense columns) to scatter
  * @param[in] target table_view to modify with scattered values from `input`
  * @param[in] boolean_mask column_view which acts as boolean mask.
  * @param[in] mr Optional, The resource to use for all returned allocations
  *
- * @returns Returns a table by scattering `source` into `target` as per `boolean_mask`.
+ * @returns Returns a table by scattering `input` into `target` as per `boolean_mask`.
  */
 std::unique_ptr<table> boolean_mask_scatter(
     table_view const& input, table_view const& target,
@@ -643,14 +643,14 @@ std::unique_ptr<table> boolean_mask_scatter(
  * All other rows in the output will equal the same row in `target`.
  *
  * Example:
- * source: {11}
+ * input: {11}
  * boolean_mask: {true, false, false, false, true, true, false, true, true, false}
  * target:       {{   2,     2,     3,     4,    4,     7,    7,    7,    8,    10}}
  *
  * output:       {{   11,    2,     3,     4,   11,    11,    7,   11,   11,    10}}
  *
- * @throw  cudf::logic_error if source.size() != target.num_columns()
- * @throws cudf::logic_error if any `i`th source_scalar.type() != `i`th target_column.type()
+ * @throw  cudf::logic_error if input.size() != target.num_columns()
+ * @throws cudf::logic_error if any `i`th input_scalar type != `i`th target_column type
  * @throws cudf::logic_error if boolean_mask.type() != bool
  * @throws cudf::logic_error if boolean_mask.size() != target.size()
  *
@@ -659,7 +659,7 @@ std::unique_ptr<table> boolean_mask_scatter(
  * @param[in] boolean_mask column_view which acts as boolean mask.
  * @param[in] mr Optional, The resource to use for all returned allocations
  *
- * @returns Returns a table by scattering `source` into `target` as per `boolean_mask`.
+ * @returns Returns a table by scattering `input` into `target` as per `boolean_mask`.
  */
  std::unique_ptr<table> boolean_mask_scatter(
     std::vector<std::unique_ptr<scalar>> const& input, table_view const& target,
