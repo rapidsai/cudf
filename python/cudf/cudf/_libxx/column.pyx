@@ -309,8 +309,10 @@ cdef class Column:
         return build_column(data, dtype=dtype, mask=mask, children=children)
 
     @staticmethod
-    cdef Column from_column_view(column_view cv, Column owner):
+    cdef Column from_column_view(column_view cv, object owner):
         from cudf.core.column import build_column
+
+        column_owner = isinstance(owner, Column)
 
         size = cv.size()
         dtype = cudf_to_np_types[cv.type().id()]
@@ -318,29 +320,38 @@ cdef class Column:
         data_ptr = <uintptr_t>(cv.head[void]())
         data = None
         if data_ptr:
+            data_owner = owner
+            if column_owner:
+                data_owner = owner.data
             data = Buffer(
                 data=data_ptr,
                 size=size * dtype.itemsize,
-                owner=owner.data
+                owner=data_owner
             )
 
         mask_ptr = <uintptr_t>(cv.null_mask())
         mask = None
         if mask_ptr:
+            mask_owner = owner
+            if column_owner:
+                mask_owner = owner.mask
             mask = Buffer(
                 mask=mask_ptr,
                 size=calc_chunk_size(size, mask_bitsize),
-                owner=owner.mask
+                owner=mask_owner
             )
 
         offset = cv.offset()
 
         children = []
         for child_index in range(cv.num_children()):
+            child_owner = owner
+            if column_owner:
+                child_owner = owner._children[child_index]
             children.append(
                 Column.from_column_view(
                     cv.child(child_index),
-                    owner._children[child_index]
+                    child_owner
                 )
             )
         children = tuple(children)
