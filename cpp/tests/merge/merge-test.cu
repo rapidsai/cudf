@@ -8,6 +8,7 @@
 #include <rmm/thrust_rmm_allocator.h>
 #include <cudf/column/column_factories.hpp>
 #include <tests/utilities/column_utilities.hpp>
+#include <tests/utilities/table_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <tests/utilities/type_lists.hpp>
@@ -171,6 +172,60 @@ TYPED_TEST(MergeTest_, MismatchedKeyColumnsAndOrderTypes) {
                                            key_cols,
                                            column_order,
                                            null_precedence), cudf::logic_error);
+}
+
+TYPED_TEST(MergeTest_, NoInputTables) {
+  std::unique_ptr<cudf::experimental::table> p_outputTable;
+  CUDF_EXPECT_NO_THROW(p_outputTable = cudf::experimental::merge({}, {}, {}, {}));
+  EXPECT_EQ(p_outputTable->num_columns(), 0);
+}
+
+TYPED_TEST(MergeTest_, SingleTableInput) {
+  using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam>;
+
+  cudf::size_type inputRows = 40;
+
+  auto sequence = cudf::test::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
+  columnFactoryT colWrap1(sequence, sequence+inputRows);
+
+  std::vector<cudf::size_type> key_cols{0};
+  std::vector<cudf::order> column_order {cudf::order::ASCENDING};
+  std::vector<cudf::null_order> null_precedence{};
+
+  cudf::table_view left_view{{colWrap1}};
+
+  std::unique_ptr<cudf::experimental::table> p_outputTable;
+  CUDF_EXPECT_NO_THROW(p_outputTable = cudf::experimental::merge({left_view},
+                                                                 key_cols,
+                                                                 column_order,
+                                                                 null_precedence));
+
+  auto input_column_view{left_view.column(0)};
+  auto output_column_view{p_outputTable->view().column(0)};
+  
+  cudf::test::expect_columns_equal(input_column_view, output_column_view);
+}
+
+TYPED_TEST(MergeTest_, MergeTwoEmptyTables) {
+  using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam>;
+
+  std::vector<cudf::size_type> key_cols{0};
+  std::vector<cudf::order> column_order {cudf::order::ASCENDING};
+  std::vector<cudf::null_order> null_precedence{};
+
+  columnFactoryT leftColWrap1{};
+  columnFactoryT rightColWrap1{};
+
+  cudf::table_view left_view{{leftColWrap1}};
+  cudf::table_view right_view{{rightColWrap1}};
+
+  std::unique_ptr<cudf::experimental::table> p_outputTable;
+  CUDF_EXPECT_NO_THROW(p_outputTable = cudf::experimental::merge({left_view, right_view},
+                                                                 key_cols,
+                                                                 column_order,
+                                                                 null_precedence));
+
+  //cudf::test::expect_tables_equal(left_view, p_outputTable->view());
 }
 
 TYPED_TEST(MergeTest_, MergeWithEmptyColumn) {
@@ -585,6 +640,7 @@ TYPED_TEST(MergeTest_, Merge2KeyNullColumns) {
     cudf::test::expect_columns_equal(expected_column_view1, output_column_view1);
     cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
 }
+
 
 TYPED_TEST(MergeTest_, NMerge1KeyColumns) {
   using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam>;

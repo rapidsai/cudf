@@ -356,37 +356,18 @@ std::unique_ptr<column> column_merger::operator()<cudf::dictionary32>(column_vie
 
 using table_ptr_type = std::unique_ptr<cudf::experimental::table>;
 
-std::unique_ptr<cudf::experimental::table> merge(cudf::table_view const& left_table,
-                                                 cudf::table_view const& right_table,
-                                                 std::vector<cudf::size_type> const& key_cols,
-                                                 std::vector<cudf::order> const& column_order,
-                                                 std::vector<cudf::null_order> const& null_precedence,
-                                                 rmm::mr::device_memory_resource* mr,
-                                                 cudaStream_t stream = 0) {
-    auto n_cols = left_table.num_columns();
-    CUDF_EXPECTS( n_cols == right_table.num_columns(), "Mismatched number of columns");
-    if (left_table.num_columns() == 0) {
-      return cudf::experimental::empty_like(left_table);
-    }
-
-    CUDF_EXPECTS(cudf::have_same_types(left_table, right_table), "Mismatched column types");
-
-    auto keys_sz = key_cols.size();
-    CUDF_EXPECTS( keys_sz > 0, "Empty key_cols");
-    CUDF_EXPECTS( keys_sz <= static_cast<size_t>(left_table.num_columns()), "Too many values in key_cols");
-
-    CUDF_EXPECTS(keys_sz == column_order.size(), "Mismatched size between key_cols and column_order");
-
-    if (not column_order.empty())
-      {
-        CUDF_EXPECTS(column_order.size() <= static_cast<size_t>(left_table.num_columns()), "Too many values in column_order");
-      }
-
+table_ptr_type merge(cudf::table_view const& left_table,
+                     cudf::table_view const& right_table,
+                     std::vector<cudf::size_type> const& key_cols,
+                     std::vector<cudf::order> const& column_order,
+                     std::vector<cudf::null_order> const& null_precedence,
+                     rmm::mr::device_memory_resource* mr,
+                     cudaStream_t stream = 0) {
     //collect index columns for lhs, rhs, resp.
     //
     cudf::table_view index_left_view{left_table.select(key_cols)};
     cudf::table_view index_right_view{right_table.select(key_cols)};
-    bool nullable = cudf::has_nulls(index_left_view) || cudf::has_nulls(index_right_view);
+    const bool nullable = cudf::has_nulls(index_left_view) || cudf::has_nulls(index_right_view);
 
     //extract merged row order according to indices:
     //
@@ -394,25 +375,23 @@ std::unique_ptr<cudf::experimental::table> merge(cudf::table_view const& left_ta
       merged_indices = generate_merged_indices(index_left_view, index_right_view, column_order, null_precedence, nullable);
 
     //create merged table:
-    //
-    std::vector<std::unique_ptr<column>> v_merged_cols;
-    v_merged_cols.reserve(n_cols);
+    //    
+    const auto n_cols = left_table.num_columns();
+    std::vector<std::unique_ptr<column>> merged_cols;
+    merged_cols.reserve(n_cols);
 
     column_merger merger{merged_indices, mr, stream};
+    transform(left_table.begin(), left_table.end(), 
+              right_table.begin(), 
+              std::back_inserter(merged_cols),
+              [&](auto& left_col, auto& right_col){
+                return cudf::experimental::type_dispatcher(left_col.type(),
+                                                           merger,
+                                                           left_col,
+                                                           right_col);
+              });
 
-    for(auto i=0;i<n_cols;++i)
-      {
-        const auto& left_col = left_table.column(i);
-        const auto& right_col= right_table.column(i);
-
-        auto merged = cudf::experimental::type_dispatcher(left_col.type(),
-                                                          merger,
-                                                          left_col,
-                                                          right_col);
-        v_merged_cols.emplace_back(std::move(merged));
-      }
-
-    return std::make_unique<cudf::experimental::table>(std::move(v_merged_cols));
+    return std::make_unique<cudf::experimental::table>(std::move(merged_cols));
 }
 
 
@@ -458,7 +437,6 @@ table_ptr_type merge(std::vector<table_view> const& tables_to_merge,
                       std::vector<cudf::null_order> const& null_precedence,
                       rmm::mr::device_memory_resource* mr,
                       cudaStream_t stream = 0) {
-    // TODO add test case
     if (tables_to_merge.empty()) {
       return std::make_unique<cudf::experimental::table>();
     }
@@ -472,7 +450,7 @@ table_ptr_type merge(std::vector<table_view> const& tables_to_merge,
       CUDF_EXPECTS(cudf::have_same_types(first_table, table),
                    "Mismatched column types");
     }
- 
+    
     CUDF_EXPECTS(!key_cols.empty(),
                  "Empty key_cols");
     CUDF_EXPECTS(key_cols.size() <= static_cast<size_t>(n_cols), 
@@ -483,11 +461,6 @@ table_ptr_type merge(std::vector<table_view> const& tables_to_merge,
     CUDF_EXPECTS(column_order.size() <= static_cast<size_t>(n_cols), 
                  "Too many values in column_order");
  
-    if (tables_to_merge.size() == 1 || n_cols == 0) {
-      // TODO add test case
-      return std::make_unique<cudf::experimental::table>(first_table);
-    }
- 
     // A queue of (table view, table) pairs
     std::priority_queue<merge_queue_item> merge_queue;
     // The table pointer is null if we do not own the table (input tables)
@@ -497,14 +470,23 @@ table_ptr_type merge(std::vector<table_view> const& tables_to_merge,
                     if (table.num_rows() > 0)
                       merge_queue.emplace(table, table_ptr_type()); 
                   });
-    // If there is only one table in the queue, that's the final result
+
+    // If there is only one non-empty table_view, return its copy
+    if (merge_queue.size() == 1) {
+      return std::make_unique<cudf::experimental::table>(merge_queue.top().view());
+    }
+    // No inputs have rows, return a table with same columns as the first one
+    if (merge_queue.empty()) {
+      return empty_like(first_table);
+    }
+    
+    // Pick the two smallest tables and merge them
+    // Until there is only one table left in the queue
     while (merge_queue.size() > 1) {
-      // TODO explain the traversal logic
-       
       // Deallocated at the end of the block
-      const auto left_table = merge_queue_item(merge_queue);
+      auto const left_table = merge_queue_item(merge_queue);
       // Deallocated at the end of the block
-      const auto right_table = merge_queue_item(merge_queue);
+      auto const right_table = merge_queue_item(merge_queue);
       auto merged_table = merge(left_table.view(), 
                                 right_table.view(), 
                                 key_cols, 
@@ -512,12 +494,8 @@ table_ptr_type merge(std::vector<table_view> const& tables_to_merge,
                                 null_precedence, 
                                 mr, 
                                 stream);
-      const auto merged_table_view = merged_table->view();
+      auto const merged_table_view = merged_table->view();
       merge_queue.emplace(merged_table_view, std::move(merged_table));
-    }
-    if (merge_queue.empty()) {
-      // TODO add test case
-      return std::make_unique<cudf::experimental::table>();
     }
 
     return std::move(merge_queue_item(merge_queue).table());
