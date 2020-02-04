@@ -1,11 +1,10 @@
 # cuDF 0.13.0 (Date TBD)
 
 ## New Features
-- PR #3681 Adding cudf::experimental::boolean_mask_scatter
-
 - PR #3693 add string support, skipna to scan operation
 - PR #3662 Define and implement `shift`.
 - PR #3861 Added Series.sum feature for String
+- PR #3681 Adding cudf::experimental::boolean_mask_scatter
 
 ## Improvements
 
