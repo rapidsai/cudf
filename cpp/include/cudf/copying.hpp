@@ -503,6 +503,43 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs, column_view const& 
                                     rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
 /**
+* @brief Creates a new table by shifting all values in all columns by an offset.
+*
+* Elements will be determined by `output[col][idx] = input[col][idx - offset]`.
+* Some elements in the output may be indeterminable from the input. For those
+* elements, the value will be determined by `fill_values`.
+*
+* Examples
+* -------------------------------------------------
+* input      = { [0, 1, 2, 3, 4], [5, 4, 3, 2, 1] }
+* offset     = 3
+* fill_values = { @, 7 }
+* return     = { [@, @, @, 0, 1], [7, 7, 7, 5, 4] }
+* -------------------------------------------------
+* input      = { [0, 1, 2, 3, 4], [5, 4, 3, 2, 1] }
+* offset     = -2
+* fill_values = { 2, @ }
+* return     = { [2, 3, 4, 2, 2], [3, 2, 1, @, @] }
+*
+* @note if a column is nullable, it's output column will be nullable.
+* @note if a fill value is null, it's output column will be nullable.
+*
+* @param input       Table containing columns to be shifted.
+* @param offset      The offset by which to shift the input.
+* @param fill_values Fill value for indeterminable outputs.
+*
+* @throw cudf::logic_error if @p input dtype is not fixed-with.
+* @throw cudf::logic_error if @p fill_values size differs from input num columns.
+* @throw cudf::logic_error if @p fill_values dtype does not match @p input dtype.
+*/
+std::unique_ptr<table> shift(table_view const& input,
+                             size_type offset,
+                             std::vector<std::reference_wrapper<scalar>> const& fill_values,
+                             rmm::mr::device_memory_resource *mr =
+                               rmm::mr::get_default_resource(),
+                             cudaStream_t stream = 0);
+
+/*
  * @brief   Returns a new column, where each element is selected from either @p lhs or 
  *          @p rhs based on the value of the corresponding element in @p boolean_mask
  *

@@ -2,6 +2,8 @@
 
 ## New Features
 
+- PR #3693 add string support, skipna to scan operation
+- PR #3662 Define and implement `shift`.
 - PR #3861 Added Series.sum feature for String
 
 ## Improvements
@@ -14,6 +16,7 @@
 - PR #3910 Adding sinh, cosh, tanh, asinh, acosh, atanh cube root and rint unary support.
 - PR #3972 Add Java bindings for left_semi_join and left_anti_join
 - PR #3975 Simplify and generalize data handling in `Buffer`
+- PR #3985 Update RMM include files and remove extraneously included header files.
 - PR #3601 Port UDF functionality for rolling windows to libcudf++
 - PR #3911 Adding null boolean handling for copy_if_else
 - PR #4003 Drop old `to_device` utility wrapper function
@@ -41,6 +44,7 @@
 - PR #4000 Fix dask_cudf sort_values performance for single partitions
 - PR #4007 Fix for copy_bitmask issue with uninitialized device_buffer
 - PR #4037 Fix JNI quantile compile issue
+- PR #4052 Fix for round-robin when num_partitions divides nrows.
 - PR #4049 Fix `cudf::split` issue returning one less than expected column vectors
 
 
@@ -365,6 +369,7 @@
 - PR #3500 cudf::fill()/cudf::repeat() support for strings columns.
 - PR #3438 Update scalar and scalar_device_view to better support strings
 - PR #3414 Add copy_range function for strings column
+- PR #3685 Add string support to contiguous_split.
 - PR #3471 Add scalar/column, column/scalar and scalar/scalar overloads to copy_if_else.
 - PR #3451 Add support for implicit typecasting of join columns
 
