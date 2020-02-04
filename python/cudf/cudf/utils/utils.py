@@ -326,39 +326,67 @@ class cached_property:
             return value
 
 
-class OrderedColumnDict(OrderedDict):
+class ColumnValuesMappingMixin:
     """
-    An OrderedDict with the following restrictions:
-
-    - All values must be of type ColumnBase (or its derivatives)
-    - All values must be of the same length
+    Coerce provided values for the mapping to Columns.
     """
 
     def __setitem__(self, key, value):
-        from cudf.core.column import ColumnBase
+        from cudf.core.column import as_column
 
-        if not isinstance(value, ColumnBase):
-            raise TypeError(
-                f"Cannot insert object of type "
-                f"{value.__class__.__name__} into OrderedColumnDict"
-            )
-
-        if self.first is not None and len(self.first) > 0:
-            if len(value) != len(self.first):
-                raise ValueError(
-                    f"Cannot insert Column of different length "
-                    "into OrderedColumnDict"
-                )
-
+        value = as_column(value)
         super().__setitem__(key, value)
 
-    @property
-    def first(self):
-        """
-        Returns the first value if self is non-empty;
-        returns None otherwise.
-        """
-        if len(self) == 0:
-            return None
+
+class EqualLengthValuesMappingMixin:
+    """
+    Require all values in the mapping to hacve the same length.
+    """
+
+    def __setitem__(self, key, value):
+        if len(self) > 0:
+            first = next(iter(self.values()))
+            if len(value) != len(first):
+                raise ValueError("All values must be of equal length")
+        super().__setitem__(key, value)
+
+
+class NestMissingMappingMixin:
+    """
+    Make missing values of a mapping empty instances
+    of the same type as the mapping.
+    """
+
+    def __missing__(self, key):
+        self[key] = self.__class__()
+        return self[key]
+
+
+class NestTupleKeysMappingMixin:
+    """
+    Perform nested indexing when provided tuple keys.
+    """
+
+    def __getitem__(self, key):
+        if isinstance(key, tuple):
+            d = self
+            for k in key[:-1]:
+                d = d[k]
+            return d.__getitem__(key[-1])
         else:
-            return next(iter(self.values()))
+            super().__getitem__(key)
+
+    def __setitem__(self, key, value):
+        if isinstance(key, tuple):
+            d = self
+            for k in key[:-1]:
+                d = d[k]
+            d.__setitem__(key[-1], value)
+        else:
+            super().__setitem__(key, value)
+
+
+class OrderedColumnDict(
+    ColumnValuesMappingMixin, EqualLengthValuesMappingMixin, OrderedDict
+):
+    pass
