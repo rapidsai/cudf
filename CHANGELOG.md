@@ -2,9 +2,11 @@
 
 ## New Features
 
+- PR #3577 Add initial dictionary support to column classes
 - PR #3693 add string support, skipna to scan operation
 - PR #3662 Define and implement `shift`.
 - PR #3861 Added Series.sum feature for String
+
 
 ## Improvements
 
@@ -29,6 +31,7 @@
 - PR #3880 Add aggregation infrastructure support for reduction
 - PR #4021 Change quantiles signature for clarity.
 - PR #4062 Improve how java classifiers are produced
+- PR #4038 JNI and Java support for is_nan and is_not_nan
 
 ## Bug Fixes
 
@@ -48,6 +51,8 @@
 - PR #4037 Fix JNI quantile compile issue
 - PR #4054 Fixed JNI to deal with reduction API changes
 - PR #4052 Fix for round-robin when num_partitions divides nrows.
+- PR #4049 Fix `cudf::split` issue returning one less than expected column vectors
+
 
 # cuDF 0.12.0 (Date TBD)
 

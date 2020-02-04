@@ -189,6 +189,19 @@ clamper (column_view const& input,
                                 hi_itr, hi_replace_itr, mr, stream);
 }
 
+template <typename T, typename ScalarIterator>
+std::enable_if_t<std::is_same<T, dictionary32>::value, std::unique_ptr<cudf::column>>
+clamper (column_view const& input,
+         ScalarIterator const& lo_itr,
+         ScalarIterator const& lo_replace_itr,
+         ScalarIterator const& hi_itr,
+         ScalarIterator const& hi_replace_itr,
+         rmm::mr::device_memory_resource* mr,
+         cudaStream_t stream) {
+
+    CUDF_FAIL("dictionary type not supported");
+}
+
 } //namespace
 
 template<typename T, typename ScalarIterator>
