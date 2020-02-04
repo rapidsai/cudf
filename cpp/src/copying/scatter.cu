@@ -333,7 +333,7 @@ std::vector<std::unique_ptr<table>> scatter_to_tables(
 }
 
 std::unique_ptr<column> boolean_mask_scatter(
-    column_view const& source, column_view const& target,
+    column_view const& input, column_view const& target,
     column_view const& boolean_mask,
     rmm::mr::device_memory_resource *mr,
     cudaStream_t stream) {
@@ -350,7 +350,7 @@ std::unique_ptr<column> boolean_mask_scatter(
     // The scatter map is actually a table with only one column, which is scatter map.
     auto scatter_map = detail::apply_boolean_mask(table_view{{indices->view()}}, boolean_mask,
                                                   mr, stream);
-    auto output_table =  detail::scatter(table_view{{source}}, scatter_map->get_column(0).view(),
+    auto output_table =  detail::scatter(table_view{{input}}, scatter_map->get_column(0).view(),
                                              table_view{{target}}, false, mr, stream);
 
     // There is only one column in output_table
@@ -358,37 +358,36 @@ std::unique_ptr<column> boolean_mask_scatter(
 }
 
 std::unique_ptr<column> boolean_mask_scatter(
-    scalar const& source, column_view const& target,
+    scalar const& input, column_view const& target,
     column_view const& boolean_mask,
     rmm::mr::device_memory_resource *mr,
     cudaStream_t stream) {
   
-    return detail::copy_if_else(source, target, boolean_mask, mr, stream);
+    return detail::copy_if_else(input, target, boolean_mask, mr, stream);
 }
 
 std::unique_ptr<table> boolean_mask_scatter(
-    table_view const& source, table_view const& target,
+    table_view const& input, table_view const& target,
     column_view const& boolean_mask,
     rmm::mr::device_memory_resource *mr,
     cudaStream_t stream) {
 
-    CUDF_EXPECTS(source.num_columns() == target.num_columns(), "Mismatch in number of source columns and target columns");
+    CUDF_EXPECTS(input.num_columns() == target.num_columns(), "Mismatch in number of input columns and target columns");
     CUDF_EXPECTS(boolean_mask.size() == target.num_rows(), "Boolean mask size and number of target rows mismatch");
     CUDF_EXPECTS(boolean_mask.type().id() == BOOL8, "Mask must be of Boolean type");
-    std::vector<cudf::size_type> column_indices(target.num_columns());
-    std::iota(std::begin(column_indices), std::end(column_indices), 0);
-    // Count valid pair of source and columns as per type at each column index i
-    auto valid_pair_count = std::count_if(column_indices.begin(), column_indices.end(), [&source, &target](auto index){
-                return ((source.column(index).type().id()) == (target.column(index).type().id()));
-                });
-   CUDF_EXPECTS(target.num_columns() == valid_pair_count,"Type mismatch in source scalar and target column");
+    // Count valid pair of input and columns as per type at each column index i
+    CUDF_EXPECTS(std::all_of(thrust::counting_iterator<size_type>(0),
+                                        thrust::counting_iterator<size_type>(target.num_columns()),
+                                        [&input, &target](auto index){
+                                            return ((input.column(index).type().id()) == (target.column(index).type().id()));
+                                        }), "Type mismatch in input column and target column");
 
     if (target.num_rows() != 0) {
         std::vector<std::unique_ptr<column>> out_columns(target.num_columns());
-        std::transform(source.begin(), source.end(), target.begin(),
+        std::transform(input.begin(), input.end(), target.begin(),
                 out_columns.begin(),
-                [&boolean_mask, mr, stream] (auto const& source_column, auto const& target_column){
-                return boolean_mask_scatter(source_column, target_column,
+                [&boolean_mask, mr, stream] (auto const& input_column, auto const& target_column){
+                return boolean_mask_scatter(input_column, target_column,
                         boolean_mask, mr, stream);});
 
         return std::make_unique<experimental::table>(std::move(out_columns));
@@ -398,27 +397,26 @@ std::unique_ptr<table> boolean_mask_scatter(
 }
 
 std::unique_ptr<table> boolean_mask_scatter(
-    std::vector<std::unique_ptr<scalar>> const& source,
+    std::vector<std::unique_ptr<scalar>> const& input,
     table_view const& target,
     column_view const& boolean_mask,
     rmm::mr::device_memory_resource *mr,
     cudaStream_t stream) {
 
-    CUDF_EXPECTS(static_cast<size_type>(source.size()) == target.num_columns(), "Mismatch in number of scalars and target columns");
+    CUDF_EXPECTS(static_cast<size_type>(input.size()) == target.num_columns(), "Mismatch in number of scalars and target columns");
     CUDF_EXPECTS(boolean_mask.size() == target.num_rows(), "Boolean mask size and number of target rows mismatch");
     CUDF_EXPECTS(boolean_mask.type().id() == BOOL8, "Mask must be of Boolean type");
 
-    std::vector<cudf::size_type> column_indices(target.num_columns());
-    std::iota(std::begin(column_indices), std::end(column_indices), 0);
-    // Count valid pair of source and columns as per type at each column/scalar index i
-    auto valid_pair_count = std::count_if(column_indices.begin(), column_indices.end(), [&source, &target](auto index){
-                return ((source[index]->type().id()) == (target.column(index).type().id()));
-                });
-   CUDF_EXPECTS(target.num_columns() == valid_pair_count,"Type mismatch in source scalar and target column");
+    // Count valid pair of input and columns as per type at each column/scalar index i
+    CUDF_EXPECTS(std::all_of(thrust::counting_iterator<size_type>(0),
+                                        thrust::counting_iterator<size_type>(target.num_columns()),
+                                        [&input, &target](auto index){
+                                            return ((input[index]->type().id()) == (target.column(index).type().id()));
+                                        }), "Type mismatch in input scalar and target column");
 
     if (target.num_rows() != 0) {
         std::vector<std::unique_ptr<column>> out_columns(target.num_columns());
-        std::transform(source.begin(), source.end(), target.begin(),
+        std::transform(input.begin(), input.end(), target.begin(),
                 out_columns.begin(),
                 [&boolean_mask, mr, stream] (auto const& scalar, auto const& target_column){
                 return boolean_mask_scatter(*(scalar.get()), target_column,
@@ -435,40 +433,35 @@ std::unique_ptr<table> boolean_mask_scatter(
 std::unique_ptr<table> scatter(
     table_view const& source, column_view const& scatter_map,
     table_view const& target, bool check_bounds,
-    rmm::mr::device_memory_resource* mr)
-{
+    rmm::mr::device_memory_resource* mr) {
   return detail::scatter(source, scatter_map, target, check_bounds, mr);
 }
 
 std::unique_ptr<table> scatter(
     std::vector<std::unique_ptr<scalar>> const& source, column_view const& indices,
     table_view const& target, bool check_bounds,
-    rmm::mr::device_memory_resource* mr)
- {
+    rmm::mr::device_memory_resource* mr) {
   return detail::scatter(source, indices, target, check_bounds, mr);
 }
 
 std::vector<std::unique_ptr<table>> scatter_to_tables(
     table_view const& input, column_view const& partition_map,
-    rmm::mr::device_memory_resource* mr)
-{
+    rmm::mr::device_memory_resource* mr) {
   return detail::scatter_to_tables(input, partition_map, mr);
 }
 
 std::unique_ptr<table> boolean_mask_scatter(
-    table_view const& source, table_view const& target,
+    table_view const& input, table_view const& target,
     column_view const& boolean_mask,
-    rmm::mr::device_memory_resource *mr)
-{
-    return detail::boolean_mask_scatter(source, target, boolean_mask, mr);
+    rmm::mr::device_memory_resource *mr) {
+    return detail::boolean_mask_scatter(input, target, boolean_mask, mr);
 }
 
 std::unique_ptr<table> boolean_mask_scatter(
-    std::vector<std::unique_ptr<scalar>> const& source, table_view const& target,
+    std::vector<std::unique_ptr<scalar>> const& input, table_view const& target,
     column_view const& boolean_mask,
-    rmm::mr::device_memory_resource *mr)
-{
-    return detail::boolean_mask_scatter(source, target, boolean_mask, mr);
+    rmm::mr::device_memory_resource *mr) {
+    return detail::boolean_mask_scatter(input, target, boolean_mask, mr);
 }
 
 }  // namespace experimental

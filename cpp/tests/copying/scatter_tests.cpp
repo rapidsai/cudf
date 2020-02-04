@@ -762,6 +762,17 @@ TEST_F(BooleanMaskScatterFails, NumberOfColumnMismatch)
     EXPECT_THROW(cudf::experimental::boolean_mask_scatter(source_table, target_table, mask), cudf::logic_error);
 }
 
+TEST_F(BooleanMaskScatterFails, MoreTruesInMaskThanSourceSize)
+{
+    cudf::test::fixed_width_column_wrapper<int32_t> source({1, 5, 6, 8, 9});
+    cudf::test::fixed_width_column_wrapper<int32_t> target(                     {   2,     2,     3,     4,   11,   12,     7,    7,   10,    10});
+    cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> mask({true,  false, true, false, true, true, false, true, true});
+    auto source_table = cudf::table_view({source, source});
+    auto target_table = cudf::table_view({target});
+
+    EXPECT_THROW(cudf::experimental::boolean_mask_scatter(source_table, target_table, mask), cudf::logic_error);
+}
+
 template <typename T>
 struct BooleanMaskScalarScatter : public cudf::test::BaseFixture {
 

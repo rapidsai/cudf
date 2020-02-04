@@ -598,8 +598,12 @@ std::unique_ptr<column> copy_if_else( scalar const& lhs, scalar const& rhs, colu
                                     rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Scatters dense `i`th buffer/column from `source` of size N to `i`th` target` column of
- * size K (K >= N) as per `boolean_mask` of size K.
+ * @brief Scatters rows from the input table to rows of the output corresponding
+ * to true values in a boolean mask.
+ *
+ * The `i`th row of `input` will be written to the output table at the location
+ * of the `i`th true value in `boolean_mask`. All other rows in the output will
+ * equal the same row in `target`.
  *
  * `boolean_mask` should have N number of `true`s. If boolean mask is `true`,
  * corresponding value in target is updated with value from corresponding
@@ -615,26 +619,28 @@ std::unique_ptr<column> copy_if_else( scalar const& lhs, scalar const& rhs, colu
  * @throw  cudf::logic_error if source.num_columns() != target.num_columns()
  * @throws cudf::logic_error if any `i`th source_column.type() != `i`th target_column.type()
  * @throws cudf::logic_error if boolean_mask.type() != bool
- * @throws cudf::logic_error if boolean_mask.size() != target.size()
+ * @throws cudf::logic_error if boolean_mask.size() != target.num_rows()
+ * @throws cudf::logic_error if number of `true` in `boolean_mask` > source.num_rows()
  *
- * @param[in] source table_view (set of dense buffer) which gets scattered
- * @param[in] target table_view which gets updated with scattered values from `source`
- * @param[in] boolean_mask column_view which is a scatter_map.
+ * @param[in] input table_view (set of dense columns) to scatter
+ * @param[in] target table_view to modify with scattered values from `input`
+ * @param[in] boolean_mask column_view which acts as boolean mask.
  * @param[in] mr Optional, The resource to use for all returned allocations
  *
  * @returns Returns a table by scattering `source` into `target` as per `boolean_mask`.
  */
 std::unique_ptr<table> boolean_mask_scatter(
-    table_view const& source, table_view const& target,
+    table_view const& input, table_view const& target,
     column_view const& boolean_mask,
     rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Scatters scalar values from `source` to `target` of size K as per
- * `boolean_mask` of size K.
+ * @brief Scatters scalar values to rows of the output corresponding
+ * to true values in a boolean mask.
  *
- * If boolean mask is `true`, corresponding value in target is updated
- * with value from `source`, else it is left untouched.
+ * The `i`th scalar in `input` will be written to all columns of the output
+ * table at the location of the `i`th true value in `boolean_mask`.
+ * All other rows in the output will equal the same row in `target`.
  *
  * Example:
  * source: {11}
@@ -648,15 +654,15 @@ std::unique_ptr<table> boolean_mask_scatter(
  * @throws cudf::logic_error if boolean_mask.type() != bool
  * @throws cudf::logic_error if boolean_mask.size() != target.size()
  *
- * @param[in] source scalar which gets scattered
- * @param[in] target table_view which gets updated with scattered values from `source`
- * @param[in] boolean_mask column_view which is a scatter_map.
+ * @param[in] input scalars to scatter
+ * @param[in] target table_view to modify with scattered values from `input`
+ * @param[in] boolean_mask column_view which acts as boolean mask.
  * @param[in] mr Optional, The resource to use for all returned allocations
  *
  * @returns Returns a table by scattering `source` into `target` as per `boolean_mask`.
  */
  std::unique_ptr<table> boolean_mask_scatter(
-    std::vector<std::unique_ptr<scalar>> const& source, table_view const& target,
+    std::vector<std::unique_ptr<scalar>> const& input, table_view const& target,
     column_view const& boolean_mask,
     rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
