@@ -1,27 +1,21 @@
 import itertools
 import random
 from abc import ABCMeta, abstractmethod
-from collections import OrderedDict, defaultdict
 
 import numpy as np
 import pandas as pd
 
+from cudf.utils.utils import *
 from cudf.utils.utils import cached_property
 
 
-class NestedOrderedDict(OrderedDict):
-    def __missing__(self, key):
-        self[key] = NestedOrderedDict()
-        return self[key]
-
-    def __setitem__(self, key, value):
-        if isinstance(key, tuple):
-            d = self
-            for k in key[:-1]:
-                d = d[k]
-            d.__setitem__(key[-1], value)
-        else:
-            super().__setitem__(key, value)
+class NestedOrderedDict(
+    NestTupleKeysMappingMixin,
+    EqualLengthValuesMappingMixin,
+    NestMissingMappingMixin,
+    OrderedDict,
+):
+    pass
 
 
 class ColumnAccessor(metaclass=ABCMeta):
@@ -104,12 +98,19 @@ def _compare_keys(key, target):
     return True
 
 
-def _flatten_keys(d, parents=[]):
-    for k, v in d.items():
-        if not isinstance(v, NestedOrderedDict):
-            yield tuple(parents + [k])
-        else:
-            yield from _flatten_keys(v, parents + [k])
+def _flatten_keys(d):
+    """
+    Flatten the keys of a NestedOrderedDict
+    """
+
+    def _flatten(d, parents=[]):
+        for k, v in d.items():
+            if not isinstance(v, NestedOrderedDict):
+                yield tuple(parents + [k])
+            else:
+                yield from _flatten(v, parents + [k])
+
+    return _flatten(d)
 
 
 if __name__ == "__main__":
