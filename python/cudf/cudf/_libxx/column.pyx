@@ -1,3 +1,10 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
+# cython: profile=False
+# distutils: language = c++
+# cython: embedsignature = True
+# cython: language_level = 3
+
 import numpy as np
 import pandas as pd
 import cython
@@ -113,7 +120,9 @@ cdef class Column:
         """
         Returns the pointer to the data buffer accounting for the offset
         """
-        return self.data.ptr + (offset * self.dtype.itemsize)
+        if self.data is None:
+            return 0
+        return self.data.ptr + (self.offset * self.dtype.itemsize)
 
     @property
     def nullable(self):
@@ -139,13 +148,14 @@ cdef class Column:
         """
         Returns the pointer to the validity buffer accounting for the offset
         """
-        if self.offset == 0 and self.mask is not None:
+        if self.mask is None:
+            return 0
+        elif self.mask is not None and self.offset == 0:
             return self.mask.ptr
-        elif self.mask is None:
-            raise RuntimeError("No validity buffer is allocated")
-        raise RuntimeError(
-            "Cannot get the pointer to a mask with a nonzero offset"
-        )
+        else:
+            raise RuntimeError(
+                "Cannot get the pointer to a mask with a nonzero offset"
+            )
 
     def _set_mask(self, value):
         self._mask = value
