@@ -2482,7 +2482,7 @@ def test_series_to_gpu_array(nan_value):
 
     s = Series([0, 1, None, 3])
     np.testing.assert_array_equal(
-        s.to_array(nan_value), s.to_gpu_array(nan_value).copy_to_host()
+        s.to_array(nan_value), cupy.asnumpy(s.to_gpu_array(nan_value))
     )
 
 
@@ -3723,7 +3723,7 @@ def test_isin_index(data, values):
     got = gsr.index.isin(values)
     expected = psr.index.isin(values)
 
-    assert_eq(got._column.data_array_view.copy_to_host(), expected)
+    assert_eq(cupy.asnumpy(got._column.data_array_view), expected)
 
 
 def test_constructor_properties():
