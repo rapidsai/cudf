@@ -2499,7 +2499,6 @@ class DataFrame(Frame):
         Returns
         -------
         merged : DataFrame
-        
         Examples
         --------
         >>> import cudf
