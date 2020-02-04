@@ -37,30 +37,24 @@ namespace detail
       std::is_same<AggOp, DeviceMax>::value ||
       std::is_same<AggOp, DeviceCount>::value;
 
-    constexpr bool timestamp_mean =
-      is_mean &&
-      cudf::is_timestamp<ColumnType>();
-
-    constexpr bool timestamp_sum =
-        std::is_same<AggOp, DeviceSum>::value &&
-        cudf::is_timestamp<ColumnType>();
-    
-    constexpr bool is_operation_supported == (op == experimental::aggregation::SUM) or
+    constexpr bool is_operation_supported = (op == experimental::aggregation::SUM) or
                                              (op == experimental::aggregation::MIN) or
                                              (op == experimental::aggregation::MAX) or
                                              (op == experimental::aggregation::COUNT) or
-                                             (op == experimental::aggregation::MEAN)
+                                             (op == experimental::aggregation::MEAN);
 
-    constexpr bool is_valid_timestamp_agg = !timestamp_mean and !timestamp_sum and cudf::is_timestamp<ColumnType>();
+    constexpr bool is_valid_timestamp_agg = cudf::is_timestamp<ColumnType>() and
+                                             (op == experimental::aggregation::MIN or
+                                              op == experimental::aggregation::MAX or 
+                                              op == experimental::aggregation::COUNT);
 
 
-    constexpr bool is_valid_numeric_agg = cudf::is_numeric<ColumnType>() and
-                                          comparable_countable_op and 
-                                          is_operation_supported
+    constexpr bool is_valid_numeric_agg = (cudf::is_numeric<ColumnType>() or
+                                          is_comparable_countable_op) and 
+                                          is_operation_supported;
 
     constexpr bool is_valid_rolling_agg = !std::is_same<ColumnType, cudf::string_view>::value and
-                                          (is_valid_timestamp_agg or is_valid_numeric_agg)
-
+                                          (is_valid_timestamp_agg or is_valid_numeric_agg);
 
     return is_valid_rolling_agg and
            cudf::experimental::detail::is_valid_aggregation<ColumnType, op>();
