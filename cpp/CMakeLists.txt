@@ -540,6 +540,7 @@ add_library(cudf
             src/utilities/nvtx/legacy/nvtx_utils.cpp
             src/copying/copy.cpp
             src/copying/scatter.cu
+            src/copying/shift.cu
             src/copying/copy.cu
             src/copying/slice.cpp
             src/copying/split.cpp
