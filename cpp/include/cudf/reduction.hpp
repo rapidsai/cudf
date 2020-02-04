@@ -18,6 +18,7 @@
 
 #include <cudf/cudf.h>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/aggregation.hpp>
 
 namespace cudf {
 namespace experimental {
@@ -31,23 +32,6 @@ enum class scan_op {
   MIN,      ///< Computes the prefix scan of maximum operation of all values for the column
   MAX,      ///< Computes the prefix scan of maximum operation of all values for the column
   PRODUCT,  ///< Computes the prefix scan of multiplicative product operation of all values for the column
-};
-
-/**
- * @brief These enums indicate the supported reduction operations that can be
- * performed on a column
- */
-enum class reduction_op {
-  SUM = 0,        ///< Computes the sum of all values in the column
-  MIN,            ///< Computes the minimum of all values in the column
-  MAX,            ///< Computes the maximum of all values in the column
-  PRODUCT,        ///< Computes the multiplicative product of all values in the column
-  SUMOFSQUARES,   ///< Computes the sum of squares of the values in the column
-  MEAN,           ///< Computes the arithmetic mean of the values in the column
-  VAR,            ///< Computes the variance of the values in the column
-  STD,            ///< Computes the standard deviation of the values in the column
-  ANY,            ///< Computes to true if any of the values are non-zero/true
-  ALL,            ///< Computes to true if all of the values are non-zero/true
 };
 
 /** --------------------------------------------------------------------------*
@@ -70,18 +54,17 @@ enum class reduction_op {
  *   eg.(timestamp, string...), the same type must be specified.
  *
  * @param[in] col Input column view
- * @param[in] op  The operator applied by the reduction
+ * @param[in] agg unique_ptr of the aggregation operator applied by the reduction
  * @param[in] output_dtype  The computation and output precision.
  * @params[in] mr The resource to use for all allocations
- * @param[in] ddof Delta Degrees of Freedom: the divisor used in calculation of
- * `std` and `var` is `N - ddof`, where `N` is the population size.`
  * @returns  cudf::scalar the result value
  * If the reduction fails, the member is_valid of the output scalar
  * will contain `false`.
  * ----------------------------------------------------------------------------**/
 std::unique_ptr<scalar> reduce(
-    const column_view& col, reduction_op op, data_type output_dtype,
-    cudf::size_type ddof = 1,
+    const column_view& col, 
+    std::unique_ptr<aggregation> const &agg,
+    data_type output_dtype,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /** --------------------------------------------------------------------------*
@@ -99,7 +82,7 @@ std::unique_ptr<scalar> reduce(
  * @returns unique pointer to new output column
  * ----------------------------------------------------------------------------**/
 std::unique_ptr<column> scan(
-    const column_view& input, scan_op op, bool inclusive,
+    const column_view& input, scan_op op, bool inclusive, bool skipna=true,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 }  // namespace experimental

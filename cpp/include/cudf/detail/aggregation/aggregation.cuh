@@ -51,7 +51,23 @@ struct corresponding_operator<aggregation::MAX> {
   using type = DeviceMax;
 };
 template <>
+struct corresponding_operator<aggregation::ANY> {
+  using type = DeviceMax;
+};
+template <>
+struct corresponding_operator<aggregation::ALL> {
+  using type = DeviceMin;
+};
+template <>
 struct corresponding_operator<aggregation::SUM> {
+  using type = DeviceSum;
+};
+template <>
+struct corresponding_operator<aggregation::PRODUCT> {
+  using type = DeviceProduct;
+};
+template <>
+struct corresponding_operator<aggregation::SUM_OF_SQUARES> {
   using type = DeviceSum;
 };
 template <>

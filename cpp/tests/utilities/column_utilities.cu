@@ -30,6 +30,7 @@
 #include <thrust/logical.h>
 
 #include <gmock/gmock.h>
+#include <numeric>
 
 namespace cudf {
 namespace test {
@@ -361,14 +362,25 @@ std::string to_string(cudf::column_view const& col, std::string const& delimiter
   std::ostringstream buffer;
   std::vector<std::string> h_data = to_strings(col);
 
-  std::copy(h_data.begin(), h_data.end() - 1, std::ostream_iterator<std::string>(buffer, delimiter.c_str()));
-  buffer << h_data.back();
+  std::copy(h_data.begin(), h_data.end() - (!h_data.empty()), std::ostream_iterator<std::string>(buffer, delimiter.c_str()));
+  if (!h_data.empty())
+    buffer << h_data.back();
 
   return buffer.str();
 }
 
 void print(cudf::column_view const& col, std::ostream &os, std::string const& delimiter) {
   os << to_string(col, delimiter);
+}
+
+bool validate_host_masks(std::vector<bitmask_type> const& expected_mask,
+                         std::vector<bitmask_type> const& got_mask,
+                         size_type number_of_elements) {
+
+    return std::all_of(thrust::make_counting_iterator(0), thrust::make_counting_iterator(number_of_elements),
+            [&expected_mask, &got_mask](auto index){
+                return cudf::bit_is_set(expected_mask.data(), index) == cudf::bit_is_set(got_mask.data(), index);
+            });
 }
 
 }  // namespace test
