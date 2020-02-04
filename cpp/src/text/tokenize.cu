@@ -23,7 +23,6 @@
 #include <cudf/utilities/error.hpp>
 #include <text/utilities/tokenize_ops.cuh>
 
-#include <vector>
 #include <thrust/transform.h>
 
 namespace cudf
@@ -32,7 +31,7 @@ namespace nvtext
 {
 namespace detail
 {
-namespace 
+namespace
 {
 
 // common pattern for token_count functions
@@ -82,6 +81,9 @@ std::unique_ptr<column> tokenize_fn( size_type strings_count, Tokenizer ttfn,
 
 } // namespace
 
+// detail functions
+
+// zero or more character tokenizer
 std::unique_ptr<column> tokenize( strings_column_view const& strings,
                                   string_scalar const& delimiter = string_scalar(""),
                                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
@@ -93,6 +95,7 @@ std::unique_ptr<column> tokenize( strings_column_view const& strings,
     return tokenize_fn( strings.size(), tokenator_fn{*strings_column,d_delimiter}, mr, stream );
 }
 
+// zero or more character token counter
 std::unique_ptr<column> token_count( strings_column_view const& strings,
                                      string_scalar const& delimiter = string_scalar(""),
                                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
@@ -104,7 +107,7 @@ std::unique_ptr<column> token_count( strings_column_view const& strings,
     return token_count_fn( strings.size(), tokenator_fn{*strings_column,d_delimiter}, mr, stream );
 }
 
-//
+// one or more string delimiter tokenizer
 std::unique_ptr<column> tokenize( strings_column_view const& strings,
                                   strings_column_view const& delimiters,
                                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
@@ -121,6 +124,7 @@ std::unique_ptr<column> tokenize( strings_column_view const& strings,
                         mr, stream );
 }
 
+// one or more string delimiter token counter
 std::unique_ptr<column> token_count( strings_column_view const& strings,
                                      strings_column_view const& delimiters,
                                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
