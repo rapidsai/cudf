@@ -544,6 +544,16 @@ class DataFrame(Frame):
                             self._index = as_index(value.index)
                         elif len(value) > 0:
                             self._index = RangeIndex(start=0, stop=len(value))
+                        value = column.as_column(value)
+                        new_data = self._data.__class__()
+                        for key in self._data:
+                            if key == arg:
+                                new_data[key] = value
+                            else:
+                                new_data[key] = column.column_empty(
+                                    len(value), masked=True
+                                )
+                        self._data = new_data
                     elif isinstance(value, (pd.Series, Series)):
                         value = Series(value)._align_to_index(
                             self._index, how="right", allow_non_unique=True
@@ -1682,13 +1692,15 @@ class DataFrame(Frame):
                 self._index = as_index(value.index)
             elif len(value) > 0:
                 self._index = RangeIndex(start=0, stop=len(value))
+                new_data = self._data.__class__()
                 if num_cols != 0:
                     for col_name in self._data:
-                        self._data[col_name] = column.column_empty_like(
+                        new_data[col_name] = column.column_empty_like(
                             self._data[col_name],
                             masked=True,
                             newsize=len(value),
                         )
+                self._data = new_data
         elif isinstance(value, (pd.Series, Series)):
             value = Series(value)._align_to_index(self._index, how="right")
 
