@@ -23,6 +23,7 @@
 #include <cudf/utilities/error.hpp>
 #include <strings/utilities.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/detail/utilities/cuda.cuh>
 
 #include <vector>
 #include <thrust/transform.h>
@@ -386,23 +387,14 @@ struct whitespace_rsplit_tokenizer_fn
     }
 };
 
-// TODO: copied from cuDF PR 3685 (should include instead of duplicating once
-// PR 3685 is merged)
-#if 1
-template <typename T>
-__device__ inline T round_up_pow2(T number_to_round, T modulus) {
-    return (number_to_round + (modulus - 1)) & -modulus;
-}
-
 // align all column size allocations to this boundary so that all output column buffers
 // start at that alignment.
 static constexpr size_type split_align = 64;
-#endif
 
 __device__ size_type compute_memory_size(
     size_type token_count, size_type token_size_sum) {
-  return round_up_pow2(token_size_sum, split_align) +
-    round_up_pow2(
+  return cudf::experimental::detail::round_up_pow2(token_size_sum, split_align) +
+    cudf::experimental::detail::round_up_pow2(
       (token_count + 1) * static_cast<size_type>(sizeof(size_type)),
       split_align);
 }
@@ -536,7 +528,8 @@ struct token_copier_fn {
 
     auto memory_ptr = static_cast<char*>(info.memory_ptr);
 
-    auto const char_buf_size = round_up_pow2(info.token_size_sum, split_align);
+    auto const char_buf_size =
+      cudf::experimental::detail::round_up_pow2(info.token_size_sum, split_align);
     auto const char_buf_ptr = memory_ptr;
     memory_ptr += char_buf_size;
     auto const offset_buf_ptr = reinterpret_cast<size_type*>(memory_ptr);
@@ -729,7 +722,8 @@ struct whitespace_token_copier_fn {
 
     auto memory_ptr = static_cast<char*>(info.memory_ptr);
 
-    auto const char_buf_size = round_up_pow2(info.token_size_sum, split_align);
+    auto const char_buf_size =
+      cudf::experimental::detail::round_up_pow2(info.token_size_sum, split_align);
     auto const char_buf_ptr = memory_ptr;
     memory_ptr += char_buf_size;
     auto const offset_buf_ptr = reinterpret_cast<size_type*>(memory_ptr);
