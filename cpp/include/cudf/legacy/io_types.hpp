@@ -217,6 +217,8 @@ struct orc_read_arg {
   bool use_index = false;                   ///< Whether to use row index to speed-up reading
   bool use_np_dtypes = true;                ///< Whether to use numpy-compatible dtypes
   gdf_time_unit timestamp_unit = TIME_UNIT_NONE;  ///< Resolution of timestamps
+  bool decimals_as_float = true;            ///< Whether to convert decimals to float64
+  int forced_decimals_scale = -1;           /// Optional forced decimal scale; -1 is none
 
   explicit orc_read_arg(const source_info& src) : source(src) {}
 };

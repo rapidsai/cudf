@@ -1,6 +1,7 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 from contextlib import ExitStack as does_not_raise
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
@@ -8,11 +9,12 @@ import pyarrow as pa
 import pytest
 from numba import cuda
 
+import nvstrings
 import rmm
 
 from cudf import concat
 from cudf.core import DataFrame, Series
-from cudf.core.index import StringColumn, StringIndex
+from cudf.core.index import StringIndex
 from cudf.tests.utils import assert_eq
 
 data_list = [
@@ -50,6 +52,19 @@ def ps_gs(data, index):
     ps = pd.Series(data, index=index, dtype="str", name="nice name")
     gs = Series(data, index=index, dtype="str", name="nice name")
     return (ps, gs)
+
+
+@pytest.mark.parametrize("nbytes", [0, 2 ** 10, 2 ** 31 - 1, 2 ** 31, 2 ** 32])
+@patch.object(nvstrings.nvstrings, "byte_count")
+def test_from_nvstrings_nbytes(mock_byte_count, nbytes):
+    import cudf._libxx as libcudfxx
+
+    mock_byte_count.return_value = nbytes
+    expectation = raise_builder(
+        [nbytes > libcudfxx.MAX_STRING_COLUMN_BYTES], MemoryError
+    )
+    with expectation:
+        Series(nvstrings.to_device([""]))
 
 
 @pytest.mark.parametrize("construct", [list, np.array, pd.Series, pa.array])
@@ -120,7 +135,7 @@ def test_string_get_item(ps_gs, item):
         np.array([False] * 5),
         rmm.to_device(np.array([True] * 5)),
         rmm.to_device(np.array([False] * 5)),
-        list(np.random.randint(0, 2, 5).astype("bool")),
+        np.random.randint(0, 2, 5).astype("bool").tolist(),
         np.random.randint(0, 2, 5).astype("bool"),
         rmm.to_device(np.random.randint(0, 2, 5).astype("bool")),
     ],
@@ -826,6 +841,9 @@ def test_string_set_scalar(scalar):
 
 
 def test_string_index():
+    from cudf.core.column import as_column
+    from cudf.core.index import as_index
+
     pdf = pd.DataFrame(np.random.rand(5, 5))
     gdf = DataFrame.from_pandas(pdf)
     stringIndex = ["a", "b", "c", "d", "e"]
@@ -840,7 +858,7 @@ def test_string_index():
     pdf.index = stringIndex
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
-    stringIndex = StringColumn(["a", "b", "c", "d", "e"], name="name")
+    stringIndex = as_index(as_column(["a", "b", "c", "d", "e"]), name="name")
     pdf.index = stringIndex
     gdf.index = stringIndex
     assert_eq(pdf, gdf)

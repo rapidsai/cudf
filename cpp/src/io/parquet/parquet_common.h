@@ -25,6 +25,7 @@ namespace parquet {
  * @brief Basic data types in Parquet, determines how data is physically stored
  **/
 enum Type {
+  UNDEFINED_TYPE = -1, // Undefined for non-leaf nodes
   BOOLEAN = 0,
   INT32 = 1,
   INT64 = 2,
@@ -96,6 +97,7 @@ enum Compression {
  * @brief Compression codec used for compressed data pages
  **/
 enum FieldRepetitionType {
+  NO_REPETITION_TYPE = -1,
   REQUIRED = 0,   // This field is required (can not be null) and each record has exactly 1 value.
   OPTIONAL = 1,   // The field is optional (can be null) and each record has 0 or 1 values.
   REPEATED = 2,   // The field is repeated and can contain 0 or more values
@@ -109,6 +111,24 @@ enum PageType {
   INDEX_PAGE = 1,
   DICTIONARY_PAGE = 2,
   DATA_PAGE_V2 = 3,
+};
+
+/**
+ * @brief Thrift compact protocol struct field types
+ **/
+enum {
+    ST_FLD_TRUE = 1,
+    ST_FLD_FALSE = 2,
+    ST_FLD_BYTE = 3,
+    ST_FLD_I16 = 4,
+    ST_FLD_I32 = 5,
+    ST_FLD_I64 = 6,
+    ST_FLD_DOUBLE = 7,
+    ST_FLD_BINARY = 8,
+    ST_FLD_LIST = 9,
+    ST_FLD_SET = 10,
+    ST_FLD_MAP = 11,
+    ST_FLD_STRUCT = 12,
 };
 
 } // namespace parquet

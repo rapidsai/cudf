@@ -74,10 +74,10 @@ class reader::impl {
    * @param stripe Stripe index to select
    * @param stream Stream to use for memory allocation and kernels
    *
-   * @return The set of columns
+   * @return The set of columns along with metadata
    */
-  std::unique_ptr<table> read(int skip_rows, int num_rows, int stripe,
-                              cudaStream_t stream);
+  table_with_metadata read(int skip_rows, int num_rows, int stripe,
+                           cudaStream_t stream);
 
  private:
   /**
@@ -132,6 +132,8 @@ class reader::impl {
   bool _use_index = true;
   bool _use_np_dtypes = true;
   bool _has_timestamp_column = false;
+  bool _decimals_as_float = true;
+  int _decimals_as_int_scale = -1;
   data_type _timestamp_type{type_id::EMPTY};
 };
 

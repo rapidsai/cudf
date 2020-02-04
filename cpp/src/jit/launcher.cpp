@@ -30,7 +30,7 @@ namespace jit {
       const std::string& cuda_source,
       const std::vector<std::string>& header_names,
       const std::vector<std::string>& compiler_flags,
-      jitify_v2::file_callback_type file_callback,
+      jitify::experimental::file_callback_type file_callback,
       cudaStream_t stream
     )
      : cache_instance{cudf::jit::cudfJitCache::Instance()}

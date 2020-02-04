@@ -64,6 +64,16 @@ ColumnView slice(ColumnView const& input,
 }
 
 /**
+ * @copydoc cudf::experimental::contiguous_split
+ *
+ * @param stream Optional CUDA stream on which to execute kernels
+ **/
+std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& input,
+                                                      std::vector<size_type> const& splits,
+                                                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                                      cudaStream_t stream = 0);
+
+/**
  * @brief Creates an uninitialized new column of the specified size and same type as the `input`.
  * Supports only fixed-width types.
  *
@@ -80,6 +90,7 @@ std::unique_ptr<column> allocate_like(column_view const& input, size_type size,
                                       rmm::mr::device_memory_resource *mr =
                                           rmm::mr::get_default_resource(),
                                       cudaStream_t stream = 0);
+
 
 /**
  * @brief   Returns a new column, where each element is selected from either @p lhs or 
@@ -101,6 +112,70 @@ std::unique_ptr<column> allocate_like(column_view const& input, size_type size,
  * @returns new column with the selected elements
  */
 std::unique_ptr<column> copy_if_else( column_view const& lhs, column_view const& rhs, column_view const& boolean_mask,
+                                    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource(),
+                                    cudaStream_t stream = 0);
+
+/**
+ * @brief   Returns a new column, where each element is selected from either @p lhs or 
+ *          @p rhs based on the value of the corresponding element in @p boolean_mask
+ *
+ * Selects each element i in the output column from either @p rhs or @p lhs using the following rule:
+ *          output[i] = (boolean_mask[i]) ? lhs : rhs[i]
+ *         
+ * @throws cudf::logic_error if lhs and rhs are not of the same type 
+ * @throws cudf::logic_error if boolean mask is not of type bool8
+ * @throws cudf::logic_error if boolean mask is not of the same length as rhs  
+ * @param[in] left-hand scalar
+ * @param[in] right-hand column_view
+ * @param[in] column_view representing "left (true) / right (false)" boolean for each element
+ * @param[in] mr resource for allocating device memory 
+ * @param[in] stream Optional CUDA stream on which to execute kernels
+ *
+ * @returns new column with the selected elements
+ */
+std::unique_ptr<column> copy_if_else(scalar const& lhs, column_view const& rhs, column_view const& boolean_mask,
+                                    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource(),
+                                    cudaStream_t stream = 0);
+
+/**
+ * @brief   Returns a new column, where each element is selected from either @p lhs or 
+ *          @p rhs based on the value of the corresponding element in @p boolean_mask
+ *
+ * Selects each element i in the output column from either @p rhs or @p lhs using the following rule:
+ *          output[i] = (boolean_mask[i]) ? lhs[i] : rhs
+ *         
+ * @throws cudf::logic_error if lhs and rhs are not of the same type 
+ * @throws cudf::logic_error if boolean mask is not of type bool8
+ * @throws cudf::logic_error if boolean mask is not of the same length as lhs  
+ * @param[in] left-hand column_view
+ * @param[in] right-hand scalar
+ * @param[in] column_view representing "left (true) / right (false)" boolean for each element
+ * @param[in] mr resource for allocating device memory 
+ * @param[in] stream Optional CUDA stream on which to execute kernels
+ *
+ * @returns new column with the selected elements
+ */
+std::unique_ptr<column> copy_if_else(column_view const& lhs, scalar const& rhs, column_view const& boolean_mask,
+                                    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource(),
+                                    cudaStream_t stream = 0);
+                                    
+/**
+ * @brief   Returns a new column, where each element is selected from either @p lhs or 
+ *          @p rhs based on the value of the corresponding element in @p boolean_mask
+ *
+ * Selects each element i in the output column from either @p rhs or @p lhs using the following rule:
+ *          output[i] = (boolean_mask[i]) ? lhs : rhs
+ *          
+ * @throws cudf::logic_error if boolean mask is not of type bool8 
+ * @param[in] left-hand scalar
+ * @param[in] right-hand scalar
+ * @param[in] column_view representing "left (true) / right (false)" boolean for each element
+ * @param[in] mr resource for allocating device memory 
+ * @param[in] stream Optional CUDA stream on which to execute kernels
+ *
+ * @returns new column with the selected elements
+ */
+std::unique_ptr<column> copy_if_else( scalar const& lhs, scalar const& rhs, column_view const& boolean_mask,
                                     rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource(),
                                     cudaStream_t stream = 0);
 

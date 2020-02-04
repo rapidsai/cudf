@@ -23,6 +23,9 @@ python/*/build
 python/cudf/*/_lib/**/*.cpp
 python/cudf/*/_lib/**/*.h
 python/cudf/*/_lib/.nfs*
+python/cudf/*/_libxx/**/*.cpp
+python/cudf/*/_libxx/**/*.h
+python/cudf/*/_libxx/.nfs*
 python/cudf/*.ipynb
 python/cudf/.ipynb_checkpoints
 python/*/record.txt

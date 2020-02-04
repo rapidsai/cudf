@@ -32,22 +32,22 @@ cdef unique_ptr[cudf_table] make_table_from_columns(columns):
     """
     cdef vector[gdf_column*] c_columns
     for idx, (col_name, col) in enumerate(columns.items()):
-        check_gdf_compatibility(col._column)
         # Workaround for string columns
         if col.dtype.type == np.object_:
             c_columns.push_back(
-                column_view_from_string_column(col._column, col_name)
+                column_view_from_string_column(col, col_name)
             )
         else:
             c_columns.push_back(
-                column_view_from_column(col._column, col_name)
+                column_view_from_column(col, col_name)
             )
 
     return make_unique[cudf_table](c_columns)
 
 
 cpdef read_orc(filepath_or_buffer, columns=None, stripe=None,
-               skip_rows=None, num_rows=None, use_index=True):
+               skip_rows=None, num_rows=None, use_index=True,
+               decimals_as_float=True, force_decimal_scale=None):
     """
     Cython function to call into libcudf API, see `read_orc`.
 
@@ -61,6 +61,9 @@ cpdef read_orc(filepath_or_buffer, columns=None, stripe=None,
     for col in columns or []:
         options.columns.push_back(str(col).encode())
     options.use_index = use_index
+    options.decimals_as_float = decimals_as_float
+    if force_decimal_scale is not None:
+        options.forced_decimals_scale = force_decimal_scale
 
     # Create reader from source
     cdef const unsigned char[::1] buffer = view_of_buffer(filepath_or_buffer)

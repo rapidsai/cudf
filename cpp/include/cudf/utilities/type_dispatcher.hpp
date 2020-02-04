@@ -108,11 +108,11 @@ CUDF_TYPE_MAPPING(int64_t, type_id::INT64);
 CUDF_TYPE_MAPPING(float, type_id::FLOAT32);
 CUDF_TYPE_MAPPING(double, type_id::FLOAT64);
 CUDF_TYPE_MAPPING(cudf::string_view, type_id::STRING);
-CUDF_TYPE_MAPPING(timestamp_D, type_id::TIMESTAMP_DAYS);
-CUDF_TYPE_MAPPING(timestamp_s, type_id::TIMESTAMP_SECONDS);
-CUDF_TYPE_MAPPING(timestamp_ms, type_id::TIMESTAMP_MILLISECONDS);
-CUDF_TYPE_MAPPING(timestamp_us, type_id::TIMESTAMP_MICROSECONDS);
-CUDF_TYPE_MAPPING(timestamp_ns, type_id::TIMESTAMP_NANOSECONDS);
+CUDF_TYPE_MAPPING(cudf::timestamp_D, type_id::TIMESTAMP_DAYS);
+CUDF_TYPE_MAPPING(cudf::timestamp_s, type_id::TIMESTAMP_SECONDS);
+CUDF_TYPE_MAPPING(cudf::timestamp_ms, type_id::TIMESTAMP_MILLISECONDS);
+CUDF_TYPE_MAPPING(cudf::timestamp_us, type_id::TIMESTAMP_MICROSECONDS);
+CUDF_TYPE_MAPPING(cudf::timestamp_ns, type_id::TIMESTAMP_NANOSECONDS);
 
 
 template <typename T>
@@ -136,6 +136,12 @@ MAP_NUMERIC_SCALAR(int64_t)
 MAP_NUMERIC_SCALAR(float)
 MAP_NUMERIC_SCALAR(double)
 MAP_NUMERIC_SCALAR(cudf::experimental::bool8)
+
+template <>
+struct type_to_scalar_type_impl<std::string> {
+  using ScalarType = cudf::string_scalar;
+  using ScalarDeviceType = cudf::string_scalar_device_view;
+};
 
 template <>
 struct type_to_scalar_type_impl<cudf::string_view> {

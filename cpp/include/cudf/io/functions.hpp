@@ -71,9 +71,9 @@ struct read_avro_args {
  * @param args Settings for controlling reading behavior
  * @param mr Optional resource to use for device memory allocation
  *
- * @return The set of columns
+ * @return The set of columns along with metadata
  */
-std::unique_ptr<table> read_avro(
+table_with_metadata read_avro(
     read_avro_args const& args,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
@@ -182,9 +182,9 @@ struct read_csv_args {
  * @param args Settings for controlling reading behavior
  * @param mr Optional resource to use for device memory allocation
  *
- * @return The set of columns
+ * @return The set of columns along with metadata
  */
-std::unique_ptr<table> read_csv(
+table_with_metadata read_csv(
     read_csv_args const& args,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
@@ -205,12 +205,18 @@ struct read_orc_args {
   size_type num_rows = -1;
 
   /// Whether to use row index to speed-up reading
-  bool use_index = false;
+  bool use_index = true;
 
   /// Whether to use numpy-compatible dtypes
   bool use_np_dtypes = true;
   /// Cast timestamp columns to a specific type
   data_type timestamp_type{EMPTY};
+
+  /// Whether to convert decimals to float64
+  bool decimals_as_float = true;
+  /// For decimals as int, optional forced decimal scale;
+  /// -1 is auto (column scale), >=0: number of fractional digits
+  int forced_decimals_scale = -1;
 
   explicit read_orc_args(source_info const& src) : source(src) {}
 };
@@ -233,7 +239,7 @@ struct read_orc_args {
  *
  * @return The set of columns
  */
-std::unique_ptr<table> read_orc(
+table_with_metadata read_orc(
     read_orc_args const& args,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
@@ -241,15 +247,19 @@ std::unique_ptr<table> read_orc(
  * @brief Settings to use for `write_orc()`
  */
 struct write_orc_args {
+  /// Specify the sink to use for writer output
   sink_info sink;
-
   /// Specify the compression format to use
-  compression_type compression = compression_type::AUTO;
+  compression_type compression;
   /// Set of columns to output
   table_view table;
+  /// Optional associated metadata
+  const table_metadata *metadata;
 
-  explicit write_orc_args(sink_info const& snk, table_view const& table)
-      : sink(snk), table(table) {}
+  explicit write_orc_args(sink_info const& snk, table_view const& table_,
+                          const table_metadata *metadata_ = nullptr,
+                          compression_type compression_ = compression_type::AUTO)
+      : sink(snk), table(table_), metadata(metadata_), compression(compression_) {}
 };
 
 /**
@@ -313,11 +323,53 @@ struct read_parquet_args {
  * @param args Settings for controlling reading behavior
  * @param mr Optional resource to use for device memory allocation
  *
- * @return The set of columns
+ * @return The set of columns along with metadata
  */
-std::unique_ptr<table> read_parquet(
+table_with_metadata read_parquet(
     read_parquet_args const& args,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @brief Settings to use for `write_parquet()`
+ */
+struct write_parquet_args {
+  /// Specify the sink to use for writer output
+  sink_info sink;
+  /// Specify the compression format to use
+  compression_type compression;
+  /// Specify the level of statistics in the output file
+  statistics_freq stats_level;
+  /// Set of columns to output
+  table_view table;
+  /// Optional associated metadata
+  const table_metadata *metadata;
+
+  explicit write_parquet_args(sink_info const& sink_, table_view const& table_,
+                              const table_metadata *metadata_ = nullptr,
+                              compression_type compression_ = compression_type::AUTO,
+                              statistics_freq stats_lvl_ = statistics_freq::STATISTICS_ROWGROUP)
+      : sink(sink_), table(table_), metadata(metadata_), compression(compression_), stats_level(stats_lvl_) {}
+};
+
+/**
+ * @brief Writes a set of columns to parquet format
+ *
+ * The following code snippet demonstrates how to write columns to a file:
+ * @code
+ *  #include <cudf.h>
+ *  ...
+ *  std::string filepath = "dataset.parquet";
+ *  cudf::experimental::io::write_parquet_args args{cudf::sink_info(filepath), table->view()};
+ *  ...
+ *  cudf::write_parquet(args);
+ * @endcode
+ *
+ * @param args Settings for controlling writing behavior
+ * @param mr Optional resource to use for device memory allocation
+ */
+void write_parquet(write_parquet_args const& args, rmm::mr::device_memory_resource* mr =
+                                               rmm::mr::get_default_resource());
+
 
 }  // namespace io
 }  // namespace experimental

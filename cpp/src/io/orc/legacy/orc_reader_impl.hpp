@@ -143,6 +143,8 @@ class reader::Impl {
   bool has_timestamp_column_ = false;
   bool use_index_ = true;
   bool use_np_dtypes_ = true;
+  bool decimals_as_float_ = true;
+  int decimals_as_int_scale_ = -1;
   gdf_time_unit timestamp_unit_ = TIME_UNIT_NONE;
 };
 

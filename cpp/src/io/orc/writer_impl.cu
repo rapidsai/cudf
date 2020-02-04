@@ -21,7 +21,6 @@
 
 #include "writer_impl.hpp"
 
-#include <nvstrings/NVStrings.h>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
@@ -52,13 +51,16 @@ using pinned_buffer = std::unique_ptr<T, decltype(&cudaFreeHost)>;
 /**
  * @brief Function that translates GDF compression to ORC compression
  **/
-constexpr orc::CompressionKind to_orc_compression(
+orc::CompressionKind to_orc_compression(
     compression_type compression) {
   switch (compression) {
+    case compression_type::AUTO:
     case compression_type::SNAPPY:
       return orc::CompressionKind::SNAPPY;
     case compression_type::NONE:
+      return orc::CompressionKind::NONE;
     default:
+      CUDF_EXPECTS(false, "Unsupported compression type");
       return orc::CompressionKind::NONE;
   }
 }
@@ -89,8 +91,6 @@ constexpr orc::TypeKind to_orc_type(cudf::type_id id) {
     case cudf::type_id::TIMESTAMP_MILLISECONDS:
     case cudf::type_id::TIMESTAMP_NANOSECONDS:
       return TypeKind::TIMESTAMP;
-    case cudf::type_id::CATEGORY:
-      return TypeKind::INT;
     case cudf::type_id::STRING:
       return TypeKind::STRING;
     default:
@@ -106,9 +106,9 @@ constexpr T to_clockscale(cudf::type_id timestamp_id) {
   switch (timestamp_id) {
     case cudf::type_id::TIMESTAMP_SECONDS:
       return 9;
-    case cudf::type_id::TIMESTAMP_MICROSECONDS:
-      return 6;
     case cudf::type_id::TIMESTAMP_MILLISECONDS:
+      return 6;
+    case cudf::type_id::TIMESTAMP_MICROSECONDS:
       return 3;
     case cudf::type_id::TIMESTAMP_NANOSECONDS:
     default:
@@ -119,18 +119,45 @@ constexpr T to_clockscale(cudf::type_id timestamp_id) {
 }  // namespace
 
 /**
+ * @brief Helper kernel for converting string data/offsets into nvstrdesc
+ * REMOVEME: Once we eliminate the legacy readers/writers, the kernels could be
+ * made to use the native offset+data layout.
+ **/
+__global__ void stringdata_to_nvstrdesc(gpu::nvstrdesc_s *dst, const size_type *offsets,
+                        const char *strdata, const uint32_t *nulls,
+                        size_type column_size) {
+  size_type row = blockIdx.x * blockDim.x + threadIdx.x;
+  if (row < column_size) {
+    uint32_t is_valid = (nulls) ? (nulls[row >> 5] >> (row & 0x1f)) & 1 : 1;
+    size_t count;
+    const char *ptr;
+    if (is_valid) {
+      size_type cur = offsets[row];
+      size_type next = offsets[row + 1];
+      ptr = strdata + cur;
+      count = (next > cur) ? next - cur : 0;
+    }
+    else {
+      ptr = nullptr;
+      count = 0;
+    }
+    dst[row].ptr = ptr;
+    dst[row].count = count;
+  }
+}
+
+
+/**
  * @brief Helper class that adds ORC-specific column info
  **/
 class orc_column_view {
-  using str_pair = std::pair<const char *, size_t>;
-
  public:
   /**
    * @brief Constructor that extracts out the string position + length pairs
    * for building dictionaries for string columns
    **/
   explicit orc_column_view(size_t id, size_t str_id, column_view const &col,
-                           cudaStream_t stream)
+                           const table_metadata *metadata, cudaStream_t stream)
       : _id(id),
         _str_id(str_id),
         _string_type(col.type().id() == type_id::STRING),
@@ -141,19 +168,23 @@ class orc_column_view {
         _nulls(col.has_nulls() ? col.null_mask() : nullptr),
         _clockscale(to_clockscale<uint8_t>(col.type().id())),
         _type_kind(to_orc_type(col.type().id())) {
-    if (_string_type) {
+    if (_string_type && _data_count > 0) {
       strings_column_view view{col};
-      _nvstr =
-          NVStrings::create_from_offsets(view.chars().data<char>(), view.size(),
-                                         view.offsets().data<size_type>());
-
-      _indexes = rmm::device_buffer(_data_count * sizeof(str_pair), stream);
-      CUDF_EXPECTS(
-          _nvstr->create_index(static_cast<str_pair *>(_indexes.data())) == 0,
-          "Cannot retrieve string pairs");
+      _indexes = rmm::device_buffer(_data_count * sizeof(gpu::nvstrdesc_s), stream);
+      stringdata_to_nvstrdesc<<< ((_data_count-1)>>8)+1, 256, 0, stream >>>(
+            reinterpret_cast<gpu::nvstrdesc_s *>(_indexes.data()),
+            view.offsets().data<size_type>(), view.chars().data<char>(),
+            _nulls, _data_count);
       _data = _indexes.data();
+      cudaStreamSynchronize(stream);
     }
-    _name = "_col" + std::to_string(_id);
+    // Generating default name if name isn't present in metadata
+    if (metadata && _id < metadata->column_names.size()) {
+      _name = metadata->column_names[_id];
+    }
+    else {
+      _name = "_col" + std::to_string(_id);
+    }
   }
 
   auto is_string() const noexcept { return _string_type; }
@@ -219,7 +250,6 @@ class orc_column_view {
   ColumnEncodingKind _encoding_kind;
 
   // String dictionary-related members
-  NVStrings *_nvstr = nullptr;
   rmm::device_buffer _indexes;
   size_t dict_stride = 0;
   gpu::DictionaryChunk const *dict = nullptr;
@@ -736,7 +766,7 @@ void writer::impl::write_index_stream(
     buffer_[1] = static_cast<uint8_t>(uncomp_ix_len >> 8);
     buffer_[2] = static_cast<uint8_t>(uncomp_ix_len >> 16);
   }
-  outfile_.write(reinterpret_cast<char *>(buffer_.data()), buffer_.size());
+  out_sink_->write(buffer_.data(), buffer_.size());
   stripe.indexLength += buffer_.size();
 }
 
@@ -757,21 +787,18 @@ void writer::impl::write_data_stream(gpu::StripeStream const &strm_desc,
                              cudaMemcpyDeviceToHost, stream));
     CUDA_TRY(cudaStreamSynchronize(stream));
 
-    outfile_.write(reinterpret_cast<char *>(stream_out), length);
+    out_sink_->write(stream_out, length);
   }
   stripe.dataLength += length;
 }
 
-writer::impl::impl(std::string filepath, writer_options const &options,
-                   rmm::mr::device_memory_resource *mr)
-    : _mr(mr) {
-  compression_kind_ = to_orc_compression(options.compression);
+writer::impl::impl(std::unique_ptr<data_sink> sink, writer_options const &options,
+  rmm::mr::device_memory_resource *mr):
+  compression_kind_(to_orc_compression(options.compression)), 
+  out_sink_(std::move(sink)),
+  _mr(mr) {}
 
-  outfile_.open(filepath, std::ios::out | std::ios::binary | std::ios::trunc);
-  CUDF_EXPECTS(outfile_.is_open(), "Cannot open output file");
-}
-
-void writer::impl::write(table_view const &table, cudaStream_t stream) {
+void writer::impl::write(table_view const &table, const table_metadata *metadata, cudaStream_t stream) {
   size_type num_columns = table.num_columns();
   size_type num_rows = 0;
 
@@ -780,13 +807,14 @@ void writer::impl::write(table_view const &table, cudaStream_t stream) {
 
   // Wrapper around cudf columns to attach ORC-specific type info
   std::vector<orc_column_view> orc_columns;
+  orc_columns.reserve(num_columns); // Avoids unnecessary re-allocation
   for (auto it = table.begin(); it < table.end(); ++it) {
     const auto col = *it;
     const auto current_id = orc_columns.size();
     const auto current_str_id = str_col_ids.size();
 
     num_rows = std::max<uint32_t>(num_rows, col.size());
-    orc_columns.emplace_back(current_id, current_str_id, col, stream);
+    orc_columns.emplace_back(current_id, current_str_id, col, metadata, stream);
     if (orc_columns.back().is_string()) {
       str_col_ids.push_back(current_id);
     }
@@ -923,13 +951,13 @@ void writer::impl::write(table_view const &table, cudaStream_t stream) {
   ProtobufWriter pbw_(&buffer_);
 
   // Write file header
-  outfile_.write(MAGIC, std::strlen(MAGIC));
+  out_sink_->write(MAGIC, std::strlen(MAGIC));
 
   // Write stripes
   size_t group = 0;
   for (size_t stripe_id = 0; stripe_id < stripes.size(); stripe_id++) {
     auto groups_in_stripe = div_by_rowgroups(stripes[stripe_id].numberOfRows);
-    stripes[stripe_id].offset = outfile_.tellp();
+    stripes[stripe_id].offset = out_sink_->bytes_written();
 
     // Column (skippable) index streams appear at the start of the stripe
     stripes[stripe_id].indexLength = 0;
@@ -976,16 +1004,15 @@ void writer::impl::write(table_view const &table, cudaStream_t stream) {
       buffer_[1] = static_cast<uint8_t>(uncomp_sf_len >> 8);
       buffer_[2] = static_cast<uint8_t>(uncomp_sf_len >> 16);
     }
-    outfile_.write(reinterpret_cast<char *>(buffer_.data()), buffer_.size());
+    out_sink_->write(buffer_.data(), buffer_.size());
 
     group += groups_in_stripe;
   }
 
   // Write filefooter metadata
-  // TBD: We may want to add pandas or spark column metadata strings here
   FileFooter ff;
   ff.headerLength = std::strlen(MAGIC);
-  ff.contentLength = outfile_.tellp();
+  ff.contentLength = out_sink_->bytes_written();
   ff.stripes = std::move(stripes);
   ff.numberOfRows = num_rows;
   ff.rowIndexStride = row_index_stride_;
@@ -997,6 +1024,11 @@ void writer::impl::write(table_view const &table, cudaStream_t stream) {
     ff.types[1 + i].kind = orc_columns[i].orc_kind();
     ff.types[0].subtypes[i] = 1 + i;
     ff.types[0].fieldNames[i] = orc_columns[i].orc_name();
+  }
+  if (metadata) {
+    for (auto it = metadata->user_data.begin(); it != metadata->user_data.end(); it++) {
+      ff.metadata.push_back({it->first, it->second});
+    }
   }
   buffer_.resize((compression_kind_ != NONE) ? 3 : 0);
   pbw_.write(&ff);
@@ -1019,21 +1051,25 @@ void writer::impl::write(table_view const &table, cudaStream_t stream) {
   }
   const auto ps_length = static_cast<uint8_t>(pbw_.write(&ps));
   buffer_.push_back(ps_length);
-  outfile_.write(reinterpret_cast<char *>(buffer_.data()), buffer_.size());
-  outfile_.flush();
+  out_sink_->write(buffer_.data(), buffer_.size());
+  out_sink_->flush();
 }
 
 // Forward to implementation
-writer::writer(std::string filepath, writer_options const &options,
+writer::writer(std::string const& filepath, writer_options const& options,
                rmm::mr::device_memory_resource *mr)
-    : _impl(std::make_unique<impl>(filepath, options, mr)) {}
+    : _impl(std::make_unique<impl>(data_sink::create(filepath), options, mr)) {}
+
+writer::writer(std::vector<char>* buffer, writer_options const& options,
+                   rmm::mr::device_memory_resource *mr)
+        : _impl(std::make_unique<impl>(data_sink::create(buffer), options, mr)) {}
 
 // Destructor within this translation unit
 writer::~writer() = default;
 
 // Forward to implementation
-void writer::write_all(table_view const &table, cudaStream_t stream) {
-  _impl->write(table, stream);
+void writer::write_all(table_view const &table, const table_metadata *metadata, cudaStream_t stream) {
+  _impl->write(table, metadata, stream);
 }
 
 }  // namespace orc

@@ -63,5 +63,52 @@ bool is_sorted(cudf::table_view const& table,
                std::vector<order> const& column_order,
                std::vector<null_order> const& null_precedence);
 
+/**
+ * @brief Performs a lexicographic sort of the rows of a table
+ *
+ * @param input The table to sort
+ * @param column_order The desired order for each column. Size must be
+ * equal to `input.num_columns()` or empty. If empty, all columns are sorted in
+ * ascending order.
+ * @param null_precedence The desired order of a null element compared to other
+ * elements for each column in `input`. Size must be equal to
+ * `input.num_columns()` or empty. If empty, all columns will be sorted with
+ * `null_order::BEFORE`.
+ * @param mr The device memory resource used to allocate the returned table
+ * @return New table containing the desired sorted order of `input`
+ */
+std::unique_ptr<table> sort(
+    table_view input, std::vector<order> const& column_order = {},
+    std::vector<null_order> const& null_precedence = {},
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+
+/**
+ * @brief Performs a key-value sort.
+ *
+ * Creates a new table that reorders the rows of `values` according to the
+ * lexicographic ordering of the rows of `keys`.
+ *
+ * @throws `cudf::logic_error` if `values.num_rows() != keys.num_rows()`.
+ *
+ * @param values The table to reorder
+ * @param keys The table that determines the ordering
+ * @param column_order The desired order for each column in `keys`. Size must be
+ * equal to `input.num_columns()` or empty. If empty, all columns are sorted in
+ * ascending order.
+ * @param null_precedence The desired order of a null element compared to other
+ * elements for each column in `keys`. Size must be equal to
+ * `keys.num_columns()` or empty. If empty, all columns will be sorted with
+ * `null_order::BEFORE`.
+ * @param mr The device memory resource used to allocate the returned table
+ * @return The reordering of `values` determined by the lexicographic order of
+ * the rows of `keys`.
+ */
+std::unique_ptr<table> sort_by_key(
+    table_view const& values, table_view const& keys,
+    std::vector<order> const& column_order = {},
+    std::vector<null_order> const& null_precedence = {},
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
 }  // namespace experimental
 }  // namespace cudf

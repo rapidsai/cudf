@@ -45,7 +45,11 @@ def optimize(dsk, keys, **kwargs):
 
 
 def finalize(results):
-    return cudf.concat(results)
+    if results and isinstance(
+        results[0], (cudf.DataFrame, cudf.Series, cudf.Index, cudf.MultiIndex)
+    ):
+        return cudf.concat(results)
+    return results
 
 
 class _Frame(dd.core._Frame, OperatorMethodMixin):
@@ -631,3 +635,31 @@ from_cudf = dd.from_pandas
 
 def from_dask_dataframe(df):
     return df.map_partitions(cudf.from_pandas)
+
+
+for name in [
+    "add",
+    "sub",
+    "mul",
+    "truediv",
+    "floordiv",
+    "mod",
+    "pow",
+    "radd",
+    "rsub",
+    "rmul",
+    "rtruediv",
+    "rfloordiv",
+    "rmod",
+    "rpow",
+]:
+    meth = getattr(cudf.DataFrame, name)
+    DataFrame._bind_operator_method(name, meth)
+
+    meth = getattr(cudf.Series, name)
+    Series._bind_operator_method(name, meth)
+
+for name in ["lt", "gt", "le", "ge", "ne", "eq"]:
+
+    meth = getattr(cudf.Series, name)
+    Series._bind_comparison_method(name, meth)

@@ -42,5 +42,37 @@ std::vector<cudf::column_view> slice(cudf::column_view const& input,
     return result;
 };
 
+std::vector<cudf::table_view> slice(cudf::table_view const& input,
+                                                std::vector<size_type> const& indices){
+
+    CUDF_EXPECTS(indices.size()%2 == 0, "indices size must be even");
+    std::vector<cudf::table_view> result{};
+
+    if(indices.size() == 0 or input.num_columns() == 0) {
+        return result;
+    }
+
+    // 2d arrangement of column_views that represent the outgoing table_views    
+    // sliced_table[i][j]
+    // where i is the i'th column of the j'th table_view
+    std::vector<std::vector<cudf::column_view>> sliced_table;
+    sliced_table.reserve(indices.size() + 1);
+    std::transform(input.begin(), input.end(), std::back_inserter(sliced_table), [&indices](cudf::column_view const& c){
+       return slice(c, indices);
+    });
+
+    // distribute columns into outgoing table_views
+    size_t num_output_tables = indices.size()/2;
+    for(size_t i = 0; i < num_output_tables; i++){        
+        std::vector<cudf::column_view> table_columns;
+        for(size_t j = 0; j<input.num_columns(); j++){
+            table_columns.emplace_back(sliced_table[j][i]);
+        }
+        result.emplace_back(table_view{table_columns});
+    }
+
+    return result;
+};
+
 } // experimental
 } // cudf

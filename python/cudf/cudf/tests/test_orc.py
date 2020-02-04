@@ -103,6 +103,16 @@ def test_orc_reader_decimal(datadir):
     np.testing.assert_allclose(pdf, gdf)
 
 
+def test_orc_reader_decimal_as_int(datadir):
+    path = datadir / "TestOrcFile.decimal.orc"
+
+    gdf = cudf.read_orc(
+        path, engine="cudf", decimals_as_float=False, force_decimal_scale=2
+    ).to_pandas()
+
+    assert gdf["_col0"][0] == -100050  # -1000.5
+
+
 def test_orc_reader_filenotfound(tmpdir):
     with pytest.raises(FileNotFoundError):
         cudf.read_orc("TestMissingFile.orc")
