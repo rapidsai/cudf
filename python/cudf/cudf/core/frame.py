@@ -36,7 +36,7 @@ class Frame(libcudfxx.Table):
         _as_column : Converts a single columned Frame to Column
         """
         assert (
-            self. _num_columns == 1
+            self._num_columns == 1
             and self._index is None
             and self._column_names[0] is None
         ), """There should be only one data column,

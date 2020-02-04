@@ -22,7 +22,6 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_scalar.hpp>
 #include <rmm/thrust_rmm_allocator.h>
-#include <rmm/mr/device_memory_resource.hpp>
 
 #include <memory>
 #include <type_traits>
