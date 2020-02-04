@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <cudf/table/table.hpp>
+#include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/text/tokenize.hpp>
@@ -89,13 +89,27 @@ TEST_F(TextTokenizeTest, TokenizeErrorTest)
     cudf::strings_column_view strings_view( strings );
 
     {
-        cudf::test::strings_column_wrapper delimiters{};
+        cudf::test::strings_column_wrapper delimiters{}; // empty delimiters
         cudf::strings_column_view delimiters_view( delimiters );
         EXPECT_THROW( cudf::nvtext::tokenize(strings_view,delimiters_view), cudf::logic_error );
+        EXPECT_THROW( cudf::nvtext::token_count(strings_view,delimiters_view), cudf::logic_error );
     }
     {
-        cudf::test::strings_column_wrapper delimiters( {"",""}, {0,0} );
+        cudf::test::strings_column_wrapper delimiters( {"",""}, {0,0} ); // null delimiters
         cudf::strings_column_view delimiters_view( delimiters );
         EXPECT_THROW( cudf::nvtext::tokenize(strings_view,delimiters_view), cudf::logic_error );
+        EXPECT_THROW( cudf::nvtext::token_count(strings_view,delimiters_view), cudf::logic_error );
     }
+}
+
+TEST_F(TextTokenizeTest, TokenizeEmptyTest)
+{
+    auto strings = cudf::make_empty_column(cudf::data_type{cudf::STRING});
+    cudf::strings_column_view strings_view( strings->view() );
+    auto results = cudf::nvtext::tokenize(strings_view);
+    EXPECT_EQ( results->size(), 0 );
+    EXPECT_EQ( results->has_nulls(), false);
+    results = cudf::nvtext::token_count(strings_view);
+    EXPECT_EQ( results->size(), 0 );
+    EXPECT_EQ( results->has_nulls(), false);
 }
