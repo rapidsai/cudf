@@ -123,6 +123,8 @@ cpdef write_parquet(
     cdef vector[string] column_names
     cdef map[string, string] user_data
 
+    # Construct the column names
+    column_names.push_back(str.encode(table._index.name))
     for col_name in table._column_names:
         column_names.push_back(str.encode(col_name))
 
@@ -139,16 +141,14 @@ cpdef write_parquet(
         })
 
     # Append the index column
+    idx_dtype = table._index._data[table._index.name].dtype
     column_metadata.append({
         "name": table._index.name,
         "field_name": table._index.name,
-        "pandas_type": "int64",
-        "numpy_type": "int64",
+        "pandas_type": pd.api.types.pandas_dtype(idx_dtype).name,
+        "numpy_type": np.dtype(idx_dtype).name,
         "metadata": None
     })
-
-    # add the index name to the list of output columns
-    column_names.push_back(str.encode(table._index.name))
 
     pandas_metadata = {
         "index_columns": [table._index.name],
