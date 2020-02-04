@@ -21,7 +21,7 @@ import rmm
 
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
-from cudf._libxx.column cimport Column
+from cudf._libxx.includes.column cimport Column
 from cudf._lib.utils cimport *
 cimport cudf._lib.includes.reduce as cpp_reduce
 

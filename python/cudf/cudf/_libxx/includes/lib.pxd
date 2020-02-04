@@ -138,24 +138,6 @@ cdef extern from "cudf/table/table.hpp" namespace "cudf::experimental" nogil:
         mutable_table_view mutable_view()
         vector[unique_ptr[column]] release()
 
-cdef extern from "cudf/copying.hpp" namespace "cudf::experimental" nogil:
-    cdef unique_ptr[table] cpp_gather "cudf::experimental::gather" (
-        table_view source_table,
-        column_view gather_map
-    )
-
-cdef extern from "cudf/hashing.hpp" namespace "cudf" nogil:
-    cdef pair[unique_ptr[table], vector[size_type]] hash_partition "cudf::hash_partition" (
-        table_view input,
-        vector[size_type] columns_to_hash,
-        int num_partitions
-    ) except +
-
-    cdef unique_ptr[column] hash "cudf::hash" (
-        table_view input,
-        vector[uint32_t] initial_hash
-    ) except +
-
 cdef extern from "<utility>" namespace "std" nogil:
     cdef unique_ptr[column] move(unique_ptr[column])
     cdef unique_ptr[table] move(unique_ptr[table])

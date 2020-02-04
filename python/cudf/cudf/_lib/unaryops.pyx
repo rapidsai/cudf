@@ -19,7 +19,7 @@ from rmm._lib.lib cimport cudaStream_t, c_free
 from cudf.utils import cudautils
 from cudf.core.buffer import Buffer
 
-from cudf._libxx.column cimport Column
+from cudf._libxx.includes.column cimport Column
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
 from cudf._lib.GDFError import GDFError

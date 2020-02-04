@@ -265,7 +265,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param srcOffset index in data to start at.
    */
   final void setShorts(long offset, short[] data, long srcOffset, long len) {
-    assert len > 0;
+    assert len >= 0 : "length is not allowed " + len;
     assert len <= data.length - srcOffset;
     long requestedAddress = this.address + offset;
     addressOutOfBoundsCheck(requestedAddress, len * 2, "setShorts");
@@ -301,7 +301,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param srcOffset index into data to start at
    */
   final void setInts(long offset, int[] data, long srcOffset, long len) {
-    assert len > 0;
+    assert len >= 0 : "length is not allowed " + len;
     assert len <= data.length - srcOffset;
     long requestedAddress = this.address + offset;
     addressOutOfBoundsCheck(requestedAddress, len * 4, "setInts");
@@ -337,7 +337,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param srcOffset index into data to start at.
    */
   final void setLongs(long offset, long[] data, long srcOffset, long len) {
-    assert len > 0;
+    assert len >= 0 : "length is not allowed " + len;
     assert len <= data.length - srcOffset;
     long requestedAddress = this.address + offset;
     addressOutOfBoundsCheck(requestedAddress, len * 8, "setLongs");
@@ -373,7 +373,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param srcOffset index into data to start at
    */
   final void setFloats(long offset, float[] data, long srcOffset, long len) {
-    assert len > 0;
+    assert len >= 0 : "length is not allowed " + len;
     assert len <= data.length - srcOffset;
     long requestedAddress = this.address + offset;
     addressOutOfBoundsCheck(requestedAddress, len * 4, "setFloats");
@@ -409,7 +409,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param srcOffset index into data to start at
    */
   final void setDoubles(long offset, double[] data, long srcOffset, long len) {
-    assert len > 0;
+    assert len >= 0 : "length is not allowed " + len;
     assert len <= data.length - srcOffset;
     long requestedAddress = this.address + offset;
     addressOutOfBoundsCheck(requestedAddress, len * 8, "setDoubles");
