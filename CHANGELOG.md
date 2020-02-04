@@ -51,6 +51,7 @@
 - PR #4054 Fixed JNI to deal with reduction API changes
 - PR #4052 Fix for round-robin when num_partitions divides nrows.
 - PR #4049 Fix `cudf::split` issue returning one less than expected column vectors
+- PR #4066 Fixed mismatch with dtype enums
 
 
 # cuDF 0.12.0 (Date TBD)
