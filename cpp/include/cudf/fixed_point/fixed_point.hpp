@@ -43,14 +43,14 @@ enum class Radix : int32_t {
 
 namespace detail {
     // helper function to negate strongly typed scale_type
-    __host__ __device__
+    CUDA_HOST_DEVICE_CALLABLE
     auto negate(scale_type const& scale) {
         return scale_type{-scale};
     }
 
     // perform this operation when constructing with positive scale
     template <Radix Rad, typename T>
-    __host__ __device__
+    CUDA_HOST_DEVICE_CALLABLE
     constexpr auto right_shift(T const& val, scale_type const& scale) {
         assert(scale > 0);
         return val / std::pow(static_cast<int32_t>(Rad), static_cast<int32_t>(scale));
@@ -58,7 +58,7 @@ namespace detail {
 
     // perform this operation when constructing with negative scale
     template <Radix Rad, typename T>
-    __host__ __device__
+    CUDA_HOST_DEVICE_CALLABLE
     constexpr auto left_shift(T const& val, scale_type const& scale) {
         assert(scale < 0);
         return val * std::pow(static_cast<int32_t>(Rad), static_cast<int32_t>(negate(scale)));
@@ -66,7 +66,7 @@ namespace detail {
 
     // convenience generic shift function
     template <Radix Rad, typename T>
-    __host__ __device__
+    CUDA_HOST_DEVICE_CALLABLE
     constexpr auto shift(T const& val, scale_type const& scale) {
         // TODO sort out casting
         // situation where you are constructing with floating point type makes val float/double
@@ -134,7 +134,7 @@ public:
     // EXPLICIT CONVERSION OPERATOR
     template <typename U,
               typename std::enable_if_t<is_supported_construction_value_type<U>()>* = nullptr>
-    __host__ __device__
+    CUDA_HOST_DEVICE_CALLABLE
     explicit constexpr operator U() const {
         return detail::shift<Rad>(static_cast<U>(_value), detail::negate(_scale));
     }
@@ -144,34 +144,34 @@ public:
     }
 
     template <typename Rep1, Radix Rad1>
-    __host__ __device__
+    CUDA_HOST_DEVICE_CALLABLE
     fixed_point<Rep1, Rad1>& operator+=(fixed_point<Rep1, Rad1> const& rhs) {
         *this = *this + rhs;
         return *this;
     }
 
     template <typename Rep1, Radix Rad1>
-    __host__ __device__
+    CUDA_HOST_DEVICE_CALLABLE
     fixed_point<Rep1, Rad1>& operator*=(fixed_point<Rep1, Rad1> const& rhs) {
         *this = *this * rhs;
         return *this;
     }
 
     template <typename Rep1, Radix Rad1>
-    __host__ __device__
+    CUDA_HOST_DEVICE_CALLABLE
     fixed_point<Rep1, Rad1>& operator-=(fixed_point<Rep1, Rad1> const& rhs) {
         *this = *this - rhs;
         return *this;
     }
 
     template <typename Rep1, Radix Rad1>
-    __host__ __device__
+    CUDA_HOST_DEVICE_CALLABLE
     fixed_point<Rep1, Rad1>& operator/=(fixed_point<Rep1, Rad1> const& rhs) {
         *this = *this / rhs;
         return *this;
     }
 
-    __host__ __device__
+    CUDA_HOST_DEVICE_CALLABLE
     fixed_point<Rep, Rad>& operator++() {
         *this = *this + fixed_point<Rep, Rad>{1, scale_type{_scale}};
         return *this;
@@ -179,30 +179,30 @@ public:
 
     // enable access to _value & _scale
     template <typename Rep1, Radix Rad1>
-    __host__ __device__
+    CUDA_HOST_DEVICE_CALLABLE
     friend fixed_point<Rep1, Rad1> operator+(fixed_point<Rep1, Rad1> const& lhs,
                                              fixed_point<Rep1, Rad1> const& rhs);
 
     // enable access to _value & _scale
     template <typename Rep1, Radix Rad1>
-    __host__ __device__
+    CUDA_HOST_DEVICE_CALLABLE
     friend fixed_point<Rep1, Rad1> operator-(fixed_point<Rep1, Rad1> const& lhs,
                                              fixed_point<Rep1, Rad1> const& rhs);
 
     // enable access to _value & _scale
     template <typename Rep1, Radix Rad1>
-    __host__ __device__
+    CUDA_HOST_DEVICE_CALLABLE
     friend fixed_point<Rep1, Rad1> operator*(fixed_point<Rep1, Rad1> const& lhs,
                                              fixed_point<Rep1, Rad1> const& rhs);
 
     // enable access to _value & _scale
     template <typename Rep1, Radix Rad1>
-    __host__ __device__
+    CUDA_HOST_DEVICE_CALLABLE
     friend fixed_point<Rep1, Rad1> operator/(fixed_point<Rep1, Rad1> const& lhs,
                                              fixed_point<Rep1, Rad1> const& rhs);
 
     template<typename Rep1, Radix Rad1>
-    __host__ __device__
+    CUDA_HOST_DEVICE_CALLABLE
     friend bool operator==(fixed_point<Rep1, Rad1> const& lhs,
                            fixed_point<Rep1, Rad1> const& rhs);
 };
@@ -217,27 +217,27 @@ std::string print_rep() {
 }
 
 template <typename Rep, typename T>
-__host__ __device__
+CUDA_HOST_DEVICE_CALLABLE
 auto addition_overflow(T lhs, T rhs) {
     return rhs > 0 ? lhs > std::numeric_limits<Rep>::max() - rhs
                    : lhs < std::numeric_limits<Rep>::min() - rhs;
 }
 
 template <typename Rep, typename T>
-__host__ __device__
+CUDA_HOST_DEVICE_CALLABLE
 auto subtraction_overflow(T lhs, T rhs) {
     return rhs > 0 ? lhs < std::numeric_limits<Rep>::min() + rhs
                    : lhs > std::numeric_limits<Rep>::max() + rhs;
 }
 
 template <typename Rep, typename T>
-__host__ __device__
+CUDA_HOST_DEVICE_CALLABLE
 auto division_overflow(T lhs, T rhs) {
     return lhs == std::numeric_limits<Rep>::min() && rhs == -1;
 }
 
 template <typename Rep, typename T>
-__host__ __device__
+CUDA_HOST_DEVICE_CALLABLE
 auto multiplication_overflow(T lhs, T rhs) {
     auto const min = std::numeric_limits<Rep>::min();
     auto const max = std::numeric_limits<Rep>::max();
@@ -248,7 +248,7 @@ auto multiplication_overflow(T lhs, T rhs) {
 
 // PLUS Operation
 template<typename Rep1, Radix Rad1>
-__host__ __device__
+CUDA_HOST_DEVICE_CALLABLE
 fixed_point<Rep1, Rad1> operator+(fixed_point<Rep1, Rad1> const& lhs,
                                   fixed_point<Rep1, Rad1> const& rhs) {
 
@@ -268,7 +268,7 @@ fixed_point<Rep1, Rad1> operator+(fixed_point<Rep1, Rad1> const& lhs,
 
 // MINUS Operation
 template<typename Rep1, Radix Rad1>
-__host__ __device__
+CUDA_HOST_DEVICE_CALLABLE
 fixed_point<Rep1, Rad1> operator-(fixed_point<Rep1, Rad1> const& lhs,
                                   fixed_point<Rep1, Rad1> const& rhs) {
 
@@ -288,7 +288,7 @@ fixed_point<Rep1, Rad1> operator-(fixed_point<Rep1, Rad1> const& lhs,
 
 // MULTIPLIES Operation
 template<typename Rep1, Radix Rad1>
-__host__ __device__
+CUDA_HOST_DEVICE_CALLABLE
 fixed_point<Rep1, Rad1> operator*(fixed_point<Rep1, Rad1> const& lhs,
                                   fixed_point<Rep1, Rad1> const& rhs) {
 
@@ -304,7 +304,7 @@ fixed_point<Rep1, Rad1> operator*(fixed_point<Rep1, Rad1> const& lhs,
 
 // DIVISION Operation
 template<typename Rep1, Radix Rad1>
-__host__ __device__
+CUDA_HOST_DEVICE_CALLABLE
 fixed_point<Rep1, Rad1> operator/(fixed_point<Rep1, Rad1> const& lhs,
                                   fixed_point<Rep1, Rad1> const& rhs) {
 
@@ -320,7 +320,7 @@ fixed_point<Rep1, Rad1> operator/(fixed_point<Rep1, Rad1> const& lhs,
 
 // EQUALITY COMPARISON Operation
 template<typename Rep1, Radix Rad1>
-__host__ __device__
+CUDA_HOST_DEVICE_CALLABLE
 bool operator==(fixed_point<Rep1, Rad1> const& lhs,
                 fixed_point<Rep1, Rad1> const& rhs) {
     auto const rhsv = lhs._scale > rhs._scale ? detail::shift<Rad1>(rhs._value, scale_type{lhs._scale - rhs._scale}) : rhs._value;
