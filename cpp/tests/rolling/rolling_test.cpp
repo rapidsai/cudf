@@ -120,6 +120,7 @@ protected:
                                                                   min_periods, op));
     }
 
+
     auto reference = create_reference_output(op, input, preceding_window, following_window,
                                              min_periods);
 
@@ -146,13 +147,14 @@ protected:
                         size_type min_periods)
   {
     // test all supported aggregators
-    run_test_col(input, preceding_window, following_window, min_periods, cudf::experimental::make_min_aggregation());
+    //run_test_col(input, preceding_window, following_window, min_periods, cudf::experimental::make_min_aggregation());
     //run_test_col(input, preceding_window, following_window, min_periods, cudf::experimental::make_count_aggregation());
     //run_test_col(input, preceding_window, following_window, min_periods, cudf::experimental::make_max_aggregation());
-    //run_test_col(input, preceding_window, following_window, min_periods, cudf::experimental::make_mean_aggregation());
 
-    if (!cudf::is_timestamp(input.type()))
+    if (not cudf::is_timestamp(input.type())){
       run_test_col(input, preceding_window, following_window, min_periods, cudf::experimental::make_sum_aggregation());
+      run_test_col(input, preceding_window, following_window, min_periods, cudf::experimental::make_mean_aggregation());
+    }
   }
 
   private:
@@ -426,7 +428,7 @@ TEST_F(RollingErrorTest, SumTimestampNotSupported)
                cudf::logic_error);
 }
 
-TYPED_TEST_CASE(RollingTest, ::testing::Types<int8_t>);
+TYPED_TEST_CASE(RollingTest, cudf::test::FixedWidthTypes);
 
 // simple example from Pandas docs
 TYPED_TEST(RollingTest, SimpleStatic)
