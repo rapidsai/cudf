@@ -205,7 +205,7 @@ constexpr inline bool is_fixed_width(data_type type) {
   return cudf::experimental::type_dispatcher(type, is_fixed_width_impl{});
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Indicates whether the type `T` is a compound type.
  *
  * `column`s with "compound" elements are logically a single column of elements,
@@ -216,10 +216,11 @@ constexpr inline bool is_fixed_width(data_type type) {
  * @tparam T The type to verify
  * @return true `T` corresponds to a "compound" type
  * @return false `T` corresponds to a "simple" type
- *---------------------------------------------------------------------------**/
+ */
 template <typename T>
 constexpr inline bool is_compound() {
-  return std::is_same<T, cudf::string_view>::value;
+  return std::is_same<T, cudf::string_view>::value or 
+         std::is_same<T, cudf::dictionary32>::value;
 }
 
 struct is_compound_impl {
