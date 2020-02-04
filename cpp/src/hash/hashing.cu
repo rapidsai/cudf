@@ -33,7 +33,8 @@ namespace {
 // Launch configuration for optimized hash partition
 constexpr size_type OPTIMIZED_BLOCK_SIZE = 512;
 constexpr size_type OPTIMIZED_ROWS_PER_THREAD = 8;
-constexpr size_type ELEMENT_PER_THREAD = 2;
+constexpr size_type ELEMENTS_PER_THREAD = 2;
+constexpr size_type THRESHOLD_FOR_OPTIMIZED_PARTITION_KERNEL = 1024; 
 
 // Launch configuration for fallback hash partition
 constexpr size_type FALLBACK_BLOCK_SIZE = 256;
@@ -265,11 +266,11 @@ void copy_block_partitions(
   __shared__ typename BlockScan::TempStorage temp_storage;
 
   // use src/partitioned_join.cuh=2 to support upto 1024 partitions 
-  size_type temp_histo[ELEMENT_PER_THREAD];
+  size_type temp_histo[ELEMENTS_PER_THREAD];
 
-  for (int i = 0; i < ELEMENT_PER_THREAD; ++i) {
-    if (ELEMENT_PER_THREAD * threadIdx.x + i < num_partitions) {
-      temp_histo[i] = block_partition_sizes[blockIdx.x + (ELEMENT_PER_THREAD * threadIdx.x + i) * gridDim.x]; 
+  for (int i = 0; i < ELEMENTS_PER_THREAD; ++i) {
+    if (ELEMENTS_PER_THREAD * threadIdx.x + i < num_partitions) {
+      temp_histo[i] = block_partition_sizes[blockIdx.x + (ELEMENTS_PER_THREAD * threadIdx.x + i) * gridDim.x]; 
     } else {
       temp_histo[i] = 0;
     }
@@ -286,9 +287,9 @@ void copy_block_partitions(
   }
 
   // Calculate the offset in shared memory of each partition in this thread block
-  for (int i = 0; i < ELEMENT_PER_THREAD; ++i) {
-    if (ELEMENT_PER_THREAD * threadIdx.x + i < num_partitions) {
-      partition_offset_shared[ELEMENT_PER_THREAD * threadIdx.x + i + 1] = temp_histo[i]; 
+  for (int i = 0; i < ELEMENTS_PER_THREAD; ++i) {
+    if (ELEMENTS_PER_THREAD * threadIdx.x + i < num_partitions) {
+      partition_offset_shared[ELEMENTS_PER_THREAD * threadIdx.x + i + 1] = temp_histo[i]; 
     } 
   }
 
@@ -438,7 +439,7 @@ hash_partition_table(table_view const& input,
 {
   auto const num_rows = table_to_hash.num_rows();
 
-  bool const use_optimization {num_partitions <= 1024};
+  bool const use_optimization {num_partitions <= THRESHOLD_FOR_OPTIMIZED_PARTITION_KERNEL};
   auto const block_size = use_optimization
     ? OPTIMIZED_BLOCK_SIZE : FALLBACK_BLOCK_SIZE;
   auto const rows_per_thread = use_optimization
