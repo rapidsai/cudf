@@ -561,7 +561,7 @@ def test_drop_duplicates_multi_index():
         ["one", "two", "one", "two", "one", "two", "one", "two"],
     ]
 
-    idx = MultiIndex.from_tuples(list(zip(*arrays)), names=['a', 'b'])
+    idx = MultiIndex.from_tuples(list(zip(*arrays)), names=["a", "b"])
     pdf = DataFrame(np.random.randint(0, 2, (8, 4)), index=idx)
     gdf = cudf.DataFrame.from_pandas(pdf)
 
