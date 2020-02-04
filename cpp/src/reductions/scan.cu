@@ -12,6 +12,7 @@
 #include <cudf/reduction.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/null_mask.hpp>
+#include <cudf/detail/aggregation/aggregation.hpp>
 
 namespace cudf {
 namespace experimental {
@@ -217,36 +218,37 @@ template <typename T,
 };
 
 std::unique_ptr<column> scan(const column_view& input,
-                             scan_op op, bool inclusive, bool skipna,
+                             std::unique_ptr<aggregation> const &agg,
+                             bool inclusive, bool skipna,
                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                              cudaStream_t stream=0)
 {
   CUDF_EXPECTS(is_numeric(input.type()) || is_compound(input.type()), "Unexpected non-numeric or non-string type.");
 
-  switch (op) {
-    case scan_op::SUM:
+  switch (agg->kind) {
+    case aggregation::SUM:
         return cudf::experimental::type_dispatcher(input.type(),
             ScanDispatcher<cudf::DeviceSum>(), input, inclusive, skipna, mr, stream);
-    case scan_op::MIN:
+    case aggregation::MIN:
         return cudf::experimental::type_dispatcher(input.type(),
             ScanDispatcher<cudf::DeviceMin>(), input, inclusive, skipna, mr, stream);
-    case scan_op::MAX:
+    case aggregation::MAX:
         return cudf::experimental::type_dispatcher(input.type(),
             ScanDispatcher<cudf::DeviceMax>(), input, inclusive, skipna, mr, stream);
-    case scan_op::PRODUCT:
+    case aggregation::PRODUCT:
         return cudf::experimental::type_dispatcher(input.type(),
             ScanDispatcher<cudf::DeviceProduct>(), input, inclusive, skipna, mr, stream);
     default:
-        CUDF_FAIL("The input enum `scan::operators` is out of the range");
+        CUDF_FAIL("Unsupported aggregation operator for scan");
     }
 }
 } // namespace detail
 
-std::unique_ptr<column> scan(const column_view& input,
-                             scan_op op, bool inclusive, bool skipna,
-                             rmm::mr::device_memory_resource* mr)
-{
-  return detail::scan(input, op, inclusive, skipna, mr);
+std::unique_ptr<column> scan(const column_view &input,
+                             std::unique_ptr<aggregation> const &agg,
+                             bool inclusive, bool skipna,
+                             rmm::mr::device_memory_resource *mr) {
+  return detail::scan(input, agg, inclusive, skipna, mr);
 }
 
 }  // namespace experimental

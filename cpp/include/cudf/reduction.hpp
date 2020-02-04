@@ -23,17 +23,6 @@
 namespace cudf {
 namespace experimental {
 
-/**
- * @brief These enums indicate the supported operations of prefix scan that can
- * be performed on a column
- */
-enum class scan_op {
-  SUM = 0,  ///< Computes the prefix scan of     sum operation of all values for the column
-  MIN,      ///< Computes the prefix scan of maximum operation of all values for the column
-  MAX,      ///< Computes the prefix scan of maximum operation of all values for the column
-  PRODUCT,  ///< Computes the prefix scan of multiplicative product operation of all values for the column
-};
-
 /** --------------------------------------------------------------------------*
  * @brief  Computes the reduction of the values in all rows of a column.
  * This function does not detect overflows in reductions.
@@ -75,15 +64,16 @@ std::unique_ptr<scalar> reduce(
  * @throws `cudf::logic_error` if column datatype is not numeric type.
  *
  * @param[in] input The input column view for the scan
- * @param[in] op The operation of the scan
+ * @param[in] agg unique_ptr of the aggregation operator applied by the scan
  * @param[in] inclusive The flag for applying an inclusive scan if true,
  *            an exclusive scan if false.
  * @params[in] mr The resource to use for all allocations
  * @returns unique pointer to new output column
  * ----------------------------------------------------------------------------**/
-std::unique_ptr<column> scan(
-    const column_view& input, scan_op op, bool inclusive, bool skipna=true,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column>
+scan(const column_view &input, std::unique_ptr<aggregation> const &agg,
+     bool inclusive, bool skipna = true,
+     rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
 }  // namespace experimental
 }  // namespace cudf
