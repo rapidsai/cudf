@@ -185,15 +185,15 @@ generate_merged_indices(table_view const& left_table,
     rmm::device_vector<order> d_column_order(column_order);
 
     auto exec_pol = rmm::exec_policy(stream);
-    if (nullable){
+    if (nullable)
+    {
       rmm::device_vector<null_order> d_null_precedence(null_precedence);
 
       auto ineq_op =
         experimental::detail::row_lexicographic_tagged_comparator<true>(*lhs_device_view,
-                                                                              *rhs_device_view,
-                                                                              d_column_order.data().get(),
-                                                                              d_null_precedence.data().get());
-
+                                                                        *rhs_device_view,
+                                                                        d_column_order.data().get(),
+                                                                        d_null_precedence.data().get());
         thrust::merge(exec_pol->on(stream),
                       left_begin_zip_iterator,
                       left_end_zip_iterator,
@@ -201,11 +201,13 @@ generate_merged_indices(table_view const& left_table,
                       right_end_zip_iterator,
                       merged_indices.begin(),
                       ineq_op);
-    } else {
+    }
+    else
+    {
       auto ineq_op =
         experimental::detail::row_lexicographic_tagged_comparator<false>(*lhs_device_view,
-                                                                               *rhs_device_view,
-                                                                               d_column_order.data().get());
+                                                                         *rhs_device_view,
+                                                                         d_column_order.data().get());
         thrust::merge(exec_pol->on(stream),
                       left_begin_zip_iterator,
                       left_end_zip_iterator,
@@ -219,6 +221,7 @@ generate_merged_indices(table_view const& left_table,
 
     return merged_indices;
 }
+
 
 } // anonym. namespace
 
@@ -245,10 +248,9 @@ struct column_merger
 
   // column merger operator;
   //
-  template<typename Element>//required: column type
-  std::enable_if_t<cudf::is_fixed_width<Element>(),
-                   std::unique_ptr<cudf::column>>
-  operator()(cudf::column_view const& lcol, cudf::column_view const& rcol) const
+  template<typename Element> //required: column type
+  std::unique_ptr<column> operator()(column_view const& lcol,
+                                     column_view const& rcol) const
   {
     auto lsz = lcol.size();
     auto merged_size = lsz + rcol.size();
@@ -318,39 +320,38 @@ struct column_merger
     return p_merged_col;
   }
 
-  //specialization for strings
-  //
-  template<typename Element>//required: column type
-  std::enable_if_t<not cudf::is_fixed_width<Element>(),
-                   std::unique_ptr<cudf::column>>
-  operator()(cudf::column_view const& lcol, cudf::column_view const& rcol) const
-  {
-
-    auto column = strings::detail::merge<index_type>( strings_column_view(lcol),
-                                                      strings_column_view(rcol),
-                                                      dv_row_order_.begin(),
-                                                      dv_row_order_.end(),
-                                                      mr_,
-                                                      stream_);
-
-    if (lcol.has_nulls() || rcol.has_nulls())
-      {
-        auto merged_view = column->mutable_view();
-        materialize_bitmask(lcol,
-                            rcol,
-                            merged_view,
-                            dv_row_order_.data().get(),
-                            stream_);
-      }
-    return column;
-  }
-
 private:
   index_vector const& dv_row_order_;
   rmm::mr::device_memory_resource* mr_;
   cudaStream_t stream_;
 };
 
+// specialization for strings
+template<>
+std::unique_ptr<column> column_merger::operator()<cudf::string_view>(column_view const& lcol,
+                                                                     column_view const& rcol) const
+{
+  auto column = strings::detail::merge<index_type>( strings_column_view(lcol),
+                                                    strings_column_view(rcol),
+                                                    dv_row_order_.begin(),
+                                                    dv_row_order_.end(),
+                                                    mr_,
+                                                    stream_);
+  if (lcol.has_nulls() || rcol.has_nulls())
+    {
+      auto merged_view = column->mutable_view();
+      materialize_bitmask(lcol, rcol, merged_view, dv_row_order_.data().get(), stream_);
+    }
+  return column;
+}
+
+// specialization for dictionary
+template<>
+std::unique_ptr<column> column_merger::operator()<cudf::dictionary32>(column_view const& lcol,
+                                                                          column_view const& rcol) const
+{
+  CUDF_FAIL("dictionary not supported yet");
+}
 
 std::unique_ptr<cudf::experimental::table> merge(cudf::table_view const& left_table,
                                                  cudf::table_view const& right_table,
@@ -387,11 +388,7 @@ std::unique_ptr<cudf::experimental::table> merge(cudf::table_view const& left_ta
     //extract merged row order according to indices:
     //
     rmm::device_vector<index_type>
-      merged_indices = generate_merged_indices(index_left_view,
-                                               index_right_view,
-                                               column_order,
-                                               null_precedence,
-                                               nullable);
+      merged_indices = generate_merged_indices(index_left_view, index_right_view, column_order, null_precedence, nullable);
 
     //create merged table:
     //
@@ -428,3 +425,4 @@ std::unique_ptr<cudf::experimental::table> merge(table_view const& left_table,
 
 }  // namespace experimental
 }  // namespace cudf
+
