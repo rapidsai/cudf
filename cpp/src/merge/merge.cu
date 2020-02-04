@@ -17,28 +17,27 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/tuple.h>
 #include <thrust/merge.h>
- 
+
 #include <vector>
 #include <queue>
-#include <iostream>
- 
+
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <rmm/thrust_rmm_allocator.h>
 #include <cudf/copying.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
- 
+
 #include <cudf/detail/merge.cuh>
 #include <cudf/strings/detail/merge.cuh>
- 
+
 namespace { // anonym.
- 
+
 using namespace cudf;
- 
+
 using experimental::detail::side;
 using index_type = experimental::detail::index_type;
- 
- 
+
+
 /**
  * @brief Merges the bits of two validity bitmasks.
  *
@@ -192,8 +191,22 @@ generate_merged_indices(table_view const& left_table,
 
       auto ineq_op =
         experimental::detail::row_lexicographic_tagged_comparator<true>(*lhs_device_view,
-                                                                              *rhs_device_view,
-                                                                              d_column_order.data().get());
+                                                                        *rhs_device_view,
+                                                                        d_column_order.data().get(),
+                                                                        d_null_precedence.data().get());
+
+        thrust::merge(exec_pol->on(stream),
+                      left_begin_zip_iterator,
+                      left_end_zip_iterator,
+                      right_begin_zip_iterator,
+                      right_end_zip_iterator,
+                      merged_indices.begin(),
+                      ineq_op);
+    } else {
+      auto ineq_op =
+        experimental::detail::row_lexicographic_tagged_comparator<false>(*lhs_device_view,
+                                                                         *rhs_device_view,
+                                                                         d_column_order.data().get());
       thrust::merge(exec_pol->on(stream),
                     left_begin_zip_iterator,
                     left_end_zip_iterator,
