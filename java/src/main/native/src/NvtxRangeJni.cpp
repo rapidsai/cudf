@@ -14,9 +14,6 @@
  * limitations under the License.
  */
 
-#include <cstddef>
-#include <cstdint>
-#include "cudf/cudf.h"
 #include <cudf/utilities/nvtx_utils.hpp>
 
 #include "jni_utils.hpp"

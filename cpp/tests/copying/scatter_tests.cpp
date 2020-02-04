@@ -547,6 +547,33 @@ TYPED_TEST(ScatterDataTypeTests, ScatterScalarBothNulls)
   expect_tables_equal(result->view(), expected_table);
 }
 
+TYPED_TEST(ScatterDataTypeTests, ScatterSourceNullsLarge)
+{
+  using cudf::test::fixed_width_column_wrapper;
+  using cudf::test::expect_tables_equal;
+  using cudf::test::make_counting_transform_iterator;
+
+  constexpr cudf::size_type N {513};
+
+  fixed_width_column_wrapper<TypeParam> source({0, 0, 0, 0}, {0, 0, 0, 0});
+  fixed_width_column_wrapper<int32_t> scatter_map({0, 1, 2, 3});
+  auto target_data = make_counting_transform_iterator(0, [](auto i){return i;});
+  fixed_width_column_wrapper<TypeParam> target(target_data, target_data+N);
+
+  auto expect_data = make_counting_transform_iterator(0, [](auto i){return i;});
+  auto expect_valid = make_counting_transform_iterator(0, [](auto i){return i>3;});
+  fixed_width_column_wrapper<TypeParam> expected(expect_data, expect_data+N, expect_valid);
+
+  auto const source_table = cudf::table_view({source, source});
+  auto const target_table = cudf::table_view({target, target});
+  auto const expected_table = cudf::table_view({expected, expected});
+
+  auto const result = cudf::experimental::scatter(source_table, scatter_map,
+    target_table, true);
+
+  expect_tables_equal(result->view(), expected_table);
+}
+
 class ScatterStringsTests : public cudf::test::BaseFixture {};
 
 TEST_F(ScatterStringsTests, ScatterNoNulls)

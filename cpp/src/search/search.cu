@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,12 +24,12 @@
 
 #include <hash/unordered_multiset.cuh>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/search.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <strings/utilities.hpp>
 
 #include <thrust/binary_search.h>
-#include <thrust/device_vector.h>
 #include <thrust/logical.h>
 
 namespace cudf {
@@ -64,7 +64,6 @@ void launch_search(DataIterator it_data,
 
 } // namespace
 
-namespace detail {
 
 std::unique_ptr<column> search_ordered(table_view const& t,
                                        table_view const& values,
@@ -150,10 +149,12 @@ struct contains_scalar_dispatch {
   }
 };
 
+namespace detail {
+
 bool contains(column_view const& col,
               scalar const& value,
               rmm::mr::device_memory_resource *mr,
-              cudaStream_t stream = 0)
+              cudaStream_t stream)
 {
   CUDF_EXPECTS(col.type() == value.type(), "DTYPE mismatch");
 
@@ -227,7 +228,7 @@ struct multi_contains_dispatch {
 std::unique_ptr<column> contains(column_view const& haystack,
                                  column_view const& needles,
                                  rmm::mr::device_memory_resource* mr,
-                                 cudaStream_t stream = 0) {
+                                 cudaStream_t stream) {
 
   CUDF_EXPECTS(haystack.type() == needles.type(), "DTYPE mismatch");
 
@@ -235,7 +236,30 @@ std::unique_ptr<column> contains(column_view const& haystack,
                                              multi_contains_dispatch{},
                                              haystack, needles, mr, stream);
 }
+
+std::unique_ptr<column> lower_bound(table_view const& t,
+                                    table_view const& values,
+                                    std::vector<order> const& column_order,
+                                    std::vector<null_order> const& null_precedence,
+                                    rmm::mr::device_memory_resource *mr,
+                                    cudaStream_t stream)
+{
+  return search_ordered(t, values, true, column_order, null_precedence, mr, stream);
+}
+
+std::unique_ptr<column> upper_bound(table_view const& t,
+                                    table_view const& values,
+                                    std::vector<order> const& column_order,
+                                    std::vector<null_order> const& null_precedence,
+                                    rmm::mr::device_memory_resource *mr,
+                                    cudaStream_t stream)
+{
+  return search_ordered(t, values, false, column_order, null_precedence, mr, stream);
+}
+
 } // namespace detail
+
+// external APIs
 
 std::unique_ptr<column> lower_bound(table_view const& t,
                                     table_view const& values,
@@ -243,7 +267,7 @@ std::unique_ptr<column> lower_bound(table_view const& t,
                                     std::vector<null_order> const& null_precedence,
                                     rmm::mr::device_memory_resource *mr)
 {
-  return detail::search_ordered(t, values, true, column_order, null_precedence, mr);
+  return detail::lower_bound(t, values, column_order, null_precedence, mr);
 }
 
 std::unique_ptr<column> upper_bound(table_view const& t,
@@ -252,7 +276,7 @@ std::unique_ptr<column> upper_bound(table_view const& t,
                                     std::vector<null_order> const& null_precedence,
                                     rmm::mr::device_memory_resource *mr)
 {
-  return detail::search_ordered(t, values, false, column_order, null_precedence, mr);
+  return detail::upper_bound(t, values, column_order, null_precedence, mr);
 }
 
 bool contains(column_view const& col, scalar const& value, rmm::mr::device_memory_resource *mr)
