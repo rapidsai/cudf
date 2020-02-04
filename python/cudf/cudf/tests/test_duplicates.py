@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from pandas import DataFrame, Series, date_range
+from pandas import DataFrame, MultiIndex, Series, date_range
 
 import cudf
 from cudf import concat
@@ -560,7 +560,9 @@ def test_drop_duplicates_multi_index():
         ["bar", "bar", "baz", "baz", "foo", "foo", "qux", "qux"],
         ["one", "two", "one", "two", "one", "two", "one", "two"],
     ]
-    pdf = DataFrame(np.random.randint(0, 2, (8, 4)), index=arrays)
+
+    idx = MultiIndex.from_tuples(list(zip(*arrays)), names=['a', 'b'])
+    pdf = DataFrame(np.random.randint(0, 2, (8, 4)), index=idx)
     gdf = cudf.DataFrame.from_pandas(pdf)
 
     expected = pdf.drop_duplicates()
