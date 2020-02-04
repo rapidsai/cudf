@@ -173,5 +173,5 @@ std::unique_ptr<column> token_count( strings_column_view const& strings,
     return detail::token_count( strings, delimiters, mr );
 }
 
-} // namespace strings
+} // namespace nvtext
 } // namespace cudf

@@ -38,7 +38,7 @@ using string_index_pair = thrust::pair<const char*,size_type>;
  */
 struct base_tokenator
 {
-    string_view d_delimiter; // zero or more delimiter characters
+    string_view d_delimiter{}; // zero or more delimiter characters
 
     /**
      * @brief Return true if the given character is a delimiter.
@@ -217,5 +217,5 @@ struct multi_delimiter_tokenizer_fn
 };
 
 } // namespace detail
-} // namespace strings
+} // namespace nvtext
 } // namespace cudf
