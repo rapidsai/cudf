@@ -220,7 +220,6 @@ struct column_gatherer_impl<dictionary32, MapItType>
           return make_empty_column(data_type{DICTIONARY32});
       // we decided we will copy the keys for gather
       auto keys_copy = std::make_unique<column>( dictionary.keys(), stream, mr );
-
       // create view of the indices column combined with the null mask
       // in order to call gather on it
       column_view indices( data_type{INT32}, dictionary.size(), 
@@ -230,15 +229,16 @@ struct column_gatherer_impl<dictionary32, MapItType>
       column_gatherer_impl<int32_t,MapItType> index_gatherer;
       auto new_indices = index_gatherer( indices, gather_map_begin, gather_map_end,
                                          nullify_out_of_bounds, mr, stream);
-      // copy null mask for the output parent
-      auto null_count = new_indices->null_count();
-      rmm::device_buffer null_mask{};
-      if( null_count )
-          null_mask = copy_bitmask(new_indices->view(),stream,mr);
-      // reset null mask on indices column
-      new_indices->set_null_mask( rmm::device_buffer{}, 0 );
-      return make_dictionary_column( std::move(keys_copy), std::move(new_indices),
-                                     std::move(null_mask), null_count );
+      // dissect the column's contents 
+      auto null_count = new_indices->null_count(); // get this before it goes away
+      auto contents = new_indices->release(); // new_indices will now be empty
+      // build the output indices column from the contents' data component
+      auto indices_column = std::make_unique<column>( data_type{INT32},
+          static_cast<size_type>(output_count), std::move(*(contents.data.release())),
+          rmm::device_buffer{}, 0 ); // set null count to 0
+      // finally, build the dictionary with the null_mask component and the keys and indices
+      return make_dictionary_column( std::move(keys_copy), std::move(indices_column),
+                                     std::move(*(contents.null_mask.release())), null_count );
   }
 };
 
