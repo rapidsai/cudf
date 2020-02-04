@@ -24,8 +24,8 @@ namespace nvtext
 {
 
 /**
- * @brief Returns new string column where each string in the input column
- * has any whitespace normalized.
+ * @brief Returns new strings column by normalizing the whitespace in each
+ * string in the input column.
  *
  * Normalizing a string replaces any number of whitespace character runs
  * with a single space and trims whitespace from the beginning and end
@@ -33,12 +33,12 @@ namespace nvtext
  *
  * Example:
  * ```
- * s = ["a b", "  c  d", "e\tf "]
+ * s = ["a b", "  c  d", "e \t f "]
  * t = normalize_spaces(s)
  * t is now ["a b","c d","e f"]
  * ```
  *
- * An null input element at row `i` produces corresponding null entry
+ * A null input element at row `i` produces a corresponding null entry
  * for row `i` in the output column.
  *
  * @param strings Strings column to normalize.
