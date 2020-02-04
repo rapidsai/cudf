@@ -367,7 +367,7 @@ table_ptr_type merge(cudf::table_view const& left_table,
     //
     cudf::table_view index_left_view{left_table.select(key_cols)};
     cudf::table_view index_right_view{right_table.select(key_cols)};
-    const bool nullable = cudf::has_nulls(index_left_view) || cudf::has_nulls(index_right_view);
+    bool const nullable = cudf::has_nulls(index_left_view) || cudf::has_nulls(index_right_view);
 
     //extract merged row order according to indices:
     //
@@ -376,7 +376,7 @@ table_ptr_type merge(cudf::table_view const& left_table,
 
     //create merged table:
     //    
-    const auto n_cols = left_table.num_columns();
+    auto const n_cols = left_table.num_columns();
     std::vector<std::unique_ptr<column>> merged_cols;
     merged_cols.reserve(n_cols);
 
@@ -384,7 +384,7 @@ table_ptr_type merge(cudf::table_view const& left_table,
     transform(left_table.begin(), left_table.end(), 
               right_table.begin(), 
               std::back_inserter(merged_cols),
-              [&](auto& left_col, auto& right_col){
+              [&](auto const& left_col, auto const& right_col){
                 return cudf::experimental::type_dispatcher(left_col.type(),
                                                            merger,
                                                            left_col,
@@ -394,55 +394,49 @@ table_ptr_type merge(cudf::table_view const& left_table,
     return std::make_unique<cudf::experimental::table>(std::move(merged_cols));
 }
 
-
-class merge_queue_item {
-private:
+struct merge_queue_item {
   table_view view_;
   table_ptr_type table_;
-  cudf::size_type priority_;
+  // Priority is a separate member to ensure that moving from an object 
+  // does not change its priority (which would ruin the queue invariant)
+  cudf::size_type priority_ = 0;
  
   void set_priority() {
     // Smallest tables have the highest priority
     priority_ = -view_.num_rows();
   }
  
-public:
   merge_queue_item(table_view const& view, table_ptr_type&& table):
   view_(view), 
   table_(std::move(table)) {
     set_priority();
   }
-
-  explicit merge_queue_item(std::priority_queue<merge_queue_item>& queue){
-    auto& item = const_cast<merge_queue_item&>(queue.top());
-    view_ = item.view_;
-    // Safe as priority_ is not affected by the move
-    table_ = std::move(item.table_);
-    set_priority();
-
-    queue.pop();
-  }
-
-   auto& view() const { return view_; }
-   auto& table() { return table_; }
  
   bool operator<(merge_queue_item const& other) const {
       return priority_ < other.priority_;
   }
 };
+
+// Helper function to ensure that moving out of the priority_queue is "atomic"
+template <typename T>
+T top_and_pop(std::priority_queue<T>& q){
+  auto moved = std::move(const_cast<T&>(q.top()));
+  q.pop();
+  return moved;
+}
  
 table_ptr_type merge(std::vector<table_view> const& tables_to_merge,
-                      std::vector<cudf::size_type> const& key_cols,
-                      std::vector<cudf::order> const& column_order,
-                      std::vector<cudf::null_order> const& null_precedence,
-                      rmm::mr::device_memory_resource* mr,
-                      cudaStream_t stream = 0) {
+                     std::vector<cudf::size_type> const& key_cols,
+                     std::vector<cudf::order> const& column_order,
+                     std::vector<cudf::null_order> const& null_precedence,
+                     rmm::mr::device_memory_resource* mr,
+                     cudaStream_t stream = 0) {
     if (tables_to_merge.empty()) {
       return std::make_unique<cudf::experimental::table>();
     }
  
     auto const& first_table = tables_to_merge.front();
-    const auto n_cols = first_table.num_columns();
+    auto const n_cols = first_table.num_columns();
  
     for (auto const& table: tables_to_merge) {
       CUDF_EXPECTS(n_cols == table.num_columns(),
@@ -473,7 +467,7 @@ table_ptr_type merge(std::vector<table_view> const& tables_to_merge,
 
     // If there is only one non-empty table_view, return its copy
     if (merge_queue.size() == 1) {
-      return std::make_unique<cudf::experimental::table>(merge_queue.top().view());
+      return std::make_unique<cudf::experimental::table>(merge_queue.top().view_);
     }
     // No inputs have rows, return a table with same columns as the first one
     if (merge_queue.empty()) {
@@ -483,12 +477,12 @@ table_ptr_type merge(std::vector<table_view> const& tables_to_merge,
     // Pick the two smallest tables and merge them
     // Until there is only one table left in the queue
     while (merge_queue.size() > 1) {
+      // To delete the intermediate table at the end of the block
+      auto const left_table = top_and_pop(merge_queue);
       // Deallocated at the end of the block
-      auto const left_table = merge_queue_item(merge_queue);
-      // Deallocated at the end of the block
-      auto const right_table = merge_queue_item(merge_queue);
-      auto merged_table = merge(left_table.view(), 
-                                right_table.view(), 
+      auto const right_table = top_and_pop(merge_queue);
+      auto merged_table = merge(left_table.view_, 
+                                right_table.view_, 
                                 key_cols, 
                                 column_order, 
                                 null_precedence, 
@@ -498,7 +492,7 @@ table_ptr_type merge(std::vector<table_view> const& tables_to_merge,
       merge_queue.emplace(merged_table_view, std::move(merged_table));
     }
 
-    return std::move(merge_queue_item(merge_queue).table());
+    return std::move(top_and_pop(merge_queue).table_);
 }
  
 }  // namespace detail
