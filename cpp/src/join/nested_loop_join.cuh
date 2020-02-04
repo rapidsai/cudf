@@ -31,8 +31,16 @@ namespace join {
 
 namespace detail {
 
+/**
+ * @brief   Provides a comparator based upon the specified comparison operator
+ */
 class join_operation_comparator {
 public:
+  /**
+   * @brief  Host-side constructor
+   *
+   * @param comparison  Identifies the desired comparison (<, <=, ==, !=, >, >=)
+   */
   __host__ join_operation_comparator(join_comparison_operator comparison) {
     cmp = true;
     if (comparison == join_comparison_operator::LESS_THAN) {
@@ -53,6 +61,13 @@ public:
     }
   }
 
+  /**
+   * @brief  Device-side function to evaluate the value of a weak_ordering
+   *         against the join criteria
+   *
+   * @return true if this value of weak_ordering satisfies the join criteria
+   *         false if not
+   */
   bool __device__ operator()(cudf::experimental::weak_ordering v) {
     return (v == value) == cmp;
   }
@@ -63,15 +78,37 @@ private:
 };
   
 
+/**
+ *  @brief  Dispatch function for the type dispatcher to compare an element
+ *          from corresponding columns in left and right tables
+ */
 class join_operation_dispatch {
 public:
+  /**
+   *  @brief  Host-side constructor
+   *
+   *  @param left        The left table
+   *  @param right       The right table
+   *  @param operation   Join operation
+   */
   __host__ join_operation_dispatch(table_device_view const &left, table_device_view const &right, join_operation const & operation):
     _left(left), _right(right), _compare(operation.op),
     _left_column_index(operation.left_column_idx),
     _right_column_index(operation.right_column_idx) {}
 
+  /**
+   *  @brief  Device-side function returning the type of the columns being compared
+   */
   data_type __device__ type() const noexcept { return _left.column(_left_column_index).type(); }
 
+  /**
+   *  @brief  Dispatched function comparing an element from left to an element from right
+   *
+   *  The constructor identified which columns to interact with, this is stored in the class.
+   *
+   *  @param left_index   Which row in the left table to compare
+   *  @param right_index  Which row in the right table to compare
+   */
   template <typename Element>
   bool __device__ operator()(cudf::size_type left_index, cudf::size_type right_index) {
 
@@ -91,6 +128,14 @@ private:
   cudf::size_type             _right_column_index;
 };
 
+/**
+ *  @brief  Device-side function to perform a set of join operations anded together.
+ *
+ *  @param num_operations   Number of operations
+ *  @param operations       Array of operation dispatch objects
+ *  @param l                Index of left row to compare
+ *  @param r                Index of right row to compare
+ */
 __device__ bool match_operations(size_t num_operations, 
                                  join_operation_dispatch const* operations,
                                  cudf::size_type l,
@@ -107,20 +152,19 @@ __device__ bool match_operations(size_t num_operations,
 }
 
 
+/**
+ *  @brief  Compute inner join using nested loop join technique
+ *
+ *  @param left      The left table
+ *  @param right     The right table
+ *  @param join_ops  Vector of join operations which are ANDed together
+ *  @param stream    Cuda stream
+ */
 rmm::device_vector<int64_t> nested_join_indices(table_view const& left,
                                                 table_view const& right,
                                                 std::vector<join_operation> const& join_ops,
                                                 cudaStream_t stream) {
 
-
-  // TODO:  This should be done before we come into this
-  //         If we do this outside then I'm not sure I need JoinKind
-  //         as a template parameter here...
-  //
-  //Trivial left join case - exit early
-  //if ((JoinKind == join_kind::LEFT_JOIN) && (right.num_rows() == 0)) {
-  //  return get_trivial_left_join_indices(left, stream);
-  //}
 
   auto d_left = table_device_view::create(left, stream);
   auto d_right = table_device_view::create(right, stream);
@@ -137,7 +181,9 @@ rmm::device_vector<int64_t> nested_join_indices(table_view const& left,
   join_operation_dispatch *d_operations = operations.data().get();
 
   //
-  //   Naive implementation
+  //   Naive implementation.  Two passes, first we'll count how many
+  //   rows out of the cross product pass the criteria, then we'll
+  //   allocate space and make a second pass to fill the space.
   //
   auto output_size = thrust::count_if(rmm::exec_policy(stream)->on(stream),
                                       thrust::make_counting_iterator<cudf::size_type>(0),
@@ -157,6 +203,13 @@ rmm::device_vector<int64_t> nested_join_indices(table_view const& left,
 
   rmm::device_vector<int64_t> output_indices(output_size);
 
+  //
+  //   NOTE: a custom kernel here (instead of using copy_if) could directly
+  //         compute left_complement and right_complement (or at least the
+  //         expensive part of that computation - the scatter) and save
+  //         several kernel calls later.  I think the same technique could
+  //         be used for sort/merge and hash joins.
+  //
   thrust::copy_if(rmm::exec_policy(stream)->on(stream),
                   thrust::make_counting_iterator<cudf::size_type>(0),
                   thrust::make_counting_iterator<cudf::size_type>(left_num_rows * right_num_rows),
