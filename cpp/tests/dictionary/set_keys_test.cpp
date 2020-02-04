@@ -37,44 +37,35 @@ TEST_F(DictionarySetKeysTest, StringsKeys)
 
     auto result = cudf::dictionary::set_keys( dictionary->view(), new_keys );
     cudf::dictionary_column_view view(result->view());
-
-    cudf::test::print(view.dictionary_keys());
-    std::cout << std::endl;
-
-    cudf::test::expect_columns_equal(view.dictionary_keys(), new_keys);
-
-    cudf::test::print(view.indices());
-    std::cout << std::endl;
-
-    //std::vector<int32_t> h_expected{4,0,3,1,2,2,2,4,0};
-    //cudf::test::fixed_width_column_wrapper<int32_t> indices_expected( h_expected.begin(), h_expected.end() );
-    //cudf::test::expect_columns_equal(view.indices(), indices_expected);
+    cudf::test::expect_columns_equal(view.keys(), new_keys);
+    cudf::test::fixed_width_column_wrapper<int32_t> indices_expected{2,0,2,1,1,1,1,2,0};
+    cudf::test::expect_columns_equal(view.indices(), indices_expected);
 }
 
-//TEST_F(DictionarySetKeysTest, FloatKeys)
-//{
-//    cudf::test::fixed_width_column_wrapper<float> input{ 4.25, 7.125, 0.5, -11.75, 7.125, 0.5 };
-//
-//    auto dictionary = cudf::dictionary::encode( input );
-//    cudf::dictionary_column_view view(dictionary->view());
-//
-//    cudf::test::fixed_width_column_wrapper<float> keys_expected{ -11.75, 0.5, 4.25, 7.125 };
-//    cudf::test::expect_columns_equal(view.dictionary_keys(), keys_expected);
-//
-//    cudf::test::fixed_width_column_wrapper<int32_t> expected{2,3,1,0,3,1};
-//    cudf::test::expect_columns_equal(view.indices(), expected);
-//}
-//
-//TEST_F(DictionarySetKeysTest, WithNulls)
-//{
-//    cudf::test::fixed_width_column_wrapper<int64_t> input{ { 444,0,333,111,222,222,222,444,000 }, {1,1,1,1,1,0,1,1,1}};
-//
-//    auto dictionary = cudf::dictionary::encode( input );
-//    cudf::dictionary_column_view view(dictionary->view());
-//
-//    cudf::test::fixed_width_column_wrapper<int64_t> keys_expected{ 0,111,222,333,444 };
-//    cudf::test::expect_columns_equal(view.dictionary_keys(), keys_expected);
-//
-//    cudf::test::fixed_width_column_wrapper<int32_t> expected{{4,0,3,1,2,2,2,4,0}};
-//    cudf::test::expect_columns_equal(view.indices(), expected);
-//}
+TEST_F(DictionarySetKeysTest, FloatKeys)
+{
+    cudf::test::fixed_width_column_wrapper<float> input{ 4.25, 7.125, 0.5, -11.75, 7.125, 0.5 };
+
+    auto dictionary = cudf::dictionary::encode( input );
+    cudf::dictionary_column_view view(dictionary->view());
+
+    cudf::test::fixed_width_column_wrapper<float> keys_expected{ -11.75, 0.5, 4.25, 7.125 };
+    cudf::test::expect_columns_equal(view.keys(), keys_expected);
+
+    cudf::test::fixed_width_column_wrapper<int32_t> expected{2,3,1,0,3,1};
+    cudf::test::expect_columns_equal(view.indices(), expected);
+}
+
+TEST_F(DictionarySetKeysTest, WithNulls)
+{
+    cudf::test::fixed_width_column_wrapper<int64_t> input{ { 444,0,333,111,222,222,222,444,000 }, {1,1,1,1,1,0,1,1,1}};
+
+    auto dictionary = cudf::dictionary::encode( input );
+    cudf::dictionary_column_view view(dictionary->view());
+
+    cudf::test::fixed_width_column_wrapper<int64_t> keys_expected{ 0,111,222,333,444 };
+    cudf::test::expect_columns_equal(view.keys(), keys_expected);
+
+    cudf::test::fixed_width_column_wrapper<int32_t> expected{{4,0,3,1,2,2,2,4,0}};
+    cudf::test::expect_columns_equal(view.indices(), expected);
+}
