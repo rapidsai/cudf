@@ -44,7 +44,9 @@ quantile(column_view const& input,
 
 /* @brief Gathers the rows corrosponding to the desired quantiles. The indices
  *        used to gather rows are computed by interpolating between the index on
- *        either side of the desired quantile.
+ *        either side of the desired quantile. Since some columns may be non-
+ *        arithmetic, interpolation between rows is limited to non-arithmetic
+ *        strategies.
  *
  * @param input           Table used to compute quantile rows.
  * @param q               Desired quantiles in range [0, 1].
