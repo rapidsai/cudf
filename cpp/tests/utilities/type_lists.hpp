@@ -189,7 +189,6 @@ static constexpr std::array<cudf::type_id, 8> non_numeric_type_ids{
     cudf::TIMESTAMP_MILLISECONDS,
     cudf::TIMESTAMP_MICROSECONDS,
     cudf::TIMESTAMP_NANOSECONDS,
-    cudf::CATEGORY,
     cudf::STRING};
 
 /**---------------------------------------------------------------------------*
