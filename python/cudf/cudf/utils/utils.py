@@ -326,6 +326,17 @@ class cached_property:
             return value
 
 
+class NestMissingMappingMixin:
+    """
+    Make missing values of a mapping empty instances
+    of the same type as the mapping.
+    """
+
+    def __missing__(self, key):
+        super().__setitem__(key, self.__class__())
+        return super().__getitem__(key)
+
+
 class ColumnValuesMappingMixin:
     """
     Coerce provided values for the mapping to Columns.
@@ -340,7 +351,7 @@ class ColumnValuesMappingMixin:
 
 class EqualLengthValuesMappingMixin:
     """
-    Require all values in the mapping to hacve the same length.
+    Require all values in the mapping to have the same length.
     """
 
     def __setitem__(self, key, value):
@@ -349,17 +360,6 @@ class EqualLengthValuesMappingMixin:
             if len(value) != len(first):
                 raise ValueError("All values must be of equal length")
         super().__setitem__(key, value)
-
-
-class NestMissingMappingMixin:
-    """
-    Make missing values of a mapping empty instances
-    of the same type as the mapping.
-    """
-
-    def __missing__(self, key):
-        self[key] = self.__class__()
-        return self[key]
 
 
 class NestTupleKeysMappingMixin:
@@ -374,7 +374,7 @@ class NestTupleKeysMappingMixin:
                 d = d[k]
             return d.__getitem__(key[-1])
         else:
-            super().__getitem__(key)
+            return super().__getitem__(key)
 
     def __setitem__(self, key, value):
         if isinstance(key, tuple):
