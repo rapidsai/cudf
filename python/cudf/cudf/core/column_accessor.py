@@ -1,7 +1,7 @@
 import itertools
 from abc import ABCMeta, abstractmethod, abstractproperty
 
-from cudf.utils.utils import *
+from cudf.utils.utils import OrderedColumnDict
 
 
 class ColumnAccessor(metaclass=ABCMeta):
@@ -10,6 +10,9 @@ class ColumnAccessor(metaclass=ABCMeta):
 
     def __setitem__(self, key, value):
         self.set_by_label(key, value)
+
+    def __len__(self):
+        return len(self.names)
 
     @abstractmethod
     def get_by_label(self, key):
@@ -52,15 +55,14 @@ class ColumnAccessor(metaclass=ABCMeta):
         pass
 
 
-class OrderedDictColumnAccessor(ColumnAccessor):
+class OrderedColumnDictAccessor(ColumnAccessor):
     def __init__(self, data):
         """
         Parameters
         ----------
         data : OrderedColumnDict (possibly nested)
         """
-        assert isinstance(data, OrderedColumnDict)
-        self._data = data
+        self._data = OrderedColumnDict(data)
 
     def get_by_label(self, key):
         return self._data[key]
