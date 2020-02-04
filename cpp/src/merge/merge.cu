@@ -276,6 +276,7 @@ struct column_merger
     //which won't be called anymore (because of the _condition_ below)
     //
     cudf::set_null_mask(merged_view.null_mask(),
+                        0,
                         merged_view.size(),
                         true,
                         stream_);
