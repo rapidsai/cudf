@@ -139,7 +139,11 @@ public:
         return detail::shift<Rad>(static_cast<U>(_value), detail::negate(_scale));
     }
 
-    auto get() const noexcept {
+    auto to_int32() const noexcept {
+        return static_cast<int32_t>(*this);
+    }
+
+    auto to_double() const noexcept {
         return static_cast<double>(*this);
     }
 
@@ -330,7 +334,7 @@ bool operator==(fixed_point<Rep1, Rad1> const& lhs,
 
 template <typename Rep, Radix Radix>
 std::ostream& operator<<(std::ostream& os, fixed_point<Rep, Radix> const& fp) {
-    return os << fp.get();
+    return os << fp.to_double();
 }
 
 } // namespace fixed_point

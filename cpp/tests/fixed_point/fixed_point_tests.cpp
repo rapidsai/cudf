@@ -48,13 +48,13 @@ TYPED_TEST(FixedPointTestBothReps, SimpleDecimalXXConstruction) {
     decimalXX num5{1.234567, scale_type{-5}};
     decimalXX num6{1.234567, scale_type{-6}};
 
-    EXPECT_EQ(1,        num0.get());
-    EXPECT_EQ(1.2,      num1.get());
-    EXPECT_EQ(1.23,     num2.get());
-    EXPECT_EQ(1.234,    num3.get());
-    EXPECT_EQ(1.2345,   num4.get());
-    EXPECT_EQ(1.23456,  num5.get());
-    EXPECT_EQ(1.234567, num6.get());
+    EXPECT_EQ(1,        num0.to_double());
+    EXPECT_EQ(1.2,      num1.to_double());
+    EXPECT_EQ(1.23,     num2.to_double());
+    EXPECT_EQ(1.234,    num3.to_double());
+    EXPECT_EQ(1.2345,   num4.to_double());
+    EXPECT_EQ(1.23456,  num5.to_double());
+    EXPECT_EQ(1.234567, num6.to_double());
 
 }
 
@@ -68,11 +68,11 @@ TYPED_TEST(FixedPointTestBothReps, SimpleBinaryFPConstruction) {
     binary_fp num3{10, scale_type{3}};
     binary_fp num4{10, scale_type{4}};
 
-    EXPECT_EQ(10, num0.get());
-    EXPECT_EQ(10, num1.get());
-    EXPECT_EQ(8,  num2.get());
-    EXPECT_EQ(8,  num3.get());
-    EXPECT_EQ(0,  num4.get());
+    EXPECT_EQ(10, num0.to_int32());
+    EXPECT_EQ(10, num1.to_int32());
+    EXPECT_EQ(8,  num2.to_int32());
+    EXPECT_EQ(8,  num3.to_int32());
+    EXPECT_EQ(0,  num4.to_int32());
 
 }
 
@@ -109,10 +109,10 @@ TYPED_TEST(FixedPointTestBothReps, DecimalXXTrickyDivision) {
 
     decimalXX ZERO = ONE_1;
 
-    EXPECT_EQ(ONE_1.get(),    0); // 1 / 10 = 0
-    EXPECT_EQ(SIX_1.get(),    0); // 6 / 10 = 0
-    EXPECT_EQ(TEN_0.get(),   10);
-    EXPECT_EQ(SIXTY_1.get(), 60);
+    EXPECT_EQ(ONE_1.to_int32(),    0); // 1 / 10 = 0
+    EXPECT_EQ(SIX_1.to_int32(),    0); // 6 / 10 = 0
+    EXPECT_EQ(TEN_0.to_int32(),   10);
+    EXPECT_EQ(SIXTY_1.to_int32(), 60);
 
     EXPECT_EQ(SIXTY_1 / TEN_0, ZERO);
     EXPECT_EQ(SIXTY_1 / TEN_1, SIX_0);
@@ -121,8 +121,8 @@ TYPED_TEST(FixedPointTestBothReps, DecimalXXTrickyDivision) {
     decimalXX B{1.234, scale_type{-3}};
     decimalXX C{1,     scale_type{-2}};
 
-    EXPECT_EQ((A / B).get(),       20);
-    EXPECT_EQ(((A * C) / B).get(), 28);
+    EXPECT_EQ((A / B).to_int32(),       20);
+    EXPECT_EQ(((A * C) / B).to_int32(), 28);
 
 }
 
@@ -146,7 +146,7 @@ TYPED_TEST(FixedPointTestBothReps, DecimalXXThrust) {
         std::cend(vec2),
         0);
 
-    EXPECT_EQ(res1.get(), res2);
+    EXPECT_EQ(res1.to_int32(), res2);
 
     std::vector<int32_t> vec3(vec1.size());
 
@@ -154,7 +154,7 @@ TYPED_TEST(FixedPointTestBothReps, DecimalXXThrust) {
         std::cbegin(vec1),
         std::cend(vec1),
         std::begin(vec3),
-        [] (auto const& e) { return e.get(); });
+        [] (auto const& e) { return e.to_int32(); });
 
     EXPECT_EQ(vec2, vec3);
 
@@ -243,7 +243,7 @@ void integer_vector_test(ValueType const initial_value,
         std::cend(vec2),
         static_cast<ValueType>(0));
 
-    EXPECT_EQ(res1.get(), res2);
+    EXPECT_EQ(res1.to_int32(), res2);
 
     std::vector<ValueType> vec3(vec1.size());
 
@@ -251,7 +251,7 @@ void integer_vector_test(ValueType const initial_value,
         std::cbegin(vec1),
         std::cend(vec1),
         std::begin(vec3),
-        [] (auto const& e) { return e.get(); });
+        [] (auto const& e) { return e.to_int32(); });
 
     EXPECT_EQ(vec2, vec3);
 }
@@ -284,7 +284,7 @@ void float_vector_test(ValueType const initial_value,
         std::cend(vec1),
         std::cbegin(vec2),
         [] (auto const& a, auto const& b) {
-            return a.get() - b <= std::numeric_limits<ValueType>::epsilon();
+            return a.to_double() - b <= std::numeric_limits<ValueType>::epsilon();
         });
 
     EXPECT_TRUE(equal);
