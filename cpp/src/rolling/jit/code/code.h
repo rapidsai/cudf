@@ -1,5 +1,8 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ *
+ * Copyright 2018-2019 BlazingDB, Inc.
+ *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,26 +16,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package ai.rapids.cudf;
 
-/**
- * Reduction operations on a column
- */
-public enum ReductionOp {
-  SUM(0),
-  MIN(1),
-  MAX(2),
-  PRODUCT(3),
-  SUMOFSQUARES(4),
-  MEAN(5),
-  VAR(6),
-  STD(7),
-  ANY(8),
-  ALL(9);
+#ifndef GDF_BINARY_OPERATION_JIT_CODE_CODE_H
+#define GDF_BINARY_OPERATION_JIT_CODE_CODE_H
 
-  final int nativeId;
+namespace cudf {
+namespace experimental {
+namespace rolling {
+namespace jit {
+namespace code {
 
-  ReductionOp(int nativeId) {
-    this.nativeId = nativeId;
-  }
+    extern const char* kernel_headers;
+    extern const char* kernel;
+    extern const char* operation_h;
+
 }
+}
+}
+}
+}
+
+#endif

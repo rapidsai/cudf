@@ -43,6 +43,7 @@ namespace detail
       cudf::is_timestamp<ColumnType>();
 
     constexpr bool is_valid_rolling_agg = !std::is_same<ColumnType, cudf::string_view>::value and
+                                          !std::is_same<ColumnType, cudf::dictionary32>::value and
                                             ((op == experimental::aggregation::SUM) or
                                              (op == experimental::aggregation::MIN) or
                                              (op == experimental::aggregation::MAX) or
@@ -52,10 +53,8 @@ namespace detail
                                             comparable_countable_op or
                                             timestamp_mean);
 
-
     return is_valid_rolling_agg and
            cudf::experimental::detail::is_valid_aggregation<ColumnType, op>();
-    //return is_valid_rolling_agg;
   }
 
   // store functor

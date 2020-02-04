@@ -22,7 +22,6 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_scalar.hpp>
 #include <rmm/thrust_rmm_allocator.h>
-#include <rmm/mr/device_memory_resource.hpp>
 
 #include <memory>
 #include <type_traits>
@@ -77,6 +76,12 @@ class scalar {
    * @brief Returns a raw pointer to the validity bool in device memory
    */
   bool* validity_data() { return _is_valid.data(); }
+
+  /**
+   * @brief Returns a const raw pointer to the validity bool in device memory
+   */
+  bool const* validity_data() const { return _is_valid.data(); }
+
 
  protected:
   data_type _type{EMPTY};      ///< Logical type of value in the scalar
