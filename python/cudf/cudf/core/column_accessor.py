@@ -59,6 +59,9 @@ class OrderedDictColumnAccessor(ColumnAccessor):
             if _compare_keys(k, key)
         ]
 
+    def get_column_by_index(self, key):
+        return self._data[self._flat_keys[key]]
+
     @cached_property
     def _flat_keys(self):
         return tuple(_flatten_keys(self._data))
@@ -80,6 +83,9 @@ class PandasColumnAccessor(ColumnAccessor):
 
     def get_columns(self, key):
         return self._values[self._columns.get_locs(key)]
+
+    def get_column_by_index(self, index):
+        return self._values[index]
 
 
 def _compare_keys(key, target):
