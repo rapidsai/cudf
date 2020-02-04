@@ -1,6 +1,11 @@
-from cudf._libxx.lib cimport *
-from cudf._libxx.column cimport Column
-from cudf._libxx.table cimport Table
+from cudf._libxx.includes.lib cimport *
+from cudf._libxx.includes.column cimport Column
+from cudf._libxx.includes.table cimport Table
+
+from cudf._libxx.includes.hash cimport (
+    hash_partition as cpp_hash_partition,
+    hash as cpp_hash
+)
 
 def _hash_partition(source_table, columns_to_hash, num_partitions):
     cdef vector[size_type] c_columns_to_hash = columns_to_hash
