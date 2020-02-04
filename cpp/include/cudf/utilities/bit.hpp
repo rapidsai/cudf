@@ -40,7 +40,7 @@ namespace detail {
 #else
 #define constexpr_assert(CHECK) \
   (LIKELY(CHECK) ? void(0) : [] { assert(!#CHECK); }())
-#end
+#endif
 
 template <typename T>
 constexpr CUDA_HOST_DEVICE_CALLABLE std::size_t size_in_bits() {
