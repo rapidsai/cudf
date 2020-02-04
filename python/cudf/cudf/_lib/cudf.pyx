@@ -8,7 +8,7 @@
 import cudf
 from cudf._lib.cudf cimport *
 from cudf._lib.GDFError import GDFError
-from cudf._libxx.column cimport Column
+from cudf._libxx.includes.column cimport Column
 from libcpp.vector cimport vector
 from libc.stdint cimport uintptr_t
 from libc.stdlib cimport malloc, free

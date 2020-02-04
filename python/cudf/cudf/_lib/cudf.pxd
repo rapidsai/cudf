@@ -17,7 +17,7 @@ from libc.stdint cimport (  # noqa: E211
 )
 from libcpp.vector cimport vector
 
-from cudf._libxx.column cimport Column
+from cudf._libxx.includes.column cimport Column
 
 # Utility functions to build gdf_columns, gdf_context and error handling
 

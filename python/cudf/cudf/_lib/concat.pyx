@@ -7,7 +7,7 @@
 
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
-from cudf._libxx.column cimport Column
+from cudf._libxx.includes.column cimport Column
 from libc.stdlib cimport free
 from libcpp.vector cimport vector
 

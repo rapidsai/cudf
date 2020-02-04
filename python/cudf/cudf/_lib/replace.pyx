@@ -11,7 +11,7 @@ from libc.stdlib cimport free
 
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
-from cudf._libxx.column cimport Column
+from cudf._libxx.includes.column cimport Column
 from cudf.utils.dtypes import is_scalar
 
 cimport cudf._lib.includes.replace as cpp_replace
