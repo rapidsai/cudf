@@ -187,13 +187,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_ifElseSS(JNIEnv *env, j
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_reduce(JNIEnv *env, jclass,
-    jlong j_col_view, jint j_reduce_op, jint j_dtype) {
+    jlong j_col_view, jint agg_type, jint j_dtype) {
   JNI_NULL_CHECK(env, j_col_view, "column view is null", 0);
   try {
     auto col = reinterpret_cast<cudf::column_view*>(j_col_view);
-    auto op = static_cast<cudf::experimental::reduction_op>(j_reduce_op);
+    auto agg = cudf::jni::map_jni_aggregation(agg_type);
     cudf::data_type out_dtype{static_cast<cudf::type_id>(j_dtype)};
-    std::unique_ptr<cudf::scalar> result = cudf::experimental::reduce(*col, op, out_dtype);
+    std::unique_ptr<cudf::scalar> result = cudf::experimental::reduce(*col, agg, out_dtype);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);

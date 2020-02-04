@@ -72,13 +72,22 @@ set(CONTIGUOUS_SPLIT_BENCH_SRC
 ConfigureBench(CONTIGUOUS_SPLIT_BENCH "${CONTIGUOUS_SPLIT_BENCH_SRC}")
 
 ###################################################################################################
-# - apply_boolean_mask benchmark ------------------------------------------------------------------------------
+# - shift benchmark -------------------------------------------------------------------------------
+
+set(SHIFT_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/copying/shift_benchmark.cu")
+
+ConfigureBench(SHIFT_BENCH "${SHIFT_BENCH_SRC}")
+
+###################################################################################################
+# - apply_boolean_mask benchmark ------------------------------------------------------------------
 
 set(APPLY_BOOLEAN_MASK_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/apply_boolean_mask_benchmark.cu")
 
 ConfigureBench(APPLY_BOOLEAN_MASK_BENCH "${APPLY_BOOLEAN_MASK_BENCH_SRC}")
 
+###################################################################################################
 # - join benchmark --------------------------------------------------------------------------------
 
 set(JOIN_BENCH_SRC
@@ -87,7 +96,7 @@ set(JOIN_BENCH_SRC
 ConfigureBench(JOIN_BENCH "${JOIN_BENCH_SRC}")
 
 ###################################################################################################
-# - iterator benchmark ------------------------------------------------------------------------------
+# - iterator benchmark ----------------------------------------------------------------------------
 
 set(ITERATOR_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/iterator/iterator_benchmark.cu")
@@ -136,7 +145,7 @@ set(LEGACY_STACK_BENCH_SRC
 ConfigureBench(LEGACY_STACK_BENCH "${LEGACY_STACK_BENCH_SRC}")
 
 ###################################################################################################
-# - legacy hashing benchmark -----------------------------------------------------------------------------
+# - legacy hashing benchmark ----------------------------------------------------------------------
 
 set(LEGACY_HASHING_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/hashing/legacy/hashing_benchmark.cu")
@@ -158,3 +167,11 @@ set(MERGE_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/merge/merge_benchmark.cu")
 
 ConfigureBench(MERGE_BENCH "${MERGE_BENCH_SRC}")
+
+###################################################################################################
+# - null_mask benchmark -----------------------------------------------------------------------------
+
+set(NULLMASK_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/null_mask/set_null_mask_benchmark.cpp")
+
+ConfigureBench(NULLMASK_BENCH "${NULLMASK_BENCH_SRC}")
