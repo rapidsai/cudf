@@ -42,8 +42,9 @@ quantile(column_view const& input,
          interpolation interp = interpolation::LINEAR,
          order_info column_order = {});
 
-/* @brief Selects the rows corrosponding to a quantiles by interpolating between
- *        the rows on either side of the desired quantiles.
+/* @brief Gathers the rows corrosponding to the desired quantiles. The indices
+ *        used to gather rows are computed by interpolating between the index on
+ *        either side of the desired quantile.
  *
  * @param input           Table used to compute quantile rows.
  * @param q               Desired quantiles in range [0, 1].
@@ -57,7 +58,7 @@ quantile(column_view const& input,
  */
 std::unique_ptr<table>
 quantiles(table_view const& input,
-          std::vector<double> q,
+          std::vector<double> const& q,
           interpolation interp = interpolation::NEAREST,
           std::vector<order> const& column_order = {},
           std::vector<null_order> const& null_precedence = {},

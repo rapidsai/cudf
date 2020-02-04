@@ -13,7 +13,7 @@ namespace experimental {
 
 std::unique_ptr<table>
 quantiles(table_view const& input,
-          std::vector<double> q,
+          std::vector<double> const& q,
           interpolation interp,
           std::vector<order> const& column_order,
           std::vector<null_order> const& null_precedence,
