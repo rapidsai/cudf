@@ -1,36 +1,54 @@
 import itertools
-import random
-from abc import ABCMeta, abstractmethod
-
-import numpy as np
-import pandas as pd
+from abc import ABCMeta, abstractmethod, abstractproperty
 
 from cudf.utils.utils import *
-from cudf.utils.utils import cached_property
-
-
-class NestedOrderedDict(
-    NestTupleKeysMappingMixin,
-    EqualLengthValuesMappingMixin,
-    NestMissingMappingMixin,
-    OrderedDict,
-):
-    pass
 
 
 class ColumnAccessor(metaclass=ABCMeta):
+    def __getitem__(self, key):
+        return self.get_by_label(key)
+
+    def __setitem__(self, key, value):
+        self.set_by_label(key, value)
+
     @abstractmethod
-    def get_column(self, key):
+    def get_by_label(self, key):
         """
-        Get a single column by key.
+        Get column or columns by key.
         """
         pass
 
     @abstractmethod
-    def get_columns(self, key):
+    def get_by_index(self, key):
         """
-        Get multiple columns specified by `key`
+        Get columns specified by index.
         """
+        pass
+
+    @abstractmethod
+    def get_by_label_range(self, key):
+        """
+        Get column or columns by a slice.
+        """
+        pass
+
+    @abstractmethod
+    def get_by_index_range(self, key):
+        """
+        Get column or columns by a slice of indexes.
+        """
+        pass
+
+    @abstractmethod
+    def set_by_label(self, key, value):
+        pass
+
+    @abstractproperty
+    def names(self):
+        pass
+
+    @abstractproperty
+    def values(self):
         pass
 
 
@@ -39,32 +57,37 @@ class OrderedDictColumnAccessor(ColumnAccessor):
         """
         Parameters
         ----------
-        data : NestedOrderedDict (possibly nested)
+        data : OrderedColumnDict (possibly nested)
         """
-        assert isinstance(data, NestedOrderedDict)
+        assert isinstance(data, OrderedColumnDict)
         self._data = data
 
-    def get_column(self, key):
-        if not isinstance(key, tuple):
-            key = (key,)
-        d = self._data
-        for k in key:
-            d = d[k]
-        return d
+    def get_by_label(self, key):
+        return self._data[key]
 
-    def get_columns(self, key):
+    def get_by_label_range(self, key):
         return [
-            self.get_column(k)
-            for k in self._flat_keys
-            if _compare_keys(k, key)
+            self.get_by_label(k) for k in self._data if _compare_keys(k, key)
         ]
 
-    def get_column_by_index(self, key):
-        return self._data[self._flat_keys[key]]
+    def get_by_index(self, key):
+        return next(itertools.islice(self._data.values(), key, key + 1))
 
-    @cached_property
-    def _flat_keys(self):
-        return tuple(_flatten_keys(self._data))
+    def get_by_index_range(self, start=0, end=None):
+        if end is None:
+            end = len(self._data)
+        return list(itertools.islice(self._data.values(), start, end))
+
+    def set_by_label(self, key, value):
+        self._data[key] = value
+
+    @property
+    def names(self):
+        return pd.Index(tuple(self._data.keys()))
+
+    @property
+    def values(self):
+        return tuple(self._data.values())
 
 
 class PandasColumnAccessor(ColumnAccessor):
@@ -78,14 +101,31 @@ class PandasColumnAccessor(ColumnAccessor):
         self._values = values
         self._columns = columns
 
-    def get_column(self, key):
+    def get_by_label(self, key):
         return self._values[self._columns.get_loc(key)]
 
-    def get_columns(self, key):
+    def get_by_label_range(self, key):
         return self._values[self._columns.get_locs(key)]
 
-    def get_column_by_index(self, index):
+    def get_by_index(self, index):
         return self._values[index]
+
+    def get_by_index_range(self, start=0, end=None):
+        if end is None:
+            end = len(self._values)
+        return self._values[start:end]
+
+    def set_by_label(self, key, value):
+        self._columns.append(key)
+        self._values.append(value)
+
+    @property
+    def names(self):
+        return self._columns
+
+    @property
+    def values(self):
+        return tuple(self._values)
 
 
 def _compare_keys(key, target):
@@ -102,46 +142,3 @@ def _compare_keys(key, target):
         if k1 != k2:
             return False
     return True
-
-
-def _flatten_keys(d):
-    """
-    Flatten the keys of a NestedOrderedDict
-    """
-
-    def _flatten(d, parents=[]):
-        for k, v in d.items():
-            if not isinstance(v, NestedOrderedDict):
-                yield tuple(parents + [k])
-            else:
-                yield from _flatten(v, parents + [k])
-
-    return _flatten(d)
-
-
-if __name__ == "__main__":
-    LEVELS = 3
-    COLUMNS = 1000
-    ROWS = 10
-
-    columns = pd.MultiIndex.from_tuples(
-        tuple(
-            set(
-                tuple(
-                    random.choice("abcdefghjklmnopqrstuv")
-                    for i in range(LEVELS)
-                )
-                for j in range(COLUMNS)
-            )
-        )
-    )
-
-    COLUMNS = len(columns)
-
-    df = pd.DataFrame(np.random.rand(ROWS, COLUMNS), columns=columns)
-
-    odict = NestedOrderedDict()
-    for idx, col in zip(columns.values, df.values.T):
-        odict[idx] = col
-    odict_accessor = OrderedDictColumnAccessor(odict)
-    pd_accessor = PandasColumnAccessor(columns, df.values.T)
