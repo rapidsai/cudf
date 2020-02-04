@@ -27,6 +27,7 @@
 - PR #4014 ORC/Parquet: add count parameter to stripe/rowgroup-based reader API
 - PR #3880 Add aggregation infrastructure support for reduction
 - PR #4021 Change quantiles signature for clarity.
+- PR #4058 Port hash.pyx to use libcudf++ APIs
 
 ## Bug Fixes
 
