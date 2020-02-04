@@ -45,6 +45,7 @@
 - PR #4007 Fix for copy_bitmask issue with uninitialized device_buffer
 - PR #4037 Fix JNI quantile compile issue
 - PR #4052 Fix for round-robin when num_partitions divides nrows.
+- PR #4061 Add NDEBUG guard on `constexpr_assert`.
 
 # cuDF 0.12.0 (Date TBD)
 
