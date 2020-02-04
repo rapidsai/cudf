@@ -197,9 +197,8 @@ static constexpr std::array<cudf::type_id, 8> non_numeric_type_ids{
  * This can be used for iterating over `type_id`s for custom testing, or used in
  * GTest value-parameterized tests.
  *---------------------------------------------------------------------------**/
-static constexpr std::array<cudf::type_id, 3> non_fixed_width_type_ids{
+static constexpr std::array<cudf::type_id, 2> non_fixed_width_type_ids{
     cudf::EMPTY,    
-    cudf::CATEGORY,
     cudf::STRING};
 
 }  // namespace test
