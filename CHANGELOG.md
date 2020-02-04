@@ -42,12 +42,16 @@
 - PR #3970 Fix for Series Pickle
 - PR #3964 Restore legacy NVStrings and NVCategory dependencies in Java jar
 - PR #3982 Fix java unary op enum and add missing ops
+- PR #3999 Fix issue serializing empty string columns (java)
 - PR #3979 Add `name` to Series serialize and deserialize
 - PR #4005 Fix null mask allocation bug in gather_bitmask
 - PR #4000 Fix dask_cudf sort_values performance for single partitions
 - PR #4007 Fix for copy_bitmask issue with uninitialized device_buffer
 - PR #4037 Fix JNI quantile compile issue
+- PR #4054 Fixed JNI to deal with reduction API changes
 - PR #4052 Fix for round-robin when num_partitions divides nrows.
+- PR #4049 Fix `cudf::split` issue returning one less than expected column vectors
+
 
 # cuDF 0.12.0 (Date TBD)
 
