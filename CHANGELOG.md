@@ -2,7 +2,11 @@
 
 ## New Features
 
+- PR #3577 Add initial dictionary support to column classes
+- PR #3693 add string support, skipna to scan operation
+- PR #3662 Define and implement `shift`.
 - PR #3861 Added Series.sum feature for String
+
 
 ## Improvements
 
@@ -38,11 +42,15 @@
 - PR #3970 Fix for Series Pickle
 - PR #3964 Restore legacy NVStrings and NVCategory dependencies in Java jar
 - PR #3982 Fix java unary op enum and add missing ops
+- PR #3999 Fix issue serializing empty string columns (java)
 - PR #3979 Add `name` to Series serialize and deserialize
 - PR #4005 Fix null mask allocation bug in gather_bitmask
 - PR #4000 Fix dask_cudf sort_values performance for single partitions
 - PR #4007 Fix for copy_bitmask issue with uninitialized device_buffer
 - PR #4037 Fix JNI quantile compile issue
+- PR #4054 Fixed JNI to deal with reduction API changes
+- PR #4052 Fix for round-robin when num_partitions divides nrows.
+- PR #4049 Fix `cudf::split` issue returning one less than expected column vectors
 
 
 # cuDF 0.12.0 (Date TBD)
@@ -366,6 +374,7 @@
 - PR #3500 cudf::fill()/cudf::repeat() support for strings columns.
 - PR #3438 Update scalar and scalar_device_view to better support strings
 - PR #3414 Add copy_range function for strings column
+- PR #3685 Add string support to contiguous_split.
 - PR #3471 Add scalar/column, column/scalar and scalar/scalar overloads to copy_if_else.
 - PR #3451 Add support for implicit typecasting of join columns
 
