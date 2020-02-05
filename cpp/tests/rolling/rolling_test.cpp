@@ -147,13 +147,13 @@ protected:
                         size_type min_periods)
   {
     // test all supported aggregators
-    //run_test_col(input, preceding_window, following_window, min_periods, cudf::experimental::make_min_aggregation());
-    //run_test_col(input, preceding_window, following_window, min_periods, cudf::experimental::make_count_aggregation());
-    //run_test_col(input, preceding_window, following_window, min_periods, cudf::experimental::make_max_aggregation());
+    run_test_col(input, preceding_window, following_window, min_periods, cudf::experimental::make_min_aggregation());
+    run_test_col(input, preceding_window, following_window, min_periods, cudf::experimental::make_count_aggregation());
+    run_test_col(input, preceding_window, following_window, min_periods, cudf::experimental::make_max_aggregation());
+    run_test_col(input, preceding_window, following_window, min_periods, cudf::experimental::make_mean_aggregation());
 
     if (not cudf::is_timestamp(input.type())){
       run_test_col(input, preceding_window, following_window, min_periods, cudf::experimental::make_sum_aggregation());
-      run_test_col(input, preceding_window, following_window, min_periods, cudf::experimental::make_mean_aggregation());
     }
   }
 

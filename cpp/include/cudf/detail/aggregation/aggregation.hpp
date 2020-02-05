@@ -172,10 +172,17 @@ struct target_type_impl<Source, aggregation::ALL> {
 };
 
 // Always use `double` for MEAN
-// TODO (dm): Except for timestamp where result is timestamp. (Use FloorDiv)
-template <typename Source>
-struct target_type_impl<Source, aggregation::MEAN> {
+// Except for timestamp where result is timestamp. (Use FloorDiv)
+template <typename Source, aggregation::Kind k>
+struct target_type_impl<Source, k,
+                        std::enable_if_t<!is_timestamp<Source>() && (k == aggregation::MEAN)>> {
   using type = double;
+};
+
+template <typename Source, aggregation::Kind k>
+struct target_type_impl<Source, k,
+                        std::enable_if_t<is_timestamp<Source>() && (k == aggregation::MEAN)>> {
+  using type = Source;
 };
 
 constexpr bool is_sum_product_agg(aggregation::Kind k) {

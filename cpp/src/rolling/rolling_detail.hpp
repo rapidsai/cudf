@@ -46,7 +46,8 @@ namespace detail
     constexpr bool is_valid_timestamp_agg = cudf::is_timestamp<ColumnType>() and
                                              (op == experimental::aggregation::MIN or
                                               op == experimental::aggregation::MAX or 
-                                              op == experimental::aggregation::COUNT);
+                                              op == experimental::aggregation::COUNT or
+                                              op == experimental::aggregation::MEAN);
 
 
     constexpr bool is_valid_numeric_agg = (cudf::is_numeric<ColumnType>() or
