@@ -6,6 +6,7 @@ from operator import getitem
 import numpy as np
 import toolz
 
+import dask
 from dask import compute, delayed
 from dask.base import tokenize
 from dask.dataframe.core import DataFrame, _concat
@@ -205,8 +206,7 @@ def shuffle_group_divs_2(df, divisions, col):
     ind = set_partitions_pre(
         df[col], divisions=df._constructor_sliced(divisions)
     ).astype(np.int32)
-    n = ind.max() + 1
-    result2 = group_split_dispatch(df, ind.values.view(np.int32), n)
+    result2 = group_split_dispatch(df, ind.view(np.int32), len(divisions) - 1)
     return result2, df.iloc[:0]
 
 
@@ -394,14 +394,50 @@ def sort_values_experimental(
     # Step 2 - Calculate new divisions (if necessary)
     if not divisions or (use_explicit and len(divisions) != npartitions + 1):
         # TODO: Use input divisions for use_explicit==True
+
+        partition_size = None  # 10e6
+        repartition = False
+        if partition_size and not use_explicit:
+            repartition = True
+        index2 = df2[index]
+        if repartition:
+            index2, df2 = dask.base.optimize(index2, df2)
+            parts = df2.to_delayed(optimize_graph=False)
+            sizes = [delayed(dask.sizeof.sizeof)(part) for part in parts]
+        else:
+            (index2,) = dask.base.optimize(index2)
+            sizes = []
+
         doubledivs = (
-            df2[index]
-            ._repartition_quantiles(npartitions * 2, upsample=upsample)
+            index2._repartition_quantiles(npartitions * 2, upsample=upsample)
             .compute()
             .to_list()
         )
         # Heuristic: Start with 2x divisions and coarsening
         divisions = [doubledivs[i] for i in range(0, len(doubledivs), 2)]
+
+        if repartition:
+            iparts = index2.to_delayed(optimize_graph=False)
+            mins = [ipart.min() for ipart in iparts]
+            maxes = [ipart.max() for ipart in iparts]
+            sizes, mins, maxes = dask.base.optimize(sizes, mins, maxes)
+            sizes, mins, maxes = dask.base.compute(
+                sizes, mins, maxes, optimize_graph=False
+            )
+
+            total = sum(sizes)
+            npartitions = max(math.ceil(total / partition_size), 1)
+            npartitions = min(npartitions, df2.npartitions)
+            n = len(divisions)
+            try:
+                divisions = np.interp(
+                    x=np.linspace(0, n - 1, npartitions + 1),
+                    xp=np.linspace(0, n - 1, n),
+                    fp=divisions,
+                ).tolist()
+            except (TypeError, ValueError):  # str type
+                indexes = np.linspace(0, n - 1, npartitions + 1).astype(int)
+                divisions = [divisions[i] for i in indexes]
 
     # Step 3 - Perform repartitioning shuffle
     if use_explicit:

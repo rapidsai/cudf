@@ -193,9 +193,8 @@ class DataFrame(_Frame, dd.core.DataFrame):
             )
             # Set index and repartition
             npartitions = kwargs.get("npartitions", self.npartitions)
-            return df.map_partitions(M.set_index, other).repartition(
-                npartitions=npartitions
-            )
+            df2 = df.map_partitions(M.set_index, other)
+            return df2.repartition(npartitions=npartitions)
         if kwargs.pop("shuffle", "tasks") != "tasks":
             raise ValueError(
                 "Dask-cudf only supports task based shuffling, got %s"
