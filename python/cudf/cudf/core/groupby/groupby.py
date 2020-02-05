@@ -12,7 +12,7 @@ from cudf.utils.dtypes import is_scalar
 
 
 def columns_from_dataframe(df):
-    cols = list(df._data.values())
+    cols = list(df._data.columns)
     # strip column names
     for col in cols:
         col.name = None

@@ -1,68 +1,47 @@
 import itertools
-from abc import ABCMeta, abstractmethod, abstractproperty
+from collections.abc import MutableMapping
 
 from cudf.utils.utils import OrderedColumnDict
 
 
-class ColumnAccessor(metaclass=ABCMeta):
+class OrderedColumnDictAccessor(MutableMapping):
+    def __init__(self, data={}):
+        """
+        Parameters
+        ----------
+        data : OrderedColumnDict (possibly nested)
+        """
+        # TODO: we should validate `data`
+        self._data = OrderedColumnDict(data)
+
+    def __iter__(self):
+        return self._data.__iter__()
+
     def __getitem__(self, key):
         return self.get_by_label(key)
 
     def __setitem__(self, key, value):
         self.set_by_label(key, value)
 
+    def __delitem__(self, key):
+        self._data.__delitem__(key)
+
     def __len__(self):
-        return len(self.names)
+        return len(self._data)
 
-    @abstractmethod
-    def get_by_label(self, key):
+    def insert(self, name, value, loc=-1):
         """
-        Get column or columns by key.
+        Insert value at specified location.
         """
-        pass
+        # TODO: we should move all insert logic here
+        new_keys = list(self.keys())
+        new_values = list(self.values())
+        new_keys.insert(loc, name)
+        new_values.insert(loc, value)
+        return self.__class__(dict(zip(new_keys, new_values)))
 
-    @abstractmethod
-    def get_by_index(self, key):
-        """
-        Get columns specified by index.
-        """
-        pass
-
-    @abstractmethod
-    def get_by_label_range(self, key):
-        """
-        Get column or columns by a slice.
-        """
-        pass
-
-    @abstractmethod
-    def get_by_index_range(self, key):
-        """
-        Get column or columns by a slice of indexes.
-        """
-        pass
-
-    @abstractmethod
-    def set_by_label(self, key, value):
-        pass
-
-    @abstractproperty
-    def names(self):
-        pass
-
-    @abstractproperty
-    def values(self):
-        pass
-
-
-class OrderedColumnDictAccessor(ColumnAccessor):
-    def __init__(self, data):
-        """
-        Parameters
-        ----------
-        data : OrderedColumnDict (possibly nested)
-        """
-        self._data = OrderedColumnDict(data)
+    def copy(self):
+        return self.__class__(self._data.copy())
 
     def get_by_label(self, key):
         return self._data[key]
@@ -73,61 +52,23 @@ class OrderedColumnDictAccessor(ColumnAccessor):
         ]
 
     def get_by_index(self, key):
-        return next(itertools.islice(self._data.values(), key, key + 1))
+        return next(itertools.islice(self.values(), key, key + 1))
 
     def get_by_index_range(self, start=0, end=None):
         if end is None:
             end = len(self._data)
-        return list(itertools.islice(self._data.values(), start, end))
+        return list(itertools.islice(self.values(), start, end))
 
     def set_by_label(self, key, value):
         self._data[key] = value
 
     @property
     def names(self):
-        return pd.Index(tuple(self._data.keys()))
+        return tuple(self.keys())
 
     @property
-    def values(self):
-        return tuple(self._data.values())
-
-
-class PandasColumnAccessor(ColumnAccessor):
-    def __init__(self, columns, values):
-        """
-        Parameters
-        ----------
-        columns : A pd.Index object
-        values : list of Columns
-        """
-        self._values = values
-        self._columns = columns
-
-    def get_by_label(self, key):
-        return self._values[self._columns.get_loc(key)]
-
-    def get_by_label_range(self, key):
-        return self._values[self._columns.get_locs(key)]
-
-    def get_by_index(self, index):
-        return self._values[index]
-
-    def get_by_index_range(self, start=0, end=None):
-        if end is None:
-            end = len(self._values)
-        return self._values[start:end]
-
-    def set_by_label(self, key, value):
-        self._columns.append(key)
-        self._values.append(value)
-
-    @property
-    def names(self):
-        return self._columns
-
-    @property
-    def values(self):
-        return tuple(self._values)
+    def columns(self):
+        return tuple(self.values())
 
 
 def _compare_keys(key, target):

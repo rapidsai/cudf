@@ -134,7 +134,7 @@ class Series(Frame):
     @classmethod
     def _from_table(cls, table):
         name = next(iter(table._data.keys()))
-        data = next(iter(table._data.values()))
+        data = next(iter(table._data.columns))
         return cls(data=data, index=Index._from_table(table._index), name=name)
 
     @property
@@ -222,7 +222,7 @@ class Series(Frame):
     def name(self):
         """Returns name of the Series.
         """
-        return next(iter(self._data))
+        return self._data.names[0]
 
     @name.setter
     def name(self, value):

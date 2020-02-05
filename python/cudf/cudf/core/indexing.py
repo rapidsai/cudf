@@ -355,7 +355,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                 if len(df) > 0 and not (
                     isinstance(arg[0], slice) or isinstance(arg[1], slice)
                 ):
-                    return list(df._data.values())[0][0]
+                    return list(df._data.columns)[0][0]
                 elif df.shape[1] > 1:
                     result = self._downcast_to_series(df, arg)
                     result.index = df.columns

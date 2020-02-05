@@ -403,7 +403,7 @@ class MultiIndex(Index):
             result.columns = as_index(columns, name=name)
         if len(column_tuple) == len(self.levels) and len(result.columns) == 1:
             result = cudf.Series(
-                next(iter(result._data.values())),
+                next(iter(result._data.columns)),
                 name=column_tuple,
                 index=result.index,
             )
@@ -425,7 +425,7 @@ class MultiIndex(Index):
             return tuples, slice(None)
 
     def __len__(self):
-        return len(next(iter(self._data.values())))
+        return len(next(iter(self._data.columns)))
 
     def equals(self, other):
         if self is other:

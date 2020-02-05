@@ -32,6 +32,7 @@ from cudf.core.column import (
     as_column,
     column_empty,
 )
+from cudf.core.column_accessor import OrderedColumnDictAccessor
 from cudf.core.frame import Frame
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
@@ -182,11 +183,13 @@ class DataFrame(Frame):
             else:
                 self._index = as_index(index)
             if columns is not None:
-                self._data = OrderedDict.fromkeys(
-                    columns,
-                    column.column_empty(
-                        len(self), dtype="object", masked=True
-                    ),
+                self._data = OrderedColumnDictAccessor(
+                    OrderedDict.fromkeys(
+                        columns,
+                        column.column_empty(
+                            len(self), dtype="object", masked=True
+                        ),
+                    )
                 )
         else:
             if is_list_like(data):
@@ -320,7 +323,7 @@ class DataFrame(Frame):
 
         # Use the column directly to avoid duplicating the index
         # need to pickle column names to handle numpy integer columns
-        header["column_names"] = pickle.dumps(tuple(self._data.keys()))
+        header["column_names"] = pickle.dumps(tuple(self._data.names))
         column_header, column_frames = column.serialize_columns(self._columns)
         header["columns"] = column_header
         frames.extend(column_frames)
@@ -347,7 +350,7 @@ class DataFrame(Frame):
     def dtypes(self):
         """Return the dtypes in this object."""
         return pd.Series(
-            [x.dtype for x in self._data.values()], index=self._data.keys()
+            [x.dtype for x in self._data.columns], index=self._data.names
         )
 
     @property
@@ -614,13 +617,13 @@ class DataFrame(Frame):
         self._drop_column(name)
 
     def __sizeof__(self):
-        columns = sum(col.__sizeof__() for col in self._data.values())
+        columns = sum(col.__sizeof__() for col in self._data.columns)
         index = self._index.__sizeof__()
         return columns + index
 
     def memory_usage(self, index=True, deep=False):
         ind = list(self.columns)
-        sizes = [col._memory_usage(deep=deep) for col in self._data.values()]
+        sizes = [col._memory_usage(deep=deep) for col in self._data.columns]
         if index:
             ind.append("Index")
             sizes.append(self.index.memory_usage(deep=deep))
@@ -1301,7 +1304,7 @@ class DataFrame(Frame):
             return self.multi_cols
         else:
             name = self._columns_name
-            return pd.Index(self._data.keys(), name=name, tupleize_cols=False)
+            return pd.Index(self._data.names, name=name, tupleize_cols=False)
 
     @columns.setter
     def columns(self, columns):
@@ -1330,7 +1333,7 @@ class DataFrame(Frame):
                 self._columns_name = columns.name
 
     def _rename_columns(self, new_names):
-        old_cols = iter(self._data.keys())
+        old_cols = iter(self._data.names)
         l_old_cols = len(self._data)
         l_new_cols = len(new_names)
         if l_new_cols != l_old_cols:
@@ -1535,7 +1538,8 @@ class DataFrame(Frame):
         if inplace is True:
             for column_name in set(out.columns) - set(self.columns):
                 self[column_name] = out._data[column_name]
-                self._data.move_to_end(column_name, last=False)
+                col = out._data.pop(column_name)
+                self._data = self._data.insert(column_name, col, loc=0)
             self.index = RangeIndex(len(self))
         else:
             return out.set_index(RangeIndex(len(self)))
@@ -1594,7 +1598,7 @@ class DataFrame(Frame):
     def _take_columns(self, positions):
         positions = Series(positions)
         columns = self.columns
-        column_values = list(self._data.values())
+        column_values = list(self._data.columns)
 
         result = DataFrame()
         for idx in range(len(positions)):
@@ -1706,10 +1710,7 @@ class DataFrame(Frame):
 
         value = column.as_column(value)
 
-        self._data[name] = value
-        keys = list(self._data.keys())
-        for i, col in enumerate(keys[loc:-1]):
-            self._data.move_to_end(col)
+        self._data = self._data.insert(name, value, loc=loc)
 
     def add_column(self, name, data, forceindex=False):
         """Add a column
@@ -1834,7 +1835,7 @@ class DataFrame(Frame):
         Return DataFrame with duplicate rows removed, optionally only
         considering certain subset of columns.
         """
-        in_cols = list(self._data.values())
+        in_cols = list(self._data.columns)
         if subset is None:
             subset = self._data
         elif (
@@ -2268,7 +2269,7 @@ class DataFrame(Frame):
         return outdf
 
     def argsort(self, ascending=True, na_position="last"):
-        cols = list(self._data.values())
+        cols = list(self._data.columns)
         return get_sorted_inds(
             cols, ascending=ascending, na_position=na_position
         )
@@ -2702,7 +2703,7 @@ class DataFrame(Frame):
                 categorical_dtypes[name] = col.dtype
 
         # Save the order of the original column names for preservation later
-        org_names = list(itertools.chain(lhs._data.keys(), rhs._data.keys()))
+        org_names = list(itertools.chain(lhs._data.names, rhs._data.names))
 
         # potentially do an implicit typecast
         (lhs, rhs, to_categorical) = self._typecast_before_merge(
@@ -2721,21 +2722,21 @@ class DataFrame(Frame):
             # Pandas lexicographically sort is NOT a sort of all columns.
             # Instead, it sorts columns in lhs, then in "on", and then rhs.
             left_of_on = []
-            for name in lhs._data.keys():
+            for name in lhs._data.names:
                 if name not in left_on:
                     for i in range(len(gdf_result)):
                         if gdf_result[i][1] == name:
                             left_of_on.append(gdf_result.pop(i))
                             break
             in_on = []
-            for name in itertools.chain(lhs._data.keys(), rhs._data.keys()):
+            for name in itertools.chain(lhs._data.names, rhs._data.keys()):
                 if name in left_on or name in right_on:
                     for i in range(len(gdf_result)):
                         if gdf_result[i][1] == name:
                             in_on.append(gdf_result.pop(i))
                             break
             right_of_on = []
-            for name in rhs._data.keys():
+            for name in rhs._data.names:
                 if name not in right_on:
                     for i in range(len(gdf_result)):
                         if gdf_result[i][1] == name:
@@ -3326,8 +3327,8 @@ class DataFrame(Frame):
         -------
         partitioned: list of DataFrame
         """
-        cols = list(self._data.values())
-        names = list(self._data.keys())
+        cols = list(self._data.columns)
+        names = list(self._data.names)
         key_indices = [names.index(k) for k in columns]
         # Allocate output buffers
         outputs = [col.copy() for col in cols]
@@ -4163,17 +4164,17 @@ class DataFrame(Frame):
         if axis in (None, 0):
             result = [
                 getattr(self[col], method)(*args, **kwargs)
-                for col in self._data.keys()
+                for col in self._data.names
             ]
 
             if isinstance(result[0], Series):
                 support_result = result
                 result = DataFrame(index=support_result[0].index)
-                for idx, col in enumerate(self._data.keys()):
+                for idx, col in enumerate(self._data.names):
                     result[col] = support_result[idx]
             else:
                 result = Series(result)
-                result = result.set_index(self._data.keys())
+                result = result.set_index(self._data.names)
             return result
 
         elif axis == 1:
@@ -4445,7 +4446,7 @@ class DataFrame(Frame):
         new_index = self.index.repeat(repeats)
         cols = libcudf.filling.repeat(self._columns, repeats)
         # to preserve col names, need to get it from old _cols dict
-        column_names = self._data.keys()
+        column_names = self._data.names
         result = DataFrame(data=dict(zip(column_names, cols)))
         return result.set_index(new_index)
 
@@ -4463,7 +4464,7 @@ class DataFrame(Frame):
         The tiled output cudf.DataFrame
         """
         cols = libcudf.filling.tile(self._columns, reps)
-        column_names = self._data.keys()
+        column_names = self._data.names
         return DataFrame(data=dict(zip(column_names, cols)))
 
     def stack(self, level=-1, dropna=True):

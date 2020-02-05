@@ -96,7 +96,7 @@ class Index(Frame):
 
     @property
     def name(self):
-        return next(iter(self._data.keys()))
+        return next(iter(self._data.names))
 
     @name.setter
     def name(self, value):
@@ -453,7 +453,7 @@ class Index(Frame):
             raise ValueError("Cannot construct Index from any empty Table")
         if table._num_columns == 1:
             return as_index(
-                next(iter(table._data.values())),
+                next(iter(table._data.columns)),
                 name=next(iter(table._data.keys())),
             )
         else:
@@ -510,9 +510,9 @@ class RangeIndex(Index):
 
     @property
     def _data(self):
-        from cudf.utils.utils import OrderedColumnDict
+        from cudf.core.column_accessor import OrderedColumnDictAccessor
 
-        return OrderedColumnDict({self.name: self._values})
+        return OrderedColumnDictAccessor({self.name: self._values})
 
     def __contains__(self, item):
         if not isinstance(
@@ -752,7 +752,7 @@ class GenericIndex(Index):
 
     @property
     def _values(self):
-        return next(iter(self._data.values()))
+        return next(iter(self._data.columns))
 
     def copy(self, deep=True):
         result = as_index(self._values.copy(deep=deep))
