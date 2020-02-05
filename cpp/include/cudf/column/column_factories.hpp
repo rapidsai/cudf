@@ -202,7 +202,7 @@ std::unique_ptr<column> make_fixed_width_column(
 
 
 /**
- * @brief Construct STRING type column given a vector of pointer/size pairs.
+ * @brief Construct STRING type column given a device vector of pointer/size pairs.
  * The total number of char bytes must not exceed the maximum size of size_type.
  * The string characters are expected to be UTF-8 encoded sequence of char
  * bytes. Use the strings_column_view class to perform strings operations on
@@ -226,6 +226,39 @@ std::unique_ptr<column> make_fixed_width_column(
  */
 std::unique_ptr<column> make_strings_column(
     const rmm::device_vector<thrust::pair<const char*, size_type>>& strings,
+    cudaStream_t stream = 0,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @brief Construct STRING type column given a device vector of string_view.
+ * The total number of char bytes must not exceed the maximum size of size_type.
+ * The string characters are expected to be UTF-8 encoded sequence of char
+ * bytes. Use the strings_column_view class to perform strings operations on
+ * this type of column.
+ *
+ * @note For each string_view, if `.data()` is `null_placeholder.data()`, that
+ * string is considered null. Likewise, a string is considered empty (not null)
+ * if `.data()` is not `null_placeholder.data()` and `.size_bytes()` is 0.
+ * Otherwise the `.data()` must be a valid device address pointing to
+ * `.size_bytes()` consecutive bytes. The `null_count()` for the output column
+ * will be equal to the number of input `string_view`s that are null.
+ *
+ * @throws std::bad_alloc if device memory allocation fails
+ *
+ * @param string_views The vector of string_view.
+ *                Each string_view must point to a device memory address or
+ * `null_placeholder` (indicating a null string). The size must be the number of
+ * bytes.
+ * @param null_placeholder string_view indicating null string in given list of
+ * string_views.
+ * @param stream Optional stream for use with all memory allocation
+ *               and device kernels
+ * @param mr Optional resource to use for device memory
+ *           allocation of the column's `null_mask` and children.
+ */
+std::unique_ptr<column> make_strings_column(
+    const rmm::device_vector<string_view>& string_views,
+    const string_view null_placeholder,
     cudaStream_t stream = 0,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
