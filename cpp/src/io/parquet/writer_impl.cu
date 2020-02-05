@@ -404,51 +404,94 @@ void writer::impl::write_chunked_begin(pq_chunked_state& state){
 }
 
 void writer::impl::write_chunked(table_view const& table, pq_chunked_state& state){  
-  size_type num_columns = table.num_columns();
+size_type num_columns = table.num_columns();
   size_type num_rows = 0;
 
-  // Wrapper around cudf columns to attach parquet-specific type info
+  // Wrapper around cudf columns to attach parquet-specific type info.
+  // Note : I wish we could do this in the begin() function but since the
+  // metadata is optional we would have no way of knowing how many columns
+  // we actually have.
   std::vector<parquet_column_view> parquet_columns;
   parquet_columns.reserve(num_columns); // Avoids unnecessary re-allocation
   for (auto it = table.begin(); it < table.end(); ++it) {
     const auto col = *it;
     const auto current_id = parquet_columns.size();
 
-    num_rows = std::max<uint32_t>(num_rows, col.size());    
-    parquet_columns.emplace_back(current_id, col, metadata, stream);
+    num_rows = std::max<uint32_t>(num_rows, col.size());
+    parquet_columns.emplace_back(current_id, col, state.user_metadata, state.stream);
+  }  
+
+  if(state.user_metadata_with_nullability.column_nullable.size() > 0){
+    CUDF_EXPECTS(state.user_metadata_with_nullability.column_nullable.size() == static_cast<size_t>(num_columns), "When passing values in user_metadata_with_nullability, data for all columns must be specified");
   }
 
-  // Initialize column description
-  FileMetaData md;
-  hostdevice_vector<gpu::EncColumnDesc> col_desc(num_columns);
-  md.version = 1;
-  md.num_rows = num_rows;
-  md.schema.resize(1 + num_columns);
-  md.schema[0].type = UNDEFINED_TYPE;
-  md.schema[0].repetition_type = NO_REPETITION_TYPE;
-  md.schema[0].name = "schema";
-  md.schema[0].num_children = num_columns;
-  md.column_order_listsize = (stats_granularity_ != statistics_freq::STATISTICS_NONE) ? num_columns : 0;
-  if (metadata) {
-    for (auto it = metadata->user_data.begin(); it != metadata->user_data.end(); it++) {
-      md.key_value_metadata.push_back({it->first, it->second});
+  // first call. setup metadata. num_rows will get incremented as write_chunked is 
+  // called multiple times.
+  if(state.md.version == 0){  
+    state.md.version = 1;
+    state.md.num_rows = num_rows;
+    state.md.schema.resize(1 + num_columns);
+    state.md.schema[0].type = UNDEFINED_TYPE;
+    state.md.schema[0].repetition_type = NO_REPETITION_TYPE;
+    state.md.schema[0].name = "schema";
+    state.md.schema[0].num_children = num_columns;
+    state.md.column_order_listsize = (stats_granularity_ != statistics_freq::STATISTICS_NONE) ? num_columns : 0;
+    if(state.user_metadata != nullptr){
+      for (auto it = state.user_metadata->user_data.begin(); it != state.user_metadata->user_data.end(); it++) {
+        state.md.key_value_metadata.push_back({it->first, it->second});
+      }    
     }
+    for (auto i = 0; i < num_columns; i++) {
+      auto& col = parquet_columns[i];
+      // Column metadata
+      state.md.schema[1 + i].type = col.physical_type();
+      state.md.schema[1 + i].converted_type = col.converted_type();
+      // because the repetition type is global (in the sense of, not per-rowgroup or per write_chunked() call) 
+      // we cannot know up front if the user is going to end up passing tables with nulls/no nulls in the 
+      // multiple write_chunked() case.  so we'll do some special handling.
+      //
+      // if the user is explictly saying "I am only calling this once", fall back to the original behavior and assume
+      // the columns in this one table tell us everything we need to know. 
+      if(state.single_write_mode){
+        state.md.schema[1 + i].repetition_type = (col.null_count() || col.data_count() < (size_t)num_rows) ? OPTIONAL : REQUIRED;
+      } 
+      // otherwise, if the user is explicitly telling us global information about all the tables that will ever get passed in
+      else if(state.user_metadata_with_nullability.column_nullable.size() > 0){        
+        state.md.schema[1 + i].repetition_type = state.user_metadata_with_nullability.column_nullable[i] ? OPTIONAL : REQUIRED;
+      } 
+      // otherwise assume the worst case.
+      else {
+        state.md.schema[1 + i].repetition_type = OPTIONAL;
+      }
+      state.md.schema[1 + i].name = col.name();
+      state.md.schema[1 + i].num_children = 0; // Leaf node     
+    }
+  } else {
+    // verify the user isn't passing mismatched tables
+    CUDF_EXPECTS(state.md.schema[0].num_children == num_columns, "Mismatch in table structure between multiple calls to write_chunked");    
+    for (auto i = 0; i < num_columns; i++) {
+      auto& col = parquet_columns[i];
+      CUDF_EXPECTS(state.md.schema[1 + i].type == col.physical_type(), "Mismatch in column types between multiple calls to write_chunked");
+    }
+    
+    // increment num rows
+    state.md.num_rows += num_rows;
   }
+
+  // Initialize column description    
+  hostdevice_vector<gpu::EncColumnDesc> col_desc(num_columns);  
+
+  // setup gpu column description.
+  // applicable to only this _write_chunked() call
   for (auto i = 0; i < num_columns; i++) {
     auto& col = parquet_columns[i];
-    // Column metadata
-    md.schema[1 + i].type = col.physical_type();
-    md.schema[1 + i].converted_type = col.converted_type();
-    md.schema[1 + i].repetition_type = (col.null_count() || col.data_count() < (size_t)num_rows) ? OPTIONAL : REQUIRED;
-    md.schema[1 + i].name = col.name();
-    md.schema[1 + i].num_children = 0; // Leaf node
     // GPU column description
     auto *desc = &col_desc[i];
     desc->column_data_base = col.data();
     desc->valid_map_base = col.nulls();
     desc->stats_dtype = col.stats_type();
     desc->ts_scale = col.ts_scale();
-    if (md.schema[1 + i].type != BOOLEAN && md.schema[1 + i].type != UNDEFINED_TYPE) {
+    if (state.md.schema[1 + i].type != BOOLEAN && state.md.schema[1 + i].type != UNDEFINED_TYPE) {
       col.alloc_dictionary(num_rows);
       desc->dict_index = col.get_dict_index();
       desc->dict_data = col.get_dict_data();
@@ -458,9 +501,9 @@ void writer::impl::write_chunked(table_view const& table, pq_chunked_state& stat
       desc->dict_index = nullptr;
     }
     desc->num_rows = col.data_count();
-    desc->physical_type = static_cast<uint8_t>(md.schema[1 + i].type);
-    desc->converted_type = static_cast<uint8_t>(md.schema[1 + i].converted_type);
-    desc->level_bits = (md.schema[1 + i].repetition_type == OPTIONAL) ? 1 : 0;
+    desc->physical_type = static_cast<uint8_t>(state.md.schema[1 + i].type);
+    desc->converted_type = static_cast<uint8_t>(state.md.schema[1 + i].converted_type);
+    desc->level_bits = (state.md.schema[1 + i].repetition_type == OPTIONAL) ? 1 : 0;
   }
 
   // Init page fragments
@@ -469,31 +512,39 @@ void writer::impl::write_chunked(table_view const& table, pq_chunked_state& stat
   // fragment exceeds the max page size limit (we ideally want the page size to be below 1MB so as to have enough pages
   // to get good compression/decompression performance).
   uint32_t fragment_size = 5000;
-  uint32_t num_fragments = (uint32_t)((md.num_rows + fragment_size - 1) / fragment_size);
+  uint32_t num_fragments = (uint32_t)((num_rows + fragment_size - 1) / fragment_size);
   hostdevice_vector<gpu::PageFragment> fragments(num_columns * num_fragments);
   if (fragments.size() != 0) {
-    init_page_fragments(fragments, col_desc, num_columns, num_fragments, num_rows, fragment_size, stream);
+    init_page_fragments(fragments, col_desc, num_columns, num_fragments, num_rows, fragment_size, state.stream);
   }
 
+  size_t global_rowgroup_base = state.md.row_groups.size();      
+  
   // Decide row group boundaries based on uncompressed data size
-  size_t rowgroup_size = 0;
-  uint32_t num_rowgroups = 0;
-  for (uint32_t f = 0, rowgroup_start = 0; f < num_fragments; f++) {
+  size_t rowgroup_size = 0;  
+  uint32_t num_rowgroups = 0;  
+  for (uint32_t f = 0, global_r = global_rowgroup_base, rowgroup_start = 0; f < num_fragments; f++) {
     size_t fragment_data_size = 0;
     for (auto i = 0; i < num_columns; i++) {
       fragment_data_size += fragments[i * num_fragments + f].fragment_data_size;
     }
     if (f > rowgroup_start && (rowgroup_size + fragment_data_size > max_rowgroup_size_ ||
                                (f + 1 - rowgroup_start) * fragment_size > max_rowgroup_rows_)) {
-      md.row_groups.resize(num_rowgroups + 1);
-      md.row_groups[num_rowgroups++].num_rows = (f - rowgroup_start) * fragment_size;
+
+      // update schema
+      state.md.row_groups.resize(state.md.row_groups.size() + 1);
+      state.md.row_groups[global_r++].num_rows = (f - rowgroup_start) * fragment_size;
+      num_rowgroups++;
       rowgroup_start = f;
       rowgroup_size = 0;
     }
     rowgroup_size += fragment_data_size;
     if (f + 1 == num_fragments) {
-      md.row_groups.resize(num_rowgroups + 1);
-      md.row_groups[num_rowgroups++].num_rows = md.num_rows - rowgroup_start * fragment_size;
+
+      // update schema
+      state.md.row_groups.resize(state.md.row_groups.size() + 1);
+      state.md.row_groups[global_r++].num_rows = num_rows - rowgroup_start * fragment_size;
+      num_rowgroups++;
     }
   }
 
@@ -503,18 +554,18 @@ void writer::impl::write_chunked(table_view const& table, pq_chunked_state& stat
     frag_stats.resize(num_fragments * num_columns);
     if (frag_stats.size() != 0) {
       gather_fragment_statistics(frag_stats.data().get(), fragments, col_desc,
-                                 num_columns, num_fragments, fragment_size, stream);
+                                 num_columns, num_fragments, fragment_size, state.stream);
     }
   }
 
   // Initialize row groups and column chunks
   uint32_t num_chunks = num_rowgroups * num_columns;
   hostdevice_vector<gpu::EncColumnChunk> chunks(num_chunks);
-  uint32_t num_dictionaries = 0;
-  for (uint32_t r = 0, f = 0, start_row = 0; r < num_rowgroups; r++) {
-    uint32_t fragments_in_chunk = (uint32_t)((md.row_groups[r].num_rows + fragment_size - 1) / fragment_size);
-    md.row_groups[r].total_byte_size = 0;
-    md.row_groups[r].columns.resize(num_columns);
+  uint32_t num_dictionaries = 0;  
+  for (uint32_t r = 0, global_r = global_rowgroup_base, f = 0, start_row = 0; r < num_rowgroups; r++) {
+    uint32_t fragments_in_chunk = (uint32_t)((state.md.row_groups[global_r].num_rows + fragment_size - 1) / fragment_size);
+    state.md.row_groups[global_r].total_byte_size = 0;
+    state.md.row_groups[global_r].columns.resize(num_columns);
     for (int i = 0; i < num_columns; i++) {
       gpu::EncColumnChunk *ck = &chunks[r * num_columns + i];
       bool dict_enable = false;
@@ -527,7 +578,7 @@ void writer::impl::write_chunked(table_view const& table, pq_chunked_state& stat
       ck->fragments = fragments.device_ptr() + i * num_fragments + f;
       ck->stats = (frag_stats.size() != 0) ? frag_stats.data().get() + i * num_fragments + f : nullptr;
       ck->start_row = start_row;
-      ck->num_rows = (uint32_t)md.row_groups[r].num_rows;
+      ck->num_rows = (uint32_t)state.md.row_groups[global_r].num_rows;
       ck->first_fragment = i * num_fragments + f;
       ck->first_page = 0;
       ck->num_pages = 0;
@@ -553,17 +604,17 @@ void writer::impl::write_chunked(table_view const& table, pq_chunked_state& stat
         }
       }
       ck->has_dictionary = dict_enable;
-      md.row_groups[r].columns[i].meta_data.type = md.schema[1 + i].type;
-      md.row_groups[r].columns[i].meta_data.encodings = { PLAIN, RLE };
+      state.md.row_groups[global_r].columns[i].meta_data.type = state.md.schema[1 + i].type;
+      state.md.row_groups[global_r].columns[i].meta_data.encodings = { PLAIN, RLE };
       if (dict_enable) {
-        md.row_groups[r].columns[i].meta_data.encodings.push_back(PLAIN_DICTIONARY);
+        state.md.row_groups[global_r].columns[i].meta_data.encodings.push_back(PLAIN_DICTIONARY);
       }
-      md.row_groups[r].columns[i].meta_data.path_in_schema = { md.schema[1 + i].name };
-      md.row_groups[r].columns[i].meta_data.codec = UNCOMPRESSED;
-      md.row_groups[r].columns[i].meta_data.num_values = md.row_groups[r].num_rows;
+      state.md.row_groups[global_r].columns[i].meta_data.path_in_schema = { state.md.schema[1 + i].name };
+      state.md.row_groups[global_r].columns[i].meta_data.codec = UNCOMPRESSED;
+      state.md.row_groups[global_r].columns[i].meta_data.num_values = state.md.row_groups[global_r].num_rows;
     }
     f += fragments_in_chunk;
-    start_row += (uint32_t)md.row_groups[r].num_rows;
+    start_row += (uint32_t)state.md.row_groups[global_r].num_rows;
   }
 
   // Free unused dictionaries
@@ -573,7 +624,7 @@ void writer::impl::write_chunked(table_view const& table, pq_chunked_state& stat
 
   // Build chunk dictionaries and count pages
   if (num_chunks != 0) {
-    build_chunk_dictionaries(chunks, col_desc, num_rowgroups, num_columns, num_dictionaries, stream);
+    build_chunk_dictionaries(chunks, col_desc, num_rowgroups, num_columns, num_dictionaries, state.stream);
   }
 
   // Initialize batches of rowgroups to encode (mainly to limit peak memory usage)
@@ -615,8 +666,8 @@ void writer::impl::write_chunked(table_view const& table, pq_chunked_state& stat
   size_t max_comp_bfr_size = (compression_ != parquet::Compression::UNCOMPRESSED) ? gpu::GetMaxCompressedBfrSize(max_uncomp_bfr_size, max_pages_in_batch) : 0;
   uint32_t max_comp_pages = (compression_ != parquet::Compression::UNCOMPRESSED) ? max_pages_in_batch : 0;
   uint32_t num_stats_bfr = (stats_granularity_ != statistics_freq::STATISTICS_NONE) ? num_pages + num_chunks : 0;
-  rmm::device_buffer uncomp_bfr(max_uncomp_bfr_size, stream);
-  rmm::device_buffer comp_bfr(max_comp_bfr_size, stream);
+  rmm::device_buffer uncomp_bfr(max_uncomp_bfr_size, state.stream);
+  rmm::device_buffer comp_bfr(max_comp_bfr_size, state.stream);
   rmm::device_vector<gpu_inflate_input_s> comp_in(max_comp_pages);
   rmm::device_vector<gpu_inflate_status_s> comp_out(max_comp_pages);
   rmm::device_vector<gpu::EncPage> pages(num_pages);
@@ -640,7 +691,7 @@ void writer::impl::write_chunked(table_view const& table, pq_chunked_state& stat
                        (num_stats_bfr) ? page_stats.data().get() : nullptr,
                        (num_stats_bfr) ? frag_stats.data().get() : nullptr,
                        num_rowgroups, num_columns, num_pages, num_stats_bfr,
-                       stream);
+                       state.stream);
   }
 
   auto host_bfr = [&]() {
@@ -650,49 +701,48 @@ void writer::impl::write_chunked(table_view const& table, pq_chunked_state& stat
                                     return ptr;
                                   }(max_chunk_bfr_size),
                                   cudaFreeHost};
-  }(); 
+  }();
 
-  // Encode row groups in batches
-  size_t current_chunk_offset = sizeof(fhdr);
-  for (uint32_t b = 0, r = 0; b < (uint32_t)batch_list.size(); b++) {
+  // Encode row groups in batches  
+  for (uint32_t b = 0, r = 0, global_r = global_rowgroup_base; b < (uint32_t)batch_list.size(); b++) {
     // Count pages in this batch
     uint32_t rnext = r + batch_list[b];
     uint32_t first_page_in_batch = chunks[r * num_columns].first_page;
     uint32_t first_page_in_next_batch = (rnext < num_rowgroups) ? chunks[rnext * num_columns].first_page : num_pages;
     uint32_t pages_in_batch = first_page_in_next_batch - first_page_in_batch;
-    encode_pages(chunks, pages.data().get(), num_columns, pages_in_batch, first_page_in_batch,
+    encode_pages(chunks, pages.data().get(), num_columns, pages_in_batch, first_page_in_batch, 
                  batch_list[b], r, comp_in.data().get(), comp_out.data().get(),
                  (stats_granularity_ == statistics_freq::STATISTICS_PAGE) ? page_stats.data().get() : nullptr,
                  (stats_granularity_ != statistics_freq::STATISTICS_NONE) ? page_stats.data().get() + num_pages : nullptr,
-                 stream);
-    for (; r < rnext; r++) {
+                 state.stream);
+    for (; r < rnext; r++, global_r++) {
       for (auto i = 0; i < num_columns; i++) {
         gpu::EncColumnChunk *ck = &chunks[r * num_columns + i];
         void *dev_bfr;
         if (ck->is_compressed) {
-          md.row_groups[r].columns[i].meta_data.codec = compression_;
+          state.md.row_groups[global_r].columns[i].meta_data.codec = compression_;
           dev_bfr = ck->compressed_bfr;
         }
         else {
           dev_bfr = ck->uncompressed_bfr;
         }
         CUDA_TRY(cudaMemcpyAsync(host_bfr.get(), dev_bfr, ck->ck_stat_size + ck->compressed_size,
-                                 cudaMemcpyDeviceToHost, stream));
-        CUDA_TRY(cudaStreamSynchronize(stream));
-        md.row_groups[r].total_byte_size += ck->compressed_size;
-        md.row_groups[r].columns[i].meta_data.data_page_offset = current_chunk_offset + ((ck->has_dictionary) ? ck->dictionary_size : 0);
-        md.row_groups[r].columns[i].meta_data.dictionary_page_offset = (ck->has_dictionary) ? current_chunk_offset : 0;
-        md.row_groups[r].columns[i].meta_data.total_uncompressed_size = ck->bfr_size;
-        md.row_groups[r].columns[i].meta_data.total_compressed_size = ck->compressed_size;
+                                 cudaMemcpyDeviceToHost, state.stream));
+        CUDA_TRY(cudaStreamSynchronize(state.stream));
+        state.md.row_groups[global_r].total_byte_size += ck->compressed_size;
+        state.md.row_groups[global_r].columns[i].meta_data.data_page_offset = state.current_chunk_offset + ((ck->has_dictionary) ? ck->dictionary_size : 0);
+        state.md.row_groups[global_r].columns[i].meta_data.dictionary_page_offset = (ck->has_dictionary) ? state.current_chunk_offset : 0;
+        state.md.row_groups[global_r].columns[i].meta_data.total_uncompressed_size = ck->bfr_size;
+        state.md.row_groups[global_r].columns[i].meta_data.total_compressed_size = ck->compressed_size;
         out_sink_->write(host_bfr.get() + ck->ck_stat_size, ck->compressed_size);
         if (ck->ck_stat_size != 0) {
-          md.row_groups[r].columns[i].meta_data.statistics_blob.resize(ck->ck_stat_size);
-          memcpy(md.row_groups[r].columns[i].meta_data.statistics_blob.data(), host_bfr.get(), ck->ck_stat_size);
+          state.md.row_groups[global_r].columns[i].meta_data.statistics_blob.resize(ck->ck_stat_size);
+          memcpy(state.md.row_groups[global_r].columns[i].meta_data.statistics_blob.data(), host_bfr.get(), ck->ck_stat_size);
         }
-        current_chunk_offset += ck->compressed_size;
+        state.current_chunk_offset += ck->compressed_size;
       }
     }
-  } 
+  }
 }
 
 void writer::impl::write_chunked_end(pq_chunked_state &state){    
