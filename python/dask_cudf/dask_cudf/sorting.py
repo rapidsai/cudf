@@ -394,7 +394,7 @@ def sort_values_experimental(
     if not divisions or len(divisions) != npartitions + 1:
         divisions = (
             df2[index]
-            ._repartition_quantiles(npartitions, upsample=1.0)
+            ._repartition_quantiles(npartitions, upsample=10.0)
             .compute()
             .to_list()
         )
@@ -405,8 +405,6 @@ def sort_values_experimental(
         df3 = explicit_sorted_shuffle(
             df2, index, divisions, by, explicit_client, sorted_split
         )
-        df3.divisions = (None,) * (npartitions + 1)
-        return df3
     else:
         df3 = rearrange_by_division_list(
             df2,
@@ -415,8 +413,8 @@ def sort_values_experimental(
             max_branch=max_branch,
             sorted_split=sorted_split,
         )
-        df3.divisions = (None,) * (npartitions + 1)
+    df3.divisions = (None,) * (npartitions + 1)
 
-        # Step 4 - Return final sorted df
-        #          (Can remove after k-way merge added)
-        return df3.map_partitions(M.sort_values, by)
+    # Step 4 - Return final sorted df
+    # (Can remove after k-way merge added)
+    return df3.map_partitions(M.sort_values, by)

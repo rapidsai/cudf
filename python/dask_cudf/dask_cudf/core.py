@@ -234,6 +234,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
         experimental=False,
         explicit_client=None,
         max_branch=None,
+        sorted_split=False,
         **kwargs,
     ):
         """Sort by the given column
@@ -257,6 +258,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
                     ignore_index=ignore_index,
                     explicit_client=explicit_client,
                     max_branch=max_branch,
+                    sorted_split=sorted_split,
                 )
             else:
                 # Legacy sorting algorithm based on "batcher-sortnet"
