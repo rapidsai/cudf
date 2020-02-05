@@ -605,9 +605,9 @@ std::unique_ptr<column> copy_if_else( scalar const& lhs, scalar const& rhs, colu
  * of the `i`th true value in `boolean_mask`. All other rows in the output will
  * equal the same row in `target`.
  *
- * `boolean_mask` should have N number of `true`s. If boolean mask is `true`,
- * corresponding value in target is updated with value from corresponding
- * `input` column, else it is left untouched.
+ * `boolean_mask` should have number of `true`s <= number of rows in `input`.
+ * If boolean mask is `true`, corresponding value in target is updated with
+ * value from corresponding `input` column, else it is left untouched.
  *
  * Example:
  * input: {{1, 5, 6, 8, 9}}
