@@ -20,7 +20,7 @@
 #include <iostream>
 #include <limits>
 
-namespace fixpt {
+namespace numeric {
 
 // This is a wrapper struct that enforces "strong typing"
 // at the construction site of the type. No implicit

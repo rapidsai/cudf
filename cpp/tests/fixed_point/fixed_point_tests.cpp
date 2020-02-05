@@ -25,7 +25,7 @@
 #include <numeric>
 #include <limits>
 
-using namespace fixpt;
+using namespace numeric;
 
 struct FixedPointTest         : public cudf::test::BaseFixture {};
 
