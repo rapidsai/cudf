@@ -50,7 +50,8 @@ public enum DType {
    */
   TIMESTAMP_NANOSECONDS(8, 12, "timestamp[ns]"),
   CATEGORY(4, 13, "category"),
-  STRING(0, 14, "str");
+  //DICTIONARY32(4, 14, "NO IDEA"),
+  STRING(0, 15, "str");
 
   private static final DType[] D_TYPES = DType.values();
   final int sizeInBytes;
