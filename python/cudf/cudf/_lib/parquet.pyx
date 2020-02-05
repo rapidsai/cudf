@@ -161,9 +161,7 @@ cpdef write_parquet(
         }
     }
 
-    json_str = json.dumps(pandas_metadata, indent=4)
-    print("Pandas Metadata:")
-    print(json_str)
+    json_str = json.dumps(pandas_metadata)
 
     user_data[str.encode("pandas")] = str.encode(json_str)
 

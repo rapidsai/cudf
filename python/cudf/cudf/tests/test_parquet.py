@@ -470,7 +470,7 @@ def test_multifile_warning(datadir):
 
 
 # Validates the integrity of the GPU accelerated parquet writer.
-def test_parquet_writer_gpu(tmpdir, simple_pdf, simple_gdf):
+def test_parquet_writer_gpu(tmpdir, simple_gdf):
     gdf_fname = tmpdir.join("gdf.parquet")
 
     # Write out the gdf using the GPU accelerated writer
@@ -480,11 +480,5 @@ def test_parquet_writer_gpu(tmpdir, simple_pdf, simple_gdf):
 
     # Read the gdf back in using Pandas
     got = pd.read_parquet(gdf_fname)
-
-    # Debugging logic, will remove later.
-    print("Expected:")
-    print(expect)
-    print("Got:")
-    print(got)
 
     assert_eq(expect, got, check_categorical=False)

@@ -53,8 +53,6 @@ def read_parquet(
             strings_to_categorical,
             use_pandas_metadata,
         )
-        print(df)
-        print(type(df))
     else:
         warnings.warn("Using CPU via PyArrow to read Parquet dataset.")
         pa_table = pq.read_pandas(
