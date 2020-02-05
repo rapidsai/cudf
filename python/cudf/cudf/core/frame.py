@@ -58,6 +58,9 @@ class Frame(libcudfxx.Table):
             result._data[name] = col.unary_operator(op)
         return result
 
+    def searchsorted(self, values, side):
+        return libcudfxx.search_sorted(self, values, side)
+
     def sin(self):
         return self._unaryop("sin")
 

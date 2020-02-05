@@ -260,9 +260,9 @@ class DatetimeColumn(column.ColumnBase):
         value = column.as_column(value).as_numerical[0]
         return self.as_numerical.find_last_value(value, closest=closest)
 
-    def searchsorted(self, value, side="left"):
-        value_col = column.as_column(value)
-        return libcudf.search.search_sorted(self, value_col, side)
+    # def searchsorted(self, value, side="left"):
+    #     value_col = column.as_column(value)
+    #     return libcudf.search.search_sorted(self, value_col, side)
 
     def unique(self, method="sort"):
         # method variable will indicate what algorithm to use to

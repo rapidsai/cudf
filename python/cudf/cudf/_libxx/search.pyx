@@ -1,9 +1,10 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from cudf._libxx.lib cimport *
-from cudf._libxx.column cimport Column
-from cudf._libxx.table cimport Table
+from cudf._libxx.includes.lib cimport *
+from cudf._libxx.includes.column cimport Column
+from cudf._libxx.includes.table cimport Table
 from libcpp.vector cimport vector
+cimport cudf._libxx.includes.search as cpp_search
 
 
 def search_sorted(Table table, Table values, side):
@@ -24,14 +25,14 @@ def search_sorted(Table table, Table values, side):
     cdef vector[null_order] c_null_precedence
 
     if side == 'left':
-        c_result = cpp_lower_bound(
+        c_result = cpp_search.lower_bound(
             table.view(),
             values.view(),
             c_column_order,
             c_null_precedence,
         )
     elif side == 'right':
-        c_result = cpp_upper_bound(
+        c_result = cpp_search.upper_bound(
             table.view(),
             values.view(),
             c_column_order,
@@ -52,7 +53,7 @@ def contains (Column haystack, Column needles):
     """
     cdef unique_ptr[column] c_result
 
-    c_result = cpp_contains(
+    c_result = cpp_search.contains(
         haystack.view(),
         needles.view(),
     )

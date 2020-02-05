@@ -513,15 +513,15 @@ class CategoricalColumn(column.ColumnBase):
         """
         return self.as_numerical.find_last_value(self._encode(value))
 
-    def searchsorted(self, value, side="left"):
-        if not self.ordered:
-            raise ValueError("Requires ordered categories")
+    # def searchsorted(self, value, side="left"):
+    # if not self.ordered:
+    #     raise ValueError("Requires ordered categories")
 
-        value_col = column.as_column(value)
-        if self.dtype != value_col.dtype:
-            raise TypeError("Categoricals can only compare with the same type")
+    # value_col = column.as_column(value)
+    # if self.dtype != value_col.dtype:
+    #     raise TypeError("Categoricals can only compare with the same type")
 
-        return libcudf.search.search_sorted(self, value_col, side)
+    # return libcudf.search.search_sorted(self, value_col, side)
 
     @property
     def is_monotonic_increasing(self):

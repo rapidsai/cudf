@@ -44,8 +44,6 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         AFTER "cudf::null_order::AFTER"
         BEFORE "cudf::null_order::BEFORE"
 
-    cdef cppclass scalar:
-        pass
 
 cdef extern from "cudf/column/column.hpp" namespace "cudf" nogil:
     cdef cppclass column_contents "cudf::column::contents":
@@ -152,21 +150,3 @@ cdef extern from "<utility>" namespace "std" nogil:
     cdef unique_ptr[column] move(unique_ptr[column])
     cdef unique_ptr[table] move(unique_ptr[table])
     cdef vector[unique_ptr[column]] move(vector[unique_ptr[column]])
-
-cdef extern from "cudf/search.hpp" namespace "cudf::experimental" nogil:
-    cdef unique_ptr[column] cpp_lower_bound "cudf::experimental::lower_bound" (
-        table_view t,
-        table_view values,
-        vector[order] column_order,
-        vector[null_order] null_precedence,
-    )
-    cdef unique_ptr[column] cpp_upper_bound "cudf::experimental::upper_bound" (
-        table_view t,
-        table_view values,
-        vector[order] column_order,
-        vector[null_order] null_precedence,
-    )
-    cdef unique_ptr[column] cpp_contains "cudf::experimental::contains" (
-        column_view haystack,
-        column_view needles,
-    )

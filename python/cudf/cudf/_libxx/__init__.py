@@ -1,6 +1,7 @@
 import numpy as np
 
 from cudf._libxx.copying import gather
+from cudf._libxx.search import contains, search_sorted
 from cudf._libxx.table import Table
 
 MAX_COLUMN_SIZE = np.iinfo(np.int32).max

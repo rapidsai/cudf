@@ -384,9 +384,9 @@ class NumericalColumn(column.ColumnBase):
             raise ValueError("value not found")
         return found
 
-    def searchsorted(self, value, side="left"):
-        value_col = column.as_column(value)
-        return libcudf.search.search_sorted(self, value_col, side)
+    # def searchsorted(self, value, side="left"):
+    #     value_col = column.as_column(value)
+    #     return libcudf.search.search_sorted(self, value_col, side)
 
     @property
     def is_monotonic_increasing(self):
