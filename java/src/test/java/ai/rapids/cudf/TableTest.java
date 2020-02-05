@@ -18,7 +18,6 @@
 
 package ai.rapids.cudf;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -1106,7 +1105,6 @@ public class TableTest extends CudfTestBase {
     }
   }
 
-  @Disabled
   @Test
   void testContiguousSplitWithStrings() {
     ContiguousTable[] splits = null;
