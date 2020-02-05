@@ -44,11 +44,10 @@ column_view_base::column_view_base(data_type type, size_type size,
     CUDF_EXPECTS(nullptr == null_mask,
                  "EMPTY column should have no null mask.");
   }
-  else if ( type.id()==DICTIONARY32 || // TODO: add to type-dispatcher
-            is_compound(type) ) {
+  else if ( is_compound(type) ) {
     CUDF_EXPECTS(nullptr == data, "Compound (parent) columns cannot have data");
   } else if( size > 0){
-    CUDF_EXPECTS(nullptr != data, "Null data pointer.");
+    CUDF_EXPECTS(nullptr != data, "Null data pointer.");	   
   }
 
   CUDF_EXPECTS(offset >= 0, "Invalid offset.");
@@ -80,19 +79,12 @@ size_type column_view_base::null_count(size_type begin, size_type end) const {
 column_view::column_view(data_type type, size_type size, void const* data,
                          bitmask_type const* null_mask, size_type null_count,
                          size_type offset,
-                         std::vector<column_view> const& children,
-                         column_view* dictionary_keys)
+                         std::vector<column_view> const& children)
     : detail::column_view_base{type, size, data, null_mask, null_count, offset},
-      _children{children}, _dictionary_keys{dictionary_keys} {
+      _children{children} {
   if (type.id() == EMPTY) {
     CUDF_EXPECTS(num_children() == 0, "EMPTY column cannot have children.");
   }
-}
-
-column_view column_view::dictionary_keys() const noexcept {
-  if( _dictionary_keys )
-    return *_dictionary_keys;
-  return column_view{};
 }
 
 // Mutable view constructor

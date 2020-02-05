@@ -21,28 +21,34 @@ namespace cudf
 {
 
 //
-dictionary_column_view::dictionary_column_view( column_view const& strings_column )
-    : column_view(strings_column)
+dictionary_column_view::dictionary_column_view( column_view const& dictionary_column )
+    : column_view(dictionary_column)
 {
     CUDF_EXPECTS( type().id()==DICTIONARY32, "dictionary_column_view only supports DICTIONARY type");
+    if( size() > 0 )
+        CUDF_EXPECTS( num_children()==2, "dictionary column has no children");
 }
 
-column_view dictionary_column_view::parent() const
+column_view dictionary_column_view::parent() const noexcept
 {
     return static_cast<column_view>(*this);
 }
 
-column_view dictionary_column_view::indices() const
+column_view dictionary_column_view::indices() const noexcept
 {
-    CUDF_EXPECTS( num_children()>0, "dictionary column has no children" );
     return child(0);
+}
+
+column_view dictionary_column_view::keys() const noexcept
+{
+    return child(1);
 }
 
 size_type dictionary_column_view::keys_size() const noexcept
 {
     if( size()==0 )
         return 0;
-    return dictionary_keys().size();
+    return keys().size();
 }
 
 } // namespace cudf

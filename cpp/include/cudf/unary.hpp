@@ -29,12 +29,20 @@ enum class unary_op {
   ARCSIN,       // < Trigonometric sine inverse
   ARCCOS,       // < Trigonometric cosine inverse
   ARCTAN,       // < Trigonometric tangent inverse
+  SINH,         // < Hyperbolic sine
+  COSH,         // < Hyperbolic cosine
+  TANH,         // < Hyperbolic tangent
+  ARCSINH,      // < Hyperbolic sine inverse
+  ARCCOSH,      // < Hperbolic cosine inverse
+  ARCTANH,      // < Hyperbolic tangent inverse
   EXP,          // < Exponential (base e, Euler number)
   LOG,          // < Natural Logarithm (base e)
   SQRT,         // < Square-root (x^0.5)
+  CBRT,         // < Cube-root (x^(1.0/3))
   CEIL,         // < Smallest integer value not less than arg
   FLOOR,        // < largest integer value not greater than arg
   ABS,          // < Absolute value
+  RINT,         // < Rounds the floating-point argument arg to an integer value
   BIT_INVERT,   // < Bitwise Not (~)
   NOT,          // < Logical Not (!)
 };
