@@ -26,7 +26,8 @@ namespace cudf
  *
  * A dictionary column contains a set of keys and a column of indices.
  * The keys are a sorted set of unique values for the column.
- * The indices values are position indices into the keys.
+ * The indices represent the corresponding positions of each element's
+ * value in the keys.
  */
 class dictionary_column_view : private column_view
 {
@@ -43,17 +44,21 @@ public:
     using column_view::null_count;
     using column_view::has_nulls;
     using column_view::offset;
-    using column_view::dictionary_keys;
 
     /**
      * @brief Returns the parent column.
      */
-    column_view parent() const;
+    column_view parent() const noexcept;
 
     /**
      * @brief Returns the column of indices
      */
-    column_view indices() const;
+    column_view indices() const noexcept;
+
+    /**
+     * @brief Returns the column of keys
+     */
+    column_view keys() const noexcept;
 
     /**
      * @brief Returns the number of rows in the keys column.

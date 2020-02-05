@@ -37,7 +37,7 @@ namespace dictionary
  *
  * The null_mask and null count are copied from the input column to the output column.
  *
- * @throw cudf::logic_error - only INT32 is supported for the indices type.
+ * @throw cudf::logic_error if indices type is not INT32
  *
  * ```
  * c = [429,111,213,111,213,429,213]
@@ -48,15 +48,12 @@ namespace dictionary
  * @param column The column to dictionary encode.
  * @param indices_type The integer type to use for the indices.
  * @param mr Optional resource to use for device memory allocation.
- * @param stream Optional stream on which to issue all memory allocation and
- *               device kernels.
  * @return Returns a dictionary column.
  */
 std::unique_ptr<column> encode(
     column_view const& column,
     data_type indices_type = data_type{INT32},
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0);
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Create a column by gathering the keys from the provided
