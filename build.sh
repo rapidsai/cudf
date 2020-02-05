@@ -18,23 +18,24 @@ ARGS=$*
 # script, and that this script resides in the repo dir!
 REPODIR=$(cd $(dirname $0); pwd)
 
-VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks external -v -g -n --allgpuarch -h"
-HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [external] [-v] [-g] [-n] [-h]
-   clean        - remove all existing build artifacts and configuration (start
-                  over)
-   libnvstrings - build the nvstrings C++ code only
-   nvstrings    - build the nvstrings Python package
-   libcudf      - build the cudf C++ code only
-   cudf         - build the cudf Python package
-   dask_cudf    - build the dask_cudf Python package
-   benchmarks   - build benchmarks
-   external     - build external datasources
-   -v           - verbose build mode
-   -g           - build for debug
-   -n           - no install step
-   --allgpuarch - build for all supported GPU architectures
-   -h           - print this text
-
+VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks --external -v -g -n --allgpuarch --disable_nvtx -h"
+HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [--external] [--disable_nvtx] [-v] [-g] [-n] [-h]
+   clean            - remove all existing build artifacts and configuration (start
+                    over)
+   libnvstrings     - build the nvstrings C++ code only
+   nvstrings        - build the nvstrings Python package
+   libcudf          - build the cudf C++ code only
+   cudf             - build the cudf Python package
+   dask_cudf        - build the dask_cudf Python package
+   benchmarks       - build benchmarks
+   --external       - build external datasource support for libcudf
+   -v               - verbose build mode
+   -g               - build for debug
+   -n               - no install step
+   --disable_nvtx   - disable inserting NVTX profiling ranges
+   --allgpuarch     - build for all supported GPU architectures
+   -h               - print this text
+   
    default action (no args) is to build and install 'libnvstrings' then
    'nvstrings' then 'libcudf' then 'cudf' then 'dask_cudf' targets
 "
@@ -52,6 +53,7 @@ INSTALL_TARGET=install
 BENCHMARKS=OFF
 BUILD_EXTERNAL_DATASOURCES=OFF
 BUILD_ALL_GPU_ARCH=0
+BUILD_NVTX=ON
 
 # Set defaults for vars that may not have been defined externally
 #  FIXME: if INSTALL_PREFIX is not set, check PREFIX, then check
@@ -91,6 +93,8 @@ if hasArg -g; then
 fi
 if hasArg -n; then
     INSTALL_TARGET=""
+    LIBCUDF_BUILD_DIR=${LIB_BUILD_DIR}
+    LIBNVSTRINGS_BUILD_DIR=${LIB_BUILD_DIR}
 fi
 if hasArg --allgpuarch; then
     BUILD_ALL_GPU_ARCH=1
@@ -98,8 +102,10 @@ fi
 if hasArg benchmarks; then
     BENCHMARKS=ON
 fi
-if hasArg external; then
+if hasArg --external; then
     BUILD_EXTERNAL_DATASOURCES="ON"
+if hasArg --disable_nvtx; then
+    BUILD_NVTX="OFF"
 fi
 
 # If clean given, run it prior to any other steps
@@ -135,6 +141,7 @@ if buildAll || hasArg libnvstrings || hasArg libcudf || hasArg external; then
           -DCMAKE_CXX11_ABI=ON \
           ${GPU_ARCH} \
           -DBUILD_EXTERNAL_DATASOURCES=${BUILD_EXTERNAL_DATASOURCES} \
+          -DUSE_NVTX=${BUILD_NVTX} \
           -DBUILD_BENCHMARKS=${BENCHMARKS} \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ..
 fi
@@ -157,7 +164,7 @@ if buildAll || hasArg nvstrings; then
         python setup.py build_ext
         python setup.py install --single-version-externally-managed --record=record.txt
     else
-        python setup.py build_ext --library-dir=${LIBNVSTRINGS_BUILD_DIR}
+        python setup.py build_ext --build-lib=${PWD} --library-dir=${LIBNVSTRINGS_BUILD_DIR}
     fi
 fi
 

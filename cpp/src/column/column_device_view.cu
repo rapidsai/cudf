@@ -61,7 +61,7 @@ column_device_view::column_device_view( column_view source, ptrdiff_t h_ptr, ptr
       new(h_column) column_device_view(child,reinterpret_cast<ptrdiff_t>(h_end),reinterpret_cast<ptrdiff_t>(d_end));
       h_column++; // adv to next child
       // update the pointers for holding this child column's child data
-      auto col_child_data_size = extent(child) - sizeof(child);
+      auto col_child_data_size = extent(child) - sizeof(column_device_view);
       h_end += col_child_data_size;
       d_end += col_child_data_size;
     }

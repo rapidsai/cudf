@@ -36,6 +36,11 @@
 using scan_op = cudf::experimental::scan_op;
 using cudf::column_view;
 
+void print_view(column_view const& view, const char* msg = nullptr) {
+    std::cout << msg<< " {";
+    cudf::test::print(view); std::cout << "}\n";
+}
+
 // This is the main test feature
 template <typename T>
 struct ScanTest : public cudf::test::BaseFixture
@@ -84,7 +89,6 @@ struct ScanTest : public cudf::test::BaseFixture
                 ASSERT_LT(static_cast<int>(i),  128);
             });
     }
-
 };
 
 using Types = cudf::test::NumericTypes;
@@ -192,4 +196,202 @@ TYPED_TEST(ScanTest, Sum)
     this->scan_test({v.begin(), v.end(), b.begin()}, 
                     {exact.begin(), exact.end(), b.begin()},
                     scan_op::SUM, true);
+}
+
+struct ScanStringTest : public cudf::test::BaseFixture {
+  void scan_test(cudf::test::strings_column_wrapper const& col_in,
+                 cudf::test::strings_column_wrapper const& expected_col_out,
+                 scan_op op, bool inclusive) 
+  {
+    bool do_print = false;
+    if (do_print) {
+      std::cout << "input = {";  cudf::test::print(col_in);  std::cout<<"}\n";
+      std::cout << "expect = {";  cudf::test::print(expected_col_out);  std::cout<<"}\n";
+    }
+
+    const column_view input_view = col_in;
+    std::unique_ptr<cudf::column> col_out;
+
+    CUDF_EXPECT_NO_THROW(col_out = cudf::experimental::scan(input_view, op, inclusive));
+    const column_view result_view = col_out->view();
+
+    cudf::test::expect_column_properties_equal(input_view, result_view);
+    cudf::test::expect_columns_equal(expected_col_out, result_view);
+
+    if (do_print) {
+      std::cout << "result = {"; cudf::test::print(result_view); std::cout<<"}\n";
+    }
+  }
+};
+
+TEST_F(ScanStringTest, Min)
+{
+  // data and valid arrays
+  std::vector<std::string> v({"one", "two", "three", "four", "five", "six", "seven", "eight", "nine"});
+  std::vector<bool>        b({    1,     0,       1,      1,      0,     0,       1,       1,      1});
+  std::vector<std::string> exact(v.size());
+
+  std::transform(v.cbegin(), v.cend(),
+                 exact.begin(),
+                 [acc = v[0]](auto i) mutable { acc = std::min(acc, i); return acc; });
+
+  // string column without nulls
+  cudf::test::strings_column_wrapper col_nonulls(v.begin(), v.end());
+  cudf::test::strings_column_wrapper expected1(exact.begin(), exact.end());
+  this->scan_test(col_nonulls, expected1, scan_op::MIN, true);
+
+  std::transform(v.cbegin(), v.cend(), b.begin(),
+        exact.begin(),
+        [acc=v[0]](auto i, bool b) mutable { if(b) acc = std::min(acc, i); return acc; }
+        );
+  // string column with nulls
+  cudf::test::strings_column_wrapper col_nulls(v.begin(), v.end(), b.begin());
+  cudf::test::strings_column_wrapper expected2(exact.begin(), exact.end(), b.begin());
+  this->scan_test(col_nulls, expected2, scan_op::MIN, true);
+}
+
+TEST_F(ScanStringTest, Max)
+{
+  // data and valid arrays
+  std::vector<std::string> v({"one", "two", "three", "four", "five", "six", "seven", "eight", "nine"});
+  std::vector<bool>        b({    1,     0,       1,      1,      0,     0,       1,       1,      1});
+  std::vector<std::string> exact(v.size());
+
+  std::transform(v.cbegin(), v.cend(),
+                 exact.begin(),
+                 [acc = v[0]](auto i) mutable { acc = std::max(acc, i); return acc; });
+
+  // string column without nulls
+  cudf::test::strings_column_wrapper col_nonulls(v.begin(), v.end());
+  cudf::test::strings_column_wrapper expected1(exact.begin(), exact.end());
+  this->scan_test(col_nonulls, expected1, scan_op::MAX, true);
+
+  std::transform(v.cbegin(), v.cend(), b.begin(),
+        exact.begin(),
+        [acc=v[0]](auto i, bool b) mutable { if(b) acc = std::max(acc, i); return acc; }
+        );
+  // string column with nulls
+  cudf::test::strings_column_wrapper col_nulls(v.begin(), v.end(), b.begin());
+  cudf::test::strings_column_wrapper expected2(exact.begin(), exact.end(), b.begin());
+  this->scan_test(col_nulls, expected2, scan_op::MAX, true);
+}
+
+TYPED_TEST(ScanTest, SkipNA)
+{
+  bool do_print=false;
+  std::vector<TypeParam> v{1,2,3,4,5,6,7,8,1,1};
+  std::vector<bool>      b{1,1,1,1,1,0,1,0,1,1};
+  cudf::test::fixed_width_column_wrapper<TypeParam> const col_in{v.begin(), v.end(),
+                                                            b.begin()};
+  const column_view input_view = col_in;
+  std::unique_ptr<cudf::column> col_out;
+  
+  //test output calculation
+  std::vector<TypeParam> out_v(input_view.size());
+  std::vector<bool>      out_b(input_view.size());
+
+  std::transform(v.cbegin(), v.cend(), b.cbegin(),
+      out_v.begin(),
+      [acc=0](auto i, bool b) mutable { if(b) (acc += i); return acc; }
+      );
+  std::transform(b.cbegin(), b.cend(),
+      out_b.begin(),
+      [acc=true](auto i) mutable { acc = acc && i; return acc; }
+      );
+
+  //skipna=true (default)
+  CUDF_EXPECT_NO_THROW(col_out = cudf::experimental::scan(input_view, scan_op::SUM, true, true));
+  cudf::test::fixed_width_column_wrapper<TypeParam> expected_col_out1{
+      out_v.begin(), out_v.end(), b.cbegin()};
+  cudf::test::expect_column_properties_equal(expected_col_out1, col_out->view());
+  cudf::test::expect_columns_equal(expected_col_out1, col_out->view());
+  if(do_print) {
+    print_view(expected_col_out1, "expect = ");
+    print_view(col_out->view(),   "result = ");
+  }
+
+  //skipna=false
+  CUDF_EXPECT_NO_THROW(col_out = cudf::experimental::scan(input_view, scan_op::SUM, true, false));
+  cudf::test::fixed_width_column_wrapper<TypeParam> expected_col_out2{
+      out_v.begin(), out_v.end(), out_b.begin()};
+  if(do_print) {
+    print_view(expected_col_out2, "expect = ");
+    print_view(col_out->view(),   "result = ");
+  }
+  cudf::test::expect_column_properties_equal(expected_col_out2, col_out->view());
+  cudf::test::expect_columns_equal(expected_col_out2, col_out->view());
+}
+
+TEST_F(ScanStringTest, SkipNA)
+{
+  // data and valid arrays
+  std::vector<std::string> v({"one", "two", "three", "four", "five", "six", "seven", "eight", "nine"});
+  std::vector<bool>        b({    1,     1,       1,      0,      0,     0,       1,       1,      1});
+  std::vector<std::string> exact(v.size());
+  std::vector<bool>      out_b(v.size());
+
+  // test output calculation
+  std::transform(v.cbegin(), v.cend(), b.begin(),
+        exact.begin(),
+        [acc=v[0]](auto i, bool b) mutable { if(b) acc = std::max(acc, i); return acc; }
+        );
+  std::transform(b.cbegin(), b.cend(),
+      out_b.begin(),
+      [acc=true](auto i) mutable { acc = acc && i; return acc; }
+      );
+  // string column with nulls
+  cudf::test::strings_column_wrapper col_nulls(v.begin(), v.end(), b.begin());
+  cudf::test::strings_column_wrapper expected2(exact.begin(), exact.end(), out_b.begin());
+  std::unique_ptr<cudf::column> col_out;
+  //skipna=false
+  CUDF_EXPECT_NO_THROW(col_out = cudf::experimental::scan(col_nulls, scan_op::MAX, true, false));
+  if(false) {
+    print_view(expected2, "expect = ");
+    print_view(col_out->view(),   "result = ");
+  }
+  cudf::test::expect_column_properties_equal(expected2, col_out->view());
+  cudf::test::expect_columns_equal(expected2, col_out->view());
+
+  //Exclusive scan string not supported.
+  CUDF_EXPECT_THROW_MESSAGE((cudf::experimental::scan(col_nulls, scan_op::MIN, false, true)),
+  "String types supports only inclusive min/max for `cudf::scan`");
+
+  CUDF_EXPECT_THROW_MESSAGE((cudf::experimental::scan(col_nulls, scan_op::MIN, false, false)),
+  "String types supports only inclusive min/max for `cudf::scan`");
+}
+
+TYPED_TEST(ScanTest, EmptyColumnSkipNA)
+{
+  bool do_print=false;
+  std::vector<TypeParam> v{};
+  std::vector<bool>      b{};
+  cudf::test::fixed_width_column_wrapper<TypeParam> const col_in{v.begin(), v.end(),
+                                                            b.begin()};
+  std::unique_ptr<cudf::column> col_out;
+  
+  //test output calculation
+  std::vector<TypeParam> out_v(v.size());
+  std::vector<bool>      out_b(v.size());
+  
+  //skipna=true (default)
+  CUDF_EXPECT_NO_THROW(col_out = cudf::experimental::scan(col_in, scan_op::SUM, true, true));
+  cudf::test::fixed_width_column_wrapper<TypeParam> expected_col_out1{
+      out_v.begin(), out_v.end(), b.cbegin()};
+  cudf::test::expect_column_properties_equal(expected_col_out1, col_out->view());
+  cudf::test::expect_columns_equal(expected_col_out1, col_out->view());
+  if(do_print) {
+    print_view(expected_col_out1, "expect = ");
+    print_view(col_out->view(),   "result = ");
+  }
+
+  //skipna=false
+  CUDF_EXPECT_NO_THROW(col_out = cudf::experimental::scan(col_in, scan_op::SUM, true, false));
+  cudf::test::fixed_width_column_wrapper<TypeParam> expected_col_out2{
+      out_v.begin(), out_v.end(), out_b.begin()};
+  if(do_print) {
+    print_view(expected_col_out2, "expect = ");
+    print_view(col_out->view(),   "result = ");
+  }
+  cudf::test::expect_column_properties_equal(expected_col_out2, col_out->view());
+  cudf::test::expect_columns_equal(expected_col_out2, col_out->view());
 }

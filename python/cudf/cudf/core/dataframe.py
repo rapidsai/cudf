@@ -253,8 +253,15 @@ class DataFrame(Frame):
         else:
             self._index = as_index(index)
 
-        for (i, col_name) in enumerate(data):
-            self.insert(i, col_name, data[col_name])
+        if len(data.keys()) != 0 and all(
+            isinstance(key, tuple) for key in data.keys()
+        ):
+            for (i, col_name) in enumerate(data):
+                self.insert(i, i, data[col_name])
+            self.columns = cudf.MultiIndex.from_tuples(data.keys())
+        else:
+            for (i, col_name) in enumerate(data):
+                self.insert(i, col_name, data[col_name])
 
     @classmethod
     def _from_table(cls, table):
@@ -438,13 +445,12 @@ class DataFrame(Frame):
         >>> print(df[[True, False, True, False]]) # mask the entire dataframe,
         # returning the rows specified in the boolean mask
         """
-        if isinstance(
-            self.columns, cudf.core.multiindex.MultiIndex
-        ) and isinstance(arg, tuple):
-            return self.columns._get_column_major(self, arg)
         if is_scalar(arg) or isinstance(arg, tuple):
-            s = cudf.Series(self._data[arg], name=arg, index=self.index)
-            return s
+            if isinstance(self.columns, cudf.MultiIndex):
+                if is_scalar(arg):
+                    arg = [arg]
+                return self.columns._get_column_major(self, tuple(arg))
+            return cudf.Series(self._data[arg], name=arg, index=self.index)
         elif isinstance(arg, slice):
             df = DataFrame(index=self.index[arg])
             for k, col in self._data.items():
@@ -471,14 +477,14 @@ class DataFrame(Frame):
                 # New df-wide index
                 index = self.index.take(mask)
                 for col in self._data:
-                    df[col] = self._data[col][arg]
+                    df[col] = self[col][arg]
                 df = df.set_index(index)
             else:
                 if len(arg) == 0:
                     df.index = self.index
                     return df
                 for col in arg:
-                    df[col] = self._data[col]
+                    df[col] = self[col]
                 df.index = self.index
             return df
         elif isinstance(arg, DataFrame):
@@ -1285,7 +1291,7 @@ class DataFrame(Frame):
             return self.multi_cols
         else:
             name = self._columns_name
-            return pd.Index(self._data.keys(), name=name)
+            return pd.Index(self._data.keys(), name=name, tupleize_cols=False)
 
     @columns.setter
     def columns(self, columns):
@@ -1305,7 +1311,7 @@ class DataFrame(Frame):
             """
             self.multi_cols = columns
         elif isinstance(columns, pd.MultiIndex):
-            self.columns = cudf.MultiIndex.from_pandas(columns)
+            self.multi_cols = cudf.MultiIndex.from_pandas(columns)
         else:
             if hasattr(self, "multi_cols"):
                 delattr(self, "multi_cols")
@@ -1485,11 +1491,14 @@ class DataFrame(Frame):
             return df
 
     def reset_index(self, drop=False, inplace=False):
+        if isinstance(self.columns, pd.MultiIndex):
+            self.columns = cudf.MultiIndex.from_pandas(self.columns)
         out = DataFrame()
         if not drop:
             if isinstance(self.index, cudf.core.multiindex.MultiIndex):
                 framed = self.index.to_frame()
                 name = framed.columns
+                name_len = len(name)
                 for col_name, col_value in framed._data.items():
                     out[col_name] = col_value
             else:
@@ -1497,11 +1506,12 @@ class DataFrame(Frame):
                 if self.index.name is not None:
                     name = self.index.name
                 out[name] = self.index._values
+                name_len = 1
             for col_name, col_value in self._data.items():
                 out[col_name] = col_value
             if isinstance(self.columns, cudf.core.multiindex.MultiIndex):
-                ncols = self.shape[1]
-                mi_columns = dict(zip(range(ncols), [name, len(name) * [""]]))
+                ncols = len(self.columns.levels)
+                mi_columns = dict(zip(range(ncols), [name, name_len * [""]]))
                 top = DataFrame(mi_columns)
                 bottom = self.columns.to_frame().reset_index(drop=True)
                 index_frame = cudf.concat([top, bottom])
@@ -1521,33 +1531,65 @@ class DataFrame(Frame):
             return out.set_index(RangeIndex(len(self)))
 
     def take(self, positions):
+        """
+        Return a new DataFrame containing the rows specified by *positions*
+
+        Parameters
+        ----------
+        positions : array-like
+            Integer or boolean array-like specifying the rows of the output.
+            If integer, each element represents the integer index of a row.
+            If boolean, *positions* must be of the same length as *self*,
+            and represents a boolean mask.
+
+        Returns
+        -------
+        out : DataFrame
+            New DataFrame
+
+        Examples
+        --------
+        >>> a = cudf.DataFrame({'a': [1.0, 2.0, 3.0],
+                                'b': pd.Series(['a', 'b', 'c'])})
+        >>> a.take([0, 2, 2])
+             a  b
+        0  1.0  a
+        2  3.0  c
+        2  3.0  c
+        >>> a.take([True, False, True])
+             a  b
+        0  1.0  a
+        2  3.0  c
+        """
         positions = as_column(positions)
         if pd.api.types.is_bool_dtype(positions):
             return self._apply_boolean_mask(positions,)
-        out = self.gather(positions)
+        out = self._gather(positions)
+        out.columns = self.columns
         return out
-
-    def _apply_boolean_mask(self, mask):
-        index = self.index.take(mask)
-        out = DataFrame()
-        if self._data:
-            for i, col_name in enumerate(self._data.keys()):
-                out[col_name] = self._data[col_name][mask]
-        return out.set_index(index)
 
     def _take_columns(self, positions):
         positions = Series(positions)
-        column_names = list(self._data.keys())
+        columns = self.columns
         column_values = list(self._data.values())
+
         result = DataFrame()
         for idx in range(len(positions)):
-            if len(self) == 0:
-                result[idx] = as_column([])
+            if isinstance(columns, cudf.MultiIndex):
+                colname = positions[idx]
             else:
-                result[column_names[positions[idx]]] = column_values[
-                    positions[idx]
-                ]
+                colname = columns[positions[idx]]
+            if len(self) == 0:
+                result[colname] = as_column([])
+            else:
+                result[colname] = column_values[positions[idx]]
+
         result.index = self._index
+        if isinstance(columns, cudf.MultiIndex):
+            columns = columns.take(positions)
+        else:
+            columns = columns.take(positions.to_pandas())
+        result.columns = columns
         return result
 
     def copy(self, deep=True):
@@ -1767,36 +1809,8 @@ class DataFrame(Frame):
         Return DataFrame with duplicate rows removed, optionally only
         considering certain subset of columns.
         """
-        in_cols = list(self._data.values())
-        if subset is None:
-            subset = self._data
-        elif (
-            not np.iterable(subset)
-            or isinstance(subset, str)
-            or isinstance(subset, tuple)
-            and subset in self.columns
-        ):
-            subset = (subset,)
-        diff = set(subset) - set(self._data)
-        if len(diff) != 0:
-            raise KeyError("columns {!r} do not exist".format(diff))
-        subset_cols = [
-            col for name, col in self._data.items() if name in subset
-        ]
-        in_index = self.index
-        if isinstance(in_index, cudf.core.multiindex.MultiIndex):
-            in_index = RangeIndex(len(in_index), name=in_index.name)
-        out_cols, new_index = libcudf.stream_compaction.drop_duplicates(
-            [in_index._values], in_cols, subset_cols, keep
-        )
-        new_index = as_index(new_index, name=self.index.name)
-        if isinstance(self.index, cudf.core.multiindex.MultiIndex):
-            new_index = self.index.take(new_index)
 
-        outdf = DataFrame()
-        for k, new_col in zip(self._data, out_cols):
-            outdf[k] = new_col
-        outdf = outdf.set_index(new_index)
+        outdf = super().drop_duplicates(subset=subset, keep=keep)
 
         return self._mimic_inplace(outdf, inplace=inplace)
 
@@ -1809,106 +1823,6 @@ class DataFrame(Frame):
             self._columns_name = result._columns_name
         else:
             return result
-
-    def dropna(self, axis=0, how="any", subset=None, thresh=None):
-        """
-        Drops rows (or columns) containing nulls from a Column.
-
-        Parameters
-        ----------
-        axis : {0, 1}, optional
-            Whether to drop rows (axis=0, default) or columns (axis=1)
-            containing nulls.
-        how : {"any", "all"}, optional
-            Specifies how to decide whether to drop a row (or column).
-            any (default) drops rows (or columns) containing at least
-            one null value. all drops only rows (or columns) containing
-            *all* null values.
-        subset : list, optional
-            List of columns to consider when dropping rows (all columns
-            are considered by default). Alternatively, when dropping
-            columns, subset is a list of rows to consider.
-        thresh: int, optional
-            If specified, then drops every row (or column) containing
-            less than `thresh` non-null values
-
-
-        Returns
-        -------
-        Copy of the DataFrame with rows/columns containing nulls dropped.
-        """
-        if axis == 0:
-            return self._drop_na_rows(how=how, subset=subset, thresh=thresh)
-        else:
-            return self._drop_na_columns(how=how, subset=subset, thresh=thresh)
-
-    def _drop_na_rows(self, how="any", subset=None, thresh=None):
-        """
-        Drop rows containing nulls.
-        """
-        data_cols = self._columns
-
-        index_cols = []
-        if isinstance(self.index, cudf.MultiIndex):
-            index_cols.extend(self.index._source_data._columns)
-        else:
-            index_cols.append(self.index._values)
-
-        input_cols = index_cols + list(data_cols)
-
-        if subset is not None:
-            subset = self._columns_view(subset)._columns
-        else:
-            subset = self._columns
-
-        if len(subset) == 0:
-            return self
-
-        result_cols = libcudf.stream_compaction.drop_nulls(
-            input_cols, how=how, subset=subset, thresh=thresh
-        )
-
-        result_index_cols, result_data_cols = (
-            result_cols[: len(index_cols)],
-            result_cols[len(index_cols) :],
-        )
-
-        if isinstance(self.index, cudf.MultiIndex):
-            result_index = cudf.MultiIndex.from_frame(
-                DataFrame._from_columns(result_index_cols),
-                names=self.index.names,
-            )
-        else:
-            result_index = cudf.core.index.as_index(result_index_cols[0])
-
-        df = DataFrame._from_columns(
-            result_data_cols, index=result_index, columns=self.columns
-        )
-        return df
-
-    def _drop_na_columns(self, how="any", subset=None, thresh=None):
-        """
-        Drop columns containing nulls
-        """
-        out_cols = []
-
-        if subset is None:
-            df = self
-        else:
-            df = self.take(subset)
-
-        if thresh is None:
-            if how == "all":
-                thresh = 1
-            else:
-                thresh = len(df)
-
-        for col in self.columns:
-            if (len(df[col]) - df[col].null_count) < thresh:
-                continue
-            out_cols.append(col)
-
-        return self[out_cols]
 
     def pop(self, item):
         """Return a column and drop it from the DataFrame.
@@ -3852,9 +3766,9 @@ class DataFrame(Frame):
             raise ValueError(msg.format(data.shape[0], len(index)))
 
         df = DataFrame()
-        data = data.transpose()  # to mimic the pandas behaviour
+        data = cupy.asfortranarray(cupy.asarray(data))
         for i, k in enumerate(names):
-            df[k] = Series(data[i], nan_as_null=nan_as_null)
+            df[k] = Series(data[:, i], nan_as_null=nan_as_null)
 
         if index is not None:
             indices = data[index]

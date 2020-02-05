@@ -1,6 +1,12 @@
 import numpy as np
 
-from cudf._libxx.gather import gather
+from cudf._libxx.copying import gather
+from cudf._libxx.stream_compaction import (
+    apply_boolean_mask,
+    drop_duplicates,
+    drop_nulls,
+    unique_count,
+)
 from cudf._libxx.table import Table
 
 MAX_COLUMN_SIZE = np.iinfo(np.int32).max

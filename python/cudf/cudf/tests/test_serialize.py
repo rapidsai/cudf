@@ -233,3 +233,27 @@ def test_serialize_all_null_string():
 
     recreated = cudf.Series.deserialize(*gd_series.serialize())
     assert_eq(recreated, pd_series)
+
+
+def test_serialize_named_series():
+    gdf = cudf.DataFrame({"a": [1, 2, 3, 4], "b": [5, 1, 2, 5]})
+
+    ser = gdf["b"]
+    recreated = cudf.Series.deserialize(*ser.serialize())
+    assert_eq(recreated, ser)
+
+
+def test_serialize_seriesgroupby():
+    gdf = cudf.DataFrame({"a": [1, 2, 3, 4], "b": [5, 1, 2, 5]})
+
+    gb = gdf.groupby(["a"]).b
+    recreated = cudf.core.groupby.groupby._Groupby.deserialize(*gb.serialize())
+    assert_eq(recreated.sum(), gb.sum())
+
+
+def test_serialize_string_check_buffer_sizes():
+    df = cudf.DataFrame({"a": ["a", "b", "cd", None]})
+    expect = df.memory_usage(deep=True).loc["a"]
+    header, frames = df.serialize()
+    got = sum(b.nbytes for b in frames)
+    assert expect == got
