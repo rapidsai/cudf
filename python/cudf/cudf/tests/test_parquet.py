@@ -473,12 +473,6 @@ def test_multifile_warning(datadir):
 def test_parquet_writer_gpu(tmpdir, simple_pdf, simple_gdf):
     gdf_fname = tmpdir.join("gdf.parquet")
 
-    cudf_fname = "/home/jdyer/cudf.parquet"
-    pd_fname = "/home/jdyer/pandas.parquet"
-
-    simple_gdf.to_parquet(cudf_fname.strpath)
-    simple_pdf.to_parquet(pd_fname.strpath)
-
     # Write out the gdf using the GPU accelerated writer
     simple_gdf.to_parquet(gdf_fname.strpath)
     expect = simple_gdf
