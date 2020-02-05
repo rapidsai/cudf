@@ -64,7 +64,7 @@ std::unique_ptr<scalar> reduce(
  * @throws `cudf::logic_error` if column datatype is not numeric type.
  *
  * @param[in] input The input column view for the scan
- * @param[in] agg unique_ptr of the aggregation operator applied by the scan
+ * @param[in] agg unique_ptr to aggregation operator applied by the scan
  * @param[in] inclusive The flag for applying an inclusive scan if true,
  *            an exclusive scan if false.
  * @params[in] mr The resource to use for all allocations
@@ -77,4 +77,3 @@ scan(const column_view &input, std::unique_ptr<aggregation> const &agg,
 
 }  // namespace experimental
 }  // namespace cudf
-
