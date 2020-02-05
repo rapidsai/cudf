@@ -8,7 +8,6 @@
 - PR #3861 Added Series.sum feature for String
 - PR #4053 Multi-column quantiles.
 
-
 ## Improvements
 
 - PR #3525 build.sh option to disable nvtx
