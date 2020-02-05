@@ -164,7 +164,7 @@ ConfigureBench(HASHING_BENCH "${HASHING_BENCH_SRC}")
 # - merge benchmark -----------------------------------------------------------------------------
 
 set(MERGE_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/merge/merge_benchmark.cu")
+  "${CMAKE_CURRENT_SOURCE_DIR}/merge/merge_benchmark.cpp")
 
 ConfigureBench(MERGE_BENCH "${MERGE_BENCH_SRC}")
 

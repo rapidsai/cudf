@@ -395,25 +395,17 @@ table_ptr_type merge(cudf::table_view const& left_table,
 }
 
 struct merge_queue_item {
-  table_view view_;
-  table_ptr_type table_;
+  table_view view;
+  table_ptr_type table;
   // Priority is a separate member to ensure that moving from an object 
   // does not change its priority (which would ruin the queue invariant)
-  cudf::size_type priority_ = 0;
- 
-  void set_priority() {
-    // Smallest tables have the highest priority
-    priority_ = -view_.num_rows();
-  }
+  cudf::size_type priority = 0;
  
   merge_queue_item(table_view const& view, table_ptr_type&& table):
-  view_(view), 
-  table_(std::move(table)) {
-    set_priority();
-  }
+    view{view}, table{std::move(table)}, priority{-view.num_rows()} {}
  
   bool operator<(merge_queue_item const& other) const {
-      return priority_ < other.priority_;
+      return priority < other.priority;
   }
 };
 
@@ -438,12 +430,12 @@ table_ptr_type merge(std::vector<table_view> const& tables_to_merge,
     auto const& first_table = tables_to_merge.front();
     auto const n_cols = first_table.num_columns();
  
-    for (auto const& table: tables_to_merge) {
-      CUDF_EXPECTS(n_cols == table.num_columns(),
-                   "Mismatched number of columns");
-      CUDF_EXPECTS(cudf::have_same_types(first_table, table),
-                   "Mismatched column types");
-    }
+    CUDF_EXPECTS(std::all_of(tables_to_merge.cbegin(), tables_to_merge.cend(),
+                 [n_cols] (auto const& tbl) { return n_cols == tbl.num_columns(); }),
+                 "Mismatched number of columns");
+    CUDF_EXPECTS(std::all_of(tables_to_merge.cbegin(), tables_to_merge.cend(),
+                             [&] (auto const& tbl) { return cudf::have_same_types(first_table, tbl); }),
+                 "Mismatched column types");
     
     CUDF_EXPECTS(!key_cols.empty(),
                  "Empty key_cols");
@@ -465,7 +457,7 @@ table_ptr_type merge(std::vector<table_view> const& tables_to_merge,
 
     // If there is only one non-empty table_view, return its copy
     if (merge_queue.size() == 1) {
-      return std::make_unique<cudf::experimental::table>(merge_queue.top().view_);
+      return std::make_unique<cudf::experimental::table>(merge_queue.top().view);
     }
     // No inputs have rows, return a table with same columns as the first one
     if (merge_queue.empty()) {
@@ -479,8 +471,8 @@ table_ptr_type merge(std::vector<table_view> const& tables_to_merge,
       auto const left_table = top_and_pop(merge_queue);
       // Deallocated at the end of the block
       auto const right_table = top_and_pop(merge_queue);
-      auto merged_table = merge(left_table.view_, 
-                                right_table.view_, 
+      auto merged_table = merge(left_table.view, 
+                                right_table.view, 
                                 key_cols, 
                                 column_order, 
                                 null_precedence, 
@@ -490,7 +482,7 @@ table_ptr_type merge(std::vector<table_view> const& tables_to_merge,
       merge_queue.emplace(merged_table_view, std::move(merged_table));
     }
 
-    return std::move(top_and_pop(merge_queue).table_);
+    return std::move(top_and_pop(merge_queue).table);
 }
  
 }  // namespace detail

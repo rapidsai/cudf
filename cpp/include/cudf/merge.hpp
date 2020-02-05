@@ -35,11 +35,11 @@ namespace experimental {
  *            col 2 {4, 5, 6, 7}
  * table 2 => col 1 {1, 2}
  *            col 2 {8, 9}
- * table 2 => col 1 {2, 4}
+ * table 3 => col 1 {2, 4}
  *            col 2 {8, 9}
  * output:
  * table => col 1 {0, 1, 1, 2, 2, 2, 3, 4}
- *          col 2 {4, 5, 8, 6, 9, 8, 7, 9}
+ *          col 2 {4, 5, 8, 6, 8, 9, 7, 9}
  *
  * Example 2: 
  * input:
