@@ -57,7 +57,6 @@ segmented_count_unset_bits(bitmask_type const* bitmask,
 void concatenate_masks(std::vector<column_view> const &views,
     bitmask_type * dest_mask,
     cudaStream_t stream);
-
 }  // namespace detail
 
 }  // namespace cudf
