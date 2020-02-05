@@ -78,7 +78,9 @@ async def _explicit_shuffle(s, df_nparts, df_parts, index, divisions):
     # Concatenate all parts owned by this worker into
     # a single cudf DataFrame
     df = df_concat(df_parts[0])
-    del df_parts
+    for part in df_parts:
+        if part:
+            del part
 
     # Calculate new partition mapping
     if df:
@@ -87,6 +89,7 @@ async def _explicit_shuffle(s, df_nparts, df_parts, index, divisions):
         partitions[(df[index] >= divisions.iloc[-1]).values] = (
             len(divisions) - 2
         )
+        del divisions
     else:
         partitions = None
 
@@ -99,7 +102,7 @@ async def _explicit_shuffle(s, df_nparts, df_parts, index, divisions):
 def explicit_sorted_shuffle(df, index, divisions, sort_by, client, **kwargs):
     # Explict-comms shuffle
     # TODO: Fast repartition back to df.npartitions using views...
-    client.rebalance(futures=df.to_delayed())
+    # client.rebalance(futures=df.to_delayed())
     return comms.default_comms().dataframe_operation(
         _explicit_shuffle, df_list=(df,), extra_args=(index, divisions)
     )
