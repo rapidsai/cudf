@@ -59,6 +59,7 @@
 - PR #4049 Fix `cudf::split` issue returning one less than expected column vectors
 - PR #4065 Parquet writer: fix for out-of-range dictionary indices
 - PR #4066 Fixed mismatch with dtype enums
+- PR #4076 All null string entries should have null data buffer
 
 # cuDF 0.12.0 (Date TBD)
 

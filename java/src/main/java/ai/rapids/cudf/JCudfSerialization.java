@@ -1037,10 +1037,7 @@ public class JCudfSerialization {
       // Don't copy anything, there are no rows
       return 0;
     }
-    long bytesToCopy = 0;
-    if (column.getHostBufferFor(ColumnVector.BufferType.DATA) != null) {
-      bytesToCopy = (numRows + 1) * 4;
-    }
+    long bytesToCopy = (numRows + 1) * 4;
 
     long srcOffset = rowOffset * 4;
     if (rowOffset == 0) {
