@@ -24,7 +24,7 @@ namespace nvtext
 {
 
 /**
- * @brief Returns new strings column by normalizing the whitespace in each
+ * @brief Returns a new strings column by normalizing the whitespace in each
  * string in the input column.
  *
  * Normalizing a string replaces any number of whitespace character runs
@@ -33,7 +33,7 @@ namespace nvtext
  *
  * Example:
  * ```
- * s = ["a b", "  c  d", "e \t f "]
+ * s = ["a b", "  c  d\n", "e \t f "]
  * t = normalize_spaces(s)
  * t is now ["a b","c d","e f"]
  * ```

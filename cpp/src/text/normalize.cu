@@ -92,7 +92,7 @@ struct normalize_spaces_fn : base_tokenator
 
 } // namspace
 
-//
+// details API
 std::unique_ptr<column> normalize_spaces( strings_column_view const& strings,
                                           rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                           cudaStream_t stream = 0 )
@@ -109,8 +109,8 @@ std::unique_ptr<column> normalize_spaces( strings_column_view const& strings,
     auto offsets_transformer_itr = thrust::make_transform_iterator( thrust::make_counting_iterator<int32_t>(0),
         normalize_spaces_fn{d_strings} );
     auto offsets_column = strings::detail::make_offsets_child_column(offsets_transformer_itr,
-                                       offsets_transformer_itr+strings_count,
-                                       mr, stream);
+                                                                     offsets_transformer_itr+strings_count,
+                                                                     mr, stream);
     auto d_offsets = offsets_column->view().data<int32_t>();
     // build the chars column -- copy tokens to the chars buffer
     size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
