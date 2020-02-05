@@ -164,7 +164,8 @@ enum type_id {
   TIMESTAMP_MILLISECONDS,  ///< duration of milliseconds since Unix Epoch in int64
   TIMESTAMP_MICROSECONDS,  ///< duration of microseconds since Unix Epoch in int64
   TIMESTAMP_NANOSECONDS,  ///< duration of nanoseconds since Unix Epoch in int64
-  CATEGORY,   ///< Categorial/Dictionary type
+  CATEGORY,   ///< Categorial (type to be removed)
+  DICTIONARY32, ///< Dictionary type using int32 indices
   STRING,     ///< String elements
   // `NUM_TYPE_IDS` must be last!
   NUM_TYPE_IDS  ///< Total number of type ids
@@ -229,5 +230,6 @@ inline bool operator==(data_type const& lhs, data_type const& rhs) {
  * @return Size in bytes of an element of the specified `data_type`
  */
 std::size_t size_of(data_type t);
+
 
 }  // namespace cudf

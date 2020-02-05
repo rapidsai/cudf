@@ -17,6 +17,7 @@
 #include "column_utilities.hpp"
 
 #include <cudf/column/column_view.hpp>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/bit.hpp>
@@ -342,6 +343,22 @@ struct column_view_printer {
                      });
     } else {
       out = std::move(h_data.first);
+    }
+  }
+
+  template <typename Element, typename std::enable_if_t<std::is_same<Element, cudf::dictionary32>::value>* = nullptr>
+  void operator()(cudf::column_view const& col, std::vector<std::string> & out) {
+    cudf::dictionary_column_view dictionary(col);
+    if( col.size()==0 )
+      return;
+    std::vector<std::string> keys = to_strings(dictionary.keys());
+    std::vector<std::string> indices = to_strings(dictionary.indices());
+    out.insert(out.end(),keys.begin(),keys.end());
+    if( !indices.empty() )
+    {
+      std::string first = "\x08 : " + indices.front(); // use : as delimiter
+      out.push_back(first);                            // between keys and indices
+      out.insert(out.end(),indices.begin()+1,indices.end());
     }
   }
 };
