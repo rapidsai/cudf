@@ -19,6 +19,8 @@
 #include <cudf/detail/scatter.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/gather.hpp>
+#include <cudf/stream_compaction.hpp>
+#include <cudf/detail/stream_compaction.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/table/table_device_view.cuh>
@@ -26,6 +28,7 @@
 #include <cudf/strings/detail/scatter.cuh>
 #include <cudf/strings/string_view.cuh>
 #include "thrust/iterator/counting_iterator.h"
+#include <numeric>
 
 #include <thrust/iterator/discard_iterator.h>
 
@@ -329,29 +332,136 @@ std::vector<std::unique_ptr<table>> scatter_to_tables(
     input, partition_map, mr, stream);
 }
 
+std::unique_ptr<column> boolean_mask_scatter(
+    column_view const& input, column_view const& target,
+    column_view const& boolean_mask,
+    rmm::mr::device_memory_resource *mr,
+    cudaStream_t stream) {
+
+    auto indices = cudf::make_numeric_column(data_type{INT32},
+                                  target.size(), UNALLOCATED, stream, mr);
+    auto mutable_indices = indices->mutable_view();
+
+    thrust::sequence(rmm::exec_policy(stream)->on(stream),
+                     mutable_indices.begin<size_type>(),
+                     mutable_indices.end<size_type>(),
+                     0);
+
+    // The scatter map is actually a table with only one column, which is scatter map.
+    auto scatter_map = detail::apply_boolean_mask(table_view{{indices->view()}}, boolean_mask,
+                                                  mr, stream);
+    auto output_table =  detail::scatter(table_view{{input}}, scatter_map->get_column(0).view(),
+                                             table_view{{target}}, false, mr, stream);
+
+    // There is only one column in output_table
+    return std::make_unique<column>(std::move(output_table->get_column(0)));
+}
+
+std::unique_ptr<column> boolean_mask_scatter(
+    scalar const& input, column_view const& target,
+    column_view const& boolean_mask,
+    rmm::mr::device_memory_resource *mr,
+    cudaStream_t stream) {
+  
+    return detail::copy_if_else(input, target, boolean_mask, mr, stream);
+}
+
+std::unique_ptr<table> boolean_mask_scatter(
+    table_view const& input, table_view const& target,
+    column_view const& boolean_mask,
+    rmm::mr::device_memory_resource *mr,
+    cudaStream_t stream) {
+
+    CUDF_EXPECTS(input.num_columns() == target.num_columns(), "Mismatch in number of input columns and target columns");
+    CUDF_EXPECTS(boolean_mask.size() == target.num_rows(), "Boolean mask size and number of target rows mismatch");
+    CUDF_EXPECTS(boolean_mask.type().id() == BOOL8, "Mask must be of Boolean type");
+    // Count valid pair of input and columns as per type at each column index i
+    CUDF_EXPECTS(std::all_of(thrust::counting_iterator<size_type>(0),
+                                        thrust::counting_iterator<size_type>(target.num_columns()),
+                                        [&input, &target](auto index){
+                                            return ((input.column(index).type().id()) == (target.column(index).type().id()));
+                                        }), "Type mismatch in input column and target column");
+
+    if (target.num_rows() != 0) {
+        std::vector<std::unique_ptr<column>> out_columns(target.num_columns());
+        std::transform(input.begin(), input.end(), target.begin(),
+                out_columns.begin(),
+                [&boolean_mask, mr, stream] (auto const& input_column, auto const& target_column){
+                return boolean_mask_scatter(input_column, target_column,
+                        boolean_mask, mr, stream);});
+
+        return std::make_unique<experimental::table>(std::move(out_columns));
+    } else {
+        return experimental::empty_like(target);
+    }
+}
+
+std::unique_ptr<table> boolean_mask_scatter(
+    std::vector<std::reference_wrapper<scalar>> const& input,
+    table_view const& target,
+    column_view const& boolean_mask,
+    rmm::mr::device_memory_resource *mr,
+    cudaStream_t stream) {
+
+    CUDF_EXPECTS(static_cast<size_type>(input.size()) == target.num_columns(), "Mismatch in number of scalars and target columns");
+    CUDF_EXPECTS(boolean_mask.size() == target.num_rows(), "Boolean mask size and number of target rows mismatch");
+    CUDF_EXPECTS(boolean_mask.type().id() == BOOL8, "Mask must be of Boolean type");
+
+    // Count valid pair of input and columns as per type at each column/scalar index i
+    CUDF_EXPECTS(std::all_of(thrust::counting_iterator<size_type>(0),
+                                        thrust::counting_iterator<size_type>(target.num_columns()),
+                                        [&input, &target](auto index){
+                                            return (input[index].get().type().id() == target.column(index).type().id());
+                                        }), "Type mismatch in input scalar and target column");
+
+    if (target.num_rows() != 0) {
+        std::vector<std::unique_ptr<column>> out_columns(target.num_columns());
+        std::transform(input.begin(), input.end(), target.begin(),
+                out_columns.begin(),
+                [&boolean_mask, mr, stream] (auto const& scalar, auto const& target_column){
+                return boolean_mask_scatter(scalar.get(), target_column,
+                        boolean_mask, mr, stream);});
+
+        return std::make_unique<experimental::table>(std::move(out_columns));
+    } else {
+        return experimental::empty_like(target);
+    }
+}
+
 }  // namespace detail
 
 std::unique_ptr<table> scatter(
     table_view const& source, column_view const& scatter_map,
     table_view const& target, bool check_bounds,
-    rmm::mr::device_memory_resource* mr)
-{
+    rmm::mr::device_memory_resource* mr) {
   return detail::scatter(source, scatter_map, target, check_bounds, mr);
 }
 
 std::unique_ptr<table> scatter(
     std::vector<std::unique_ptr<scalar>> const& source, column_view const& indices,
     table_view const& target, bool check_bounds,
-    rmm::mr::device_memory_resource* mr)
-{
+    rmm::mr::device_memory_resource* mr) {
   return detail::scatter(source, indices, target, check_bounds, mr);
 }
 
 std::vector<std::unique_ptr<table>> scatter_to_tables(
     table_view const& input, column_view const& partition_map,
-    rmm::mr::device_memory_resource* mr)
-{
+    rmm::mr::device_memory_resource* mr) {
   return detail::scatter_to_tables(input, partition_map, mr);
+}
+
+std::unique_ptr<table> boolean_mask_scatter(
+    table_view const& input, table_view const& target,
+    column_view const& boolean_mask,
+    rmm::mr::device_memory_resource *mr) {
+    return detail::boolean_mask_scatter(input, target, boolean_mask, mr);
+}
+
+std::unique_ptr<table> boolean_mask_scatter(
+    std::vector<std::reference_wrapper<scalar>> const& input, table_view const& target,
+    column_view const& boolean_mask,
+    rmm::mr::device_memory_resource *mr) {
+    return detail::boolean_mask_scatter(input, target, boolean_mask, mr);
 }
 
 }  // namespace experimental
