@@ -44,6 +44,32 @@ auto const temp_env = static_cast<cudf::test::TempDirTestEnvironment*>(
     ::testing::AddGlobalTestEnvironment(
         new cudf::test::TempDirTestEnvironment));
 
+template<typename T>
+std::unique_ptr<cudf::experimental::table> create_random_fixed_table(cudf::size_type num_columns, cudf::size_type num_rows, bool include_validity)
+{       
+   auto valids = cudf::test::make_counting_transform_iterator(0, 
+      [](auto i) { 
+        return i % 2 == 0 ? true : false; 
+      }
+    );
+   std::vector<cudf::test::fixed_width_column_wrapper<T>> src_cols(num_columns);
+   for(int idx=0; idx<num_columns; idx++){
+      auto rand_elements = cudf::test::make_counting_transform_iterator(0, [](T i){return rand();});
+      if(include_validity){
+         src_cols[idx] = cudf::test::fixed_width_column_wrapper<T>(rand_elements, rand_elements + num_rows, valids);
+      } else {
+         src_cols[idx] = cudf::test::fixed_width_column_wrapper<T>(rand_elements, rand_elements + num_rows);
+      }
+   }      
+   std::vector<std::unique_ptr<cudf::column>> columns(num_columns);
+   std::transform(src_cols.begin(), src_cols.end(), columns.begin(), [](cudf::test::fixed_width_column_wrapper<T> &in){   
+      auto ret = in.release();
+      ret->has_nulls();
+      return ret;
+   });
+   return std::make_unique<cudf::experimental::table>(std::move(columns));   
+}
+
 // Base test fixture for tests
 struct ParquetWriterTest : public cudf::test::BaseFixture {};
 
@@ -67,6 +93,20 @@ struct ParquetWriterTimestampTypeTest : public ParquetWriterTest {
 TYPED_TEST_CASE(ParquetWriterNumericTypeTest, cudf::test::NumericTypes);
 using SupportedTimestampTypes = cudf::test::TimestampTypes;
 TYPED_TEST_CASE(ParquetWriterTimestampTypeTest, SupportedTimestampTypes);
+
+// Base test fixture for chunked writer tests
+struct ParquetChunkedWriterTest : public cudf::test::BaseFixture {};
+
+// Typed test fixture for numeric type tests
+template <typename T>
+struct ParquetChunkedWriterNumericTypeTest : public ParquetChunkedWriterTest {
+  auto type() {
+    return cudf::data_type{cudf::experimental::type_to_id<T>()};
+  }
+};
+
+// Declare typed test cases
+TYPED_TEST_CASE(ParquetChunkedWriterNumericTypeTest, cudf::test::NumericTypes);
 
 namespace {
 
@@ -377,4 +417,227 @@ TEST_F(ParquetWriterTest, HostBuffer) {
 
   expect_tables_equal(expected->view(), result.tbl->view());
   EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
+}
+
+TEST_F(ParquetChunkedWriterTest, SingleTable)
+{
+  srand(31337);
+  auto table1 = create_random_fixed_table<int>(5, 5, true);      
+
+  cudf_io::write_parquet_chunked_args args{cudf_io::sink_info{"ChunkedSingle.parquet"}};
+  auto state = cudf_io::write_parquet_chunked_begin(args);  
+  cudf_io::write_parquet_chunked(*table1, state);  
+  cudf_io::write_parquet_chunked_end(state);    
+
+  cudf_io::read_parquet_args read_args{cudf_io::source_info{"ChunkedSingle.parquet"}};
+  auto result = cudf_io::read_parquet(read_args);
+  
+  expect_tables_equal(*result.tbl, *table1);    
+}
+
+TEST_F(ParquetChunkedWriterTest, SimpleTable)
+{
+  srand(31337);
+  auto table1 = create_random_fixed_table<int>(5, 5, true);
+  auto table2 = create_random_fixed_table<int>(5, 5, true);
+  
+  auto full_table = cudf::experimental::concatenate({*table1, *table2});          
+
+  cudf_io::write_parquet_chunked_args args{cudf_io::sink_info{"ChunkedSimple.parquet"}};
+  auto state = cudf_io::write_parquet_chunked_begin(args);  
+  cudf_io::write_parquet_chunked(*table1, state);
+  cudf_io::write_parquet_chunked(*table2, state);  
+  cudf_io::write_parquet_chunked_end(state);    
+
+  cudf_io::read_parquet_args read_args{cudf_io::source_info{"ChunkedSimple.parquet"}};
+  auto result = cudf_io::read_parquet(read_args);
+  
+  expect_tables_equal(*result.tbl, *full_table);    
+}
+
+TEST_F(ParquetChunkedWriterTest, LargeTables)
+{
+  srand(31337);
+  auto table1 = create_random_fixed_table<int>(512, 4096, true);
+  auto table2 = create_random_fixed_table<int>(512, 8192, true);
+  
+  auto full_table = cudf::experimental::concatenate({*table1, *table2});          
+
+  cudf_io::write_parquet_chunked_args args{cudf_io::sink_info{"ChunkedLarge.parquet"}};
+  auto state = cudf_io::write_parquet_chunked_begin(args);  
+  cudf_io::write_parquet_chunked(*table1, state);
+  cudf_io::write_parquet_chunked(*table2, state);  
+  cudf_io::write_parquet_chunked_end(state);    
+
+  cudf_io::read_parquet_args read_args{cudf_io::source_info{"ChunkedLarge.parquet"}};
+  auto result = cudf_io::read_parquet(read_args);
+  
+  expect_tables_equal(*result.tbl, *full_table);    
+}
+
+TEST_F(ParquetChunkedWriterTest, ManyTables)
+{
+  srand(31337);
+  std::vector<std::unique_ptr<table>> tables;
+  std::vector<table_view> table_views;
+  constexpr int num_tables = 96;
+  for(int idx=0; idx<num_tables; idx++){
+    auto tbl = create_random_fixed_table<int>(16, 64, true);
+    table_views.push_back(*tbl);
+    tables.push_back(std::move(tbl));
+  }    
+  
+  auto expected = cudf::experimental::concatenate(table_views);
+
+  cudf_io::write_parquet_chunked_args args{cudf_io::sink_info{"ChunkedManyTables.parquet"}};
+  auto state = cudf_io::write_parquet_chunked_begin(args); 
+  std::for_each(table_views.begin(), table_views.end(), [&state](table_view const& tbl){
+    cudf_io::write_parquet_chunked(tbl, state);
+  });  
+  cudf_io::write_parquet_chunked_end(state);    
+
+  cudf_io::read_parquet_args read_args{cudf_io::source_info{"ChunkedManyTables.parquet"}};
+  auto result = cudf_io::read_parquet(read_args);
+  
+  expect_tables_equal(*result.tbl, *expected);    
+}
+
+TEST_F(ParquetChunkedWriterTest, Strings)
+{       
+  std::vector<std::unique_ptr<cudf::column>> cols;
+
+  bool mask1[]    = { 1, 1, 0, 1, 1, 1, 1 };
+  std::vector<const char*> h_strings1 { "four", "score", "and", "seven", "years", "ago", "abcdefgh" };
+  cudf::test::strings_column_wrapper strings1( h_strings1.begin(), h_strings1.end(), mask1 );
+  cols.push_back(strings1.release());  
+  cudf::experimental::table tbl1(std::move(cols));
+
+  bool mask2[]    = { 0, 1, 1, 1, 1, 1, 1 };
+  std::vector<const char*> h_strings2 { "ooooo", "ppppppp", "fff", "j", "cccc", "bbb", "zzzzzzzzzzz" };
+  cudf::test::strings_column_wrapper strings2( h_strings2.begin(), h_strings2.end(), mask2 );
+  cols.push_back(strings2.release());  
+  cudf::experimental::table tbl2(std::move(cols));    
+
+  auto expected = cudf::experimental::concatenate({tbl1, tbl2});  
+
+  cudf_io::write_parquet_chunked_args args{cudf_io::sink_info{"ChunkedStrings.parquet"}};
+  auto state = cudf_io::write_parquet_chunked_begin(args);   
+  cudf_io::write_parquet_chunked(tbl1, state);
+  cudf_io::write_parquet_chunked(tbl2, state);
+  cudf_io::write_parquet_chunked_end(state);    
+
+  cudf_io::read_parquet_args read_args{cudf_io::source_info{"ChunkedStrings.parquet"}};
+  auto result = cudf_io::read_parquet(read_args);      
+
+  expect_tables_equal(*result.tbl, *expected);      
+}
+
+TEST_F(ParquetChunkedWriterTest, MismatchedTypes)
+{         
+  srand(31337);
+  auto table1 = create_random_fixed_table<int>(4, 4, true);
+  auto table2 = create_random_fixed_table<float>(4, 4, true);  
+
+  cudf_io::write_parquet_chunked_args args{cudf_io::sink_info{"ChunkedMismatchedTypes.parquet"}};
+  auto state = cudf_io::write_parquet_chunked_begin(args);  
+  cudf_io::write_parquet_chunked(*table1, state);
+  EXPECT_THROW(cudf_io::write_parquet_chunked(*table2, state), cudf::logic_error);  
+  cudf_io::write_parquet_chunked_end(state);    
+}
+
+TEST_F(ParquetChunkedWriterTest, MismatchedStructure)
+{         
+  srand(31337);
+  auto table1 = create_random_fixed_table<int>(4, 4, true);
+  auto table2 = create_random_fixed_table<float>(3, 4, true);  
+
+  cudf_io::write_parquet_chunked_args args{cudf_io::sink_info{"ChunkedMismatchedStructure.parquet"}};
+  auto state = cudf_io::write_parquet_chunked_begin(args);  
+  cudf_io::write_parquet_chunked(*table1, state);
+  EXPECT_THROW(cudf_io::write_parquet_chunked(*table2, state), cudf::logic_error);  
+  cudf_io::write_parquet_chunked_end(state);    
+}
+
+TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize)
+{
+  // write out two 31 row tables and make sure they get
+  // read back with all their validity bits in the right place
+
+  using T = TypeParam;
+
+  int num_els = 31;
+  std::vector<std::unique_ptr<cudf::column>> cols;
+
+  bool mask[]    = { 0, 1, 1, 1, 1, 1, 1, 1,  1, 1, 1, 1, 1, 1, 1, 1,  1, 1, 1, 1, 1, 1, 1, 1,  1, 1, 1, 1, 1, 1, 1 };
+
+  T c1a[]        = { 5, 5, 5, 5, 5, 5, 5, 5,  5, 5, 5, 5, 5, 5, 5, 5,  5, 5, 5, 5, 5, 5, 5, 5,  5, 5, 5, 5, 5, 5, 5 };
+  T c1b[]        = { 6, 6, 6, 6, 6, 6, 6, 6,  6, 6, 6, 6, 6, 6, 6, 6,  6, 6, 6, 6, 6, 6, 6, 6,  6, 6, 6, 6, 6, 6, 6 };
+  column_wrapper<T> c1a_w(c1a, c1a + num_els, mask);
+  column_wrapper<T> c1b_w(c1b, c1b + num_els, mask);
+  cols.push_back(c1a_w.release());
+  cols.push_back(c1b_w.release());
+  cudf::experimental::table tbl1(std::move(cols));
+
+  T c2a[]        = { 8, 8, 8, 8, 8, 8, 8, 8,  8, 8, 8, 8, 8, 8, 8, 8,  8, 8, 8, 8, 8, 8, 8, 8,  8, 8, 8, 8, 8, 8, 8 };
+  T c2b[]        = { 9, 9, 9, 9, 9, 9, 9, 9,  9, 9, 9, 9, 9, 9, 9, 9,  9, 9, 9, 9, 9, 9, 9, 9,  9, 9, 9, 9, 9, 9, 9 };
+  column_wrapper<T> c2a_w(c2a, c2a + num_els, mask);
+  column_wrapper<T> c2b_w(c2b, c2b + num_els, mask);
+  cols.push_back(c2a_w.release());
+  cols.push_back(c2b_w.release());
+  cudf::experimental::table tbl2(std::move(cols));
+
+  auto expected = cudf::experimental::concatenate({tbl1, tbl2});  
+
+  cudf_io::write_parquet_chunked_args args{cudf_io::sink_info{"ChunkedUnalignedSize.parquet"}};
+  auto state = cudf_io::write_parquet_chunked_begin(args);   
+  cudf_io::write_parquet_chunked(tbl1, state);
+  cudf_io::write_parquet_chunked(tbl2, state);
+  cudf_io::write_parquet_chunked_end(state);    
+
+  cudf_io::read_parquet_args read_args{cudf_io::source_info{"ChunkedUnalignedSize.parquet"}};
+  auto result = cudf_io::read_parquet(read_args);      
+
+  expect_tables_equal(*result.tbl, *expected);      
+}
+
+TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize2)
+{
+  // write out two 33 row tables and make sure they get
+  // read back with all their validity bits in the right place
+
+  using T = TypeParam;
+
+  int num_els = 33;
+  std::vector<std::unique_ptr<cudf::column>> cols;
+
+  bool mask[]    = { 0, 1, 1, 1, 1, 1, 1, 1,  1, 1, 1, 1, 1, 1, 1, 1,  1, 1, 1, 1, 1, 1, 1, 1,  1, 1, 1, 1, 1, 1, 1, 1, 1 };
+
+  T c1a[]        = { 5, 5, 5, 5, 5, 5, 5, 5,  5, 5, 5, 5, 5, 5, 5, 5,  5, 5, 5, 5, 5, 5, 5, 5,  5, 5, 5, 5, 5, 5, 5, 5, 5 };
+  T c1b[]        = { 6, 6, 6, 6, 6, 6, 6, 6,  6, 6, 6, 6, 6, 6, 6, 6,  6, 6, 6, 6, 6, 6, 6, 6,  6, 6, 6, 6, 6, 6, 6, 6, 6 };
+  column_wrapper<T> c1a_w(c1a, c1a + num_els, mask);
+  column_wrapper<T> c1b_w(c1b, c1b + num_els, mask);
+  cols.push_back(c1a_w.release());
+  cols.push_back(c1b_w.release());
+  cudf::experimental::table tbl1(std::move(cols));
+
+  T c2a[]        = { 8, 8, 8, 8, 8, 8, 8, 8,  8, 8, 8, 8, 8, 8, 8, 8,  8, 8, 8, 8, 8, 8, 8, 8,  8, 8, 8, 8, 8, 8, 8, 8, 8 };
+  T c2b[]        = { 9, 9, 9, 9, 9, 9, 9, 9,  9, 9, 9, 9, 9, 9, 9, 9,  9, 9, 9, 9, 9, 9, 9, 9,  9, 9, 9, 9, 9, 9, 9, 9, 9 };
+  column_wrapper<T> c2a_w(c2a, c2a + num_els, mask);
+  column_wrapper<T> c2b_w(c2b, c2b + num_els, mask);
+  cols.push_back(c2a_w.release());
+  cols.push_back(c2b_w.release());
+  cudf::experimental::table tbl2(std::move(cols));
+
+  auto expected = cudf::experimental::concatenate({tbl1, tbl2});  
+
+  cudf_io::write_parquet_chunked_args args{cudf_io::sink_info{"ChunkedUnalignedSize2.parquet"}};
+  auto state = cudf_io::write_parquet_chunked_begin(args);   
+  cudf_io::write_parquet_chunked(tbl1, state);
+  cudf_io::write_parquet_chunked(tbl2, state);
+  cudf_io::write_parquet_chunked_end(state);    
+
+  cudf_io::read_parquet_args read_args{cudf_io::source_info{"ChunkedUnalignedSize2.parquet"}};
+  auto result = cudf_io::read_parquet(read_args);      
+
+  expect_tables_equal(*result.tbl, *expected);      
 }

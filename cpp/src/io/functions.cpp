@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -184,6 +184,47 @@ void write_parquet(write_parquet_args const& args,
   auto writer = make_writer<parquet::writer>(args.sink, options, mr);
 
   writer->write_all(args.table, args.metadata);
+}
+
+using namespace cudf::experimental::io::detail::parquet;
+namespace parquet = cudf::experimental::io::detail::parquet;
+
+/**
+ * @copydoc cudf::experimental::io::write_parquet_chunked_begin
+ * 
+ **/
+std::shared_ptr<pq_chunked_state> write_parquet_chunked_begin(write_parquet_chunked_args const& args, rmm::mr::device_memory_resource* mr){     
+  parquet::writer_options options{args.compression, args.stats_level};
+
+  auto state = std::make_shared<pq_chunked_state>();  
+  state->wp = make_writer<parquet::writer>(args.sink, options, mr); 
+
+  // have to make a copy of the metadata here since we can't really 
+  // guarantee the lifetime of the incoming pointer
+  if(args.metadata != nullptr){
+    state->user_metadata_with_nullability = *args.metadata;
+    state->user_metadata = &state->user_metadata_with_nullability;
+  }  
+  state->stream = 0;
+  state->wp->write_chunked_begin(*state);  
+  return state;
+}
+
+/**
+ * @copydoc cudf::experimental::io::write_parquet_chunked
+ * 
+ **/
+void write_parquet_chunked(table_view const& table, std::shared_ptr<pq_chunked_state>& state){
+  state->wp->write_chunked(table, *state);
+}
+
+/**
+ * @copydoc cudf::experimental::io::write_parquet_chunked_end
+ * 
+ **/
+void write_parquet_chunked_end(std::shared_ptr<pq_chunked_state>& state){
+  state->wp->write_chunked_end(*state);
+  state.reset();
 }
 
 }  // namespace io

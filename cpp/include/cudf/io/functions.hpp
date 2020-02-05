@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -370,6 +370,86 @@ struct write_parquet_args {
 void write_parquet(write_parquet_args const& args, rmm::mr::device_memory_resource* mr =
                                                rmm::mr::get_default_resource());
 
+
+/**
+ * @brief Settings to use for `write_parquet_chunked()`
+ */
+struct write_parquet_chunked_args {
+  /// Specify the sink to use for writer output
+  sink_info sink;
+  /// Specify the compression format to use
+  compression_type compression;
+  /// Specify the level of statistics in the output file
+  statistics_freq stats_level;
+  /// Optional associated metadata.
+  const table_metadata_with_nullability *metadata;
+
+  explicit write_parquet_chunked_args(sink_info const& sink_,
+                              const table_metadata_with_nullability *metadata_ = nullptr,
+                              compression_type compression_ = compression_type::AUTO,
+                              statistics_freq stats_lvl_ = statistics_freq::STATISTICS_ROWGROUP)
+      : sink(sink_), metadata(metadata_), compression(compression_), stats_level(stats_lvl_) {}
+};
+
+/**
+ * @brief Forward declaration of anonymous chunked-writer state struct.
+ */
+namespace detail {
+namespace parquet {
+  struct pq_chunked_state;
+};
+};
+
+/**
+ * @brief Begin the process of writing a parquet file in a chunked/stream form.
+ * 
+ * The intent of the write_parquet_chunked_ path is to allow writing of an
+ * arbitrarily large / arbitrary number of rows to a parquet file in multiple passes. 
+ *
+ * The following code snippet demonstrates how to write a single parquet file containing
+ * one logical table by writing a series of individual cudf::tables.
+ * @code
+ *  #include <cudf.h>
+ *  ...
+ *  std::string filepath = "dataset.parquet";
+ *  cudf::experimental::io::write_parquet_chunked_args args{cudf::sink_info(filepath), table->view()};
+ *  ...
+ *  auto state = cudf::write_parquet_chunked_begin(args);
+ *    cudf::write_parquet_chunked(table0, state);
+ *    cudf::write_parquet_chunked(table1, state);
+ *    ...
+ *  cudf_write_parquet_chunked_end(state);
+ * @endcode
+ *
+ * @param[in] args Settings for controlling writing behavior
+ * @param[in] mr Optional resource to use for device memory allocation
+ * 
+ * @returns pointer to an anonymous state structure storing information about the chunked write. this 
+ *          pointer must be passed to all subsequent write_parquet_chunked() and write_parquet_chunked_end()
+ *          calls.
+ */
+std::shared_ptr<detail::parquet::pq_chunked_state> write_parquet_chunked_begin(
+                                                write_parquet_chunked_args const& args, 
+                                                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+/**
+ * @brief Write a single table as a subtable of a larger logical parquet file/table.
+ * 
+ * All tables passed into multiple calls of this function must contain the same # of columns and have columns
+ * of the same type. 
+ *
+ * @param[in] table The table data to be written.
+ * @param[in] state Opaque state information about the writer process. Must be the same pointer returned
+ *            from write_parquet_chunked_begin()
+ */                                            
+void write_parquet_chunked(table_view const& table, std::shared_ptr<detail::parquet::pq_chunked_state>& state);
+
+/**
+ * @brief Finish writing a chunked/stream parquet file.   
+ * 
+ * @param[in] state Opaque state information about the writer process. Must be the same pointer returned
+ *            from write_parquet_chunked_begin()
+ */                                            
+void write_parquet_chunked_end(std::shared_ptr<detail::parquet::pq_chunked_state>& state);
 
 }  // namespace io
 }  // namespace experimental

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -99,8 +99,24 @@ enum statistics_freq {
  * f5    f6 
  */
 struct table_metadata {
-  std::vector<std::string> column_names; //!< Names of columns contained in the table
-  std::map<std::string, std::string> user_data; //!< Format-dependent metadata as key-values pairs
+  std::vector<std::string> column_names;        //!< Names of columns contained in the table
+  std::map<std::string, std::string> user_data; //!< Format-dependent metadata as key-values pairs  
+};
+
+/**
+ * @brief Derived class of table_metadata which includes nullability information per column of input.
+ * 
+ * This information is used as an optimization for chunked writes. If the caller leaves column_nullable
+ * uninitialized, the writer code will assume the worst case : that all columns are nullable.
+ * 
+ * If the column_nullable field is not empty, it is expected that it has a length equal to the number
+ * of columns in the table being written.  
+ * 
+ * In the case where column nullability is known, pass `true`
+ * 
+ */
+struct table_metadata_with_nullability : public table_metadata {
+  std::vector<bool>         column_nullable;    //!< Per-column nullability information.
 };
 
 /**

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -383,7 +383,27 @@ writer::impl::impl(std::unique_ptr<data_sink> sink, writer_options const &option
   stats_granularity_(options.stats_granularity),
   out_sink_(std::move(sink)){}
 
-void writer::impl::write(table_view const &table, const table_metadata *metadata, cudaStream_t stream) {
+void writer::impl::write(table_view const &table, const table_metadata *metadata, cudaStream_t stream) {    
+  pq_chunked_state state;
+  state.user_metadata = metadata;
+  state.stream = stream;
+  state.single_write_mode = true;
+
+  write_chunked_begin(state);
+  write_chunked(table, state);
+  write_chunked_end(state);    
+}
+
+void writer::impl::write_chunked_begin(pq_chunked_state& state){
+  // Write file header
+  file_header_s fhdr;
+  fhdr.magic = PARQUET_MAGIC;
+  out_sink_->write(&fhdr, sizeof(fhdr));
+
+  state.current_chunk_offset = sizeof(file_header_s);
+}
+
+void writer::impl::write_chunked(table_view const& table, pq_chunked_state& state){  
   size_type num_columns = table.num_columns();
   size_type num_rows = 0;
 
@@ -394,7 +414,7 @@ void writer::impl::write(table_view const &table, const table_metadata *metadata
     const auto col = *it;
     const auto current_id = parquet_columns.size();
 
-    num_rows = std::max<uint32_t>(num_rows, col.size());
+    num_rows = std::max<uint32_t>(num_rows, col.size());    
     parquet_columns.emplace_back(current_id, col, metadata, stream);
   }
 
@@ -630,12 +650,7 @@ void writer::impl::write(table_view const &table, const table_metadata *metadata
                                     return ptr;
                                   }(max_chunk_bfr_size),
                                   cudaFreeHost};
-  }();
-
-  // Write file header
-  file_header_s fhdr;
-  fhdr.magic = PARQUET_MAGIC;
-  out_sink_->write(&fhdr, sizeof(fhdr));
+  }(); 
 
   // Encode row groups in batches
   size_t current_chunk_offset = sizeof(fhdr);
@@ -677,14 +692,16 @@ void writer::impl::write(table_view const &table, const table_metadata *metadata
         current_chunk_offset += ck->compressed_size;
       }
     }
-  }
+  } 
+}
 
+void writer::impl::write_chunked_end(pq_chunked_state &state){    
   CompactProtocolWriter cpw(&buffer_);
   file_ender_s fendr;
-  fendr.footer_len = (uint32_t)cpw.write(&md);
+  fendr.footer_len = (uint32_t)cpw.write(&state.md);  
   fendr.magic = PARQUET_MAGIC;
-  out_sink_->write(buffer_.data(), buffer_.size());
-  out_sink_->write(&fendr, sizeof(fendr));
+  out_sink_->write(buffer_.data(), buffer_.size());  
+  out_sink_->write(&fendr, sizeof(fendr));  
   out_sink_->flush();
 }
 
@@ -703,6 +720,21 @@ writer::~writer() = default;
 // Forward to implementation
 void writer::write_all(table_view const &table, const table_metadata *metadata, cudaStream_t stream) {
   _impl->write(table, metadata, stream);
+}
+
+// Forward to implementation
+void writer::write_chunked_begin(pq_chunked_state& state){
+  _impl->write_chunked_begin(state);
+}
+
+// Forward to implementation
+void writer::write_chunked(table_view const& table, pq_chunked_state &state){
+  _impl->write_chunked(table, state);
+}
+
+// Forward to implementation
+void writer::write_chunked_end(pq_chunked_state &state){
+  _impl->write_chunked_end(state);
 }
 
 }  // namespace parquet
