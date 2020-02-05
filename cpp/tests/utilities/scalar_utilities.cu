@@ -34,32 +34,36 @@ namespace {
 struct compare_scalar_functor
 {
     template<typename T>
-    typename std::enable_if_t<not std::is_floating_point<T>::value, void>
-    operator()(cudf::scalar const& lhs, cudf::scalar const& rhs)
+    void operator()(cudf::scalar const& lhs, cudf::scalar const& rhs)
     {
         auto lhs_t = static_cast<scalar_type_t<T> const&>(lhs);
         auto rhs_t = static_cast<scalar_type_t<T> const&>(rhs);
         EXPECT_EQ(lhs_t.value(), rhs_t.value());
     }
-
-    template<typename T>
-    std::enable_if_t<std::is_same<T, float>::value>
-    operator()(cudf::scalar const& lhs, cudf::scalar const& rhs)
-    {
-        auto lhs_t = static_cast<scalar_type_t<T> const&>(lhs);
-        auto rhs_t = static_cast<scalar_type_t<T> const&>(rhs);
-        EXPECT_FLOAT_EQ(lhs_t.value(), rhs_t.value());
-    }
-
-    template<typename T>
-    std::enable_if_t<std::is_same<T, double>::value>
-    operator()(cudf::scalar const& lhs, cudf::scalar const& rhs)
-    {
-        auto lhs_t = static_cast<scalar_type_t<T> const&>(lhs);
-        auto rhs_t = static_cast<scalar_type_t<T> const&>(rhs);
-        EXPECT_DOUBLE_EQ(lhs_t.value(), rhs_t.value());
-    }
 };
+
+template<>
+void compare_scalar_functor::operator()<float>(cudf::scalar const& lhs, cudf::scalar const& rhs)
+{
+    auto lhs_t = static_cast<scalar_type_t<float> const&>(lhs);
+    auto rhs_t = static_cast<scalar_type_t<float> const&>(rhs);
+    EXPECT_FLOAT_EQ(lhs_t.value(), rhs_t.value());
+}
+
+template<>
+void compare_scalar_functor::operator()<double>(cudf::scalar const& lhs, cudf::scalar const& rhs)
+{
+    auto lhs_t = static_cast<scalar_type_t<double> const&>(lhs);
+    auto rhs_t = static_cast<scalar_type_t<double> const&>(rhs);
+    EXPECT_DOUBLE_EQ(lhs_t.value(), rhs_t.value());
+}
+
+template<>
+void compare_scalar_functor::operator()<cudf::dictionary32>(cudf::scalar const& lhs, cudf::scalar const& rhs)
+{
+    CUDF_FAIL("Unsupported scalar compare type: dictionary");
+}
+
 
 } // anonymous namespace
 

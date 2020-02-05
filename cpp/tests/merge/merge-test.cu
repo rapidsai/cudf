@@ -1,4 +1,5 @@
 #include <cudf/types.hpp>
+#include <tests/utilities/cudf_gmock.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -196,7 +197,7 @@ TYPED_TEST(MergeTest_, MergeWithEmptyColumn) {
     cudf::table_view right_view{{rightColWrap1}};
 
     std::unique_ptr<cudf::experimental::table> p_outputTable;
-    EXPECT_NO_THROW(p_outputTable = cudf::experimental::merge(left_view,
+    CUDF_EXPECT_NO_THROW(p_outputTable = cudf::experimental::merge(left_view,
                                                               right_view,
                                                               key_cols,
                                                               column_order,
@@ -252,7 +253,7 @@ TYPED_TEST(MergeTest_, Merge1KeyColumns) {
     std::vector<cudf::null_order> null_precedence{};
 
     std::unique_ptr<cudf::experimental::table> p_outputTable;
-    EXPECT_NO_THROW(p_outputTable = cudf::experimental::merge(left_view,
+    CUDF_EXPECT_NO_THROW(p_outputTable = cudf::experimental::merge(left_view,
                                                               right_view,
                                                               key_cols,
                                                               column_order,
@@ -342,7 +343,7 @@ TYPED_TEST(MergeTest_, Merge2KeyColumns) {
     std::vector<cudf::null_order> null_precedence{};
 
     std::unique_ptr<cudf::experimental::table> p_outputTable;
-    EXPECT_NO_THROW(p_outputTable = cudf::experimental::merge(left_view,
+    CUDF_EXPECT_NO_THROW(p_outputTable = cudf::experimental::merge(left_view,
                                                               right_view,
                                                               key_cols,
                                                               column_order,
@@ -445,7 +446,7 @@ TYPED_TEST(MergeTest_, Merge1KeyNullColumns) {
     cudf::table_view right_view{{rightColWrap1}};
 
     std::unique_ptr<cudf::experimental::table> p_outputTable;
-    EXPECT_NO_THROW(p_outputTable = cudf::experimental::merge(left_view,
+    CUDF_EXPECT_NO_THROW(p_outputTable = cudf::experimental::merge(left_view,
                                                               right_view,
                                                               key_cols,
                                                               column_order,
@@ -540,7 +541,7 @@ TYPED_TEST(MergeTest_, Merge2KeyNullColumns) {
     std::vector<cudf::null_order> null_precedence{cudf::null_order::AFTER, cudf::null_order::AFTER};
 
     std::unique_ptr<cudf::experimental::table> p_outputTable;
-    EXPECT_NO_THROW(p_outputTable = cudf::experimental::merge(left_view,
+    CUDF_EXPECT_NO_THROW(p_outputTable = cudf::experimental::merge(left_view,
                                                               right_view,
                                                               key_cols,
                                                               column_order,
