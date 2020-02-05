@@ -7,7 +7,7 @@ from libc.stdint cimport uintptr_t
 
 from cudf._libxx.column cimport *
 from cudf._libxx.lib cimport *
-from cudf.core.column_accessor import OrderedColumnDictAccessor
+from cudf.core.column_accessor import ColumnAccessor
 
 
 cdef class Table:
@@ -24,7 +24,7 @@ cdef class Table:
         """
         if data is None:
             data = {}
-        self._data = OrderedColumnDictAccessor(data)
+        self._data = ColumnAccessor(data)
         self._index = index
 
     @property

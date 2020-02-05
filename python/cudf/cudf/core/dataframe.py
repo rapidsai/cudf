@@ -32,7 +32,7 @@ from cudf.core.column import (
     as_column,
     column_empty,
 )
-from cudf.core.column_accessor import OrderedColumnDictAccessor
+from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
@@ -183,7 +183,7 @@ class DataFrame(Frame):
             else:
                 self._index = as_index(index)
             if columns is not None:
-                self._data = OrderedColumnDictAccessor(
+                self._data = ColumnAccessor(
                     OrderedDict.fromkeys(
                         columns,
                         column.column_empty(

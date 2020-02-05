@@ -510,9 +510,9 @@ class RangeIndex(Index):
 
     @property
     def _data(self):
-        from cudf.core.column_accessor import OrderedColumnDictAccessor
+        from cudf.core.column_accessor import ColumnAccessor
 
-        return OrderedColumnDictAccessor({self.name: self._values})
+        return ColumnAccessor({self.name: self._values})
 
     def __contains__(self, item):
         if not isinstance(

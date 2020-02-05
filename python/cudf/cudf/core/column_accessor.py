@@ -4,7 +4,7 @@ from collections.abc import MutableMapping
 from cudf.utils.utils import OrderedColumnDict
 
 
-class OrderedColumnDictAccessor(MutableMapping):
+class ColumnAccessor(MutableMapping):
     def __init__(self, data={}):
         """
         Parameters
