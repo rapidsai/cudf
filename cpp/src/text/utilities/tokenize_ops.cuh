@@ -147,7 +147,6 @@ struct tokenator_fn : base_tokenator
                                                             (epos_bo-spos_bo) };
             }
             spos = epos + 1;
-            //epos = d_str.length();
             ++itr;
             ++token_idx;
         }
