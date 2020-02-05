@@ -3,7 +3,6 @@ import math
 import warnings
 from operator import getitem
 
-import cupy
 import numpy as np
 import toolz
 
@@ -16,9 +15,6 @@ from dask.highlevelgraph import HighLevelGraph
 from dask.utils import M, digit, insert
 
 import cudf as gd
-import rmm
-
-cupy.cuda.set_allocator(rmm.rmm_cupy_allocator)
 
 try:
     from .explicit_shuffle import explicit_sorted_shuffle

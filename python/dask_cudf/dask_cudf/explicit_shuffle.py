@@ -1,14 +1,9 @@
 import asyncio
 
-import cupy
-
 from dask_cuda.explicit_comms import comms
 from distributed.protocol import to_serialize
 
 import cudf
-import rmm
-
-cupy.cuda.set_allocator(rmm.rmm_cupy_allocator)
 
 
 async def send_df(ep, df):
