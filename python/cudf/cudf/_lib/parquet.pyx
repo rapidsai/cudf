@@ -124,7 +124,6 @@ cpdef write_parquet(
     cdef map[string, string] user_data
 
     # Construct the column names
-    column_names.push_back(str.encode(table._index.name))
     for col_name in table._column_names:
         column_names.push_back(str.encode(col_name))
 
@@ -141,6 +140,7 @@ cpdef write_parquet(
         })
 
     # Append the index column
+    column_names.push_back(str.encode(table._index.name))
     idx_dtype = table._index._data[table._index.name].dtype
     column_metadata.append({
         "name": table._index.name,
