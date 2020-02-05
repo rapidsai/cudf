@@ -32,6 +32,7 @@
 - PR #4021 Change quantiles signature for clarity.
 - PR #4062 Improve how java classifiers are produced
 - PR #4038 JNI and Java support for is_nan and is_not_nan
+- PR #3891 Port NVStrings (r)split_record to contiguous_(r)split_record
 
 ## Bug Fixes
 
