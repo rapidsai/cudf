@@ -6,6 +6,7 @@
 - PR #3693 add string support, skipna to scan operation
 - PR #3662 Define and implement `shift`.
 - PR #3861 Added Series.sum feature for String
+- PR #3681 Add cudf::experimental::boolean_mask_scatter
 
 ## Improvements
 
