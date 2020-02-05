@@ -27,12 +27,16 @@ enum AggregateOp {
   MAX(2),
   COUNT(3),
   MEAN(4),
-  MEDIAN(5);
+  MEDIAN(5),
   // TODO Quantile
-  // ARGMAX(7),
-  // ARGMIN(8);
-  // PTX and CUDA are the others...
-  // There are others too stddev, we need to look at what is the correct API to support these...
+  ARGMAX(7),
+  ARGMIN(8),
+  PRODUCT(9),
+  SUMOFSQUARES(10),
+  VAR(11), // This can take a delta degrees of freedom
+  STD(12), // This can take a delta degrees of freedom
+  ANY(13),
+  ALL(14);
 
   final int nativeId;
 

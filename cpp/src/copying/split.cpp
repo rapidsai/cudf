@@ -41,11 +41,7 @@ namespace  {
                     indices.push_back(split); // This for the start
                 });
         
-        if (splits.back() != column_size) {
-            indices.push_back(column_size); // This to include rest of the elements
-        } else {
-            indices.pop_back(); // Not required as it is extra 
-        }
+        indices.push_back(column_size); // This to include rest of the elements
 
         return cudf::experimental::slice(input, indices);
     }   
