@@ -1037,7 +1037,11 @@ public class JCudfSerialization {
       // Don't copy anything, there are no rows
       return 0;
     }
-    long bytesToCopy = (numRows + 1) * 4;
+    long bytesToCopy = 0;
+    if (column.getHostBufferFor(ColumnVector.BufferType.DATA) != null) {
+      bytesToCopy = (numRows + 1) * 4;
+    }
+
     long srcOffset = rowOffset * 4;
     if (rowOffset == 0) {
       return copySlicedAndPad(out, column, ColumnVector.BufferType.OFFSET, srcOffset, bytesToCopy);
@@ -1294,11 +1298,7 @@ public class JCudfSerialization {
             offsets = combinedBuffer.slice(offsetInfo.offsets, offsetInfo.offsetsLen);
           }
 
-          if (offsetInfo.dataLen == 0) {
-            // The vector is possibly full of null strings. This is a rare corner case, but here is the
-            // simplest place to work around it.
-            data = DeviceMemoryBuffer.allocate(1);
-          } else {
+          if (offsetInfo.dataLen > 0) {
             data = combinedBuffer.slice(offsetInfo.data, offsetInfo.dataLen);
           }
 
