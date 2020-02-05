@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,42 +29,50 @@
 #include <random>
  
 // to enable, run cmake with -DBUILD_BENCHMARKS=ON
- 
+
+// Fixture that enables RMM pool mode
 class Merge: public cudf::benchmark {};
  
 using IntColWrap = cudf::test::fixed_width_column_wrapper<int32_t>;
 
 void BM_merge(benchmark::State& state) {   
-   const cudf::size_type avg_rows = state.range(0);
-   const int num_tables = state.range(1);
-    
-   auto sequence0 = cudf::test::make_counting_transform_iterator(0, [](auto row) {
-      return row; });
-        
-   // Content is irrelevant for the benchmark
-   auto sequence1 = cudf::test::make_counting_transform_iterator(0, [](auto row) {
+   cudf::size_type const avg_rows = 1 << 19; // 512K rows
+   int const num_tables = state.range(0);
+
+   auto data_sequence = cudf::test::make_counting_transform_iterator(0, [](auto row) {
+      // Content is irrelevant for the benchmark
       return 0; });
   
+   // Using 0 seed to ensure consistent pseudo-numbers on each run
    std::mt19937 rand_gen(0);
-   std::normal_distribution<> dist(avg_rows, avg_rows/2);
+   // Gaussian distribution with 98% of elements are in range [0, avg_rows*2] 
+   std::normal_distribution<> table_size_dist(avg_rows, avg_rows/2);
+   // Used to generate a random monotonic sequence for each table key column
+   std::uniform_int_distribution<> key_dist(0, 10);
 
-   std::vector<std::pair<IntColWrap, IntColWrap>> facts{};
+   std::vector<std::pair<IntColWrap, IntColWrap>> columns;
    size_t total_rows = 0;
-   std::vector<cudf::table_view> tables{};
+   std::vector<cudf::table_view> tables;
    for (int i = 0; i < num_tables; ++i){
-      const cudf::size_type rows = std::round(dist(rand_gen));
-      const auto clamped_rows = std::max(std::min(rows , avg_rows*2), 0);
+      cudf::size_type const rows = std::round(table_size_dist(rand_gen));
+      // Ensure size in range [0, avg_rows*2] 
+      auto const clamped_rows = std::max(std::min(rows , avg_rows*2), 0);
 
-      facts.emplace_back(std::pair<IntColWrap, IntColWrap>{
-         IntColWrap{sequence0, sequence0 + clamped_rows}, 
-         IntColWrap{sequence1, sequence1 + clamped_rows}
+      int32_t prev_key = 0;
+      auto key_sequence = cudf::test::make_counting_transform_iterator(0, [&](auto row) {
+         prev_key += key_dist(rand_gen);
+         return prev_key; });
+
+      columns.emplace_back(std::pair<IntColWrap, IntColWrap>{
+         IntColWrap{key_sequence, key_sequence + clamped_rows}, 
+         IntColWrap{data_sequence, data_sequence + clamped_rows}
       });
-      tables.push_back(cudf::table_view{{facts.back().first, facts.back().second}});
+      tables.push_back(cudf::table_view{{columns.back().first, columns.back().second}});
       total_rows += clamped_rows;
    }
-   std::vector<cudf::size_type> key_cols{0};
-   std::vector<cudf::order> column_order {cudf::order::ASCENDING};
-   std::vector<cudf::null_order> null_precedence{};
+   std::vector<cudf::size_type> const key_cols{0};
+   std::vector<cudf::order> const column_order {cudf::order::ASCENDING};
+   std::vector<cudf::null_order> const null_precedence{};
   
    for(auto _ : state){
       cuda_event_timer raii(state, true); // flush_l2_cache = true, stream = 0
@@ -78,11 +86,11 @@ void BM_merge(benchmark::State& state) {
 }
  
  
- #define MBM_BENCHMARK_DEFINE(name)                 \
- BENCHMARK_DEFINE_F(Merge, name)(::benchmark::State& state) {                       \
-    BM_merge(state);                                                               \
- }                                                                                            \
- BENCHMARK_REGISTER_F(Merge, name)->Unit(benchmark::kNanosecond)->UseManualTime() \
-                                      ->RangeMultiplier(2)->Ranges({{1<<19, 1<<19},{2, 128}});
+#define MBM_BENCHMARK_DEFINE(name)                                                \
+BENCHMARK_DEFINE_F(Merge, name)(::benchmark::State& state) {                      \
+   BM_merge(state);                                                               \
+}                                                                                 \
+BENCHMARK_REGISTER_F(Merge, name)->Unit(benchmark::kNanosecond)->UseManualTime()  \
+                                      ->RangeMultiplier(2)->Ranges({{2, 128}});
                                                                        
- MBM_BENCHMARK_DEFINE(pow2tables);
+MBM_BENCHMARK_DEFINE(pow2tables);

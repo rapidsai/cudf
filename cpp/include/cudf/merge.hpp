@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ namespace cudf {
 namespace experimental {
 
 /**
- * @brief Merge sorted tables.
+ * @brief Merge a set of sorted tables.
  * 
  * Merges sorted tables into one sorted table
  * containing data from all tables.
@@ -35,9 +35,11 @@ namespace experimental {
  *            col 2 {4, 5, 6, 7}
  * table 2 => col 1 {1, 2}
  *            col 2 {8, 9}
+ * table 2 => col 1 {2, 4}
+ *            col 2 {8, 9}
  * output:
- * table => col 1 {0, 1, 1, 2, 2, 3}
- *          col 2 {4, 5, 8, 6, 9, 7}
+ * table => col 1 {0, 1, 1, 2, 2, 2, 3, 4}
+ *          col 2 {4, 5, 8, 6, 9, 8, 7, 9}
  *
  * Example 2: 
  * input:
@@ -67,7 +69,14 @@ namespace experimental {
  *   Res2 = {GREEN, NULL, RED}
  * 
  * 
- * @throws cudf::logic_error if TODO
+ * @throws cudf::logic_error if tables in `tables_to_merge` have different 
+ * number of columns
+ * @throws cudf::logic_error if tables in `tables_to_merge` have columns with 
+ * mismatched types
+ * @throws cudf::logic_error if `key_cols` is empty
+ * @throws cudf::logic_error if `key_cols` size is larger than the number of 
+ * columns in `tables_to_merge` tables
+ * @throws cudf::logic_error if `key_cols` size and `column_order` size mismatches
  * 
  * @Param[in] tables_to_merge Non-empty list of tables to be merged
  * @Param[in] key_cols Indices of left_cols and right_cols to be used

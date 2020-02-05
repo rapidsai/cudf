@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -452,8 +452,6 @@ table_ptr_type merge(std::vector<table_view> const& tables_to_merge,
  
     CUDF_EXPECTS(key_cols.size() == column_order.size(),
                  "Mismatched size between key_cols and column_order");
-    CUDF_EXPECTS(column_order.size() <= static_cast<size_t>(n_cols), 
-                 "Too many values in column_order");
  
     // A queue of (table view, table) pairs
     std::priority_queue<merge_queue_item> merge_queue;
@@ -502,13 +500,8 @@ std::unique_ptr<cudf::experimental::table> merge(std::vector<table_view> const& 
                                                  std::vector<cudf::order> const& column_order,
                                                  std::vector<cudf::null_order> const& null_precedence,
                                                  rmm::mr::device_memory_resource* mr){
-  return detail::merge(tables_to_merge, 
-                       key_cols, 
-                       column_order, 
-                       null_precedence, 
-                       mr);
+  return detail::merge(tables_to_merge, key_cols, column_order, null_precedence, mr);
 }
  
 }  // namespace experimental
 }  // namespace cudf
- 

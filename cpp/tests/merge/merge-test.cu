@@ -225,7 +225,7 @@ TYPED_TEST(MergeTest_, MergeTwoEmptyTables) {
                                                                  column_order,
                                                                  null_precedence));
 
-  //cudf::test::expect_tables_equal(left_view, p_outputTable->view());
+  cudf::test::expect_tables_equal(left_view, p_outputTable->view());
 }
 
 TYPED_TEST(MergeTest_, MergeWithEmptyColumn) {
