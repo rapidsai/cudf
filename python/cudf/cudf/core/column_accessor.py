@@ -5,7 +5,7 @@ from cudf.utils.utils import OrderedColumnDict
 
 
 class ColumnAccessor(MutableMapping):
-    def __init__(self, data={}):
+    def __init__(self, data={}, name=None):
         """
         Parameters
         ----------
@@ -13,6 +13,7 @@ class ColumnAccessor(MutableMapping):
         """
         # TODO: we should validate `data`
         self._data = OrderedColumnDict(data)
+        self.name = name
 
     def __iter__(self):
         return self._data.__iter__()

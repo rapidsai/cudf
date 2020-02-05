@@ -168,14 +168,8 @@ class DataFrame(Frame):
     def __init__(self, data=None, index=None, columns=None, dtype=None):
         super().__init__()
 
-        self._columns_name = None
-
         if isinstance(data, libcudfxx.Table):
             return DataFrame._from_table(data)
-
-        if isinstance(columns, cudf.MultiIndex):
-            self.multi_cols = columns
-            columns = RangeIndex(len(columns))
 
         if data is None:
             if index is None:
@@ -216,9 +210,6 @@ class DataFrame(Frame):
             index = as_index(index)
         self._index = as_index(index)
         data = list(itertools.zip_longest(*data))
-
-        if columns is None:
-            columns = range(len(data))
 
         for col_name, col in enumerate(data):
             self._data[col_name] = column.as_column(col)
@@ -261,7 +252,7 @@ class DataFrame(Frame):
         ):
             for (i, col_name) in enumerate(data):
                 self.insert(i, i, data[col_name])
-            self.columns = cudf.MultiIndex.from_tuples(data.keys())
+            self.columns = pd.MultiIndex.from_tuples(data.keys())
         else:
             for (i, col_name) in enumerate(data):
                 self.insert(i, col_name, data[col_name])
@@ -1300,37 +1291,18 @@ class DataFrame(Frame):
     def columns(self):
         """Returns a tuple of columns
         """
-        if hasattr(self, "multi_cols"):
-            return self.multi_cols
-        else:
-            name = self._columns_name
-            return pd.Index(self._data.names, name=name, tupleize_cols=False)
+        return pd.Index(self._data.names, name=self._data.name)
 
     @columns.setter
     def columns(self, columns):
-        if isinstance(columns, cudf.MultiIndex):
-            if len(columns) != len(self.columns):
-                msg = (
-                    f"Length mismatch: Expected axis has %d elements, "
-                    "new values have %d elements"
-                    % (len(self.columns), len(columns))
-                )
-                raise ValueError(msg)
-            """
-            new_names = []
-            for idx, name in enumerate(columns):
-                new_names.append(name)
-            self._rename_columns(new_names)
-            """
-            self.multi_cols = columns
-        elif isinstance(columns, pd.MultiIndex):
-            self.multi_cols = cudf.MultiIndex.from_pandas(columns)
-        else:
-            if hasattr(self, "multi_cols"):
-                delattr(self, "multi_cols")
-            self._rename_columns(columns)
-            if hasattr(columns, "name"):
-                self._columns_name = columns.name
+        if isinstance(columns, (cudf.MultiIndex, cudf.Index)):
+            columns = columns.to_pandas()
+        if columns is None:
+            columns = pd.Index(range(len(self._data.columns)))
+        columns = pd.Index(columns)
+        self._data = ColumnAccessor(
+            dict(zip(columns, self._data.columns)), name=columns.name
+        )
 
     def _rename_columns(self, new_names):
         old_cols = iter(self._data.names)
@@ -1641,9 +1613,7 @@ class DataFrame(Frame):
                 data[k] = self._data[k]
 
         out = DataFrame(data=data, columns=self.columns.copy(deep=deep))
-
         out.index = index
-
         return out
 
     def __copy__(self):
