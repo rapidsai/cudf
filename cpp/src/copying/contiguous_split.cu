@@ -436,6 +436,7 @@ contiguous_split_result alloc_and_copy(cudf::table_view const& t, thrust::device
    // copy (this would be cleaner with a std::transform, but there's an nvcc compiler issue in the way)   
    std::vector<column_view> out_cols;
    out_cols.reserve(t.num_columns());
+
    column_index = 0;   
    std::for_each(t.begin(), t.end(), [&out_cols, &buf, &column_index, &split_info](cudf::column_view const& c){
       cudf::experimental::type_dispatcher(c.type(), column_copy_functor{}, c, split_info[column_index], buf, out_cols);

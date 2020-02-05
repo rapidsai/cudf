@@ -39,11 +39,7 @@ std::vector<cudf::size_type> splits_to_indices(std::vector<cudf::size_type> spli
                 indices.push_back(split); // This for the start
             });
 
-    if (splits.back() != size) {
-        indices.push_back(size); // This to include rest of the elements
-    } else {
-        indices.pop_back(); // Not required as it is extra 
-    }
+    indices.push_back(size); // This to include rest of the elements
 
     return indices;
 }
@@ -107,7 +103,7 @@ TYPED_TEST(SplitTest, SplitEndToSize) {
 
     cudf::test::fixed_width_column_wrapper<T> col = create_fixed_columns<T>(start, size, valids);
 
-    std::vector<cudf::size_type> splits{2, 5, 10};
+    std::vector<cudf::size_type> splits{2, 5, 10, 10, 10, 10};
     std::vector<cudf::test::fixed_width_column_wrapper<T>> expected = create_expected_columns_for_splits<T>(splits, size, true);
     std::vector<cudf::column_view> result = cudf::experimental::split(col, splits);
 
