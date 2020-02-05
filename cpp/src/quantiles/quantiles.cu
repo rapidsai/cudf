@@ -11,27 +11,19 @@
 namespace cudf {
 namespace experimental {
 
+namespace detail {
+
+template<typename SortMapIterator>
 std::unique_ptr<table>
 quantiles(table_view const& input,
+          SortMapIterator sortmap,
           std::vector<double> const& q,
           interpolation interp,
-          std::vector<order> const& column_order,
-          std::vector<null_order> const& null_precedence,
           rmm::mr::device_memory_resource* mr)
 {
-    CUDF_EXPECTS(interp == interpolation::HIGHER ||
-                 interp == interpolation::LOWER ||
-                 interp == interpolation::NEAREST,
-                 "multi-column quantiles require a non-arithmetic interpolation strategy.");
-
-    CUDF_EXPECTS(input.num_rows() > 0,
-                 "multi-column quantiles require at least one input row.");
-
-    auto sorted_idx = detail::sorted_order(input, column_order, null_precedence);
-
-    auto sortmap_lookup = [sortmap=sorted_idx->view().data<size_type>()]
+    auto sortmap_lookup = [sortmap]
         __device__(size_type idx) {
-            return sortmap[idx];
+            return *(sortmap + idx);
         };
 
     auto quantile_idx_lookup = [sortmap_lookup, interp, size=input.num_rows()]
@@ -53,6 +45,44 @@ quantiles(table_view const& input,
                           false,
                           false,
                           mr);
+}
+
+}
+
+std::unique_ptr<table>
+quantiles(table_view const& input,
+          std::vector<double> const& q,
+          interpolation interp,
+          cudf::sortedness sorted,
+          std::vector<order> const& column_order,
+          std::vector<null_order> const& null_precedence,
+          rmm::mr::device_memory_resource* mr)
+{
+    CUDF_EXPECTS(interp == interpolation::HIGHER ||
+                 interp == interpolation::LOWER ||
+                 interp == interpolation::NEAREST,
+                 "multi-column quantiles require a non-arithmetic interpolation strategy.");
+
+    CUDF_EXPECTS(input.num_rows() > 0,
+                 "multi-column quantiles require at least one input row.");
+
+    if (sorted == sortedness::SORTED)
+    {
+        return detail::quantiles(input,
+                                 thrust::make_counting_iterator<size_type>(0),
+                                 q,
+                                 interp,
+                                 mr);
+    }
+    else
+    {
+        auto sorted_idx = detail::sorted_order(input, column_order, null_precedence);
+        return detail::quantiles(input,
+                                 sorted_idx->view().data<size_type>(),
+                                 q,
+                                 interp,
+                                 mr);
+    }
 }
 
 }

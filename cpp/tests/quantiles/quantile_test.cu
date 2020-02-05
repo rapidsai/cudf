@@ -186,7 +186,7 @@ sorted_ascending_null_before() {
             q_expect{ 0.75, 9, 8, 8.25, 8.5, 8 },
             q_expect{ 1.00, 9, 9, 9, 9, 9 }
         },
-        { true, cudf::order::ASCENDING, cudf::null_order::BEFORE }
+        { cudf::sortedness::SORTED, cudf::order::ASCENDING, cudf::null_order::BEFORE }
     };
 }
 
@@ -201,7 +201,7 @@ sorted_ascending_null_before() {
             q_expect{ 0.50, 8, 7, 7.5, 7.5, 8 },
             q_expect{ 1.00, 9, 9, 9, 9, 9 }
         },
-        { true, cudf::order::ASCENDING, cudf::null_order::BEFORE }
+        { cudf::sortedness::SORTED, cudf::order::ASCENDING, cudf::null_order::BEFORE }
     };
 }
 
@@ -216,7 +216,7 @@ sorted_ascending_null_before() {
             q_expect{ 0.50, 1, 0, 0.5, 0.5, 0 },
             q_expect{ 1.50, 1, 1, 1, 1, 1 }
         },
-        { true, cudf::order::ASCENDING, cudf::null_order::BEFORE }
+        { cudf::sortedness::SORTED, cudf::order::ASCENDING, cudf::null_order::BEFORE }
     };
 }
 
@@ -233,7 +233,7 @@ sorted_descending_null_after() {
             q_expect{ 0.75, 9, 8, 8.25, 8.5, 8 },
             q_expect{ 1.00, 9, 9, 9, 9, 9 }
         },
-        { true, cudf::order::DESCENDING, cudf::null_order::AFTER }
+        { cudf::sortedness::SORTED, cudf::order::DESCENDING, cudf::null_order::AFTER }
     };
 }
 
@@ -248,7 +248,7 @@ sorted_descending_null_after() {
             q_expect{ 0.50, 8, 7, 7.5, 7.5, 8 },
             q_expect{ 1.00, 9, 9, 9, 9, 9 }
         },
-        { true, cudf::order::DESCENDING, cudf::null_order::AFTER }
+        { cudf::sortedness::SORTED, cudf::order::DESCENDING, cudf::null_order::AFTER }
     };
 }
 
@@ -261,7 +261,7 @@ sorted_descending_null_after() {
         {
             q_expect{ 0.50, 1, 0, 0.5, 0.5, 0 }
         },
-        { true, cudf::order::DESCENDING, cudf::null_order::AFTER }
+        { cudf::sortedness::SORTED, cudf::order::DESCENDING, cudf::null_order::AFTER }
     };
 }
 

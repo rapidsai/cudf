@@ -52,6 +52,7 @@ quantile(column_view const& input,
  * @param q               Desired quantiles in range [0, 1].
  * @param interp          Strategy used to select between the two rows on either
                           side of the desired quantile.
+ * @param sorted          Indicates if the input has been pre-sorted.
  * @param column_order    The desired sort order for each column.
  * @param null_precedence The desired order of null compared to other elements.
  *
@@ -62,6 +63,7 @@ std::unique_ptr<table>
 quantiles(table_view const& input,
           std::vector<double> const& q,
           interpolation interp = interpolation::NEAREST,
+          cudf::sortedness sorted = sortedness::UNSORTED,
           std::vector<order> const& column_order = {},
           std::vector<null_order> const& null_precedence = {},
           rmm::mr::device_memory_resource* mr =
