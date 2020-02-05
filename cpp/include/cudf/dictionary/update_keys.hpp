@@ -36,16 +36,17 @@ namespace dictionary
  * d2 is now {["a","b","c","d"],[3,0,2,0]}
  * ```
  *
- * @throw cudf_logic_error if the keys type does not match the keys type in
- * the dictionary_column.
+ * @throw cudf_logic_error if the new_keys type does not match the keys type in
+ *        the dictionary_column.
+ * @throw cudf_logic_error if the new_keys contain nulls.
  *
  * @param dictionary_column Existing dictionary column.
- * @param keys New keys to incorporate into the dictionary_column
+ * @param new_keys New keys to incorporate into the dictionary_column
  * @param mr Resource for allocating memory for the output.
  * @return New dictionary column.
  */
 std::unique_ptr<column> add_keys( dictionary_column_view const& dictionary_column,
-                                  column_view const& keys,
+                                  column_view const& new_keys,
                                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
@@ -62,8 +63,8 @@ std::unique_ptr<column> add_keys( dictionary_column_view const& dictionary_colum
  * ```
  *
  * @throw cudf_logic_error if the keys_to_remove type does not match the keys type in
- * the dictionary_column.
- * @throw cudf_logic_error if keys_to_remove contains nulls
+ *        the dictionary_column.
+ * @throw cudf_logic_error if the keys_to_remove contain nulls.
  *
  * @param dictionary_column Existing dictionary column.
  * @param keys_to_remove The keys to remove from the dictionary_column
@@ -110,7 +111,8 @@ std::unique_ptr<column> remove_unused_keys( dictionary_column_view const& dictio
  * ```
  *
  * @throw cudf_logic_error if the keys type does not match the keys type in
- * the dictionary_column.
+ *        the dictionary_column.
+ * @throw cudf_logic_error if the keys contain nulls.
  *
  * @param dictionary_column Existing dictionary column.
  * @param keys New keys to use for the output column.

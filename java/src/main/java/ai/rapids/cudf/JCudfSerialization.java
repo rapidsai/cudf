@@ -547,10 +547,11 @@ public class JCudfSerialization {
       }
       if (type == DType.STRING) {
         // offsets
-        totalDataSize += padFor64byteAlignment((numRows + 1) * 4);
-
-        // data
         if (numRows > 0) {
+          // The size of an empty string array is empty.
+          totalDataSize += padFor64byteAlignment((numRows + 1) * 4);
+
+          // data
           totalDataSize += padFor64byteAlignment(getRawStringDataLength(column, rowOffset, numRows));
         }
       } else {
@@ -571,7 +572,9 @@ public class JCudfSerialization {
       }
       if (type == DType.STRING) {
         // offsets
-        totalDataSize += padFor64byteAlignment((numRows + 1) * 4);
+        if (numRows > 0) {
+          totalDataSize += padFor64byteAlignment((numRows + 1) * 4);
+        }
 
         long stringDataLen = 0;
         for (int batchNumber = 0; batchNumber < columnsForEachBatch.length; batchNumber++) {
@@ -616,12 +619,12 @@ public class JCudfSerialization {
       DType type = dataTypes[column];
       long nullCount = nullCounts[column];
 
-      long validity = -1;
+      long validity = 0;
       long validityLen = 0;
-      long offsets = -1;
+      long offsets = 0;
       long offsetsLen = 0;
-      long data;
-      long dataLen;
+      long data = 0;
+      long dataLen = 0;
       if (nullCount > 0) {
         validityLen = padFor64byteAlignment(BitVectorHelper.getValidityLengthInBytes(numRows));
         validity = bufferOffset;
@@ -629,15 +632,17 @@ public class JCudfSerialization {
       }
 
       if (type == DType.STRING) {
-        offsetsLen = (numRows + 1) * 4;
-        offsets = bufferOffset;
-        int startStringOffset = buffer.getInt(bufferOffset);
-        int endStringOffset = buffer.getInt(bufferOffset + (numRows * 4));
-        bufferOffset += padFor64byteAlignment(offsetsLen);
+        if (numRows > 0) {
+          offsetsLen = (numRows + 1) * 4;
+          offsets = bufferOffset;
+          int startStringOffset = buffer.getInt(bufferOffset);
+          int endStringOffset = buffer.getInt(bufferOffset + (numRows * 4));
+          bufferOffset += padFor64byteAlignment(offsetsLen);
 
-        dataLen = endStringOffset - startStringOffset;
-        data = bufferOffset;
-        bufferOffset += padFor64byteAlignment(dataLen);
+          dataLen = endStringOffset - startStringOffset;
+          data = bufferOffset;
+          bufferOffset += padFor64byteAlignment(dataLen);
+        }
       } else {
         dataLen = type.sizeInBytes * numRows;
         data = bufferOffset;
@@ -674,7 +679,7 @@ public class JCudfSerialization {
       }
     }
 
-    if (validCount < headers.length) {
+    if (validCount > 0 && validCount < headers.length) {
       SerializedTableHeader[] filteredHeaders = new SerializedTableHeader[validCount];
       HostMemoryBuffer[] filteredBuffers = new HostMemoryBuffer[validCount];
       int at = 0;
@@ -1028,6 +1033,10 @@ public class JCudfSerialization {
 
   private static long copySlicedOffsets(DataWriter out, ColumnBufferProvider column, long rowOffset,
                                         long numRows) throws IOException {
+    if (numRows <= 0) {
+      // Don't copy anything, there are no rows
+      return 0;
+    }
     long bytesToCopy = (numRows + 1) * 4;
     long srcOffset = rowOffset * 4;
     if (rowOffset == 0) {
@@ -1039,10 +1048,7 @@ public class JCudfSerialization {
       throw new IllegalStateException("Copy is too large, need to do chunked copy");
     }
     ByteBuffer bb = buff.asByteBuffer(startOffset, (int)bytesToCopy);
-    int start = 0;
-    if (numRows > 0) {
-      start = bb.getInt();
-    }
+    int start = bb.getInt();
     out.writeIntNativeOrder(0);
     long total = 4;
     for (int i = 1; i < (numRows + 1); i++) {
@@ -1055,9 +1061,9 @@ public class JCudfSerialization {
     return ret;
   }
 
-  private static int[] copyConcateOffsets(DataWriter out,
-                                          int columnIndex,
-                                          ColumnBufferProvider[][] providers) throws IOException {
+  private static int[] copyConcatOffsets(DataWriter out,
+                                         int columnIndex,
+                                         ColumnBufferProvider[][] providers) throws IOException {
     int dataLens[] = new int[providers.length];
     long totalCopied = 0;
     int offsetToAdd = 0;
@@ -1144,13 +1150,15 @@ public class JCudfSerialization {
       concatValidity(out, columnIndex, combinedHeader.numRows, providers);
     }
 
-    DType type = combinedHeader.types[columnIndex];
-    if (type == DType.STRING) {
-      // Get the actual lengths for each section...
-      int dataLens[] = copyConcateOffsets(out, columnIndex, providers);
-      copyConcateStringData(out, columnIndex, dataLens, providers);
-    } else {
-      concatBasicData(out, columnIndex, type, providers);
+    if (combinedHeader.numRows > 0) {
+      DType type = combinedHeader.types[columnIndex];
+      if (type == DType.STRING) {
+        // Get the actual lengths for each section...
+        int dataLens[] = copyConcatOffsets(out, columnIndex, providers);
+        copyConcateStringData(out, columnIndex, dataLens, providers);
+      } else {
+        concatBasicData(out, columnIndex, type, providers);
+      }
     }
   }
 

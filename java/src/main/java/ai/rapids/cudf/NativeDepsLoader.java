@@ -34,6 +34,8 @@ public class NativeDepsLoader {
   private static final String[] loadOrder = new String[] {
       "boost_filesystem",
       "rmm",
+      "NVStrings",
+      "NVCategory",
       "cudf",
       "cudfjni"
   };

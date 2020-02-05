@@ -26,10 +26,22 @@
 namespace cudf
 {
 
-template <typename IndicesType>
+/**
+ * @brief A strongly typed wrapper for indices in a DICTIONARY type column.
+ *
+ * IndexType will be integer types like int32_t.
+ * 
+ * For example, `dictionary32` is a strongly typed wrapper around an `int32_t`
+ * value that holds the offset into the dictionary keys for a specific element. 
+ *
+ * This wrapper provides common conversion and comparison operations for
+ * the IndexType.
+ *
+ */
+template <typename IndexType>
 struct dictionary_wrapper
 {
-  using value_type = IndicesType;
+  using value_type = IndexType;
 
   dictionary_wrapper() = default;
   ~dictionary_wrapper() = default;

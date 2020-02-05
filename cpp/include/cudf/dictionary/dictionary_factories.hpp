@@ -23,17 +23,18 @@ namespace cudf
 {
 
 /**
- * @brief Construct a dictionary column by using the provided keys
- * and indices.
+ * @brief Construct a dictionary column by copying the provided `keys`
+ * and `indices`.
  *
- * The keys_column must contain no nulls.
+ * It is expected that `keys_column.has_nulls() == false`.
  * It is assumed the elements in `keys_column` are unique and
- * are in a strict, total order. Meaning, `keys_column[i]` is _ordered before
+ * are in a strict, total order. Meaning, `keys_column[i]` is ordered before
  * `keys_column[i+1]` for all `i in [0,n-1)` where `n` is the number of keys.
  *
  * The indices values must be in the range [0,keys_column.size()).
  *
- * The null_mask and null count for the output column are copied from the indices column.
+ * If element `i` in `indices_column` is null, then element `i` in the returned dictionary column 
+ * will also be null.
  *
  * ```
  * k = ["a","c","d"]
@@ -43,6 +44,7 @@ namespace cudf
  * ```
  *
  * @throw cudf::logic_error if keys_column contains nulls
+ * @throw cudf::logic_error if indices_column type is not INT32
  *
  * @param keys_column Column of unique, ordered values to use as the new dictionary column's keys.
  * @param indices_column Indices to use for the new dictionary column.
@@ -62,7 +64,7 @@ std::unique_ptr<column> make_dictionary_column( column_view const& keys_column,
  *
  * The keys_column and indices columns must contain no nulls.
  * It is assumed the elements in `keys_column` are unique and
- * are in a strict, total order. Meaning, `keys_column[i]` is _ordered before
+ * are in a strict, total order. Meaning, `keys_column[i]` is ordered before
  * `keys_column[i+1]` for all `i in [0,n-1)` where `n` is the number of keys.
  *
  * The indices values must be in the range [0,keys_column.size()).
@@ -70,6 +72,7 @@ std::unique_ptr<column> make_dictionary_column( column_view const& keys_column,
  * The null_mask and null count for the output column are copied from the indices column.
  *
  * @throw cudf::logic_error if keys_column or indices_column contains nulls
+ * @throw cudf::logic_error if indices_column type is not INT32
  *
  * @param keys_column Column of unique, ordered values to use as the new dictionary column's keys.
  * @param indices_column Indices to use for the new dictionary column.
@@ -77,8 +80,8 @@ std::unique_ptr<column> make_dictionary_column( column_view const& keys_column,
  * @param null_count Number of nulls for the output column.
  * @return New dictionary column.
  */
-std::unique_ptr<column> make_dictionary_column( std::shared_ptr<column>&& keys_column,
-                                                std::unique_ptr<column>&& indices_column,
+std::unique_ptr<column> make_dictionary_column( std::unique_ptr<column> keys_column,
+                                                std::unique_ptr<column> indices_column,
                                                 rmm::device_buffer&& null_mask,
                                                 size_type null_count );
 
