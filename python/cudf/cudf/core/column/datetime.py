@@ -166,10 +166,10 @@ class DatetimeColumn(column.ColumnBase):
         from cudf.core.column import string
 
         if len(self) > 0:
-            dev_ptr = self.data.ptr
+            dev_ptr = self.data_ptr
             null_ptr = None
             if self.nullable:
-                null_ptr = self.mask.ptr
+                null_ptr = self.mask_ptr
             kwargs.update(
                 {
                     "count": len(self),

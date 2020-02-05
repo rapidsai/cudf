@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 # cython: profile=False
 # distutils: language = c++
@@ -284,10 +284,7 @@ cdef gdf_column* column_view_from_column(Column col,
         else:
             data_ptr = 0
 
-    if col.nullable:
-        valid_ptr = col.mask_ptr
-    else:
-        valid_ptr = 0
+    valid_ptr = col._offsetted_mask_ptr
 
     cdef char* c_col_name = py_to_c_str(col_name)
     cdef size_type len_col = len(col)
@@ -382,10 +379,7 @@ cdef gdf_column* column_view_from_string_column(
     cdef uintptr_t category = 0
     cdef gdf_dtype c_dtype = GDF_STRING
 
-    if col.nullable and col.has_nulls:
-        mask_ptr = col.mask_ptr
-    else:
-        mask_ptr = 0
+    mask_ptr = col._offsetted_mask_ptr
 
     if col_name is None:
         col_name = col.name

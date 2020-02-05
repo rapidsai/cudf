@@ -11,14 +11,15 @@ import cython
 import rmm
 
 from libc.stdint cimport uintptr_t
+from libc.stdlib cimport malloc, free
 from libcpp.pair cimport pair
 from libcpp cimport bool
+from libcpp.memory cimport unique_ptr, make_unique
 
 import cudf._libxx as libcudfxx
 from cudf._libxx.lib cimport *
-from cudf.core.buffer import Buffer
-from libc.stdlib cimport malloc, free
 
+from cudf.core.buffer import Buffer
 from cudf.utils.dtypes import is_categorical_dtype
 from cudf.utils.utils import cached_property, calc_chunk_size, mask_bitsize
 
@@ -125,6 +126,16 @@ cdef class Column:
     def mask(self):
         return self._mask
 
+    @cached_property
+    def _offsetted_mask(self):
+        offsetted_mask = None
+        if self.mask is not None:
+            if self.offset == 0:
+                offsetted_mask = self.mask
+            else:
+                offsetted_mask = libcudfxx.null_mask.copy_bitmask(self)
+        return offsetted_mask
+
     @mask.setter
     def mask(self, value):
         self._set_mask(value)
@@ -150,6 +161,8 @@ cdef class Column:
                     )
                 raise RuntimeError(error_msg)
         self._mask = value
+        if hasattr(self, "_offsetted_mask"):
+            del self._offsetted_mask
         if hasattr(self, "null_count"):
             del self.null_count
 
@@ -166,6 +179,17 @@ cdef class Column:
             raise RuntimeError(
                 "Cannot get the pointer to a mask with a nonzero offset"
             )
+
+    @property
+    def _offsetted_mask_ptr(self):
+        """
+        Returns the pointer to the memoized validity buffer that is constructed
+        based on the offset
+        """
+        if self._offsetted_mask is None:
+            return 0
+        else:
+            return self._offsetted_mask.ptr
 
     @cached_property
     def null_count(self):

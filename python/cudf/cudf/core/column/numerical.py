@@ -127,13 +127,13 @@ class NumericalColumn(column.ColumnBase):
             if self.dtype in (np.dtype("int8"), np.dtype("int16")):
                 self_as_int32 = self.astype("int32", **kwargs)
                 dev_array = self_as_int32.data_array_view
-                dev_ptr = self_as_int32.data.ptr
+                dev_ptr = self_as_int32.data_ptr
             else:
                 dev_array = self.data_array_view
-                dev_ptr = self.data.ptr
+                dev_ptr = self.data_ptr
             null_ptr = None
             if self.nullable:
-                null_ptr = self.mask.ptr
+                null_ptr = self.mask_ptr
             kwargs = {"count": len(self), "nulls": null_ptr, "bdevmem": True}
             data = string._numeric_to_str_typecast_functions[
                 np.dtype(dev_array.dtype)

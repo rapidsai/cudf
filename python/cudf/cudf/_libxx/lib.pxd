@@ -147,7 +147,13 @@ cdef extern from "cudf/copying.hpp" namespace "cudf::experimental" nogil:
         column_view gather_map
     )
 
+cdef extern from "cudf/null_mask.hpp" namespace "cudf" nogil:
+    cdef device_buffer cpp_copy_bitmask "cudf::copy_bitmask" (
+        column_view view
+    )
+
 cdef extern from "<utility>" namespace "std" nogil:
     cdef unique_ptr[column] move(unique_ptr[column])
     cdef unique_ptr[table] move(unique_ptr[table])
     cdef vector[unique_ptr[column]] move(vector[unique_ptr[column]])
+    cdef device_buffer move(device_buffer)
