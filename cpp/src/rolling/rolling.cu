@@ -248,7 +248,7 @@ struct rolling_window_launcher
 {
 
   template <typename T, typename agg_op, aggregation::Kind op, typename WindowIterator, bool op_argmin_agrmax=false>
-  void kernel_launcher(column_view const& input,
+  size_type kernel_launcher(column_view const& input,
                        mutable_column_view& output,
                        WindowIterator preceding_window_begin,
                        WindowIterator following_window_begin,
@@ -277,13 +277,14 @@ struct rolling_window_launcher
                preceding_window_begin, following_window_begin, min_periods, identity);
       }
 
-      output.set_null_count(output.size() - device_valid_count.value(stream));
+      size_type valid_count = device_valid_count.value(stream);
 
       // check the stream for debugging
       CHECK_CUDA(stream);
       
       cudf::nvtx::range_pop();
 
+      return valid_count;
   }
 
   // This launch is only for fixed width columns with valid aggregation option
@@ -307,8 +308,10 @@ struct rolling_window_launcher
               UNINITIALIZED, stream, mr);
 
       cudf::mutable_column_view output_view = output->mutable_view();
-      kernel_launcher<T, agg_op, op, WindowIterator>(input, output_view, preceding_window_begin,
+      auto valid_count = kernel_launcher<T, agg_op, op, WindowIterator>(input, output_view, preceding_window_begin,
               following_window_begin, min_periods, agg, agg_op::template identity<T>(), stream);
+
+      output->set_null_count(output->size() - valid_count);
 
       return output;
   }
@@ -343,8 +346,9 @@ struct rolling_window_launcher
           kernel_launcher<T, DeviceMax, aggregation::ARGMAX, WindowIterator, true>(input, output_view, preceding_window_begin,
                   following_window_begin, min_periods, agg, DeviceMax::template identity<T>(), stream);
       } else {
-          kernel_launcher<T, DeviceCount, aggregation::COUNT, WindowIterator>(input, output_view, preceding_window_begin,
+          auto valid_count = kernel_launcher<T, DeviceCount, aggregation::COUNT, WindowIterator>(input, output_view, preceding_window_begin,
                   following_window_begin, min_periods, agg, string_view{}, stream);
+          output->set_null_count(output->size() - valid_count);
       }
 
       // If aggregation operation is MIN or MAX, then the output we got is a gather map
