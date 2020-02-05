@@ -218,7 +218,13 @@ struct column_gatherer_impl<dictionary32, MapItType>
       auto output_count = std::distance(gather_map_begin, gather_map_end);
       if( output_count == 0 )
           return make_empty_column(data_type{DICTIONARY32});
-      // we decided we will copy the keys for gather
+      // The gather could cause some keys to be abandoned -- no indices point to them.
+      // In this case, we could do further work to remove the abandoned keys and
+      // reshuffle the indices values.
+      // We decided we will copy the keys for gather since the keys column should
+      // be relatively smallish.
+      // Also, there are scenarios where the keys are common with other dictionaries
+      // and the original intention was to share the keys here.
       auto keys_copy = std::make_unique<column>( dictionary.keys(), stream, mr );
       // create view of the indices column combined with the null mask
       // in order to call gather on it
