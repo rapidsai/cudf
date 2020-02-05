@@ -356,6 +356,8 @@ std::unique_ptr<column> column_merger::operator()<cudf::dictionary32>(column_vie
 
 using table_ptr_type = std::unique_ptr<cudf::experimental::table>;
 
+namespace {
+
 table_ptr_type merge(cudf::table_view const& left_table,
                      cudf::table_view const& right_table,
                      std::vector<cudf::size_type> const& key_cols,
@@ -416,6 +418,8 @@ T top_and_pop(std::priority_queue<T>& q){
   q.pop();
   return moved;
 }
+
+} // anonym. namespace
  
 table_ptr_type merge(std::vector<table_view> const& tables_to_merge,
                      std::vector<cudf::size_type> const& key_cols,

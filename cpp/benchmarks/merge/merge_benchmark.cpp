@@ -26,6 +26,8 @@
 #include <benchmarks/synchronization/synchronization.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 
+#include <thrust/iterator/constant_iterator.h>
+
 #include <random>
  
 // to enable, run cmake with -DBUILD_BENCHMARKS=ON
@@ -39,9 +41,8 @@ void BM_merge(benchmark::State& state) {
    cudf::size_type const avg_rows = 1 << 19; // 512K rows
    int const num_tables = state.range(0);
 
-   auto data_sequence = cudf::test::make_counting_transform_iterator(0, [](auto row) {
-      // Content is irrelevant for the benchmark
-      return 0; });
+   // Content is irrelevant for the benchmark
+   auto data_sequence = thrust::make_constant_iterator(0);
   
    // Using 0 seed to ensure consistent pseudo-numbers on each run
    std::mt19937 rand_gen(0);
