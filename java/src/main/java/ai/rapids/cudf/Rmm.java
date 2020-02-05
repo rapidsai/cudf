@@ -99,8 +99,12 @@ public class Rmm {
   static native void free(long ptr, long stream) throws RmmException;
 
   /**
+   * Delete an rmm::device_buffer.
+   */
+  static native void freeDeviceBuffer(long rmmBufferAddress) throws RmmException;
+
+  /**
    * If logging is enabled get the log as a String.
    */
   public static native String getLog() throws RmmException;
-
 }

@@ -15,14 +15,16 @@
  */
 package ai.rapids.cudf;
 
+import java.util.EnumSet;
+
 public enum DType {
-  INVALID(0, 0, "invalid"),
-  INT8(1, 1, "int"),
+  EMPTY(0, 0, "NOT SUPPORTED"),
+  INT8(1, 1, "byte"),
   INT16(2, 2, "short"),
-  INT32(4, 3, "int32"),
-  INT64(8, 4, "int64"),
-  FLOAT32(4, 5, "float32"),
-  FLOAT64(8, 6, "float64"),
+  INT32(4, 3, "int"),
+  INT64(8, 4, "long"),
+  FLOAT32(4, 5, "float"),
+  FLOAT64(8, 6, "double"),
   /**
    * Byte wise true non-0/false 0.  In general true will be 1.
    */
@@ -30,23 +32,26 @@ public enum DType {
   /**
    * Days since the UNIX epoch
    */
-  DATE32(4, 8, "date32"),
+  TIMESTAMP_DAYS(4, 8, "date32"),
+  /**
+   * s since the UNIX epoch
+   */
+  TIMESTAMP_SECONDS(8, 9, "timestamp[s]"),
   /**
    * ms since the UNIX epoch
    */
-  DATE64(8, 9, "date64"),
+  TIMESTAMP_MILLISECONDS(8, 10, "timestamp[ms]"),
   /**
-   * Exact timestamp encoded with int64 since the UNIX epoch (Default unit ms)
+   * microseconds since the UNIX epoch
    */
-  TIMESTAMP(8, 10, "timestamp"),
-  STRING(0, 12, "str"),
-  // IMPLEMENTATION DETAIL: The sizeInBytes is 4 for STRING_CATEGORY because the dictionary is
-  // stored in the data pointer as ints.  This makes some of the code in ColumnVector common
-  // for STRING_CATEGORY.
+  TIMESTAMP_MICROSECONDS(8, 11, "timestamp[us]"),
   /**
-   * Strings, but stored on the device with a dictionary for compression.
+   * ns since the UNIX epoch
    */
-  STRING_CATEGORY(4, 13, "not-supported");
+  TIMESTAMP_NANOSECONDS(8, 12, "timestamp[ns]"),
+  CATEGORY(4, 13, "category"),
+  //DICTIONARY32(4, 14, "NO IDEA"),
+  STRING(0, 15, "str");
 
   private static final DType[] D_TYPES = DType.values();
   final int sizeInBytes;
@@ -59,6 +64,17 @@ public enum DType {
     this.simpleName = simpleName;
   }
 
+  public boolean isTimestamp() {
+    return TIMESTAMPS.contains(this);
+  }
+
+  /**
+   * Returns true for timestamps with time level resolution, as opposed to day level resolution
+   */
+  public boolean hasTimeResolution() {
+    return TIME_RESOLUTION.contains(this);
+  }
+
   static DType fromNative(int nativeId) {
     for (DType type : D_TYPES) {
       if (type.nativeId == nativeId) {
@@ -67,4 +83,17 @@ public enum DType {
     }
     throw new IllegalArgumentException("Could not translate " + nativeId + " into a DType");
   }
+
+  private static final EnumSet<DType> TIMESTAMPS = EnumSet.of(
+      DType.TIMESTAMP_DAYS,
+      DType.TIMESTAMP_SECONDS,
+      DType.TIMESTAMP_MILLISECONDS,
+      DType.TIMESTAMP_MICROSECONDS,
+      DType.TIMESTAMP_NANOSECONDS);
+
+  private static final EnumSet<DType> TIME_RESOLUTION = EnumSet.of(
+      DType.TIMESTAMP_SECONDS,
+      DType.TIMESTAMP_MILLISECONDS,
+      DType.TIMESTAMP_MICROSECONDS,
+      DType.TIMESTAMP_NANOSECONDS);
 }

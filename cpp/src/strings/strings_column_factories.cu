@@ -90,6 +90,32 @@ std::unique_ptr<column> make_strings_column(
                                null_count, std::move(null_mask), stream, mr);
 }
 
+struct string_view_to_pair {
+    string_view null_placeholder;
+    string_view_to_pair(string_view n) : null_placeholder(n) {}
+  __device__
+  thrust::pair<const char *, size_type>
+  operator()(const string_view& i) {
+        return (i.data() == null_placeholder.data())
+                   ? thrust::pair<const char *, size_type>{nullptr, 0}
+                   : thrust::pair<const char *, size_type>{i.data(), i.size_bytes()};
+      }
+};
+
+// Create a strings-type column from vector of string_view
+std::unique_ptr<column> make_strings_column(
+    const rmm::device_vector<string_view>& string_views,
+    const string_view null_placeholder,
+    cudaStream_t stream,
+    rmm::mr::device_memory_resource* mr)
+{
+  auto it_pair = thrust::make_transform_iterator(
+      string_views.begin(), string_view_to_pair{null_placeholder});
+  const rmm::device_vector<thrust::pair<const char *, size_type>> dev_strings(
+      it_pair, it_pair + string_views.size());
+  return make_strings_column(dev_strings, stream, mr);
+}
+
 // Create a strings-type column from device vector of chars and vector of offsets.
 std::unique_ptr<column> make_strings_column(
     const rmm::device_vector<char>& strings,
