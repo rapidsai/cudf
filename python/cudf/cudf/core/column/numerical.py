@@ -1,6 +1,4 @@
-# Copyright (c) 2018-2019, NVIDIA CORPORATION.
-
-from __future__ import division, print_function
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -23,7 +21,7 @@ from cudf.utils.dtypes import (
 
 
 class NumericalColumn(column.ColumnBase):
-    def __init__(self, data, dtype, mask=None, offset=0):
+    def __init__(self, data, dtype, mask=None, size=None, offset=0):
         """
         Parameters
         ----------
@@ -35,8 +33,11 @@ class NumericalColumn(column.ColumnBase):
         dtype = np.dtype(dtype)
         if data.size % dtype.itemsize:
             raise ValueError("Buffer size must be divisible by element size")
-        size = data.size // dtype.itemsize
-        super().__init__(data, size=size, dtype=dtype, mask=mask)
+        if size is None:
+            size = data.size // dtype.itemsize
+        super().__init__(
+            data, size=size, dtype=dtype, mask=mask, offset=offset
+        )
 
     def __contains__(self, item):
         """
@@ -150,10 +151,12 @@ class NumericalColumn(column.ColumnBase):
         )
 
     def as_numerical_column(self, dtype, **kwargs):
+        casted = libcudf.typecast.cast(self, dtype)
         return column.build_column(
-            data=libcudf.typecast.cast(self, dtype).data,
+            data=casted.data,
             dtype=np.dtype(dtype),
-            mask=self.mask,
+            mask=casted.mask,
+            size=casted.size,
         )
 
     def sort_by_values(self, ascending=True, na_position="last"):

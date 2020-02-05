@@ -68,8 +68,8 @@ cdef class Column:
     The *dtype* indicates the Column's element type.
     """
     def __init__(self, data, size, dtype, mask=None, offset=0, children=()):
-        self.offset = offset
         self.size = size
+        self.offset = offset
         self.dtype = dtype
         self.data = data
         self.mask = mask
@@ -204,7 +204,14 @@ cdef class Column:
         if not pd.api.types.is_integer(value):
             raise TypeError("Expected an integer for offset, got " +
                             type(value).__name__)
+
+        if not hasattr(self, "_offset"):
+            offset_diff = value
+        else:
+            offset_diff = value - self._offset
+
         self._offset = value
+        self.size = self.size - offset_diff
 
     @property
     def children(self):

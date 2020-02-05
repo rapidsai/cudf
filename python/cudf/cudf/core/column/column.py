@@ -56,7 +56,14 @@ class ColumnBase(Column):
     def __reduce__(self):
         return (
             build_column,
-            (self.data, self.dtype, self.mask, self.offset, self._children),
+            (
+                self.data,
+                self.dtype,
+                self.mask,
+                self.size,
+                self.offset,
+                self._children,
+            ),
         )
 
     def as_frame(self, name=None):
@@ -917,7 +924,7 @@ def column_empty_like_same_mask(column, dtype):
     """
     result = column_empty_like(column, dtype)
     if column.nullable:
-        result.mask = column.mask
+        result.mask = column._offsetted_mask
     return result
 
 
@@ -961,7 +968,7 @@ def column_empty(row_count, dtype="object", masked=False):
 
 
 def build_column(
-    data, dtype, mask=None, offset=0, children=(), categories=None
+    data, dtype, mask=None, size=None, offset=0, children=(), categories=None
 ):
     """
     Build a Column of the appropriate type from the given parameters
@@ -975,6 +982,7 @@ def build_column(
         The dtype associated with the Column to construct
     mask : Buffer, optionapl
         The mask buffer
+    size : int, optional
     offset : int, optional
     children : tuple, optional
     categories : Column, optional
@@ -996,15 +1004,19 @@ def build_column(
         if not isinstance(children[0], ColumnBase):
             raise TypeError("children must be a tuple of Columns")
         return CategoricalColumn(
-            dtype=dtype, mask=mask, offset=offset, children=children
+            dtype=dtype, mask=mask, size=size, offset=offset, children=children
         )
     elif dtype.type is np.datetime64:
-        return DatetimeColumn(data=data, dtype=dtype, mask=mask, offset=offset)
+        return DatetimeColumn(
+            data=data, dtype=dtype, mask=mask, size=size, offset=offset
+        )
     elif dtype.type in (np.object_, np.str_):
-        return StringColumn(mask=mask, offset=offset, children=children)
+        return StringColumn(
+            mask=mask, size=size, offset=offset, children=children
+        )
     else:
         return NumericalColumn(
-            data=data, dtype=dtype, mask=mask, offset=offset
+            data=data, dtype=dtype, mask=mask, size=size, offset=offset
         )
 
 
@@ -1173,13 +1185,17 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
 
     elif isinstance(arbitrary, pa.Array):
         if isinstance(arbitrary, pa.StringArray):
-            nbuf, obuf, sbuf = buffers_from_pyarrow(arbitrary)
+            pa_size, pa_offset, nbuf, obuf, sbuf = buffers_from_pyarrow(
+                arbitrary
+            )
             children = (
                 build_column(data=obuf, dtype="int32"),
                 build_column(data=sbuf, dtype="int8"),
             )
 
-            data = string.StringColumn(mask=nbuf, children=children)
+            data = string.StringColumn(
+                mask=nbuf, children=children, size=pa_size, offset=pa_offset
+            )
 
         elif isinstance(arbitrary, pa.NullArray):
             new_dtype = pd.api.types.pandas_dtype(dtype)
@@ -1207,6 +1223,9 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
             data = as_column(arbitrary, nan_as_null=nan_as_null)
         elif isinstance(arbitrary, pa.DictionaryArray):
             codes = as_column(arbitrary.indices)
+            pa_offset = codes.offset
+            pa_size = len(codes)
+            codes.offset = 0
             if isinstance(arbitrary.dictionary, pa.NullArray):
                 categories = as_column([], dtype="object")
             else:
@@ -1215,20 +1234,36 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
                 categories=categories, ordered=arbitrary.type.ordered
             )
             data = categorical.CategoricalColumn(
-                dtype=dtype, mask=codes.mask, children=(codes,)
+                dtype=dtype,
+                mask=codes.mask,
+                children=(codes,),
+                size=pa_size,
+                offset=pa_offset,
             )
         elif isinstance(arbitrary, pa.TimestampArray):
             dtype = np.dtype("M8[{}]".format(arbitrary.type.unit))
-            pamask, padata, _ = buffers_from_pyarrow(arbitrary, dtype=dtype)
+            pa_size, pa_offset, pamask, padata, _ = buffers_from_pyarrow(
+                arbitrary, dtype=dtype
+            )
 
             data = datetime.DatetimeColumn(
-                data=padata, mask=pamask, dtype=dtype
+                data=padata,
+                mask=pamask,
+                dtype=dtype,
+                size=pa_size,
+                offset=pa_offset,
             )
         elif isinstance(arbitrary, pa.Date64Array):
             raise NotImplementedError
-            pamask, padata, _ = buffers_from_pyarrow(arbitrary, dtype="M8[ms]")
+            pa_size, pa_offset, pamask, padata, _ = buffers_from_pyarrow(
+                arbitrary, dtype="M8[ms]"
+            )
             data = datetime.DatetimeColumn(
-                data=padata, mask=pamask, dtype=np.dtype("M8[ms]")
+                data=padata,
+                mask=pamask,
+                dtype=np.dtype("M8[ms]"),
+                size=pa_size,
+                offset=pa_offset,
             )
         elif isinstance(arbitrary, pa.Date32Array):
             # No equivalent np dtype and not yet supported
@@ -1247,16 +1282,27 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
                 arbitrary = arbitrary.cast(pa.int8())
             else:
                 arbitrary = pa.array([], type=pa.int8())
-            pamask, padata, _ = buffers_from_pyarrow(arbitrary, dtype=dtype)
+
+            pa_size, pa_offset, pamask, padata, _ = buffers_from_pyarrow(
+                arbitrary, dtype=dtype
+            )
             data = numerical.NumericalColumn(
-                data=padata, mask=pamask, dtype=dtype
+                data=padata,
+                mask=pamask,
+                dtype=dtype,
+                size=pa_size,
+                offset=pa_offset,
             )
         else:
-            pamask, padata, _ = buffers_from_pyarrow(arbitrary)
+            pa_size, pa_offset, pamask, padata, _ = buffers_from_pyarrow(
+                arbitrary
+            )
             data = numerical.NumericalColumn(
                 data=padata,
                 dtype=np.dtype(arbitrary.type.to_pandas_dtype()),
                 mask=pamask,
+                size=pa_size,
+                offset=pa_offset,
             )
 
     elif isinstance(arbitrary, pa.ChunkedArray):

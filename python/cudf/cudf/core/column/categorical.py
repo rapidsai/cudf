@@ -220,7 +220,7 @@ class CategoricalColumn(column.ColumnBase):
     """Implements operations for Columns of Categorical type
     """
 
-    def __init__(self, dtype, mask=None, offset=0, children=()):
+    def __init__(self, dtype, mask=None, size=None, offset=0, children=()):
         """
         Parameters
         ----------
@@ -234,7 +234,8 @@ class CategoricalColumn(column.ColumnBase):
             respectively
         """
         data = Buffer.empty(0)
-        size = children[0].size
+        if size is None:
+            size = children[0].size
         if isinstance(dtype, pd.api.types.CategoricalDtype):
             dtype = CategoricalDtype.from_pandas(dtype)
         if not isinstance(dtype, CategoricalDtype):

@@ -440,7 +440,7 @@ class StringColumn(column.ColumnBase):
     """Implements operations for Columns of String type
     """
 
-    def __init__(self, mask=None, offset=0, children=()):
+    def __init__(self, mask=None, size=None, offset=0, children=()):
         """
         Parameters
         ----------
@@ -455,16 +455,19 @@ class StringColumn(column.ColumnBase):
         data = Buffer.empty(0)
         dtype = np.dtype("object")
 
-        if len(children) == 0:
-            size = 0
-        elif children[0].size == 0:
-            size = 0
-        else:
-            # one less because the last element of offsets is the number of
-            # bytes in the data buffer
-            size = children[0].size - 1
+        if size is None:
+            if len(children) == 0:
+                size = 0
+            elif children[0].size == 0:
+                size = 0
+            else:
+                # one less because the last element of offsets is the number of
+                # bytes in the data buffer
+                size = children[0].size - 1
 
-        super().__init__(data, size, dtype, mask=mask, children=children)
+        super().__init__(
+            data, size, dtype, mask=mask, offset=offset, children=children
+        )
 
         self._nvstrings = None
         self._nvcategory = None
