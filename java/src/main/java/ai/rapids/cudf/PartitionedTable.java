@@ -38,7 +38,7 @@ public final class PartitionedTable implements AutoCloseable {
     this.partitionsOffsets = partitionOffsets;
   }
 
-  Table getTable() {
+  public Table getTable() {
     return table;
   }
 

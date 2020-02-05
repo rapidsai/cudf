@@ -607,7 +607,6 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_hashPartition(
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_roundRobinPartition(
     JNIEnv *env, jclass, jlong input_table,
     jint num_partitions, jint start_partition, jintArray output_offsets) {
-    std::cerr << "num_partitions:" << num_partitions << " start_partition:" << start_partition << "\n";
   JNI_NULL_CHECK(env, input_table, "input table is null", NULL);
   JNI_NULL_CHECK(env, output_offsets, "output_offsets is null", NULL);
   JNI_ARG_CHECK(env, num_partitions > 0, "num_partitions <= 0", NULL);
