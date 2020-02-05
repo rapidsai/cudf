@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,26 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package ai.rapids.cudf;
 
-/**
- * Reduction operations on a column
- */
-public enum ReductionOp {
-  SUM(0),
-  MIN(1),
-  MAX(2),
-  PRODUCT(3),
-  SUMOFSQUARES(4),
-  MEAN(5),
-  VAR(6),
-  STD(7),
-  ANY(8),
-  ALL(9);
+#pragma once
 
-  final int nativeId;
-
-  ReductionOp(int nativeId) {
-    this.nativeId = nativeId;
-  }
-}
+#include "json_common.h"

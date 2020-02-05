@@ -103,6 +103,12 @@ class Index(Frame):
         col = self._data.pop(self.name)
         self._data[value] = col
 
+    def dropna(self):
+        """
+        Return a Series with null values removed.
+        """
+        return super().dropna(subset=[self.name])
+
     def take(self, indices):
         """Gather only the specific subset of indices
 
@@ -1042,7 +1048,9 @@ def as_index(arbitrary, **kwargs):
 
     kwargs = _setdefault_name(arbitrary, kwargs)
 
-    if isinstance(arbitrary, Index):
+    if isinstance(arbitrary, cudf.MultiIndex):
+        return arbitrary
+    elif isinstance(arbitrary, Index):
         idx = arbitrary.copy(deep=False)
         idx.rename(**kwargs, inplace=True)
         return idx
@@ -1060,8 +1068,6 @@ def as_index(arbitrary, **kwargs):
         return RangeIndex(
             start=arbitrary._start, stop=arbitrary._stop, **kwargs
         )
-    elif isinstance(arbitrary, cudf.MultiIndex):
-        return arbitrary
     elif isinstance(arbitrary, pd.MultiIndex):
         return cudf.MultiIndex.from_pandas(arbitrary)
     else:
