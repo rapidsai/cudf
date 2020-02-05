@@ -257,7 +257,7 @@ cdef class Column:
 
         cdef bitmask_type* mask
         if self.nullable:
-            mask = <bitmask_type*><uintptr_t>(self.mask_ptr)
+            mask = <bitmask_type*><uintptr_t>(self.mask.ptr)
         else:
             mask = NULL
 
@@ -296,7 +296,7 @@ cdef class Column:
 
         cdef bitmask_type* mask
         if self.nullable:
-            mask = <bitmask_type*><uintptr_t>(self.mask_ptr)
+            mask = <bitmask_type*><uintptr_t>(self.mask.ptr)
         else:
             mask = NULL
 

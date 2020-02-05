@@ -1,5 +1,6 @@
 import numpy as np
 
+from cudf._libxx import column, copying, null_mask, table
 from cudf._libxx.copying import gather
 from cudf._libxx.table import Table
 
