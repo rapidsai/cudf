@@ -42,11 +42,15 @@ quantile(column_view const& input,
          interpolation interp = interpolation::LINEAR,
          order_info column_order = {});
 
-/* @brief Gathers the rows corrosponding to the desired quantiles. The indices
- *        used to gather rows are computed by interpolating between the index on
- *        either side of the desired quantile. Since some columns may be non-
- *        arithmetic, interpolation between rows is limited to non-arithmetic
- *        strategies.
+/* @brief Gathers the rows corrosponding to the desired quantiles.
+ *
+ * The indices used to gather rows are computed by interpolating between the
+ * index on either side of the desired quantile. Since some columns may be
+ * non-arithmetic, interpolation between rows is limited to non-arithmetic
+ * strategies.
+ *
+ * quantiles `<= 0` corrospond to row `0`. (first)
+ * quantiles `>= 1` corrospond to row `input.size() - 1`. (last)
  *
  * @param input           Table used to compute quantile rows.
  * @param q               Desired quantiles in range [0, 1].
