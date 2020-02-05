@@ -54,7 +54,7 @@ std::unique_ptr<table>
 quantiles(table_view const& input,
           std::vector<double> const& q,
           interpolation interp,
-          cudf::sortedness sorted,
+          cudf::sorted is_input_sorted,
           std::vector<order> const& column_order,
           std::vector<null_order> const& null_precedence,
           rmm::mr::device_memory_resource* mr)
@@ -67,7 +67,7 @@ quantiles(table_view const& input,
     CUDF_EXPECTS(input.num_rows() > 0,
                  "multi-column quantiles require at least one input row.");
 
-    if (sorted == sortedness::SORTED)
+    if (is_input_sorted == sorted::YES)
     {
         return detail::quantiles(input,
                                  thrust::make_counting_iterator<size_type>(0),

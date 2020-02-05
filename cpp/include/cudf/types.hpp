@@ -109,16 +109,16 @@ enum class null_order : bool {
 /**---------------------------------------------------------------------------*
  * @brief Indicates whether a collection of values is known to be sorted.
  *---------------------------------------------------------------------------**/
-enum class sortedness : bool {
-    UNSORTED,
-    SORTED
+enum class sorted : bool {
+    NO,
+    YES
 };
 
 /**---------------------------------------------------------------------------*
  * @brief Indicates how a collection of values has been ordered.
  *---------------------------------------------------------------------------**/
 struct order_info {
-   sortedness sorted;
+   sorted is_sorted;
    order ordering;
    null_order null_ordering;
 };

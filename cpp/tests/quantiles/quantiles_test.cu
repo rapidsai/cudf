@@ -52,7 +52,7 @@ TYPED_TEST(QuantilesTest, TestMultiColumnOrderCountMismatch)
     EXPECT_THROW(experimental::quantiles(input,
                                          { 0.0f },
                                          experimental::interpolation::NEAREST,
-                                         sortedness::UNSORTED,
+                                         sorted::NO,
                                          { order::ASCENDING },
                                          { null_order::AFTER, null_order::AFTER }),
                  logic_error);
@@ -69,7 +69,7 @@ TYPED_TEST(QuantilesTest, TestMultiColumnNullOrderCountMismatch)
     EXPECT_THROW(experimental::quantiles(input,
                                          { 0.0f },
                                          experimental::interpolation::NEAREST,
-                                         sortedness::UNSORTED,
+                                         sorted::NO,
                                          { order::ASCENDING, order::ASCENDING },
                                          { null_order::AFTER }),
                  logic_error);
@@ -112,7 +112,7 @@ TYPED_TEST(QuantilesTest, TestMultiColumnUnsorted)
     auto actual = experimental::quantiles(input,
                                           { 0.0f, 0.5f, 0.7f, 0.25f, 1.0f },
                                           experimental::interpolation::NEAREST,
-                                          sortedness::UNSORTED,
+                                          sorted::NO,
                                           { order::ASCENDING, order::DESCENDING });
 
     auto expected_a = strings_column_wrapper(
@@ -147,7 +147,7 @@ TYPED_TEST(QuantilesTest, TestMultiColumnAssumedSorted)
     auto actual = experimental::quantiles(input,
                                           { 0.0f, 0.5f, 0.7f, 0.25f, 1.0f },
                                           experimental::interpolation::NEAREST,
-                                          sortedness::SORTED);
+                                          sorted::YES);
 
     auto expected_a = strings_column_wrapper(
         { "C", "D", "C", "D", "A" },

@@ -63,7 +63,7 @@ struct quantile_functor
 
         auto valid_count = input.size() - input.null_count();
 
-        if (column_order.sorted != sortedness::SORTED)
+        if (column_order.is_sorted != sorted::YES)
         {
             table_view const in_table { { input } };
             auto sortmap = sorted_order(in_table, { order::ASCENDING }, { null_order::AFTER });
