@@ -67,6 +67,12 @@ JNIEXPORT jint JNICALL Java_ai_rapids_cudf_Cuda_getDevice(JNIEnv *env, jclass) {
   return dev;
 }
 
+JNIEXPORT jint JNICALL Java_ai_rapids_cudf_Cuda_getDeviceCount(JNIEnv *env, jclass) {
+  jint count;
+  JNI_CUDA_TRY(env, -2, cudaGetDeviceCount(&count));
+  return count;
+}
+
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_setDevice(JNIEnv *env, jclass, jint dev) {
   JNI_CUDA_TRY(env, , cudaSetDevice(dev));
 }
