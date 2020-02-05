@@ -1291,7 +1291,11 @@ class DataFrame(Frame):
     def columns(self):
         """Returns a tuple of columns
         """
-        return pd.Index(self._data.names, name=self._data.name)
+        return pd.Index(
+            self._data.names,
+            name=self._data.name,
+            tupleize_cols=self._data.multiindex,
+        )
 
     @columns.setter
     def columns(self, columns):
@@ -1299,9 +1303,12 @@ class DataFrame(Frame):
             columns = columns.to_pandas()
         if columns is None:
             columns = pd.Index(range(len(self._data.columns)))
-        columns = pd.Index(columns)
+        is_multiindex = isinstance(columns, pd.MultiIndex)
+        columns = pd.Index(columns, tupleize_cols=is_multiindex)
         self._data = ColumnAccessor(
-            dict(zip(columns, self._data.columns)), name=columns.name
+            dict(zip(columns, self._data.columns)),
+            name=columns.name,
+            multiindex=is_multiindex,
         )
 
     def _rename_columns(self, new_names):

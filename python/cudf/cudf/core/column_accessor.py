@@ -5,15 +5,18 @@ from cudf.utils.utils import OrderedColumnDict
 
 
 class ColumnAccessor(MutableMapping):
-    def __init__(self, data={}, name=None):
+    def __init__(self, data={}, name=None, multiindex=False):
         """
         Parameters
         ----------
         data : OrderedColumnDict (possibly nested)
+        name : optional name for the ColumnAccessor
+        multiindex : The keys convert to a Pandas MultiIndex
         """
         # TODO: we should validate `data`
         self._data = OrderedColumnDict(data)
         self.name = name
+        self.multiindex = multiindex
 
     def __iter__(self):
         return self._data.__iter__()
