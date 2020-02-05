@@ -81,7 +81,7 @@ std::unique_ptr<column> tokenize_fn( size_type strings_count, Tokenizer ttfn,
 
 } // namespace
 
-// detail functions
+// detail APIs
 
 // zero or more character tokenizer
 std::unique_ptr<column> tokenize( strings_column_view const& strings,
