@@ -67,7 +67,7 @@ std::unique_ptr<table>
 quantiles(table_view const& input,
           std::vector<double> const& q,
           interpolation interp = interpolation::NEAREST,
-          cudf::sorted is_input_sorted = sorted::UNSORTED,
+          cudf::sorted is_input_sorted = sorted::NO,
           std::vector<order> const& column_order = {},
           std::vector<null_order> const& null_precedence = {},
           rmm::mr::device_memory_resource* mr =
