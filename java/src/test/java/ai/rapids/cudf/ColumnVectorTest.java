@@ -21,7 +21,9 @@ package ai.rapids.cudf;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Array;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -1149,41 +1151,52 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testStringCast() {
-    Integer[] integerArray = {1, 2, 3, 7, 8};
 
-    Short[] shortValues = Arrays.stream(integerArray).map(i -> i.shortValue()).collect(Collectors.toList()).toArray(new Short[integerArray.length]);
-    String[] stringShortValues = Arrays.stream(shortValues).map(i -> String.valueOf(i)).collect(Collectors.toList()).toArray(new String[shortValues.length]);
+    Short[] shortValues = {1, 3, 45, -0, null};
+    String[] stringShortValues = getStringArray(shortValues);
 
     testCastFixedWidthToStringsAndBack(DType.INT16, () -> ColumnVector.fromBoxedShorts(shortValues), () -> ColumnVector.fromStrings(stringShortValues));
 
-    String[] stringIntValues = Arrays.asList(integerArray).stream().map(i -> String.valueOf(i)).collect(Collectors.toList()).toArray(new String[integerArray.length]);
+    Integer[] integerArray = {1, -2, 3, null, 8};
+    String[] stringIntValues = getStringArray(integerArray);
 
     testCastFixedWidthToStringsAndBack(DType.INT32, () -> ColumnVector.fromBoxedInts(integerArray), () -> ColumnVector.fromStrings(stringIntValues));
 
-    Long[] longValues = Arrays.stream(integerArray).map(i -> i.longValue()).collect(Collectors.toList()).toArray(new Long[integerArray.length]);
-    String[] stringLongValues = Arrays.stream(longValues).map(i -> String.valueOf(i)).collect(Collectors.toList()).toArray(new String[longValues.length]);
+    Long[] longValues = {null, 3l, 2l, -43l, null};
+    String[] stringLongValues = getStringArray(longValues);
 
     testCastFixedWidthToStringsAndBack(DType.INT64, () -> ColumnVector.fromBoxedLongs(longValues), () -> ColumnVector.fromStrings(stringLongValues));
 
-    Float[] floatValues = Arrays.stream(integerArray).map(i -> i.floatValue()).collect(Collectors.toList()).toArray(new Float[integerArray.length]);
-    String[] stringFloatValues = Arrays.stream(floatValues).map(i -> String.valueOf(i)).collect(Collectors.toList()).toArray(new String[floatValues.length]);
+    Float[] floatValues = {Float.NaN, null, 03f, -004f, 12f};
+    String[] stringFloatValues = getStringArray(floatValues);
 
     testCastFixedWidthToStringsAndBack(DType.FLOAT32, () -> ColumnVector.fromBoxedFloats(floatValues), () -> ColumnVector.fromStrings(stringFloatValues));
 
-    Double[] doubleValues = Arrays.stream(integerArray).map(i -> i.doubleValue()).collect(Collectors.toList()).toArray(new Double[integerArray.length]);
-    String[] stringDoubleValues = Arrays.stream(doubleValues).map(i -> String.valueOf(i)).collect(Collectors.toList()).toArray(new String[doubleValues.length]);
+    Double[] doubleValues = {Double.NaN, Double.NEGATIVE_INFINITY, 4d, 98d, null, Double.POSITIVE_INFINITY};
+    //Creating the string array manually because of the way cudf converts POSITIVE_INFINITY to "Inf" instead of "INFINITY"
+    String[] stringDoubleValues = {"NaN","-Inf", "4.0", "98.0", null, "Inf"};
 
     testCastFixedWidthToStringsAndBack(DType.FLOAT64, () -> ColumnVector.fromBoxedDoubles(doubleValues), () -> ColumnVector.fromStrings(stringDoubleValues));
 
     Boolean[] booleans = {true, false, false};
-    String[] stringBools = Arrays.stream(booleans).map(i -> String.valueOf(i)).collect(Collectors.toList()).toArray(new String[booleans.length]);
+    String[] stringBools = getStringArray(booleans);
 
     testCastFixedWidthToStringsAndBack(DType.BOOL8, () -> ColumnVector.fromBoxedBooleans(booleans), () -> ColumnVector.fromStrings(stringBools));
   }
 
+  private static <T> String[] getStringArray(T[] input) {
+    String[] result = new String[input.length];
+    for (int i = 0 ; i < input.length ; i++) {
+      if (input[i] == null) {
+        result[i] = null;
+      } else {
+        result[i] = String.valueOf(input[i]);
+      }
+    }
+    return result;
+  }
 
-
-  private void testCastFixedWidthToStringsAndBack(DType type, Supplier<ColumnVector> fixedWidthSupplier,
+  private static void testCastFixedWidthToStringsAndBack(DType type, Supplier<ColumnVector> fixedWidthSupplier,
                                                   Supplier<ColumnVector> stringColumnSupplier) {
     try (ColumnVector fixedWidthColumn = fixedWidthSupplier.get();
          ColumnVector stringColumn = stringColumnSupplier.get();
