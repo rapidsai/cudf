@@ -5,8 +5,8 @@ import numpy as np
 from cython.operator cimport dereference
 from libc.stdint cimport uintptr_t
 
-from cudf._libxx.column cimport *
-from cudf._libxx.lib cimport *
+from cudf._libxx.includes.lib cimport *
+from cudf._libxx.includes.column cimport Column
 from cudf.utils.utils import OrderedColumnDict
 
 

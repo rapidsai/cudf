@@ -8,7 +8,7 @@ from libcpp.pair cimport pair
 from libcpp cimport bool
 
 import cudf._libxx as libcudfxx
-from cudf._libxx.lib cimport *
+from cudf._libxx.includes.lib cimport *
 from cudf.core.buffer import Buffer
 from libc.stdlib cimport malloc, free
 
