@@ -351,7 +351,7 @@ def sort_values_experimental(
     explicit_client=None,
     max_branch=None,
     divisions=None,
-    sorted_split=True,
+    sorted_split=False,
 ):
     """ Experimental sort_values implementation.
 
@@ -375,7 +375,7 @@ def sort_values_experimental(
         )
 
     # Step 1 - Pre-sort each partition
-    if sorted_split and not explicit_client:
+    if sorted_split:
         df2 = df.map_partitions(M.sort_values, by)
     else:
         df2 = df
@@ -407,7 +407,7 @@ def sort_values_experimental(
     if use_explicit:
         warnings.warn("Using explicit comms - This is an advanced feature.")
         df3 = explicit_sorted_shuffle(
-            df2, index, divisions, by, explicit_client
+            df2, index, divisions, by, explicit_client, sorted_split
         )
         df3.divisions = (None,) * (npartitions + 1)
         return df3
