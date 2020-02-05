@@ -1038,7 +1038,6 @@ public class JCudfSerialization {
       return 0;
     }
     long bytesToCopy = (numRows + 1) * 4;
-
     long srcOffset = rowOffset * 4;
     if (rowOffset == 0) {
       return copySlicedAndPad(out, column, ColumnVector.BufferType.OFFSET, srcOffset, bytesToCopy);
@@ -1295,6 +1294,8 @@ public class JCudfSerialization {
             offsets = combinedBuffer.slice(offsetInfo.offsets, offsetInfo.offsetsLen);
           }
 
+          // The vector is possibly full of null strings. This is a rare corner case, but we let
+          // data buffer stay null.
           if (offsetInfo.dataLen > 0) {
             data = combinedBuffer.slice(offsetInfo.data, offsetInfo.dataLen);
           }
