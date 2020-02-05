@@ -149,6 +149,12 @@ struct contains_scalar_dispatch {
   }
 };
 
+template <>
+bool contains_scalar_dispatch::operator()<cudf::dictionary32>(column_view const& col, scalar const& value,
+                cudaStream_t stream, rmm::mr::device_memory_resource *mr) {
+    CUDF_FAIL("dictionary type not supported yet");
+}
+
 namespace detail {
 
 bool contains(column_view const& col,
@@ -224,6 +230,14 @@ struct multi_contains_dispatch {
     return result;
   }
 };
+
+template <>
+std::unique_ptr<column> multi_contains_dispatch::operator()<dictionary32>(column_view const& haystack,
+                                   column_view const& needles,
+                                   rmm::mr::device_memory_resource *mr,
+                                   cudaStream_t stream) {
+  CUDF_FAIL("dictionary type not supported");
+}
 
 std::unique_ptr<column> contains(column_view const& haystack,
                                  column_view const& needles,
