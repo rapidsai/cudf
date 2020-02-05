@@ -54,10 +54,10 @@
 - PR #4037 Fix JNI quantile compile issue
 - PR #4054 Fixed JNI to deal with reduction API changes
 - PR #4052 Fix for round-robin when num_partitions divides nrows.
+- PR #4061 Add NDEBUG guard on `constexpr_assert`.
 - PR #4049 Fix `cudf::split` issue returning one less than expected column vectors
 - PR #4065 Parquet writer: fix for out-of-range dictionary indices
 - PR #4066 Fixed mismatch with dtype enums
-
 
 # cuDF 0.12.0 (Date TBD)
 
