@@ -26,7 +26,6 @@
 #include <cudf/strings/detail/copy_range.cuh>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
-#include <rmm/mr/device_memory_resource.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 
@@ -136,6 +135,17 @@ struct out_of_place_copy_range_dispatch {
         cudf::strings_column_view(target), target_begin, target_end,
         mr, stream);
     }
+  }
+
+  template <typename T>
+  std::enable_if_t<std::is_same<cudf::dictionary32, T>::value,
+                   std::unique_ptr<cudf::column>>
+  operator()(
+      cudf::size_type source_begin, cudf::size_type source_end,
+      cudf::size_type target_begin,
+      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+      cudaStream_t stream = 0) {
+        CUDF_FAIL("dictionary type not supported");
   }
 };
 

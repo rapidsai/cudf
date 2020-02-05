@@ -27,7 +27,6 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <rmm/thrust_rmm_allocator.h>
-#include <rmm/mr/device_memory_resource.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/constant_iterator.h>

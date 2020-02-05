@@ -73,6 +73,18 @@ std::unique_ptr<cudf::experimental::aggregation> map_jni_aggregation(jint op) {
       return cudf::experimental::make_argmax_aggregation();
     case 8: // ARGMIN
       return cudf::experimental::make_argmin_aggregation();
+    case 9: // PRODUCT
+      return cudf::experimental::make_product_aggregation();
+    case 10: // SUMOFSQUARES
+      return cudf::experimental::make_sum_of_squares_aggregation();
+    case 11: // VAR
+      return cudf::experimental::make_variance_aggregation();
+    case 12: // STD
+      return cudf::experimental::make_std_aggregation();
+    case 13: // ANY
+      return cudf::experimental::make_any_aggregation();
+    case 14: // ALL
+      return cudf::experimental::make_all_aggregation();
     default:
       throw std::logic_error("Unsupported Aggregation Operation");
   }
