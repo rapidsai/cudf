@@ -481,10 +481,4 @@ def test_parquet_writer_gpu(tmpdir, simple_pdf, simple_gdf):
     # Read the gdf back in using Pandas
     got = pd.read_parquet(gdf_fname)
 
-    # Debugging logic, will remove later.
-    print("Expected:")
-    print(expect)
-    print("Got:")
-    print(got)
-
     assert_eq(expect, got, check_categorical=False)
