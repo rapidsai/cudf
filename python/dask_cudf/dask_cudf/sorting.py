@@ -392,7 +392,8 @@ def sort_values_experimental(
         npartitions = len(explicit_client.cluster.workers)
 
     # Step 2 - Calculate new divisions (if necessary)
-    if not divisions or len(divisions) != npartitions + 1:
+    if not divisions or (use_explicit and len(divisions) != npartitions + 1):
+        # TODO: Use input divisions for use_explicit==True
         doubledivs = (
             df2[index]
             ._repartition_quantiles(npartitions * 2, upsample=upsample)

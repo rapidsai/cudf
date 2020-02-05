@@ -262,6 +262,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
                     max_branch=max_branch,
                     sorted_split=sorted_split,
                     upsample=upsample,
+                    divisions=kwargs.get("divisions", None),
                 )
             else:
                 # Legacy sorting algorithm based on "batcher-sortnet"
