@@ -161,7 +161,7 @@ std::unique_ptr<table> boolean_mask_scatter(
 
 /**
  * @copydoc cudf::experimental::boolean_mask_scatter(
- *                    std::vector<std::unique_ptr<scalar>> const& source,
+ *                    std::vector<std::reference_wrapper<scalar>> const& source,
  *                    table_view const& target,
  *                    column_view const& boolean_mask,
  *                    rmm::mr::device_memory_resource *mr)
@@ -169,7 +169,7 @@ std::unique_ptr<table> boolean_mask_scatter(
  * @param stream The stream to use for CUDA operations
  */
 std::unique_ptr<table> boolean_mask_scatter(
-    std::vector<std::unique_ptr<scalar>> const& source,
+    std::vector<std::reference_wrapper<scalar>> const& source,
     table_view const& target,
     column_view const& boolean_mask,
     rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource(),

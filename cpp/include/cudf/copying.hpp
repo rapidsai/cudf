@@ -662,7 +662,7 @@ std::unique_ptr<table> boolean_mask_scatter(
  * @returns Returns a table by scattering `input` into `target` as per `boolean_mask`.
  */
  std::unique_ptr<table> boolean_mask_scatter(
-    std::vector<std::unique_ptr<scalar>> const& input, table_view const& target,
+    std::vector<std::reference_wrapper<scalar>> const& input, table_view const& target,
     column_view const& boolean_mask,
     rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 

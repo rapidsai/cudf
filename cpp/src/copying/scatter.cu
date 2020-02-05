@@ -397,7 +397,7 @@ std::unique_ptr<table> boolean_mask_scatter(
 }
 
 std::unique_ptr<table> boolean_mask_scatter(
-    std::vector<std::unique_ptr<scalar>> const& input,
+    std::vector<std::reference_wrapper<scalar>> const& input,
     table_view const& target,
     column_view const& boolean_mask,
     rmm::mr::device_memory_resource *mr,
@@ -411,7 +411,7 @@ std::unique_ptr<table> boolean_mask_scatter(
     CUDF_EXPECTS(std::all_of(thrust::counting_iterator<size_type>(0),
                                         thrust::counting_iterator<size_type>(target.num_columns()),
                                         [&input, &target](auto index){
-                                            return ((input[index]->type().id()) == (target.column(index).type().id()));
+                                            return (input[index].get().type().id() == target.column(index).type().id());
                                         }), "Type mismatch in input scalar and target column");
 
     if (target.num_rows() != 0) {
@@ -419,7 +419,7 @@ std::unique_ptr<table> boolean_mask_scatter(
         std::transform(input.begin(), input.end(), target.begin(),
                 out_columns.begin(),
                 [&boolean_mask, mr, stream] (auto const& scalar, auto const& target_column){
-                return boolean_mask_scatter(*(scalar.get()), target_column,
+                return boolean_mask_scatter(scalar.get(), target_column,
                         boolean_mask, mr, stream);});
 
         return std::make_unique<experimental::table>(std::move(out_columns));
@@ -458,7 +458,7 @@ std::unique_ptr<table> boolean_mask_scatter(
 }
 
 std::unique_ptr<table> boolean_mask_scatter(
-    std::vector<std::unique_ptr<scalar>> const& input, table_view const& target,
+    std::vector<std::reference_wrapper<scalar>> const& input, table_view const& target,
     column_view const& boolean_mask,
     rmm::mr::device_memory_resource *mr) {
     return detail::boolean_mask_scatter(input, target, boolean_mask, mr);
