@@ -348,6 +348,7 @@ def sort_values_experimental(
     max_branch=None,
     divisions=None,
     sorted_split=False,
+    upsample=1.0,
 ):
     """ Experimental sort_values implementation.
 
@@ -392,12 +393,14 @@ def sort_values_experimental(
 
     # Step 2 - Calculate new divisions (if necessary)
     if not divisions or len(divisions) != npartitions + 1:
-        divisions = (
+        doubledivs = (
             df2[index]
-            ._repartition_quantiles(npartitions, upsample=10.0)
+            ._repartition_quantiles(npartitions * 2, upsample=upsample)
             .compute()
             .to_list()
         )
+        # Heuristic: Start with 2x divisions and coarsening
+        divisions = [doubledivs[i] for i in range(0, len(doubledivs), 2)]
 
     # Step 3 - Perform repartitioning shuffle
     if use_explicit:

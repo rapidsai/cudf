@@ -189,6 +189,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 max_branch=max_branch,
                 divisions=kwargs.get("divisions", None),
                 sorted_split=kwargs.get("sorted_split", False),
+                upsample=kwargs.get("upsample", 1.0),
             )
             # Set index and repartition
             npartitions = kwargs.get("npartitions", self.npartitions)
@@ -235,6 +236,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
         explicit_client=None,
         max_branch=None,
         sorted_split=False,
+        upsample=1.0,
         **kwargs,
     ):
         """Sort by the given column
@@ -259,6 +261,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
                     explicit_client=explicit_client,
                     max_branch=max_branch,
                     sorted_split=sorted_split,
+                    upsample=upsample,
                 )
             else:
                 # Legacy sorting algorithm based on "batcher-sortnet"
