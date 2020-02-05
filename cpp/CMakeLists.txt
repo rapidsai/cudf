@@ -539,6 +539,7 @@ add_library(cudf
             src/utilities/nvtx/legacy/nvtx_utils.cpp
             src/copying/copy.cpp
             src/copying/scatter.cu
+            src/copying/shift.cu
             src/copying/copy.cu
             src/copying/slice.cpp
             src/copying/split.cpp
@@ -610,6 +611,10 @@ add_library(cudf
             src/strings/utilities.cu
             src/scalar/scalar.cpp
             src/scalar/scalar_factories.cpp
+            src/dictionary/dictionary_column_view.cpp
+            src/dictionary/dictionary_factories.cu
+            src/dictionary/encode.cu
+            src/dictionary/decode.cu
             src/groupby/groupby.cu
             src/groupby/hash/groupby.cu
             src/groupby/sort/groupby.cu

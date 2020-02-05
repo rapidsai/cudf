@@ -378,6 +378,12 @@ __inline__ __device__ cudf::string_view decode_value(const char *data,
                                                      ParseOptions const &opts) {
   return cudf::string_view{};
 }
+template <>
+__inline__ __device__ cudf::dictionary32 decode_value(const char *data,
+                                                     long start, long end,
+                                                     ParseOptions const &opts) {
+  return cudf::dictionary32{};
+}
 
 /**
  * @brief Functor for converting CSV raw data to typed value.
