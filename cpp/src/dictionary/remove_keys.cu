@@ -39,7 +39,7 @@ std::unique_ptr<column> remove_keys( dictionary_column_view const& dictionary_co
                                      cudaStream_t stream = 0)
 {
     CUDF_EXPECTS( !keys_to_remove.has_nulls(), "keys_to_remove must not have nulls" );
-    auto keys_view = dictionary_column.dictionary_keys();
+    auto keys_view = dictionary_column.keys();
     CUDF_EXPECTS( keys_view.type()==keys_to_remove.type(), "keys types must match");
     auto indices_view = dictionary_column.indices();
     auto count = indices_view.size();
@@ -76,9 +76,8 @@ std::unique_ptr<column> remove_keys( dictionary_column_view const& dictionary_co
                         return (d_indices[idx] >= 0) && (d_null_mask ? bit_is_set(d_null_mask,idx) : true);
                     }, stream, mr);
 
-    std::shared_ptr<column> keys_column(std::move(table_keys[0]));
     // create column with keys_column and indices_column
-    return make_dictionary_column( std::move(keys_column), std::move(indices_column), 
+    return make_dictionary_column( std::move(table_keys.front()), std::move(indices_column), 
                                    std::move(new_nulls.first), new_nulls.second );
 }
 
@@ -87,7 +86,7 @@ std::unique_ptr<column> remove_unused_keys( dictionary_column_view const& dictio
                                             cudaStream_t stream = 0)
 {
     // locate the keys to remove
-    auto keys = dictionary_column.dictionary_keys();
+    auto keys = dictionary_column.keys();
     auto indices = dictionary_column.indices();
     auto execpol = rmm::exec_policy(stream);
     // build keys index to verify against indices values
