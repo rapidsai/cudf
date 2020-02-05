@@ -50,7 +50,7 @@ std::unique_ptr<column> add_keys( dictionary_column_view const& dictionary_colum
                                   cudaStream_t stream = 0)
 {
     CUDF_EXPECTS( !new_keys.has_nulls(), "Keys must not have nulls" );
-    auto old_keys = dictionary_column.dictionary_keys(); // [a,b,c,d,f]
+    auto old_keys = dictionary_column.keys(); // [a,b,c,d,f]
     CUDF_EXPECTS( new_keys.type()==old_keys.type(), "Keys must be the same type");
     // first, concatenate the keys together                 [a,b,c,d,f] + [d,b,e] = [a,b,c,d,f,d,b,e]
     auto combined_keys = cudf::concatenate( std::vector<column_view>{old_keys, new_keys}, mr, stream);
@@ -66,7 +66,6 @@ std::unique_ptr<column> add_keys( dictionary_column_view const& dictionary_colum
                     std::vector<order>{order::ASCENDING},
                     std::vector<null_order>{null_order::AFTER}, // should be no nulls here
                     mr, stream);
-    std::shared_ptr<column> keys_column(std::move(table_keys[0]));
 
     // now create the indices column -- map old values to the new ones
     // gather([4,0,3,1,2,2,2,4,0],[0,1,2,3,5]) = [5,0,3,1,2,2,2,5,0]
@@ -79,7 +78,7 @@ std::unique_ptr<column> add_keys( dictionary_column_view const& dictionary_colum
     CUDF_EXPECTS( indices_column->type().id()==cudf::type_id::INT32, "expecting INT32 indices");
 
     // create new dictionary column with keys_column and indices_column
-    return make_dictionary_column( std::move(keys_column), std::move(indices_column), 
+    return make_dictionary_column( std::move(table_keys.front()), std::move(indices_column), 
                                    copy_bitmask( dictionary_column.parent(), stream, mr), // nulls have
                                    dictionary_column.null_count() );                      // not changed
 }

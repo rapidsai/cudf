@@ -39,7 +39,7 @@ TEST_F(DictionaryAddKeysTest, StringsColumn)
 
     std::vector<const char*> h_keys{ "aaa", "bbb", "ccc", "ddd", "eee", "fff" };
     cudf::test::strings_column_wrapper keys_expected( h_keys.begin(), h_keys.end() );
-    cudf::test::expect_columns_equal(view.dictionary_keys(), keys_expected);
+    cudf::test::expect_columns_equal(view.keys(), keys_expected);
 
     std::vector<int32_t> h_expected{5,0,3,1,2,2,2,5,0};
     cudf::test::fixed_width_column_wrapper<int32_t> indices_expected( h_expected.begin(), h_expected.end() );
@@ -56,7 +56,7 @@ TEST_F(DictionaryAddKeysTest, FloatColumn)
     cudf::dictionary_column_view view(result->view());
 
     cudf::test::fixed_width_column_wrapper<float> keys_expected{ -11.75, 0.5, 4.25, 5.0, 7.125 };
-    cudf::test::expect_columns_equal(view.dictionary_keys(), keys_expected);
+    cudf::test::expect_columns_equal(view.keys(), keys_expected);
 
     cudf::test::fixed_width_column_wrapper<int32_t> expected{ 2,4,1,0,4,1};
     cudf::test::expect_columns_equal(view.indices(), expected);
@@ -72,7 +72,7 @@ TEST_F(DictionaryAddKeysTest, WithNull)
     cudf::dictionary_column_view view(result->view());
 
     cudf::test::fixed_width_column_wrapper<int64_t> keys_expected{ 0,111,222,333,444,555 };
-    cudf::test::expect_columns_equal(view.dictionary_keys(), keys_expected);
+    cudf::test::expect_columns_equal(view.keys(), keys_expected);
 
     cudf::test::fixed_width_column_wrapper<int32_t> expected{{4,0,3,1,2,2,2,4,0}};
     cudf::test::expect_columns_equal(view.indices(), expected);
