@@ -34,7 +34,8 @@ quantiles(table_view const& input,
                                                       interp);
         };
 
-    auto q_device = static_cast<rmm::device_vector<double>>(q);
+    rmm::device_vector<double> q_device = q;
+
     auto quantile_idx_iter = thrust::make_transform_iterator(q_device.begin(),
                                                              quantile_idx_lookup);
 
