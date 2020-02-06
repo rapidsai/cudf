@@ -30,7 +30,7 @@
 - PR #4014 ORC/Parquet: add count parameter to stripe/rowgroup-based reader API
 - PR #3880 Add aggregation infrastructure support for reduction
 - PR #4021 Change quantiles signature for clarity.
-- PR #4029 Port streaming.pyx to use libcudf++ APIs
+- PR #4029 Port stream_compaction.pyx to use libcudf++ APIs
 - PR #4031 Docs build scripts and instructions update
 - PR #4062 Improve how java classifiers are produced
 - PR #4038 JNI and Java support for is_nan and is_not_nan
@@ -61,6 +61,8 @@
 - PR #4065 Parquet writer: fix for out-of-range dictionary indices
 - PR #4066 Fixed mismatch with dtype enums
 - PR #4078 Fix joins for when column_in_common input parameter is empty
+- PR #4080 Fix multi-index dask test with sort issue
+
 
 # cuDF 0.12.0 (Date TBD)
 
