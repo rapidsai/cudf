@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,8 @@
 namespace cudf {
 namespace experimental {
 
-/* @brief Computes a value for a quantile by interpolating between the values on
+/**
+ * @brief Computes a value for a quantile by interpolating between the values on
  *        either side of the desired quantile.
  *
  * @param[in] input        Column used to compute quantile values.
@@ -42,15 +43,20 @@ quantile(column_view const& input,
          interpolation interp = interpolation::LINEAR,
          order_info column_order = {});
 
-/* @brief Gathers the rows corrosponding to the desired quantiles.
+/**
+ * @brief Returns the rows of the input corresponding to the requested quantiles.
+ *
+ * Quantiles are cut points that divide the range of a dataset into continuous
+ * intervals. e.g: quartiles are the three cut points that divide a dataset into
+ * four equal-sized groups. See https://en.wikipedia.org/wiki/Quantile
  *
  * The indices used to gather rows are computed by interpolating between the
  * index on either side of the desired quantile. Since some columns may be
  * non-arithmetic, interpolation between rows is limited to non-arithmetic
  * strategies.
  *
- * quantiles `<= 0` corrospond to row `0`. (first)
- * quantiles `>= 1` corrospond to row `input.size() - 1`. (last)
+ * quantiles `<= 0` correspond to row `0`. (first)
+ * quantiles `>= 1` correspond to row `input.size() - 1`. (last)
  *
  * @param input           Table used to compute quantile rows.
  * @param q               Desired quantiles in range [0, 1].

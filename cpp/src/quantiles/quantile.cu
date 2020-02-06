@@ -17,14 +17,17 @@
 #include <memory>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
+
 #include <cudf/copying.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+
 #include <quantiles/quantiles_util.hpp>
-#include "cudf/utilities/error.hpp"
+
 
 namespace cudf {
 namespace experimental {
@@ -45,7 +48,7 @@ struct quantile_functor
     template<typename T>
     std::enable_if_t<std::is_arithmetic<T>::value, std::unique_ptr<scalar>>
     operator()(column_view const& input,
-               double percent,
+               double q,
                interpolation interp,
                order_info column_order,
                rmm::mr::device_memory_resource *mr =
@@ -75,7 +78,7 @@ struct quantile_functor
                 return detail::get_array_value<T>(input_begin, idx);
             };
 
-            auto result = select_quantile<ScalarResult>(selector, valid_count, percent, interp);
+            auto result = select_quantile<ScalarResult>(selector, valid_count, q, interp);
             return std::make_unique<numeric_scalar<ScalarResult>>(result, true, stream);
         }
 
@@ -87,7 +90,7 @@ struct quantile_functor
             return get_array_value<T>(input_begin, column_order.ordering == order::ASCENDING ? location : -location);
         };
 
-        auto result = select_quantile<ScalarResult>(selector, valid_count, percent, interp);
+        auto result = select_quantile<ScalarResult>(selector, valid_count, q, interp);
         return std::make_unique<numeric_scalar<ScalarResult>>(result, true, stream);
     }
 };

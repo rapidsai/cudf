@@ -1,17 +1,33 @@
+/*
+ * Copyright (c) 2020, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/cudf_gtest.hpp>
+#include <tests/utilities/table_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
 
-#include <cudf/types.hpp>
-#include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
-#include <tests/utilities/table_utilities.hpp>
+#include <cudf/table/table.hpp>
+#include <cudf/types.hpp>
 
+#include <cudf/column/column_view.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/quantiles.hpp>
-#include "cudf/column/column_view.hpp"
-#include "cudf/utilities/error.hpp"
-#include "gtest/gtest.h"
+#include <cudf/utilities/error.hpp>
 
 using namespace cudf;
 using namespace test;
@@ -39,6 +55,19 @@ TYPED_TEST(QuantilesTest, TestMultiColumnZeroRows)
     auto input = table_view({ input_a });
 
     EXPECT_THROW(experimental::quantiles(input, { 0.0f }), logic_error);
+}
+
+TYPED_TEST(QuantilesTest, TestZeroRequestedQuantiles)
+{
+    using T = TypeParam;
+
+    auto input_a = fixed_width_column_wrapper<T>({ 1 }, { 1 });
+    auto input = table_view(std::vector<column_view>{ input_a });
+
+    auto actual = experimental::quantiles(input, { });
+    auto expected = experimental::empty_like(input);
+
+    expect_tables_equal(expected->view(), actual->view());
 }
 
 TYPED_TEST(QuantilesTest, TestMultiColumnOrderCountMismatch)
