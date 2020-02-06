@@ -107,7 +107,7 @@ cdef class Column:
         if hasattr(self, "_nvstrings"):
             self._nvstrings = None
 
-        self._size = value
+        self._size = int(value)
 
     @property
     def base_data(self):
@@ -274,8 +274,8 @@ cdef class Column:
         else:
             offset_diff = value - self._offset
 
-        self._offset = value
-        self.size = self.size - offset_diff
+        self._offset = int(value)
+        self.size = int(self.size - offset_diff)
 
     @property
     def base_children(self):

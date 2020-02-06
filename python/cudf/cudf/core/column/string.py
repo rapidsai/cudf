@@ -536,26 +536,6 @@ class StringColumn(column.ColumnBase):
             if self.size == 0:
                 self._nvstrings = nvstrings.to_device([])
             else:
-                print(
-                    "chars",
-                    self.children[1].data_ptr,
-                    self.children[1].dtype,
-                    self.children[1].to_array(),
-                )
-                print(
-                    "offsets",
-                    self.children[0].data_ptr,
-                    self.children[0].dtype,
-                    self.children[0].to_array(),
-                )
-                print("size", self.size)
-                print(
-                    "mask",
-                    self.mask_ptr,
-                    self.mask.ptr,
-                    self.mask.to_host_array(),
-                )
-                print("ncount", self.null_count)
                 self._nvstrings = nvstrings.from_offsets(
                     self.children[1].data_ptr,
                     self.children[0].data_ptr,
