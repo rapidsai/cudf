@@ -1849,7 +1849,6 @@ class DataFrame(Frame):
             self._index = result._index
             if hasattr(result, "multi_cols"):
                 self.multi_cols = result.multi_cols
-            self._columns_name = result._columns_name
         else:
             return result
 
