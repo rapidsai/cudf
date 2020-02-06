@@ -493,6 +493,21 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringTimestampToTimest
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_timestampToStringTimestamp(
+    JNIEnv *env, jobject j_object, jlong handle, jstring j_format) {
+  JNI_NULL_CHECK(env, handle, "column is null", 0);
+  JNI_NULL_CHECK(env, j_format, "format is null", 0);
+
+  try {
+    cudf::jni::native_jstring format(env, j_format);
+    cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
+
+    std::unique_ptr<cudf::column> result = cudf::strings::from_timestamps(*column, format.get());
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_ColumnVector_containsScalar(JNIEnv *env, jobject j_object,
                                                                  jlong j_view_handle, jlong j_scalar_handle) {
   JNI_NULL_CHECK(env, j_view_handle, "haystack vector is null", false);

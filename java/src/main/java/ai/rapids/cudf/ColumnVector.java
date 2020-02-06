@@ -1903,7 +1903,20 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return A new vector allocated on the GPU.
    */
   public ColumnVector asStrings() {
+    assert !type.isTimestamp() : "timestamp to String not supported without format yet";
     return castTo(DType.STRING);
+  }
+
+  /**
+   * Cast timestamp to String
+   * @format - format used to cast the timestamp to string
+   * @return A new vector allocated on the GPU
+   */
+  public ColumnVector asStrings(String format) {
+    assert type.isTimestamp() : "unsupported conversion to non-timestamp DType";
+    assert format != null : "Format string may not be NULL";
+
+    return new ColumnVector(timestampToStringTimestamp(this.getNativeView(), format));
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -2081,20 +2094,37 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Native method to parse and convert a NVString column vector to unix timestamp. A unix
+   * Native method to parse and convert a string column vector to unix timestamp. A unix
    * timestamp is a long value representing how many units since 1970-01-01 00:00:00.000 in either
    * positive or negative direction. This mirrors the functionality spark sql's to_unix_timestamp.
    * Strings that fail to parse will default to 0. Supported time units are second, millisecond,
    * microsecond, and nanosecond. Larger time units for column vectors are not supported yet in cudf.
+   * No checking is done for invalid formats or invalid timestamp units.
+   * Negative timestamp values are not currently supported.
+   *
    * @param unit integer native ID of the time unit to parse the timestamp into.
    * @param format strptime format specifier string of the timestamp. Used to parse and convert
    *               the timestamp with. Supports %Y,%y,%m,%d,%H,%I,%p,%M,%S,%f,%z format specifiers.
-   *               See https://github.com/rapidsai/custrings/blob/branch-0.10/docs/source/datetime.md
+   *               See http://man7.org/linux/man-pages/man3/strftime.3.html
    *               for full parsing format specification and documentation.
    * @return native handle of the resulting cudf column, used to construct the Java column vector
    *         by the timestampToLong method.
    */
   private static native long stringTimestampToTimestamp(long viewHandle, int unit, String format);
+
+  /**
+   * Native method to parse and convert a timestamp column vector to string column vector. A unix
+   * timestamp is a long value representing how many units since 1970-01-01 00:00:00:000 in either
+   * positive or negative direction. This mirrors the functionality spark sql's from_unixtime.
+   * No checking is done for invalid formats or invalid timestamp units.
+   * Negative timestamp values are not currently supported.
+   *
+   * @param format - strftime format specifier string of the timestamp. Its used to parse and convert
+   *               the timestamp with. Supports %Y,%y,%m,%d,%H,%I,%p,%M,%S,%f,%z format specifiers.
+   *               See http://man7.org/linux/man-pages/man3/strftime.3.html for details
+   * @return - native handle of the resulting cudf column used to construct the Java column vector
+   */
+  private static native long timestampToStringTimestamp(long viewHandle, String format);
 
   /**
    * Native method for locating the starting index of the first instance of a given substring
