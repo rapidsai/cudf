@@ -272,8 +272,8 @@ def test_groupby_multiindex_reset_index():
     df = cudf.DataFrame(
         {"a": [1, 1, 2, 3, 4], "b": [5, 2, 1, 2, 5], "c": [1, 2, 2, 3, 5]}
     )
-    ddf = dask_cudf.from_cudf(df, npartitions=1)
-    pddf = dd.from_pandas(df.to_pandas(), npartitions=1)
+    ddf = dask_cudf.from_cudf(df, npartitions=2)
+    pddf = dd.from_pandas(df.to_pandas(), npartitions=2)
     gr = ddf.groupby(["a", "c"]).agg({"b": ["count"]}).reset_index()
     pr = pddf.groupby(["a", "c"]).agg({"b": ["count"]}).reset_index()
     dd.assert_eq(
@@ -283,7 +283,7 @@ def test_groupby_multiindex_reset_index():
 
 
 @pytest.mark.parametrize(
-    "groupby_keys", [["a"], ["a", "b"], ["a", "b", "dd"], ["a", "dd", "b"]],
+    "groupby_keys", [["a"], ["a", "b"], ["a", "b", "dd"], ["a", "dd", "b"]]
 )
 @pytest.mark.parametrize(
     "agg_func",
