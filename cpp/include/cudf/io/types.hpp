@@ -62,6 +62,7 @@ enum class io_type {
   FILEPATH,                  ///< Input/output is a file path
   HOST_BUFFER,               ///< Input/output is a buffer in host memory,
   ARROW_RANDOM_ACCESS_FILE,  ///< Input/output is an arrow::io::RandomAccessFile
+  VOID,                      ///< Input/output is nothing. No work is done. Useful for benchmarking
 };
 
 /**
@@ -161,6 +162,9 @@ struct sink_info {
 
   explicit sink_info(std::vector<char>* buffer)
       : type(io_type::HOST_BUFFER), buffer(buffer) {}
+
+  explicit sink_info()
+      : type(io_type::VOID){}
 };
 
 }  // namespace io

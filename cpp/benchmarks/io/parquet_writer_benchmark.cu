@@ -81,7 +81,7 @@ void PQ_write(benchmark::State& state)
       cuda_event_timer raii(state, true); // flush_l2_cache = true, stream = 0
       
       // out_buffer.clear();
-      cudf_io::write_parquet_args args{cudf_io::sink_info("parquet_bm.parquet"), view};
+      cudf_io::write_parquet_args args{cudf_io::sink_info(), view};
       cudf_io::write_parquet(args);      
    }
 
@@ -95,6 +95,7 @@ BENCHMARK_DEFINE_F(ParquetWrite, name)(::benchmark::State& state) {             
    PQ_write(state);                                                                           \
 }                                                                                             \
 BENCHMARK_REGISTER_F(ParquetWrite, name)->Args({size, num_columns})                           \
-                                           ->Unit(benchmark::kMillisecond)->UseManualTime()
+                                        ->Unit(benchmark::kMillisecond)->UseManualTime()      \
+                                        ->Iterations(4)
 
-PWBM_BENCHMARK_DEFINE(2Gb8Cols, (int64_t)512 * 1024 * 1024, 8);
+PWBM_BENCHMARK_DEFINE(3Gb8Cols, (int64_t)3 * 1024 * 1024 * 1024, 8);

@@ -89,6 +89,16 @@ class writer {
   explicit writer(
       std::vector<char>* buffer, writer_options const& options,
       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+  /**
+   * @brief Constructor for output to void (no io performed).
+   *   
+   * @param options Settings for controlling writing behavior
+   * @param mr Optional resource to use for device memory allocation
+   */
+  explicit writer(
+      writer_options const& options,
+      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
     
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header
@@ -141,7 +151,7 @@ class writer {
   std::unique_ptr<impl> _impl;
 
  public:
-  /**
+   /**
    * @brief Constructor for output to a file.
    *
    * @param filepath Path to the output file
@@ -151,8 +161,26 @@ class writer {
   explicit writer(
       std::string const& filepath, writer_options const& options,
       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+  /**
+   * @brief Constructor for output to host buffer.
+   *
+   * @param buffer Pointer to the output vector
+   * @param options Settings for controlling writing behavior
+   * @param mr Optional resource to use for device memory allocation
+   */
   explicit writer(
       std::vector<char>* buffer, writer_options const &options,
+      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+  /**
+   * @brief Constructor for output to void (no io performed).
+   *   
+   * @param options Settings for controlling writing behavior
+   * @param mr Optional resource to use for device memory allocation
+   */
+  explicit writer(
+      writer_options const &options,
       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header

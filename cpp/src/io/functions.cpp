@@ -52,6 +52,8 @@ std::unique_ptr<writer> make_writer(sink_info const& sink,
     return std::make_unique<writer>(sink.filepath, options, mr);
   } if (sink.type == io_type::HOST_BUFFER) {
     return std::make_unique<writer>(sink.buffer, options, mr);
+  } if (sink.type == io_type::VOID) {
+    return std::make_unique<writer>(options, mr);
   } else {
     CUDF_FAIL("Unsupported sink type");
   }
