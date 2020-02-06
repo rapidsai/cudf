@@ -329,7 +329,7 @@ construct_join_output_df(
 
   bool const nullify_out_of_bounds{ JoinKind != join_kind::INNER_JOIN };
 
-  std::unique_ptr<experimental::table> common_table;
+  std::unique_ptr<experimental::table> common_table = std::make_unique<experimental::table>();
   // Construct the joined columns
   if (join_kind::FULL_JOIN == JoinKind) {
     auto complement_indices =
@@ -348,9 +348,7 @@ construct_join_output_df(
           false, nullify_out_of_bounds);
       common_table = experimental::concatenate(
           {common_from_right->view(), common_from_left->view()});
-    } else {
-          common_table = std::make_unique<experimental::table>();
-    }
+    } 
     joined_indices =
       concatenate_vector_pairs(complement_indices, joined_indices);
   } else {
@@ -360,8 +358,6 @@ construct_join_output_df(
           joined_indices.first.begin(),
           joined_indices.first.end(),
           false, nullify_out_of_bounds);
-      } else {
-          common_table = std::make_unique<experimental::table>();
       }
   }
 
