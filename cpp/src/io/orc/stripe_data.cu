@@ -1946,18 +1946,27 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
                 __syncthreads();
             }
             __syncthreads();
-            vals_skipped = 0;
-            if (num_rowgroups > 0)
+            if (numvals == 0 && vals_skipped != 0 && num_rowgroups > 0)
             {
-                uint32_t run_pos = s->top.data.index.run_pos[CI_DATA] << ((s->chunk.type_kind == BOOLEAN) ? 3 : 0);
-                if (run_pos)
+                // Special case if the secondary streams produced fewer values than the primary stream's RLE run,
+                // as a result of initial RLE run offset: keep vals_skipped as non-zero to ensure proper
+                // buffered_count/max_vals update below.
+            }
+            else
+            {
+                vals_skipped = 0;
+                if (num_rowgroups > 0)
                 {
-                    vals_skipped = min(numvals, run_pos);
-                    numvals -= vals_skipped;
-                    __syncthreads();
-                    if (t == 0)
+                    uint32_t run_pos = s->top.data.index.run_pos[CI_DATA] << ((s->chunk.type_kind == BOOLEAN) ? 3 : 0);
+                    if (run_pos)
                     {
-                        s->top.data.index.run_pos[CI_DATA] = 0;
+                        vals_skipped = min(numvals, run_pos);
+                        numvals -= vals_skipped;
+                        __syncthreads();
+                        if (t == 0)
+                        {
+                            s->top.data.index.run_pos[CI_DATA] = 0;
+                        }
                     }
                 }
             }
