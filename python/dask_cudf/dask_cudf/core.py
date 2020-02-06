@@ -193,7 +193,10 @@ class DataFrame(_Frame, dd.core.DataFrame):
             )
             # Set index and repartition
             npartitions = kwargs.get("npartitions", self.npartitions)
+            partition_size = kwargs.get("partition_size", None)
             df2 = df.map_partitions(M.set_index, other)
+            if partition_size:
+                return df2.repartition(partition_size=partition_size)
             return df2.repartition(npartitions=npartitions)
         if kwargs.pop("shuffle", "tasks") != "tasks":
             raise ValueError(
