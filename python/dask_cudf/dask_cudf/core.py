@@ -182,12 +182,13 @@ class DataFrame(_Frame, dd.core.DataFrame):
     ):
         if experimental and not sorted:
             # Use sort values for the shuffle
+            divisions = divisions = kwargs.get("divisions", None)
             df = self.sort_values(
                 [other],
                 experimental=experimental,
                 explicit_client=explicit_client,
                 max_branch=max_branch,
-                divisions=kwargs.get("divisions", None),
+                divisions=divisions,
                 sorted_split=kwargs.get("sorted_split", False),
                 upsample=kwargs.get("upsample", 1.0),
             )
@@ -197,7 +198,9 @@ class DataFrame(_Frame, dd.core.DataFrame):
             df2 = df.map_partitions(M.set_index, other)
             if partition_size:
                 return df2.repartition(partition_size=partition_size)
-            return df2.repartition(npartitions=npartitions)
+            if not divisions and df2.npartitions != npartitions:
+                return df2.repartition(npartitions=npartitions)
+            return df2
         if kwargs.pop("shuffle", "tasks") != "tasks":
             raise ValueError(
                 "Dask-cudf only supports task based shuffling, got %s"
