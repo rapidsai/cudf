@@ -43,14 +43,14 @@ namespace
  * Repeated whitespace is replaced with a single space.
  * Also, whitespace is trimmed from the beginning and end of each string.
  *
- * This functor called be called to compute the output size in bytes
+ * This functor can be called to compute the output size in bytes
  * of each string and then called again to fill in the allocated buffer.
  */
 struct normalize_spaces_fn : base_tokenator
 {
     column_device_view d_strings;
     int32_t const* d_offsets{}; // offsets into d_buffer
-    char* d_buffer{}; // output buffer for characters
+    char* d_buffer{};           // output buffer for characters
 
     normalize_spaces_fn( column_device_view d_strings,
                          int32_t const* d_offsets = nullptr,
@@ -68,19 +68,20 @@ struct normalize_spaces_fn : base_tokenator
         int32_t nbytes = 0;  // holds the number of bytes per output string
         size_type spos = 0;  // start position of current token
         size_type epos = d_str.length();  // end position of current token
-        bool spaces = true;  // init to trim whitespace from the beginning
+        bool spaces = true;  // true to trim whitespace from the beginning
         auto itr = d_str.begin();
         // this will retrieve tokens automatically skipping runs of whitespace
         while( next_token(d_str,spaces,itr,spos,epos) )
         {
             auto spos_bo = d_str.byte_offset(spos); // convert character position
             auto epos_bo = d_str.byte_offset(epos); // values to byte offsets
-            nbytes += epos_bo - spos_bo + 1; // size plus a single space per token
+            nbytes += epos_bo - spos_bo + 1; // token size plus a single space
             if( optr )
-            {   // write token to output buffer
+            {
                 string_view token( d_str.data() + spos_bo, epos_bo - spos_bo );
                 if( optr != buffer ) // prepend space unless we are at the beginning
                     optr = strings::detail::copy_string(optr,single_space);
+                // write token to output buffer
                 optr = strings::detail::copy_string(optr,token); // copy token to output
             }
             spos = epos + 1;
@@ -107,15 +108,16 @@ std::unique_ptr<column> normalize_spaces( strings_column_view const& strings,
     rmm::device_buffer null_mask = copy_bitmask( strings.parent(), stream, mr );
     // create offsets by calculating size of each string for output
     auto offsets_transformer_itr = thrust::make_transform_iterator( thrust::make_counting_iterator<int32_t>(0),
-        normalize_spaces_fn{d_strings} );
+        normalize_spaces_fn{d_strings} ); // this does size-only calc
     auto offsets_column = strings::detail::make_offsets_child_column(offsets_transformer_itr,
                                                                      offsets_transformer_itr+strings_count,
                                                                      mr, stream);
     auto d_offsets = offsets_column->view().data<int32_t>();
-    // build the chars column -- copy tokens to the chars buffer
+    // build the chars column
     size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
     auto chars_column = strings::detail::create_chars_child_column( strings_count, strings.null_count(), bytes, mr, stream );
     auto d_chars = chars_column->mutable_view().data<char>();
+    // copy tokens to the chars buffer
     thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
         thrust::make_counting_iterator<size_type>(0), strings_count,
         normalize_spaces_fn{d_strings, d_offsets, d_chars} );
