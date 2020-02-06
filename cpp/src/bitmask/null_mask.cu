@@ -95,19 +95,50 @@ rmm::device_buffer create_null_mask(size_type size, mask_state state,
   return mask;
 }
 
-//Set pre-allocated null mask to:
-//all entries to valid, if valid_flag==true,
-//or null, otherwise;
-void set_null_mask(bitmask_type* bitmask,
-                   size_type size, bool valid,
-                   cudaStream_t stream)
-{
-  if (bitmask != nullptr) {
-    size_type mask_size = bitmask_allocation_size_bytes(size);
+__global__ void set_null_mask_kernel(bitmask_type *__restrict__ destination,
+                                     size_type begin_bit, size_type end_bit,
+                                     bool valid,
+                                     size_type number_of_mask_words) {
+  auto x = destination + word_index(begin_bit);
+  const auto last_word = word_index(end_bit) - word_index(begin_bit);
+  bitmask_type fill_value = (valid == true) ? 0xffffffff : 0x00;
 
-    uint8_t fill_value = (valid == true) ? 0xff : 0x00;
-    CUDA_TRY(cudaMemsetAsync(bitmask,
-                             fill_value, mask_size, stream));
+  for (size_type destination_word_index = threadIdx.x + blockIdx.x * blockDim.x;
+       destination_word_index < number_of_mask_words;
+       destination_word_index += blockDim.x * gridDim.x) {
+    if (destination_word_index == 0 || destination_word_index == last_word) {
+      bitmask_type mask = ~bitmask_type{0};
+      if (destination_word_index == 0) {
+        mask = ~(set_least_significant_bits(intra_word_index(begin_bit)));
+      }
+      if (destination_word_index == last_word) {
+        mask = mask & set_least_significant_bits(intra_word_index(end_bit));
+      }
+      x[destination_word_index] = (valid == true)
+                                      ? x[destination_word_index] | mask
+                                      : x[destination_word_index] & ~mask;
+    } else {
+      x[destination_word_index] = fill_value;
+    }
+  }
+}
+
+//Set pre-allocated null mask of given bit range [begin_bit, end_bit)
+//to valid, if valid==true,
+//or null, otherwise;
+void set_null_mask(bitmask_type *bitmask, size_type begin_bit,
+                   size_type end_bit, bool valid, cudaStream_t stream) {
+  CUDF_EXPECTS(begin_bit >= 0, "Invalid range.");
+  CUDF_EXPECTS(begin_bit < end_bit, "Invalid bit range.");
+  if (bitmask != nullptr) {
+    auto number_of_mask_words = num_bitmask_words(end_bit) - 
+        begin_bit / detail::size_in_bits<bitmask_type>();
+    cudf::experimental::detail::grid_1d config(number_of_mask_words, 256);
+    set_null_mask_kernel<<<config.num_blocks, config.num_threads_per_block, 0,
+                           stream>>>(static_cast<bitmask_type *>(bitmask),
+                                     begin_bit, end_bit, valid,
+                                     number_of_mask_words);
+    CHECK_CUDA(stream);
   }
 }
 
@@ -666,9 +697,7 @@ rmm::device_buffer copy_bitmask(bitmask_type const *mask, size_type begin_bit,
     dest_mask = rmm::device_buffer{static_cast<void const *>(mask), num_bytes,
                                    stream, mr};
   } else {
-    auto number_of_mask_words = cudf::util::div_rounding_up_safe(
-        static_cast<size_t>(end_bit - begin_bit),
-        detail::size_in_bits<bitmask_type>());
+    auto number_of_mask_words = num_bitmask_words(end_bit - begin_bit);
     dest_mask = rmm::device_buffer{num_bytes, stream, mr};
     cudf::experimental::detail::grid_1d config(number_of_mask_words, 256);
     copy_offset_bitmask<<<config.num_blocks, config.num_threads_per_block, 0,

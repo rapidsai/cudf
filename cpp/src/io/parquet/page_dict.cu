@@ -113,6 +113,7 @@ __device__ void GenerateDictionaryIndices(dict_state_s *s, uint32_t t)
     uint32_t *dict_data = s->col.dict_data + s->ck.start_row;
     const uint32_t *valid_map = s->col.valid_map_base;
     uint32_t num_dict_entries = 0;
+
     for (uint32_t i = 0; i < s->row_cnt; i += 1024) {
         uint32_t row = s->ck.start_row + i + t;
         uint32_t is_valid = (i + t < s->row_cnt && row < s->col.num_rows) ? (valid_map) ? (valid_map[row >> 5] >> (row & 0x1f)) & 1 : 1 : 0;
@@ -190,6 +191,7 @@ gpuBuildChunkDictionaries(EncColumnChunk *chunks, uint32_t *dev_scratch)
     while (s->row_cnt < s->ck.num_rows) {
         uint32_t frag_start_row = s->ck.start_row + s->row_cnt, num_dict_entries, frag_dict_size;
         FetchDictionaryFragment(s, s->col.dict_data, frag_start_row, t);
+        __syncthreads();
         num_dict_entries = s->frag.num_dict_vals;
         if (!t) {
             s->num_dict_entries = 0;
@@ -272,19 +274,28 @@ gpuBuildChunkDictionaries(EncColumnChunk *chunks, uint32_t *dev_scratch)
                 }
             }
             __syncthreads();
-            // At this point the order of dictionary is non-deterministic, so reorder the duplicate rows such that the lowest
-            // row number is the non-duplicate value
-            if (is_valid && is_dupe && next - 1 > row) {
-                atomicMin(&s->col.dict_index[next - 1], row);
-            }
-            __syncthreads();
-            if (is_valid && is_dupe && next - 1 > row) {
-                if (s->col.dict_index[next - 1] == row) {
-                    s->col.dict_index[next - 1] = row | (1u << 31);
-                    s->col.dict_index[row] = row;
+            // At this point, the dictionary order is non-deterministic, and we want insertion order
+            // Make sure that the non-duplicate entry corresponds to the lower row number
+            // (The entry in dict_data (next-1) used for duplicate elimination does not need
+            // to be the lowest row number)
+            bool reorder_check = (is_valid && is_dupe && next - 1 > row);
+            if (reorder_check) {
+                next = s->col.dict_index[next - 1];
+                while (next & (1u << 31)) {
+                    next = s->col.dict_index[next & 0x7fffffff];
                 }
             }
-            __syncthreads();
+            if (__syncthreads_or(reorder_check)) {
+                if (reorder_check) {
+                    atomicMin(&s->col.dict_index[next], row);
+                }
+                __syncthreads();
+                if (reorder_check && s->col.dict_index[next] == row) {
+                    s->col.dict_index[next] = row | (1u << 31);
+                    s->col.dict_index[row] = row;
+                }
+                __syncthreads();
+            }
         }
         __syncthreads();
         num_dict_entries = s->num_dict_entries;
