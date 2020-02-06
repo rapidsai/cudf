@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "result_cache.hpp"
 #include "group_reductions.hpp"
 
 #include <cudf/column/column.hpp>
@@ -27,6 +26,7 @@
 #include <cudf/types.hpp>
 #include <cudf/aggregation.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/aggregation/result_cache.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/binaryop.hpp>
 #include <cudf/detail/unary.hpp>
@@ -106,7 +106,7 @@ struct store_result_functor {
  private:
   size_type col_idx; ///< Index of column in requests being operated on
   sort::sort_groupby_helper & helper; ///< Sort helper
-  result_cache & cache; ///< cache of results to store into
+  experimental::detail::result_cache & cache; ///< cache of results to store into
   column_view const& values; ///< Column of values to group and aggregate
 
   cudaStream_t stream; ///< CUDA stream on which to execute kernels 
@@ -306,7 +306,7 @@ groupby::sort_aggregate(
   // We're going to start by creating a cache of results so that aggs that
   // depend on other aggs will not have to be recalculated. e.g. mean depends on
   // sum and count. std depends on mean and count
-  detail::result_cache cache(requests.size());
+  experimental::detail::result_cache cache(requests.size());
   
   for (size_t i = 0; i < requests.size(); i++) {
     auto store_functor = detail::store_result_functor(i, requests[i].values,

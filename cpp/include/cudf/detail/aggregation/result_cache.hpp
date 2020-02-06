@@ -23,7 +23,6 @@
 
 namespace cudf {
 namespace experimental {
-namespace groupby {
 namespace detail {
 
 struct aggregation_equality {
@@ -97,6 +96,5 @@ class result_cache {
 
 
 }  // namespace detail
-}  // namespace groupby
 }  // namespace experimental
 }  // namespace cudf

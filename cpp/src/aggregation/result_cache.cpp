@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
-#include "result_cache.hpp"
+#include <cudf/detail/aggregation/result_cache.hpp>
 
 namespace cudf {
 namespace experimental {
-namespace groupby {
 namespace detail {
 
 namespace {
@@ -98,6 +97,5 @@ result_cache::release_result(size_t col_idx,
 }
 
 }  // namespace detail
-}  // namespace groupby
 }  // namespace experimental
 }  // namespace cudf
