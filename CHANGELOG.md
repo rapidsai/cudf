@@ -37,7 +37,7 @@
 - PR #4067 Removed unused `CATEGORY` type ID.
 - PR #3891 Port NVStrings (r)split_record to contiguous_(r)split_record
 - PR #4064 Add cudaGetDeviceCount to JNI layer
-- PR #4078 Add support for writing large Parquet files in a chunked manner.
+- PR #4087 Add support for writing large Parquet files in a chunked manner.
 
 ## Bug Fixes
 
