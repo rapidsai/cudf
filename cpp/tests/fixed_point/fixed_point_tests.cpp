@@ -84,8 +84,22 @@ TYPED_TEST(FixedPointTestBothReps, PaddedDecimalXXConstruction) {
 
     using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
 
+    decimalXX a{1.1,      scale_type{-1}};
+    decimalXX b{1.01,     scale_type{-2}};
+    decimalXX c{1.001,    scale_type{-3}};
+    decimalXX d{1.0001,   scale_type{-4}};
+    decimalXX e{1.00001,  scale_type{-5}};
+    decimalXX f{1.000001, scale_type{-6}};
+
     decimalXX x{1.000123, scale_type{-8}};
     decimalXX y{0.000123, scale_type{-8}};
+
+    EXPECT_EQ(1.1,      a.to_double());
+    EXPECT_EQ(1.01,     b.to_double());
+    EXPECT_EQ(1.001,    c.to_double());
+    EXPECT_EQ(1.0001,   d.to_double());
+    EXPECT_EQ(1.00001,  e.to_double());
+    EXPECT_EQ(1.000001, f.to_double());
 
     EXPECT_EQ(1.000123, x.to_double());
     EXPECT_EQ(0.000123, y.to_double());
@@ -119,6 +133,18 @@ TYPED_TEST(FixedPointTestBothReps, SimpleBinaryFPConstruction) {
     EXPECT_EQ(1.25,   num7.to_double());
     EXPECT_EQ(1.375,  num8.to_double());
     EXPECT_EQ(1.4375, num9.to_double());
+
+}
+
+TYPED_TEST(FixedPointTestBothReps, MoreSimpleBinaryFPConstruction) {
+
+    using binary_fp = fixed_point<TypeParam, Radix::BASE_2>;
+
+    binary_fp num0{1.25, scale_type{-2}};
+    binary_fp num1{2.1,  scale_type{-4}};
+
+    EXPECT_EQ(1.25,   num0.to_double());
+    EXPECT_EQ(2.0625, num1.to_double());
 
 }
 
