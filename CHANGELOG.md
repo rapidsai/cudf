@@ -36,6 +36,7 @@
 - PR #4038 JNI and Java support for is_nan and is_not_nan
 - PR #3891 Port NVStrings (r)split_record to contiguous_(r)split_record
 - PR #4064 Add cudaGetDeviceCount to JNI layer
+- PR #4077 Use Dask to serialize `Buffer`s
 
 ## Bug Fixes
 
