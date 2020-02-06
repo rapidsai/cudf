@@ -859,13 +859,15 @@ class ColumnBase(Column):
         frames = []
         header["type"] = pickle.dumps(type(self))
         header["dtype"] = self.dtype.str
-        data_frames = [self.data_array_view]
+        data_header, data_frames = self.data.serialize()
+        header["data_header"] = data_header
         frames.extend(data_frames)
 
         if self.nullable:
-            mask_frames = [self.mask_array_view]
+            mask_header, mask_frames = self.mask.serialize()
         else:
-            mask_frames = []
+            mask_header, mask_frames = {}, []
+        header["mask_header"] = mask_header
         frames.extend(mask_frames)
         header["frame_count"] = len(frames)
         return header, frames
@@ -873,10 +875,10 @@ class ColumnBase(Column):
     @classmethod
     def deserialize(cls, header, frames):
         dtype = header["dtype"]
-        data = Buffer(frames[0])
+        data = Buffer.deserialize(header["data_header"], [frames[0]])
         mask = None
         if header["frame_count"] > 1:
-            mask = Buffer(frames[1])
+            mask = Buffer.deserialize(header["mask_header"], [frames[1]])
         return build_column(data=data, dtype=dtype, mask=mask)
 
 
