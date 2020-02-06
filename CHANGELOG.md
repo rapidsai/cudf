@@ -62,9 +62,10 @@
 - PR #4066 Fixed mismatch with dtype enums
 - PR #4078 Fix joins for when column_in_common input parameter is empty
 - PR #4080 Fix multi-index dask test with sort issue
+- PR #4084 Update Java for removal of CATEGORY type
 
 
-# cuDF 0.12.0 (Date TBD)
+# cuDF 0.12.0 (04 Feb 2020)
 
 ## New Features
 
