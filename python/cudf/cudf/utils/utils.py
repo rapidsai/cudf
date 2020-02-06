@@ -326,17 +326,6 @@ class cached_property:
             return value
 
 
-class NestMissingMappingMixin:
-    """
-    Make missing values of a mapping empty instances
-    of the same type as the mapping.
-    """
-
-    def __missing__(self, key):
-        super().__setitem__(key, self.__class__())
-        return super().__getitem__(key)
-
-
 class ColumnValuesMappingMixin:
     """
     Coerce provided values for the mapping to Columns.
@@ -360,30 +349,6 @@ class EqualLengthValuesMappingMixin:
             if len(value) != len(first):
                 raise ValueError("All values must be of equal length")
         super().__setitem__(key, value)
-
-
-class NestTupleKeysMappingMixin:
-    """
-    Perform nested indexing when provided tuple keys.
-    """
-
-    def __getitem__(self, key):
-        if isinstance(key, tuple):
-            d = self
-            for k in key[:-1]:
-                d = d[k]
-            return d.__getitem__(key[-1])
-        else:
-            return super().__getitem__(key)
-
-    def __setitem__(self, key, value):
-        if isinstance(key, tuple):
-            d = self
-            for k in key[:-1]:
-                d = d[k]
-            d.__setitem__(key[-1], value)
-        else:
-            super().__setitem__(key, value)
 
 
 class OrderedColumnDict(
