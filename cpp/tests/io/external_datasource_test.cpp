@@ -47,15 +47,25 @@ TEST_F(ExternalDatasource, Basic)
 {
     std::map<std::string, std::string> datasource_confs;
 
+    //Topic
+    datasource_confs.insert({"ex_ds.kafka.topic", "libcudf-test"});
+
+    //General Conf
+    datasource_confs.insert({"bootstrap.servers", "localhost:9092"});
+    datasource_confs.insert({"group.id", "jeremy_test"});
+    datasource_confs.insert({"auto.offset.reset", "beginning"});
+
     cudf::io::external::datasource_factory dfs("/home/jdyer/Development/cudf/external/build");
     cudf::io::external::external_datasource* ex_datasource = dfs.external_datasource_by_id("librdkafka-1.2.2", datasource_confs);
-    printf("External Datasource ID is '%s'\n", ex_datasource->libcudf_datasource_identifier().c_str());
+    //printf("External Datasource ID is '%s'\n", ex_datasource->libcudf_datasource_identifier().c_str());
+    ex_datasource->configure_datasource(datasource_confs);
 }
 
-TEST_F(ExternalDatasource, csv_read)
-{
-    std::map<std::string, std::string> datasource_confs;
+// TEST_F(ExternalDatasource, kafka_read_single_message)
+// {
+//     std::map<std::string, std::string> datasource_confs;
     
-    // Create the reader.
-    //cudf::experimental::io::detail::csv::reader csv_reader = cudf::experimental::io::detail::csv::reader("librdkafka-1.2.2", datasource_confs, );
-}
+//     cudf::io::external::datasource_factory dfs("/home/jdyer/Development/cudf/external/build");
+//     cudf::io::external::external_datasource* ex_datasource = dfs.external_datasource_by_id("librdkafka-1.2.2", datasource_confs);
+//     printf("External Datasource ID is '%s'\n", ex_datasource->libcudf_datasource_identifier().c_str());
+// }

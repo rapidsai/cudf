@@ -49,6 +49,7 @@ class datasource_factory {
  public:
   
   external_datasource* external_datasource_by_id(std::string unique_id, std::map<std::string, std::string> datasource_confs) {
+
     std::map<std::string, external_datasource_wrapper>::iterator it;
     it = external_libs_.find(unique_id);
     if (it != external_libs_.end()) {
@@ -82,7 +83,7 @@ class datasource_factory {
         ex_ds_destroy ex_ds_dest = (ex_ds_destroy) dlsym(dl_handle, "libcudf_external_datasource_destroy");
 
         //TODO: Explore best approach for error handling here that fits into the cuDF paradigm
-        if ((error = dlerror()) != NULL)  {
+        if ((error = dlerror()) != NULL) {
           fputs(error, stderr);
           exit(1);
         }
@@ -96,6 +97,11 @@ class datasource_factory {
 
       bool isOpen() {
         return open_;
+      }
+
+      bool configure(std::map<std::string, std::string> datasource_confs) {
+        datasource_confs_ = datasource_confs;
+        return ex_ds_->configure_datasource(datasource_confs);
       }
 
       std::string unique_id() {
@@ -117,6 +123,8 @@ class datasource_factory {
       std::string ds_unique_id_;
       std::string external_datasource_lib_;
       cudf::io::external::external_datasource *ex_ds_;
+      std::map<std::string, std::string> datasource_confs_;
+      bool configured_ = false;
       bool open_ = false;
   };
 

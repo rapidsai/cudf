@@ -18,8 +18,8 @@ ARGS=$*
 # script, and that this script resides in the repo dir!
 REPODIR=$(cd $(dirname $0); pwd)
 
-VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks --external -v -g -n --allgpuarch --disable_nvtx -h"
-HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [--external] [--disable_nvtx] [-v] [-g] [-n] [-h]
+VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks external -v -g -n --allgpuarch --disable_nvtx -h"
+HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [external] [--disable_nvtx] [-v] [-g] [-n] [-h]
    clean            - remove all existing build artifacts and configuration (start
                     over)
    libnvstrings     - build the nvstrings C++ code only
@@ -28,7 +28,7 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [--external] [--disab
    cudf             - build the cudf Python package
    dask_cudf        - build the dask_cudf Python package
    benchmarks       - build benchmarks
-   --external       - build external datasource support for libcudf
+   external       - build external datasource support for libcudf
    -v               - verbose build mode
    -g               - build for debug
    -n               - no install step
@@ -102,8 +102,9 @@ fi
 if hasArg benchmarks; then
     BENCHMARKS=ON
 fi
-if hasArg --external; then
+if hasArg external; then
     BUILD_EXTERNAL_DATASOURCES="ON"
+fi
 if hasArg --disable_nvtx; then
     BUILD_NVTX="OFF"
 fi

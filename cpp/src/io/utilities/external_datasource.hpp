@@ -24,6 +24,7 @@
 #include <algorithm>
 #include <memory>
 #include <string>
+#include <map>
 #include "datasource.hpp"
 
 namespace cudf {
@@ -42,6 +43,12 @@ class external_datasource : public datasource {
    * which external datasource should be used on invocation.
    */
   virtual std::string libcudf_datasource_identifier() = 0;
+
+  /**
+   * Takes user provided configurations and applies them to the external datasource.
+   * This allows for the first instance being created or an existing instance being updated.
+   */
+  virtual bool configure_datasource(std::map<std::string, std::string> datasource_configs) = 0;
 
   /**
    * @brief Base class destructor
