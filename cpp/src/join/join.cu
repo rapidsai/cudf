@@ -331,11 +331,11 @@ construct_join_output_df(
 
   std::unique_ptr<experimental::table> common_table;
   // Construct the joined columns
-  if (not columns_in_common.empty()) {
-    if (join_kind::FULL_JOIN == JoinKind) {
-      auto complement_indices =
-        get_left_join_indices_complement(joined_indices.second,
-            left.num_rows(), right.num_rows(), stream);
+  if (join_kind::FULL_JOIN == JoinKind) {
+    auto complement_indices =
+      get_left_join_indices_complement(joined_indices.second,
+        left.num_rows(), right.num_rows(), stream);
+    if (not columns_in_common.empty()) {
       auto common_from_right = experimental::detail::gather(
           right.select(right_common_col),
           complement_indices.second.begin(),
@@ -348,17 +348,21 @@ construct_join_output_df(
           false, nullify_out_of_bounds);
       common_table = experimental::concatenate(
           {common_from_right->view(), common_from_left->view()});
-      joined_indices =
-        concatenate_vector_pairs(complement_indices, joined_indices);
     } else {
+          common_table = std::make_unique<experimental::table>();
+    }
+    joined_indices =
+      concatenate_vector_pairs(complement_indices, joined_indices);
+  } else {
+      if (not columns_in_common.empty()) {
       common_table = experimental::detail::gather(
           left.select(left_common_col),
           joined_indices.first.begin(),
           joined_indices.first.end(),
           false, nullify_out_of_bounds);
-    }
-  } else {
-      common_table = std::make_unique<experimental::table>();
+      } else {
+          common_table = std::make_unique<experimental::table>();
+      }
   }
 
   // Construct the left non common columns
