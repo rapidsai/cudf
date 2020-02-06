@@ -60,6 +60,7 @@
 - PR #4049 Fix `cudf::split` issue returning one less than expected column vectors
 - PR #4065 Parquet writer: fix for out-of-range dictionary indices
 - PR #4066 Fixed mismatch with dtype enums
+- PR #4078 Fix joins for when column_in_common input parameter is empty
 
 # cuDF 0.12.0 (Date TBD)
 
