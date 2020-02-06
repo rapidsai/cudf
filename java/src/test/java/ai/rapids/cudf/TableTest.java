@@ -715,6 +715,90 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testLeftSemiJoin() {
+    try (Table leftTable = new Table.TestBuilder()
+        .column(  2,   3,   9,   0,   1,   7,   4,   6,   5,   8)
+        .column(100, 101, 102, 103, 104, 105, 106, 107, 108, 109)
+        .build();
+         Table rightTable = new Table.TestBuilder()
+             .column(  6,   5,   9,   8,  10,  32)
+             .column(201, 202, 203, 204, 205, 206)
+             .build();
+         Table expected = new Table.TestBuilder()
+             .column(  9,   6,   5,   8)
+             .column(102, 107, 108, 109)
+             .build();
+         Table joinedTable = leftTable.onColumns(0).leftSemiJoin(rightTable.onColumns(0));
+         Table orderedJoinedTable = joinedTable.orderBy(Table.asc(1, true))) {
+      assertTablesAreEqual(expected, orderedJoinedTable);
+    }
+  }
+
+  @Test
+  void testLeftSemiJoinWithNulls() {
+    try (Table leftTable = new Table.TestBuilder()
+        .column( 360,  326, null,  306, null,  254,  251,  361,  301,  317)
+        .column(  10,   11, null,   13,   14, null,   16,   17,   18,   19)
+        .column("20", "29", "22", "23", "24", "25", "26", "27", "28", "29")
+        .build();
+         Table rightTable = new Table.TestBuilder()
+             .column( 306,  301,  360,  109,  335,  254,  317,  361,  251,  326)
+             .column("20", "21", "22", "23", "24", "25", "26", "27", "28", "29")
+             .build();
+         Table joinedTable = leftTable.onColumns(0, 2).leftSemiJoin(rightTable.onColumns(0, 1));
+         Table orderedJoinedTable = joinedTable.orderBy(Table.asc(0, true));
+         Table expected = new Table.TestBuilder()
+             .column(254,   326,   361)
+             .column(null,   11,    17)
+             .column("25", "29",  "27")
+             .build()) {
+      assertTablesAreEqual(expected, orderedJoinedTable);
+    }
+  }
+
+  @Test
+  void testLeftAntiJoin() {
+    try (Table leftTable = new Table.TestBuilder()
+        .column(  2,   3,   9,   0,   1,   7,   4,   6,   5,   8)
+        .column(100, 101, 102, 103, 104, 105, 106, 107, 108, 109)
+        .build();
+         Table rightTable = new Table.TestBuilder()
+             .column(  6,   5,   9,   8,  10,  32)
+             .column(201, 202, 203, 204, 205, 206)
+             .build();
+         Table expected = new Table.TestBuilder()
+             .column(  2,   3,   0,   1,   7,   4)
+             .column(100, 101, 103, 104, 105, 106)
+             .build();
+         Table joinedTable = leftTable.onColumns(0).leftAntiJoin(rightTable.onColumns(0));
+         Table orderedJoinedTable = joinedTable.orderBy(Table.asc(1, true))) {
+      assertTablesAreEqual(expected, orderedJoinedTable);
+    }
+  }
+
+  @Test
+  void testLeftAntiJoinWithNulls() {
+    try (Table leftTable = new Table.TestBuilder()
+        .column( 360,  326, null,  306, null,  254,  251,  361,  301,  317)
+        .column(  10,   11, null,   13,   14, null,   16,   17,   18,   19)
+        .column("20", "21", "22", "23", "24", "25", "26", "27", "28", "29")
+        .build();
+         Table rightTable = new Table.TestBuilder()
+             .column( 306,  301,  360,  109,  335,  254,  317,  361,  251,  326)
+             .column("20", "21", "22", "23", "24", "25", "26", "27", "28", "29")
+             .build();
+         Table joinedTable = leftTable.onColumns(0, 2).leftAntiJoin(rightTable.onColumns(0, 1));
+         Table orderedJoinedTable = joinedTable.orderBy(Table.asc(2, true));
+         Table expected = new Table.TestBuilder()
+             .column( 360,  326, null,  306, null,  251,  301,  317)
+             .column(  10,   11, null,   13,   14,   16,   18,   19)
+             .column("20", "21", "22", "23", "24", "26", "28", "29")
+             .build()) {
+      assertTablesAreEqual(expected, orderedJoinedTable);
+    }
+  }
+
+  @Test
   void testBoundsNulls() {
     boolean[] descFlags = new boolean[1];
     try (Table table = new TestBuilder()
@@ -1135,6 +1219,65 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testSerializationRoundTripEmpty() throws IOException {
+    try (ColumnVector emptyInt = ColumnVector.fromInts();
+         ColumnVector emptyDouble = ColumnVector.fromDoubles();
+         ColumnVector emptyString = ColumnVector.fromStrings();
+         Table t = new Table(emptyInt, emptyInt, emptyDouble, emptyString)) {
+      ByteArrayOutputStream bout = new ByteArrayOutputStream();
+      JCudfSerialization.writeToStream(t, bout, 0, 0);
+      ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
+      DataInputStream din = new DataInputStream(bin);
+      try (Table result = JCudfSerialization.readTableFrom(din)) {
+        assertTablesAreEqual(t, result);
+      }
+    }
+  }
+
+  @Test
+  void testSerializationRoundTripConcatOnHostEmpty() throws IOException {
+    try (ColumnVector emptyInt = ColumnVector.fromInts();
+         ColumnVector emptyDouble = ColumnVector.fromDoubles();
+         ColumnVector emptyString = ColumnVector.fromStrings();
+         Table t = new Table(emptyInt, emptyInt, emptyDouble, emptyString)) {
+      ByteArrayOutputStream bout = new ByteArrayOutputStream();
+      JCudfSerialization.writeToStream(t, bout, 0, 0);
+      JCudfSerialization.writeToStream(t, bout, 0, 0);
+      ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
+      DataInputStream din = new DataInputStream(bin);
+
+      ArrayList<JCudfSerialization.SerializedTableHeader> headers = new ArrayList<>();
+      List<HostMemoryBuffer> buffers = new ArrayList<>();
+      try {
+        JCudfSerialization.SerializedTableHeader head;
+        long numRows = 0;
+        do {
+          head = new JCudfSerialization.SerializedTableHeader(din);
+          if (head.wasInitialized()) {
+            HostMemoryBuffer buff = HostMemoryBuffer.allocate(head.dataLen);
+            buffers.add(buff);
+            JCudfSerialization.readTableIntoBuffer(din, head, buff);
+            assert head.wasDataRead();
+            numRows += head.getNumRows();
+            assert numRows <= Integer.MAX_VALUE;
+            headers.add(head);
+          }
+        } while (head.wasInitialized());
+        assert numRows == t.getRowCount();
+        try (Table found = JCudfSerialization.readAndConcat(
+            headers.toArray(new JCudfSerialization.SerializedTableHeader[headers.size()]),
+            buffers.toArray(new HostMemoryBuffer[buffers.size()]))) {
+          assertTablesAreEqual(t, found);
+        }
+      } finally {
+        for (HostMemoryBuffer buff: buffers) {
+          buff.close();
+        }
+      }
+    }
+  }
+
+  @Test
   void testSerializationRoundTripConcatHostSide() throws IOException {
     try (Table t = new Table.TestBuilder()
         .column(     100,      202,      3003,    40004,        5,      -60,    1, null,    3,  null,     5, null,    7, null,   9,   null,    11, null,   13, null,  15)
@@ -1170,10 +1313,10 @@ public class TableTest extends CudfTestBase {
               buffers.add(buff);
               JCudfSerialization.readTableIntoBuffer(din, head, buff);
               assert head.wasDataRead();
+              numRows += head.getNumRows();
+              assert numRows <= Integer.MAX_VALUE;
+              headers.add(head);
             }
-            numRows += head.getNumRows();
-            assert numRows <= Integer.MAX_VALUE;
-            headers.add(head);
           } while (head.wasInitialized());
           assert numRows == t.getRowCount();
           try (Table found = JCudfSerialization.readAndConcat(

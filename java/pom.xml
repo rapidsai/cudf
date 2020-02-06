@@ -377,14 +377,11 @@
                             def libcudart = ~/libcudart\\.so\\.(.*)\\s+=>.*/
                             def cm = libcudart.matcher(sout)
                             if (cm.find()) {
-                                switch(cm.group(1)) {
-                                    case ~/10\\.0.*/:
-                                        pom.properties['cuda.classifier'] = 'cuda10'
-                                        break
-                                    default:
-                                        pom.properties['cuda.classifier'] = ''
-                                        break
-                                }
+                                def classifier = 'cuda' + cm.group(1)
+                                  .replaceFirst(/\\./, '-') // First . becomes a -
+                                  .replaceAll(/\\..*$/, '') // Drop all of the subversions from cuda
+                                  .replaceAll(/-0$/, '') // If it is a X.0 version, like 10.0 drop the .0
+                                pom.properties['cuda.classifier'] = classifier
                             } else {
                                 fail("Could not find cudart as a dependency of libcudfjni out> $sout err> $serr")
                             }
@@ -454,6 +451,8 @@
                                     <directory>${native.cudf.path}</directory>
                                     <includes>
                                         <include>libcudf.so</include>
+                                        <include>libNVCategory.so</include>
+                                        <include>libNVStrings.so</include>
                                     </includes>
                                 </resource>
                                 <resource>

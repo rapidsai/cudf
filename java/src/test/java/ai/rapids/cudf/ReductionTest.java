@@ -31,17 +31,17 @@ class ReductionTest extends CudfTestBase {
   public static final float DELTAF = 0.001f;
 
   // reduction operations that produce a floating point value
-  private static EnumSet<ReductionOp> FLOAT_REDUCTIONS = EnumSet.of(
-      ReductionOp.MEAN,
-      ReductionOp.STD,
-      ReductionOp.VAR);
+  private static EnumSet<AggregateOp> FLOAT_REDUCTIONS = EnumSet.of(
+      AggregateOp.MEAN,
+      AggregateOp.STD,
+      AggregateOp.VAR);
 
   // reduction operations that produce a floating point value
-  private static EnumSet<ReductionOp> BOOL_REDUCTIONS = EnumSet.of(
-      ReductionOp.ANY,
-      ReductionOp.ALL);
+  private static EnumSet<AggregateOp> BOOL_REDUCTIONS = EnumSet.of(
+      AggregateOp.ANY,
+      AggregateOp.ALL);
 
-  private static Scalar buildExpectedScalar(ReductionOp op, DType baseType, Object expectedObject) {
+  private static Scalar buildExpectedScalar(AggregateOp op, DType baseType, Object expectedObject) {
     if (expectedObject == null) {
       return Scalar.fromNull(baseType);
     }
@@ -86,150 +86,150 @@ class ReductionTest extends CudfTestBase {
   private static Stream<Arguments> createBooleanParams() {
     Boolean[] vals = new Boolean[]{true, true, null, false, true, false, null};
     return Stream.of(
-        Arguments.of(ReductionOp.SUM, new Boolean[0], null, 0.),
-        Arguments.of(ReductionOp.SUM, new Boolean[]{null, null, null}, null, 0.),
-        Arguments.of(ReductionOp.SUM, vals, true, 0.),
-        Arguments.of(ReductionOp.MIN, vals, false, 0.),
-        Arguments.of(ReductionOp.MAX, vals, true, 0.),
-        Arguments.of(ReductionOp.PRODUCT, vals, false, 0.),
-        Arguments.of(ReductionOp.SUMOFSQUARES, vals, true, 0.),
-        Arguments.of(ReductionOp.MEAN, vals, 0.6, DELTAD),
-        Arguments.of(ReductionOp.STD, vals, 0.5477225575051662, DELTAD),
-        Arguments.of(ReductionOp.VAR, vals, 0.3, DELTAD),
-        Arguments.of(ReductionOp.ANY, vals, true, 0.),
-        Arguments.of(ReductionOp.ALL, vals, false, 0.)
+        Arguments.of(AggregateOp.SUM, new Boolean[0], null, 0.),
+        Arguments.of(AggregateOp.SUM, new Boolean[]{null, null, null}, null, 0.),
+        Arguments.of(AggregateOp.SUM, vals, true, 0.),
+        Arguments.of(AggregateOp.MIN, vals, false, 0.),
+        Arguments.of(AggregateOp.MAX, vals, true, 0.),
+        Arguments.of(AggregateOp.PRODUCT, vals, false, 0.),
+        Arguments.of(AggregateOp.SUMOFSQUARES, vals, true, 0.),
+        Arguments.of(AggregateOp.MEAN, vals, 0.6, DELTAD),
+        Arguments.of(AggregateOp.STD, vals, 0.5477225575051662, DELTAD),
+        Arguments.of(AggregateOp.VAR, vals, 0.3, DELTAD),
+        Arguments.of(AggregateOp.ANY, vals, true, 0.),
+        Arguments.of(AggregateOp.ALL, vals, false, 0.)
     );
   }
 
   private static Stream<Arguments> createByteParams() {
     Byte[] vals = new Byte[]{-1, 7, 123, null, 50, 60, 100};
     return Stream.of(
-        Arguments.of(ReductionOp.SUM, new Byte[0], null, 0.),
-        Arguments.of(ReductionOp.SUM, new Byte[]{null, null, null}, null, 0.),
-        Arguments.of(ReductionOp.SUM, vals, (byte) 83, 0.),
-        Arguments.of(ReductionOp.MIN, vals, (byte) -1, 0.),
-        Arguments.of(ReductionOp.MAX, vals, (byte) 123, 0.),
-        Arguments.of(ReductionOp.PRODUCT, vals, (byte) 160, 0.),
-        Arguments.of(ReductionOp.SUMOFSQUARES, vals, (byte) 47, 0.),
-        Arguments.of(ReductionOp.MEAN, vals, 56.5, DELTAD),
-        Arguments.of(ReductionOp.STD, vals, 49.24530434467839, DELTAD),
-        Arguments.of(ReductionOp.VAR, vals, 2425.1, DELTAD),
-        Arguments.of(ReductionOp.ANY, vals, true, 0.),
-        Arguments.of(ReductionOp.ALL, vals, true, 0.)
+        Arguments.of(AggregateOp.SUM, new Byte[0], null, 0.),
+        Arguments.of(AggregateOp.SUM, new Byte[]{null, null, null}, null, 0.),
+        Arguments.of(AggregateOp.SUM, vals, (byte) 83, 0.),
+        Arguments.of(AggregateOp.MIN, vals, (byte) -1, 0.),
+        Arguments.of(AggregateOp.MAX, vals, (byte) 123, 0.),
+        Arguments.of(AggregateOp.PRODUCT, vals, (byte) 160, 0.),
+        Arguments.of(AggregateOp.SUMOFSQUARES, vals, (byte) 47, 0.),
+        Arguments.of(AggregateOp.MEAN, vals, 56.5, DELTAD),
+        Arguments.of(AggregateOp.STD, vals, 49.24530434467839, DELTAD),
+        Arguments.of(AggregateOp.VAR, vals, 2425.1, DELTAD),
+        Arguments.of(AggregateOp.ANY, vals, true, 0.),
+        Arguments.of(AggregateOp.ALL, vals, true, 0.)
     );
   }
 
   private static Stream<Arguments> createShortParams() {
     Short[] vals = new Short[]{-1, 7, 123, null, 50, 60, 100};
     return Stream.of(
-        Arguments.of(ReductionOp.SUM, new Short[0], null, 0.),
-        Arguments.of(ReductionOp.SUM, new Short[]{null, null, null}, null, 0.),
-        Arguments.of(ReductionOp.SUM, vals, (short) 339, 0.),
-        Arguments.of(ReductionOp.MIN, vals, (short) -1, 0.),
-        Arguments.of(ReductionOp.MAX, vals, (short) 123, 0.),
-        Arguments.of(ReductionOp.PRODUCT, vals, (short) -22624, 0.),
-        Arguments.of(ReductionOp.SUMOFSQUARES, vals, (short) 31279, 0.),
-        Arguments.of(ReductionOp.MEAN, vals, 56.5, DELTAD),
-        Arguments.of(ReductionOp.STD, vals, 49.24530434467839, DELTAD),
-        Arguments.of(ReductionOp.VAR, vals, 2425.1, DELTAD),
-        Arguments.of(ReductionOp.ANY, vals, true, 0.),
-        Arguments.of(ReductionOp.ALL, vals, true, 0.)
+        Arguments.of(AggregateOp.SUM, new Short[0], null, 0.),
+        Arguments.of(AggregateOp.SUM, new Short[]{null, null, null}, null, 0.),
+        Arguments.of(AggregateOp.SUM, vals, (short) 339, 0.),
+        Arguments.of(AggregateOp.MIN, vals, (short) -1, 0.),
+        Arguments.of(AggregateOp.MAX, vals, (short) 123, 0.),
+        Arguments.of(AggregateOp.PRODUCT, vals, (short) -22624, 0.),
+        Arguments.of(AggregateOp.SUMOFSQUARES, vals, (short) 31279, 0.),
+        Arguments.of(AggregateOp.MEAN, vals, 56.5, DELTAD),
+        Arguments.of(AggregateOp.STD, vals, 49.24530434467839, DELTAD),
+        Arguments.of(AggregateOp.VAR, vals, 2425.1, DELTAD),
+        Arguments.of(AggregateOp.ANY, vals, true, 0.),
+        Arguments.of(AggregateOp.ALL, vals, true, 0.)
     );
   }
 
   private static Stream<Arguments> createIntParams() {
     Integer[] vals = new Integer[]{-1, 7, 123, null, 50, 60, 100};
     return Stream.of(
-        Arguments.of(ReductionOp.SUM, new Integer[0], null, 0.),
-        Arguments.of(ReductionOp.SUM, new Integer[]{null, null, null}, null, 0.),
-        Arguments.of(ReductionOp.SUM, vals, 339, 0.),
-        Arguments.of(ReductionOp.MIN, vals, -1, 0.),
-        Arguments.of(ReductionOp.MAX, vals, 123, 0.),
-        Arguments.of(ReductionOp.PRODUCT, vals, -258300000, 0.),
-        Arguments.of(ReductionOp.SUMOFSQUARES, vals, 31279, 0.),
-        Arguments.of(ReductionOp.MEAN, vals, 56.5, DELTAD),
-        Arguments.of(ReductionOp.STD, vals, 49.24530434467839, DELTAD),
-        Arguments.of(ReductionOp.VAR, vals, 2425.1, DELTAD),
-        Arguments.of(ReductionOp.ANY, vals, true, 0.),
-        Arguments.of(ReductionOp.ALL, vals, true, 0.)
+        Arguments.of(AggregateOp.SUM, new Integer[0], null, 0.),
+        Arguments.of(AggregateOp.SUM, new Integer[]{null, null, null}, null, 0.),
+        Arguments.of(AggregateOp.SUM, vals, 339, 0.),
+        Arguments.of(AggregateOp.MIN, vals, -1, 0.),
+        Arguments.of(AggregateOp.MAX, vals, 123, 0.),
+        Arguments.of(AggregateOp.PRODUCT, vals, -258300000, 0.),
+        Arguments.of(AggregateOp.SUMOFSQUARES, vals, 31279, 0.),
+        Arguments.of(AggregateOp.MEAN, vals, 56.5, DELTAD),
+        Arguments.of(AggregateOp.STD, vals, 49.24530434467839, DELTAD),
+        Arguments.of(AggregateOp.VAR, vals, 2425.1, DELTAD),
+        Arguments.of(AggregateOp.ANY, vals, true, 0.),
+        Arguments.of(AggregateOp.ALL, vals, true, 0.)
     );
   }
 
   private static Stream<Arguments> createLongParams() {
     Long[] vals = new Long[]{-1L, 7L, 123L, null, 50L, 60L, 100L};
     return Stream.of(
-        Arguments.of(ReductionOp.SUM, new Long[0], null, 0.),
-        Arguments.of(ReductionOp.SUM, new Long[]{null, null, null}, null, 0.),
-        Arguments.of(ReductionOp.SUM, vals, 339L, 0.),
-        Arguments.of(ReductionOp.MIN, vals, -1L, 0.),
-        Arguments.of(ReductionOp.MAX, vals, 123L, 0.),
-        Arguments.of(ReductionOp.PRODUCT, vals, -258300000L, 0.),
-        Arguments.of(ReductionOp.SUMOFSQUARES, vals, 31279L, 0.),
-        Arguments.of(ReductionOp.MEAN, vals, 56.5, DELTAD),
-        Arguments.of(ReductionOp.STD, vals, 49.24530434467839, DELTAD),
-        Arguments.of(ReductionOp.VAR, vals, 2425.1, DELTAD),
-        Arguments.of(ReductionOp.ANY, vals, true, 0.),
-        Arguments.of(ReductionOp.ALL, vals, true, 0.)
+        Arguments.of(AggregateOp.SUM, new Long[0], null, 0.),
+        Arguments.of(AggregateOp.SUM, new Long[]{null, null, null}, null, 0.),
+        Arguments.of(AggregateOp.SUM, vals, 339L, 0.),
+        Arguments.of(AggregateOp.MIN, vals, -1L, 0.),
+        Arguments.of(AggregateOp.MAX, vals, 123L, 0.),
+        Arguments.of(AggregateOp.PRODUCT, vals, -258300000L, 0.),
+        Arguments.of(AggregateOp.SUMOFSQUARES, vals, 31279L, 0.),
+        Arguments.of(AggregateOp.MEAN, vals, 56.5, DELTAD),
+        Arguments.of(AggregateOp.STD, vals, 49.24530434467839, DELTAD),
+        Arguments.of(AggregateOp.VAR, vals, 2425.1, DELTAD),
+        Arguments.of(AggregateOp.ANY, vals, true, 0.),
+        Arguments.of(AggregateOp.ALL, vals, true, 0.)
     );
   }
 
   private static Stream<Arguments> createFloatParams() {
     Float[] vals = new Float[]{-1f, 7f, 123f, null, 50f, 60f, 100f};
     return Stream.of(
-        Arguments.of(ReductionOp.SUM, new Float[0], null, 0f),
-        Arguments.of(ReductionOp.SUM, new Float[]{null, null, null}, null, 0f),
-        Arguments.of(ReductionOp.SUM, vals, 339f, 0f),
-        Arguments.of(ReductionOp.MIN, vals, -1f, 0f),
-        Arguments.of(ReductionOp.MAX, vals, 123f, 0f),
-        Arguments.of(ReductionOp.PRODUCT, vals, -258300000f, 0f),
-        Arguments.of(ReductionOp.SUMOFSQUARES, vals, 31279f, 0f),
-        Arguments.of(ReductionOp.MEAN, vals, 56.5f, DELTAF),
-        Arguments.of(ReductionOp.STD, vals, 49.24530434467839f, DELTAF),
-        Arguments.of(ReductionOp.VAR, vals, 2425.1f, DELTAF),
-        Arguments.of(ReductionOp.ANY, vals, true, 0f),
-        Arguments.of(ReductionOp.ALL, vals, true, 0f)
+        Arguments.of(AggregateOp.SUM, new Float[0], null, 0f),
+        Arguments.of(AggregateOp.SUM, new Float[]{null, null, null}, null, 0f),
+        Arguments.of(AggregateOp.SUM, vals, 339f, 0f),
+        Arguments.of(AggregateOp.MIN, vals, -1f, 0f),
+        Arguments.of(AggregateOp.MAX, vals, 123f, 0f),
+        Arguments.of(AggregateOp.PRODUCT, vals, -258300000f, 0f),
+        Arguments.of(AggregateOp.SUMOFSQUARES, vals, 31279f, 0f),
+        Arguments.of(AggregateOp.MEAN, vals, 56.5f, DELTAF),
+        Arguments.of(AggregateOp.STD, vals, 49.24530434467839f, DELTAF),
+        Arguments.of(AggregateOp.VAR, vals, 2425.1f, DELTAF),
+        Arguments.of(AggregateOp.ANY, vals, true, 0f),
+        Arguments.of(AggregateOp.ALL, vals, true, 0f)
     );
   }
 
   private static Stream<Arguments> createDoubleParams() {
     Double[] vals = new Double[]{-1., 7., 123., null, 50., 60., 100.};
     return Stream.of(
-        Arguments.of(ReductionOp.SUM, new Double[0], null, 0.),
-        Arguments.of(ReductionOp.SUM, new Double[]{null, null, null}, null, 0.),
-        Arguments.of(ReductionOp.SUM, vals, 339., 0.),
-        Arguments.of(ReductionOp.MIN, vals, -1., 0.),
-        Arguments.of(ReductionOp.MAX, vals, 123., 0.),
-        Arguments.of(ReductionOp.PRODUCT, vals, -258300000., 0.),
-        Arguments.of(ReductionOp.SUMOFSQUARES, vals, 31279., 0.),
-        Arguments.of(ReductionOp.MEAN, vals, 56.5, DELTAD),
-        Arguments.of(ReductionOp.STD, vals, 49.24530434467839, DELTAD),
-        Arguments.of(ReductionOp.VAR, vals, 2425.1, DELTAD),
-        Arguments.of(ReductionOp.ANY, vals, true, 0.),
-        Arguments.of(ReductionOp.ALL, vals, true, 0.)
+        Arguments.of(AggregateOp.SUM, new Double[0], null, 0.),
+        Arguments.of(AggregateOp.SUM, new Double[]{null, null, null}, null, 0.),
+        Arguments.of(AggregateOp.SUM, vals, 339., 0.),
+        Arguments.of(AggregateOp.MIN, vals, -1., 0.),
+        Arguments.of(AggregateOp.MAX, vals, 123., 0.),
+        Arguments.of(AggregateOp.PRODUCT, vals, -258300000., 0.),
+        Arguments.of(AggregateOp.SUMOFSQUARES, vals, 31279., 0.),
+        Arguments.of(AggregateOp.MEAN, vals, 56.5, DELTAD),
+        Arguments.of(AggregateOp.STD, vals, 49.24530434467839, DELTAD),
+        Arguments.of(AggregateOp.VAR, vals, 2425.1, DELTAD),
+        Arguments.of(AggregateOp.ANY, vals, true, 0.),
+        Arguments.of(AggregateOp.ALL, vals, true, 0.)
     );
   }
 
   private static Stream<Arguments> createTimestampDaysParams() {
     Integer[] vals = new Integer[]{-1, 7, 123, null, 50, 60, 100};
     return Stream.of(
-        Arguments.of(ReductionOp.MAX, new Integer[0], null),
-        Arguments.of(ReductionOp.MAX, new Integer[]{null, null, null}, null),
-        Arguments.of(ReductionOp.MAX, vals, 123),
-        Arguments.of(ReductionOp.MIN, vals, -1)
+        Arguments.of(AggregateOp.MAX, new Integer[0], null),
+        Arguments.of(AggregateOp.MAX, new Integer[]{null, null, null}, null),
+        Arguments.of(AggregateOp.MAX, vals, 123),
+        Arguments.of(AggregateOp.MIN, vals, -1)
     );
   }
 
   private static Stream<Arguments> createTimestampResolutionParams() {
     Long[] vals = new Long[]{-1L, 7L, 123L, null, 50L, 60L, 100L};
     return Stream.of(
-        Arguments.of(ReductionOp.MAX, new Long[0], null),
-        Arguments.of(ReductionOp.MAX, new Long[]{null, null, null}, null),
-        Arguments.of(ReductionOp.MIN, vals, -1L),
-        Arguments.of(ReductionOp.MAX, vals, 123L)
+        Arguments.of(AggregateOp.MAX, new Long[0], null),
+        Arguments.of(AggregateOp.MAX, new Long[]{null, null, null}, null),
+        Arguments.of(AggregateOp.MIN, vals, -1L),
+        Arguments.of(AggregateOp.MAX, vals, 123L)
     );
   }
 
-  private static void assertEqualsDelta(ReductionOp op, Scalar expected, Scalar result,
+  private static void assertEqualsDelta(AggregateOp op, Scalar expected, Scalar result,
       Double delta) {
     if (FLOAT_REDUCTIONS.contains(op)) {
       assertEquals(expected.getDouble(), result.getDouble(), delta);
@@ -238,7 +238,7 @@ class ReductionTest extends CudfTestBase {
     }
   }
 
-  private static void assertEqualsDelta(ReductionOp op, Scalar expected, Scalar result,
+  private static void assertEqualsDelta(AggregateOp op, Scalar expected, Scalar result,
       Float delta) {
     if (FLOAT_REDUCTIONS.contains(op)) {
       assertEquals(expected.getFloat(), result.getFloat(), delta);
@@ -249,7 +249,7 @@ class ReductionTest extends CudfTestBase {
 
   @ParameterizedTest
   @MethodSource("createBooleanParams")
-  void testBoolean(ReductionOp op, Boolean[] values, Object expectedObject, Double delta) {
+  void testBoolean(AggregateOp op, Boolean[] values, Object expectedObject, Double delta) {
     try (Scalar expected = buildExpectedScalar(op, DType.BOOL8, expectedObject);
          ColumnVector v = ColumnVector.fromBoxedBooleans(values);
          Scalar result = v.reduce(op, expected.getType())) {
@@ -259,7 +259,7 @@ class ReductionTest extends CudfTestBase {
 
   @ParameterizedTest
   @MethodSource("createByteParams")
-  void testByte(ReductionOp op, Byte[] values, Object expectedObject, Double delta) {
+  void testByte(AggregateOp op, Byte[] values, Object expectedObject, Double delta) {
     try (Scalar expected = buildExpectedScalar(op, DType.INT8, expectedObject);
          ColumnVector v = ColumnVector.fromBoxedBytes(values);
          Scalar result = v.reduce(op, expected.getType())) {
@@ -269,7 +269,7 @@ class ReductionTest extends CudfTestBase {
 
   @ParameterizedTest
   @MethodSource("createShortParams")
-  void testShort(ReductionOp op, Short[] values, Object expectedObject, Double delta) {
+  void testShort(AggregateOp op, Short[] values, Object expectedObject, Double delta) {
     try (Scalar expected = buildExpectedScalar(op, DType.INT16, expectedObject);
          ColumnVector v = ColumnVector.fromBoxedShorts(values);
          Scalar result = v.reduce(op, expected.getType())) {
@@ -279,7 +279,7 @@ class ReductionTest extends CudfTestBase {
 
   @ParameterizedTest
   @MethodSource("createIntParams")
-  void testInt(ReductionOp op, Integer[] values, Object expectedObject, Double delta) {
+  void testInt(AggregateOp op, Integer[] values, Object expectedObject, Double delta) {
     try (Scalar expected = buildExpectedScalar(op, DType.INT32, expectedObject);
          ColumnVector v = ColumnVector.fromBoxedInts(values);
          Scalar result = v.reduce(op, expected.getType())) {
@@ -289,7 +289,7 @@ class ReductionTest extends CudfTestBase {
 
   @ParameterizedTest
   @MethodSource("createLongParams")
-  void testLong(ReductionOp op, Long[] values, Object expectedObject, Double delta) {
+  void testLong(AggregateOp op, Long[] values, Object expectedObject, Double delta) {
     try (Scalar expected = buildExpectedScalar(op, DType.INT64, expectedObject);
          ColumnVector v = ColumnVector.fromBoxedLongs(values);
          Scalar result = v.reduce(op, expected.getType())) {
@@ -299,7 +299,7 @@ class ReductionTest extends CudfTestBase {
 
   @ParameterizedTest
   @MethodSource("createFloatParams")
-  void testFloat(ReductionOp op, Float[] values, Object expectedObject, Float delta) {
+  void testFloat(AggregateOp op, Float[] values, Object expectedObject, Float delta) {
     try (Scalar expected = buildExpectedScalar(op, DType.FLOAT32, expectedObject);
          ColumnVector v = ColumnVector.fromBoxedFloats(values);
          Scalar result = v.reduce(op, expected.getType())) {
@@ -309,7 +309,7 @@ class ReductionTest extends CudfTestBase {
 
   @ParameterizedTest
   @MethodSource("createDoubleParams")
-  void testDouble(ReductionOp op, Double[] values, Object expectedObject, Double delta) {
+  void testDouble(AggregateOp op, Double[] values, Object expectedObject, Double delta) {
     try (Scalar expected = buildExpectedScalar(op, DType.FLOAT64, expectedObject);
          ColumnVector v = ColumnVector.fromBoxedDoubles(values);
          Scalar result = v.reduce(op, expected.getType())) {
@@ -319,7 +319,7 @@ class ReductionTest extends CudfTestBase {
 
   @ParameterizedTest
   @MethodSource("createTimestampDaysParams")
-  void testTimestampDays(ReductionOp op, Integer[] values, Object expectedObject) {
+  void testTimestampDays(AggregateOp op, Integer[] values, Object expectedObject) {
     try (Scalar expected = buildExpectedScalar(op, DType.TIMESTAMP_DAYS, expectedObject);
          ColumnVector v = ColumnVector.timestampDaysFromBoxedInts(values);
          Scalar result = v.reduce(op, expected.getType())) {
@@ -329,7 +329,7 @@ class ReductionTest extends CudfTestBase {
 
   @ParameterizedTest
   @MethodSource("createTimestampResolutionParams")
-  void testTimestampSeconds(ReductionOp op, Long[] values, Object expectedObject) {
+  void testTimestampSeconds(AggregateOp op, Long[] values, Object expectedObject) {
     try (Scalar expected = buildExpectedScalar(op, DType.TIMESTAMP_SECONDS, expectedObject);
          ColumnVector v = ColumnVector.timestampSecondsFromBoxedLongs(values);
          Scalar result = v.reduce(op, expected.getType())) {
@@ -339,7 +339,7 @@ class ReductionTest extends CudfTestBase {
 
   @ParameterizedTest
   @MethodSource("createTimestampResolutionParams")
-  void testTimestampMilliseconds(ReductionOp op, Long[] values, Object expectedObject) {
+  void testTimestampMilliseconds(AggregateOp op, Long[] values, Object expectedObject) {
     try (Scalar expected = buildExpectedScalar(op, DType.TIMESTAMP_MILLISECONDS, expectedObject);
          ColumnVector v = ColumnVector.timestampMilliSecondsFromBoxedLongs(values);
          Scalar result = v.reduce(op, expected.getType())) {
@@ -349,7 +349,7 @@ class ReductionTest extends CudfTestBase {
 
   @ParameterizedTest
   @MethodSource("createTimestampResolutionParams")
-  void testTimestampMicroseconds(ReductionOp op, Long[] values, Object expectedObject) {
+  void testTimestampMicroseconds(AggregateOp op, Long[] values, Object expectedObject) {
     try (Scalar expected = buildExpectedScalar(op, DType.TIMESTAMP_MICROSECONDS, expectedObject);
          ColumnVector v = ColumnVector.timestampMicroSecondsFromBoxedLongs(values);
          Scalar result = v.reduce(op, expected.getType())) {
@@ -359,7 +359,7 @@ class ReductionTest extends CudfTestBase {
 
   @ParameterizedTest
   @MethodSource("createTimestampResolutionParams")
-  void testTimestampNanoseconds(ReductionOp op, Long[] values, Object expectedObject) {
+  void testTimestampNanoseconds(AggregateOp op, Long[] values, Object expectedObject) {
     try (Scalar expected = buildExpectedScalar(op, DType.TIMESTAMP_NANOSECONDS, expectedObject);
          ColumnVector v = ColumnVector.timestampNanoSecondsFromBoxedLongs(values);
          Scalar result = v.reduce(op, expected.getType())) {
