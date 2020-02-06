@@ -52,33 +52,35 @@ std::unique_ptr<column> add_keys( dictionary_column_view const& dictionary_colum
     CUDF_EXPECTS( !new_keys.has_nulls(), "Keys must not have nulls" );
     auto old_keys = dictionary_column.keys(); // [a,b,c,d,f]
     CUDF_EXPECTS( new_keys.type()==old_keys.type(), "Keys must be the same type");
-    // first, concatenate the keys together                 [a,b,c,d,f] + [d,b,e] = [a,b,c,d,f,d,b,e]
-    auto combined_keys = cudf::concatenate( std::vector<column_view>{old_keys, new_keys}, mr, stream);
-    // drop_duplicates will sort and remove any duplicate keys we may been given
-    // the keys_indices values will also be sorted according to the keys      [a,b,c,d,e,f]
+    // first, concatenate the keys together
+    // [a,b,c,d,f] + [d,b,e] = [a,b,c,d,f,d,b,e]
+    auto combined_keys = cudf::concatenate(std::vector<column_view>{old_keys, new_keys}, mr, stream);
+    // sort and remove any duplicates from the combined keys
+    // drop_duplicates([a,b,c,d,f,d,b,e]) = [a,b,c,d,e,f]
     auto table_keys = experimental::detail::drop_duplicates( table_view{{*combined_keys}},
-                            std::vector<size_type>{0},
+                            std::vector<size_type>{0}, // only one key column
                             experimental::duplicate_keep_option::KEEP_FIRST,
                             true, mr, stream )->release();
-    // create map for indices          lower_bound([a,b,c,d,e,f],[a,b,c,d,f]) = [0,1,2,3,5]
-    auto map_indices = cudf::experimental::detail::lower_bound( table_view{{table_keys[0]->view()}},
+    std::unique_ptr<column> keys_column(std::move(table_keys.front()));
+    // create a map for the indices
+    // lower_bound([a,b,c,d,e,f],[a,b,c,d,f]) = [0,1,2,3,5]
+    auto map_indices = cudf::experimental::detail::lower_bound( table_view{{table_keys.front()->view()}},
                     table_view{{old_keys}},
                     std::vector<order>{order::ASCENDING},
                     std::vector<null_order>{null_order::AFTER}, // should be no nulls here
                     mr, stream);
-
     // now create the indices column -- map old values to the new ones
     // gather([4,0,3,1,2,2,2,4,0],[0,1,2,3,5]) = [5,0,3,1,2,2,2,5,0]
     auto table_indices = cudf::experimental::detail::gather( table_view{{map_indices->view()}},
                                                              dictionary_column.indices(),
                                                              false, false, false,
                                                              mr, stream )->release();
-    std::unique_ptr<column> indices_column(std::move(table_indices[0]));
+    std::unique_ptr<column> indices_column(std::move(table_indices.front()));
     //
     CUDF_EXPECTS( indices_column->type().id()==cudf::type_id::INT32, "expecting INT32 indices");
 
     // create new dictionary column with keys_column and indices_column
-    return make_dictionary_column( std::move(table_keys.front()), std::move(indices_column), 
+    return make_dictionary_column( std::move(keys_column), std::move(indices_column),
                                    copy_bitmask( dictionary_column.parent(), stream, mr), // nulls have
                                    dictionary_column.null_count() );                      // not changed
 }
