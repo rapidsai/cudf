@@ -457,4 +457,6 @@ def sort_values_experimental(
 
     # Step 4 - Return final sorted df
     # (Can remove after k-way merge added)
-    return df3.map_partitions(M.sort_values, by)
+    df4 = df3.map_partitions(M.sort_values, by)
+    df4.divisions = tuple(divisions)
+    return df4
