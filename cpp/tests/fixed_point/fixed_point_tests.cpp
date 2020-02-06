@@ -58,6 +58,40 @@ TYPED_TEST(FixedPointTestBothReps, SimpleDecimalXXConstruction) {
 
 }
 
+TYPED_TEST(FixedPointTestBothReps, SimpleNegativeDecimalXXConstruction) {
+
+    using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
+
+    decimalXX num0{-1.234567, scale_type{ 0}};
+    decimalXX num1{-1.234567, scale_type{-1}};
+    decimalXX num2{-1.234567, scale_type{-2}};
+    decimalXX num3{-1.234567, scale_type{-3}};
+    decimalXX num4{-1.234567, scale_type{-4}};
+    decimalXX num5{-1.234567, scale_type{-5}};
+    decimalXX num6{-1.234567, scale_type{-6}};
+
+    EXPECT_EQ(-1,        num0.to_double());
+    EXPECT_EQ(-1.2,      num1.to_double());
+    EXPECT_EQ(-1.23,     num2.to_double());
+    EXPECT_EQ(-1.234,    num3.to_double());
+    EXPECT_EQ(-1.2345,   num4.to_double());
+    EXPECT_EQ(-1.23456,  num5.to_double());
+    EXPECT_EQ(-1.234567, num6.to_double());
+
+}
+
+TYPED_TEST(FixedPointTestBothReps, PaddedDecimalXXConstruction) {
+
+    using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
+
+    decimalXX x{1.000123, scale_type{-8}};
+    decimalXX y{0.000123, scale_type{-8}};
+
+    EXPECT_EQ(1.000123, x.to_double());
+    EXPECT_EQ(0.000123, y.to_double());
+
+}
+
 TYPED_TEST(FixedPointTestBothReps, SimpleBinaryFPConstruction) {
 
     using binary_fp = fixed_point<TypeParam, Radix::BASE_2>;
@@ -68,11 +102,23 @@ TYPED_TEST(FixedPointTestBothReps, SimpleBinaryFPConstruction) {
     binary_fp num3{10, scale_type{3}};
     binary_fp num4{10, scale_type{4}};
 
-    EXPECT_EQ(10, num0.to_int32());
-    EXPECT_EQ(10, num1.to_int32());
-    EXPECT_EQ(8,  num2.to_int32());
-    EXPECT_EQ(8,  num3.to_int32());
-    EXPECT_EQ(0,  num4.to_int32());
+    binary_fp num5{1.49, scale_type{ 0}};
+    binary_fp num6{1.49, scale_type{-1}};
+    binary_fp num7{1.49, scale_type{-2}};
+    binary_fp num8{1.49, scale_type{-3}};
+    binary_fp num9{1.49, scale_type{-4}};
+
+    EXPECT_EQ(10, num0.to_double());
+    EXPECT_EQ(10, num1.to_double());
+    EXPECT_EQ(8,  num2.to_double());
+    EXPECT_EQ(8,  num3.to_double());
+    EXPECT_EQ(0,  num4.to_double());
+
+    EXPECT_EQ(1,      num5.to_double());
+    EXPECT_EQ(1,      num6.to_double());
+    EXPECT_EQ(1.25,   num7.to_double());
+    EXPECT_EQ(1.375,  num8.to_double());
+    EXPECT_EQ(1.4375, num9.to_double());
 
 }
 
