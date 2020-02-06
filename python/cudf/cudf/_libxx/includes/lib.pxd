@@ -27,9 +27,8 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         TIMESTAMP_MILLISECONDS = 10
         TIMESTAMP_MICROSECONDS = 11
         TIMESTAMP_NANOSECONDS = 12
-        CATEGORY = 13
-        STRING = 14
-        NUM_TYPE_IDS = 15
+        STRING = 13
+        NUM_TYPE_IDS = 14
 
     cdef cppclass data_type:
         data_type()
