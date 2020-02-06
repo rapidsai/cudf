@@ -26,9 +26,8 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         TIMESTAMP_MILLISECONDS = 10
         TIMESTAMP_MICROSECONDS = 11
         TIMESTAMP_NANOSECONDS = 12
-        CATEGORY = 13
-        STRING = 14
-        NUM_TYPE_IDS = 15
+        STRING = 13
+        NUM_TYPE_IDS = 14
 
     cdef cppclass data_type:
         data_type()
@@ -138,8 +137,10 @@ cdef extern from "cudf/table/table.hpp" namespace "cudf::experimental" nogil:
         vector[unique_ptr[column]] release()
 
 cdef extern from "cudf/copying.hpp" namespace "cudf::experimental" nogil:
-    cdef unique_ptr[table] gather(table_view source_table,
-                                  column_view gather_map)
+    cdef unique_ptr[table] cpp_gather "cudf::experimental::gather" (
+        table_view source_table,
+        column_view gather_map
+    )
 
 cdef extern from "<utility>" namespace "std" nogil:
     cdef unique_ptr[column] move(unique_ptr[column])

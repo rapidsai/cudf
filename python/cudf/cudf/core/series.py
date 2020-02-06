@@ -148,9 +148,6 @@ class Series(Frame):
     def __contains__(self, item):
         return item in self._index
 
-    def __reduce__(self):
-        return (Series, (self._data, self.index))
-
     @classmethod
     def from_pandas(cls, s, nan_as_null=True):
         return cls(s, nan_as_null=nan_as_null)
@@ -190,6 +187,7 @@ class Series(Frame):
         header = {}
         frames = []
         header["index"], index_frames = self._index.serialize()
+        header["name"] = pickle.dumps(self.name)
         frames.extend(index_frames)
         header["index_frame_count"] = len(index_frames)
         header["column"], column_frames = self._column.serialize()
@@ -237,13 +235,15 @@ class Series(Frame):
         index_nframes = header["index_frame_count"]
         idx_typ = pickle.loads(header["index"]["type"])
         index = idx_typ.deserialize(header["index"], frames[:index_nframes])
+        name = pickle.loads(header["name"])
 
         frames = frames[index_nframes:]
 
         column_nframes = header["column_frame_count"]
         col_typ = pickle.loads(header["column"]["type"])
         column = col_typ.deserialize(header["column"], frames[:column_nframes])
-        return Series(column, index=index)
+
+        return Series(column, index=index, name=name)
 
     def _copy_construct_defaults(self):
         return dict(data=self._column, index=self._index, name=self.name)
@@ -1194,26 +1194,18 @@ class Series(Frame):
     def has_nulls(self):
         return self._column.has_nulls
 
+    def dropna(self):
+        """
+        Return a Series with null values removed.
+        """
+        return super().dropna(subset=[self.name])
+
     def drop_duplicates(self, keep="first", inplace=False):
         """
         Return Series with duplicate values removed
         """
-        in_cols = [self._column]
-        in_index = self.index
-        from cudf.core.multiindex import MultiIndex
+        result = super().drop_duplicates(subset=[self.name], keep=keep)
 
-        if isinstance(in_index, MultiIndex):
-            in_index = RangeIndex(len(in_index))
-        out_cols, new_index = libcudf.stream_compaction.drop_duplicates(
-            [in_index._values], in_cols, None, keep
-        )
-        new_index = as_index(new_index)
-        if self.index.equals(new_index):
-            new_index = self.index
-        if isinstance(self.index, MultiIndex):
-            new_index = self.index.take(new_index)
-
-        result = Series(out_cols[0], index=new_index, name=self.name)
         return self._mimic_inplace(result, inplace=inplace)
 
     def _mimic_inplace(self, result, inplace=False):
@@ -1224,19 +1216,6 @@ class Series(Frame):
             self.name = result.name
         else:
             return result
-
-    def dropna(self):
-        """
-        Return a Series with null values removed.
-        """
-        if not self.has_nulls:
-            return self
-        name = self.name
-        result = self.to_frame(name="_").dropna()
-        result = result["_"]
-        result.name = name
-        self.name = name
-        return result
 
     def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
         """Fill null values with ``value``.
@@ -2148,8 +2127,7 @@ class Series(Frame):
             raise NotImplementedError(msg)
         if self.null_count == len(self):
             return 0
-        return self._column.unique_count(method=method, dropna=dropna)
-        # return len(self._column.unique())
+        return self._column.unique_count(method, dropna)
 
     def value_counts(self, sort=True):
         """Returns unique values of this Series.

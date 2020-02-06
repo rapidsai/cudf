@@ -77,6 +77,52 @@ table_with_metadata read_avro(
     read_avro_args const& args,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/**---------------------------------------------------------------------------*
+ * @brief Input arguments to the `read_json` interface
+ *
+ * Available parameters and are closely patterned after PANDAS' `read_json` API.
+ * Not all parameters are unsupported. If the matching PANDAS' parameter
+ * has a default value of `None`, then a default value of `-1` or `0` may be
+ * used as the equivalent.
+ *
+ * Parameters in PANDAS that are unavailable or in cudf:
+ *  `orient`                - currently fixed-format
+ *  `typ`                   - data is always returned as a cudf::table
+ *  `convert_axes`          - use column functions for axes operations instead
+ *  `convert_dates`         - dates are detected automatically
+ *  `keep_default_dates`    - dates are detected automatically
+ *  `numpy`                 - data is always returned as a cudf::table
+ *  `precise_float`         - there is only one converter
+ *  `date_unit`             - only millisecond units are supported
+ *  `encoding`              - only ASCII-encoded data is supported
+ *  `chunksize`             - use `byte_range_xxx` for chunking instead
+ *---------------------------------------------------------------------------**/
+struct read_json_args {
+  source_info source;
+
+  ///< Data types of the column; empty to infer dtypes
+  std::vector<std::string> dtype;
+  /// Specify the compression format of the source or infer from file extension
+  compression_type compression = compression_type::AUTO;
+
+  ///< Read the file as a json object per line
+  bool lines = false;
+
+  ///< Bytes to skip from the start
+  size_t byte_range_offset = 0;             
+  ///< Bytes to read; always reads complete rows
+  size_t byte_range_size = 0;
+
+   /// Whether to parse dates as DD/MM versus MM/DD
+  bool dayfirst = false;
+
+  explicit read_json_args(const source_info& src) : source(src) {}
+};
+
+// Freeform API wraps the detail reader class API
+table_with_metadata read_json(read_json_args const& args,
+                                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()); 
+
 /**
  * @brief Settings to use for `read_csv()`
  */
@@ -199,6 +245,8 @@ struct read_orc_args {
 
   /// Stripe to read; -1 is all
   size_type stripe = -1;
+  /// Number of stripes to read starting from `stripe`; default is one if stripe >= 0
+  size_type stripe_count = -1;
   /// Rows to skip from the start; -1 is none
   size_type skip_rows = -1;
   /// Rows to read; -1 is all
@@ -292,6 +340,8 @@ struct read_parquet_args {
 
   /// Row group to read; -1 is all
   size_type row_group = -1;
+  /// Number of row groups to read starting from row_group; default is one if row_group >= 0
+  size_type row_group_count = -1;
   /// Rows to skip from the start; -1 is none
   size_type skip_rows = -1;
   /// Rows to read; -1 is all
