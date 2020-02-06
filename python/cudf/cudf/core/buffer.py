@@ -1,5 +1,6 @@
 import functools
 import operator
+import pickle
 
 import numpy as np
 
@@ -88,6 +89,35 @@ class Buffer:
     def empty(cls, size):
         dbuf = DeviceBuffer(size=size)
         return Buffer(dbuf)
+
+    def serialize(self):
+        from distributed.protocol.cuda import cuda_dumps
+
+        # Rely on existing serializers with fallback to Numba array
+        try:
+            header, frames = cuda_dumps(self._owner)
+        except NotImplementedError:
+            header, frames = cuda_dumps(
+                rmm.device_array_from_ptr(
+                    self.ptr, nelem=self.size, dtype="int8"
+                )
+            )
+
+        # Patch header to load data with `Buffer`
+        header["original-type-serialized"] = header["type-serialized"]
+        header["type-serialized"] = pickle.dumps(self.__class__)
+
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, header, frames):
+        from distributed.protocol.cuda import cuda_loads
+
+        # Revert patch to load data with owner's type
+        header = dict(header)
+        header["type-serialized"] = header.pop("original-type-serialized")
+
+        return cls(data=cuda_loads(header, frames))
 
 
 def _buffer_data_from_array_interface(array_interface):
