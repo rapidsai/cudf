@@ -260,6 +260,23 @@ cdef class Column:
         if hasattr(self, "children"):
             del self.children
 
+    def _mimic_inplace(self, other_col, inplace=False):
+        """
+        Given another column, update the attributes of this column to mimic an
+        inplace operation. This does not modify the memory of Buffers, but
+        instead replaces the Buffers and other attributes underneath the column
+        object with the Buffers and attributes from the other column.
+        """
+        if inplace:
+            self.size = other_col.size
+            self.offset = other_col.offset
+            self.dtype = other_col.dtype
+            self.set_base_data(other_col.base_data)
+            self.set_base_mask(other_col.base_mask)
+            self.set_base_children(other_col.base_children)
+        else:
+            return other_col
+
     cdef size_type compute_null_count(self) except? 0:
         return self._view(UNKNOWN_NULL_COUNT).null_count()
 

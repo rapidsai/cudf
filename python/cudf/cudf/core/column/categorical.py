@@ -200,12 +200,7 @@ class CategoricalAccessor(object):
         owner = self._column_owner
         inplace = kwargs.get("inplace", False)
         if inplace:
-            if isinstance(owner, Series):
-                owner._column = new_col
-            elif isinstance(owner, CategoricalIndex):
-                owner._values = new_col
-            else:
-                raise RuntimeError("Unknown object type to update inplace")
+            self._mimic_inplace(new_col, inplace=True)
         else:
             if owner is None:
                 return new_col

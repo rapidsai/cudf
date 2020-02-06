@@ -474,7 +474,7 @@ class ColumnBase(Column):
                 return self.apply_boolean_mask(arg)
             raise NotImplementedError(type(arg))
 
-    def _setitem(self, key, value):
+    def __setitem__(self, key, value):
         """
         Set the value of self[key] to value.
 
@@ -543,7 +543,7 @@ class ColumnBase(Column):
                     )
                 raise
 
-        return out
+        self._mimic_inplace(out, inplace=True)
 
     def fillna(self, value):
         """Fill null values with ``value``.

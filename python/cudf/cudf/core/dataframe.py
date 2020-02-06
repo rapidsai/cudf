@@ -524,10 +524,9 @@ class DataFrame(Frame):
                     scatter_map = arg[col_name]
                     if is_scalar(value):
                         value = utils.scalar_broadcast_to(value, len(self))
-                    new_col = self._data[col_name]._setitem(
-                        scatter_map, column.as_column(value)[scatter_map]
-                    )
-                    self._data[col_name] = new_col
+                    self._data[col_name][scatter_map] = column.as_column(
+                        value
+                    )[scatter_map]
         elif is_scalar(arg) or isinstance(arg, tuple):
             if isinstance(value, DataFrame):
                 _setitem_with_dataframe(
@@ -577,10 +576,9 @@ class DataFrame(Frame):
                     )
                 else:
                     for col_name in self._data:
-                        new_col = self._data[col_name]._setitem(
-                            mask, column.as_column(value)[mask]
-                        )
-                        self._data[col_name] = new_col
+                        self._data[col_name][mask] = column.as_column(value)[
+                            mask
+                        ]
             else:
                 if isinstance(value, DataFrame):
                     _setitem_with_dataframe(

@@ -462,18 +462,18 @@ class Series(Frame):
         else:
             value = column.as_column(value)
 
-        new_self = self.copy(deep=False)._column
         if hasattr(value, "dtype") and pd.api.types.is_numeric_dtype(
             value.dtype
         ):
             # normalize types if necessary:
             if not pd.api.types.is_integer(key):
-                to_dtype = np.result_type(value.dtype, new_self.dtype)
+                to_dtype = np.result_type(value.dtype, self._column.dtype)
                 value = value.astype(to_dtype)
-                new_self = new_self.astype(to_dtype)
+                self._column._mimic_inplace(
+                    self._column.astype(to_dtype), inplace=True
+                )
 
-        result_col = new_self._setitem(key, value)
-        self._column = result_col
+        self._column[key] = value
 
     def take(self, indices):
         """Return Series by taking values from the corresponding *indices*.
