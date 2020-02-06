@@ -357,6 +357,8 @@ construct_join_output_df(
           joined_indices.first.end(),
           false, nullify_out_of_bounds);
     }
+  } else {
+      common_table = std::make_unique<experimental::table>();
   }
 
   // Construct the left non common columns
