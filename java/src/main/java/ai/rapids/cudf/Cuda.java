@@ -81,6 +81,13 @@ public class Cuda {
   public static native int getDevice() throws CudaException;
 
   /**
+   * Get the device count.
+   * @return returns the number of compute-capable devices
+   * @throws CudaException on any error
+   */
+  public static native int getDeviceCount() throws CudaException;
+
+  /**
    * Set the id of the current device.
    * Note this is relative to CUDA_SET_VISIBLE_DEVICES, e.g. if
    * CUDA_SET_VISIBLE_DEVICES=1,0, and you call setDevice(0), you will get device 1.

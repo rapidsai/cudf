@@ -603,5 +603,74 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs, scalar const& rhs, 
 std::unique_ptr<column> copy_if_else( scalar const& lhs, scalar const& rhs, column_view const& boolean_mask,
                                     rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
+/**
+ * @brief Scatters rows from the input table to rows of the output corresponding
+ * to true values in a boolean mask.
+ *
+ * The `i`th row of `input` will be written to the output table at the location
+ * of the `i`th true value in `boolean_mask`. All other rows in the output will
+ * equal the same row in `target`.
+ *
+ * `boolean_mask` should have number of `true`s <= number of rows in `input`.
+ * If boolean mask is `true`, corresponding value in target is updated with
+ * value from corresponding `input` column, else it is left untouched.
+ *
+ * Example:
+ * input: {{1, 5, 6, 8, 9}}
+ * boolean_mask: {true, false, false, false, true, true, false, true, true, false}
+ * target:       {{   2,     2,     3,     4,    4,     7,    7,    7,    8,    10}}
+ *
+ * output:       {{   1,     2,     3,     4,    5,     6,    7,    8,    9,    10}}
+ *
+ * @throw  cudf::logic_error if input.num_columns() != target.num_columns()
+ * @throws cudf::logic_error if any `i`th input_column type != `i`th target_column type
+ * @throws cudf::logic_error if boolean_mask.type() != bool
+ * @throws cudf::logic_error if boolean_mask.size() != target.num_rows()
+ * @throws cudf::logic_error if number of `true` in `boolean_mask` > input.num_rows()
+ *
+ * @param[in] input table_view (set of dense columns) to scatter
+ * @param[in] target table_view to modify with scattered values from `input`
+ * @param[in] boolean_mask column_view which acts as boolean mask.
+ * @param[in] mr Optional, The resource to use for all returned allocations
+ *
+ * @returns Returns a table by scattering `input` into `target` as per `boolean_mask`.
+ */
+std::unique_ptr<table> boolean_mask_scatter(
+    table_view const& input, table_view const& target,
+    column_view const& boolean_mask,
+    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+
+/**
+ * @brief Scatters scalar values to rows of the output corresponding
+ * to true values in a boolean mask.
+ *
+ * The `i`th scalar in `input` will be written to all columns of the output
+ * table at the location of the `i`th true value in `boolean_mask`.
+ * All other rows in the output will equal the same row in `target`.
+ *
+ * Example:
+ * input: {11}
+ * boolean_mask: {true, false, false, false, true, true, false, true, true, false}
+ * target:       {{   2,     2,     3,     4,    4,     7,    7,    7,    8,    10}}
+ *
+ * output:       {{   11,    2,     3,     4,   11,    11,    7,   11,   11,    10}}
+ *
+ * @throw  cudf::logic_error if input.size() != target.num_columns()
+ * @throws cudf::logic_error if any `i`th input_scalar type != `i`th target_column type
+ * @throws cudf::logic_error if boolean_mask.type() != bool
+ * @throws cudf::logic_error if boolean_mask.size() != target.size()
+ *
+ * @param[in] input scalars to scatter
+ * @param[in] target table_view to modify with scattered values from `input`
+ * @param[in] boolean_mask column_view which acts as boolean mask.
+ * @param[in] mr Optional, The resource to use for all returned allocations
+ *
+ * @returns Returns a table by scattering `input` into `target` as per `boolean_mask`.
+ */
+ std::unique_ptr<table> boolean_mask_scatter(
+    std::vector<std::reference_wrapper<scalar>> const& input, table_view const& target,
+    column_view const& boolean_mask,
+    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+
 }  // namespace experimental
 }  // namespace cudf
