@@ -55,6 +55,8 @@ quantile(column_view const& input,
  * non-arithmetic, interpolation between rows is limited to non-arithmetic
  * strategies.
  *
+ * Non-arithmetic interpolation strategies include HIGHER, LOWER, and NEAREST.
+ *
  * quantiles `<= 0` correspond to row `0`. (first)
  * quantiles `>= 1` correspond to row `input.size() - 1`. (last)
  *
