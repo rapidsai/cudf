@@ -105,7 +105,7 @@ class Buffer:
 
         # Patch header to load data with `Buffer`
         header["original-type-serialized"] = header["type-serialized"]
-        header["type"] = pickle.dumps(self.__class__)
+        header["type"] = pickle.dumps(type(self))
         header["type-serialized"] = pickle.dumps(self.__class__)
 
         return header, frames
