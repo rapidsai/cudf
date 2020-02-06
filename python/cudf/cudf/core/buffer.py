@@ -104,7 +104,9 @@ class Buffer:
             )
 
         # Patch header to load data with `Buffer`
+        header["original-type"] = header["type"]
         header["original-type-serialized"] = header["type-serialized"]
+        header["type"] = pickle.dumps(self.__class__)
         header["type-serialized"] = pickle.dumps(self.__class__)
 
         return header, frames
@@ -115,6 +117,7 @@ class Buffer:
 
         # Revert patch to load data with owner's type
         header = dict(header)
+        header["type"] = header.pop("original-type")
         header["type-serialized"] = header.pop("original-type-serialized")
 
         return cls(data=cuda_loads(header, frames))
