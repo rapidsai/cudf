@@ -40,6 +40,8 @@ struct base_tokenator
 {
     string_view d_delimiter{}; // zero or more delimiter characters
 
+    base_tokenator() = default;
+
     /**
      * @brief Return true if the given character is a delimiter.
      *

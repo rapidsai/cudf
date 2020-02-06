@@ -43,10 +43,15 @@ using position_pair = thrust::pair<int32_t,int32_t>;
 /**
  * @brief This records the byte positions of each token within each string.
  *
- * The position values are recorded to prevent costly locating tokens in
- * a string to generate ngrams from it.
+ * The position values are recorded since we need to reference tokens
+ * within a string multiple times to generate the ngrams. For example,
+ * to generate tri-grams for string "aa b ccc dd" requires creating
+ * the following two strings ["aa_b_ccc","b_ccc_dd"]. Notice the
+ * tokens "b" and "ccc" needed to be copied twice.
+ * 
  * Most of the work is done in the base class to locate the tokens.
- * This functor records the byte positions in the d_token_positions member.
+ * This functor simply records the byte positions in the d_token_positions
+ * member.
  */
 struct string_tokens_positions_fn : base_tokenator
 {
@@ -86,7 +91,7 @@ struct string_tokens_positions_fn : base_tokenator
  * @brief Generate the ngrams for each string.
  *
  * The ngrams for each string are placed contiguously within the section of memory
- * assigned for the string. At the same time, the size of each ngram is recorded
+ * assigned for the input string. At the same time, the size of each ngram is recorded
  * in order to build the output offsets column.
  *
  * This functor can be called to compute the size of memory needed to write out
@@ -96,15 +101,15 @@ struct string_tokens_positions_fn : base_tokenator
  */
 struct ngram_builder_fn
 {
-    column_device_view d_strings;
-    string_view d_separator;  // separator to place between 'grams
-    size_type ngrams;  // number of ngrams to generate
+    column_device_view const d_strings;
+    string_view const d_separator;    // separator to place between them 'grams
+    size_type ngrams;                 // number of ngrams to generate
     int32_t const* d_token_offsets;   // offsets for token position for each string
     position_pair const* d_token_positions;  // token positions for each string
     int32_t const* d_chars_offsets{}; // offsets for each string's ngrams
-    char* d_chars{};  // write ngram strings to here
+    char* d_chars{};                  // write ngram strings to here
     int32_t const* d_ngram_offsets{}; // offsets for sizes of each string's ngrams
-    int32_t* d_ngram_sizes{}; // write ngram sizes to here
+    int32_t* d_ngram_sizes{};         // write ngram sizes to here
 
     __device__ size_type operator()(size_type idx)
     {
@@ -141,7 +146,6 @@ struct ngram_builder_fn
         return nbytes;
     }
 };
-
 
 } // namespace
 
@@ -214,7 +218,7 @@ std::unique_ptr<column> ngrams_tokenize( strings_column_view const& strings,
     // This produces a set of offsets for the output memory where we can build adjacent
     // ngrams for each string.
     // Ex. bigram for first string produces 2 bigrams ("a_bb","bb_ccc") which
-    // is build in memory like this: "a_bbbb_ccc"
+    //     is built in memory like this: "a_bbbb_ccc"
     rmm::device_vector<int32_t> chars_offsets(strings_count+1); // output memory offsets
     auto d_chars_offsets = chars_offsets.data().get();          // per input string
     thrust::transform_inclusive_scan( execpol->on(stream), thrust::make_counting_iterator<size_type>(0),
