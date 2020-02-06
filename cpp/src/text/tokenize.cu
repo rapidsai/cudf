@@ -20,6 +20,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/text/tokenize.hpp>
+#include <cudf/text/detail/tokenize.hpp>
 #include <cudf/utilities/error.hpp>
 #include <text/utilities/tokenize_ops.cuh>
 
@@ -67,7 +68,7 @@ std::unique_ptr<column> tokenize_fn( size_type strings_count, Tokenizer ttfn,
                             d_token_counts.template begin<int32_t>(),
                             d_token_counts.template end<int32_t>(),
                             token_offsets.begin()+1 );
-    cudaMemsetAsync( token_offsets.data().get(), 0, sizeof(int32_t), stream );
+    CUDA_TRY(cudaMemsetAsync( token_offsets.data().get(), 0, sizeof(int32_t), stream ));
     auto total_tokens = token_offsets.back();
     // build a list of pointers to each token
     rmm::device_vector<string_index_pair> tokens(total_tokens);
@@ -85,9 +86,9 @@ std::unique_ptr<column> tokenize_fn( size_type strings_count, Tokenizer ttfn,
 
 // zero or more character tokenizer
 std::unique_ptr<column> tokenize( strings_column_view const& strings,
-                                  string_scalar const& delimiter = string_scalar(""),
-                                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                  cudaStream_t stream = 0 )
+                                  string_scalar const& delimiter,
+                                  rmm::mr::device_memory_resource* mr,
+                                  cudaStream_t stream )
 {
     CUDF_EXPECTS( delimiter.is_valid(), "Parameter delimiter must be valid");
     string_view d_delimiter( delimiter.data(), delimiter.size() );
@@ -97,9 +98,9 @@ std::unique_ptr<column> tokenize( strings_column_view const& strings,
 
 // zero or more character token counter
 std::unique_ptr<column> token_count( strings_column_view const& strings,
-                                     string_scalar const& delimiter = string_scalar(""),
-                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                     cudaStream_t stream = 0 )
+                                     string_scalar const& delimiter,
+                                     rmm::mr::device_memory_resource* mr,
+                                     cudaStream_t stream )
 {
     CUDF_EXPECTS( delimiter.is_valid(), "Parameter delimiter must be valid");
     string_view d_delimiter( delimiter.data(), delimiter.size() );
@@ -110,8 +111,8 @@ std::unique_ptr<column> token_count( strings_column_view const& strings,
 // one or more string delimiter tokenizer
 std::unique_ptr<column> tokenize( strings_column_view const& strings,
                                   strings_column_view const& delimiters,
-                                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                  cudaStream_t stream = 0 )
+                                  rmm::mr::device_memory_resource* mr,
+                                  cudaStream_t stream )
 {
     CUDF_EXPECTS( delimiters.size()>0, "Parameter delimiters must not be empty");
     CUDF_EXPECTS( !delimiters.has_nulls(), "Parameter delimiters must not have nulls");
@@ -127,8 +128,8 @@ std::unique_ptr<column> tokenize( strings_column_view const& strings,
 // one or more string delimiter token counter
 std::unique_ptr<column> token_count( strings_column_view const& strings,
                                      strings_column_view const& delimiters,
-                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                     cudaStream_t stream = 0 )
+                                     rmm::mr::device_memory_resource* mr,
+                                     cudaStream_t stream )
 {
     CUDF_EXPECTS( delimiters.size()>0, "Parameter delimiters must not be empty");
     CUDF_EXPECTS( !delimiters.has_nulls(), "Parameter delimiters must not have nulls");
