@@ -156,7 +156,6 @@ enum type_id {
   TIMESTAMP_MILLISECONDS,  ///< duration of milliseconds since Unix Epoch in int64
   TIMESTAMP_MICROSECONDS,  ///< duration of microseconds since Unix Epoch in int64
   TIMESTAMP_NANOSECONDS,  ///< duration of nanoseconds since Unix Epoch in int64
-  CATEGORY,   ///< Categorial (type to be removed)
   DICTIONARY32, ///< Dictionary type using int32 indices
   STRING,     ///< String elements
   // `NUM_TYPE_IDS` must be last!
