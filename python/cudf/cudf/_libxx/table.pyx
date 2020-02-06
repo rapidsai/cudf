@@ -52,7 +52,8 @@ cdef class Table:
 
     @property
     def _index_names(self):
-        return tuple(self._index._data.keys())
+        return None if self._index is None else tuple(
+            self._index._data.keys())
 
     @property
     def _columns(self):

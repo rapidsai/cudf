@@ -15,8 +15,8 @@ import rmm
 import cudf
 import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
-from cudf._lib.stream_compaction import nunique as cpp_unique_count
 from cudf._libxx.column import Column
+from cudf._libxx.stream_compaction import unique_count as cpp_unique_count
 from cudf.core.buffer import Buffer
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils import cudautils, ioutils, utils
@@ -61,13 +61,13 @@ class ColumnBase(Column):
             ),
         )
 
-    def as_frame(self, name=None):
+    def as_frame(self):
         from cudf.core.frame import Frame
 
         """
         Converts a Column to Frame
         """
-        return Frame({name: self.copy(deep=False)})
+        return Frame({None: self.copy(deep=False)})
 
     @property
     def data_array_view(self):
@@ -263,13 +263,8 @@ class ColumnBase(Column):
         return col
 
     def dropna(self):
-        dropped_col = libcudf.stream_compaction.drop_nulls([self])
-        if not dropped_col:
-            return column_empty_like(self, newsize=0)
-        else:
-            dropped_col = dropped_col[0]
-            dropped_col = dropped_col.set_mask(None)
-            return dropped_col
+        dropped_col = self.as_frame().dropna()._as_column()
+        return dropped_col
 
     def _get_mask_as_column(self):
         data = Buffer(cudautils.ones(len(self), dtype=np.bool_))
@@ -727,7 +722,7 @@ class ColumnBase(Column):
         if method != "sort":
             msg = "non sort based unique_count() not implemented yet"
             raise NotImplementedError(msg)
-        return cpp_unique_count(self, dropna)
+        return cpp_unique_count(self, ignore_nulls=dropna)
 
     def repeat(self, repeats, axis=None):
         assert axis in (None, 0)
@@ -779,12 +774,10 @@ class ColumnBase(Column):
 
     def apply_boolean_mask(self, mask):
         mask = as_column(mask, dtype="bool")
-        data = libcudf.stream_compaction.apply_boolean_mask([self], mask)
-        if not data:
-            return column_empty_like(self, newsize=0)
-        else:
-            result = data[0]
-            return result
+        result = (
+            self.as_frame()._apply_boolean_mask(boolean_mask=mask)._as_column()
+        )
+        return result
 
     def argsort(self, ascending):
         _, inds = self.sort_by_values(ascending=ascending)

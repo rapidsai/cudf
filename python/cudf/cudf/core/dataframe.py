@@ -1568,19 +1568,6 @@ class DataFrame(Frame):
         out.columns = self.columns
         return out
 
-    def _apply_boolean_mask(self, mask):
-        index = self.index.take(mask)
-        out = DataFrame()
-        if self._data:
-            for idx, (col_name, col_value) in enumerate(self._data.items()):
-                if isinstance(self.columns, cudf.MultiIndex):
-                    out[idx] = col_value[mask]
-                else:
-                    out[col_name] = col_value[mask]
-        out.columns = self.columns
-        out.index = index
-        return out
-
     def _take_columns(self, positions):
         positions = Series(positions)
         columns = self.columns
@@ -1822,36 +1809,8 @@ class DataFrame(Frame):
         Return DataFrame with duplicate rows removed, optionally only
         considering certain subset of columns.
         """
-        in_cols = list(self._data.values())
-        if subset is None:
-            subset = self._data
-        elif (
-            not np.iterable(subset)
-            or isinstance(subset, str)
-            or isinstance(subset, tuple)
-            and subset in self.columns
-        ):
-            subset = (subset,)
-        diff = set(subset) - set(self._data)
-        if len(diff) != 0:
-            raise KeyError("columns {!r} do not exist".format(diff))
-        subset_cols = [
-            col for name, col in self._data.items() if name in subset
-        ]
-        in_index = self.index
-        if isinstance(in_index, cudf.core.multiindex.MultiIndex):
-            in_index = RangeIndex(len(in_index), name=in_index.name)
-        out_cols, new_index = libcudf.stream_compaction.drop_duplicates(
-            [in_index._values], in_cols, subset_cols, keep
-        )
-        new_index = as_index(new_index, name=self.index.name)
-        if isinstance(self.index, cudf.core.multiindex.MultiIndex):
-            new_index = self.index.take(new_index)
 
-        outdf = DataFrame()
-        for k, new_col in zip(self._data, out_cols):
-            outdf[k] = new_col
-        outdf = outdf.set_index(new_index)
+        outdf = super().drop_duplicates(subset=subset, keep=keep)
 
         return self._mimic_inplace(outdf, inplace=inplace)
 
@@ -1864,106 +1823,6 @@ class DataFrame(Frame):
             self._columns_name = result._columns_name
         else:
             return result
-
-    def dropna(self, axis=0, how="any", subset=None, thresh=None):
-        """
-        Drops rows (or columns) containing nulls from a Column.
-
-        Parameters
-        ----------
-        axis : {0, 1}, optional
-            Whether to drop rows (axis=0, default) or columns (axis=1)
-            containing nulls.
-        how : {"any", "all"}, optional
-            Specifies how to decide whether to drop a row (or column).
-            any (default) drops rows (or columns) containing at least
-            one null value. all drops only rows (or columns) containing
-            *all* null values.
-        subset : list, optional
-            List of columns to consider when dropping rows (all columns
-            are considered by default). Alternatively, when dropping
-            columns, subset is a list of rows to consider.
-        thresh: int, optional
-            If specified, then drops every row (or column) containing
-            less than `thresh` non-null values
-
-
-        Returns
-        -------
-        Copy of the DataFrame with rows/columns containing nulls dropped.
-        """
-        if axis == 0:
-            return self._drop_na_rows(how=how, subset=subset, thresh=thresh)
-        else:
-            return self._drop_na_columns(how=how, subset=subset, thresh=thresh)
-
-    def _drop_na_rows(self, how="any", subset=None, thresh=None):
-        """
-        Drop rows containing nulls.
-        """
-        data_cols = self._columns
-
-        index_cols = []
-        if isinstance(self.index, cudf.MultiIndex):
-            index_cols.extend(self.index._source_data._columns)
-        else:
-            index_cols.append(self.index._values)
-
-        input_cols = index_cols + list(data_cols)
-
-        if subset is not None:
-            subset = self._columns_view(subset)._columns
-        else:
-            subset = self._columns
-
-        if len(subset) == 0:
-            return self
-
-        result_cols = libcudf.stream_compaction.drop_nulls(
-            input_cols, how=how, subset=subset, thresh=thresh
-        )
-
-        result_index_cols, result_data_cols = (
-            result_cols[: len(index_cols)],
-            result_cols[len(index_cols) :],
-        )
-
-        if isinstance(self.index, cudf.MultiIndex):
-            result_index = cudf.MultiIndex.from_frame(
-                DataFrame._from_columns(result_index_cols),
-                names=self.index.names,
-            )
-        else:
-            result_index = cudf.core.index.as_index(result_index_cols[0])
-
-        df = DataFrame._from_columns(
-            result_data_cols, index=result_index, columns=self.columns
-        )
-        return df
-
-    def _drop_na_columns(self, how="any", subset=None, thresh=None):
-        """
-        Drop columns containing nulls
-        """
-        out_cols = []
-
-        if subset is None:
-            df = self
-        else:
-            df = self.take(subset)
-
-        if thresh is None:
-            if how == "all":
-                thresh = 1
-            else:
-                thresh = len(df)
-
-        for col in self.columns:
-            if (len(df[col]) - df[col].null_count) < thresh:
-                continue
-            out_cols.append(col)
-
-        return self[out_cols]
 
     def pop(self, item):
         """Return a column and drop it from the DataFrame.

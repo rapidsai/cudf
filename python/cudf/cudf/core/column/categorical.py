@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 import pickle
 
@@ -494,15 +494,6 @@ class CategoricalColumn(column.ColumnBase):
         )
 
         return result
-
-    def apply_boolean_mask(self, mask):
-        codes = super().apply_boolean_mask(mask)
-        return column.build_categorical_column(
-            categories=self.dtype.categories,
-            codes=codes,
-            mask=codes.mask,
-            ordered=self.dtype.ordered,
-        )
 
     def find_first_value(self, value, closest=False):
         """
