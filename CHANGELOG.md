@@ -37,6 +37,7 @@
 - PR #4067 Removed unused `CATEGORY` type ID.
 - PR #3891 Port NVStrings (r)split_record to contiguous_(r)split_record
 - PR #4064 Add cudaGetDeviceCount to JNI layer
+- PR #4079 Simply use `mask.size` to create the array view
 
 ## Bug Fixes
 
