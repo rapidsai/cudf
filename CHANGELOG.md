@@ -6,7 +6,7 @@
 - PR #3693 add string support, skipna to scan operation
 - PR #3662 Define and implement `shift`.
 - PR #3861 Added Series.sum feature for String
-
+- PR #3681 Add cudf::experimental::boolean_mask_scatter
 
 ## Improvements
 
@@ -30,6 +30,13 @@
 - PR #4014 ORC/Parquet: add count parameter to stripe/rowgroup-based reader API
 - PR #3880 Add aggregation infrastructure support for reduction
 - PR #4021 Change quantiles signature for clarity.
+- PR #4029 Port stream_compaction.pyx to use libcudf++ APIs
+- PR #4031 Docs build scripts and instructions update
+- PR #4062 Improve how java classifiers are produced
+- PR #4038 JNI and Java support for is_nan and is_not_nan
+- PR #4067 Removed unused `CATEGORY` type ID.
+- PR #3891 Port NVStrings (r)split_record to contiguous_(r)split_record
+- PR #4064 Add cudaGetDeviceCount to JNI layer
 
 ## Bug Fixes
 
@@ -41,12 +48,19 @@
 - PR #3970 Fix for Series Pickle
 - PR #3964 Restore legacy NVStrings and NVCategory dependencies in Java jar
 - PR #3982 Fix java unary op enum and add missing ops
+- PR #3999 Fix issue serializing empty string columns (java)
 - PR #3979 Add `name` to Series serialize and deserialize
 - PR #4005 Fix null mask allocation bug in gather_bitmask
 - PR #4000 Fix dask_cudf sort_values performance for single partitions
 - PR #4007 Fix for copy_bitmask issue with uninitialized device_buffer
 - PR #4037 Fix JNI quantile compile issue
+- PR #4054 Fixed JNI to deal with reduction API changes
 - PR #4052 Fix for round-robin when num_partitions divides nrows.
+- PR #4061 Add NDEBUG guard on `constexpr_assert`.
+- PR #4049 Fix `cudf::split` issue returning one less than expected column vectors
+- PR #4065 Parquet writer: fix for out-of-range dictionary indices
+- PR #4066 Fixed mismatch with dtype enums
+- PR #4080 Fix multi-index dask test with sort issue
 
 # cuDF 0.12.0 (Date TBD)
 
