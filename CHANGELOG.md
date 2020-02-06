@@ -7,6 +7,7 @@
 - PR #3662 Define and implement `shift`.
 - PR #3861 Added Series.sum feature for String
 - PR #3681 Add cudf::experimental::boolean_mask_scatter
+- PR #4088 Added asString() on ColumnVector in Java that takes a format string
 
 ## Improvements
 
