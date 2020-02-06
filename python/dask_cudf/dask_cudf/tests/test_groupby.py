@@ -274,7 +274,13 @@ def test_groupby_multiindex_reset_index():
     )
     ddf = dask_cudf.from_cudf(df, npartitions=1)
     pddf = dd.from_pandas(df.to_pandas(), npartitions=1)
-    gr = ddf.groupby(["a", "c"]).agg({"b": ["count"]}).reset_index().sort_values(by=["a", "c"]).reset_index(drop=True)
+    gr = (
+        ddf.groupby(["a", "c"])
+        .agg({"b": ["count"]})
+        .reset_index()
+        .sort_values(by=["a", "c"])
+        .reset_index(drop=True)
+    )
     pr = pddf.groupby(["a", "c"]).agg({"b": ["count"]}).reset_index()
     dd.assert_eq(gr.compute(), pr.compute())
 
