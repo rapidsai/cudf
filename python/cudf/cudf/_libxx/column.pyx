@@ -92,11 +92,22 @@ cdef class Column:
                     libcudfxx.MAX_COLUMN_SIZE_STR)
             )
 
-        self._size = value
-        if hasattr(self, "null_count"):
+        try:
             del self.null_count
-        if hasattr(self, "children"):
+        except AttributeError:
+            pass
+        try:
             del self.children
+        except AttributeError:
+            pass
+        if hasattr(self, "_indices"):
+            self._indices = None
+        if hasattr(self, "_nvcategory"):
+            self._nvcategory = None
+        if hasattr(self, "_nvstrings"):
+            self._nvstrings = None
+
+        self._size = value
 
     @property
     def base_data(self):
@@ -123,9 +134,13 @@ cdef class Column:
         if value is not None and not isinstance(value, Buffer):
             raise TypeError("Expected a Buffer or None for data, got " +
                             type(value).__name__)
-        self._base_data = value
-        if hasattr(self, "data"):
+
+        try:
             del self.data
+        except AttributeError:
+            pass
+
+        self._base_data = value
 
     @property
     def nullable(self):
@@ -181,11 +196,23 @@ cdef class Column:
                         "allocation as opposed to the offsetted allocation."
                     )
                 raise RuntimeError(error_msg)
-        self._base_mask = value
-        if hasattr(self, "mask"):
+
+        try:
             del self.mask
-        if hasattr(self, "null_count"):
+        except AttributeError:
+            pass
+        try:
             del self.null_count
+        except AttributeError:
+            pass
+        if hasattr(self, "_indices"):
+            self._indices = None
+        if hasattr(self, "_nvcategory"):
+            self._nvcategory = None
+        if hasattr(self, "_nvstrings"):
+            self._nvstrings = None
+
+        self._base_mask = value
 
     def set_mask(self, value):
         """
@@ -223,6 +250,25 @@ cdef class Column:
             raise TypeError("Expected an integer for offset, got " +
                             type(value).__name__)
 
+        try:
+            del self.null_count
+        except AttributeError:
+            pass
+        try:
+            del self.mask
+        except AttributeError:
+            pass
+        try:
+            del self.children
+        except AttributeError:
+            pass
+        if hasattr(self, "_indices"):
+            self._indices = None
+        if hasattr(self, "_nvcategory"):
+            self._nvcategory = None
+        if hasattr(self, "_nvstrings"):
+            self._nvstrings = None
+
         if not hasattr(self, "_offset"):
             offset_diff = value
         else:
@@ -230,12 +276,6 @@ cdef class Column:
 
         self._offset = value
         self.size = self.size - offset_diff
-        if hasattr(self, "null_count"):
-            del self.null_count
-        if hasattr(self, "mask"):
-            del self.mask
-        if hasattr(self, "children"):
-            del self.children
 
     @property
     def base_children(self):
@@ -256,9 +296,19 @@ cdef class Column:
                     "Expected each of children to be a  Column, got " +
                     type(child).__name__
                 )
-        self._base_children = value
-        if hasattr(self, "children"):
+
+        try:
             del self.children
+        except AttributeError:
+            pass
+        if hasattr(self, "_indices"):
+            self._indices = None
+        if hasattr(self, "_nvcategory"):
+            self._nvcategory = None
+        if hasattr(self, "_nvstrings"):
+            self._nvstrings = None
+
+        self._base_children = value
 
     def _mimic_inplace(self, other_col, inplace=False):
         """
@@ -404,7 +454,7 @@ cdef class Column:
         if data_ptr:
             data_owner = owner
             if column_owner:
-                data_owner = owner.data
+                data_owner = owner.base_data
             data = Buffer(
                 data=data_ptr,
                 size=size * dtype.itemsize,
@@ -416,7 +466,7 @@ cdef class Column:
         if mask_ptr:
             mask_owner = owner
             if column_owner:
-                mask_owner = owner.mask
+                mask_owner = owner.base_mask
             mask = Buffer(
                 mask=mask_ptr,
                 size=calc_chunk_size(size, mask_bitsize),

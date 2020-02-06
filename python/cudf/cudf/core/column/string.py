@@ -479,8 +479,8 @@ class StringColumn(column.ColumnBase):
             return self.base_children
         else:
             # First get the base columns for chars and offsets
-            chars_column = self.base_children[0]
-            offsets_column = self.base_children[1]
+            chars_column = self.base_children[1].copy(deep=False)
+            offsets_column = self.base_children[0].copy(deep=False)
 
             # Shift offsets column by the parent offset.
             offsets_column.offset = self.offset
@@ -493,10 +493,10 @@ class StringColumn(column.ColumnBase):
             # Now run a subtraction binary op to shift all of the offsets by
             # the parent offset
             offsets_column = offsets_column.binary_operator(
-                "sub", offsets_column.dtype.type(offsets_column.offset)
+                "sub", offsets_column.dtype.type(chars_offset)
             )
 
-            return (chars_column, offsets_column)
+            return (offsets_column, chars_column)
 
     def __contains__(self, item):
         return True in self.str().contains(f"^{item}$")._column
@@ -536,6 +536,26 @@ class StringColumn(column.ColumnBase):
             if self.size == 0:
                 self._nvstrings = nvstrings.to_device([])
             else:
+                print(
+                    "chars",
+                    self.children[1].data_ptr,
+                    self.children[1].dtype,
+                    self.children[1].to_array(),
+                )
+                print(
+                    "offsets",
+                    self.children[0].data_ptr,
+                    self.children[0].dtype,
+                    self.children[0].to_array(),
+                )
+                print("size", self.size)
+                print(
+                    "mask",
+                    self.mask_ptr,
+                    self.mask.ptr,
+                    self.mask.to_host_array(),
+                )
+                print("ncount", self.null_count)
                 self._nvstrings = nvstrings.from_offsets(
                     self.children[1].data_ptr,
                     self.children[0].data_ptr,
@@ -561,6 +581,7 @@ class StringColumn(column.ColumnBase):
     def _set_mask(self, value):
         self._nvstrings = None
         self._nvcategory = None
+        self._indices = None
         super()._set_mask(value)
 
     @property

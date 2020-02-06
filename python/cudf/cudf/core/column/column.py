@@ -349,7 +349,7 @@ class ColumnBase(Column):
         """Copy the column with a new allocation of the data but not the mask,
         which is shared by the new column.
         """
-        return self.replace(data=self.data.copy())
+        return self.replace(data=self.base_data.copy())
 
     def copy(self, deep=True):
         """Columns are immutable, so a deep copy produces a copy of the
@@ -360,9 +360,10 @@ class ColumnBase(Column):
             return libcudf.copying.copy_column(self)
         else:
             return build_column(
-                self.data,
+                self.base_data,
                 self.dtype,
-                mask=self.mask,
+                mask=self.base_mask,
+                size=self.size,
                 offset=self.offset,
                 children=self.base_children,
             )

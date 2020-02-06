@@ -20,7 +20,7 @@ def copy_bitmask(Column col):
     Copies column's validity mask buffer into a new buffer, shifting by the
     offset if nonzero
     """
-    if col.mask is None:
+    if col.base_mask is None:
         return None
 
     cdef column_view col_view = col.view()
