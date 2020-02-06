@@ -150,3 +150,11 @@ set(HASHING_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/hashing/hashing_benchmark.cpp")
 
 ConfigureBench(HASHING_BENCH "${HASHING_BENCH_SRC}")
+
+###################################################################################################
+# - parquet writer benchmark -----------------------------------------------------------------------------
+
+set(PARQUET_WRITER_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/io/parquet_writer_benchmark.cu")
+
+ConfigureBench(PARQUET_WRITER_BENCH "${PARQUET_WRITER_BENCH_SRC}")

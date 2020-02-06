@@ -562,7 +562,7 @@ size_type num_columns = table.num_columns();
   uint32_t num_chunks = num_rowgroups * num_columns;
   hostdevice_vector<gpu::EncColumnChunk> chunks(num_chunks);
   uint32_t num_dictionaries = 0;  
-  for (uint32_t r = 0, global_r = global_rowgroup_base, f = 0, start_row = 0; r < num_rowgroups; r++) {
+  for (uint32_t r = 0, global_r = global_rowgroup_base, f = 0, start_row = 0; r < num_rowgroups; r++, global_r++) {
     uint32_t fragments_in_chunk = (uint32_t)((state.md.row_groups[global_r].num_rows + fragment_size - 1) / fragment_size);
     state.md.row_groups[global_r].total_byte_size = 0;
     state.md.row_groups[global_r].columns.resize(num_columns);
