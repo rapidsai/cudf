@@ -21,20 +21,15 @@ quantiles(table_view const& input,
           interpolation interp,
           rmm::mr::device_memory_resource* mr)
 {
-    auto sortmap_lookup = [sortmap]
-        __device__(size_type idx) {
-            return *(sortmap + idx);
-        };
-
-    auto quantile_idx_lookup = [sortmap_lookup, interp, size=input.num_rows()]
+    auto quantile_idx_lookup = [sortmap, interp, size=input.num_rows()]
         __device__ (double q) {
-            return detail::select_quantile<size_type>(sortmap_lookup,
-                                                      size,
-                                                      q,
-                                                      interp);
+            auto selector = [sortmap] __device__ (auto idx) {
+                return sortmap[idx];
+            };
+            return detail::select_quantile<size_type>(selector, size, q, interp);
         };
 
-    rmm::device_vector<double> q_device = q;
+    rmm::device_vector<double> q_device{q};
 
     auto quantile_idx_iter = thrust::make_transform_iterator(q_device.begin(),
                                                              quantile_idx_lookup);
@@ -59,6 +54,9 @@ quantiles(table_view const& input,
           std::vector<null_order> const& null_precedence,
           rmm::mr::device_memory_resource* mr)
 {
+    CUDF_EXPECTS(q.size() > 0,
+                 "multi-column quantiles require at least one requested quantile.");
+
     CUDF_EXPECTS(interp == interpolation::HIGHER ||
                  interp == interpolation::LOWER ||
                  interp == interpolation::NEAREST,
