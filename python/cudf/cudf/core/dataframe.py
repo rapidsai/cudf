@@ -870,7 +870,6 @@ class DataFrame(Frame):
             upper = cudf.concat([upper_left, upper_right], axis=1)
             lower = cudf.concat([lower_left, lower_right], axis=1)
             output = cudf.concat([upper, lower])
-        temp_mi_columns = output.columns
 
         for col in output._data:
             if (
@@ -881,8 +880,7 @@ class DataFrame(Frame):
                 output[col] = output._data[col].astype("str").fillna("null")
             else:
                 output[col] = output._data[col]
-        if isinstance(self.columns, cudf.MultiIndex):
-            output.columns = temp_mi_columns
+
         return output
 
     def __repr__(self):
@@ -1518,7 +1516,7 @@ class DataFrame(Frame):
             for column_name in set(out.columns) - set(self.columns):
                 self[column_name] = out._data[column_name]
                 col = out._data.pop(column_name)
-                self._data = self._data.insert(column_name, col, loc=0)
+                self._data.insert(column_name, col, loc=0)
             self.index = RangeIndex(len(self))
         else:
             return out.set_index(RangeIndex(len(self)))
@@ -1687,7 +1685,7 @@ class DataFrame(Frame):
 
         value = column.as_column(value)
 
-        self._data = self._data.insert(name, value, loc=loc)
+        self._data.insert(name, value, loc=loc)
 
     def add_column(self, name, data, forceindex=False):
         """Add a column

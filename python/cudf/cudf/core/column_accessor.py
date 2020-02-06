@@ -13,7 +13,7 @@ class ColumnAccessor(MutableMapping):
         name : optional name for the ColumnAccessor
         multiindex : The keys convert to a Pandas MultiIndex
         """
-        # TODO: we should validate `data`
+        # TODO: we should validate the keys of `data`
         self._data = OrderedColumnDict(data)
         self.name = name
         self.multiindex = multiindex
@@ -38,14 +38,15 @@ class ColumnAccessor(MutableMapping):
         Insert value at specified location.
         """
         # TODO: we should move all insert logic here
+        name = self._pad_key(name)
         new_keys = list(self.keys())
         new_values = list(self.values())
         new_keys.insert(loc, name)
         new_values.insert(loc, value)
-        return self.__class__(dict(zip(new_keys, new_values)))
+        self._data = self._data.__class__((zip(new_keys, new_values)))
 
     def copy(self):
-        return self.__class__(self._data.copy())
+        return self.__class__(self._data.copy(), multiindex=self.multiindex)
 
     def get_by_label(self, key):
         return self._data[key]
@@ -64,6 +65,9 @@ class ColumnAccessor(MutableMapping):
         return list(itertools.islice(self.values(), start, end))
 
     def set_by_label(self, key, value):
+        if self.multiindex:
+            if not isinstance(key, tuple):
+                key = (key,) + ("",) * (self.nlevels - 1)
         self._data[key] = value
 
     @property
@@ -73,6 +77,20 @@ class ColumnAccessor(MutableMapping):
     @property
     def columns(self):
         return tuple(self.values())
+
+    @property
+    def nlevels(self):
+        if not self.multiindex:
+            return 1
+        else:
+            return len(self.names[0])
+
+    def _pad_key(self, key, pad_value=""):
+        if not self.multiindex:
+            return key
+        if not isinstance(key, tuple):
+            key = (key,)
+        return key + (pad_value,) * (self.nlevels - 1)
 
 
 def _compare_keys(key, target):
