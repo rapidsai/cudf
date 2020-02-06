@@ -62,6 +62,7 @@
 - PR #4066 Fixed mismatch with dtype enums
 - PR #4080 Fix multi-index dask test with sort issue
 - PR #4084 Update Java for removal of CATEGORY type
+- PR #4086 ORC reader: fix potentially incorrect timestamp decoding in the last rowgroup
 
 
 # cuDF 0.12.0 (04 Feb 2020)
