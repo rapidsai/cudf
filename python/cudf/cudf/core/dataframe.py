@@ -3815,7 +3815,7 @@ class DataFrame(Frame):
         dtype = np.dtype(members)
         ret = np.recarray(len(self), dtype=dtype)
         if index:
-            ret["index"] = self.index.values
+            ret["index"] = self.index.to_array()
         for col in self.columns:
             ret[col] = self[col].to_array()
         return ret

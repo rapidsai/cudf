@@ -200,7 +200,7 @@ class CategoricalAccessor(object):
         owner = self._column_owner
         inplace = kwargs.get("inplace", False)
         if inplace:
-            self._mimic_inplace(new_col, inplace=True)
+            self._parent._mimic_inplace(new_col, inplace=True)
         else:
             if owner is None:
                 return new_col
@@ -242,7 +242,6 @@ class CategoricalColumn(column.ColumnBase):
             offset=offset,
             children=children,
         )
-        self._codes = None
 
     def __contains__(self, item):
         try:

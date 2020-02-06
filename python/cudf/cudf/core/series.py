@@ -1267,7 +1267,7 @@ class Series(Frame):
         data = self._column.fillna(value)
 
         if inplace:
-            self._column = data
+            self._column._mimic_inplace(data, inplace=True)
         else:
             return self._copy_construct(data=data)
 

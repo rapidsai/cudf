@@ -1,5 +1,6 @@
 from contextlib import contextmanager
 
+import cupy
 import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
@@ -60,6 +61,10 @@ def assert_eq(a, b, **kwargs):
         a = a.to_pandas()
     if hasattr(b, "to_pandas"):
         b = b.to_pandas()
+    if isinstance(a, cupy.ndarray):
+        a = cupy.asnumpy(a)
+    if isinstance(b, cupy.ndarray):
+        b = cupy.asnumpy(b)
     if isinstance(a, pd.DataFrame):
         tm.assert_frame_equal(a, b, **kwargs)
     elif isinstance(a, pd.Series):

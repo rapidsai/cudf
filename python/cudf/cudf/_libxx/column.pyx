@@ -274,6 +274,12 @@ cdef class Column:
             self.set_base_data(other_col.base_data)
             self.set_base_mask(other_col.base_mask)
             self.set_base_children(other_col.base_children)
+            if hasattr(other_col, "_nvstrings"):
+                self._nvstrings = other_col._nvstrings
+            if hasattr(other_col, "_nvcategory"):
+                self._nvcategory = other_col._nvcategory
+            if hasattr(other_col, "_indices"):
+                self._indices = other_col._indices
         else:
             return other_col
 
