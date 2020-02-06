@@ -23,6 +23,18 @@
 namespace cudf {
 namespace experimental {
 
+// @brief Enum to describe scan operation type
+enum class scan_type : bool {
+   INCLUSIVE, 
+   EXCLUSIVE
+};
+
+// @brief Enum to describe include nulls or exclude nulls in an aggregation
+enum class nulls_inclusion : bool {
+   INCLUDE_NULLS, 
+   EXCLUDE_NULLS
+};
+
 /** --------------------------------------------------------------------------*
  * @brief  Computes the reduction of the values in all rows of a column.
  * This function does not detect overflows in reductions.
@@ -67,12 +79,16 @@ std::unique_ptr<scalar> reduce(
  * @param[in] agg unique_ptr to aggregation operator applied by the scan
  * @param[in] inclusive The flag for applying an inclusive scan if true,
  *            an exclusive scan if false.
+ * @param[in] skip_nulls Exclude null values when computing the result if
+ * nulls_inclusion::EXCLUDE_NULLS.
+ * Include nulls if nulls_inclusion::INCLUDE_NULLS. Any operation with a null
+ * results in a null.
  * @params[in] mr The resource to use for all allocations
  * @returns unique pointer to new output column
  * ----------------------------------------------------------------------------**/
 std::unique_ptr<column>
 scan(const column_view &input, std::unique_ptr<aggregation> const &agg,
-     bool inclusive, bool skipna = true,
+     scan_type inclusive, nulls_inclusion skip_nulls = nulls_inclusion::EXCLUDE_NULLS,
      rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
 }  // namespace experimental
