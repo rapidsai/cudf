@@ -19,8 +19,9 @@ class CategoricalAccessor(object):
     This mimicks pandas `df.cat` interface.
     """
 
-    def __init__(self, parent):
+    def __init__(self, parent, column_owner=None):
         self._parent = parent
+        self._column_owner = column_owner
 
     @property
     def categories(self):
@@ -37,51 +38,29 @@ class CategoricalAccessor(object):
         return self._parent.ordered
 
     def as_ordered(self, **kwargs):
-        inplace = kwargs.get("inplace", False)
-        data = None if inplace else self._parent
-        if not self.ordered:
+        out_col = self._parent
+        if not out_col.ordered:
             kwargs["ordered"] = True
-            data = self._set_categories(self.categories, **kwargs)
-        if data is not None:
-            from cudf import Series
+            out_col = self._set_categories(self._parent.categories, **kwargs)
 
-            parent = self._parent
-            return Series(
-                column.build_categorical_column(
-                    categories=parent.dtype.categories,
-                    codes=parent.cat().codes,
-                    mask=parent.mask,
-                    ordered=True,
-                )
-            )
+        return self._return_or_inplace(out_col, **kwargs)
 
-    def as_unordered(self, inplace=False):
-        if inplace:
-            self._parent.dtype.ordered = False
-        else:
-            from cudf import Series
+    def as_unordered(self, **kwargs):
+        out_col = self._parent
+        if out_col.ordered:
+            kwargs["ordered"] = False
+            out_col = self._set_categories(self.categories, **kwargs)
 
-            parent = self._parent
-            return Series(
-                column.build_categorical_column(
-                    categories=parent.dtype.categories,
-                    codes=parent.codes,
-                    mask=parent.mask,
-                    ordered=False,
-                )
-            )
+        return self._return_or_inplace(out_col, **kwargs)
 
     def add_categories(self, new_categories, **kwargs):
-        inplace = kwargs.get("inplace", False)
-        data = None if inplace else self._parent
         new_categories = column.as_column(new_categories)
         new_categories = self._parent.categories.append(new_categories)
+        out_col = self._parent
         if not self._categories_equal(new_categories, **kwargs):
-            data = self._set_categories(new_categories, **kwargs)
-        if data is not None:
-            from cudf import Series
+            out_col = self._set_categories(new_categories, **kwargs)
 
-            return Series(data=data)
+        return self._return_or_inplace(out_col, **kwargs)
 
     def remove_categories(self, removals, **kwargs):
         from cudf import Series
@@ -89,50 +68,52 @@ class CategoricalAccessor(object):
         cats = self.categories.to_series()
         removals = Series(removals, dtype=cats.dtype)
         removals_mask = removals.isin(cats)
+
         # ensure all the removals are in the current categories
         # list. If not, raise an error to match Pandas behavior
         if not removals_mask.all():
             vals = removals[~removals_mask].to_array()
             msg = "removals must all be in old categories: {}".format(vals)
             raise ValueError(msg)
-        return self.set_categories(cats[~cats.isin(removals)], **kwargs)
+
+        new_categories = cats[~cats.isin(removals)]._column
+        out_col = self._parent
+        if not self._categories_equal(new_categories, **kwargs):
+            out_col = self._set_categories(new_categories, **kwargs)
+
+        return self._return_or_inplace(out_col, **kwargs)
 
     def set_categories(self, new_categories, **kwargs):
         """Returns a new Series with the categories set to the
         specified *new_categories*."""
-        data = self._parent
+        ordered = kwargs.get("ordered", self.ordered)
+        rename = kwargs.pop("rename", False)
         new_categories = column.as_column(new_categories)
         # when called with rename=True, the pandas behavior is
         # to replace the current category values with the new
         # categories.
-        if kwargs.pop("rename", False):
+        if rename:
             # enforce same length
-            if len(new_categories) != len(data.categories):
+            if len(new_categories) != len(self._parent.categories):
                 raise ValueError(
                     "new_categories must have the same "
                     "number of items as old categories"
                 )
-            elif not kwargs.get("inplace", False):
-                # return a copy if inplace=False
-                data = data.replace(categories=new_categories, **kwargs)
-            else:
-                # mutate inplace if inplace=True
-                data.categories = new_categories
-                ordered = kwargs.get("ordered", self.ordered)
-                data._dtype = CategoricalDtype(
-                    categories=column.as_column(new_categories),
-                    ordered=ordered,
-                )
-        elif not self._categories_equal(new_categories, **kwargs):
-            data = self._set_categories(new_categories, **kwargs)
-        if data is not None:
-            from cudf import Series
+            out_col = column.build_categorical_column(
+                new_categories,
+                self._parent.children[0],
+                self._parent.mask,
+                self._parent.size,
+                ordered=ordered,
+            )
+        else:
+            out_col = self._parent
+            if not self._categories_equal(new_categories, **kwargs):
+                out_col = self._set_categories(new_categories, **kwargs)
 
-            return Series(data=data)
+        return self._return_or_inplace(out_col, **kwargs)
 
     def reorder_categories(self, new_categories, **kwargs):
-        from cudf.core.series import Series
-
         new_categories = column.as_column(new_categories)
         # Compare new_categories against current categories.
         # Ignore order for comparison because we're only interested
@@ -143,9 +124,9 @@ class CategoricalAccessor(object):
                 "items in new_categories are not the same as in "
                 "old categories"
             )
-        data = self._set_categories(new_categories, **kwargs)
-        if data is not None:
-            return Series(data=data)
+        out_col = self._set_categories(new_categories, **kwargs)
+
+        return self._return_or_inplace(out_col, **kwargs)
 
     def _categories_equal(self, new_categories, **kwargs):
         cur_categories = self._parent.categories
@@ -201,19 +182,37 @@ class CategoricalAccessor(object):
         new_codes = df["new_codes"]._column
         new_dtype = CategoricalDtype(categories=new_cats, ordered=ordered)
 
-        if kwargs.get("inplace", False):
-            self._parent.data = None
-            self._parent.mask = new_codes.mask
-            self._parent.dtype = new_dtype
-            self._parent._children = (new_codes,)
-            return None
-
         return column.build_column(
             data=None,
             dtype=new_dtype,
             mask=new_codes.mask,
             children=(new_codes,),
         )
+
+    def _return_or_inplace(self, new_col, **kwargs):
+        """
+        Returns an object of the type of the column owner or updates the column
+        of the owner (Series or Index) to mimic an inplace operation
+        """
+        from cudf import Series
+        from cudf.core.index import CategoricalIndex
+
+        owner = self._column_owner
+        inplace = kwargs.get("inplace", False)
+        if inplace:
+            if isinstance(owner, Series):
+                owner._column = new_col
+            elif isinstance(owner, CategoricalIndex):
+                owner._values = new_col
+            else:
+                raise RuntimeError("Unknown object type to update inplace")
+        else:
+            if owner is None:
+                return new_col
+            elif isinstance(owner, CategoricalIndex):
+                return CategoricalIndex(new_col, name=owner.name)
+            elif isinstance(owner, Series):
+                return Series(new_col, index=owner.index, name=owner.name)
 
 
 class CategoricalColumn(column.ColumnBase):
@@ -295,6 +294,16 @@ class CategoricalColumn(column.ColumnBase):
             data=None, dtype=dtype, mask=mask, children=(data,)
         )
 
+    @utils.cached_property
+    def children(self):
+        if self.offset == 0:
+            return self.base_children
+        else:
+            codes_column = self.base_children[0]
+            codes_column.offset = self.offset
+            categories_column = self.base_children[1]
+            return (codes_column, categories_column)
+
     @property
     def as_numerical(self):
         return column.build_column(
@@ -313,7 +322,7 @@ class CategoricalColumn(column.ColumnBase):
 
     @property
     def codes(self):
-        return self._children[0].set_mask(self.mask)
+        return self.children[0].set_mask(self.mask)
 
     @property
     def ordered(self):
@@ -323,8 +332,8 @@ class CategoricalColumn(column.ColumnBase):
     def ordered(self, value):
         self.dtype.ordered = value
 
-    def cat(self):
-        return CategoricalAccessor(self)
+    def cat(self, column_owner=None):
+        return CategoricalAccessor(self, column_owner=column_owner)
 
     def binary_operator(self, binop, rhs, reflect=False):
         msg = (
@@ -486,12 +495,11 @@ class CategoricalColumn(column.ColumnBase):
         result = column.build_categorical_column(
             categories=self.dtype.categories,
             codes=result,
-            mask=result.mask,
+            mask=None,
             ordered=self.dtype.ordered,
         )
 
-        result.mask = None
-        return self._mimic_inplace(result, inplace)
+        return result
 
     def apply_boolean_mask(self, mask):
         codes = super().apply_boolean_mask(mask)
@@ -564,7 +572,7 @@ class CategoricalColumn(column.ColumnBase):
             return self.cat().codes._column
         gather_map = self.cat().codes.astype("int32").fillna(0)._column
         out = self.categories.take(gather_map)
-        out.mask = self.mask
+        out = out.set_mask(self.mask)
         return out
 
     def copy(self, deep=True):

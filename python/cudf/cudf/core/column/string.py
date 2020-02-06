@@ -473,6 +473,31 @@ class StringColumn(column.ColumnBase):
         self._nvcategory = None
         self._indices = None
 
+    @utils.cached_property
+    def children(self):
+        if self.offset == 0:
+            return self.base_children
+        else:
+            # First get the base columns for chars and offsets
+            chars_column = self.base_children[0]
+            offsets_column = self.base_children[1]
+
+            # Shift offsets column by the parent offset.
+            offsets_column.offset = self.offset
+
+            # Shift the chars offset by the new first element of the offsets
+            # column
+            chars_offset = offsets_column[0]
+            chars_column.offset = chars_offset
+
+            # Now run a subtraction binary op to shift all of the offsets by
+            # the parent offset
+            offsets_column = offsets_column.binary_operator(
+                "sub", offsets_column.dtype.type(offsets_column.offset)
+            )
+
+            return (chars_column, offsets_column)
+
     def __contains__(self, item):
         return True in self.str().contains(f"^{item}$")._column
 
@@ -484,9 +509,12 @@ class StringColumn(column.ColumnBase):
         return StringMethods(self, index=index, name=name)
 
     def __sizeof__(self):
-        n = self._children[0].__sizeof__() + self._children[1].__sizeof__()
-        if self.mask:
-            n += self.mask.size
+        n = (
+            self.base_children[0].__sizeof__()
+            + self.base_children[1].__sizeof__()
+        )
+        if self.base_mask:
+            n += self.base_mask.size
         return n
 
     def _memory_usage(self, deep=False):
@@ -509,8 +537,8 @@ class StringColumn(column.ColumnBase):
                 self._nvstrings = nvstrings.to_device([])
             else:
                 self._nvstrings = nvstrings.from_offsets(
-                    self._children[1].data_ptr,
-                    self._children[0].data_ptr,
+                    self.children[1].data_ptr,
+                    self.children[0].data_ptr,
                     self.size,
                     mask_ptr,
                     ncount=self.null_count,
@@ -548,7 +576,7 @@ class StringColumn(column.ColumnBase):
 
     @property
     def _nbytes(self):
-        return self._children[1].size
+        return self.children[1].size
 
     def as_numerical_column(self, dtype, **kwargs):
 
@@ -587,7 +615,7 @@ class StringColumn(column.ColumnBase):
             out_mask = Buffer.empty(mask_size)
             out_mask_ptr = out_mask.ptr
             self.nvstrings.set_null_bitmask(out_mask_ptr, bdevmem=True)
-            out_col.mask = out_mask
+            out_col = out_col.set_mask(out_mask)
 
         return out_col.astype(out_dtype)
 
@@ -746,7 +774,7 @@ class StringColumn(column.ColumnBase):
                 " single values"
             )
 
-    def fillna(self, fill_value, inplace=False):
+    def fillna(self, fill_value):
         """
         Fill null values with * fill_value *
         """
@@ -772,8 +800,9 @@ class StringColumn(column.ColumnBase):
 
         filled_data = self.nvstrings.fillna(fill_value)
         result = column.as_column(filled_data)
-        result.mask = None
-        return self._mimic_inplace(result, inplace)
+        result = result.set_mask(None)
+
+        return result
 
     def _find_first_and_last(self, value):
         found_indices = self.str().contains(f"^{value}$")._column

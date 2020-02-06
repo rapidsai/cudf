@@ -284,7 +284,7 @@ cdef gdf_column* column_view_from_column(Column col,
         else:
             data_ptr = 0
 
-    valid_ptr = col._offsetted_mask_ptr
+    valid_ptr = col.mask_ptr
 
     cdef char* c_col_name = py_to_c_str(col_name)
     cdef size_type len_col = len(col)
@@ -379,7 +379,7 @@ cdef gdf_column* column_view_from_string_column(
     cdef uintptr_t category = 0
     cdef gdf_dtype c_dtype = GDF_STRING
 
-    mask_ptr = col._offsetted_mask_ptr
+    mask_ptr = col.mask_ptr
 
     if col_name is None:
         col_name = col.name

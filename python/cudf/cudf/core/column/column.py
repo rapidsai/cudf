@@ -20,12 +20,7 @@ from cudf._libxx.column import Column
 from cudf.core.buffer import Buffer
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils import cudautils, ioutils, utils
-from cudf.utils.dtypes import (
-    is_categorical_dtype,
-    is_scalar,
-    is_string_dtype,
-    np_to_pa_dtype,
-)
+from cudf.utils.dtypes import is_categorical_dtype, is_scalar, np_to_pa_dtype
 from cudf.utils.utils import (
     buffers_from_pyarrow,
     calc_chunk_size,
@@ -57,12 +52,12 @@ class ColumnBase(Column):
         return (
             build_column,
             (
-                self.data,
+                self.base_data,
                 self.dtype,
-                self.mask,
+                self.base_mask,
                 self.size,
                 self.offset,
-                self._children,
+                self.base_children,
             ),
         )
 
@@ -141,29 +136,6 @@ class ColumnBase(Column):
         if self.nullable:
             n += self.mask.size
         return n
-
-    def set_mask(self, mask):
-        """
-        Return a Column with the same data but new mask.
-
-        Parameters
-        ----------
-        mask : 1D array-like
-            The null-mask.  Valid values are marked as ``1``; otherwise ``0``.
-            The mask bit given the data index ``idx`` is computed as::
-
-                (mask[idx // 8] >> (idx % 8)) & 1
-        """
-        if mask is None:
-            return self
-        mask = Buffer(mask)
-        return build_column(
-            self.data,
-            self.dtype,
-            mask=mask,
-            offset=self.offset,
-            children=self._children,
-        )
 
     @staticmethod
     def from_mem_views(data_mem, mask_mem=None, null_count=None):
@@ -296,7 +268,7 @@ class ColumnBase(Column):
             return column_empty_like(self, newsize=0)
         else:
             dropped_col = dropped_col[0]
-            dropped_col.mask = None
+            dropped_col = dropped_col.set_mask(None)
             return dropped_col
 
     def _get_mask_as_column(self):
@@ -392,7 +364,7 @@ class ColumnBase(Column):
                 self.dtype,
                 mask=self.mask,
                 offset=self.offset,
-                children=self._children,
+                children=self.base_children,
             )
 
     def view(self, newcls, **kwargs):
@@ -502,7 +474,7 @@ class ColumnBase(Column):
                 return self.apply_boolean_mask(arg)
             raise NotImplementedError(type(arg))
 
-    def __setitem__(self, key, value):
+    def _setitem(self, key, value):
         """
         Set the value of self[key] to value.
 
@@ -554,7 +526,7 @@ class ColumnBase(Column):
             raise ValueError(msg)
 
         if is_categorical_dtype(value.dtype):
-            value = value.cat().set_categories(self.categories)._column
+            value = value.cat().set_categories(self.categories)
             assert self.dtype == value.dtype
 
         if isinstance(key, slice):
@@ -571,7 +543,7 @@ class ColumnBase(Column):
                     )
                 raise
 
-        self._mimic_inplace(out, inplace=True)
+        return out
 
     def fillna(self, value):
         """Fill null values with ``value``.
@@ -760,29 +732,6 @@ class ColumnBase(Column):
         assert axis in (None, 0)
         return libcudf.filling.repeat([self], repeats)[0]
 
-    def _mimic_inplace(self, result, inplace=False):
-        """
-        If `inplace=True`, used to mimic an inplace operation
-        by replacing data in ``self`` with data in ``result``.
-
-        Otherwise, returns ``result`` unchanged.
-        """
-        if inplace:
-            self.data = result.data
-            self.mask = result.mask
-            self.dtype = result.dtype
-            self.size = result.size
-            self.offset = result.offset
-            if hasattr(result, "_children"):
-                self._children = result._children
-                if is_string_dtype(self):
-                    # force recomputation of nvstrings/nvcategory
-                    self._nvstrings = None
-                    self._nvcategory = None
-            self.__class__ = result.__class__
-        else:
-            return result
-
     def astype(self, dtype, **kwargs):
         if is_categorical_dtype(dtype):
             return self.as_categorical_column(dtype, **kwargs)
@@ -924,7 +873,7 @@ def column_empty_like_same_mask(column, dtype):
     """
     result = column_empty_like(column, dtype)
     if column.nullable:
-        result.mask = column._offsetted_mask
+        result.set_mask(column.mask)
     return result
 
 
@@ -967,9 +916,7 @@ def column_empty(row_count, dtype="object", masked=False):
     return build_column(data, dtype, mask=mask, children=children)
 
 
-def build_column(
-    data, dtype, mask=None, size=None, offset=0, children=(), categories=None
-):
+def build_column(data, dtype, mask=None, size=None, offset=0, children=()):
     """
     Build a Column of the appropriate type from the given parameters
 
@@ -985,9 +932,6 @@ def build_column(
     size : int, optional
     offset : int, optional
     children : tuple, optional
-    categories : Column, optional
-        If constructing a CategoricalColumn, a Column containing
-        the categories
     """
     from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.datetime import DatetimeColumn
@@ -1021,7 +965,7 @@ def build_column(
 
 
 def build_categorical_column(
-    categories, codes, mask=None, offset=0, ordered=None
+    categories, codes, mask=None, size=None, offset=0, ordered=None
 ):
     """
     Build a CategoricalColumn
@@ -1035,7 +979,8 @@ def build_categorical_column(
         the size of `codes`
     mask : Buffer
         Null mask
-    offset : int
+    size : int, optional
+    offset : int, optional
     ordered : bool
         Indicates whether the categories are ordered
     """
@@ -1044,6 +989,7 @@ def build_categorical_column(
         data=None,
         dtype=dtype,
         mask=mask,
+        size=size,
         offset=offset,
         children=(as_column(codes),),
     )
@@ -1143,7 +1089,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
         ):
             if nan_as_null:
                 mask = libcudf.unaryops.nans_to_nulls(data)
-                data.mask = mask
+                data = data.set_mask(mask)
 
         elif data.dtype.kind == "M":
             null = column_empty_like(data, masked=True, newsize=1)
@@ -1326,7 +1272,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
             data = as_column(pa.array(arbitrary, from_pandas=True))
         elif arbitrary.dtype == np.bool:
             # Bug in PyArrow or HDF that requires us to do this
-            data = as_column(pa.array(np.array(arbitrary), from_pandas=True))
+            data = as_column(pa.array(np.asarray(arbitrary), from_pandas=True))
         else:
             data = as_column(pa.array(arbitrary, from_pandas=nan_as_null))
 

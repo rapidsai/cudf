@@ -315,7 +315,7 @@ class NumericalColumn(column.ColumnBase):
         )
         return output
 
-    def fillna(self, fill_value, inplace=False):
+    def fillna(self, fill_value):
         """
         Fill null values with *fill_value*
         """
@@ -337,7 +337,9 @@ class NumericalColumn(column.ColumnBase):
             else:
                 fill_value = fill_value.astype(self.dtype)
         result = libcudf.replace.replace_nulls(self, fill_value)
-        return self._mimic_inplace(result, inplace)
+        result = column.build_column(result.data, result.dtype, mask=None)
+
+        return result
 
     def find_first_value(self, value, closest=False):
         """
@@ -498,7 +500,7 @@ def _numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
     _ = libcudf.binops.apply_op(lhs, rhs, out, op)
 
     if is_op_comparison:
-        out.fillna(op == "ne", inplace=True)
+        out = out.fillna(op == "ne")
 
     libcudf.nvtx.nvtx_range_pop()
     return out

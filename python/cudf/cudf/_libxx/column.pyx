@@ -71,9 +71,9 @@ cdef class Column:
         self.size = size
         self.offset = offset
         self.dtype = dtype
-        self.data = data
-        self.mask = mask
-        self.children = children
+        self.set_base_data(data)
+        self.set_base_mask(mask)
+        self.set_base_children(children)
 
     @property
     def size(self):
@@ -93,54 +93,75 @@ cdef class Column:
             )
 
         self._size = value
+        if hasattr(self, "null_count"):
+            del self.null_count
+        if hasattr(self, "children"):
+            del self.children
 
     @property
-    def data(self):
-        return self._data
+    def base_data(self):
+        return self._base_data
 
-    @data.setter
-    def data(self, value):
-        if value is not None and not isinstance(value, Buffer):
-            raise TypeError("Expected a Buffer or None for data, got " +
-                            type(value).__name__)
-        self._data = value
+    @cached_property
+    def data(self):
+        if self.offset == 0 or self.base_data is None:
+            return self.base_data
+        else:
+            buf = Buffer(self.base_data)
+            buf.ptr = buf.ptr + (self.offset * self.dtype.itemsize)
+            buf.size = buf.size - (self.offset * self.dtype.itemsize)
+            return buf
 
     @property
     def data_ptr(self):
-        """
-        Returns the pointer to the data buffer accounting for the offset
-        """
         if self.data is None:
             return 0
-        return self.data.ptr + (self.offset * self.dtype.itemsize)
+        else:
+            return self.data.ptr
+
+    def set_base_data(self, value):
+        if value is not None and not isinstance(value, Buffer):
+            raise TypeError("Expected a Buffer or None for data, got " +
+                            type(value).__name__)
+        self._base_data = value
+        if hasattr(self, "data"):
+            del self.data
 
     @property
     def nullable(self):
-        return self.mask is not None
+        return self.base_mask is not None
 
     @property
     def has_nulls(self):
         return self.null_count != 0
 
     @property
-    def mask(self):
-        return self._mask
+    def base_mask(self):
+        return self._base_mask
 
     @cached_property
-    def _offsetted_mask(self):
-        offsetted_mask = None
-        if self.mask is not None:
+    def mask(self):
+        mask = None
+        if self.base_mask is not None:
             if self.offset == 0:
-                offsetted_mask = self.mask
+                mask = self.base_mask
             else:
-                offsetted_mask = libcudfxx.null_mask.copy_bitmask(self)
-        return offsetted_mask
+                mask = libcudfxx.null_mask.copy_bitmask(self)
+        return mask
 
-    @mask.setter
-    def mask(self, value):
-        self._set_mask(value)
+    @property
+    def mask_ptr(self):
+        if self.mask is None:
+            return 0
+        else:
+            return self.mask.ptr
 
-    def _set_mask(self, value):
+    def set_base_mask(self, value):
+        """
+        Replaces the base mask buffer of the column inplace. This does not
+        modify size or offset in any way, so the passed mask is expected to be
+        compatible with the current offset.
+        """
         if value is not None and not isinstance(value, Buffer):
             raise TypeError("Expected a Buffer or None for mask, got " +
                             type(value).__name__)
@@ -160,36 +181,33 @@ cdef class Column:
                         "allocation as opposed to the offsetted allocation."
                     )
                 raise RuntimeError(error_msg)
-        self._mask = value
-        if hasattr(self, "_offsetted_mask"):
-            del self._offsetted_mask
+        self._base_mask = value
+        if hasattr(self, "mask"):
+            del self.mask
         if hasattr(self, "null_count"):
             del self.null_count
 
-    @property
-    def mask_ptr(self):
+    def set_mask(self, value):
         """
-        Returns the pointer to the validity buffer accounting for the offset
+        Replaces the mask buffer of the column and returns a new column. This
+        will zero the column offset, compute a new mask buffer if necessary,
+        and compute new data Buffers zero-copy that use pointer arithmetic to
+        properly adjust the pointer.
         """
-        if self.mask is None:
-            return 0
-        elif self.mask is not None and self.offset == 0:
-            return self.mask.ptr
-        else:
-            raise RuntimeError(
-                "Cannot get the pointer to a mask with a nonzero offset"
-            )
+        if value is not None and not isinstance(value, Buffer):
+            raise TypeError("Expected a Buffer or None for mask, got " +
+                            type(value).__name__)
 
-    @property
-    def _offsetted_mask_ptr(self):
-        """
-        Returns the pointer to the memoized validity buffer that is constructed
-        based on the offset
-        """
-        if self._offsetted_mask is None:
-            return 0
-        else:
-            return self._offsetted_mask.ptr
+        from cudf.core.column import build_column
+
+        return build_column(
+            self.data,
+            self.dtype,
+            value,
+            self.size,
+            offset=0,
+            children=self.children
+        )
 
     @cached_property
     def null_count(self):
@@ -212,13 +230,22 @@ cdef class Column:
 
         self._offset = value
         self.size = self.size - offset_diff
+        if hasattr(self, "null_count"):
+            del self.null_count
+        if hasattr(self, "mask"):
+            del self.mask
+        if hasattr(self, "children"):
+            del self.children
 
     @property
-    def children(self):
-        return self._children
+    def base_children(self):
+        return self._base_children
 
-    @children.setter
-    def children(self, value):
+    @cached_property
+    def children(self):
+        return self._base_children
+
+    def set_base_children(self, value):
         if not isinstance(value, tuple):
             raise TypeError("Expected a tuple of Columns for children, got " +
                             type(value).__name__)
@@ -229,8 +256,9 @@ cdef class Column:
                     "Expected each of children to be a  Column, got " +
                     type(child).__name__
                 )
-
-        self._children = value
+        self._base_children = value
+        if hasattr(self, "children"):
+            del self.children
 
     cdef size_type compute_null_count(self) except? 0:
         return self._view(UNKNOWN_NULL_COUNT).null_count()
@@ -248,16 +276,16 @@ cdef class Column:
         cdef vector[mutable_column_view] children
         cdef void* data
 
-        data = <void*><uintptr_t>(col.data_ptr)
+        data = <void*><uintptr_t>(col.base_data.ptr)
 
         cdef Column child_column
-        if self._children:
-            for child_column in self._children:
+        if self.base_children:
+            for child_column in self.base_children:
                 children.push_back(child_column.mutable_view())
 
         cdef bitmask_type* mask
         if self.nullable:
-            mask = <bitmask_type*><uintptr_t>(self.mask.ptr)
+            mask = <bitmask_type*><uintptr_t>(self.base_mask.ptr)
         else:
             mask = NULL
 
@@ -287,16 +315,16 @@ cdef class Column:
         cdef vector[column_view] children
         cdef void* data
 
-        data = <void*><uintptr_t>(col.data_ptr)
+        data = <void*><uintptr_t>(col.base_data.ptr)
 
         cdef Column child_column
-        if self._children:
-            for child_column in self._children:
+        if self.base_children:
+            for child_column in self.base_children:
                 children.push_back(child_column.view())
 
         cdef bitmask_type* mask
         if self.nullable:
-            mask = <bitmask_type*><uintptr_t>(self.mask.ptr)
+            mask = <bitmask_type*><uintptr_t>(self.base_mask.ptr)
         else:
             mask = NULL
 
@@ -378,7 +406,7 @@ cdef class Column:
         for child_index in range(cv.num_children()):
             child_owner = owner
             if column_owner:
-                child_owner = owner._children[child_index]
+                child_owner = owner.base_children[child_index]
             children.append(
                 Column.from_column_view(
                     cv.child(child_index),

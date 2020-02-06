@@ -225,16 +225,16 @@ class DatetimeColumn(column.ColumnBase):
                 "datetime column of {} has no NaN value".format(self.dtype)
             )
 
-    def fillna(self, fill_value, inplace=False):
+    def fillna(self, fill_value):
         if is_scalar(fill_value):
             fill_value = np.datetime64(fill_value, self.time_unit)
         else:
             fill_value = column.as_column(fill_value, nan_as_null=False)
 
         result = libcudf.replace.replace_nulls(self, fill_value)
+        result = column.build_column(result.data, result.dtype, mask=None)
 
-        result.mask = None
-        return self._mimic_inplace(result, inplace)
+        return result
 
     def sort_by_values(self, ascending=True, na_position="last"):
         col_inds = get_sorted_inds(self, ascending, na_position)

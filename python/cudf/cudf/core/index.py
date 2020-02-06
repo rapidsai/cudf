@@ -5,6 +5,7 @@ from __future__ import division, print_function
 import functools
 import pickle
 
+import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -119,7 +120,16 @@ class Index(Frame):
 
     @property
     def values(self):
-        return np.asarray([i for i in self._values])
+        if is_categorical_dtype(self.dtype) or np.issubdtype(
+            self.dtype, np.dtype("object")
+        ):
+            raise TypeError("Data must be numeric")
+        if len(self) == 0:
+            return cupy.asarray([], dtype=self.dtype)
+        if self._values.null_count > 0:
+            raise ValueError("Column must have no nulls.")
+
+        return cupy.asarray(self._values.data_array_view)
 
     def to_pandas(self):
         return pd.Index(self._values.to_pandas(), name=self.name)
@@ -999,7 +1009,7 @@ class StringIndex(GenericIndex):
         super(StringIndex, self).__init__(values, **kwargs)
 
     def to_pandas(self):
-        return pd.Index(self.values, name=self.name, dtype="object")
+        return pd.Index(self.to_array(), name=self.name, dtype="object")
 
     def take(self, indices):
         return self._values[indices]
