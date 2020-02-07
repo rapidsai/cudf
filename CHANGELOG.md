@@ -7,6 +7,7 @@
 - PR #3662 Define and implement `shift`.
 - PR #3861 Added Series.sum feature for String
 - PR #3681 Add cudf::experimental::boolean_mask_scatter
+- PR #4040 Add support for n-way merge of sorted tables
 
 ## Improvements
 
