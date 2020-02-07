@@ -1294,11 +1294,9 @@ public class JCudfSerialization {
             offsets = combinedBuffer.slice(offsetInfo.offsets, offsetInfo.offsetsLen);
           }
 
-          if (offsetInfo.dataLen == 0) {
-            // The vector is possibly full of null strings. This is a rare corner case, but here is the
-            // simplest place to work around it.
-            data = DeviceMemoryBuffer.allocate(1);
-          } else {
+          // The vector is possibly full of null strings. This is a rare corner case, but we let
+          // data buffer stay null.
+          if (offsetInfo.dataLen > 0) {
             data = combinedBuffer.slice(offsetInfo.data, offsetInfo.dataLen);
           }
 
