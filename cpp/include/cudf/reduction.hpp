@@ -30,9 +30,9 @@ enum class scan_type : bool {
 };
 
 // @brief Enum to describe include nulls or exclude nulls in an aggregation
-enum class nulls_inclusion : bool {
-   INCLUDE_NULLS, 
-   EXCLUDE_NULLS
+enum class include_nulls : bool {
+   YES, 
+   NO
 };
 
 /** --------------------------------------------------------------------------*
@@ -77,18 +77,17 @@ std::unique_ptr<scalar> reduce(
  *
  * @param[in] input The input column view for the scan
  * @param[in] agg unique_ptr to aggregation operator applied by the scan
- * @param[in] inclusive The flag for applying an inclusive scan if true,
- *            an exclusive scan if false.
- * @param[in] skip_nulls Exclude null values when computing the result if
- * nulls_inclusion::EXCLUDE_NULLS.
- * Include nulls if nulls_inclusion::INCLUDE_NULLS. Any operation with a null
- * results in a null.
+ * @param[in] inclusive The flag for applying an inclusive scan if
+ *            scan_type::INCLUSIVE, an exclusive scan if scan_type::EXCLUSIVE.
+ * @param[in] include_nulls_flag Exclude null values when computing the result if
+ * include_nulls::NO. Include nulls if include_nulls::YES.
+ * Any operation with a null results in a null.
  * @params[in] mr The resource to use for all allocations
  * @returns unique pointer to new output column
  * ----------------------------------------------------------------------------**/
 std::unique_ptr<column>
 scan(const column_view &input, std::unique_ptr<aggregation> const &agg,
-     scan_type inclusive, nulls_inclusion skip_nulls = nulls_inclusion::EXCLUDE_NULLS,
+     scan_type inclusive, include_nulls include_nulls_flag = include_nulls::NO,
      rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
 }  // namespace experimental
