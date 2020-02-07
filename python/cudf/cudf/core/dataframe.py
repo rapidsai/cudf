@@ -2129,12 +2129,17 @@ class DataFrame(Frame):
                 raise ValueError(errmsg.format(k))
 
         if order == "F":
-            matrix = rmm.device_array(
-                shape=(nrow, ncol), dtype=dtype, order=order
+            matrix = cupy.ndarray(
+                shape=(nrow, ncol),
+                dtype=dtype,
+                order=order,
+                memptr=cupy.asarray(
+                    rmm.DeviceBuffer(nrow * ncol * dtype.itemsize)
+                ).data,
             )
             for colidx, inpcol in enumerate(cols):
                 dense = inpcol.astype(dtype).to_gpu_array(fillna="pandas")
-                matrix[:, colidx].copy_to_device(dense)
+                matrix[:, colidx] = dense
         elif order == "C":
             matrix = cudautils.row_matrix(cols, nrow, ncol, dtype)
         else:
