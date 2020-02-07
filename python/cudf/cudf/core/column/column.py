@@ -92,9 +92,7 @@ class ColumnBase(Column):
         View the mask as a device array
         """
         result = rmm.device_array_from_ptr(
-            ptr=self.mask.ptr,
-            nelem=calc_chunk_size(len(self), mask_bitsize),
-            dtype=np.int8,
+            ptr=self.mask.ptr, nelem=self.mask.size, dtype=np.int8,
         )
         result.gpu_data._obj = self
         return result
@@ -107,9 +105,8 @@ class ColumnBase(Column):
         sr = pd.Series(arr.copy_to_host())
 
         if self.nullable:
-            mask_bits = self.mask_array_view.copy_to_host()
             mask_bytes = (
-                cudautils.expand_mask_bits(len(self), mask_bits)
+                cudautils.expand_mask_bits(len(self), self.mask_array_view)
                 .copy_to_host()
                 .astype(bool)
             )
