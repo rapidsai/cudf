@@ -77,8 +77,8 @@ TEST_P(SliceParmsTest, Slice)
     auto strings_view = cudf::strings_column_view(strings);
     auto results = cudf::strings::detail::slice(strings_view,start,end);
 
-    cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
-         thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
+    cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end() );
+        // thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
     cudf::test::expect_columns_equal(*results,expected);
 }
 
@@ -117,8 +117,8 @@ TEST_P(SliceParmsTest, SliceAllEmpty)
     }
     auto strings_view = cudf::strings_column_view(strings);
     auto results = cudf::strings::detail::slice(strings_view,start,end);
-    cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
-         thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
+    cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end() );
+        // thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
     cudf::test::expect_columns_equal(*results,expected);
 }
 
