@@ -45,7 +45,7 @@ std::unique_ptr<column> concatenate( std::vector<strings_column_view> const& str
     // build vector of column_device_views
     std::vector<std::unique_ptr<column_device_view,std::function<void(column_device_view*)> > > device_cols(strings_columns.size());
     thrust::host_vector<column_device_view> h_device_views;
-    for( auto &scv : strings_columns )
+    for( auto&& scv : strings_columns )
     {
         device_cols.emplace_back(column_device_view::create(scv.parent(),stream));
         h_device_views.push_back(*(device_cols.back()));
