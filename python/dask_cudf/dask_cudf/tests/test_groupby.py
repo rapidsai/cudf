@@ -268,12 +268,13 @@ def test_groupby_split_out_multiindex(agg_func):
     dd.assert_eq(gr.compute(), pr.compute())
 
 
-def test_groupby_multiindex_reset_index():
+@pytest.mark.parametrize("npartitions", [1, 2])
+def test_groupby_multiindex_reset_index(npartitions):
     df = cudf.DataFrame(
         {"a": [1, 1, 2, 3, 4], "b": [5, 2, 1, 2, 5], "c": [1, 2, 2, 3, 5]}
     )
-    ddf = dask_cudf.from_cudf(df, npartitions=2)
-    pddf = dd.from_pandas(df.to_pandas(), npartitions=2)
+    ddf = dask_cudf.from_cudf(df, npartitions=npartitions)
+    pddf = dd.from_pandas(df.to_pandas(), npartitions=npartitions)
     gr = ddf.groupby(["a", "c"]).agg({"b": ["count"]}).reset_index()
     pr = pddf.groupby(["a", "c"]).agg({"b": ["count"]}).reset_index()
     dd.assert_eq(
