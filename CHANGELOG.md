@@ -37,6 +37,7 @@
 - PR #4067 Removed unused `CATEGORY` type ID.
 - PR #3891 Port NVStrings (r)split_record to contiguous_(r)split_record
 - PR #4064 Add cudaGetDeviceCount to JNI layer
+- PR #3716 Update cudf.to_parquet to use new GPU accelerated Parquet writer
 
 ## Bug Fixes
 
@@ -131,7 +132,6 @@
 - PR #3616 Add aggregation infrastructure for argmax/argmin.
 - PR #3653 Make `gather_bitmask_kernel` more reusable.
 - PR #3710 Remove multiple CMake configuration steps from root build script
-- PR #3716 Update cudf.to_parquet to use new GPU accelerated Parquet writer
 - PR #3657 Define and implement compiled binops for string column comparisons
 - PR #3520 Change read_parquet defaults and add warnings
 - PR #3780 Java APIs for selecting a GPU

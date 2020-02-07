@@ -122,14 +122,35 @@ cpdef write_parquet(
 
     cdef vector[string] column_names
     cdef map[string, string] user_data
+    cdef table_view tv = table.data_view()
 
-    # Construct the column names
-    column_names.push_back(str.encode(table._index.name))
+    index_columns = []
+    column_metadata = []
+
+    if index is None or index is True:
+        tv = table.view()
+
+        index_columns.append(table._index.name)
+
+        # Write the index out as value columns
+        column_names.push_back(str.encode(table._index.name))
+
+        # Append the index column
+        idx_dtype = table._index._data[table._index.name].dtype
+        column_metadata.append({
+            "name": table._index.name,
+            "field_name": table._index.name,
+            "pandas_type": pd.api.types.pandas_dtype(idx_dtype).name,
+            "numpy_type": np.dtype(idx_dtype).name,
+            "metadata": None
+        })
+
+
+    # Value columns to output    
     for col_name in table._column_names:
         column_names.push_back(str.encode(col_name))
 
-    # Construct Pandas metadata
-    column_metadata = []
+    # Construct Pandas column metadata
     for c in table._column_names:
         col = table._data[c]
         column_metadata.append({
@@ -140,29 +161,19 @@ cpdef write_parquet(
             "metadata": None
         })
 
-    # Append the index column
-    idx_dtype = table._index._data[table._index.name].dtype
-    column_metadata.append({
-        "name": table._index.name,
-        "field_name": table._index.name,
-        "pandas_type": pd.api.types.pandas_dtype(idx_dtype).name,
-        "numpy_type": np.dtype(idx_dtype).name,
-        "metadata": None
-    })
-
+    # Create the final Pandas metadata
     pandas_metadata = {
-        "index_columns": [table._index.name],
+        "index_columns": index_columns,
         "column_indexes": [],
         "columns": column_metadata,
-        "pandas_version": "0.20.0",  # What do we really need to put here?
+        "pandas_version": pd.__version__,
         "creator": {
             "library": "cudf",
-            "version": "0.13"   # What to place here??
+            "version": cudf.__version__
         }
     }
-
     json_str = json.dumps(pandas_metadata)
-
+    print("Pandas Metadata: " + str(json_str))
     user_data[str.encode("pandas")] = str.encode(json_str)
 
     # Set the table_metadata
@@ -171,9 +182,9 @@ cpdef write_parquet(
 
     cdef compression_type comp_type
     if compression is None:
-        comp_type = compression_type.none
+        comp_type = compression_type.NONE
     elif compression == "snappy":
-        comp_type = compression_type.snappy
+        comp_type = compression_type.SNAPPY
     else:
         raise ValueError("Unsupported `compression` type")
 
@@ -188,7 +199,6 @@ cpdef write_parquet(
     else:
         raise ValueError("Unsupported `statistics_freq` type")
 
-    cdef table_view tv = table.view()
     cdef write_parquet_args args
 
     # Perform write

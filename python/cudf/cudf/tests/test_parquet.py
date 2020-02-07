@@ -470,15 +470,58 @@ def test_multifile_warning(datadir):
 
 
 # Validates the integrity of the GPU accelerated parquet writer.
-def test_parquet_writer_gpu(tmpdir, simple_pdf, simple_gdf):
+def test_parquet_writer_gpu_none_index(tmpdir, simple_pdf, simple_gdf):
     gdf_fname = tmpdir.join("gdf.parquet")
+    pdf_fname = tmpdir.join("pdf.parquet")
+
+    assert_eq(simple_pdf, simple_gdf)
 
     # Write out the gdf using the GPU accelerated writer
-    simple_gdf.to_parquet(gdf_fname.strpath)
-    expect = simple_gdf
-    assert os.path.exists(gdf_fname)
+    simple_gdf.to_parquet(gdf_fname.strpath, index=None)
+    simple_pdf.to_parquet(pdf_fname.strpath, index=None)
 
-    # Read the gdf back in using Pandas
+    assert os.path.exists(gdf_fname)
+    assert os.path.exists(pdf_fname)
+
+    expect = pd.read_parquet(pdf_fname)
+    got = pd.read_parquet(gdf_fname)
+
+    assert_eq(expect, got, check_categorical=False)
+
+
+def test_parquet_writer_gpu_true_index(tmpdir, simple_pdf, simple_gdf):
+    gdf_fname = tmpdir.join("gdf.parquet")
+    pdf_fname = tmpdir.join("pdf.parquet")
+
+    assert_eq(simple_pdf, simple_gdf)
+
+    # Write out the gdf using the GPU accelerated writer
+    simple_gdf.to_parquet(gdf_fname.strpath, index=True)
+    simple_pdf.to_parquet(pdf_fname.strpath, index=True)
+
+    assert os.path.exists(gdf_fname)
+    assert os.path.exists(pdf_fname)
+
+    expect = pd.read_parquet(pdf_fname)
+    got = pd.read_parquet(gdf_fname)
+
+    assert_eq(expect, got, check_categorical=False)
+
+
+def test_parquet_writer_gpu_false_index(tmpdir, simple_pdf, simple_gdf):
+    gdf_fname = tmpdir.join("gdf.parquet")
+    pdf_fname = tmpdir.join("pdf.parquet")
+
+    assert_eq(simple_pdf, simple_gdf)
+
+    # Write out the gdf using the GPU accelerated writer
+    simple_gdf.to_parquet(gdf_fname.strpath, index=False)
+    simple_pdf.to_parquet(pdf_fname.strpath, index=False)
+
+    assert os.path.exists(gdf_fname)
+    assert os.path.exists(pdf_fname)
+
+    expect = pd.read_parquet(pdf_fname)
     got = pd.read_parquet(gdf_fname)
 
     assert_eq(expect, got, check_categorical=False)
