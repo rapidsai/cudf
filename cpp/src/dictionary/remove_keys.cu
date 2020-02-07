@@ -47,20 +47,20 @@ std::unique_ptr<column> remove_keys( dictionary_column_view const& dictionary_co
     // locate keys to remove by searching the keys column
     auto matches = experimental::detail::contains( keys_view, keys_to_remove, mr, stream);
     auto d_matches = matches->view().data<experimental::bool8>();
-    // create keys indices column to identify original key positions after removing they keys
-    rmm::device_vector<int32_t> keys_indices(keys_view.size()); // needed for remapping indices
-    thrust::sequence( execpol->on(stream), keys_indices.begin(), keys_indices.end() );
-    column_view keys_indices_view( data_type{INT32}, keys_view.size(), keys_indices.data().get() );
+    // create keys positions column to identify original key positions after removing they keys
+    rmm::device_vector<int32_t> keys_positions(keys_view.size()); // needed for remapping indices
+    thrust::sequence( execpol->on(stream), keys_positions.begin(), keys_positions.end() );
+    column_view keys_positions_view( data_type{INT32}, keys_view.size(), keys_positions.data().get() );
     // copy the non-removed keys ( d_matches: true=remove, false=keep )
-    auto table_keys = experimental::detail::copy_if( table_view{{keys_view, keys_indices_view}},
+    auto table_keys = experimental::detail::copy_if( table_view{{keys_view, keys_positions_view}},
         [d_matches]__device__(size_type idx) { return !d_matches[idx]; }, mr, stream )->release();
     std::unique_ptr<column> keys_column(std::move(table_keys.front()));
-    keys_indices_view = table_keys[1]->view();
+    keys_positions_view = table_keys[1]->view();
     rmm::device_vector<int32_t> map_indices(keys_view.size(),-1); // init -1 to identify new nulls
     // build indices mapper; example scatter([0,1,2][0,2,4][-1,-1,-1,-1,-1]) => [0,-1,1,-1,2]
     thrust::scatter( execpol->on(stream), thrust::make_counting_iterator<int32_t>(0),
-                     thrust::make_counting_iterator<int32_t>(keys_indices_view.size()),
-                     keys_indices_view.begin<int32_t>(), map_indices.begin() );
+                     thrust::make_counting_iterator<int32_t>(keys_positions_view.size()),
+                     keys_positions_view.begin<int32_t>(), map_indices.begin() );
     // create new indices column
     // gather([4,0,3,1,2,2,2,4,0],[0,-1,1,-1,2]) => [2,0,-1,-1,1,1,1,2,0]
     column_view map_indices_view( data_type{INT32}, keys_view.size(), map_indices.data().get() );
@@ -68,7 +68,7 @@ std::unique_ptr<column> remove_keys( dictionary_column_view const& dictionary_co
                     indices_view, false, false, false, mr, stream )->release();
     std::unique_ptr<column> indices_column(std::move(table_indices.front()));
 
-    // compute new nulls -- merge the current nulls with the newly created ones (value<0)
+    // compute new nulls -- merge the existing nulls with the newly created ones (value<0)
     auto d_null_mask = dictionary_column.null_mask();
     auto d_indices = indices_column->view().data<int32_t>();
     auto new_nulls = experimental::detail::valid_if( thrust::make_counting_iterator<size_type>(0),
@@ -80,7 +80,7 @@ std::unique_ptr<column> remove_keys( dictionary_column_view const& dictionary_co
                     }, stream, mr);
 
     // create column with keys_column and indices_column
-    return make_dictionary_column( std::move(keys_column), std::move(indices_column), 
+    return make_dictionary_column( std::move(keys_column), std::move(indices_column),
                                    std::move(new_nulls.first), new_nulls.second );
 }
 
