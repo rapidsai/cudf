@@ -1660,7 +1660,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * representation of the data will be used for the cast.
    *
    * For Strings:
-   * Spark sql's cast string from/to timestamp isn't supported atm.
+   * Casting strings from/to timestamp isn't supported atm.
    * Please look at {@link ColumnVector#asTimestamp(DType, String)}
    * for casting string to timestamp when the format is known
    *
