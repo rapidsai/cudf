@@ -38,6 +38,7 @@
 - PR #4038 JNI and Java support for is_nan and is_not_nan
 - PR #4067 Removed unused `CATEGORY` type ID.
 - PR #3891 Port NVStrings (r)split_record to contiguous_(r)split_record
+- PR #4072 Allow round_robin_partition to single partition
 - PR #4064 Add cudaGetDeviceCount to JNI layer
 - PR #4079 Simply use `mask.size` to create the array view
 - PR #4092 Keep mask on GPU for bit unpacking
