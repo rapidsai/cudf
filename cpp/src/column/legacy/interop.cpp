@@ -33,7 +33,6 @@ data_type gdf_dtype_to_data_type(gdf_dtype dtype) {
         case GDF_DATE32:    return data_type{TIMESTAMP_DAYS};
         case GDF_DATE64:    return data_type{TIMESTAMP_MILLISECONDS};
         case GDF_TIMESTAMP: return data_type{TIMESTAMP_MILLISECONDS};
-        case GDF_CATEGORY:  return data_type{CATEGORY};
         default:
            CUDF_FAIL("Unsupported `gdf_dtype` for conversion to `data_type`.");
     }
@@ -53,7 +52,6 @@ gdf_dtype data_type_to_gdf_dtype( data_type type) {
     case TIMESTAMP_MILLISECONDS: return GDF_TIMESTAMP;
     case TIMESTAMP_MICROSECONDS: return GDF_TIMESTAMP;
     case TIMESTAMP_NANOSECONDS:  return GDF_TIMESTAMP;
-    case CATEGORY:               return GDF_CATEGORY;
     default:
       CUDF_FAIL("Unsupported `data_type` for conversion to `gdf_dtype.");
   }

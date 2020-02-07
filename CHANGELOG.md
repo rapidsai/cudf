@@ -6,7 +6,9 @@
 - PR #3693 add string support, skipna to scan operation
 - PR #3662 Define and implement `shift`.
 - PR #3861 Added Series.sum feature for String
-
+- PR #3681 Add cudf::experimental::boolean_mask_scatter
+- PR #4040 Add support for n-way merge of sorted tables
+- PR #4053 Multi-column quantiles.
 
 ## Improvements
 
@@ -31,7 +33,16 @@
 - PR #3880 Add aggregation infrastructure support for reduction
 - PR #4021 Change quantiles signature for clarity.
 - PR #4045 Reorganize `libxx` directory
+- PR #4029 Port stream_compaction.pyx to use libcudf++ APIs
+- PR #4031 Docs build scripts and instructions update
+- PR #4062 Improve how java classifiers are produced
 - PR #4038 JNI and Java support for is_nan and is_not_nan
+- PR #4067 Removed unused `CATEGORY` type ID.
+- PR #3891 Port NVStrings (r)split_record to contiguous_(r)split_record
+- PR #4064 Add cudaGetDeviceCount to JNI layer
+- PR #4079 Simply use `mask.size` to create the array view
+- PR #4092 Keep mask on GPU for bit unpacking
+- PR #4081 Copy from `Buffer`'s pointer directly to host
 
 ## Bug Fixes
 
@@ -51,10 +62,16 @@
 - PR #4037 Fix JNI quantile compile issue
 - PR #4054 Fixed JNI to deal with reduction API changes
 - PR #4052 Fix for round-robin when num_partitions divides nrows.
+- PR #4061 Add NDEBUG guard on `constexpr_assert`.
 - PR #4049 Fix `cudf::split` issue returning one less than expected column vectors
+- PR #4065 Parquet writer: fix for out-of-range dictionary indices
+- PR #4066 Fixed mismatch with dtype enums
+- PR #4080 Fix multi-index dask test with sort issue
+- PR #4084 Update Java for removal of CATEGORY type
+- PR #4089 Fix dask groupby mutliindex test case issues in join
 
 
-# cuDF 0.12.0 (Date TBD)
+# cuDF 0.12.0 (04 Feb 2020)
 
 ## New Features
 
