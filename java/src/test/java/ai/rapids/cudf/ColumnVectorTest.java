@@ -422,7 +422,6 @@ public class ColumnVectorTest extends CudfTestBase {
           s = Scalar.fromString("hello, world!");
           break;
         case EMPTY:
-        case CATEGORY:
           continue;
         default:
           throw new IllegalArgumentException("Unexpected type: " + type);
@@ -527,7 +526,6 @@ public class ColumnVectorTest extends CudfTestBase {
           break;
         }
         case EMPTY:
-        case CATEGORY:
           continue;
         default:
           throw new IllegalArgumentException("Unexpected type: " + type);
@@ -553,7 +551,7 @@ public class ColumnVectorTest extends CudfTestBase {
   void testFromScalarNull() {
     final int rowCount = 4;
     for (DType type : DType.values()) {
-      if (type == DType.EMPTY || type == DType.CATEGORY) {
+      if (type == DType.EMPTY) {
         continue;
       }
       try (Scalar s = Scalar.fromNull(type);
