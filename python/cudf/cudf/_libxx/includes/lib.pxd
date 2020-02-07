@@ -141,4 +141,5 @@ cdef extern from "<utility>" namespace "std" nogil:
     cdef unique_ptr[column] move(unique_ptr[column])
     cdef unique_ptr[table] move(unique_ptr[table])
     cdef vector[unique_ptr[column]] move(vector[unique_ptr[column]])
-    cdef pair[unique_ptr[table], vector[size_type]] move(pair[unique_ptr[table], vector[size_type]])
+    cdef pair[unique_ptr[table], vector[size_type]] move(
+        pair[unique_ptr[table], vector[size_type]])

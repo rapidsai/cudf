@@ -14,6 +14,7 @@ from cudf._libxx.includes.hash cimport (
     hash as cpp_hash
 )
 
+
 def _hash_partition(Table source_table, columns_to_hash, num_partitions):
     cdef vector[size_type] c_columns_to_hash = columns_to_hash
     cdef int c_num_partitions = num_partitions
@@ -26,10 +27,14 @@ def _hash_partition(Table source_table, columns_to_hash, num_partitions):
         )
     )
 
-    return (Table.from_unique_ptr(move(c_result.first),
-        column_names=source_table._column_names,
-        index_names=source_table._index._column_names),
-        list(c_result.second))
+    return (
+        Table.from_unique_ptr(
+            move(c_result.first),
+            column_names=source_table._column_names,
+            index_names=source_table._index._column_names),
+        list(c_result.second)
+    )
+
 
 def _hash(Table source_table, initial_hash_values=None):
     cdef vector[uint32_t] c_initial_hash = initial_hash_values
