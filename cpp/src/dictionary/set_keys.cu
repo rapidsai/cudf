@@ -16,15 +16,10 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/copying.hpp>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
-#include <cudf/stream_compaction.hpp>
 #include <cudf/detail/search.hpp>
 #include <cudf/detail/valid_if.cuh>
-#include <cudf/table/table.hpp>
-#include <cudf/table/table_view.hpp>
-#include <cudf/table/row_operators.cuh>
-#include <cudf/dictionary/encode.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/binary_search.h>
@@ -38,12 +33,12 @@ namespace detail
 namespace
 {
 
-struct dispatch_compute_indices                                  
-{                                                                
-    template<typename Element>                                   
+struct dispatch_compute_indices
+{
+    template<typename Element>
     std::unique_ptr<column> operator()( dictionary_column_view const& input, column_view const& new_keys,
                                         rmm::mr::device_memory_resource* mr, cudaStream_t stream )
-    {                                                            
+    {
         auto dictionary_view = column_device_view::create(input.parent(),stream);
         auto d_dictionary = *dictionary_view;
         auto dictionary_itr = thrust::make_transform_iterator( thrust::make_counting_iterator<size_type>(0),
@@ -61,11 +56,11 @@ struct dispatch_compute_indices
             [d_new_keys] __device__ (size_type idx) {
                 return d_new_keys.template element<Element>(idx);
             });
-                                                                  
+
         auto result = make_numeric_column(data_type{INT32}, input.size(),
                                          mask_state::UNALLOCATED,stream, mr);
-        auto d_result = result->mutable_view().data<int32_t>();  
-        auto execpol = rmm::exec_policy(stream);                 
+        auto d_result = result->mutable_view().data<int32_t>();
+        auto execpol = rmm::exec_policy(stream);
         thrust::lower_bound( execpol->on(stream), keys_itr, keys_itr + new_keys.size(),
                              dictionary_itr, dictionary_itr + input.size(),
                              d_result, thrust::less<Element>() );
@@ -92,7 +87,7 @@ std::unique_ptr<column> set_keys( dictionary_column_view const& dictionary_colum
     // copy the keys
     auto keys_column = std::make_unique<column>(new_keys,stream,mr);
     // compute the new indices
-    auto indices_column = experimental::type_dispatcher( new_keys.type(), dispatch_compute_indices{}, 
+    auto indices_column = experimental::type_dispatcher( new_keys.type(), dispatch_compute_indices{},
         dictionary_column, new_keys, mr, stream );
 
     // compute the new nulls
@@ -109,7 +104,7 @@ std::unique_ptr<column> set_keys( dictionary_column_view const& dictionary_colum
                     }, stream, mr);
 
     // create column with keys_column and indices_column
-    return make_dictionary_column( std::move(keys_column), std::move(indices_column), 
+    return make_dictionary_column( std::move(keys_column), std::move(indices_column),
                                    std::move(new_nulls.first), new_nulls.second );
 }
 } // namespace detail
