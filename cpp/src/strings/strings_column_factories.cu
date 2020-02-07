@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/null_mask.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <strings/utilities.hpp>
@@ -24,7 +23,6 @@
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/transform_reduce.h>
-#include <thrust/transform_scan.h>
 #include <thrust/for_each.h>
 
 
