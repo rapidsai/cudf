@@ -8,6 +8,7 @@
 - PR #3861 Added Series.sum feature for String
 - PR #3681 Add cudf::experimental::boolean_mask_scatter
 - PR #4040 Add support for n-way merge of sorted tables
+- PR #4053 Multi-column quantiles.
 
 ## Improvements
 
@@ -42,6 +43,8 @@
 - PR #3891 Port NVStrings (r)split_record to contiguous_(r)split_record
 - PR #4064 Add cudaGetDeviceCount to JNI layer
 - PR #4079 Simply use `mask.size` to create the array view
+- PR #4092 Keep mask on GPU for bit unpacking
+- PR #4081 Copy from `Buffer`'s pointer directly to host
 
 ## Bug Fixes
 
