@@ -63,6 +63,7 @@
 - PR #4066 Fixed mismatch with dtype enums
 - PR #4080 Fix multi-index dask test with sort issue
 - PR #4084 Update Java for removal of CATEGORY type
+- PR #4089 Fix dask groupby mutliindex test case issues in join
 
 
 # cuDF 0.12.0 (04 Feb 2020)
