@@ -20,7 +20,6 @@
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <rmm/mr/device_memory_resource.hpp>
 
 namespace cudf {
 namespace experimental {
@@ -153,7 +152,7 @@ table_with_metadata read_orc(read_orc_args const& args,
   auto reader = make_reader<orc::reader>(args.source, options, mr);
 
   if (args.stripe != -1) {
-    return reader->read_stripe(args.stripe);
+    return reader->read_stripe(args.stripe, std::max(args.stripe_count, 1));
   } else if (args.skip_rows != -1 || args.num_rows != -1) {
     return reader->read_rows(args.skip_rows, args.num_rows);
   } else {
@@ -183,7 +182,7 @@ table_with_metadata read_parquet(read_parquet_args const& args,
   auto reader = make_reader<parquet::reader>(args.source, options, mr);
 
   if (args.row_group != -1) {
-    return reader->read_row_group(args.row_group);
+    return reader->read_row_group(args.row_group, std::max(args.row_group_count, 1));
   } else if (args.skip_rows != -1 || args.num_rows != -1) {
     return reader->read_rows(args.skip_rows, args.num_rows);
   } else {

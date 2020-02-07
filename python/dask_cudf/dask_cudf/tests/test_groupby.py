@@ -276,7 +276,10 @@ def test_groupby_multiindex_reset_index():
     pddf = dd.from_pandas(df.to_pandas(), npartitions=1)
     gr = ddf.groupby(["a", "c"]).agg({"b": ["count"]}).reset_index()
     pr = pddf.groupby(["a", "c"]).agg({"b": ["count"]}).reset_index()
-    dd.assert_eq(gr.compute(), pr.compute())
+    dd.assert_eq(
+        gr.compute().sort_values(by=["a", "c"]).reset_index(drop=True),
+        pr.compute().sort_values(by=["a", "c"]).reset_index(drop=True),
+    )
 
 
 @pytest.mark.parametrize(
@@ -318,6 +321,6 @@ def test_groupby_reset_index_drop_True():
     pddf = dd.from_pandas(df.to_pandas(), 5)
     gr = ddf.groupby(["a"]).agg({"b": ["count"]}).reset_index(drop=True)
     pr = pddf.groupby(["a"]).agg({"b": ["count"]}).reset_index(drop=True)
-    gf = gr.compute()
-    pf = pr.compute()
+    gf = gr.compute().sort_values(by=["b"]).reset_index(drop=True)
+    pf = pr.compute().sort_values(by=[("b", "count")]).reset_index(drop=True)
     dd.assert_eq(gf, pf)
