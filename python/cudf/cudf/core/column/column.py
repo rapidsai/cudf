@@ -94,9 +94,7 @@ class ColumnBase(Column):
         View the mask as a device array
         """
         result = rmm.device_array_from_ptr(
-            ptr=self.mask_ptr,
-            nelem=calc_chunk_size(len(self), mask_bitsize),
-            dtype=np.int8,
+            ptr=self.mask_ptr, nelem=self.mask.size, dtype=np.int8,
         )
         result.gpu_data._obj = self
         return result

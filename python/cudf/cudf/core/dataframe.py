@@ -2821,8 +2821,9 @@ class DataFrame(Frame):
         df.index.name = None
 
         if len(idx_col_names) > 1:
-            df.index._source_data.columns = index_frame_l.columns
             df.index.names = index_frame_l.columns
+            for new_key, old_key in zip(index_frame_l.columns, idx_col_names):
+                df.index._data[new_key] = df.index._data.pop(old_key)
 
         return df
 
