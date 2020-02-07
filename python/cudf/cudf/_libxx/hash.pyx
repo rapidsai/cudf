@@ -18,7 +18,7 @@ def _hash_partition(Table source_table, columns_to_hash, num_partitions):
     cdef vector[size_type] c_columns_to_hash = columns_to_hash
     cdef int c_num_partitions = num_partitions
 
-    cdef pair[unique_ptr[table], vector[size_type]] c_result = (
+    cdef pair[unique_ptr[table], vector[size_type]] c_result = move(
         cpp_hash_partition(
             source_table.view(),
             c_columns_to_hash,
@@ -34,7 +34,7 @@ def _hash_partition(Table source_table, columns_to_hash, num_partitions):
 def _hash(Table source_table, initial_hash_values=None):
     cdef vector[uint32_t] c_initial_hash = initial_hash_values
 
-    cdef unique_ptr[column] c_result = (
+    cdef unique_ptr[column] c_result = move(
         cpp_hash(
             source_table.data_view(),
             c_initial_hash
