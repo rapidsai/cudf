@@ -448,6 +448,13 @@ cdef class Column:
 
     @staticmethod
     cdef Column from_column_view(column_view cv, object owner):
+        """
+        Given a ``cudf::column_view``, constructs a ``cudf.Column`` from it,
+        along with referencing an ``owner`` Python object that owns the memory
+        lifetime. If ``owner`` is a ``cudf.Column``, we reach inside of it and
+        make the owner of each newly created ``Buffer`` the respective
+        ``Buffer`` from the ``owner`` ``cudf.Column``.
+        """
         from cudf.core.column import build_column
 
         column_owner = isinstance(owner, Column)
@@ -498,9 +505,9 @@ cdef class Column:
             data,
             dtype,
             mask,
+            size,
             offset,
             tuple(children)
         )
-        result.size = size
 
         return result
