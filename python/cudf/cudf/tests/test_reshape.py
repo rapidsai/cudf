@@ -107,6 +107,10 @@ def test_df_stack(nulls, num_cols, num_rows, dtype):
     got = gdf.stack()
 
     expect = pdf.stack()
+    if {None} == set(expect.index.names):
+        expect.rename_axis(
+            list(range(0, len(expect.index.names))), inplace=True
+        )
 
     assert_eq(expect, got)
     pass
