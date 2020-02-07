@@ -7,6 +7,8 @@
 - PR #3662 Define and implement `shift`.
 - PR #3861 Added Series.sum feature for String
 - PR #3681 Add cudf::experimental::boolean_mask_scatter
+- PR #4040 Add support for n-way merge of sorted tables
+- PR #4053 Multi-column quantiles.
 
 ## Improvements
 
@@ -36,7 +38,11 @@
 - PR #4038 JNI and Java support for is_nan and is_not_nan
 - PR #4067 Removed unused `CATEGORY` type ID.
 - PR #3891 Port NVStrings (r)split_record to contiguous_(r)split_record
+- PR #4072 Allow round_robin_partition to single partition
 - PR #4064 Add cudaGetDeviceCount to JNI layer
+- PR #4079 Simply use `mask.size` to create the array view
+- PR #4092 Keep mask on GPU for bit unpacking
+- PR #4081 Copy from `Buffer`'s pointer directly to host
 
 ## Bug Fixes
 
@@ -63,6 +69,8 @@
 - PR #4080 Fix multi-index dask test with sort issue
 - PR #4084 Update Java for removal of CATEGORY type
 - PR #4086 ORC reader: fix potentially incorrect timestamp decoding in the last rowgroup
+- PR #4089 Fix dask groupby mutliindex test case issues in join
+- PR #4076 All null string entries should have null data buffer
 
 
 # cuDF 0.12.0 (04 Feb 2020)
@@ -131,7 +139,6 @@
 - PR #3673 Parquet reader: improve rounding of timestamp conversion to seconds
 - PR #3699 Stringify libcudacxx headers for binary op JIT
 - PR #3697 Improve column insert performance for wide frames
-- PR #3616 Add aggregation infrastructure for argmax/argmin.
 - PR #3653 Make `gather_bitmask_kernel` more reusable.
 - PR #3710 Remove multiple CMake configuration steps from root build script
 - PR #3657 Define and implement compiled binops for string column comparisons
