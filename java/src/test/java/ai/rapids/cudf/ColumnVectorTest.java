@@ -1316,8 +1316,10 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector s_timestamps = ColumnVector.timestampSecondsFromLongs(TIMES_S);
          ColumnVector unsupported_s_string_times = ColumnVector.fromStrings(UNSUPPORTED_TIME_S_STRING);
          ColumnVector unsupported_s_timestamps = ColumnVector.timestampSecondsFromLongs(UNSUPPORTED_TIME_S);
-         ColumnVector timestampsAsStrings = s_timestamps.asStrings("%Y-%m-%d %H:%M:%S")) {
+         ColumnVector timestampsAsStrings = s_timestamps.asStrings("%Y-%m-%d %H:%M:%S");
+         ColumnVector timestampsAsStringsUsingDefaultFormat = s_timestamps.asStrings()) {
       assertColumnsAreEqual(s_string_times, timestampsAsStrings);
+      assertColumnsAreEqual(timestampsAsStringsUsingDefaultFormat, timestampsAsStrings);
       assertThrows(AssertionFailedError.class, () -> assertColumnsAreEqual(unsupported_s_string_times, unsupported_s_timestamps));
     }
 
@@ -1330,7 +1332,6 @@ public class ColumnVectorTest extends CudfTestBase {
       assertColumnsAreEqual(ns_string_times, timestampsAsStrings);
       assertThrows(AssertionFailedError.class, () -> assertColumnsAreEqual(unsupported_ns_string_times, unsupported_ns_timestamps));
     }
-
   }
 
   @Test

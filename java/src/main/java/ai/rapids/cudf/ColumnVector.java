@@ -1903,7 +1903,9 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return A new vector allocated on the GPU.
    */
   public ColumnVector asStrings() {
-    assert !type.isTimestamp() : "timestamp to String not supported without format yet";
+    if (type.isTimestamp()) {
+      return asStrings("%Y-%m-%d %H:%M:%S");
+    }
     return castTo(DType.STRING);
   }
 
@@ -1922,8 +1924,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return A new vector allocated on the GPU
    */
   public ColumnVector asStrings(String format) {
-    assert type.isTimestamp() : "unsupported conversion to non-timestamp DType";
-    assert format != null : "Format string may not be NULL";
+    assert type.isTimestamp() : "unsupported conversion from non-timestamp DType";
+    assert format != null || format.isEmpty(): "Format string may not be NULL or empty";
 
     return new ColumnVector(timestampToStringTimestamp(this.getNativeView(), format));
   }
