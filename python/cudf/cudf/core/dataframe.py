@@ -1563,7 +1563,7 @@ class DataFrame(Frame):
         """
         positions = as_column(positions)
         if pd.api.types.is_bool_dtype(positions):
-            return self._apply_boolean_mask(positions,)
+            return self._apply_boolean_mask(positions)
         out = self._gather(positions)
         out.columns = self.columns
         return out
@@ -1580,7 +1580,7 @@ class DataFrame(Frame):
             else:
                 colname = columns[positions[idx]]
             if len(self) == 0:
-                result[colname] = as_column([])
+                result[colname] = as_column([], dtype=positions.dtype)
             else:
                 result[colname] = column_values[positions[idx]]
 
