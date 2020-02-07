@@ -118,7 +118,7 @@ cdef class Table:
         created ``cudf.Table`` the respective ``Buffer`` from the relevant
         ``cudf.Column`` of the ``owner`` ``cudf.Table``.
         """
-        cdef table_view.iterator it = tv.begin()
+        cdef size_type column_idx = 0
         table_owner = isinstance(owner, Table)
 
         # First construct the index, if any
@@ -128,11 +128,14 @@ cdef class Table:
             for _ in index_names:
                 column_owner = owner
                 if table_owner:
-                    column_owner = table_owner._columns[it - tv.begin()]
+                    column_owner = table_owner._columns[column_idx]
                 index_columns.append(
-                    Column.from_column_view(dereference(it), column_owner)
+                    Column.from_column_view(
+                        tv.column(column_idx),
+                        column_owner
+                    )
                 )
-                it += 1
+                column_idx += 1
             index = Table(OrderedColumnDict(zip(index_names, index_columns)))
 
         # Construct the data OrderedColumnDict
@@ -140,11 +143,11 @@ cdef class Table:
         for _ in column_names:
             column_owner = owner
             if table_owner:
-                column_owner = table_owner._columns[it - tv.begin()]
+                column_owner = table_owner._columns[column_idx]
             data_columns.append(
-                Column.from_column_view(dereference(it), column_owner)
+                Column.from_column_view(tv.column(column_idx), column_owner)
             )
-            it += 1
+            column_idx += 1
         data = OrderedColumnDict(zip(column_names, data_columns))
 
         return Table(data=data, index=index)
