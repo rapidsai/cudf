@@ -16,6 +16,8 @@ test_data = [
     {("a", "b"): [1, 2, 3], ("b", "c"): [2, 3, 4]},
 ]
 
+test_mi_data = [{("a", "b"): [1, 2, 4], ("a", "c"): [2, 3, 4]}]
+
 
 @pytest.fixture(params=test_data)
 def data(request):

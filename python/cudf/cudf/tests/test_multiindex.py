@@ -329,26 +329,27 @@ def test_multiindex_column_shape():
         gdf.columns = gdfIndex
 
 
-def test_multiindex_columns(pdf, gdf, pdfIndex):
+@pytest.mark.parametrize(
+    "query",
+    [
+        ("a", "store", "clouds", "fire"),
+        ("a", "store", "storm", "smoke"),
+        ("a", "store"),
+        ("a", "house"),
+        ("a", "store", "storm"),
+        ("a",),
+        ("c", "forest", "clear"),
+    ],
+)
+def test_multiindex_columns(pdf, gdf, pdfIndex, query):
     pdf = pdf.T
     gdf = cudf.from_pandas(pdf)
     gdfIndex = cudf.from_pandas(pdfIndex)
     assert_eq(pdfIndex, gdfIndex)
     pdf.columns = pdfIndex
     gdf.columns = gdfIndex
-    assert_eq(
-        pdf[("a", "store", "clouds", "fire")],
-        gdf[("a", "store", "clouds", "fire")],
-    )
-    assert_eq(
-        pdf[("a", "store", "storm", "smoke")],
-        gdf[("a", "store", "storm", "smoke")],
-    )
-    assert_eq(pdf[("a", "store")], gdf[("a", "store")])
-    assert_eq(pdf[("b", "house")], gdf[("b", "house")])
-    assert_eq(pdf[("a", "store", "storm")], gdf[("a", "store", "storm")])
-    assert_eq(pdf[("a",)], gdf[("a",)])
-    assert_eq(pdf[("c", "forest", "clear")], gdf[("c", "forest", "clear")])
+    gdf[query]
+    assert_eq(pdf[query], gdf[query])
 
 
 def test_multiindex_from_tuples():

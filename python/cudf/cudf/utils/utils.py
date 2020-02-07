@@ -355,3 +355,32 @@ class OrderedColumnDict(
     ColumnValuesMappingMixin, EqualLengthValuesMappingMixin, OrderedDict
 ):
     pass
+
+
+class NestedMappingMixin:
+    """
+    Make missing values of a mapping empty instances
+    of the same type as the mapping.
+    """
+
+    def __getitem__(self, key):
+        if isinstance(key, tuple):
+            d = self
+            for k in key[:-1]:
+                d = d[k]
+            return d.__getitem__(key[-1])
+        else:
+            return super().__getitem__(key)
+
+    def __setitem__(self, key, value):
+        if isinstance(key, tuple):
+            d = self
+            for k in key[:-1]:
+                d = d.setdefault(k, self.__class__())
+            d.__setitem__(key[-1], value)
+        else:
+            super().__setitem__(key, value)
+
+
+class NestedOrderedDict(NestedMappingMixin, OrderedDict):
+    pass

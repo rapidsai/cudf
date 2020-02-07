@@ -171,6 +171,13 @@ class DataFrame(Frame):
         if isinstance(data, libcudfxx.Table):
             return DataFrame._from_table(data)
 
+        if isinstance(data, ColumnAccessor):
+            self._data = data
+            if index is None:
+                index = as_index(range(len(data.columns[0])))
+            self._index = as_index(index)
+            return None
+
         if data is None:
             if index is None:
                 self._index = RangeIndex(0)
@@ -183,7 +190,7 @@ class DataFrame(Frame):
                         column.column_empty(
                             len(self), dtype="object", masked=True
                         ),
-                    )
+                    ),
                 )
         else:
             if is_list_like(data):
@@ -237,12 +244,12 @@ class DataFrame(Frame):
         data, index = self._align_input_series_indices(data, index=index)
 
         if index is None:
-            for i, col_name in enumerate(data):
+            if data:
+                col_name = next(iter(data))
                 if is_scalar(data[col_name]):
                     num_rows = num_rows or 1
                 else:
-                    data[col_name] = column.as_column(data[col_name])
-                    num_rows = data[col_name].size
+                    num_rows = len(column.as_column(data[col_name]))
             self._index = RangeIndex(0, num_rows)
         else:
             self._index = as_index(index)
@@ -440,11 +447,19 @@ class DataFrame(Frame):
         # returning the rows specified in the boolean mask
         """
         if is_scalar(arg) or isinstance(arg, tuple):
-            if isinstance(self.columns, cudf.MultiIndex):
-                if is_scalar(arg):
-                    arg = [arg]
-                return self.columns._get_column_major(self, tuple(arg))
-            return cudf.Series(self._data[arg], name=arg, index=self.index)
+            if is_scalar(arg):
+                nlevels = 1
+            else:
+                nlevels = len(arg)
+            new_data = self._data.get_by_label(arg)
+            if nlevels == self._data.nlevels:
+                return cudf.Series(new_data, name=arg, index=self.index)
+            else:
+                return cudf.DataFrame(
+                    new_data,
+                    columns=new_data.to_pandas_index(),
+                    index=self.index,
+                )
         elif isinstance(arg, slice):
             df = DataFrame(index=self.index[arg])
             for k, col in self._data.items():
@@ -1289,11 +1304,7 @@ class DataFrame(Frame):
     def columns(self):
         """Returns a tuple of columns
         """
-        return pd.Index(
-            self._data.names,
-            name=self._data.name,
-            tupleize_cols=self._data.multiindex,
-        )
+        return self._data.to_pandas_index()
 
     @columns.setter
     def columns(self, columns):
@@ -1302,11 +1313,19 @@ class DataFrame(Frame):
         if columns is None:
             columns = pd.Index(range(len(self._data.columns)))
         is_multiindex = isinstance(columns, pd.MultiIndex)
-        columns = pd.Index(columns, tupleize_cols=is_multiindex)
+
+        if not isinstance(columns, pd.Index):
+            columns = pd.Index(columns, tupleize_cols=is_multiindex)
+
+        if not len(columns) == len(self.columns):
+            raise ValueError(
+                f"Length mismatch: expected {len(self.columns)} elements ,"
+                "got {len(columns)} elements"
+            )
         self._data = ColumnAccessor(
             dict(zip(columns, self._data.columns)),
-            name=columns.name,
             multiindex=is_multiindex,
+            level_names=columns.names,
         )
 
     def _rename_columns(self, new_names):
@@ -3637,10 +3656,7 @@ class DataFrame(Frame):
                         df[i] = Series(vals[idx], nan_as_null=nan_as_null)
 
         # Set columns
-        if isinstance(dataframe.columns, pd.MultiIndex):
-            df.columns = cudf.MultiIndex.from_pandas(dataframe.columns)
-        else:
-            df.columns = dataframe.columns
+        df.columns = dataframe.columns
 
         # Set index
         if isinstance(dataframe.index, pd.MultiIndex):

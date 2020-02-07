@@ -14,6 +14,7 @@ import rmm
 import cudf
 import cudf._lib as libcudf
 from cudf.core.column import ColumnBase, DatetimeColumn, column
+from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
@@ -108,7 +109,9 @@ class Series(Frame):
             data = data._values
             if dtype is not None:
                 data = data.astype(dtype)
-
+        elif isinstance(data, ColumnAccessor):
+            name, data = data.names[0], data.columns[0]
+                
         if isinstance(data, Series):
             index = data._index if index is None else index
             if name is None:

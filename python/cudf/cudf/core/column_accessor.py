@@ -1,11 +1,14 @@
 import itertools
 from collections.abc import MutableMapping
 
-from cudf.utils.utils import OrderedColumnDict
+import pandas as pd
+
+import cudf
+from cudf.utils.utils import NestedOrderedDict, OrderedColumnDict
 
 
 class ColumnAccessor(MutableMapping):
-    def __init__(self, data={}, name=None, multiindex=False):
+    def __init__(self, data={}, multiindex=False, level_names=None):
         """
         Parameters
         ----------
@@ -15,14 +18,17 @@ class ColumnAccessor(MutableMapping):
         """
         # TODO: we should validate the keys of `data`
         self._data = OrderedColumnDict(data)
-        self.name = name
         self.multiindex = multiindex
+        if level_names is None:
+            self.level_names = tuple((None,) * self.nlevels)
+        else:
+            self.level_names = tuple(level_names)
 
     def __iter__(self):
         return self._data.__iter__()
 
     def __getitem__(self, key):
-        return self.get_by_label(key)
+        return self._data[key]
 
     def __setitem__(self, key, value):
         self.set_by_label(key, value)
@@ -43,18 +49,33 @@ class ColumnAccessor(MutableMapping):
         new_values = list(self.values())
         new_keys.insert(loc, name)
         new_values.insert(loc, value)
-        self._data = self._data.__class__((zip(new_keys, new_values)))
+        self._data = self._data.__class__(zip(new_keys, new_values),)
 
     def copy(self):
-        return self.__class__(self._data.copy(), multiindex=self.multiindex)
+        return self.__class__(
+            self._data.copy(),
+            multiindex=self.multiindex,
+            level_names=self.level_names,
+        )
 
     def get_by_label(self, key):
-        return self._data[key]
+        result = self._grouped_data[key]
+        if isinstance(result, cudf.core.column.ColumnBase):
+            return self.__class__({key: result})
+        else:
+            result = {k: v for k, v in self._flatten(result)}
+            return self.__class__(
+                result,
+                multiindex=self.multiindex,
+                level_names=self.level_names[len(key) :],
+            )
 
     def get_by_label_range(self, key):
-        return [
-            self.get_by_label(k) for k in self._data if _compare_keys(k, key)
-        ]
+        return self.__class__(
+            {k: self._data[k] for k in self._data if _compare_keys(k, key)},
+            multiindex=self.multiindex,
+            level_names=self.level_names,
+        )
 
     def get_by_index(self, key):
         return next(itertools.islice(self.values(), key, key + 1))
@@ -91,6 +112,30 @@ class ColumnAccessor(MutableMapping):
         if not isinstance(key, tuple):
             key = (key,)
         return key + (pad_value,) * (self.nlevels - 1)
+
+    @property
+    def _grouped_data(self):
+        if self.multiindex:
+            return NestedOrderedDict(zip(self.names, self.columns))
+        else:
+            return self._data
+
+    def _flatten(self, d, parents=[]):
+
+        for k, v in d.items():
+            if not isinstance(v, d.__class__):
+                yield (tuple(parents + [k]), v)
+            else:
+                yield from self._flatten(v, parents + [k])
+
+    @property
+    def name(self):
+        return self.level_names[-1]
+
+    def to_pandas_index(self):
+        result = pd.Index(self.names, tupleize_cols=self.multiindex)
+        result.names = self.level_names
+        return result
 
 
 def _compare_keys(key, target):
