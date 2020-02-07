@@ -2116,8 +2116,7 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
         if (t == 0)
         {
             s->top.data.cur_row += s->top.data.nrows;
-            if ((s->chunk.type_kind == STRING || s->chunk.type_kind == BINARY || s->chunk.type_kind == VARCHAR || s->chunk.type_kind == CHAR)
-             && !IS_DICTIONARY(s->chunk.encoding_kind) && s->top.data.max_vals > 0)
+            if (s->is_string && !IS_DICTIONARY(s->chunk.encoding_kind) && s->top.data.max_vals > 0)
             {
                 s->chunk.dictionary_start += s->vals.u32[s->top.data.max_vals - 1];
             }
