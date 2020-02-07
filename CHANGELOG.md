@@ -67,6 +67,7 @@
 - PR #4080 Fix multi-index dask test with sort issue
 - PR #4084 Update Java for removal of CATEGORY type
 - PR #4089 Fix dask groupby mutliindex test case issues in join
+- PR #4097 Fix strings concatenate logic with column offsets
 
 
 # cuDF 0.12.0 (04 Feb 2020)
