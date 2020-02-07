@@ -58,14 +58,20 @@ cdef extern from "cudf/io/functions.hpp" \
         SNAPPY "cudf::experimental::io::compression_type::SNAPPY"
 
     ctypedef enum statistics_freq:
-        STATISTICS_NONE "cudf::experimental::io::statistics_freq::STATISTICS_NONE"
-        STATISTICS_ROWGROUP "cudf::experimental::io::statistics_freq::STATISTICS_ROWGROUP"
-        STATISTICS_PAGE "cudf::experimental::io::statistics_freq::STATISTICS_PAGE"
+        STATISTICS_NONE \
+            "cudf::experimental::io::statistics_freq::STATISTICS_NONE"
+        STATISTICS_ROWGROUP \
+            "cudf::experimental::io::statistics_freq::STATISTICS_ROWGROUP"
+        STATISTICS_PAGE \
+            "cudf::experimental::io::statistics_freq::STATISTICS_PAGE"
 
     ctypedef enum io_type:
-        FILEPATH "cudf::experimental::io::io_types::FILEPATH"
-        HOST_BUFFER "cudf::experimental::io::io_types::HOST_BUFFER"
-        ARROW_RANDOM_ACCESS_FILE "cudf::experimental::io::io_types::ARROW_RANDOM_ACCESS_FILE"
+        FILEPATH \
+            "cudf::experimental::io::io_types::FILEPATH"
+        HOST_BUFFER \
+            "cudf::experimental::io::io_types::HOST_BUFFER"
+        ARROW_RANDOM_ACCESS_FILE \
+            "cudf::experimental::io::io_types::ARROW_RANDOM_ACCESS_FILE"
 
     cdef cppclass sink_info:
         io_type type

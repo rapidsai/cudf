@@ -145,8 +145,7 @@ cpdef write_parquet(
             "metadata": None
         })
 
-
-    # Value columns to output    
+    # Value columns to output
     for col_name in table._column_names:
         column_names.push_back(str.encode(col_name))
 

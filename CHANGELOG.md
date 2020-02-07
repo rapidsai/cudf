@@ -40,13 +40,10 @@
 - PR #3891 Port NVStrings (r)split_record to contiguous_(r)split_record
 - PR #4072 Allow round_robin_partition to single partition
 - PR #4064 Add cudaGetDeviceCount to JNI layer
-<<<<<<< HEAD
 - PR #3716 Update cudf.to_parquet to use new GPU accelerated Parquet writer
-=======
 - PR #4079 Simply use `mask.size` to create the array view
 - PR #4092 Keep mask on GPU for bit unpacking
 - PR #4081 Copy from `Buffer`'s pointer directly to host
->>>>>>> upstream/branch-0.13
 
 ## Bug Fixes
 
