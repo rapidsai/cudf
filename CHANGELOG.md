@@ -8,6 +8,7 @@
 - PR #3861 Added Series.sum feature for String
 - PR #3681 Add cudf::experimental::boolean_mask_scatter
 - PR #4088 Added asString() on ColumnVector in Java that takes a format string
+- PR #4040 Add support for n-way merge of sorted tables
 
 ## Improvements
 
