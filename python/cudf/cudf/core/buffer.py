@@ -61,9 +61,9 @@ class Buffer:
         return self.__class__, (self.to_host_array(),)
 
     def to_host_array(self):
-        return rmm.device_array_from_ptr(
-            self.ptr, nelem=self.size, dtype="int8"
-        ).copy_to_host()
+        data = np.empty((self.size,), "i1")
+        rmm._lib.device_buffer.copy_ptr_to_host(self.ptr, data.view("u1"))
+        return data
 
     def _init_from_array_like(self, data):
         if hasattr(data, "__cuda_array_interface__"):
