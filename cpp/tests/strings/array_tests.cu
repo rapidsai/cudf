@@ -20,6 +20,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/sorting.hpp>
 #include <cudf/strings/copying.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/strings/detail/scatter.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/utilities/error.hpp>
@@ -27,7 +28,7 @@
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/column_utilities.hpp>
-#include "./utilities.h"
+#include <tests/strings/utilities.h>
 
 #include <vector>
 #include <gmock/gmock.h>
@@ -76,8 +77,8 @@ TEST_P(SliceParmsTest, Slice)
     auto strings_view = cudf::strings_column_view(strings);
     auto results = cudf::strings::detail::slice(strings_view,start,end);
 
-    cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end() );
-         //thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
+    cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
+         thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
     cudf::test::expect_columns_equal(*results,expected);
 }
 
@@ -116,8 +117,8 @@ TEST_P(SliceParmsTest, SliceAllEmpty)
     }
     auto strings_view = cudf::strings_column_view(strings);
     auto results = cudf::strings::detail::slice(strings_view,start,end);
-    cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end() );
-         //thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
+    cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
+         thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
     cudf::test::expect_columns_equal(*results,expected);
 }
 
@@ -137,24 +138,22 @@ TEST_F(StringsColumnTest, Gather)
     std::vector<const char*> h_strings{ "eee", "bb", nullptr, "", "aa", "bbb", "ééé" };
     cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
         thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
-    auto strings_view = cudf::strings_column_view(strings);
 
     cudf::test::fixed_width_column_wrapper<int32_t> gather_map{{4,1}};
-    auto results = cudf::strings::detail::gather(strings_view,gather_map);
+    auto results = cudf::experimental::gather(cudf::table_view{{strings}},gather_map)->release();
 
     std::vector<const char*> h_expected{ "aa", "bb" };
-    cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end() );
-         //thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
-    cudf::test::expect_columns_equal(*results,expected);
+    cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
+         thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
+    cudf::test::expect_columns_equal(results.front()->view(),expected);
 }
 
 TEST_F(StringsColumnTest, GatherZeroSizeStringsColumn)
 {
     cudf::column_view zero_size_strings_column( cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
-    auto strings_view = cudf::strings_column_view(zero_size_strings_column);
     cudf::column_view map_view( cudf::data_type{cudf::INT32}, 0, nullptr, nullptr, 0);
-    auto results = cudf::strings::detail::gather(strings_view,map_view);
-    cudf::test::expect_strings_empty(results->view());
+    auto results = cudf::experimental::gather(cudf::table_view{{zero_size_strings_column}},map_view)->release();
+    cudf::test::expect_strings_empty(results.front()->view());
 }
 
 struct column_to_string_view_vector
