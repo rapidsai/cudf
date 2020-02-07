@@ -8,6 +8,7 @@
 - PR #3861 Added Series.sum feature for String
 - PR #3681 Add cudf::experimental::boolean_mask_scatter
 - PR #4040 Add support for n-way merge of sorted tables
+- PR #4053 Multi-column quantiles.
 
 ## Improvements
 
