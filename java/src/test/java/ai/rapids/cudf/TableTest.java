@@ -2004,6 +2004,68 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  @Test
+  void testTransposeWithBooleans() {
+    try (Table t = new Table.TestBuilder()
+        .column(true, false, true, false)
+        .column(false, false, true, true)
+        .build();
+         Table result = t.transpose();
+         Table expected = new Table.TestBuilder()
+             .column(true, false)
+             .column(false, false)
+             .column(true, true)
+             .column(false, true)
+             .build()) {
+      assertTablesAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testTransposeWithInts() {
+    try (Table t = new Table.TestBuilder()
+        .column(1, 2, 3, 4)
+        .column(5, 6, 7, 8)
+        .build();
+         Table result = t.transpose();
+         Table expected = new Table.TestBuilder()
+             .column(1, 5)
+             .column(2, 6)
+             .column(3, 7)
+             .column(4, 8)
+             .build()) {
+      assertTablesAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testTransposeWithNullsAndNans() {
+    try (Table t = new Table.TestBuilder()
+        .column(1.0, null, 2.0, null)
+        .column(Double.NaN, null, 3.0, 4.0)
+        .build();
+         Table result = t.transpose();
+         Table expected = new Table.TestBuilder()
+             .column(1.0, Double.NaN)
+             .column((Double)null, null)
+             .column(2.0, 3.0)
+             .column(null, 4.0)
+             .build()) {
+      assertTablesAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testTransposeWithMixedType() {
+    assertThrows(AssertionError.class, () -> {
+      try (Table t = new Table.TestBuilder()
+          .column("a", "b", "c", "d")
+          .column(false, false, true, true)
+          .build();
+           Table result = t.transpose()) {}
+    });
+  }
+
   private Table getExpectedFileTable() {
     return new TestBuilder()
         .column(true, false, false, true, false)

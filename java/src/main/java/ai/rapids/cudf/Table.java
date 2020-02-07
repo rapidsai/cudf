@@ -175,6 +175,8 @@ public final class Table implements AutoCloseable {
   private static native long bound(long inputTable, long valueTable,
                                    boolean[] descFlags, boolean[] areNullsSmallest, boolean isUpperBound) throws CudfException;
 
+  private static native long[] transpose(long inputTable) throws CudfException;
+
   private static native void writeORC(int compressionType, String[] colNames, String[] metadataKeys,
                                       String[] metadataValues, String outputFileName, long buffer,
                                       long bufferLength, long tableToWrite) throws CudfException;
@@ -859,6 +861,17 @@ public final class Table implements AutoCloseable {
    */
   public ContiguousTable[] contiguousSplit(int... indices) {
     return contiguousSplit(nativeHandle, indices);
+  }
+
+  /** Transposes a table
+   * @return the transpose of the table
+   */
+  public Table transpose() {
+    for (int i = 0; i < this.columns.length; i++) {
+      assert this.columns[i].getType() == this.columns[0].getType() :
+          "Mixed data types are not allowed for transpose";
+    }
+    return new Table(transpose(this.nativeHandle));
   }
 
   /////////////////////////////////////////////////////////////////////////////

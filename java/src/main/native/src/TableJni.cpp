@@ -21,6 +21,7 @@
 #include <cudf/search.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/stream_compaction.hpp>
+#include <cudf/detail/transpose.hpp>
 
 #include "jni_utils.hpp"
 
@@ -116,6 +117,14 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_deleteCudfTable(JNIEnv *env, jc
                                                                jlong j_cudf_table_view) {
   JNI_NULL_CHECK(env, j_cudf_table_view, "table view handle is null", );
   delete reinterpret_cast<cudf::table_view*>(j_cudf_table_view);
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_transpose(JNIEnv *env, jclass class_object,
+                                                               jlong j_input_table) {
+  JNI_NULL_CHECK(env, j_input_table, "table view handle is null", NULL);
+  cudf::table_view *input_table = reinterpret_cast<cudf::table_view *>(j_input_table);
+  std::unique_ptr<cudf::experimental::table> result =cudf::detail::transpose(*input_table);
+  return cudf::jni::convert_table_for_return(env, result);
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_orderBy(
