@@ -1204,7 +1204,7 @@ def test_to_from_arrow_nulls(data_type):
     # number of bytes, so only check the first byte in this case
     np.testing.assert_array_equal(
         np.array(s1.buffers()[0])[0],
-        gs1._column.mask_array_view.copy_to_host()[0],
+        cupy.asnumpy(gs1._column.mask_array_view)[0],
     )
     assert pa.Array.equals(s1, gs1.to_arrow())
 
@@ -1215,7 +1215,7 @@ def test_to_from_arrow_nulls(data_type):
     # number of bytes, so only check the first byte in this case
     np.testing.assert_array_equal(
         np.array(s2.buffers()[0])[0],
-        gs2._column.mask_array_view.copy_to_host()[0],
+        cupy.asnumpy(gs2._column.mask_array_view)[0],
     )
     assert pa.Array.equals(s2, gs2.to_arrow())
 
