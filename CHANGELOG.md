@@ -70,6 +70,7 @@
 - PR #4080 Fix multi-index dask test with sort issue
 - PR #4084 Update Java for removal of CATEGORY type
 - PR #4089 Fix dask groupby mutliindex test case issues in join
+- PR #4076 All null string entries should have null data buffer
 
 
 # cuDF 0.12.0 (04 Feb 2020)
@@ -138,7 +139,6 @@
 - PR #3673 Parquet reader: improve rounding of timestamp conversion to seconds
 - PR #3699 Stringify libcudacxx headers for binary op JIT
 - PR #3697 Improve column insert performance for wide frames
-- PR #3616 Add aggregation infrastructure for argmax/argmin.
 - PR #3653 Make `gather_bitmask_kernel` more reusable.
 - PR #3710 Remove multiple CMake configuration steps from root build script
 - PR #3657 Define and implement compiled binops for string column comparisons
