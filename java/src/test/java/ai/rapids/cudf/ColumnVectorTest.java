@@ -228,6 +228,142 @@ public class ColumnVectorTest extends CudfTestBase {
     }
   }
 
+   @Test
+  void isNanTestWithNulls() {
+    try (ColumnVector v = ColumnVector.fromBoxedDoubles(null, null, Double.NaN, null, Double.NaN, null);
+         ColumnVector vF = ColumnVector.fromBoxedFloats(null, null, Float.NaN, null, Float.NaN, null);
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(false, false, true, false, true, false);
+         ColumnVector result = v.isNan();
+         ColumnVector resultF = vF.isNan()) {
+      assertColumnsAreEqual(expected, result);
+      assertColumnsAreEqual(expected, resultF);
+    }
+  }
+
+  @Test
+  void isNanForTypeMismatch() {
+    assertThrows(CudfException.class, () -> {
+      try (ColumnVector v = ColumnVector.fromStrings("foo", "bar", "baz");
+           ColumnVector result = v.isNan()) {}
+    });
+  }
+
+  @Test
+  void isNanTest() {
+    try (ColumnVector v = ColumnVector.fromBoxedDoubles(1.0, 2.0, Double.NaN, 4.0, Double.NaN, 6.0);
+         ColumnVector vF = ColumnVector.fromBoxedFloats(1.1f, 2.2f, Float.NaN, 4.4f, Float.NaN, 6.6f);
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(false, false, true, false, true, false);
+         ColumnVector result = v.isNan();
+         ColumnVector resultF = vF.isNan()) {
+      assertColumnsAreEqual(expected, result);
+      assertColumnsAreEqual(expected, resultF);
+    }
+  }
+
+  @Test
+  void isNanTestEmptyColumn() {
+    try (ColumnVector v = ColumnVector.fromBoxedDoubles();
+         ColumnVector vF = ColumnVector.fromBoxedFloats();
+         ColumnVector expected = ColumnVector.fromBoxedBooleans();
+         ColumnVector result = v.isNan();
+         ColumnVector resultF = vF.isNan()) {
+      assertColumnsAreEqual(expected, result);
+      assertColumnsAreEqual(expected, resultF);
+    }
+  }
+
+  @Test
+  void isNanTestAllNotNans() {
+    try (ColumnVector v = ColumnVector.fromBoxedDoubles(1.0, 2.0, 3.0, 4.0, 5.0, 6.0);
+         ColumnVector vF = ColumnVector.fromBoxedFloats(1.1f, 2.2f, 3.3f, 4.4f, 5.5f, 6.6f);
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(false, false, false, false, false, false);
+         ColumnVector result = v.isNan();
+         ColumnVector resultF = vF.isNan()) {
+      assertColumnsAreEqual(expected, result);
+      assertColumnsAreEqual(expected, resultF);
+    }
+  }
+
+  @Test
+  void isNanTestAllNans() {
+    try (ColumnVector v = ColumnVector.fromBoxedDoubles(Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN);
+         ColumnVector vF = ColumnVector.fromBoxedFloats(Float.NaN, Float.NaN, Float.NaN, Float.NaN, Float.NaN, Float.NaN);
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(true, true, true, true, true, true);
+         ColumnVector result = v.isNan();
+         ColumnVector resultF = vF.isNan()) {
+      assertColumnsAreEqual(expected, result);
+      assertColumnsAreEqual(expected, resultF);
+    }
+  }
+
+  @Test
+  void isNotNanTestWithNulls() {
+    try (ColumnVector v = ColumnVector.fromBoxedDoubles(null, null, Double.NaN, null, Double.NaN, null);
+         ColumnVector vF = ColumnVector.fromBoxedFloats(null, null, Float.NaN, null, Float.NaN, null);
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(true, true, false, true, false, true);
+         ColumnVector result = v.isNotNan();
+         ColumnVector resultF = vF.isNotNan()) {
+      assertColumnsAreEqual(expected, result);
+      assertColumnsAreEqual(expected, resultF);
+    }
+  }
+
+  @Test
+  void isNotNanForTypeMismatch() {
+    assertThrows(CudfException.class, () -> {
+      try (ColumnVector v = ColumnVector.fromStrings("foo", "bar", "baz");
+           ColumnVector result = v.isNotNan()) {}
+    });
+  }
+
+  @Test
+  void isNotNanTest() {
+    try (ColumnVector v = ColumnVector.fromBoxedDoubles(1.0, 2.0, Double.NaN, 4.0, Double.NaN, 6.0);
+         ColumnVector vF = ColumnVector.fromBoxedFloats(1.1f, 2.2f, Float.NaN, 4.4f, Float.NaN, 6.6f);
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(true, true, false, true, false, true);
+         ColumnVector result = v.isNotNan();
+         ColumnVector resultF = vF.isNotNan()) {
+      assertColumnsAreEqual(expected, result);
+      assertColumnsAreEqual(expected, resultF);
+    }
+  }
+
+  @Test
+  void isNotNanTestEmptyColumn() {
+    try (ColumnVector v = ColumnVector.fromBoxedDoubles();
+         ColumnVector vF = ColumnVector.fromBoxedFloats();
+         ColumnVector expected = ColumnVector.fromBoxedBooleans();
+         ColumnVector result = v.isNotNan();
+         ColumnVector resultF = vF.isNotNan()) {
+      assertColumnsAreEqual(expected, result);
+      assertColumnsAreEqual(expected, resultF);
+    }
+  }
+
+  @Test
+  void isNotNanTestAllNotNans() {
+    try (ColumnVector v = ColumnVector.fromBoxedDoubles(1.0, 2.0, 3.0, 4.0, 5.0, 6.0);
+         ColumnVector vF = ColumnVector.fromBoxedFloats(1.1f, 2.2f, 3.3f, 4.4f, 5.5f, 6.6f);
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(true, true, true, true, true, true);
+         ColumnVector result = v.isNotNan();
+         ColumnVector resultF = vF.isNotNan()) {
+      assertColumnsAreEqual(expected, result);
+      assertColumnsAreEqual(expected, resultF);
+    }
+  }
+
+  @Test
+  void isNotNanTestAllNans() {
+    try (ColumnVector v = ColumnVector.fromBoxedDoubles(Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN);
+         ColumnVector vF = ColumnVector.fromBoxedFloats(Float.NaN, Float.NaN, Float.NaN, Float.NaN, Float.NaN, Float.NaN);
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(false, false, false, false, false, false);
+         ColumnVector result = v.isNotNan();
+         ColumnVector resultF = vF.isNotNan()) {
+      assertColumnsAreEqual(expected, result);
+      assertColumnsAreEqual(expected, resultF);
+    }
+  }
+
   @Test
   void testGetDeviceMemorySizeNonStrings() {
     try (ColumnVector v0 = ColumnVector.fromBoxedInts(1, 2, 3, 4, 5, 6);
@@ -286,7 +422,6 @@ public class ColumnVectorTest extends CudfTestBase {
           s = Scalar.fromString("hello, world!");
           break;
         case EMPTY:
-        case CATEGORY:
           continue;
         default:
           throw new IllegalArgumentException("Unexpected type: " + type);
@@ -391,7 +526,6 @@ public class ColumnVectorTest extends CudfTestBase {
           break;
         }
         case EMPTY:
-        case CATEGORY:
           continue;
         default:
           throw new IllegalArgumentException("Unexpected type: " + type);
@@ -417,7 +551,7 @@ public class ColumnVectorTest extends CudfTestBase {
   void testFromScalarNull() {
     final int rowCount = 4;
     for (DType type : DType.values()) {
-      if (type == DType.EMPTY || type == DType.CATEGORY) {
+      if (type == DType.EMPTY) {
         continue;
       }
       try (Scalar s = Scalar.fromNull(type);

@@ -20,7 +20,6 @@
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <rmm/mr/device_memory_resource.hpp>
 
 namespace cudf {
 namespace experimental {
