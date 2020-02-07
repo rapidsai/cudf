@@ -68,8 +68,8 @@ cdef class Column:
     The *dtype* indicates the Column's element type.
     """
     def __init__(self, data, size, dtype, mask=None, offset=0, children=()):
-        self.size = size
         self.offset = offset
+        self.size = size
         self.dtype = dtype
         self.set_base_data(data)
         self.set_base_mask(mask)
@@ -274,8 +274,14 @@ cdef class Column:
         else:
             offset_diff = value - self._offset
 
+        if hasattr(self, "_size"):
+            if offset_diff > self.size:
+                raise RuntimeError(
+                    "Can't set the offset of a column to larger than the"
+                    " number of elements in the column"
+                )
+            self.size = int(self.size - offset_diff)
         self._offset = int(value)
-        self.size = int(self.size - offset_diff)
 
     @property
     def base_children(self):

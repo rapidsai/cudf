@@ -484,11 +484,14 @@ class StringColumn(column.ColumnBase):
 
             # Shift offsets column by the parent offset.
             offsets_column.offset = self.offset
+            offsets_column.size = self.size + 1
 
             # Shift the chars offset by the new first element of the offsets
             # column
             chars_offset = offsets_column[0]
+            chars_size = offsets_column[self.size]
             chars_column.offset = chars_offset
+            chars_column.size = chars_size
 
             # Now run a subtraction binary op to shift all of the offsets by
             # the parent offset
@@ -674,7 +677,7 @@ class StringColumn(column.ColumnBase):
         if fillna is not None:
             warnings.warn("fillna parameter not supported for string arrays")
 
-        return self.to_arrow().to_pandas().array
+        return self.to_arrow().to_pandas().values
 
     def serialize(self):
         header = {"null_count": self.null_count}

@@ -290,13 +290,10 @@ class CategoricalColumn(column.ColumnBase):
 
     @utils.cached_property
     def children(self):
-        if self.offset == 0:
-            return self.base_children
-        else:
-            codes_column = self.base_children[0]
-            codes_column.offset = self.offset
-            categories_column = self.base_children[1]
-            return (codes_column, categories_column)
+        codes_column = self.base_children[0].copy(deep=False)
+        codes_column.offset = self.offset
+        codes_column.size = self.size
+        return (codes_column,)
 
     @property
     def as_numerical(self):
