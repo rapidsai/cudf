@@ -321,6 +321,6 @@ def test_groupby_reset_index_drop_True():
     pddf = dd.from_pandas(df.to_pandas(), 5)
     gr = ddf.groupby(["a"]).agg({"b": ["count"]}).reset_index(drop=True)
     pr = pddf.groupby(["a"]).agg({"b": ["count"]}).reset_index(drop=True)
-    gf = gr.compute()
-    pf = pr.compute()
+    gf = gr.compute().sort_values(by=["b"]).reset_index(drop=True)
+    pf = pr.compute().sort_values(by=[("b", "count")]).reset_index(drop=True)
     dd.assert_eq(gf, pf)
