@@ -161,6 +161,14 @@ set(HASHING_BENCH_SRC
 ConfigureBench(HASHING_BENCH "${HASHING_BENCH_SRC}")
 
 ###################################################################################################
+# - merge benchmark -----------------------------------------------------------------------------
+
+set(MERGE_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/merge/merge_benchmark.cpp")
+
+ConfigureBench(MERGE_BENCH "${MERGE_BENCH_SRC}")
+
+###################################################################################################
 # - null_mask benchmark -----------------------------------------------------------------------------
 
 set(NULLMASK_BENCH_SRC
