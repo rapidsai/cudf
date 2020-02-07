@@ -646,7 +646,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeCudfColumnView(
     jlong j_offset, jlong j_valid, jint j_null_count, jint size) {
 
   JNI_ARG_CHECK(env, (size != 0), "size is 0", 0);
-  JNI_NULL_CHECK(env, j_data, "char data is null", 0);
 
   cudf::type_id n_type = static_cast<cudf::type_id>(j_type);
   cudf::data_type n_data_type(n_type);

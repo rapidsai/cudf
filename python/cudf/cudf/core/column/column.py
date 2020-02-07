@@ -105,9 +105,8 @@ class ColumnBase(Column):
         sr = pd.Series(arr.copy_to_host())
 
         if self.nullable:
-            mask_bits = self.mask_array_view.copy_to_host()
             mask_bytes = (
-                cudautils.expand_mask_bits(len(self), mask_bits)
+                cudautils.expand_mask_bits(len(self), self.mask_array_view)
                 .copy_to_host()
                 .astype(bool)
             )

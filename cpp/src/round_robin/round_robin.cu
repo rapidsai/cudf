@@ -174,7 +174,7 @@ round_robin_partition(table_view const& input,
 {
   auto nrows = input.num_rows();
   
-  CUDF_EXPECTS( num_partitions > 1, "Incorrect number of partitions. Must be greater than 1." );
+  CUDF_EXPECTS( num_partitions > 0, "Incorrect number of partitions. Must be greater than 0." );
   CUDF_EXPECTS( start_partition < num_partitions, "Incorrect start_partition index. Must be less than number of partitions." );
   CUDF_EXPECTS( start_partition >= 0, "Incorrect start_partition index. Must be positive." );//since cudf::size_type is an alias for int32_t, it _can_ be negative
 
