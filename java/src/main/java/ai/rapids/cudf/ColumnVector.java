@@ -1908,8 +1908,17 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Cast timestamp to String
-   * @format - format used to cast the timestamp to string
+   * Method to parse and convert a timestamp column vector to string column vector. A unix
+   * timestamp is a long value representing how many units since 1970-01-01 00:00:00:000 in either
+   * positive or negative direction. This mirrors the functionality spark sql's from_unixtime.
+
+   * No checking is done for invalid formats or invalid timestamp units.
+   * Negative timestamp values are not currently supported and will yield undesired results. See
+   * github issue https://github.com/rapidsai/cudf/issues/3116 for details
+   *
+   * @param format - strftime format specifier string of the timestamp. Its used to parse and convert
+   *               the timestamp with. Supports %Y,%y,%m,%d,%H,%I,%p,%M,%S,%f,%z format specifiers.
+   *               See http://man7.org/linux/man-pages/man3/strftime.3.html for details
    * @return A new vector allocated on the GPU
    */
   public ColumnVector asStrings(String format) {
