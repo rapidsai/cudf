@@ -18,29 +18,31 @@ ARGS=$*
 # script, and that this script resides in the repo dir!
 REPODIR=$(cd $(dirname $0); pwd)
 
-VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks external -v -g -n --allgpuarch --disable_nvtx -h"
-HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [external] [--disable_nvtx] [-v] [-g] [-n] [-h]
-   clean            - remove all existing build artifacts and configuration (start
-                    over)
-   libnvstrings     - build the nvstrings C++ code only
-   nvstrings        - build the nvstrings Python package
-   libcudf          - build the cudf C++ code only
-   cudf             - build the cudf Python package
-   dask_cudf        - build the dask_cudf Python package
-   benchmarks       - build benchmarks
-   external       - build external datasource support for libcudf
-   -v               - verbose build mode
-   -g               - build for debug
-   -n               - no install step
-   --disable_nvtx   - disable inserting NVTX profiling ranges
-   --allgpuarch     - build for all supported GPU architectures
-   -h               - print this text
+VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks external  --external-lib-dir -v -g -n --allgpuarch --disable_nvtx -h"
+HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [external] [--external-lib-dir] [--disable_nvtx] [-v] [-g] [-n] [-h]
+   clean                - remove all existing build artifacts and configuration (start
+                        over)
+   libnvstrings         - build the nvstrings C++ code only
+   nvstrings            - build the nvstrings Python package
+   libcudf              - build the cudf C++ code only
+   cudf                 - build the cudf Python package
+   dask_cudf            - build the dask_cudf Python package
+   benchmarks           - build benchmarks
+   external             - build external datasource support for libcudf
+   --external-lib-dir   - default directory to search for external datasource libraries
+   -v                   - verbose build mode
+   -g                   - build for debug
+   -n                   - no install step
+   --disable_nvtx       - disable inserting NVTX profiling ranges
+   --allgpuarch         - build for all supported GPU architectures
+   -h                   - print this text
    
    default action (no args) is to build and install 'libnvstrings' then
-   'nvstrings' then 'libcudf' then 'cudf' then 'dask_cudf' targets
+   'nvstrings' then 'libcudf' then 'cudf' then 'dask_cudf' then 'external' targets
 "
 LIB_BUILD_DIR=${REPODIR}/cpp/build
 EXTERNAL_BUILD_DIR=${REPODIR}/external/build
+EXTERNAL_LIB_DIR=/usr/lib/cudf/external
 NVSTRINGS_BUILD_DIR=${REPODIR}/python/nvstrings/build
 CUDF_BUILD_DIR=${REPODIR}/python/cudf/build
 DASK_CUDF_BUILD_DIR=${REPODIR}/python/dask_cudf/build
@@ -104,6 +106,9 @@ if hasArg benchmarks; then
 fi
 if hasArg external; then
     BUILD_EXTERNAL_DATASOURCES="ON"
+    if hasArg --external-lib-dir; then
+        EXTERNAL_LIB_DIR=/something
+    fi
 fi
 if hasArg --disable_nvtx; then
     BUILD_NVTX="OFF"
