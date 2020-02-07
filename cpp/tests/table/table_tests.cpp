@@ -18,6 +18,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/copying.hpp>
 
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
@@ -166,4 +167,40 @@ TEST_F(TableTest, ConcatenateTables)
   auto concat_table = cudf::experimental::concatenate({t1.view(), t2.view()});
 
   cudf::test::expect_tables_equal(*concat_table, gold_table);
+}
+
+TEST_F(TableTest, ConcatenateTablesWithOffsets)
+{
+  column_wrapper<int32_t> col1_1{{5, 4, 3, 5, 8, 5, 6}};
+  cudf::test::strings_column_wrapper col2_1({"dada", "egg", "avocado", "dada", "kite", "dog", "ln"});
+  cudf::table_view table_view_in1 {{col1_1, col2_1}};
+
+  column_wrapper<int32_t> col1_2{{5, 8, 5, 6, 15, 14, 13}};
+  cudf::test::strings_column_wrapper col2_2({"dada", "kite", "dog", "ln", "dado", "greg", "spinach"});
+  cudf::table_view table_view_in2 {{col1_2, col2_2}};
+
+  std::vector<cudf::size_type> split_indexes1{3};
+  std::vector<cudf::table_view> partitioned1 =
+    cudf::experimental::split( table_view_in1, split_indexes1);
+
+  std::vector<cudf::size_type> split_indexes2{3};
+  std::vector<cudf::table_view> partitioned2 =
+    cudf::experimental::split( table_view_in2, split_indexes2);
+
+  std::vector<cudf::table_view> table_views_to_concat;
+  table_views_to_concat.push_back(partitioned1[1]);
+  table_views_to_concat.push_back(partitioned2[1]);
+  std::unique_ptr<cudf::experimental::table> concatenated_tables =
+    cudf::experimental::concatenate(table_views_to_concat);
+
+  //cudf::test::print( concatenated_tables->view().column(0) );
+  //std::cout << std::endl;
+  //cudf::test::print( concatenated_tables->view().column(1) );
+  //std::cout << std::endl;
+
+  column_wrapper<int32_t> exp1_1{{5, 8, 5, 6, 6, 15, 14, 13}};
+  cudf::test::strings_column_wrapper exp2_1({"dada", "kite", "dog", "ln", "ln", "dado", "greg", "spinach"});
+  cudf::table_view table_view_exp1 {{exp1_1, exp2_1}};
+
+  cudf::test::expect_tables_equal( concatenated_tables->view(), table_view_exp1);
 }
