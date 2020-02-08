@@ -95,6 +95,15 @@ class Buffer:
                 f"Cannot construct Buffer from {data.__class__.__name__}"
             )
 
+    def serialize(self):
+        header = self.__cuda_array_interface__.copy()
+        frames = [self]
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, header, frames):
+        return Buffer(frames[0])
+
     @classmethod
     def empty(cls, size):
         dbuf = DeviceBuffer(size=size)
