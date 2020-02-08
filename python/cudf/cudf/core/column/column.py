@@ -80,10 +80,15 @@ class ColumnBase(Column):
         else:
             dtype = self.dtype
 
-        result = rmm.device_array_from_ptr(
-            ptr=self.data.ptr, nelem=len(self), dtype=dtype
+        result = cuda.as_cuda_array(self.data)
+        # Workaround until `.view(...)` can change itemsize
+        # xref: https://github.com/numba/numba/issues/4829
+        result = cuda.devicearray.DeviceNDArray(
+            shape=(result.nbytes // dtype.itemsize,),
+            strides=(dtype.itemsize,),
+            dtype=dtype,
+            gpu_data=result.gpu_data,
         )
-        result.gpu_data._obj = self
         return result
 
     @property
@@ -91,10 +96,7 @@ class ColumnBase(Column):
         """
         View the mask as a device array
         """
-        result = rmm.device_array_from_ptr(
-            ptr=self.mask.ptr, nelem=self.mask.size, dtype=np.int8,
-        )
-        result.gpu_data._obj = self
+        result = cuda.as_cuda_array(self.mask).view(np.int8)
         return result
 
     def __len__(self):
