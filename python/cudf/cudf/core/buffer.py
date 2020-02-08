@@ -109,7 +109,17 @@ class Buffer:
 
     @classmethod
     def deserialize(cls, header, frames):
-        return Buffer(frames[0])
+        buf = Buffer(frames[0])
+
+        if header["shape"] != buf.__cuda_array_interface__["shape"]:
+            raise ValueError(
+                "Recieved a `Buffer` with the wrong size."
+                " Expected {0}, but got {1}".format(
+                    header["shape"], buf.__cuda_array_interface__["shape"]
+                )
+            )
+
+        return buf
 
     @classmethod
     def empty(cls, size):
