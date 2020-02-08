@@ -165,10 +165,15 @@ public final class Table implements AutoCloseable {
   
   private static native ContiguousTable[] contiguousSplit(long inputTable, int[] indices);
 
-  private static native long[] partition(long inputTable,
-                                         int[] columnsToHash,
-                                         int numberOfPartitions,
-                                         int[] outputOffsets) throws CudfException;
+  private static native long[] hashPartition(long inputTable,
+                                             int[] columnsToHash,
+                                             int numberOfPartitions,
+                                             int[] outputOffsets) throws CudfException;
+
+  private static native long[] roundRobinPartition(long inputTable,
+                                                   int numberOfPartitions,
+                                                   int startPartition,
+                                                   int[] outputOffsets) throws CudfException;
 
   private static native void deleteCudfTable(long handle) throws CudfException;
 
@@ -798,6 +803,26 @@ public final class Table implements AutoCloseable {
     return new AggregateOperation(this, groupByOptions, operationIndicesArray);
   }
 
+  /**
+   * Round-robin partition a table into the specified number of partitions. The first row is placed
+   * in the specified starting partition, the next row is placed in the next partition, and so on.
+   * When the last partition is reached then next partition is partition 0 and the algorithm
+   * continues until all rows have been placed in partitions, evenly distributing the rows
+   * among the partitions.
+   * @param numberOfPartitions - number of partitions to use
+   * @param startPartition - starting partition index (i.e.: where first row is placed).
+   * @return - {@link PartitionedTable} - Table that exposes a limited functionality of the
+   * {@link Table} class
+   */
+  public PartitionedTable roundRobinPartition(int numberOfPartitions, int startPartition) {
+    int[] partitionOffsets = new int[numberOfPartitions];
+    try (DevicePrediction dp = new DevicePrediction(getDeviceMemorySize(), "roundRobinPartition")) {
+      return new PartitionedTable(new Table(Table.roundRobinPartition(nativeHandle,
+          numberOfPartitions, startPartition,
+          partitionOffsets)), partitionOffsets);
+    }
+  }
+
   public TableOperation onColumns(int... indices) {
     int[] operationIndicesArray = copyAndValidate(indices);
     return new TableOperation(this, operationIndicesArray);
@@ -1105,14 +1130,26 @@ public final class Table implements AutoCloseable {
      * @return - {@link PartitionedTable} - Table that exposes a limited functionality of the
      * {@link Table} class
      */
-    public PartitionedTable partition(int numberOfPartitions) {
+    public PartitionedTable hashPartition(int numberOfPartitions) {
       int[] partitionOffsets = new int[numberOfPartitions];
       try (DevicePrediction prediction = new DevicePrediction(operation.table.getDeviceMemorySize(), "partition")) {
-        return new PartitionedTable(new Table(Table.partition(operation.table.nativeHandle,
+        return new PartitionedTable(new Table(Table.hashPartition(operation.table.nativeHandle,
             operation.indices,
             partitionOffsets.length,
             partitionOffsets)), partitionOffsets);
       }
+    }
+
+    /**
+     * Hash partition a table into the specified number of partitions.
+     * @deprecated Use {@link #hashPartition(int)}
+     * @param numberOfPartitions - number of partitions to use
+     * @return - {@link PartitionedTable} - Table that exposes a limited functionality of the
+     * {@link Table} class
+     */
+    @Deprecated
+    public PartitionedTable partition(int numberOfPartitions) {
+      return hashPartition(numberOfPartitions);
     }
   }
 
