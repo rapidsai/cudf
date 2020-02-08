@@ -60,6 +60,13 @@ class Buffer:
     def __reduce__(self):
         return self.__class__, (self.to_host_array(),)
 
+    def __len__(self):
+        return self.size
+
+    @property
+    def nbytes(self):
+        return self.size
+
     @property
     def __cuda_array_interface__(self):
         intf = {
