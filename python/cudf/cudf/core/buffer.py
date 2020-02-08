@@ -60,6 +60,17 @@ class Buffer:
     def __reduce__(self):
         return self.__class__, (self.to_host_array(),)
 
+    @property
+    def __cuda_array_interface__(self):
+        intf = {
+            "data": (self.ptr, False),
+            "shape": (self.size,),
+            "strides": (1,),
+            "typestr": "|u1",
+            "version": 0,
+        }
+        return intf
+
     def to_host_array(self):
         data = np.empty((self.size,), "i1")
         rmm._lib.device_buffer.copy_ptr_to_host(self.ptr, data.view("u1"))
