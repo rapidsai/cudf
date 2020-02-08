@@ -180,13 +180,12 @@ class CategoricalAccessor(object):
 
         ordered = kwargs.get("ordered", self.ordered)
         new_codes = df["new_codes"]._column
-        new_dtype = CategoricalDtype(categories=new_cats, ordered=ordered)
 
-        return column.build_column(
-            data=None,
-            dtype=new_dtype,
+        return column.build_categorical_column(
+            categories=new_cats,
+            codes=new_codes,
             mask=new_codes.mask,
-            children=(new_codes,),
+            ordered=ordered,
         )
 
     def _return_or_inplace(self, new_col, **kwargs):
@@ -243,6 +242,8 @@ class CategoricalColumn(column.ColumnBase):
             children=children,
         )
 
+        self._codes = None
+
     def __contains__(self, item):
         try:
             self._encode(item)
@@ -288,12 +289,14 @@ class CategoricalColumn(column.ColumnBase):
             data=None, dtype=dtype, mask=mask, children=(data,)
         )
 
-    @utils.cached_property
+    @property
     def children(self):
-        codes_column = self.base_children[0].copy(deep=False)
-        codes_column.offset = self.offset
-        codes_column.size = self.size
-        return (codes_column,)
+        if self._children is None:
+            codes_column = self.base_children[0].copy(deep=False)
+            codes_column.offset = self.offset
+            codes_column.size = self.size
+            self._children = (codes_column,)
+        return self._children
 
     @property
     def as_numerical(self):
@@ -313,7 +316,9 @@ class CategoricalColumn(column.ColumnBase):
 
     @property
     def codes(self):
-        return self.children[0].set_mask(self.mask)
+        if self._codes is None:
+            self._codes = self.children[0].set_mask(self.mask)
+        return self._codes
 
     @property
     def ordered(self):
@@ -587,6 +592,13 @@ class CategoricalColumn(column.ColumnBase):
                 self._categories._memory_usage()
                 + self.cat().codes.memory_usage()
             )
+
+    def _mimic_inplace(self, other_col, inplace=False):
+        out = super()._mimic_inplace(other_col, inplace=inplace)
+        if inplace:
+            self._codes = other_col._codes
+
+        return out
 
 
 def pandas_categorical_as_column(categorical, codes=None):

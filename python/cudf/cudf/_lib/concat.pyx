@@ -8,6 +8,7 @@
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
 from cudf._libxx.column cimport Column
+from cudf._libxx.lib cimport UNKNOWN_NULL_COUNT
 from libc.stdlib cimport free
 from libcpp.vector cimport vector
 
@@ -30,8 +31,7 @@ def _column_concat(cols_to_concat, Column output_col):
             num_cols
         )
 
-    if hasattr(output_col, "null_count"):
-        del output_col.null_count  # force null_count to be recomputed
+    output_col._null_count = UNKNOWN_NULL_COUNT
 
     check_gdf_error(result)
 

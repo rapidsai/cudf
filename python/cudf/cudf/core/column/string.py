@@ -473,33 +473,35 @@ class StringColumn(column.ColumnBase):
         self._nvcategory = None
         self._indices = None
 
-    @utils.cached_property
+    @property
     def children(self):
-        if self.offset == 0:
-            return self.base_children
-        else:
-            # First get the base columns for chars and offsets
-            chars_column = self.base_children[1].copy(deep=False)
-            offsets_column = self.base_children[0].copy(deep=False)
+        if self._children is None:
+            if self.offset == 0:
+                self._children = self.base_children
+            else:
+                # First get the base columns for chars and offsets
+                chars_column = self.base_children[1].copy(deep=False)
+                offsets_column = self.base_children[0].copy(deep=False)
 
-            # Shift offsets column by the parent offset.
-            offsets_column.offset = self.offset
-            offsets_column.size = self.size + 1
+                # Shift offsets column by the parent offset.
+                offsets_column.offset = self.offset
+                offsets_column.size = self.size + 1
 
-            # Shift the chars offset by the new first element of the offsets
-            # column
-            chars_offset = offsets_column[0]
-            chars_size = offsets_column[self.size]
-            chars_column.offset = chars_offset
-            chars_column.size = chars_size
+                # Shift the chars offset by the new first element of the
+                # offsets column
+                chars_offset = offsets_column[0]
+                chars_size = offsets_column[self.size]
+                chars_column.offset = chars_offset
+                chars_column.size = chars_size
 
-            # Now run a subtraction binary op to shift all of the offsets by
-            # the parent offset
-            offsets_column = offsets_column.binary_operator(
-                "sub", offsets_column.dtype.type(chars_offset)
-            )
+                # Now run a subtraction binary op to shift all of the offsets
+                # by the parent offset
+                offsets_column = offsets_column.binary_operator(
+                    "sub", offsets_column.dtype.type(chars_offset)
+                )
 
-            return (offsets_column, chars_column)
+                self._children = (offsets_column, chars_column)
+        return self._children
 
     def __contains__(self, item):
         return True in self.str().contains(f"^{item}$")._column
@@ -889,6 +891,15 @@ class StringColumn(column.ColumnBase):
         raise NotImplementedError(
             "Strings are not yet supported via `__cuda_array_interface__`"
         )
+
+    def _mimic_inplace(self, other_col, inplace=False):
+        out = super()._mimic_inplace(other_col, inplace=inplace)
+        if inplace:
+            self._nvstrings = other_col._nvstrings
+            self._nvcategory = other_col._nvcategory
+            self._indices = other_col._indices
+
+        return out
 
 
 def _string_column_binop(lhs, rhs, op):

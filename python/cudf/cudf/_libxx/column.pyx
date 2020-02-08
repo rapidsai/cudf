@@ -21,7 +21,7 @@ from cudf._libxx.lib cimport *
 
 from cudf.core.buffer import Buffer
 from cudf.utils.dtypes import is_categorical_dtype
-from cudf.utils.utils import cached_property, calc_chunk_size, mask_bitsize
+from cudf.utils.utils import calc_chunk_size, mask_bitsize
 
 
 np_to_cudf_types = {
@@ -92,20 +92,16 @@ cdef class Column:
                     libcudfxx.MAX_COLUMN_SIZE_STR)
             )
 
-        try:
-            del self.null_count
-        except AttributeError:
-            pass
-        try:
-            del self.children
-        except AttributeError:
-            pass
+        self._null_count = UNKNOWN_NULL_COUNT
+        self._children = None
         if hasattr(self, "_indices"):
             self._indices = None
         if hasattr(self, "_nvcategory"):
             self._nvcategory = None
         if hasattr(self, "_nvstrings"):
             self._nvstrings = None
+        if hasattr(self, "_codes"):
+            self._codes = None
 
         self._size = int(value)
 
@@ -113,15 +109,17 @@ cdef class Column:
     def base_data(self):
         return self._base_data
 
-    @cached_property
+    @property
     def data(self):
-        if self.offset == 0 or self.base_data is None:
-            return self.base_data
-        else:
-            buf = Buffer(self.base_data)
-            buf.ptr = buf.ptr + (self.offset * self.dtype.itemsize)
-            buf.size = buf.size - (self.offset * self.dtype.itemsize)
-            return buf
+        if self._data is None:
+            if self.offset == 0 or self.base_data is None:
+                self._data = self.base_data
+            else:
+                buf = Buffer(self.base_data)
+                buf.ptr = buf.ptr + (self.offset * self.dtype.itemsize)
+                buf.size = buf.size - (self.offset * self.dtype.itemsize)
+                self._data = buf
+        return self._data
 
     @property
     def data_ptr(self):
@@ -135,10 +133,7 @@ cdef class Column:
             raise TypeError("Expected a Buffer or None for data, got " +
                             type(value).__name__)
 
-        try:
-            del self.data
-        except AttributeError:
-            pass
+        self._data = None
 
         self._base_data = value
 
@@ -154,15 +149,14 @@ cdef class Column:
     def base_mask(self):
         return self._base_mask
 
-    @cached_property
+    @property
     def mask(self):
-        mask = None
-        if self.base_mask is not None:
-            if self.offset == 0:
-                mask = self.base_mask
+        if self._mask is None:
+            if self.offset == 0 or self.base_mask is None:
+                self._mask = self.base_mask
             else:
-                mask = libcudfxx.null_mask.copy_bitmask(self)
-        return mask
+                self._mask = libcudfxx.null_mask.copy_bitmask(self)
+        return self._mask
 
     @property
     def mask_ptr(self):
@@ -197,20 +191,16 @@ cdef class Column:
                     )
                 raise RuntimeError(error_msg)
 
-        try:
-            del self.mask
-        except AttributeError:
-            pass
-        try:
-            del self.null_count
-        except AttributeError:
-            pass
+        self._mask = None
+        self._null_count = UNKNOWN_NULL_COUNT
         if hasattr(self, "_indices"):
             self._indices = None
         if hasattr(self, "_nvcategory"):
             self._nvcategory = None
         if hasattr(self, "_nvstrings"):
             self._nvstrings = None
+        if hasattr(self, "_codes"):
+            self._codes = None
 
         self._base_mask = value
 
@@ -236,9 +226,11 @@ cdef class Column:
             children=self.children
         )
 
-    @cached_property
+    @property
     def null_count(self):
-        return self.compute_null_count()
+        if self._null_count == UNKNOWN_NULL_COUNT:
+            self._null_count = self.compute_null_count()
+        return self._null_count
 
     @property
     def offset(self):
@@ -250,24 +242,17 @@ cdef class Column:
             raise TypeError("Expected an integer for offset, got " +
                             type(value).__name__)
 
-        try:
-            del self.null_count
-        except AttributeError:
-            pass
-        try:
-            del self.mask
-        except AttributeError:
-            pass
-        try:
-            del self.children
-        except AttributeError:
-            pass
+        self._null_count = UNKNOWN_NULL_COUNT
+        self._mask = None
+        self._children = None
         if hasattr(self, "_indices"):
             self._indices = None
         if hasattr(self, "_nvcategory"):
             self._nvcategory = None
         if hasattr(self, "_nvstrings"):
             self._nvstrings = None
+        if hasattr(self, "_codes"):
+            self._codes = None
 
         if not hasattr(self, "_offset"):
             offset_diff = value
@@ -287,9 +272,11 @@ cdef class Column:
     def base_children(self):
         return self._base_children
 
-    @cached_property
+    @property
     def children(self):
-        return self._base_children
+        if self._children is None:
+            self._children = self.base_children
+        return self._children
 
     def set_base_children(self, value):
         if not isinstance(value, tuple):
@@ -303,16 +290,15 @@ cdef class Column:
                     type(child).__name__
                 )
 
-        try:
-            del self.children
-        except AttributeError:
-            pass
+        self._children = None
         if hasattr(self, "_indices"):
             self._indices = None
         if hasattr(self, "_nvcategory"):
             self._nvcategory = None
         if hasattr(self, "_nvstrings"):
             self._nvstrings = None
+        if hasattr(self, "_codes"):
+            self._codes = None
 
         self._base_children = value
 
@@ -324,18 +310,12 @@ cdef class Column:
         object with the Buffers and attributes from the other column.
         """
         if inplace:
-            self.size = other_col.size
             self.offset = other_col.offset
+            self.size = other_col.size
             self.dtype = other_col.dtype
             self.set_base_data(other_col.base_data)
             self.set_base_mask(other_col.base_mask)
             self.set_base_children(other_col.base_children)
-            if hasattr(other_col, "_nvstrings"):
-                self._nvstrings = other_col._nvstrings
-            if hasattr(other_col, "_nvcategory"):
-                self._nvcategory = other_col._nvcategory
-            if hasattr(other_col, "_indices"):
-                self._indices = other_col._indices
         else:
             return other_col
 
