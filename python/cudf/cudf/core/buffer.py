@@ -1,5 +1,6 @@
 import functools
 import operator
+import pickle
 
 import numpy as np
 
@@ -103,7 +104,9 @@ class Buffer:
             )
 
     def serialize(self):
-        header = self.__cuda_array_interface__.copy()
+        header = {}
+        header["type"] = pickle.dumps(type(self))
+        header["desc"] = self.__cuda_array_interface__.copy()
         frames = [self]
         return header, frames
 
@@ -111,11 +114,12 @@ class Buffer:
     def deserialize(cls, header, frames):
         buf = cls(frames[0])
 
-        if header["shape"] != buf.__cuda_array_interface__["shape"]:
+        if header["desc"]["shape"] != buf.__cuda_array_interface__["shape"]:
             raise ValueError(
                 "Recieved a `Buffer` with the wrong size."
                 " Expected {0}, but got {1}".format(
-                    header["shape"], buf.__cuda_array_interface__["shape"]
+                    header["desc"]["shape"],
+                    buf.__cuda_array_interface__["shape"],
                 )
             )
 
