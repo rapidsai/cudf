@@ -109,7 +109,7 @@ class Buffer:
 
     @classmethod
     def deserialize(cls, header, frames):
-        buf = Buffer(frames[0])
+        buf = cls(frames[0])
 
         if header["shape"] != buf.__cuda_array_interface__["shape"]:
             raise ValueError(
