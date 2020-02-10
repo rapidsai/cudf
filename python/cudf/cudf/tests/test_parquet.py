@@ -525,3 +525,29 @@ def test_parquet_writer_gpu_false_index(tmpdir, simple_pdf, simple_gdf):
     got = pd.read_parquet(gdf_fname)
 
     assert_eq(expect, got, check_categorical=False)
+
+
+def test_parquet_writer_gpu_multi_index(tmpdir, simple_pdf, simple_gdf):
+    gdf_fname = tmpdir.join("gdf.parquet")
+    pdf_fname = tmpdir.join("pdf.parquet")
+
+    simple_pdf = simple_pdf.set_index(["col_bool", "col_int8"])
+    simple_gdf = simple_gdf.set_index(["col_bool", "col_int8"])
+
+    assert_eq(simple_pdf, simple_gdf)
+
+    print("PDF Index Type: " + str(type(simple_pdf.index)))
+    print("GDF Index Type: " + str(type(simple_gdf.index)))
+
+    # Write out the gdf using the GPU accelerated writer
+    simple_gdf.to_parquet(gdf_fname.strpath, index=None)
+    simple_pdf.to_parquet(pdf_fname.strpath, index=None)
+
+    assert os.path.exists(gdf_fname)
+    assert os.path.exists(pdf_fname)
+
+    expect = pd.read_parquet(pdf_fname)
+    got = pd.read_parquet(gdf_fname)
+
+    assert_eq(expect, got, check_categorical=False)
+

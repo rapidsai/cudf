@@ -29,9 +29,72 @@ import errno
 import os
 import json
 import pandas as pd
+import pyarrow as pa
 
 from cudf._libxx.table cimport *
 
+
+cpdef generate_pandas_metadata(Table table, index):
+    col_names = []
+    types = []
+    index_levels = []
+    index_descriptors = []
+
+    # Columns
+    for name, col in table._data.items():
+        col_names.append(name)
+        types.append(col.to_arrow().type)
+
+    # Indexes
+    if index is not False:
+        if isinstance(table._index, cudf.core.multiindex.MultiIndex):
+            for name in table._index.names:
+                idx = table.index.get_level_values(name)
+                if isinstance(idx, cudf.core.index.RangeIndex):
+                    descr = {
+                        "kind": "range",
+                        "name": table.index.name,
+                        "start": table.index._start,
+                        "stop": table.index._stop,
+                        "step": 1,
+                    }
+                else:
+                    index_arrow = idx.to_arrow()
+                    descr = name
+                    types.append(index_arrow.type)
+                    col_names.append(name)
+                    index_levels.append(idx)
+                index_descriptors.append(descr)
+        else:
+            if isinstance(table._index, cudf.core.index.RangeIndex):
+                descr = {
+                    "kind": "range",
+                    "name": table.index.name,
+                    "start": table.index._start,
+                    "stop": table.index._stop,
+                    "step": 1,
+                }
+            else:
+                index_arrow = table._index.to_arrow()
+                descr = table._index.name
+                types.append(index_arrow.type)
+                col_names.append(table._index.name)
+                index_levels.append(table._index)
+            index_descriptors.append(descr)
+        
+
+    metadata = pa.pandas_compat.construct_metadata(
+        table,
+        col_names,
+        index_levels,
+        index_descriptors,
+        index,
+        types,
+    )
+
+    md = metadata[b'pandas']
+    json_str = md.decode("utf-8")
+    return json_str
 
 cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
                    skip_rows=None, num_rows=None,
@@ -124,56 +187,19 @@ cpdef write_parquet(
     cdef map[string, string] user_data
     cdef table_view tv = table.data_view()
 
-    index_columns = []
-    column_metadata = []
-
-    if index is None or index is True:
+    if index is not False:
         tv = table.view()
+        if isinstance(table._index, cudf.core.multiindex.MultiIndex):
+            for idx_name in table._index.names:
+                column_names.push_back(str.encode(idx_name))
+        else:
+            column_names.push_back(str.encode(table._index.name))
 
-        index_columns.append(table._index.name)
-
-        # Write the index out as value columns
-        column_names.push_back(str.encode(table._index.name))
-
-        # Append the index column
-        idx_dtype = table._index._data[table._index.name].dtype
-        column_metadata.append({
-            "name": table._index.name,
-            "field_name": table._index.name,
-            "pandas_type": pd.api.types.pandas_dtype(idx_dtype).name,
-            "numpy_type": np.dtype(idx_dtype).name,
-            "metadata": None
-        })
-
-    # Value columns to output
     for col_name in table._column_names:
         column_names.push_back(str.encode(col_name))
 
-    # Construct Pandas column metadata
-    for c in table._column_names:
-        col = table._data[c]
-        column_metadata.append({
-            "name": c,
-            "field_name": c,
-            "pandas_type": pd.api.types.pandas_dtype(col.dtype).name,
-            "numpy_type": np.dtype(col.dtype).name,
-            "metadata": None
-        })
-
-    # Create the final Pandas metadata
-    pandas_metadata = {
-        "index_columns": index_columns,
-        "column_indexes": [],
-        "columns": column_metadata,
-        "pandas_version": pd.__version__,
-        "creator": {
-            "library": "cudf",
-            "version": cudf.__version__
-        }
-    }
-    json_str = json.dumps(pandas_metadata)
-    print("Pandas Metadata: " + str(json_str))
-    user_data[str.encode("pandas")] = str.encode(json_str)
+    pandas_metadata = generate_pandas_metadata(table, index)
+    user_data[str.encode("pandas")] = str.encode(pandas_metadata)
 
     # Set the table_metadata
     tbl_meta.get().column_names = column_names
