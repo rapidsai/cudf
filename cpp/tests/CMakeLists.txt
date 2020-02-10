@@ -328,6 +328,7 @@ set(LEGACY_QUANTILES_TEST_SRC
 ConfigureTest(LEGACY_QUANTILES_TEST "${LEGACY_QUANTILES_TEST_SRC}")
 
 set(QUANTILES_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/quantile_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/quantiles_test.cu")
 
 ConfigureTest(QUANTILES_TEST "${QUANTILES_TEST_SRC}")
@@ -856,8 +857,9 @@ ConfigureTest(BITMASK_TEST "${BITMASK_TEST_SRC}")
 
 set(DICTIONARY_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/factories_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/encode_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/decode_test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/encode_test.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/gather_test.cpp")
 
 ConfigureTest(DICTIONARY_TEST "${DICTIONARY_TEST_SRC}")
 

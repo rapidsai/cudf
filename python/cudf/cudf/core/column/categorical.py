@@ -261,10 +261,9 @@ class CategoricalColumn(column.ColumnBase):
         header["data_frames_count"] = len(data_frames)
         frames.extend(data_frames)
         if self.nullable:
-            mask_frames = [self.mask_array_view]
-        else:
-            mask_frames = []
-        frames.extend(mask_frames)
+            mask_header, mask_frames = self.mask.serialize()
+            header["mask"] = mask_header
+            frames.extend(mask_frames)
         header["frame_count"] = len(frames)
         return header, frames
 
@@ -282,8 +281,10 @@ class CategoricalColumn(column.ColumnBase):
             frames[n_dtype_frames : n_dtype_frames + n_data_frames],
         )
         mask = None
-        if header["frame_count"] > n_dtype_frames + n_data_frames:
-            mask = Buffer(frames[n_dtype_frames + n_data_frames])
+        if "mask" in header:
+            mask = Buffer.deserialize(
+                header["mask"], [frames[n_dtype_frames + n_data_frames]]
+            )
         return column.build_column(
             data=None, dtype=dtype, mask=mask, children=(data,)
         )

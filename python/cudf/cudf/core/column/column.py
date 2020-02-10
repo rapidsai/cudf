@@ -82,10 +82,15 @@ class ColumnBase(Column):
         else:
             dtype = self.dtype
 
-        result = rmm.device_array_from_ptr(
-            ptr=self.data_ptr, nelem=len(self), dtype=dtype
+        result = cuda.as_cuda_array(self.data)
+        # Workaround until `.view(...)` can change itemsize
+        # xref: https://github.com/numba/numba/issues/4829
+        result = cuda.devicearray.DeviceNDArray(
+            shape=(result.nbytes // dtype.itemsize,),
+            strides=(dtype.itemsize,),
+            dtype=dtype,
+            gpu_data=result.gpu_data
         )
-        result.gpu_data._obj = self
         return result
 
     @property
@@ -93,10 +98,7 @@ class ColumnBase(Column):
         """
         View the mask as a device array
         """
-        result = rmm.device_array_from_ptr(
-            ptr=self.mask_ptr, nelem=self.mask.size, dtype=np.int8
-        )
-        result.gpu_data._obj = self
+        result = cuda.as_cuda_array(self.mask).view(np.int8)
         return result
 
     def __len__(self):
@@ -107,9 +109,8 @@ class ColumnBase(Column):
         sr = pd.Series(arr.copy_to_host())
 
         if self.nullable:
-            mask_bits = self.mask_array_view.copy_to_host()
             mask_bytes = (
-                cudautils.expand_mask_bits(len(self), mask_bits)
+                cudautils.expand_mask_bits(len(self), self.mask_array_view)
                 .copy_to_host()
                 .astype(bool)
             )
@@ -782,24 +783,26 @@ class ColumnBase(Column):
         frames = []
         header["type"] = pickle.dumps(type(self))
         header["dtype"] = self.dtype.str
-        data_frames = [self.data_array_view]
+
+        data_header, data_frames = self.data.serialize()
+        header["data"] = data_header
         frames.extend(data_frames)
 
         if self.nullable:
-            mask_frames = [self.mask_array_view]
-        else:
-            mask_frames = []
-        frames.extend(mask_frames)
+            mask_header, mask_frames = self.mask.serialize()
+            header["mask"] = mask_header
+            frames.extend(mask_frames)
+
         header["frame_count"] = len(frames)
         return header, frames
 
     @classmethod
     def deserialize(cls, header, frames):
         dtype = header["dtype"]
-        data = Buffer(frames[0])
+        data = Buffer.deserialize(header["data"], [frames[0]])
         mask = None
-        if header["frame_count"] > 1:
-            mask = Buffer(frames[1])
+        if "mask" in header:
+            mask = Buffer.deserialize(header["mask"], [frames[1]])
         return build_column(data=data, dtype=dtype, mask=mask)
 
 
