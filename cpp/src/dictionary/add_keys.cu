@@ -38,9 +38,9 @@ namespace detail
  *
  * ```
  * Example:
- * d1 = {[a,b,c,d,f],{4,0,3,1,2,2,2,4,0}}
- * d2 = add_keys(d1,[d,b,e])
- * d2 is now {[a,b,c,d,e,f],[5,0,3,1,2,2,2,5,0]}
+ * d1 = {[a, b, c, d, f], {4, 0, 3, 1, 2, 2, 2, 4, 0}}
+ * d2 = add_keys( d1, [d, b, e] )
+ * d2 is now {[a, b, c, d, e, f], [5, 0, 3, 1, 2, 2, 2, 5, 0]}
  * ```
  *
  */
