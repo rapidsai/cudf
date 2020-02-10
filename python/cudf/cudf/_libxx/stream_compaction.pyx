@@ -1,8 +1,8 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 import pandas as pd
-from cudf._libxx.includes.column cimport *
-from cudf._libxx.includes.table cimport *
+from cudf._libxx.column cimport *
+from cudf._libxx.table cimport *
 
 from cudf._libxx.includes.stream_compaction cimport *
 
