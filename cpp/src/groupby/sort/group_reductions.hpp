@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/column/column.hpp>
+#include <cudf/aggregation.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 
@@ -137,7 +138,7 @@ std::unique_ptr<column> group_quantiles(
  * @brief Internal API to calculate number of unique non-null values in each
  * group of @p values
  *
- * @param values Grouped values to get unique count of
+ * @param values Grouped and sorted (within group) values to get unique count of
  * @param group_labels ID of group that the corresponding value belongs to
  * @param num_groups Number of groups ( unique values in @p group_labels )
  * @param group_offsets Offsets of groups' starting points within @p values
@@ -149,6 +150,7 @@ std::unique_ptr<column> group_nunique(
     rmm::device_vector<size_type> const& group_labels,
     size_type num_groups,
     rmm::device_vector<size_type> const& group_offsets,
+    include_nulls _include_nulls,
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream = 0);
 

@@ -18,6 +18,7 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/types.hpp>
+#include <cudf/aggregation.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
@@ -33,6 +34,7 @@ std::unique_ptr<column> group_nunique(
     rmm::device_vector<size_type> const& group_labels,
     size_type num_groups,
     rmm::device_vector<size_type> const& group_offsets,
+    include_nulls _include_nulls,
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream)
 {
@@ -53,10 +55,12 @@ std::unique_ptr<column> group_nunique(
     auto comp = element_equality_comparator<true>{*values_view, *values_view};
     auto is_unique_iterator = thrust::make_transform_iterator(
         thrust::make_counting_iterator<size_type>(0),
-        [v = *values_view, comp, group_offsets = group_offsets.data().get(),
-         group_labels = group_labels.data().get()] 
+        [v = *values_view, comp, _include_nulls,
+         group_offsets = group_offsets.data().get(),
+         group_labels =  group_labels.data().get()] 
          __device__(auto i) -> size_type {
-          bool is_unique = v.is_valid_nocheck(i) &&
+          bool is_unique =
+              (_include_nulls == include_nulls::YES || v.is_valid_nocheck(i)) &&
               (group_offsets[group_labels[i]] == i ||
               (not cudf::experimental::type_dispatcher(v.type(), comp, i, i - 1)));
           return static_cast<size_type>(is_unique);
@@ -72,7 +76,8 @@ std::unique_ptr<column> group_nunique(
     auto comp = element_equality_comparator<false>{*values_view, *values_view};
     auto is_unique_iterator = thrust::make_transform_iterator(
         thrust::make_counting_iterator<size_type>(0),
-        [v = *values_view, comp, group_offsets = group_offsets.data().get(),
+        [v = *values_view, comp, 
+         group_offsets = group_offsets.data().get(),
          group_labels = group_labels.data().get()] 
          __device__(auto i) -> size_type {
           bool is_unique = group_offsets[group_labels[i]] == i ||

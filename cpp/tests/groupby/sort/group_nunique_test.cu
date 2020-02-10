@@ -141,7 +141,7 @@ TYPED_TEST(groupby_nunique_test, null_keys_and_values_with_duplicates)
 
                                           //  { 1, 1,     2, 2, 2,    3, 3,    4}
     fixed_width_column_wrapper<K> expect_keys({ 1,        2,          3,       4}, all_valid());
-                                          //  { 3, 6,     1, 4, 9,-   2*, 8,   -*}
+                                          //  { 3, 6,-    1, 4, 9,-   2*, 8,   -*}
                                           //  unique,     with null,  dup,     dup null
     fixed_width_column_wrapper<R> expect_vals { 2,        3,          2,       0};
     fixed_width_column_wrapper<R> expect_bool_vals { 1, 1, 1, 0};
@@ -154,6 +154,32 @@ TYPED_TEST(groupby_nunique_test, null_keys_and_values_with_duplicates)
         test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
+
+TYPED_TEST(groupby_nunique_test, include_nulls)
+{
+    using K = int32_t;
+    using V = TypeParam;
+    using R = experimental::detail::target_type_t<V, experimental::aggregation::NUNIQUE>;
+
+    fixed_width_column_wrapper<K> keys(       { 1, 2, 3, 3, 1, 2, 2, 1, 3, 3, 2, 4, 4, 2},
+                                              { 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1});
+    fixed_width_column_wrapper<V> vals(       { 0, 1, 2, 2, 3, 4, 5, 6, 7, 8, 9, 4, 4, 2},
+                                              { 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 0, 0});
+
+                                          //  { 1, 1,     2, 2, 2,    3, 3,    4}
+    fixed_width_column_wrapper<K> expect_keys({ 1,        2,          3,       4}, all_valid());
+                                          //  { 3, 6,-    1, 4, 9,-   2*, 8,   -*}
+                                          //  unique,     with null,  dup,     dup null
+    fixed_width_column_wrapper<R> expect_vals { 3,        4,          2,       1};
+    fixed_width_column_wrapper<R> expect_bool_vals { 2, 2, 1, 1};
+
+
+    auto agg = cudf::experimental::make_nunique_aggregation(cudf::experimental::include_nulls::YES);
+    if(std::is_same<V, cudf::experimental::bool8>())
+        test_single_agg(keys, vals, expect_keys, expect_bool_vals, std::move(agg));
+    else 
+        test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+}
 
 
 } // namespace test

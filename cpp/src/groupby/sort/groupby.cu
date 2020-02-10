@@ -287,10 +287,14 @@ void store_result_functor::operator()<aggregation::NUNIQUE>(
   if (cache.has_result(col_idx, agg))
     return;
 
+  auto nunique_agg =
+    static_cast<experimental::detail::nunique_aggregation const*>(agg.get());
+
   auto result = detail::group_nunique(get_sorted_values(),
                             helper.group_labels(),
                             helper.num_groups(), 
                             helper.group_offsets(),
+                            nunique_agg->_include_nulls,
                             mr, stream);
   cache.add_result(col_idx, agg, std::move(result));
 };

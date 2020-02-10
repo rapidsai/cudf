@@ -86,8 +86,8 @@ std::unique_ptr<aggregation> make_argmin_aggregation() {
   return std::make_unique<aggregation>(aggregation::ARGMIN);
 }
 /// Factory to create a NUNIQUE aggregation
-std::unique_ptr<aggregation> make_nunique_aggregation() {
-  return std::make_unique<aggregation>(aggregation::NUNIQUE);
+std::unique_ptr<aggregation> make_nunique_aggregation(include_nulls _include_nulls) {
+  return std::make_unique<detail::nunique_aggregation>(aggregation::NUNIQUE, _include_nulls);
 }
 /// Factory to create a UDF aggregation
 std::unique_ptr<aggregation> make_udf_aggregation(udf_type type,

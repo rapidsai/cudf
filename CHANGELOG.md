@@ -11,7 +11,7 @@
 - PR #3681 Add cudf::experimental::boolean_mask_scatter
 - PR #4040 Add support for n-way merge of sorted tables
 - PR #4053 Multi-column quantiles.
-- PR #4107 Add `groupby.nunique()` aggregation
+- PR #4107 Add groupby nunique aggregation
 
 ## Improvements
 

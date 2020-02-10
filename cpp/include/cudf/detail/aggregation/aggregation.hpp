@@ -63,6 +63,7 @@ class aggregation {
 
   bool operator==(aggregation const& other) const { return kind == other.kind; }
 };
+enum class include_nulls : bool; //forward declaration
 namespace detail {
 /**
  * @brief Derived class for specifying a quantile aggregation
@@ -93,6 +94,20 @@ struct std_var_aggregation : aggregation {
   bool operator==(std_var_aggregation const& other) const {
     return aggregation::operator==(other)
        and _ddof == other._ddof;
+  }
+};
+
+/**
+ * @brief Derived class for specifying a nunique aggregation
+ */
+struct nunique_aggregation : aggregation {
+  nunique_aggregation(aggregation::Kind k, include_nulls _include_nulls)
+      : aggregation{k}, _include_nulls{_include_nulls} {}
+include_nulls _include_nulls;    ///< include or exclude nulls
+
+  bool operator==(nunique_aggregation const& other) const {
+    return aggregation::operator==(other)
+       and _include_nulls == other._include_nulls;
   }
 };
 
