@@ -42,17 +42,16 @@ gpu_init_statistics_groups(statistics_group *groups, const stats_column_desc *co
   uint32_t t = threadIdx.x & 0x1f;
   volatile statistics_group *group = &group_g[threadIdx.x >> 5];
   if (chunk_id < num_rowgroups) {
-    if (!t) {
+    if (t == 0) {
       uint32_t num_rows = cols[col_id].num_rows;
       group->col = &cols[col_id];
       group->start_row = chunk_id * row_index_stride;
       group->num_rows = min(num_rows - min(chunk_id * row_index_stride, num_rows), row_index_stride);
-      __threadfence_block();
     }
-    SYNCWARP();
-    if (t < sizeof(statistics_group) / sizeof(uint32_t)) {
-      reinterpret_cast<uint32_t *>(&groups[col_id * num_rowgroups + chunk_id])[t] = reinterpret_cast<volatile uint32_t *>(group)[t];
-    }
+  }
+  __syncthreads();
+  if (chunk_id < num_rowgroups && t < sizeof(statistics_group) / sizeof(uint32_t)) {
+    reinterpret_cast<uint32_t *>(&groups[col_id * num_rowgroups + chunk_id])[t] = reinterpret_cast<volatile uint32_t *>(group)[t];
   } 
 }
 
