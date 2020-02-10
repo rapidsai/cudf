@@ -9,7 +9,6 @@ import cudf
 from cudf._lib.cudf cimport *
 from cudf._lib.GDFError import GDFError
 from cudf._libxx.column cimport Column
-from cudf._libxx.lib cimport UNKNOWN_NULL_COUNT
 from libcpp.vector cimport vector
 from libc.stdint cimport uintptr_t
 from libc.stdlib cimport malloc, free
@@ -308,7 +307,7 @@ cdef gdf_column* column_view_from_column(Column col,
             c_col_name
         )
 
-    col._null_count = UNKNOWN_NULL_COUNT
+    col._null_count = None
 
     return c_col
 
@@ -404,7 +403,7 @@ cdef gdf_column* column_view_from_string_column(
             c_col_name
         )
 
-    col._null_count = UNKNOWN_NULL_COUNT
+    col._null_count = None
 
     return c_col
 

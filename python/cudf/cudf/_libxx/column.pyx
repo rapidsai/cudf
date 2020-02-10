@@ -11,7 +11,6 @@ import cython
 import rmm
 
 from libc.stdint cimport uintptr_t
-from libc.stdlib cimport malloc, free
 from libcpp.pair cimport pair
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr, make_unique
@@ -92,7 +91,7 @@ cdef class Column:
                     libcudfxx.MAX_COLUMN_SIZE_STR)
             )
 
-        self._null_count = UNKNOWN_NULL_COUNT
+        self._null_count = None
         self._children = None
         if hasattr(self, "_indices"):
             self._indices = None
@@ -192,7 +191,7 @@ cdef class Column:
                 raise RuntimeError(error_msg)
 
         self._mask = None
-        self._null_count = UNKNOWN_NULL_COUNT
+        self._null_count = None
         if hasattr(self, "_indices"):
             self._indices = None
         if hasattr(self, "_nvcategory"):
@@ -228,7 +227,7 @@ cdef class Column:
 
     @property
     def null_count(self):
-        if self._null_count == UNKNOWN_NULL_COUNT:
+        if self._null_count is None:
             self._null_count = self.compute_null_count()
         return self._null_count
 
@@ -242,7 +241,7 @@ cdef class Column:
             raise TypeError("Expected an integer for offset, got " +
                             type(value).__name__)
 
-        self._null_count = UNKNOWN_NULL_COUNT
+        self._null_count = None
         self._mask = None
         self._children = None
         if hasattr(self, "_indices"):
@@ -348,7 +347,10 @@ cdef class Column:
         else:
             mask = NULL
 
-        cdef size_type c_null_count = self.null_count
+        null_count = self.null_count
+        if null_count is None:
+            null_count = UNKNOWN_NULL_COUNT
+        cdef size_type c_null_count = null_count
 
         return mutable_column_view(
             dtype,
@@ -360,7 +362,11 @@ cdef class Column:
             children)
 
     cdef column_view view(self) except *:
-        return self._view(self.null_count)
+        null_count = self.null_count
+        if null_count is None:
+            null_count = UNKNOWN_NULL_COUNT
+        cdef size_type c_null_count = null_count
+        return self._view(c_null_count)
 
     cdef column_view _view(self, size_type null_count) except *:
         if is_categorical_dtype(self.dtype):
