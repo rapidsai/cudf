@@ -652,25 +652,14 @@ class StringColumn(column.ColumnBase):
         frames = []
         sub_headers = []
 
-        sbuf = Buffer.empty(self.nvstrings.byte_count())
-        obuf = Buffer.empty(
-            np.dtype("int32").itemsize * (len(self.nvstrings) + 1)
-        )
-        mask_size = utils.calc_chunk_size(
-            len(self.nvstrings), utils.mask_bitsize
-        )
-        nbuf = Buffer.empty(mask_size)
-        self.nvstrings.to_offsets(
-            sbuf.ptr, obuf.ptr, nbuf=nbuf.ptr, bdevmem=True,
-        )
-        for item in [sbuf, obuf]:
+        for item in reversed(self.children):
             sheader = item.__cuda_array_interface__.copy()
             sheader["dtype"] = item.dtype.str
             sub_headers.append(sheader)
             frames.append(item)
 
         if self.null_count > 0:
-            frames.append(nbuf)
+            frames.append(self.mask)
 
         header["nvstrings"] = len(self.nvstrings)
         header["subheaders"] = sub_headers
