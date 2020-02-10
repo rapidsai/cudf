@@ -74,6 +74,7 @@
 - PR #4049 Fix `cudf::split` issue returning one less than expected column vectors
 - PR #4065 Parquet writer: fix for out-of-range dictionary indices
 - PR #4066 Fixed mismatch with dtype enums
+- PR #4078 Fix joins for when column_in_common input parameter is empty
 - PR #4080 Fix multi-index dask test with sort issue
 - PR #4084 Update Java for removal of CATEGORY type
 - PR #4086 ORC reader: fix potentially incorrect timestamp decoding in the last rowgroup
