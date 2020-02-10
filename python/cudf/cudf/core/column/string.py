@@ -452,7 +452,6 @@ class StringColumn(column.ColumnBase):
             Two non-null columns containing the string data and offsets
             respectively
         """
-        data = Buffer.empty(0)
         dtype = np.dtype("object")
 
         if size is None:
@@ -466,7 +465,7 @@ class StringColumn(column.ColumnBase):
                 size = children[0].size - 1
 
         super().__init__(
-            data, size, dtype, mask=mask, offset=offset, children=children
+            None, size, dtype, mask=mask, offset=offset, children=children
         )
 
         self._nvstrings = None
@@ -474,10 +473,13 @@ class StringColumn(column.ColumnBase):
         self._indices = None
 
     def set_base_data(self, value):
-        raise RuntimeError(
-            "StringColumns do not use data attribute of Column, use "
-            "`set_base_children` instead"
-        )
+        if value is not None:
+            raise RuntimeError(
+                "StringColumns do not use data attribute of Column, use "
+                "`set_base_children` instead"
+            )
+        else:
+            super().set_base_data(value)
 
     def set_base_mask(self, value):
         super().set_base_mask(value)

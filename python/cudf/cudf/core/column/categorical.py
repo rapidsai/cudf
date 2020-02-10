@@ -226,7 +226,6 @@ class CategoricalColumn(column.ColumnBase):
             Two non-null columns containing the categories and codes
             respectively
         """
-        data = Buffer.empty(0)
         if size is None:
             size = children[0].size
         if isinstance(dtype, pd.api.types.CategoricalDtype):
@@ -234,7 +233,7 @@ class CategoricalColumn(column.ColumnBase):
         if not isinstance(dtype, CategoricalDtype):
             raise ValueError("dtype must be instance of CategoricalDtype")
         super().__init__(
-            data,
+            data=None,
             size=size,
             dtype=dtype,
             mask=mask,
@@ -290,10 +289,13 @@ class CategoricalColumn(column.ColumnBase):
         )
 
     def set_base_data(self, value):
-        raise RuntimeError(
-            "CategoricalColumns do not use data attribute of Column, use "
-            "`set_base_children` instead"
-        )
+        if value is not None:
+            raise RuntimeError(
+                "CategoricalColumns do not use data attribute of Column, use "
+                "`set_base_children` instead"
+            )
+        else:
+            super().set_base_data(value)
 
     def set_base_mask(self, value):
         super().set_base_mask(value)
@@ -476,7 +478,7 @@ class CategoricalColumn(column.ColumnBase):
             ordered=self.dtype.ordered,
         )
 
-    def fillna(self, fill_value, inplace=False):
+    def fillna(self, fill_value):
         """
         Fill null values with *fill_value*
         """

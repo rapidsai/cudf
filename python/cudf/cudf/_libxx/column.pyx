@@ -69,11 +69,11 @@ cdef class Column:
     def __init__(self, data, size, dtype, mask=None, offset=0, children=()):
         if not pd.api.types.is_integer(offset):
             raise TypeError("Expected an integer for offset, got " +
-                            type(value).__name__)
+                            type(offset).__name__)
 
         if not pd.api.types.is_integer(size):
             raise TypeError("Expected an integer for size, got " +
-                            type(value).__name__)
+                            type(size).__name__)
 
         if size > libcudfxx.MAX_COLUMN_SIZE:
             raise MemoryError(
@@ -96,6 +96,13 @@ cdef class Column:
     @property
     def base_data(self):
         return self._base_data
+
+    @property
+    def base_data_ptr(self):
+        if self.base_data is None:
+            return 0
+        else:
+            return self.base_data.ptr
 
     @property
     def data(self):
@@ -136,6 +143,13 @@ cdef class Column:
     @property
     def base_mask(self):
         return self._base_mask
+
+    @property
+    def base_mask_ptr(self):
+        if self.base_mask is None:
+            return 0
+        else:
+            return self.base_mask.ptr
 
     @property
     def mask(self):
@@ -272,7 +286,7 @@ cdef class Column:
         cdef vector[mutable_column_view] children
         cdef void* data
 
-        data = <void*><uintptr_t>(col.base_data.ptr)
+        data = <void*><uintptr_t>(col.base_data_ptr)
 
         cdef Column child_column
         if self.base_children:
@@ -281,7 +295,7 @@ cdef class Column:
 
         cdef bitmask_type* mask
         if self.nullable:
-            mask = <bitmask_type*><uintptr_t>(self.base_mask.ptr)
+            mask = <bitmask_type*><uintptr_t>(self.base_mask_ptr)
         else:
             mask = NULL
 
@@ -318,7 +332,7 @@ cdef class Column:
         cdef vector[column_view] children
         cdef void* data
 
-        data = <void*><uintptr_t>(col.base_data.ptr)
+        data = <void*><uintptr_t>(col.base_data_ptr)
 
         cdef Column child_column
         if self.base_children:
@@ -327,7 +341,7 @@ cdef class Column:
 
         cdef bitmask_type* mask
         if self.nullable:
-            mask = <bitmask_type*><uintptr_t>(self.base_mask.ptr)
+            mask = <bitmask_type*><uintptr_t>(self.base_mask_ptr)
         else:
             mask = NULL
 
@@ -377,7 +391,8 @@ cdef class Column:
         along with referencing an ``owner`` Python object that owns the memory
         lifetime. If ``owner`` is a ``cudf.Column``, we reach inside of it and
         make the owner of each newly created ``Buffer`` the respective
-        ``Buffer`` from the ``owner`` ``cudf.Column``.
+        ``Buffer`` from the ``owner`` ``cudf.Column``. If ``owner`` is
+        ``None``, we allocate new memory for the resulting ``cudf.Column``.
         """
         from cudf.core.column import build_column
 
@@ -392,11 +407,16 @@ cdef class Column:
             data_owner = owner
             if column_owner:
                 data_owner = owner.base_data
-            data = Buffer(
-                data=data_ptr,
-                size=size * dtype.itemsize,
-                owner=data_owner
-            )
+            if data_owner is None:
+                data = Buffer(
+                    rmm.DeviceBuffer(ptr=data_ptr, size=size * dtype.itemsize)
+                )
+            else:
+                data = Buffer(
+                    data=data_ptr,
+                    size=size * dtype.itemsize,
+                    owner=data_owner
+                )
 
         mask_ptr = <uintptr_t>(cv.null_mask())
         mask = None
@@ -404,11 +424,19 @@ cdef class Column:
             mask_owner = owner
             if column_owner:
                 mask_owner = owner.base_mask
-            mask = Buffer(
-                mask=mask_ptr,
-                size=calc_chunk_size(size, mask_bitsize),
-                owner=mask_owner
-            )
+            if mask_owner is None:
+                mask = Buffer(
+                    rmm.DeviceBuffer(
+                        ptr=mask_ptr,
+                        size=calc_chunk_size(size, mask_bitsize)
+                    )
+                )
+            else:
+                mask = Buffer(
+                    mask=mask_ptr,
+                    size=calc_chunk_size(size, mask_bitsize),
+                    owner=mask_owner
+                )
 
         offset = cv.offset()
 
