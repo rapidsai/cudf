@@ -113,6 +113,12 @@ std::unique_ptr<aggregation> make_argmax_aggregation();
 std::unique_ptr<aggregation> make_argmin_aggregation();
 
 /**
+ * @brief Factory to create a `nunique` aggregation
+ * 
+ * `argmin` returns the number of unique elements.
+*/
+std::unique_ptr<aggregation> make_nunique_aggregation();
+/**
  * @brief Factory to create a aggregation base on UDF for PTX or CUDA
  *
  * @param[in] type: either udf_type::PTX or udf_type::CUDA

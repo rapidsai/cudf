@@ -53,6 +53,7 @@ class aggregation {
     QUANTILE,  ///< compute specified quantile(s)
     ARGMAX,    ///< Index of max element
     ARGMIN,    ///< Index of min element
+    NUNIQUE,   ///< count number of unique elements
     PTX,       ///< PTX UDF based reduction
     CUDA       ///< CUDA UDf based reduction
   };
@@ -242,6 +243,12 @@ struct target_type_impl<Source, aggregation::ARGMIN> {
   using type = size_type;
 };
 
+// Always use size_type accumulator for NUNIQUE
+template <typename Source>
+struct target_type_impl<Source, aggregation::NUNIQUE> {
+  using type = cudf::size_type;
+};
+
 /**
  * @brief Helper alias to get the accumulator type for performing aggregation
  * `k` on elements of type `Source`
@@ -324,6 +331,9 @@ CUDA_HOST_DEVICE_CALLABLE decltype(auto) aggregation_dispatcher(
           std::forward<Ts>(args)...);
     case aggregation::ARGMIN:
       return f.template operator()<aggregation::ARGMIN>(
+          std::forward<Ts>(args)...);
+    case aggregation::NUNIQUE:
+      return f.template operator()<aggregation::NUNIQUE>(
           std::forward<Ts>(args)...);
     default: {
 #ifndef __CUDA_ARCH__

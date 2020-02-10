@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -130,6 +130,25 @@ std::unique_ptr<column> group_quantiles(
     rmm::device_vector<size_type> const& group_offsets,
     std::vector<double> const& quantiles,
     interpolation interp,
+    rmm::mr::device_memory_resource* mr,
+    cudaStream_t stream = 0);
+
+/**
+ * @brief Internal API to calculate number of unique non-null values in each
+ * group of @p values
+ *
+ * @param values Grouped values to get unique count of
+ * @param group_labels ID of group that the corresponding value belongs to
+ * @param num_groups Number of groups ( unique values in @p group_labels )
+ * @param group_offsets Offsets of groups' starting points within @p values
+ * @param mr Memory resource to allocate output with
+ * @param stream Stream to perform computation in
+ */
+std::unique_ptr<column> group_nunique(
+    column_view const& values,
+    rmm::device_vector<size_type> const& group_labels,
+    size_type num_groups,
+    rmm::device_vector<size_type> const& group_offsets,
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream = 0);
 
