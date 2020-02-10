@@ -70,6 +70,7 @@
 - PR #4084 Update Java for removal of CATEGORY type
 - PR #4089 Fix dask groupby mutliindex test case issues in join
 - PR #4076 All null string entries should have null data buffer
+- PR #4108 Fix dtype-preservation bugs in cudf/dask_cudf
 
 
 # cuDF 0.12.0 (04 Feb 2020)
