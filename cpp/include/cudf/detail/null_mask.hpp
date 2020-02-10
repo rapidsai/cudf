@@ -15,9 +15,33 @@
  */
 #pragma once
 
+#include <cudf/types.hpp>
+
+#include <vector>
+
 namespace cudf {
 
 namespace detail {
+
+/**
+ * @copydoc cudf::segmented_count_set_bits
+ *
+ * @param[in] stream Optional CUDA stream on which to execute kernels
+ */
+std::vector<size_type>
+segmented_count_set_bits(bitmask_type const* bitmask,
+                         std::vector<size_type> const& indices,
+                         cudaStream_t stream = 0);
+
+/**
+ * @copydoc cudf::segmented_count_unset_bits
+ *
+ * @param[in] stream Optional CUDA stream on which to execute kernels
+ */
+std::vector<size_type>
+segmented_count_unset_bits(bitmask_type const* bitmask,
+                           std::vector<size_type> const& indices,
+                           cudaStream_t stream = 0);
 
 /**---------------------------------------------------------------------------*
  * @brief Concatenates `views[i]`'s bitmask from the bits
@@ -33,7 +57,6 @@ namespace detail {
 void concatenate_masks(std::vector<column_view> const &views,
     bitmask_type * dest_mask,
     cudaStream_t stream);
-
 }  // namespace detail
 
 }  // namespace cudf

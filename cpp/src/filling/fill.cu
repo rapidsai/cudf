@@ -25,7 +25,6 @@
 #include <cudf/strings/detail/fill.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
-#include <rmm/mr/device_memory_resource.hpp>
 
 #include <cuda_runtime.h>
 
@@ -104,6 +103,16 @@ struct out_of_place_fill_range_dispatch {
     auto p_scalar = static_cast<ScalarType const*>(&value);
     return cudf::strings::detail::fill(cudf::strings_column_view(input),
                                        begin, end, *p_scalar, mr, stream);
+  }
+  
+  template <typename T>
+  std::enable_if_t<std::is_same<cudf::dictionary32, T>::value,
+                   std::unique_ptr<cudf::column>>
+  operator()(
+      cudf::size_type begin, cudf::size_type end,
+      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(), 
+      cudaStream_t stream = 0) {
+        CUDF_FAIL("dictionary not supported yet");
   }
 };
 

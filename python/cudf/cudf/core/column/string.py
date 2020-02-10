@@ -1,4 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
 import functools
 import pickle
@@ -7,7 +7,6 @@ import warnings
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from numba import cuda
 
 import nvstrings
 import rmm
@@ -16,7 +15,7 @@ import cudf._lib as libcudf
 from cudf._lib.nvtx import nvtx_range_pop, nvtx_range_push
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
-from cudf.utils import cudautils, utils
+from cudf.utils import utils
 from cudf.utils.dtypes import is_list_like
 
 _str_to_numeric_typecast_functions = {
@@ -482,7 +481,7 @@ class StringColumn(column.ColumnBase):
         return StringMethods(self, index=index, name=name)
 
     def __sizeof__(self):
-        n = self.nvstrings.device_memory()
+        n = self.children[0].__sizeof__() + self.children[1].__sizeof__()
         if self.mask:
             n += self.mask.size
         return n
@@ -543,6 +542,10 @@ class StringColumn(column.ColumnBase):
             self.nvcategory.values(devptr=ptr)
             self._indices = out_dev_arr
         return self._indices
+
+    @property
+    def _nbytes(self):
+        return self.children[1].size
 
     def as_numerical_column(self, dtype, **kwargs):
 
@@ -661,11 +664,14 @@ class StringColumn(column.ColumnBase):
             nbuf=libcudf.cudf.get_ctype_ptr(nbuf),
             bdevmem=True,
         )
-        for item in [nbuf, sbuf, obuf]:
+        for item in [sbuf, obuf]:
             sheader = item.__cuda_array_interface__.copy()
             sheader["dtype"] = item.dtype.str
             sub_headers.append(sheader)
             frames.append(item)
+
+        if self.null_count > 0:
+            frames.append(nbuf)
 
         header["nvstrings"] = len(self.nvstrings)
         header["subheaders"] = sub_headers
@@ -675,25 +681,22 @@ class StringColumn(column.ColumnBase):
     @classmethod
     def deserialize(cls, header, frames):
         # Deserialize the mask, value, and offset frames
-        arrays = []
+        buffers = [Buffer(each_frame) for each_frame in frames]
+        ptrs = [int(buf.ptr) for buf in buffers]
 
-        for each_frame in frames:
-            if hasattr(each_frame, "__cuda_array_interface__"):
-                each_frame = cuda.as_cuda_array(each_frame)
-            elif isinstance(each_frame, memoryview):
-                each_frame = np.asarray(each_frame)
-                each_frame = cudautils.to_device(each_frame)
-
-            arrays.append(libcudf.cudf.get_ctype_ptr(each_frame))
+        if header["null_count"] > 0:
+            nbuf = ptrs[2]
+        else:
+            nbuf = None
 
         # Use from_offsets to get nvstring data.
         # Note: array items = [nbuf, sbuf, obuf]
         scount = header["nvstrings"]
         data = nvstrings.from_offsets(
-            arrays[1],
-            arrays[2],
+            ptrs[0],
+            ptrs[1],
             scount,
-            nbuf=arrays[0],
+            nbuf=nbuf,
             ncount=header["null_count"],
             bdevmem=True,
         )
@@ -815,6 +818,11 @@ class StringColumn(column.ColumnBase):
         else:
             msg = "{!r} operator not supported between {} and {}"
             raise TypeError(msg.format(binop, type(self), type(rhs)))
+
+    def sum(self, dtype=None):
+        # dtype is irrelevant it is needed to be in sync with
+        # the sum method for Numeric Series
+        return self._nvstrings.join().to_host()[0]
 
     @property
     def is_unique(self):

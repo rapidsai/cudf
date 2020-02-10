@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 import pickle
 import warnings
@@ -14,8 +14,9 @@ import rmm
 
 import cudf
 import cudf._lib as libcudf
-from cudf._lib.stream_compaction import nunique as cpp_unique_count
+import cudf._libxx as libcudfxx
 from cudf._libxx.column import Column
+from cudf._libxx.stream_compaction import unique_count as cpp_unique_count
 from cudf.core.buffer import Buffer
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils import cudautils, ioutils, utils
@@ -58,6 +59,14 @@ class ColumnBase(Column):
             (self.data, self.dtype, self.mask, self.offset, self.children),
         )
 
+    def as_frame(self):
+        from cudf.core.frame import Frame
+
+        """
+        Converts a Column to Frame
+        """
+        return Frame({None: self.copy(deep=False)})
+
     @property
     def data_array_view(self):
         """
@@ -71,10 +80,15 @@ class ColumnBase(Column):
         else:
             dtype = self.dtype
 
-        result = rmm.device_array_from_ptr(
-            ptr=self.data.ptr, nelem=len(self), dtype=dtype
+        result = cuda.as_cuda_array(self.data)
+        # Workaround until `.view(...)` can change itemsize
+        # xref: https://github.com/numba/numba/issues/4829
+        result = cuda.devicearray.DeviceNDArray(
+            shape=(result.nbytes // dtype.itemsize,),
+            strides=(dtype.itemsize,),
+            dtype=dtype,
+            gpu_data=result.gpu_data,
         )
-        result.gpu_data._obj = self
         return result
 
     @property
@@ -82,12 +96,7 @@ class ColumnBase(Column):
         """
         View the mask as a device array
         """
-        result = rmm.device_array_from_ptr(
-            ptr=self.mask.ptr,
-            nelem=calc_chunk_size(len(self), mask_bitsize),
-            dtype=np.int8,
-        )
-        result.gpu_data._obj = self
+        result = cuda.as_cuda_array(self.mask).view(np.int8)
         return result
 
     def __len__(self):
@@ -98,9 +107,8 @@ class ColumnBase(Column):
         sr = pd.Series(arr.copy_to_host())
 
         if self.nullable:
-            mask_bits = self.mask_array_view.copy_to_host()
             mask_bytes = (
-                cudautils.expand_mask_bits(len(self), mask_bits)
+                cudautils.expand_mask_bits(len(self), self.mask_array_view)
                 .copy_to_host()
                 .astype(bool)
             )
@@ -227,15 +235,28 @@ class ColumnBase(Column):
             if not (obj.dtype == head.dtype):
                 raise ValueError("All series must be of same type")
 
+        newsize = sum(map(len, objs))
+        if newsize > libcudfxx.MAX_COLUMN_SIZE:
+            raise MemoryError(
+                "Result of concat cannot have "
+                "size > {}".format(libcudfxx.MAX_COLUMN_SIZE_STR)
+            )
+
         # Handle strings separately
         if all(isinstance(o, StringColumn) for o in objs):
+            result_nbytes = sum(o._nbytes for o in objs)
+            if result_nbytes > libcudfxx.MAX_STRING_COLUMN_BYTES:
+                raise MemoryError(
+                    "Result of concat cannot have > {}  bytes".format(
+                        libcudfxx.MAX_STRING_COLUMN_BYTES_STR
+                    )
+                )
             objs = [o.nvstrings for o in objs]
             return as_column(nvstrings.from_strings(*objs))
 
         # Filter out inputs that have 0 length
         objs = [o for o in objs if len(o) > 0]
         nulls = any(col.nullable for col in objs)
-        newsize = sum(map(len, objs))
 
         if is_categorical_dtype(head):
             data_dtype = head.codes.dtype
@@ -262,13 +283,8 @@ class ColumnBase(Column):
         return col
 
     def dropna(self):
-        dropped_col = libcudf.stream_compaction.drop_nulls([self])
-        if not dropped_col:
-            return column_empty_like(self, newsize=0)
-        else:
-            dropped_col = dropped_col[0]
-            dropped_col.mask = None
-            return dropped_col
+        dropped_col = self.as_frame().dropna()._as_column()
+        return dropped_col
 
     def _get_mask_as_column(self):
         data = Buffer(cudautils.ones(len(self), dtype=np.bool_))
@@ -725,7 +741,7 @@ class ColumnBase(Column):
         if method != "sort":
             msg = "non sort based unique_count() not implemented yet"
             raise NotImplementedError(msg)
-        return cpp_unique_count(self, dropna)
+        return cpp_unique_count(self, ignore_nulls=dropna)
 
     def repeat(self, repeats, axis=None):
         assert axis in (None, 0)
@@ -800,12 +816,10 @@ class ColumnBase(Column):
 
     def apply_boolean_mask(self, mask):
         mask = as_column(mask, dtype="bool")
-        data = libcudf.stream_compaction.apply_boolean_mask([self], mask)
-        if not data:
-            return column_empty_like(self, newsize=0)
-        else:
-            result = data[0]
-            return result
+        result = (
+            self.as_frame()._apply_boolean_mask(boolean_mask=mask)._as_column()
+        )
+        return result
 
     def argsort(self, ascending):
         _, inds = self.sort_by_values(ascending=ascending)
@@ -844,24 +858,26 @@ class ColumnBase(Column):
         frames = []
         header["type"] = pickle.dumps(type(self))
         header["dtype"] = self.dtype.str
-        data_frames = [self.data_array_view]
+
+        data_header, data_frames = self.data.serialize()
+        header["data"] = data_header
         frames.extend(data_frames)
 
         if self.nullable:
-            mask_frames = [self.mask_array_view]
-        else:
-            mask_frames = []
-        frames.extend(mask_frames)
+            mask_header, mask_frames = self.mask.serialize()
+            header["mask"] = mask_header
+            frames.extend(mask_frames)
+
         header["frame_count"] = len(frames)
         return header, frames
 
     @classmethod
     def deserialize(cls, header, frames):
         dtype = header["dtype"]
-        data = Buffer(frames[0])
+        data = Buffer.deserialize(header["data"], [frames[0]])
         mask = None
-        if header["frame_count"] > 1:
-            mask = Buffer(frames[1])
+        if "mask" in header:
+            mask = Buffer.deserialize(header["mask"], [frames[1]])
         return build_column(data=data, dtype=dtype, mask=mask)
 
 
@@ -1068,6 +1084,14 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
         if dtype is not None:
             data = data.astype(dtype)
     elif isinstance(arbitrary, nvstrings.nvstrings):
+        byte_count = arbitrary.byte_count()
+        if byte_count > libcudfxx.MAX_STRING_COLUMN_BYTES:
+            raise MemoryError(
+                "Cannot construct string columns "
+                "containing > {} bytes. "
+                "Consider using dask_cudf to partition "
+                "your data.".format(libcudfxx.MAX_STRING_COLUMN_BYTES_STR)
+            )
         sbuf = Buffer.empty(arbitrary.byte_count())
         obuf = Buffer.empty(
             (arbitrary.size() + 1) * np.dtype("int32").itemsize

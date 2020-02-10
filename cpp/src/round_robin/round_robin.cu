@@ -174,7 +174,7 @@ round_robin_partition(table_view const& input,
 {
   auto nrows = input.num_rows();
   
-  CUDF_EXPECTS( num_partitions > 1, "Incorrect number of partitions. Must be greater than 1." );
+  CUDF_EXPECTS( num_partitions > 0, "Incorrect number of partitions. Must be greater than 0." );
   CUDF_EXPECTS( start_partition < num_partitions, "Incorrect start_partition index. Must be less than number of partitions." );
   CUDF_EXPECTS( start_partition >= 0, "Incorrect start_partition index. Must be positive." );//since cudf::size_type is an alias for int32_t, it _can_ be negative
 
@@ -183,8 +183,13 @@ round_robin_partition(table_view const& input,
   if (num_partitions >= nrows ) {
     return degenerate_partitions(input, num_partitions, start_partition, mr, stream);
   }
+                                                                                          
+  auto np_max_size = nrows % num_partitions;//# partitions of max size
 
-  auto num_partitions_max_size = nrows % num_partitions;//# partitions of max size
+  //handle case when nr `mod` np == 0;
+  //fix for bug: https://github.com/rapidsai/cudf/issues/4043
+  auto num_partitions_max_size = (np_max_size > 0 ? np_max_size : num_partitions);
+  
   cudf::size_type max_partition_size = std::ceil( static_cast<double>(nrows) / static_cast<double>(num_partitions));// max size of partitions
   
   auto total_max_partitions_size = num_partitions_max_size * max_partition_size;
