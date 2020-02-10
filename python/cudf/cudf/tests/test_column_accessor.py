@@ -6,40 +6,66 @@ import cudf
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.tests.utils import assert_eq
 
-test_data = [
+simple_test_data = [
     {},
-    {"a": 1},
     {"a": []},
     {"a": [1]},
     {"a": ["a"]},
     {"a": [1, 2, 3], "b": ["a", "b", "c"]},
-    {("a", "b"): [1, 2, 3], ("b", "c"): [2, 3, 4]},
 ]
 
-test_mi_data = [{("a", "b"): [1, 2, 4], ("a", "c"): [2, 3, 4]}]
+mi_test_data = [
+    {("a", "b"): [1, 2, 4], ("a", "c"): [2, 3, 4]},
+    {("a", "b"): [1, 2, 3], ("a", ""): [2, 3, 4]},
+    {("a", "b"): [1, 2, 4], ("c", "d"): [2, 3, 4]},
+    {("a", "b"): [1, 2, 3], ("a", "c"): [2, 3, 4], ("b", ""): [4, 5, 6]},
+]
 
 
-@pytest.fixture(params=test_data)
-def data(request):
+@pytest.fixture(params=simple_test_data)
+def simple_data(request):
     return request.param
 
 
-def test_iter(data):
+@pytest.fixture(params=mi_test_data)
+def mi_data(request):
+    return request.param
+
+
+@pytest.fixture(params=simple_test_data + mi_test_data)
+def all_data(request):
+    return request.param
+
+
+def test_to_pandas_simple(simple_data):
+    """
+    Test that a ColumnAccessor converts to a correct pd.Index
+    """
+    ca = ColumnAccessor(simple_data)
+    assert_eq(ca.to_pandas_index(), pd.DataFrame(simple_data).columns)
+
+
+def test_to_pandas_multiindex(mi_data):
+    ca = ColumnAccessor(mi_data, multiindex=True)
+    assert_eq(ca.to_pandas_index(), pd.DataFrame(mi_data).columns)
+
+
+def test_iter(simple_data):
     """
     Test that iterating over the CA
     yields column names.
     """
-    ca = ColumnAccessor(data)
-    for expect_key, got_key in zip(data, ca):
+    ca = ColumnAccessor(simple_data)
+    for expect_key, got_key in zip(simple_data, ca):
         assert expect_key == got_key
 
 
-def test_all_columns(data):
+def test_all_columns(simple_data):
     """
     Test that all values of the CA are
     columns.
     """
-    ca = ColumnAccessor(data)
+    ca = ColumnAccessor(simple_data)
     for col in ca.values():
         assert isinstance(col, cudf.core.column.ColumnBase)
 
