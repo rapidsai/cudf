@@ -335,7 +335,7 @@ def test_multiindex_column_shape():
         ("a", "store", "clouds", "fire"),
         ("a", "store", "storm", "smoke"),
         ("a", "store"),
-        ("a", "house"),
+        ("b", "house"),
         ("a", "store", "storm"),
         ("a",),
         ("c", "forest", "clear"),
@@ -348,7 +348,6 @@ def test_multiindex_columns(pdf, gdf, pdfIndex, query):
     assert_eq(pdfIndex, gdfIndex)
     pdf.columns = pdfIndex
     gdf.columns = gdfIndex
-    gdf[query]
     assert_eq(pdf[query], gdf[query])
 
 
