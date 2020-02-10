@@ -1149,7 +1149,7 @@ class Series(Frame):
 
     @property
     def cat(self):
-        return self._column.cat(column_owner=self)
+        return self._column.cat(parent=self)
 
     @property
     def str(self):

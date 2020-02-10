@@ -154,9 +154,10 @@ class NumericalColumn(column.ColumnBase):
         casted = libcudf.typecast.cast(self, dtype)
         return column.build_column(
             data=casted.data,
-            dtype=np.dtype(dtype),
+            dtype=casted.dtype,
             mask=casted.mask,
             size=casted.size,
+            offset=casted.offset,
         )
 
     def sort_by_values(self, ascending=True, na_position="last"):

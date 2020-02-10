@@ -19,34 +19,34 @@ class CategoricalAccessor(object):
     This mimicks pandas `df.cat` interface.
     """
 
-    def __init__(self, parent, column_owner=None):
+    def __init__(self, column, parent=None):
+        self._column = column
         self._parent = parent
-        self._column_owner = column_owner
 
     @property
     def categories(self):
         from cudf.core.index import as_index
 
-        return as_index(self._parent.categories)
+        return as_index(self._column.categories)
 
     @property
     def codes(self):
-        return cudf.Series(self._parent.codes)
+        return cudf.Series(self._column.codes)
 
     @property
     def ordered(self):
-        return self._parent.ordered
+        return self._column.ordered
 
     def as_ordered(self, **kwargs):
-        out_col = self._parent
+        out_col = self._column
         if not out_col.ordered:
             kwargs["ordered"] = True
-            out_col = self._set_categories(self._parent.categories, **kwargs)
+            out_col = self._set_categories(self._column.categories, **kwargs)
 
         return self._return_or_inplace(out_col, **kwargs)
 
     def as_unordered(self, **kwargs):
-        out_col = self._parent
+        out_col = self._column
         if out_col.ordered:
             kwargs["ordered"] = False
             out_col = self._set_categories(self.categories, **kwargs)
@@ -55,8 +55,8 @@ class CategoricalAccessor(object):
 
     def add_categories(self, new_categories, **kwargs):
         new_categories = column.as_column(new_categories)
-        new_categories = self._parent.categories.append(new_categories)
-        out_col = self._parent
+        new_categories = self._column.categories.append(new_categories)
+        out_col = self._column
         if not self._categories_equal(new_categories, **kwargs):
             out_col = self._set_categories(new_categories, **kwargs)
 
@@ -77,7 +77,7 @@ class CategoricalAccessor(object):
             raise ValueError(msg)
 
         new_categories = cats[~cats.isin(removals)]._column
-        out_col = self._parent
+        out_col = self._column
         if not self._categories_equal(new_categories, **kwargs):
             out_col = self._set_categories(new_categories, **kwargs)
 
@@ -94,20 +94,20 @@ class CategoricalAccessor(object):
         # categories.
         if rename:
             # enforce same length
-            if len(new_categories) != len(self._parent.categories):
+            if len(new_categories) != len(self._column.categories):
                 raise ValueError(
                     "new_categories must have the same "
                     "number of items as old categories"
                 )
             out_col = column.build_categorical_column(
                 new_categories,
-                self._parent.children[0],
-                self._parent.mask,
-                self._parent.size,
+                self._column.children[0],
+                self._column.mask,
+                self._column.size,
                 ordered=ordered,
             )
         else:
-            out_col = self._parent
+            out_col = self._column
             if not self._categories_equal(new_categories, **kwargs):
                 out_col = self._set_categories(new_categories, **kwargs)
 
@@ -129,7 +129,7 @@ class CategoricalAccessor(object):
         return self._return_or_inplace(out_col, **kwargs)
 
     def _categories_equal(self, new_categories, **kwargs):
-        cur_categories = self._parent.categories
+        cur_categories = self._column.categories
         if len(new_categories) != len(cur_categories):
             return False
         # if order doesn't matter, sort before the equals call below
@@ -151,7 +151,7 @@ class CategoricalAccessor(object):
 
         from cudf import DataFrame, Series
 
-        cur_cats = self._parent.categories
+        cur_cats = self._column.categories
         new_cats = column.as_column(new_categories)
 
         # Join the old and new categories to build a map from
@@ -196,10 +196,10 @@ class CategoricalAccessor(object):
         from cudf import Series
         from cudf.core.index import CategoricalIndex
 
-        owner = self._column_owner
+        owner = self._parent
         inplace = kwargs.get("inplace", False)
         if inplace:
-            self._parent._mimic_inplace(new_col, inplace=True)
+            self._column._mimic_inplace(new_col, inplace=True)
         else:
             if owner is None:
                 return new_col
