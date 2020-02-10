@@ -402,7 +402,7 @@ class ColumnBase(Column):
         ------
         ``IndexError`` if out-of-bound
         """
-        index = np.int32(index)
+        index = np.int32(int(index))
         if index < 0:
             index = len(self) + index
         if index > len(self) - 1:
