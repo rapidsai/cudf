@@ -29,8 +29,8 @@
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
 
-namespace cudf
-{
+using namespace cudf;
+
 namespace nvtext
 {
 namespace detail
@@ -270,4 +270,3 @@ std::unique_ptr<column> ngrams_tokenize( strings_column_view const& strings,
 }
 
 } // namespace nvtext
-} // namespace cudf

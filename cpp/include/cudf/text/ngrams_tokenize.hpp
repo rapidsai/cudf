@@ -19,8 +19,8 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf
-{
+using namespace cudf;
+
 namespace nvtext
 {
 
@@ -46,8 +46,8 @@ namespace nvtext
  * Example:
  * ```
  * s = ["a b c", "d e", "f g h i", "j"]
- * t = ngrams_tokenize(s,2," ","_")
- * t is now ["a_b","b_c","d_e","f_g","g_h","h_i"]
+ * t = ngrams_tokenize(s, 2, " ", "_")
+ * t is now ["a_b", "b_c", "d_e", "f_g", "g_h", "h_i"]
  * ```
  *
  * All null row entries are ignored and the output contains all valid rows.
@@ -70,4 +70,3 @@ std::unique_ptr<column> ngrams_tokenize( strings_column_view const& strings,
 
 
 } // namespace nvtext
-} // namespace cudf

@@ -45,7 +45,7 @@ TEST_F(TextNgramsTokenizeTest, Tokenize)
                                                      "the_dog","dog_chased","chased_the","the_cat",
                                                      "the_cat","cat_chased","chased_the","the_mouse",
                                                      "the_mousé","mousé_ate","ate_the","the_cheese" };
-        auto results = cudf::nvtext::ngrams_tokenize(strings_view);
+        auto results = nvtext::ngrams_tokenize(strings_view);
         cudf::test::expect_columns_equal(*results,expected);
     }
     {
@@ -53,7 +53,7 @@ TEST_F(TextNgramsTokenizeTest, Tokenize)
                                                      "the:dog:chased","dog:chased:the","chased:the:cat",
                                                      "the:cat:chased","cat:chased:the","chased:the:mouse",
                                                      "the:mousé:ate","mousé:ate:the","ate:the:cheese" };
-        auto results = cudf::nvtext::ngrams_tokenize(strings_view,3,std::string{" "},std::string{":"});
+        auto results = nvtext::ngrams_tokenize(strings_view,3,std::string{" "},std::string{":"});
         cudf::test::expect_columns_equal(*results,expected);
     }
     {
@@ -61,7 +61,7 @@ TEST_F(TextNgramsTokenizeTest, Tokenize)
                                                      "the--dog--chased--the","dog--chased--the--cat",
                                                      "the--cat--chased--the","cat--chased--the--mouse",
                                                      "the--mousé--ate--the","mousé--ate--the--cheese" };
-        auto results = cudf::nvtext::ngrams_tokenize(strings_view,4,std::string{" "},std::string{"--"});
+        auto results = nvtext::ngrams_tokenize(strings_view,4,std::string{" "},std::string{"--"});
         cudf::test::expect_columns_equal(*results,expected);
     }
 }
@@ -70,7 +70,7 @@ TEST_F(TextNgramsTokenizeTest, TokenizeEmptyTest)
 {
     auto strings = cudf::make_empty_column(cudf::data_type{cudf::STRING});
     cudf::strings_column_view strings_view( strings->view() );
-    auto results = cudf::nvtext::ngrams_tokenize(strings_view);
+    auto results = nvtext::ngrams_tokenize(strings_view);
     EXPECT_EQ( results->size(), 0 );
     EXPECT_EQ( results->has_nulls(), false);
 }
@@ -79,5 +79,5 @@ TEST_F(TextNgramsTokenizeTest, TokenizeErrorTest)
 {
     cudf::test::strings_column_wrapper strings{ "this column intentionally left blank" };
     cudf::strings_column_view strings_view( strings );
-    EXPECT_THROW( cudf::nvtext::ngrams_tokenize(strings_view,0), cudf::logic_error );
+    EXPECT_THROW( nvtext::ngrams_tokenize(strings_view,0), cudf::logic_error );
 }
