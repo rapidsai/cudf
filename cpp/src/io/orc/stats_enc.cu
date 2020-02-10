@@ -36,22 +36,22 @@ namespace gpu {
 __global__ void __launch_bounds__(128)
 gpu_init_statistics_groups(statistics_group *groups, const stats_column_desc *cols,
                            uint32_t num_columns, uint32_t num_rowgroups, uint32_t row_index_stride) {
-  __shared__ __align__(4) volatile statistics_group grp_g[4];
+  __shared__ __align__(4) volatile statistics_group group_g[4];
   uint32_t col_id = blockIdx.y;
-  uint32_t ck_id = (blockIdx.x * 4) + (threadIdx.x >> 5);
+  uint32_t chunk_id = (blockIdx.x * 4) + (threadIdx.x >> 5);
   uint32_t t = threadIdx.x & 0x1f;
-  volatile statistics_group *grp = &grp_g[threadIdx.x >> 5];
-  if (ck_id < num_rowgroups) {
+  volatile statistics_group *group = &group_g[threadIdx.x >> 5];
+  if (chunk_id < num_rowgroups) {
     if (!t) {
       uint32_t num_rows = cols[col_id].num_rows;
-      grp->col = &cols[col_id];
-      grp->start_row = ck_id * row_index_stride;
-      grp->num_rows = min(num_rows - min(ck_id * row_index_stride, num_rows), row_index_stride);
+      group->col = &cols[col_id];
+      group->start_row = chunk_id * row_index_stride;
+      group->num_rows = min(num_rows - min(chunk_id * row_index_stride, num_rows), row_index_stride);
       __threadfence_block();
     }
     SYNCWARP();
     if (t < sizeof(statistics_group) / sizeof(uint32_t)) {
-      reinterpret_cast<uint32_t *>(&groups[col_id * num_rowgroups + ck_id])[t] = reinterpret_cast<volatile uint32_t *>(grp)[t];
+      reinterpret_cast<uint32_t *>(&groups[col_id * num_rowgroups + chunk_id])[t] = reinterpret_cast<volatile uint32_t *>(group)[t];
     }
   } 
 }
@@ -134,8 +134,8 @@ gpu_init_statistics_buffersize(statistics_merge_group *groups, const statistics_
 struct stats_state_s {
   uint8_t *base;              ///< Output buffer start
   uint8_t *end;               ///< Output buffer end
-  statistics_chunk ck;
-  statistics_merge_group grp;
+  statistics_chunk chunk;
+  statistics_merge_group group;
   stats_column_desc col;
   // ORC stats
   uint64_t numberOfValues;
@@ -229,26 +229,26 @@ gpu_encode_statistics(uint8_t *blob_bfr, statistics_merge_group *groups, const s
   stats_state_s * const s = &state_g[threadIdx.x >> 5];
   if (idx < statistics_count) {
     if (t < sizeof(statistics_chunk) / sizeof(uint32_t)) {
-      reinterpret_cast<uint32_t *>(&s->ck)[t] = reinterpret_cast<const uint32_t *>(&chunks[idx])[t];
+      reinterpret_cast<uint32_t *>(&s->chunk)[t] = reinterpret_cast<const uint32_t *>(&chunks[idx])[t];
     }
     if (t < sizeof(statistics_merge_group) / sizeof(uint32_t)) {
-      reinterpret_cast<uint32_t *>(&s->grp)[t] = reinterpret_cast<uint32_t *>(&groups[idx])[t];
+      reinterpret_cast<uint32_t *>(&s->group)[t] = reinterpret_cast<uint32_t *>(&groups[idx])[t];
     }
   }
   __syncthreads();
   if (idx < statistics_count) {
     if (t < sizeof(stats_column_desc) / sizeof(uint32_t)) {
-      reinterpret_cast<uint32_t *>(&s->col)[t] = reinterpret_cast<const uint32_t *>(s->grp.col)[t];
+      reinterpret_cast<uint32_t *>(&s->col)[t] = reinterpret_cast<const uint32_t *>(s->group.col)[t];
     }
     if (t == 0) {
-      s->base = blob_bfr + s->grp.start_chunk;
-      s->end = blob_bfr + s->grp.start_chunk + s->grp.num_chunks;
+      s->base = blob_bfr + s->group.start_chunk;
+      s->end = blob_bfr + s->group.start_chunk + s->group.num_chunks;
     }
   }
   __syncthreads();
   // Encode and update actual bfr size
   if (idx < statistics_count && t == 0) {
-    uint8_t *cur = pb_put_uint(s->base, 1, s->ck.non_nulls);
+    uint8_t *cur = pb_put_uint(s->base, 1, s->chunk.non_nulls);
     uint8_t *fld_start = cur;
     switch(s->col.stats_dtype) {
     case dtype_int8:
@@ -261,15 +261,15 @@ gpu_encode_statistics(uint8_t *blob_bfr, statistics_merge_group *groups, const s
       //  optional sint64 maximum = 2;
       //  optional sint64 sum = 3;
       // }
-      if (s->ck.has_minmax || s->ck.has_sum) {
+      if (s->chunk.has_minmax || s->chunk.has_sum) {
         *cur = 2 * 8 + PB_TYPE_FIXEDLEN;
         cur += 2;
-        if (s->ck.has_minmax) {
-          cur = pb_put_int(cur, 1, s->ck.min_value.i_val);
-          cur = pb_put_int(cur, 2, s->ck.max_value.i_val);
+        if (s->chunk.has_minmax) {
+          cur = pb_put_int(cur, 1, s->chunk.min_value.i_val);
+          cur = pb_put_int(cur, 2, s->chunk.max_value.i_val);
         }
-        if (s->ck.has_sum) {
-          cur = pb_put_int(cur, 3, s->ck.sum.i_val);
+        if (s->chunk.has_sum) {
+          cur = pb_put_int(cur, 3, s->chunk.sum.i_val);
         }
         fld_start[1] = cur - (fld_start + 2);
       }
@@ -282,11 +282,11 @@ gpu_encode_statistics(uint8_t *blob_bfr, statistics_merge_group *groups, const s
       //  optional double maximum = 2;
       //  optional double sum = 3;
       // }
-      if (s->ck.has_minmax) {
+      if (s->chunk.has_minmax) {
         *cur = 3 * 8 + PB_TYPE_FIXEDLEN;
         cur += 2;
-        cur = pb_put_fixed64(cur, 1, &s->ck.min_value.fp_val);
-        cur = pb_put_fixed64(cur, 2, &s->ck.max_value.fp_val);
+        cur = pb_put_fixed64(cur, 1, &s->chunk.min_value.fp_val);
+        cur = pb_put_fixed64(cur, 2, &s->chunk.max_value.fp_val);
         fld_start[1] = cur - (fld_start + 2);
       }
       break;
@@ -297,16 +297,16 @@ gpu_encode_statistics(uint8_t *blob_bfr, statistics_merge_group *groups, const s
       //  optional string maximum = 2;
       //  optional sint64 sum = 3; // sum will store the total length of all strings
       // }
-      if (s->ck.has_minmax && s->ck.has_sum) {
-        uint32_t sz = (pb_put_uint(cur, 3, s->ck.sum.i_val) - cur)
-                    + (pb_put_uint(cur, 1, s->ck.min_value.str_val.length) - cur)
-                    + (pb_put_uint(cur, 2, s->ck.max_value.str_val.length) - cur)
-                    + s->ck.min_value.str_val.length + s->ck.max_value.str_val.length;
+      if (s->chunk.has_minmax && s->chunk.has_sum) {
+        uint32_t sz = (pb_put_uint(cur, 3, s->chunk.sum.i_val) - cur)
+                    + (pb_put_uint(cur, 1, s->chunk.min_value.str_val.length) - cur)
+                    + (pb_put_uint(cur, 2, s->chunk.max_value.str_val.length) - cur)
+                    + s->chunk.min_value.str_val.length + s->chunk.max_value.str_val.length;
         cur[0] = 4 * 8 + PB_TYPE_FIXEDLEN;
         cur = pb_encode_uint(cur + 1, sz);
-        cur = pb_put_binary(cur, 1, s->ck.min_value.str_val.ptr, s->ck.min_value.str_val.length);
-        cur = pb_put_binary(cur, 2, s->ck.max_value.str_val.ptr, s->ck.max_value.str_val.length);
-        cur = pb_put_uint(cur, 3, s->ck.sum.i_val);
+        cur = pb_put_binary(cur, 1, s->chunk.min_value.str_val.ptr, s->chunk.min_value.str_val.length);
+        cur = pb_put_binary(cur, 2, s->chunk.max_value.str_val.ptr, s->chunk.max_value.str_val.length);
+        cur = pb_put_uint(cur, 3, s->chunk.sum.i_val);
       }
       break;
     case dtype_bool8:
@@ -314,9 +314,9 @@ gpu_encode_statistics(uint8_t *blob_bfr, statistics_merge_group *groups, const s
       // message BucketStatistics {
       //  repeated uint64 count = 1 [packed=true];
       // }
-      if (s->ck.has_sum) { // Sum is equal to the number of 'true' values
+      if (s->chunk.has_sum) { // Sum is equal to the number of 'true' values
         cur[0] = 5 * 8 + PB_TYPE_FIXEDLEN;
-        cur = pb_put_packed_uint(cur + 2, 1, s->ck.sum.i_val);
+        cur = pb_put_packed_uint(cur + 2, 1, s->chunk.sum.i_val);
         fld_start[1] = cur - (fld_start + 2);
       }
       break;
@@ -328,7 +328,7 @@ gpu_encode_statistics(uint8_t *blob_bfr, statistics_merge_group *groups, const s
       //  optional string maximum = 2;
       //  optional string sum = 3;
       // }
-      if (s->ck.has_minmax) {
+      if (s->chunk.has_minmax) {
         // TODO: Decimal support (decimal min/max stored as strings)
       }
       break;
@@ -338,11 +338,11 @@ gpu_encode_statistics(uint8_t *blob_bfr, statistics_merge_group *groups, const s
       //  optional sint32 minimum = 1;
       //  optional sint32 maximum = 2;
       // }
-      if (s->ck.has_minmax) {
+      if (s->chunk.has_minmax) {
         cur[0] = 7 * 8 + PB_TYPE_FIXEDLEN;
         cur += 2;
-        cur = pb_put_int(cur, 1, s->ck.min_value.i_val);
-        cur = pb_put_int(cur, 2, s->ck.max_value.i_val);
+        cur = pb_put_int(cur, 1, s->chunk.min_value.i_val);
+        cur = pb_put_int(cur, 2, s->chunk.max_value.i_val);
         fld_start[1] = cur - (fld_start + 2);
       }      
       break;
@@ -354,11 +354,11 @@ gpu_encode_statistics(uint8_t *blob_bfr, statistics_merge_group *groups, const s
       //  optional sint64 minimumUtc = 3; // min,max values saved as milliseconds since UNIX epoch
       //  optional sint64 maximumUtc = 4;
       // }
-      if (s->ck.has_minmax) {
+      if (s->chunk.has_minmax) {
         cur[0] = 7 * 8 + PB_TYPE_FIXEDLEN;
         cur += 2;
-        cur = pb_put_int(cur, 3, s->ck.min_value.i_val); // minimumUtc
-        cur = pb_put_int(cur, 4, s->ck.max_value.i_val); // maximumUtc
+        cur = pb_put_int(cur, 3, s->chunk.min_value.i_val); // minimumUtc
+        cur = pb_put_int(cur, 4, s->chunk.max_value.i_val); // maximumUtc
         fld_start[1] = cur - (fld_start + 2);
       }      
       break;
