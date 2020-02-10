@@ -28,8 +28,8 @@
 
 #include <thrust/for_each.h>
 
-namespace cudf
-{
+using namespace cudf;
+
 namespace nvtext
 {
 namespace detail
@@ -48,15 +48,15 @@ namespace
  */
 struct normalize_spaces_fn : base_tokenator
 {
-    column_device_view d_strings;
+    column_device_view const d_strings;
     int32_t const* d_offsets{}; // offsets into d_buffer
     char* d_buffer{};           // output buffer for characters
 
-    normalize_spaces_fn( column_device_view d_strings,
+    normalize_spaces_fn( column_device_view const& d_strings,
                          int32_t const* d_offsets = nullptr,
                          char* d_buffer = nullptr )
         : d_strings(d_strings), d_offsets(d_offsets), d_buffer(d_buffer) {}
-    //
+
     __device__ int32_t operator()(unsigned int idx)
     {
         if( d_strings.is_null(idx) )
@@ -138,4 +138,3 @@ std::unique_ptr<column> normalize_spaces( strings_column_view const& strings,
 }
 
 } // namespace nvtext
-} // namespace cudf

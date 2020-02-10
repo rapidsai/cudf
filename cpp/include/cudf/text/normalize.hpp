@@ -18,8 +18,8 @@
 #include <cudf/column/column.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf
-{
+using namespace cudf;
+
 namespace nvtext
 {
 
@@ -49,4 +49,3 @@ std::unique_ptr<column> normalize_spaces( strings_column_view const& strings,
                                           rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 } // namespace nvtext
-} // namespace cudf
