@@ -652,17 +652,16 @@ class StringColumn(column.ColumnBase):
         frames = []
         sub_headers = []
 
-        sbuf = rmm.device_array(self.nvstrings.byte_count(), dtype="int8")
-        obuf = rmm.device_array(len(self.nvstrings) + 1, dtype="int32")
+        sbuf = Buffer.empty(self.nvstrings.byte_count())
+        obuf = Buffer.empty(
+            np.dtype("int32").itemsize * (len(self.nvstrings) + 1)
+        )
         mask_size = utils.calc_chunk_size(
             len(self.nvstrings), utils.mask_bitsize
         )
-        nbuf = rmm.device_array(mask_size, dtype="int8")
+        nbuf = Buffer.empty(mask_size)
         self.nvstrings.to_offsets(
-            libcudf.cudf.get_ctype_ptr(sbuf),
-            libcudf.cudf.get_ctype_ptr(obuf),
-            nbuf=libcudf.cudf.get_ctype_ptr(nbuf),
-            bdevmem=True,
+            sbuf.ptr, obuf.ptr, nbuf=nbuf.ptr, bdevmem=True,
         )
         for item in [sbuf, obuf]:
             sheader = item.__cuda_array_interface__.copy()
