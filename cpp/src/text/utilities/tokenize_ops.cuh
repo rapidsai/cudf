@@ -105,19 +105,14 @@ struct base_tokenator
 /**
  * @brief Tokenizing function for multi-character delimiter.
  *
- * This is used for counting tokens and tokenizing strings.
- * The functor will identify and place the token positions within each
- * and place in the d_tokens member.
- *
- * This functor is called in two passes.
  * The first pass simply counts the tokens so the size of the output
- * vector can be calculated. The second pass will place the token
+ * vector can be calculated. The second pass places the token
  * positions into the d_tokens vector.
  */
 struct tokenator_fn : base_tokenator
 {
     column_device_view const d_strings;   // strings to tokenize
-    size_type* d_offsets{};         // offsets into the d_tokens vector for each string
+    size_type* d_offsets{};               // offsets into the d_tokens vector for each string
     string_index_pair* d_tokens{};        // token positions in device memory
 
     tokenator_fn( column_device_view const& d_strings, string_view const& d_delimiter,
@@ -126,6 +121,15 @@ struct tokenator_fn : base_tokenator
     : base_tokenator{d_delimiter},
       d_strings(d_strings), d_offsets(d_offsets), d_tokens(d_tokens) {}
 
+    /**
+     * @brief Identifies the token positions within each string.
+     *
+     * This counts the tokens in each string and also places the token positions
+     * into the d_tokens member.
+     *
+     * @param idx Index of the string to tokenize in the d_strings column.
+     * @return The number of tokens for this string.
+     */
     __device__ size_type operator()(size_type idx)
     {
         if( d_strings.is_null(idx) )
@@ -166,12 +170,21 @@ using delimiterator = column_device_view::const_iterator<string_view>;
  */
 struct multi_delimiter_tokenizer_fn
 {
-    column_device_view const d_strings;    // strings column to tokenize
-    delimiterator delimiters_begin;  // first delimiter
-    delimiterator delimiters_end;    // last delimiter
-    size_type* d_offsets{};          // offsets into the d_tokens output vector
-    string_index_pair* d_tokens{};   // token positions found for each string
+    column_device_view const d_strings;  // strings column to tokenize
+    delimiterator delimiters_begin;      // first delimiter
+    delimiterator delimiters_end;        // last delimiter
+    size_type* d_offsets{};              // offsets into the d_tokens output vector
+    string_index_pair* d_tokens{};       // token positions found for each string
 
+    /**
+     * @brief Identifies the token positions within each string.
+     *
+     * This counts the tokens in each string and also places the token positions
+     * into the d_tokens member.
+     *
+     * @param idx Index of the string to tokenize in the d_strings column.
+     * @return The number of tokens for this string.
+     */
     __device__ size_type operator()(size_type idx)
     {
         if( d_strings.is_null(idx) )
