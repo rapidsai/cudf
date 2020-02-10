@@ -74,7 +74,15 @@ constexpr unsigned int log2_buffersize_threads_per_block = 5 + log2_buffersize_r
 constexpr unsigned int buffersize_reduction_size = 1 << log2_buffersize_reduction_size;
 constexpr unsigned int buffersize_reduction_mask = buffersize_reduction_size - 1;
 constexpr unsigned int buffersize_threads_per_block = 1 << log2_buffersize_threads_per_block;
-constexpr unsigned int buffersize_scratch_size = buffersize_threads_per_block / buffersize_reduction_size; 
+constexpr unsigned int buffersize_scratch_size = buffersize_threads_per_block / buffersize_reduction_size;
+constexpr unsigned int pb_fld_hdrlen = 1;
+constexpr unsigned int pb_fld_hdrlen16 = 2; // > 127-byte length
+constexpr unsigned int pb_fld_hdrlen32 = 5; // > 16KB length
+constexpr unsigned int pb_fldlen_int64 = 10;
+constexpr unsigned int pb_fldlen_float64 = 8;
+constexpr unsigned int pb_fldlen_decimal = 40; // Assume decimal2string fits in 40 characters
+constexpr unsigned int pb_fldlen_bucket1 = 1 + pb_fldlen_int64;
+constexpr unsigned int pb_fldlen_common = 2 * pb_fld_hdrlen + pb_fldlen_int64;
 
 __global__ void __launch_bounds__(buffersize_threads_per_block, 1)
 gpu_init_statistics_buffersize(statistics_merge_group *groups, const statistics_chunk *chunks, uint32_t statistics_count) {
@@ -93,7 +101,7 @@ gpu_init_statistics_buffersize(statistics_merge_group *groups, const statistics_
       statistics_dtype dtype = col->stats_dtype;
       switch(dtype) {
       case dtype_bool8:
-        stats_len = 12 + 1 + 1 + 10;
+        stats_len = pb_fldlen_common + pb_fld_hdrlen + pb_fldlen_bucket1;
         break;
       case dtype_int8:
       case dtype_int16:
@@ -101,18 +109,19 @@ gpu_init_statistics_buffersize(statistics_merge_group *groups, const statistics_
       case dtype_date32:
       case dtype_int64:
       case dtype_timestamp64:
-        stats_len = 12 + 1 + 3 * (1 + 10);
+        stats_len = pb_fldlen_common + pb_fld_hdrlen + 3 * (pb_fld_hdrlen + pb_fldlen_int64);
         break;
       case dtype_float32:
       case dtype_float64:
-        stats_len = 12 + 1 + 3 * (1 + 8);
+        stats_len = pb_fldlen_common + pb_fld_hdrlen + 3 * (pb_fld_hdrlen + pb_fldlen_float64);
         break;
       case dtype_decimal64:
       case dtype_decimal128:
-        stats_len = 12 + 2 + 3 * (1 + 40);
+        stats_len = pb_fldlen_common + pb_fld_hdrlen16 + 3 * (pb_fld_hdrlen + pb_fldlen_decimal);
         break;
       case dtype_string:
-        stats_len = 12 + 5 + 3 * (1 + 10) + chunks[idx].min_value.str_val.length + chunks[idx].max_value.str_val.length;
+        stats_len = pb_fldlen_common + pb_fld_hdrlen32 + 3 * (pb_fld_hdrlen + pb_fldlen_int64)
+                  + chunks[idx].min_value.str_val.length + chunks[idx].max_value.str_val.length;
         break;
       default: break;
       }
