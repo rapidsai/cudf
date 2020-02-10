@@ -112,8 +112,8 @@ def copy_array(arr, out=None):
         out = rmm.device_array_like(arr)
 
     if (
-        arr.is_c_contiguous()
-        and out.is_c_contiguous()
+        arr.flags["C_CONTIGUOUS"]
+        and out.flags["C_CONTIGUOUS"]
         and out.size == arr.size
     ):
         out.copy_to_device(arr)
