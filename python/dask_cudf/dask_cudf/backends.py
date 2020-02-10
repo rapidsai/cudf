@@ -10,19 +10,32 @@ get_parallel_type.register(cudf.Series, lambda _: Series)
 get_parallel_type.register(cudf.Index, lambda _: Index)
 
 
+def _meta_nonempty_simple(x):
+    # TODO: Make sure multiindex types are preserved
+    #       during pandas round-trip...
+    y = meta_nonempty(x.to_pandas())
+    return cudf.from_pandas(y)
+
+
 @meta_nonempty.register((cudf.DataFrame, cudf.Series))
 def meta_nonempty_cudf(x, index=None):
-    index_dtype = x.index.dtype
-    y = cudf.from_pandas(meta_nonempty(x.to_pandas()))
-    y.index = y.index.astype(index_dtype)
-    return y
+    if isinstance(x.index, cudf.MultiIndex):
+        return _meta_nonempty_simple(x)
+    else:
+        index_dtype = x.index.dtype
+        y = cudf.from_pandas(meta_nonempty(x.to_pandas()))
+        y.index = y.index.astype(index_dtype)
+        return y
 
 
 @meta_nonempty.register(cudf.Index)
 def meta_nonempty_cudf_index(x, index=None):
-    dtype = x.dtype
-    y = cudf.from_pandas(meta_nonempty(x.to_pandas()))
-    return y.astype(dtype)
+    if isinstance(x, cudf.MultiIndex):
+        return _meta_nonempty_simple(x)
+    else:
+        dtype = x.dtype
+        y = cudf.from_pandas(meta_nonempty(x.to_pandas()))
+        return y.astype(dtype)
 
 
 @make_meta.register((cudf.Series, cudf.DataFrame))
