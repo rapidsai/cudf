@@ -26,8 +26,8 @@
 
 #include <thrust/transform.h>
 
-namespace cudf
-{
+using namespace cudf;
+
 namespace nvtext
 {
 namespace detail
@@ -97,10 +97,10 @@ std::unique_ptr<column> tokenize( strings_column_view const& strings,
 }
 
 // zero or more character token counter
-std::unique_ptr<column> token_count( strings_column_view const& strings,
-                                     string_scalar const& delimiter,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream )
+std::unique_ptr<column> count_tokens( strings_column_view const& strings,
+                                      string_scalar const& delimiter,
+                                      rmm::mr::device_memory_resource* mr,
+                                      cudaStream_t stream )
 {
     CUDF_EXPECTS( delimiter.is_valid(), "Parameter delimiter must be valid");
     string_view d_delimiter( delimiter.data(), delimiter.size() );
@@ -126,10 +126,10 @@ std::unique_ptr<column> tokenize( strings_column_view const& strings,
 }
 
 // one or more string delimiter token counter
-std::unique_ptr<column> token_count( strings_column_view const& strings,
-                                     strings_column_view const& delimiters,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream )
+std::unique_ptr<column> count_tokens( strings_column_view const& strings,
+                                      strings_column_view const& delimiters,
+                                      rmm::mr::device_memory_resource* mr,
+                                      cudaStream_t stream )
 {
     CUDF_EXPECTS( delimiters.size()>0, "Parameter delimiters must not be empty");
     CUDF_EXPECTS( !delimiters.has_nulls(), "Parameter delimiters must not have nulls");
@@ -160,19 +160,18 @@ std::unique_ptr<column> tokenize( strings_column_view const& strings,
     return detail::tokenize( strings, delimiters, mr );
 }
 
-std::unique_ptr<column> token_count( strings_column_view const& strings,
+std::unique_ptr<column> count_tokens( strings_column_view const& strings,
                                      string_scalar const& delimiter,
                                      rmm::mr::device_memory_resource* mr)
 {
-    return detail::token_count( strings, delimiter, mr );
+    return detail::count_tokens( strings, delimiter, mr );
 }
 
-std::unique_ptr<column> token_count( strings_column_view const& strings,
-                                     strings_column_view const& delimiters,
-                                     rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> count_tokens( strings_column_view const& strings,
+                                      strings_column_view const& delimiters,
+                                      rmm::mr::device_memory_resource* mr)
 {
-    return detail::token_count( strings, delimiters, mr );
+    return detail::count_tokens( strings, delimiters, mr );
 }
 
 } // namespace nvtext
-} // namespace cudf

@@ -19,8 +19,8 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf
-{
+using namespace cudf;
+
 namespace nvtext
 {
 
@@ -114,9 +114,9 @@ std::unique_ptr<column> tokenize( strings_column_view const& strings,
  * @param mr Resource for allocating device memory.
  * @return New INT32 column of token counts.
  */
-std::unique_ptr<column> token_count( strings_column_view const& strings,
-                                     string_scalar const& delimiter = string_scalar{""},
-                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> count_tokens( strings_column_view const& strings,
+                                      string_scalar const& delimiter = string_scalar{""},
+                                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Returns the number of tokens in each string of a strings column
@@ -143,9 +143,8 @@ std::unique_ptr<column> token_count( strings_column_view const& strings,
  * @param mr Resource for allocating device memory.
  * @return New INT32 column of token counts.
  */
-std::unique_ptr<column> token_count( strings_column_view const& strings,
-                                     strings_column_view const& delimiters,
-                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> count_tokens( strings_column_view const& strings,
+                                      strings_column_view const& delimiters,
+                                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 } // namespace nvtext
-} // namespace cudf

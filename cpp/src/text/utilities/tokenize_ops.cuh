@@ -19,8 +19,8 @@
 
 #include <thrust/logical.h>
 
-namespace cudf
-{
+using namespace cudf;
+
 namespace nvtext
 {
 namespace detail
@@ -118,7 +118,7 @@ struct tokenator_fn : base_tokenator
 {
     column_device_view d_strings;   // strings to tokenize
     size_type* d_offsets{};         // offsets into the d_tokens vector for each string
-    string_index_pair* d_tokens{};  // token positions in device memory
+    string_index_pair* d_tokens{};        // token positions in device memory
 
     tokenator_fn( column_device_view& d_strings, string_view& d_delimiter,
                   size_type* d_offsets=nullptr,
@@ -130,7 +130,7 @@ struct tokenator_fn : base_tokenator
     {
         if( d_strings.is_null(idx) )
             return 0;
-        string_view d_str = d_strings.element<string_view>(idx);
+        auto d_str = d_strings.element<string_view>(idx);
         string_index_pair* d_str_tokens = d_tokens ? d_tokens + d_offsets[idx] : nullptr;
         bool spaces = true;
         size_type spos = 0;
@@ -141,8 +141,8 @@ struct tokenator_fn : base_tokenator
         {
             if( d_str_tokens )
             {
-                int spos_bo = d_str.byte_offset(spos); // convert char pos
-                int epos_bo = d_str.byte_offset(epos); // to byte offset
+                auto spos_bo = d_str.byte_offset(spos); // convert char pos
+                auto epos_bo = d_str.byte_offset(epos); // to byte offset
                 d_str_tokens[token_idx] = string_index_pair{ d_str.data() + spos_bo,
                                                             (epos_bo-spos_bo) };
             }
@@ -156,7 +156,7 @@ struct tokenator_fn : base_tokenator
 
 
 // delimiters' iterator = delimiterator
-using delimiterator = cudf::column_device_view::const_iterator<string_view>;
+using delimiterator = column_device_view::const_iterator<string_view>;
 
 /**
  * @brief Tokenizes strings using multiple string delimiters.
@@ -217,4 +217,3 @@ struct multi_delimiter_tokenizer_fn
 
 } // namespace detail
 } // namespace nvtext
-} // namespace cudf
