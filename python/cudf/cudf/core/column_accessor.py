@@ -63,10 +63,12 @@ class ColumnAccessor(MutableMapping):
         if isinstance(result, cudf.core.column.ColumnBase):
             return self.__class__({key: result})
         else:
-            result = {k: v for k, v in self._flatten(result)}
+            result = _flatten(result)
+            if not isinstance(key, tuple):
+                key = (key,)
             return self.__class__(
                 result,
-                multiindex=self.multiindex,
+                multiindex=self.nlevels - len(key) > 1,
                 level_names=self.level_names[len(key) :],
             )
 
@@ -120,14 +122,6 @@ class ColumnAccessor(MutableMapping):
         else:
             return self._data
 
-    def _flatten(self, d, parents=[]):
-
-        for k, v in d.items():
-            if not isinstance(v, d.__class__):
-                yield (tuple(parents + [k]), v)
-            else:
-                yield from self._flatten(v, parents + [k])
-
     @property
     def name(self):
         return self.level_names[-1]
@@ -136,6 +130,19 @@ class ColumnAccessor(MutableMapping):
         result = pd.Index(self.names, tupleize_cols=self.multiindex)
         result.names = self.level_names
         return result
+
+
+def _flatten(d):
+    def _inner(d, parents=[]):
+        for k, v in d.items():
+            if not isinstance(v, d.__class__):
+                if parents:
+                    k = tuple(parents + [k])
+                yield (k, v)
+            else:
+                yield from _inner(d=v, parents=parents + [k])
+
+    return {k: v for k, v in _inner(d)}
 
 
 def _compare_keys(key, target):

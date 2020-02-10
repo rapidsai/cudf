@@ -3,6 +3,7 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core.column import as_column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.tests.utils import assert_eq
 
@@ -20,6 +21,14 @@ mi_test_data = [
     {("a", "b"): [1, 2, 4], ("c", "d"): [2, 3, 4]},
     {("a", "b"): [1, 2, 3], ("a", "c"): [2, 3, 4], ("b", ""): [4, 5, 6]},
 ]
+
+
+def check_ca_equal(lhs, rhs):
+    assert lhs.level_names == rhs.level_names
+    assert lhs.multiindex == rhs.multiindex
+    for l_key, r_key in zip(lhs, rhs):
+        assert l_key == r_key
+        assert_eq(lhs[l_key], rhs[r_key])
 
 
 @pytest.fixture(params=simple_test_data)
@@ -77,3 +86,38 @@ def test_column_size_mismatch():
     """
     with pytest.raises(ValueError):
         _ = ColumnAccessor({"a": [1], "b": [1, 2]})
+
+
+def test_get_by_label_simple():
+    """
+    Test getting a column by label
+    """
+    ca = ColumnAccessor({"a": [1, 2, 3], "b": [2, 3, 4]})
+    check_ca_equal(ca.get_by_label("a"), ColumnAccessor({"a": [1, 2, 3]}))
+    check_ca_equal(ca.get_by_label("b"), ColumnAccessor({"b": [2, 3, 4]}))
+
+
+def test_get_by_label_multiindex():
+    """
+    Test getting column(s) by label with MultiIndex
+    """
+    ca = ColumnAccessor(
+        {
+            ("a", "b", "c"): [1, 2, 3],
+            ("a", "b", "e"): [2, 3, 4],
+            ("b", "x", ""): [4, 5, 6],
+            ("a", "d", "e"): [3, 4, 5],
+        },
+        multiindex=True,
+    )
+
+    expect = ColumnAccessor(
+        {("b", "c"): [1, 2, 3], ("b", "e"): [2, 3, 4], ("d", "e"): [3, 4, 5]},
+        multiindex=True,
+    )
+    got = ca.get_by_label("a")
+    check_ca_equal(expect, got)
+
+    expect = ColumnAccessor({"c": [1, 2, 3], "e": [2, 3, 4]}, multiindex=False)
+    got = ca.get_by_label(("a", "b"))
+    check_ca_equal(expect, got)
