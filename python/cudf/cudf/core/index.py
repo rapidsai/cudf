@@ -103,6 +103,12 @@ class Index(Frame):
         col = self._data.pop(self.name)
         self._data[value] = col
 
+    def dropna(self):
+        """
+        Return a Series with null values removed.
+        """
+        return super().dropna(subset=[self.name])
+
     def take(self, indices):
         """Gather only the specific subset of indices
 

@@ -20,7 +20,12 @@ package ai.rapids.cudf;
 
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Array;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static ai.rapids.cudf.QuantileMethod.*;
@@ -422,7 +427,6 @@ public class ColumnVectorTest extends CudfTestBase {
           s = Scalar.fromString("hello, world!");
           break;
         case EMPTY:
-        case CATEGORY:
           continue;
         default:
           throw new IllegalArgumentException("Unexpected type: " + type);
@@ -527,7 +531,6 @@ public class ColumnVectorTest extends CudfTestBase {
           break;
         }
         case EMPTY:
-        case CATEGORY:
           continue;
         default:
           throw new IllegalArgumentException("Unexpected type: " + type);
@@ -553,7 +556,7 @@ public class ColumnVectorTest extends CudfTestBase {
   void testFromScalarNull() {
     final int rowCount = 4;
     for (DType type : DType.values()) {
-      if (type == DType.EMPTY || type == DType.CATEGORY) {
+      if (type == DType.EMPTY) {
         continue;
       }
       try (Scalar s = Scalar.fromNull(type);
@@ -1233,7 +1236,7 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testCast() {
+  void testFixedWidthCast() {
     int[] values = new int[]{1,3,4,5,2};
     long[] longValues = Arrays.stream(values).asLongStream().toArray();
     double[] doubleValues = Arrays.stream(values).asDoubleStream().toArray();
@@ -1277,6 +1280,64 @@ public class ColumnVectorTest extends CudfTestBase {
       assertColumnsAreEqual(expectedMs, ms);
       assertColumnsAreEqual(expectedNs, ns);
       assertColumnsAreEqual(expectedS, s);
+    }
+  }
+
+  @Test
+  void testStringCast() {
+
+    Short[] shortValues = {1, 3, 45, -0, null};
+    String[] stringShortValues = getStringArray(shortValues);
+
+    testCastFixedWidthToStringsAndBack(DType.INT16, () -> ColumnVector.fromBoxedShorts(shortValues), () -> ColumnVector.fromStrings(stringShortValues));
+
+    Integer[] integerArray = {1, -2, 3, null, 8};
+    String[] stringIntValues = getStringArray(integerArray);
+
+    testCastFixedWidthToStringsAndBack(DType.INT32, () -> ColumnVector.fromBoxedInts(integerArray), () -> ColumnVector.fromStrings(stringIntValues));
+
+    Long[] longValues = {null, 3l, 2l, -43l, null};
+    String[] stringLongValues = getStringArray(longValues);
+
+    testCastFixedWidthToStringsAndBack(DType.INT64, () -> ColumnVector.fromBoxedLongs(longValues), () -> ColumnVector.fromStrings(stringLongValues));
+
+    Float[] floatValues = {Float.NaN, null, 03f, -004f, 12f};
+    String[] stringFloatValues = getStringArray(floatValues);
+
+    testCastFixedWidthToStringsAndBack(DType.FLOAT32, () -> ColumnVector.fromBoxedFloats(floatValues), () -> ColumnVector.fromStrings(stringFloatValues));
+
+    Double[] doubleValues = {Double.NaN, Double.NEGATIVE_INFINITY, 4d, 98d, null, Double.POSITIVE_INFINITY};
+    //Creating the string array manually because of the way cudf converts POSITIVE_INFINITY to "Inf" instead of "INFINITY"
+    String[] stringDoubleValues = {"NaN","-Inf", "4.0", "98.0", null, "Inf"};
+
+    testCastFixedWidthToStringsAndBack(DType.FLOAT64, () -> ColumnVector.fromBoxedDoubles(doubleValues), () -> ColumnVector.fromStrings(stringDoubleValues));
+
+    Boolean[] booleans = {true, false, false};
+    String[] stringBools = getStringArray(booleans);
+
+    testCastFixedWidthToStringsAndBack(DType.BOOL8, () -> ColumnVector.fromBoxedBooleans(booleans), () -> ColumnVector.fromStrings(stringBools));
+  }
+
+  private static <T> String[] getStringArray(T[] input) {
+    String[] result = new String[input.length];
+    for (int i = 0 ; i < input.length ; i++) {
+      if (input[i] == null) {
+        result[i] = null;
+      } else {
+        result[i] = String.valueOf(input[i]);
+      }
+    }
+    return result;
+  }
+
+  private static void testCastFixedWidthToStringsAndBack(DType type, Supplier<ColumnVector> fixedWidthSupplier,
+                                                  Supplier<ColumnVector> stringColumnSupplier) {
+    try (ColumnVector fixedWidthColumn = fixedWidthSupplier.get();
+         ColumnVector stringColumn = stringColumnSupplier.get();
+         ColumnVector fixedWidthCastedToString = fixedWidthColumn.castTo(DType.STRING);
+         ColumnVector stringCastedToFixedWidth = stringColumn.castTo(type)) {
+      assertColumnsAreEqual(stringColumn, fixedWidthCastedToString);
+      assertColumnsAreEqual(fixedWidthColumn, stringCastedToFixedWidth);
     }
   }
 
