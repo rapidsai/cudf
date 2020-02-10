@@ -135,13 +135,16 @@ std::unique_ptr<column> group_quantiles(
     cudaStream_t stream = 0);
 
 /**
- * @brief Internal API to calculate number of unique non-null values in each
- * group of @p values
+ * @brief Internal API to calculate number of unique values in each group of
+ *  @p values
  *
  * @param values Grouped and sorted (within group) values to get unique count of
  * @param group_labels ID of group that the corresponding value belongs to
  * @param num_groups Number of groups ( unique values in @p group_labels )
  * @param group_offsets Offsets of groups' starting points within @p values
+ * @param _include_nulls Exclude nulls while counting if include_nulls::NO,
+ *  Include nulls if include_nulls::YES.
+ *  Nulls are treated equal.
  * @param mr Memory resource to allocate output with
  * @param stream Stream to perform computation in
  */
