@@ -2557,7 +2557,7 @@ class DataFrame(Frame):
         )
         # Compute merge
         gdf_result = join(lhs, rhs, left_on, right_on, how, method)
-        gdf_result = list({v: k for k, v in gdf_result._data.items()}.items())
+        gdf_result = list(gdf_result._data.items())
 
         # Let's sort the columns of the GDF result. NB: Pandas doc says
         # that it sorts when how='outer' but this is NOT the case.
@@ -2570,21 +2570,21 @@ class DataFrame(Frame):
             for name in lhs._data.keys():
                 if name not in left_on:
                     for i in range(len(gdf_result)):
-                        if gdf_result[i][1] == name:
+                        if gdf_result[i][0] == name:
                             left_of_on.append(gdf_result.pop(i))
                             break
             in_on = []
             for name in itertools.chain(lhs._data.keys(), rhs._data.keys()):
                 if name in left_on or name in right_on:
                     for i in range(len(gdf_result)):
-                        if gdf_result[i][1] == name:
+                        if gdf_result[i][0] == name:
                             in_on.append(gdf_result.pop(i))
                             break
             right_of_on = []
             for name in rhs._data.keys():
                 if name not in right_on:
                     for i in range(len(gdf_result)):
-                        if gdf_result[i][1] == name:
+                        if gdf_result[i][0] == name:
                             right_of_on.append(gdf_result.pop(i))
                             break
             result = (
@@ -2595,21 +2595,19 @@ class DataFrame(Frame):
         else:
             for org_name in org_names:
                 for i in range(len(gdf_result)):
-                    if gdf_result[i][1] == org_name:
+                    if gdf_result[i][0] == org_name:
                         result.append(gdf_result.pop(i))
                         break
             for cat_name in to_categorical:
                 for i in range(len(gdf_result)):
-                    if gdf_result[i][1] == cat_name + "_codes":
+                    if gdf_result[i][0] == cat_name + "_codes":
                         cat_codes.append(gdf_result.pop(i))
             assert len(gdf_result) == 0
-
-        cat_codes = {v: k for k, v in cat_codes}
+        cat_codes = dict(cat_codes)
 
         # Build a new data frame based on the merged columns from GDF
-
         df = DataFrame()
-        for col, name in result:
+        for name, col in result:
             if is_string_dtype(col):
                 df[name] = col
             elif is_categorical_dtype(categorical_dtypes.get(name, col.dtype)):
