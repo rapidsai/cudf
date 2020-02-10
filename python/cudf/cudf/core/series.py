@@ -4,7 +4,7 @@ import pickle
 import warnings
 from numbers import Number
 
-import cupy
+import cupy as cp
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_dict_like
@@ -161,12 +161,12 @@ class Series(Frame):
             raise TypeError("Data must be numeric")
 
         if len(self) == 0:
-            return cupy.asarray([], dtype=self.dtype)
+            return cp.asarray([], dtype=self.dtype)
 
         if self.has_nulls:
             raise ValueError("Column must have no nulls.")
 
-        return cupy.asarray(self._column.data_array_view)
+        return cp.asarray(self._column.data_array_view)
 
     @property
     def values_host(self):
