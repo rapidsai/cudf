@@ -142,7 +142,11 @@ struct stats_state_s {
   uint8_t hasNull;
 };
 
-
+/*
+ * Protobuf encoding - see
+ * https://developers.google.com/protocol-buffers/docs/encoding
+ *
+ */
 // Protobuf varint encoding for unsigned int
 __device__ inline uint8_t *pb_encode_uint(uint8_t *p, uint64_t v) {
   while (v > 0x7f) {
@@ -197,6 +201,23 @@ __device__ inline uint8_t *pb_put_fixed64(uint8_t *p, uint32_t id, const void *r
  * @param[in,out] chunks Statistics data
  * @param[in] statistics_count Number of statistics buffers
  *
+ * ORC statistics format from https://orc.apache.org/specification/ORCv1/
+ *
+ * message ColumnStatistics {
+ *  // the number of values
+ *  optional uint64 numberOfValues = 1;
+ *  // At most one of these has a value for any column
+ *  optional IntegerStatistics intStatistics = 2;
+ *  optional DoubleStatistics doubleStatistics = 3;
+ *  optional StringStatistics stringStatistics = 4;
+ *  optional BucketStatistics bucketStatistics = 5;
+ *  optional DecimalStatistics decimalStatistics = 6;
+ *  optional DateStatistics dateStatistics = 7;
+ *  optional BinaryStatistics binaryStatistics = 8;
+ *  optional TimestampStatistics timestampStatistics = 9;
+ *  optional bool hasNull = 10;
+ * }
+ *
  **/
 // blockDim {128,1,1}
 __global__ void __launch_bounds__(128)
@@ -234,7 +255,12 @@ gpu_encode_statistics(uint8_t *blob_bfr, statistics_merge_group *groups, const s
     case dtype_int16:
     case dtype_int32:
     case dtype_int64:
-      // IntegerStatistics = 2
+      // intStatistics = 2
+      // message IntegerStatistics {
+      //  optional sint64 minimum = 1;
+      //  optional sint64 maximum = 2;
+      //  optional sint64 sum = 3;
+      // }
       if (s->ck.has_minmax || s->ck.has_sum) {
         *cur = 2 * 8 + PB_TYPE_FIXEDLEN;
         cur += 2;
@@ -250,7 +276,12 @@ gpu_encode_statistics(uint8_t *blob_bfr, statistics_merge_group *groups, const s
       break;
     case dtype_float32:
     case dtype_float64:
-      // DoubleStatistics = 3
+      // doubleStatistics = 3
+      // message DoubleStatistics {
+      //  optional double minimum = 1;
+      //  optional double maximum = 2;
+      //  optional double sum = 3;
+      // }
       if (s->ck.has_minmax) {
         *cur = 3 * 8 + PB_TYPE_FIXEDLEN;
         cur += 2;
@@ -260,7 +291,12 @@ gpu_encode_statistics(uint8_t *blob_bfr, statistics_merge_group *groups, const s
       }
       break;
     case dtype_string:
-      // StringStatistics = 4
+      // stringStatistics = 4
+      // message StringStatistics {
+      //  optional string minimum = 1;
+      //  optional string maximum = 2;
+      //  optional sint64 sum = 3; // sum will store the total length of all strings
+      // }
       if (s->ck.has_minmax && s->ck.has_sum) {
         uint32_t sz = (pb_put_uint(cur, 3, s->ck.sum.i_val) - cur)
                     + (pb_put_uint(cur, 1, s->ck.min_value.str_val.length) - cur)
@@ -274,7 +310,10 @@ gpu_encode_statistics(uint8_t *blob_bfr, statistics_merge_group *groups, const s
       }
       break;
     case dtype_bool8:
-      // BucketStatistics = 5
+      // bucketStatistics = 5
+      // message BucketStatistics {
+      //  repeated uint64 count = 1 [packed=true];
+      // }
       if (s->ck.has_sum) { // Sum is equal to the number of 'true' values
         cur[0] = 5 * 8 + PB_TYPE_FIXEDLEN;
         cur = pb_put_packed_uint(cur + 2, 1, s->ck.sum.i_val);
@@ -283,13 +322,22 @@ gpu_encode_statistics(uint8_t *blob_bfr, statistics_merge_group *groups, const s
       break;
     case dtype_decimal64:
     case dtype_decimal128:
-      // DecimalStatistics = 6
+      // decimalStatistics = 6
+      // message DecimalStatistics {
+      //  optional string minimum = 1;
+      //  optional string maximum = 2;
+      //  optional string sum = 3;
+      // }
       if (s->ck.has_minmax) {
         // TODO: Decimal support (decimal min/max stored as strings)
       }
       break;
     case dtype_date32:
-      // DateStatistics = 7
+      // dateStatistics = 7
+      // message DateStatistics { // min,max values saved as days since epoch
+      //  optional sint32 minimum = 1;
+      //  optional sint32 maximum = 2;
+      // }
       if (s->ck.has_minmax) {
         cur[0] = 7 * 8 + PB_TYPE_FIXEDLEN;
         cur += 2;
@@ -299,7 +347,13 @@ gpu_encode_statistics(uint8_t *blob_bfr, statistics_merge_group *groups, const s
       }      
       break;
     case dtype_timestamp64:
-      // TimestampStatistics = 9
+      // timestampStatistics = 9
+      // message TimestampStatistics {
+      //  optional sint64 minimum = 1; // min,max values saved as milliseconds since epoch
+      //  optional sint64 maximum = 2;
+      //  optional sint64 minimumUtc = 3; // min,max values saved as milliseconds since UNIX epoch
+      //  optional sint64 maximumUtc = 4;
+      // }
       if (s->ck.has_minmax) {
         cur[0] = 7 * 8 + PB_TYPE_FIXEDLEN;
         cur += 2;
