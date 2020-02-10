@@ -53,14 +53,17 @@ std::unique_ptr<column> add_keys( dictionary_column_view const& dictionary_colum
  * @brief Create a new dictionary column by removing the specified keys
  * from the existing dictionary_column.
  *
+ * The output column will have the same number of rows as the input column.
+ * Null entries from the input column and copied to the output column.
  * The indices are updated to the new positions of the remaining keys.
- * Any indices pointing to removed keys are set to null.
+ * Any indices pointing to removed keys sets that row to null.
  *
  * ```
- * d1 = {["a","c","d"],[2,0,1,0]}
- * d2 = remove_keys(d1,["b","c"])
- * d2 is now {["a","d"],[1,0,null,0]}
+ * d1 = {keys=["a", "c", "d"], indices=[2, 0, 1, 0, 2]}
+ * d2 = remove_keys( d1, ["b", "c"] )
+ * d2 is now {keys=["a", "d"], indices=[1, 0, x, 0, 1], nulls=[1, 1, 0, 1, 1]}
  * ```
+ * Note that "a" has been removed so output row[2] becomes null.
  *
  * @throw cudf_logic_error if the keys_to_remove type does not match the keys type in
  *        the dictionary_column.

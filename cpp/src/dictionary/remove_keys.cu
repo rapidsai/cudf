@@ -33,6 +33,7 @@ namespace dictionary
 {
 namespace detail
 {
+
 std::unique_ptr<column> remove_keys( dictionary_column_view const& dictionary_column,
                                      column_view const& keys_to_remove,
                                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
@@ -111,6 +112,7 @@ std::unique_ptr<column> remove_unused_keys( dictionary_column_view const& dictio
 
 } // namespace detail
 
+// external APIs
 
 std::unique_ptr<column> remove_keys( dictionary_column_view const& dictionary_column,
                                      column_view const& keys_to_remove,
