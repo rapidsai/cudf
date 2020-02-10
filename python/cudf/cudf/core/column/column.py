@@ -462,7 +462,7 @@ class ColumnBase(Column):
                 else:
                     # data Buffer lifetime is tied to self:
                     slice_data = Buffer(
-                        data=slice_data.device_ctypes_pointer.value,
+                        data=slice_data.data.mem.ptr,
                         size=slice_data.nbytes,
                         owner=self,
                     )
