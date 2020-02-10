@@ -115,7 +115,7 @@ std::unique_ptr<aggregation> make_argmin_aggregation();
 /**
  * @brief Factory to create a `nunique` aggregation
  * 
- * `argmin` returns the number of unique elements.
+ * `nunique` returns the number of unique elements.
 */
 std::unique_ptr<aggregation> make_nunique_aggregation();
 /**
