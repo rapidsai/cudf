@@ -452,7 +452,7 @@ class DataFrame(Frame):
             else:
                 nlevels = len(arg)
             new_data = self._data.get_by_label(arg)
-            if nlevels == self._data.nlevels:
+            if self._data.multiindex is False or nlevels == self._data.nlevels:
                 return cudf.Series(new_data, name=arg, index=self.index)
             else:
                 return cudf.DataFrame(

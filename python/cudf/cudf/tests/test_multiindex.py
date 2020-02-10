@@ -608,7 +608,7 @@ def test_multiindex_iloc(pdf, gdf, pdfIndex, iloc_rows, iloc_columns):
             presult, gresult, check_index_type=False, check_column_type=False
         )
     else:
-        assert_eq(presult, gresult, check_index_type=False)
+        assert_eq(presult, gresult, check_index_type=False, check_dtype=False)
 
 
 @pytest.mark.parametrize(
@@ -657,7 +657,7 @@ def test_multicolumn_iloc(pdf, gdf, pdfIndex, iloc_rows, iloc_columns):
             presult, gresult, check_index_type=False, check_column_type=False
         )
     else:
-        assert_eq(presult, gresult, check_index_type=False)
+        assert_eq(presult, gresult, check_index_type=False, check_dtype=False)
 
 
 def test_multicolumn_item():
