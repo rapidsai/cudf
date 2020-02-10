@@ -3,9 +3,11 @@
 ## New Features
 
 - PR #3577 Add initial dictionary support to column classes
+- PR #3777 Add support for dictionary column in gather
 - PR #3693 add string support, skipna to scan operation
 - PR #3662 Define and implement `shift`.
 - PR #3861 Added Series.sum feature for String
+- PR #4069 Added cast of numeric columns from/to String
 - PR #3681 Add cudf::experimental::boolean_mask_scatter
 - PR #4040 Add support for n-way merge of sorted tables
 - PR #4053 Multi-column quantiles.
@@ -15,6 +17,7 @@
 
 - PR #3525 build.sh option to disable nvtx
 - PR #3748 Optimize hash_partition using shared memory
+- PR #3808 Optimize hash_partition using shared memory and cub block scan
 - PR #3698 Add count_(un)set_bits functions taking multiple ranges and updated slice to compute null counts at once.
 - PR #3909 Move java backend to libcudf++
 - PR #3971 Adding `as_table` to convert Column to Table in python
@@ -31,7 +34,8 @@
 - PR #4008 Eliminate extra copy in column constructor
 - PR #4013 Add cython definition for io readers cudf/io/io_types.hpp
 - PR #4014 ORC/Parquet: add count parameter to stripe/rowgroup-based reader API
-- PR #3880 Add aggregation infrastructure support for reduction
+- PR #3880 Add aggregation infrastructure support for cudf::reduce
+- PR #4059 Add aggregation infrastructure support for cudf::scan 
 - PR #4021 Change quantiles signature for clarity.
 - PR #4029 Port stream_compaction.pyx to use libcudf++ APIs
 - PR #4031 Docs build scripts and instructions update
@@ -41,9 +45,12 @@
 - PR #3891 Port NVStrings (r)split_record to contiguous_(r)split_record
 - PR #4072 Allow round_robin_partition to single partition
 - PR #4064 Add cudaGetDeviceCount to JNI layer
+- PR #4083 Use two partitions in test_groupby_multiindex_reset_index
+- PR #4071 Add Java bindings for round robin partition
 - PR #4079 Simply use `mask.size` to create the array view
 - PR #4092 Keep mask on GPU for bit unpacking
 - PR #4081 Copy from `Buffer`'s pointer directly to host
+- PR #4098 Remove legacy calls from libcudf strings column code
 
 ## Bug Fixes
 
@@ -69,6 +76,7 @@
 - PR #4066 Fixed mismatch with dtype enums
 - PR #4080 Fix multi-index dask test with sort issue
 - PR #4084 Update Java for removal of CATEGORY type
+- PR #4086 ORC reader: fix potentially incorrect timestamp decoding in the last rowgroup
 - PR #4089 Fix dask groupby mutliindex test case issues in join
 - PR #4076 All null string entries should have null data buffer
 
