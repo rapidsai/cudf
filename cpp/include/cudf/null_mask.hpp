@@ -80,18 +80,22 @@ rmm::device_buffer create_null_mask(
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
  /**---------------------------------------------------------------------------*
- * @brief Sets a pre-allocated bitmask buffer to a given state
+ * @brief Sets a pre-allocated bitmask buffer to a given state in the range 
+ *  `[begin_bit, end_bit)`
  *
+ * Sets `[begin_bit, end_bit)` bits of bitmask to valid if `valid==true` 
+ * or null otherwise.
+ * 
  * @param bitmask Pointer to bitmask (e.g. returned by `column_view.null_mask()`)
- * @param size The number of elements represented by the mask (e.g.,
-   number of rows in a column)
+ * @param begin_bit Index of the first bit to set (inclusive)
+ * @param end_bit Index of the last bit to set (exclusive)
  * @param valid If true set all entries to valid; otherwise, set all to null.
  * @param stream Optional, stream on which all memory allocations/operations
  * will be submitted
  *---------------------------------------------------------------------------**/
-  void set_null_mask(bitmask_type* bitmask,
-                     size_type size, bool valid, cudaStream_t stream = 0);
-  
+void set_null_mask(bitmask_type *bitmask, size_type begin_bit,
+                   size_type end_bit, bool valid, cudaStream_t stream = 0);
+
 /**---------------------------------------------------------------------------*
  * @brief Given a bitmask, counts the number of set (1) bits in the range
  * `[start, stop)`

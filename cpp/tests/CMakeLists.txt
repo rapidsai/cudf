@@ -328,6 +328,7 @@ set(LEGACY_QUANTILES_TEST_SRC
 ConfigureTest(LEGACY_QUANTILES_TEST "${LEGACY_QUANTILES_TEST_SRC}")
 
 set(QUANTILES_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/quantile_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/quantiles_test.cu")
 
 ConfigureTest(QUANTILES_TEST "${QUANTILES_TEST_SRC}")
@@ -553,7 +554,8 @@ set(COPYING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_range_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/slice_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/shift_tests.cu")
 
 ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
 
@@ -682,7 +684,7 @@ ConfigureTest(LEGACY_MERGE_TEST "${LEGACY_MERGE_TEST_SRC}")
 # - sorted-merge new tests ----------------------------------------------------------------------------
 
 set(MERGE_TEST_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/merge/merge-test.cu"
+  "${CMAKE_CURRENT_SOURCE_DIR}/merge/merge_test.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/merge/merge_string_test.cpp")
 
 ConfigureTest(MERGE_TEST "${MERGE_TEST_SRC}")
@@ -844,10 +846,22 @@ ConfigureTest(STRINGS_TEST "${STRINGS_TEST_SRC}")
 
 set(BITMASK_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/valid_if_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/set_nullmask_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/bitmask_tests.cu")
 
 
 ConfigureTest(BITMASK_TEST "${BITMASK_TEST_SRC}")
+
+###################################################################################################
+# - dictionary tests ---------------------------------------------------------------------------------
+
+set(DICTIONARY_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/factories_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/encode_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/decode_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/gather_test.cpp")
+
+ConfigureTest(DICTIONARY_TEST "${DICTIONARY_TEST_SRC}")
 
 ###################################################################################################
 ### enable testing ################################################################################
