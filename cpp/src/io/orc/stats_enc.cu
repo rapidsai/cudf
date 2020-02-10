@@ -32,15 +32,21 @@ namespace gpu {
  * @param[in] row_index_stride Rowgroup size in rows
  *
  **/
-// blockDim {128,1,1}
-__global__ void __launch_bounds__(128)
+constexpr unsigned int log2_init_thread_per_group = 5;
+constexpr unsigned int log2_init_groups_per_block = 2;
+constexpr unsigned int init_thread_per_group = 1 << log2_init_thread_per_group;
+constexpr unsigned int init_groups_per_block = 1 << log2_init_groups_per_block;
+constexpr unsigned int init_threads_per_block = 1 << (log2_init_thread_per_group + log2_init_groups_per_block);
+constexpr unsigned int init_group_thread_mask = init_thread_per_group - 1;
+
+__global__ void __launch_bounds__(init_threads_per_block)
 gpu_init_statistics_groups(statistics_group *groups, const stats_column_desc *cols,
                            uint32_t num_columns, uint32_t num_rowgroups, uint32_t row_index_stride) {
-  __shared__ __align__(4) volatile statistics_group group_g[4];
+  __shared__ __align__(4) volatile statistics_group group_g[init_groups_per_block];
   uint32_t col_id = blockIdx.y;
-  uint32_t chunk_id = (blockIdx.x * 4) + (threadIdx.x >> 5);
-  uint32_t t = threadIdx.x & 0x1f;
-  volatile statistics_group *group = &group_g[threadIdx.x >> 5];
+  uint32_t chunk_id = (blockIdx.x * init_groups_per_block) + (threadIdx.x >> log2_init_thread_per_group);
+  uint32_t t = threadIdx.x & init_group_thread_mask;
+  volatile statistics_group *group = &group_g[threadIdx.x >> log2_init_thread_per_group];
   if (chunk_id < num_rowgroups) {
     if (t == 0) {
       uint32_t num_rows = cols[col_id].num_rows;
@@ -63,17 +69,23 @@ gpu_init_statistics_groups(statistics_group *groups, const stats_column_desc *co
  * @param[in] statistics_count Number of statistics buffers
  *
  **/
-// blockDim {1024,1,1}
-__global__ void __launch_bounds__(1024, 1)
+constexpr unsigned int log2_buffersize_reduction_size = 5;
+constexpr unsigned int log2_buffersize_threads_per_block = 5 + log2_buffersize_reduction_size;
+constexpr unsigned int buffersize_reduction_size = 1 << log2_buffersize_reduction_size;
+constexpr unsigned int buffersize_reduction_mask = buffersize_reduction_size - 1;
+constexpr unsigned int buffersize_threads_per_block = 1 << log2_buffersize_threads_per_block;
+constexpr unsigned int buffersize_scratch_size = buffersize_threads_per_block / buffersize_reduction_size; 
+
+__global__ void __launch_bounds__(buffersize_threads_per_block, 1)
 gpu_init_statistics_buffersize(statistics_merge_group *groups, const statistics_chunk *chunks, uint32_t statistics_count) {
-  __shared__ volatile uint32_t scratch_red[32];
+  __shared__ volatile uint32_t scratch_red[buffersize_scratch_size];
   __shared__ volatile uint32_t stats_size;
   uint32_t t = threadIdx.x;
   if (!t) {
     stats_size = 0;
   }
   __syncthreads();
-  for (uint32_t start = 0; start < statistics_count; start += 1024) {
+  for (uint32_t start = 0; start < statistics_count; start += buffersize_threads_per_block) {
     uint32_t stats_len = 0, stats_pos;
     uint32_t idx = start + t;
     if (idx < statistics_count) {
@@ -106,16 +118,16 @@ gpu_init_statistics_buffersize(statistics_merge_group *groups, const statistics_
       }
     }
     stats_pos = WarpReducePos32(stats_len, t);
-    if ((t & 0x1f) == 0x1f) {
-      scratch_red[t >> 5] = stats_pos;
+    if ((t & buffersize_reduction_mask) == buffersize_reduction_mask) {
+      scratch_red[t >> log2_buffersize_reduction_size] = stats_pos;
     }
     __syncthreads();
-    if (t < 32) {
+    if (t < buffersize_scratch_size) {
       scratch_red[t] = WarpReducePos32(scratch_red[t], t);
     }
     __syncthreads();
-    if (t >= 32) {
-      stats_pos += scratch_red[(t >> 5) - 1];
+    if (t >= buffersize_reduction_size) {
+      stats_pos += scratch_red[(t >> log2_buffersize_reduction_size) - 1];
     }
     stats_pos += stats_size;
     if (idx < statistics_count) {
@@ -123,7 +135,7 @@ gpu_init_statistics_buffersize(statistics_merge_group *groups, const statistics_
       groups[idx].num_chunks = stats_len;
     }
     __syncthreads();
-    if (t == 1023) {
+    if (t == buffersize_threads_per_block - 1) {
       stats_size = stats_pos;
     }
   }
@@ -218,14 +230,20 @@ __device__ inline uint8_t *pb_put_fixed64(uint8_t *p, uint32_t id, const void *r
  * }
  *
  **/
-// blockDim {128,1,1}
-__global__ void __launch_bounds__(128)
+constexpr unsigned int log2_encode_threads_per_chunk = 5;
+constexpr unsigned int log2_encode_chunks_per_block = 2;
+constexpr unsigned int encode_threads_per_chunk = 1 << log2_encode_threads_per_chunk;
+constexpr unsigned int encode_chunks_per_block = 1 << log2_encode_chunks_per_block;
+constexpr unsigned int encode_threads_per_block = 1 << (log2_encode_threads_per_chunk + log2_encode_chunks_per_block);
+constexpr unsigned int encode_chunk_thread_mask = encode_threads_per_chunk - 1;
+
+__global__ void __launch_bounds__(encode_threads_per_block)
 gpu_encode_statistics(uint8_t *blob_bfr, statistics_merge_group *groups, const statistics_chunk *chunks,
                       uint32_t statistics_count) {
-  __shared__ __align__(8) stats_state_s state_g[4];
-  uint32_t t = threadIdx.x & 0x1f;
-  uint32_t idx = blockIdx.x * 4 + (threadIdx.x >> 5);
-  stats_state_s * const s = &state_g[threadIdx.x >> 5];
+  __shared__ __align__(8) stats_state_s state_g[encode_chunks_per_block];
+  uint32_t t = threadIdx.x & encode_chunk_thread_mask;
+  uint32_t idx = blockIdx.x * encode_chunks_per_block + (threadIdx.x >> log2_encode_threads_per_chunk);
+  stats_state_s * const s = &state_g[threadIdx.x >> log2_encode_threads_per_chunk];
   if (idx < statistics_count) {
     if (t < sizeof(statistics_chunk) / sizeof(uint32_t)) {
       reinterpret_cast<uint32_t *>(&s->chunk)[t] = reinterpret_cast<const uint32_t *>(&chunks[idx])[t];
@@ -384,8 +402,8 @@ gpu_encode_statistics(uint8_t *blob_bfr, statistics_merge_group *groups, const s
 cudaError_t orc_init_statistics_groups(statistics_group *groups, const stats_column_desc *cols, uint32_t num_columns,
                                        uint32_t num_rowgroups, uint32_t row_index_stride, cudaStream_t stream)
 {
-    dim3 dim_groups((num_rowgroups+3) >> 2, num_columns);
-    gpu_init_statistics_groups <<< dim_groups, 128, 0, stream >>>(groups, cols, num_columns, num_rowgroups, row_index_stride);
+    dim3 dim_groups((num_rowgroups + init_groups_per_block - 1) / init_groups_per_block, num_columns);
+    gpu_init_statistics_groups <<< dim_groups, init_threads_per_block, 0, stream >>>(groups, cols, num_columns, num_rowgroups, row_index_stride);
 
     return cudaSuccess;
 }
@@ -404,7 +422,7 @@ cudaError_t orc_init_statistics_groups(statistics_group *groups, const stats_col
 cudaError_t orc_init_statistics_buffersize(statistics_merge_group *groups, const statistics_chunk *chunks,
                                            uint32_t statistics_count, cudaStream_t stream)
 {
-    gpu_init_statistics_buffersize <<< 1, 1024, 0, stream >>>(groups, chunks, statistics_count);
+    gpu_init_statistics_buffersize <<< 1, buffersize_threads_per_block, 0, stream >>>(groups, chunks, statistics_count);
     return cudaSuccess;
 }
 
@@ -422,7 +440,8 @@ cudaError_t orc_init_statistics_buffersize(statistics_merge_group *groups, const
 cudaError_t orc_encode_statistics(uint8_t *blob_bfr, statistics_merge_group *groups, const statistics_chunk *chunks,
                                   uint32_t statistics_count, cudaStream_t stream)
 {
-    gpu_encode_statistics <<< (statistics_count + 3) >> 2, 128, 0, stream >>>(blob_bfr, groups, chunks, statistics_count);
+    unsigned int num_blocks = (statistics_count + encode_chunks_per_block - 1) / encode_chunks_per_block;
+    gpu_encode_statistics <<< num_blocks, encode_threads_per_block, 0, stream >>>(blob_bfr, groups, chunks, statistics_count);
     return cudaSuccess;
 }
 
