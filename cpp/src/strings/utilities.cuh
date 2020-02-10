@@ -15,7 +15,7 @@
  */
 #pragma once
 
-#include <bitmask/legacy/valid_if.cuh>
+//#include <bitmask/legacy/valid_if.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 
@@ -86,35 +86,6 @@ auto make_strings_children( SizeAndExecuteFunction size_and_exec_fn, size_type s
     size_and_exec_fn.d_chars = chars_column->mutable_view().template data<char>(); // fill in the chars
     thrust::for_each_n(rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count, size_and_exec_fn);
     return std::make_pair(std::move(offsets_column),std::move(chars_column));
-}
-
-
-/**
- * @brief Utility to create a null mask for a strings column using a custom function.
- *
- * @tparam BoolFn Function should return true/false given index for a strings column.
- * @param strings_count Number of strings for the column.
- * @param bfn The custom function used for identifying null string entries.
- * @param mr Memory resource to use.
- * @param stream Stream to use for any kernel calls.
- * @return Pair including null mask and null count
- */
-template <typename BoolFn>
-std::pair<rmm::device_buffer,cudf::size_type> make_null_mask( cudf::size_type strings_count,
-    BoolFn bfn,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0)
-{
-    auto valid_mask = valid_if( static_cast<const bit_mask_t*>(nullptr),
-                                bfn, strings_count, stream );
-    auto null_count = valid_mask.second;
-    rmm::device_buffer null_mask;
-    if( null_count > 0 )
-        null_mask = rmm::device_buffer(valid_mask.first,
-                                       gdf_valid_allocation_size(strings_count),
-                                       stream,mr); // does deep copy
-    RMM_TRY( RMM_FREE(valid_mask.first,stream) ); // TODO valid_if to return device_buffer in future
-    return std::make_pair(std::move(null_mask), null_count);
 }
 
 /**
