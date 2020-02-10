@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.tests.utils import assert_eq, does_not_raise
+from cudf.tests.utils import assert_eq
 
 dtypes = [
     "int8",
@@ -36,32 +36,26 @@ def test_column_offset_and_size(pandas_input, offset, size):
     if size_check is None:
         size_check = 100
 
-    if offset_check > size_check:
-        expectation = pytest.raises(RuntimeError)
+    col = cudf.core.column.as_column(pandas_input)
+    col = cudf.core.column.build_column(
+        data=col.base_data,
+        dtype=col.dtype,
+        mask=col.base_mask,
+        size=size,
+        offset=offset,
+        children=col.base_children,
+    )
+
+    got = cudf.Series(col)
+
+    if offset is None:
+        offset = 0
+    if size is None:
+        size = 100
     else:
-        expectation = does_not_raise()
+        size = size + offset
 
-    with expectation:
-        col = cudf.core.column.as_column(pandas_input)
-        col = cudf.core.column.build_column(
-            data=col.base_data,
-            dtype=col.dtype,
-            mask=col.base_mask,
-            size=size,
-            offset=offset,
-            children=col.base_children,
-        )
+    slicer = slice(offset, size)
+    expect = pandas_input.iloc[slicer].reset_index(drop=True)
 
-        got = cudf.Series(col)
-
-        if offset is None:
-            offset = 0
-        if size is None:
-            size = 100
-        else:
-            size = size + offset
-
-        slicer = slice(offset, size)
-        expect = pandas_input.iloc[slicer].reset_index(drop=True)
-
-        assert_eq(expect, got)
+    assert_eq(expect, got)

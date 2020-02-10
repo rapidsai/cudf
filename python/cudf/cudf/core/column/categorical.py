@@ -213,7 +213,7 @@ class CategoricalColumn(column.ColumnBase):
     """Implements operations for Columns of Categorical type
     """
 
-    def __init__(self, dtype, mask=None, size=None, offset=0, children=()):
+    def __init__(self, dtype, mask=None, size=None, offset=None, children=()):
         """
         Parameters
         ----------
@@ -228,6 +228,8 @@ class CategoricalColumn(column.ColumnBase):
         """
         if size is None:
             size = children[0].size
+            if offset is not None:
+                size = size - offset
         if isinstance(dtype, pd.api.types.CategoricalDtype):
             dtype = CategoricalDtype.from_pandas(dtype)
         if not isinstance(dtype, CategoricalDtype):
@@ -313,9 +315,9 @@ class CategoricalColumn(column.ColumnBase):
             codes_column = column.build_column(
                 data=codes_column.base_data,
                 dtype=codes_column.dtype,
-                mask=codes_column.mask,
-                size=codes_column.size,
-                offset=codes_column.offset,
+                mask=codes_column.base_mask,
+                size=self.size,
+                offset=self.offset,
             )
             self._children = (codes_column,)
         return self._children
@@ -350,8 +352,8 @@ class CategoricalColumn(column.ColumnBase):
     def ordered(self, value):
         self.dtype.ordered = value
 
-    def cat(self, column_owner=None):
-        return CategoricalAccessor(self, column_owner=column_owner)
+    def cat(self, parent=None):
+        return CategoricalAccessor(self, parent=parent)
 
     def binary_operator(self, binop, rhs, reflect=False):
         msg = (

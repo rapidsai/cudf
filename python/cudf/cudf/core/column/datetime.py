@@ -23,7 +23,7 @@ _numpy_to_pandas_conversion = {
 
 
 class DatetimeColumn(column.ColumnBase):
-    def __init__(self, data, dtype, mask=None, size=None, offset=0):
+    def __init__(self, data, dtype, mask=None, size=None, offset=None):
         """
         Parameters
         ----------
@@ -39,6 +39,8 @@ class DatetimeColumn(column.ColumnBase):
             raise ValueError("Buffer size must be divisible by element size")
         if size is None:
             size = data.size // dtype.itemsize
+            if offset is not None:
+                size = size - offset
         super().__init__(
             data, size=size, dtype=dtype, mask=mask, offset=offset
         )

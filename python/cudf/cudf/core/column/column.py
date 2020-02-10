@@ -89,7 +89,7 @@ class ColumnBase(Column):
             shape=(result.nbytes // dtype.itemsize,),
             strides=(dtype.itemsize,),
             dtype=dtype,
-            gpu_data=result.gpu_data
+            gpu_data=result.gpu_data,
         )
         return result
 

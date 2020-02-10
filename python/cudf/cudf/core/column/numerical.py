@@ -21,7 +21,7 @@ from cudf.utils.dtypes import (
 
 
 class NumericalColumn(column.ColumnBase):
-    def __init__(self, data, dtype, mask=None, size=None, offset=0):
+    def __init__(self, data, dtype, mask=None, size=None, offset=None):
         """
         Parameters
         ----------
@@ -35,6 +35,8 @@ class NumericalColumn(column.ColumnBase):
             raise ValueError("Buffer size must be divisible by element size")
         if size is None:
             size = data.size // dtype.itemsize
+            if offset is not None:
+                size = size - offset
         super().__init__(
             data, size=size, dtype=dtype, mask=mask, offset=offset
         )

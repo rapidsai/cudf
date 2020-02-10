@@ -66,10 +66,13 @@ cdef class Column:
 
     The *dtype* indicates the Column's element type.
     """
-    def __init__(self, data, size, dtype, mask=None, offset=0, children=()):
-        if not pd.api.types.is_integer(offset):
+    def __init__(self, data, size, dtype, mask=None, offset=None, children=()):
+        if not pd.api.types.is_integer(offset) and offset is not None:
             raise TypeError("Expected an integer for offset, got " +
                             type(offset).__name__)
+
+        if offset is None:
+            offset = 0
 
         if not pd.api.types.is_integer(size):
             raise TypeError("Expected an integer for size, got " +
@@ -236,7 +239,9 @@ cdef class Column:
 
     @property
     def children(self):
-        raise NotImplementedError
+        if self._children is None:
+            self._children = self.base_children
+        return self._children
 
     def set_base_children(self, value):
         if not isinstance(value, tuple):

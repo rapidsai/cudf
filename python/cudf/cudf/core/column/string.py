@@ -440,7 +440,7 @@ class StringColumn(column.ColumnBase):
     """Implements operations for Columns of String type
     """
 
-    def __init__(self, mask=None, size=None, offset=0, children=()):
+    def __init__(self, mask=None, size=None, offset=None, children=()):
         """
         Parameters
         ----------
@@ -463,6 +463,8 @@ class StringColumn(column.ColumnBase):
                 # one less because the last element of offsets is the number of
                 # bytes in the data buffer
                 size = children[0].size - 1
+            if offset is not None:
+                size = size - offset
 
         super().__init__(
             None, size, dtype, mask=mask, offset=offset, children=children
