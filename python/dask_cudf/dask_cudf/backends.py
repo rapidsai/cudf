@@ -18,13 +18,23 @@ def _nonempty_index(idx):
     if isinstance(idx, cudf.core.index.RangeIndex):
         return cudf.core.index.RangeIndex(2, name=idx.name)
     elif isinstance(idx, cudf.core.index.DatetimeIndex):
-        # Use pandas for datetime indices (for now)
-        return cudf.from_pandas(meta_nonempty(idx.to_pandas()))
+        start = "1970-01-01"
+        data = [start, "1970-01-02"]
+        return cudf.core.index.DatetimeIndex(
+            data, start=start, periods=2, name=idx.name
+        )
     elif isinstance(idx, cudf.core.index.StringIndex):
         return cudf.core.index.StringIndex(["cat", "dog"])
     elif isinstance(idx, cudf.core.index.CategoricalIndex):
-        # Use pandas for categorical indices (for now)
-        return cudf.from_pandas(meta_nonempty(idx.to_pandas()))
+        key = tuple(idx._data.keys())
+        assert len(key) == 1
+        categories = idx._data[key[0]].categories
+        codes = [0, 0]
+        ordered = idx._data[key[0]].ordered
+        values = column.build_categorical_column(
+            categories=categories, codes=codes, ordered=ordered
+        )
+        return cudf.core.index.CategoricalIndex(values, name=idx.name)
     elif isinstance(idx, cudf.core.index.GenericIndex):
         return cudf.core.index.GenericIndex(
             np.arange(2, dtype=idx.dtype), name=idx.name
@@ -47,8 +57,12 @@ def _nonempty_series(s, idx=None):
         idx = _nonempty_index(s.index)
     dtype = s.dtype
     if is_categorical_dtype(dtype):
-        # Use pandas for categories (for now)
-        data = cudf.from_pandas(meta_nonempty(s.to_pandas()))._column
+        categories = s._column.categories
+        codes = [0, 0]
+        ordered = s._column.ordered
+        data = column.build_categorical_column(
+            categories=categories, codes=codes, ordered=ordered
+        )
     elif is_string_dtype(dtype):
         data = ["cat", "dog"]
     else:
