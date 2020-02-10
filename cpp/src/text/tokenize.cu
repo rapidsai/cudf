@@ -26,8 +26,8 @@
 
 #include <thrust/transform.h>
 
-namespace cudf
-{
+using namespace cudf;
+
 namespace nvtext
 {
 namespace detail
@@ -37,7 +37,7 @@ namespace
 
 // common pattern for token_count functions
 template<typename TokenCounter>
-std::unique_ptr<column> token_count_fn( size_type strings_count, TokenCounter tcfn,
+std::unique_ptr<column> token_count_fn( size_type strings_count, TokenCounter tokenizer,
                                         rmm::mr::device_memory_resource* mr,
                                         cudaStream_t stream )
 {
@@ -48,19 +48,19 @@ std::unique_ptr<column> token_count_fn( size_type strings_count, TokenCounter tc
     thrust::transform( rmm::exec_policy(stream)->on(stream),
         thrust::make_counting_iterator<size_type>(0),
         thrust::make_counting_iterator<size_type>(strings_count),
-        d_token_counts, tcfn );
+        d_token_counts, tokenizer );
     return token_counts;
 }
 
 // common pattern for tokenize functions
 template<typename Tokenizer>
-std::unique_ptr<column> tokenize_fn( size_type strings_count, Tokenizer ttfn,
+std::unique_ptr<column> tokenize_fn( size_type strings_count, Tokenizer tokenizer,
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream )
 {
     auto execpol = rmm::exec_policy(stream);
     // get the number of tokens in each string
-    auto token_counts = token_count_fn( strings_count, ttfn, mr, stream );
+    auto token_counts = token_count_fn( strings_count, tokenizer, mr, stream );
     auto d_token_counts = token_counts->view();
     // create token-index offsets from the counts
     rmm::device_vector<int32_t> token_offsets(strings_count+1);
@@ -73,9 +73,10 @@ std::unique_ptr<column> tokenize_fn( size_type strings_count, Tokenizer ttfn,
     // build a list of pointers to each token
     rmm::device_vector<string_index_pair> tokens(total_tokens);
     // now go get the tokens
-    ttfn.d_offsets = token_offsets.data().get();
-    ttfn.d_tokens = tokens.data().get();
-    thrust::for_each_n(execpol->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count, ttfn );
+    tokenizer.d_offsets = token_offsets.data().get();
+    tokenizer.d_tokens = tokens.data().get();
+    thrust::for_each_n(execpol->on(stream), 
+        thrust::make_counting_iterator<size_type>(0), strings_count, tokenizer );
     // create the strings column using the tokens pointers
     return make_strings_column(tokens,stream,mr);
 }
@@ -97,10 +98,10 @@ std::unique_ptr<column> tokenize( strings_column_view const& strings,
 }
 
 // zero or more character token counter
-std::unique_ptr<column> token_count( strings_column_view const& strings,
-                                     string_scalar const& delimiter,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream )
+std::unique_ptr<column> count_tokens( strings_column_view const& strings,
+                                      string_scalar const& delimiter,
+                                      rmm::mr::device_memory_resource* mr,
+                                      cudaStream_t stream )
 {
     CUDF_EXPECTS( delimiter.is_valid(), "Parameter delimiter must be valid");
     string_view d_delimiter( delimiter.data(), delimiter.size() );
@@ -126,10 +127,10 @@ std::unique_ptr<column> tokenize( strings_column_view const& strings,
 }
 
 // one or more string delimiter token counter
-std::unique_ptr<column> token_count( strings_column_view const& strings,
-                                     strings_column_view const& delimiters,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream )
+std::unique_ptr<column> count_tokens( strings_column_view const& strings,
+                                      strings_column_view const& delimiters,
+                                      rmm::mr::device_memory_resource* mr,
+                                      cudaStream_t stream )
 {
     CUDF_EXPECTS( delimiters.size()>0, "Parameter delimiters must not be empty");
     CUDF_EXPECTS( !delimiters.has_nulls(), "Parameter delimiters must not have nulls");
@@ -160,19 +161,18 @@ std::unique_ptr<column> tokenize( strings_column_view const& strings,
     return detail::tokenize( strings, delimiters, mr );
 }
 
-std::unique_ptr<column> token_count( strings_column_view const& strings,
+std::unique_ptr<column> count_tokens( strings_column_view const& strings,
                                      string_scalar const& delimiter,
                                      rmm::mr::device_memory_resource* mr)
 {
-    return detail::token_count( strings, delimiter, mr );
+    return detail::count_tokens( strings, delimiter, mr );
 }
 
-std::unique_ptr<column> token_count( strings_column_view const& strings,
-                                     strings_column_view const& delimiters,
-                                     rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> count_tokens( strings_column_view const& strings,
+                                      strings_column_view const& delimiters,
+                                      rmm::mr::device_memory_resource* mr)
 {
-    return detail::token_count( strings, delimiters, mr );
+    return detail::count_tokens( strings, delimiters, mr );
 }
 
 } // namespace nvtext
-} // namespace cudf

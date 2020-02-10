@@ -45,15 +45,15 @@ TEST_F(TextTokenizeTest, Tokenize)
                                                  "the","cat","chased","the","mouse",
                                                  "the","mousé","ate","the","cheese" };
 
-    auto results = cudf::nvtext::tokenize(strings_view, cudf::string_scalar(" "));
+    auto results = nvtext::tokenize(strings_view, cudf::string_scalar(" "));
     cudf::test::expect_columns_equal(*results,expected);
-    results = cudf::nvtext::tokenize(strings_view);
+    results = nvtext::tokenize(strings_view);
     cudf::test::expect_columns_equal(*results,expected);
 
     cudf::test::fixed_width_column_wrapper<int32_t> expected_counts{6,5,5,0,0,5};
-    results = cudf::nvtext::token_count( strings_view, cudf::string_scalar(": #") );
+    results = nvtext::count_tokens( strings_view, cudf::string_scalar(": #") );
     cudf::test::expect_columns_equal(*results,expected_counts);
-    results = cudf::nvtext::token_count( strings_view );
+    results = nvtext::count_tokens( strings_view );
     cudf::test::expect_columns_equal(*results,expected_counts);
 }
 
@@ -71,7 +71,7 @@ TEST_F(TextTokenizeTest, TokenizeMulti)
     cudf::test::strings_column_wrapper delimiters{ "the ", "over " };
     cudf::strings_column_view delimiters_view( delimiters );
 
-    auto results = cudf::nvtext::tokenize(strings_view,delimiters_view);
+    auto results = nvtext::tokenize(strings_view,delimiters_view);
 
     cudf::test::strings_column_wrapper expected{ "fox jumped ", "dog",
                                                  "dog chased  ", "cat",
@@ -79,7 +79,7 @@ TEST_F(TextTokenizeTest, TokenizeMulti)
                                                  "mousé ate ", "cheese"};
     cudf::test::expect_columns_equal(*results,expected);
     cudf::test::fixed_width_column_wrapper<int32_t> expected_counts{2,2,2,0,0,0,2};
-    results = cudf::nvtext::token_count(strings_view,delimiters_view);
+    results = nvtext::count_tokens(strings_view,delimiters_view);
     cudf::test::expect_columns_equal(*results,expected_counts);
 }
 
@@ -91,14 +91,14 @@ TEST_F(TextTokenizeTest, TokenizeErrorTest)
     {
         cudf::test::strings_column_wrapper delimiters{}; // empty delimiters
         cudf::strings_column_view delimiters_view( delimiters );
-        EXPECT_THROW( cudf::nvtext::tokenize(strings_view,delimiters_view), cudf::logic_error );
-        EXPECT_THROW( cudf::nvtext::token_count(strings_view,delimiters_view), cudf::logic_error );
+        EXPECT_THROW( nvtext::tokenize(strings_view,delimiters_view), cudf::logic_error );
+        EXPECT_THROW( nvtext::count_tokens(strings_view,delimiters_view), cudf::logic_error );
     }
     {
         cudf::test::strings_column_wrapper delimiters( {"",""}, {0,0} ); // null delimiters
         cudf::strings_column_view delimiters_view( delimiters );
-        EXPECT_THROW( cudf::nvtext::tokenize(strings_view,delimiters_view), cudf::logic_error );
-        EXPECT_THROW( cudf::nvtext::token_count(strings_view,delimiters_view), cudf::logic_error );
+        EXPECT_THROW( nvtext::tokenize(strings_view,delimiters_view), cudf::logic_error );
+        EXPECT_THROW( nvtext::count_tokens(strings_view,delimiters_view), cudf::logic_error );
     }
 }
 
@@ -106,10 +106,10 @@ TEST_F(TextTokenizeTest, TokenizeEmptyTest)
 {
     auto strings = cudf::make_empty_column(cudf::data_type{cudf::STRING});
     cudf::strings_column_view strings_view( strings->view() );
-    auto results = cudf::nvtext::tokenize(strings_view);
+    auto results = nvtext::tokenize(strings_view);
     EXPECT_EQ( results->size(), 0 );
     EXPECT_EQ( results->has_nulls(), false);
-    results = cudf::nvtext::token_count(strings_view);
+    results = nvtext::count_tokens(strings_view);
     EXPECT_EQ( results->size(), 0 );
     EXPECT_EQ( results->has_nulls(), false);
 }
