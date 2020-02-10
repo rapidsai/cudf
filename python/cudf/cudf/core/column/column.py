@@ -4,6 +4,7 @@ import pickle
 import warnings
 from numbers import Number
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -80,15 +81,7 @@ class ColumnBase(Column):
         else:
             dtype = self.dtype
 
-        result = cuda.as_cuda_array(self.data)
-        # Workaround until `.view(...)` can change itemsize
-        # xref: https://github.com/numba/numba/issues/4829
-        result = cuda.devicearray.DeviceNDArray(
-            shape=(result.nbytes // dtype.itemsize,),
-            strides=(dtype.itemsize,),
-            dtype=dtype,
-            gpu_data=result.gpu_data,
-        )
+        result = cp.asarray(self.data).view(dtype)
         return result
 
     @property
@@ -96,7 +89,7 @@ class ColumnBase(Column):
         """
         View the mask as a device array
         """
-        result = cuda.as_cuda_array(self.mask).view(np.int8)
+        result = cp.asarray(self.mask).view(np.int8)
         return result
 
     def __len__(self):
