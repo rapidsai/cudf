@@ -49,6 +49,7 @@
 - PR #4079 Simply use `mask.size` to create the array view
 - PR #4092 Keep mask on GPU for bit unpacking
 - PR #4081 Copy from `Buffer`'s pointer directly to host
+- PR #4101 Redux serialize `Buffer` directly with `__cuda_array_interface__`
 - PR #4098 Remove legacy calls from libcudf strings column code
 
 ## Bug Fixes
@@ -73,6 +74,7 @@
 - PR #4049 Fix `cudf::split` issue returning one less than expected column vectors
 - PR #4065 Parquet writer: fix for out-of-range dictionary indices
 - PR #4066 Fixed mismatch with dtype enums
+- PR #4078 Fix joins for when column_in_common input parameter is empty
 - PR #4080 Fix multi-index dask test with sort issue
 - PR #4084 Update Java for removal of CATEGORY type
 - PR #4086 ORC reader: fix potentially incorrect timestamp decoding in the last rowgroup
