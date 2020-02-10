@@ -652,7 +652,7 @@ class StringColumn(column.ColumnBase):
         frames = []
         sub_headers = []
 
-        for item in reversed(self.children):
+        for item in self.children:
             sheader = item.__cuda_array_interface__.copy()
             sheader["dtype"] = item.dtype.str
             sub_headers.append(sheader)
@@ -681,8 +681,8 @@ class StringColumn(column.ColumnBase):
         # Note: array items = [nbuf, sbuf, obuf]
         scount = header["nvstrings"]
         data = nvstrings.from_offsets(
-            ptrs[0],
             ptrs[1],
+            ptrs[0],
             scount,
             nbuf=nbuf,
             ncount=header["null_count"],
