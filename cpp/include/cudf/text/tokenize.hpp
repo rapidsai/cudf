@@ -42,7 +42,7 @@ namespace nvtext
  * ```
  * s = ["a", "b c", "d  e f "]
  * t = tokenize(s)
- * t is now ["a","b","c","d","e","f"]
+ * t is now ["a", "b", "c", "d", "e", "f"]
  * ```
  *
  * All null row entries are ignored and the output contains all valid rows.
@@ -71,10 +71,10 @@ std::unique_ptr<column> tokenize( strings_column_view const& strings,
  *
  * Example:
  * ```
- * s = ["a", "b c", "d,e:f;"]
- * d = [",",":",";"]
+ * s = ["a", "b c", "d.e:f;"]
+ * d = [".", ":", ";"]
  * t = tokenize(s,d)
- * t is now ["a","b c","d","e","f"]
+ * t is now ["a", "b c", "d", "e", "f"]
  * ```
  *
  * All null row entries are ignored and the output contains all valid rows.
@@ -101,8 +101,8 @@ std::unique_ptr<column> tokenize( strings_column_view const& strings,
  * Example:
  * ```
  * s = ["a", "b c", " ", "d e f"]
- * t = token_count(s)
- * t is now [1,2,0,3]
+ * t = count_tokens(s)
+ * t is now [1, 2, 0, 3]
  * ```
  *
  * All null row entries are ignored and the output contains all valid rows.
@@ -128,9 +128,9 @@ std::unique_ptr<column> count_tokens( strings_column_view const& strings,
  * Example:
  * ```
  * s = ["a", "b c", "d.e:f;"]
- * d = [".",":",";"]
- * t = token_count(s,d)
- * t is now [1,1,3]
+ * d = [".", ":", ";"]
+ * t = count_tokens(s,d)
+ * t is now [1, 1, 3]
  * ```
  *
  * All null row entries are ignored and the output contains all valid rows.
