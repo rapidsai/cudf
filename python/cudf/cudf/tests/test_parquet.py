@@ -550,4 +550,3 @@ def test_parquet_writer_gpu_multi_index(tmpdir, simple_pdf, simple_gdf):
     got = pd.read_parquet(gdf_fname)
 
     assert_eq(expect, got, check_categorical=False)
-

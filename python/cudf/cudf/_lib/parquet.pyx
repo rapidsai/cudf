@@ -81,7 +81,6 @@ cpdef generate_pandas_metadata(Table table, index):
                 col_names.append(table._index.name)
                 index_levels.append(table._index)
             index_descriptors.append(descr)
-        
 
     metadata = pa.pandas_compat.construct_metadata(
         table,
