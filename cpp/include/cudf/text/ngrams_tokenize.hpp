@@ -42,6 +42,8 @@ namespace nvtext
  * to build the output column. That is, ngrams created in input row[i] will be placed in
  * the output column directly before ngrams created in input row[i+1].
  *
+ * The size of the output column will be the total number of ngrams generated from
+ * the input strings column.
  *
  * Example:
  * ```

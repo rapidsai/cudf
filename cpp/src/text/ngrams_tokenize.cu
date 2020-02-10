@@ -47,8 +47,8 @@ using position_pair = thrust::pair<int32_t,int32_t>;
  * within a string multiple times to generate the ngrams. For example,
  * to generate tri-grams for string "aa b ccc dd" requires creating
  * the following two strings ["aa_b_ccc","b_ccc_dd"]. Notice the
- * tokens "b" and "ccc" needed to be copied twice.
- * 
+ * tokens "b" and "ccc" needed to be copied twice for this string.
+ *
  * Most of the work is done in the base class to locate the tokens.
  * This functor simply records the byte positions in the d_token_positions
  * member.
@@ -151,7 +151,6 @@ struct ngram_builder_fn
 
 // detail APIs
 
-//
 std::unique_ptr<column> ngrams_tokenize( strings_column_view const& strings,
                                          size_type ngrams = 2,
                                          string_scalar const& delimiter = string_scalar(""),
