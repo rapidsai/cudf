@@ -18,6 +18,7 @@
 
 package ai.rapids.cudf;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.opentest4j.AssertionFailedError;
 
@@ -1291,46 +1292,56 @@ public class ColumnVectorTest extends CudfTestBase {
         1674631932L,   //'2023-01-25 07:32:12'
         1530705600L};  //'2018-07-04 12:00:00'
 
-    final String[] UNSUPPORTED_TIME_S_STRING = {"1965-10-26 14:01:12",
-        "1960-02-06 19:22:11"};
-
-    final long[] UNSUPPORTED_TIME_S = {-131968728L,   //'1965-10-26 14:01:12'
-        -312439069L};   //'1960-02-06 19:22:11'
-
     final long[] TIMES_NS = {
         1530705600115254330L,   //'2018-07-04 12:00:00.115254330'
         1674631932929861604L,   //'2023-01-25 07:32:12.929861604'
         1530705600115254330L};  //'2018-07-04 12:00:00.115254330'
-
-    final long[] UNSUPPORTED_TIME_NS = {-131968727761702469L};   //'1965-10-26 14:01:12.238297531'
 
     final String[] TIMES_NS_STRING = {
         "2018-07-04 12:00:00.115254330",
         "2023-01-25 07:32:12.929861604",
         "2018-07-04 12:00:00.115254330"};
 
-    final String[] UNSUPPORTED_TIME_NS_STRING = {"1965-10-26 14:01:12.238297531"};
-
     // Seconds
     try (ColumnVector s_string_times = ColumnVector.fromStrings(TIMES_S_STRING);
          ColumnVector s_timestamps = ColumnVector.timestampSecondsFromLongs(TIMES_S);
-         ColumnVector unsupported_s_string_times = ColumnVector.fromStrings(UNSUPPORTED_TIME_S_STRING);
-         ColumnVector unsupported_s_timestamps = ColumnVector.timestampSecondsFromLongs(UNSUPPORTED_TIME_S);
          ColumnVector timestampsAsStrings = s_timestamps.asStrings("%Y-%m-%d %H:%M:%S");
          ColumnVector timestampsAsStringsUsingDefaultFormat = s_timestamps.asStrings()) {
       assertColumnsAreEqual(s_string_times, timestampsAsStrings);
       assertColumnsAreEqual(timestampsAsStringsUsingDefaultFormat, timestampsAsStrings);
-      assertThrows(AssertionFailedError.class, () -> assertColumnsAreEqual(unsupported_s_string_times, unsupported_s_timestamps));
     }
 
     // Nanoseconds
     try (ColumnVector ns_string_times = ColumnVector.fromStrings(TIMES_NS_STRING);
          ColumnVector ns_timestamps = ColumnVector.timestampNanoSecondsFromLongs(TIMES_NS);
-         ColumnVector unsupported_ns_string_times = ColumnVector.fromStrings(UNSUPPORTED_TIME_NS_STRING);
-         ColumnVector unsupported_ns_timestamps = ColumnVector.timestampSecondsFromLongs(UNSUPPORTED_TIME_NS);
          ColumnVector timestampsAsStrings = ns_timestamps.asStrings("%Y-%m-%d %H:%M:%S.%f")) {
       assertColumnsAreEqual(ns_string_times, timestampsAsStrings);
-      assertThrows(AssertionFailedError.class, () -> assertColumnsAreEqual(unsupported_ns_string_times, unsupported_ns_timestamps));
+    }
+  }
+
+  @Test
+  @Disabled
+  void testCastNegativeTimestampAsString() {
+    final String[] NEG_TIME_S_STRING = {"1965-10-26 14:01:12",
+        "1960-02-06 19:22:11"};
+
+    final long[] NEG_TIME_S = {-131968728L,   //'1965-10-26 14:01:12'
+        -312439069L};   //'1960-02-06 19:22:11'
+
+    final long[] NEG_TIME_NS = {-131968727761702469L};   //'1965-10-26 14:01:12.238297531'
+
+    final String[] NEG_TIME_NS_STRING = {"1965-10-26 14:01:12.238297531"};
+
+    // Seconds
+    try (ColumnVector unsupported_s_string_times = ColumnVector.fromStrings(NEG_TIME_S_STRING);
+         ColumnVector unsupported_s_timestamps = ColumnVector.timestampSecondsFromLongs(NEG_TIME_S)) {
+      assertColumnsAreEqual(unsupported_s_string_times, unsupported_s_timestamps);
+    }
+
+    // Nanoseconds
+    try (ColumnVector unsupported_ns_string_times = ColumnVector.fromStrings(NEG_TIME_NS_STRING);
+         ColumnVector unsupported_ns_timestamps = ColumnVector.timestampSecondsFromLongs(NEG_TIME_NS)) {
+      assertColumnsAreEqual(unsupported_ns_string_times, unsupported_ns_timestamps);
     }
   }
 

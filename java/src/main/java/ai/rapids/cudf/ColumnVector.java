@@ -1900,13 +1900,20 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   /**
    * Cast to Strings.
+   * Negative timestamps are not supported
    * @return A new vector allocated on the GPU.
    */
   public ColumnVector asStrings() {
-    if (type.isTimestamp()) {
-      return asStrings("%Y-%m-%d %H:%M:%S");
+    switch(type) {
+      case TIMESTAMP_SECONDS:
+        return asStrings("%Y-%m-%d %H:%M:%S");
+      case TIMESTAMP_DAYS:
+        return asStrings("%Y-%m-%d");
+      case TIMESTAMP_NANOSECONDS:
+        return asStrings("%Y-%m-%d %H:%M:%S.%f");
+      default:
+        return castTo(DType.STRING);
     }
-    return castTo(DType.STRING);
   }
 
   /**
