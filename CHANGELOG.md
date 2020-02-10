@@ -51,7 +51,7 @@
 - PR #4081 Copy from `Buffer`'s pointer directly to host
 - PR #4101 Redux serialize `Buffer` directly with `__cuda_array_interface__`
 - PR #4098 Remove legacy calls from libcudf strings column code
-- PR #4111 Construct `Buffer`'s to serialize `StringColumn`
+- PR #4111 Use `Buffer`'s to serialize `StringColumn`
 
 ## Bug Fixes
 
