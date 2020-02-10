@@ -38,7 +38,7 @@ using string_index_pair = thrust::pair<const char*,size_type>;
  */
 struct base_tokenator
 {
-    string_view d_delimiter{}; // zero or more delimiter characters
+    string_view const d_delimiter{}; // zero or more delimiter characters
 
     /**
      * @brief Return true if the given character is a delimiter.
@@ -116,11 +116,11 @@ struct base_tokenator
  */
 struct tokenator_fn : base_tokenator
 {
-    column_device_view d_strings;   // strings to tokenize
+    column_device_view const d_strings;   // strings to tokenize
     size_type* d_offsets{};         // offsets into the d_tokens vector for each string
     string_index_pair* d_tokens{};        // token positions in device memory
 
-    tokenator_fn( column_device_view& d_strings, string_view& d_delimiter,
+    tokenator_fn( column_device_view const& d_strings, string_view const& d_delimiter,
                   size_type* d_offsets=nullptr,
                   string_index_pair* d_tokens=nullptr )
     : base_tokenator{d_delimiter},
@@ -166,7 +166,7 @@ using delimiterator = column_device_view::const_iterator<string_view>;
  */
 struct multi_delimiter_tokenizer_fn
 {
-    column_device_view d_strings;    // strings column to tokenize
+    column_device_view const d_strings;    // strings column to tokenize
     delimiterator delimiters_begin;  // first delimiter
     delimiterator delimiters_end;    // last delimiter
     size_type* d_offsets{};          // offsets into the d_tokens output vector
