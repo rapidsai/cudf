@@ -94,7 +94,7 @@ class ColumnBase(Column):
         View the mask as a device array
         """
         result = rmm.device_array_from_ptr(
-            ptr=self.mask_ptr, nelem=self.mask.size, dtype=np.int8,
+            ptr=self.mask_ptr, nelem=self.mask.size, dtype=np.int8
         )
         result.gpu_data._obj = self
         return result
@@ -134,13 +134,6 @@ class ColumnBase(Column):
         if self.nullable:
             n += self.mask.size
         return n
-
-    @staticmethod
-    def from_mem_views(data_mem, mask_mem=None, null_count=None):
-        """Create a Column object from a data device array (or nvstrings
-           object), and an optional mask device array
-        """
-        raise NotImplementedError
 
     @classmethod
     def _concat(cls, objs, dtype=None):
@@ -337,12 +330,6 @@ class ColumnBase(Column):
             return self.mask_array_view
         else:
             raise ValueError("Column has no null mask")
-
-    def copy_data(self):
-        """Copy the column with a new allocation of the data but not the mask,
-        which is shared by the new column.
-        """
-        return self.replace(data=self.base_data.copy())
 
     def copy(self, deep=True):
         """Columns are immutable, so a deep copy produces a copy of the
@@ -544,12 +531,7 @@ class ColumnBase(Column):
 
         Returns a copy with null filled.
         """
-        if not self.nullable:
-            return self
-        out = cudautils.fillna(
-            data=self.data_array_view, mask=self.mask_array_view, value=value
-        )
-        return self.replace(data=Buffer(out), mask=None, null_count=0)
+        raise NotImplementedError
 
     def isnull(self):
         """Identify missing values in a Column.
@@ -570,20 +552,6 @@ class ColumnBase(Column):
         """Identify non-missing values in a Column. Alias for notna.
         """
         return self.notna()
-
-    def _invert(self):
-        """Internal convenience function for inverting masked array
-
-        Returns
-        -------
-        DeviceNDArray
-           logical inverted mask
-        """
-        if self.has_nulls:
-            raise ValueError("Column must have no nulls.")
-        gpu_mask = self.data_array_view
-        cudautils.invert_mask(gpu_mask, gpu_mask)
-        return self.replace(data=Buffer(gpu_mask), mask=None, null_count=0)
 
     def find_first_value(self, value):
         """
@@ -1161,9 +1129,6 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
             data = as_column(arbitrary, nan_as_null=nan_as_null)
         elif isinstance(arbitrary, pa.DictionaryArray):
             codes = as_column(arbitrary.indices)
-            pa_offset = codes.offset
-            pa_size = len(codes)
-            codes.offset = 0
             if isinstance(arbitrary.dictionary, pa.NullArray):
                 categories = as_column([], dtype="object")
             else:
@@ -1173,10 +1138,10 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
             )
             data = categorical.CategoricalColumn(
                 dtype=dtype,
-                mask=codes.mask,
+                mask=codes.base_mask,
                 children=(codes,),
-                size=pa_size,
-                offset=pa_offset,
+                size=codes.size,
+                offset=codes.offset,
             )
         elif isinstance(arbitrary, pa.TimestampArray):
             dtype = np.dtype("M8[{}]".format(arbitrary.type.unit))

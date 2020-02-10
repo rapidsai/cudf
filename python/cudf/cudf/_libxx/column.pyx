@@ -67,8 +67,23 @@ cdef class Column:
     The *dtype* indicates the Column's element type.
     """
     def __init__(self, data, size, dtype, mask=None, offset=0, children=()):
-        self.offset = offset
-        self.size = size
+        if not pd.api.types.is_integer(offset):
+            raise TypeError("Expected an integer for offset, got " +
+                            type(value).__name__)
+
+        if not pd.api.types.is_integer(size):
+            raise TypeError("Expected an integer for size, got " +
+                            type(value).__name__)
+
+        if size > libcudfxx.MAX_COLUMN_SIZE:
+            raise MemoryError(
+                "Cannot create columns of size > {}. "
+                "Consider using dask_cudf to partition your data".format(
+                    libcudfxx.MAX_COLUMN_SIZE_STR)
+            )
+
+        self._offset = int(offset)
+        self._size = int(size)
         self.dtype = dtype
         self.set_base_data(data)
         self.set_base_mask(mask)
@@ -77,32 +92,6 @@ cdef class Column:
     @property
     def size(self):
         return self._size
-
-    @size.setter
-    def size(self, value):
-        if not pd.api.types.is_integer(value):
-            raise TypeError("Expected an integer for size, got " +
-                            type(value).__name__)
-
-        if value > libcudfxx.MAX_COLUMN_SIZE:
-            raise MemoryError(
-                "Cannot create columns of size > {}. "
-                "Consider using dask_cudf to partition your data".format(
-                    libcudfxx.MAX_COLUMN_SIZE_STR)
-            )
-
-        self._null_count = None
-        self._children = None
-        if hasattr(self, "_indices"):
-            self._indices = None
-        if hasattr(self, "_nvcategory"):
-            self._nvcategory = None
-        if hasattr(self, "_nvstrings"):
-            self._nvstrings = None
-        if hasattr(self, "_codes"):
-            self._codes = None
-
-        self._size = int(value)
 
     @property
     def base_data(self):
@@ -192,15 +181,7 @@ cdef class Column:
 
         self._mask = None
         self._null_count = None
-        if hasattr(self, "_indices"):
-            self._indices = None
-        if hasattr(self, "_nvcategory"):
-            self._nvcategory = None
-        if hasattr(self, "_nvstrings"):
-            self._nvstrings = None
-        if hasattr(self, "_codes"):
-            self._codes = None
-
+        self._children = None
         self._base_mask = value
 
     def set_mask(self, value):
@@ -235,47 +216,13 @@ cdef class Column:
     def offset(self):
         return self._offset
 
-    @offset.setter
-    def offset(self, value):
-        if not pd.api.types.is_integer(value):
-            raise TypeError("Expected an integer for offset, got " +
-                            type(value).__name__)
-
-        self._null_count = None
-        self._mask = None
-        self._children = None
-        if hasattr(self, "_indices"):
-            self._indices = None
-        if hasattr(self, "_nvcategory"):
-            self._nvcategory = None
-        if hasattr(self, "_nvstrings"):
-            self._nvstrings = None
-        if hasattr(self, "_codes"):
-            self._codes = None
-
-        if not hasattr(self, "_offset"):
-            offset_diff = value
-        else:
-            offset_diff = value - self._offset
-
-        if hasattr(self, "_size"):
-            if offset_diff > self.size:
-                raise RuntimeError(
-                    "Can't set the offset of a column to larger than the"
-                    " number of elements in the column"
-                )
-            self.size = int(self.size - offset_diff)
-        self._offset = int(value)
-
     @property
     def base_children(self):
         return self._base_children
 
     @property
     def children(self):
-        if self._children is None:
-            self._children = self.base_children
-        return self._children
+        raise NotImplementedError
 
     def set_base_children(self, value):
         if not isinstance(value, tuple):
@@ -290,15 +237,6 @@ cdef class Column:
                 )
 
         self._children = None
-        if hasattr(self, "_indices"):
-            self._indices = None
-        if hasattr(self, "_nvcategory"):
-            self._nvcategory = None
-        if hasattr(self, "_nvstrings"):
-            self._nvstrings = None
-        if hasattr(self, "_codes"):
-            self._codes = None
-
         self._base_children = value
 
     def _mimic_inplace(self, other_col, inplace=False):
@@ -309,8 +247,8 @@ cdef class Column:
         object with the Buffers and attributes from the other column.
         """
         if inplace:
-            self.offset = other_col.offset
-            self.size = other_col.size
+            self._offset = other_col.offset
+            self._size = other_col.size
             self.dtype = other_col.dtype
             self.set_base_data(other_col.base_data)
             self.set_base_mask(other_col.base_mask)

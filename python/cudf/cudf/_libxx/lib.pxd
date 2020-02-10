@@ -130,54 +130,12 @@ cdef extern from "cudf/table/table_view.hpp" namespace "cudf" nogil:
         size_type num_columns()
         size_type num_rows()
 
-        # These are needed to use table_view iterator
-        cppclass iterator:
-            column_view& operator*()
-            iterator operator++()
-            iterator operator--()
-            iterator operator+(size_t)
-            iterator operator-(size_t)
-            ptrdiff_t operator-(iterator)
-            bint operator==(iterator)
-            bint operator!=(iterator)
-            bint operator<(iterator)
-            bint operator>(iterator)
-            bint operator<=(iterator)
-            bint operator>=(iterator)
-        cppclass const_iterator(iterator):
-            pass
-        iterator begin()
-        const_iterator const_begin "begin"()
-        iterator end()
-        const_iterator const_end "end"()
-
     cdef cppclass mutable_table_view:
         mutable_table_view()
         mutable_table_view(const vector[mutable_column_view])
         mutable_column_view column(size_type column_index)
         size_type num_columns()
         size_type num_rows()
-
-        # These are needed to use mutable_table_view iterator
-        cppclass iterator:
-            mutable_column_view& operator*()
-            iterator operator++()
-            iterator operator--()
-            iterator operator+(size_t)
-            iterator operator-(size_t)
-            ptrdiff_t operator-(iterator)
-            bint operator==(iterator)
-            bint operator!=(iterator)
-            bint operator<(iterator)
-            bint operator>(iterator)
-            bint operator<=(iterator)
-            bint operator>=(iterator)
-        cppclass const_iterator(iterator):
-            pass
-        iterator begin()
-        const_iterator const_begin "begin"()
-        iterator end()
-        const_iterator const_end "end"()
 
 cdef extern from "cudf/table/table.hpp" namespace "cudf::experimental" nogil:
     cdef cppclass table:

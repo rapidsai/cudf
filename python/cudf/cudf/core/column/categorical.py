@@ -289,12 +289,31 @@ class CategoricalColumn(column.ColumnBase):
             data=None, dtype=dtype, mask=mask, children=(data,)
         )
 
+    def set_base_data(self, value):
+        raise RuntimeError(
+            "CategoricalColumns do not use data attribute of Column, use "
+            "`set_base_children` instead"
+        )
+
+    def set_base_mask(self, value):
+        super().set_base_mask(value)
+        self._codes = None
+
+    def set_base_children(self, value):
+        super().set_base_children(value)
+        self._codes = None
+
     @property
     def children(self):
         if self._children is None:
-            codes_column = self.base_children[0].copy(deep=False)
-            codes_column.offset = self.offset
-            codes_column.size = self.size
+            codes_column = self.base_children[0]
+            codes_column = column.build_column(
+                data=codes_column.base_data,
+                dtype=codes_column.dtype,
+                mask=codes_column.mask,
+                size=codes_column.size,
+                offset=codes_column.offset,
+            )
             self._children = (codes_column,)
         return self._children
 

@@ -473,6 +473,25 @@ class StringColumn(column.ColumnBase):
         self._nvcategory = None
         self._indices = None
 
+    def set_base_data(self, value):
+        raise RuntimeError(
+            "StringColumns do not use data attribute of Column, use "
+            "`set_base_children` instead"
+        )
+
+    def set_base_mask(self, value):
+        super().set_base_mask(value)
+        self._indices = None
+        self._nvcategory = None
+        self._nvstrings = None
+
+    def set_base_children(self, value):
+        # TODO: Implement dtype validation of the children here somehow
+        super().set_base_children(value)
+        self._indices = None
+        self._nvcategory = None
+        self._nvstrings = None
+
     @property
     def children(self):
         if self._children is None:
@@ -481,23 +500,34 @@ class StringColumn(column.ColumnBase):
             else:
                 # First get the base columns for chars and offsets
                 chars_column = self.base_children[1].copy(deep=False)
-                offsets_column = self.base_children[0].copy(deep=False)
+                offsets_column = self.base_children[0]
 
                 # Shift offsets column by the parent offset.
-                offsets_column.offset = self.offset
-                offsets_column.size = self.size + 1
+                offsets_column = column.build_column(
+                    data=offsets_column.base_data,
+                    dtype=offsets_column.dtype,
+                    mask=offsets_column.base_mask,
+                    size=self.size + 1,
+                    offset=self.offset,
+                )
+
+                # Now run a subtraction binary op to shift all of the offsets
+                # by the respective number of characters relative to the
+                # parent offset
+                chars_offset = offsets_column[0]
+                offsets_column = offsets_column.binary_operator(
+                    "sub", offsets_column.dtype.type(chars_offset)
+                )
 
                 # Shift the chars offset by the new first element of the
                 # offsets column
-                chars_offset = offsets_column[0]
                 chars_size = offsets_column[self.size]
-                chars_column.offset = chars_offset
-                chars_column.size = chars_size
-
-                # Now run a subtraction binary op to shift all of the offsets
-                # by the parent offset
-                offsets_column = offsets_column.binary_operator(
-                    "sub", offsets_column.dtype.type(chars_offset)
+                chars_column = column.build_column(
+                    data=chars_column.base_data,
+                    dtype=chars_column.dtype,
+                    mask=chars_column.base_mask,
+                    size=chars_size,
+                    offset=chars_offset,
                 )
 
                 self._children = (offsets_column, chars_column)
