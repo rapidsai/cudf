@@ -80,6 +80,7 @@
 - PR #4086 ORC reader: fix potentially incorrect timestamp decoding in the last rowgroup
 - PR #4089 Fix dask groupby mutliindex test case issues in join
 - PR #4076 All null string entries should have null data buffer
+- PR #4115 Serialize an empty column table with non zero rows
 
 
 # cuDF 0.12.0 (04 Feb 2020)
