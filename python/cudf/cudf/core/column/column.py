@@ -87,7 +87,7 @@ class ColumnBase(Column):
         """
         View the mask as a CuPy ndarray
         """
-        result = cp.asarray(self.mask)
+        result = cp.asarray(self.mask).view(np.int8)
         return result
 
     def __len__(self):
@@ -98,9 +98,8 @@ class ColumnBase(Column):
         sr = pd.Series(cp.asnumpy(arr))
 
         if self.nullable:
-            mask_bits = cp.asnumpy(self.mask_array_view)
             mask_bytes = (
-                cudautils.expand_mask_bits(len(self), mask_bits)
+                cudautils.expand_mask_bits(len(self), self.mask_array_view)
                 .copy_to_host()
                 .astype(bool)
             )
@@ -850,24 +849,26 @@ class ColumnBase(Column):
         frames = []
         header["type"] = pickle.dumps(type(self))
         header["dtype"] = self.dtype.str
-        data_frames = [self.data_array_view]
+
+        data_header, data_frames = self.data.serialize()
+        header["data"] = data_header
         frames.extend(data_frames)
 
         if self.nullable:
-            mask_frames = [self.mask_array_view]
-        else:
-            mask_frames = []
-        frames.extend(mask_frames)
+            mask_header, mask_frames = self.mask.serialize()
+            header["mask"] = mask_header
+            frames.extend(mask_frames)
+
         header["frame_count"] = len(frames)
         return header, frames
 
     @classmethod
     def deserialize(cls, header, frames):
         dtype = header["dtype"]
-        data = Buffer(frames[0])
+        data = Buffer.deserialize(header["data"], [frames[0]])
         mask = None
-        if header["frame_count"] > 1:
-            mask = Buffer(frames[1])
+        if "mask" in header:
+            mask = Buffer.deserialize(header["mask"], [frames[1]])
         return build_column(data=data, dtype=dtype, mask=mask)
 
 
