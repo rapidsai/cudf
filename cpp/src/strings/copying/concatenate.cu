@@ -38,12 +38,14 @@ std::unique_ptr<column> concatenate( std::vector<strings_column_view> const& str
     // calculate the size of the output column
     size_t strings_count = thrust::transform_reduce( strings_columns.begin(), strings_columns.end(),
         [] (auto scv) { return scv.size(); }, static_cast<size_t>(0), thrust::plus<size_t>());
-    CUDF_EXPECTS( strings_count < std::numeric_limits<size_type>::max(), "total number of strings is too large for cudf column" );
+    CUDF_EXPECTS( strings_count < std::numeric_limits<size_type>::max(), 
+        "total number of strings is too large for cudf column" );
     if( strings_count == 0 )
         return make_empty_strings_column(mr,stream);
 
     // build vector of column_device_views
-    std::vector<std::unique_ptr<column_device_view,std::function<void(column_device_view*)> > > device_cols(strings_columns.size());
+    std::vector<std::unique_ptr<column_device_view,std::function<void(column_device_view*)> > > 
+        device_cols(strings_columns.size());
     thrust::host_vector<column_device_view> h_device_views;
     for( auto&& scv : strings_columns )
     {
