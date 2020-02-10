@@ -660,7 +660,6 @@ class StringColumn(column.ColumnBase):
         if self.null_count > 0:
             frames.append(self.mask)
 
-        header["nvstrings"] = len(self.nvstrings)
         header["subheaders"] = sub_headers
         header["frame_count"] = len(frames)
         return header, frames
