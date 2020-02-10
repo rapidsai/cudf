@@ -174,7 +174,8 @@ class DataFrame(Frame):
         if isinstance(data, ColumnAccessor):
             self._data = data
             if index is None:
-                index = as_index(range(len(data.columns[0])))
+
+                index = as_index(range(self._data.nrows))
             self._index = as_index(index)
             return None
 

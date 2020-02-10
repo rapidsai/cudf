@@ -297,24 +297,13 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         # Iloc Step 1:
         # Gather the columns specified by the second tuple arg
         columns = self._get_column_selection(arg[1])
-        if isinstance(self._df.columns, MultiIndex):
-            columns_df = self._df.columns._get_column_major(self._df, arg[1])
-            if (
-                len(columns_df) == 0
-                and len(columns_df.columns) == 0
-                and not isinstance(arg[0], slice)
-            ):
-                result = Series(column_empty(0, dtype="float64"), name=arg[0])
-                result._index = columns_df.columns.copy(deep=False)
-                return result
+        if isinstance(arg[0], slice):
+            columns_df = DataFrame()
+            for i, col in enumerate(columns):
+                columns_df.insert(i, col, self._df[col])
+            columns_df._index = self._df._index
         else:
-            if isinstance(arg[0], slice):
-                columns_df = DataFrame()
-                for i, col in enumerate(columns):
-                    columns_df.insert(i, col, self._df[col])
-                columns_df._index = self._df._index
-            else:
-                columns_df = self._df._columns_view(columns)
+            columns_df = self._df._columns_view(columns)
 
         # Iloc Step 2:
         # Gather the rows specified by the first tuple arg
@@ -394,13 +383,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         return self._df[col].iloc[arg[0]]
 
     def _get_column_selection(self, arg):
-        cols = self._df.columns
-        if isinstance(cols, cudf.MultiIndex):
-            return cols._get_column_major(self._df, arg)
-        if is_scalar(arg):
-            return [cols[arg]]
-        else:
-            return cols[arg]
+        return cudf.DataFrame(self._df._data.get_by_index(arg))
 
 
 def _normalize_dtypes(df):

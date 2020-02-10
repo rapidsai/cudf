@@ -72,20 +72,26 @@ class ColumnAccessor(MutableMapping):
                 level_names=self.level_names[len(key) :],
             )
 
-    def get_by_label_range(self, key):
+    def get_by_label_slice(self, key):
         return self.__class__(
             {k: self._data[k] for k in self._data if _compare_keys(k, key)},
             multiindex=self.multiindex,
             level_names=self.level_names,
         )
 
-    def get_by_index(self, key):
-        return next(itertools.islice(self.values(), key, key + 1))
-
-    def get_by_index_range(self, start=0, end=None):
-        if end is None:
-            end = len(self._data)
-        return list(itertools.islice(self.values(), start, end))
+    def get_by_index(self, index):
+        if isinstance(index, slice):
+            start, stop, step = index.indices(len(self._data))
+            keys = itertools.islice(self.keys(), start, stop)
+        elif pd.api.types.is_integer(index):
+            keys = itertools.islice(self.keys(), index, index + 1)
+        else:
+            keys = (self.names[i] for i in index)
+        return self.__class__(
+            {k: self._data[k] for k in keys},
+            multiindex=self.multiindex,
+            level_names=self.level_names,
+        )
 
     def set_by_label(self, key, value):
         if self.multiindex:
@@ -130,6 +136,13 @@ class ColumnAccessor(MutableMapping):
         result = pd.Index(self.names, tupleize_cols=self.multiindex)
         result.names = self.level_names
         return result
+
+    @property
+    def nrows(self):
+        if len(self._data) == 0:
+            return 0
+        else:
+            return len(next(iter(self.values())))
 
 
 def _flatten(d):
