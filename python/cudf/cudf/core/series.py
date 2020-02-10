@@ -177,7 +177,7 @@ class Series(Frame):
         elif is_categorical_dtype(self.dtype):
             return self._column.to_pandas().values
         else:
-            return self._column.data_array_view.copy_to_host()
+            return cp.asnumpy(self._column.data_array_view)
 
     @classmethod
     def from_arrow(cls, s):

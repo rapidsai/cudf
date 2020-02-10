@@ -2,6 +2,7 @@
 
 from __future__ import division, print_function
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -180,8 +181,8 @@ class NumericalColumn(column.ColumnBase):
     def to_arrow(self):
         mask = None
         if self.nullable:
-            mask = pa.py_buffer(self.mask_array_view.copy_to_host())
-        data = pa.py_buffer(self.data_array_view.copy_to_host())
+            mask = pa.py_buffer(cp.asnumpy(self.mask_array_view))
+        data = pa.py_buffer(cp.asnumpy(self.data_array_view))
         pa_dtype = np_to_pa_dtype(self.dtype)
         out = pa.Array.from_buffers(
             type=pa_dtype,
