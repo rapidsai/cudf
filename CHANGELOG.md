@@ -30,7 +30,8 @@
 - PR #4008 Eliminate extra copy in column constructor
 - PR #4013 Add cython definition for io readers cudf/io/io_types.hpp
 - PR #4014 ORC/Parquet: add count parameter to stripe/rowgroup-based reader API
-- PR #3880 Add aggregation infrastructure support for reduction
+- PR #3880 Add aggregation infrastructure support for cudf::reduce
+- PR #4059 Add aggregation infrastructure support for cudf::scan 
 - PR #4021 Change quantiles signature for clarity.
 - PR #4029 Port stream_compaction.pyx to use libcudf++ APIs
 - PR #4031 Docs build scripts and instructions update
@@ -41,6 +42,7 @@
 - PR #4072 Allow round_robin_partition to single partition
 - PR #4064 Add cudaGetDeviceCount to JNI layer
 - PR #3716 Update cudf.to_parquet to use new GPU accelerated Parquet writer
+- PR #4071 Add Java bindings for round robin partition
 - PR #4079 Simply use `mask.size` to create the array view
 - PR #4092 Keep mask on GPU for bit unpacking
 - PR #4081 Copy from `Buffer`'s pointer directly to host
