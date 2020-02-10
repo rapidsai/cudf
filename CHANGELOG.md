@@ -80,6 +80,7 @@
 - PR #4084 Update Java for removal of CATEGORY type
 - PR #4086 ORC reader: fix potentially incorrect timestamp decoding in the last rowgroup
 - PR #4089 Fix dask groupby mutliindex test case issues in join
+- PR #4097 Fix strings concatenate logic with column offsets
 - PR #4076 All null string entries should have null data buffer
 - PR #4109 Use rmm::device_vector instead of thrust::device_vector
 
