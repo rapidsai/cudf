@@ -10,10 +10,19 @@ get_parallel_type.register(cudf.Series, lambda _: Series)
 get_parallel_type.register(cudf.Index, lambda _: Index)
 
 
-@meta_nonempty.register((cudf.DataFrame, cudf.Series, cudf.Index))
+@meta_nonempty.register((cudf.DataFrame, cudf.Series))
 def meta_nonempty_cudf(x, index=None):
-    y = meta_nonempty(x.to_pandas())  # TODO: add iloc[:5]
-    return cudf.from_pandas(y)
+    index_dtype = x.index.dtype
+    y = cudf.from_pandas(meta_nonempty(x.to_pandas()))
+    y.index = y.index.astype(index_dtype)
+    return y
+
+
+@meta_nonempty.register(cudf.Index)
+def meta_nonempty_cudf_index(x, index=None):
+    dtype = x.dtype
+    y = cudf.from_pandas(meta_nonempty(x.to_pandas()))
+    return y.astype(dtype)
 
 
 @make_meta.register((cudf.Series, cudf.DataFrame))

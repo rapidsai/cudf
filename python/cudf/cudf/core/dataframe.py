@@ -1580,7 +1580,7 @@ class DataFrame(Frame):
             else:
                 colname = columns[positions[idx]]
             if len(self) == 0:
-                result[colname] = as_column([], dtype=positions.dtype)
+                result[colname] = as_column([], dtype=self.dtypes[idx])
             else:
                 result[colname] = column_values[positions[idx]]
 
