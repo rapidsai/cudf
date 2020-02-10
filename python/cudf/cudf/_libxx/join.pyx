@@ -86,5 +86,5 @@ cpdef join(lhs, rhs, left_on, right_on, how, method):
             ))
     py_result = Table.from_unique_ptr(
         move(c_result),
-        column_names = result_col_names)
+        column_names=result_col_names)
     return py_result
