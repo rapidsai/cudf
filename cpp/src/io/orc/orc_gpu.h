@@ -371,8 +371,8 @@ cudaError_t BuildStripeDictionaries(StripeDictionary *stripes_dev, StripeDiction
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
-cudaError_t OrcInitStatisticsGroups(statistics_group *groups, const stats_column_desc *cols, uint32_t num_columns,
-                                    uint32_t num_rowgroups, uint32_t row_index_stride, cudaStream_t stream = (cudaStream_t)0);
+cudaError_t orc_init_statistics_groups(statistics_group *groups, const stats_column_desc *cols, uint32_t num_columns,
+                                       uint32_t num_rowgroups, uint32_t row_index_stride, cudaStream_t stream = (cudaStream_t)0);
 
 /**
  * @brief Launches kernels to return statistics buffer offsets and sizes
@@ -384,8 +384,8 @@ cudaError_t OrcInitStatisticsGroups(statistics_group *groups, const stats_column
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
-cudaError_t OrcInitStatisticsBufferSize(statistics_merge_group *groups, const statistics_chunk *chunks,
-                                        uint32_t statistics_count, cudaStream_t stream = (cudaStream_t)0);
+cudaError_t orc_init_statistics_buffersize(statistics_merge_group *groups, const statistics_chunk *chunks,
+                                           uint32_t statistics_count, cudaStream_t stream = (cudaStream_t)0);
 
 /**
  * @brief Launches kernel to encode statistics in ORC protobuf format
@@ -397,8 +397,8 @@ cudaError_t OrcInitStatisticsBufferSize(statistics_merge_group *groups, const st
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
-cudaError_t OrcEncodeStatistics(uint8_t *blob_bfr, statistics_merge_group *groups, const statistics_chunk *chunks,
-                                uint32_t statistics_count, cudaStream_t stream = (cudaStream_t)0);
+cudaError_t orc_encode_statistics(uint8_t *blob_bfr, statistics_merge_group *groups, const statistics_chunk *chunks,
+                                  uint32_t statistics_count, cudaStream_t stream = (cudaStream_t)0);
 
 
 } // namespace gpu

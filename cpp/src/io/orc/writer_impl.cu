@@ -746,8 +746,8 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
                            stat_desc.memory_size(), cudaMemcpyHostToDevice, stream));
   CUDA_TRY(cudaMemcpyAsync(stat_merge.device_ptr(), stat_merge.host_ptr(),
                            stat_merge.memory_size(), cudaMemcpyHostToDevice, stream));
-  CUDA_TRY(gpu::OrcInitStatisticsGroups(stat_groups.data().get(), stat_desc.device_ptr(),
-                                        num_columns, num_rowgroups, row_index_stride_, stream));
+  CUDA_TRY(gpu::orc_init_statistics_groups(stat_groups.data().get(), stat_desc.device_ptr(),
+                                           num_columns, num_rowgroups, row_index_stride_, stream));
   CUDA_TRY(GatherColumnStatistics(stat_chunks.data().get(), stat_groups.data().get(),
                                   num_chunks, stream));
   CUDA_TRY(MergeColumnStatistics(stat_chunks.data().get() + num_chunks, stat_chunks.data().get(),
@@ -756,15 +756,15 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
                                  stat_chunks.data().get() + num_chunks,
                                  stat_merge.device_ptr(stripe_list.size() * num_columns),
                                  num_columns, stream));
-  CUDA_TRY(gpu::OrcInitStatisticsBufferSize(stat_merge.device_ptr(), stat_chunks.data().get() + num_chunks,
-                                            num_stat_blobs, stream));
+  CUDA_TRY(gpu::orc_init_statistics_buffersize(stat_merge.device_ptr(), stat_chunks.data().get() + num_chunks,
+                                               num_stat_blobs, stream));
   CUDA_TRY(cudaMemcpyAsync(stat_merge.host_ptr(), stat_merge.device_ptr(),
                            stat_merge.memory_size(), cudaMemcpyDeviceToHost, stream));
   CUDA_TRY(cudaStreamSynchronize(stream));
 
   hostdevice_vector<uint8_t> blobs(stat_merge[num_stat_blobs - 1].start_chunk + stat_merge[num_stat_blobs - 1].num_chunks);
-  CUDA_TRY(gpu::OrcEncodeStatistics(blobs.device_ptr(), stat_merge.device_ptr(),
-                                    stat_chunks.data().get() + num_chunks, num_stat_blobs, stream));
+  CUDA_TRY(gpu::orc_encode_statistics(blobs.device_ptr(), stat_merge.device_ptr(),
+                                      stat_chunks.data().get() + num_chunks, num_stat_blobs, stream));
   CUDA_TRY(cudaMemcpyAsync(stat_merge.host_ptr(), stat_merge.device_ptr(),
                            stat_merge.memory_size(), cudaMemcpyDeviceToHost, stream));
   CUDA_TRY(cudaMemcpyAsync(blobs.host_ptr(), blobs.device_ptr(),

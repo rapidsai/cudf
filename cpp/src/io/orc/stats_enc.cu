@@ -34,8 +34,8 @@ namespace gpu {
  **/
 // blockDim {128,1,1}
 __global__ void __launch_bounds__(128)
-gpuInitStatisticsGroups(statistics_group *groups, const stats_column_desc *cols,
-                        uint32_t num_columns, uint32_t num_rowgroups, uint32_t row_index_stride) {
+gpu_init_statistics_groups(statistics_group *groups, const stats_column_desc *cols,
+                           uint32_t num_columns, uint32_t num_rowgroups, uint32_t row_index_stride) {
   __shared__ __align__(4) volatile statistics_group grp_g[4];
   uint32_t col_id = blockIdx.y;
   uint32_t ck_id = (blockIdx.x * 4) + (threadIdx.x >> 5);
@@ -66,7 +66,7 @@ gpuInitStatisticsGroups(statistics_group *groups, const stats_column_desc *cols,
  **/
 // blockDim {1024,1,1}
 __global__ void __launch_bounds__(1024, 1)
-gpuInitStatisticsBufferSize(statistics_merge_group *groups, const statistics_chunk *chunks, uint32_t statistics_count) {
+gpu_init_statistics_buffersize(statistics_merge_group *groups, const statistics_chunk *chunks, uint32_t statistics_count) {
   __shared__ volatile uint32_t scratch_red[32];
   __shared__ volatile uint32_t stats_size;
   uint32_t t = threadIdx.x;
@@ -200,8 +200,8 @@ __device__ inline uint8_t *pb_put_fixed64(uint8_t *p, uint32_t id, const void *r
  **/
 // blockDim {128,1,1}
 __global__ void __launch_bounds__(128)
-gpuEncodeStatistics(uint8_t *blob_bfr, statistics_merge_group *groups, const statistics_chunk *chunks,
-                    uint32_t statistics_count) {
+gpu_encode_statistics(uint8_t *blob_bfr, statistics_merge_group *groups, const statistics_chunk *chunks,
+                      uint32_t statistics_count) {
   __shared__ __align__(8) stats_state_s state_g[4];
   uint32_t t = threadIdx.x & 0x1f;
   uint32_t idx = blockIdx.x * 4 + (threadIdx.x >> 5);
@@ -328,11 +328,11 @@ gpuEncodeStatistics(uint8_t *blob_bfr, statistics_merge_group *groups, const sta
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
-cudaError_t OrcInitStatisticsGroups(statistics_group *groups, const stats_column_desc *cols, uint32_t num_columns,
-                                    uint32_t num_rowgroups, uint32_t row_index_stride, cudaStream_t stream)
+cudaError_t orc_init_statistics_groups(statistics_group *groups, const stats_column_desc *cols, uint32_t num_columns,
+                                       uint32_t num_rowgroups, uint32_t row_index_stride, cudaStream_t stream)
 {
     dim3 dim_groups((num_rowgroups+3) >> 2, num_columns);
-    gpuInitStatisticsGroups <<< dim_groups, 128, 0, stream >>>(groups, cols, num_columns, num_rowgroups, row_index_stride);
+    gpu_init_statistics_groups <<< dim_groups, 128, 0, stream >>>(groups, cols, num_columns, num_rowgroups, row_index_stride);
 
     return cudaSuccess;
 }
@@ -348,10 +348,10 @@ cudaError_t OrcInitStatisticsGroups(statistics_group *groups, const stats_column
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
-cudaError_t OrcInitStatisticsBufferSize(statistics_merge_group *groups, const statistics_chunk *chunks,
-                                        uint32_t statistics_count, cudaStream_t stream)
+cudaError_t orc_init_statistics_buffersize(statistics_merge_group *groups, const statistics_chunk *chunks,
+                                           uint32_t statistics_count, cudaStream_t stream)
 {
-    gpuInitStatisticsBufferSize <<< 1, 1024, 0, stream >>>(groups, chunks, statistics_count);
+    gpu_init_statistics_buffersize <<< 1, 1024, 0, stream >>>(groups, chunks, statistics_count);
     return cudaSuccess;
 }
 
@@ -366,10 +366,10 @@ cudaError_t OrcInitStatisticsBufferSize(statistics_merge_group *groups, const st
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
-cudaError_t OrcEncodeStatistics(uint8_t *blob_bfr, statistics_merge_group *groups, const statistics_chunk *chunks,
-                                uint32_t statistics_count, cudaStream_t stream)
+cudaError_t orc_encode_statistics(uint8_t *blob_bfr, statistics_merge_group *groups, const statistics_chunk *chunks,
+                                  uint32_t statistics_count, cudaStream_t stream)
 {
-    gpuEncodeStatistics <<< (statistics_count + 3) >> 2, 128, 0, stream >>>(blob_bfr, groups, chunks, statistics_count);
+    gpu_encode_statistics <<< (statistics_count + 3) >> 2, 128, 0, stream >>>(blob_bfr, groups, chunks, statistics_count);
     return cudaSuccess;
 }
 
