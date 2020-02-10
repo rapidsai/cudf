@@ -1,7 +1,10 @@
+import numpy as np
+
 from dask.dataframe.core import get_parallel_type, make_meta, meta_nonempty
 from dask.dataframe.methods import concat_dispatch
 
 import cudf
+from cudf.utils.dtypes import is_categorical_dtype, is_string_dtype
 
 from .core import DataFrame, Index, Series
 
@@ -10,32 +13,64 @@ get_parallel_type.register(cudf.Series, lambda _: Series)
 get_parallel_type.register(cudf.Index, lambda _: Index)
 
 
-def _meta_nonempty_simple(x):
-    # TODO: Make sure multiindex types are preserved
-    #       during pandas round-trip...
-    y = meta_nonempty(x.to_pandas())
-    return cudf.from_pandas(y)
-
-
-@meta_nonempty.register((cudf.DataFrame, cudf.Series))
-def meta_nonempty_cudf(x, index=None):
-    if isinstance(x.index, cudf.MultiIndex):
-        return _meta_nonempty_simple(x)
-    else:
-        index_dtype = x.index.dtype
-        y = cudf.from_pandas(meta_nonempty(x.to_pandas()))
-        y.index = y.index.astype(index_dtype)
-        return y
-
-
 @meta_nonempty.register(cudf.Index)
-def meta_nonempty_cudf_index(x, index=None):
-    if isinstance(x, cudf.MultiIndex):
-        return _meta_nonempty_simple(x)
+def _nonempty_index(idx):
+    if isinstance(idx, cudf.core.index.RangeIndex):
+        return cudf.core.index.RangeIndex(2, name=idx.name)
+    elif isinstance(idx, cudf.core.index.DatetimeIndex):
+        # Use pandas for datetime indices (for now)
+        return cudf.from_pandas(meta_nonempty(idx.to_pandas()))
+    elif isinstance(idx, cudf.core.index.StringIndex):
+        return cudf.core.index.StringIndex(["cat", "dog"])
+    elif isinstance(idx, cudf.core.index.CategoricalIndex):
+        # Use pandas for categorical indices (for now)
+        return cudf.from_pandas(meta_nonempty(idx.to_pandas()))
+    elif isinstance(idx, cudf.core.index.GenericIndex):
+        return cudf.core.index.GenericIndex(
+            np.arange(2, dtype=idx.dtype), name=idx.name
+        )
+    elif isinstance(idx, cudf.core.MultiIndex):
+        levels = [meta_nonempty(l) for l in idx.levels]
+        codes = [[0, 0] for i in idx.levels]
+        return cudf.core.MultiIndex(
+            levels=levels, codes=codes, names=idx.names
+        )
+
+    raise TypeError(
+        "Don't know how to handle index of type {0}".format(type(idx))
+    )
+
+
+@meta_nonempty.register(cudf.Series)
+def _nonempty_series(s, idx=None):
+    if idx is None:
+        idx = _nonempty_index(s.index)
+    dtype = s.dtype
+    if is_categorical_dtype(dtype):
+        # Use pandas for categories (for now)
+        data = cudf.from_pandas(meta_nonempty(s.to_pandas()))._column
+    elif is_string_dtype(dtype):
+        data = ["cat", "dog"]
     else:
-        dtype = x.dtype
-        y = cudf.from_pandas(meta_nonempty(x.to_pandas()))
-        return y.astype(dtype)
+        data = np.arange(start=0, stop=2, dtype=dtype)
+
+    return cudf.Series(data, name=s.name, index=idx)
+
+
+@meta_nonempty.register(cudf.DataFrame)
+def meta_nonempty_cudf(x):
+    idx = meta_nonempty(x.index)
+    dt_s_dict = dict()
+    data = dict()
+    for i, c in enumerate(x.columns):
+        series = x[c]
+        dt = str(series.dtype)
+        if dt not in dt_s_dict:
+            dt_s_dict[dt] = _nonempty_series(series, idx=idx)
+        data[i] = dt_s_dict[dt]
+    res = cudf.DataFrame(data, index=idx, columns=np.arange(len(x.columns)))
+    res.columns = x.columns
+    return res
 
 
 @make_meta.register((cudf.Series, cudf.DataFrame))
