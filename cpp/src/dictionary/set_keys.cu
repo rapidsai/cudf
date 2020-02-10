@@ -20,6 +20,7 @@
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/detail/search.hpp>
 #include <cudf/detail/valid_if.cuh>
+#include <cudf/stream_compaction.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/binary_search.h>
@@ -33,6 +34,12 @@ namespace detail
 namespace
 {
 
+/**
+ * @brief Type-dispatch functor for remapping the old indices to new values based on the new key-set.
+ *
+ * The dispatch is based on the key type.
+ * The output column is the new indices column for the new dictionary column.
+ */
 struct dispatch_compute_indices
 {
     template<typename Element>
@@ -71,10 +78,7 @@ struct dispatch_compute_indices
 
 } // namespace
 
-/**
- * @brief Create a new dictionary by applying the given keys.
- *
- */
+//
 std::unique_ptr<column> set_keys( dictionary_column_view const& dictionary_column,
                                   column_view const& new_keys,
                                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
@@ -84,8 +88,13 @@ std::unique_ptr<column> set_keys( dictionary_column_view const& dictionary_colum
     auto keys = dictionary_column.keys();
     CUDF_EXPECTS( keys.type()==new_keys.type(), "keys types must match");
 
-    // copy the keys
-    auto keys_column = std::make_unique<column>(new_keys,stream,mr);
+    // copy the keys -- use drop_duplicates to make sure they are sorted and unique
+    auto table_keys = experimental::detail::drop_duplicates( table_view{{keys_column}},
+                        std::vector<size_type>{0},
+                        experimental::duplicate_keep_option::KEEP_FIRST,
+                        true, mr, stream )->release();
+    std::unique_ptr<column> keys_column(std::move(table_keys.front()));
+
     // compute the new indices
     auto indices_column = experimental::type_dispatcher( new_keys.type(), dispatch_compute_indices{},
         dictionary_column, new_keys, mr, stream );
