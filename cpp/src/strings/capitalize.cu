@@ -146,14 +146,47 @@ namespace { // anonym.
   };
          
 }//anonym.
+
+std::unique_ptr<column> capitalize( strings_column_view const& strings,
+                                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                    cudaStream_t stream = 0)
+{
+  
+  //TODO:
+  //
+  auto fctr = [] __device__ (char* d_buffer,
+                             detail::character_cases_table_type const* d_case_table,
+                             detail::character_flags_table_type case_flag,
+                             uint32_t code_point,
+                             detail::character_flags_table_type flag){
+    //TODO:
+    //....
+  };//nothing for now...
+
+  auto strings_column = column_device_view::create(strings.parent(),stream);
+  auto d_column = *strings_column;
+  character_flags_table_type case_flag = IS_LOWER(0xFF);
+  auto d_flags = get_character_flags_table();
+  auto d_case_table = get_character_cases_table();
+  int32_t const* d_offsets{nullptr}; // <- for now; TODO
+  char* d_chars{nullptr};            // <- for now; TODO
+  
+  detail::case_manip<decltype(fctr), pass_step::ExecuteOp> cmanip{d_column,
+      case_flag,
+      d_flags,
+      d_case_table,
+      d_offsets,
+      d_chars};
+  
+  return nullptr;//for now
+}
+
 }//namespace detail
 
 std::unique_ptr<column> capitalize( strings_column_view const& strings,
                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
-{
-  //TODO:
-  //
-  return nullptr;//for now
+{  
+  return detail::capitalize(strings, mr);
 }
 
 std::unique_ptr<column> title( strings_column_view const& strings,
