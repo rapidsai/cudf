@@ -7,6 +7,10 @@ from cudf._libxx.stream_compaction import (
     drop_nulls,
     unique_count,
 )
+from cudf._libxx.reshape import (
+    interleave_columns, 
+    tile
+)
 from cudf._libxx.table import Table
 
 MAX_COLUMN_SIZE = np.iinfo(np.int32).max
