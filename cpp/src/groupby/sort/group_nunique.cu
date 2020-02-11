@@ -50,7 +50,7 @@ std::unique_ptr<column> group_nunique(
   }
 
   auto values_view = column_device_view::create(values);
-  if (values.nullable()) {
+  if (values.has_nulls()) {
 
     auto comp = element_equality_comparator<true>{*values_view, *values_view};
     auto is_unique_iterator = thrust::make_transform_iterator(
