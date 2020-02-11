@@ -77,7 +77,7 @@ std::unique_ptr<cudf::column> tokenize_fn( cudf::size_type strings_count, Tokeni
     thrust::for_each_n(execpol->on(stream),
         thrust::make_counting_iterator<cudf::size_type>(0), strings_count, tokenizer );
     // create the strings column using the tokens pointers
-    return make_strings_column(tokens,stream,mr);
+    return cudf::make_strings_column(tokens,stream,mr);
 }
 
 } // namespace
