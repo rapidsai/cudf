@@ -5,7 +5,9 @@ from libcpp.vector cimport vector
 cimport cudf._libxx.includes.merge as cpp_merge
 
 
-def merge_sorted(tables, keys=None, ascending=True, na_position="last"):
+def merge_sorted(
+    tables, keys=None, index=False, ascending=True, na_position="last"
+):
     cdef vector[size_type] c_column_keys
     cdef vector[table_view] c_input_tables
     cdef vector[order] c_column_order
@@ -31,7 +33,7 @@ def merge_sorted(tables, keys=None, ascending=True, na_position="last"):
         0 if source_table._index is None
         else source_table._index._num_columns
     )
-    if keys is not None:
+    if not index and keys is not None:
         for name in keys:
             c_column_keys.push_back(
                 num_index_columns + source_table._column_names.index(name)
@@ -39,9 +41,13 @@ def merge_sorted(tables, keys=None, ascending=True, na_position="last"):
             c_column_order.push_back(column_order)
             c_null_precedence.push_back(null_precedence)
     else:
-        for i in range(
-            num_index_columns, num_index_columns + source_table._num_columns
-        ):
+        if index:
+            start=0
+            stop=num_index_columns
+        else:
+            start=num_index_columns
+            stop=num_index_columns + source_table._num_columns
+        for i in range(start, stop):
             c_column_keys.push_back(i)
             c_column_order.push_back(column_order)
             c_null_precedence.push_back(null_precedence)

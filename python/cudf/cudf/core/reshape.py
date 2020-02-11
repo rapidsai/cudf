@@ -369,16 +369,22 @@ def get_dummies(
         return concat(df_list, axis=1).drop(labels=columns)
 
 
-def merge_sorted(objs, keys=None, ascending=True, na_position="last"):
+def merge_sorted(
+    objs, keys=None, index=False, ascending=True, na_position="last"
+):
     """Merge a list of sorted DataFrame or Series objects.
 
-    Note: Dataframes must be pre-sorted.
+    Dataframes/Series in objs list MUST be pre-sorted by columns
+    listed in `keys`, or by the index (if `index=True`).
 
     Parameters
     ----------
     objs : list of DataFrame, Series, or Index
     keys : list, default None
-        List of Column names to sort by. If None, all columns used.
+        List of Column names to sort by. If None, all columns used
+        (Ignored if `index=True`)
+    index : bool, default False
+        Use index for sorting. `keys` input will be ignored if True
     ascending : bool, default True
         Sorting is in ascending order, otherwise it is descending
     na_position : {‘first’, ‘last’}, default ‘last’
@@ -400,7 +406,11 @@ def merge_sorted(objs, keys=None, ascending=True, na_position="last"):
 
     result = objs[0]._constructor._from_table(
         cudf._libxx.merge.merge_sorted(
-            objs, keys=keys, ascending=ascending, na_position=na_position
+            objs,
+            keys=keys,
+            index=index,
+            ascending=ascending,
+            na_position=na_position,
         )
     )
     result._copy_categories(objs[0])
