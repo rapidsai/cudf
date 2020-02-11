@@ -493,7 +493,10 @@ class StringColumn(column.ColumnBase):
             return self.str().size() * self.dtype.itemsize
 
     def __len__(self):
-        return len(self.children[0]) - 1
+        if self.size:
+            return len(self.children[0]) - 1
+        else:
+            return 0
 
     @property
     def nvstrings(self):
