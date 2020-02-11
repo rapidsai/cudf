@@ -2070,7 +2070,7 @@ class DataFrame(Frame):
 
         out.index = index
 
-        if isinstance(objs[0].columns, cudf.MultiIndex):
+        if isinstance(objs[0].columns, pd.MultiIndex):
             out.columns = objs[0].columns
         else:
             out.columns = unique_columns_ordered_ls
