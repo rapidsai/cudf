@@ -723,28 +723,14 @@ class StringColumn(column.ColumnBase):
         frames = []
         sub_headers = []
 
-        sbuf = rmm.device_array(self.nvstrings.byte_count(), dtype="int8")
-        obuf = rmm.device_array(len(self.nvstrings) + 1, dtype="int32")
-        mask_size = utils.calc_chunk_size(
-            len(self.nvstrings), utils.mask_bitsize
-        )
-        nbuf = rmm.device_array(mask_size, dtype="int8")
-        self.nvstrings.to_offsets(
-            libcudf.cudf.get_ctype_ptr(sbuf),
-            libcudf.cudf.get_ctype_ptr(obuf),
-            nbuf=libcudf.cudf.get_ctype_ptr(nbuf),
-            bdevmem=True,
-        )
-        for item in [sbuf, obuf]:
-            sheader = item.__cuda_array_interface__.copy()
-            sheader["dtype"] = item.dtype.str
+        for item in self.children:
+            sheader, sframes = item.serialize()
             sub_headers.append(sheader)
-            frames.append(item)
+            frames.extend(sframes)
 
         if self.null_count > 0:
-            frames.append(nbuf)
+            frames.append(self.mask)
 
-        header["nvstrings"] = len(self.nvstrings)
         header["subheaders"] = sub_headers
         header["frame_count"] = len(frames)
         return header, frames
@@ -753,25 +739,21 @@ class StringColumn(column.ColumnBase):
     def deserialize(cls, header, frames):
         # Deserialize the mask, value, and offset frames
         buffers = [Buffer(each_frame) for each_frame in frames]
-        ptrs = [int(buf.ptr) for buf in buffers]
 
         if header["null_count"] > 0:
-            nbuf = ptrs[2]
+            nbuf = buffers[2]
         else:
             nbuf = None
 
-        # Use from_offsets to get nvstring data.
-        # Note: array items = [nbuf, sbuf, obuf]
-        scount = header["nvstrings"]
-        data = nvstrings.from_offsets(
-            ptrs[0],
-            ptrs[1],
-            scount,
-            nbuf=nbuf,
-            ncount=header["null_count"],
-            bdevmem=True,
+        children = []
+        for h, b in zip(header["subheaders"], buffers[:2]):
+            column_type = pickle.loads(h["type"])
+            children.append(column_type.deserialize(h, [b]))
+
+        col = column.build_column(
+            data=None, dtype="str", mask=nbuf, children=tuple(children)
         )
-        return column.as_column(data)
+        return col
 
     def sort_by_values(self, ascending=True, na_position="last"):
         if na_position == "last":
