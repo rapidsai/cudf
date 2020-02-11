@@ -369,7 +369,7 @@ def get_dummies(
         return concat(df_list, axis=1).drop(labels=columns)
 
 
-def sorted_merge(objs, keys=None, ascending=True, nulls_after=True):
+def merge_sorted(objs, keys=None, ascending=True, na_position="last"):
     """Merge a list of sorted DataFrame or Series objects.
 
     Note: Dataframes must be pre-sorted.
@@ -380,17 +380,28 @@ def sorted_merge(objs, keys=None, ascending=True, nulls_after=True):
     keys : list, default None
         List of Column names to sort by. If None, all columns used.
     ascending : bool, default True
-        Sorting is in ascending order, otherwise descending order
-    nulls_after : bool, default True
-        Nulls are ordered last, otherwise they go first
+        Sorting is in ascending order, otherwise it is descending
+    na_position : {‘first’, ‘last’}, default ‘last’
+        'first' nulls at the beginning, 'last' nulls at the end
 
     Returns
     -------
     A new, lexocographically sorted, DataFrame/Series.
     """
 
-    return objs[0]._constructor._from_table(
-        cudf._libxx.merge.sorted_merge(
-            objs, keys=keys, ascending=ascending, nulls_after=nulls_after
+    if not isinstance(objs, list):
+        raise TypeError("objs must be a list of Frame-like objects")
+
+    if len(objs) < 1:
+        raise TypeError("objs must be non-empty")
+
+    if len(objs) == 1:
+        return objs[0]
+
+    result = objs[0]._constructor._from_table(
+        cudf._libxx.merge.merge_sorted(
+            objs, keys=keys, ascending=ascending, na_position=na_position
         )
     )
+    result._copy_categories(objs[0])
+    return result

@@ -5,7 +5,7 @@ from libcpp.vector cimport vector
 cimport cudf._libxx.includes.merge as cpp_merge
 
 
-def sorted_merge(tables, keys=None, ascending=True, nulls_after=True):
+def merge_sorted(tables, keys=None, ascending=True, na_position="last"):
     cdef vector[size_type] c_column_keys
     cdef vector[table_view] c_input_tables
     cdef vector[order] c_column_order
@@ -22,7 +22,9 @@ def sorted_merge(tables, keys=None, ascending=True, nulls_after=True):
 
     # Define sorting order and null precedence
     column_order = order.ASCENDING if ascending else order.DESCENDING
-    null_precedence = null_order.AFTER if nulls_after else null_order.BEFORE
+    null_precedence = (
+        null_order.AFTER if na_position == "last" else null_order.BEFORE
+    )
 
     # Define C vectors for each key column
     num_index_columns = (
