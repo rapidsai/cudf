@@ -1,12 +1,6 @@
-import pandas as pd
-
 from cudf._libxx.lib cimport *
 from cudf._libxx.table cimport Table
 from cudf._libxx.join cimport *
-
-from cudf._lib.utils cimport *
-from cudf._lib.utils import *
-
 
 cpdef join(lhs, rhs, left_on, right_on, how, method):
     """
@@ -29,7 +23,6 @@ cpdef join(lhs, rhs, left_on, right_on, how, method):
     result_col_names = []  # Preserve the order of the column names
 
     for name, col in lhs._data.items():
-        check_gdf_compatibility(col)
         result_col_names.append(name)
 
     for name in left_on:
@@ -48,7 +41,6 @@ cpdef join(lhs, rhs, left_on, right_on, how, method):
         right_on_ind.push_back(list(rhs._data.keys()).index(name))
 
     for name, col in rhs._data.items():
-        check_gdf_compatibility(col)
         if not ((name in left_on) and (name in right_on)
            and (left_on.index(name) == right_on.index(name))):
             result_col_names.append(name)
