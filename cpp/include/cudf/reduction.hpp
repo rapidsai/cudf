@@ -29,12 +29,6 @@ enum class scan_type : bool {
    EXCLUSIVE
 };
 
-// @brief Enum to describe include nulls or exclude nulls in an aggregation
-enum class include_nulls : bool {
-   YES, 
-   NO
-};
-
 /** --------------------------------------------------------------------------*
  * @brief  Computes the reduction of the values in all rows of a column.
  * This function does not detect overflows in reductions.
