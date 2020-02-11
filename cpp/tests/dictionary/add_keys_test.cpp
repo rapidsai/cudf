@@ -64,16 +64,12 @@ TEST_F(DictionaryAddKeysTest, FloatColumn)
 
 TEST_F(DictionaryAddKeysTest, WithNull)
 {
-    cudf::test::fixed_width_column_wrapper<int64_t> input{ { 444,0,333,111,222,222,222,444,0 }, {1,1,1,1,1,0,1,1,1}};
-    cudf::test::fixed_width_column_wrapper<int64_t> add_keys{ 0, 111, 555 };
+    cudf::test::fixed_width_column_wrapper<int64_t> input{ { 555,0,333,111,222,222,222,555,0 }, {1,1,1,1,1,0,1,1,1}};
+    cudf::test::fixed_width_column_wrapper<int64_t> new_keys{ 0, 111, 444 };
 
     auto dictionary = cudf::dictionary::encode( input );
-    auto result = cudf::dictionary::add_keys( cudf::dictionary_column_view(dictionary->view()), add_keys );
-    cudf::dictionary_column_view view(result->view());
+    auto result = cudf::dictionary::add_keys( cudf::dictionary_column_view(dictionary->view()), new_keys );
+    auto decoded = cudf::dictionary::decode(result->view());
 
-    cudf::test::fixed_width_column_wrapper<int64_t> keys_expected{ 0,111,222,333,444,555 };
-    cudf::test::expect_columns_equal(view.keys(), keys_expected);
-
-    cudf::test::fixed_width_column_wrapper<int32_t> expected{{4,0,3,1,2,2,2,4,0}};
-    cudf::test::expect_columns_equal(view.indices(), expected);
+    cudf::test::expect_columns_equal(decoded->view(), input); // new keys should not change anything
 }
