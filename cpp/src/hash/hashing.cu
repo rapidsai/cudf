@@ -34,7 +34,7 @@ namespace {
 constexpr size_type OPTIMIZED_BLOCK_SIZE = 512;
 constexpr size_type OPTIMIZED_ROWS_PER_THREAD = 8;
 constexpr size_type ELEMENTS_PER_THREAD = 2;
-constexpr size_type THRESHOLD_FOR_OPTIMIZED_PARTITION_KERNEL = 512; 
+constexpr size_type THRESHOLD_FOR_OPTIMIZED_PARTITION_KERNEL = 1024; 
 
 // Launch configuration for fallback hash partition
 constexpr size_type FALLBACK_BLOCK_SIZE = 256;
