@@ -19,7 +19,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
-#include <nvtext/tokenize.hpp>
+#include <nvtext/detail/tokenize.hpp>
 #include <nvtext/ngrams_tokenize.hpp>
 #include <cudf/utilities/error.hpp>
 #include <strings/utilities.hpp>
@@ -28,8 +28,6 @@
 
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
-
-using namespace cudf;
 
 namespace nvtext
 {
@@ -58,15 +56,15 @@ struct string_tokens_positions_fn
     int32_t const* d_token_offsets;   // offsets into the d_token_positions for each string
     position_pair* d_token_positions; // token positions in each string
 
-    __device__ void operator()(size_type idx)
+    __device__ void operator()(cudf::size_type idx)
     {
         if( d_strings.is_null(idx) )
             return;
-        string_view d_str = d_strings.element<string_view>(idx);
+        cudf::string_view d_str = d_strings.element<cudf::string_view>(idx);
         // create tokenizer for this string
         characters_tokenizer tokenizer( d_str, d_delimiter );
         // record the token positions for this string
-        size_type token_index = 0;
+        cudf::size_type token_index = 0;
         auto token_positions = d_token_positions + d_token_offsets[idx];
         while( tokenizer.next_token() )
             token_positions[token_index++] = tokenizer.token_byte_positions();
@@ -87,9 +85,9 @@ struct string_tokens_positions_fn
  */
 struct ngram_builder_fn
 {
-    column_device_view const d_strings;
-    string_view const d_separator;    // separator to place between them 'grams
-    size_type ngrams;                 // number of ngrams to generate
+    cudf::column_device_view const d_strings;
+    cudf::string_view const d_separator;    // separator to place between them 'grams
+    cudf::size_type ngrams;                 // number of ngrams to generate
     int32_t const* d_token_offsets;   // offsets for token position for each string
     position_pair const* d_token_positions;  // token positions for each string
     int32_t const* d_chars_offsets{}; // offsets for each string's ngrams
@@ -97,31 +95,31 @@ struct ngram_builder_fn
     int32_t const* d_ngram_offsets{}; // offsets for sizes of each string's ngrams
     int32_t* d_ngram_sizes{};         // write ngram sizes to here
 
-    __device__ size_type operator()(size_type idx)
+    __device__ cudf::size_type operator()(cudf::size_type idx)
     {
         if( d_strings.is_null(idx) )
             return 0;
-        string_view d_str = d_strings.element<string_view>(idx);
+        cudf::string_view d_str = d_strings.element<cudf::string_view>(idx);
         auto token_positions = d_token_positions + d_token_offsets[idx];
         auto token_count = d_token_offsets[idx+1] - d_token_offsets[idx];
-        size_type nbytes = 0;  // total number of output bytes needed for this string
-        size_type ngram_index = 0;
+        cudf::size_type nbytes = 0;  // total number of output bytes needed for this string
+        cudf::size_type ngram_index = 0;
         char* out_ptr = d_chars ? d_chars + d_chars_offsets[idx] : nullptr;
         int32_t* d_sizes = d_ngram_sizes ? d_ngram_sizes + d_ngram_offsets[idx] : nullptr;
-        for( size_type token_index = (ngrams-1); token_index < token_count; ++token_index )
+        for( cudf::size_type token_index = (ngrams-1); token_index < token_count; ++token_index )
         {
-            size_type length = 0; // calculate size of each ngram in bytes
-            for( size_type n = (ngrams-1); n >= 0; --n ) // sliding window of tokens
+            cudf::size_type length = 0; // calculate size of each ngram in bytes
+            for( cudf::size_type n = (ngrams-1); n >= 0; --n ) // sliding window of tokens
             {
                 position_pair item = token_positions[token_index-n];
                 length += item.second - item.first;
                 if( out_ptr )
-                    out_ptr = strings::detail::copy_and_increment(out_ptr, d_str.data() + item.first,
-                                                                  item.second - item.first);
+                    out_ptr = cudf::strings::detail::copy_and_increment(out_ptr, d_str.data() + item.first,
+                                                                        item.second - item.first);
                 if( n > 0 )
                 {   // copy separator (except for the last one)
                     if( out_ptr )
-                        out_ptr = strings::detail::copy_string( out_ptr, d_separator );
+                        out_ptr = cudf::strings::detail::copy_string( out_ptr, d_separator );
                     length += d_separator.size_bytes();
                 }
             }
@@ -137,25 +135,27 @@ struct ngram_builder_fn
 
 // detail APIs
 
-std::unique_ptr<column> ngrams_tokenize( strings_column_view const& strings,
-                                         size_type ngrams = 2,
-                                         string_scalar const& delimiter = string_scalar(""),
-                                         string_scalar const& separator = string_scalar{"_"},
-                                         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                         cudaStream_t stream = 0 )
+std::unique_ptr<cudf::column> ngrams_tokenize( cudf::strings_column_view const& strings,
+                                               cudf::size_type ngrams = 2,
+                                               cudf::string_scalar const& delimiter = cudf::string_scalar(""),
+                                               cudf::string_scalar const& separator = cudf::string_scalar{"_"},
+                                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                               cudaStream_t stream = 0 )
 {
     CUDF_EXPECTS( delimiter.is_valid(), "Parameter delimiter must be valid");
-    string_view d_delimiter( delimiter.data(), delimiter.size() );
+    cudf::string_view d_delimiter( delimiter.data(), delimiter.size() );
     CUDF_EXPECTS( separator.is_valid(), "Parameter separator must be valid");
-    string_view d_separator( separator.data(), separator.size() );
+    cudf::string_view d_separator( separator.data(), separator.size() );
 
     CUDF_EXPECTS( ngrams >=1, "Parameter ngrams should be an integer value of 1 or greater");
     if( ngrams==1 ) // this is just a straight tokenize
-        return tokenize(strings,delimiter,mr); // TODO: call the stream version
+        return tokenize(strings,delimiter,mr,stream);
+    auto strings_count = strings.size();
+    if( strings.size()==0 )
+        return cudf::make_empty_column(cudf::data_type{cudf::STRING});
 
     auto execpol = rmm::exec_policy(stream);
-    auto strings_count = strings.size();
-    auto strings_column = column_device_view::create(strings.parent(),stream);
+    auto strings_column = cudf::column_device_view::create(strings.parent(),stream);
     auto d_strings = *strings_column;
 
     // Example for comments with ngrams=2
@@ -166,8 +166,8 @@ std::unique_ptr<column> ngrams_tokenize( strings_column_view const& strings,
     rmm::device_vector<int32_t> token_offsets(strings_count+1);
     auto d_token_offsets = token_offsets.data().get();
     thrust::transform_inclusive_scan( rmm::exec_policy(stream)->on(stream),
-        thrust::make_counting_iterator<size_type>(0),
-        thrust::make_counting_iterator<size_type>(strings_count),
+        thrust::make_counting_iterator<cudf::size_type>(0),
+        thrust::make_counting_iterator<cudf::size_type>(strings_count),
         d_token_offsets+1,
         tokenator_fn{d_strings,d_delimiter},
         thrust::plus<int32_t>());
@@ -178,16 +178,16 @@ std::unique_ptr<column> ngrams_tokenize( strings_column_view const& strings,
     // Ex. start/end pairs: [(0,1),(2,4),(5,8), (0,2),(3,4)]
     rmm::device_vector<position_pair> token_positions(total_tokens);
     auto d_token_positions = token_positions.data().get();
-    thrust::for_each_n( execpol->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count,
+    thrust::for_each_n( execpol->on(stream), thrust::make_counting_iterator<cudf::size_type>(0), strings_count,
         string_tokens_positions_fn{d_strings, d_delimiter, d_token_offsets, d_token_positions});
 
     // compute the number of ngrams per string to get the total number of ngrams to generate
     // Ex. ngram-counts = [2,1]; ngram-offsets = [0,2,3]; total = 3 bigrams
     rmm::device_vector<int32_t> ngram_offsets(strings_count+1);
     auto d_ngram_offsets = ngram_offsets.data().get();
-    thrust::transform_inclusive_scan( execpol->on(stream), thrust::make_counting_iterator<size_type>(0),
-        thrust::make_counting_iterator<size_type>(strings_count), d_ngram_offsets+1,
-        [d_token_offsets, ngrams] __device__ (size_type idx)
+    thrust::transform_inclusive_scan( execpol->on(stream), thrust::make_counting_iterator<cudf::size_type>(0),
+        thrust::make_counting_iterator<cudf::size_type>(strings_count), d_ngram_offsets+1,
+        [d_token_offsets, ngrams] __device__ (cudf::size_type idx)
         {
             auto token_count = d_token_offsets[idx+1] - d_token_offsets[idx];
             //printf("%d:token_count=%d\n",(int)idx,(int)token_count);
@@ -206,8 +206,8 @@ std::unique_ptr<column> ngrams_tokenize( strings_column_view const& strings,
     //     is built in memory like this: "a_bbbb_ccc"
     rmm::device_vector<int32_t> chars_offsets(strings_count+1); // output memory offsets
     auto d_chars_offsets = chars_offsets.data().get();          // per input string
-    thrust::transform_inclusive_scan( execpol->on(stream), thrust::make_counting_iterator<size_type>(0),
-        thrust::make_counting_iterator<size_type>(strings_count), d_chars_offsets +1,
+    thrust::transform_inclusive_scan( execpol->on(stream), thrust::make_counting_iterator<cudf::size_type>(0),
+        thrust::make_counting_iterator<cudf::size_type>(strings_count), d_chars_offsets +1,
         ngram_builder_fn{d_strings, d_separator, ngrams, d_token_offsets, d_token_positions},
         thrust::plus<int32_t>() );
     CUDA_TRY(cudaMemsetAsync( d_chars_offsets, 0, sizeof(int32_t), stream));
@@ -217,7 +217,8 @@ std::unique_ptr<column> ngrams_tokenize( strings_column_view const& strings,
     auto d_ngram_sizes = ngram_sizes.data().get();          // ngram to generate
 
     // build chars column
-    auto chars_column = strings::detail::create_chars_child_column( strings_count, 0, output_chars_size, mr, stream );
+    auto chars_column = cudf::strings::detail::create_chars_child_column( strings_count, 0,
+                                                                          output_chars_size, mr, stream );
     auto d_chars = chars_column->mutable_view().data<char>();
     // Generate the ngrams into the chars column data buffer.
     // The ngram_builder_fn functor also fills the d_ngram_sizes vector with the
@@ -226,14 +227,9 @@ std::unique_ptr<column> ngrams_tokenize( strings_column_view const& strings,
     thrust::for_each_n( execpol->on(0), thrust::make_counting_iterator<int32_t>(0), strings_count,
         ngram_builder_fn{d_strings, d_separator, ngrams, d_token_offsets, d_token_positions,
                          d_chars_offsets, d_chars, d_ngram_offsets, d_ngram_sizes});
-    // build the offsets column -- convert the ngram sizes into offsets
-    auto offsets_column = make_numeric_column(
-          data_type{INT32}, total_ngrams + 1, mask_state::UNALLOCATED, stream, mr);
-    auto d_offsets = offsets_column->mutable_view().data<int32_t>();
-    thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream),
-                           d_ngram_sizes, d_ngram_sizes + total_tokens,
-                           d_offsets+1);
-    CUDA_TRY(cudaMemsetAsync(d_offsets, 0, sizeof(int32_t), stream));
+    // build the offsets column -- converting the ngram sizes into offsets
+    auto offsets_column = cudf::strings::detail::make_offsets_child_column( ngram_sizes.begin(), ngram_sizes.end(),
+                                                                            mr, stream );
     chars_column->set_null_count(0);
     offsets_column->set_null_count(0);
     // create the output strings column
@@ -245,11 +241,11 @@ std::unique_ptr<column> ngrams_tokenize( strings_column_view const& strings,
 
 // external APIs
 
-std::unique_ptr<column> ngrams_tokenize( strings_column_view const& strings,
-                                         size_type ngrams,
-                                         string_scalar const& delimiter,
-                                         string_scalar const& separator,
-                                         rmm::mr::device_memory_resource* mr )
+std::unique_ptr<cudf::column> ngrams_tokenize( cudf::strings_column_view const& strings,
+                                               cudf::size_type ngrams,
+                                               cudf::string_scalar const& delimiter,
+                                               cudf::string_scalar const& separator,
+                                               rmm::mr::device_memory_resource* mr )
 {
     return detail::ngrams_tokenize( strings, ngrams, delimiter, separator, mr );
 }
