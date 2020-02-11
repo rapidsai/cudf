@@ -161,7 +161,7 @@ void binary_operation(mutable_column_view& out,
            cudf::jit::get_type_name(rhs.type()),
            cudf::jit::get_type_name(lhs.type()),
            get_operator_name(op, OperatorType::Reverse)})
-      .launch(out.size(), cudf::jit::get_data_ptr(out),
+      .launch(out.size(), cudf::jit::get_data_ptr(column_view{out}),
               cudf::jit::get_data_ptr(rhs), cudf::jit::get_data_ptr(lhs));
 }
 
@@ -179,7 +179,7 @@ void binary_operation(mutable_column_view& out,
            cudf::jit::get_type_name(lhs.type()),
            cudf::jit::get_type_name(rhs.type()),
            get_operator_name(op, OperatorType::Direct)})
-      .launch(out.size(), cudf::jit::get_data_ptr(out),
+      .launch(out.size(), cudf::jit::get_data_ptr(column_view{out}),
               cudf::jit::get_data_ptr(lhs), cudf::jit::get_data_ptr(rhs));
 }
 
@@ -197,7 +197,7 @@ void binary_operation(mutable_column_view& out,
            cudf::jit::get_type_name(lhs.type()),
            cudf::jit::get_type_name(rhs.type()),
            get_operator_name(op, OperatorType::Direct)})
-      .launch(out.size(), cudf::jit::get_data_ptr(out),
+      .launch(out.size(), cudf::jit::get_data_ptr(column_view{out}),
               cudf::jit::get_data_ptr(lhs), cudf::jit::get_data_ptr(rhs));
 }
 
@@ -225,7 +225,7 @@ void binary_operation(mutable_column_view& out,
                         cudf::jit::get_type_name(rhs.type()),
                         get_operator_name(binary_operator::GENERIC_BINARY,
                                           OperatorType::Direct)})
-      .launch(out.size(), cudf::jit::get_data_ptr(out),
+      .launch(out.size(), cudf::jit::get_data_ptr(column_view{out}),
               cudf::jit::get_data_ptr(lhs), cudf::jit::get_data_ptr(rhs));
 }
 

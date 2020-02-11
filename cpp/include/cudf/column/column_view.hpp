@@ -496,7 +496,7 @@ class mutable_column_view : public detail::column_view_base {
    *
    * @return column_view An immutable view of the mutable view's elements
    *---------------------------------------------------------------------------**/
-  operator column_view() const;
+  explicit operator column_view() const;
 
  private:
   std::vector<mutable_column_view> mutable_children;

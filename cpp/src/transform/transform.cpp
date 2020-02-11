@@ -65,7 +65,7 @@ void unary_operation(mutable_column_view output, column_view input,
       cudf::jit::get_type_name(input.type()) }
   ).launch(
     output.size(),
-    cudf::jit::get_data_ptr(output),
+    cudf::jit::get_data_ptr(column_view{output}),
     cudf::jit::get_data_ptr(input)
   );
 

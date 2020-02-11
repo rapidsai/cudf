@@ -22,6 +22,7 @@
 
 #include <exception>
 #include <vector>
+#include <algorithm>
 
 namespace cudf {
 
@@ -111,8 +112,9 @@ void mutable_column_view::set_null_count(size_type new_null_count) {
 mutable_column_view::operator column_view() const {
   // Convert children to immutable views
   std::vector<column_view> child_views(num_children());
-  std::copy(std::cbegin(mutable_children), std::cend(mutable_children),
-            std::begin(child_views));
+  std::transform(std::cbegin(mutable_children), std::cend(mutable_children),
+                 std::begin(child_views),
+                 [](auto const& mut_child) { return column_view{mut_child}; });
   return column_view{_type,
                      _size,
                      _data,

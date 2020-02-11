@@ -976,7 +976,7 @@ void normalize_nans_and_zeros(mutable_column_view in_out,
 
   // wrapping the in_out data in a column_view so we can call the same lower level code.
   // that we use for the non in-place version.
-  column_view input = in_out;
+  column_view input{in_out};
 
   // to device. unique_ptr which gets automatically cleaned up when we leave
   auto device_in = column_device_view::create(input);

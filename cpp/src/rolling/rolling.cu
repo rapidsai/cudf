@@ -348,7 +348,7 @@ std::unique_ptr<column> rolling_window_udf(column_view const &input,
                         udf_agg->_operator_name,
                         static_window ? "cudf::size_type" : "cudf::size_type*"})
     .launch(input.size(), cudf::jit::get_data_ptr(input), input.null_mask(),
-            cudf::jit::get_data_ptr(output_view), output_view.null_mask(),
+            cudf::jit::get_data_ptr(column_view{output_view}), output_view.null_mask(),
             device_valid_count.data(), preceding_window, following_window, min_periods);
 
   output->set_null_count(output->size() - device_valid_count.value(stream));

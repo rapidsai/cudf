@@ -274,7 +274,7 @@ struct column_copy_functor {
       }
       mcv.set_null_count(cudf::UNKNOWN_NULL_COUNT);
 
-      out_cols.push_back(mcv);
+      out_cols.push_back(column_view{mcv});
    }
 };
 template <>
