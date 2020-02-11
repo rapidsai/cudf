@@ -2588,9 +2588,9 @@ class DataFrame(Frame):
                             right_of_on.append(gdf_result.pop(i))
                             break
             result = (
-                sorted(left_of_on, key=lambda x: str(x[1]))
-                + sorted(in_on, key=lambda x: str(x[1]))
-                + sorted(right_of_on, key=lambda x: str(x[1]))
+                sorted(left_of_on, key=lambda x: str(x[0]))
+                + sorted(in_on, key=lambda x: str(x[0]))
+                + sorted(right_of_on, key=lambda x: str(x[0]))
             )
         else:
             for org_name in org_names:
