@@ -47,11 +47,11 @@ namespace experimental {
 namespace detail {
 
 namespace { // anonymous
-/**---------------------------------------------------------------------------*
+/**
  * @brief Only count operation is executed and count is updated
  *        depending on `min_periods` and returns true if it was
  *        valid, else false.
- *---------------------------------------------------------------------------**/
+ */
 template <typename InputType, typename OutputType, typename agg_op, aggregation::Kind op, bool has_nulls>
 std::enable_if_t<op == aggregation::COUNT, bool>
 __device__
@@ -79,11 +79,11 @@ process_rolling_window(column_device_view input,
     return output_is_valid;
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Only used for `string_view` type to get ARGMIN and ARGMAX, which
  *        will be used to gather MIN and MAX. And returns true if the
  *        operation was valid, else false.
- *---------------------------------------------------------------------------**/
+ */
 template <typename InputType, typename OutputType, typename agg_op, aggregation::Kind op, bool has_nulls>
 std::enable_if_t<(op == aggregation::ARGMIN  or op == aggregation::ARGMAX) and
                  std::is_same<InputType, cudf::string_view>::value, bool>
@@ -121,10 +121,10 @@ process_rolling_window(column_device_view input,
     return output_is_valid;
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Operates on only fixed-width types and returns true if the
  *        operation was valid, else false.
- *---------------------------------------------------------------------------**/
+ */
 template <typename InputType, typename OutputType, typename agg_op, aggregation::Kind op, bool has_nulls>
 std::enable_if_t<!std::is_same<InputType, cudf::string_view>::value and !(op == aggregation::COUNT), bool>
 __device__
