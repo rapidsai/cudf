@@ -493,7 +493,7 @@ class StringColumn(column.ColumnBase):
             return self.str().size() * self.dtype.itemsize
 
     def __len__(self):
-        return self.nvstrings.size()
+        return self.size
 
     @property
     def nvstrings(self):
@@ -804,7 +804,7 @@ class StringColumn(column.ColumnBase):
     def sum(self, dtype=None):
         # dtype is irrelevant it is needed to be in sync with
         # the sum method for Numeric Series
-        return self._nvstrings.join().to_host()[0]
+        return self.nvstrings.join().to_host()[0]
 
     @property
     def is_unique(self):
