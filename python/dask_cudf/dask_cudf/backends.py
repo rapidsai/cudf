@@ -13,16 +13,26 @@ get_parallel_type.register(cudf.Series, lambda _: Series)
 get_parallel_type.register(cudf.Index, lambda _: Index)
 
 
+_dt_name_conversion = {
+    "ns": "datetime64[ns]",
+    "us": "datetime64[us]",
+    "ms": "datetime64[ms]",
+    "s": "datetime64[s]",
+    "D": "datetime64[D]",
+}
+
+
 @meta_nonempty.register(cudf.Index)
 def _nonempty_index(idx):
     if isinstance(idx, cudf.core.index.RangeIndex):
         return cudf.core.index.RangeIndex(2, name=idx.name)
     elif isinstance(idx, cudf.core.index.DatetimeIndex):
+        resolution = np.datetime_data(idx.dtype)[0]
+        dtype = _dt_name_conversion[resolution]
         start = "1970-01-01"
-        data = [start, "1970-01-02"]
-        return cudf.core.index.DatetimeIndex(
-            data, start=start, periods=2, name=idx.name
-        )
+        data = np.array([start, "1970-01-02"], dtype=dtype)
+        values = cudf.core.column.DatetimeColumn.from_numpy(data)
+        return cudf.core.index.DatetimeIndex(values, name=idx.name)
     elif isinstance(idx, cudf.core.index.StringIndex):
         return cudf.core.index.StringIndex(["cat", "dog"])
     elif isinstance(idx, cudf.core.index.CategoricalIndex):

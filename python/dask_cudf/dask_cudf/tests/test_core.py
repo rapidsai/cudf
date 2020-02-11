@@ -490,11 +490,12 @@ def test_hash_object_dispatch(index):
         "float64",
         "strings",
         "cats",
-        "time",
+        "time_ms",
+        "time_ns",
         ["int32", "int64"],
         ["int8", "float64", "strings"],
         ["cats", "int8", "float64"],
-        ["time", "cats"],
+        ["time_ms", "cats"],
     ],
 )
 def test_make_meta_backends(index):
@@ -505,9 +506,10 @@ def test_make_meta_backends(index):
     )
     df["strings"] = ["cat", "dog", "fish"]
     df["cats"] = df["strings"].astype("category")
-    df["time"] = np.array(
-        ["2018-10-07", "2018-10-08", "2018-10-09"], dtype="datetime64"
+    df["time_ms"] = np.array(
+        ["2018-10-07", "2018-10-08", "2018-10-09"], dtype="datetime64[ms]"
     )
+    df["time_ns"] = df["time_ms"].astype("datetime64[ns]")
     df = df.set_index(index)
     ddf = dgd.from_cudf(df, npartitions=1)
 
