@@ -20,10 +20,9 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
-#include <cudf/text/normalize.hpp>
+#include <nvtext/normalize.hpp>
 #include <strings/utilities.cuh>
 #include <strings/utilities.hpp>
-
 #include <text/utilities/tokenize_ops.cuh>
 
 #include <thrust/for_each.h>
@@ -46,9 +45,9 @@ namespace
  * This functor can be called to compute the output size in bytes
  * of each string and then called again to fill in the allocated buffer.
  */
-struct normalize_spaces_fn : base_tokenator
+struct normalize_spaces_fn
 {
-    column_device_view const d_strings;
+    column_device_view const d_strings;   // strings to normalize
     int32_t const* d_offsets{}; // offsets into d_buffer
     char* d_buffer{};           // output buffer for characters
 
@@ -66,26 +65,25 @@ struct normalize_spaces_fn : base_tokenator
         char* buffer = d_offsets ? d_buffer + d_offsets[idx] : nullptr;
         char* optr = buffer; // running output pointer
         int32_t nbytes = 0;  // holds the number of bytes per output string
-        size_type spos = 0;  // start position of current token
-        size_type epos = d_str.length();  // end position of current token
-        bool spaces = true;  // true to trim whitespace from the beginning
-        auto itr = d_str.begin();
+        // create tokenizer for this string with whitespace delimiter
+        character_tokenizer tokenizer( d_str, cudf::string_view{} );
         // this will retrieve tokens automatically skipping runs of whitespace
-        while( next_token(d_str,spaces,itr,spos,epos) )
+        while( tokenizer.next_token() )
         {
-            auto spos_bo = d_str.byte_offset(spos); // convert character position
-            auto epos_bo = d_str.byte_offset(epos); // values to byte offsets
-            nbytes += epos_bo - spos_bo + 1; // token size plus a single space
+            auto token_pos = tokenizer.token_byte_positions();
+            auto spos = token_pos.first;//d_str.byte_offset(spos); // convert character position
+            auto epos = token_pos.second;//d_str.byte_offset(epos); // values to byte offsets
+            nbytes += epos - spos + 1; // token size plus a single space
             if( optr )
             {
-                string_view token( d_str.data() + spos_bo, epos_bo - spos_bo );
+                string_view token( d_str.data() + spos, epos - spos );
                 if( optr != buffer ) // prepend space unless we are at the beginning
                     optr = strings::detail::copy_string(optr,single_space);
                 // write token to output buffer
                 optr = strings::detail::copy_string(optr,token); // copy token to output
             }
-            spos = epos + 1;
-            ++itr; // next character
+            //spos = epos + 1;
+            //++itr; // next character
         }
         return (nbytes>0) ? nbytes-1:0; // remove trailing space
     }
