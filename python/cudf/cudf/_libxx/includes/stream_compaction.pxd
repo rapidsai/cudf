@@ -8,6 +8,7 @@
 from cudf._libxx.lib import *
 from cudf._libxx.lib cimport *
 
+
 cdef extern from "cudf/stream_compaction.hpp" namespace "cudf::experimental" \
         nogil:
     ctypedef enum duplicate_keep_option:

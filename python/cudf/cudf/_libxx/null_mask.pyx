@@ -11,6 +11,7 @@ from libcpp.memory cimport unique_ptr, make_unique
 import cudf._libxx as libcudfxx
 from cudf._libxx.lib cimport *
 from cudf._libxx.column cimport Column
+from cudf._libxx.includes.null_mask cimport copy_bitmask as cpp_copy_bitmask
 
 from cudf.core.buffer import Buffer
 
