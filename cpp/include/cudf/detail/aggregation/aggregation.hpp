@@ -53,6 +53,7 @@ class aggregation {
     QUANTILE,  ///< compute specified quantile(s)
     ARGMAX,    ///< Index of max element
     ARGMIN,    ///< Index of min element
+    NUNIQUE,   ///< count number of unique elements
     PTX,       ///< PTX UDF based reduction
     CUDA       ///< CUDA UDf based reduction
   };
@@ -62,6 +63,7 @@ class aggregation {
 
   bool operator==(aggregation const& other) const { return kind == other.kind; }
 };
+enum class include_nulls : bool; //forward declaration
 namespace detail {
 /**
  * @brief Derived class for specifying a quantile aggregation
@@ -92,6 +94,20 @@ struct std_var_aggregation : aggregation {
   bool operator==(std_var_aggregation const& other) const {
     return aggregation::operator==(other)
        and _ddof == other._ddof;
+  }
+};
+
+/**
+ * @brief Derived class for specifying a nunique aggregation
+ */
+struct nunique_aggregation : aggregation {
+  nunique_aggregation(aggregation::Kind k, include_nulls _include_nulls)
+      : aggregation{k}, _include_nulls{_include_nulls} {}
+include_nulls _include_nulls;    ///< include or exclude nulls
+
+  bool operator==(nunique_aggregation const& other) const {
+    return aggregation::operator==(other)
+       and _include_nulls == other._include_nulls;
   }
 };
 
@@ -242,6 +258,12 @@ struct target_type_impl<Source, aggregation::ARGMIN> {
   using type = size_type;
 };
 
+// Always use size_type accumulator for NUNIQUE
+template <typename Source>
+struct target_type_impl<Source, aggregation::NUNIQUE> {
+  using type = cudf::size_type;
+};
+
 /**
  * @brief Helper alias to get the accumulator type for performing aggregation
  * `k` on elements of type `Source`
@@ -324,6 +346,9 @@ CUDA_HOST_DEVICE_CALLABLE decltype(auto) aggregation_dispatcher(
           std::forward<Ts>(args)...);
     case aggregation::ARGMIN:
       return f.template operator()<aggregation::ARGMIN>(
+          std::forward<Ts>(args)...);
+    case aggregation::NUNIQUE:
+      return f.template operator()<aggregation::NUNIQUE>(
           std::forward<Ts>(args)...);
     default: {
 #ifndef __CUDA_ARCH__
