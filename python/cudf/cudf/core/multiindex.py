@@ -183,7 +183,7 @@ class MultiIndex(Index):
 
         codes = DataFrame()
         for idx in self.codes.columns[n:]:
-            codes.add_column(idx, self.codes[idx])
+            codes.insert(len(codes.columns), idx, self.codes[idx])
         result = MultiIndex(self.levels[n:], codes)
         if self.names is not None:
             result.names = self.names[n:]
@@ -320,15 +320,17 @@ class MultiIndex(Index):
                 name = k
             else:
                 name = index.names[k]
-            out_index.add_column(
-                name, index._source_data[index._source_data.columns[k]]
+            out_index.insert(
+                len(out_index.columns),
+                name,
+                index._source_data[index._source_data.columns[k]],
             )
 
         if len(result) == 1 and size == 0 and slice_access is False:
             # If the final result is one row and it was not mapped into
             # directly, return a Series with a tuple as name.
             result = result.T
-            result = result[result.columns[0]]
+            result = result[result._data.names[0]]
         elif len(result) == 0 and slice_access is False:
             # Pandas returns an empty Series with a tuple as name
             # the one expected result column

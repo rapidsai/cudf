@@ -59,6 +59,20 @@ def test_to_pandas_multiindex(mi_data):
     assert_eq(ca.to_pandas_index(), pd.DataFrame(mi_data).columns)
 
 
+def test_to_pandas_multiindex_names():
+    ca = ColumnAccessor(
+        {("a", "b"): [1, 2, 3], ("c", "d"): [3, 4, 5]},
+        multiindex=True,
+        level_names=("foo", "bar"),
+    )
+    assert_eq(
+        ca.to_pandas_index(),
+        pd.MultiIndex.from_tuples(
+            (("a", "b"), ("c", "d")), names=("foo", "bar")
+        ),
+    )
+
+
 def test_iter(simple_data):
     """
     Test that iterating over the CA
@@ -179,4 +193,24 @@ def test_get_by_index_multiindex():
         multiindex=True,
     )
     got = ca.get_by_index([0, 1, 3])
+    check_ca_equal(expect, got)
+
+
+def test_get_by_index_empty():
+    ca = ColumnAccessor(
+        {
+            ("a", "b", "c"): [1, 2, 3],
+            ("a", "b", "e"): [2, 3, 4],
+            ("b", "x", ""): [4, 5, 6],
+            ("a", "d", "e"): [3, 4, 5],
+        },
+        multiindex=True,
+    )
+    expect = ColumnAccessor(
+        {}, multiindex=True, level_names=((None, None, None))
+    )
+    got = ca.get_by_index(slice(None, 0))
+    check_ca_equal(expect, got)
+
+    got = ca.get_by_index([])
     check_ca_equal(expect, got)

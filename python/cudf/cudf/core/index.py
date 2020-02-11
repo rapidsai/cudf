@@ -1059,9 +1059,7 @@ def as_index(arbitrary, **kwargs):
     elif isinstance(arbitrary, cudf.Series):
         return as_index(arbitrary._column, **kwargs)
     elif isinstance(arbitrary, pd.RangeIndex):
-        return RangeIndex(
-            start=arbitrary._start, stop=arbitrary._stop, **kwargs
-        )
+        return RangeIndex(start=arbitrary.start, stop=arbitrary.stop, **kwargs)
     elif isinstance(arbitrary, pd.MultiIndex):
         return cudf.MultiIndex.from_pandas(arbitrary)
     else:

@@ -652,7 +652,7 @@ def test_multicolumn_iloc(pdf, gdf, pdfIndex, iloc_rows, iloc_columns):
         name = gresult.name[len(gresult.name) - 1]
         if isinstance(name, str) and "cudf" in name:
             gresult.name = name
-    if isinstance(presult, cudf.DataFrame):
+    if isinstance(presult, pd.DataFrame):
         assert_eq(
             presult, gresult, check_index_type=False, check_column_type=False
         )

@@ -87,10 +87,9 @@ class ColumnAccessor(MutableMapping):
             keys = itertools.islice(self.keys(), index, index + 1)
         else:
             keys = (self.names[i] for i in index)
+        data = {k: self._data[k] for k in keys}
         return self.__class__(
-            {k: self._data[k] for k in keys},
-            multiindex=self.multiindex,
-            level_names=self.level_names,
+            data, multiindex=self.multiindex, level_names=self.level_names,
         )
 
     def set_by_label(self, key, value):
@@ -133,8 +132,14 @@ class ColumnAccessor(MutableMapping):
         return self.level_names[-1]
 
     def to_pandas_index(self):
-        result = pd.Index(self.names, tupleize_cols=self.multiindex)
-        result.names = self.level_names
+        if self.multiindex:
+            result = pd.MultiIndex.from_tuples(
+                self.names, names=self.level_names
+            )
+        else:
+            result = pd.Index(
+                self.names, name=self.level_names[0], tupleize_cols=False
+            )
         return result
 
     @property

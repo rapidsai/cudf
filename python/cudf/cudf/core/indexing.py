@@ -159,10 +159,13 @@ class _DataFrameIndexer(object):
         nrows, ncols = df.shape
         # determine the axis along which the Series is taken:
         if nrows == 1 and ncols == 1:
-            if not is_scalar(arg[0]):
+            if is_scalar(arg[0]) and is_scalar(arg[1]):
+                return df[df.columns[0]][0]
+            elif not is_scalar(arg[0]):
                 axis = 1
             else:
                 axis = 0
+
         elif nrows == 1:
             axis = 0
         elif ncols == 1:
@@ -172,11 +175,11 @@ class _DataFrameIndexer(object):
 
         # take series along the axis:
         if axis == 1:
-            return df[df.columns[0]]
+            return df[df._data.names[0]]
         else:
             df = _normalize_dtypes(df)
             sr = df.T
-            return sr[sr.columns[0]]
+            return sr[sr._data.names[0]]
 
 
 class _DataFrameLocIndexer(_DataFrameIndexer):
@@ -296,14 +299,8 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
 
         # Iloc Step 1:
         # Gather the columns specified by the second tuple arg
-        columns = self._get_column_selection(arg[1])
-        if isinstance(arg[0], slice):
-            columns_df = DataFrame()
-            for i, col in enumerate(columns):
-                columns_df.insert(i, col, self._df[col])
-            columns_df._index = self._df._index
-        else:
-            columns_df = self._df._columns_view(columns)
+        columns_df = self._get_column_selection(arg[1])
+        columns_df._index = self._df._index
 
         # Iloc Step 2:
         # Gather the rows specified by the first tuple arg
@@ -364,7 +361,8 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                 else:
                     return df[df.columns[0]]
             return self._downcast_to_series(df, arg)
-        if df.shape[0] == 0 and df.shape[1] == 0:
+
+        if df.shape[0] == 0 and df.shape[1] == 0 and isinstance(arg[0], slice):
             from cudf.core.index import RangeIndex
 
             slice_len = arg[0].stop or len(self._df)
@@ -387,8 +385,9 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
 
 
 def _normalize_dtypes(df):
-    dtypes = df.dtypes.values.tolist()
-    normalized_dtype = np.result_type(*dtypes)
-    for name, col in df._data.items():
-        df[name] = col.astype(normalized_dtype)
+    if len(df.columns) > 0:
+        dtypes = df.dtypes.values.tolist()
+        normalized_dtype = np.result_type(*dtypes)
+        for name, col in df._data.items():
+            df[name] = col.astype(normalized_dtype)
     return df
