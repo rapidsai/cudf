@@ -19,26 +19,30 @@
 
 #include <thrust/logical.h>
 
-using namespace cudf;
-
 namespace nvtext
 {
 namespace detail
 {
 
-using string_index_pair = thrust::pair<const char*,size_type>;
+using string_index_pair = thrust::pair<const char*,cudf::size_type>;
+using position_pair = thrust::pair<size_type,size_type>;
 
 /**
- * @brief Base class for tokenize functions that use multi-character
- * delimiters.
+ * @brief Tokenizer class that use multi-character delimiters.
  *
  * This is common code for tokenize, token-counters, normalize functions.
  * If an empty delimiter string is specified, then whitespace
  * (code-point <= ' ') is used to identify tokens.
+ *
+ * After instantiating this object, use the `next_token()` method
+ * to parse tokens and the `token_byte_positions()` to retrieve the
+ * current token's byte offsets within the string.
  */
-struct base_tokenator
+struct character_tokenizer
 {
-    string_view const d_delimiter{}; // zero or more delimiter characters
+    __device__ character_tokenizer( cudf::string_view const& d_str, cudf::string_view const& d_delimiter )
+    : d_str(d_str), d_delimiter(d_delimiter), spaces(true), itr(d_str.begin()),
+      start_position(0), end_position(d_str.length()) {}
 
     /**
      * @brief Return true if the given character is a delimiter.
@@ -48,11 +52,11 @@ struct base_tokenator
      * @param chr The character to test.
      * @return true if the character is a delimiter
      */
-    __device__ bool is_delimiter(char_utf8 chr)
+    __device__ bool is_delimiter(cudf::char_utf8 chr)
     {
         return d_delimiter.empty() ? (chr <= ' ') : // whitespace check
                thrust::any_of( thrust::seq, d_delimiter.begin(), d_delimiter.end(),
-                               [chr] __device__ (char_utf8 c) {return c==chr;});
+                               [chr] __device__ (cudf::char_utf8 c) {return c==chr;});
     }
 
     /**
@@ -61,45 +65,61 @@ struct base_tokenator
      *
      * For empty delimiter, whitespace code-point is checked.
      * Starting at the given iterator (itr) position, a token
-     * start position (spos) is identified when a delimiter is
-     * not found. Once found, the end position (epos) is identified
+     * start position is identified when a delimiter is
+     * not found. Once found, the end position is identified
      * when a delimiter or the end of the string is found.
      *
-     * @param d_str String to tokenize.
-     * @param[in,out] spaces Identifies current character position
-     *                is a delimiter or not.
-     * @param[in,out] itr Current position in d_str to search for tokens.
-     * @param[in,out] spos Start character position of the token found.
-     * @param[in,out] epos End character position of the token found.
-     * @return true if a token was found, false if no more tokens
+     * @return true if a token has been found
      */
-    __device__ bool next_token( string_view const& d_str, bool& spaces,
-                                string_view::const_iterator& itr,
-                                size_type& spos, size_type& epos )
+    __device__ bool next_token()
     {
-        if( spos >= d_str.length() )
+        if( itr != d_str.begin() )
+        {   // skip these 2 lines the first time through
+            start_position = end_position + 1;
+            ++itr;
+        }
+        if( start_position >= d_str.length() )
             return false;
-        epos = d_str.length(); // init to the end
+        // continue search for the next token
+        end_position = d_str.length();
         for( ; itr != d_str.end(); ++itr )
         {
             char_utf8 ch = *itr;
             if( spaces == is_delimiter(ch) )
             {
                 if( spaces )
-                    spos = itr.position()+1;
+                    start_position = itr.position()+1;
                 else
-                    epos = itr.position()+1;
+                    end_position = itr.position()+1;
                 continue;
             }
             spaces = !spaces;
             if( spaces )
             {
-                epos = itr.position();
+                end_position = itr.position();
                 break;
             }
         }
-        return spos < epos;
+        return start_position < end_position;
     }
+
+    /**
+     * @brief Returns the byte offsets for the current token
+     * within this string.
+     */
+    __device__ position_pair token_byte_positions()
+    {
+        return position_pair{d_str.byte_offset(start_position),
+                             d_str.byte_offset(end_position)};
+    }
+
+private:
+    cudf::string_view const d_str;          // string to tokenize
+    cudf::string_view const d_delimiter;    // delimiter characters
+    bool spaces;                            // true if current position is delimiter
+    cudf::string_view::const_iterator itr;  // current position in d_str
+    cudf::size_type start_position;         // starting character position of token found
+    cudf::size_type end_position;           // ending character position (excl) of token found
 };
 
 /**
@@ -109,17 +129,12 @@ struct base_tokenator
  * vector can be calculated. The second pass places the token
  * positions into the d_tokens vector.
  */
-struct tokenator_fn : base_tokenator
+struct tokenator_fn
 {
-    column_device_view const d_strings;   // strings to tokenize
-    size_type* d_offsets{};               // offsets into the d_tokens vector for each string
-    string_index_pair* d_tokens{};        // token positions in device memory
-
-    tokenator_fn( column_device_view const& d_strings, string_view const& d_delimiter,
-                  size_type* d_offsets=nullptr,
-                  string_index_pair* d_tokens=nullptr )
-    : base_tokenator{d_delimiter},
-      d_strings(d_strings), d_offsets(d_offsets), d_tokens(d_tokens) {}
+    cudf::column_device_view const d_strings;  // strings to tokenize
+    cudf::string_view const d_delimiter;       // delimiter characters to tokenize around
+    cudf::size_type*   d_offsets{}; // offsets into the d_tokens vector for each string
+    string_index_pair* d_tokens{};  // token positions in device memory
 
     /**
      * @brief Identifies the token positions within each string.
@@ -130,37 +145,33 @@ struct tokenator_fn : base_tokenator
      * @param idx Index of the string to tokenize in the d_strings column.
      * @return The number of tokens for this string.
      */
-    __device__ size_type operator()(size_type idx)
+    __device__ cudf::size_type operator()(size_type idx)
     {
         if( d_strings.is_null(idx) )
             return 0;
-        auto d_str = d_strings.element<string_view>(idx);
+        auto d_str = d_strings.element<cudf::string_view>(idx);
+        // create tokenizer for this string
+        character_tokenizer tokenizer( d_str, d_delimiter );
         string_index_pair* d_str_tokens = d_tokens ? d_tokens + d_offsets[idx] : nullptr;
-        bool spaces = true;
-        size_type spos = 0;
-        size_type epos = d_str.length();
-        size_type token_idx = 0;
-        auto itr = d_str.begin();
-        while( next_token(d_str,spaces,itr,spos,epos) )
+        cudf::size_type token_idx = 0;
+        while( tokenizer.next_token() )
         {
             if( d_str_tokens )
             {
-                auto spos_bo = d_str.byte_offset(spos); // convert char pos
-                auto epos_bo = d_str.byte_offset(epos); // to byte offset
-                d_str_tokens[token_idx] = string_index_pair{ d_str.data() + spos_bo,
-                                                            (epos_bo-spos_bo) };
+                auto pos_pair = tokenizer.token_byte_positions();
+                d_str_tokens[token_idx] =
+                    string_index_pair{ d_str.data() + pos_pair.first,
+                                       (pos_pair.second - pos_pair.first) };
             }
-            spos = epos + 1;
-            ++itr;
             ++token_idx;
         }
-        return token_idx;
+        return token_idx; // number of tokens found
     }
 };
 
 
 // delimiters' iterator = delimiterator
-using delimiterator = column_device_view::const_iterator<string_view>;
+using delimiterator = cudf::column_device_view::const_iterator<cudf::string_view>;
 
 /**
  * @brief Tokenizes strings using multiple string delimiters.
@@ -170,11 +181,11 @@ using delimiterator = column_device_view::const_iterator<string_view>;
  */
 struct multi_delimiter_tokenizer_fn
 {
-    column_device_view const d_strings;  // strings column to tokenize
-    delimiterator delimiters_begin;      // first delimiter
-    delimiterator delimiters_end;        // last delimiter
-    size_type* d_offsets{};              // offsets into the d_tokens output vector
-    string_index_pair* d_tokens{};       // token positions found for each string
+    cudf::column_device_view const d_strings;  // strings column to tokenize
+    delimiterator delimiters_begin;            // first delimiter
+    delimiterator delimiters_end;              // last delimiter
+    cudf::size_type* d_offsets{};              // offsets into the d_tokens output vector
+    string_index_pair* d_tokens{};             // token positions found for each string
 
     /**
      * @brief Identifies the token positions within each string.
@@ -185,19 +196,19 @@ struct multi_delimiter_tokenizer_fn
      * @param idx Index of the string to tokenize in the d_strings column.
      * @return The number of tokens for this string.
      */
-    __device__ size_type operator()(size_type idx)
+    __device__ cudf::size_type operator()(size_type idx)
     {
         if( d_strings.is_null(idx) )
             return 0;
-        string_view d_str = d_strings.element<string_view>(idx);
+        cudf::string_view d_str = d_strings.element<cudf::string_view>(idx);
         auto d_str_tokens = d_tokens ? d_tokens + d_offsets[idx] : nullptr;
         auto data_ptr = d_str.data();
         auto curr_ptr = data_ptr;
-        size_type last_pos = 0, token_idx = 0;
+        cudf::size_type last_pos = 0, token_idx = 0;
         while( curr_ptr < data_ptr + d_str.size_bytes() )
         {
-            string_view sub_str(curr_ptr,static_cast<size_type>(data_ptr + d_str.size_bytes() - curr_ptr));
-            size_type increment_bytes = 1;
+            cudf::string_view sub_str(curr_ptr,static_cast<cudf::size_type>(data_ptr + d_str.size_bytes() - curr_ptr));
+            cudf::size_type increment_bytes = 1;
             // look for delimiter at current position
             auto itr_find = thrust::find_if( thrust::seq, delimiters_begin, delimiters_end,
                 [sub_str]__device__(string_view const& d_delim) {
@@ -206,7 +217,7 @@ struct multi_delimiter_tokenizer_fn
                 });
             if( itr_find != delimiters_end )
             {   // found delimiter
-                auto token_size = static_cast<size_type>((curr_ptr - data_ptr) - last_pos);
+                auto token_size = static_cast<cudf::size_type>((curr_ptr - data_ptr) - last_pos);
                 if( token_size > 0 ) // we only care about non-zero sized tokens
                 {
                     if( d_str_tokens )
