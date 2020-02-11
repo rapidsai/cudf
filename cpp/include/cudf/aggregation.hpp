@@ -33,10 +33,48 @@
 
 namespace cudf {
 namespace experimental {
+
 /**
- * @brief Base class for abstract representation of an aggregation.
+ * @brief Base class for specifying the desired aggregation in an
+ * `aggregation_request`.
+ *
+ * This type is meant to be opaque in the public interface.
+ *
+ * Other kinds of aggregations may derive from this class to encapsulate
+ * additional information needed to compute the aggregation.
  */
-class aggregation;
+class aggregation {
+ public:
+  /**
+   * @brief Possible aggregation operations
+   */
+  enum Kind {
+    SUM,       ///< sum reduction
+    PRODUCT,   ///< product reduction
+    MIN,       ///< min reduction
+    MAX,       ///< max reduction
+    COUNT,     ///< count number of elements
+    ANY,       ///< any reduction
+    ALL,       ///< all reduction
+    SUM_OF_SQUARES, ///< sum of squares reduction
+    MEAN,      ///< arithmetic mean reduction
+    VARIANCE,  ///< groupwise variance
+    STD,       ///< groupwise standard deviation
+    MEDIAN,    ///< median reduction
+    QUANTILE,  ///< compute specified quantile(s)
+    ARGMAX,    ///< Index of max element
+    ARGMIN,    ///< Index of min element
+    PTX,       ///< PTX UDF based reduction
+    CUDA       ///< CUDA UDf based reduction
+  };
+
+  aggregation(aggregation::Kind a) : kind{a} {}
+  Kind kind;  ///< The aggregation to perform
+
+  bool operator==(aggregation const& other) const { return kind == other.kind; }
+
+  ~aggregation(){};
+};
 
 enum class udf_type : bool {
    CUDA,
