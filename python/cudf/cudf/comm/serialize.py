@@ -16,6 +16,7 @@ try:
             cudf.core.series.Series,
             cudf.core.groupby.groupby._Groupby,
             cudf.core.column.column.Column,
+            cudf.core.buffer.Buffer,
         )
     )
     def serialize_cudf_dataframe(x):
@@ -30,6 +31,7 @@ try:
             cudf.core.series.Series,
             cudf.core.groupby.groupby._Groupby,
             cudf.core.column.column.Column,
+            cudf.core.buffer.Buffer,
         )
     )
     def deserialize_cudf_dataframe(header, frames):

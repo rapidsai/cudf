@@ -1,5 +1,6 @@
 import numpy as np
 
+<<<<<<< HEAD
 from cudf._libxx.copying import gather
 from cudf._libxx.stream_compaction import (
     apply_boolean_mask,
@@ -12,6 +13,9 @@ from cudf._libxx.reshape import (
     tile
 )
 from cudf._libxx.table import Table
+=======
+from . import copying, stream_compaction, table
+>>>>>>> b005583b553fa66ddc0c1c91f9066c5d36add74f
 
 MAX_COLUMN_SIZE = np.iinfo(np.int32).max
 MAX_COLUMN_SIZE_STR = "INT32_MAX"
