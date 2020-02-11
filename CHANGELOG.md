@@ -37,6 +37,7 @@
 - PR #3880 Add aggregation infrastructure support for cudf::reduce
 - PR #4059 Add aggregation infrastructure support for cudf::scan 
 - PR #4021 Change quantiles signature for clarity.
+- PR #4045 Reorganize `libxx` directory
 - PR #4029 Port stream_compaction.pyx to use libcudf++ APIs
 - PR #4031 Docs build scripts and instructions update
 - PR #4062 Improve how java classifiers are produced
