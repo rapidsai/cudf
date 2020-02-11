@@ -1,32 +1,47 @@
-from cudf._libxx.includes.lib cimport *
-from cudf._libxx.includes.column cimport Column
-from cudf._libxx.includes.table cimport Table
+from cudf._libxx.lib cimport *
+from cudf._libxx.column cimport Column
+from cudf._libxx.table cimport Table
 from libcpp.vector cimport vector
 cimport cudf._libxx.includes.merge as cpp_merge
 
 
-ascending_dict = {True: ASCENDING, False: DESCENDING}
-nulls_after_dict = {True: AFTER, False: BEFORE}
-
-
-def sorted_merge(tables, keys, ascending=True, nulls_after=True):
+def sorted_merge(tables, keys=None, ascending=True, nulls_after=True):
     cdef vector[size_type] c_column_keys
     cdef vector[table_view] c_input_tables
-    cdef unique_ptr[table] c_output_table
     cdef vector[order] c_column_order
     cdef vector[null_order] c_null_precedence
-    cdef size_type key
-    cdef Table input_table
+    cdef order column_order
+    cdef null_order null_precedence
+    cdef Table source_table
 
-    for input_table in tables:
-        c_input_tables.push_back(input_table.view())
+    for source_table in tables:
+        c_input_tables.push_back(source_table.view())
+    source_table = tables[0]
 
-    for key in keys:
-        c_column_keys.push_back(key)
-        c_column_order.push_back(ascending_dict[ascending])
-        c_null_precedence.push_back(nulls_after_dict[nulls_after])
+    num_index_columns = (
+        0 if source_table._index is None
+        else source_table._index._num_columns
+    )
 
-    cdef unique_ptr[table] c_ouput_table = (
+    column_order = order.ASCENDING if ascending else order.DESCENDING
+    null_precedence = null_order.AFTER if nulls_after else null_order.BEFORE
+
+    if keys is not None:
+        for name in keys:
+            c_column_keys.push_back(
+                num_index_columns + source_table._column_names.index(name)
+            )
+            c_column_order.push_back(column_order)
+            c_null_precedence.push_back(null_precedence)
+    else:
+        for i in range(
+            num_index_columns, num_index_columns + source_table._num_columns
+        ):
+            c_column_keys.push_back(i)
+            c_column_order.push_back(column_order)
+            c_null_precedence.push_back(null_precedence)
+
+    cdef unique_ptr[table] c_result = move(
         cpp_merge.merge(
             c_input_tables,
             c_column_keys,
@@ -35,9 +50,11 @@ def sorted_merge(tables, keys, ascending=True, nulls_after=True):
         )
     )
 
-    input_table = tables[0]
     return Table.from_unique_ptr(
-        move(c_output_table),
-        column_names=input_table._column_names,
-        index_names=input_table._index._column_names
+        move(c_result),
+        column_names=source_table._column_names,
+        index_names=(
+            None if source_table._index
+            is None else source_table._index_names
+        )
     )
