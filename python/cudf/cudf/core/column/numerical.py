@@ -35,8 +35,7 @@ class NumericalColumn(column.ColumnBase):
             raise ValueError("Buffer size must be divisible by element size")
         if size is None:
             size = data.size // dtype.itemsize
-            if offset is not None:
-                size = size - offset
+            size = size - offset
         super().__init__(
             data, size=size, dtype=dtype, mask=mask, offset=offset
         )

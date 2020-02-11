@@ -66,23 +66,28 @@ cdef class Column:
 
     The *dtype* indicates the Column's element type.
     """
-    def __init__(self, data, size, dtype, mask=None, offset=None, children=()):
-        if not pd.api.types.is_integer(offset) and offset is not None:
+    def __init__(self, data, size, dtype, mask=None, offset=0, children=()):
+        if not pd.api.types.is_integer(offset):
             raise TypeError("Expected an integer for offset, got " +
                             type(offset).__name__)
-
-        if offset is None:
-            offset = 0
 
         if not pd.api.types.is_integer(size):
             raise TypeError("Expected an integer for size, got " +
                             type(size).__name__)
 
+        if size < 0:
+            raise RuntimeError(
+                "Cannot create columns of size < 0. Got size: {}".format(
+                    str(size)
+                )
+            )
+
         if size > libcudfxx.MAX_COLUMN_SIZE:
             raise MemoryError(
                 "Cannot create columns of size > {}. "
                 "Consider using dask_cudf to partition your data".format(
-                    libcudfxx.MAX_COLUMN_SIZE_STR)
+                    libcudfxx.MAX_COLUMN_SIZE_STR
+                )
             )
 
         self._offset = int(offset)

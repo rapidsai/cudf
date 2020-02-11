@@ -26,16 +26,9 @@ def pandas_input(request):
     return pd.Series(data, dtype=request.param)
 
 
-@pytest.mark.parametrize("offset", [None, 0, 1, 15])
+@pytest.mark.parametrize("offset", [0, 1, 15])
 @pytest.mark.parametrize("size", [None, 50, 10, 0])
 def test_column_offset_and_size(pandas_input, offset, size):
-    offset_check = offset
-    if offset_check is None:
-        offset_check = 0
-    size_check = size
-    if size_check is None:
-        size_check = 100
-
     col = cudf.core.column.as_column(pandas_input)
     col = cudf.core.column.build_column(
         data=col.base_data,
