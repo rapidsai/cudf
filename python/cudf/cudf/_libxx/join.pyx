@@ -1,6 +1,8 @@
 from cudf._libxx.lib cimport *
 from cudf._libxx.table cimport Table
-from cudf._libxx.join cimport *
+from cudf._libxx.includes.join cimport *
+from libcpp.vector cimport vector
+from libcpp.pair cimport pair
 
 cpdef join(lhs, rhs, left_on, right_on, how, method):
     """
@@ -54,9 +56,8 @@ cpdef join(lhs, rhs, left_on, right_on, how, method):
     cdef Table c_rhs = rhs
     cdef table_view lhs_view = c_lhs.data_view()
     cdef table_view rhs_view = c_rhs.data_view()
-
-    with nogil:
-        if how == 'inner':
+    if how == 'inner':
+        with nogil:
             c_result = move(cpp_inner_join(
                 lhs_view,
                 rhs_view,
@@ -64,7 +65,8 @@ cpdef join(lhs, rhs, left_on, right_on, how, method):
                 right_on_ind,
                 columns_in_common
             ))
-        elif how == 'left':
+    elif how == 'left':
+        with nogil:
             c_result = move(cpp_left_join(
                 lhs_view,
                 rhs_view,
@@ -72,7 +74,8 @@ cpdef join(lhs, rhs, left_on, right_on, how, method):
                 right_on_ind,
                 columns_in_common
             ))
-        elif how == 'outer':
+    elif how == 'outer':
+        with nogil:
             c_result = move(cpp_full_join(
                 lhs_view,
                 rhs_view,
