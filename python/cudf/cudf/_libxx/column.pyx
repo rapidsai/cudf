@@ -162,13 +162,7 @@ cdef class Column:
     @property
     def mask(self):
         if self._mask is None:
-            if self.base_mask is None or (
-                self.offset == 0
-                and self.base_mask.size == calc_chunk_size(
-                    self.size,
-                    mask_bitsize
-                )
-            ):
+            if self.base_mask is None or self.offset == 0:
                 self._mask = self.base_mask
             else:
                 self._mask = libcudfxx.null_mask.copy_bitmask(self)
