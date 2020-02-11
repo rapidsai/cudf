@@ -39,6 +39,17 @@ def test_column_offset_and_size(pandas_input, offset, size):
         children=col.base_children,
     )
 
+    if cudf.utils.dtypes.is_categorical_dtype(col.dtype):
+        assert col.size == col.codes.size
+        assert col.size == (col.codes.data.size / col.codes.dtype.itemsize)
+    elif pd.api.types.is_string_dtype(col.dtype):
+        assert col.size == (col.children[0].size - 1)
+        assert col.size == (
+            (col.children[0].data.size / col.children[0].dtype.itemsize) - 1
+        )
+    else:
+        assert col.size == (col.data.size / col.dtype.itemsize)
+
     got = cudf.Series(col)
 
     if offset is None:

@@ -21,7 +21,7 @@ from cudf.utils.dtypes import (
 
 
 class NumericalColumn(column.ColumnBase):
-    def __init__(self, data, dtype, mask=None, size=None, offset=None):
+    def __init__(self, data, dtype, mask=None, size=None, offset=0):
         """
         Parameters
         ----------

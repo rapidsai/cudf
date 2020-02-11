@@ -115,12 +115,12 @@ cdef class Column:
     @property
     def data(self):
         if self._data is None:
-            if self.offset == 0 or self.base_data is None:
+            if self.base_data is None:
                 self._data = self.base_data
             else:
                 buf = Buffer(self.base_data)
                 buf.ptr = buf.ptr + (self.offset * self.dtype.itemsize)
-                buf.size = buf.size - (self.offset * self.dtype.itemsize)
+                buf.size = self.size * self.dtype.itemsize
                 self._data = buf
         return self._data
 
@@ -162,7 +162,13 @@ cdef class Column:
     @property
     def mask(self):
         if self._mask is None:
-            if self.offset == 0 or self.base_mask is None:
+            if self.base_mask is None or (
+                self.offset == 0
+                and self.base_mask.size == calc_chunk_size(
+                    self.size,
+                    mask_bitsize
+                )
+            ):
                 self._mask = self.base_mask
             else:
                 self._mask = libcudfxx.null_mask.copy_bitmask(self)

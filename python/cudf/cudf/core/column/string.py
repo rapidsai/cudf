@@ -498,11 +498,14 @@ class StringColumn(column.ColumnBase):
     @property
     def children(self):
         if self._children is None:
-            if self.offset == 0:
+            if self.base_children is None or (
+                self.offset == 0
+                and self.base_children[0].size == (self.size + 1)
+            ):
                 self._children = self.base_children
             else:
                 # First get the base columns for chars and offsets
-                chars_column = self.base_children[1].copy(deep=False)
+                chars_column = self.base_children[1]
                 offsets_column = self.base_children[0]
 
                 # Shift offsets column by the parent offset.
