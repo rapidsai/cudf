@@ -386,9 +386,10 @@ thrust::host_vector<column_split_info> preprocess_string_column_info(cudf::table
     
    // compute column split information
    rmm::device_vector<thrust::pair<size_type, size_type>> device_offsets(t.num_columns());
-   thrust::transform(rmm::exec_policy(stream)->on(stream), device_offset_columns.begin(), device_offset_columns.end(), device_offsets.begin(), 
-      [] __device__ (column_preprocess_info const& cpi){
-         return thrust::make_pair(cpi.offsets.head<int32_t>()[cpi.offset], cpi.offsets.head<int32_t>()[cpi.offset + cpi.size]);
+   auto *offsets_p = device_offsets.data().get();
+   thrust::for_each(rmm::exec_policy(stream)->on(stream), device_offset_columns.begin(), device_offset_columns.end(),
+      [offsets_p] __device__ (column_preprocess_info const& cpi){
+        offsets_p[cpi.index] = thrust::make_pair(cpi.offsets.head<int32_t>()[cpi.offset], cpi.offsets.head<int32_t>()[cpi.offset + cpi.size]);
       }
    );
    thrust::host_vector<thrust::pair<size_type, size_type>> host_offsets(device_offsets);
@@ -405,7 +406,7 @@ thrust::host_vector<column_split_info> preprocess_string_column_info(cudf::table
          split_info[cpi.index].chars_offset = offset_start;
       }
    );
-   return split_info;   
+   return split_info;
 }
 
 /**
