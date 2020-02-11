@@ -84,6 +84,7 @@
 - PR #4097 Fix strings concatenate logic with column offsets
 - PR #4076 All null string entries should have null data buffer
 - PR #4109 Use rmm::device_vector instead of thrust::device_vector
+- PR #4116 Fix a bug in contiguous_split() where tables with mixed column types could corrupt string output
 
 
 # cuDF 0.12.0 (04 Feb 2020)
