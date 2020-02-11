@@ -11,6 +11,7 @@
 - PR #3681 Add cudf::experimental::boolean_mask_scatter
 - PR #4040 Add support for n-way merge of sorted tables
 - PR #4053 Multi-column quantiles.
+- PR #4107 Add groupby nunique aggregation
 
 ## Improvements
 
@@ -50,8 +51,10 @@
 - PR #4079 Simply use `mask.size` to create the array view
 - PR #4092 Keep mask on GPU for bit unpacking
 - PR #4081 Copy from `Buffer`'s pointer directly to host
+- PR #4105 Change threshold of using optimized hash partition code
 - PR #4101 Redux serialize `Buffer` directly with `__cuda_array_interface__`
 - PR #4098 Remove legacy calls from libcudf strings column code
+- PR #4111 Use `Buffer`'s to serialize `StringColumn`
 
 ## Bug Fixes
 
@@ -80,7 +83,10 @@
 - PR #4084 Update Java for removal of CATEGORY type
 - PR #4086 ORC reader: fix potentially incorrect timestamp decoding in the last rowgroup
 - PR #4089 Fix dask groupby mutliindex test case issues in join
+- PR #4097 Fix strings concatenate logic with column offsets
 - PR #4076 All null string entries should have null data buffer
+- PR #4109 Use rmm::device_vector instead of thrust::device_vector
+- PR #4116 Fix a bug in contiguous_split() where tables with mixed column types could corrupt string output
 
 
 # cuDF 0.12.0 (04 Feb 2020)
