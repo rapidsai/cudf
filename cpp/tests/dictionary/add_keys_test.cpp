@@ -29,11 +29,11 @@ TEST_F(DictionaryAddKeysTest, StringsColumn)
 {
     std::vector<const char*> h_strings{ "fff", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "fff", "aaa" };
     cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end() );
-    std::vector<const char*> h_add_keys{ "ddd", "bbb", "eee" };
-    cudf::test::strings_column_wrapper add_keys( h_add_keys.begin(), h_add_keys.end() );
+    std::vector<const char*> h_new_keys{ "ddd", "bbb", "eee" };
+    cudf::test::strings_column_wrapper new_keys( h_new_keys.begin(), h_new_keys.end() );
 
     auto dictionary = cudf::dictionary::encode( strings );
-    auto result = cudf::dictionary::add_keys( cudf::dictionary_column_view(dictionary->view()), add_keys );
+    auto result = cudf::dictionary::add_keys( cudf::dictionary_column_view(dictionary->view()), new_keys );
 
     cudf::dictionary_column_view view(result->view());
 
@@ -49,10 +49,10 @@ TEST_F(DictionaryAddKeysTest, StringsColumn)
 TEST_F(DictionaryAddKeysTest, FloatColumn)
 {
     cudf::test::fixed_width_column_wrapper<float> input{ 4.25, 7.125, 0.5, -11.75, 7.125, 0.5 };
-    cudf::test::fixed_width_column_wrapper<float> add_keys{ 4.25, -11.75, 5.0 };
+    cudf::test::fixed_width_column_wrapper<float> new_keys{ 4.25, -11.75, 5.0 };
 
     auto dictionary = cudf::dictionary::encode( input );
-    auto result = cudf::dictionary::add_keys( cudf::dictionary_column_view(dictionary->view()), add_keys );
+    auto result = cudf::dictionary::add_keys( cudf::dictionary_column_view(dictionary->view()), new_keys );
     cudf::dictionary_column_view view(result->view());
 
     cudf::test::fixed_width_column_wrapper<float> keys_expected{ -11.75, 0.5, 4.25, 5.0, 7.125 };
@@ -72,4 +72,15 @@ TEST_F(DictionaryAddKeysTest, WithNull)
     auto decoded = cudf::dictionary::decode(result->view());
 
     cudf::test::expect_columns_equal(decoded->view(), input); // new keys should not change anything
+}
+
+TEST_F(DictionaryAddKeysTest, Errors)
+{
+    cudf::test::fixed_width_column_wrapper<int64_t> input{ 1,2,3 };
+    auto dictionary = cudf::dictionary::encode( input );
+
+    cudf::test::fixed_width_column_wrapper<float> new_keys{ 1.0, 2.0, 3.0 };
+    EXPECT_THROW( cudf::dictionary::add_keys( dictionary->view(), new_keys ), cudf::logic_error);
+    cudf::test::fixed_width_column_wrapper<int64_t> null_keys{ {1,2,3},{1,0,1} };
+    EXPECT_THROW( cudf::dictionary::add_keys( dictionary->view(), null_keys ), cudf::logic_error);
 }
