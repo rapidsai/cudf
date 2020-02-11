@@ -17,7 +17,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-#include <cudf/text/ngrams_tokenize.hpp>
+#include <nvtext/ngrams_tokenize.hpp>
 
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_wrapper.hpp>

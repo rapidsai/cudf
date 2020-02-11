@@ -19,8 +19,8 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
-#include <cudf/text/tokenize.hpp>
-#include <cudf/text/ngrams_tokenize.hpp>
+#include <nvtext/tokenize.hpp>
+#include <nvtext/ngrams_tokenize.hpp>
 #include <cudf/utilities/error.hpp>
 #include <strings/utilities.hpp>
 #include <strings/utilities.cuh>
@@ -37,8 +37,6 @@ namespace detail
 {
 namespace
 {
-//
-using position_pair = thrust::pair<int32_t,int32_t>;
 
 /**
  * @brief This records the byte positions of each token within each string.
@@ -49,41 +47,29 @@ using position_pair = thrust::pair<int32_t,int32_t>;
  * the following two strings ["aa_b_ccc","b_ccc_dd"]. Notice the
  * tokens "b" and "ccc" needed to be copied twice for this string.
  *
- * Most of the work is done in the base class to locate the tokens.
+ * Most of the work is done in the characters_tokenizer locating the tokens.
  * This functor simply records the byte positions in the d_token_positions
  * member.
  */
-struct string_tokens_positions_fn : base_tokenator
+struct string_tokens_positions_fn
 {
-    column_device_view d_strings;
-    int32_t const* d_token_offsets;
-    position_pair* d_token_positions;
-
-    string_tokens_positions_fn( column_device_view& d_strings,
-        string_view& d_delimiter, int32_t const* d_token_offsets,
-        position_pair* d_token_positions )
-        : base_tokenator{d_delimiter}, d_strings(d_strings),
-          d_token_offsets(d_token_offsets), d_token_positions(d_token_positions) {}
+    cudf::column_device_view const d_strings;  // strings to tokenize
+    cudf::string_view const d_delimiter;       // delimiter to tokenize around
+    int32_t const* d_token_offsets;   // offsets into the d_token_positions for each string
+    position_pair* d_token_positions; // token positions in each string
 
     __device__ void operator()(size_type idx)
     {
         if( d_strings.is_null(idx) )
             return;
         string_view d_str = d_strings.element<string_view>(idx);
-        bool spaces = true;
-        size_type spos = 0;
-        size_type epos = d_str.length();
+        // create tokenizer for this string
+        characters_tokenizer tokenizer( d_str, d_delimiter );
+        // record the token positions for this string
         size_type token_index = 0;
         auto token_positions = d_token_positions + d_token_offsets[idx];
-        auto itr = d_str.begin();
-        while( next_token(d_str,spaces,itr,spos,epos) )
-        {
-            token_positions[token_index++] =
-                thrust::make_pair(d_str.byte_offset(spos),  // convert char pos
-                                  d_str.byte_offset(epos)); // to byte offset
-            spos = epos + 1;
-            ++itr;
-        }
+        while( tokenizer.next_token() )
+            token_positions[token_index++] = tokenizer.token_byte_positions();
     }
 };
 

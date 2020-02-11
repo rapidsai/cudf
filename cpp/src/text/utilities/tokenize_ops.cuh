@@ -45,8 +45,6 @@ struct characters_tokenizer
     : d_str(d_str), d_delimiter(d_delimiter), spaces(true), itr(d_str.begin()),
       start_position(0), end_position(d_str.length()) {}
 
-    base_tokenator() = default;
-
     /**
      * @brief Return true if the given character is a delimiter.
      *
