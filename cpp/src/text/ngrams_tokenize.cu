@@ -85,11 +85,11 @@ struct string_tokens_positions_fn
  */
 struct ngram_builder_fn
 {
-    cudf::column_device_view const d_strings;
-    cudf::string_view const d_separator;    // separator to place between them 'grams
-    cudf::size_type ngrams;                 // number of ngrams to generate
-    int32_t const* d_token_offsets;   // offsets for token position for each string
-    position_pair const* d_token_positions;  // token positions for each string
+    cudf::column_device_view const d_strings; // strings to generate ngrams from
+    cudf::string_view const d_separator;      // separator to place between them 'grams
+    cudf::size_type ngrams;                   // number of ngrams to generate
+    int32_t const* d_token_offsets;           // offsets for token position for each string
+    position_pair const* d_token_positions;   // token positions for each string
     int32_t const* d_chars_offsets{}; // offsets for each string's ngrams
     char* d_chars{};                  // write ngram strings to here
     int32_t const* d_ngram_offsets{}; // offsets for sizes of each string's ngrams
@@ -117,7 +117,7 @@ struct ngram_builder_fn
                     out_ptr = cudf::strings::detail::copy_and_increment(out_ptr, d_str.data() + item.first,
                                                                         item.second - item.first);
                 if( n > 0 )
-                {   // copy separator (except for the last one)
+                {   // include the separator (except for the last one)
                     if( out_ptr )
                         out_ptr = cudf::strings::detail::copy_string( out_ptr, d_separator );
                     length += d_separator.size_bytes();
@@ -222,8 +222,7 @@ std::unique_ptr<cudf::column> ngrams_tokenize( cudf::strings_column_view const& 
     auto d_chars = chars_column->mutable_view().data<char>();
     // Generate the ngrams into the chars column data buffer.
     // The ngram_builder_fn functor also fills the d_ngram_sizes vector with the
-    // size of each ngram. This will be used to build the official output offsets column
-    // pointing to each generated ngram.
+    // size of each ngram.
     thrust::for_each_n( execpol->on(0), thrust::make_counting_iterator<int32_t>(0), strings_count,
         ngram_builder_fn{d_strings, d_separator, ngrams, d_token_offsets, d_token_positions,
                          d_chars_offsets, d_chars, d_ngram_offsets, d_ngram_sizes});
