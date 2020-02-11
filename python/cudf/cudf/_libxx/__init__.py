@@ -8,6 +8,7 @@ from cudf._libxx.stream_compaction import (
     unique_count,
 )
 from cudf._libxx.table import Table
+from cudf._libxx.rolling import rolling
 
 MAX_COLUMN_SIZE = np.iinfo(np.int32).max
 MAX_COLUMN_SIZE_STR = "INT32_MAX"
