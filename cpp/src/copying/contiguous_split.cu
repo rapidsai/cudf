@@ -367,7 +367,7 @@ struct column_preprocess_info {
  * - avoiding reaching into gpu memory on the cpu to retrieve offsets to compute string sizes.
  * - creating column_device_views on the base string_column_view itself as that causes gpu memory allocation.
  */
-thrust::host_vector<column_split_info> preprocess_string_column_info(cudf::table_view const& t, thrust::device_vector<column_split_info>& device_split_info, cudaStream_t stream)
+thrust::host_vector<column_split_info> preprocess_string_column_info(cudf::table_view const& t, rmm::device_vector<column_split_info>& device_split_info, cudaStream_t stream)
 {          
    // build a list of all the offset columns and their indices for all input string columns and put them on the gpu   
    thrust::host_vector<column_preprocess_info> offset_columns;
@@ -382,13 +382,14 @@ thrust::host_vector<column_split_info> preprocess_string_column_info(cudf::table
       }
       column_index++;
    });   
-   thrust::device_vector<column_preprocess_info> device_offset_columns = offset_columns;
+   rmm::device_vector<column_preprocess_info> device_offset_columns = offset_columns;
     
    // compute column split information
-   thrust::device_vector<thrust::pair<size_type, size_type>> device_offsets(t.num_columns());
-   thrust::transform(rmm::exec_policy(stream)->on(stream), device_offset_columns.begin(), device_offset_columns.end(), device_offsets.begin(), 
-      [] __device__ (column_preprocess_info const& cpi){
-         return thrust::make_pair(cpi.offsets.head<int32_t>()[cpi.offset], cpi.offsets.head<int32_t>()[cpi.offset + cpi.size]);
+   rmm::device_vector<thrust::pair<size_type, size_type>> device_offsets(t.num_columns());
+   auto *offsets_p = device_offsets.data().get();
+   thrust::for_each(rmm::exec_policy(stream)->on(stream), device_offset_columns.begin(), device_offset_columns.end(),
+      [offsets_p] __device__ (column_preprocess_info const& cpi){
+        offsets_p[cpi.index] = thrust::make_pair(cpi.offsets.head<int32_t>()[cpi.offset], cpi.offsets.head<int32_t>()[cpi.offset + cpi.size]);
       }
    );
    thrust::host_vector<thrust::pair<size_type, size_type>> host_offsets(device_offsets);
@@ -405,7 +406,7 @@ thrust::host_vector<column_split_info> preprocess_string_column_info(cudf::table
          split_info[cpi.index].chars_offset = offset_start;
       }
    );
-   return split_info;   
+   return split_info;
 }
 
 /**
@@ -416,7 +417,7 @@ thrust::host_vector<column_split_info> preprocess_string_column_info(cudf::table
  * call with the input table.  The memory referenced by the table_view and its internal column_views
  * is entirely contained in single block of memory.
  */
-contiguous_split_result alloc_and_copy(cudf::table_view const& t, thrust::device_vector<column_split_info>& device_split_info, rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+contiguous_split_result alloc_and_copy(cudf::table_view const& t, rmm::device_vector<column_split_info>& device_split_info, rmm::mr::device_memory_resource* mr, cudaStream_t stream)
 {           
    // preprocess column split information for string columns.
    thrust::host_vector<column_split_info> split_info = preprocess_string_column_info(t, device_split_info, stream);
@@ -462,7 +463,7 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
    //                benchmark:        1 GB data, 10 columns, 256 splits.
    //                no optimization:  106 ms (8 GB/s)
    //                optimization:     20 ms (48 GB/s)
-   thrust::device_vector<column_split_info> device_split_info(input.num_columns());
+   rmm::device_vector<column_split_info> device_split_info(input.num_columns());
 
    std::vector<contiguous_split_result> result;
    std::transform(subtables.begin(), subtables.end(), std::back_inserter(result), [mr, stream, &device_split_info](table_view const& t) { 
