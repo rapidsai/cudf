@@ -74,7 +74,7 @@ std::unique_ptr<cudf::column> tokenize_fn( cudf::size_type strings_count, Tokeni
     // now go get the tokens
     tokenizer.d_offsets = token_offsets.data().get();
     tokenizer.d_tokens = tokens.data().get();
-    thrust::for_each_n(execpol->on(stream), 
+    thrust::for_each_n(execpol->on(stream),
         thrust::make_counting_iterator<cudf::size_type>(0), strings_count, tokenizer );
     // create the strings column using the tokens pointers
     return make_strings_column(tokens,stream,mr);
