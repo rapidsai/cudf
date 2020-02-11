@@ -19,8 +19,8 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
-#include <cudf/text/tokenize.hpp>
-#include <cudf/text/detail/tokenize.hpp>
+#include <nvtext/tokenize.hpp>
+#include <nvtext/detail/tokenize.hpp>
 #include <cudf/utilities/error.hpp>
 #include <text/utilities/tokenize_ops.cuh>
 
