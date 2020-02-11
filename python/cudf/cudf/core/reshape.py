@@ -367,3 +367,30 @@ def get_dummies(
             df_list.append(col_enc_df)
 
         return concat(df_list, axis=1).drop(labels=columns)
+
+
+def sorted_merge(objs, keys=None, ascending=True, nulls_after=True):
+    """Merge a list of sorted DataFrame or Series objects.
+
+    Note: Dataframes must be pre-sorted.
+
+    Parameters
+    ----------
+    objs : list of DataFrame, Series, or Index
+    keys : list, default None
+        List of Column names to sort by. If None, all columns used.
+    ascending : bool, default True
+        Sorting is in ascending order, otherwise descending order
+    nulls_after : bool, default True
+        Nulls are ordered last, otherwise they go first
+
+    Returns
+    -------
+    A new, lexocographically sorted, DataFrame/Series.
+    """
+
+    return objs[0]._constructor._from_table(
+        cudf._libxx.merge.sorted_merge(
+            objs, keys=keys, ascending=ascending, nulls_after=nulls_after
+        )
+    )
