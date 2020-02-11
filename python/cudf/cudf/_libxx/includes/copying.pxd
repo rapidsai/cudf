@@ -1,4 +1,4 @@
-from cudf._libxx.includes.lib cimport *
+from cudf._libxx.lib cimport *
 
 
 cdef extern from "cudf/copying.hpp" namespace "cudf::experimental" nogil:
