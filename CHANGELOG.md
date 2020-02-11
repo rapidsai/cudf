@@ -52,6 +52,7 @@
 - PR #4105 Change threshold of using optimized hash partition code
 - PR #4101 Redux serialize `Buffer` directly with `__cuda_array_interface__`
 - PR #4098 Remove legacy calls from libcudf strings column code
+- PR #4111 Use `Buffer`'s to serialize `StringColumn`
 
 ## Bug Fixes
 
