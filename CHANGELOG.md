@@ -42,6 +42,7 @@
 - PR #4031 Docs build scripts and instructions update
 - PR #4062 Improve how java classifiers are produced
 - PR #4038 JNI and Java support for is_nan and is_not_nan
+- PR #3786 Adding string support to rolling_windows
 - PR #4067 Removed unused `CATEGORY` type ID.
 - PR #3891 Port NVStrings (r)split_record to contiguous_(r)split_record
 - PR #4072 Allow round_robin_partition to single partition
