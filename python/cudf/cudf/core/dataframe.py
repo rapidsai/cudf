@@ -1318,7 +1318,7 @@ class DataFrame(Frame):
         if not len(columns) == len(self.columns):
             raise ValueError(
                 f"Length mismatch: expected {len(self.columns)} elements ,"
-                "got {len(columns)} elements"
+                f"got {len(columns)} elements"
             )
         self._data = ColumnAccessor(
             dict(zip(columns, self._data.columns)),
@@ -1498,45 +1498,31 @@ class DataFrame(Frame):
             return df
 
     def reset_index(self, drop=False, inplace=False):
-        if isinstance(self.columns, pd.MultiIndex):
-            self.columns = cudf.MultiIndex.from_pandas(self.columns)
-        out = DataFrame()
-        if not drop:
-            if isinstance(self.index, cudf.core.multiindex.MultiIndex):
-                framed = self.index.to_frame()
-                name = framed.columns
-                name_len = len(name)
-                for col_name, col_value in framed._data.items():
-                    out[col_name] = col_value
+        if inplace:
+            result = self
+        else:
+            result = self.copy()
+        index_columns = self.index._data.columns
+        if all(name is None for name in self.index.names):
+            if isinstance(self.index, cudf.MultiIndex):
+                names = tuple(
+                    f"level_{i}" for i, _ in enumerate(self.index.names)
+                )
             else:
-                name = "index"
-                if self.index.name is not None:
-                    name = self.index.name
-                out[name] = self.index._values
-                name_len = 1
-            for col_name, col_value in self._data.items():
-                out[col_name] = col_value
-            if isinstance(self.columns, cudf.core.multiindex.MultiIndex):
-                ncols = len(self.columns.levels)
-                mi_columns = dict(zip(range(ncols), [name, name_len * [""]]))
-                top = DataFrame(mi_columns)
-                bottom = self.columns.to_frame().reset_index(drop=True)
-                index_frame = cudf.concat([top, bottom])
-                mc_df = DataFrame()
-                for idx, key in enumerate(out._data):
-                    mc_df[idx] = out[key]
-                mc_df.columns = cudf.MultiIndex.from_frame(index_frame)
-                out = mc_df
+                names = ("index",)
         else:
-            out = self
-        if inplace is True:
-            for column_name in set(out.columns) - set(self.columns):
-                self[column_name] = out._data[column_name]
-                col = out._data.pop(column_name)
-                self._data.insert(column_name, col, loc=0)
-            self.index = RangeIndex(len(self))
+            names = self.index.names
+
+        if not drop:
+            for name, index_column in zip(
+                reversed(names), reversed(index_columns)
+            ):
+                result.insert(0, name, index_column)
+        result.index = RangeIndex(len(self))
+        if inplace:
+            return
         else:
-            return out.set_index(RangeIndex(len(self)))
+            return result
 
     def take(self, positions):
         """

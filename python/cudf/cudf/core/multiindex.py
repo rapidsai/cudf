@@ -48,7 +48,7 @@ class MultiIndex(Index):
         # early termination enables lazy evaluation of codes
         if "source_data" in kwargs:
             source_data = kwargs["source_data"].reset_index(drop=True)
-            self.names = names
+            self._names = names
             self._data = source_data._data
             self._codes = codes
             self._levels = levels
@@ -114,7 +114,17 @@ class MultiIndex(Index):
             source_data[name] = level[name].reset_index(drop=True)
 
         self._data = source_data._data
-        self.names = [None] * len(self._levels) if names is None else names
+        self.names = names
+
+    @property
+    def names(self):
+        return self._names
+
+    @names.setter
+    def names(self, value):
+        value = [None] * self.nlevels if value is None else value
+        assert len(value) == self.nlevels
+        self._names = value
 
     @classmethod
     def _from_table(cls, table):
@@ -203,6 +213,10 @@ class MultiIndex(Index):
         if self._codes is None:
             self._compute_levels_and_codes()
         return self._codes
+
+    @property
+    def nlevels(self):
+        return self._source_data.shape[1]
 
     @property
     def levels(self):

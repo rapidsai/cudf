@@ -95,6 +95,10 @@ class Index(Frame):
         return idx_typ(index, name=name)
 
     @property
+    def names(self):
+        return (self.name,)
+
+    @property
     def name(self):
         return next(iter(self._data.names))
 
@@ -965,10 +969,6 @@ class CategoricalIndex(GenericIndex):
                 pd.Categorical(values, categories=values)
             )
         super(CategoricalIndex, self).__init__(values, **kwargs)
-
-    @property
-    def names(self):
-        return [self._values.name]
 
     @property
     def codes(self):

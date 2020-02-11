@@ -735,13 +735,6 @@ def test_multiindex_multicolumn_reset_index():
     assert_eq(pdg.reset_index(), gdg.reset_index(), check_dtype=False)
 
 
-def test_multiindex_columns_from_pandas(pdf, pdfIndex):
-    pdf.index = pdfIndex
-    pdfT = pdf.T
-    gdfT = cudf.from_pandas(pdfT)
-    assert isinstance(gdfT.columns, cudf.core.multiindex.MultiIndex)
-
-
 def test_groupby_multiindex_columns_from_pandas(pdf, gdf, pdfIndex):
     gdfIndex = cudf.from_pandas(pdfIndex)
     pdf.index = pdfIndex
