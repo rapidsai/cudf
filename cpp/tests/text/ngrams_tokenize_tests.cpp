@@ -66,6 +66,16 @@ TEST_F(TextNgramsTokenizeTest, Tokenize)
     }
 }
 
+TEST_F(TextNgramsTokenizeTest, TokenizeOneGram)
+{
+    cudf::test::strings_column_wrapper strings{"aaa bbb","  ccc  ddd  ", "eee"};
+    cudf::strings_column_view strings_view( strings );
+
+    cudf::test::strings_column_wrapper expected{ "aaa","bbb","ccc","ddd","eee" };
+    auto results = nvtext::ngrams_tokenize(strings_view,1);
+    cudf::test::expect_columns_equal(*results,expected);
+}
+
 TEST_F(TextNgramsTokenizeTest, TokenizeEmptyTest)
 {
     auto strings = cudf::make_empty_column(cudf::data_type{cudf::STRING});
