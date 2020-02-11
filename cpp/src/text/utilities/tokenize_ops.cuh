@@ -69,7 +69,7 @@ struct character_tokenizer
      * not found. Once found, the end position is identified
      * when a delimiter or the end of the string is found.
      *
-     * @return true if token has been found
+     * @return true if a token has been found
      */
     __device__ bool next_token()
     {
