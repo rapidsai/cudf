@@ -93,8 +93,20 @@ namespace { // anonym.
     {
       if( d_column_.is_null(row_index) )
         return 0; // null string
-      //TODO:
-      //...
+
+      string_view d_str = d_column_.template element<string_view>(row_index);
+      char* d_buffer = nullptr;
+      d_buffer = d_chars_ + d_offsets_[row_index];
+
+      for( auto itr = d_str.begin(); itr != d_str.end(); ++itr )
+        {
+          uint32_t code_point = detail::utf8_to_codepoint(*itr);
+          detail::character_flags_table_type flag = code_point <= 0x00FFFF ? d_flags_[code_point] : 0;
+
+          modifier_functor(d_buffer, d_case_table_, case_flag_, code_point, flag);
+        }
+
+      return 0;
     }
 
     //specialization for SizeOnly:
@@ -106,8 +118,23 @@ namespace { // anonym.
     {
       if( d_column_.is_null(row_index) )
         return 0; // null string
-      //TODO:
-      //...
+      
+      int32_t bytes = 0;
+      string_view d_str = d_column_.template element<string_view>(row_index);
+      for( auto itr = d_str.begin(); itr != d_str.end(); ++itr )
+        {
+            uint32_t code_point = detail::utf8_to_codepoint(*itr);
+            detail::character_flags_table_type flag = code_point <= 0x00FFFF ? d_flags_[code_point] : 0;
+            if( flag & case_flag_ )
+            {
+              bytes += detail::bytes_in_char_utf8(detail::codepoint_to_utf8(d_case_table_[code_point]));
+            }
+            else
+            {
+              bytes += detail::bytes_in_char_utf8(*itr);
+            }
+        }
+        return bytes;
     }
   private:
     column_device_view const d_column_;
