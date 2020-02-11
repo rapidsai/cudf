@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 import pickle
 
@@ -267,10 +267,9 @@ class CategoricalColumn(column.ColumnBase):
         header["data_frames_count"] = len(data_frames)
         frames.extend(data_frames)
         if self.nullable:
-            mask_frames = [self.mask_array_view]
-        else:
-            mask_frames = []
-        frames.extend(mask_frames)
+            mask_header, mask_frames = self.mask.serialize()
+            header["mask"] = mask_header
+            frames.extend(mask_frames)
         header["frame_count"] = len(frames)
         return header, frames
 
@@ -288,8 +287,10 @@ class CategoricalColumn(column.ColumnBase):
             frames[n_dtype_frames : n_dtype_frames + n_data_frames],
         )
         mask = None
-        if header["frame_count"] > n_dtype_frames + n_data_frames:
-            mask = Buffer(frames[n_dtype_frames + n_data_frames])
+        if "mask" in header:
+            mask = Buffer.deserialize(
+                header["mask"], [frames[n_dtype_frames + n_data_frames]]
+            )
         return column.build_column(
             data=None, dtype=dtype, mask=mask, children=(data,)
         )
@@ -491,15 +492,6 @@ class CategoricalColumn(column.ColumnBase):
 
         result.mask = None
         return self._mimic_inplace(result, inplace)
-
-    def apply_boolean_mask(self, mask):
-        codes = super().apply_boolean_mask(mask)
-        return column.build_categorical_column(
-            categories=self.dtype.categories,
-            codes=codes,
-            mask=codes.mask,
-            ordered=self.dtype.ordered,
-        )
 
     def find_first_value(self, value, closest=False):
         """

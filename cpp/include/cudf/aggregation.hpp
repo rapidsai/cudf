@@ -43,6 +43,12 @@ enum class udf_type : bool {
    PTX
 };
 
+// @brief Enum to describe include nulls or exclude nulls in an aggregation
+enum class include_nulls : bool {
+   YES, 
+   NO
+};
+
 /// Factory to create a SUM aggregation
 std::unique_ptr<aggregation> make_sum_aggregation();
 
@@ -112,6 +118,13 @@ std::unique_ptr<aggregation> make_argmax_aggregation();
 */
 std::unique_ptr<aggregation> make_argmin_aggregation();
 
+/**
+ * @brief Factory to create a `nunique` aggregation
+ * 
+ * `nunique` returns the number of unique elements.
+*/
+std::unique_ptr<aggregation>
+make_nunique_aggregation(include_nulls _include_nulls = include_nulls::NO);
 /**
  * @brief Factory to create a aggregation base on UDF for PTX or CUDA
  *

@@ -5,8 +5,8 @@ import numpy as np
 from cython.operator cimport dereference
 from libc.stdint cimport uintptr_t
 
-from cudf._libxx.column cimport *
 from cudf._libxx.lib cimport *
+from cudf._libxx.column cimport Column
 from cudf.utils.utils import OrderedColumnDict
 
 
@@ -45,7 +45,8 @@ cdef class Table:
 
     @property
     def _index_names(self):
-        return tuple(self._index._data.keys())
+        return None if self._index is None else tuple(
+            self._index._data.keys())
 
     @property
     def _columns(self):
