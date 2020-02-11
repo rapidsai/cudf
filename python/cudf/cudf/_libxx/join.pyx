@@ -11,6 +11,14 @@ cpdef join(lhs, rhs, left_on, right_on, how, method):
         msg = "new join api only supports left, inner or outer"
         raise ValueError(msg)
 
+    missing_key_err = 'column "{}" not found in {}'
+    for name in left_on:
+        if name not in lhs._data.keys():
+            raise KeyError(missing_key_err.format(name, 'left'))
+    for name in right_on:
+        if name not in rhs._data.keys():
+            raise KeyError(missing_key_err.format(name, 'right'))
+
     left_idx = []
     right_idx = []
 
@@ -26,8 +34,6 @@ cpdef join(lhs, rhs, left_on, right_on, how, method):
         result_col_names.append(name)
 
     for name in left_on:
-        # This will ensure that the column name is valid
-        lhs._data[name]
         left_on_ind.push_back(list(lhs._data.keys()).index(name))
         if (name in right_on and
            (left_on.index(name) == right_on.index(name))):
@@ -36,8 +42,6 @@ cpdef join(lhs, rhs, left_on, right_on, how, method):
                 list(rhs._data.keys()).index(name)))
 
     for name in right_on:
-        # This will ensure that the column name is valid
-        rhs._data[name]
         right_on_ind.push_back(list(rhs._data.keys()).index(name))
 
     for name, col in rhs._data.items():
