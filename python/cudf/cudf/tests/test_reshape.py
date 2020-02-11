@@ -125,7 +125,7 @@ def _prepare_merge_sorted_test(
     chunk = int(size / nparts)
     indices = [i * chunk for i in range(0, nparts)] + [size]
     if series:
-        df = df[keys]
+        df = df[keys[0]]
         dfs = [
             df.iloc[indices[i] : indices[i + 1]]
             .copy()
