@@ -4,10 +4,9 @@ import pandas as pd
 from cudf._libxx.column cimport *
 from cudf._libxx.table cimport *
 
-from cudf._libxx.stream_compaction import *
-from cudf._libxx.stream_compaction cimport *
+from cudf._libxx.includes.stream_compaction cimport *
 
-from cudf._libxx.stream_compaction cimport (
+from cudf._libxx.includes.stream_compaction cimport (
     duplicate_keep_option,
     drop_nulls as cpp_drop_nulls,
     apply_boolean_mask as cpp_apply_boolean_mask,

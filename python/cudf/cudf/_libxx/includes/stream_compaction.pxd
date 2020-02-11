@@ -1,6 +1,4 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
-
-from cudf._libxx.lib import *
 from cudf._libxx.lib cimport *
 
 cdef extern from "cudf/stream_compaction.hpp" namespace "cudf::experimental" \

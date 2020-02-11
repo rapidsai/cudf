@@ -38,6 +38,7 @@
 - PR #3880 Add aggregation infrastructure support for cudf::reduce
 - PR #4059 Add aggregation infrastructure support for cudf::scan 
 - PR #4021 Change quantiles signature for clarity.
+- PR #4045 Reorganize `libxx` directory
 - PR #4029 Port stream_compaction.pyx to use libcudf++ APIs
 - PR #4031 Docs build scripts and instructions update
 - PR #4062 Improve how java classifiers are produced
@@ -55,6 +56,7 @@
 - PR #4101 Redux serialize `Buffer` directly with `__cuda_array_interface__`
 - PR #4098 Remove legacy calls from libcudf strings column code
 - PR #4111 Use `Buffer`'s to serialize `StringColumn`
+- PR #4113 Get `len` of `StringColumn`s without `nvstrings`
 
 ## Bug Fixes
 
@@ -86,6 +88,7 @@
 - PR #4097 Fix strings concatenate logic with column offsets
 - PR #4076 All null string entries should have null data buffer
 - PR #4109 Use rmm::device_vector instead of thrust::device_vector
+- PR #4113 Use `.nvstrings` in `StringColumn.sum(...)`
 - PR #4116 Fix a bug in contiguous_split() where tables with mixed column types could corrupt string output
 
 
