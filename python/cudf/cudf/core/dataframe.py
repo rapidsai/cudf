@@ -1563,7 +1563,7 @@ class DataFrame(Frame):
         """
         positions = as_column(positions)
         if pd.api.types.is_bool_dtype(positions):
-            return self._apply_boolean_mask(positions,)
+            return self._apply_boolean_mask(positions)
         out = self._gather(positions)
         out.columns = self.columns
         return out
@@ -3675,7 +3675,7 @@ class DataFrame(Frame):
         dtype = np.dtype(members)
         ret = np.recarray(len(self), dtype=dtype)
         if index:
-            ret["index"] = self.index.values
+            ret["index"] = self.index.to_array()
         for col in self.columns:
             ret[col] = self[col].to_array()
         return ret
