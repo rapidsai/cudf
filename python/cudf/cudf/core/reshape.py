@@ -3,7 +3,7 @@
 import numpy as np
 
 import cudf
-from cudf.core import DataFrame, Index, Series, pRangeIndex
+from cudf.core import DataFrame, Index, RangeIndex, Series
 from cudf.core.column import build_categorical_column
 from cudf.core.index import as_index
 from cudf.utils import cudautils
