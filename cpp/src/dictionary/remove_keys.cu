@@ -50,7 +50,7 @@ std::unique_ptr<column> remove_keys_fn( dictionary_column_view const& dictionary
     rmm::device_vector<int32_t> keys_positions(keys_view.size()); // needed for remapping indices
     thrust::sequence( execpol->on(stream), keys_positions.begin(), keys_positions.end() );
     column_view keys_positions_view( data_type{INT32}, keys_view.size(), keys_positions.data().get() );
-    
+
     // copy the non-removed keys ( d_matches: true=remove, false=keep )
     std::unique_ptr<column> keys_column;
     rmm::device_vector<int32_t> map_indices(keys_view.size(),-1); // init -1 to identify new nulls
@@ -65,7 +65,7 @@ std::unique_ptr<column> remove_keys_fn( dictionary_column_view const& dictionary
                          thrust::make_counting_iterator<int32_t>(keys_positions_view.size()),
                          keys_positions_view.begin<int32_t>(), map_indices.begin() );
     } // frees up the temporary table_keys objects
-    
+
     // create new indices column
     // Example: gather([4,0,3,1,2,2,2,4,0],[0,-1,1,-1,2]) => [2,0,-1,-1,1,1,1,2,0]
     column_view map_indices_view( data_type{INT32}, keys_view.size(), map_indices.data().get() );
@@ -102,7 +102,7 @@ std::unique_ptr<column> remove_keys( dictionary_column_view const& dictionary_co
     CUDF_EXPECTS( !keys_to_remove.has_nulls(), "keys_to_remove must not have nulls" );
     auto keys_view = dictionary_column.keys();
     CUDF_EXPECTS( keys_view.type()==keys_to_remove.type(), "keys types must match");
-    
+
     // locate keys to remove by searching the keys column
     auto matches = experimental::detail::contains( keys_view, keys_to_remove, mr, stream);
     // call common utility method to remove the keys not found
@@ -118,16 +118,16 @@ std::unique_ptr<column> remove_unused_keys( dictionary_column_view const& dictio
     auto keys = dictionary_column.keys();
     auto indices = dictionary_column.indices();
     auto execpol = rmm::exec_policy(stream);
-    
+
     // build keys index to verify against indices values
     rmm::device_vector<int32_t> keys_positions(keys.size());
     thrust::sequence( execpol->on(stream), keys_positions.begin(), keys_positions.end());
-    
+
     // wrap the indices for comparison with column_views
     column_view keys_positions_view( data_type{INT32}, keys.size(), keys_positions.data().get() );
     column_view indices_view( data_type{INT32}, indices.size(), indices.data<int32_t>(),
         dictionary_column.null_mask(), dictionary_column.null_count(), dictionary_column.offset() );
-    
+
     // search the indices values with key indices to look for any holes
     auto matches = experimental::detail::contains( keys_positions_view, indices_view, mr, stream);
     auto d_matches = matches->mutable_view().data<experimental::bool8>();
