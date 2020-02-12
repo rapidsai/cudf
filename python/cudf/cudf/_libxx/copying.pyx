@@ -1,14 +1,22 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
+# cython: profile=False
+# distutils: language = c++
+# cython: embedsignature = True
+# cython: language_level = 3
+
 import pandas as pd
 
 from cudf._libxx.lib cimport *
 from cudf._libxx.column cimport Column
 from cudf._libxx.table cimport Table
+cimport cudf._libxx.includes.copying as cpp_copying
 
 
 def gather(Table source_table, Column gather_map):
     assert pd.api.types.is_integer_dtype(gather_map.dtype)
     cdef unique_ptr[table] c_result = (
-        cpp_gather(
+        cpp_copying.gather(
             source_table.view(),
             gather_map.view()
         )
