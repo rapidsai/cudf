@@ -51,13 +51,15 @@ namespace { // anonym.
     //specialization for ExecuteOp:
     //
     template<pass_step p = Pass>
-    case_manip(column_device_view const d_column,
+    case_manip(modifier_functor d_fctr,
+               column_device_view const d_column,
                character_flags_table_type case_flag,
                character_flags_table_type const* d_flags,
                character_cases_table_type const* d_case_table,
                int32_t const* d_offsets,
                char* d_chars,
                typename std::enable_if_t<p == pass_step::ExecuteOp>* = nullptr):
+      d_functor_(d_fctr),
       d_column_(d_column),
       case_flag_(case_flag),
       d_flags_(d_flags),
@@ -70,11 +72,13 @@ namespace { // anonym.
     //specialization for SizeOnly:
     //
     template<pass_step p = Pass>
-    case_manip(column_device_view const d_column,
+    case_manip(modifier_functor d_fctr,
+               column_device_view const d_column,
                character_flags_table_type case_flag,
                character_flags_table_type const* d_flags,
                character_cases_table_type const* d_case_table,
                typename std::enable_if_t<p != pass_step::ExecuteOp>* = nullptr):
+      d_functor_(d_fctr),
       d_column_(d_column),
       case_flag_(case_flag),
       d_flags_(d_flags),
@@ -103,7 +107,7 @@ namespace { // anonym.
           uint32_t code_point = detail::utf8_to_codepoint(*itr);
           detail::character_flags_table_type flag = code_point <= 0x00FFFF ? d_flags_[code_point] : 0;
 
-          modifier_functor(d_buffer, d_case_table_, case_flag_, code_point, flag);
+          d_functor_(d_buffer, d_case_table_, case_flag_, code_point, flag);
         }
 
       return 0;
@@ -137,6 +141,7 @@ namespace { // anonym.
         return bytes;
     }
   private:
+    modifier_functor d_functor_;
     column_device_view const d_column_;
     character_flags_table_type case_flag_; // flag to check with on each character
     character_flags_table_type const* d_flags_;
@@ -147,31 +152,49 @@ namespace { // anonym.
          
 }//anonym.
 
-std::unique_ptr<column> capitalize( strings_column_view const& strings,
-                                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                    cudaStream_t stream = 0)
+template<typename device_modifier_functor>
+std::unique_ptr<column> modify_strings( strings_column_view const& strings,
+                                        character_flags_table_type case_flag,
+                                        device_modifier_functor d_fctr,
+                                        rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                        cudaStream_t stream = 0)
 {
-  
-  //TODO:
-  //
-  auto fctr = [] __device__ (char* d_buffer,
-                             detail::character_cases_table_type const* d_case_table,
-                             detail::character_flags_table_type case_flag,
-                             uint32_t code_point,
-                             detail::character_flags_table_type flag){
-    //TODO:
-    //....
-  };//nothing for now...
+  auto strings_count = strings.size();
+  if( strings_count == 0 )
+    return detail::make_empty_strings_column(mr,stream);
 
+  auto execpol = rmm::exec_policy(stream);
+  
   auto strings_column = column_device_view::create(strings.parent(),stream);
   auto d_column = *strings_column;
-  character_flags_table_type case_flag = IS_LOWER(0xFF);
+
+  // copy null mask
+  rmm::device_buffer null_mask = copy_bitmask(strings.parent(),stream,mr);
+  // get the lookup tables used for case conversion
   auto d_flags = get_character_flags_table();
-  auto d_case_table = get_character_cases_table();
-  int32_t const* d_offsets{nullptr}; // <- for now; TODO
-  char* d_chars{nullptr};            // <- for now; TODO
+  auto d_case_table = get_character_cases_table();  
+
+  auto d_empty_fctr = [] __device__ (char* d_buffer,
+                                     detail::character_cases_table_type const* d_case_table,
+                                     detail::character_flags_table_type case_flag,
+                                     uint32_t code_point,
+                                     detail::character_flags_table_type flag){
+    //purposely empty; used just to instantiate a sizeOnly `case_manip` that doesn't need a functor
+  };
+
+  detail::case_manip<decltype(d_empty_fctr), pass_step::SizeOnly> cprobe{d_empty_fctr,
+      d_column,
+      case_flag,
+      d_flags,
+      d_case_table};
+
   
-  detail::case_manip<decltype(fctr), pass_step::ExecuteOp> cmanip{d_column,
+  int32_t const* d_offsets{nullptr};                    // <- for now; TODO
+  char* d_chars{nullptr};                               // <- for now; TODO
+
+  
+  detail::case_manip<device_modifier_functor, pass_step::ExecuteOp> cmanip{d_fctr,
+      d_column,
       case_flag,
       d_flags,
       d_case_table,
@@ -185,8 +208,21 @@ std::unique_ptr<column> capitalize( strings_column_view const& strings,
 
 std::unique_ptr<column> capitalize( strings_column_view const& strings,
                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
-{  
-  return detail::capitalize(strings, mr);
+{
+  //TODO:
+  //
+  auto fctr = [] __device__ (char* d_buffer,
+                             detail::character_cases_table_type const* d_case_table,
+                             detail::character_flags_table_type case_flag,
+                             uint32_t code_point,
+                             detail::character_flags_table_type flag){
+    //TODO:
+    //....
+  };//nothing for now...
+
+  detail::character_flags_table_type case_flag = IS_LOWER(0xFF);// <- ????? for now; TODO
+
+  return detail::modify_strings(strings, case_flag, fctr, mr);
 }
 
 std::unique_ptr<column> title( strings_column_view const& strings,
