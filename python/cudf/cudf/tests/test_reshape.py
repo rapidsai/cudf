@@ -121,6 +121,7 @@ def _prepare_merge_sorted_test(
     size,
     nparts,
     keys,
+    add_null=False,
     na_position="last",
     ascending=True,
     series=False,
@@ -135,6 +136,8 @@ def _prepare_merge_sorted_test(
         )
     else:
         df = cudf.datasets.timeseries()[:size].reset_index(drop=False)
+        if add_null:
+            df.iloc[1, df.columns.get_loc(keys[0])] = None
     chunk = int(size / nparts)
     indices = [i * chunk for i in range(0, nparts)] + [size]
     if index:
@@ -167,10 +170,18 @@ def _prepare_merge_sorted_test(
 @pytest.mark.parametrize("keys", [None, ["id"], ["name", "timestamp"]])
 @pytest.mark.parametrize("nparts", [2, 10])
 def test_df_merge_sorted(nparts, keys, na_position, ascending):
-    size = 20
+    size = 100
     keys_1 = keys or ["timestamp"]
+    # Null values NOT currently supported with Categorical data
+    # or when `ascending=False`
+    add_null = ascending and keys_1[0] not in ("name")
     df, dfs = _prepare_merge_sorted_test(
-        size, nparts, keys_1, na_position=na_position, ascending=ascending
+        size,
+        nparts,
+        keys_1,
+        add_null=add_null,
+        na_position=na_position,
+        ascending=ascending,
     )
 
     expect = df.sort_values(
@@ -190,7 +201,7 @@ def test_df_merge_sorted(nparts, keys, na_position, ascending):
 @pytest.mark.parametrize("index", ["id", "x"])
 @pytest.mark.parametrize("nparts", [2, 10])
 def test_df_merge_sorted_index(nparts, index, ascending):
-    size = 20
+    size = 100
     df, dfs = _prepare_merge_sorted_test(
         size, nparts, index, ascending=ascending, index=True
     )
@@ -206,7 +217,7 @@ def test_df_merge_sorted_index(nparts, index, ascending):
 @pytest.mark.parametrize("key", ["id", "name", "timestamp"])
 @pytest.mark.parametrize("nparts", [2, 10])
 def test_series_merge_sorted(nparts, key, na_position, ascending):
-    size = 20
+    size = 100
     df, dfs = _prepare_merge_sorted_test(
         size,
         nparts,
