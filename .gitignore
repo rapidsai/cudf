@@ -14,6 +14,7 @@ DartConfiguration.tcl
 .DS_Store
 *.manifest
 *.spec
+.nfs*
 
 ## Python build directories & artifacts
 dist/

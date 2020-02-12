@@ -8,8 +8,7 @@
 from cudf._libxx.lib cimport *
 
 
-cdef extern from "cudf/copying.hpp" namespace "cudf::experimental" nogil:
-    cdef unique_ptr[table] gather (
-        table_view source_table,
-        column_view gather_map
-    )
+cdef extern from "cudf/null_mask.hpp" namespace "cudf" nogil:
+    cdef device_buffer copy_bitmask "cudf::copy_bitmask" (
+        column_view view
+    ) except +
