@@ -15,7 +15,7 @@ from cudf._libxx.lib cimport *
 from cudf._libxx.column cimport *
 from cudf._libxx.table cimport *
 
-from cudf._libxx.stream_compaction cimport (
+from cudf._libxx.includes.reshape cimport (
     interleave_columns as cpp_interleave_columns,
     tile as cpp_tile
 )
