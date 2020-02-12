@@ -6,6 +6,7 @@ import pytest
 
 from cudf.core import Series
 from cudf.datasets import randomdata
+from cudf.core import DataFrame
 
 params_dtypes = [np.int32, np.float32, np.float64]
 methods = ["min", "max", "sum", "mean", "var", "std"]
@@ -372,3 +373,11 @@ def test_corr1d(data1, data2):
     got = gs1.corr(gs2)
     expected = ps1.corr(ps2)
     np.testing.assert_approx_equal(got, expected, significant=8)
+ 
+def test_df_corr():
+    gdf = cudf.datasets.randomdata(1000000, {str(x):float for x in range(50)})
+    pdf= gdf.to_pandas()
+    got = gdf.corr()
+    expected = pdf.corr()
+    np.testing.assert_array_almost_equal(got.to_pandas(), expected)
+  
