@@ -1,3 +1,10 @@
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+
+# cython: profile=False
+# distutils: language = c++
+# cython: embedsignature = True
+# cython: language_level = 3
+
 from libc.stdint cimport int32_t, uint32_t
 from libcpp cimport bool
 from libcpp.vector cimport vector
@@ -8,6 +15,14 @@ from rmm._lib.device_buffer cimport device_buffer, DeviceBuffer, move
 cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
     ctypedef int32_t size_type
     ctypedef uint32_t bitmask_type
+
+    ctypedef enum order:
+        ASCENDING "cudf::order::ASCENDING"
+        DESCENDING "cudf::order::DESCENDING"
+
+    ctypedef enum null_order:
+        AFTER "cudf::null_order::AFTER"
+        BEFORE "cudf::null_order::BEFORE"
 
     cdef enum:
         UNKNOWN_NULL_COUNT = -1
@@ -26,14 +41,16 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         TIMESTAMP_MILLISECONDS = 10
         TIMESTAMP_MICROSECONDS = 11
         TIMESTAMP_NANOSECONDS = 12
-        STRING = 13
-        NUM_TYPE_IDS = 14
+        DICTIONARY32 = 13
+        STRING = 14
+        NUM_TYPE_IDS = 15
 
     cdef cppclass data_type:
         data_type()
         data_type(const data_type&)
         data_type(type_id id)
         type_id id()
+
 
 cdef extern from "cudf/column/column.hpp" namespace "cudf" nogil:
     cdef cppclass column_contents "cudf::column::contents":
@@ -71,6 +88,7 @@ cdef extern from "cudf/column/column_view.hpp" namespace "cudf" nogil:
                     const bitmask_type* null_mask, size_type null_count,
                     size_type offset, vector[column_view] children)
         T* data[T]()
+        T* head[T]()
         bitmask_type* null_mask()
         size_type size()
         data_type type()
@@ -79,6 +97,7 @@ cdef extern from "cudf/column/column_view.hpp" namespace "cudf" nogil:
         bool has_nulls()
         size_type offset()
         size_type num_children()
+        column_view child(size_type)
 
     cdef cppclass mutable_column_view:
         mutable_column_view()
@@ -102,6 +121,7 @@ cdef extern from "cudf/column/column_view.hpp" namespace "cudf" nogil:
             size_type offset, vector[mutable_column_view] children
         )
         T* data[T]()
+        T* head[T]()
         bitmask_type* null_mask()
         size_type size()
         data_type type()
@@ -110,6 +130,7 @@ cdef extern from "cudf/column/column_view.hpp" namespace "cudf" nogil:
         bool has_nulls()
         size_type offset()
         size_type num_children()
+        mutable_column_view& child(size_type)
 
 cdef extern from "cudf/table/table_view.hpp" namespace "cudf" nogil:
     cdef cppclass table_view:
@@ -136,13 +157,8 @@ cdef extern from "cudf/table/table.hpp" namespace "cudf::experimental" nogil:
         mutable_table_view mutable_view()
         vector[unique_ptr[column]] release()
 
-cdef extern from "cudf/copying.hpp" namespace "cudf::experimental" nogil:
-    cdef unique_ptr[table] cpp_gather "cudf::experimental::gather" (
-        table_view source_table,
-        column_view gather_map
-    )
-
 cdef extern from "<utility>" namespace "std" nogil:
     cdef unique_ptr[column] move(unique_ptr[column])
     cdef unique_ptr[table] move(unique_ptr[table])
     cdef vector[unique_ptr[column]] move(vector[unique_ptr[column]])
+    cdef device_buffer move(device_buffer)
