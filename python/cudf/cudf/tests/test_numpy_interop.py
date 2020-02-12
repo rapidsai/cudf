@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 from cudf.core import DataFrame
+from cudf.tests.utils import assert_eq
 
 
 def test_to_records_noindex():
@@ -37,10 +38,10 @@ def test_from_records_noindex(columns):
     df = DataFrame.from_records(rec, columns=columns)
 
     if columns and "a" in columns:
-        np.testing.assert_array_equal(aa, df["a"])
+        assert_eq(aa, df["a"].values)
     if columns and "b" in columns:
-        np.testing.assert_array_equal(bb, df["b"])
-    np.testing.assert_array_equal(np.arange(10), df.index.values)
+        assert_eq(bb, df["b"].values)
+    assert_eq(np.arange(10), df.index.values)
 
 
 @pytest.mark.parametrize("columns", [None, ("a", "b"), ("a",), ("b",)])
@@ -55,10 +56,10 @@ def test_from_records_withindex(columns):
     df = DataFrame.from_records(rec, index="index")
 
     if columns and "a" in columns:
-        np.testing.assert_array_equal(aa, df["a"])
+        assert_eq(aa, df["a"].values)
     if columns and "b" in columns:
-        np.testing.assert_array_equal(bb, df["b"])
-    np.testing.assert_array_equal(ii, df.index.values)
+        assert_eq(bb, df["b"].values)
+    assert_eq(ii, df.index.values)
 
 
 def test_numpy_non_contiguious():
@@ -69,4 +70,4 @@ def test_numpy_non_contiguious():
     assert rec.a.flags["C_CONTIGUOUS"] is False
 
     gdf = DataFrame.from_records(rec, index="index")
-    np.testing.assert_array_equal(aa, gdf["a"].to_array())
+    assert_eq(aa, gdf["a"].values)
