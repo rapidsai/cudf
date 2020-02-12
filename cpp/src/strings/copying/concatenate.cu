@@ -102,7 +102,6 @@ std::unique_ptr<column> concatenate( std::vector<strings_column_view> const& str
         null_count += scv.null_count();
     }
     rmm::device_vector<column_device_view> device_views(h_device_views);
-    thrust::device_vector<column_device_view>::const_iterator vitr = device_views.begin();
     auto d_views = device_views.data().get();
     auto execpol = rmm::exec_policy(stream);
     rmm::device_vector<offset_pair> columns_offsets(strings_columns.size()+1);
