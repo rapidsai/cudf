@@ -201,15 +201,8 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
         from cudf import MultiIndex
 
         # Step 1: Gather columns
-        if isinstance(self._df.columns, MultiIndex):
-            columns_df = self._df.columns._get_column_major(self._df, arg[1])
-            if isinstance(columns_df, Series):
-                return columns_df
-        else:
-            columns = self._get_column_selection(arg[1])
-            columns_df = DataFrame(index=self._df.index)
-            for i, col in enumerate(columns):
-                columns_df.insert(i, col, self._df[col])
+        columns_df = self._get_column_selection(arg[1])
+        columns_df._index = self._df._index
 
         # Step 2: Gather rows
         if isinstance(columns_df.index, MultiIndex):
@@ -262,25 +255,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
             self._df[col].loc[key[0]] = value
 
     def _get_column_selection(self, arg):
-        if is_scalar(arg):
-            return [arg]
-
-        elif isinstance(arg, slice):
-            start = self._df.columns[0] if arg.start is None else arg.start
-            stop = self._df.columns[-1] if arg.stop is None else arg.stop
-            cols = []
-            within_slice = False
-            for c in self._df.columns:
-                if c == start:
-                    within_slice = True
-                if within_slice:
-                    cols.append(c)
-                if c == stop:
-                    break
-            return cols
-
-        else:
-            return arg
+        return cudf.DataFrame(self._df._data.get_by_label(arg))
 
 
 class _DataFrameIlocIndexer(_DataFrameIndexer):
