@@ -22,14 +22,14 @@ cdef extern from "cudf/io/types.hpp" \
         QUOTE_NONE,
 
     ctypedef enum compression_type:
-        none "cudf::experimental::io::compression_type::NONE"
-        auto "cudf::experimental::io::compression_type::AUTO"
-        snappy "cudf::experimental::io::compression_type::SNAPPY"
-        gzip "cudf::experimental::io::compression_type::GZIP"
-        bzip2 "cudf::experimental::io::compression_type::BZIP2"
-        brotli "cudf::experimental::io::compression_type::BROTLI"
-        zip "cudf::experimental::io::compression_type::ZIP"
-        xz "cudf::experimental::io::compression_type::XZ"
+        NONE "cudf::experimental::io::compression_type::NONE"
+        AUTO "cudf::experimental::io::compression_type::AUTO"
+        SNAPPY "cudf::experimental::io::compression_type::SNAPPY"
+        GZIP "cudf::experimental::io::compression_type::GZIP"
+        BZIP2 "cudf::experimental::io::compression_type::BZIP2"
+        BROTLI "cudf::experimental::io::compression_type::BROTLI"
+        ZIP "cudf::experimental::io::compression_type::ZIP"
+        XZ "cudf::experimental::io::compression_type::XZ"
 
     ctypedef enum io_type:
         FILEPATH,

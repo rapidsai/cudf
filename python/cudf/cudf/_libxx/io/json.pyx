@@ -37,9 +37,9 @@ cpdef read_json(filepath_or_buffer, dtype, lines, compression, byte_range):
     cdef reader_options args = reader_options()
     args.lines = lines
     if compression is not None:
-        args.compression = compression_type.auto
+        args.compression = compression_type.AUTO
     else:
-        args.compression = compression_type.none
+        args.compression = compression_type.NONE
     if dtype is False:
         raise ValueError("False value is unsupported for `dtype`")
     elif dtype is not True:
