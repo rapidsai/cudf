@@ -32,11 +32,12 @@ TEST_F(DictionarySetKeysTest, StringsKeys)
 
     cudf::test::strings_column_wrapper new_keys{ "aaa", "ccc", "eee", "fff" };
     auto result = cudf::dictionary::set_keys( dictionary->view(), new_keys );
-
-    cudf::dictionary_column_view view(result->view());
-    cudf::test::expect_columns_equal(view.keys(), new_keys);
-    cudf::test::fixed_width_column_wrapper<int32_t> indices_expected{2,0,2,1,1,1,1,2,0};
-    cudf::test::expect_columns_equal(view.indices(), indices_expected);
+    
+    std::vector<const char*> h_expected{ "eee","aaa",nullptr,nullptr,"ccc","ccc","ccc","eee","aaa" };
+    cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
+        thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
+    auto decoded = cudf::dictionary::decode(result->view());
+    cudf::test::expect_columns_equal(*decoded,expected);
 }
 
 TEST_F(DictionarySetKeysTest, FloatKeys)
@@ -46,10 +47,10 @@ TEST_F(DictionarySetKeysTest, FloatKeys)
 
     cudf::test::fixed_width_column_wrapper<float> new_keys{ 0.5, 1.0, 4.25, 7.125 };
     auto result = cudf::dictionary::set_keys( dictionary->view(), new_keys );
-    cudf::dictionary_column_view view(result->view());
-    cudf::test::expect_columns_equal(view.keys(), new_keys);
-    cudf::test::fixed_width_column_wrapper<int32_t> indices_expected{2,3,0,0,3,0};
-    cudf::test::expect_columns_equal(view.indices(), indices_expected);
+
+    cudf::test::fixed_width_column_wrapper<float> expected{ { 4.25, 7.125, 0.5, 0, 7.125, 0.5 }, {1,1,1,0,1,1}};
+    auto decoded = cudf::dictionary::decode(result->view());
+    cudf::test::expect_columns_equal(*decoded,expected);
 }
 
 TEST_F(DictionarySetKeysTest, WithNulls)
@@ -60,13 +61,8 @@ TEST_F(DictionarySetKeysTest, WithNulls)
     cudf::test::fixed_width_column_wrapper<int64_t> new_keys{ 0, 222, 333, 444 };
     auto result = cudf::dictionary::set_keys( dictionary->view(), new_keys );
 
-    cudf::dictionary_column_view view(result->view());
-    cudf::test::expect_columns_equal(view.keys(), new_keys);
-    cudf::test::fixed_width_column_wrapper<int32_t> indices_expected{ 3,0,2,1,1,0,1,3,0 };
-    cudf::test::expect_columns_equal(view.indices(), indices_expected);
-
-    auto decoded = cudf::dictionary::decode(result->view());
     cudf::test::fixed_width_column_wrapper<int64_t> expected{ { 444,0,333,111,222,222,222,444,0 }, {1,1,1,0,1,0,1,1,1}};
+    auto decoded = cudf::dictionary::decode(result->view());
     cudf::test::expect_columns_equal(*decoded,expected);
 }
 
