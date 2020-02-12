@@ -1,3 +1,10 @@
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+
+# cython: profile=False
+# distutils: language = c++
+# cython: embedsignature = True
+# cython: language_level = 3
+
 from libc.stdint cimport int32_t, uint32_t
 from libcpp cimport bool
 from libcpp.vector cimport vector
@@ -26,8 +33,9 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         TIMESTAMP_MILLISECONDS = 10
         TIMESTAMP_MICROSECONDS = 11
         TIMESTAMP_NANOSECONDS = 12
-        STRING = 13
-        NUM_TYPE_IDS = 14
+        DICTIONARY32 = 13
+        STRING = 14
+        NUM_TYPE_IDS = 15
 
     cdef cppclass data_type:
         data_type()
@@ -71,6 +79,7 @@ cdef extern from "cudf/column/column_view.hpp" namespace "cudf" nogil:
                     const bitmask_type* null_mask, size_type null_count,
                     size_type offset, vector[column_view] children)
         T* data[T]()
+        T* head[T]()
         bitmask_type* null_mask()
         size_type size()
         data_type type()
@@ -79,6 +88,7 @@ cdef extern from "cudf/column/column_view.hpp" namespace "cudf" nogil:
         bool has_nulls()
         size_type offset()
         size_type num_children()
+        column_view child(size_type)
 
     cdef cppclass mutable_column_view:
         mutable_column_view()
@@ -102,6 +112,7 @@ cdef extern from "cudf/column/column_view.hpp" namespace "cudf" nogil:
             size_type offset, vector[mutable_column_view] children
         )
         T* data[T]()
+        T* head[T]()
         bitmask_type* null_mask()
         size_type size()
         data_type type()
@@ -110,6 +121,7 @@ cdef extern from "cudf/column/column_view.hpp" namespace "cudf" nogil:
         bool has_nulls()
         size_type offset()
         size_type num_children()
+        mutable_column_view& child(size_type)
 
 cdef extern from "cudf/table/table_view.hpp" namespace "cudf" nogil:
     cdef cppclass table_view:
@@ -140,3 +152,4 @@ cdef extern from "<utility>" namespace "std" nogil:
     cdef unique_ptr[column] move(unique_ptr[column])
     cdef unique_ptr[table] move(unique_ptr[table])
     cdef vector[unique_ptr[column]] move(vector[unique_ptr[column]])
+    cdef device_buffer move(device_buffer)
