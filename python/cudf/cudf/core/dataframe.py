@@ -4524,7 +4524,16 @@ class DataFrame(Frame):
         )
         df.columns = self.columns
         return df
-
+    
+    def corr(self):
+        """Compute the correlation matrix of a DataFrame.
+        """
+        corr = cupy.corrcoef(self.values, rowvar=False)
+        df = DataFrame.from_gpu_matrix(cupy.asfortranarray(corr)).set_index(
+            self.columns
+        )
+        df.columns = self.columns
+        return df
 
 def from_pandas(obj):
     """
