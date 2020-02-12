@@ -82,7 +82,9 @@ namespace { // anonym.
       d_column_(d_column),
       case_flag_(case_flag),
       d_flags_(d_flags),
-      d_case_table_(d_case_table)
+      d_case_table_(d_case_table),
+      d_offsets_(nullptr),
+      d_chars_(nullptr)
     {
     }
 
@@ -188,20 +190,35 @@ std::unique_ptr<column> modify_strings( strings_column_view const& strings,
       d_flags,
       d_case_table};
 
-  
-  int32_t const* d_offsets{nullptr};                    // <- for now; TODO
-  char* d_chars{nullptr};                               // <- for now; TODO
 
-  
+  // build offsets column -- calculate the size of each output string
+  auto offsets_transformer_itr = thrust::make_transform_iterator( thrust::make_counting_iterator<size_type>(0), cprobe);
+  auto offsets_column = detail::make_offsets_child_column(offsets_transformer_itr,
+                                                          offsets_transformer_itr+strings_count,
+                                                          mr, stream);
+  auto offsets_view = offsets_column->view();
+  auto d_new_offsets = offsets_view.template data<int32_t>();//not sure why this requires `.template` and the next one (`d_chars = ...`) doesn't
+
+  // build the chars column -- convert characters based on case_flag parameter
+  size_type bytes = thrust::device_pointer_cast(d_new_offsets)[strings_count];
+  auto chars_column = strings::detail::create_chars_child_column( strings_count, d_column.null_count(), bytes, mr, stream );
+  auto chars_view = chars_column->mutable_view();
+  auto d_chars = chars_view.data<char>();
+
   detail::case_manip<device_modifier_functor, pass_step::ExecuteOp> cmanip{d_fctr,
       d_column,
       case_flag,
       d_flags,
       d_case_table,
-      d_offsets,
+      d_new_offsets,
       d_chars};
   
-  return nullptr;//for now
+  thrust::for_each_n(execpol->on(stream),
+                     thrust::make_counting_iterator<size_type>(0), strings_count, cmanip);
+  
+  //
+  return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
+                             d_column.null_count(), std::move(null_mask), stream, mr);
 }
 
 }//namespace detail
@@ -230,7 +247,18 @@ std::unique_ptr<column> title( strings_column_view const& strings,
 {
   //TODO:
   //
-  return nullptr;//for now
+  auto fctr = [] __device__ (char* d_buffer,
+                             detail::character_cases_table_type const* d_case_table,
+                             detail::character_flags_table_type case_flag,
+                             uint32_t code_point,
+                             detail::character_flags_table_type flag){
+    //TODO:
+    //....
+  };//nothing for now...
+
+  detail::character_flags_table_type case_flag = IS_LOWER(0xFF);// <- ????? for now; TODO
+
+  return detail::modify_strings(strings, case_flag, fctr, mr);
 }
   
 }//namespace strings
