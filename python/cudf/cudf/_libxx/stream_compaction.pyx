@@ -1,11 +1,14 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+# cython: profile=False
+# distutils: language = c++
+# cython: embedsignature = True
+# cython: language_level = 3
+
 import pandas as pd
+
 from cudf._libxx.column cimport *
 from cudf._libxx.table cimport *
-
-from cudf._libxx.includes.stream_compaction cimport *
-
 from cudf._libxx.includes.stream_compaction cimport (
     duplicate_keep_option,
     drop_nulls as cpp_drop_nulls,
