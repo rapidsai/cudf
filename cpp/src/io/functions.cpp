@@ -231,7 +231,7 @@ std::shared_ptr<pq_chunked_state> write_parquet_chunked_begin(write_parquet_chun
  * @copydoc cudf::experimental::io::write_parquet_chunked
  * 
  **/
-void write_parquet_chunked(table_view const& table, std::shared_ptr<pq_chunked_state>& state){
+void write_parquet_chunked(table_view const& table, std::shared_ptr<pq_chunked_state> const& state){
   state->wp->write_chunked(table, *state);
 }
 

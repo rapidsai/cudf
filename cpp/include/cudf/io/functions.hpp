@@ -491,7 +491,7 @@ std::shared_ptr<detail::parquet::pq_chunked_state> write_parquet_chunked_begin(
  * @param[in] state Opaque state information about the writer process. Must be the same pointer returned
  *            from write_parquet_chunked_begin()
  */                                            
-void write_parquet_chunked(table_view const& table, std::shared_ptr<detail::parquet::pq_chunked_state>& state);
+void write_parquet_chunked(table_view const& table, std::shared_ptr<detail::parquet::pq_chunked_state> const& state);
 
 /**
  * @brief Finish writing a chunked/stream parquet file.   
