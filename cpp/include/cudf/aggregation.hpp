@@ -64,6 +64,7 @@ class aggregation {
     QUANTILE,  ///< compute specified quantile(s)
     ARGMAX,    ///< Index of max element
     ARGMIN,    ///< Index of min element
+    NUNIQUE,   ///< count number of unique elements
     PTX,       ///< PTX UDF based reduction
     CUDA       ///< CUDA UDf based reduction
   };
