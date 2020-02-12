@@ -462,7 +462,9 @@ class DataFrame(Frame):
             df = DataFrame(index=self.index[arg])
             for k, col in self._data.items():
                 df[k] = col[arg]
+            df.columns = self.columns
             return df
+
         elif isinstance(
             arg,
             (
