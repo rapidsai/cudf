@@ -115,10 +115,7 @@ struct column_gatherer_impl
 
       size_type num_destination_rows = std::distance(gather_map_begin, gather_map_end);
       cudf::experimental::mask_allocation_policy policy =
-        cudf::experimental::mask_allocation_policy::RETAIN;
-      if (nullify_out_of_bounds) {
-        policy = cudf::experimental::mask_allocation_policy::ALWAYS;
-      }
+        cudf::experimental::mask_allocation_policy::NEVER;
       std::unique_ptr<column> destination_column =
           cudf::experimental::detail::allocate_like(source_column, num_destination_rows,
                           policy, mr, stream);
@@ -128,12 +125,6 @@ struct column_gatherer_impl
       using map_type = typename std::iterator_traits<MapIterator>::value_type;
 
       if (nullify_out_of_bounds) {
-        CUDA_TRY(cudaMemsetAsync(
-              destination_column->mutable_view().null_mask(),
-              0,
-              bitmask_allocation_size_bytes(destination_column->size()),
-              stream));
-
         thrust::gather_if(rmm::exec_policy(stream)->on(stream), gather_map_begin,
                           gather_map_end, gather_map_begin,
                           source_data, destination_data,
@@ -387,16 +378,22 @@ gather(table_view const& source_table, MapIterator gather_map_begin,
 
   for(auto const& source_column : source_table) {
     // The data gather for n columns will be put on the first n streams
-    destination_columns.push_back(
-                                  cudf::experimental::type_dispatcher(source_column.type(),
-                                                                      column_gatherer{},
-                                                                      source_column,
-                                                                      gather_map_begin,
-                                                                      gather_map_end,
-                                                                      nullify_out_of_bounds,
-                                                                      mr,
-                                                                      stream));
+    auto dest = cudf::experimental::type_dispatcher(source_column.type(),
+                                                    column_gatherer{},
+                                                    source_column,
+                                                    gather_map_begin,
+                                                    gather_map_end,
+                                                    nullify_out_of_bounds,
+                                                    mr,
+                                                    stream);
 
+    // Allocate null mask if we need one
+    if (source_column.nullable() or nullify_out_of_bounds) {
+      auto mask = create_null_mask(dest->size(), mask_state::ALL_NULL, stream, mr);
+      dest->set_null_mask(std::move(mask), 0);
+    }
+
+    destination_columns.push_back(std::move(dest));
   }
 
   std::unique_ptr<table> destination_table = std::make_unique<table>(std::move(destination_columns));
