@@ -2,7 +2,7 @@ import numba
 import pandas as pd
 
 import cudf
-import cudf._lib as libcudf
+import cudf._libxx as libcudf
 from cudf.utils import cudautils
 
 

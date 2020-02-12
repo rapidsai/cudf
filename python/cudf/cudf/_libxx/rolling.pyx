@@ -1,5 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+from __future__ import print_function
 import cudf
 import pandas as pd
 import numba
@@ -20,8 +21,9 @@ def rolling(Column source_column, window, min_periods, center,  op):
     cdef size_type c_forward_window = 0
     cdef unique_ptr[column] c_result
     
-    if (isinstance(window, Column) or isinstance(window, cudf.Series) or
-        pd.api.types.is_list_like(window)):
+    if (isinstance(window, (Column, 
+                            numba.cuda.cudadrv.devicearray.DeviceNDArray,
+                            cudf.Series)) or pd.api.types.is_list_like(window)):
         if center:
             # TODO: we can support this even though Pandas currently does not
             raise NotImplementedError(
@@ -33,21 +35,28 @@ def rolling(Column source_column, window, min_periods, center,  op):
         elif isinstance(window, Column):
             column_window = window
         else:
-            column_window = cudf.Series(window)._columnn
+            column_window = cudf.Series(window)._column
             
-        tmp_column_window = Column(column_window.data, column_window.size,
+        f_column_window  = cudf.Series([0]*column_window.size, dtype = column_window.dtype)._column
+        pre_column_window = Column(column_window.data, column_window.size,
                                column_window.dtype, column_window.mask,
                                column_window.offset,
                                column_window.children)
 
+        fwd_column_window = Column(f_column_window.data, f_column_window.size,
+                               f_column_window.dtype)
+
         c_result = move(
                 cpp_rolling_window(source_column.view(),
-                                   tmp_column_window.view(),
-                                   tmp_column_window.view(),
+                                   pre_column_window.view(),
+                                   fwd_column_window.view(),
                                    c_min_periods,
                                    get_aggregation(op, {'dtype': source_column.dtype}))
         )
     else:
+        if op == "count":
+            min_periods = 0
+        c_min_periods = min_periods
         if center:
             c_window = (window // 2) + 1
             c_forward_window = window - (c_window)
