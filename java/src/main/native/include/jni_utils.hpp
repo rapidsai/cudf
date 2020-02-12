@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -778,14 +778,14 @@ std::unique_ptr<cudf::experimental::aggregation> map_jni_aggregation(jint op);
 
 #define JNI_NULL_CHECK(env, obj, error_msg, ret_val)                                               \
   {                                                                                                \
-    if (obj == 0) {                                                                                \
+    if ((obj) == 0) {                                                                              \
       JNI_THROW_NEW(env, "java/lang/NullPointerException", error_msg, ret_val);                    \
     }                                                                                              \
   }
 
 #define JNI_ARG_CHECK(env, obj, error_msg, ret_val)                                                \
   {                                                                                                \
-    if (!obj) {                                                                                    \
+    if (!(obj)) {                                                                                  \
       JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", error_msg, ret_val);                \
     }                                                                                              \
   }

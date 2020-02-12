@@ -128,6 +128,14 @@ list_types_tuple = (list, np.array)
 
 
 def buffers_from_pyarrow(pa_arr, dtype=None):
+    """
+    Given a pyarrow array returns a 5 length tuple of:
+        - size
+        - offset
+        - cudf.Buffer --> mask
+        - cudf.Buffer --> data
+        - cudf.Buffer --> string characters
+    """
     from cudf.core.buffer import Buffer
     from cudf.utils.cudautils import copy_array
 
@@ -142,13 +150,12 @@ def buffers_from_pyarrow(pa_arr, dtype=None):
         pamask = None
 
     offset = pa_arr.offset
-    size = pa_arr.offset + len(pa_arr)
+    size = len(pa_arr)
 
     if dtype:
         data_dtype = dtype
     elif isinstance(pa_arr, pa.StringArray):
         data_dtype = np.int32
-        size = size + 1  # extra element holds number of bytes
     else:
         if isinstance(pa_arr, pa.DictionaryArray):
             data_dtype = pa_arr.indices.type.to_pandas_dtype()
@@ -156,16 +163,14 @@ def buffers_from_pyarrow(pa_arr, dtype=None):
             data_dtype = pa_arr.type.to_pandas_dtype()
 
     if buffers[1]:
-        padata = Buffer(
-            np.asarray(buffers[1]).view(data_dtype)[offset : offset + size]
-        )
+        padata = Buffer(np.asarray(buffers[1]).view(data_dtype))
     else:
         padata = Buffer.empty(0)
 
     pastrs = None
     if isinstance(pa_arr, pa.StringArray):
         pastrs = Buffer(np.asarray(buffers[2]).view(np.int8))
-    return (pamask, padata, pastrs)
+    return (size, offset, pamask, padata, pastrs)
 
 
 def get_result_name(left, right):
