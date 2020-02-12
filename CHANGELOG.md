@@ -92,6 +92,7 @@
 - PR #4113 Use `.nvstrings` in `StringColumn.sum(...)`
 - PR #4116 Fix a bug in contiguous_split() where tables with mixed column types could corrupt string output
 - PR #4125 Fix type enum to account for added Dictionary type in `types.hpp`
+- PR #4132 Fix `hash_partition` null mask allocation
 
 
 # cuDF 0.12.0 (04 Feb 2020)
