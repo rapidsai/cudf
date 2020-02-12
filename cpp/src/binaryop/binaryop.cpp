@@ -87,6 +87,8 @@ const std::string hash = "prog_binop.experimental";
 
 const std::vector<std::string> compiler_flags{
     "-std=c++14",
+    // Have jitify prune unused global variables
+    "-remove-unused-globals",
     // suppress all NVRTC warnings
     "-w",
     // force libcudacxx to not include system headers

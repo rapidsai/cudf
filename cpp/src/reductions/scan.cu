@@ -12,6 +12,7 @@
 #include <cudf/reduction.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/null_mask.hpp>
+#include <cudf/detail/aggregation/aggregation.hpp>
 
 namespace cudf {
 namespace experimental {
@@ -42,14 +43,14 @@ struct ScanDispatcher {
   //for arithmetic types
   template <typename T,
     std::enable_if_t<std::is_arithmetic<T>::value, T>* = nullptr>
-  auto exclusive_scan(const column_view& input_view, bool skipna,
+  auto exclusive_scan(const column_view& input_view, include_nulls include_nulls_flag,
                       rmm::mr::device_memory_resource* mr, cudaStream_t stream)
   {
     const size_type size = input_view.size();
     auto output_column = experimental::detail::allocate_like(
         input_view, size, experimental::mask_allocation_policy::NEVER, mr,
         stream);
-    if (skipna) {
+    if (include_nulls_flag==include_nulls::NO) {
       output_column->set_null_mask(copy_bitmask(input_view, stream, mr),
                                    input_view.null_count());
     }
@@ -77,7 +78,8 @@ struct ScanDispatcher {
   //for string type
   template <typename T,
     std::enable_if_t<is_string_supported<T>(), T>* = nullptr>
-  std::unique_ptr<column> exclusive_scan(const column_view& input_view, bool skipna,
+  std::unique_ptr<column> exclusive_scan(const column_view& input_view, 
+                      include_nulls include_nulls_flag,
                       rmm::mr::device_memory_resource* mr, cudaStream_t stream)
   {
     CUDF_FAIL("String types supports only inclusive min/max for `cudf::scan`");
@@ -95,27 +97,31 @@ struct ScanDispatcher {
       rmm::exec_policy(stream)->on(stream),
       v, v + input_view.size(), 
       thrust::identity<bool>{}) -  v;
-    cudf::set_null_mask(static_cast<cudf::bitmask_type*>(mask.data()), 0, first_null_position, true);
-    cudf::set_null_mask(static_cast<cudf::bitmask_type*>(mask.data()), first_null_position, input_view.size(), false);
+    cudf::set_null_mask(static_cast<cudf::bitmask_type *>(mask.data()),
+                        0, first_null_position, true);
+    cudf::set_null_mask(static_cast<cudf::bitmask_type *>(mask.data()),
+                        first_null_position, input_view.size(), false);
     return mask;
   }
 
   //for arithmetic types
   template <typename T,
     std::enable_if_t<std::is_arithmetic<T>::value, T>* = nullptr>
-  auto inclusive_scan(const column_view& input_view, bool skipna,
+  auto inclusive_scan(const column_view& input_view, include_nulls include_nulls_flag,
                       rmm::mr::device_memory_resource* mr, cudaStream_t stream)
   {
     const size_type size = input_view.size();
     auto output_column = experimental::detail::allocate_like(
         input_view, size, experimental::mask_allocation_policy::NEVER, mr,
         stream);
-    if(skipna) {
+    if(include_nulls_flag==include_nulls::NO) {
     output_column->set_null_mask(copy_bitmask(input_view, stream, mr),
                                  input_view.null_count());
     } else {
       if (input_view.nullable()) {
-        output_column->set_null_mask(mask_inclusive_scan(input_view, mr, stream), cudf::UNKNOWN_NULL_COUNT);
+        output_column->set_null_mask(
+            mask_inclusive_scan(input_view, mr, stream),
+            cudf::UNKNOWN_NULL_COUNT);
       }
     }
     
@@ -141,7 +147,8 @@ struct ScanDispatcher {
 //for string type
 template <typename T,
     std::enable_if_t<is_string_supported<T>(), T>* = nullptr>
-  std::unique_ptr<column> inclusive_scan(const column_view& input_view, bool skipna,
+  std::unique_ptr<column> inclusive_scan(const column_view& input_view, 
+                      include_nulls include_nulls_flag,
                       rmm::mr::device_memory_resource* mr, cudaStream_t stream)
   {
     const size_type size = input_view.size();
@@ -163,7 +170,7 @@ template <typename T,
     CHECK_CUDA(stream);
 
     auto output_column = make_strings_column(result, Op::template identity<T>(), stream, mr);
-    if(skipna) {
+    if(include_nulls_flag==include_nulls::NO) {
       output_column->set_null_mask(copy_bitmask(input_view, stream, mr),
                                    input_view.null_count());
     } else {
@@ -191,15 +198,15 @@ template <typename T,
   template <typename T,
             typename std::enable_if_t<is_supported<T>(), T>* = nullptr>
   std::unique_ptr<column> operator()(const column_view& input, 
-                  bool inclusive, bool skipna,
+                  scan_type inclusive, include_nulls include_nulls_flag,
                   rmm::mr::device_memory_resource* mr, cudaStream_t stream)
   {
     std::unique_ptr<column> output;
-      if (inclusive)
-        output = inclusive_scan<T>(input, skipna, mr, stream);
+      if (inclusive==scan_type::INCLUSIVE)
+        output = inclusive_scan<T>(input, include_nulls_flag, mr, stream);
       else
-        output = exclusive_scan<T>(input, skipna, mr, stream);
-    if (skipna) {
+        output = exclusive_scan<T>(input, include_nulls_flag, mr, stream);
+    if (include_nulls_flag==include_nulls::NO) {
       CUDF_EXPECTS(input.null_count() == output->null_count(),
                    "Input / output column null count mismatch");
     }
@@ -209,7 +216,7 @@ template <typename T,
   template <typename T,
             typename std::enable_if_t<!is_supported<T>(), T>* = nullptr>
   std::unique_ptr<column> operator()(const column_view& input,
-                  bool inclusive, bool skipna,
+                  scan_type inclusive, include_nulls include_nulls_flag,
                   rmm::mr::device_memory_resource* mr, cudaStream_t stream)
   {
     CUDF_FAIL("Non-arithmetic types not supported for `cudf::scan`");
@@ -217,36 +224,37 @@ template <typename T,
 };
 
 std::unique_ptr<column> scan(const column_view& input,
-                             scan_op op, bool inclusive, bool skipna,
+                             std::unique_ptr<aggregation> const &agg,
+                             scan_type inclusive, include_nulls include_nulls_flag,
                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                              cudaStream_t stream=0)
 {
   CUDF_EXPECTS(is_numeric(input.type()) || is_compound(input.type()), "Unexpected non-numeric or non-string type.");
 
-  switch (op) {
-    case scan_op::SUM:
+  switch (agg->kind) {
+    case aggregation::SUM:
         return cudf::experimental::type_dispatcher(input.type(),
-            ScanDispatcher<cudf::DeviceSum>(), input, inclusive, skipna, mr, stream);
-    case scan_op::MIN:
+            ScanDispatcher<cudf::DeviceSum>(), input, inclusive, include_nulls_flag, mr, stream);
+    case aggregation::MIN:
         return cudf::experimental::type_dispatcher(input.type(),
-            ScanDispatcher<cudf::DeviceMin>(), input, inclusive, skipna, mr, stream);
-    case scan_op::MAX:
+            ScanDispatcher<cudf::DeviceMin>(), input, inclusive, include_nulls_flag, mr, stream);
+    case aggregation::MAX:
         return cudf::experimental::type_dispatcher(input.type(),
-            ScanDispatcher<cudf::DeviceMax>(), input, inclusive, skipna, mr, stream);
-    case scan_op::PRODUCT:
+            ScanDispatcher<cudf::DeviceMax>(), input, inclusive, include_nulls_flag, mr, stream);
+    case aggregation::PRODUCT:
         return cudf::experimental::type_dispatcher(input.type(),
-            ScanDispatcher<cudf::DeviceProduct>(), input, inclusive, skipna, mr, stream);
+            ScanDispatcher<cudf::DeviceProduct>(), input, inclusive, include_nulls_flag, mr, stream);
     default:
-        CUDF_FAIL("The input enum `scan::operators` is out of the range");
+        CUDF_FAIL("Unsupported aggregation operator for scan");
     }
 }
 } // namespace detail
 
-std::unique_ptr<column> scan(const column_view& input,
-                             scan_op op, bool inclusive, bool skipna,
-                             rmm::mr::device_memory_resource* mr)
-{
-  return detail::scan(input, op, inclusive, skipna, mr);
+std::unique_ptr<column> scan(const column_view &input,
+                             std::unique_ptr<aggregation> const &agg,
+                             scan_type inclusive, include_nulls include_nulls_flag,
+                             rmm::mr::device_memory_resource *mr) {
+  return detail::scan(input, agg, inclusive, include_nulls_flag, mr);
 }
 
 }  // namespace experimental
