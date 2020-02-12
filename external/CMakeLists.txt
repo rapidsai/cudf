@@ -136,3 +136,7 @@ target_link_directories(cudf_kafka PUBLIC "${RDKAFKA_LIBRARY}")
 
 # link targets for cudf_kafka
 target_link_libraries(cudf_kafka rdkafka rdkafka++)
+
+install(TARGETS cudf_kafka
+        DESTINATION lib
+        COMPONENT cudf_kafka)

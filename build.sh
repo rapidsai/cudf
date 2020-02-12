@@ -139,7 +139,7 @@ fi
 ################################################################################
 # Configure, build, and install libnvstrings
 
-if buildAll || hasArg libnvstrings || hasArg libcudf || hasArg external; then
+if buildAll || hasArg libnvstrings || hasArg libcudf; then
 
     mkdir -p ${LIB_BUILD_DIR}
     cd ${LIB_BUILD_DIR}
@@ -211,6 +211,7 @@ fi
 # Build and install the external datasources
 if buildAll || hasArg external; then
 
+    echo "Making external datasource ${EXTERNAL_BUILD_DIR}"
     mkdir -p ${EXTERNAL_BUILD_DIR}
     cd ${EXTERNAL_BUILD_DIR}
     cmake -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
@@ -219,4 +220,5 @@ if buildAll || hasArg external; then
 
     # build the external datasource project
     make -j${PARALLEL_LEVEL} VERBOSE=${VERBOSE}
+    make install
 fi

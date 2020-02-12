@@ -73,7 +73,6 @@ class datasource_factory {
   boost::filesystem::path getExternalLibDir() {
     // The environment variable always overrides the
     // default/compile-time value of `EXTERNAL_DATASOURCE_LIB_PATH`
-    printf("External Lib Path '%s'\n", external_lib_dir_.c_str());
     if (!boost::filesystem::exists(external_lib_dir_)) {
       auto external_io_lib_path_env = std::getenv("EXTERNAL_DATASOURCE_LIB_PATH");
       auto external_io_lib_path = boost::filesystem::path(
@@ -167,37 +166,21 @@ class datasource_factory {
  private:
   void load_external_libs() {
     boost::filesystem::path ext_path = getExternalLibDir();
-    if (boost::filesystem::is_directory(ext_path)) {
+    printf("Loading External Libraries at: '%s'\n", ext_path.c_str());
+    if (boost::filesystem::exists(ext_path) && boost::filesystem::is_directory(ext_path)) {
         boost::filesystem::directory_iterator it{ext_path};
-        while (it != boost::filesystem::directory_iterator{})
-          std::cout << *it++ << '\n';
+        boost::filesystem::directory_iterator endit;
+        while (it != endit) {
+          if (it->path().extension() == EXTERNAL_LIB_SUFFIX) {
+            external_datasource_wrapper wrapper(it->path().c_str());
+            external_libs_.insert(std::pair<std::string, external_datasource_wrapper>(wrapper.unique_id(), wrapper));
+            printf("External Datasource: '%s' loaded from shared object: '%s'\n", wrapper.unique_id().c_str(), it->path().c_str());
+          }
+          ++it;
+        }
     } else {
       //TODO: Some sort of runtime error because the library directory does not exist. Advice from reviewer?
     }
-
-    // DIR* dirp = opendir(EXTERNAL_LIB_DIR.c_str());
-    // struct dirent * dp;
-    // while ((dp = readdir(dirp)) != NULL) {
-    //   if (has_suffix(dp->d_name, EXTERNAL_LIB_SUFFIX)) {
-    //     std::string filename(EXTERNAL_LIB_DIR);
-    //     filename.append("/");
-    //     filename.append(dp->d_name);
-
-    //     // Load and wrap the external datasource.
-    //     external_datasource_wrapper wrapper(filename);
-    //     external_libs_.insert(std::pair<std::string, external_datasource_wrapper>(wrapper.unique_id(), wrapper));
-
-    //     // Print out information for user
-    //     printf("External Datasource: '%s' loaded from shared object: '%s'\n", wrapper.unique_id().c_str(), filename.c_str());
-    //   }
-    // }
-    // closedir(dirp);
-  }
-
-  bool has_suffix(const std::string &str, const std::string &suffix)
-  {
-    return str.size() >= suffix.size() &&
-      str.compare(str.size() - suffix.size(), suffix.size(), suffix) == 0;
   }
 
  private:
