@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cudf/copying.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/dictionary/update_keys.hpp>
@@ -27,22 +28,29 @@ struct DictionaryRemoveKeysTest : public cudf::test::BaseFixture {};
 
 TEST_F(DictionaryRemoveKeysTest, StringsColumn)
 {
-    std::vector<const char*> h_strings{ "eee", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "eee", "aaa" };
-    cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end() );
-    std::vector<const char*> h_remove_keys{ "ddd", "bbb", "fff" };
-    cudf::test::strings_column_wrapper remove_keys( h_remove_keys.begin(), h_remove_keys.end() );
+    cudf::test::strings_column_wrapper strings{ "eee", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "eee", "aaa" };
+    cudf::test::strings_column_wrapper remove_keys{ "ddd", "bbb", "fff" };
 
     auto dictionary = cudf::dictionary::encode( strings );
-    auto result = cudf::dictionary::remove_keys( cudf::dictionary_column_view(dictionary->view()), remove_keys );
-    cudf::dictionary_column_view view(result->view());
+    // remove keys
+    {
+        auto result = cudf::dictionary::remove_keys( cudf::dictionary_column_view(dictionary->view()), remove_keys );
+        std::vector<const char*> h_expected{ "eee", "aaa", nullptr, nullptr, "ccc", "ccc", "ccc", "eee", "aaa" };
+        cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
+            thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
+        auto decoded = cudf::dictionary::decode( result->view() );
+        cudf::test::expect_columns_equal( decoded->view(), expected);
+    }
+    // remove_unused_keys
+    {
+        cudf::test::fixed_width_column_wrapper<int32_t> gather_map{0,4,3,1};
+        auto table_result = cudf::experimental::gather(cudf::table_view{{dictionary->view()}}, gather_map)->release();
+        auto result = cudf::dictionary::remove_unused_keys( table_result.front()->view() );
+        auto decoded = cudf::dictionary::decode( result->view() );
+        cudf::test::strings_column_wrapper expected{ "eee", "ccc", "bbb", "aaa" };
+        cudf::test::expect_columns_equal( decoded->view(), expected);
+    }
 
-    std::vector<const char*> h_keys{ "aaa", "ccc", "eee" };
-    cudf::test::strings_column_wrapper keys_expected( h_keys.begin(), h_keys.end() );
-    cudf::test::expect_columns_equal(view.keys(), keys_expected);
-
-    std::vector<int32_t> h_expected{2,0,-1,-1,1,1,1,2,0};
-    cudf::test::fixed_width_column_wrapper<int32_t> indices_expected( h_expected.begin(), h_expected.end() );
-    cudf::test::expect_columns_equal(view.indices(), indices_expected);
 }
 
 TEST_F(DictionaryRemoveKeysTest, FloatColumn)
@@ -51,14 +59,21 @@ TEST_F(DictionaryRemoveKeysTest, FloatColumn)
     cudf::test::fixed_width_column_wrapper<float> remove_keys{ 4.25, -11.75, 5.0 };
 
     auto dictionary = cudf::dictionary::encode( input );
-    auto result = cudf::dictionary::remove_keys( cudf::dictionary_column_view(dictionary->view()), remove_keys );
-    cudf::dictionary_column_view view(result->view());
 
-    cudf::test::fixed_width_column_wrapper<float> keys_expected{ 0.5, 7.125 };
-    cudf::test::expect_columns_equal(view.keys(), keys_expected);
-
-    cudf::test::fixed_width_column_wrapper<int32_t> expected{-1,1,0,-1,1,0};
-    cudf::test::expect_columns_equal(view.indices(), expected);
+    {
+        auto result = cudf::dictionary::remove_keys( cudf::dictionary_column_view(dictionary->view()), remove_keys );
+        auto decoded = cudf::dictionary::decode( result->view() );
+        cudf::test::fixed_width_column_wrapper<float> expected{ {0,7.125,0.5,0,7.125,0.5}, {0,1,1,0,1,1} };
+        cudf::test::expect_columns_equal( decoded->view(), expected);
+    }
+    {
+        cudf::test::fixed_width_column_wrapper<int32_t> gather_map{0,2,3,1};
+        auto table_result = cudf::experimental::gather(cudf::table_view{{dictionary->view()}}, gather_map)->release();
+        auto result = cudf::dictionary::remove_unused_keys( table_result.front()->view() );
+        auto decoded = cudf::dictionary::decode( result->view() );
+        cudf::test::fixed_width_column_wrapper<float> expected{ {4.25,0.5,-11.75,7.125} };
+        cudf::test::expect_columns_equal( decoded->view(), expected);
+    }
 }
 
 TEST_F(DictionaryRemoveKeysTest, WithNull)
@@ -67,12 +82,18 @@ TEST_F(DictionaryRemoveKeysTest, WithNull)
     cudf::test::fixed_width_column_wrapper<int64_t> remove_keys{ 0, 111, 777 };
 
     auto dictionary = cudf::dictionary::encode( input );
-    auto result = cudf::dictionary::remove_keys( cudf::dictionary_column_view(dictionary->view()), remove_keys );
-    cudf::dictionary_column_view view(result->view());
-
-    cudf::test::fixed_width_column_wrapper<int64_t> keys_expected{ 222,333,444 };
-    cudf::test::expect_columns_equal(view.keys(), keys_expected);
-
-    cudf::test::fixed_width_column_wrapper<int32_t> expected{2,-1,1,-1,0,0,0,2,-1};
-    cudf::test::expect_columns_equal(view.indices(), expected);
+    {
+        auto result = cudf::dictionary::remove_keys( cudf::dictionary_column_view(dictionary->view()), remove_keys );
+        auto decoded = cudf::dictionary::decode( result->view() );
+        cudf::test::fixed_width_column_wrapper<int64_t> expected{ {444,0,333,0,222,0,222,444,0}, {1,0,1,0,1,0,1,1,0} };
+        cudf::test::expect_columns_equal( decoded->view(), expected);
+    }
+    {
+        cudf::test::fixed_width_column_wrapper<int32_t> gather_map{0,2,3,1};
+        auto table_result = cudf::experimental::gather(cudf::table_view{{dictionary->view()}}, gather_map)->release();
+        auto result = cudf::dictionary::remove_unused_keys( table_result.front()->view() );
+        auto decoded = cudf::dictionary::decode( result->view() );
+        cudf::test::fixed_width_column_wrapper<int64_t> expected{ {444,333,111,0} };
+        cudf::test::expect_columns_equal( decoded->view(), expected);
+    }
 }
