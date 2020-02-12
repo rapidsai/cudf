@@ -12,7 +12,7 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf::experimental" nogil:
 
     cdef cppclass aggregation:
         pass
-        
+
     cdef unique_ptr[aggregation] make_sum_aggregation()
 
     cdef unique_ptr[aggregation] make_product_aggregation()
@@ -37,13 +37,16 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf::experimental" nogil:
 
     cdef unique_ptr[aggregation] make_median_aggregation()
 
+    cdef unique_ptr[aggregation] make_quantile_aggregation(vector[double] q,
+                                                           interpolation i)
+
     cdef unique_ptr[aggregation] make_argmax_aggregation()
 
     cdef unique_ptr[aggregation] make_argmin_aggregation()
 
-    cdef unique_ptr[aggregation] make_udf_aggregation(udf_type type,
-                                                      string user_defined_aggregator,
-                                                      data_type output_type)
+    cdef unique_ptr[aggregation] make_udf_aggregation(
+        udf_type type,
+        string user_defined_aggregator,
+        data_type output_type)
 
-cdef unique_ptr[aggregation] get_aggregation (op, kwargs)
-
+cdef unique_ptr[aggregation] get_aggregation(op, kwargs)

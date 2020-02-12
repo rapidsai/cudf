@@ -19,6 +19,13 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
     cdef enum:
         UNKNOWN_NULL_COUNT = -1
 
+    ctypedef enum interpolation:
+        LINEAR "cudf::experimental::interpolation::LINEAR"
+        LOWER "cudf::experimental::interpolation::LOWER"
+        HIGHER "cudf::experimental::interpolation::HIGHER"
+        MIDPOINT "cudf::experimental::interpolation::MIDPOINT"
+        NEAREST "cudf::experimental::interpolation::NEAREST"
+
     cdef enum type_id:
         EMPTY = 0
         INT8 = 1
