@@ -385,46 +385,6 @@ class MultiIndex(Index):
         final = self._index_and_downcast(result, result.index, row_tuple)
         return final
 
-    def _get_column_major(self, df, column_tuple):
-        from cudf import Series
-        from cudf import DataFrame
-
-        valid_indices = self._get_valid_indices_by_tuple(
-            df.columns, column_tuple, len(df._data)
-        )
-        result = df._take_columns(valid_indices)
-        if isinstance(column_tuple, (numbers.Number, slice)):
-            column_tuple = [column_tuple]
-        if len(result) == 0 and len(result.columns) == 0:
-            result_columns = df.columns.copy(deep=False)
-            clear_codes = DataFrame()
-            for name in df.columns.names:
-                clear_codes[name] = Series([])
-            result_columns._codes = clear_codes
-            result_columns._source_data = clear_codes
-            result.columns = result_columns
-        elif len(column_tuple) < len(self.levels) and (
-            not slice(None) in column_tuple
-            and not isinstance(column_tuple[0], (slice, numbers.Number))
-        ):
-            columns = self._popn(len(column_tuple))
-            result.columns = columns.take(valid_indices)
-        else:
-            result.columns = self.take(valid_indices)
-        if len(result.columns.levels) == 1:
-            columns = []
-            for code in result.columns.codes[result.columns.codes.columns[0]]:
-                columns.append(result.columns.levels[0][code])
-            name = result.columns.names[0]
-            result.columns = as_index(columns, name=name)
-        if len(column_tuple) == len(self.levels) and len(result.columns) == 1:
-            result = cudf.Series(
-                next(iter(result._data.columns)),
-                name=column_tuple,
-                index=result.index,
-            )
-        return result
-
     def _split_tuples(self, tuples):
         if len(tuples) == 1:
             return tuples, slice(None)

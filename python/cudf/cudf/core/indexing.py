@@ -208,19 +208,11 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
         if isinstance(columns_df.index, MultiIndex):
             return columns_df.index._get_row_major(columns_df, arg[0])
         else:
-            if isinstance(self._df.columns, MultiIndex):
-                if isinstance(arg[0], slice):
-                    start, stop, step = arg[0].indices(len(columns_df))
-                    indices = arange(start, stop, step)
-                    df = columns_df.take(indices)
-                else:
-                    df = columns_df.take(arg[0])
-            else:
-                df = DataFrame()
-                for col in columns_df.columns:
-                    # need Series() in case a scalar is returned
-                    df[col] = Series(columns_df[col].loc[arg[0]])
-                df.columns = columns_df.columns
+            df = DataFrame()
+            for col in columns_df.columns:
+                # need Series() in case a scalar is returned
+                df[col] = Series(columns_df[col].loc[arg[0]])
+            df.columns = columns_df.columns
 
         # Step 3: Gather index
         if df.shape[0] == 1:  # we have a single row
@@ -242,7 +234,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
 
     def _setitem_tuple_arg(self, key, value):
         if isinstance(self._df.index, cudf.MultiIndex) or isinstance(
-            self._df.columns, cudf.MultiIndex
+            self._df.columns, pd.MultiIndex
         ):
             raise NotImplementedError(
                 "Setting values using df.loc[] not supported on "
@@ -312,29 +304,6 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         # Iloc Step 4:
         # Downcast
         if self._can_downcast_to_series(df, arg):
-            if isinstance(df.columns, MultiIndex):
-                if len(df) > 0 and not (
-                    isinstance(arg[0], slice) or isinstance(arg[1], slice)
-                ):
-                    return list(df._data.columns)[0][0]
-                elif df.shape[1] > 1:
-                    result = self._downcast_to_series(df, arg)
-                    result.index = df.columns
-                    return result
-                elif not isinstance(arg[0], slice):
-                    if len(df._data) == 0:
-                        return Series(
-                            column_empty(0, dtype="float64"),
-                            index=df.columns,
-                            name=arg[0],
-                        )
-                    else:
-                        result_series = df[df.columns[0]]
-                        result_series.index = df.columns
-                        result_series.name = arg[0]
-                        return result_series
-                else:
-                    return df[df.columns[0]]
             return self._downcast_to_series(df, arg)
 
         if df.shape[0] == 0 and df.shape[1] == 0 and isinstance(arg[0], slice):

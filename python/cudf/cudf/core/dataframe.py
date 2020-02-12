@@ -222,8 +222,7 @@ class DataFrame(Frame):
         for col_name, col in enumerate(data):
             self._data[col_name] = column.as_column(col)
 
-        if not hasattr(self, "multi_cols"):
-            self.columns = columns
+        self.columns = columns
 
     def _init_from_dict_like(self, data, index=None, columns=None):
         data = data.copy()
@@ -1564,30 +1563,6 @@ class DataFrame(Frame):
         out.columns = self.columns
         return out
 
-    def _take_columns(self, positions):
-        positions = Series(positions)
-        columns = self.columns
-        column_values = list(self._data.columns)
-
-        result = DataFrame()
-        for idx in range(len(positions)):
-            if isinstance(columns, cudf.MultiIndex):
-                colname = positions[idx]
-            else:
-                colname = columns[positions[idx]]
-            if len(self) == 0:
-                result[colname] = as_column([])
-            else:
-                result[colname] = column_values[positions[idx]]
-
-        result.index = self._index
-        if isinstance(columns, cudf.MultiIndex):
-            columns = columns.take(positions)
-        else:
-            columns = columns.take(positions.to_pandas())
-        result.columns = columns
-        return result
-
     def copy(self, deep=True):
         """
         Returns a copy of this dataframe
@@ -1810,8 +1785,6 @@ class DataFrame(Frame):
         if inplace:
             self._data = result._data
             self._index = result._index
-            if hasattr(result, "multi_cols"):
-                self.multi_cols = result.multi_cols
         else:
             return result
 
