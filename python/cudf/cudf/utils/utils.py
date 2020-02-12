@@ -76,11 +76,6 @@ def make_mask(size):
     return rmm.device_array(shape=size, dtype=mask_dtype)
 
 
-def require_writeable_array(arr):
-    # This should be fixed in numba (numba issue #2521)
-    return np.require(arr, requirements="W")
-
-
 def scalar_broadcast_to(scalar, size, dtype=None):
     from cudf.utils.cudautils import fill_value
     from cudf.utils.dtypes import to_cudf_compatible_scalar, is_string_dtype
@@ -141,8 +136,6 @@ def buffers_from_pyarrow(pa_arr, dtype=None):
         - cudf.Buffer --> string characters
     """
     from cudf.core.buffer import Buffer
-
-    # from cudf.utils.cudautils import copy_array
 
     buffers = pa_arr.buffers()
 

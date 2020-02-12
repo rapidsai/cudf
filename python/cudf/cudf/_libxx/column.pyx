@@ -219,16 +219,16 @@ cdef class Column:
         properly adjust the pointer.
         """
         mask_size = calc_mask_bytes(self.size)
-        required_num_bits = -(-self.size // 8)  # ceiling divide
+        required_num_bytes = -(-self.size // 8)  # ceiling divide
         error_msg = (
-            "The value for mask is smaller than expected, got {}  bits, "
-            "expected " + str(required_num_bits) + " bits."
+            "The value for mask is smaller than expected, got {}  bytes, "
+            "expected " + str(required_num_bytes) + " bytes."
         )
         if value is None:
             mask = None
         elif hasattr(value, "__cuda_array_interface__"):
             mask = Buffer(value)
-            if mask.size < required_num_bits:
+            if mask.size < required_num_bytes:
                 raise ValueError(error_msg.format(str(value.size)))
             if mask.size < mask_size:
                 dbuf = rmm.DeviceBuffer(size=mask_size)
@@ -236,14 +236,14 @@ cdef class Column:
                 mask = Buffer(dbuf)
         elif hasattr(value, "__array_interface__"):
             value = np.asarray(value).view("u1")[:mask_size]
-            if value.size < required_num_bits:
+            if value.size < required_num_bytes:
                 raise ValueError(error_msg.format(str(value.size)))
             dbuf = rmm.DeviceBuffer(size=mask_size)
             dbuf.copy_from_host(value)
             mask = Buffer(dbuf)
         elif PyObject_CheckBuffer(value):
             value = np.asarray(value).view("u1")[:mask_size]
-            if value.size < required_num_bits:
+            if value.size < required_num_bytes:
                 raise ValueError(error_msg.format(str(value.size)))
             dbuf = rmm.DeviceBuffer(size=mask_size)
             dbuf.copy_from_host()
