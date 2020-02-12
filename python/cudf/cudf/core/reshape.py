@@ -1,10 +1,9 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 import numpy as np
-import pandas as pd
 
 import cudf
-from cudf.core import DataFrame, Index, MultiIndex, RangeIndex, Series
+from cudf.core import DataFrame, Index, Series, pRangeIndex
 from cudf.core.column import build_categorical_column
 from cudf.core.index import as_index
 from cudf.utils import cudautils

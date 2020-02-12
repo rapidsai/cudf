@@ -1,9 +1,7 @@
-import numpy as np
 import pandas as pd
 import pytest
 
 import cudf
-from cudf.core.column import as_column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.tests.utils import assert_eq
 

@@ -113,7 +113,7 @@ class Series(Frame):
                 data = data.astype(dtype)
         elif isinstance(data, ColumnAccessor):
             name, data = data.names[0], data.columns[0]
-                
+
         if isinstance(data, Series):
             index = data._index if index is None else index
             if name is None:
