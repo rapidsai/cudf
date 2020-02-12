@@ -32,21 +32,18 @@ namespace gpu {
  * @param[in] row_index_stride Rowgroup size in rows
  *
  **/
-constexpr unsigned int log2_init_thread_per_group = 5;
-constexpr unsigned int log2_init_groups_per_block = 2;
-constexpr unsigned int init_thread_per_group = 1 << log2_init_thread_per_group;
-constexpr unsigned int init_groups_per_block = 1 << log2_init_groups_per_block;
-constexpr unsigned int init_threads_per_block = 1 << (log2_init_thread_per_group + log2_init_groups_per_block);
-constexpr unsigned int init_group_thread_mask = init_thread_per_group - 1;
+constexpr unsigned int init_threads_per_group = 32;
+constexpr unsigned int init_groups_per_block = 4;
+constexpr unsigned int init_threads_per_block = init_threads_per_group * init_groups_per_block;
 
 __global__ void __launch_bounds__(init_threads_per_block)
 gpu_init_statistics_groups(statistics_group *groups, const stats_column_desc *cols,
                            uint32_t num_columns, uint32_t num_rowgroups, uint32_t row_index_stride) {
   __shared__ __align__(4) volatile statistics_group group_g[init_groups_per_block];
   uint32_t col_id = blockIdx.y;
-  uint32_t chunk_id = (blockIdx.x * init_groups_per_block) + (threadIdx.x >> log2_init_thread_per_group);
-  uint32_t t = threadIdx.x & init_group_thread_mask;
-  volatile statistics_group *group = &group_g[threadIdx.x >> log2_init_thread_per_group];
+  uint32_t chunk_id = (blockIdx.x * init_groups_per_block) + threadIdx.y;
+  uint32_t t = threadIdx.x;
+  volatile statistics_group *group = &group_g[threadIdx.y];
   if (chunk_id < num_rowgroups) {
     if (t == 0) {
       uint32_t num_rows = cols[col_id].num_rows;
@@ -69,12 +66,8 @@ gpu_init_statistics_groups(statistics_group *groups, const stats_column_desc *co
  * @param[in] statistics_count Number of statistics buffers
  *
  **/
-constexpr unsigned int log2_buffersize_reduction_size = 5;
-constexpr unsigned int log2_buffersize_threads_per_block = 5 + log2_buffersize_reduction_size;
-constexpr unsigned int buffersize_reduction_size = 1 << log2_buffersize_reduction_size;
-constexpr unsigned int buffersize_reduction_mask = buffersize_reduction_size - 1;
-constexpr unsigned int buffersize_threads_per_block = 1 << log2_buffersize_threads_per_block;
-constexpr unsigned int buffersize_scratch_size = buffersize_threads_per_block / buffersize_reduction_size;
+constexpr unsigned int buffersize_reduction_dim = 32;
+constexpr unsigned int buffersize_threads_per_block = buffersize_reduction_dim * buffersize_reduction_dim;
 constexpr unsigned int pb_fld_hdrlen = 1;
 constexpr unsigned int pb_fld_hdrlen16 = 2; // > 127-byte length
 constexpr unsigned int pb_fld_hdrlen32 = 5; // > 16KB length
@@ -86,9 +79,11 @@ constexpr unsigned int pb_fldlen_common = 2 * pb_fld_hdrlen + pb_fldlen_int64;
 
 __global__ void __launch_bounds__(buffersize_threads_per_block, 1)
 gpu_init_statistics_buffersize(statistics_merge_group *groups, const statistics_chunk *chunks, uint32_t statistics_count) {
-  __shared__ volatile uint32_t scratch_red[buffersize_scratch_size];
+  __shared__ volatile uint32_t scratch_red[buffersize_reduction_dim];
   __shared__ volatile uint32_t stats_size;
-  uint32_t t = threadIdx.x;
+  uint32_t tx = threadIdx.x;
+  uint32_t ty = threadIdx.y;
+  uint32_t t = ty * buffersize_reduction_dim + tx;
   if (!t) {
     stats_size = 0;
   }
@@ -126,17 +121,17 @@ gpu_init_statistics_buffersize(statistics_merge_group *groups, const statistics_
       default: break;
       }
     }
-    stats_pos = WarpReducePos32(stats_len, t);
-    if ((t & buffersize_reduction_mask) == buffersize_reduction_mask) {
-      scratch_red[t >> log2_buffersize_reduction_size] = stats_pos;
+    stats_pos = WarpReducePos32(stats_len, tx);
+    if (tx == buffersize_reduction_dim - 1) {
+      scratch_red[ty] = stats_pos;
     }
     __syncthreads();
-    if (t < buffersize_scratch_size) {
-      scratch_red[t] = WarpReducePos32(scratch_red[t], t);
+    if (ty == 0) {
+      scratch_red[tx] = WarpReducePos32(scratch_red[tx], tx);
     }
     __syncthreads();
-    if (t >= buffersize_reduction_size) {
-      stats_pos += scratch_red[(t >> log2_buffersize_reduction_size) - 1];
+    if (ty != 0) {
+      stats_pos += scratch_red[ty - 1];
     }
     stats_pos += stats_size;
     if (idx < statistics_count) {
@@ -239,20 +234,17 @@ __device__ inline uint8_t *pb_put_fixed64(uint8_t *p, uint32_t id, const void *r
  * }
  *
  **/
-constexpr unsigned int log2_encode_threads_per_chunk = 5;
-constexpr unsigned int log2_encode_chunks_per_block = 2;
-constexpr unsigned int encode_threads_per_chunk = 1 << log2_encode_threads_per_chunk;
-constexpr unsigned int encode_chunks_per_block = 1 << log2_encode_chunks_per_block;
-constexpr unsigned int encode_threads_per_block = 1 << (log2_encode_threads_per_chunk + log2_encode_chunks_per_block);
-constexpr unsigned int encode_chunk_thread_mask = encode_threads_per_chunk - 1;
+constexpr unsigned int encode_threads_per_chunk = 32;
+constexpr unsigned int encode_chunks_per_block = 4;
+constexpr unsigned int encode_threads_per_block = encode_threads_per_chunk * encode_chunks_per_block;
 
 __global__ void __launch_bounds__(encode_threads_per_block)
 gpu_encode_statistics(uint8_t *blob_bfr, statistics_merge_group *groups, const statistics_chunk *chunks,
                       uint32_t statistics_count) {
   __shared__ __align__(8) stats_state_s state_g[encode_chunks_per_block];
-  uint32_t t = threadIdx.x & encode_chunk_thread_mask;
-  uint32_t idx = blockIdx.x * encode_chunks_per_block + (threadIdx.x >> log2_encode_threads_per_chunk);
-  stats_state_s * const s = &state_g[threadIdx.x >> log2_encode_threads_per_chunk];
+  uint32_t t = threadIdx.x;
+  uint32_t idx = blockIdx.x * encode_chunks_per_block + threadIdx.y;
+  stats_state_s * const s = &state_g[threadIdx.y];
   if (idx < statistics_count) {
     if (t < sizeof(statistics_chunk) / sizeof(uint32_t)) {
       reinterpret_cast<uint32_t *>(&s->chunk)[t] = reinterpret_cast<const uint32_t *>(&chunks[idx])[t];
@@ -411,8 +403,9 @@ gpu_encode_statistics(uint8_t *blob_bfr, statistics_merge_group *groups, const s
 cudaError_t orc_init_statistics_groups(statistics_group *groups, const stats_column_desc *cols, uint32_t num_columns,
                                        uint32_t num_rowgroups, uint32_t row_index_stride, cudaStream_t stream)
 {
-    dim3 dim_groups((num_rowgroups + init_groups_per_block - 1) / init_groups_per_block, num_columns);
-    gpu_init_statistics_groups <<< dim_groups, init_threads_per_block, 0, stream >>>(groups, cols, num_columns, num_rowgroups, row_index_stride);
+    dim3 dim_grid((num_rowgroups + init_groups_per_block - 1) / init_groups_per_block, num_columns);
+    dim3 dim_block(init_threads_per_group, init_groups_per_block);
+    gpu_init_statistics_groups <<< dim_grid, dim_block, 0, stream >>>(groups, cols, num_columns, num_rowgroups, row_index_stride);
 
     return cudaSuccess;
 }
@@ -431,7 +424,8 @@ cudaError_t orc_init_statistics_groups(statistics_group *groups, const stats_col
 cudaError_t orc_init_statistics_buffersize(statistics_merge_group *groups, const statistics_chunk *chunks,
                                            uint32_t statistics_count, cudaStream_t stream)
 {
-    gpu_init_statistics_buffersize <<< 1, buffersize_threads_per_block, 0, stream >>>(groups, chunks, statistics_count);
+    dim3 dim_block(buffersize_reduction_dim, buffersize_reduction_dim);
+    gpu_init_statistics_buffersize <<< 1, dim_block, 0, stream >>>(groups, chunks, statistics_count);
     return cudaSuccess;
 }
 
@@ -450,7 +444,8 @@ cudaError_t orc_encode_statistics(uint8_t *blob_bfr, statistics_merge_group *gro
                                   uint32_t statistics_count, cudaStream_t stream)
 {
     unsigned int num_blocks = (statistics_count + encode_chunks_per_block - 1) / encode_chunks_per_block;
-    gpu_encode_statistics <<< num_blocks, encode_threads_per_block, 0, stream >>>(blob_bfr, groups, chunks, statistics_count);
+    dim3 dim_block(encode_threads_per_chunk, encode_chunks_per_block);
+    gpu_encode_statistics <<< num_blocks, dim_block, 0, stream >>>(blob_bfr, groups, chunks, statistics_count);
     return cudaSuccess;
 }
 
