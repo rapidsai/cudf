@@ -113,7 +113,8 @@ struct table_metadata {
  * If the column_nullable field is not empty, it is expected that it has a length equal to the number
  * of columns in the table being written.  
  * 
- * In the case where column nullability is known, pass `true`
+ * In the case where column nullability is known, pass `true` if the corresponding column could contain 
+ * nulls in one or more subtables to be written, otherwise `false`.
  * 
  */
 struct table_metadata_with_nullability : public table_metadata {

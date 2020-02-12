@@ -151,7 +151,7 @@ class writer {
   std::unique_ptr<impl> _impl;
 
  public:
-   /**
+  /**
    * @brief Constructor for output to a file.
    *
    * @param filepath Path to the output file
