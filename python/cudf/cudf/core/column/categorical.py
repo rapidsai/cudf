@@ -244,6 +244,12 @@ class CategoricalColumn(column.ColumnBase):
 
         self._codes = None
 
+    @property
+    def base_size(self):
+        return int(
+            (self.base_children[0].size) / self.base_children[0].dtype.itemsize
+        )
+
     def __contains__(self, item):
         try:
             self._encode(item)

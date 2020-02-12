@@ -473,6 +473,13 @@ class StringColumn(column.ColumnBase):
         self._nvcategory = None
         self._indices = None
 
+    @property
+    def base_size(self):
+        return int(
+            (self.base_children[0].size - 1)
+            / self.base_children[0].dtype.itemsize
+        )
+
     def set_base_data(self, value):
         if value is not None:
             raise RuntimeError(
