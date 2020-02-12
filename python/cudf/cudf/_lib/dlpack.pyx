@@ -21,6 +21,7 @@ import pyarrow as pa
 import warnings
 
 from cudf._lib.includes.dlpack cimport *
+from cudf.utils.utils import mask_dtype
 
 
 cpdef from_dlpack(dlpack_capsule):

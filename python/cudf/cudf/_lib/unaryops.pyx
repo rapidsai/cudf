@@ -143,7 +143,7 @@ def apply_dt_extract_op(Column incol, Column outcol, op):
 def nans_to_nulls(Column py_col):
     from cudf.core.column import as_column
     from cudf.core.buffer import Buffer
-    from cudf.utils.utils import mask_bitsize, calc_chunk_size
+    from cudf.utils.utils import mask_bitsize, calc_mask_bytes
 
     cdef gdf_column* c_col = column_view_from_column(py_col)
     cdef pair[cpp_unaryops.bit_mask_t_ptr, size_type] result
@@ -157,7 +157,7 @@ def nans_to_nulls(Column py_col):
         mask_ptr = rmm._DevicePointer(int(<uintptr_t>result.first))
         mask_buf = Buffer(
             mask_ptr,
-            calc_chunk_size(len(py_col), mask_bitsize)
+            calc_mask_bytes(len(py_col))
         )
     else:
         c_free(<void*><uintptr_t>result.first, <cudaStream_t><uintptr_t>0)

@@ -23,7 +23,7 @@ import pyarrow as pa
 
 from cudf.utils import cudautils
 from cudf.utils.dtypes import is_categorical_dtype
-from cudf.utils.utils import calc_chunk_size, mask_dtype, mask_bitsize
+from cudf.utils.utils import calc_mask_bytes, mask_bitsize
 import rmm
 import nvstrings
 import nvcategory
@@ -329,7 +329,6 @@ cdef Column gdf_column_to_column(gdf_column* c_col):
     """
     from cudf.core.buffer import Buffer
     from cudf.core.column import build_column, as_column
-    from cudf.utils.utils import mask_bitsize, calc_chunk_size
 
     gdf_dtype = c_col.dtype
     data_ptr = int(<uintptr_t>c_col.data)
@@ -359,7 +358,7 @@ cdef Column gdf_column_to_column(gdf_column* c_col):
         mask = None
         if mask_ptr != 0:
             mptr = rmm._DevicePointer(mask_ptr)
-            mask = Buffer(mptr, size=calc_chunk_size(c_col.size, mask_bitsize))
+            mask = Buffer(mptr, size=calc_mask_bytes(c_col.size))
 
         result = build_column(data=data,
                               dtype=dtype,

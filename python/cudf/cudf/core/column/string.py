@@ -651,9 +651,7 @@ class StringColumn(column.ColumnBase):
         out_col = column.as_column(out_arr)
 
         if self.has_nulls:
-            mask_size = utils.calc_chunk_size(
-                len(self.nvstrings), utils.mask_bitsize
-            )
+            mask_size = utils.calc_mask_bytes(len(self.nvstrings))
             out_mask = Buffer.empty(mask_size)
             out_mask_ptr = out_mask.ptr
             self.nvstrings.set_null_bitmask(out_mask_ptr, bdevmem=True)
@@ -671,10 +669,8 @@ class StringColumn(column.ColumnBase):
         sbuf = np.empty(self.nvstrings.byte_count(), dtype="int8")
         obuf = np.empty(len(self.nvstrings) + 1, dtype="int32")
 
-        mask_size = utils.calc_chunk_size(
-            len(self.nvstrings), utils.mask_bitsize
-        )
-        nbuf = np.empty(mask_size, dtype="int8")
+        mask_size = utils.calc_mask_bytes(len(self.nvstrings))
+        nbuf = np.empty(mask_size, dtype="u1")
 
         self.str().to_offsets(sbuf, obuf, nbuf=nbuf)
         sbuf = pa.py_buffer(sbuf)

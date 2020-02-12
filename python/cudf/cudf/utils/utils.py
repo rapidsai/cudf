@@ -9,15 +9,19 @@ from numba import njit
 
 import rmm
 
-mask_dtype = np.dtype(np.int8)
+mask_dtype = np.dtype(np.int32)
 mask_bitsize = mask_dtype.itemsize * 8
-mask_byte_padding = 64
+mask_byte_padding = int(64 / mask_dtype.itemsize)
 
 
 def calc_chunk_size(size, chunksize):
     return mask_byte_padding * ceil(
         ((size + chunksize - 1) // chunksize) / mask_byte_padding
     )
+
+
+def calc_mask_bytes(size):
+    return calc_chunk_size(size, mask_bitsize) * mask_dtype.itemsize
 
 
 @njit
@@ -137,15 +141,16 @@ def buffers_from_pyarrow(pa_arr, dtype=None):
         - cudf.Buffer --> string characters
     """
     from cudf.core.buffer import Buffer
-    from cudf.utils.cudautils import copy_array
+
+    # from cudf.utils.cudautils import copy_array
 
     buffers = pa_arr.buffers()
 
     if pa_arr.null_count:
-        mask_dev_array = make_mask(len(pa_arr))
-        arrow_dev_array = rmm.to_device(np.asarray(buffers[0]).view("int8"))
-        copy_array(arrow_dev_array, mask_dev_array)
-        pamask = Buffer(mask_dev_array)
+        mask_size = calc_mask_bytes(len(pa_arr))
+        dbuf = rmm.DeviceBuffer(size=mask_size)
+        dbuf.copy_from_host(np.asarray(buffers[0]).view("u1"))
+        pamask = Buffer(dbuf)
     else:
         pamask = None
 

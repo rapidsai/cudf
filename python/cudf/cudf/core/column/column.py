@@ -21,11 +21,7 @@ from cudf.core.buffer import Buffer
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.dtypes import is_categorical_dtype, is_scalar, np_to_pa_dtype
-from cudf.utils.utils import (
-    buffers_from_pyarrow,
-    calc_chunk_size,
-    mask_bitsize,
-)
+from cudf.utils.utils import buffers_from_pyarrow, calc_mask_bytes, mask_dtype
 
 
 class ColumnBase(Column):
@@ -98,7 +94,17 @@ class ColumnBase(Column):
         """
         View the mask as a device array
         """
-        result = cuda.as_cuda_array(self.mask).view(np.int8)
+        result = cuda.as_cuda_array(self.mask)
+        dtype = mask_dtype
+
+        # Workaround until `.view(...)` can change itemsize
+        # xref: https://github.com/numba/numba/issues/4829
+        result = cuda.devicearray.DeviceNDArray(
+            shape=(result.nbytes // dtype.itemsize,),
+            strides=(dtype.itemsize,),
+            dtype=dtype,
+            gpu_data=result.gpu_data,
+        )
         return result
 
     def __len__(self):
@@ -274,11 +280,10 @@ class ColumnBase(Column):
         If ``all_valid`` is False, the new mask is set to all null.
         """
         nelem = len(self)
-        mask_sz = utils.calc_chunk_size(nelem, utils.mask_bitsize)
-        mask = rmm.device_array(mask_sz, dtype=utils.mask_dtype)
+        mask_sz = calc_mask_bytes(nelem)
+        mask = Buffer.empty(mask_sz)
         if nelem > 0:
             cudautils.fill_value(mask, 0xFF if all_valid else 0)
-        mask = Buffer(mask)
         return self.set_mask(mask=mask)
 
     def to_gpu_array(self, fillna=None):
@@ -1026,7 +1031,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
 
         nbuf = None
         if arbitrary.null_count() > 0:
-            mask_size = calc_chunk_size(arbitrary.size(), mask_bitsize)
+            mask_size = calc_mask_bytes(arbitrary.size())
             nbuf = Buffer.empty(mask_size)
             arbitrary.set_null_bitmask(nbuf.ptr, bdevmem=True)
         arbitrary.to_offsets(sbuf.ptr, obuf.ptr, None, bdevmem=True)
@@ -1352,7 +1357,6 @@ def _data_from_cuda_array_interface_desc(obj):
 
 
 def _mask_from_cuda_array_interface_desc(obj):
-    from cudf.utils.utils import calc_chunk_size, mask_dtype, mask_bitsize
     from cudf.utils.cudautils import compact_mask_bytes
 
     desc = obj.__cuda_array_interface__
@@ -1365,10 +1369,8 @@ def _mask_from_cuda_array_interface_desc(obj):
         typestr = desc["typestr"]
         typecode = typestr[1]
         if typecode == "t":
-            nelem = calc_chunk_size(nelem, mask_bitsize)
-            mask = Buffer(
-                data=ptr, size=nelem * mask_dtype.itemsize, owner=obj
-            )
+            mask_size = calc_mask_bytes(nelem)
+            mask = Buffer(data=ptr, size=mask_size, owner=obj)
         elif typecode == "b":
             dtype = np.dtype(typestr)
             mask = compact_mask_bytes(

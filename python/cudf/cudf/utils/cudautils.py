@@ -250,7 +250,7 @@ def gpu_expand_mask_bits(bits, out):
 def expand_mask_bits(size, bits):
     """Expand bit-mask into byte-mask
     """
-    expanded_mask = full(size, 0, dtype=np.int32)
+    expanded_mask = full(size, 0, dtype=np.uint8)
     numtasks = min(1024, expanded_mask.size)
     if numtasks > 0:
         gpu_expand_mask_bits.forall(numtasks)(bits, expanded_mask)

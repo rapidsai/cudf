@@ -26,6 +26,7 @@ import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
 from cudf.core import column
 from cudf.core._sort import get_sorted_inds
+from cudf.core.buffer import Buffer
 from cudf.core.column import (
     CategoricalColumn,
     StringColumn,
@@ -505,7 +506,7 @@ class DataFrame(Frame):
                 )
             else:
                 boolbits = cudautils.make_empty_mask(len(self[col]))
-            df[col] = df[col].set_mask(boolbits)
+            df[col] = df[col].set_mask(Buffer(boolbits))
         return df
 
     def __setitem__(self, arg, value):

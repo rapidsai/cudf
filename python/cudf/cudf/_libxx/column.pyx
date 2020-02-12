@@ -10,6 +10,7 @@ import pandas as pd
 import cython
 import rmm
 
+from cpython.buffer cimport PyObject_CheckBuffer
 from libc.stdint cimport uintptr_t
 from libcpp.pair cimport pair
 from libcpp cimport bool
@@ -20,7 +21,7 @@ from cudf._libxx.lib cimport *
 
 from cudf.core.buffer import Buffer
 from cudf.utils.dtypes import is_categorical_dtype
-from cudf.utils.utils import calc_chunk_size, mask_bitsize
+from cudf.utils.utils import calc_mask_bytes, mask_bitsize
 
 
 np_to_cudf_types = {
@@ -186,19 +187,20 @@ cdef class Column:
                             type(value).__name__)
         if value is not None:
             offsetted_size = self.size + self.offset
-            required_size = -(-self.size // mask_bitsize)  # ceiling divide
+            required_size = -(-self.size // 8)  # ceiling divide
+            required_offset_size = -(-offsetted_size // 8)  # ceiling divide
             if value.size < required_size:
                 error_msg = (
                     "The Buffer for mask is smaller than expected, got " +
-                    str(value.size) + " bytes, expected " + str(required_size)
-                    + " bytes."
+                    str(value.size) + " bytes, expected " +
+                    str(required_offset_size) + " bytes."
                 )
-                if self.offset != 0:
-                    error_msg += (
-                        " Note: the column has a non-zero offset and the mask "
-                        "is expected to be sized according to the base "
-                        "allocation as opposed to the offsetted allocation."
-                    )
+            elif value.size < required_offset_size:
+                error_msg = (
+                    "The column has a non-zero offset and the mask is "
+                    "expected to be sized according to the base allocation"
+                    " as opposed to the offsetted allocation."
+                )
                 raise RuntimeError(error_msg)
 
         self._mask = None
@@ -213,7 +215,24 @@ cdef class Column:
         and compute new data Buffers zero-copy that use pointer arithmetic to
         properly adjust the pointer.
         """
-        if value is not None and not isinstance(value, Buffer):
+        mask_size = calc_mask_bytes(self.size)
+        if value is None:
+            mask = None
+        elif hasattr(value, "__cuda_array_interface__"):
+            mask = Buffer(value)
+            if value.size < mask_size:
+                dbuf = rmm.DeviceBuffer(size=mask_size)
+                dbuf.copy_from_device(mask)
+                mask = Buffer(dbuf)
+        elif hasattr(value, "__array_interface__"):
+            dbuf = rmm.DeviceBuffer(size=mask_size)
+            dbuf.copy_from_host(value.view("u1")[:mask_size])
+            mask = Buffer(dbuf)
+        elif PyObject_CheckBuffer(value):
+            dbuf = rmm.DeviceBuffer(size=mask_size)
+            dbuf.copy_from_host(value.view("u1")[:mask_size])
+            mask = Buffer(dbuf)
+        else:
             raise TypeError("Expected a Buffer or None for mask, got " +
                             type(value).__name__)
 
@@ -222,7 +241,7 @@ cdef class Column:
         return build_column(
             self.data,
             self.dtype,
-            value,
+            mask,
             self.size,
             offset=0,
             children=self.children
@@ -438,13 +457,13 @@ cdef class Column:
                 mask = Buffer(
                     rmm.DeviceBuffer(
                         ptr=mask_ptr,
-                        size=calc_chunk_size(size, mask_bitsize)
+                        size=calc_mask_bytes(size)
                     )
                 )
             else:
                 mask = Buffer(
                     mask=mask_ptr,
-                    size=calc_chunk_size(size, mask_bitsize),
+                    size=calc_mask_bytes(size),
                     owner=mask_owner
                 )
 
