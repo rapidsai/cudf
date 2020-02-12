@@ -94,6 +94,7 @@
 - PR #4116 Fix a bug in contiguous_split() where tables with mixed column types could corrupt string output
 - PR #4119 Fix binary ops slowdown using jitify -remove-unused-globals
 - PR #4125 Fix type enum to account for added Dictionary type in `types.hpp`
+- PR #4137 Update Java for mutating fill and rolling window changes
 
 
 # cuDF 0.12.0 (04 Feb 2020)
