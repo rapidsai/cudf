@@ -59,20 +59,49 @@ class ColumnAccessor(MutableMapping):
         )
 
     def get_by_label(self, key):
-        result = self._grouped_data[key]
-        if isinstance(result, cudf.core.column.ColumnBase):
-            return self.__class__({key: result})
-        else:
-            result = _flatten(result)
-            if not isinstance(key, tuple):
-                key = (key,)
+        if isinstance(key, slice):
+            return self.get_by_label_slice(key)
+        elif isinstance(key, list):
             return self.__class__(
-                result,
-                multiindex=self.nlevels - len(key) > 1,
-                level_names=self.level_names[len(key) :],
+                {k: self._data[k] for k in key},
+                multiindex=self.multiindex,
+                level_names=self.level_names,
             )
+        else:
+            result = self._grouped_data[key]
+            if isinstance(result, cudf.core.column.ColumnBase):
+                return self.__class__({key: result})
+            else:
+                result = _flatten(result)
+                if not isinstance(key, tuple):
+                    key = (key,)
+                return self.__class__(
+                    result,
+                    multiindex=self.nlevels - len(key) > 1,
+                    level_names=self.level_names[len(key) :],
+                )
 
     def get_by_label_slice(self, key):
+        start = key.start
+        stop = key.stop
+        if start is None:
+            start = self.names[0]
+        if stop is None:
+            stop = self.names[-1]
+        keys = itertools.chain(
+            itertools.takewhile(
+                lambda k: k != stop,
+                itertools.dropwhile(lambda k: k != start, self.keys()),
+            ),
+            (stop,),
+        )
+        return self.__class__(
+            {k: self._data[k] for k in keys},
+            multiindex=self.multiindex,
+            level_names=self.level_names,
+        )
+
+    def get_by_label_with_wildcard(self, key):
         return self.__class__(
             {k: self._data[k] for k in self._data if _compare_keys(k, key)},
             multiindex=self.multiindex,
@@ -118,7 +147,7 @@ class ColumnAccessor(MutableMapping):
             return key
         if not isinstance(key, tuple):
             key = (key,)
-        return key + (pad_value,) * (self.nlevels - 1)
+        return key + (pad_value,) * (self.nlevels - len(key))
 
     @property
     def _grouped_data(self):

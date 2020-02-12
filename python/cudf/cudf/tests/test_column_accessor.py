@@ -148,6 +148,20 @@ def test_get_by_label_multiindex():
     check_ca_equal(expect, got)
 
 
+def test_get_by_label_simple_slice():
+    ca = ColumnAccessor({"a": [1, 2, 3], "b": [2, 3, 4], "c": [3, 4, 5]})
+    expect = ColumnAccessor({"b": [2, 3, 4], "c": [3, 4, 5]})
+    got = ca.get_by_label(slice("b", "c"))
+    check_ca_equal(expect, got)
+
+
+def test_by_label_list():
+    ca = ColumnAccessor({"a": [1, 2, 3], "b": [2, 3, 4], "c": [3, 4, 5]})
+    expect = ColumnAccessor({"b": [2, 3, 4], "c": [3, 4, 5]})
+    got = ca.get_by_label(["b", "c"])
+    check_ca_equal(expect, got)
+
+
 def test_get_by_index_simple():
     """
     Test getting a column by label
