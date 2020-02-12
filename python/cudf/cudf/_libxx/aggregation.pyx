@@ -17,17 +17,18 @@ cdef unique_ptr[aggregation] get_aggregation(op, kwargs):
     cdef type_id tid
     cdef data_type out_dtype
     cdef string cpp_str
+    cdef unique_ptr[aggregation] agg
 
     if op is "sum":
-        return make_sum_aggregation()
+        agg = move(make_sum_aggregation())
     elif op is "min":
-        return make_min_aggregation()
+        agg = move(make_min_aggregation())
     elif op is "max":
-        return make_max_aggregation()
+        agg = move(make_max_aggregation())
     elif op is "mean":
-        return make_mean_aggregation()
+        agg = move(make_mean_aggregation())
     elif op is "count":
-        return make_count_aggregation()
+        agg = move(make_count_aggregation())
     elif callable(op):
         # Handling UDF type
         nb_type = numba.numpy_support.from_dtype(kwargs['dtype'])
@@ -44,6 +45,8 @@ cdef unique_ptr[aggregation] get_aggregation(op, kwargs):
 
         out_dtype = data_type(tid)
 
-        return make_udf_aggregation(udf_type.PTX, cpp_str, out_dtype)
+        agg = move(make_udf_aggregation(udf_type.PTX, cpp_str, out_dtype))
     else:
         assert False, "Invalid aggreagtion operation"
+
+    return move(agg)

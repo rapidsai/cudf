@@ -57,7 +57,7 @@ def drop_nulls(Table source_table, how="any", keys=None, thresh=None):
     elif how == "all":
         c_keep_threshold = 1
 
-    cdef unique_ptr[table] c_result = (
+    cdef unique_ptr[table] c_result = move(
         cpp_drop_nulls(source_table.view(),
                        cpp_keys,
                        c_keep_threshold)
@@ -88,7 +88,7 @@ def apply_boolean_mask(Table source_table, Column boolean_mask):
 
     assert pd.api.types.is_bool_dtype(boolean_mask.dtype)
 
-    cdef unique_ptr[table] c_result = (
+    cdef unique_ptr[table] c_result = move(
         cpp_apply_boolean_mask(source_table.view(),
                                boolean_mask.view())
     )
@@ -147,7 +147,7 @@ def drop_duplicates(Table source_table, keys=None,
 
     cdef cpp_nulls_are_equal = nulls_are_equal
 
-    cdef unique_ptr[table] c_result = (
+    cdef unique_ptr[table] c_result = move(
         cpp_drop_duplicates(source_table.view(),
                             cpp_keys,
                             cpp_keep_option,
