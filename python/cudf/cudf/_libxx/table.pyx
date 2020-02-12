@@ -53,8 +53,7 @@ cdef class Table:
 
     @property
     def _index_names(self):
-        return None if self._index is None else
-            self._index._data.names
+        return None if self._index is None else self._index._data.names
 
     @property
     def _columns(self):
@@ -137,7 +136,7 @@ cdef class Table:
                     )
                 )
                 column_idx += 1
-            index = Table(OrderedColumnDict(zip(index_names, index_columns)))
+            index = Table(dict(zip(index_names, index_columns)))
 
         # Construct the data OrderedColumnDict
         data_columns = []
@@ -149,7 +148,7 @@ cdef class Table:
                 Column.from_column_view(tv.column(column_idx), column_owner)
             )
             column_idx += 1
-        data = OrderedColumnDict(zip(column_names, data_columns))
+        data = dict(zip(column_names, data_columns))
 
         return Table(data=data, index=index)
 
