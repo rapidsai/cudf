@@ -99,7 +99,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromScalar(JNIEnv *env,
     } else if (cudf::is_fixed_width(dtype)) {
       col = cudf::make_fixed_width_column(dtype, row_count, mask_state);
       auto mut_view = col->mutable_view();
-      cudf::experimental::fill(mut_view, 0, row_count, *scalar_val);
+      cudf::experimental::fill_in_place(mut_view, 0, row_count, *scalar_val);
     } else if (dtype.id() == cudf::type_id::STRING) {
       // create a string column of all empty strings to fill (cheapest string column to create)
       auto offsets = cudf::make_numeric_column(cudf::data_type{cudf::INT32}, row_count + 1, cudf::mask_state::UNALLOCATED);
