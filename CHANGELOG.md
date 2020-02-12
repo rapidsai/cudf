@@ -58,6 +58,7 @@
 - PR #4098 Remove legacy calls from libcudf strings column code
 - PR #4111 Use `Buffer`'s to serialize `StringColumn`
 - PR #4113 Get `len` of `StringColumn`s without `nvstrings`
+- PR #4130 Renames in-place `cudf::experimental::fill` to `cudf::experimental::fill_in_place`
 
 ## Bug Fixes
 
