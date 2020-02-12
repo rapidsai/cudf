@@ -10,6 +10,12 @@ from distributed.protocol import to_serialize
 import cudf
 
 
+def _cleanup_parts(df_parts):
+    for part in df_parts:
+        if part:
+            del part
+
+
 async def send_df(ep, df):
     if df is None:
         return await ep.write("empty")
@@ -39,20 +45,27 @@ async def recv_parts(eps, parts):
     parts.extend(await asyncio.gather(*futures))
 
 
-async def exchange_and_concat_parts(rank, eps, parts):
+async def exchange_and_concat_parts(rank, eps, parts, sort_by):
     ret = [parts[rank]]
     await asyncio.gather(recv_parts(eps, ret), send_parts(eps, parts))
-    # Parts may be sorted - k-way merge should improve performance here
-    return concat([df for df in ret if df is not None])
+    return concat(
+        [df for df in ret if df is not None and len(df)],
+        # TODO: USe `sort_by=sort_by` here (not working right now)
+        sort_by=None,
+    )
 
 
-def concat(df_list):
+def concat(df_list, sort_by=None):
     if len(df_list) == 0:
         return None
     if isinstance(df_list[0], cudf.DataFrame):
-        return cudf.concat(df_list)
+        if sort_by:
+            new_df = cudf.merge_sorted(df_list, keys=sort_by)
+        new_df = cudf.concat(df_list)
     else:
-        return pd.concat(df_list)
+        new_df = pd.concat(df_list)
+    _cleanup_parts(df_list)
+    return new_df
 
 
 def partition_by_column(df, column, n_chunks):
@@ -63,9 +76,9 @@ def partition_by_column(df, column, n_chunks):
 
 
 async def distributed_shuffle(
-    n_chunks, rank, eps, table, partitions, index, sorted_split
+    n_chunks, rank, eps, table, partitions, index, sort_by
 ):
-    if sorted_split:
+    if sort_by:
         parts = [
             table.iloc[partitions[i] : partitions[i + 1]]
             for i in range(0, len(partitions) - 1)
@@ -73,40 +86,32 @@ async def distributed_shuffle(
     else:
         parts = partition_by_column(table, partitions, n_chunks)
     del table
-    return await exchange_and_concat_parts(rank, eps, parts)
+    return await exchange_and_concat_parts(rank, eps, parts, sort_by)
 
 
 async def _explicit_shuffle(
-    s, df_nparts, df_parts, index, divisions, sorted_split, to_cpu
+    s, df_nparts, df_parts, index, sort_by, divisions, to_cpu
 ):
-    def df_concat(df_parts):
+    def df_concat(df_parts, sort_by=None):
         """Making sure df_parts is a single dataframe or None"""
         if len(df_parts) == 0:
             return None
         elif len(df_parts) == 1:
             return df_parts[0]
         else:
-            return concat(df_parts)
+            return concat(df_parts, sort_by=sort_by)
 
     # Concatenate all parts owned by this worker into
     # a single cudf DataFrame
     if to_cpu:
         df = df_concat([dfp.to_pandas() for dfp in df_parts[0]])
     else:
-        df = df_concat(df_parts[0])
-    nparts = len(df_parts)
-    for part in df_parts:
-        if part:
-            del part
+        df = df_concat(df_parts[0], sort_by=sort_by)
 
     # Calculate new partition mapping
     if df is not None:
         divisions = df._constructor_sliced(divisions, dtype=df[index].dtype)
-        if sorted_split:
-            if nparts > 1:
-                # Need to sort again after concatenation
-                # (Should be faster with k-way merge)
-                df = df.sort_values(index)
+        if sort_by:
             splits = df[index].searchsorted(divisions, side="left")
             splits[-1] = len(df[index])
             partitions = splits.tolist()
@@ -121,7 +126,7 @@ async def _explicit_shuffle(
 
     # Run distributed shuffle and set_index algorithm
     new_df = await distributed_shuffle(
-        s["nworkers"], s["rank"], s["eps"], df, partitions, index, sorted_split
+        s["nworkers"], s["rank"], s["eps"], df, partitions, index, sort_by
     )
     del df
     if to_cpu:
@@ -129,9 +134,7 @@ async def _explicit_shuffle(
     return new_df
 
 
-def explicit_sorted_shuffle(
-    df, index, divisions, sort_by, client, sorted_split, **kwargs
-):
+def explicit_sorted_shuffle(df, index, divisions, sort_by, client, **kwargs):
     # Explict-comms shuffle
     # TODO: Fast repartition back to df.npartitions using views...
     # client.rebalance(futures=df.to_delayed())
@@ -141,5 +144,5 @@ def explicit_sorted_shuffle(
     return comms.default_comms().dataframe_operation(
         _explicit_shuffle,
         df_list=(df,),
-        extra_args=(index, divisions, sorted_split, to_cpu),
+        extra_args=(index, sort_by, divisions, to_cpu),
     )

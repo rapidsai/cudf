@@ -168,10 +168,33 @@ def set_partitions_pre(s, divisions):
 
 
 def sorted_split_divs(df, divisions, col, stage, k, npartitions):
-    if stage > 1:
-        raise ValueError("Use of sorted_split_divs with multiple stages.")
+    divs = divisions
+    if k > npartitions:
+        # Aggregate divisions for "k" partitions
+        divs = list(divisions)[0::2]
+        if not len(divisions) % len(divs):
+            divs += [divisions[-1]]
 
-    # First, get partitions
+    # Get partitions
+    dtype = df[col].dtype
+    splits = df[col].searchsorted(
+        df._constructor_sliced(divs, dtype=dtype), side="left"
+    )
+    splits[-1] = len(df[col])
+    partitions = splits.tolist()
+
+    # Create splits
+    return {
+        i: df.iloc[partitions[i] : partitions[i + 1]].copy()
+        for i in range(len(divs) - 1)
+    }
+
+
+def sorted_split_divs_2(df, divisions, col):
+    if not len(df):
+        return {}, df
+
+    # Get partitions
     dtype = df[col].dtype
     splits = df[col].searchsorted(
         df._constructor_sliced(divisions, dtype=dtype), side="left"
@@ -179,11 +202,14 @@ def sorted_split_divs(df, divisions, col, stage, k, npartitions):
     splits[-1] = len(df[col])
     partitions = splits.tolist()
 
-    # Second, create splits
-    return {
-        i: df.iloc[partitions[i] : partitions[i + 1]]
-        for i in range(0, len(partitions) - 1)
-    }
+    # Create splits
+    return (
+        {
+            i: df.iloc[partitions[i] : partitions[i + 1]].copy()
+            for i in range(len(divisions) - 1)
+        },
+        df.iloc[:0],
+    )
 
 
 def shuffle_group_divs(df, divisions, col, stage, k, npartitions):
@@ -210,18 +236,24 @@ def shuffle_group_divs_2(df, divisions, col):
     return result2, df.iloc[:0]
 
 
+def _concat_wrapper(df_list, sort_by):
+    if sort_by:
+        return gd.merge_sorted(df_list, keys=sort_by)
+    else:
+        return _concat(df_list)
+
+
 def rearrange_by_division_list(
-    df, column: str, divisions: list, max_branch=None, sorted_split=None
+    df, column: str, divisions: list, max_branch=None, sort_by=None
 ):
 
     npartitions = len(divisions) - 1
     n = df.npartitions
     max_branch = max_branch or 32
-    if sorted_split:
-        # Only do single stage if data is already sorted
+    stages = int(math.ceil(math.log(n) / math.log(max_branch)))
+
+    if sort_by:
         stages = 1
-    else:
-        stages = int(math.ceil(math.log(n) / math.log(max_branch)))
 
     if stages > 1:
         k = int(math.ceil(n ** (1 / stages)))
@@ -246,17 +278,17 @@ def rearrange_by_division_list(
         for i, inp in enumerate(inputs)
     }
 
-    if sorted_split:
-        _split_func = sorted_split_divs
-        _agg_func = _concat
+    if sort_by:
+        _split_func_1 = sorted_split_divs
+        _split_func_2 = sorted_split_divs_2
     else:
-        _split_func = shuffle_group_divs
-        _agg_func = _concat
+        _split_func_1 = shuffle_group_divs
+        _split_func_2 = shuffle_group_divs_2
 
     for stage in range(1, stages + 1):
         group = {  # Convert partition into dict of dataframe pieces
             ("shuffle-group-divs-" + token, stage, inp): (
-                _split_func,
+                _split_func_1,
                 ("shuffle-join-" + token, stage - 1, inp),
                 divisions,
                 column,
@@ -279,7 +311,7 @@ def rearrange_by_division_list(
 
         join = {  # concatenate those pieces together, with their friends
             ("shuffle-join-" + token, stage, inp): (
-                _agg_func,
+                _concat_wrapper,
                 [
                     (
                         "shuffle-split-" + token,
@@ -289,6 +321,7 @@ def rearrange_by_division_list(
                     )
                     for j in range(k)
                 ],
+                sort_by,
             )
             for inp in inputs
         }
@@ -313,7 +346,7 @@ def rearrange_by_division_list(
 
         dsk = {
             ("repartition-group-" + token, i): (
-                shuffle_group_divs_2,
+                _split_func_2,
                 k,
                 divisions,
                 column,
@@ -440,23 +473,42 @@ def sort_values_experimental(
                 divisions = [divisions[i] for i in indexes]
 
     # Step 3 - Perform repartitioning shuffle
+    sort_by = None
+    if sorted_split:
+        sort_by = by
     if use_explicit:
         warnings.warn("Using explicit comms - This is an advanced feature.")
         df3 = explicit_sorted_shuffle(
-            df2, index, divisions, by, explicit_client, sorted_split
+            df2, index, divisions, sort_by, explicit_client
         )
     else:
+        if sorted_split:
+            # sorted_split does not support multiple stages (yet)
+            # Lets aggregate divisions here...
+            npartitions = len(divisions) - 1
+            n = df.npartitions
+            max_branch = max_branch or 32
+            stages = int(math.ceil(math.log(n) / math.log(max_branch)))
+            k = n
+            if stages > 1:
+                k = int(math.ceil(n ** (1 / stages)))
+            if k < n:
+                # Aggregate divisions for "k" partitions
+                divs = list(divisions)[0::2]
+                if not len(divisions) % len(divs):
+                    divs += [divisions[-1]]
+                divisions = divs
+
         df3 = rearrange_by_division_list(
-            df2,
-            index,
-            divisions,
-            max_branch=max_branch,
-            sorted_split=sorted_split,
+            df2, index, divisions, max_branch=max_branch, sort_by=sort_by
         )
-    df3.divisions = (None,) * (npartitions + 1)
+    df3.divisions = (None,) * (df3.npartitions + 1)
 
     # Step 4 - Return final sorted df
-    # (Can remove after k-way merge added)
-    df4 = df3.map_partitions(M.sort_values, by)
+    if sorted_split:
+        # Data should already be sorted
+        df4 = df3
+    else:
+        df4 = df3.map_partitions(M.sort_values, by)
     df4.divisions = tuple(divisions)
     return df4

@@ -200,6 +200,8 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 return df2.repartition(partition_size=partition_size)
             if not divisions and df2.npartitions != npartitions:
                 return df2.repartition(npartitions=npartitions)
+            if divisions and df2.npartitions != len(divisions) - 1:
+                return df2.repartition(divisions=divisions)
             return df2
         if kwargs.pop("shuffle", "tasks") != "tasks":
             raise ValueError(
