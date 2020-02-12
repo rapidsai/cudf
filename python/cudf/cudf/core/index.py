@@ -516,6 +516,10 @@ class RangeIndex(Index):
     def name(self, value):
         self._name = value
 
+    @property
+    def names(self):
+        return (self.name,)
+
     @cached_property
     def _values(self):
         if len(self) > 0:
@@ -981,10 +985,6 @@ class CategoricalIndex(GenericIndex):
                 pd.Categorical(values, categories=values)
             )
         super(CategoricalIndex, self).__init__(values, **kwargs)
-
-    @property
-    def names(self):
-        return [self._values.name]
 
     @property
     def codes(self):
