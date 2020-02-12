@@ -42,7 +42,7 @@ try:
     def _handle_string(s):
         if isinstance(s._column, StringColumn):
             out_col = column.column_empty(len(s), dtype="int32", masked=False)
-            ptr = out_col.data.ptr
+            ptr = out_col.data_ptr
             s._column.data_array_view.hash(devptr=ptr)
             s = out_col
         return s
