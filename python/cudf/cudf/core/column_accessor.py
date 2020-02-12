@@ -4,7 +4,11 @@ from collections.abc import MutableMapping
 import pandas as pd
 
 import cudf
-from cudf.utils.utils import NestedOrderedDict, OrderedColumnDict
+from cudf.utils.utils import (
+    NestedOrderedDict,
+    OrderedColumnDict,
+    cached_property,
+)
 
 
 class ColumnAccessor(MutableMapping):
@@ -32,12 +36,66 @@ class ColumnAccessor(MutableMapping):
 
     def __setitem__(self, key, value):
         self.set_by_label(key, value)
+        self._clear_cache()
 
     def __delitem__(self, key):
         self._data.__delitem__(key)
+        self._clear_cache()
 
     def __len__(self):
         return len(self._data)
+
+    @property
+    def nlevels(self):
+        if not self.multiindex:
+            return 1
+        else:
+            return len(next(iter(self.keys())))
+
+    @property
+    def name(self):
+        return self.level_names[-1]
+
+    @property
+    def nrows(self):
+        if len(self._data) == 0:
+            return 0
+        else:
+            return len(next(iter(self.values())))
+
+    @cached_property
+    def names(self):
+        return tuple(self.keys())
+
+    @cached_property
+    def columns(self):
+        return tuple(self.values())
+
+    @cached_property
+    def _grouped_data(self):
+        if self.multiindex:
+            return NestedOrderedDict(zip(self.names, self.columns))
+        else:
+            return self._data
+
+    def _clear_cache(self):
+        cached_properties = "columns", "names", "_grouped_data"
+        for attr in cached_properties:
+            try:
+                self.__delattr__(attr)
+            except AttributeError:
+                pass
+
+    def to_pandas_index(self):
+        if self.multiindex:
+            result = pd.MultiIndex.from_tuples(
+                self.names, names=self.level_names
+            )
+        else:
+            result = pd.Index(
+                self.names, name=self.level_names[0], tupleize_cols=False
+            )
+        return result
 
     def insert(self, name, value, loc=-1):
         """
@@ -50,6 +108,7 @@ class ColumnAccessor(MutableMapping):
         new_keys.insert(loc, name)
         new_values.insert(loc, value)
         self._data = self._data.__class__(zip(new_keys, new_values),)
+        self._clear_cache()
 
     def copy(self):
         return self.__class__(
@@ -127,56 +186,12 @@ class ColumnAccessor(MutableMapping):
                 key = (key,) + ("",) * (self.nlevels - 1)
         self._data[key] = value
 
-    @property
-    def names(self):
-        return tuple(self.keys())
-
-    @property
-    def columns(self):
-        return tuple(self.values())
-
-    @property
-    def nlevels(self):
-        if not self.multiindex:
-            return 1
-        else:
-            return len(self.names[0])
-
     def _pad_key(self, key, pad_value=""):
         if not self.multiindex:
             return key
         if not isinstance(key, tuple):
             key = (key,)
         return key + (pad_value,) * (self.nlevels - len(key))
-
-    @property
-    def _grouped_data(self):
-        if self.multiindex:
-            return NestedOrderedDict(zip(self.names, self.columns))
-        else:
-            return self._data
-
-    @property
-    def name(self):
-        return self.level_names[-1]
-
-    def to_pandas_index(self):
-        if self.multiindex:
-            result = pd.MultiIndex.from_tuples(
-                self.names, names=self.level_names
-            )
-        else:
-            result = pd.Index(
-                self.names, name=self.level_names[0], tupleize_cols=False
-            )
-        return result
-
-    @property
-    def nrows(self):
-        if len(self._data) == 0:
-            return 0
-        else:
-            return len(next(iter(self.values())))
 
 
 def _flatten(d):
