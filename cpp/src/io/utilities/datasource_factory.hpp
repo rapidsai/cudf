@@ -1,4 +1,4 @@
-/*
+/**
  * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,33 +23,69 @@
 #include <vector>
 #include <map>
 #include <dlfcn.h>
-
+#include <boost/filesystem.hpp>
 #include "external_datasource.hpp"
 
 namespace cudf {
 namespace io {
 namespace external {
 
+// Default `EXTERNAL_DATASOURCE_LIB_PATH` to `/usr/local/lib/cudf_external_lib`.
+// This definition can be overridden at compile time by specifying a
+// `-DEXTERNAL_DATASOURCE_LIB_PATH=/home/lib/cudf_external_lib` CMake argument.
+// Use `boost::filesystem` for cross-platform path resolution and dir
+// creation. This path is used in the `getExternalLibDir()` function below.
+#if !defined(EXTERNAL_DATASOURCE_LIB_PATH)
+#define EXTERNAL_DATASOURCE_LIB_PATH \
+  boost::filesystem::path("/usr/local/lib/cudf_external_lib")
+#endif
+
 /**
  * @brief Factory class for creating and managing instances of external datasources
- **/
+ */
 class datasource_factory {
  public:
 
   /**
    * Load all of the .so files that are possible candidates for housing external datasources.
    */
-  datasource_factory(std::string external_lib_dir);
+  datasource_factory(boost::filesystem::path external_lib_dir);
 
   /**
    * @brief Base class destructor
-   **/
+   */
   virtual ~datasource_factory(){};
  
  public:
+
+  /**
+   * @brief Get the string path to libcudf External Datasource libraries.
+   *
+   * This path can be overridden at runtime by defining an environment variable
+   * named `EXTERNAL_DATASOURCE_LIB_PATH`. The value of this variable must be a path
+   * under which the process' user has read privileges.
+   *
+   * This function returns a path to the cache directory, creating it if it
+   * doesn't exist.
+   *
+   * The default cache directory `/usr/local/lib/cudf_external_lib`.
+   */
+  boost::filesystem::path getExternalLibDir() {
+    // The environment variable always overrides the
+    // default/compile-time value of `EXTERNAL_DATASOURCE_LIB_PATH`
+    printf("External Lib Path '%s'\n", external_lib_dir_.c_str());
+    if (!boost::filesystem::exists(external_lib_dir_)) {
+      auto external_io_lib_path_env = std::getenv("EXTERNAL_DATASOURCE_LIB_PATH");
+      auto external_io_lib_path = boost::filesystem::path(
+          external_io_lib_path_env != nullptr ? external_io_lib_path_env
+                                        : EXTERNAL_DATASOURCE_LIB_PATH);
+      return external_io_lib_path;
+    } else {
+      return external_lib_dir_;
+    }
+  }
   
   external_datasource* external_datasource_by_id(std::string unique_id, std::map<std::string, std::string> datasource_confs) {
-
     std::map<std::string, external_datasource_wrapper>::iterator it;
     it = external_libs_.find(unique_id);
     if (it != external_libs_.end()) {
@@ -130,23 +166,32 @@ class datasource_factory {
 
  private:
   void load_external_libs() {
-    DIR* dirp = opendir(EXTERNAL_LIB_DIR.c_str());
-    struct dirent * dp;
-    while ((dp = readdir(dirp)) != NULL) {
-      if (has_suffix(dp->d_name, EXTERNAL_LIB_SUFFIX)) {
-        std::string filename(EXTERNAL_LIB_DIR);
-        filename.append("/");
-        filename.append(dp->d_name);
-
-        // Load and wrap the external datasource.
-        external_datasource_wrapper wrapper(filename);
-        external_libs_.insert(std::pair<std::string, external_datasource_wrapper>(wrapper.unique_id(), wrapper));
-
-        // Print out information for user
-        printf("External Datasource: '%s' loaded from shared object: '%s'\n", wrapper.unique_id().c_str(), filename.c_str());
-      }
+    boost::filesystem::path ext_path = getExternalLibDir();
+    if (boost::filesystem::is_directory(ext_path)) {
+        boost::filesystem::directory_iterator it{ext_path};
+        while (it != boost::filesystem::directory_iterator{})
+          std::cout << *it++ << '\n';
+    } else {
+      //TODO: Some sort of runtime error because the library directory does not exist. Advice from reviewer?
     }
-    closedir(dirp);
+
+    // DIR* dirp = opendir(EXTERNAL_LIB_DIR.c_str());
+    // struct dirent * dp;
+    // while ((dp = readdir(dirp)) != NULL) {
+    //   if (has_suffix(dp->d_name, EXTERNAL_LIB_SUFFIX)) {
+    //     std::string filename(EXTERNAL_LIB_DIR);
+    //     filename.append("/");
+    //     filename.append(dp->d_name);
+
+    //     // Load and wrap the external datasource.
+    //     external_datasource_wrapper wrapper(filename);
+    //     external_libs_.insert(std::pair<std::string, external_datasource_wrapper>(wrapper.unique_id(), wrapper));
+
+    //     // Print out information for user
+    //     printf("External Datasource: '%s' loaded from shared object: '%s'\n", wrapper.unique_id().c_str(), filename.c_str());
+    //   }
+    // }
+    // closedir(dirp);
   }
 
   bool has_suffix(const std::string &str, const std::string &suffix)
@@ -156,7 +201,7 @@ class datasource_factory {
   }
 
  private:
-  std::string EXTERNAL_LIB_DIR;
+  boost::filesystem::path external_lib_dir_;
   std::string EXTERNAL_LIB_SUFFIX = ".so";     // Currently only support .so files.
   std::map<std::string, external_datasource_wrapper> external_libs_;
 };

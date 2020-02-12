@@ -22,7 +22,8 @@ namespace cudf {
 namespace io {
 namespace external {
 
-datasource_factory::datasource_factory(std::string external_lib_dir) : EXTERNAL_LIB_DIR(external_lib_dir) {
+datasource_factory::datasource_factory(boost::filesystem::path external_lib_dir) {
+  external_lib_dir_ = external_lib_dir;
   load_external_libs();
 }
 
