@@ -56,7 +56,7 @@
 - PR #4101 Redux serialize `Buffer` directly with `__cuda_array_interface__`
 - PR #4098 Remove legacy calls from libcudf strings column code
 - PR #4111 Use `Buffer`'s to serialize `StringColumn`
-- PR #XXXX Mask cleanup and fixes: use `int32` dtype, ensure 64 byte padding, handle offsets
+- PR #4133 Mask cleanup and fixes: use `int32` dtype, ensure 64 byte padding, handle offsets
 
 ## Bug Fixes
 
