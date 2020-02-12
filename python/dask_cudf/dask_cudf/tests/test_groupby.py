@@ -268,19 +268,23 @@ def test_groupby_split_out_multiindex(agg_func):
     dd.assert_eq(gr.compute(), pr.compute())
 
 
-def test_groupby_multiindex_reset_index():
+@pytest.mark.parametrize("npartitions", [1, 2])
+def test_groupby_multiindex_reset_index(npartitions):
     df = cudf.DataFrame(
         {"a": [1, 1, 2, 3, 4], "b": [5, 2, 1, 2, 5], "c": [1, 2, 2, 3, 5]}
     )
-    ddf = dask_cudf.from_cudf(df, npartitions=1)
-    pddf = dd.from_pandas(df.to_pandas(), npartitions=1)
+    ddf = dask_cudf.from_cudf(df, npartitions=npartitions)
+    pddf = dd.from_pandas(df.to_pandas(), npartitions=npartitions)
     gr = ddf.groupby(["a", "c"]).agg({"b": ["count"]}).reset_index()
     pr = pddf.groupby(["a", "c"]).agg({"b": ["count"]}).reset_index()
-    dd.assert_eq(gr.compute(), pr.compute())
+    dd.assert_eq(
+        gr.compute().sort_values(by=["a", "c"]).reset_index(drop=True),
+        pr.compute().sort_values(by=["a", "c"]).reset_index(drop=True),
+    )
 
 
 @pytest.mark.parametrize(
-    "groupby_keys", [["a"], ["a", "b"], ["a", "b", "dd"], ["a", "dd", "b"]],
+    "groupby_keys", [["a"], ["a", "b"], ["a", "b", "dd"], ["a", "dd", "b"]]
 )
 @pytest.mark.parametrize(
     "agg_func",
@@ -318,6 +322,6 @@ def test_groupby_reset_index_drop_True():
     pddf = dd.from_pandas(df.to_pandas(), 5)
     gr = ddf.groupby(["a"]).agg({"b": ["count"]}).reset_index(drop=True)
     pr = pddf.groupby(["a"]).agg({"b": ["count"]}).reset_index(drop=True)
-    gf = gr.compute()
-    pf = pr.compute()
+    gf = gr.compute().sort_values(by=["b"]).reset_index(drop=True)
+    pf = pr.compute().sort_values(by=[("b", "count")]).reset_index(drop=True)
     dd.assert_eq(gf, pf)

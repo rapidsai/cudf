@@ -779,6 +779,28 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     }
   }
 
+  /**
+   * Returns a Boolean vector with the same number of rows as this instance, that has
+   * TRUE for any entry that is NaN, and FALSE if null or a valid floating point value
+   * @return - Boolean vector
+   */
+  public ColumnVector isNan() {
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.BOOL8),"isNan")) {
+      return new ColumnVector(isNanNative(offHeap.cudfColumnHandle.getViewHandle()));
+    }
+  }
+
+  /**
+   * Returns a Boolean vector with the same number of rows as this instance, that has
+   * TRUE for any entry that is null or a valid floating point value, FALSE otherwise
+   * @return - Boolean vector
+   */
+  public ColumnVector isNotNan() {
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.BOOL8),"isNan")) {
+      return new ColumnVector(isNotNanNative(offHeap.cudfColumnHandle.getViewHandle()));
+    }
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // Replacement
   /////////////////////////////////////////////////////////////////////////////
@@ -1366,7 +1388,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * of the specified type.
    */
   public Scalar sum(DType outType) {
-    return reduce(ReductionOp.SUM, outType);
+    return reduce(AggregateOp.SUM, outType);
   }
 
   /**
@@ -1382,7 +1404,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * of the specified type.
    */
   public Scalar min(DType outType) {
-    return reduce(ReductionOp.MIN, outType);
+    return reduce(AggregateOp.MIN, outType);
   }
 
   /**
@@ -1398,7 +1420,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * of the specified type.
    */
   public Scalar max(DType outType) {
-    return reduce(ReductionOp.MAX, outType);
+    return reduce(AggregateOp.MAX, outType);
   }
 
   /**
@@ -1414,7 +1436,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * of the specified type.
    */
   public Scalar product(DType outType) {
-    return reduce(ReductionOp.PRODUCT, outType);
+    return reduce(AggregateOp.PRODUCT, outType);
   }
 
   /**
@@ -1430,7 +1452,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * scalar of the specified type.
    */
   public Scalar sumOfSquares(DType outType) {
-    return reduce(ReductionOp.SUMOFSQUARES, outType);
+    return reduce(AggregateOp.SUMOFSQUARES, outType);
   }
 
   /**
@@ -1452,7 +1474,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * Null values are skipped.
    */
   public Scalar mean(DType outType) {
-    return reduce(ReductionOp.MEAN, outType);
+    return reduce(AggregateOp.MEAN, outType);
   }
 
   /**
@@ -1474,7 +1496,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * Null values are skipped.
    */
   public Scalar variance(DType outType) {
-    return reduce(ReductionOp.VAR, outType);
+    return reduce(AggregateOp.VAR, outType);
   }
 
   /**
@@ -1497,7 +1519,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * an element of the column when calculating the standard deviation.
    */
   public Scalar standardDeviation(DType outType) {
-    return reduce(ReductionOp.STD, outType);
+    return reduce(AggregateOp.STD, outType);
   }
 
   /**
@@ -1516,7 +1538,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * Null values are skipped.
    */
   public Scalar any(DType outType) {
-    return reduce(ReductionOp.ANY, outType);
+    return reduce(AggregateOp.ANY, outType);
   }
 
   /**
@@ -1535,7 +1557,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * Null values are skipped.
    */
   public Scalar all(DType outType) {
-    return reduce(ReductionOp.ALL, outType);
+    return reduce(AggregateOp.ALL, outType);
   }
 
   /**
@@ -1548,7 +1570,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * empty or the reduction operation fails then the
    * {@link Scalar#isValid()} method of the result will return false.
    */
-  public Scalar reduce(ReductionOp op) {
+  public Scalar reduce(AggregateOp op) {
     return reduce(op, type);
   }
 
@@ -1564,7 +1586,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * empty or the reduction operation fails then the
    * {@link Scalar#isValid()} method of the result will return false.
    */
-  public Scalar reduce(ReductionOp op, DType outType) {
+  public Scalar reduce(AggregateOp op, DType outType) {
     return new Scalar(outType, reduce(offHeap.cudfColumnHandle.getViewHandle(), op.nativeId, outType.nativeId));
   }
 
@@ -1658,6 +1680,19 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * Generic method to cast ColumnVector
    * When casting from a Date, Timestamp, or Boolean to a numerical type the underlying numerical
    * representation of the data will be used for the cast.
+   *
+   * For Strings:
+   * Casting strings from/to timestamp isn't supported atm.
+   * Please look at {@link ColumnVector#asTimestamp(DType, String)}
+   * for casting string to timestamp when the format is known
+   *
+   * Float values when converted to String could be different from the expected default behavior in
+   * Java
+   * e.g.
+   * 12.3 => "12.30000019" instead of "12.3"
+   * Double.POSITIVE_INFINITY => "Inf" instead of "INFINITY"
+   * Double.NEGATIVE_INFINITY => "-Inf" instead of "-INFINITY"
+   *
    * @param type type of the resulting ColumnVector
    * @return A new vector allocated on the GPU
    */
@@ -2172,6 +2207,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   private static native long reduce(long viewHandle, int reduceOp, int dtype) throws CudfException;
 
   private static native long isNullNative(long viewHandle);
+
+  private static native long isNanNative(long viewHandle);
+
+  private static native long isNotNanNative(long viewHandle);
 
   private static native long isNotNullNative(long viewHandle);
 

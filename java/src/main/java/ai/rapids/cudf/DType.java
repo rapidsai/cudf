@@ -49,7 +49,7 @@ public enum DType {
    * ns since the UNIX epoch
    */
   TIMESTAMP_NANOSECONDS(8, 12, "timestamp[ns]"),
-  CATEGORY(4, 13, "category"),
+  //DICTIONARY32(4, 13, "NO IDEA"),
   STRING(0, 14, "str");
 
   private static final DType[] D_TYPES = DType.values();
