@@ -5,7 +5,7 @@ These notebooks provide examples of how to use cuDF.  These notebooks are design
 ## Notebooks
 Notebook Title | Status | Description     
 --- | --- | ---                                                                                                                                                                                           
-[Sample Notebook](sample-notebook.ipynb) | Working | This is a sample notebook, that should have a human readable description
+[Numba-cuDF Integration](notebooks_numba_cuDF_integration.ipynb) | Working | A demonstration of GPU accelerated Python library interoperability, including a few examples of accelerating cuDF Dataframe operations using Numba kernels directly.
 
 ## RAPIDS notebooks
 Visit the main RAPIDS [notebooks](https://github.com/rapidsai/notebooks) repo for a listing of all notebooks across all RAPIDS libraries.
