@@ -204,10 +204,14 @@ class Rolling:
                 agg_name,
             )
         else:
+            from cudf.utils import cudautils
+
             result_col = libcudf.rolling.rolling(
                 sr._column,
                 as_column(self.window),
-                as_column([0] * self.window.size, dtype=self.window.dtype),
+                as_column(
+                    cudautils.full(self.window.size, 0, self.window.dtype)
+                ),
                 None,
                 self.min_periods,
                 self.center,
