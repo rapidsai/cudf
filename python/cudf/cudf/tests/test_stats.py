@@ -379,5 +379,5 @@ def test_df_corr():
     pdf = gdf.to_pandas()
     got = gdf.corr()
     expected = pdf.corr()
-    np.testing.assert_array_almost_equal(got.to_pandas(), expected)
+    assert_eq(got, expected)
   
