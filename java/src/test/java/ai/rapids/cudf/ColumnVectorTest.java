@@ -1057,7 +1057,7 @@ public class ColumnVectorTest extends CudfTestBase {
     WindowOptions options = WindowOptions.builder().window(1, 1)
         .minPeriods(2).build();
     try (ColumnVector v1 = ColumnVector.fromInts(5, 4, 7, 6, 8)) {
-      try (ColumnVector expected = ColumnVector.fromInts(9, 16, 17, 21, 14);
+      try (ColumnVector expected = ColumnVector.fromLongs(9, 16, 17, 21, 14);
            ColumnVector result = v1.rollingWindow(AggregateOp.SUM, options)) {
         assertColumnsAreEqual(expected, result);
       }
@@ -1073,7 +1073,7 @@ public class ColumnVectorTest extends CudfTestBase {
       }
 
       // The rolling window produces the same result type as the input
-      try (ColumnVector expected = ColumnVector.fromInts(4, 5, 5, 7, 7);
+      try (ColumnVector expected = ColumnVector.fromDoubles(4.5, 16.0 / 3, 17.0 / 3, 7, 7);
            ColumnVector result = v1.rollingWindow(AggregateOp.MEAN, options)) {
         assertColumnsAreEqual(expected, result);
       }
@@ -1092,7 +1092,7 @@ public class ColumnVectorTest extends CudfTestBase {
       WindowOptions window = WindowOptions.builder()
           .minPeriods(2).window(precedingCol, followingCol).build();
       try (ColumnVector v1 = ColumnVector.fromInts(5, 4, 7, 6, 8);
-           ColumnVector expected = ColumnVector.fromBoxedInts(null, null, 9, 16, 25);
+           ColumnVector expected = ColumnVector.fromBoxedLongs(null, null, 9L, 16L, 25L);
            ColumnVector result = v1.rollingWindow(AggregateOp.SUM, window)) {
         assertColumnsAreEqual(expected, result);
       }
@@ -1122,7 +1122,7 @@ public class ColumnVectorTest extends CudfTestBase {
       WindowOptions window = WindowOptions.builder().minPeriods(2)
           .window(precedingCol, followingCol).build();
       try (ColumnVector v1 = ColumnVector.fromInts(5, 4, 7, 6, 8);
-           ColumnVector expected = ColumnVector.fromInts(16, 22, 30, 14, 14);
+           ColumnVector expected = ColumnVector.fromLongs(16, 22, 30, 14, 14);
            ColumnVector result = v1.rollingWindow(AggregateOp.SUM, window)) {
         assertColumnsAreEqual(expected, result);
       }
