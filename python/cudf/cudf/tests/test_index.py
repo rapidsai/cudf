@@ -302,3 +302,8 @@ def test_from_pandas_gen():
     gidx_2 = cudf.from_pandas(pidx)
 
     assert_eq(gidx_1, gidx_2)
+
+
+def test_index_names():
+    idx = cudf.core.index.as_index([1, 2, 3], name="idx")
+    assert idx.names == ("idx",)
