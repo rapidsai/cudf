@@ -155,6 +155,8 @@ class ColumnAccessor(MutableMapping):
     def get_by_label_slice(self, key):
         start = key.start
         stop = key.stop
+        if key.step is not None:
+            raise TypeError("Label slicing with step is not supported")
         if start is None:
             start = self.names[0]
         if stop is None:
