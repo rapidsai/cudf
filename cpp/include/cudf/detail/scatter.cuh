@@ -33,7 +33,7 @@ namespace experimental {
 namespace detail {
 
 template <typename T, typename MapIterator>
-rmm::device_vector<T> make_gather_map(MapIterator scatter_map_begin,
+rmm::device_vector<T> scatter_to_gather(MapIterator scatter_map_begin,
     MapIterator scatter_map_end, size_type gather_rows,
     cudaStream_t stream)
 {
@@ -49,59 +49,6 @@ rmm::device_vector<T> make_gather_map(MapIterator scatter_map_begin,
     scatter_map_begin, gather_map.begin());
 
   return gather_map;
-}
-
-template <typename MapIterator>
-void gather_bitmask(table_view const& source, MapIterator gather_map,
-    std::vector<std::unique_ptr<column>>& target,
-    rmm::mr::device_memory_resource* mr, cudaStream_t stream)
-{
-  // Create null mask if source is nullable but target is not
-  for (size_t i = 0; i < target.size(); ++i) {
-    if (source.column(i).nullable() and not target[i]->nullable()) {
-      auto mask = create_null_mask(target[i]->size(), mask_state::ALL_VALID, stream, mr);
-      target[i]->set_null_mask(std::move(mask), 0);
-    }
-  }
-
-  auto const device_source = table_device_view::create(source, stream);
-
-  // Make device array of target bitmask pointers
-  thrust::host_vector<bitmask_type*> target_masks(target.size());
-  std::transform(target.begin(), target.end(), target_masks.begin(),
-    [](auto const& col) { return col->mutable_view().null_mask(); });
-  rmm::device_vector<bitmask_type*> d_target_masks(target_masks);
-  auto target_rows = target.front()->size();
-
-
-  auto masks = d_target_masks.data().get();
-
-  // Compute block size
-  constexpr size_type block_size = 256;
-  using Selector = gather_bitmask_functor<true, decltype(gather_map)>;
-  auto bitmask_selector = Selector{ *device_source, masks, gather_map };
-  auto counting_it = thrust::make_counting_iterator(0);
-  auto bitmask_kernel = valid_if_n_kernel<decltype(counting_it), decltype(counting_it), Selector, block_size>;
-  size_type const grid_size = grid_1d(target_rows, block_size).num_blocks;
-
-  auto d_valid_counts = rmm::device_vector<size_type>(target.size());
-  bitmask_kernel<<<grid_size, block_size, 0, stream>>>(counting_it,
-                                                       counting_it,
-                                                       bitmask_selector,
-                                                       masks,
-                                                       target.size(),
-                                                       target_rows,
-                                                       d_valid_counts.data().get());
-
-  // Copy the valid counts into each column
-  auto const valid_counts = thrust::host_vector<size_type>(d_valid_counts);
-  size_t index = 0;
-  for (auto& target_col : target) {
-    if (target_col->nullable()) {
-      auto const null_count = target_rows - valid_counts[index++];
-      target_col->set_null_count(null_count);
-    }
-  }
 }
 
 template <typename MapIterator>
@@ -209,7 +156,7 @@ scatter(table_view const& source, MapIterator scatter_map_begin,
           updated_scatter_map_end, target_col, mr, stream);
       });
 
-    auto gather_map = make_gather_map<T>(updated_scatter_map_begin, updated_scatter_map_end,
+    auto gather_map = scatter_to_gather<T>(updated_scatter_map_begin, updated_scatter_map_end,
       target.num_rows(), stream);
     gather_bitmask(source, gather_map.begin(), result, mr, stream);
 

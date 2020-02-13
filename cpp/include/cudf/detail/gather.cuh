@@ -330,6 +330,49 @@ void gather_bitmask(table_device_view input,
                                                      valid_counts);
 }
 
+template <typename MapIterator>
+void gather_bitmask(table_view const& source, MapIterator gather_map,
+    std::vector<std::unique_ptr<column>>& target,
+    rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+{
+  // Validate that all target columns have the same size
+  auto const target_rows = target.front()->size();
+  CUDF_EXPECTS(std::all_of(target.begin(), target.end(), [target_rows](auto const& col)
+    { return  target_rows == col->size(); }), "Column size mismatch");
+
+  // Create null mask if source is nullable but target is not
+  for (size_t i = 0; i < target.size(); ++i) {
+    if (source.column(i).nullable() and not target[i]->nullable()) {
+      auto mask = create_null_mask(target[i]->size(), mask_state::ALL_VALID, stream, mr);
+      target[i]->set_null_mask(std::move(mask), 0);
+    }
+  }
+
+  // Make device array of target bitmask pointers
+  thrust::host_vector<bitmask_type*> target_masks(target.size());
+  std::transform(target.begin(), target.end(), target_masks.begin(),
+    [](auto const& col) { return col->mutable_view().null_mask(); });
+  rmm::device_vector<bitmask_type*> d_target_masks(target_masks);
+  auto masks = d_target_masks.data().get();
+
+  auto const device_source = table_device_view::create(source, stream);
+  auto d_valid_counts = rmm::device_vector<size_type>(target.size());
+
+  // TODO add params and dispatch for ignore_out_of_bounds/nullify_out_of_bounds
+  gather_bitmask<true>(*device_source, gather_map, masks, target.size(), target_rows,
+    d_valid_counts.data().get(), stream);
+
+  // Copy the valid counts into each column
+  auto const valid_counts = thrust::host_vector<size_type>(d_valid_counts);
+  size_t index = 0;
+  for (auto& target_col : target) {
+    if (target_col->nullable()) {
+      auto const null_count = target_rows - valid_counts[index++];
+      target_col->set_null_count(null_count);
+    }
+  }
+}
+
 
 /**
  * @brief Gathers the specified rows of a set of columns according to a gather map.

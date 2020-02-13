@@ -21,8 +21,8 @@
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/table/row_operators.cuh>
-#include <cudf/detail/scatter.hpp>
 #include <cudf/detail/scatter.cuh>
+#include <cudf/detail/gather.cuh>
 
 #include <thrust/tabulate.h>
 
