@@ -332,7 +332,7 @@ void gather_bitmask(table_device_view input,
 
 template <typename MapIterator>
 void gather_bitmask(table_view const& source, MapIterator gather_map,
-    std::vector<std::unique_ptr<column>>& target,
+    std::vector<std::unique_ptr<column>>& target, bool ignore_out_of_bounds,
     rmm::mr::device_memory_resource* mr, cudaStream_t stream)
 {
   // Validate that all target columns have the same size
@@ -358,8 +358,11 @@ void gather_bitmask(table_view const& source, MapIterator gather_map,
   auto const device_source = table_device_view::create(source, stream);
   auto d_valid_counts = rmm::device_vector<size_type>(target.size());
 
-  // TODO add params and dispatch for ignore_out_of_bounds/nullify_out_of_bounds
-  gather_bitmask<true>(*device_source, gather_map, masks, target.size(), target_rows,
+  // TODO add param and dispatch for nullify_out_of_bounds
+  auto impl = ignore_out_of_bounds
+    ? gather_bitmask<true, MapIterator>
+    : gather_bitmask<false, MapIterator>;
+  impl(*device_source, gather_map, masks, target.size(), target_rows,
     d_valid_counts.data().get(), stream);
 
   // Copy the valid counts into each column

@@ -158,7 +158,8 @@ scatter(table_view const& source, MapIterator scatter_map_begin,
 
     auto gather_map = scatter_to_gather<T>(updated_scatter_map_begin, updated_scatter_map_end,
       target.num_rows(), stream);
-    gather_bitmask(source, gather_map.begin(), result, mr, stream);
+    // TODO this should be nullify_out_of_bounds, not ignore_out_of_bounds
+    gather_bitmask(source, gather_map.begin(), result, true, mr, stream);
 
     return std::make_unique<table>(std::move(result));
 }

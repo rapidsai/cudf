@@ -562,7 +562,7 @@ hash_partition_table(table_view const& input,
           grid_size, stream);
 
       // Handle bitmask using gather to take advantage of ballot_sync
-      experimental::detail::gather_bitmask(input, gather_map.begin(), output_cols, mr, stream);
+      experimental::detail::gather_bitmask(input, gather_map.begin(), output_cols, false, mr, stream);
     }
 
     auto output {std::make_unique<experimental::table>(std::move(output_cols))};
