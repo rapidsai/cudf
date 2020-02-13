@@ -5,9 +5,6 @@ import cudf
 import pandas as pd
 import numba
 
-from cudf.core.column.column import as_column
-from numba.cuda.cudadrv.devicearray import DeviceNDArray
-
 from cudf._libxx.lib cimport *
 from cudf._libxx.column cimport *
 
