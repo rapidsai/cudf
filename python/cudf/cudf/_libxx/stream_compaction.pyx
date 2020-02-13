@@ -57,11 +57,17 @@ def drop_nulls(Table source_table, how="any", keys=None, thresh=None):
     elif how == "all":
         c_keep_threshold = 1
 
-    cdef unique_ptr[table] c_result = move(
-        cpp_drop_nulls(source_table.view(),
-                       cpp_keys,
-                       c_keep_threshold)
-    )
+    cdef unique_ptr[table] c_result
+    cdef table_view source_table_view = source_table.view()
+
+    with nogil:
+        c_result = move(
+            cpp_drop_nulls(
+                source_table_view,
+                cpp_keys,
+                c_keep_threshold
+            )
+        )
 
     return Table.from_unique_ptr(
         move(c_result),
@@ -88,10 +94,17 @@ def apply_boolean_mask(Table source_table, Column boolean_mask):
 
     assert pd.api.types.is_bool_dtype(boolean_mask.dtype)
 
-    cdef unique_ptr[table] c_result = move(
-        cpp_apply_boolean_mask(source_table.view(),
-                               boolean_mask.view())
-    )
+    cdef unique_ptr[table] c_result
+    cdef table_view source_table_view = source_table.view()
+    cdef column_view boolean_mask_view = boolean_mask.view()
+
+    with nogil:
+        c_result = move(
+            cpp_apply_boolean_mask(
+                source_table_view,
+                boolean_mask_view
+            )
+        )
 
     return Table.from_unique_ptr(
         move(c_result),
@@ -145,14 +158,19 @@ def drop_duplicates(Table source_table, keys=None,
         )
     )
 
-    cdef cpp_nulls_are_equal = nulls_are_equal
+    cdef bool cpp_nulls_are_equal = nulls_are_equal
+    cdef unique_ptr[table] c_result
+    cdef table_view source_table_view = source_table.view()
 
-    cdef unique_ptr[table] c_result = move(
-        cpp_drop_duplicates(source_table.view(),
-                            cpp_keys,
-                            cpp_keep_option,
-                            cpp_nulls_are_equal)
-    )
+    with nogil:
+        c_result = move(
+            cpp_drop_duplicates(
+                source_table_view,
+                cpp_keys,
+                cpp_keep_option,
+                cpp_nulls_are_equal
+            )
+        )
 
     return Table.from_unique_ptr(
         move(c_result),
@@ -180,11 +198,13 @@ def unique_count(Column source_column, ignore_nulls=True, nan_as_null=False):
     Count of number of unique rows in `source_column`
     """
 
-    cdef cpp_ignore_nulls = ignore_nulls
-    cdef cpp_nan_as_null = nan_as_null
+    cdef bool cpp_ignore_nulls = ignore_nulls
+    cdef bool cpp_nan_as_null = nan_as_null
 
-    count = cpp_unique_count(source_column.view(),
-                             cpp_ignore_nulls,
-                             cpp_nan_as_null)
+    cdef column_view source_column_view = source_column.view()
+    with nogil:
+        count = cpp_unique_count(source_column_view,
+                                 cpp_ignore_nulls,
+                                 cpp_nan_as_null)
 
     return count

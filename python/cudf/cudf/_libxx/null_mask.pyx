@@ -25,7 +25,11 @@ def copy_bitmask(Column col):
         return None
 
     cdef column_view col_view = col.view()
-    cdef device_buffer db = cpp_copy_bitmask(col_view)
+    cdef device_buffer db
+
+    with nogil:
+        db = cpp_copy_bitmask(col_view)
+
     cdef unique_ptr[device_buffer] up_db = make_unique[device_buffer](move(db))
     rmm_db = DeviceBuffer.c_from_unique_ptr(move(up_db))
     buf = Buffer(rmm_db)
