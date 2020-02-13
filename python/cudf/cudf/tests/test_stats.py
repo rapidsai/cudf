@@ -376,7 +376,7 @@ def test_corr1d(data1, data2):
  
 def test_df_corr():
     gdf = randomdata(100, {str(x):float for x in range(50)})
-    pdf= gdf.to_pandas()
+    pdf = gdf.to_pandas()
     got = gdf.corr()
     expected = pdf.corr()
     np.testing.assert_array_almost_equal(got.to_pandas(), expected)
