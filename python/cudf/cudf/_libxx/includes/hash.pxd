@@ -5,7 +5,7 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
-from cudf._libxx.includes.lib cimport *
+from cudf._libxx.lib cimport *
 
 cdef extern from "cudf/hashing.hpp" namespace "cudf" nogil:
     cdef pair[unique_ptr[table], vector[size_type]] \

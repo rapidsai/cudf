@@ -32,13 +32,14 @@ class Frame(libcudfxx.table.Table):
         return result
 
     def _hash_partition(self, columns_to_hash, num_partitions):
-        frame, offsets = libcudfxx._hash_partition(
-            self, columns_to_hash, num_partitions)
+        frame, offsets = libcudfxx.hash_partition(
+            self, columns_to_hash, num_partitions
+        )
         frame._copy_categories(self)
         return frame, offsets
 
     def _hash_columns(self):
-        result = libcudfxx._hash(self)
+        result = libcudfxx.hash(self)
         return result
 
     def _as_column(self):
