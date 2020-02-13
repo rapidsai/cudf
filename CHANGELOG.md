@@ -58,6 +58,7 @@
 - PR #4098 Remove legacy calls from libcudf strings column code
 - PR #4111 Use `Buffer`'s to serialize `StringColumn`
 - PR #4113 Get `len` of `StringColumn`s without `nvstrings`
+- PR #4147 Remove workaround for UNKNOWN_NULL_COUNT in contiguous_split.
 
 ## Bug Fixes
 
