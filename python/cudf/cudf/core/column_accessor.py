@@ -101,17 +101,22 @@ class ColumnAccessor(MutableMapping):
         """
         Insert value at specified location.
         """
+        ncols = len(self._data)
+        if loc == -1:
+            loc = ncols
+        if not (0 <= loc <= ncols):
+            raise ValueError(
+                "insert: loc out of bounds: must be " " 0 <= loc <= ncols"
+            )
         # TODO: we should move all insert logic here
         if name in self._data:
             raise ValueError(f"Cannot insert {name}, already exists")
-        if loc == -1 or loc == len(self._data):
+        if loc == len(self._data):
             self._data[name] = value
         else:
             name = self._pad_key(name)
-            new_keys = list(self.names)
-            new_values = list(self.columns)
-            new_keys.insert(loc, name)
-            new_values.insert(loc, value)
+            new_keys = self.names[:loc] + (name,) + self.names[loc:]
+            new_values = self.columns[:loc] + (value,) + self.columns[loc:]
             self._data = self._data.__class__(zip(new_keys, new_values),)
         self._clear_cache()
 
