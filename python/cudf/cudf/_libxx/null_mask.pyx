@@ -59,7 +59,6 @@ def create_null_mask(size_type size, mask_state state=UNINITIALIZED):
     Given a size and a mask state, allocate a mask that can properly represent
     the given size with the given mask state
     """
-    cdef mask_state state =
     cdef device_buffer db
     cdef unique_ptr[device_buffer] up_db
 
