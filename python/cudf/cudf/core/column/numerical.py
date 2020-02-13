@@ -1,6 +1,4 @@
-# Copyright (c) 2018-2019, NVIDIA CORPORATION.
-
-from __future__ import division, print_function
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -23,7 +21,7 @@ from cudf.utils.dtypes import (
 
 
 class NumericalColumn(column.ColumnBase):
-    def __init__(self, data, dtype, mask=None, offset=0):
+    def __init__(self, data, dtype, mask=None, size=None, offset=0):
         """
         Parameters
         ----------
@@ -35,8 +33,12 @@ class NumericalColumn(column.ColumnBase):
         dtype = np.dtype(dtype)
         if data.size % dtype.itemsize:
             raise ValueError("Buffer size must be divisible by element size")
-        size = data.size // dtype.itemsize
-        super().__init__(data, size=size, dtype=dtype, mask=mask)
+        if size is None:
+            size = data.size // dtype.itemsize
+            size = size - offset
+        super().__init__(
+            data, size=size, dtype=dtype, mask=mask, offset=offset
+        )
 
     def __contains__(self, item):
         """
@@ -127,13 +129,13 @@ class NumericalColumn(column.ColumnBase):
             if self.dtype in (np.dtype("int8"), np.dtype("int16")):
                 self_as_int32 = self.astype("int32", **kwargs)
                 dev_array = self_as_int32.data_array_view
-                dev_ptr = self_as_int32.data.ptr
+                dev_ptr = self_as_int32.data_ptr
             else:
                 dev_array = self.data_array_view
-                dev_ptr = self.data.ptr
+                dev_ptr = self.data_ptr
             null_ptr = None
             if self.nullable:
-                null_ptr = self.mask.ptr
+                null_ptr = self.mask_ptr
             kwargs = {"count": len(self), "nulls": null_ptr, "bdevmem": True}
             data = string._numeric_to_str_typecast_functions[
                 np.dtype(dev_array.dtype)
@@ -150,10 +152,13 @@ class NumericalColumn(column.ColumnBase):
         )
 
     def as_numerical_column(self, dtype, **kwargs):
+        casted = libcudf.typecast.cast(self, dtype)
         return column.build_column(
-            data=libcudf.typecast.cast(self, dtype).data,
-            dtype=np.dtype(dtype),
-            mask=self.mask,
+            data=casted.data,
+            dtype=casted.dtype,
+            mask=casted.mask,
+            size=casted.size,
+            offset=casted.offset,
         )
 
     def sort_by_values(self, ascending=True, na_position="last"):
@@ -312,7 +317,7 @@ class NumericalColumn(column.ColumnBase):
         )
         return output
 
-    def fillna(self, fill_value, inplace=False):
+    def fillna(self, fill_value):
         """
         Fill null values with *fill_value*
         """
@@ -334,7 +339,9 @@ class NumericalColumn(column.ColumnBase):
             else:
                 fill_value = fill_value.astype(self.dtype)
         result = libcudf.replace.replace_nulls(self, fill_value)
-        return self._mimic_inplace(result, inplace)
+        result = column.build_column(result.data, result.dtype, mask=None)
+
+        return result
 
     def find_first_value(self, value, closest=False):
         """
@@ -495,7 +502,7 @@ def _numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
     _ = libcudf.binops.apply_op(lhs, rhs, out, op)
 
     if is_op_comparison:
-        out.fillna(op == "ne", inplace=True)
+        out = out.fillna(op == "ne")
 
     libcudf.nvtx.nvtx_range_pop()
     return out

@@ -33,6 +33,8 @@ namespace {
 // Launch configuration for optimized hash partition
 constexpr size_type OPTIMIZED_BLOCK_SIZE = 512;
 constexpr size_type OPTIMIZED_ROWS_PER_THREAD = 8;
+constexpr size_type ELEMENTS_PER_THREAD = 2;
+constexpr size_type THRESHOLD_FOR_OPTIMIZED_PARTITION_KERNEL = 1024; 
 
 // Launch configuration for fallback hash partition
 constexpr size_type FALLBACK_BLOCK_SIZE = 256;
@@ -260,15 +262,35 @@ void copy_block_partitions(
   auto partition_offset_global = reinterpret_cast<size_type*>(
     partition_offset_shared + num_partitions + 1);
 
-  // Calculate the offset in shared memory of each partition in this thread block
-  if (threadIdx.x == 0) {
-    // TODO: could use a block scan instead of serialization
-    partition_offset_shared[0] = 0;
+  typedef cub::BlockScan<size_type, OPTIMIZED_BLOCK_SIZE> BlockScan;
+  __shared__ typename BlockScan::TempStorage temp_storage;
 
-    for (size_type ipartition = 0; ipartition < num_partitions; ipartition ++) {
-      partition_offset_shared[ipartition + 1] = partition_offset_shared[ipartition]
-        + block_partition_sizes[ipartition * gridDim.x + blockIdx.x];
+  // use ELEMENTS_PER_THREAD=2 to support upto 1024 partitions 
+  size_type temp_histo[ELEMENTS_PER_THREAD];
+
+  for (int i = 0; i < ELEMENTS_PER_THREAD; ++i) {
+    if (ELEMENTS_PER_THREAD * threadIdx.x + i < num_partitions) {
+      temp_histo[i] = block_partition_sizes[blockIdx.x + (ELEMENTS_PER_THREAD * threadIdx.x + i) * gridDim.x]; 
+    } else {
+      temp_histo[i] = 0;
     }
+  }
+
+  __syncthreads();
+
+  BlockScan(temp_storage).InclusiveSum(temp_histo, temp_histo);
+
+  __syncthreads();
+
+  if (threadIdx.x == 0) {
+    partition_offset_shared[0] = 0;
+  }
+
+  // Calculate the offset in shared memory of each partition in this thread block
+  for (int i = 0; i < ELEMENTS_PER_THREAD; ++i) {
+    if (ELEMENTS_PER_THREAD * threadIdx.x + i < num_partitions) {
+      partition_offset_shared[ELEMENTS_PER_THREAD * threadIdx.x + i + 1] = temp_histo[i]; 
+    } 
   }
 
   // Fetch the offset in the output buffer of each partition in this thread block
@@ -417,7 +439,7 @@ hash_partition_table(table_view const& input,
 {
   auto const num_rows = table_to_hash.num_rows();
 
-  bool const use_optimization {num_partitions <= 512};
+  bool const use_optimization {num_partitions <= THRESHOLD_FOR_OPTIMIZED_PARTITION_KERNEL};
   auto const block_size = use_optimization
     ? OPTIMIZED_BLOCK_SIZE : FALLBACK_BLOCK_SIZE;
   auto const rows_per_thread = use_optimization

@@ -61,7 +61,7 @@ std::unique_ptr<cudf::column> gather( strings_column_view const& strings,
 {
     auto output_count = std::distance(begin, end);
     auto strings_count = strings.size();
-    if( output_count == 0 || strings_count == 0 )
+    if( output_count == 0 )
         return make_empty_strings_column(mr,stream);
 
     auto execpol = rmm::exec_policy(stream);
