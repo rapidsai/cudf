@@ -94,12 +94,14 @@
 - PR #4089 Fix dask groupby mutliindex test case issues in join
 - PR #4097 Fix strings concatenate logic with column offsets
 - PR #4076 All null string entries should have null data buffer
+- PR #4145 Support empty index case in DataFrame._from_table
 - PR #4109 Use rmm::device_vector instead of thrust::device_vector
 - PR #4113 Use `.nvstrings` in `StringColumn.sum(...)`
 - PR #4116 Fix a bug in contiguous_split() where tables with mixed column types could corrupt string output
 - PR #4119 Fix binary ops slowdown using jitify -remove-unused-globals
 - PR #4125 Fix type enum to account for added Dictionary type in `types.hpp`
 - PR #4137 Update Java for mutating fill and rolling window changes
+- PR #4141 Fix NVStrings test_convert failure in 10.2 build
 
 
 # cuDF 0.12.0 (04 Feb 2020)
