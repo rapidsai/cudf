@@ -18,10 +18,10 @@ from libcpp.memory cimport unique_ptr, make_unique
 
 import cudf._libxx as libcudfxx
 from cudf._libxx.lib cimport *
+from cudf._libxx.null_mask import bitmask_allocation_size_bytes
 
 from cudf.core.buffer import Buffer
 from cudf.utils.dtypes import is_categorical_dtype
-from cudf.utils.utils import calc_mask_bytes, mask_bitsize
 
 
 np_to_cudf_types = {
@@ -191,7 +191,7 @@ cdef class Column:
                             type(value).__name__)
 
         if value is not None:
-            required_size = calc_mask_bytes(self.base_size)
+            required_size = bitmask_allocation_size_bytes(self.base_size)
             if value.size < required_size:
                 error_msg = (
                     "The Buffer for mask is smaller than expected, got " +
@@ -218,7 +218,7 @@ cdef class Column:
         and compute new data Buffers zero-copy that use pointer arithmetic to
         properly adjust the pointer.
         """
-        mask_size = calc_mask_bytes(self.size)
+        mask_size = bitmask_allocation_size_bytes(self.size)
         required_num_bytes = -(-self.size // 8)  # ceiling divide
         error_msg = (
             "The value for mask is smaller than expected, got {}  bytes, "
@@ -475,13 +475,13 @@ cdef class Column:
                 mask = Buffer(
                     rmm.DeviceBuffer(
                         ptr=mask_ptr,
-                        size=calc_mask_bytes(size)
+                        size=bitmask_allocation_size_bytes(size)
                     )
                 )
             else:
                 mask = Buffer(
                     mask=mask_ptr,
-                    size=calc_mask_bytes(size),
+                    size=bitmask_allocation_size_bytes(size),
                     owner=mask_owner
                 )
 

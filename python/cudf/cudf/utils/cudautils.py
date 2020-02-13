@@ -7,13 +7,12 @@ from numba import cuda, int32, numpy_support
 
 import rmm
 
+from cudf._libxx.null_mask import create_null_mask
 from cudf.utils.utils import (
     check_equals_float,
     check_equals_int,
-    make_mask,
     mask_bitsize,
     mask_get,
-    mask_set,
     rint,
 )
 
@@ -250,7 +249,7 @@ def gpu_expand_mask_bits(bits, out):
 def expand_mask_bits(size, bits):
     """Expand bit-mask into byte-mask
     """
-    expanded_mask = full(size, 0, dtype=np.uint8)
+    expanded_mask = full(size, 0, dtype=np.bool_)
     numtasks = min(1024, expanded_mask.size)
     if numtasks > 0:
         gpu_expand_mask_bits.forall(numtasks)(bits, expanded_mask)
@@ -313,31 +312,8 @@ def copy_to_dense(data, mask, out=None):
     return (sz, out)
 
 
-@cuda.jit
-def gpu_compact_mask_bytes(bools, bits):
-    tid = cuda.grid(1)
-    base = tid * mask_bitsize
-    for i in range(base, base + mask_bitsize):
-        if i >= bools.size:
-            break
-        if bools[i]:
-            mask_set(bits, i)
-
-
-def compact_mask_bytes(boolbytes):
-    """Convert booleans (in bytes) to a bitmask
-    """
-    bits = make_mask(boolbytes.size)
-    if bits.size > 0:
-        # Fill zero
-        gpu_fill_value.forall(bits.size)(bits, 0)
-        # Compact
-        gpu_compact_mask_bytes.forall(bits.size)(boolbytes, bits)
-    return bits
-
-
 def make_empty_mask(size):
-    bits = make_mask(size)
+    bits = create_null_mask(size)
     if bits.size > 0:
         gpu_fill_value.forall(bits.size)(bits, 0)
     return bits
@@ -822,16 +798,6 @@ def modulo(arr, d):
     if arr.size > 0:
         gpu_modulo.forall(arr.size)(arr, out, d)
     return out
-
-
-def boolean_array_to_index_array(bool_array):
-    """ Converts a boolean array to an integer array to be used for gather /
-        scatter operations
-    """
-    boolbits = compact_mask_bytes(bool_array)
-    indices = arange(len(bool_array))
-    _, selinds = copy_to_dense(indices, mask=boolbits)
-    return selinds
 
 
 @cuda.jit

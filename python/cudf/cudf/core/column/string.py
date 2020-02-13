@@ -13,6 +13,10 @@ import rmm
 
 import cudf._lib as libcudf
 from cudf._lib.nvtx import nvtx_range_pop, nvtx_range_push
+from cudf._libxx.null_mask import (
+    bitmask_allocation_size_bytes,
+    create_null_mask,
+)
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.utils import utils
@@ -658,8 +662,7 @@ class StringColumn(column.ColumnBase):
         out_col = column.as_column(out_arr)
 
         if self.has_nulls:
-            mask_size = utils.calc_mask_bytes(len(self.nvstrings))
-            out_mask = Buffer.empty(mask_size)
+            out_mask = create_null_mask(len(self))
             out_mask_ptr = out_mask.ptr
             self.nvstrings.set_null_bitmask(out_mask_ptr, bdevmem=True)
             out_col = out_col.set_mask(out_mask)
@@ -676,8 +679,8 @@ class StringColumn(column.ColumnBase):
         sbuf = np.empty(self.nvstrings.byte_count(), dtype="int8")
         obuf = np.empty(len(self.nvstrings) + 1, dtype="int32")
 
-        mask_size = utils.calc_mask_bytes(len(self.nvstrings))
-        nbuf = np.empty(mask_size, dtype="u1")
+        mask_size = bitmask_allocation_size_bytes(len(self.nvstrings))
+        nbuf = np.empty(mask_size, dtype="i1")
 
         self.str().to_offsets(sbuf, obuf, nbuf=nbuf)
         sbuf = pa.py_buffer(sbuf)

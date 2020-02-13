@@ -1,6 +1,6 @@
 import functools
 from collections import OrderedDict
-from math import ceil, floor, isinf, isnan
+from math import floor, isinf, isnan
 
 import numpy as np
 import pandas as pd
@@ -9,29 +9,15 @@ from numba import njit
 
 import rmm
 
+from cudf._libxx.null_mask import bitmask_allocation_size_bytes
+
 mask_dtype = np.dtype(np.int32)
 mask_bitsize = mask_dtype.itemsize * 8
-mask_byte_padding = int(64 / mask_dtype.itemsize)
-
-
-def calc_chunk_size(size, chunksize):
-    return mask_byte_padding * ceil(
-        ((size + chunksize - 1) // chunksize) / mask_byte_padding
-    )
-
-
-def calc_mask_bytes(size):
-    return calc_chunk_size(size, mask_bitsize) * mask_dtype.itemsize
 
 
 @njit
 def mask_get(mask, pos):
     return (mask[pos // mask_bitsize] >> (pos % mask_bitsize)) & 1
-
-
-@njit
-def mask_set(mask, pos):
-    mask[pos // mask_bitsize] |= 1 << (pos % mask_bitsize)
 
 
 @njit
@@ -67,13 +53,6 @@ def rint(x):
 @njit
 def check_equals_int(a, b):
     return a == b
-
-
-def make_mask(size):
-    """Create mask to obtain at least *size* number of bits.
-    """
-    size = calc_chunk_size(size, mask_bitsize)
-    return rmm.device_array(shape=size, dtype=mask_dtype)
 
 
 def scalar_broadcast_to(scalar, size, dtype=None):
@@ -140,7 +119,7 @@ def buffers_from_pyarrow(pa_arr, dtype=None):
     buffers = pa_arr.buffers()
 
     if pa_arr.null_count:
-        mask_size = calc_mask_bytes(len(pa_arr))
+        mask_size = bitmask_allocation_size_bytes(len(pa_arr))
         dbuf = rmm.DeviceBuffer(size=mask_size)
         dbuf.copy_from_host(np.asarray(buffers[0]).view("u1"))
         pamask = Buffer(dbuf)

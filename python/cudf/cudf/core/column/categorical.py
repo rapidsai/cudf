@@ -8,6 +8,7 @@ import pyarrow as pa
 
 import cudf
 import cudf._lib as libcudf
+from cudf._libxx.transform import bools_to_mask
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.core.dtypes import CategoricalDtype
@@ -639,12 +640,11 @@ def pandas_categorical_as_column(categorical, codes=None):
     codes = categorical.codes if codes is None else codes
     codes = column.as_column(codes)
 
-    valid_codes = codes != -1
+    valid_codes = codes.unordered_compare("ne", codes.dtype.type(-1))
 
     mask = None
-    if not np.all(valid_codes):
-        mask = cudautils.compact_mask_bytes(valid_codes)
-        mask = Buffer(mask)
+    if not valid_codes.all():
+        mask = bools_to_mask(valid_codes)
 
     return column.build_categorical_column(
         categories=categorical.categories,

@@ -16,12 +16,17 @@ import cudf
 import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
 from cudf._libxx.column import Column
+from cudf._libxx.null_mask import (
+    bitmask_allocation_size_bytes,
+    create_null_mask,
+)
 from cudf._libxx.stream_compaction import unique_count as cpp_unique_count
+from cudf._libxx.transform import bools_to_mask
 from cudf.core.buffer import Buffer
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.dtypes import is_categorical_dtype, is_scalar, np_to_pa_dtype
-from cudf.utils.utils import buffers_from_pyarrow, calc_mask_bytes, mask_dtype
+from cudf.utils.utils import buffers_from_pyarrow, mask_dtype
 
 
 class ColumnBase(Column):
@@ -248,7 +253,7 @@ class ColumnBase(Column):
         # Allocate output mask only if there's nulls in the input objects
         mask = None
         if nulls:
-            mask = Buffer(utils.make_mask(newsize))
+            mask = create_null_mask(newsize)
 
         col = build_column(
             data=data, dtype=head.dtype, mask=mask, children=children
@@ -279,10 +284,8 @@ class ColumnBase(Column):
         If ``all_valid`` is True, the new mask is set to all valid.
         If ``all_valid`` is False, the new mask is set to all null.
         """
-        nelem = len(self)
-        mask_sz = calc_mask_bytes(nelem)
-        mask = Buffer.empty(mask_sz)
-        if nelem > 0:
+        mask = create_null_mask(len(self))
+        if len(self) > 0:
             cudautils.fill_value(mask, 0xFF if all_valid else 0)
         return self.set_mask(mask=mask)
 
@@ -428,7 +431,8 @@ class ColumnBase(Column):
                 bytemask = cudautils.expand_mask_bits(
                     data_size, self.mask_array_view
                 )
-                slice_mask = cudautils.compact_mask_bytes(bytemask[arg])
+                bytemask = as_column(bytemask)
+                slice_mask = bools_to_mask(bytemask[arg])
             else:
                 slice_data = self.data_array_view[arg]
                 slice_mask = None
@@ -620,13 +624,13 @@ class ColumnBase(Column):
 
         Returns
         -------
-        device array
+        Buffer
         """
 
         if self.has_nulls:
             raise ValueError("Column must have no nulls.")
 
-        return cudautils.compact_mask_bytes(self.data_array_view)
+        return bools_to_mask(self)
 
     @ioutils.doc_to_dlpack()
     def to_dlpack(self):
@@ -1031,8 +1035,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
 
         nbuf = None
         if arbitrary.null_count() > 0:
-            mask_size = calc_mask_bytes(arbitrary.size())
-            nbuf = Buffer.empty(mask_size)
+            nbuf = create_null_mask(arbitrary.size())
             arbitrary.set_null_bitmask(nbuf.ptr, bdevmem=True)
         arbitrary.to_offsets(sbuf.ptr, obuf.ptr, None, bdevmem=True)
         children = (
@@ -1357,8 +1360,6 @@ def _data_from_cuda_array_interface_desc(obj):
 
 
 def _mask_from_cuda_array_interface_desc(obj):
-    from cudf.utils.cudautils import compact_mask_bytes
-
     desc = obj.__cuda_array_interface__
     mask = desc.get("mask", None)
 
@@ -1369,16 +1370,11 @@ def _mask_from_cuda_array_interface_desc(obj):
         typestr = desc["typestr"]
         typecode = typestr[1]
         if typecode == "t":
-            mask_size = calc_mask_bytes(nelem)
+            mask_size = bitmask_allocation_size_bytes(nelem)
             mask = Buffer(data=ptr, size=mask_size, owner=obj)
         elif typecode == "b":
-            dtype = np.dtype(typestr)
-            mask = compact_mask_bytes(
-                rmm.device_array_from_ptr(
-                    ptr, nelem=nelem, dtype=dtype, finalizer=None
-                )
-            )
-            mask = Buffer(mask)
+            col = as_column(mask)
+            mask = bools_to_mask(col)
         else:
             raise NotImplementedError(
                 f"Cannot infer mask from typestr {typestr}"

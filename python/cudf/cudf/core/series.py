@@ -1454,9 +1454,7 @@ class Series(Frame):
         -------
         device array
         """
-        if self.has_nulls:
-            raise ValueError("Column must have no nulls.")
-        return cudautils.compact_mask_bytes(self._column.data_array_view)
+        return self._column.as_mask()
 
     def astype(self, dtype, errors="raise", **kwargs):
         """
