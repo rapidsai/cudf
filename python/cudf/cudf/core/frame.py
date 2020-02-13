@@ -127,11 +127,11 @@ class Frame(libcudfxx.table.Table):
 
         Example
         -------
-        >>> cols = Series([['A1', 'A2', 'A3'], ['B1', 'B2', 'B3']])
-        >>> cols
+        >>> df = DataFrame([['A1', 'A2', 'A3'], ['B1', 'B2', 'B3']])
+        >>> df
         0    [A1, A2, A3]
         1    [B1, B2, B3]
-        >>> reshape.interleave_columns(df)
+        >>> df.interleave_columns()
         0    A1
         1    B1
         2    A2
@@ -141,7 +141,7 @@ class Frame(libcudfxx.table.Table):
  
         Returns
         -------
-        The interleavedcolumns as a single column
+        The interleaved columns as a single column
         """
         result = self.__class__._from_table(
             libcudfxx.reshape.interleave_columns(self)
@@ -163,9 +163,9 @@ class Frame(libcudfxx.table.Table):
 
         Example
         -------
-        >>> self  = Dataframe([[8, 4, 7], [5, 2, 3]])
+        >>> df  = Dataframe([[8, 4, 7], [5, 2, 3]])
         >>> count = 2
-        >>> reshape.tile(df, count)
+        >>> df.tile(df, count)
            0  1  2  3  4  5
         0  8  4  7  8  4  7
         1  5  2  3  5  2  3

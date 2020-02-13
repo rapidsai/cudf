@@ -130,6 +130,7 @@ def test_df_stack(nulls, num_cols, num_rows, dtype):
         "float64",
         "datetime64[ms]",
         "str",
+        "category",
     ],
 )
 @pytest.mark.parametrize("nulls", ["none", "some"])
@@ -149,7 +150,7 @@ def test_interleave_columns(nulls, num_cols, num_rows, dtype):
         pdf[colname] = data
 
     gdf = DataFrame.from_pandas(pdf)
-
+    
     got = gdf.interleave_columns()
     
     expect = pdf.fillna("null")
@@ -174,6 +175,7 @@ def test_interleave_columns(nulls, num_cols, num_rows, dtype):
         "float64",
         "datetime64[ms]",
         "str",
+        "category",
     ],
 )
 @pytest.mark.parametrize("nulls", ["none", "some"])

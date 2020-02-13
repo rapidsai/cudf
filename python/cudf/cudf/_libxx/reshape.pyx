@@ -16,7 +16,7 @@ from cudf._libxx.includes.reshape cimport (
      tile as cpp_tile
 )
 
-def interleave_columns(Table source_table):
+def interleave_columns(Column source_table):
     """
     Interleave columns of a table into a single column.
  
