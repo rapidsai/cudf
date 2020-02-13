@@ -168,9 +168,6 @@ class DataFrame(Frame):
     def __init__(self, data=None, index=None, columns=None, dtype=None):
         super().__init__()
 
-        if isinstance(data, libcudfxx.table.Table):
-            return DataFrame._from_table(data)
-
         if isinstance(data, ColumnAccessor):
             self._data = data
             if index is None:
@@ -178,6 +175,12 @@ class DataFrame(Frame):
                 index = as_index(range(self._data.nrows))
             self._index = as_index(index)
             return None
+
+        if isinstance(data, DataFrame):
+            self._data = data._data
+            self._index = data._index
+            self.columns = data.columns
+            return
 
         if data is None:
             if index is None:
@@ -444,19 +447,8 @@ class DataFrame(Frame):
         # returning the rows specified in the boolean mask
         """
         if is_scalar(arg) or isinstance(arg, tuple):
-            if is_scalar(arg):
-                nlevels = 1
-            else:
-                nlevels = len(arg)
-            new_data = self._data.get_by_label(arg)
-            if self._data.multiindex is False or nlevels == self._data.nlevels:
-                return cudf.Series(new_data, name=arg, index=self.index)
-            else:
-                return cudf.DataFrame(
-                    new_data,
-                    columns=new_data.to_pandas_index(),
-                    index=self.index,
-                )
+            return self._get_columns_by_label(arg, downcast=True)
+
         elif isinstance(arg, slice):
             df = DataFrame(index=self.index[arg])
             for k, col in self._data.items():
@@ -478,23 +470,11 @@ class DataFrame(Frame):
         ):
             mask = arg
             if isinstance(mask, list):
-                mask = np.array(mask)
-            df = DataFrame()
-
+                mask = pd.Series(mask)
             if mask.dtype == "bool":
-                # New df-wide index
-                index = self.index.take(mask)
-                for col in self._data:
-                    df[col] = self[col][arg]
-                df = df.set_index(index)
+                return self._apply_boolean_mask(mask)
             else:
-                if len(arg) == 0:
-                    df.index = self.index
-                    return df
-                for col in arg:
-                    df[col] = self[col]
-                df.index = self.index
-            return df
+                return self._get_columns_by_label(mask)
         elif isinstance(arg, DataFrame):
             return self.mask(arg)
         else:

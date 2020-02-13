@@ -246,7 +246,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
             self._df[col].loc[key[0]] = value
 
     def _get_column_selection(self, arg):
-        return cudf.DataFrame(self._df._data.get_by_label(arg))
+        return self._df._get_columns_by_label(arg)
 
 
 class _DataFrameIlocIndexer(_DataFrameIndexer):
@@ -323,7 +323,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         return self._df[col].iloc[arg[0]]
 
     def _get_column_selection(self, arg):
-        return cudf.DataFrame(self._df._data.get_by_index(arg))
+        return cudf.DataFrame(self._df._get_columns_by_index(arg))
 
 
 def _normalize_dtypes(df):
