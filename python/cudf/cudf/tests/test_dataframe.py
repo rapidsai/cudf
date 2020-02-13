@@ -4416,4 +4416,4 @@ def test_dataframe_from_table_empty_index():
     odict = df._data
     tbl = Table(odict)
 
-    result = DataFrame._from_table(tbl) # noqa: F841
+    result = DataFrame._from_table(tbl)  # noqa: F841
