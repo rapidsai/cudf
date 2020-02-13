@@ -103,8 +103,8 @@ class ColumnAccessor(MutableMapping):
         """
         # TODO: we should move all insert logic here
         name = self._pad_key(name)
-        new_keys = list(self.keys())
-        new_values = list(self.values())
+        new_keys = list(self.names)
+        new_values = list(self.columns)
         new_keys.insert(loc, name)
         new_values.insert(loc, value)
         self._data = self._data.__class__(zip(new_keys, new_values),)
