@@ -204,12 +204,13 @@ struct multi_delimiter_strings_tokenizer
         cudf::string_view d_str = d_strings.element<cudf::string_view>(idx);
         auto d_str_tokens = d_tokens ? d_tokens + d_offsets[idx] : nullptr;
         auto data_ptr = d_str.data();
-        auto curr_ptr = data_ptr;
-        cudf::size_type last_pos = 0, token_idx = 0;
-        while( curr_ptr < data_ptr + d_str.size_bytes() )
+        cudf::size_type last_pos = 0;
+        cudf::size_type token_idx = 0;
+        // check for delimiters at each character position
+        for( auto itr = d_str.begin(); itr != d_str.end(); ++itr )
         {
+            auto curr_ptr = data_ptr + itr.byte_offset();
             cudf::string_view sub_str(curr_ptr,static_cast<cudf::size_type>(data_ptr + d_str.size_bytes() - curr_ptr));
-            cudf::size_type increment_bytes = 1;
             // look for delimiter at current position
             auto itr_find = thrust::find_if( thrust::seq, delimiters_begin, delimiters_end,
                 [sub_str]__device__(cudf::string_view const& d_delim) {
@@ -225,10 +226,9 @@ struct multi_delimiter_strings_tokenizer
                         d_str_tokens[token_idx] = string_index_pair{ data_ptr + last_pos, token_size };
                     ++token_idx;
                 }
-                increment_bytes = (*itr_find).size_bytes();
-                last_pos = (curr_ptr - data_ptr) + increment_bytes; // point past delimiter
+                last_pos = (curr_ptr - data_ptr) + (*itr_find).size_bytes(); // point past delimiter
+                itr += (*itr_find).length()-1;
             }
-            curr_ptr += increment_bytes; // move on to the next byte
         }
         if( last_pos < d_str.size_bytes() ) // left-over tokens
         {
