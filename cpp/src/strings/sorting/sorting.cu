@@ -45,7 +45,7 @@ std::unique_ptr<cudf::column> sort( strings_column_view strings,
 
     // sort the indices of the strings
     size_type num_strings = strings.size();
-    thrust::device_vector<size_type> indices(num_strings);
+    rmm::device_vector<size_type> indices(num_strings);
     thrust::sequence( execpol->on(stream), indices.begin(), indices.end() );
     thrust::sort( execpol->on(stream), indices.begin(), indices.end(),
         [d_column, stype, order, null_order] __device__ (size_type lhs, size_type rhs) {
