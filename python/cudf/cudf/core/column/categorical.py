@@ -254,7 +254,7 @@ class CategoricalColumn(column.ColumnBase):
     def serialize(self):
         header = {}
         frames = []
-        header["type"] = pickle.dumps(type(self))
+        header["type-serialized"] = pickle.dumps(type(self))
         header["dtype"], dtype_frames = self.dtype.serialize()
         header["dtype_frames_count"] = len(dtype_frames)
         frames.extend(dtype_frames)
@@ -276,7 +276,7 @@ class CategoricalColumn(column.ColumnBase):
         )
         n_data_frames = header["data_frames_count"]
 
-        column_type = pickle.loads(header["data"]["type"])
+        column_type = pickle.loads(header["data"]["type-serialized"])
         data = column_type.deserialize(
             header["data"],
             frames[n_dtype_frames : n_dtype_frames + n_data_frames],

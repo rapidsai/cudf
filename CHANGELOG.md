@@ -63,6 +63,7 @@
 - PR #4130 Renames in-place `cudf::experimental::fill` to `cudf::experimental::fill_in_place`
 - PR #4136 Add `Index.names` property
 - PR #4144 Release GIL when calling libcudf++ functions
+- PR #4149 Use "type-serialized" for pickled types like Dask
 
 ## Bug Fixes
 
