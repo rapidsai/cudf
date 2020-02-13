@@ -491,11 +491,19 @@ std::unique_ptr<column> rolling_window_udf(column_view const &input,
   auto output_view = output->mutable_view();
   rmm::device_scalar<size_type> device_valid_count{0, stream};
 
+  const std::vector<std::string> compiler_flags{
+    "-std=c++14",
+    // Have jitify prune unused global variables
+    "-remove-unused-globals",
+    // suppress all NVRTC warnings
+    "-w"
+  };
+
   // Launch the jitify kernel
   cudf::jit::launcher(hash, cuda_source,
                       { cudf_types_hpp, cudf_utilities_bit_hpp,
                         cudf::experimental::rolling::jit::code::operation_h },
-                      { "-std=c++14", "-w" }, nullptr, stream)
+                      compiler_flags, nullptr, stream)
     .set_kernel_inst("gpu_rolling_new", // name of the kernel we are launching
                       { cudf::jit::get_type_name(input.type()), // list of template arguments
                         cudf::jit::get_type_name(output->type()),

@@ -35,8 +35,10 @@
 - PR #4013 Add cython definition for io readers cudf/io/io_types.hpp
 - PR #4028 Port json.pyx to use non-legacy libcudf APIs
 - PR #4014 ORC/Parquet: add count parameter to stripe/rowgroup-based reader API
+- PR #4042 Port cudf/io/functions.hpp to Cython for use in IO bindings
+- PR #3880 Add aggregation infrastructure support for reduction
 - PR #3880 Add aggregation infrastructure support for cudf::reduce
-- PR #4059 Add aggregation infrastructure support for cudf::scan 
+- PR #4059 Add aggregation infrastructure support for cudf::scan
 - PR #4021 Change quantiles signature for clarity.
 - PR #4057 Handle offsets in cython Column class
 - PR #4045 Reorganize `libxx` directory
@@ -59,6 +61,7 @@
 - PR #4098 Remove legacy calls from libcudf strings column code
 - PR #4111 Use `Buffer`'s to serialize `StringColumn`
 - PR #4113 Get `len` of `StringColumn`s without `nvstrings`
+- PR #4130 Renames in-place `cudf::experimental::fill` to `cudf::experimental::fill_in_place`
 
 ## Bug Fixes
 
@@ -92,7 +95,9 @@
 - PR #4109 Use rmm::device_vector instead of thrust::device_vector
 - PR #4113 Use `.nvstrings` in `StringColumn.sum(...)`
 - PR #4116 Fix a bug in contiguous_split() where tables with mixed column types could corrupt string output
+- PR #4119 Fix binary ops slowdown using jitify -remove-unused-globals
 - PR #4125 Fix type enum to account for added Dictionary type in `types.hpp`
+- PR #4137 Update Java for mutating fill and rolling window changes
 
 
 # cuDF 0.12.0 (04 Feb 2020)
