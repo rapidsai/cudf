@@ -375,9 +375,10 @@ def test_corr1d(data1, data2):
     np.testing.assert_approx_equal(got, expected, significant=8)
  
 def test_df_corr():
+    from cudf.tests import utils
     gdf = randomdata(100, {str(x):float for x in range(50)})
     pdf = gdf.to_pandas()
     got = gdf.corr()
     expected = pdf.corr()
-    assert_eq(got, expected)
+    utils.assert_eq(got, expected)
   
