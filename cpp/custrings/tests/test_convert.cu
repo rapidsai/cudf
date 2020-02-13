@@ -139,7 +139,7 @@ TEST_F(TestConvert, ToFloat)
             else if( std::isinf(fval1) )
                 EXPECT_TRUE( std::isinf(fval2) );
             else
-                EXPECT_DOUBLE_EQ(fval1,fval2);
+                EXPECT_NEAR(fval1,fval2,1e-10);
         }
     }
 
