@@ -4407,3 +4407,12 @@ def test_init_multiindex_from_dict():
     gdf = DataFrame({("a", "b"): [1]})
     assert_eq(pdf, gdf)
     assert_eq(pdf.columns, gdf.columns)
+
+def test_dataframe_from_table_empty_index():
+    from cudf._libxx.table import Table
+    
+    df = DataFrame({'a':[1,2,3], 'b':[4,5,6]})
+    odict = df._data
+    tbl = Table(odict)
+
+    result = DataFrame._from_table(tbl)
