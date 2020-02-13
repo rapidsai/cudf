@@ -164,7 +164,7 @@ class ColumnAccessor(MutableMapping):
         keys = itertools.chain(
             itertools.takewhile(
                 lambda k: k != stop,
-                itertools.dropwhile(lambda k: k != start, self.keys()),
+                itertools.dropwhile(lambda k: k != start, self.names),
             ),
             (stop,),
         )
@@ -184,9 +184,9 @@ class ColumnAccessor(MutableMapping):
     def get_by_index(self, index):
         if isinstance(index, slice):
             start, stop, step = index.indices(len(self._data))
-            keys = itertools.islice(self.keys(), start, stop)
+            keys = self.names[start:stop:step]
         elif pd.api.types.is_integer(index):
-            keys = itertools.islice(self.keys(), index, index + 1)
+            keys = self.names[index : index + 1]
         else:
             keys = (self.names[i] for i in index)
         data = {k: self._data[k] for k in keys}
