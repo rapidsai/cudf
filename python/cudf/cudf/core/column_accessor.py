@@ -120,7 +120,9 @@ class ColumnAccessor(MutableMapping):
             self._data = self._data.__class__(zip(new_keys, new_values),)
         self._clear_cache()
 
-    def copy(self):
+    def copy(self, deep=False):
+        if deep:
+            raise TypeError("Cannot deep copy a ColumnAccessor")
         return self.__class__(
             self._data.copy(),
             multiindex=self.multiindex,
