@@ -662,7 +662,7 @@ class StringColumn(column.ColumnBase):
         out_col = column.as_column(out_arr)
 
         if self.has_nulls:
-            out_mask = create_null_mask(len(self))
+            out_mask = create_null_mask(len(self), state="uninitialized")
             out_mask_ptr = out_mask.ptr
             self.nvstrings.set_null_bitmask(out_mask_ptr, bdevmem=True)
             out_col = out_col.set_mask(out_mask)

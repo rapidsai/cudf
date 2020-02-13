@@ -212,14 +212,12 @@ def copy_range(out_col, in_col, int out_begin, int out_end,
         return out_col
 
     if not out_col.has_nulls and in_col.nullable:
-        mask = create_null_mask(len(out_col))
-        cudautils.fill_value(mask, 0xff)
-        out_col = out_col.set_mask(Buffer(mask))
+        mask = create_null_mask(len(out_col), state="all_valid")
+        out_col = out_col.set_mask(mask)
 
     if not in_col.has_nulls and out_col.nullable:
-        mask = create_null_mask(len(in_col))
-        cudautils.fill_value(mask, 0xff)
-        in_col = in_col.set_mask(Buffer(mask))
+        mask = create_null_mask(len(in_col), state="all_valid")
+        in_col = in_col.set_mask(mask)
 
     cdef gdf_column* c_out_col = column_view_from_column(out_col)
     cdef gdf_column* c_in_col = column_view_from_column(in_col)

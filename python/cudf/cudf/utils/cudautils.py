@@ -7,7 +7,6 @@ from numba import cuda, int32, numpy_support
 
 import rmm
 
-from cudf._libxx.null_mask import create_null_mask
 from cudf.utils.utils import (
     check_equals_float,
     check_equals_int,
@@ -310,13 +309,6 @@ def copy_to_dense(data, mask, out=None):
     if out.size > 0:
         gpu_copy_to_dense.forall(data.size)(data, mask, slots, out)
     return (sz, out)
-
-
-def make_empty_mask(size):
-    bits = create_null_mask(size)
-    if bits.size > 0:
-        gpu_fill_value.forall(bits.size)(bits, 0)
-    return bits
 
 
 #

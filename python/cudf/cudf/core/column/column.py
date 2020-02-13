@@ -253,7 +253,7 @@ class ColumnBase(Column):
         # Allocate output mask only if there's nulls in the input objects
         mask = None
         if nulls:
-            mask = create_null_mask(newsize)
+            mask = create_null_mask(newsize, state="uninitialized")
 
         col = build_column(
             data=data, dtype=head.dtype, mask=mask, children=children
@@ -278,16 +278,6 @@ class ColumnBase(Column):
 
     def _memory_usage(self, **kwargs):
         return self.__sizeof__()
-
-    def allocate_mask(self, all_valid=True):
-        """Return a new Column with a newly allocated mask buffer.
-        If ``all_valid`` is True, the new mask is set to all valid.
-        If ``all_valid`` is False, the new mask is set to all null.
-        """
-        mask = create_null_mask(len(self))
-        if len(self) > 0:
-            cudautils.fill_value(mask, 0xFF if all_valid else 0)
-        return self.set_mask(mask=mask)
 
     def to_gpu_array(self, fillna=None):
         """Get a dense numba device array for the data.
@@ -881,7 +871,7 @@ def column_empty(row_count, dtype="object", masked=False):
         data = Buffer.empty(row_count * dtype.itemsize)
 
     if masked:
-        mask = Buffer(cudautils.make_empty_mask(row_count))
+        mask = create_null_mask(row_count, state="all_null")
     else:
         mask = None
 
@@ -1035,7 +1025,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
 
         nbuf = None
         if arbitrary.null_count() > 0:
-            nbuf = create_null_mask(arbitrary.size())
+            nbuf = create_null_mask(arbitrary.size(), state="uninitialized")
             arbitrary.set_null_bitmask(nbuf.ptr, bdevmem=True)
         arbitrary.to_offsets(sbuf.ptr, obuf.ptr, None, bdevmem=True)
         children = (

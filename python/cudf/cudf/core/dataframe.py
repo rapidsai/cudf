@@ -24,10 +24,10 @@ import rmm
 import cudf
 import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
+from cudf._libxx.null_mask import create_null_mask
 from cudf._libxx.transform import bools_to_mask
 from cudf.core import column
 from cudf.core._sort import get_sorted_inds
-from cudf.core.buffer import Buffer
 from cudf.core.column import (
     CategoricalColumn,
     StringColumn,
@@ -504,8 +504,7 @@ class DataFrame(Frame):
 
                 out_mask = bools_to_mask(other[col]._column)
             else:
-                boolbits = cudautils.make_empty_mask(len(self[col]))
-                out_mask = Buffer(boolbits)
+                out_mask = create_null_mask(len(self[col]), state="all_null")
             df[col] = df[col].set_mask(out_mask)
         return df
 
@@ -931,7 +930,7 @@ class DataFrame(Frame):
                 if fill_value is None:
                     return Series.from_masked_array(
                         data=rmm.device_array(max_num_rows, dtype="float64"),
-                        mask=cudautils.make_empty_mask(max_num_rows),
+                        mask=create_null_mask(max_num_rows, state="all_null"),
                     ).set_index(col.index)
                 else:
                     return getattr(col, fn)(fill_value)
