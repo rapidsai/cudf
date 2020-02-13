@@ -10,6 +10,7 @@ from cudf._libxx.io.types cimport *
 
 from libcpp.string cimport string
 from libcpp.vector cimport vector
+from cudf._libxx.io.types cimport *
 
 
 cdef extern from "cudf/io/functions.hpp" \

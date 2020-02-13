@@ -9,7 +9,6 @@
 from cudf._libxx.lib cimport *
 from cudf._libxx.table cimport *
 from cudf._libxx.io.functions cimport *
-from cudf._libxx.io.types cimport *
 
 from libcpp.string cimport string
 from libcpp.memory cimport unique_ptr

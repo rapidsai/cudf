@@ -9,6 +9,7 @@ from libc.stdint cimport int32_t, uint32_t
 from libcpp cimport bool
 from libcpp.vector cimport vector
 from libcpp.memory cimport unique_ptr
+from cudf._libxx.io.types cimport *
 
 from rmm._lib.device_buffer cimport device_buffer, DeviceBuffer, move
 
@@ -153,3 +154,4 @@ cdef extern from "<utility>" namespace "std" nogil:
     cdef unique_ptr[table] move(unique_ptr[table])
     cdef vector[unique_ptr[column]] move(vector[unique_ptr[column]])
     cdef device_buffer move(device_buffer)
+    cdef table_with_metadata move(table_with_metadata)
