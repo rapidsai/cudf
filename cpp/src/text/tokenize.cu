@@ -93,7 +93,7 @@ std::unique_ptr<cudf::column> tokenize( cudf::strings_column_view const& strings
     CUDF_EXPECTS( delimiter.is_valid(), "Parameter delimiter must be valid");
     cudf::string_view d_delimiter( delimiter.data(), delimiter.size() );
     auto strings_column = cudf::column_device_view::create(strings.parent(),stream);
-    return tokenize_fn( strings.size(), tokenator_fn{*strings_column,d_delimiter}, mr, stream );
+    return tokenize_fn( strings.size(), strings_tokenizer{*strings_column,d_delimiter}, mr, stream );
 }
 
 // zero or more character token counter
@@ -105,7 +105,7 @@ std::unique_ptr<cudf::column> count_tokens( cudf::strings_column_view const& str
     CUDF_EXPECTS( delimiter.is_valid(), "Parameter delimiter must be valid");
     cudf::string_view d_delimiter( delimiter.data(), delimiter.size() );
     auto strings_column = cudf::column_device_view::create(strings.parent(),stream);
-    return token_count_fn( strings.size(), tokenator_fn{*strings_column,d_delimiter}, mr, stream );
+    return token_count_fn( strings.size(), strings_tokenizer{*strings_column,d_delimiter}, mr, stream );
 }
 
 // one or more string delimiter tokenizer
@@ -119,9 +119,9 @@ std::unique_ptr<cudf::column> tokenize( cudf::strings_column_view const& strings
     auto strings_column = cudf::column_device_view::create(strings.parent(),stream);
     auto delimiters_column = cudf::column_device_view::create(delimiters.parent(),stream);
     return tokenize_fn( strings.size(),
-                        multi_delimiter_tokenizer_fn{*strings_column,
-                                                     delimiters_column->begin<cudf::string_view>(),
-                                                     delimiters_column->end<cudf::string_view>()},
+                        multi_delimiter_strings_tokenizer{*strings_column,
+                            delimiters_column->begin<cudf::string_view>(),
+                            delimiters_column->end<cudf::string_view>()},
                         mr, stream );
 }
 
@@ -136,9 +136,9 @@ std::unique_ptr<cudf::column> count_tokens( cudf::strings_column_view const& str
     auto strings_column = cudf::column_device_view::create(strings.parent(),stream);
     auto delimiters_column = cudf::column_device_view::create(delimiters.parent(),stream);
     return token_count_fn( strings.size(),
-                           multi_delimiter_tokenizer_fn{*strings_column,
-                                                        delimiters_column->begin<cudf::string_view>(),
-                                                        delimiters_column->end<cudf::string_view>()},
+                           multi_delimiter_strings_tokenizer{*strings_column,
+                                delimiters_column->begin<cudf::string_view>(),
+                                delimiters_column->end<cudf::string_view>()},
                            mr, stream );
 }
 

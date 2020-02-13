@@ -104,6 +104,10 @@ class Index(Frame):
         col = self._data.pop(self.name)
         self._data[value] = col
 
+    @property
+    def names(self):
+        return (self.name,)
+
     def dropna(self):
         """
         Return a Series with null values removed.
@@ -981,10 +985,6 @@ class CategoricalIndex(GenericIndex):
                 pd.Categorical(values, categories=values)
             )
         super(CategoricalIndex, self).__init__(values, **kwargs)
-
-    @property
-    def names(self):
-        return [self._values.name]
 
     @property
     def codes(self):
