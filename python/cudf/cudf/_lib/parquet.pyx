@@ -47,26 +47,13 @@ cpdef generate_pandas_metadata(Table table, index):
 
     # Indexes
     if index is not False:
-        if isinstance(table._index, cudf.core.multiindex.MultiIndex):
-            for name in table._index.names:
+        for name in table._index.names:
+            if isinstance(table._index, cudf.core.multiindex.MultiIndex):
                 idx = table.index.get_level_values(name)
-                if isinstance(idx, cudf.core.index.RangeIndex):
-                    descr = {
-                        "kind": "range",
-                        "name": table.index.name,
-                        "start": table.index._start,
-                        "stop": table.index._stop,
-                        "step": 1,
-                    }
-                else:
-                    index_arrow = idx.to_arrow()
-                    descr = name
-                    types.append(index_arrow.type)
-                    col_names.append(name)
-                    index_levels.append(idx)
-                index_descriptors.append(descr)
-        else:
-            if isinstance(table._index, cudf.core.index.RangeIndex):
+            else:
+                idx = table.index
+
+            if isinstance(idx, cudf.core.index.RangeIndex):
                 descr = {
                     "kind": "range",
                     "name": table.index.name,
@@ -75,11 +62,11 @@ cpdef generate_pandas_metadata(Table table, index):
                     "step": 1,
                 }
             else:
-                index_arrow = table._index.to_arrow()
-                descr = table._index.name
+                index_arrow = idx.to_arrow()
+                descr = name
                 types.append(index_arrow.type)
-                col_names.append(table._index.name)
-                index_levels.append(table._index)
+                col_names.append(name)
+                index_levels.append(idx)
             index_descriptors.append(descr)
 
     metadata = pa.pandas_compat.construct_metadata(
