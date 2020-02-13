@@ -96,7 +96,7 @@ TEST_F(TestConvert, ToFloat)
     std::vector<const char*> hstrs{"1234", nullptr, 
             "-876", "543.2", "-0.12", ".25", "-.002",
             "", "NaN", "abc123", "123abc", "456e", "-1.78e+5",
-            "-122.99609375", "12e+309" };
+            "-122.33644782123456789", "12e+309" };
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(),hstrs.size());
 
     {    
@@ -107,7 +107,7 @@ TEST_F(TestConvert, ToFloat)
         float expected[] = { 1234.0, 0,
             -876.0, 543.2, -0.12, 0.25, -0.002,
             0, nanval, 0, 123.0, 456.0, -178000.0,
-            -122.99609, infval };
+            -122.33645, infval };
         for( int idx = 0; idx < (int) hstrs.size(); ++idx )
         {
             float fval1 = results[idx];
@@ -129,7 +129,7 @@ TEST_F(TestConvert, ToFloat)
         double expected[] = { 1234.0, 0,
             -876.0, 543.2, -0.12, 0.25, -0.002,
             0, nanval, 0, 123.0, 456.0, -178000.0,
-            -122.99609375, infval };
+            -122.3364478212345, infval };
         for( int idx = 0; idx < (int) hstrs.size(); ++idx )
         {
             double fval1 = results[idx];

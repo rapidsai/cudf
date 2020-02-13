@@ -366,7 +366,6 @@ def test_stof():
         456.0,
         -178000.0,
     ]
-    # assert_eq(got, expected)
     for idx in range(len(expected)):
         if expected[idx] is None:
             assert_eq(got[idx], expected[idx])
@@ -414,7 +413,6 @@ def test_stod():
         -178000.0,
         -122.33644781999999,
     ]
-    # assert_eq(got, expected)
     for idx in range(len(expected)):
         if expected[idx] is None:
             assert_eq(got[idx], expected[idx])
