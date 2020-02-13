@@ -133,24 +133,33 @@ class ColumnAccessor(MutableMapping):
         if isinstance(key, slice):
             return self.get_by_label_slice(key)
         elif pd.api.types.is_list_like(key) and not isinstance(key, tuple):
-            return self.__class__(
-                {k: self._data[k] for k in key},
-                multiindex=self.multiindex,
-                level_names=self.level_names,
-            )
+            return self.get_by_label_list_like(key)
         else:
-            result = self._grouped_data[key]
-            if isinstance(result, cudf.core.column.ColumnBase):
-                return self.__class__({key: result})
+            if any(isinstance(k, slice) for k in key):
+                return self.get_by_label_with_wildcard(key)
             else:
-                result = _flatten(result)
-                if not isinstance(key, tuple):
-                    key = (key,)
-                return self.__class__(
-                    result,
-                    multiindex=self.nlevels - len(key) > 1,
-                    level_names=self.level_names[len(key) :],
-                )
+                return self.get_by_label_grouped(key)
+
+    def get_by_label_list_like(self, key):
+        return self.__class__(
+            {k: self._data[k] for k in key},
+            multiindex=self.multiindex,
+            level_names=self.level_names,
+        )
+
+    def get_by_label_grouped(self, key):
+        result = self._grouped_data[key]
+        if isinstance(result, cudf.core.column.ColumnBase):
+            return self.__class__({key: result})
+        else:
+            result = _flatten(result)
+            if not isinstance(key, tuple):
+                key = (key,)
+            return self.__class__(
+                result,
+                multiindex=self.nlevels - len(key) > 1,
+                level_names=self.level_names[len(key) :],
+            )
 
     def get_by_label_slice(self, key):
         start = key.start
