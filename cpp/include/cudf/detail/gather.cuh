@@ -64,7 +64,16 @@ struct bounds_checker {
   }
 };
 
-template <bool ignore_out_of_bounds, typename MapIterator>
+/**
+ * @brief The operation to perform when a gather map index is out of bounds
+ */
+enum class gather_bitmask_op {
+  DONT_CHECK,  // Don't check for out of bounds indices
+  PASSTHROUGH, // Preserve mask at rows with out of bounds indices
+  NULLIFY,     // Nullify rows with out of bounds indices
+};
+
+template <gather_bitmask_op Op, typename MapIterator>
 struct gather_bitmask_functor {
   table_device_view input;
   bitmask_type** masks;
@@ -74,9 +83,13 @@ struct gather_bitmask_functor {
     auto row_idx = gather_map[bit_idx];
     auto col = input.column(mask_idx);
 
-    if (ignore_out_of_bounds) {
+    if (Op != gather_bitmask_op::DONT_CHECK) {
       if (row_idx < 0 || row_idx >= col.size()) {
-        return bit_is_set(masks[mask_idx], bit_idx);
+        if (Op == gather_bitmask_op::PASSTHROUGH) {
+          return bit_is_set(masks[mask_idx], bit_idx);
+        } else if (Op == gather_bitmask_op::NULLIFY) {
+          return false;
+        }
       }
     }
 
@@ -301,7 +314,7 @@ struct index_converter : public thrust::unary_function<map_type,map_type>
   size_type n_rows;
 };
 
-template<bool ignore_out_of_bounds, typename GatherMap>
+template<gather_bitmask_op Op, typename GatherMap>
 void gather_bitmask(table_device_view input,
                     GatherMap gather_map_begin,
                     bitmask_type** masks,
@@ -315,7 +328,7 @@ void gather_bitmask(table_device_view input,
   }
 
   constexpr size_type block_size = 256;
-  using Selector = gather_bitmask_functor<ignore_out_of_bounds, decltype(gather_map_begin)>;
+  using Selector = gather_bitmask_functor<Op, decltype(gather_map_begin)>;
   auto selector = Selector{ input, masks, gather_map_begin };
   auto counting_it = thrust::make_counting_iterator(0);
   auto kernel = valid_if_n_kernel<decltype(counting_it), decltype(counting_it), Selector, block_size>;
@@ -332,7 +345,7 @@ void gather_bitmask(table_device_view input,
 
 template <typename MapIterator>
 void gather_bitmask(table_view const& source, MapIterator gather_map,
-    std::vector<std::unique_ptr<column>>& target, bool ignore_out_of_bounds,
+    std::vector<std::unique_ptr<column>>& target, gather_bitmask_op op,
     rmm::mr::device_memory_resource* mr, cudaStream_t stream)
 {
   // Validate that all target columns have the same size
@@ -342,8 +355,11 @@ void gather_bitmask(table_view const& source, MapIterator gather_map,
 
   // Create null mask if source is nullable but target is not
   for (size_t i = 0; i < target.size(); ++i) {
-    if (source.column(i).nullable() and not target[i]->nullable()) {
-      auto mask = create_null_mask(target[i]->size(), mask_state::ALL_VALID, stream, mr);
+    if ((source.column(i).nullable() or op == gather_bitmask_op::NULLIFY)
+        and not target[i]->nullable()) {
+      auto const state = op == gather_bitmask_op::PASSTHROUGH
+        ? mask_state::ALL_VALID : mask_state::UNINITIALIZED;
+      auto mask = create_null_mask(target[i]->size(), state, stream, mr);
       target[i]->set_null_mask(std::move(mask), 0);
     }
   }
@@ -358,10 +374,19 @@ void gather_bitmask(table_view const& source, MapIterator gather_map,
   auto const device_source = table_device_view::create(source, stream);
   auto d_valid_counts = rmm::device_vector<size_type>(target.size());
 
-  // TODO add param and dispatch for nullify_out_of_bounds
-  auto impl = ignore_out_of_bounds
-    ? gather_bitmask<true, MapIterator>
-    : gather_bitmask<false, MapIterator>;
+  // Dispatch operation enum to get implementation
+  auto const impl = [op]() {
+    switch (op) {
+      case gather_bitmask_op::DONT_CHECK:
+        return gather_bitmask<gather_bitmask_op::DONT_CHECK, MapIterator>;
+      case gather_bitmask_op::PASSTHROUGH:
+        return gather_bitmask<gather_bitmask_op::PASSTHROUGH, MapIterator>;
+      case gather_bitmask_op::NULLIFY:
+        return gather_bitmask<gather_bitmask_op::NULLIFY, MapIterator>;
+      default:
+        CUDF_FAIL("Invalid gather_bitmask_op");
+    }
+  }();
   impl(*device_source, gather_map, masks, target.size(), target_rows,
     d_valid_counts.data().get(), stream);
 
@@ -457,7 +482,7 @@ gather(table_view const& source_table, MapIterator gather_map_begin,
   rmm::device_vector<bitmask_type*> masks(host_masks);
 
   if (nullify_out_of_bounds) {
-    gather_bitmask<true>(*source_table_view,
+    gather_bitmask<gather_bitmask_op::NULLIFY>(*source_table_view,
                          gather_map_begin,
                          masks.data().get(),
                          masks.size(),
@@ -465,7 +490,7 @@ gather(table_view const& source_table, MapIterator gather_map_begin,
                          valid_counts.data().get(),
                          stream);
   } else {
-    gather_bitmask<false>(*source_table_view,
+    gather_bitmask<gather_bitmask_op::DONT_CHECK>(*source_table_view,
                           gather_map_begin,
                           masks.data().get(),
                           masks.size(),
