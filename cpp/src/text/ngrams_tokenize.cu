@@ -169,7 +169,7 @@ std::unique_ptr<cudf::column> ngrams_tokenize( cudf::strings_column_view const& 
         thrust::make_counting_iterator<cudf::size_type>(0),
         thrust::make_counting_iterator<cudf::size_type>(strings_count),
         d_token_offsets+1,
-        tokenator_fn{d_strings,d_delimiter},
+        strings_tokenizer{d_strings,d_delimiter},
         thrust::plus<int32_t>());
     CUDA_TRY(cudaMemsetAsync( d_token_offsets, 0, sizeof(int32_t), stream ));
     auto total_tokens = token_offsets[strings_count];  // Ex. 5 tokens
