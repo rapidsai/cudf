@@ -169,7 +169,7 @@ class DataFrame(Frame):
 
         self._columns_name = None
 
-        if isinstance(data, libcudfxx.Table):
+        if isinstance(data, libcudfxx.table.Table):
             return DataFrame._from_table(data)
 
         if isinstance(columns, cudf.MultiIndex):
@@ -265,7 +265,11 @@ class DataFrame(Frame):
 
     @classmethod
     def _from_table(cls, table):
-        return cls(data=table._data, index=Index._from_table(table._index))
+        if table._index is None:
+            index = None
+        else:
+            index = Index._from_table(table._index)
+        return cls(data=table._data, index=index)
 
     @staticmethod
     def _align_input_series_indices(data, index):
@@ -1563,7 +1567,7 @@ class DataFrame(Frame):
         """
         positions = as_column(positions)
         if pd.api.types.is_bool_dtype(positions):
-            return self._apply_boolean_mask(positions,)
+            return self._apply_boolean_mask(positions)
         out = self._gather(positions)
         out.columns = self.columns
         return out
@@ -3675,7 +3679,7 @@ class DataFrame(Frame):
         dtype = np.dtype(members)
         ret = np.recarray(len(self), dtype=dtype)
         if index:
-            ret["index"] = self.index.values
+            ret["index"] = self.index.to_array()
         for col in self.columns:
             ret[col] = self[col].to_array()
         return ret

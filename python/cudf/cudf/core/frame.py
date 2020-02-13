@@ -6,7 +6,7 @@ from cudf.core.column import as_column, build_categorical_column
 from cudf.utils.dtypes import is_categorical_dtype
 
 
-class Frame(libcudfxx.Table):
+class Frame(libcudfxx.table.Table):
     """
     Frame: A collection of Column objects with an optional index.
 
@@ -26,7 +26,7 @@ class Frame(libcudfxx.Table):
         if not pd.api.types.is_integer_dtype(gather_map.dtype):
             gather_map = gather_map.astype("int32")
         result = self.__class__._from_table(
-            libcudfxx.gather(self, as_column(gather_map))
+            libcudfxx.copying.gather(self, as_column(gather_map))
         )
         result._copy_categories(self)
         return result
@@ -119,7 +119,9 @@ class Frame(libcudfxx.Table):
         if len(subset_cols) == 0:
             return self.copy(deep=True)
         result = self.__class__._from_table(
-            libcudfxx.drop_nulls(self, how=how, keys=subset, thresh=thresh)
+            libcudfxx.stream_compaction.drop_nulls(
+                self, how=how, keys=subset, thresh=thresh
+            )
         )
         result._copy_categories(self)
         return result
@@ -154,7 +156,9 @@ class Frame(libcudfxx.Table):
         rows corresponding to `False` is dropped
         """
         result = self._from_table(
-            libcudfxx.apply_boolean_mask(self, as_column(boolean_mask))
+            libcudfxx.stream_compaction.apply_boolean_mask(
+                self, as_column(boolean_mask)
+            )
         )
         result._copy_categories(self)
         return result
@@ -189,7 +193,7 @@ class Frame(libcudfxx.Table):
             return self.copy(deep=True)
 
         result = self._from_table(
-            libcudfxx.drop_duplicates(
+            libcudfxx.stream_compaction.drop_duplicates(
                 self, keys=subset, keep=keep, nulls_are_equal=nulls_are_equal
             )
         )

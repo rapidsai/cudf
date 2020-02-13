@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 # cython: profile=False
 # distutils: language = c++
@@ -8,7 +8,7 @@
 import cudf
 from cudf._lib.cudf cimport *
 from cudf._lib.GDFError import GDFError
-from cudf._libxx.includes.column cimport Column
+from cudf._libxx.column cimport Column
 from libcpp.vector cimport vector
 from libc.stdint cimport uintptr_t
 from libc.stdlib cimport malloc, free
@@ -111,14 +111,6 @@ cpdef get_ctype_ptr(obj):
         return 0
     else:
         return obj.device_ctypes_pointer.value
-
-
-cpdef get_column_data_ptr(obj):
-    return obj.data.ptr
-
-
-cpdef get_column_valid_ptr(obj):
-    return obj.mask.ptr
 
 
 cdef np_dtype_from_gdf_column(gdf_column* col):
@@ -286,16 +278,13 @@ cdef gdf_column* column_view_from_column(Column col,
 
         if len(col) > 0:
             if is_categorical_dtype(col.dtype):
-                data_ptr = col.codes.data.ptr
+                data_ptr = col.codes.data_ptr
             else:
-                data_ptr = col.data.ptr
+                data_ptr = col.data_ptr
         else:
             data_ptr = 0
 
-    if col.nullable:
-        valid_ptr = col.mask.ptr
-    else:
-        valid_ptr = 0
+    valid_ptr = col.mask_ptr
 
     cdef char* c_col_name = py_to_c_str(col_name)
     cdef size_type len_col = len(col)
@@ -318,8 +307,7 @@ cdef gdf_column* column_view_from_column(Column col,
             c_col_name
         )
 
-    if hasattr(col, "null_count"):
-        del col.null_count
+    col._null_count = None
 
     return c_col
 
@@ -390,10 +378,7 @@ cdef gdf_column* column_view_from_string_column(
     cdef uintptr_t category = 0
     cdef gdf_dtype c_dtype = GDF_STRING
 
-    if col.nullable and col.has_nulls:
-        mask_ptr = col.mask.ptr
-    else:
-        mask_ptr = 0
+    mask_ptr = col.mask_ptr
 
     if col_name is None:
         col_name = col.name
@@ -418,8 +403,7 @@ cdef gdf_column* column_view_from_string_column(
             c_col_name
         )
 
-    if hasattr(col, "null_count"):
-        del col.null_count
+    col._null_count = None
 
     return c_col
 
