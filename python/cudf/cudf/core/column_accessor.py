@@ -102,12 +102,17 @@ class ColumnAccessor(MutableMapping):
         Insert value at specified location.
         """
         # TODO: we should move all insert logic here
-        name = self._pad_key(name)
-        new_keys = list(self.names)
-        new_values = list(self.columns)
-        new_keys.insert(loc, name)
-        new_values.insert(loc, value)
-        self._data = self._data.__class__(zip(new_keys, new_values),)
+        if name in self._data:
+            raise ValueError(f"Cannot insert {name}, already exists")
+        if loc == -1 or loc == len(self._data):
+            self._data[name] = value
+        else:
+            name = self._pad_key(name)
+            new_keys = list(self.names)
+            new_values = list(self.columns)
+            new_keys.insert(loc, name)
+            new_values.insert(loc, value)
+            self._data = self._data.__class__(zip(new_keys, new_values),)
         self._clear_cache()
 
     def copy(self):
