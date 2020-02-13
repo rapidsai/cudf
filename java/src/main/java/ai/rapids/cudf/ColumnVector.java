@@ -1680,6 +1680,19 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * Generic method to cast ColumnVector
    * When casting from a Date, Timestamp, or Boolean to a numerical type the underlying numerical
    * representation of the data will be used for the cast.
+   *
+   * For Strings:
+   * Casting strings from/to timestamp isn't supported atm.
+   * Please look at {@link ColumnVector#asTimestamp(DType, String)}
+   * for casting string to timestamp when the format is known
+   *
+   * Float values when converted to String could be different from the expected default behavior in
+   * Java
+   * e.g.
+   * 12.3 => "12.30000019" instead of "12.3"
+   * Double.POSITIVE_INFINITY => "Inf" instead of "INFINITY"
+   * Double.NEGATIVE_INFINITY => "-Inf" instead of "-INFINITY"
+   *
    * @param type type of the resulting ColumnVector
    * @return A new vector allocated on the GPU
    */
