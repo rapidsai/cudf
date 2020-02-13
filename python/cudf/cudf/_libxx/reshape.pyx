@@ -5,19 +5,15 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
-from cudf._libxx.cudf cimport *
-from cudf._libxx.cudf import *
-
-from cudf._libxx.reshape import *
-from cudf._libxx.reshape cimport *
-
 from cudf._libxx.lib cimport *
-from cudf._libxx.column cimport *
-from cudf._libxx.table cimport *
+from cudf._libxx.column cimport Column
+from cudf._libxx.table cimport Table
+
+from libcpp.memory cimport unique_ptr
 
 from cudf._libxx.includes.reshape cimport (
-    interleave_columns as cpp_interleave_columns,
-    tile as cpp_tile
+     interleave_columns as cpp_interleave_columns,
+     tile as cpp_tile
 )
 
 def interleave_columns(Table source_table):
@@ -40,8 +36,12 @@ def interleave_columns(Table source_table):
     """
     cdef table_view c_view = source_table.view()
     
-    return cpp_interleave_columns(c_view)
+    cdef unique_ptr[column] c_result = move(cpp_interleave_columns(c_view))
 
+    return Column.from_unique_ptr(
+          move(c_result)
+    )
+    
 def tile(Table source_table, size_type count):
     """
     Repeats the rows from `input` table `count` times to form a new table.
@@ -64,17 +64,15 @@ def tile(Table source_table, size_type count):
     -------
     The table containing the tiled "rows".
     """
+
     cdef size_type c_count = count
     cdef table_view c_view = source_table.view()
-    cdef unique_ptr[table] c_result = (
-        cpp_tile(c_view, c_count)
-    )
+    
+    cdef unique_ptr[table] c_result = move(cpp_tile(c_view, c_count))
+
     
     return Table.from_unique_ptr(
-        move(c_result),
-        column_names=source_table._column_names,
-        index_names=(
-            None if source_table._index is None
-            else source_table._index_names)
-    )
+         move(c_result),
+         column_names=source_table._column_names
+     )
 

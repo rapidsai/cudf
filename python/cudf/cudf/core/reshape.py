@@ -8,6 +8,7 @@ from cudf.core.column import build_categorical_column
 from cudf.core.index import as_index
 from cudf.utils import cudautils
 from cudf.utils.dtypes import is_categorical_dtype, is_list_like
+import cudf._libxx as libcudfxx
 
 _axis_map = {0: 0, 1: 1, "index": 0, "columns": 1}
 
@@ -367,68 +368,3 @@ def get_dummies(
             df_list.append(col_enc_df)
 
         return concat(df_list, axis=1).drop(labels=columns)
-    
-
-def interleave_columns(cols):
-    """
-    Interleave Series columns of a table into a single column.
- 
-    Converts the column major table `cols` into a row major column.
-    Parameters
-    ----------
-    cols : input Table containing columns to interleave.
-
-    Example
-    -------
-    >>> cols = Series([['A1', 'A2', 'A3'], ['B1', 'B2', 'B3']])
-    >>> cols
-    0    [A1, A2, A3]
-    1    [B1, B2, B3]
-    >>> reshape.interleave_columns(df)
-    0    A1
-    1    B1
-    2    A2
-    3    B2
-    4    A3
-    5    B3
- 
-    Returns
-    -------
-    The interleaved Series columns as a single column
-    """
-    data_col = libcudfxx.reshape.interleave_columns(df)
-    result = Series(data_cols)
-    return result
-
-
-def tile(df, count):
-    """
-    Repeats the rows from `df` DataFrame `count` times to form a new DataFrame. 
-    
-    Different from DataFrame.tile() which repeats the DataFrame sequentially
-    with the filling function. This repeats the columns by "count" number
-    of times.
-
-    Parameters
-    ----------
-    df : input Table containing columns to interleave.
-    count : Number of times to tile "rows". Must be non-negative.
-
-    Example
-    -------
-    >>> df  = Dataframe([[8, 4, 7], [5, 2, 3]])
-    >>> count = 2
-    >>> reshape.tile(df, count)
-       0  1  2  3  4  5
-    0  8  4  7  8  4  7
-    1  5  2  3  5  2  3
-    
-    Returns
-    -------
-    cudf.Dataframe containing the tiled "rows".
-    """
-    data_df = libcudfxx.reshape.tile(df, count)
-    result = DataFrame(data=data_df)
-    
-    return result
-        
