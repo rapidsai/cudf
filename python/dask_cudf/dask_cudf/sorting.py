@@ -210,7 +210,10 @@ def sorted_split_divs(df, divisions, col, stage, k, npartitions, inp):
     partitions = splits.tolist()
 
     # Create splits
-    return {i: df.iloc[partitions[i] : partitions[i + 1]] for i in range(k)}
+    return {
+        i: df.iloc[partitions[i] : partitions[i + 1]].copy(deep=False)
+        for i in range(k)
+    }
 
 
 def sorted_split_divs_2(df, divisions, col):
@@ -227,7 +230,7 @@ def sorted_split_divs_2(df, divisions, col):
 
     # Create splits
     result2 = {
-        i: df.iloc[partitions[i] : partitions[i + 1]]
+        i: df.iloc[partitions[i] : partitions[i + 1]].copy(deep=False)
         for i in range(len(divisions) - 1)
         if partitions[i] != partitions[i + 1]
     }

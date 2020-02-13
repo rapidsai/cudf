@@ -49,9 +49,7 @@ async def exchange_and_concat_parts(rank, eps, parts, sort_by):
     ret = [parts[rank]]
     await asyncio.gather(recv_parts(eps, ret), send_parts(eps, parts))
     return concat(
-        [df for df in ret if df is not None and len(df)],
-        # TODO: USe `sort_by=sort_by` here (not working right now)
-        sort_by=None,
+        [df for df in ret if df is not None and len(df)], sort_by=sort_by
     )
 
 
@@ -61,7 +59,8 @@ def concat(df_list, sort_by=None):
     if isinstance(df_list[0], cudf.DataFrame):
         if sort_by:
             new_df = cudf.merge_sorted(df_list, keys=sort_by)
-        new_df = cudf.concat(df_list)
+        else:
+            new_df = cudf.concat(df_list)
     else:
         new_df = pd.concat(df_list)
     _cleanup_parts(df_list)
@@ -80,12 +79,11 @@ async def distributed_shuffle(
 ):
     if sort_by:
         parts = [
-            table.iloc[partitions[i] : partitions[i + 1]]
+            table.iloc[partitions[i] : partitions[i + 1]].copy(deep=False)
             for i in range(0, len(partitions) - 1)
         ]
     else:
         parts = partition_by_column(table, partitions, n_chunks)
-    del table
     return await exchange_and_concat_parts(rank, eps, parts, sort_by)
 
 
