@@ -3,7 +3,6 @@ import warnings
 
 import pandas as pd
 
-from dask.dataframe.utils import group_split_dispatch
 from dask_cuda.explicit_comms import comms
 from distributed.protocol import to_serialize
 
@@ -67,23 +66,29 @@ def concat(df_list, sort_by=None):
     return new_df
 
 
-def partition_by_column(df, column, n_chunks):
+def partition_table(df, partitions, n_chunks, sort_by=None):
     if df is None:
-        return [None] * n_chunks
+        result = [None] * n_chunks
+    elif sort_by:
+        result = {
+            i: df.iloc[partitions[i] : partitions[i + 1]].copy(deep=False)
+            for i in range(0, len(partitions) - 1)
+        }
     else:
-        return group_split_dispatch(df, column, n_chunks)
+        result = dict(
+            zip(
+                range(n_chunks),
+                df.scatter_by_map(partitions, map_size=n_chunks),
+            )
+        )
+    del df
+    return result
 
 
 async def distributed_shuffle(
     n_chunks, rank, eps, table, partitions, index, sort_by
 ):
-    if sort_by:
-        parts = [
-            table.iloc[partitions[i] : partitions[i + 1]].copy(deep=False)
-            for i in range(0, len(partitions) - 1)
-        ]
-    else:
-        parts = partition_by_column(table, partitions, n_chunks)
+    parts = partition_table(table, partitions, n_chunks, sort_by=sort_by)
     return await exchange_and_concat_parts(rank, eps, parts, sort_by)
 
 
@@ -134,7 +139,6 @@ async def _explicit_shuffle(
 
 def explicit_sorted_shuffle(df, index, divisions, sort_by, client, **kwargs):
     # Explict-comms shuffle
-    # TODO: Fast repartition back to df.npartitions using views...
     # client.rebalance(futures=df.to_delayed())
     to_cpu = kwargs.get("to_cpu", False)
     if to_cpu:
