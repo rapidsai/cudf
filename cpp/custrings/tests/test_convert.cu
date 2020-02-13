@@ -129,7 +129,7 @@ TEST_F(TestConvert, ToFloat)
         double expected[] = { 1234.0, 0,
             -876.0, 543.2, -0.12, 0.25, -0.002,
             0, nanval, 0, 123.0, 456.0, -178000.0,
-            -122.3364478212345, infval };
+            -122.33644782123469, infval };
         for( int idx = 0; idx < (int) hstrs.size(); ++idx )
         {
             double fval1 = results[idx];
@@ -139,7 +139,7 @@ TEST_F(TestConvert, ToFloat)
             else if( std::isinf(fval1) )
                 EXPECT_TRUE( std::isinf(fval2) );
             else
-                EXPECT_NEAR(fval1,fval2,1e-10);
+                EXPECT_DOUBLE_EQ(fval1,fval2);
         }
     }
 
