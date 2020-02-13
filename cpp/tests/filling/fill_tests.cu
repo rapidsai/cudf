@@ -95,7 +95,7 @@ public:
     // test in-place version second
 
     cudf::mutable_column_view mutable_view{destination};
-    EXPECT_NO_THROW(cudf::experimental::fill(mutable_view, begin, end, *p_val));
+    EXPECT_NO_THROW(cudf::experimental::fill_in_place(mutable_view, begin, end, *p_val));
     cudf::test::expect_columns_equal(mutable_view, expected);
   }
 };
@@ -302,7 +302,7 @@ TEST_F(FillErrorTestFixture, InvalidInplaceCall)
       thrust::make_counting_iterator(0) + 100);
 
   auto destination_view = cudf::mutable_column_view{destination};
-  EXPECT_THROW(cudf::experimental::fill(destination_view, 0, 100, *p_val_int),
+  EXPECT_THROW(cudf::experimental::fill_in_place(destination_view, 0, 100, *p_val_int),
                cudf::logic_error);
 
   auto p_val_str = cudf::make_string_scalar("five");
@@ -313,7 +313,7 @@ TEST_F(FillErrorTestFixture, InvalidInplaceCall)
     cudf::test::strings_column_wrapper(strings.begin(), strings.end());
 
   cudf::mutable_column_view destination_view_string{destination_string};
-  EXPECT_THROW(cudf::experimental::fill(
+  EXPECT_THROW(cudf::experimental::fill_in_place(
                  destination_view_string, 0, 100, *p_val_str),
                cudf::logic_error);
 }
@@ -334,33 +334,33 @@ TEST_F(FillErrorTestFixture, InvalidRange)
   cudf::mutable_column_view destination_view{destination};
 
   // empty range == no-op, this is valid
-  EXPECT_NO_THROW(cudf::experimental::fill(destination_view, 0, 0, *p_val));
+  EXPECT_NO_THROW(cudf::experimental::fill_in_place(destination_view, 0, 0, *p_val));
   EXPECT_NO_THROW(auto p_ret =
                     cudf::experimental::fill(destination, 0, 0, *p_val));
 
   // out_begin is negative
-  EXPECT_THROW(cudf::experimental::fill(destination_view, -10, 0, *p_val),
+  EXPECT_THROW(cudf::experimental::fill_in_place(destination_view, -10, 0, *p_val),
                cudf::logic_error);
   EXPECT_THROW(auto p_ret = cudf::experimental::fill(destination, -10, 0,
                  *p_val),
                cudf::logic_error);
 
   // out_begin > out_end
-  EXPECT_THROW(cudf::experimental::fill(destination_view, 10, 5, *p_val),
+  EXPECT_THROW(cudf::experimental::fill_in_place(destination_view, 10, 5, *p_val),
                cudf::logic_error);
   EXPECT_THROW(auto p_ret = cudf::experimental::fill(destination, 10, 5,
                  *p_val),
                cudf::logic_error);
 
   // out_begin >= destination.size()
-  EXPECT_THROW(cudf::experimental::fill(destination_view, 100, 100, *p_val),
+  EXPECT_THROW(cudf::experimental::fill_in_place(destination_view, 100, 100, *p_val),
                cudf::logic_error);
   EXPECT_THROW(auto p_ret = cudf::experimental::fill(destination, 100, 100,
                  *p_val),
                cudf::logic_error);
 
   // out_end > destination.size()
-  EXPECT_THROW(cudf::experimental::fill(destination_view, 99, 101, *p_val),
+  EXPECT_THROW(cudf::experimental::fill_in_place(destination_view, 99, 101, *p_val),
                cudf::logic_error);
   EXPECT_THROW(auto p_ret = cudf::experimental::fill(destination, 99, 101,
                  *p_val),
@@ -382,7 +382,7 @@ TEST_F(FillErrorTestFixture, DTypeMismatch)
 
   auto destination_view = cudf::mutable_column_view{destination};
 
-  EXPECT_THROW(cudf::experimental::fill(
+  EXPECT_THROW(cudf::experimental::fill_in_place(
                  destination_view, 0, 10, *p_val),
                cudf::logic_error);
   EXPECT_THROW(auto p_ret = cudf::experimental::fill(
