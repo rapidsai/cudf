@@ -37,8 +37,23 @@ namespace detail
 namespace
 {
 
+/**
+ * @brief Return a new dictionary by removing identified keys from the provided dictionary.
+ *
+ * This is a common utility for `remove_keys` and `remove_unused_keys` detail functions.
+ * It will create a new dictionary with the remaining keys and create new indices values
+ * to go with these new keys.
+ *
+ * @tparam KeysKeeper Function bool(size_type) that takes keys position index
+ *                    and returns true if that key is to be used in the output dictionary.
+ * @param dictionary_column The column to use for creating the new dictionary.
+ * @param keys_to_keep_fn Called to determine which keys in `dictionary_column` to keep.
+ * @param mr Resource for creating output columns.
+ * @param stream CUDA Stream for kernel calls.
+ */
+template<typename KeysKeeper>
 std::unique_ptr<column> remove_keys_fn( dictionary_column_view const& dictionary_column,
-                                        experimental::bool8 const* d_matches,
+                                        KeysKeeper keys_to_keep_fn,
                                         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                         cudaStream_t stream = 0)
 {
@@ -51,12 +66,12 @@ std::unique_ptr<column> remove_keys_fn( dictionary_column_view const& dictionary
     thrust::sequence( execpol->on(stream), keys_positions.begin(), keys_positions.end() );
     column_view keys_positions_view( data_type{INT32}, keys_view.size(), keys_positions.data().get() );
 
-    // copy the non-removed keys ( d_matches: true=remove, false=keep )
+    // copy the non-removed keys ( keys_to_keep_fn(idx)==true )
     std::unique_ptr<column> keys_column;
     rmm::device_vector<int32_t> map_indices(keys_view.size(),-1); // init -1 to identify new nulls
     {
         auto table_keys = experimental::detail::copy_if( table_view{{keys_view, keys_positions_view}},
-            [d_matches]__device__(size_type idx) { return !d_matches[idx]; }, mr, stream )->release();
+                                                         keys_to_keep_fn, mr, stream )->release();
         keys_column = std::move(table_keys.front());
         keys_positions_view = table_keys[1]->view();
         // build indices mapper
@@ -105,9 +120,10 @@ std::unique_ptr<column> remove_keys( dictionary_column_view const& dictionary_co
 
     // locate keys to remove by searching the keys column
     auto matches = experimental::detail::contains( keys_view, keys_to_remove, mr, stream);
-    // call common utility method to remove the keys not found
-    return remove_keys_fn( dictionary_column, matches->view().data<experimental::bool8>(),
-                           mr, stream );
+    auto d_matches = matches->mutable_view().data<experimental::bool8>();
+    // call common utility method to keep the keys not matched to keys_to_remove
+    auto key_matcher = [d_matches] __device__ (size_type idx) { return !d_matches[idx]; };
+    return remove_keys_fn( dictionary_column, key_matcher, mr, stream );
 }
 
 std::unique_ptr<column> remove_unused_keys( dictionary_column_view const& dictionary_column,
@@ -131,12 +147,10 @@ std::unique_ptr<column> remove_unused_keys( dictionary_column_view const& dictio
     // search the indices values with key indices to look for any holes
     auto matches = experimental::detail::contains( keys_positions_view, indices_view, mr, stream);
     auto d_matches = matches->mutable_view().data<experimental::bool8>();
-    // need to negate the values
-    thrust::transform( execpol->on(stream), d_matches, d_matches + keys.size(), d_matches,
-        [] __device__ ( auto bv ) { return !bv; });
 
-    // call common utility method to remove the keys not found
-    return remove_keys_fn( dictionary_column, d_matches, mr, stream );
+    // call common utility method to keep the keys that match
+    auto key_matcher = [d_matches]__device__(size_type idx) { return d_matches[idx]; };
+    return remove_keys_fn( dictionary_column, key_matcher, mr, stream );
 }
 
 } // namespace detail
