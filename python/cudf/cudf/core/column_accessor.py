@@ -132,7 +132,7 @@ class ColumnAccessor(MutableMapping):
     def get_by_label(self, key):
         if isinstance(key, slice):
             return self.get_by_label_slice(key)
-        elif isinstance(key, list):
+        elif pd.api.types.is_list_like(key) and not isinstance(key, tuple):
             return self.__class__(
                 {k: self._data[k] for k in key},
                 multiindex=self.multiindex,
