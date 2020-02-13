@@ -54,6 +54,8 @@ cdef extern from "cudf/io/types.hpp" \
         io_type type
         string filepath
 
+        source_info() except +
+
     cdef cppclass sink_info:
         io_type type
         string filepath

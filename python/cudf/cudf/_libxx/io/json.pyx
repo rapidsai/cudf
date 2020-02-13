@@ -7,11 +7,9 @@
 
 
 from cudf._libxx.lib cimport *
-from cudf._libxx.io.json cimport (
-    reader as json_reader,
-    reader_options as json_reader_options
-)
 from cudf._libxx.table cimport *
+from cudf._libxx.io.functions cimport *
+from cudf._libxx.io.types cimport *
 
 from libcpp.string cimport string
 from libcpp.memory cimport unique_ptr
@@ -23,7 +21,8 @@ import collections.abc as abc
 import os
 
 
-cpdef read_json(filepath_or_buffer, dtype, lines, compression, byte_range):
+cpdef read_json_libcudf(filepath_or_buffer, dtype,
+                        lines, compression, byte_range):
     """
     Cython function to call into libcudf API, see `read_json`.
 
@@ -33,8 +32,22 @@ cpdef read_json(filepath_or_buffer, dtype, lines, compression, byte_range):
     cudf.io.json.to_json
     """
 
+    # Determine read source
+    cdef const unsigned char[::1] buffer = view_of_buffer(filepath_or_buffer)
+    cdef string filepath
+    cdef source_info source
+    if buffer is None:
+        if os.path.isfile(filepath_or_buffer):
+            source.type = io_type.FILEPATH
+            filepath = <string>str(filepath_or_buffer).encode()
+            source.filepath = filepath
+        else:
+            source.type = io_type.HOST_BUFFER
+            source.filepath = filepath_or_buffer.encode()
+
     # Setup arguments
-    cdef reader_options args = reader_options()
+    cdef read_json_args args = read_json_args(source)
+
     args.lines = lines
     if compression is not None:
         args.compression = compression_type.AUTO
@@ -52,37 +65,17 @@ cpdef read_json(filepath_or_buffer, dtype, lines, compression, byte_range):
             for col_dtype in dtype:
                 args.dtype.push_back(str(col_dtype).encode())
 
-    # Create reader from source
-    cdef const unsigned char[::1] buffer = view_of_buffer(filepath_or_buffer)
-    cdef string filepath
-    if buffer is None:
-        if os.path.isfile(filepath_or_buffer):
-            filepath = <string>str(filepath_or_buffer).encode()
-        else:
-            buffer = filepath_or_buffer.encode()
-
-    cdef unique_ptr[json_reader] reader
-    with nogil:
-        if buffer is None:
-            reader = unique_ptr[json_reader](
-                new json_reader(filepath, args)
-            )
-        else:
-            reader = unique_ptr[json_reader](
-                new json_reader(<char *>&buffer[0], buffer.shape[0], args)
-            )
-
-    # Read data into columns
-    cdef table_with_metadata c_out_table
+    # Determine byte read offsets if applicable
     cdef size_t c_range_offset = byte_range[0] if byte_range is not None else 0
     cdef size_t c_range_size = byte_range[1] if byte_range is not None else 0
+    args.byte_range_offset = c_range_offset
+    args.byte_range_size = c_range_size
+
+    # Read JSON
+    cdef table_with_metadata c_out_table
+
     with nogil:
-        if c_range_offset != 0 or c_range_size != 0:
-            c_out_table = reader.get().read_byte_range(
-                c_range_offset, c_range_size
-            )
-        else:
-            c_out_table = reader.get().read_all()
+        c_out_table = read_json(args)
 
     column_names = list(c_out_table.metadata.column_names)
     return Table.from_unique_ptr(c_out_table.tbl, column_names=column_names)
