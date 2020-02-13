@@ -108,10 +108,6 @@ class Index(Frame):
         col = self._data.pop(self.name)
         self._data[value] = col
 
-    @property
-    def names(self):
-        return (self.name,)
-
     def dropna(self):
         """
         Return a Series with null values removed.

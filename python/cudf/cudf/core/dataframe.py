@@ -23,7 +23,6 @@ import rmm
 
 import cudf
 import cudf._lib as libcudf
-import cudf._libxx as libcudfxx
 from cudf.core import column
 from cudf.core._sort import get_sorted_inds
 from cudf.core.column import (
