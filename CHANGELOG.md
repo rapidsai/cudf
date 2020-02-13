@@ -61,6 +61,7 @@
 - PR #4111 Use `Buffer`'s to serialize `StringColumn`
 - PR #4113 Get `len` of `StringColumn`s without `nvstrings`
 - PR #4130 Renames in-place `cudf::experimental::fill` to `cudf::experimental::fill_in_place`
+- PR #4143 Renames in-place `cudf::experimental::copy_range` to `cudf::experimental::copy_range_in_place`
 
 ## Bug Fixes
 
