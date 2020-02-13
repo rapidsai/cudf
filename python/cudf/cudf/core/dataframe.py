@@ -538,8 +538,10 @@ class DataFrame(Frame):
                             if key == arg:
                                 new_data[key] = value
                             else:
-                                new_data[key] = column.column_empty(
-                                    len(value), masked=True
+                                new_data[key] = column.column_empty_like(
+                                    self._data[key],
+                                    masked=True,
+                                    newsize=len(value),
                                 )
                         self._data = new_data
                     elif isinstance(value, (pd.Series, Series)):
