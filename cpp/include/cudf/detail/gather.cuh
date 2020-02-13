@@ -351,7 +351,7 @@ void gather_bitmask(table_view const& source, MapIterator gather_map,
   // Validate that all target columns have the same size
   auto const target_rows = target.front()->size();
   CUDF_EXPECTS(std::all_of(target.begin(), target.end(), [target_rows](auto const& col)
-    { return  target_rows == col->size(); }), "Column size mismatch");
+    { return target_rows == col->size(); }), "Column size mismatch");
 
   // Create null mask if source is nullable but target is not
   for (size_t i = 0; i < target.size(); ++i) {
@@ -369,8 +369,8 @@ void gather_bitmask(table_view const& source, MapIterator gather_map,
   std::transform(target.begin(), target.end(), target_masks.begin(),
     [](auto const& col) { return col->mutable_view().null_mask(); });
   rmm::device_vector<bitmask_type*> d_target_masks(target_masks);
-  auto masks = d_target_masks.data().get();
 
+  auto const masks = d_target_masks.data().get();
   auto const device_source = table_device_view::create(source, stream);
   auto d_valid_counts = rmm::device_vector<size_type>(target.size());
 
@@ -392,11 +392,10 @@ void gather_bitmask(table_view const& source, MapIterator gather_map,
 
   // Copy the valid counts into each column
   auto const valid_counts = thrust::host_vector<size_type>(d_valid_counts);
-  size_t index = 0;
-  for (auto& target_col : target) {
-    if (target_col->nullable()) {
-      auto const null_count = target_rows - valid_counts[index++];
-      target_col->set_null_count(null_count);
+  for (size_t i = 0; i < target.size(); ++i) {
+    if (target[i]->nullable()) {
+      auto const null_count = target_rows - valid_counts[i];
+      target[i]->set_null_count(null_count);
     }
   }
 }
@@ -447,68 +446,22 @@ gather(table_view const& source_table, MapIterator gather_map_begin,
 
   for(auto const& source_column : source_table) {
     // The data gather for n columns will be put on the first n streams
-    auto dest = cudf::experimental::type_dispatcher(source_column.type(),
-                                                    column_gatherer{},
-                                                    source_column,
-                                                    gather_map_begin,
-                                                    gather_map_end,
-                                                    nullify_out_of_bounds,
-                                                    mr,
-                                                    stream);
-
-    // Allocate null mask if we need one
-    if (source_column.nullable() or nullify_out_of_bounds) {
-      auto mask = create_null_mask(dest->size(), mask_state::ALL_NULL, stream, mr);
-      dest->set_null_mask(std::move(mask), 0);
-    }
-
-    destination_columns.push_back(std::move(dest));
+    destination_columns.push_back(
+      cudf::experimental::type_dispatcher(source_column.type(),
+                                          column_gatherer{},
+                                          source_column,
+                                          gather_map_begin,
+                                          gather_map_end,
+                                          nullify_out_of_bounds,
+                                          mr,
+                                          stream));
   }
 
-  std::unique_ptr<table> destination_table = std::make_unique<table>(std::move(destination_columns));
+  auto const op = nullify_out_of_bounds ? gather_bitmask_op::NULLIFY
+    : gather_bitmask_op::DONT_CHECK;
+  gather_bitmask(source_table, gather_map_begin, destination_columns, op, mr, stream);
 
-  rmm::device_vector<cudf::size_type> valid_counts(source_table.num_columns(), 0);
-
-  auto source_table_view = table_device_view::create(source_table);
-  std::vector<bitmask_type*> host_masks(destination_table->num_columns());
-  auto mutable_destination_table = destination_table->mutable_view();
-  std::transform(mutable_destination_table.begin(), mutable_destination_table.end(),
-                    host_masks.begin(), [] (auto col){
-                        return  col.nullable()?col.null_mask():nullptr;
-                    });
-
-  rmm::device_vector<bitmask_type*> masks(host_masks);
-
-  if (nullify_out_of_bounds) {
-    constexpr auto op {gather_bitmask_op::NULLIFY};
-    gather_bitmask<op>(*source_table_view,
-                       gather_map_begin,
-                       masks.data().get(),
-                       masks.size(),
-                       num_destination_rows,
-                       valid_counts.data().get(),
-                       stream);
-  } else {
-    constexpr auto op {gather_bitmask_op::DONT_CHECK};
-    gather_bitmask<op>(*source_table_view,
-                       gather_map_begin,
-                       masks.data().get(),
-                       masks.size(),
-                       num_destination_rows,
-                       valid_counts.data().get(),
-                       stream);
-  }
-
-  thrust::host_vector<cudf::size_type> h_valid_counts(valid_counts);
-
-  for (auto i=0; i<destination_table->num_columns(); ++i) {
-    if (destination_table->get_column(i).nullable()) {
-      destination_table->get_column(i).set_null_count(destination_table->num_rows()
-                                                      - h_valid_counts[i]);
-    }
-  }
-
-  return destination_table;
+  return std::make_unique<table>(std::move(destination_columns));
 }
 
 
