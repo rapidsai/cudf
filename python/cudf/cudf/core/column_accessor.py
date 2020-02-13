@@ -135,14 +135,14 @@ class ColumnAccessor(MutableMapping):
         elif pd.api.types.is_list_like(key) and not isinstance(key, tuple):
             return self.get_by_label_list_like(key)
         else:
-            if any(isinstance(k, slice) for k in key):
-                return self.get_by_label_with_wildcard(key)
-            else:
-                return self.get_by_label_grouped(key)
+            if isinstance(key, tuple):
+                if any(isinstance(k, slice) for k in key):
+                    return self.get_by_label_with_wildcard(key)
+            return self.get_by_label_grouped(key)
 
     def get_by_label_list_like(self, key):
         return self.__class__(
-            {k: self._data[k] for k in key},
+            _flatten({k: self._grouped_data[k] for k in key}),
             multiindex=self.multiindex,
             level_names=self.level_names,
         )
@@ -162,21 +162,24 @@ class ColumnAccessor(MutableMapping):
             )
 
     def get_by_label_slice(self, key):
-        start = key.start
-        stop = key.stop
-        if key.step is not None:
-            raise TypeError("Label slicing with step is not supported")
+        start, stop = key.start, key.stop
         if start is None:
             start = self.names[0]
         if stop is None:
             stop = self.names[-1]
-        keys = itertools.chain(
-            itertools.takewhile(
-                lambda k: k != stop,
-                itertools.dropwhile(lambda k: k != start, self.names),
-            ),
-            (stop,),
-        )
+        start = self._pad_key(start, slice(None))
+        stop = self._pad_key(stop, slice(None))
+        if key.step is not None:
+            raise TypeError("Label slicing with step is not supported")
+        for idx, name in enumerate(self.names):
+            if _compare_keys(name, start):
+                start_idx = idx
+                break
+        for idx, name in enumerate(reversed(self.names)):
+            if _compare_keys(name, stop):
+                stop_idx = len(self.names) - idx
+                break
+        keys = self.names[start_idx:stop_idx]
         return self.__class__(
             {k: self._data[k] for k in keys},
             multiindex=self.multiindex,
@@ -184,6 +187,7 @@ class ColumnAccessor(MutableMapping):
         )
 
     def get_by_label_with_wildcard(self, key):
+        key = self._pad_key(key, slice(None))
         return self.__class__(
             {k: self._data[k] for k in self._data if _compare_keys(k, key)},
             multiindex=self.multiindex,
@@ -238,6 +242,8 @@ def _compare_keys(key, target):
     If any value in `target` is slice(None), it is considered equal
     to the corresponding value in `key`.
     """
+    if not isinstance(key, tuple):
+        return key == target
     for k1, k2 in itertools.zip_longest(key, target, fillvalue=None):
         if k2 == slice(None):
             continue

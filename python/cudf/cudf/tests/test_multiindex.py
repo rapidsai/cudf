@@ -778,3 +778,13 @@ def test_multiindex_multicolumn_zero_row_slice():
     gdg = gdf.groupby(["x", "y"]).agg({"z": ["count"]}).iloc[:0]
     pdg = pdf.groupby(["x", "y"]).agg({"z": ["count"]}).iloc[:0]
     assert_eq(pdg, gdg, check_dtype=False)
+
+
+def test_multicolumn_loc(pdf, pdfIndex):
+    pdf = pdf.T
+    pdf.columns = pdfIndex
+    gdf = cudf.from_pandas(pdf)
+    assert_eq(pdf.loc[:, "a"], gdf.loc[:, "a"])
+    assert_eq(pdf.loc[:, ("a", "store")], gdf.loc[:, ("a", "store")])
+    assert_eq(pdf.loc[:, "a":"b"], gdf.loc[:, "a":"b"])
+    assert_eq(pdf.loc[:, ["a", "b"]], gdf.loc[:, ["a", "b"]])

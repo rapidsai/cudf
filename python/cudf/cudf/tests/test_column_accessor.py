@@ -153,6 +153,32 @@ def test_get_by_label_simple_slice():
     check_ca_equal(expect, got)
 
 
+def test_get_by_label_multiindex_slice():
+    ca = ColumnAccessor(
+        {
+            ("a", "b", "c"): [1, 2, 3],
+            ("a", "b", "e"): [2, 3, 4],
+            ("a", "d", "e"): [3, 4, 5],
+            ("b", "x", ""): [4, 5, 6],
+        },
+        multiindex=True,
+    )  # pandas needs columns to be sorted to do slicing with multiindex
+    expect = ca
+    got = ca.get_by_label(slice(None, None))
+    check_ca_equal(expect, got)
+
+    expect = ColumnAccessor(
+        {
+            ("a", "b", "e"): [2, 3, 4],
+            ("a", "d", "e"): [3, 4, 5],
+            ("b", "x", ""): [4, 5, 6],
+        },
+        multiindex=True,
+    )
+    got = ca.get_by_label(slice(("a", "b", "e"), ("b", "x", "")))
+    check_ca_equal(expect, got)
+
+
 def test_by_label_list():
     ca = ColumnAccessor({"a": [1, 2, 3], "b": [2, 3, 4], "c": [3, 4, 5]})
     expect = ColumnAccessor({"b": [2, 3, 4], "c": [3, 4, 5]})
