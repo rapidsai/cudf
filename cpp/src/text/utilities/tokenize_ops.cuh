@@ -130,7 +130,7 @@ private:
  * vector can be calculated. The second pass places the token
  * positions into the d_tokens vector.
  */
-struct tokenator_fn
+struct strings_tokenizer
 {
     cudf::column_device_view const d_strings;  // strings to tokenize
     cudf::string_view const d_delimiter;       // delimiter characters to tokenize around
@@ -180,7 +180,7 @@ using delimiterator = cudf::column_device_view::const_iterator<cudf::string_view
  * One or more strings are used as delimiters to identify tokens inside
  * each string of a given strings column.
  */
-struct multi_delimiter_tokenizer_fn
+struct multi_delimiter_strings_tokenizer
 {
     cudf::column_device_view const d_strings;  // strings column to tokenize
     delimiterator delimiters_begin;            // first delimiter
