@@ -55,8 +55,7 @@ TEST_F(ExternalDatasource, Basic)
     datasource_confs.insert({"group.id", "jeremy_test"});
     datasource_confs.insert({"auto.offset.reset", "beginning"});
 
-    cudf::io::external::datasource_factory dfs("/home/jdyer/Development/cudf/external/build");
+    cudf::io::external::datasource_factory dfs("/home/jdyer/anaconda3/envs/cudf_dev/lib/external");
     cudf::io::external::external_datasource* ex_datasource = dfs.external_datasource_by_id("librdkafka-1.2.2", datasource_confs);
-    //printf("External Datasource ID is '%s'\n", ex_datasource->libcudf_datasource_identifier().c_str());
     ex_datasource->configure_datasource(datasource_confs);
 }

@@ -49,7 +49,7 @@ class datasource_factory {
   /**
    * Load all of the .so files that are possible candidates for housing external datasources.
    */
-  datasource_factory(boost::filesystem::path external_lib_dir);
+  datasource_factory(std::string external_lib_dir);
 
   /**
    * @brief Base class destructor
@@ -68,17 +68,30 @@ class datasource_factory {
    * This function returns a path to the cache directory, creating it if it
    * doesn't exist.
    *
-   * The default cache directory `/usr/local/lib/cudf_external_lib`.
+   * The default cache directory `$CONDA_PREFIX/lib/external`.
    */
   boost::filesystem::path getExternalLibDir() {
-    // The environment variable always overrides the
-    // default/compile-time value of `EXTERNAL_DATASOURCE_LIB_PATH`
+    // python user supplied `external_lib_dir_` always has the most precedence
+    printf("external_lib_dir_: '%s'\n", external_lib_dir_.c_str());
     if (!boost::filesystem::exists(external_lib_dir_)) {
+      // Since the python external dir was not supplied check for environment variable.
       auto external_io_lib_path_env = std::getenv("EXTERNAL_DATASOURCE_LIB_PATH");
-      auto external_io_lib_path = boost::filesystem::path(
-          external_io_lib_path_env != nullptr ? external_io_lib_path_env
-                                        : EXTERNAL_DATASOURCE_LIB_PATH);
-      return external_io_lib_path;
+      if (external_io_lib_path_env != nullptr && boost::filesystem::exists(external_io_lib_path_env)) {
+        return boost::filesystem::path(external_io_lib_path_env);
+      } else {
+        if (external_io_lib_path_env != nullptr) {
+          printf("`EXTERNAL_DATASOURCE_LIB_PATH` was set to: '%s' but does not exist\n", external_io_lib_path_env);
+        }
+        auto conda_prefix = std::getenv("CONDA_PREFIX");
+        if (boost::filesystem::exists(conda_prefix)) {
+          std::string conda_str = conda_prefix;
+          conda_str.append("/lib/external");
+          boost::filesystem::path conda_path(conda_str);
+          return conda_path;
+        } else {
+          return boost::filesystem::path(EXTERNAL_DATASOURCE_LIB_PATH);
+        }
+      }
     } else {
       return external_lib_dir_;
     }
@@ -179,7 +192,7 @@ class datasource_factory {
           ++it;
         }
     } else {
-      //TODO: Some sort of runtime error because the library directory does not exist. Advice from reviewer?
+      //CUDF_FAIL();
     }
   }
 
