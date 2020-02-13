@@ -436,9 +436,7 @@ void gather_bitmask(table_view const& source, MapIterator gather_map,
 template <typename MapIterator>
 std::unique_ptr<table>
 gather(table_view const& source_table, MapIterator gather_map_begin,
-       MapIterator gather_map_end, bool check_bounds = false,
-       bool nullify_out_of_bounds = false,
-       bool allow_negative_indices = false,
+       MapIterator gather_map_end, bool nullify_out_of_bounds = false,
        rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
        cudaStream_t stream = 0) {
   auto num_destination_rows = std::distance(gather_map_begin, gather_map_end);
@@ -482,21 +480,23 @@ gather(table_view const& source_table, MapIterator gather_map_begin,
   rmm::device_vector<bitmask_type*> masks(host_masks);
 
   if (nullify_out_of_bounds) {
-    gather_bitmask<gather_bitmask_op::NULLIFY>(*source_table_view,
-                         gather_map_begin,
-                         masks.data().get(),
-                         masks.size(),
-                         num_destination_rows,
-                         valid_counts.data().get(),
-                         stream);
+    constexpr auto op {gather_bitmask_op::NULLIFY};
+    gather_bitmask<op>(*source_table_view,
+                       gather_map_begin,
+                       masks.data().get(),
+                       masks.size(),
+                       num_destination_rows,
+                       valid_counts.data().get(),
+                       stream);
   } else {
-    gather_bitmask<gather_bitmask_op::DONT_CHECK>(*source_table_view,
-                          gather_map_begin,
-                          masks.data().get(),
-                          masks.size(),
-                          num_destination_rows,
-                          valid_counts.data().get(),
-                          stream);
+    constexpr auto op {gather_bitmask_op::DONT_CHECK};
+    gather_bitmask<op>(*source_table_view,
+                       gather_map_begin,
+                       masks.data().get(),
+                       masks.size(),
+                       num_destination_rows,
+                       valid_counts.data().get(),
+                       stream);
   }
 
   thrust::host_vector<cudf::size_type> h_valid_counts(valid_counts);
