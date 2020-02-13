@@ -45,7 +45,7 @@ namespace experimental {
  * @param[in] following_window The static rolling window size in the forward direction.
  * @param[in] min_periods Minimum number of observations in window required to have a value,
  *                        otherwise element `i` is null.
- * @param[in] op The rolling window aggregation type (SUM, MAX, MIN, etc.)
+ * @param[in] agg The rolling window aggregation type (SUM, MAX, MIN, etc.)
  *
  * @returns   A nullable output column containing the rolling window results
  **/
@@ -53,7 +53,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        size_type preceding_window,
                                        size_type following_window,
                                        size_type min_periods,
-                                       std::unique_ptr<aggregation> const& aggr,
+                                       std::unique_ptr<aggregation> const& agg,
                                        rmm::mr::device_memory_resource* mr =
                                         rmm::mr::get_default_resource());
 
@@ -85,7 +85,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
  *                             `following_window[i]` specifies following window size for element `i`.
  * @param[in] min_periods Minimum number of observations in window required to have a value,
  *                        otherwise element `i` is null.
- * @param[in] op The rolling window aggregation type (sum, max, min, etc.)
+ * @param[in] agg The rolling window aggregation type (sum, max, min, etc.)
  *
  * @returns   A nullable output column containing the rolling window results
  **/
@@ -93,7 +93,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        column_view const& preceding_window,
                                        column_view const& following_window,
                                        size_type min_periods,
-                                       std::unique_ptr<aggregation> const& aggr,
+                                       std::unique_ptr<aggregation> const& agg,
                                        rmm::mr::device_memory_resource* mr =
                                         rmm::mr::get_default_resource());
 

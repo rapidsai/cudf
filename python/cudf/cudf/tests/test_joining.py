@@ -106,7 +106,7 @@ def test_dataframe_join_how(aa, bb, how, method):
     assert list(expect.columns) == list(got.columns)
     # test disabled until libgdf sort join gets updated with new api
     if method == "hash":
-        assert np.all(expect.index.values == got.index.values)
+        assert_eq(expect.index.values, got.index.values)
         if how != "outer":
             # Newly introduced ambiguous ValueError thrown when
             # an index and column have the same name. Rename the
@@ -167,7 +167,7 @@ def test_dataframe_join_suffix():
     )
     # Check
     assert list(expect.columns) == list(got.columns)
-    assert np.all(expect.index.values == got.index.values)
+    assert_eq(expect.index.values, got.index.values)
     for k in expect.columns:
         _check_series(expect[k].fillna(-1), got[k].fillna(-1))
 
@@ -198,7 +198,7 @@ def test_dataframe_join_cats():
     # Just do some rough checking here.
     assert list(got.columns) == ["b", "c"]
     assert len(got) > 0
-    assert set(got.index.values) & set("abc")
+    assert set(got.index.to_pandas()) & set("abc")
     assert set(got["b"]) & set(bb)
     assert set(got["c"]) & set(cc)
 
