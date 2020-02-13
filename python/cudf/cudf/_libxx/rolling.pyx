@@ -5,6 +5,9 @@ import cudf
 import pandas as pd
 import numba
 
+from cudf.core.column.column import as_column
+from numba.cuda.cudadrv.devicearray import DeviceNDArray
+
 from cudf._libxx.lib cimport *
 from cudf._libxx.column cimport *
 
@@ -15,14 +18,17 @@ from cudf._libxx.includes.rolling cimport (
 )
 
 
-def rolling(Column source_column, window, min_periods, center, op):
+def rolling(Column source_column, Column pre_column_window,
+            Column fwd_column_window, window, min_periods, center, op):
     """
     Rolling on input executing operation within the given window for each row
 
     Parameters
     ----------
     source_column : input column on which rolling operation is executed
-    window : Size of the moving window, can be integer or numba DeviceArray
+    pre_column_window : prior window for each element of source_column
+    fwd_column_window : forward window for each element of source_column
+    window : Size of the moving window, can be integer or None
     min_periods : Minimum number of observations in window required to have
                   a value (otherwise result is null)
     center : Set the labels at the center of the window
@@ -38,33 +44,29 @@ def rolling(Column source_column, window, min_periods, center, op):
     cdef size_type c_window = 0
     cdef size_type c_forward_window = 0
     cdef unique_ptr[column] c_result
+    cdef column_view source_column_view = source_column.view()
+    cdef column_view pre_column_window_view
+    cdef column_view fwd_column_window_view
+    cdef unique_ptr[aggregation] agg = move(
+        get_aggregation(op, {'dtype': source_column.dtype}))
 
-    if isinstance(window, numba.cuda.cudadrv.devicearray.DeviceNDArray):
+    if window is None:
         if center:
             # TODO: we can support this even though Pandas currently does not
             raise NotImplementedError(
                 "center is not implemented for offset-based windows"
             )
-        column_window = cudf.Series(window)._column
-        f_column_window = cudf.Series([0] * column_window.size,
-                                      dtype=column_window.dtype)._column
-
-        pre_column_window = Column(
-            column_window.data, column_window.size,
-            column_window.dtype)
-
-        fwd_column_window = Column(
-            f_column_window.data, f_column_window.size,
-            f_column_window.dtype)
-
-        c_result = move(
-            cpp_rolling_window(source_column.view(),
-                               pre_column_window.view(),
-                               fwd_column_window.view(),
-                               c_min_periods,
-                               get_aggregation(op,
-                                               {'dtype': source_column.dtype}))
-        )
+        pre_column_window_view = pre_column_window.view()
+        fwd_column_window_view = fwd_column_window.view()
+        with nogil:
+            c_result = move(
+                cpp_rolling_window(
+                    source_column_view,
+                    pre_column_window_view,
+                    fwd_column_window_view,
+                    c_min_periods,
+                    agg)
+            )
     else:
         if op == "count":
             min_periods = 0
@@ -76,13 +78,14 @@ def rolling(Column source_column, window, min_periods, center, op):
             c_window = window
             c_forward_window = 0
 
-        c_result = move(
-            cpp_rolling_window(source_column.view(),
-                               c_window,
-                               c_forward_window,
-                               c_min_periods,
-                               get_aggregation(op,
-                                               {'dtype': source_column.dtype}))
-        )
+        with nogil:
+            c_result = move(
+                cpp_rolling_window(
+                    source_column_view,
+                    c_window,
+                    c_forward_window,
+                    c_min_periods,
+                    agg)
+            )
 
     return Column.from_unique_ptr(move(c_result))
