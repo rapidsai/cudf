@@ -4413,3 +4413,13 @@ def test_change_column_dtype_in_empty():
     pdf["b"] = pdf["b"].astype("int64")
     gdf["b"] = gdf["b"].astype("int64")
     assert_eq(pdf, gdf)
+
+
+def test_dataframe_from_table_empty_index():
+    from cudf._libxx.table import Table
+
+    df = DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    odict = df._data
+    tbl = Table(odict)
+
+    result = DataFrame._from_table(tbl)  # noqa: F841
