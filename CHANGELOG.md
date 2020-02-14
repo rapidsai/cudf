@@ -67,6 +67,7 @@
 - PR #4136 Add `Index.names` property
 - PR #4144 Release GIL when calling libcudf++ functions
 - PR #4149 Use "type-serialized" for pickled types like Dask
+- PR #3259 Add .clang-format
 
 ## Bug Fixes
 
@@ -187,7 +188,6 @@
 - PR #3713 Adding aggregation support to rolling_window
 - PR #3875 Add abstract sink for IO writers, used by ORC and Parquet writers for now
 - PR #3916 Refactor gather bindings
-- PR #3259 Add .clang-format
 
 ## Bug Fixes
 
