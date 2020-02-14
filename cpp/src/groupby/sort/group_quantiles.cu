@@ -62,7 +62,7 @@ struct quantiles_functor {
     // For each group, calculate quantile
     thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
       thrust::make_counting_iterator(0),
-      group_offsets.size(),
+      group_sizes.size(),
       [
         d_values = *values_view,
         d_group_size = *group_size_view,

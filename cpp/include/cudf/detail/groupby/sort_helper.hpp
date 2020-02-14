@@ -126,7 +126,7 @@ struct sort_groupby_helper {
   /**
    * @brief Get the number of groups in `keys`
    */
-  size_type num_groups() { return group_offsets().size(); }
+  size_type num_groups() { return group_offsets().size() - 1; }
 
   /**
    * @brief Return the effective number of keys
