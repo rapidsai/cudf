@@ -13,6 +13,7 @@ import rmm
 
 import cudf
 import cudf._lib as libcudf
+import cudf._libxx as libcudfxx
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, DatetimeColumn, column
 from cudf.core.frame import Frame
@@ -2214,8 +2215,6 @@ class Series(Frame):
             The encoded Series.
         """
         assert stop > 0
-
-        from cudf.core.column import numerical
 
         initial_hash = np.asarray(hash(self.name)) if use_name else None
         hashed_values = libcudfxx.hash(
