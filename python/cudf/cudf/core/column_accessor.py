@@ -53,8 +53,14 @@ class ColumnAccessor(MutableMapping):
         return len(self._data)
 
     def __repr__(self):
-        return self._data.__repr__().replace(
-            self._data.__class__.__name__, self.__class__.__name__
+        data_repr = self._data.__repr__()
+        multiindex_repr = self.multiindex.__repr__()
+        level_names_repr = self.level_names.__repr__()
+        return "{}({}, multiindex={}, level_names={})".format(
+            self.__class__.__name__,
+            data_repr,
+            multiindex_repr,
+            level_names_repr,
         )
 
     @property
