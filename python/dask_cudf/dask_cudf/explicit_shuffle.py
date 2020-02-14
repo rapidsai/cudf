@@ -51,10 +51,18 @@ async def recv_parts(eps, parts):
 
 async def exchange_and_concat_parts(rank, eps, parts, sort_by):
     ret = [parts[rank]]
+    del parts[rank]
+    parts[rank] = None
     await asyncio.gather(recv_parts(eps, ret), send_parts(eps, parts))
-    return concat(
-        [df for df in ret if df is not None and len(df)], sort_by=sort_by
+    for rank in list(parts):
+        del parts[rank]
+    new_df = concat(
+        [df.copy(deep=False) for df in ret if df is not None and len(df)],
+        sort_by=sort_by,
     )
+    for r in ret:
+        del r
+    return new_df
 
 
 def concat(df_list, sort_by=None):
