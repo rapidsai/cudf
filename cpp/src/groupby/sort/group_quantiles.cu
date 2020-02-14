@@ -41,6 +41,7 @@ struct quantiles_functor {
   operator()(column_view const& values,
              column_view const& group_sizes,
              rmm::device_vector<size_type> const& group_offsets,
+             size_type const num_groups,
              rmm::device_vector<double> const& quantile,
              interpolation interpolation, rmm::mr::device_memory_resource* mr,
              cudaStream_t stream = 0)
@@ -62,7 +63,7 @@ struct quantiles_functor {
     // For each group, calculate quantile
     thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
       thrust::make_counting_iterator(0),
-      group_sizes.size(),
+      num_groups,
       [
         d_values = *values_view,
         d_group_size = *group_size_view,
@@ -124,6 +125,7 @@ std::unique_ptr<column> group_quantiles(
     column_view const& values,
     column_view const& group_sizes,
     rmm::device_vector<size_type> const& group_offsets,
+    size_type const num_groups,
     std::vector<double> const& quantiles,
     interpolation interp,
     rmm::mr::device_memory_resource* mr,
@@ -132,7 +134,7 @@ std::unique_ptr<column> group_quantiles(
   rmm::device_vector<double> dv_quantiles(quantiles);
 
   return type_dispatcher(values.type(), quantiles_functor{},
-                         values, group_sizes, group_offsets,
+                         values, group_sizes, group_offsets, num_groups,
                          dv_quantiles, interp, mr, stream);
 }
 

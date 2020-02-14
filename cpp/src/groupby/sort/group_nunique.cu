@@ -32,10 +32,10 @@ namespace {
   struct nunique_functor {
 
     template <typename T>
-    std::enable_if_t<is_fixed_width<T>(), std::unique_ptr<column>>
+    std::unique_ptr<column>
     operator()(column_view const &values,
                rmm::device_vector<size_type> const &group_labels,
-               size_type num_groups,
+               size_type const num_groups,
                rmm::device_vector<size_type> const &group_offsets,
                include_nulls _include_nulls,
                rmm::mr::device_memory_resource *mr, cudaStream_t stream) 
@@ -50,17 +50,18 @@ namespace {
 
       auto values_view = column_device_view::create(values);
       if (values.has_nulls()) {
-        auto comp = element_equality_comparator<true>{*values_view, *values_view};
+        auto equal = element_equality_comparator<true>{*values_view, *values_view};
         auto is_unique_iterator = thrust::make_transform_iterator(
             thrust::make_counting_iterator<size_type>(0),
-            [v = *values_view, comp, _include_nulls,
+            [v = *values_view, equal, _include_nulls,
              group_offsets = group_offsets.data().get(),
              group_labels = group_labels.data().get()] 
              __device__(auto i) -> size_type {
-              bool is_unique = (_include_nulls == include_nulls::YES ||
-                                v.is_valid_nocheck(i)) &&
-                               (group_offsets[group_labels[i]] == i ||
-                               (not comp.operator()<T>(i, i-1)));
+              bool is_input_countable = (_include_nulls == include_nulls::YES ||
+                                v.is_valid_nocheck(i));
+              bool is_unique = is_input_countable &&
+                               (group_offsets[group_labels[i]] == i || //first element or
+                               (not equal.operator()<T>(i, i-1)));     //new unique value in sorted
               return static_cast<size_type>(is_unique);
             });
 
@@ -70,14 +71,14 @@ namespace {
                               thrust::make_discard_iterator(),
                               result->mutable_view().begin<size_type>());
       } else {
-        auto comp = element_equality_comparator<false>{*values_view, *values_view};
+        auto equal = element_equality_comparator<false>{*values_view, *values_view};
         auto is_unique_iterator = thrust::make_transform_iterator(
             thrust::make_counting_iterator<size_type>(0),
-            [v = *values_view, comp, group_offsets = group_offsets.data().get(),
+            [v = *values_view, equal, group_offsets = group_offsets.data().get(),
              group_labels = group_labels.data().get()] 
              __device__(auto i) -> size_type {
-              bool is_unique = group_offsets[group_labels[i]] == i ||
-                               (not comp.operator()<T>(i, i - 1));
+              bool is_unique = group_offsets[group_labels[i]] == i || //first element or
+                               (not equal.operator()<T>(i, i - 1));   //new unique value in sorted
               return static_cast<size_type>(is_unique);
             });
         thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream),
@@ -88,18 +89,12 @@ namespace {
       }
       return result;
     }
-
-    template <typename T, typename... Args>
-    std::enable_if_t<!is_fixed_width<T>(), std::unique_ptr<column>>
-    operator()(Args &&... args) {
-      CUDF_FAIL("Only fixed width types are supported in nunique");
-    }
   };
 } // namespace anonymous
 std::unique_ptr<column> group_nunique(
     column_view const& values,
     rmm::device_vector<size_type> const& group_labels,
-    size_type num_groups,
+    size_type const num_groups,
     rmm::device_vector<size_type> const& group_offsets,
     include_nulls _include_nulls,
     rmm::mr::device_memory_resource* mr,
