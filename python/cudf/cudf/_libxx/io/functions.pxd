@@ -97,3 +97,19 @@ cdef extern from "cudf/io/functions.hpp" \
         int forced_decimals_scale
 
     cdef table_with_metadata read_orc(read_orc_args &args) except +
+
+    cdef cppclass write_parquet_args:
+        sink_info sink
+        compression_type compression
+        statistics_freq stats_level
+        table_view table
+        const table_metadata *metadata
+
+        write_parquet_args() except +
+        write_parquet_args(sink_info sink_,
+                           table_view table_,
+                           table_metadata *table_metadata_,
+                           compression_type compression_,
+                           statistics_freq stats_lvl_) except +
+
+    cdef void write_parquet(write_parquet_args args)
