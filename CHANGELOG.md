@@ -61,7 +61,7 @@
 - PR #4111 Use `Buffer`'s to serialize `StringColumn`
 - PR #4113 Get `len` of `StringColumn`s without `nvstrings`
 - PR #4130 Renames in-place `cudf::experimental::fill` to `cudf::experimental::fill_in_place`
-- PR #4139 Port rolling.pyx to use non-legacy libcudf APIs
+- PR #4139 Port rolling.pyx to new libcudf APIs
 - PR #4136 Add `Index.names` property
 - PR #4144 Release GIL when calling libcudf++ functions
 
