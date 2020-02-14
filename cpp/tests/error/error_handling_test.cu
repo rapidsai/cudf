@@ -56,7 +56,7 @@ TEST(CudaTryTest, TryCatch) {
 }
 
 TEST(StreamCheck, success) {
-  EXPECT_NO_THROW(cudf::detail::check_stream(0, __FILE__, __LINE__));
+  EXPECT_NO_THROW(CHECK_CUDA(0));
 }
 
 namespace {
@@ -64,42 +64,34 @@ namespace {
 void __global__ test_kernel(int* data) { data[threadIdx.x] = threadIdx.x; }
 }  // namespace
 
-// Test the function underlying CHECK_STREAM so that it throws an exception when
-// a kernel fails
+// In a release build and without explicit synchronization, CHECK_CUDA may
+// or may not fail on erroneous asynchronous CUDA calls. Invoke
+// cudaStreamSynchronize to guarantee failure on error. In a non-release build,
+// CHECK_CUDA deterministically fails on erroneous asynchronous CUDA
+// calls.
 TEST(StreamCheck, FailedKernel) {
   cudaStream_t stream;
-  cudaStreamCreate(&stream);
+  CUDA_TRY(cudaStreamCreate(&stream));
   int a;
   test_kernel<<<0, 0, 0, stream>>>(&a);
-  EXPECT_THROW(cudf::detail::check_stream(0, __FILE__, __LINE__),
-               cudf::cuda_error);
-  cudaStreamDestroy(stream);
+#ifdef NDEBUG
+  CUDA_TRY(cudaStreamSynchronize(stream));
+#endif
+  EXPECT_THROW(CHECK_CUDA(stream), cudf::cuda_error);
+  CUDA_TRY(cudaStreamDestroy(stream));
 }
 
 TEST(StreamCheck, CatchFailedKernel) {
   cudaStream_t stream;
-  cudaStreamCreate(&stream);
+  CUDA_TRY(cudaStreamCreate(&stream));
   int a;
   test_kernel<<<0, 0, 0, stream>>>(&a);
-  CUDA_EXPECT_THROW_MESSAGE(cudf::detail::check_stream(0, __FILE__, __LINE__),
+#ifndef NDEBUG
+  CUDA_TRY(cudaStreamSynchronize(stream));
+#endif
+  CUDA_EXPECT_THROW_MESSAGE(CHECK_CUDA(stream),
                             "cudaErrorInvalidConfiguration "
                             "invalid configuration argument");
-  cudaStreamDestroy(stream);
+  CUDA_TRY(cudaStreamDestroy(stream));
 }
 
-// CHECK_STREAM should do nothing in a release build, even if there's an error
-#ifdef NDEBUG
-TEST(StreamCheck, ReleaseFailedKernel) {
-  cudaStream_t stream;
-  cudaStreamCreate(&stream);
-  int a;
-  test_kernel<<<0, 0, 0, stream>>>(&a);
-  EXPECT_NO_THROW(CHECK_STREAM(0));
-  cudaStreamDestroy(stream);
-}
-#endif
-
-// STREAM_CHECK only works in a non-Release build
-#ifndef NDEBUG
-TEST(StreamCheck, test) { EXPECT_NO_THROW(CHECK_STREAM(0)); }
-#endif

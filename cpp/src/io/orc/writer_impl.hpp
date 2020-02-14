@@ -30,8 +30,8 @@
 #include <cudf/io/writers.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
+#include <io/utilities/data_sink.hpp>
 
-#include <fstream>
 #include <memory>
 #include <string>
 #include <vector>
@@ -68,20 +68,21 @@ class writer::impl {
   /**
    * @brief Constructor with writer options.
    *
-   * @param filepath Filepath if storing dataset to a file
+   * @param sink Output sink
    * @param options Settings for controlling behavior
    * @param mr Resource to use for device memory allocation
    **/
-  explicit impl(std::string filepath, writer_options const& options,
+  explicit impl(std::unique_ptr<data_sink> sink, writer_options const& options,
                 rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Write an entire dataset to ORC format.
    *
    * @param table The set of columns
+   * @param metadata The metadata associated with the table
    * @param stream Stream to use for memory allocation and kernels
    **/
-  void write(table_view const& table, cudaStream_t stream);
+  void write(table_view const& table, const table_metadata *metadata, cudaStream_t stream);
 
  private:
   /**
@@ -140,6 +141,7 @@ class writer::impl {
   /**
    * @brief Encodes the streams as a series of column data chunks
    *
+   * @param columns List of columns
    * @param num_columns Total number of columns
    * @param num_rows Total number of rows
    * @param num_rowgroups Total number of row groups
@@ -179,6 +181,29 @@ class writer::impl {
       size_t num_data_streams, std::vector<uint32_t> const& stripe_list,
       hostdevice_vector<gpu::EncChunk>& chunks,
       hostdevice_vector<gpu::StripeStream>& strm_desc, cudaStream_t stream);
+
+  /**
+   * @brief Returns per-stripe and per-file column statistics encoded
+   * in ORC protobuf format
+   *
+   * @param columns List of columns
+   * @param num_columns Total number of columns
+   * @param num_rows Total number of rows
+   * @param num_rowgroups Total number of row groups
+   * @param stripe_list List of stripe boundaries
+   * @param stripes Stripe information
+   * @param chunks List of column data chunks
+   * @param stream Stream to use for memory allocation and kernels
+   *
+   * @return The statistic blobs
+   **/
+  std::vector<std::vector<uint8_t>> gather_statistic_blobs(
+      orc_column_view const *columns,
+      size_t num_columns, size_t num_rows, size_t num_rowgroups,
+      std::vector<uint32_t> const& stripe_list,
+      std::vector<StripeInformation> const& stripes,
+      hostdevice_vector<gpu::EncChunk>& chunks,
+      cudaStream_t stream);
 
   /**
    * @brief Write the specified column's row index stream
@@ -254,9 +279,10 @@ class writer::impl {
   CompressionKind compression_kind_ = CompressionKind::NONE;
 
   bool enable_dictionary_ = true;
+  bool enable_statistics_ = true;
 
   std::vector<uint8_t> buffer_;
-  std::ofstream outfile_;
+  std::unique_ptr<data_sink> out_sink_;
 };
 
 }  // namespace orc

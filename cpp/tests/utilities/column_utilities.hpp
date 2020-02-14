@@ -35,6 +35,18 @@ namespace test {
 void expect_column_properties_equal(cudf::column_view const& lhs, cudf::column_view const& rhs);
 
 /**
+ * @brief Verifies the property equivalence of two columns.
+ *
+ * If the columns don't have nulls, then the nullability equality is relaxed.
+ * i.e. the two columns are considered equivalent even if one has a null mask
+ * and the other doesn't. 
+ * 
+ * @param lhs The first column
+ * @param rhs The second column
+ */
+void expect_column_properties_equivalent(cudf::column_view const& lhs, cudf::column_view const& rhs);
+
+/**
  * @brief Verifies the element-wise equality of two columns.
  *
  * Treats null elements as equivalent.
@@ -45,6 +57,19 @@ void expect_column_properties_equal(cudf::column_view const& lhs, cudf::column_v
  *---------------------------------------------------------------------------**/
 void expect_columns_equal(cudf::column_view const& lhs, cudf::column_view const& rhs,
                           bool print_all_differences = false);
+
+/**
+ * @brief Verifies the element-wise equivalence of two columns.
+ * 
+ * Uses machine epsilon to compare floating point types. 
+ * Treats null elements as equivalent.
+ *
+ * @param lhs                   The first column
+ * @param rhs                   The second column
+ * @param print_all_differences If true display all differences
+ *---------------------------------------------------------------------------**/
+void expect_columns_equivalent(cudf::column_view const& lhs, cudf::column_view const& rhs,
+                               bool print_all_differences = false);
 
 /**
  * @brief Verifies the bitwise equality of two device memory buffers.
@@ -88,6 +113,21 @@ void print(cudf::column_view const& col, std:: ostream &os = std::cout, std::str
  *---------------------------------------------------------------------------**/
 std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c);
 
+/**---------------------------------------------------------------------------*
+ * @brief Validates bitmask situated in host as per `number_of_elements`
+ *
+ * This takes care of padded bits
+ *
+ * @param        expected_mask A vector representing expected mask
+ * @param        got_mask A vector representing mask obtained from column
+ * @param        number_of_elements number of elements the mask represent
+ *
+ * @returns      true if both vector match till the `number_of_elements`
+ *---------------------------------------------------------------------------**/
+bool validate_host_masks(std::vector<bitmask_type> const& expected_mask,
+                         std::vector<bitmask_type> const& got_mask_begin,
+                         size_type number_of_elements);
+
 /**
  * @brief Copies the data and bitmask of a `column_view` to the host.
  *
@@ -99,7 +139,7 @@ std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c);
 template <typename T>
 std::pair<std::vector<T>, std::vector<bitmask_type>> to_host(column_view c) {
   std::vector<T> host_data(c.size());
-  CUDA_TRY(cudaMemcpy(host_data.data(), c.head<T>(), c.size() * sizeof(T), cudaMemcpyDeviceToHost));
+  CUDA_TRY(cudaMemcpy(host_data.data(), c.data<T>(), c.size() * sizeof(T), cudaMemcpyDeviceToHost));
   return { host_data, bitmask_to_host(c) };
 }
 

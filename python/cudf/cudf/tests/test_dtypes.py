@@ -32,5 +32,5 @@ def test_cdt_eq(data, ordered):
 def test_cdf_to_pandas(data, ordered):
     assert (
         pd.CategoricalDtype(data, ordered)
-        == cudf.CategoricalDtype(data, ordered).to_pandas()
+        == cudf.CategoricalDtype(categories=data, ordered=ordered).to_pandas()
     )

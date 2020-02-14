@@ -182,7 +182,7 @@ struct rolling_window_launcher
     null_count = nrows - device_valid_count.value();
 
     // check the stream for debugging
-    CHECK_STREAM(stream);
+    CHECK_CUDA(stream);
 
     cudf::nvtx::range_pop();
   }
@@ -366,7 +366,7 @@ gdf_column rolling_window(gdf_column const& input,
     default:
       CUDF_FAIL("Unsupported UDF type.");
   }
-  
+
   // Launch the jitify kernel
   cudf::jit::launcher(
     hash, cuda_source,

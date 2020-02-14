@@ -25,7 +25,6 @@
 #include <cudf/strings/detail/fill.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
-#include <rmm/mr/device_memory_resource.hpp>
 
 #include <cuda_runtime.h>
 
@@ -105,6 +104,16 @@ struct out_of_place_fill_range_dispatch {
     return cudf::strings::detail::fill(cudf::strings_column_view(input),
                                        begin, end, *p_scalar, mr, stream);
   }
+  
+  template <typename T>
+  std::enable_if_t<std::is_same<cudf::dictionary32, T>::value,
+                   std::unique_ptr<cudf::column>>
+  operator()(
+      cudf::size_type begin, cudf::size_type end,
+      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(), 
+      cudaStream_t stream = 0) {
+        CUDF_FAIL("dictionary not supported yet");
+  }
 };
 
 }  // namespace
@@ -114,11 +123,11 @@ namespace experimental {
 
 namespace detail {
 
-void fill(mutable_column_view& destination,
-          size_type begin,
-          size_type end,
-          scalar const& value,
-          cudaStream_t stream) {
+void fill_in_place(mutable_column_view& destination,
+                   size_type begin,
+                   size_type end,
+                   scalar const& value,
+                   cudaStream_t stream) {
   CUDF_EXPECTS(cudf::is_fixed_width(destination.type()) == true,
                "In-place fill does not support variable-sized types.");
   CUDF_EXPECTS((begin >= 0) &&
@@ -161,11 +170,11 @@ std::unique_ptr<column> fill(column_view const& input,
 
 }  // namespace detail
 
-void fill(mutable_column_view& destination,
-          size_type begin,
-          size_type end,
-          scalar const& value) {
-  return detail::fill(destination, begin, end, value, 0);
+void fill_in_place(mutable_column_view& destination,
+                   size_type begin,
+                   size_type end,
+                   scalar const& value) {
+  return detail::fill_in_place(destination, begin, end, value, 0);
 }
 
 std::unique_ptr<column> fill(column_view const& input,

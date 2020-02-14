@@ -2,6 +2,7 @@
 
 import os
 import random
+from glob import glob
 from io import BytesIO
 from string import ascii_letters
 
@@ -17,6 +18,36 @@ from cudf.tests.utils import assert_eq
 @pytest.fixture(scope="module")
 def datadir(datadir):
     return datadir / "parquet"
+
+
+@pytest.fixture(params=[1, 5, 10, 100])
+def simple_pdf(request):
+    types = ["bool", "int8", "int16", "int32", "int64", "float32", "float64"]
+    renamer = {
+        "C_l0_g" + str(idx): "col_" + val for (idx, val) in enumerate(types)
+    }
+    typer = {"col_" + val: val for val in types}
+    ncols = len(types)
+    nrows = request.param
+
+    # Create a pandas dataframe with random data of mixed types
+    test_pdf = pd.util.testing.makeCustomDataframe(
+        nrows=nrows, ncols=ncols, data_gen_f=lambda r, c: r, r_idx_type="i"
+    )
+    # Delete the name of the column index, and rename the row index
+    del test_pdf.columns.name
+    test_pdf.index.name = "test_index"
+
+    # Cast all the column dtypes to objects, rename them, and then cast to
+    # appropriate types
+    test_pdf = test_pdf.astype("object").rename(renamer, axis=1).astype(typer)
+
+    return test_pdf
+
+
+@pytest.fixture
+def simple_gdf(simple_pdf):
+    return cudf.DataFrame.from_pandas(simple_pdf)
 
 
 @pytest.fixture(params=[0, 1, 10, 100])
@@ -390,12 +421,12 @@ def test_parquet_reader_filepath_or_buffer(parquet_path_or_buf, src):
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
-def test_parquet_writer(tmpdir, pdf, gdf):
+def test_parquet_writer_cpu_pyarrow(tmpdir, pdf, gdf):
     pdf_fname = tmpdir.join("pdf.parquet")
     gdf_fname = tmpdir.join("gdf.parquet")
 
     pdf.to_parquet(pdf_fname.strpath)
-    gdf.to_parquet(gdf_fname.strpath)
+    gdf.to_parquet(gdf_fname.strpath, engine="pyarrow")
 
     assert os.path.exists(pdf_fname)
     assert os.path.exists(gdf_fname)
@@ -426,3 +457,96 @@ def test_parquet_writer(tmpdir, pdf, gdf):
 
     # assert_eq(expect, got)
     assert pa.Table.equals(expect, got)
+
+
+def test_multifile_warning(datadir):
+    fpath = datadir.__fspath__() + "/*.parquet"
+    with pytest.warns(UserWarning):
+        got = cudf.read_parquet(fpath)
+        fname = sorted(glob(fpath))[0]
+        expect = pd.read_parquet(fname)
+        expect = expect.apply(pd.to_numeric)
+        assert_eq(expect, got)
+
+
+# Validates the integrity of the GPU accelerated parquet writer.
+def test_parquet_writer_gpu_none_index(tmpdir, simple_pdf, simple_gdf):
+    gdf_fname = tmpdir.join("gdf.parquet")
+    pdf_fname = tmpdir.join("pdf.parquet")
+
+    assert_eq(simple_pdf, simple_gdf)
+
+    # Write out the gdf using the GPU accelerated writer
+    simple_gdf.to_parquet(gdf_fname.strpath, index=None)
+    simple_pdf.to_parquet(pdf_fname.strpath, index=None)
+
+    assert os.path.exists(gdf_fname)
+    assert os.path.exists(pdf_fname)
+
+    expect = pd.read_parquet(pdf_fname)
+    got = pd.read_parquet(gdf_fname)
+
+    assert_eq(expect, got, check_categorical=False)
+
+
+def test_parquet_writer_gpu_true_index(tmpdir, simple_pdf, simple_gdf):
+    gdf_fname = tmpdir.join("gdf.parquet")
+    pdf_fname = tmpdir.join("pdf.parquet")
+
+    assert_eq(simple_pdf, simple_gdf)
+
+    # Write out the gdf using the GPU accelerated writer
+    simple_gdf.to_parquet(gdf_fname.strpath, index=True)
+    simple_pdf.to_parquet(pdf_fname.strpath, index=True)
+
+    assert os.path.exists(gdf_fname)
+    assert os.path.exists(pdf_fname)
+
+    expect = pd.read_parquet(pdf_fname)
+    got = pd.read_parquet(gdf_fname)
+
+    assert_eq(expect, got, check_categorical=False)
+
+
+def test_parquet_writer_gpu_false_index(tmpdir, simple_pdf, simple_gdf):
+    gdf_fname = tmpdir.join("gdf.parquet")
+    pdf_fname = tmpdir.join("pdf.parquet")
+
+    assert_eq(simple_pdf, simple_gdf)
+
+    # Write out the gdf using the GPU accelerated writer
+    simple_gdf.to_parquet(gdf_fname.strpath, index=False)
+    simple_pdf.to_parquet(pdf_fname.strpath, index=False)
+
+    assert os.path.exists(gdf_fname)
+    assert os.path.exists(pdf_fname)
+
+    expect = pd.read_parquet(pdf_fname)
+    got = pd.read_parquet(gdf_fname)
+
+    assert_eq(expect, got, check_categorical=False)
+
+
+def test_parquet_writer_gpu_multi_index(tmpdir, simple_pdf, simple_gdf):
+    gdf_fname = tmpdir.join("gdf.parquet")
+    pdf_fname = tmpdir.join("pdf.parquet")
+
+    simple_pdf = simple_pdf.set_index(["col_bool", "col_int8"])
+    simple_gdf = simple_gdf.set_index(["col_bool", "col_int8"])
+
+    assert_eq(simple_pdf, simple_gdf)
+
+    print("PDF Index Type: " + str(type(simple_pdf.index)))
+    print("GDF Index Type: " + str(type(simple_gdf.index)))
+
+    # Write out the gdf using the GPU accelerated writer
+    simple_gdf.to_parquet(gdf_fname.strpath, index=None)
+    simple_pdf.to_parquet(pdf_fname.strpath, index=None)
+
+    assert os.path.exists(gdf_fname)
+    assert os.path.exists(pdf_fname)
+
+    expect = pd.read_parquet(pdf_fname)
+    got = pd.read_parquet(gdf_fname)
+
+    assert_eq(expect, got, check_categorical=False)

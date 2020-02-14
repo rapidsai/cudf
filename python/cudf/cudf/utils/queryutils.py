@@ -216,7 +216,7 @@ def query_execute(df, expr, callenv):
             envargs.append(val)
     columns = compiled["colnames"]
     # prepare col args
-    colarrays = [df[col].data.mem for col in columns]
+    colarrays = [df[col]._column.data_array_view for col in columns]
     # allocate output buffer
     nrows = len(df)
     out = rmm.device_array(nrows, dtype=np.bool_)
@@ -225,5 +225,5 @@ def query_execute(df, expr, callenv):
     kernel.forall(nrows)(*args)
     out_mask = applyutils.make_aggregate_nullmask(df, columns=columns)
     if out_mask is not None:
-        out = cudautils.fill_mask(out, out_mask.data.mem, False)
+        out = cudautils.fill_mask(out, out_mask.data_array_view, False)
     return out

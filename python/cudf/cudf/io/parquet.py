@@ -64,11 +64,44 @@ def read_parquet(
 
 
 @ioutils.doc_to_parquet()
-def to_parquet(df, path, *args, **kwargs):
+def to_parquet(
+    df,
+    path,
+    engine="cudf",
+    compression="snappy",
+    index=None,
+    partition_cols=None,
+    statistics="ROWGROUP",
+    *args,
+    **kwargs,
+):
     """{docstring}"""
-    warnings.warn(
-        "Using CPU via PyArrow to write Parquet dataset, this will "
-        "be GPU accelerated in the future"
-    )
-    pa_table = df.to_arrow()
-    pq.write_to_dataset(pa_table, path, *args, **kwargs)
+
+    if engine == "cudf":
+        if partition_cols is not None:
+            ValueError(
+                "'partition_cols' is currently not supported by the "
+                + "gpu accelerated parquet writer"
+            )
+
+        # Ensure that no columns dtype is 'category'
+        for col in df.columns:
+            if df[col].dtype.name == "category":
+                ValueError(
+                    "'category' column dtypes are currently not "
+                    + "supported by the gpu accelerated parquet writer"
+                )
+
+        return libcudf.parquet.write_parquet(
+            df, path, index, compression=compression, statistics=statistics
+        )
+    else:
+
+        # If index is empty set it to the expected default value of True
+        if index is None:
+            index = True
+
+        pa_table = df.to_arrow(preserve_index=index)
+        pq.write_to_dataset(
+            pa_table, path, partition_cols=partition_cols, *args, **kwargs
+        )

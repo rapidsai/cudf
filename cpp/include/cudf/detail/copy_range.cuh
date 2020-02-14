@@ -23,7 +23,6 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <rmm/device_scalar.hpp>
-#include <rmm/mr/device_memory_resource.hpp>
 
 #include <cub/cub.cuh>
 
@@ -190,7 +189,7 @@ void copy_range(SourceValueIterator source_value_begin,
       target_begin, target_end, nullptr);
   }
 
-  CHECK_STREAM(stream);
+  CHECK_CUDA(stream);
 }
 
 /**

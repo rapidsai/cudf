@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
-#include "unary_ops.cuh"
+#include <unary/unary_ops.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf/detail/unary.hpp>
 
 #include <cmath>
 #include <algorithm>
@@ -91,6 +92,54 @@ struct DeviceArcTan {
     }
 };
 
+struct DeviceSinH {
+    template<typename T>
+    __device__
+    T operator()(T data) {
+        return normalized_unary_op(data, [] (auto e) { return std::sinh(e); });
+    }
+};
+
+struct DeviceCosH {
+    template<typename T>
+    __device__
+    T operator()(T data) {
+        return normalized_unary_op(data, [] (auto e) { return std::cosh(e); });
+    }
+};
+
+struct DeviceTanH {
+    template<typename T>
+    __device__
+    T operator()(T data) {
+        return normalized_unary_op(data, [] (auto e) { return std::tanh(e); });
+    }
+};
+
+struct DeviceArcSinH {
+    template<typename T>
+    __device__
+    T operator()(T data) {
+        return normalized_unary_op(data, [] (auto e) { return std::asinh(e); });
+    }
+};
+
+struct DeviceArcCosH {
+    template<typename T>
+    __device__
+    T operator()(T data) {
+        return normalized_unary_op(data, [] (auto e) { return std::acosh(e); });
+    }
+};
+
+struct DeviceArcTanH {
+    template<typename T>
+    __device__
+    T operator()(T data) {
+        return normalized_unary_op(data, [] (auto e) { return std::atanh(e); });
+    }
+};
+
 // exponential functions
 
 struct DeviceExp {
@@ -114,6 +163,14 @@ struct DeviceSqrt {
     __device__
     T operator()(T data) {
         return normalized_unary_op(data, [] (auto e) { return std::sqrt(e); });
+    }
+};
+
+struct DeviceCbrt {
+    template<typename T>
+    __device__
+    T operator()(T data) {
+        return normalized_unary_op(data, [] (auto e) { return std::cbrt(e); });
     }
 };
 
@@ -143,6 +200,24 @@ struct DeviceAbs {
     }
 };
 
+struct DeviceRInt {
+    template<typename T>
+    std::enable_if_t<std::is_floating_point<T>::value, T>
+    __device__
+   operator()(T data) {
+        return std::rint(data);
+    }
+
+    // Dummy to handle other types, will never be executed
+    template<typename T>
+    std::enable_if_t<!std::is_floating_point<T>::value, T>
+    __device__
+   operator()(T data) {
+       return data;
+    }
+};
+
+
 // bitwise op
 
 struct DeviceInvert {
@@ -169,8 +244,9 @@ template<typename T, typename F>
 static std::unique_ptr<cudf::column>
 launch(cudf::column_view const& input,
        cudf::experimental::unary_op op,
-       rmm::mr::device_memory_resource* mr) {
-    return cudf::experimental::unary::launcher<T, T, F>::launch(input, op, mr);
+       rmm::mr::device_memory_resource* mr,
+       cudaStream_t stream) {
+    return cudf::experimental::unary::launcher<T, T, F>::launch(input, op, mr, stream);
 }
 
 
@@ -181,8 +257,9 @@ struct MathOpDispatcher {
     std::unique_ptr<cudf::column>
     operator()(cudf::column_view const& input,
                cudf::experimental::unary_op op,
-               rmm::mr::device_memory_resource* mr) {
-        return launch<T, F>(input, op, mr);
+               rmm::mr::device_memory_resource* mr,
+               cudaStream_t stream) {
+        return launch<T, F>(input, op, mr, stream);
     }
 
     template <typename T,
@@ -190,7 +267,8 @@ struct MathOpDispatcher {
     std::unique_ptr<cudf::column>
     operator()(cudf::column_view const& input,
                cudf::experimental::unary_op op,
-               rmm::mr::device_memory_resource* mr) {
+               rmm::mr::device_memory_resource* mr,
+               cudaStream_t stream) {
         CUDF_FAIL("Unsupported datatype for operation");
     }
 };
@@ -203,8 +281,9 @@ struct BitwiseOpDispatcher {
     std::unique_ptr<cudf::column>
     operator()(cudf::column_view const& input,
                cudf::experimental::unary_op op,
-               rmm::mr::device_memory_resource* mr) {
-        return launch<T, F>(input, op, mr);
+               rmm::mr::device_memory_resource* mr,
+               cudaStream_t stream) {
+        return launch<T, F>(input, op, mr, stream);
     }
 
     template <typename T,
@@ -212,7 +291,8 @@ struct BitwiseOpDispatcher {
     std::unique_ptr<cudf::column>
     operator()(cudf::column_view const& input,
                cudf::experimental::unary_op op,
-               rmm::mr::device_memory_resource* mr) {
+               rmm::mr::device_memory_resource* mr,
+               cudaStream_t stream) {
         CUDF_FAIL("Unsupported datatype for operation");
     }
 };
@@ -236,8 +316,9 @@ public:
     std::unique_ptr<cudf::column>
     operator()(cudf::column_view const& input,
                cudf::experimental::unary_op op,
-               rmm::mr::device_memory_resource* mr) {
-        return cudf::experimental::unary::launcher<T, cudf::experimental::bool8, F>::launch(input, op, mr);
+               rmm::mr::device_memory_resource* mr,
+               cudaStream_t stream) {
+        return cudf::experimental::unary::launcher<T, cudf::experimental::bool8, F>::launch(input, op, mr, stream);
     }
 
     template <typename T,
@@ -245,92 +326,144 @@ public:
     std::unique_ptr<cudf::column>
     operator()(cudf::column_view const& input,
                cudf::experimental::unary_op op,
-               rmm::mr::device_memory_resource* mr) {
+               rmm::mr::device_memory_resource* mr,
+               cudaStream_t stream) {
         CUDF_FAIL("Unsupported datatype for operation");
     }
 };
 
-} // namespace detail
-
 std::unique_ptr<cudf::column>
 unary_operation(cudf::column_view const& input,
                 cudf::experimental::unary_op op,
-                rmm::mr::device_memory_resource* mr) {
+                rmm::mr::device_memory_resource* mr,
+                cudaStream_t stream) {
 
     switch(op) {
         case cudf::experimental::unary_op::SIN:
             return cudf::experimental::type_dispatcher(
                 input.type(),
                 detail::MathOpDispatcher<detail::DeviceSin>{},
-                input, op, mr);
+                input, op, mr, stream);
         case cudf::experimental::unary_op::COS:
             return cudf::experimental::type_dispatcher(
                 input.type(),
                 detail::MathOpDispatcher<detail::DeviceCos>{},
-                input, op, mr);
+                input, op, mr, stream);
         case cudf::experimental::unary_op::TAN:
             return cudf::experimental::type_dispatcher(
                 input.type(),
                 detail::MathOpDispatcher<detail::DeviceTan>{},
-                input, op, mr);
+                input, op, mr, stream);
         case cudf::experimental::unary_op::ARCSIN:
             return cudf::experimental::type_dispatcher(
                 input.type(),
                 detail::MathOpDispatcher<detail::DeviceArcSin>{},
-                input, op, mr);
+                input, op, mr, stream);
         case cudf::experimental::unary_op::ARCCOS:
             return cudf::experimental::type_dispatcher(
                 input.type(),
                 detail::MathOpDispatcher<detail::DeviceArcCos>{},
-                input, op, mr);
+                input, op, mr, stream);
         case cudf::experimental::unary_op::ARCTAN:
             return cudf::experimental::type_dispatcher(
                 input.type(),
                 detail::MathOpDispatcher<detail::DeviceArcTan>{},
-                input, op, mr);
+                input, op, mr, stream);
+        case cudf::experimental::unary_op::SINH:
+            return cudf::experimental::type_dispatcher(
+                input.type(),
+                detail::MathOpDispatcher<detail::DeviceSinH>{},
+                input, op, mr, stream);
+        case cudf::experimental::unary_op::COSH:
+            return cudf::experimental::type_dispatcher(
+                input.type(),
+                detail::MathOpDispatcher<detail::DeviceCosH>{},
+                input, op, mr, stream);
+        case cudf::experimental::unary_op::TANH:
+            return cudf::experimental::type_dispatcher(
+                input.type(),
+                detail::MathOpDispatcher<detail::DeviceTanH>{},
+                input, op, mr, stream);
+        case cudf::experimental::unary_op::ARCSINH:
+            return cudf::experimental::type_dispatcher(
+                input.type(),
+                detail::MathOpDispatcher<detail::DeviceArcSinH>{},
+                input, op, mr, stream);
+        case cudf::experimental::unary_op::ARCCOSH:
+            return cudf::experimental::type_dispatcher(
+                input.type(),
+                detail::MathOpDispatcher<detail::DeviceArcCosH>{},
+                input, op, mr, stream);
+        case cudf::experimental::unary_op::ARCTANH:
+            return cudf::experimental::type_dispatcher(
+                input.type(),
+                detail::MathOpDispatcher<detail::DeviceArcTanH>{},
+                input, op, mr, stream);
         case cudf::experimental::unary_op::EXP:
             return cudf::experimental::type_dispatcher(
                 input.type(),
                 detail::MathOpDispatcher<detail::DeviceExp>{},
-                input, op, mr);
+                input, op, mr, stream);
         case cudf::experimental::unary_op::LOG:
             return cudf::experimental::type_dispatcher(
                 input.type(),
                 detail::MathOpDispatcher<detail::DeviceLog>{},
-                input, op, mr);
+                input, op, mr, stream);
         case cudf::experimental::unary_op::SQRT:
             return cudf::experimental::type_dispatcher(
                 input.type(),
                 detail::MathOpDispatcher<detail::DeviceSqrt>{},
-                input, op, mr);
+                input, op, mr, stream);
+        case cudf::experimental::unary_op::CBRT:
+            return cudf::experimental::type_dispatcher(
+                input.type(),
+                detail::MathOpDispatcher<detail::DeviceCbrt>{},
+                input, op, mr, stream);
         case cudf::experimental::unary_op::CEIL:
             return cudf::experimental::type_dispatcher(
                 input.type(),
                 detail::MathOpDispatcher<detail::DeviceCeil>{},
-                input, op, mr);
+                input, op, mr, stream);
         case cudf::experimental::unary_op::FLOOR:
             return cudf::experimental::type_dispatcher(
                 input.type(),
                 detail::MathOpDispatcher<detail::DeviceFloor>{},
-                input, op, mr);
+                input, op, mr, stream);
         case cudf::experimental::unary_op::ABS:
             return cudf::experimental::type_dispatcher(
                 input.type(),
                 detail::MathOpDispatcher<detail::DeviceAbs>{},
-                input, op, mr);
+                input, op, mr, stream);
+        case cudf::experimental::unary_op::RINT:
+            CUDF_EXPECTS((input.type().id() == FLOAT32) or (input.type().id() == FLOAT64),
+                    "rint expects floating point values");
+            return cudf::experimental::type_dispatcher(
+                input.type(),
+                detail::MathOpDispatcher<detail::DeviceRInt>{},
+                input, op, mr, stream);
         case cudf::experimental::unary_op::BIT_INVERT:
             return cudf::experimental::type_dispatcher(
                 input.type(),
                 detail::BitwiseOpDispatcher<detail::DeviceInvert>{},
-                input, op, mr);
+                input, op, mr, stream);
         case cudf::experimental::unary_op::NOT:
             return cudf::experimental::type_dispatcher(
                 input.type(),
                 detail::LogicalOpDispatcher<detail::DeviceNot>{},
-                input, op, mr);
+                input, op, mr, stream);
         default:
             CUDF_FAIL("Undefined unary operation");
     }
+}
+
+} // namespace detail
+
+std::unique_ptr<cudf::column>
+unary_operation(cudf::column_view const& input,
+                cudf::experimental::unary_op op,
+                rmm::mr::device_memory_resource* mr)
+{
+    return detail::unary_operation(input, op, mr);
 }
 
 } // namespace experimental

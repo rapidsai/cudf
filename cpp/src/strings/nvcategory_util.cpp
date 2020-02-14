@@ -107,10 +107,10 @@ gdf_error nvcategory_gather(gdf_column* column, NVCategory* nv_category){
   if(destroy_category){
     NVCategory::destroy(nv_category);
   }
-  CHECK_STREAM(0);
+  CHECK_CUDA(0);
   new_category->get_values(static_cast<nv_category_index_type *>(column->data),
                            DEVICE_ALLOCATED);
-  CHECK_STREAM(0);
+  CHECK_CUDA(0);
   //Python handles freeing the original column->dtype_info.category so we don't need to
   column->dtype_info.category = new_category;
 

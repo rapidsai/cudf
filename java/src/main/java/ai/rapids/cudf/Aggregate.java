@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -50,11 +50,21 @@ public final class Aggregate {
     return new Aggregate(AggregateOp.SUM, index);
   }
 
+  static Aggregate median(int index) {
+    return new Aggregate(AggregateOp.MEDIAN, index);
+  }
+
+  // TODO add in quantile
+
   int getIndex() {
     return index;
   }
 
   int getNativeId() {
     return type.nativeId;
+  }
+
+  AggregateOp getOp() {
+    return type;
   }
 }

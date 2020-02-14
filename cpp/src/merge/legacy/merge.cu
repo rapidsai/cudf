@@ -131,7 +131,7 @@ void materialize_bitmask(gdf_column const* left_col,
         }
     }
 
-    CHECK_STREAM(stream);
+    CHECK_CUDA(stream);
 }
 
 rmm::device_vector<index_type>
@@ -185,7 +185,7 @@ generate_merged_indices(device_table const& left_table,
                     });					        
     }
 
-    CHECK_STREAM(stream);
+    CHECK_CUDA(stream);
 
     return merged_indices;
 }
@@ -321,7 +321,7 @@ table merge(table const& left_table,
                         copy_row<false>(output_device_table, dest_row, src_device_table, src_row);
                     });
     
-    CHECK_STREAM(0);
+    CHECK_CUDA(stream);
 
     if (nullable) {
         for (cudf::size_type i = 0; i < destination_table.num_columns(); i++) {

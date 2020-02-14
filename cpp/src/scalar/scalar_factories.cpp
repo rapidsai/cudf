@@ -62,4 +62,25 @@ std::unique_ptr<scalar> make_timestamp_scalar(
                                        stream, mr);
 }
 
+namespace {
+struct default_scalar_functor {
+  template <typename T>
+  std::unique_ptr<cudf::scalar> operator()() {
+    using ScalarType = experimental::scalar_type_t<T>;
+    return std::unique_ptr<scalar>(new ScalarType);
+  }
+};
+
+template <>
+std::unique_ptr<cudf::scalar> default_scalar_functor::operator()<dictionary32>() {
+  CUDF_FAIL("dictionary type not supported");
+  return nullptr;
+}
+
+}  // namespace
+
+std::unique_ptr<scalar> make_default_constructed_scalar(data_type type) {
+  return experimental::type_dispatcher(type, default_scalar_functor{});
+}
+
 }  // namespace cudf

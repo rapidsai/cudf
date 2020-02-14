@@ -213,7 +213,7 @@ bool gdf_equal_columns(gdf_column const& left, gdf_column const& right)
     std::tie(right_data, right_bitmask) =
       cudf::test::nvcategory_column_to_host(const_cast<gdf_column*>(&right));
 
-    CHECK_STREAM(0);
+    CHECK_CUDA(0);
 
     if (left_data.size() != right_data.size())
       return false;
@@ -239,7 +239,7 @@ bool gdf_equal_columns(gdf_column const& left, gdf_column const& right)
                                      thrust::make_counting_iterator(left.size),
                                      elements_equal<T>{left, right});
     
-    CHECK_STREAM(0);
+    CHECK_CUDA(0);
   
     return equal_data;
   }

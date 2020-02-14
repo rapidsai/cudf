@@ -45,7 +45,10 @@ namespace orc {
  * @brief Options for the ORC writer.
  */
 struct writer_options {
+  /// Selects the compression format to use in the ORC file
   compression_type compression = compression_type::AUTO;
+  /// Enables writing column statistics in the ORC file
+  bool enable_statistics = true;
 
   writer_options() = default;
   writer_options(writer_options const&) = default;
@@ -55,7 +58,8 @@ struct writer_options {
    *
    * @param format Compression format to use
    */
-  explicit writer_options(compression_type format) : compression(format) {}
+  explicit writer_options(compression_type format, bool stats_en) :
+             compression(format), enable_statistics(stats_en) {}
 };
 
 /**
@@ -75,9 +79,20 @@ class writer {
    * @param mr Optional resource to use for device memory allocation
    */
   explicit writer(
-      std::string filepath, writer_options const& options,
+      std::string const& filepath, writer_options const& options,
       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-
+  
+  /**
+   * @brief Constructor for output to host buffer.
+   *
+   * @param buffer Pointer to the output vector
+   * @param options Settings for controlling writing behavior
+   * @param mr Optional resource to use for device memory allocation
+   */
+  explicit writer(
+      std::vector<char>* buffer, writer_options const& options,
+      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+    
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header
    */
@@ -87,9 +102,10 @@ class writer {
    * @brief Writes the entire dataset.
    *
    * @param table Set of columns to output
+   * @param metadata Table metadata and column names
    * @param stream Optional stream to use for device memory alloc and kernels
    */
-  void write_all(table_view const& table, cudaStream_t stream = 0);
+  void write_all(table_view const& table, const table_metadata *metadata = nullptr, cudaStream_t stream = 0);
 };
 
 }  // namespace orc
@@ -136,9 +152,11 @@ class writer {
    * @param mr Optional resource to use for device memory allocation
    */
   explicit writer(
-      std::string filepath, writer_options const& options,
+      std::string const& filepath, writer_options const& options,
       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-
+  explicit writer(
+      std::vector<char>* buffer, writer_options const &options,
+      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header
    */
@@ -148,9 +166,10 @@ class writer {
    * @brief Writes the entire dataset.
    *
    * @param table Set of columns to output
+   * @param metadata Table metadata and column names
    * @param stream Optional stream to use for device memory alloc and kernels
    */
-  void write_all(table_view const& table, cudaStream_t stream = 0);
+  void write_all(table_view const& table, const table_metadata *metadata = nullptr, cudaStream_t stream = 0);
 };
 
 }  // namespace parquet
