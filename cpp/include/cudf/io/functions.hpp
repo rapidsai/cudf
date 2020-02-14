@@ -301,6 +301,8 @@ struct write_orc_args {
   sink_info sink;
   /// Specify the compression format to use
   compression_type compression;
+  /// Enable writing column statistics
+  bool enable_statistics;
   /// Set of columns to output
   table_view table;
   /// Optional associated metadata
@@ -308,8 +310,10 @@ struct write_orc_args {
 
   explicit write_orc_args(sink_info const& snk, table_view const& table_,
                           const table_metadata *metadata_ = nullptr,
-                          compression_type compression_ = compression_type::AUTO)
-      : sink(snk), table(table_), metadata(metadata_), compression(compression_) {}
+                          compression_type compression_ = compression_type::AUTO,
+                          bool stats_en = true)
+      : sink(snk), table(table_), metadata(metadata_), compression(compression_),
+        enable_statistics(stats_en) {}
 };
 
 /**
@@ -395,6 +399,8 @@ struct write_parquet_args {
   table_view table;
   /// Optional associated metadata
   const table_metadata *metadata;
+
+  write_parquet_args() = default;
 
   explicit write_parquet_args(sink_info const& sink_, table_view const& table_,
                               const table_metadata *metadata_ = nullptr,

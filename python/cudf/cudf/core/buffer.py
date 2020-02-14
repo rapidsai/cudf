@@ -105,7 +105,7 @@ class Buffer:
 
     def serialize(self):
         header = {}
-        header["type"] = pickle.dumps(type(self))
+        header["type-serialized"] = pickle.dumps(type(self))
         header["desc"] = self.__cuda_array_interface__.copy()
         frames = [self]
         return header, frames

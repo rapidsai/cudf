@@ -48,7 +48,7 @@ class MultiIndex(Index):
         # early termination enables lazy evaluation of codes
         if "source_data" in kwargs:
             source_data = kwargs["source_data"].reset_index(drop=True)
-            self.names = names
+            self._names = names
             self._data = source_data._data
             self._codes = codes
             self._levels = levels
@@ -114,7 +114,7 @@ class MultiIndex(Index):
             source_data[name] = level[name].reset_index(drop=True)
 
         self._data = source_data._data
-        self.names = [None] * len(self._levels) if names is None else names
+        self.names = names
 
     @classmethod
     def _from_table(cls, table):
@@ -130,12 +130,26 @@ class MultiIndex(Index):
         self._data = value._data
 
     @property
+    def names(self):
+        return self._names
+
+    @names.setter
+    def names(self, value):
+        value = [None] * self.nlevels if value is None else value
+        assert len(value) == self.nlevels
+        self._names = value
+
+    @property
     def name(self):
         return self._name
 
     @name.setter
     def name(self, value):
         self._name = value
+
+    @property
+    def nlevels(self):
+        return self._source_data.shape[1]
 
     def _validate_levels_and_codes(self, levels, codes):
         if len(levels) != len(codes.columns):
@@ -488,7 +502,7 @@ class MultiIndex(Index):
         transmission.
         """
         header = {}
-        header["type"] = pickle.dumps(type(self))
+        header["type-serialized"] = pickle.dumps(type(self))
         header["names"] = pickle.dumps(self.names)
 
         header["source_data"], frames = self._source_data.serialize()
@@ -501,7 +515,9 @@ class MultiIndex(Index):
         """
         names = pickle.loads(header["names"])
 
-        source_data_typ = pickle.loads(header["source_data"]["type"])
+        source_data_typ = pickle.loads(
+            header["source_data"]["type-serialized"]
+        )
         source_data = source_data_typ.deserialize(
             header["source_data"], frames
         )
