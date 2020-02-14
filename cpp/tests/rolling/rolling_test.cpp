@@ -91,6 +91,16 @@ TEST_F (RollingStringTest, MinPeriods) {
     cudf::test::expect_columns_equal(expected_count, got_count->view());
 }
 
+TEST_F (RollingStringTest, ZeroWindowSize) {
+     cudf::test::strings_column_wrapper input ({"This", "is", "rolling", "test", "being", "operated", "on", "string", "column"},
+                                               {     1,    0,         0,     1,        0,          1,    1,        1,       0});
+     fixed_width_column_wrapper<size_type> expected_count ({0, 0, 0, 0, 0, 0, 0, 0, 0}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
+
+     auto got_count  = cudf::experimental::rolling_window(input, 0, 0, 0, cudf::experimental::make_count_aggregation());
+
+     cudf::test::expect_columns_equal(expected_count, got_count->view());
+}
+
 template <typename T>
 class RollingTest : public cudf::test::BaseFixture {
 protected:
