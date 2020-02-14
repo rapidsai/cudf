@@ -102,7 +102,7 @@
 - PR #4125 Fix type enum to account for added Dictionary type in `types.hpp`
 - PR #4137 Update Java for mutating fill and rolling window changes
 - PR #4141 Fix NVStrings test_convert failure in 10.2 build
-- PR #4151 issue
+- PR #4151 issue rolling
 
 
 # cuDF 0.12.0 (04 Feb 2020)
