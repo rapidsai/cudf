@@ -16,9 +16,15 @@ class ColumnAccessor(MutableMapping):
         """
         Parameters
         ----------
-        data : OrderedColumnDict (possibly nested)
-        name : optional name for the ColumnAccessor
-        multiindex : The keys convert to a Pandas MultiIndex
+        data : mapping
+            Mapping of keys to column values.
+        multiindex : bool, optional
+            Whether tuple keys represent a hierarchical
+            index with multiple "levels" (default=False).
+        level_names : tuple, optional
+            Tuple containing names for each of the levels.
+            For a non-hierarchical index, a tuple of size 1
+            may be passe.
         """
         # TODO: we should validate the keys of `data`
         self._data = OrderedColumnDict(data)
@@ -73,6 +79,10 @@ class ColumnAccessor(MutableMapping):
 
     @cached_property
     def _grouped_data(self):
+        """
+        If self.multiindex is True,
+        return the underlying mapping as a nested mapping.
+        """
         if self.multiindex:
             return NestedOrderedDict(zip(self.names, self.columns))
         else:
@@ -87,9 +97,17 @@ class ColumnAccessor(MutableMapping):
                 pass
 
     def to_pandas_index(self):
+        """"
+        Convert the keys of the ColumnAccessor to a Pandas Index object.
+        """
         if self.multiindex:
-            result = pd.MultiIndex.from_tuples(
-                self.names, names=self.level_names
+            # Using `from_frame()` instead of `from_tuples`
+            # prevents coercion of values to a different type
+            # (e.g., ''->NaT)
+            result = pd.MultiIndex.from_frame(
+                pd.DataFrame(
+                    self.names, columns=self.level_names, dtype="object"
+                ),
             )
         else:
             result = pd.Index(
@@ -99,8 +117,23 @@ class ColumnAccessor(MutableMapping):
 
     def insert(self, name, value, loc=-1):
         """
-        Insert value at specified location.
+        Insert column into the ColumnAccessor at the specified location.
+
+        Parameters
+        ----------
+        name : Name corresponding to the new column
+        value : column-like
+        loc : int, optional
+            The location to insert the new value at.
+            Must be (0 <= loc <= ncols). By default, the column is added
+            to the end.
+
+        Returns
+        -------
+        None, this function operates in-place.
         """
+        name = self._pad_key(name)
+
         ncols = len(self._data)
         if loc == -1:
             loc = ncols
@@ -114,13 +147,15 @@ class ColumnAccessor(MutableMapping):
         if loc == len(self._data):
             self._data[name] = value
         else:
-            name = self._pad_key(name)
             new_keys = self.names[:loc] + (name,) + self.names[loc:]
             new_values = self.columns[:loc] + (value,) + self.columns[loc:]
             self._data = self._data.__class__(zip(new_keys, new_values),)
         self._clear_cache()
 
     def copy(self, deep=False):
+        """
+        Make a (shallow) copy of this ColumnAccessor.
+        """
         if deep:
             raise TypeError("Cannot deep copy a ColumnAccessor")
         return self.__class__(
@@ -130,6 +165,18 @@ class ColumnAccessor(MutableMapping):
         )
 
     def get_by_label(self, key):
+        """
+        Return a subset of this column accessor,
+        composed of the keys specified by `key`.
+
+        Parameters
+        ----------
+        key : slice, list-like, tuple or scalar
+
+        Returns
+        -------
+        ColumnAccessor
+        """
         if isinstance(key, slice):
             return self.get_by_label_slice(key)
         elif pd.api.types.is_list_like(key) and not isinstance(key, tuple):
@@ -165,14 +212,15 @@ class ColumnAccessor(MutableMapping):
 
     def get_by_label_slice(self, key):
         start, stop = key.start, key.stop
+        if key.step is not None:
+            raise TypeError("Label slicing with step is not supported")
+
         if start is None:
             start = self.names[0]
         if stop is None:
             stop = self.names[-1]
         start = self._pad_key(start, slice(None))
         stop = self._pad_key(stop, slice(None))
-        if key.step is not None:
-            raise TypeError("Label slicing with step is not supported")
         for idx, name in enumerate(self.names):
             if _compare_keys(name, start):
                 start_idx = idx
@@ -197,6 +245,18 @@ class ColumnAccessor(MutableMapping):
         )
 
     def get_by_index(self, index):
+        """
+        Return a ColumnAccessor composed of the columns
+        specified by index.
+
+        Parameters
+        ----------
+        key : integer, integer slice, or list-like of integers
+
+        Returns
+        -------
+        ColumnAccessor
+        """
         if isinstance(index, slice):
             start, stop, step = index.indices(len(self._data))
             keys = self.names[start:stop:step]
@@ -210,12 +270,25 @@ class ColumnAccessor(MutableMapping):
         )
 
     def set_by_label(self, key, value):
+        """
+        Add (or modify) column by name.
+
+        Parameters
+        ----------
+        key : name of the column
+        value : column-like
+        """
         if self.multiindex:
             if not isinstance(key, tuple):
-                key = (key,) + ("",) * (self.nlevels - 1)
+                key = (key,) + (("",) * (self.nlevels - 1))
         self._data[key] = value
+        self._clear_cache()
 
     def _pad_key(self, key, pad_value=""):
+        """
+        Pad the provided key to a length equal to the number
+        of levels.
+        """
         if not self.multiindex:
             return key
         if not isinstance(key, tuple):
