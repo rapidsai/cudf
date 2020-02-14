@@ -4404,3 +4404,12 @@ def test_init_multiindex_from_dict():
     gdf = DataFrame({("a", "b"): [1]})
     assert_eq(pdf, gdf)
     assert_eq(pdf.columns, gdf.columns)
+
+
+def test_change_column_dtype_in_empty():
+    pdf = pd.DataFrame({"a": [], "b": []})
+    gdf = gd.from_pandas(pdf)
+    assert_eq(pdf, gdf)
+    pdf["b"] = pdf["b"].astype("int64")
+    gdf["b"] = gdf["b"].astype("int64")
+    assert_eq(pdf, gdf)
