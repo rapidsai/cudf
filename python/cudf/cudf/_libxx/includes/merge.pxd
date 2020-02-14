@@ -6,4 +6,4 @@ cdef extern from "cudf/merge.hpp" namespace "cudf::experimental" nogil:
         vector[size_type] key_cols,
         vector[order] column_order,
         vector[null_order] null_precedence,
-    )
+    ) except +
