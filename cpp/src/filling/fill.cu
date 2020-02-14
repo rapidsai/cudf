@@ -156,7 +156,7 @@ std::unique_ptr<column> fill(column_view const& input,
                              cudaStream_t stream) {
   CUDF_EXPECTS((begin >= 0) &&
                (end <= input.size()) &&
-                (begin <= end),
+               (begin <= end),
                "Range is out of bounds.");
   CUDF_EXPECTS(input.type() == value.type(), "Data type mismatch.");
 
