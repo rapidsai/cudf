@@ -17,13 +17,11 @@ from libc.stdint cimport (  # noqa: E211
 )
 from libcpp.vector cimport vector
 
-from cudf._libxx.includes.column cimport Column
+from cudf._libxx.column cimport Column
 
 # Utility functions to build gdf_columns, gdf_context and error handling
 
 cpdef get_ctype_ptr(obj)
-cpdef get_column_data_ptr(obj)
-cpdef get_column_valid_ptr(obj)
 
 cpdef gdf_time_unit np_dtype_to_gdf_time_unit(dtype)
 cpdef gdf_time_unit_to_np_dtype(gdf_time_unit time_unit)
