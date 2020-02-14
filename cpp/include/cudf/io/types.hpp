@@ -140,6 +140,8 @@ struct sink_info {
   std::string filepath;
   std::vector<char>* buffer = nullptr;
 
+  sink_info() = default;
+
   explicit sink_info(const std::string& file_path)
       : type(io_type::FILEPATH), filepath(file_path) {}
 
