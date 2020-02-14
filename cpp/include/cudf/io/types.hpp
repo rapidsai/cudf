@@ -154,7 +154,7 @@ struct source_info {
  * @brief Destination information for write interfaces
  */
 struct sink_info {
-  io_type type = io_type::FILEPATH;
+  io_type type = io_type::VOID;
   std::string filepath;
   std::vector<char>* buffer = nullptr;
 
@@ -164,10 +164,7 @@ struct sink_info {
       : type(io_type::FILEPATH), filepath(file_path) {}
 
   explicit sink_info(std::vector<char>* buffer)
-      : type(io_type::HOST_BUFFER), buffer(buffer) {}
-
-  explicit sink_info()
-      : type(io_type::VOID){}
+      : type(io_type::HOST_BUFFER), buffer(buffer) {}  
 };
 
 }  // namespace io
