@@ -46,7 +46,8 @@ cpdef read_json_libcudf(filepath_or_buffer, dtype,
         source.filepath = filepath
     else:
         source.type = io_type.HOST_BUFFER
-        source.buffer = pair[<char *>&buffer[0], buffer.shape[0]]
+        source.buffer.first = <char*>&buffer[0]
+        source.buffer.second = buffer.shape[0]
 
     # Setup arguments
     cdef read_json_args args = read_json_args(source)
