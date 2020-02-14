@@ -18,14 +18,17 @@ from cudf._libxx.includes.hash cimport (
 def hash_partition(Table source_table, columns_to_hash, num_partitions):
     cdef vector[size_type] c_columns_to_hash = columns_to_hash
     cdef int c_num_partitions = num_partitions
+    source_view = source_table.view()
 
-    cdef pair[unique_ptr[table], vector[size_type]] c_result = move(
-        cpp_hash_partition(
-            source_table.view(),
-            c_columns_to_hash,
-            c_num_partitions
+    cdef pair[unique_ptr[table], vector[size_type]] c_result
+    with nogil:
+        c_result = move(
+            cpp_hash_partition(
+                source_view,
+                c_columns_to_hash,
+                c_num_partitions
+            )
         )
-    )
 
     return (
         Table.from_unique_ptr(
@@ -38,12 +41,15 @@ def hash_partition(Table source_table, columns_to_hash, num_partitions):
 
 def hash(Table source_table, initial_hash_values=None):
     cdef vector[uint32_t] c_initial_hash = initial_hash_values
+    source_view = source_table.data_view()
 
-    cdef unique_ptr[column] c_result = move(
-        cpp_hash(
-            source_table.data_view(),
-            c_initial_hash
+    cdef unique_ptr[column] c_result
+    with nogil:
+        c_result = move(
+            cpp_hash(
+                source_view,
+                c_initial_hash
+            )
         )
-    )
 
     return Column.from_unique_ptr(move(c_result))
