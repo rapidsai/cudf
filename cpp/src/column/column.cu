@@ -130,6 +130,8 @@ mutable_column_view column::mutable_view() {
 // If the null count is known, return it. Else, compute and return it
 size_type column::null_count() const {
   if (_null_count <= cudf::UNKNOWN_NULL_COUNT) {
+    
+    std::cout<<"RGSL : Calculating null_count"<<std::endl;
     _null_count = cudf::count_unset_bits(
         static_cast<bitmask_type const *>(_null_mask.data()), 0, size());
   }
@@ -164,6 +166,7 @@ void column::set_null_count(size_type new_null_count) {
   if (new_null_count > 0) {
     CUDF_EXPECTS(nullable(), "Invalid null count.");
   }
+  std::cout<<"RGSL : Setting null_count"<<std::endl;
   _null_count = new_null_count;
 }
 

@@ -256,7 +256,8 @@ struct rolling_window_launcher
                        std::unique_ptr<aggregation> const& agg,
                        T identity,
                        cudaStream_t stream) {
-      
+     
+      std::cout<<"RGSL : The kind is "<<op<<std::endl; 
       cudf::nvtx::range_push("CUDF_ROLLING_WINDOW", cudf::nvtx::color::ORANGE);
 
       constexpr cudf::size_type block_size = 256;
@@ -302,6 +303,8 @@ struct rolling_window_launcher
          rmm::mr::device_memory_resource *mr,
          cudaStream_t stream) {
 
+      std::cout<<"RGSL : In numerical launch"<<std::endl;
+
       if (input.is_empty()) return empty_like(input);
 
       auto output = make_fixed_width_column(target_type(input.type(), op), input.size(),
@@ -311,7 +314,10 @@ struct rolling_window_launcher
       auto valid_count = kernel_launcher<T, agg_op, op, WindowIterator>(input, output_view, preceding_window_begin,
               following_window_begin, min_periods, agg, agg_op::template identity<T>(), stream);
 
+      std::cout<<"RGSL : In numerical launch the value of valid elements"<<valid_count<<std::endl;
+      std::cout<<"RGSL : In numerical launch the value of size elements"<<output->size()<<std::endl;
       output->set_null_count(output->size() - valid_count);
+      std::cout<<"RGSL : In numerical launch null count"<<output->null_count()<<std::endl;
 
       return output;
   }
@@ -329,6 +335,7 @@ struct rolling_window_launcher
          std::unique_ptr<aggregation> const& agg,
          rmm::mr::device_memory_resource *mr,
          cudaStream_t stream) {
+      std::cout<<"RGSL : In string launch"<<std::endl;
 
       if (input.is_empty()) return empty_like(input);
 
@@ -356,9 +363,11 @@ struct rolling_window_launcher
           // The rows that represent null elements will be having negative values in gather map,
           // and that's why nullify_out_of_bounds/ignore_out_of_bounds is true.
           auto output_table = detail::gather(table_view{{input}}, output->view(), false, true, false, mr, stream);
+          std::cout<<"RGSL : End of string launch in gather"<<op<<std::endl; 
           return std::make_unique<cudf::column>(std::move(output_table->get_column(0)));;
       }
 
+      std::cout<<"RGSL : End of string launch in count"<<op<<std::endl; 
       return output;
   }
 
