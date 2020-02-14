@@ -71,9 +71,11 @@ std::unique_ptr<column> add_keys( dictionary_column_view const& dictionary_colum
                     mr, stream);
     // now create the indices column -- map old values to the new ones
     // gather([4,0,3,1,2,2,2,4,0],[0,1,2,3,5]) = [5,0,3,1,2,2,2,5,0]
+    column_view indices_view( data_type{INT32}, dictionary_column.size(), 
+                              dictionary_column.indices().data<int32_t>(),
+                              nullptr, 0, dictionary_column.offset() );
     auto table_indices = cudf::experimental::detail::gather( table_view{{map_indices->view()}},
-                                                             dictionary_column.indices(),
-                                                             false, false, false,
+                                                             indices_view, false, false, false,
                                                              mr, stream )->release();
     std::unique_ptr<column> indices_column(std::move(table_indices.front()));
     //
