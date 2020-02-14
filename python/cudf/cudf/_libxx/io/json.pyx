@@ -6,6 +6,7 @@
 # cython: language_level = 3
 
 
+import cudf
 from cudf._libxx.lib cimport *
 from cudf._libxx.table cimport *
 from cudf._libxx.io.functions cimport *
@@ -82,5 +83,6 @@ cpdef read_json_libcudf(filepath_or_buffer, dtype,
         c_out_table = move(read_json(args))
 
     column_names = list(c_out_table.metadata.column_names)
-    return Table.from_unique_ptr(move(c_out_table.tbl),
-                                 column_names=column_names)
+    tbl = Table.from_unique_ptr(move(c_out_table.tbl),
+                                column_names=column_names)
+    return cudf.DataFrame._from_table(tbl)
