@@ -22,6 +22,8 @@
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/table/table.hpp>
+#include <cudf/sorting.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/groupby.hpp>
 
 namespace cudf {
@@ -33,6 +35,7 @@ inline void test_single_agg(column_view const& keys,
                             column_view const& expect_vals,
                             std::unique_ptr<experimental::aggregation>&& agg,
                             bool ignore_null_keys = true,
+                            bool stable_order = false,
                             bool keys_are_sorted = false,
                             std::vector<order> const& column_order = {},
                             std::vector<null_order> const& null_precedence = {})
@@ -48,8 +51,22 @@ inline void test_single_agg(column_view const& keys,
         ignore_null_keys, keys_are_sorted, column_order, null_precedence);
 
     auto result = gb_obj.aggregate(requests);
-    expect_tables_equal(table_view({expect_keys}), result.first->view());
-    expect_columns_equal(expect_vals, result.second[0].results[0]->view(), true);
+
+    if (stable_order) 
+    {
+        expect_tables_equal(table_view({expect_keys}), result.first->view());
+        expect_columns_equal(expect_vals, *result.second[0].results[0], true);
+    } else {
+        auto sort_order = experimental::sorted_order(result.first->view(), {},
+            {null_order::AFTER});
+        auto sorted_keys = experimental::gather(result.first->view(),
+            *sort_order);
+        auto sorted_vals = experimental::gather(
+            table_view({result.second[0].results[0]->view()}), *sort_order);
+
+        expect_tables_equal(table_view({expect_keys}), *sorted_keys);
+        expect_columns_equal(expect_vals, sorted_vals->get_column(0), true);
+    }
 }
 
 inline auto all_valid() {

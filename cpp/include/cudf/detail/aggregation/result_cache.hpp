@@ -72,13 +72,13 @@ class result_cache {
   : _cache(num_columns)
   {}
 
-  bool has_result(size_t col_idx, std::unique_ptr<aggregation> const& agg);
+  bool has_result(size_t col_idx, std::unique_ptr<aggregation> const& agg) const;
 
   void add_result(size_t col_idx, std::unique_ptr<aggregation> const& agg,
                   std::unique_ptr<column>&& col);
 
   column_view
-  get_result(size_t col_idx, std::unique_ptr<aggregation> const& agg);
+  get_result(size_t col_idx, std::unique_ptr<aggregation> const& agg) const;
 
   std::unique_ptr<column>
   release_result(size_t col_idx, std::unique_ptr<aggregation> const& agg);

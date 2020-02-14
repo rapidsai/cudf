@@ -119,6 +119,7 @@ TYPED_TEST(groupby_keys_test, pre_sorted_keys)
 
     auto agg = cudf::experimental::make_sum_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg), true,
+        true,  //< stable_order
         true); //< keys_are_sorted
 }
 
@@ -136,6 +137,7 @@ TYPED_TEST(groupby_keys_test, pre_sorted_keys_descending)
 
     auto agg = cudf::experimental::make_sum_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg), true,
+        true,  //< stable_order
         true,
         {order::DESCENDING}); //< keys_are_sorted
 }
@@ -155,6 +157,7 @@ TYPED_TEST(groupby_keys_test, pre_sorted_keys_nullable)
 
     auto agg = cudf::experimental::make_sum_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg), true,
+        true,  //< stable_order
         true /* keys_are_sorted */); 
 }
 
@@ -176,6 +179,7 @@ TYPED_TEST(groupby_keys_test, pre_sorted_keys_nulls_before_include_nulls)
     auto agg = cudf::experimental::make_sum_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg),
         false /* don't ignore null keys */, 
+        true /*  stable_order */,
         true /* keys_are_sorted */); 
 }
 

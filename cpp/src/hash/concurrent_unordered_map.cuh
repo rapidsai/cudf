@@ -17,6 +17,7 @@
 #ifndef CONCURRENT_UNORDERED_MAP_CUH
 #define CONCURRENT_UNORDERED_MAP_CUH
 
+#include <hash/managed.cuh>
 #include <utilities/legacy/device_atomics.cuh>
 #include <hash/helper_functions.cuh>
 #include <hash/hash_allocator.cuh>

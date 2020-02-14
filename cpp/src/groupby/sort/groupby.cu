@@ -15,6 +15,7 @@
  */
 
 #include "group_reductions.hpp"
+#include <groupby/common/utils.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
@@ -55,7 +56,7 @@ struct store_result_functor {
     size_type col_idx,
     column_view const& values,
     sort::sort_groupby_helper & helper,
-    result_cache & cache,
+    experimental::detail::result_cache & cache,
     cudaStream_t stream,
     rmm::mr::device_memory_resource* mr)
   : col_idx(col_idx),
@@ -281,20 +282,6 @@ void store_result_functor::operator()<aggregation::MEDIAN>(
 };
 
 
-std::vector<aggregation_result> extract_results(
-    std::vector<aggregation_request> const& requests,
-    result_cache& cache)
-{
-  std::vector<aggregation_result> results(requests.size());
-
-  for (size_t i = 0; i < requests.size(); i++) {
-    for (auto &&agg : requests[i].aggregations) {
-      results[i].results.emplace_back( cache.release_result(i, agg) );      
-    }
-  }
-  return results;
-}
-
 }  // namespace detail
 
 // Sort-based groupby
@@ -320,7 +307,7 @@ groupby::sort_aggregate(
     }
   }  
   
-  auto results = extract_results(requests, cache);
+  auto results = detail::extract_results(requests, cache);
   
   return std::make_pair(helper().unique_keys(mr, stream),
                         std::move(results));

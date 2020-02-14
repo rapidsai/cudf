@@ -301,6 +301,87 @@ __device__ inline void aggregate_row(mutable_table_device_view target,
         target.column(i), target_index, source.column(i), source_index);
   }
 }
+
+/**
+ * @brief Dispatched functor to initialize a column with the identity of an
+ * aggregation operation.
+ */
+struct identity_initializer {
+ private:
+  template <typename T, aggregation::Kind k>
+  static constexpr bool is_supported() {
+    if (cudf::is_fixed_width<T>() and
+       (k == aggregation::SUM or k == aggregation::MIN or 
+        k == aggregation::MAX or k == aggregation::COUNT or
+        k == aggregation::ARGMAX or k == aggregation::ARGMIN)) {
+      return true;
+    } 
+    else {
+      return false;
+    }
+  }
+
+  template <typename T, aggregation::Kind k>
+  std::enable_if_t<not std::is_same<corresponding_operator_t<k>, void>::value, T>
+  identity_from_operator() {
+    return corresponding_operator_t<k>::template identity<T>();
+  }
+
+  template <typename T, aggregation::Kind k>
+  std::enable_if_t<std::is_same<corresponding_operator_t<k>, void>::value, T>
+  identity_from_operator() {
+    CUDF_FAIL("Unable to get identity/sentinel from device operator");
+  }
+
+  template <typename T, aggregation::Kind k>
+  T get_identity() {
+    if (k == aggregation::ARGMAX)
+      return ARGMAX_SENTINEL;
+    else if (k == aggregation::ARGMIN)
+      return ARGMIN_SENTINEL;
+    else
+      // In C++17, we can use compile time if and not make this function SFINAE
+      return identity_from_operator<T, k>();
+  }
+ 
+ public:
+  template <typename T, aggregation::Kind k>
+  std::enable_if_t<is_supported<T, k>(), void>
+  operator()(mutable_column_view const& col, cudaStream_t stream = 0) {
+    thrust::fill(rmm::exec_policy(stream)->on(stream), col.begin<T>(),
+                 col.end<T>(), get_identity<T, k>());
+  }
+
+  template <typename T, aggregation::Kind k>
+  std::enable_if_t<not is_supported<T, k>(), void>
+  operator()(mutable_column_view const& col, cudaStream_t stream = 0) {
+    CUDF_FAIL("Unsupported aggregation for initializing values");
+  }
+};
+
+/**
+ * @brief Initializes each column in a table with a corresponding identity value
+ * of an aggregation operation.
+ *
+ * The `i`th column will be initialized with the identity value of the `i`th
+ * aggregation operation in @p aggs.
+ *
+ * @param table The table of columns to initialize.
+ * @param aggs The aggregation operations whose identity values will be used to
+ * initialize the columns.
+ */
+static void initialize_with_identity(mutable_table_view & table,
+                              std::vector<aggregation::Kind> const& aggs,
+                              cudaStream_t stream = 0) {
+  // TODO: Initialize all the columns in a single kernel instead of invoking one
+  // kernel per column
+  for (size_type i = 0; i < table.num_columns(); ++i) {
+    auto col = table.column(i);
+    dispatch_type_and_aggregation(col.type(), aggs[i], identity_initializer{}, 
+                                  col, stream);
+  }
+}
+
 }  // namespace detail
 }  // namespace experimental
 }  // namespace cudf
