@@ -778,6 +778,11 @@ class ColumnBase(Column):
 
         return output
 
+    def searchsorted(self, value, side="left"):
+        values = cudf.Series(as_column(value))
+        col = cudf.Series(self)._searchsorted(values, side)
+        return cudf.Series(col).values
+
     def serialize(self):
         header = {}
         frames = []
