@@ -53,14 +53,16 @@ def merge_sorted(
             c_null_precedence.push_back(null_precedence)
 
     # Perform sorted merge operation
-    cdef unique_ptr[table] c_result = move(
-        cpp_merge.merge(
-            c_input_tables,
-            c_column_keys,
-            c_column_order,
-            c_null_precedence,
+    cdef unique_ptr[table] c_result
+    with nogil:
+        c_result = move(
+            cpp_merge.merge(
+                c_input_tables,
+                c_column_keys,
+                c_column_order,
+                c_null_precedence,
+            )
         )
-    )
 
     # Return libxx table
     return Table.from_unique_ptr(
