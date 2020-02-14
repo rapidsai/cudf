@@ -236,17 +236,17 @@ def _flatten(d):
     return {k: v for k, v in _inner(d)}
 
 
-def _compare_keys(key, target):
+def _compare_keys(target, key):
     """
     Compare `key` to `target`.
 
-    Return True if each value in target == corresponding value in `key`.
-    If any value in `target` is slice(None), it is considered equal
-    to the corresponding value in `key`.
+    Return True if each value in `key` == corresponding value in `target`.
+    If any value in `key` is slice(None), it is considered equal
+    to the corresponding value in `target`.
     """
-    if not isinstance(key, tuple):
-        return key == target
-    for k1, k2 in itertools.zip_longest(key, target, fillvalue=None):
+    if not isinstance(target, tuple):
+        return target == key
+    for k1, k2 in itertools.zip_longest(target, key, fillvalue=None):
         if k2 == slice(None):
             continue
         if k1 != k2:
