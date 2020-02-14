@@ -267,7 +267,11 @@ class DataFrame(Frame):
 
     @classmethod
     def _from_table(cls, table):
-        return cls(data=table._data, index=Index._from_table(table._index))
+        if table._index is None:
+            index = None
+        else:
+            index = Index._from_table(table._index)
+        return cls(data=table._data, index=index)
 
     @staticmethod
     def _align_input_series_indices(data, index):
