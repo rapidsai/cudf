@@ -5,9 +5,10 @@ import pandas as pd
 
 import cudf
 from cudf.utils.utils import (
-    NestedOrderedDict,
     OrderedColumnDict,
     cached_property,
+    to_flat_dict,
+    to_nested_dict,
 )
 
 
@@ -51,6 +52,11 @@ class ColumnAccessor(MutableMapping):
     def __len__(self):
         return len(self._data)
 
+    def __repr__(self):
+        return self._data.__repr__().replace(
+            self._data.__class__.__name__, self.__class__.__name__
+        )
+
     @property
     def nlevels(self):
         if not self.multiindex:
@@ -84,7 +90,7 @@ class ColumnAccessor(MutableMapping):
         return the underlying mapping as a nested mapping.
         """
         if self.multiindex:
-            return NestedOrderedDict(zip(self.names, self.columns))
+            return to_nested_dict(dict(zip(self.names, self.columns)))
         else:
             return self._data
 
@@ -189,8 +195,8 @@ class ColumnAccessor(MutableMapping):
 
     def get_by_label_list_like(self, key):
         return self.__class__(
-            _flatten(
-                NestedOrderedDict({k: self._grouped_data[k] for k in key})
+            to_flat_dict(
+                to_nested_dict({k: self._grouped_data[k] for k in key})
             ),
             multiindex=self.multiindex,
             level_names=self.level_names,
@@ -201,7 +207,7 @@ class ColumnAccessor(MutableMapping):
         if isinstance(result, cudf.core.column.ColumnBase):
             return self.__class__({key: result})
         else:
-            result = _flatten(result)
+            result = to_flat_dict(result)
             if not isinstance(key, tuple):
                 key = (key,)
             return self.__class__(
@@ -278,9 +284,7 @@ class ColumnAccessor(MutableMapping):
         key : name of the column
         value : column-like
         """
-        if self.multiindex:
-            if not isinstance(key, tuple):
-                key = (key,) + (("",) * (self.nlevels - 1))
+        key = self._pad_key(key)
         self._data[key] = value
         self._clear_cache()
 
@@ -294,26 +298,6 @@ class ColumnAccessor(MutableMapping):
         if not isinstance(key, tuple):
             key = (key,)
         return key + (pad_value,) * (self.nlevels - len(key))
-
-
-def _flatten(d):
-    """
-    Converty the given NestedOrderedDict to a flat dictionary
-    with tuple keys.
-    """
-    if not isinstance(d, NestedOrderedDict):
-        return d
-
-    def _inner(d, parents=[]):
-        for k, v in d.items():
-            if not isinstance(v, d.__class__):
-                if parents:
-                    k = tuple(parents + [k])
-                yield (k, v)
-            else:
-                yield from _inner(d=v, parents=parents + [k])
-
-    return {k: v for k, v in _inner(d)}
 
 
 def _compare_keys(target, key):

@@ -389,3 +389,30 @@ class NestedMappingMixin:
 
 class NestedOrderedDict(NestedMappingMixin, OrderedDict):
     pass
+
+
+def to_flat_dict(d):
+    """
+    Convert the given NestedOrderedDict to a flat dictionary
+    with tuple keys.
+    """
+    if not isinstance(d, NestedOrderedDict):
+        return d
+
+    def _inner(d, parents=[]):
+        for k, v in d.items():
+            if not isinstance(v, d.__class__):
+                if parents:
+                    k = tuple(parents + [k])
+                yield (k, v)
+            else:
+                yield from _inner(d=v, parents=parents + [k])
+
+    return {k: v for k, v in _inner(d)}
+
+
+def to_nested_dict(d):
+    """
+    Convert the given dictionary with tuple keys to a NestedOrderedDict.
+    """
+    return NestedOrderedDict(d)
