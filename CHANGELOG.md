@@ -50,6 +50,7 @@
 - PR #3891 Port NVStrings (r)split_record to contiguous_(r)split_record
 - PR #4072 Allow round_robin_partition to single partition
 - PR #4064 Add cudaGetDeviceCount to JNI layer
+- PR #3716 Update cudf.to_parquet to use new GPU accelerated Parquet writer
 - PR #4083 Use two partitions in test_groupby_multiindex_reset_index
 - PR #4071 Add Java bindings for round robin partition
 - PR #4079 Simply use `mask.size` to create the array view
