@@ -1,12 +1,16 @@
 import asyncio
 import warnings
 
+import cupy
 import pandas as pd
 
 from dask_cuda.explicit_comms import comms
 from distributed.protocol import to_serialize
 
 import cudf
+import rmm
+
+cupy.cuda.set_allocator(rmm.rmm_cupy_allocator)
 
 
 def _cleanup_parts(df_parts):
@@ -139,7 +143,7 @@ async def _explicit_shuffle(
 
 def explicit_sorted_shuffle(df, index, divisions, sort_by, client, **kwargs):
     # Explict-comms shuffle
-    # client.rebalance(futures=df.to_delayed())
+    client.rebalance(futures=df.to_delayed())
     to_cpu = kwargs.get("to_cpu", False)
     if to_cpu:
         warnings.warn("Using CPU for shuffling. Performance will suffer!")

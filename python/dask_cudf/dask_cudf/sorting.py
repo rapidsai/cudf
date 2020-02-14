@@ -167,53 +167,36 @@ def set_partitions_pre(s, divisions):
     return partitions
 
 
-def _get_current_divs(divisions, stage, k, npartitions, inp):
-    divs = list(divisions)
-    if k < npartitions:
-        # Narrow down which divisions to aggregate
-        for st in range(stage):
-            zone = inp[st]
-            cnt = float(len(divs) / k)
-            start = math.floor(cnt * zone)
-            stop = math.floor(cnt * (zone + 1))
-            stop = min(stop + 1, len(divs))
-            divs = divs[start:stop]
-
-        if len(divs) > (k + 1):
-            # Aggregate divisions for "k" partitions
-            start = 0
-            stop = float(len(divs))
-            stride = float(stop / k)
-            last = divs[-1]
-            divs = [divs[math.floor(i)] for i in np.arange(0.0, stop, stride)]
-            if len(divs) < (k + 1):
-                divs += [last]
-
-        while len(divs) < (k + 1):
-            divs += [divs[-1]]
-
-        # Check new divisions size
-        assert len(divs) == (k + 1)
-    return divs
-
-
-def sorted_split_divs(df, divisions, col, stage, k, npartitions, inp):
-
-    divs = _get_current_divs(divisions, stage, k, npartitions, inp)
-
+def sorted_split_divs(df, divisions, col, stage, k, npartitions, sort_by):
     # Get partitions
     dtype = df[col].dtype
     splits = df[col].searchsorted(
-        df._constructor_sliced(divs, dtype=dtype), side="left"
+        df._constructor_sliced(divisions, dtype=dtype), side="left"
     )
     splits[-1] = len(df[col])
     partitions = splits.tolist()
 
     # Create splits
-    return {
+    split_dict = {
         i: df.iloc[partitions[i] : partitions[i + 1]].copy(deep=False)
-        for i in range(k)
+        for i in range(len(divisions) - 1)
     }
+
+    if k < npartitions:
+        # Rearrange the splits (for now -- Need NEW algorithm to avoid this)
+        # Note that we REALLY don't want to do this if we dont need to!!
+        agg_dict = {i: [] for i in range(k)}
+        for c in [int(k) for k in split_dict.keys()]:
+            c_new = np.mod(np.floor_divide(c, k ** stage), k)
+            if split_dict[c] is not None and len(split_dict[c]):
+                agg_dict[c_new].append(split_dict[c].copy(deep=False))
+        split_dict = {}
+        for i in range(k):
+            if len(agg_dict[i]):
+                split_dict[i] = gd.merge_sorted(agg_dict[i], keys=sort_by)
+            else:
+                split_dict[i] = df.iloc[:0]
+    return split_dict
 
 
 def sorted_split_divs_2(df, divisions, col):
@@ -319,7 +302,7 @@ def rearrange_by_division_list(
                 stage - 1,
                 k,
                 n,
-                inp,  # Need this to know how to split divisions
+                sort_by,  # Need this to rearrange splits (for now)
             )
             for inp in inputs
         }
@@ -354,8 +337,6 @@ def rearrange_by_division_list(
         splits.append(split)
         joins.append(join)
 
-    if sort_by:
-        inputs = sorted(inputs)
     end = {
         ("shuffle-" + token, i): ("shuffle-join-" + token, stages, inp)
         for i, inp in enumerate(inputs)
@@ -369,25 +350,6 @@ def rearrange_by_division_list(
 
     if npartitions != df.npartitions:
         parts = [i % df.npartitions for i in range(npartitions)]
-
-        if sort_by and df.npartitions < npartitions:
-            # Parts are distribued differently if we used `sorted_split`
-            divs = []
-            for inp in inputs:
-                divs.append(
-                    _get_current_divs(
-                        divisions, stages - 1, k, npartitions, inp
-                    )[inp[-1]]
-                )
-            divs += [divisions[-1]]
-            parts = (
-                np.searchsorted(divs, list(divisions)[:-1], side="right") - 1
-            ).tolist()
-
-        elif sort_by:
-            # TODO: Address this case.
-            warnings.warn("WARNING - Haven't considered this case yet.")
-
         token = tokenize(df2, npartitions)
 
         dsk = {
