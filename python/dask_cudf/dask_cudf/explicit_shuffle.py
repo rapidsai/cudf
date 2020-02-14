@@ -4,6 +4,7 @@ import warnings
 import cupy
 import pandas as pd
 
+import distributed
 from dask_cuda.explicit_comms import comms
 from distributed.protocol import to_serialize
 
@@ -143,7 +144,7 @@ async def _explicit_shuffle(
 
 def explicit_sorted_shuffle(df, index, divisions, sort_by, client, **kwargs):
     # Explict-comms shuffle
-    client.rebalance(futures=df.to_delayed())
+    client.rebalance(futures=distributed.futures_of(df))
     to_cpu = kwargs.get("to_cpu", False)
     if to_cpu:
         warnings.warn("Using CPU for shuffling. Performance will suffer!")
