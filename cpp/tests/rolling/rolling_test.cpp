@@ -161,7 +161,8 @@ protected:
 
   // use SFINAE to only instantiate for supported combinations
 
-  // specialization for COUNT
+  // specialization for COUNT_VALID, COUNT_ALL
+  template <bool include_nulls>
   std::unique_ptr<cudf::column> 
   create_count_reference_output(cudf::column_view const& input,
                                 std::vector<size_type> const& preceding_window_col,
@@ -192,7 +193,7 @@ protected:
       // aggregate
       size_type count = 0;
       for (size_type j = start_index; j < end_index; j++) {
-        if (!input.nullable() || cudf::bit_is_set(valid_mask, j))
+        if (include_nulls || !input.nullable() || cudf::bit_is_set(valid_mask, j))
           count++;
       }
 
@@ -289,8 +290,10 @@ protected:
       return create_reference_output<cudf::DeviceMax, cudf::experimental::aggregation::MAX,
              cudf::experimental::detail::target_type_t<T, cudf::experimental::aggregation::MAX>, false>(input, preceding_window,
                                                              following_window, min_periods);
-    case cudf::experimental::aggregation::COUNT:
-      return create_count_reference_output(input, preceding_window, following_window, min_periods);
+    case cudf::experimental::aggregation::COUNT_VALID:
+      return create_count_reference_output<false>(input, preceding_window, following_window, min_periods);
+    case cudf::experimental::aggregation::COUNT_ALL:
+      return create_count_reference_output<true>(input, preceding_window, following_window, min_periods);
     case cudf::experimental::aggregation::MEAN:
       return create_reference_output<cudf::DeviceSum, cudf::experimental::aggregation::MEAN,
              cudf::experimental::detail::target_type_t<T, cudf::experimental::aggregation::MEAN>, true>(input, preceding_window,
@@ -671,7 +674,8 @@ TEST_F(RollingTestStrings, StringsUnsupportedOperators)
 
   EXPECT_NO_THROW(this->run_test_col(input, window, window, 0, rolling_operator::MIN));
   EXPECT_NO_THROW(this->run_test_col(input, window, window, 0, rolling_operator::MAX));
-  EXPECT_NO_THROW(this->run_test_col(input, window, window, 0, rolling_operator::COUNT));
+  EXPECT_NO_THROW(this->run_test_col(input, window, window, 0, rolling_operator::COUNT_VALID));
+  EXPECT_NO_THROW(this->run_test_col(input, window, window, 0, rolling_operator::COUNT_ALL));
 }*/
 
 

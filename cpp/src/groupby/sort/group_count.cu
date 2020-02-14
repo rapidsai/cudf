@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/aggregation.hpp>
 #include <cudf/types.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
@@ -31,6 +32,7 @@ std::unique_ptr<column> group_count(
     column_view const& values,
     rmm::device_vector<size_type> const& group_labels,
     size_type num_groups,
+    include_nulls _include_nulls,
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream)
 {
@@ -45,7 +47,7 @@ std::unique_ptr<column> group_count(
     return result;
   }
 
-  if (values.nullable()) {
+  if (_include_nulls==include_nulls::NO && values.nullable()) {
     auto values_view = column_device_view::create(values);
     
     // make_validity_iterator returns a boolean iterator that sums to 1 (1+1=1)

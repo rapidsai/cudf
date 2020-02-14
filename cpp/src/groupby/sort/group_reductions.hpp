@@ -83,6 +83,8 @@ std::unique_ptr<column> group_max(
  * @param values Grouped values to get count of
  * @param group_labels ID of group that the corresponding value belongs to
  * @param num_groups Number of groups ( unique values in @p group_labels )
+ * @param _include_nulls Exclude nulls while counting if include_nulls::NO,
+ *  Include nulls if include_nulls::YES.
  * @param mr Memory resource to allocate output with
  * @param stream Stream to perform computation in
  */
@@ -90,6 +92,7 @@ std::unique_ptr<column> group_count(
     column_view const& values,
     rmm::device_vector<size_type> const& group_labels,
     size_type num_groups,
+    include_nulls _include_nulls,
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream = 0);
 
