@@ -141,7 +141,7 @@ std::unique_ptr<column> remove_unused_keys( dictionary_column_view const& dictio
 
     // wrap the indices for comparison with column_views
     column_view keys_positions_view( data_type{INT32}, keys.size(), keys_positions.data().get() );
-    column_view indices_view( data_type{INT32}, indices.size(), indices.data<int32_t>(),
+    column_view indices_view( data_type{INT32}, dictionary_column.size(), indices.data<int32_t>(),
         dictionary_column.null_mask(), dictionary_column.null_count(), dictionary_column.offset() );
 
     // search the indices values with key indices to look for any holes
