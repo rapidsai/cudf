@@ -719,7 +719,7 @@ class StringColumn(column.ColumnBase):
 
     def serialize(self):
         header = {"null_count": self.null_count}
-        header["type"] = pickle.dumps(type(self))
+        header["type-serialized"] = pickle.dumps(type(self))
         frames = []
         sub_headers = []
 
@@ -747,7 +747,7 @@ class StringColumn(column.ColumnBase):
 
         children = []
         for h, b in zip(header["subheaders"], buffers[:2]):
-            column_type = pickle.loads(h["type"])
+            column_type = pickle.loads(h["type-serialized"])
             children.append(column_type.deserialize(h, [b]))
 
         col = column.build_column(
