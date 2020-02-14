@@ -142,7 +142,9 @@ class ColumnAccessor(MutableMapping):
 
     def get_by_label_list_like(self, key):
         return self.__class__(
-            _flatten({k: self._grouped_data[k] for k in key}),
+            _flatten(
+                NestedOrderedDict({k: self._grouped_data[k] for k in key})
+            ),
             multiindex=self.multiindex,
             level_names=self.level_names,
         )
