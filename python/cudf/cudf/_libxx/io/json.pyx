@@ -32,17 +32,21 @@ cpdef read_json_libcudf(filepath_or_buffer, dtype,
     """
 
     # Determine read source
+    cdef source_info source
     cdef const unsigned char[::1] buffer = view_of_buffer(filepath_or_buffer)
     cdef string filepath
-    cdef source_info source
     if buffer is None:
         if os.path.isfile(filepath_or_buffer):
-            source.type = io_type.FILEPATH
             filepath = <string>str(filepath_or_buffer).encode()
-            source.filepath = filepath
         else:
-            source.type = io_type.HOST_BUFFER
-            source.filepath = filepath_or_buffer.encode()
+            buffer = filepath_or_buffer.encode()
+
+    if buffer is None:
+        source.type = io_type.FILEPATH
+        source.filepath = filepath
+    else:
+        source.type = io_type.HOST_BUFFER
+        source.buffer = pair[<char *>&buffer[0], buffer.shape[0]]
 
     # Setup arguments
     cdef read_json_args args = read_json_args(source)
@@ -74,7 +78,8 @@ cpdef read_json_libcudf(filepath_or_buffer, dtype,
     cdef table_with_metadata c_out_table
 
     with nogil:
-        c_out_table = read_json(args)
+        c_out_table = move(read_json(args))
 
     column_names = list(c_out_table.metadata.column_names)
-    return Table.from_unique_ptr(c_out_table.tbl, column_names=column_names)
+    return Table.from_unique_ptr(move(c_out_table.tbl),
+                                 column_names=column_names)
