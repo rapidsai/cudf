@@ -788,3 +788,12 @@ def test_multicolumn_loc(pdf, pdfIndex):
     assert_eq(pdf.loc[:, ("a", "store")], gdf.loc[:, ("a", "store")])
     assert_eq(pdf.loc[:, "a":"b"], gdf.loc[:, "a":"b"])
     assert_eq(pdf.loc[:, ["a", "b"]], gdf.loc[:, ["a", "b"]])
+
+
+def test_multicolumn_set_item(pdf, pdfIndex):
+    pdf = pdf.T
+    pdf.columns = pdfIndex
+    gdf = cudf.from_pandas(pdf)
+    pdf["d"] = [1, 2, 3, 4, 5]
+    gdf["d"] = [1, 2, 3, 4, 5]
+    assert_eq(pdf, gdf)
