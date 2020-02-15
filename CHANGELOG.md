@@ -14,6 +14,7 @@
 - PR #4053 Multi-column quantiles.
 - PR #4107 Add groupby nunique aggregation
 - PR #4153 Support Dask serialization protocol on cuDF objects
+- PR #4164 Add Buffer "constructor-kwargs" header
 
 ## Improvements
 
