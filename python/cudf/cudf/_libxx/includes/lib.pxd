@@ -17,10 +17,6 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         AFTER  "experimental::null_order::AFTER"
         BEFORE "experimental::null_order::BEFORE"
 
-    ctypedef enum sorted:
-        NO  "experimental::sorted::NO"
-        YES "experimental::sorted::YES"
-
     cdef enum:
         UNKNOWN_NULL_COUNT = -1
 
