@@ -1369,9 +1369,9 @@ public class ColumnVectorTest extends CudfTestBase {
 
     // all supported formats by cudf
     final String[] TIMES_NS_STRING_ALL = {
-        "004::04::07::18::2018::12::00::00::115254330",
-        "025::25::01::23::2023::07::32::12::929861604",
-        "004::04::07::18::2018::12::00::00::115254330"};
+        "04::07::18::2018::12::00::00::115254330",
+        "25::01::23::2023::07::32::12::929861604",
+        "04::07::18::2018::12::00::00::115254330"};
 
     // Seconds
     try (ColumnVector s_string_times = ColumnVector.fromStrings(TIMES_S_STRING);
@@ -1386,7 +1386,7 @@ public class ColumnVectorTest extends CudfTestBase {
     try (ColumnVector ns_string_times = ColumnVector.fromStrings(TIMES_NS_STRING);
          ColumnVector ns_timestamps = ColumnVector.timestampNanoSecondsFromLongs(TIMES_NS);
          ColumnVector ns_string_times_all = ColumnVector.fromStrings(TIMES_NS_STRING_ALL);
-         ColumnVector allSupportedFormatsTimestampAsStrings = ns_timestamps.asStrings("%j::%d::%m::%y::%Y::%H::%M::%S::%f");
+         ColumnVector allSupportedFormatsTimestampAsStrings = ns_timestamps.asStrings("%d::%m::%y::%Y::%H::%M::%S::%f");
          ColumnVector timestampsAsStrings = ns_timestamps.asStrings("%Y-%m-%d %H:%M:%S.%f")) {
       assertColumnsAreEqual(ns_string_times, timestampsAsStrings);
       allSupportedFormatsTimestampAsStrings.ensureOnHost();

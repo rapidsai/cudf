@@ -1957,15 +1957,15 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    *               %H 	24-hour of the day: 00-23
    *               %M 	Minute of the hour: 00-59
    *               %S 	Second of the minute: 00-59
-   *               %f 	9-digit microsecond: 000000000-999999999
-   *               %j 	Day of the year: 001-366
+   *               %f 	6-digit microsecond: 000000-999999
    *               See https://github.com/rapidsai/custrings/blob/branch-0.10/docs/source/datetime.md
    *
-   * Reported bugs on %p and %I
+   * Reported bugs
    * https://github.com/rapidsai/cudf/issues/4160 after the bug is fixed this method should
    * also support
-   *               %I 	12-hour of the day: 01-12 "hh" -> "%I"
-   *               %p 	Only 'AM', 'PM' "a" -> "%p"
+   *               %I 	12-hour of the day: 01-12
+   *               %p 	Only 'AM', 'PM'
+   *               %j   day of the year
    *
    * @return A new vector allocated on the GPU
    */
@@ -2185,15 +2185,15 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    *               %H 	24-hour of the day: 00-23
    *               %M 	Minute of the hour: 00-59
    *               %S 	Second of the minute: 00-59
-   *               %f 	9-digit microsecond: 000000000-999999999
-   *               %j 	Day of the year: 001-366
+   *               %f 	6-digit microsecond: 000000-999999
    *               See http://man7.org/linux/man-pages/man3/strftime.3.html for details
    *
-   * Reported bugs on %p and %I
+   * Reported bugs
    * https://github.com/rapidsai/cudf/issues/4160 after the bug is fixed this method should
    * also support
-   *               %I 	12-hour of the day: 01-12 "hh" -> "%I"
-   *               %p 	Only 'AM', 'PM' "a" -> "%p"
+   *               %I 	12-hour of the day: 01-12
+   *               %p 	Only 'AM', 'PM'
+   *               %j   day of the year
    *
    * @return - native handle of the resulting cudf column used to construct the Java column vector
    */
