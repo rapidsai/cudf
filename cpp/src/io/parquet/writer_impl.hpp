@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -78,6 +78,28 @@ class writer::impl {
    * @param stream Stream to use for memory allocation and kernels
    **/
   void write(table_view const& table, const table_metadata *metadata, cudaStream_t stream);
+  
+  /**
+   * @brief Begins the chunked/streamed write process.
+   *
+   * @param[in] pq_chunked_state State information that crosses _begin() / write_chunked() / _end() boundaries.   
+   */
+  void write_chunked_begin(struct pq_chunked_state& state);
+
+  /**
+   * @brief Writes a single subtable as part of a larger parquet file/table write.
+   *
+   * @param[in] table The table information to be written
+   * @param[in] pq_chunked_state State information that crosses _begin() / write_chunked() / _end() boundaries.      
+   */
+  void write_chunked(table_view const& table, pq_chunked_state& state);
+
+  /**
+   * @brief Finishes the chunked/streamed write process.
+   *
+   * @param[in] pq_chunked_state State information that crosses _begin() / write_chunked() / _end() boundaries.   
+   */
+  void write_chunked_end(pq_chunked_state& state);  
 
  private:
   /**
@@ -173,6 +195,7 @@ class writer::impl {
                     cudaStream_t stream);
 
  private:
+  // TODO : figure out if we want to keep this. It is currently unused.
   rmm::mr::device_memory_resource* _mr = nullptr;
 
   size_t max_rowgroup_size_ = DEFAULT_ROWGROUP_MAXSIZE;

@@ -175,3 +175,11 @@ set(NULLMASK_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/null_mask/set_null_mask_benchmark.cpp")
 
 ConfigureBench(NULLMASK_BENCH "${NULLMASK_BENCH_SRC}")
+
+###################################################################################################
+# - parquet writer benchmark -----------------------------------------------------------------------------
+
+set(PARQUET_WRITER_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/io/parquet_writer_benchmark.cu")
+
+ConfigureBench(PARQUET_WRITER_BENCH "${PARQUET_WRITER_BENCH_SRC}")
