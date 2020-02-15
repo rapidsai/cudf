@@ -13,6 +13,7 @@ import rmm
 
 import cudf
 import cudf._lib as libcudf
+from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, DatetimeColumn, column
 from cudf.core.frame import Frame
 from cudf.core.index import Index, RangeIndex, as_index
@@ -85,6 +86,7 @@ class Series(Frame):
             The number of null values.
             If None, it is calculated automatically.
         """
+        mask = Buffer(mask)
         col = column.as_column(data).set_mask(mask)
         return cls(data=col)
 
@@ -191,7 +193,7 @@ class Series(Frame):
         frames.extend(index_frames)
         header["index_frame_count"] = len(index_frames)
         header["column"], column_frames = self._column.serialize()
-        header["type"] = pickle.dumps(type(self))
+        header["type-serialized"] = pickle.dumps(type(self))
         frames.extend(column_frames)
         header["column_frame_count"] = len(column_frames)
 
@@ -233,14 +235,14 @@ class Series(Frame):
     def deserialize(cls, header, frames):
 
         index_nframes = header["index_frame_count"]
-        idx_typ = pickle.loads(header["index"]["type"])
+        idx_typ = pickle.loads(header["index"]["type-serialized"])
         index = idx_typ.deserialize(header["index"], frames[:index_nframes])
         name = pickle.loads(header["name"])
 
         frames = frames[index_nframes:]
 
         column_nframes = header["column_frame_count"]
-        col_typ = pickle.loads(header["column"]["type"])
+        col_typ = pickle.loads(header["column"]["type-serialized"])
         column = col_typ.deserialize(header["column"], frames[:column_nframes])
 
         return Series(column, index=index, name=name)
@@ -386,6 +388,8 @@ class Series(Frame):
             If None, it is calculated automatically.
 
         """
+        if mask is not None:
+            mask = Buffer(mask)
         col = self._column.set_mask(mask)
         return self._copy_construct(data=col)
 
@@ -1145,7 +1149,7 @@ class Series(Frame):
 
     @property
     def cat(self):
-        return self._column.cat()
+        return self._column.cat(parent=self)
 
     @property
     def str(self):
@@ -1239,9 +1243,11 @@ class Series(Frame):
         if axis:
             raise NotImplementedError("The axis keyword is not supported")
 
-        data = self._column.fillna(value, inplace=inplace)
+        data = self._column.fillna(value)
 
-        if not inplace:
+        if inplace:
+            self._column._mimic_inplace(data, inplace=True)
+        else:
             return self._copy_construct(data=data)
 
     def where(self, cond, other=None, axis=None):
@@ -1356,8 +1362,9 @@ class Series(Frame):
         if self.dtype.kind == "f":
             sr = self.fillna(np.nan)
             newmask = libcudf.unaryops.nans_to_nulls(sr._column)
-            self._column.mask = newmask
-        return self
+            return self.set_mask(newmask)
+        else:
+            return self
 
     def all(self, axis=0, skipna=True, level=None):
         """

@@ -23,15 +23,10 @@
 namespace cudf {
 namespace experimental {
 
-/**
- * @brief These enums indicate the supported operations of prefix scan that can
- * be performed on a column
- */
-enum class scan_op {
-  SUM = 0,  ///< Computes the prefix scan of     sum operation of all values for the column
-  MIN,      ///< Computes the prefix scan of maximum operation of all values for the column
-  MAX,      ///< Computes the prefix scan of maximum operation of all values for the column
-  PRODUCT,  ///< Computes the prefix scan of multiplicative product operation of all values for the column
+// @brief Enum to describe scan operation type
+enum class scan_type : bool {
+   INCLUSIVE, 
+   EXCLUSIVE
 };
 
 /** --------------------------------------------------------------------------*
@@ -75,16 +70,19 @@ std::unique_ptr<scalar> reduce(
  * @throws `cudf::logic_error` if column datatype is not numeric type.
  *
  * @param[in] input The input column view for the scan
- * @param[in] op The operation of the scan
- * @param[in] inclusive The flag for applying an inclusive scan if true,
- *            an exclusive scan if false.
+ * @param[in] agg unique_ptr to aggregation operator applied by the scan
+ * @param[in] inclusive The flag for applying an inclusive scan if
+ *            scan_type::INCLUSIVE, an exclusive scan if scan_type::EXCLUSIVE.
+ * @param[in] include_nulls_flag Exclude null values when computing the result if
+ * include_nulls::NO. Include nulls if include_nulls::YES.
+ * Any operation with a null results in a null.
  * @params[in] mr The resource to use for all allocations
  * @returns unique pointer to new output column
  * ----------------------------------------------------------------------------**/
-std::unique_ptr<column> scan(
-    const column_view& input, scan_op op, bool inclusive, bool skipna=true,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column>
+scan(const column_view &input, std::unique_ptr<aggregation> const &agg,
+     scan_type inclusive, include_nulls include_nulls_flag = include_nulls::NO,
+     rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
 }  // namespace experimental
 }  // namespace cudf
-

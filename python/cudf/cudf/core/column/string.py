@@ -440,7 +440,7 @@ class StringColumn(column.ColumnBase):
     """Implements operations for Columns of String type
     """
 
-    def __init__(self, mask=None, offset=0, children=()):
+    def __init__(self, mask=None, size=None, offset=0, children=()):
         """
         Parameters
         ----------
@@ -452,23 +452,92 @@ class StringColumn(column.ColumnBase):
             Two non-null columns containing the string data and offsets
             respectively
         """
-        data = Buffer.empty(0)
         dtype = np.dtype("object")
 
-        if len(children) == 0:
-            size = 0
-        elif children[0].size == 0:
-            size = 0
-        else:
-            # one less because the last element of offsets is the number of
-            # bytes in the data buffer
-            size = children[0].size - 1
+        if size is None:
+            if len(children) == 0:
+                size = 0
+            elif children[0].size == 0:
+                size = 0
+            else:
+                # one less because the last element of offsets is the number of
+                # bytes in the data buffer
+                size = children[0].size - 1
+            size = size - offset
 
-        super().__init__(data, size, dtype, mask=mask, children=children)
+        super().__init__(
+            None, size, dtype, mask=mask, offset=offset, children=children
+        )
 
         self._nvstrings = None
         self._nvcategory = None
         self._indices = None
+
+    def set_base_data(self, value):
+        if value is not None:
+            raise RuntimeError(
+                "StringColumns do not use data attribute of Column, use "
+                "`set_base_children` instead"
+            )
+        else:
+            super().set_base_data(value)
+
+    def set_base_mask(self, value):
+        super().set_base_mask(value)
+        self._indices = None
+        self._nvcategory = None
+        self._nvstrings = None
+
+    def set_base_children(self, value):
+        # TODO: Implement dtype validation of the children here somehow
+        super().set_base_children(value)
+        self._indices = None
+        self._nvcategory = None
+        self._nvstrings = None
+
+    @property
+    def children(self):
+        if self._children is None:
+            if self.base_children is None or (
+                self.offset == 0
+                and self.base_children[0].size == (self.size + 1)
+            ):
+                self._children = self.base_children
+            else:
+                # First get the base columns for chars and offsets
+                chars_column = self.base_children[1]
+                offsets_column = self.base_children[0]
+
+                # Shift offsets column by the parent offset.
+                offsets_column = column.build_column(
+                    data=offsets_column.base_data,
+                    dtype=offsets_column.dtype,
+                    mask=offsets_column.base_mask,
+                    size=self.size + 1,
+                    offset=self.offset,
+                )
+
+                # Now run a subtraction binary op to shift all of the offsets
+                # by the respective number of characters relative to the
+                # parent offset
+                chars_offset = offsets_column[0]
+                offsets_column = offsets_column.binary_operator(
+                    "sub", offsets_column.dtype.type(chars_offset)
+                )
+
+                # Shift the chars offset by the new first element of the
+                # offsets column
+                chars_size = offsets_column[self.size]
+                chars_column = column.build_column(
+                    data=chars_column.base_data,
+                    dtype=chars_column.dtype,
+                    mask=chars_column.base_mask,
+                    size=chars_size,
+                    offset=chars_offset,
+                )
+
+                self._children = (offsets_column, chars_column)
+        return self._children
 
     def __contains__(self, item):
         return True in self.str().contains(f"^{item}$")._column
@@ -481,9 +550,12 @@ class StringColumn(column.ColumnBase):
         return StringMethods(self, index=index, name=name)
 
     def __sizeof__(self):
-        n = self.children[0].__sizeof__() + self.children[1].__sizeof__()
-        if self.mask:
-            n += self.mask.size
+        n = (
+            self.base_children[0].__sizeof__()
+            + self.base_children[1].__sizeof__()
+        )
+        if self.base_mask:
+            n += self.base_mask.size
         return n
 
     def _memory_usage(self, deep=False):
@@ -493,21 +565,21 @@ class StringColumn(column.ColumnBase):
             return self.str().size() * self.dtype.itemsize
 
     def __len__(self):
-        return self.nvstrings.size()
+        return self.size
 
     @property
     def nvstrings(self):
         if self._nvstrings is None:
             if self.nullable:
-                mask_ptr = self.mask.ptr
+                mask_ptr = self.mask_ptr
             else:
                 mask_ptr = None
             if self.size == 0:
                 self._nvstrings = nvstrings.to_device([])
             else:
                 self._nvstrings = nvstrings.from_offsets(
-                    self.children[1].data.ptr,
-                    self.children[0].data.ptr,
+                    self.children[1].data_ptr,
+                    self.children[0].data_ptr,
                     self.size,
                     mask_ptr,
                     ncount=self.null_count,
@@ -530,6 +602,7 @@ class StringColumn(column.ColumnBase):
     def _set_mask(self, value):
         self._nvstrings = None
         self._nvcategory = None
+        self._indices = None
         super()._set_mask(value)
 
     @property
@@ -581,12 +654,10 @@ class StringColumn(column.ColumnBase):
             mask_size = utils.calc_chunk_size(
                 len(self.nvstrings), utils.mask_bitsize
             )
-            out_mask = column.column_empty(
-                mask_size, dtype="int8", masked=False
-            ).data
+            out_mask = Buffer.empty(mask_size)
             out_mask_ptr = out_mask.ptr
             self.nvstrings.set_null_bitmask(out_mask_ptr, bdevmem=True)
-            out_col.mask = out_mask
+            out_col = out_col.set_mask(out_mask)
 
         return out_col.astype(out_dtype)
 
@@ -644,36 +715,22 @@ class StringColumn(column.ColumnBase):
         if fillna is not None:
             warnings.warn("fillna parameter not supported for string arrays")
 
-        return self.to_arrow().to_pandas().array
+        return self.to_arrow().to_pandas().values
 
     def serialize(self):
         header = {"null_count": self.null_count}
-        header["type"] = pickle.dumps(type(self))
+        header["type-serialized"] = pickle.dumps(type(self))
         frames = []
         sub_headers = []
 
-        sbuf = rmm.device_array(self.nvstrings.byte_count(), dtype="int8")
-        obuf = rmm.device_array(len(self.nvstrings) + 1, dtype="int32")
-        mask_size = utils.calc_chunk_size(
-            len(self.nvstrings), utils.mask_bitsize
-        )
-        nbuf = rmm.device_array(mask_size, dtype="int8")
-        self.nvstrings.to_offsets(
-            libcudf.cudf.get_ctype_ptr(sbuf),
-            libcudf.cudf.get_ctype_ptr(obuf),
-            nbuf=libcudf.cudf.get_ctype_ptr(nbuf),
-            bdevmem=True,
-        )
-        for item in [sbuf, obuf]:
-            sheader = item.__cuda_array_interface__.copy()
-            sheader["dtype"] = item.dtype.str
+        for item in self.children:
+            sheader, sframes = item.serialize()
             sub_headers.append(sheader)
-            frames.append(item)
+            frames.extend(sframes)
 
         if self.null_count > 0:
-            frames.append(nbuf)
+            frames.append(self.mask)
 
-        header["nvstrings"] = len(self.nvstrings)
         header["subheaders"] = sub_headers
         header["frame_count"] = len(frames)
         return header, frames
@@ -682,25 +739,21 @@ class StringColumn(column.ColumnBase):
     def deserialize(cls, header, frames):
         # Deserialize the mask, value, and offset frames
         buffers = [Buffer(each_frame) for each_frame in frames]
-        ptrs = [int(buf.ptr) for buf in buffers]
 
         if header["null_count"] > 0:
-            nbuf = ptrs[2]
+            nbuf = buffers[2]
         else:
             nbuf = None
 
-        # Use from_offsets to get nvstring data.
-        # Note: array items = [nbuf, sbuf, obuf]
-        scount = header["nvstrings"]
-        data = nvstrings.from_offsets(
-            ptrs[0],
-            ptrs[1],
-            scount,
-            nbuf=nbuf,
-            ncount=header["null_count"],
-            bdevmem=True,
+        children = []
+        for h, b in zip(header["subheaders"], buffers[:2]):
+            column_type = pickle.loads(h["type-serialized"])
+            children.append(column_type.deserialize(h, [b]))
+
+        col = column.build_column(
+            data=None, dtype="str", mask=nbuf, children=tuple(children)
         )
-        return column.as_column(data)
+        return col
 
     def sort_by_values(self, ascending=True, na_position="last"):
         if na_position == "last":
@@ -745,7 +798,7 @@ class StringColumn(column.ColumnBase):
                 " single values"
             )
 
-    def fillna(self, fill_value, inplace=False):
+    def fillna(self, fill_value):
         """
         Fill null values with * fill_value *
         """
@@ -771,8 +824,9 @@ class StringColumn(column.ColumnBase):
 
         filled_data = self.nvstrings.fillna(fill_value)
         result = column.as_column(filled_data)
-        result.mask = None
-        return self._mimic_inplace(result, inplace)
+        result = result.set_mask(None)
+
+        return result
 
     def _find_first_and_last(self, value):
         found_indices = self.str().contains(f"^{value}$")._column
@@ -822,7 +876,7 @@ class StringColumn(column.ColumnBase):
     def sum(self, dtype=None):
         # dtype is irrelevant it is needed to be in sync with
         # the sum method for Numeric Series
-        return self._nvstrings.join().to_host()[0]
+        return self.nvstrings.join().to_host()[0]
 
     @property
     def is_unique(self):
@@ -855,6 +909,15 @@ class StringColumn(column.ColumnBase):
         raise NotImplementedError(
             "Strings are not yet supported via `__cuda_array_interface__`"
         )
+
+    def _mimic_inplace(self, other_col, inplace=False):
+        out = super()._mimic_inplace(other_col, inplace=inplace)
+        if inplace:
+            self._nvstrings = other_col._nvstrings
+            self._nvcategory = other_col._nvcategory
+            self._indices = other_col._indices
+
+        return out
 
 
 def _string_column_binop(lhs, rhs, op):

@@ -1,6 +1,7 @@
 # Copyright (c) 2018-2019, NVIDIA CORPORATION.
 
 import numpy as np
+from pytest import approx
 from utils import assert_eq
 
 import nvstrings
@@ -365,7 +366,11 @@ def test_stof():
         456.0,
         -178000.0,
     ]
-    assert_eq(got, expected)
+    for idx in range(len(expected)):
+        if expected[idx] is None:
+            assert_eq(got[idx], expected[idx])
+        else:
+            assert got[idx] == approx(expected[idx])
 
 
 def test_stod():
@@ -408,7 +413,11 @@ def test_stod():
         -178000.0,
         -122.33644781999999,
     ]
-    assert_eq(got, expected)
+    for idx in range(len(expected)):
+        if expected[idx] is None:
+            assert_eq(got[idx], expected[idx])
+        else:
+            assert got[idx] == approx(expected[idx])
 
 
 def test_htoi():
