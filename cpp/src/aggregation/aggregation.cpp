@@ -42,7 +42,8 @@ std::unique_ptr<aggregation> make_max_aggregation() {
 /// Factory to create a COUNT aggregation
 std::unique_ptr<aggregation>
 make_count_aggregation(include_nulls _include_nulls) {
-  if(_include_nulls == include_nulls::NO)
+   auto kind = (_include_nulls == include_nulls::YES) ? COUNT_ALL : COUNT_VALID;
+   return std::make_unique<aggregation>(kind);
     return std::make_unique<aggregation>(aggregation::COUNT_VALID);
   else 
     return std::make_unique<aggregation>(aggregation::COUNT_ALL);
