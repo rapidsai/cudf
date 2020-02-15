@@ -71,7 +71,7 @@ def drop_nulls(Table source_table, how="any", keys=None, thresh=None):
         move(c_result),
         column_names=source_table._column_names,
         index_names=(
-            None if source_table._index is None
+            [] if source_table._index is None
             else source_table._index_names)
     )
 

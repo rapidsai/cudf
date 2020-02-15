@@ -66,11 +66,11 @@ cdef class Table:
     cdef Table from_unique_ptr(
         unique_ptr[table] c_tbl,
         object column_names,
-        object index_names=None
+        object index_names=[],
+        object index_pos=0
     ):
         """
         Construct a Table from a unique_ptr to a cudf::table.
-
         Parameters
         ----------
         c_tbl : unique_ptr[cudf::table]
@@ -82,23 +82,17 @@ cdef class Table:
 
         cdef vector[unique_ptr[column]].iterator it = columns.begin()
 
-        # First construct the index, if any
-        index = None
-        if index_names is not None:
-            index_columns = []
-            for _ in index_names:
-                index_columns.append(Column.from_unique_ptr(
-                    move(dereference(it))
-                ))
-                it += 1
-            index = Table(OrderedColumnDict(zip(index_names, index_columns)))
+        num_cols_input = len(column_names) + len(index_names)
+        all_cols_py = []
+        for _ in range(num_cols_input):
+            all_cols_py.append(Column.from_unique_ptr(
+                move(dereference(it))
+            ))
+            it += 1 
 
-        # Construct the data OrderedColumnDict
-        data_columns = []
-        for _ in column_names:
-            data_columns.append(Column.from_unique_ptr(move(dereference(it))))
-            it += 1
-        data = OrderedColumnDict(zip(column_names, data_columns))
+        result_index = all_cols_py.pop(index_pos)
+        index = Table(OrderedColumnDict(zip(index_names, [result_index])))
+        data = OrderedColumnDict(zip(column_names, all_cols_py))
 
         return Table(data=data, index=index)
 
