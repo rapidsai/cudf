@@ -502,7 +502,7 @@ class MultiIndex(Index):
         transmission.
         """
         header = {}
-        header["type"] = pickle.dumps(type(self))
+        header["type-serialized"] = pickle.dumps(type(self))
         header["names"] = pickle.dumps(self.names)
 
         header["source_data"], frames = self._source_data.serialize()
@@ -515,7 +515,9 @@ class MultiIndex(Index):
         """
         names = pickle.loads(header["names"])
 
-        source_data_typ = pickle.loads(header["source_data"]["type"])
+        source_data_typ = pickle.loads(
+            header["source_data"]["type-serialized"]
+        )
         source_data = source_data_typ.deserialize(
             header["source_data"], frames
         )

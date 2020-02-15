@@ -85,12 +85,41 @@ class host_buffer_sink : public data_sink {
   std::vector<char>* buffer_;
 };
 
+/**
+ * @brief Implementation class for voiding data (no io performed)
+ * 
+ */
+class void_sink : public data_sink {
+
+ public:
+  explicit void_sink() : bytes_written_(0) {}
+
+  virtual ~void_sink() {}
+
+  void write(void const* data, size_t size) override {
+    bytes_written_ += size;
+  }
+
+  void flush() override {}
+
+  size_t bytes_written() override {
+    return bytes_written_;
+  }
+
+ private:
+  size_t bytes_written_;  
+};
+
 std::unique_ptr<data_sink> data_sink::create(const std::string& filepath) {
   return std::make_unique<file_sink>(filepath);
 }
 
 std::unique_ptr<data_sink> data_sink::create(std::vector<char>* buffer) {
   return std::make_unique<host_buffer_sink>(buffer);
+}
+
+std::unique_ptr<data_sink> data_sink::create() {
+  return std::make_unique<void_sink>();
 }
 
 }  // namespace io
