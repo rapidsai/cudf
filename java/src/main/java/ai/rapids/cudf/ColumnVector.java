@@ -1915,6 +1915,13 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   /**
    * Cast to Strings.
    * Negative timestamps are not supported
+   * In case of timestamps it follows the following formats
+   *    {@link DType#TIMESTAMP_DAYS} - "%Y-%m-%d"
+   *    {@link DType#TIMESTAMP_SECONDS} - "%Y-%m-%d %H:%M:%S"
+   *    {@link DType#TIMESTAMP_MICROSECONDS} - "%Y-%m-%d %H:%M:%S.%f"
+   *    {@link DType#TIMESTAMP_MILLISECONDS} - "%Y-%m-%d %H:%M:%S.%f"
+   *    {@link DType#TIMESTAMP_NANOSECONDS} - "%Y-%m-%d %H:%M:%S.%f"
+   *
    * @return A new vector allocated on the GPU.
    */
   public ColumnVector asStrings() {
