@@ -1088,6 +1088,7 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  @Disabled
   void testWindowDynamicNegative() {
     try (ColumnVector precedingCol = ColumnVector.fromInts(2, 2, 2, 3, 3);
          ColumnVector followingCol = ColumnVector.fromInts(-1, -1, -1, -1, 0)) {
@@ -1102,6 +1103,7 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  @Disabled
   void testWindowLag() {
     //TODO negative only works for ColumnVectors.  We need to file something to make it work for
     // static too
@@ -1365,6 +1367,12 @@ public class ColumnVectorTest extends CudfTestBase {
         "2023-01-25 07:32:12.929861604",
         "2018-07-04 12:00:00.115254330"};
 
+    // all supported formats by cudf
+    final String[] TIMES_NS_STRING_ALL = {
+        "004::04::07::18::2018::12::00::00::115254330",
+        "025::25::01::23::2023::07::32::12::929861604",
+        "004::04::07::18::2018::12::00::00::115254330"};
+
     // Seconds
     try (ColumnVector s_string_times = ColumnVector.fromStrings(TIMES_S_STRING);
          ColumnVector s_timestamps = ColumnVector.timestampSecondsFromLongs(TIMES_S);
@@ -1377,8 +1385,15 @@ public class ColumnVectorTest extends CudfTestBase {
     // Nanoseconds
     try (ColumnVector ns_string_times = ColumnVector.fromStrings(TIMES_NS_STRING);
          ColumnVector ns_timestamps = ColumnVector.timestampNanoSecondsFromLongs(TIMES_NS);
+         ColumnVector ns_string_times_all = ColumnVector.fromStrings(TIMES_NS_STRING_ALL);
+         ColumnVector allSupportedFormatsTimestampAsStrings = ns_timestamps.asStrings("%j::%d::%m::%y::%Y::%H::%M::%S::%f");
          ColumnVector timestampsAsStrings = ns_timestamps.asStrings("%Y-%m-%d %H:%M:%S.%f")) {
       assertColumnsAreEqual(ns_string_times, timestampsAsStrings);
+      allSupportedFormatsTimestampAsStrings.ensureOnHost();
+      for (int i = 0 ; i < allSupportedFormatsTimestampAsStrings.getRowCount() ; i++) {
+        System.out.println(new String(allSupportedFormatsTimestampAsStrings.getUTF8(i)));
+      }
+      assertColumnsAreEqual(allSupportedFormatsTimestampAsStrings, ns_string_times_all);
     }
   }
 

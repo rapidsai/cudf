@@ -1684,7 +1684,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * For Strings:
    * Casting strings from/to timestamp isn't supported atm.
    * Please look at {@link ColumnVector#asTimestamp(DType, String)}
-   * for casting string to timestamp when the format is known
+   * and {@link ColumnVector#asStrings(String)} for casting string to timestamp when the format
+   * is known
    *
    * Float values when converted to String could be different from the expected default behavior in
    * Java
@@ -1922,6 +1923,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
         return asStrings("%Y-%m-%d %H:%M:%S");
       case TIMESTAMP_DAYS:
         return asStrings("%Y-%m-%d");
+      case TIMESTAMP_MICROSECONDS:
+      case TIMESTAMP_MILLISECONDS:
       case TIMESTAMP_NANOSECONDS:
         return asStrings("%Y-%m-%d %H:%M:%S.%f");
       default:
@@ -1932,15 +1935,31 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   /**
    * Method to parse and convert a timestamp column vector to string column vector. A unix
    * timestamp is a long value representing how many units since 1970-01-01 00:00:00:000 in either
-   * positive or negative direction. This mirrors the functionality spark sql's from_unixtime.
+   * positive or negative direction.
 
    * No checking is done for invalid formats or invalid timestamp units.
    * Negative timestamp values are not currently supported and will yield undesired results. See
    * github issue https://github.com/rapidsai/cudf/issues/3116 for details
    *
    * @param format - strftime format specifier string of the timestamp. Its used to parse and convert
-   *               the timestamp with. Supports %Y,%y,%m,%d,%H,%I,%p,%M,%S,%f,%z format specifiers.
-   *               See http://man7.org/linux/man-pages/man3/strftime.3.html for details
+   *               the timestamp with. Supports %m,%j,%d,%H,%M,%S,%y,%Y,%f format specifiers.
+   *               %d 	Day of the month: 01-31
+   *               %m 	Month of the year: 01-12
+   *               %y 	Year without century: 00-99c
+   *               %Y 	Year with century: 0001-9999
+   *               %H 	24-hour of the day: 00-23
+   *               %M 	Minute of the hour: 00-59
+   *               %S 	Second of the minute: 00-59
+   *               %f 	9-digit microsecond: 000000000-999999999
+   *               %j 	Day of the year: 001-366
+   *               See https://github.com/rapidsai/custrings/blob/branch-0.10/docs/source/datetime.md
+   *
+   * Reported bugs on %p and %I
+   * https://github.com/rapidsai/cudf/issues/4160 after the bug is fixed this method should
+   * also support
+   *               %I 	12-hour of the day: 01-12 "hh" -> "%I"
+   *               %p 	Only 'AM', 'PM' "a" -> "%p"
+   *
    * @return A new vector allocated on the GPU
    */
   public ColumnVector asStrings(String format) {
@@ -2136,7 +2155,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @param unit integer native ID of the time unit to parse the timestamp into.
    * @param format strptime format specifier string of the timestamp. Used to parse and convert
    *               the timestamp with. Supports %Y,%y,%m,%d,%H,%I,%p,%M,%S,%f,%z format specifiers.
-   *               See http://man7.org/linux/man-pages/man3/strftime.3.html
+   *               See https://github.com/rapidsai/custrings/blob/branch-0.10/docs/source/datetime.md
    *               for full parsing format specification and documentation.
    * @return native handle of the resulting cudf column, used to construct the Java column vector
    *         by the timestampToLong method.
@@ -2151,8 +2170,24 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * Negative timestamp values are not currently supported.
    *
    * @param format - strftime format specifier string of the timestamp. Its used to parse and convert
-   *               the timestamp with. Supports %Y,%y,%m,%d,%H,%I,%p,%M,%S,%f,%z format specifiers.
+   *               the timestamp with. Supports %Y,%y,%m,%d,%H,%M,%S,%f format specifiers.
+   *               %d 	Day of the month: 01-31
+   *               %m 	Month of the year: 01-12
+   *               %y 	Year without century: 00-99c
+   *               %Y 	Year with century: 0001-9999
+   *               %H 	24-hour of the day: 00-23
+   *               %M 	Minute of the hour: 00-59
+   *               %S 	Second of the minute: 00-59
+   *               %f 	9-digit microsecond: 000000000-999999999
+   *               %j 	Day of the year: 001-366
    *               See http://man7.org/linux/man-pages/man3/strftime.3.html for details
+   *
+   * Reported bugs on %p and %I
+   * https://github.com/rapidsai/cudf/issues/4160 after the bug is fixed this method should
+   * also support
+   *               %I 	12-hour of the day: 01-12 "hh" -> "%I"
+   *               %p 	Only 'AM', 'PM' "a" -> "%p"
+   *
    * @return - native handle of the resulting cudf column used to construct the Java column vector
    */
   private static native long timestampToStringTimestamp(long viewHandle, String format);
