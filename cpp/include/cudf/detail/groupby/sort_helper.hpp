@@ -152,11 +152,10 @@ struct sort_groupby_helper {
   /**
    * @brief Get each group's offset into the sorted order of `keys`. 
    * 
-   * Computes and stores the group offsets and number of keys on first
-   * invocation and returns the stored group offsets on subsequent calls. 
-   * This returns `num_groups + 1` values with, first `num_groups` values 
-   * containing group offsets, and the last value is number of keys, where 
-   * `num_groups` is the number of unique `keys`.
+   * Computes and stores the group offsets on first invocation and returns 
+   * the stored group offsets on subsequent calls. 
+   * This returns a vector of size `num_groups() + 1` such that the size of 
+   * group `i` is `group_offsets[i+1] - group_offsets[i]`
    *
    * @return vector of offsets of the starting point of each group in the sorted
    * key table
