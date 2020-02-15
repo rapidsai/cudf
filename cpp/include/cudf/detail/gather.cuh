@@ -348,6 +348,10 @@ void gather_bitmask(table_view const& source, MapIterator gather_map,
     std::vector<std::unique_ptr<column>>& target, gather_bitmask_op op,
     rmm::mr::device_memory_resource* mr, cudaStream_t stream)
 {
+  if (target.empty()) {
+    return;
+  }
+
   // Validate that all target columns have the same size
   auto const target_rows = target.front()->size();
   CUDF_EXPECTS(std::all_of(target.begin(), target.end(), [target_rows](auto const& col)
