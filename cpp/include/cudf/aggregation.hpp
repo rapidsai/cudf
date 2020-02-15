@@ -64,7 +64,7 @@ std::unique_ptr<aggregation> make_max_aggregation();
 /**
  * @brief Factory to create a COUNT aggregation
  * 
- * @param _include_nulls Indicates if null values will be counted. 
+ * @param _include_nulls Indicates if null values will be counted.
 */
 std::unique_ptr<aggregation> make_count_aggregation(include_nulls _include_nulls = include_nulls::NO);
 
@@ -126,7 +126,7 @@ std::unique_ptr<aggregation> make_argmin_aggregation();
  * @brief Factory to create a `nunique` aggregation
  * 
  * `nunique` returns the number of unique elements.
- * @param _include_nulls include or exclude nulls flag
+ * @param _include_nulls Indicates if null values will be counted.
 */
 std::unique_ptr<aggregation>
 make_nunique_aggregation(include_nulls _include_nulls = include_nulls::NO);

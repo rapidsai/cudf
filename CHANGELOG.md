@@ -13,6 +13,7 @@
 - PR #4040 Add support for n-way merge of sorted tables
 - PR #4053 Multi-column quantiles.
 - PR #4107 Add groupby nunique aggregation
+- PR #4159 Add COUNT aggregation that includes null values
 
 ## Improvements
 
