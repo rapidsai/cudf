@@ -781,7 +781,7 @@ class ColumnBase(Column):
     def serialize(self):
         header = {}
         frames = []
-        header["type"] = pickle.dumps(type(self))
+        header["type-serialized"] = pickle.dumps(type(self))
         header["dtype"] = self.dtype.str
 
         data_header, data_frames = self.data.serialize()
@@ -1420,7 +1420,7 @@ def deserialize_columns(headers, frames):
 
     for meta in headers:
         col_frame_count = meta["frame_count"]
-        col_typ = pickle.loads(meta["type"])
+        col_typ = pickle.loads(meta["type-serialized"])
         colobj = col_typ.deserialize(meta, frames[:col_frame_count])
         columns.append(colobj)
         # Advance frames
