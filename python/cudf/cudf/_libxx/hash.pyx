@@ -40,7 +40,7 @@ def hash_partition(Table source_table, columns_to_hash, num_partitions):
 
 
 def hash(Table source_table, initial_hash_values=None):
-    cdef vector[uint32_t] c_initial_hash = initial_hash_values
+    cdef vector[uint32_t] c_initial_hash = initial_hash_values or []
     source_view = source_table.data_view()
 
     cdef unique_ptr[column] c_result

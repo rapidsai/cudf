@@ -14,6 +14,7 @@ import rmm
 import cudf
 import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
+from cudf._libxx.table import Table
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, DatetimeColumn, column
 from cudf.core.frame import Frame
@@ -2195,7 +2196,7 @@ class Series(Frame):
     def hash_values(self):
         """Compute the hash of values in this column.
         """
-        return Series(libcudfxx.hash(self._column)).values
+        return Series(libcudfxx.hash.hash(Table(data=self._data))).values
 
     def hash_encode(self, stop, use_name=False):
         """Encode column values as ints in [0, stop) using hash function.
@@ -2217,8 +2218,8 @@ class Series(Frame):
         assert stop > 0
 
         initial_hash = np.asarray(hash(self.name)) if use_name else None
-        hashed_values = libcudfxx.hash(
-            self._column, initial_hash_values=initial_hash
+        hashed_values = libcudfxx.hash.hash(
+            self._data, initial_hash_values=initial_hash
         )
 
         if hashed_values.has_nulls:
