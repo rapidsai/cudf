@@ -107,6 +107,7 @@
 - PR #4137 Update Java for mutating fill and rolling window changes
 - PR #4141 Fix NVStrings test_convert failure in 10.2 build
 - PR #4158 Fix merge issue with empty table return if one of the two tables are empty
+- PR #4162 Properly handle no index metadata generation for to_parquet
 
 
 # cuDF 0.12.0 (04 Feb 2020)
