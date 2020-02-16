@@ -3,6 +3,7 @@
 ## New Features
 
 - PR #3577 Add initial dictionary support to column classes
+- PR #3917 Add dictionary add_keys function
 - PR #3777 Add support for dictionary column in gather
 - PR #3693 add string support, skipna to scan operation
 - PR #3662 Define and implement `shift`.
