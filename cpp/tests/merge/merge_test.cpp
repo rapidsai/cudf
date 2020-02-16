@@ -46,6 +46,31 @@ class MergeTest_ : public cudf::test::BaseFixture {};
 
 TYPED_TEST_CASE(MergeTest_, cudf::test::FixedWidthTypes);
 
+TYPED_TEST(MergeTest_, MergeIsZeroWhenShouldNotBeZero) {
+    using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam>;
+
+    columnFactoryT leftColWrap1{1,2,3,4,5};
+    columnFactoryT rightColWrap1{};
+
+    std::vector<cudf::size_type> key_cols{0};
+    std::vector<cudf::order> column_order;
+    column_order.push_back(cudf::order::ASCENDING);
+    std::vector<cudf::null_order> null_precedence(column_order.size(), cudf::null_order::AFTER);
+
+    cudf::table_view left_view{{leftColWrap1}};
+    cudf::table_view right_view{{rightColWrap1}};
+    cudf::table_view expected{{leftColWrap1}};
+
+    auto result = cudf::experimental::merge({left_view, right_view},
+                                           key_cols,
+                                           column_order,
+                                           null_precedence);
+
+    int expected_len = 5;
+    ASSERT_EQ(result->num_rows(), expected_len);
+    cudf::test::expect_tables_equal(expected, result->view());
+}
+
 TYPED_TEST(MergeTest_, MismatchedNumColumns) {
     using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam>;
     

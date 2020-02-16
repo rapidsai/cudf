@@ -51,6 +51,23 @@ TEST_F(TableTest, EmptyColumnedTable)
     EXPECT_EQ(input.num_columns(), expected);
 }
 
+TEST_F(TableTest, ValidateConstructorTableViewToTable)
+{
+    column_wrapper <int8_t>  col1{{1,2,3,4}};
+    column_wrapper <int8_t>  col2{{1,2,3,4}};
+
+    CVector cols;
+    cols.push_back(col1.release());
+    cols.push_back(col2.release());
+
+    Table input_table(std::move(cols));
+
+    Table out_table(input_table.view());
+
+    EXPECT_EQ(input_table.num_columns(), out_table.num_columns());
+    EXPECT_EQ(input_table.num_rows(), out_table.num_rows());
+}
+
 TEST_F(TableTest, GetTableWithSelectedColumns)
 {
   column_wrapper <int8_t>  col1{{1,2,3,4}};
