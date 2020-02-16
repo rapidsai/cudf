@@ -315,8 +315,10 @@ void reader::impl::decode_data(
     if (_metadata->schema[schema_data_idx].kind == type_enum) {
       schema_desc[schema_data_idx].count = dict[i].first;
     }
-    CUDA_TRY(cudaMemsetAsync(out_buffers[i].null_mask(), -1,
-                             bitmask_allocation_size_bytes(num_rows), stream));
+    if (out_buffers[i].null_mask_size()) {
+      CUDA_TRY(cudaMemsetAsync(out_buffers[i].null_mask(), -1,
+                               bitmask_allocation_size_bytes(num_rows), stream));
+    }
   }
   rmm::device_buffer block_list(
       _metadata->block_list.data(),
@@ -443,7 +445,9 @@ table_with_metadata reader::impl::read(int skip_rows, int num_rows,
 
       std::vector<column_buffer> out_buffers;
       for (size_t i = 0; i < column_types.size(); ++i) {
-        out_buffers.emplace_back(column_types[i], num_rows, stream, _mr);
+        auto col_idx = selected_columns[i].first;
+        bool is_nullable = (_metadata->columns[col_idx].schema_null_idx >= 0);
+        out_buffers.emplace_back(column_types[i], num_rows, is_nullable, stream, _mr);
       }
 
       decode_data(block_data, dict, global_dictionary, total_dictionary_entries,
