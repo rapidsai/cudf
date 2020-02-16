@@ -15,7 +15,7 @@ from libc.stdint cimport uintptr_t
 from cudf._libxx.lib cimport *
 from cudf._libxx.column cimport Column
 from cudf.utils.utils import OrderedColumnDict
-
+from collections import OrderedDict
 
 cdef class Table:
     def __init__(self, data=None, index=None):
@@ -88,13 +88,12 @@ cdef class Table:
         cdef vector[unique_ptr[column]].iterator it = columns.begin()
 
         num_cols_input = len(column_names) + len(index_names)
-        all_cols_py = []
-        for _ in range(num_cols_input):
-            all_cols_py.append(Column.from_unique_ptr(
+        all_cols_py = OrderedDict()
+        for i in range(num_cols_input):
+            all_cols_py[i] =(Column.from_unique_ptr(
                 move(dereference(it))
             ))
             it += 1 
-
         index = None
         if index_names is not None:
             index_columns = []
@@ -104,7 +103,8 @@ cdef class Table:
                 for idx in index_pos:
                     index_columns.append(all_cols_py.pop(idx))
                 index = Table(OrderedColumnDict(zip(index_names, index_columns)))
-        data = OrderedColumnDict(zip(column_names, all_cols_py))
+
+        data = OrderedColumnDict(zip(column_names, all_cols_py.values()))
 
         return Table(data=data, index=index)
 
