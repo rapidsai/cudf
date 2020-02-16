@@ -778,9 +778,13 @@ class ColumnBase(Column):
 
         return output
 
-    def searchsorted(self, value, side="left"):
+    def searchsorted(
+        self, value, side="left", ascending=True, na_position="last"
+    ):
         values = cudf.Series(as_column(value))
-        col = cudf.Series(self)._searchsorted(values, side)
+        col = cudf.Series(self).searchsorted(
+            values, side, ascending=ascending, na_position=na_position
+        )
         return cudf.Series(col).values
 
     def serialize(self):

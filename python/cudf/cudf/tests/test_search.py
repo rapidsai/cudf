@@ -29,7 +29,7 @@ def test_searchsorted(side, obj_class):
 
     expect = psr.searchsorted(pvals, side)
     got = sr.searchsorted(vals, side)
-
+    # import pdb; pdb.set_trace()
     assert_eq(expect, cupy.asnumpy(got))
 
 

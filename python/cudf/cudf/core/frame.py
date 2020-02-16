@@ -1,8 +1,9 @@
+import cupy
 import numpy as np
 import pandas as pd
 
 import cudf._libxx as libcudfxx
-from cudf.core.column import as_column, build_categorical_column
+from cudf.core.column import ColumnBase, as_column, build_categorical_column
 from cudf.utils.dtypes import is_categorical_dtype
 
 
@@ -219,8 +220,40 @@ class Frame(libcudfxx.table.Table):
             result._data[name] = col.unary_operator(op)
         return result
 
-    def _searchsorted(self, values, side="left"):
-        return libcudfxx.search.search_sorted(self, values, side)
+    def searchsorted(
+        self, values, side="left", ascending=True, na_position="last"
+    ):
+        """Find indices where elements should be inserted to maintain order
+
+        Parameters
+        ----------
+        value : Frame or Column (Shape must be consistent with self)
+            Values to be hypothetically inserted into Self
+        side : str {‘left’, ‘right’} optional, default ‘left‘
+            If ‘left’, the index of the first suitable location found is given
+            If ‘right’, return the last such index
+        ascending : bool optional, default True
+            Sorted Frame is in ascending order (otherwise descending)
+        na_position : str {‘last’, ‘first’} optional, default ‘last‘
+            Position of null values in sorted order
+
+        Returns
+        -------
+        1-D cupy array of insertion points
+        """
+        # Convert column-typed `values` to Series
+        if isinstance(values, ColumnBase):
+            from cudf.core.series import Series
+
+            values = Series(values)
+
+        # Call libcudf++ search_sorted primitive
+        outcol = libcudfxx.search.search_sorted(
+            self, values, side, ascending=ascending, na_position=na_position
+        )
+
+        # Retrun result as cupy array
+        return cupy.asarray(outcol.data_array_view)
 
     def sin(self):
         return self._unaryop("sin")

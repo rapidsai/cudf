@@ -2559,26 +2559,6 @@ class Series(Frame):
 
         return out.copy(deep=copy)
 
-    def searchsorted(self, value, side="left"):
-        """Find indices where elements should be inserted to maintain order
-
-        Parameters
-        ----------
-        value : array_like
-            Series or Column of values to be hypothetically inserted
-        side : str {‘left’, ‘right’} optional
-            If ‘left’, the index of the first suitable location found is given.
-            If ‘right’, return the last such index
-
-        Returns
-        -------
-        1-D array of insertion points
-        """
-        if isinstance(value, cudf.core.column.ColumnBase):
-            value = Series(column.as_column(value))
-        col = self._searchsorted(value, side)
-        return Series(col).values
-
     @property
     def is_unique(self):
         return self._column.is_unique

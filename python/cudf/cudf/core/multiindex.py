@@ -736,26 +736,6 @@ class MultiIndex(Index):
                 n += col._memory_usage(deep=deep)
         return n
 
-    def searchsorted(self, value, side="left"):
-        """Find indices where elements should be inserted to maintain order
-
-        Parameters
-        ----------
-        value : MultiIndex or Dataframe
-            MultiIndex or Dataframe of values to be hypothetically inserted
-        side : str {‘left’, ‘right’} optional
-            If ‘left’, the index of the first suitable location found is given.
-            If ‘right’, return the last such index
-
-        Returns
-        -------
-        1-D array of insertion points
-        """
-        if isinstance(value, MultiIndex):
-            value = value.to_frame(index=False)
-        col = self.to_frame(index=False)._searchsorted(value, side)
-        return cudf.Series(col).values
-
     def difference(self, other, sort=None):
         temp_self = self
         temp_other = other

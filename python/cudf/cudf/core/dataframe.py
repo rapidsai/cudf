@@ -4389,24 +4389,6 @@ class DataFrame(Frame):
         df.columns = self.columns
         return df
 
-    def searchsorted(self, value, side="left"):
-        """Find indices where elements should be inserted to maintain order
-
-        Parameters
-        ----------
-        value : DataFrame
-            DataFrame of values to be hypothetically inserted
-        side : str {‘left’, ‘right’} optional
-            If ‘left’, the index of the first suitable location found is given.
-            If ‘right’, return the last such index
-
-        Returns
-        -------
-        1-D array of insertion points
-        """
-        outcol = self._searchsorted(value, side)
-        return Series(outcol).values
-
 
 def from_pandas(obj):
     """
