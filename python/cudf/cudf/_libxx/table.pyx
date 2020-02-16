@@ -77,6 +77,11 @@ cdef class Table:
         index_names : iterable
         column_names : iterable
         """
+
+        if column_names is None:
+            column_names = []
+        if index_names is None:
+            index_names = []
         cdef vector[unique_ptr[column]] columns
         columns = c_tbl.get()[0].release()
 
@@ -89,9 +94,11 @@ cdef class Table:
                 move(dereference(it))
             ))
             it += 1 
-
-        result_index = all_cols_py.pop(index_pos)
-        index = Table(OrderedColumnDict(zip(index_names, [result_index])))
+        index = None
+        if index_names is not None:
+            if len(index_names) > 0:
+                result_index = all_cols_py.pop(index_pos)
+                index = Table(OrderedColumnDict(zip(index_names, [result_index])))
         data = OrderedColumnDict(zip(column_names, all_cols_py))
 
         return Table(data=data, index=index)
