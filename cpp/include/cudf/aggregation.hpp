@@ -125,6 +125,16 @@ std::unique_ptr<aggregation> make_argmin_aggregation();
 */
 std::unique_ptr<aggregation>
 make_nunique_aggregation(include_nulls _include_nulls = include_nulls::NO);
+
+/**
+ * @brief Factory to create a `nth_element` aggregation
+ * 
+ * `nth_element` returns the n'th element of the group/series.
+ * @param _include_nulls include nulls during indexing
+*/
+std::unique_ptr<aggregation>
+make_nth_element_aggregation(size_type n, include_nulls _include_nulls = include_nulls::YES);
+
 /**
  * @brief Factory to create a aggregation base on UDF for PTX or CUDA
  *

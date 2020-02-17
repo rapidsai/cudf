@@ -212,7 +212,8 @@ set(GROUPBY_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_std_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_median_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_quantile_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_nunique_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_nunique_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_nth_element_test.cu")
 
 ConfigureTest(GROUPBY_TEST "${GROUPBY_TEST_SRC}")
 

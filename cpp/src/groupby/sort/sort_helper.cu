@@ -153,7 +153,7 @@ sort_groupby_helper::group_offsets(cudaStream_t stream) {
   if (_group_offsets)
     return *_group_offsets;
 
-  _group_offsets = std::make_unique<index_vector>(num_keys(stream));
+  _group_offsets = std::make_unique<index_vector>(num_keys(stream) + 1);
 
   auto device_input_table = table_device_view::create(_keys, stream);
   auto sorted_order = key_sort_order().data<size_type>();
@@ -175,7 +175,8 @@ sort_groupby_helper::group_offsets(cudaStream_t stream) {
   }
 
   size_type num_groups = thrust::distance(_group_offsets->begin(), result_end);
-  _group_offsets->resize(num_groups);
+  (*_group_offsets)[num_groups]= num_keys(stream);
+  _group_offsets->resize(num_groups + 1);
 
   return *_group_offsets;
 }

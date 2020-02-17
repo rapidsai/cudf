@@ -299,6 +299,26 @@ void store_result_functor::operator()<aggregation::NUNIQUE>(
   cache.add_result(col_idx, agg, std::move(result));
 };
 
+template <>
+void store_result_functor::operator()<aggregation::NTH_ELEMENT>(
+  std::unique_ptr<aggregation> const& agg)
+{
+  if (cache.has_result(col_idx, agg))
+    return;
+  
+  auto nth_element_agg =
+    static_cast<experimental::detail::nth_element_aggregation const*>(agg.get());
+
+  cache.add_result(col_idx, agg, 
+                  detail::group_nth_element(get_grouped_values(), 
+                            helper.group_labels(),
+                            helper.group_offsets(),
+                            helper.num_groups(), 
+                            nth_element_agg->n,
+                            nth_element_agg->_include_nulls,
+                            mr, stream));
+}
+
 std::vector<aggregation_result> extract_results(
     std::vector<aggregation_request> const& requests,
     result_cache& cache)
