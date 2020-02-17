@@ -16,7 +16,7 @@ from cudf._libxx.includes.reshape cimport (
      tile as cpp_tile
 )
 
-def interleave_columns(Column source_table):
+def interleave_columns(Table source_table):
     """
     Interleave columns of a table into a single column.
  
@@ -72,7 +72,10 @@ def tile(Table source_table, size_type count):
 
     
     return Table.from_unique_ptr(
-         move(c_result),
-         column_names=source_table._column_names
+          move(c_result),
+          column_names=source_table._column_names,
+          index_names=(
+            None if source_table._index
+            is None else source_table._index_names)
      )
 
