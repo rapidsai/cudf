@@ -29,4 +29,8 @@ cdef class Table:
         index_names=*
     )
     @staticmethod
-    cdef Table from_unique_ptr(unique_ptr[table] c_tbl, column_names, index_names=*, index_pos=*)
+    cdef Table from_unique_ptr(
+        unique_ptr[table] c_tbl, 
+        column_names, 
+        index_names=*, 
+        index_pos=*)

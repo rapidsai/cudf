@@ -93,7 +93,7 @@ cdef class Table:
             cols_py[i] =(Column.from_unique_ptr(
                 move(dereference(it))
             ))
-            it += 1 
+            it += 1
 
         index = None
         if index_names not in [None, []]:
