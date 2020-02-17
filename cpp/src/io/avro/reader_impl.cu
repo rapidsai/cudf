@@ -316,8 +316,7 @@ void reader::impl::decode_data(
       schema_desc[schema_data_idx].count = dict[i].first;
     }
     if (out_buffers[i].null_mask_size()) {
-      CUDA_TRY(cudaMemsetAsync(out_buffers[i].null_mask(), -1,
-                               bitmask_allocation_size_bytes(num_rows), stream));
+      set_null_mask(out_buffers[i].null_mask(), 0, num_rows, stream);
     }
   }
   rmm::device_buffer block_list(
