@@ -78,33 +78,32 @@ cdef class Table:
         column_names : iterable
         """
 
-        if column_names is None:
-            column_names = []
-        if index_names is None:
-            index_names = []
         cdef vector[unique_ptr[column]] columns
         columns = c_tbl.get()[0].release()
 
         cdef vector[unique_ptr[column]].iterator it = columns.begin()
 
-        num_cols_input = len(column_names) + len(index_names)
-        all_cols_py = OrderedDict()
+        num_cols_input = 0
+        num_cols_input += len(column_names) if column_names is not None else 0
+        num_cols_input += len(index_names) if index_names is not None else 0
+
+        cols_py = OrderedDict()
         for i in range(num_cols_input):
-            all_cols_py[i] =(Column.from_unique_ptr(
+            cols_py[i] =(Column.from_unique_ptr(
                 move(dereference(it))
             ))
             it += 1 
-        index = None
-        if index_names is not None:
-            index_columns = []
-            if len(index_names) > 0:
-                if index_pos is None:
-                    index_pos = range(len(index_names))
-                for idx in index_pos:
-                    index_columns.append(all_cols_py.pop(idx))
-                index = Table(OrderedColumnDict(zip(index_names, index_columns)))
 
-        data = OrderedColumnDict(zip(column_names, all_cols_py.values()))
+        index = None
+        if index_names not in [None, []]:
+            index_columns = []
+            if index_pos is None:
+                index_pos = range(len(index_names))
+            for idx in index_pos:
+                index_columns.append(cols_py.pop(idx))
+            index = Table(OrderedColumnDict(zip(index_names, index_columns)))
+
+        data = OrderedColumnDict(zip(column_names, cols_py.values()))
 
         return Table(data=data, index=index)
 
