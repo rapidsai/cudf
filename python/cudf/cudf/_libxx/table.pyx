@@ -76,6 +76,7 @@ cdef class Table:
         c_tbl : unique_ptr[cudf::table]
         index_names : iterable
         column_names : iterable
+        index_pos : iterable, column indices corresponding to column_names
         """
 
         cdef vector[unique_ptr[column]] columns
