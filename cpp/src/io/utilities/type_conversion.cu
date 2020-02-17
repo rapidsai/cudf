@@ -35,7 +35,6 @@ data_type convert_string_to_dtype(const std::string &dtype) {
     return data_type(cudf::type_id::TIMESTAMP_MICROSECONDS);
   if (dtype == "timestamp[ns]")
     return data_type(cudf::type_id::TIMESTAMP_NANOSECONDS);
-  if (dtype == "category") return data_type(cudf::type_id::CATEGORY);
   if (dtype == "date32") return data_type(cudf::type_id::TIMESTAMP_DAYS);
   if (dtype == "bool" || dtype == "boolean")
     return data_type(cudf::type_id::BOOL8);

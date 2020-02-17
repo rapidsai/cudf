@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -281,6 +281,24 @@ void store_result_functor::operator()<aggregation::MEDIAN>(
   cache.add_result(col_idx, agg, std::move(result));
 };
 
+template <>
+void store_result_functor::operator()<aggregation::NUNIQUE>(
+  std::unique_ptr<aggregation> const& agg)
+{
+  if (cache.has_result(col_idx, agg))
+    return;
+
+  auto nunique_agg =
+    static_cast<experimental::detail::nunique_aggregation const*>(agg.get());
+
+  auto result = detail::group_nunique(get_sorted_values(),
+                            helper.group_labels(),
+                            helper.num_groups(), 
+                            helper.group_offsets(),
+                            nunique_agg->_include_nulls,
+                            mr, stream);
+  cache.add_result(col_idx, agg, std::move(result));
+};
 
 }  // namespace detail
 

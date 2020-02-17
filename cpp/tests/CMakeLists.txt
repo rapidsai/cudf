@@ -213,7 +213,8 @@ set(GROUPBY_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_var_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_std_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_median_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_quantile_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_quantile_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_nunique_test.cu")
 
 ConfigureTest(GROUPBY_TEST "${GROUPBY_TEST_SRC}")
 
@@ -330,6 +331,7 @@ set(LEGACY_QUANTILES_TEST_SRC
 ConfigureTest(LEGACY_QUANTILES_TEST "${LEGACY_QUANTILES_TEST_SRC}")
 
 set(QUANTILES_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/quantile_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/quantiles_test.cu")
 
 ConfigureTest(QUANTILES_TEST "${QUANTILES_TEST_SRC}")
@@ -685,7 +687,7 @@ ConfigureTest(LEGACY_MERGE_TEST "${LEGACY_MERGE_TEST_SRC}")
 # - sorted-merge new tests ----------------------------------------------------------------------------
 
 set(MERGE_TEST_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/merge/merge-test.cu"
+  "${CMAKE_CURRENT_SOURCE_DIR}/merge/merge_test.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/merge/merge_string_test.cpp")
 
 ConfigureTest(MERGE_TEST "${MERGE_TEST_SRC}")
@@ -857,9 +859,11 @@ ConfigureTest(BITMASK_TEST "${BITMASK_TEST_SRC}")
 # - dictionary tests ---------------------------------------------------------------------------------
 
 set(DICTIONARY_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/add_keys_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/factories_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/encode_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/decode_test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/encode_test.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/gather_test.cpp")
 
 ConfigureTest(DICTIONARY_TEST "${DICTIONARY_TEST_SRC}")
 
