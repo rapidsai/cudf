@@ -26,7 +26,6 @@
 #include <cudf/strings/detail/copy_range.cuh>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
-#include <rmm/mr/device_memory_resource.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 
@@ -137,6 +136,17 @@ struct out_of_place_copy_range_dispatch {
         mr, stream);
     }
   }
+
+  template <typename T>
+  std::enable_if_t<std::is_same<cudf::dictionary32, T>::value,
+                   std::unique_ptr<cudf::column>>
+  operator()(
+      cudf::size_type source_begin, cudf::size_type source_end,
+      cudf::size_type target_begin,
+      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+      cudaStream_t stream = 0) {
+        CUDF_FAIL("dictionary type not supported");
+  }
 };
 
 }
@@ -146,10 +156,10 @@ namespace experimental {
 
 namespace detail {
 
-void copy_range(column_view const& source, mutable_column_view& target,
-                size_type source_begin, size_type source_end,
-                size_type target_begin,
-                cudaStream_t stream) {
+void copy_range_in_place(column_view const& source, mutable_column_view& target,
+                         size_type source_begin, size_type source_end,
+                         size_type target_begin,
+                         cudaStream_t stream) {
   CUDF_EXPECTS(cudf::is_fixed_width(target.type()) == true,
                "In-place copy_range does not support variable-sized types.");
   CUDF_EXPECTS((source_begin <= source_end) &&
@@ -202,11 +212,11 @@ std::unique_ptr<column> copy_range(column_view const& source,
 
 }  // namespace detail
 
-void copy_range(column_view const& source, mutable_column_view& target,
-                size_type source_begin, size_type source_end,
-                size_type target_begin) {
-  return detail::copy_range(source, target, source_begin, source_end,
-                            target_begin, 0);
+void copy_range_in_place(column_view const& source, mutable_column_view& target,
+                         size_type source_begin, size_type source_end,
+                         size_type target_begin) {
+  return detail::copy_range_in_place(source, target, source_begin, source_end,
+                                     target_begin, 0);
 }
 
 std::unique_ptr<column> copy_range(column_view const& source,

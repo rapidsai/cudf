@@ -276,7 +276,7 @@ std::pair<cudf::table, std::vector<gdf_column*>> compute_sort_groupby(cudf::tabl
                    set_null_count(*col);
                    return col;
                  });
-  return std::make_pair(groupby.unique_keys(), final_output_values);
+  return std::make_pair(groupby.unique_keys(), std::move(final_output_values));
 }
 
 /**---------------------------------------------------------------------------*
@@ -368,7 +368,7 @@ std::pair<cudf::table, std::vector<gdf_column*>> groupby(cudf::table const& keys
   cudf::table table_output_values(output_values);
   
   update_nvcategories(keys, output_keys, values, table_output_values);
-  return std::make_pair(output_keys, output_values);                                              
+  return std::make_pair(std::move(output_keys), std::move(output_values));                                              
 }
 
 } // namespace detail

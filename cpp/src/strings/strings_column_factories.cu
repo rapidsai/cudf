@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,18 +14,15 @@
  * limitations under the License.
  */
 
-#include <bitmask/legacy/valid_if.cuh>
-#include <cudf/detail/column_factories.hpp>
 #include <cudf/column/column.hpp>
-#include <cudf/legacy/functions.h>
-#include <cudf/null_mask.hpp>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/utilities/error.hpp>
-#include "./utilities.hpp"
-#include "./utilities.cuh"
+#include <cudf/detail/valid_if.cuh>
+#include <strings/utilities.hpp>
+#include <strings/utilities.cuh>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/transform_reduce.h>
-#include <thrust/transform_scan.h>
 #include <thrust/for_each.h>
 
 
@@ -68,11 +65,14 @@ std::unique_ptr<column> make_strings_column(
     auto d_offsets = offsets_view.data<int32_t>();
 
     // create null mask
-    auto valid_mask = strings::detail::make_null_mask(strings_count,
-        [d_strings] __device__ (size_type idx) { return d_strings[idx].first!=nullptr; },
-        mr, stream);
-    auto null_count = valid_mask.second;
-    rmm::device_buffer null_mask = valid_mask.first;
+    auto new_nulls = experimental::detail::valid_if( thrust::make_counting_iterator<size_type>(0),
+                    thrust::make_counting_iterator<size_type>(strings_count),
+                    [d_strings] __device__ (size_type idx) { return d_strings[idx].first!=nullptr; },
+                    stream, mr);
+    auto null_count = new_nulls.second;
+    rmm::device_buffer null_mask;
+    if( null_count > 0 )
+        null_mask = std::move(new_nulls.first);
 
     // build chars column
     auto chars_column = strings::detail::create_chars_child_column( strings_count, null_count, bytes, mr, stream );
@@ -88,6 +88,32 @@ std::unique_ptr<column> make_strings_column(
 
     return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
                                null_count, std::move(null_mask), stream, mr);
+}
+
+struct string_view_to_pair {
+    string_view null_placeholder;
+    string_view_to_pair(string_view n) : null_placeholder(n) {}
+  __device__
+  thrust::pair<const char *, size_type>
+  operator()(const string_view& i) {
+        return (i.data() == null_placeholder.data())
+                   ? thrust::pair<const char *, size_type>{nullptr, 0}
+                   : thrust::pair<const char *, size_type>{i.data(), i.size_bytes()};
+      }
+};
+
+// Create a strings-type column from vector of string_view
+std::unique_ptr<column> make_strings_column(
+    const rmm::device_vector<string_view>& string_views,
+    const string_view null_placeholder,
+    cudaStream_t stream,
+    rmm::mr::device_memory_resource* mr)
+{
+  auto it_pair = thrust::make_transform_iterator(
+      string_views.begin(), string_view_to_pair{null_placeholder});
+  const rmm::device_vector<thrust::pair<const char *, size_type>> dev_strings(
+      it_pair, it_pair + string_views.size());
+  return make_strings_column(dev_strings, stream, mr);
 }
 
 // Create a strings-type column from device vector of chars and vector of offsets.

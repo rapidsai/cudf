@@ -20,6 +20,7 @@ from libc.stdlib cimport malloc, free
 import cudf
 from cudf.core.buffer import Buffer
 from cudf.utils.cudautils import zeros
+from cudf.utils.dtypes import is_categorical_dtype
 
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
@@ -63,7 +64,7 @@ def groupby(
     result : tuple of list of Columns
         keys and values of the result
     """
-    from cudf.core.column import CategoricalColumn
+    from cudf.core.column import build_column, build_categorical_column
 
     if len(values) == 0:
         return (keys, [])
@@ -99,11 +100,11 @@ def groupby(
     result_value_cols = columns_from_table(&result.second)
 
     for i, inp_key_col in enumerate(keys):
-        if isinstance(inp_key_col, CategoricalColumn):
-            result_key_cols[i] = CategoricalColumn(
-                data=result_key_cols[i].data,
-                mask=result_key_cols[i].mask,
+        if is_categorical_dtype(inp_key_col.dtype):
+            result_key_cols[i] = build_categorical_column(
                 categories=inp_key_col.cat().categories,
+                codes=result_key_cols[i],
+                mask=result_key_cols[i].mask,
                 ordered=inp_key_col.cat().ordered
             )
 
@@ -125,7 +126,7 @@ def groupby_without_aggregations(cols, key_cols):
     offsets : Column
         Integer offsets to the start of each set of unique keys
     """
-    from cudf.core.column import Column, CategoricalColumn
+    from cudf.core.column import build_column, build_categorical_column
 
     cdef cudf_table* c_in_table = table_from_columns(cols)
     cdef vector[size_type] c_key_col_indices
@@ -155,17 +156,17 @@ def groupby_without_aggregations(cols, key_cols):
             c_ctx
         )
 
-    data, mask = gdf_column_to_column_mem(&c_result.second)
-    offsets = Column.from_mem_views(data, mask)
+    offsets = gdf_column_to_column(&c_result.second)
     sorted_cols = columns_from_table(&c_result.first)
 
     for i, inp_col in enumerate(cols):
-        if isinstance(inp_col, CategoricalColumn):
-            sorted_cols[i] = CategoricalColumn(
-                data=sorted_cols[i].data,
-                mask=sorted_cols[i].mask,
+        if is_categorical_dtype(inp_col.dtype):
+            sorted_cols[i] = build_categorical_column(
                 categories=inp_col.cat().categories,
-                ordered=inp_col.cat().ordered)
+                codes=sorted_cols[i],
+                mask=sorted_cols[i].mask,
+                ordered=inp_col.cat().ordered
+            )
 
     del c_in_table
 

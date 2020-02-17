@@ -196,16 +196,14 @@ def test_index_rename_inplace():
 
     # inplace=False should yield a deep copy
     gds_renamed_deep = gds.rename("new_name", inplace=False)
-    gds._values.data.mem = GenericIndex([2, 3, 4])._values.data.mem
 
-    assert (gds_renamed_deep.values == [1, 2, 3]).all()
+    assert gds_renamed_deep._values.data_ptr != gds._values.data_ptr
 
     # inplace=True returns none
-    gds_to_rename = gds
+    expected_ptr = gds._values.data_ptr
     gds.rename("new_name", inplace=True)
-    gds._values.data.mem = GenericIndex([3, 4, 5])._values.data.mem
 
-    assert (gds_to_rename.values == [3, 4, 5]).all()
+    assert expected_ptr == gds._values.data_ptr
 
 
 def test_index_rename_preserves_arg():
@@ -234,20 +232,20 @@ def test_set_index_as_property():
     # Check set_index(Series)
     cdf.index = cdf["b"]
 
-    np.testing.assert_array_equal(cdf.index.values, col2)
+    assert_eq(cdf.index._values.to_array(), col2)
 
     with pytest.raises(ValueError):
         cdf.index = [list(range(10))]
 
-    idx = np.arange(0, 1000, 100)
+    idx = pd.Index(np.arange(0, 1000, 100))
     cdf.index = idx
-    np.testing.assert_array_equal(cdf.index.values, idx)
+    assert_eq(cdf.index.to_pandas(), idx)
 
     df = cdf.to_pandas()
-    np.testing.assert_array_equal(df.index.values, idx)
+    assert_eq(df.index, idx)
 
     head = cdf.head().to_pandas()
-    np.testing.assert_array_equal(head.index.values, idx[:5])
+    assert_eq(head.index, idx[:5])
 
 
 @pytest.mark.parametrize(
@@ -286,3 +284,26 @@ def test_rangeindex_slice_attr_name():
     rg = RangeIndex(start, stop, "myindex")
     sliced_rg = rg[0:9]
     assert_eq(rg.name, sliced_rg.name)
+
+
+def test_from_pandas_str():
+    idx = ["a", "b", "c"]
+    pidx = pd.Index(idx, name="idx")
+    gidx_1 = cudf.core.index.StringIndex(idx, name="idx")
+    gidx_2 = cudf.from_pandas(pidx)
+
+    assert_eq(gidx_1, gidx_2)
+
+
+def test_from_pandas_gen():
+    idx = [2, 4, 6]
+    pidx = pd.Index(idx, name="idx")
+    gidx_1 = cudf.core.index.GenericIndex(idx, name="idx")
+    gidx_2 = cudf.from_pandas(pidx)
+
+    assert_eq(gidx_1, gidx_2)
+
+
+def test_index_names():
+    idx = cudf.core.index.as_index([1, 2, 3], name="idx")
+    assert idx.names == ("idx",)

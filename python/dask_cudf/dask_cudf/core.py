@@ -45,7 +45,11 @@ def optimize(dsk, keys, **kwargs):
 
 
 def finalize(results):
-    return cudf.concat(results)
+    if results and isinstance(
+        results[0], (cudf.DataFrame, cudf.Series, cudf.Index, cudf.MultiIndex)
+    ):
+        return cudf.concat(results)
+    return results
 
 
 class _Frame(dd.core._Frame, OperatorMethodMixin):
@@ -205,11 +209,15 @@ class DataFrame(_Frame, dd.core.DataFrame):
         ---------
         by : str
         """
-        parts = self.to_delayed()
-        sorted_parts = batcher_sortnet.sort_delayed_frame(parts, by)
-        return from_delayed(sorted_parts, meta=self._meta).reset_index(
-            force=not ignore_index
-        )
+        if self.npartitions == 1:
+            df = self.map_partitions(M.sort_values, by)
+        else:
+            parts = self.to_delayed()
+            sorted_parts = batcher_sortnet.sort_delayed_frame(parts, by)
+            df = from_delayed(sorted_parts, meta=self._meta)
+        if ignore_index:
+            return df.reset_index(drop=True)
+        return df
 
     def sort_values_binned(self, by):
         """Sorty by the given column and ensure that the same key
@@ -631,3 +639,31 @@ from_cudf = dd.from_pandas
 
 def from_dask_dataframe(df):
     return df.map_partitions(cudf.from_pandas)
+
+
+for name in [
+    "add",
+    "sub",
+    "mul",
+    "truediv",
+    "floordiv",
+    "mod",
+    "pow",
+    "radd",
+    "rsub",
+    "rmul",
+    "rtruediv",
+    "rfloordiv",
+    "rmod",
+    "rpow",
+]:
+    meth = getattr(cudf.DataFrame, name)
+    DataFrame._bind_operator_method(name, meth)
+
+    meth = getattr(cudf.Series, name)
+    Series._bind_operator_method(name, meth)
+
+for name in ["lt", "gt", "le", "ge", "ne", "eq"]:
+
+    meth = getattr(cudf.Series, name)
+    Series._bind_comparison_method(name, meth)

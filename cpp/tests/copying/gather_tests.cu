@@ -10,6 +10,7 @@
 #include <tests/utilities/table_utilities.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/gather.cuh>
+#include <tests/strings/utilities.h>
 
 
 template <typename T>
@@ -347,4 +348,70 @@ TEST_F(GatherTestStr, StringColumn) {
     auto got = cudf::experimental::gather(source_table, gather_map);
 
     cudf::test::expect_tables_equal(expected, got->view());
+}
+
+TEST_F(GatherTestStr, Gather)
+{
+    std::vector<const char*> h_strings{ "eee", "bb", "", "aa", "bbb", "ééé" };
+    cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end() );
+    cudf::table_view source_table ({strings});
+
+    std::vector<int32_t> h_map{ 4,1,5,2,7 };
+    cudf::test::fixed_width_column_wrapper<int32_t> gather_map{h_map.begin(), h_map.end()};
+    auto results = cudf::experimental::detail::gather(
+           source_table,
+           gather_map,
+           false, true
+           );
+
+    std::vector<const char*> h_expected;
+    std::vector<int32_t> expected_validity;
+    for( auto itr = h_map.begin(); itr != h_map.end(); ++itr )
+    {
+        auto index = *itr;
+        if( (0 <= index) && (index < static_cast<decltype(index)>(h_strings.size())) ) {
+            h_expected.push_back( h_strings[index] );
+            expected_validity.push_back(1);
+        }
+        else {
+            h_expected.push_back( "" );
+            expected_validity.push_back(0);
+        }
+    }
+    cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
+        expected_validity.begin());
+    cudf::test::expect_columns_equal(results->view().column(0),expected);
+}
+
+TEST_F(GatherTestStr, GatherIgnoreOutOfBounds)
+{
+    std::vector<const char*> h_strings{ "eee", "bb", "", "aa", "bbb", "ééé" };
+    cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end() );
+    cudf::table_view source_table ({strings});
+
+    std::vector<int32_t> h_map{ 3,4,0,0 };
+    cudf::test::fixed_width_column_wrapper<int32_t> gather_map{h_map.begin(), h_map.end()};
+    auto results = cudf::experimental::detail::gather(
+           source_table,
+           gather_map,
+           false, true
+           );
+
+    std::vector<const char*> h_expected;
+    std::vector<int32_t> expected_validity;
+    for( auto itr = h_map.begin(); itr != h_map.end(); ++itr ) {
+        h_expected.push_back( h_strings[*itr] );
+        expected_validity.push_back(1);
+    }
+    cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
+        expected_validity.begin());
+    cudf::test::expect_columns_equal(results->view().column(0),expected);
+}
+
+TEST_F(GatherTestStr, GatherZeroSizeStringsColumn)
+{
+    cudf::column_view zero_size_strings_column( cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
+    rmm::device_vector<cudf::size_type> gather_map{};
+    auto results = cudf::experimental::detail::gather(cudf::table_view({zero_size_strings_column}), gather_map.begin(), gather_map.end(), false, true);
+    cudf::test::expect_strings_empty(results->get_column(0).view());
 }

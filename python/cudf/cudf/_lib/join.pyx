@@ -37,8 +37,8 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
 
     assert(len(left_on) == len(right_on))
 
-    cdef cudf_table *list_lhs = table_from_dataframe(col_lhs)
-    cdef cudf_table *list_rhs = table_from_dataframe(col_rhs)
+    cdef cudf_table *list_lhs = table_from_columns(col_lhs.values())
+    cdef cudf_table *list_rhs = table_from_columns(col_rhs.values())
     cdef vector[int] left_on_ind
     cdef vector[int] right_on_ind
     cdef vector[pair[int, int]] columns_in_common

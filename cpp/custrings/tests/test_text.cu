@@ -186,6 +186,29 @@ TEST_F(TestText, NGrams)
     NVStrings::destroy(strs);
 }
 
+TEST_F(TestText, NGramsTokenize)
+{
+    NVStrings* strs = NVStrings::create_from_array(tstrs.data(),tstrs.size());
+    {
+        NVStrings* got = NVText::ngrams_tokenize(*strs," ",2,"_");
+        const char* expected[] = { "the_fox", "fox_jumped", "jumped_over", "over_the", "the_dog",
+                                   "the_dog", "dog_chased", "chased_the", "the_cat",
+                                   "the_cat", "cat_chased", "chased_the", "the_mouse",
+                                   "the_mouse", "mouse_ate", "ate_the", "the_cheese" };
+        EXPECT_TRUE( verify_strings(got,expected));
+        NVStrings::destroy(got);
+    }
+    {
+        NVStrings* got = NVText::ngrams_tokenize(*strs,nullptr,3,"_");
+        const char* expected[] = { "the_fox_jumped", "fox_jumped_over", "jumped_over_the", "over_the_dog",
+                                   "the_dog_chased", "dog_chased_the",  "chased_the_cat",
+                                   "the_cat_chased", "cat_chased_the",  "chased_the_mouse",
+                                   "the_mouse_ate",  "mouse_ate_the",   "ate_the_cheese" };
+        EXPECT_TRUE( verify_strings(got,expected));
+        NVStrings::destroy(got);
+    }
+    NVStrings::destroy(strs);
+}
 
 TEST_F(TestText, PorterStemmerMeasure)
 {

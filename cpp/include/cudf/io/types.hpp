@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,10 @@
 #pragma once
 
 #include <memory>
+#include <vector>
 #include <string>
+#include <map>
+#include <cudf/types.hpp>
 
 // Forward declarations
 namespace arrow {
@@ -59,6 +62,7 @@ enum class io_type {
   FILEPATH,                  ///< Input/output is a file path
   HOST_BUFFER,               ///< Input/output is a buffer in host memory,
   ARROW_RANDOM_ACCESS_FILE,  ///< Input/output is an arrow::io::RandomAccessFile
+  VOID,                      ///< Input/output is nothing. No work is done. Useful for benchmarking
 };
 
 /**
@@ -79,6 +83,52 @@ enum statistics_freq {
   STATISTICS_ROWGROUP = 1, //!< Per-Rowgroup column statistics
   STATISTICS_PAGE = 2,     //!< Per-page column statistics
 };
+
+/**
+ * @brief Table metadata for io readers/writers (primarily column names)
+ * For nested types (structs, maps, unions), the ordering of names in the column_names vector
+ * corresponds to a pre-order traversal of the column tree.
+ * In the example below (2 top-level columns: struct column "col1" and string column "col2"),
+ *  column_names = {"col1", "s3", "f5", "f6", "f4", "col2"}.
+ *
+ *     col1     col2 
+ *      / \ 
+ *     /   \ 
+ *   s3    f4 
+ *   / \ 
+ *  /   \ 
+ * f5    f6 
+ */
+struct table_metadata {
+  std::vector<std::string> column_names;        //!< Names of columns contained in the table
+  std::map<std::string, std::string> user_data; //!< Format-dependent metadata as key-values pairs  
+};
+
+/**
+ * @brief Derived class of table_metadata which includes nullability information per column of input.
+ * 
+ * This information is used as an optimization for chunked writes. If the caller leaves column_nullable
+ * uninitialized, the writer code will assume the worst case : that all columns are nullable.
+ * 
+ * If the column_nullable field is not empty, it is expected that it has a length equal to the number
+ * of columns in the table being written.  
+ * 
+ * In the case where column nullability is known, pass `true` if the corresponding column could contain 
+ * nulls in one or more subtables to be written, otherwise `false`.
+ * 
+ */
+struct table_metadata_with_nullability : public table_metadata {
+  std::vector<bool>         column_nullable;    //!< Per-column nullability information.
+};
+
+/**
+ * @brief Table with table metadata used by io readers to return the metadata by value
+ */
+struct table_with_metadata {
+  std::unique_ptr<table> tbl;
+  table_metadata metadata;
+};
+
 
 /**
  * @brief Source information for read interfaces
@@ -104,11 +154,17 @@ struct source_info {
  * @brief Destination information for write interfaces
  */
 struct sink_info {
-  io_type type = io_type::FILEPATH;
+  io_type type = io_type::VOID;
   std::string filepath;
+  std::vector<char>* buffer = nullptr;
+
+  sink_info() = default;
 
   explicit sink_info(const std::string& file_path)
       : type(io_type::FILEPATH), filepath(file_path) {}
+
+  explicit sink_info(std::vector<char>* buffer)
+      : type(io_type::HOST_BUFFER), buffer(buffer) {}  
 };
 
 }  // namespace io

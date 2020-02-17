@@ -66,7 +66,7 @@ gdf_error gdf_digitize(gdf_column* col,
                         binary_search_bound{},
                         right, bins->data, bins->size, col->data, col->size, out_indices);
 
-  CUDA_CHECK_LAST();
+  CHECK_CUDA(0);
 
   return GDF_SUCCESS;
 }

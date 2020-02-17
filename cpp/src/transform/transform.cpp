@@ -34,33 +34,6 @@ namespace transformation {
 
 namespace jit {
 
-
-/**
- * @brief Functor to enable the internal working of `get_data_ptr`
- * @ref get_data_ptr
- */
-struct get_data_ptr_functor {
-  template <typename T>
-  std::enable_if_t<is_fixed_width<T>(), const void *>
-  operator()(column_view const& view) {
-    return static_cast<const void*>(view.template data<T>());
-  }
-  template <typename T>
-  std::enable_if_t<not is_fixed_width<T>(), const void *>
-  operator()(column_view const& view) {
-    CUDF_FAIL("Invalid data type for transform operation");
-  }
-};
-
-/**
- * @brief Get the raw pointer to data in a (mutable_)column_view
- */
-auto get_data_ptr(column_view const& view) {
-  return experimental::type_dispatcher(view.type(),
-                         get_data_ptr_functor{}, view);
-}
-
-
 void unary_operation(mutable_column_view output, column_view input,
                      const std::string& udf, data_type output_type, bool is_ptx,
                      cudaStream_t stream) {
@@ -80,20 +53,26 @@ void unary_operation(mutable_column_view output, column_view input,
       cudf::jit::parse_single_function_cuda(
           udf, "GENERIC_UNARY_OP") + code::kernel;
   }
+
+  const std::vector<std::string> compiler_flags{
+    "-std=c++14",
+    // Have jitify prune unused global variables
+    "-remove-unused-globals",
+    // suppress all NVRTC warnings
+    "-w"
+  };
   
   // Launch the jitify kernel
-  cudf::jit::launcher(
-    hash, cuda_source,
-    { cudf_types_hpp },
-    { "-std=c++14" }, nullptr, stream
+  cudf::jit::launcher(hash, cuda_source, { cudf_types_hpp },
+                      compiler_flags, nullptr, stream
   ).set_kernel_inst(
     "kernel", // name of the kernel we are launching
     { cudf::jit::get_type_name(output.type()), // list of template arguments
       cudf::jit::get_type_name(input.type()) }
   ).launch(
     output.size(),
-    get_data_ptr(output),
-    get_data_ptr(input)
+    cudf::jit::get_data_ptr(output),
+    cudf::jit::get_data_ptr(input)
   );
 
 }

@@ -61,7 +61,7 @@ std::unique_ptr<cudf::column> gather( strings_column_view const& strings,
 {
     auto output_count = std::distance(begin, end);
     auto strings_count = strings.size();
-    if( output_count == 0 || strings_count == 0 )
+    if( output_count == 0 )
         return make_empty_strings_column(mr,stream);
 
     auto execpol = rmm::exec_policy(stream);
@@ -73,7 +73,10 @@ std::unique_ptr<cudf::column> gather( strings_column_view const& strings,
       mstate = ALL_NULL;
     }
     // create null mask -- caller must update this
-    rmm::device_buffer null_mask = create_null_mask( output_count, mstate, stream, mr );
+
+    auto null_mask  = (strings.parent().nullable() or NullifyOutOfBounds)
+                    ? create_null_mask(output_count, mstate, stream, mr)
+                    : rmm::device_buffer{};
 
     // build offsets column
     auto offsets_transformer = [d_strings, strings_count] __device__ (size_type idx) {

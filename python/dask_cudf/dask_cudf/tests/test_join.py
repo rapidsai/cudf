@@ -27,13 +27,13 @@ def test_join_inner(left_nrows, right_nrows, left_nkeys, right_nkeys):
         {
             "x": np.random.randint(0, left_nkeys, size=left_nrows),
             "a": np.arange(left_nrows),
-        }.items()
+        }
     )
     right = cudf.DataFrame(
         {
             "x": np.random.randint(0, right_nkeys, size=right_nrows),
             "a": 1000 * np.arange(right_nrows),
-        }.items()
+        }
     )
 
     expect = left.set_index("x").join(
@@ -90,13 +90,13 @@ def test_join_left(left_nrows, right_nrows, left_nkeys, right_nkeys, how):
         {
             "x": np.random.randint(0, left_nkeys, size=left_nrows),
             "a": np.arange(left_nrows, dtype=np.float64),
-        }.items()
+        }
     )
     right = cudf.DataFrame(
         {
             "x": np.random.randint(0, right_nkeys, size=right_nrows),
             "a": 1000 * np.arange(right_nrows, dtype=np.float64),
-        }.items()
+        }
     )
 
     expect = left.set_index("x").join(
@@ -160,14 +160,14 @@ def test_merge_left(
             "x": np.random.randint(0, left_nkeys, size=left_nrows),
             "y": np.random.randint(0, left_nkeys, size=left_nrows),
             "a": np.arange(left_nrows, dtype=np.float64),
-        }.items()
+        }
     )
     right = cudf.DataFrame(
         {
             "x": np.random.randint(0, right_nkeys, size=right_nrows),
             "y": np.random.randint(0, right_nkeys, size=right_nrows),
             "a": 1000 * np.arange(right_nrows, dtype=np.float64),
-        }.items()
+        }
     )
 
     expect = left.merge(right, on=("x", "y"), how=how)
@@ -206,13 +206,13 @@ def test_merge_1col_left(
         {
             "x": np.random.randint(0, left_nkeys, size=left_nrows),
             "a": np.arange(left_nrows, dtype=np.float64),
-        }.items()
+        }
     )
     right = cudf.DataFrame(
         {
             "x": np.random.randint(0, right_nkeys, size=right_nrows),
             "a": 1000 * np.arange(right_nrows, dtype=np.float64),
-        }.items()
+        }
     )
 
     expect = left.merge(right, on=["x"], how=how)

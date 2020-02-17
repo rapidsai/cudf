@@ -170,7 +170,7 @@ gdf_error gdf_hash(int num_cols,
       return GDF_INVALID_HASH_FUNCTION;
   }
 
-  CUDA_CHECK_LAST();
+  CHECK_CUDA(0);
 
   return GDF_SUCCESS;
 }
@@ -475,7 +475,7 @@ gdf_error hash_partition_table(cudf::table const &input_table,
   }
 
 
-  CUDA_CHECK_LAST();
+  CHECK_CUDA(0);
 
   
   // Compute exclusive scan of all blocks' partition sizes in-place to determine 
@@ -485,7 +485,7 @@ gdf_error hash_partition_table(cudf::table const &input_table,
                          block_partition_sizes, 
                          block_partition_sizes + (grid_size * num_partitions), 
                          scanned_block_partition_sizes);
-  CUDA_CHECK_LAST();
+  CHECK_CUDA(0);
 
 
   // Compute exclusive scan of size of each partition to determine offset location
@@ -497,7 +497,7 @@ gdf_error hash_partition_table(cudf::table const &input_table,
                          global_partition_sizes, 
                          global_partition_sizes + num_partitions,
                          scanned_global_partition_sizes);
-  CUDA_CHECK_LAST();
+  CHECK_CUDA(s1);
 
   // Copy the result of the exlusive scan to the output offsets array
   // to indicate the starting point for each partition in the output
@@ -506,6 +506,7 @@ gdf_error hash_partition_table(cudf::table const &input_table,
                            num_partitions * sizeof(cudf::size_type),
                            cudaMemcpyDeviceToHost,
                            s1));
+  CHECK_CUDA(s1);
 
   // Compute the output location for each row in-place based on it's 
   // partition number such that each partition will be contiguous in memory
@@ -516,7 +517,7 @@ gdf_error hash_partition_table(cudf::table const &input_table,
                                                                   num_partitions,
                                                                   scanned_block_partition_sizes);
 
-  CUDA_CHECK_LAST();
+  CHECK_CUDA(0);
 
   // Creates the partitioned output table by scattering the rows of
   // the input table to rows of the output table based on each rows
@@ -524,7 +525,7 @@ gdf_error hash_partition_table(cudf::table const &input_table,
   cudf::detail::scatter(&input_table, row_output_locations,
                         &partitioned_output);
 
-  CUDA_CHECK_LAST();
+  CHECK_CUDA(0);
 
   RMM_TRY(RMM_FREE(row_partition_numbers, 0));
   RMM_TRY(RMM_FREE(block_partition_sizes, 0));

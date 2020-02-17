@@ -139,7 +139,7 @@ struct AtomicsTest : public GdfTest
 
         thrust::host_vector<T> host_result(dev_result);
         cudaDeviceSynchronize();
-        CUDA_CHECK_LAST();
+        CHECK_CUDA(0);
 
         EXPECT_EQ(host_result[0], exact[0]) << "atomicAdd test failed";
         EXPECT_EQ(host_result[1], exact[1]) << "atomicMin test failed";
@@ -274,7 +274,7 @@ struct AtomicsBitwiseOpTest : public GdfTest
 
         thrust::host_vector<T> host_result(dev_result);
         cudaDeviceSynchronize();
-        CUDA_CHECK_LAST();
+        CHECK_CUDA(0);
 
         print_exact(exact, "exact");
         print_exact(host_result.data(), "result");

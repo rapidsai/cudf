@@ -17,11 +17,13 @@
 #ifndef CUDF_JIT_CACHE_H_
 #define CUDF_JIT_CACHE_H_
 
+#include <cudf/utilities/error.hpp>
 #include <jitify.hpp>
 #include <unordered_map>
 #include <string>
 #include <memory>
 #include <mutex>
+#include <boost/filesystem.hpp>
 
 namespace cudf {
 namespace jit {
@@ -29,18 +31,19 @@ namespace jit {
 template <typename Tv>
 using named_prog = std::pair<std::string, std::shared_ptr<Tv>>;
 
-/**---------------------------------------------------------------------------*
- * @brief Get the string path to Cache Directory
- * 
- * This will return a path to the cache directory and will create the directory
- * if it doesn't exist
- * 
- * The cache directory is kept in the same place as the output of C++17's 
- * std::filesystem::temp_directory_path()
- * @todo: replace the logic to find the cache dir with the above method after 
- *  transitioning to C++17
- *---------------------------------------------------------------------------**/
-std::string getCacheDir();
+/**
+ * @brief Get the string path to the JITIFY kernel cache directory.
+ *
+ * This path can be overridden at runtime by defining an environment variable
+ * named `LIBCUDF_KERNEL_CACHE_PATH`. The value of this variable must be a path
+ * under which the process' user has read/write priveleges.
+ *
+ * This function returns a path to the cache directory, creating it if it
+ * doesn't exist.
+ *
+ * The default cache directory `$TEMPDIR/cudf_$CUDF_VERSION`.
+ **/
+boost::filesystem::path getCacheDir();
 
 class cudfJitCache
 {
@@ -71,9 +74,9 @@ public:
      * @param arguments [in] template arguments for kernel in vector of strings
      * @return  Pair of string kernel identifier and compiled kernel object
      *---------------------------------------------------------------------------**/
-    named_prog<jitify_v2::KernelInstantiation> getKernelInstantiation(
+    named_prog<jitify::experimental::KernelInstantiation> getKernelInstantiation(
         std::string const& kern_name,
-        named_prog<jitify_v2::Program> const& program,
+        named_prog<jitify::experimental::Program> const& program,
         std::vector<std::string> const& arguments);
 
     /**---------------------------------------------------------------------------*
@@ -89,21 +92,21 @@ public:
      * @param given_options  [in] vector of strings options to pass to NVRTC
      * @param file_callback  [in] pointer to callback function to call whenever a
      *  header needs to be loaded
-     * @return named_prog<jitify_v2::Program> 
+     * @return named_prog<jitify::experimental::Program> 
      *---------------------------------------------------------------------------**/
-    named_prog<jitify_v2::Program> getProgram(
+    named_prog<jitify::experimental::Program> getProgram(
         std::string const& prog_file_name, 
         std::string const& cuda_source = "",
         std::vector<std::string> const& given_headers = {},
         std::vector<std::string> const& given_options = {},
-        jitify_v2::file_callback_type file_callback = nullptr);
+        jitify::experimental::file_callback_type file_callback = nullptr);
 
 private:
     template <typename Tv>
     using umap_str_shptr = std::unordered_map<std::string, std::shared_ptr<Tv>>;
 
-    umap_str_shptr<jitify_v2::KernelInstantiation>  kernel_inst_map;
-    umap_str_shptr<jitify_v2::Program>              program_map;
+    umap_str_shptr<jitify::experimental::KernelInstantiation>  kernel_inst_map;
+    umap_str_shptr<jitify::experimental::Program>              program_map;
 
     /*
     Even though this class can be used as a non-singleton, the file cache
@@ -176,8 +179,8 @@ private:
             bool successful_read = false;
             std::string serialized;
             #if defined(JITIFY_USE_CACHE)
-                std::string file_name = getCacheDir() + name;
-                cacheFile file{file_name};
+                boost::filesystem::path file_name = getCacheDir() / name;
+                cacheFile file{file_name.string()};
                 serialized = file.read();
                 successful_read = file.is_read_successful();
             #endif

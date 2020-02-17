@@ -5,10 +5,11 @@ import sys
 
 import numpy as np
 import pandas as pd
+import pytest
 
 import rmm
 
-from cudf.core import DataFrame, GenericIndex
+from cudf.core import DataFrame, GenericIndex, Series
 from cudf.core.buffer import Buffer
 
 
@@ -69,7 +70,7 @@ def test_sizeof_dataframe():
 
 def test_pickle_index():
     nelem = 10
-    idx = GenericIndex(rmm.to_device(np.arange(nelem)))
+    idx = GenericIndex(rmm.to_device(np.arange(nelem)), name="a")
     pickled = pickle.dumps(idx)
     out = pickle.loads(pickled)
     assert idx == out
@@ -77,13 +78,22 @@ def test_pickle_index():
 
 def test_pickle_buffer():
     arr = np.arange(10)
-    buf = Buffer(arr, size=4, capacity=arr.size)
-    assert buf.size == 4
-    assert buf.capacity == 10
+    buf = Buffer(arr)
+    assert buf.size == arr.nbytes
     pickled = pickle.dumps(buf)
     unpacked = pickle.loads(pickled)
     # Check that unpacked capacity equals buf.size
-    assert unpacked.size == 4
-    assert unpacked.capacity == 4
-    assert unpacked.mem.size == unpacked.capacity
-    np.testing.assert_equal(unpacked.to_array(), arr[: unpacked.size])
+    assert unpacked.size == arr.nbytes
+
+
+@pytest.mark.parametrize("named", [True, False])
+def test_pickle_series(named):
+    np.random.seed(0)
+    if named:
+        ser = Series(np.random.random(10), name="a")
+    else:
+        ser = Series(np.random.random(10))
+
+    pickled = pickle.dumps(ser)
+    out = pickle.loads(pickled)
+    assert (ser == out).all()

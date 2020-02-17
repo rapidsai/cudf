@@ -2,6 +2,7 @@
 
 import os
 import urllib
+import warnings
 from io import BytesIO, TextIOWrapper
 
 import fsspec
@@ -912,8 +913,12 @@ def get_filepath_or_buffer(
             path_or_data, mode="rb", storage_options=storage_options
         )
         if len(paths) == 0:
-            raise IOError(
-                "%s could not be resolved to any files" % path_or_data
+            raise IOError(f"{path_or_data} could not be resolved to any files")
+        elif len(paths) > 1:
+            warnings.warn(
+                f"`path_or_data` resolved to more than 1 file. "
+                f"Only the first file {paths[0]} will be read.",
+                UserWarning,
             )
 
         if _is_local_filesystem(fs):
