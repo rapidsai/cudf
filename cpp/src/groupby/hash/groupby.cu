@@ -110,8 +110,11 @@ flatten_single_pass_aggs(std::vector<aggregation_request> const& requests) {
           if (is_fixed_width(request.values.type())) {
             insert_agg(agg->kind);
           } else if (request.values.type().id() == type_id::STRING) {
-            // For string type, only MIN and MAX are supported
-            if (agg->kind == aggregation::MIN) {
+            // For string type, only ARGMIN, ARGMAX, MIN, and MAX are supported
+            if (agg->kind == aggregation::ARGMIN or 
+                agg->kind == aggregation::ARGMAX) {
+              insert_agg(agg->kind);
+            } else if (agg->kind == aggregation::MIN) {
               insert_agg(aggregation::ARGMIN);
             } else if (agg->kind == aggregation::MAX) {
               insert_agg(aggregation::ARGMAX);
@@ -171,7 +174,8 @@ void sparse_to_dense_results(
       [&sparse_results, &dense_results, to_dense_agg_result, transformed_result,
        &col, i]
       (auto const& agg) {
-        if (col.type().id() == type_id::STRING) {
+        if (col.type().id() == type_id::STRING and
+            (agg->kind == aggregation::MAX or agg->kind == aggregation::MIN)) {
           if (agg->kind == aggregation::MAX) {
             dense_results.add_result(i, agg,
               transformed_result(aggregation::ARGMAX));
