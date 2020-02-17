@@ -448,7 +448,7 @@ TEST_F(CopyRangeErrorTestFixture, InvalidRange)
 
   // source_begin >= source.size()
   EXPECT_THROW(cudf::experimental::copy_range_in_place(
-                 source, target_view, 100, 100, 0),
+                 source, target_view, 101, 100, 0),
                cudf::logic_error);
   EXPECT_THROW(auto p_ret = cudf::experimental::copy_range(
                  source, target, 101, 100, 0),
