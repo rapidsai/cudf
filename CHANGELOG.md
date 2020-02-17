@@ -67,6 +67,7 @@
 - PR #4136 Add `Index.names` property
 - PR #4144 Release GIL when calling libcudf++ functions
 - PR #4149 Use "type-serialized" for pickled types like Dask
+- PR #4170 Generalize table construction from unique pointer
 
 ## Bug Fixes
 
