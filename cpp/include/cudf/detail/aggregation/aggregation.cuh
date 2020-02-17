@@ -305,6 +305,20 @@ __device__ inline void aggregate_row(mutable_table_device_view target,
 /**
  * @brief Dispatched functor to initialize a column with the identity of an
  * aggregation operation.
+ * 
+ * Given a type @p T and aggregation kind @p k, determines and sets the 
+ * appropritate initial value of aggregation required by aggregate_row() as the 
+ * value of each element of the passed column.
+ * 
+ * The initial values set as per aggregation are:
+ * SUM: 0
+ * COUNT: 0
+ * MIN: Max element of type @p T
+ * MAX: Min element of type @p T
+ * ARGMAX: `ARGMAX_SENTINEL`
+ * ARGMIN: `ARGMIN_SENTINEL`
+ * 
+ * Only works on column of fixed-width types.
  */
 struct identity_initializer {
  private:

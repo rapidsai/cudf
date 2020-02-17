@@ -27,9 +27,9 @@ namespace groupby {
 namespace detail {
 namespace hash {
  
-/**---------------------------------------------------------------------------*
- * @brief Builds a hash map where the keys are the rows of a `keys` table, and
- * the values are the aggregation(s) of corresponding rows in a `values` table.
+/**
+ * @brief Computes single-pass aggregations and store results into a sparse 
+ * `output_values` table, and populate `map` with indices of unique keys
  *
  * The hash map is built by inserting every row `i` from the `keys` and
  * `values` tables as a single (key,value) pair. When the pair is inserted, if
@@ -62,21 +62,18 @@ namespace hash {
  * @tparam skip_rows_with_nulls Indicates if rows in `input_keys` containing
  * null values should be skipped. It `true`, it is assumed `row_bitmask` is a
  * bitmask where bit `i` indicates the presence of a null value in row `i`.
- * @tparam values_have_nulls Indicates if rows in `input_values` contain null
- * values
  * @tparam Map The type of the hash map
  * @param map Hash map object to insert key,value pairs into.
- * @param input_keys The table whose rows will be keys of the hash map
+ * @param num_keys The number of rows in input keys table
  * @param input_values The table whose rows will be aggregated in the values of
  * the hash map
  * @param output_values Table that stores the results of aggregating rows of
  * `input_values`.
- * @param ops The set of aggregation operations to perform accross the columns
+ * @param aggs The set of aggregation operations to perform accross the columns
  * of the `input_values` rows
  * @param row_bitmask Bitmask where bit `i` indicates the presence of a null
- * value in row `i` of `input_keys`. Only used if `skip_rows_with_nulls` is
- * `true`.
- *---------------------------------------------------------------------------**/
+ * value in row `i` of input keys. Only used if `skip_rows_with_nulls` is `true`
+ */
 template <bool skip_rows_with_nulls, typename Map>
 __global__ void compute_single_pass_aggs(
     Map map, size_type num_keys, table_device_view input_values,
@@ -101,32 +98,27 @@ __global__ void compute_single_pass_aggs(
 
 // TODO (dm): variance kernel
 
-/**---------------------------------------------------------------------------*
- * @brief Extracts the resulting keys and values of the groupby operation from a
- * hash map and sparse output table.
+/**
+ * @brief Extracts the populated elements from a hash map to get the indices of
+ * result values in a groupby operation.
+ * 
+ * The hash map should be constructed such that it stores the indices of the
+ * populated values in a sparse result table.
+ * 
+ * This method uses the @p map to check for populated map elements. It then 
+ * gets the element and appends its value to the  @p gather_map.
+ * The @p gather_map can be used in conjunction with sparse result values
+ * written by compute_single_pass_aggs() to get the results in a dense form,
+ * using a gather() operation.
  *
- * @tparam keys_have_nulls Indicates the presence of null values in the keys
- * table
- * @tparam values_have_nulls Indicates the presence of null values in the values
- * table
  * @tparam Map The type of the hash map object
- * @param map[in] The hash map whos "keys" are indices into the `input_keys`
- * table, and "values" are indices into the `sparse_output_values` table
- * @param input_keys The table whose rows were used as the keys to build the
- * hash map
- * @param output_keys[out] Resulting keys of the groupby operation. Contains the
- * unique set of key rows from `input_keys`. The "key" row at `i` corresponds to
- * the value row at `i` in `dense_output_values`.
- * @param sparse_output_values[in] The sparse table that holds the result of
- * aggregating the values corresponding to the rows in `input_keys`. The
- * "values" of the hash map index into this table.
- * @param dense_output_values[out] The compacted version of
- * `sparse_output_values` where row `i` corresponds to row `i` in the
- * `output_keys` table.
+ * @param map[in] The hash map that contains the indices into input keys that 
+ * are unique and sparse values that are populated with aggregation results.
+ * @param gather_map[out] The compressed array of populated values from @p map
  * @param output_write_index[in/out] Global counter used for determining write
  * location for output keys/values. When kernel is complete, indicates the final
  * result size.
- *---------------------------------------------------------------------------**/
+ */
 template <typename Map>
 __global__ void extract_gather_map(Map map,
                                    size_type * const __restrict__ gather_map,

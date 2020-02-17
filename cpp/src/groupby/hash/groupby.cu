@@ -124,6 +124,10 @@ flatten_single_pass_aggs(std::vector<aggregation_request> const& requests) {
                          std::move(agg_kinds), std::move(col_ids));
 }
 
+/**
+ * @brief Gather sparse results into dense using @p gather_map and add to 
+ * @p dense_cache
+ */
 void sparse_to_dense_results(
     std::vector<aggregation_request> const& requests,
     experimental::detail::result_cache const& sparse_results,
@@ -138,7 +142,9 @@ void sparse_to_dense_results(
 
     // Given an aggregation, this will get the result from sparse_results and 
     // convert and return dense, compacted result
-    auto to_dense_agg_result = [&] (auto const& agg) {
+    auto to_dense_agg_result =
+    [&sparse_results, &gather_map, i, mr, stream]
+    (auto const& agg) {
       auto s = sparse_results.get_result(i, agg);
       auto dense_result_table = 
         experimental::detail::gather(
@@ -151,7 +157,9 @@ void sparse_to_dense_results(
     };
 
     // Enables conversion of ARGMIN/ARGMAX into MIN/MAX
-    auto transformed_result = [&] (auto const& agg_kind) {
+    auto transformed_result =
+    [&col, to_dense_agg_result, mr, stream]
+    (auto const& agg_kind) {
       auto tranformed_agg = std::make_unique<aggregation>(agg_kind);
       auto argmax_result = to_dense_agg_result(tranformed_agg);
       auto transformed_result = experimental::detail::gather(
@@ -159,10 +167,9 @@ void sparse_to_dense_results(
       return std::move(transformed_result->release()[0]);
     };
 
-    // All fixed-width type results
     std::for_each(agg_v.begin(), agg_v.end(),
-      // [&sparse_results, &dense_results, &gather_map, &col, i, mr, stream]
-      [&]
+      [&sparse_results, &dense_results, to_dense_agg_result, transformed_result,
+       &col, i]
       (auto const& agg) {
         if (col.type().id() == type_id::STRING) {
           if (agg->kind == aggregation::MAX) {
@@ -181,6 +188,10 @@ void sparse_to_dense_results(
   }
 }
 
+/**
+ * @brief Construct hash map that uses row comparator and row hasher on 
+ * @p d_keys table and stores indices
+ */
 template <bool keys_have_nulls>
 auto create_hash_map(table_device_view const& d_keys, bool ignore_null_keys,
                      cudaStream_t stream = 0)
@@ -206,8 +217,12 @@ auto create_hash_map(table_device_view const& d_keys, bool ignore_null_keys,
                             allocator_type(), stream);
 }
 
+/**
+ * @brief Computes all aggregations from @p requests that require a single pass
+ * over the data and stores the results in @p sparse_results
+ */
 template <bool keys_have_nulls, typename Map>
-auto compute_single_pass_aggs(table_view const& keys,
+void compute_single_pass_aggs(table_view const& keys,
                               std::vector<aggregation_request> const& requests,
                               experimental::detail::result_cache& sparse_results,
                               Map& map, bool ignore_null_keys,
@@ -264,28 +279,6 @@ auto compute_single_pass_aggs(table_view const& keys,
   }
 }
 
-}  // namespace
-
-/**
- * @brief Indicates if a set of aggregation requests can be satisfied with a
- * hash-based groupby implementation.
- *
- * @param keys The table of keys
- * @param requests The set of columns to aggregate and the aggregations to
- * perform
- * @return true A hash-based groupby should be used
- * @return false A hash-based groupby should not be used
- */
-bool can_use_hash_groupby(table_view const& keys,
-                      std::vector<aggregation_request> const& requests) {
-  return std::all_of(
-      requests.begin(), requests.end(), [](aggregation_request const& r) {
-        return std::all_of(
-            r.aggregations.begin(), r.aggregations.end(),
-            [](auto const& a) { return is_hash_aggregation(a->kind); });
-      });
-}
-
 template <bool keys_have_nulls>
 auto groupby_null_templated(
     table_view const& keys, std::vector<aggregation_request> const& requests,
@@ -321,9 +314,31 @@ auto groupby_null_templated(
 
   // Extract unique keys and return
   auto unique_keys = experimental::detail::gather(
-    keys, gather_map.begin(), gather_map.begin() + num_groups.value(),
+    keys, gather_map.begin(), gather_map.end(),
     false, false, false, mr, stream);
   return unique_keys;
+}
+
+}  // namespace
+
+/**
+ * @brief Indicates if a set of aggregation requests can be satisfied with a
+ * hash-based groupby implementation.
+ *
+ * @param keys The table of keys
+ * @param requests The set of columns to aggregate and the aggregations to
+ * perform
+ * @return true A hash-based groupby should be used
+ * @return false A hash-based groupby should not be used
+ */
+bool can_use_hash_groupby(table_view const& keys,
+                      std::vector<aggregation_request> const& requests) {
+  return std::all_of(
+      requests.begin(), requests.end(), [](aggregation_request const& r) {
+        return std::all_of(
+            r.aggregations.begin(), r.aggregations.end(),
+            [](auto const& a) { return is_hash_aggregation(a->kind); });
+      });
 }
 
 // Hash-based groupby
