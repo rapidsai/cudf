@@ -1914,7 +1914,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   /**
    * Cast to Strings.
-   * Negative timestamps are not supported
+   * Negative timestamp values are not currently supported and will yield undesired results. See
+   * github issue https://github.com/rapidsai/cudf/issues/3116 for details
    * In case of timestamps it follows the following formats
    *    {@link DType#TIMESTAMP_DAYS} - "%Y-%m-%d"
    *    {@link DType#TIMESTAMP_SECONDS} - "%Y-%m-%d %H:%M:%S"
@@ -2157,7 +2158,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * Strings that fail to parse will default to 0. Supported time units are second, millisecond,
    * microsecond, and nanosecond. Larger time units for column vectors are not supported yet in cudf.
    * No checking is done for invalid formats or invalid timestamp units.
-   * Negative timestamp values are not currently supported.
+   * Negative timestamp values are not currently supported and will yield undesired results. See
+   * github issue https://github.com/rapidsai/cudf/issues/3116 for details
    *
    * @param unit integer native ID of the time unit to parse the timestamp into.
    * @param format strptime format specifier string of the timestamp. Used to parse and convert
@@ -2174,7 +2176,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * timestamp is a long value representing how many units since 1970-01-01 00:00:00:000 in either
    * positive or negative direction. This mirrors the functionality spark sql's from_unixtime.
    * No checking is done for invalid formats or invalid timestamp units.
-   * Negative timestamp values are not currently supported.
+   * Negative timestamp values are not currently supported and will yield undesired results. See
+   * github issue https://github.com/rapidsai/cudf/issues/3116 for details
    *
    * @param format - strftime format specifier string of the timestamp. Its used to parse and convert
    *               the timestamp with. Supports %Y,%y,%m,%d,%H,%M,%S,%f format specifiers.

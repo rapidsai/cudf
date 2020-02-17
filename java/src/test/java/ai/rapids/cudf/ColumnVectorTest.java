@@ -1088,7 +1088,6 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  @Disabled
   void testWindowDynamicNegative() {
     try (ColumnVector precedingCol = ColumnVector.fromInts(2, 2, 2, 3, 3);
          ColumnVector followingCol = ColumnVector.fromInts(-1, -1, -1, -1, 0)) {
@@ -1103,7 +1102,6 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  @Disabled
   void testWindowLag() {
     //TODO negative only works for ColumnVectors.  We need to file something to make it work for
     // static too
@@ -1398,7 +1396,8 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  @Disabled
+  @Disabled("Negative timestamp values are not currently. " +
+      "See github issue https://github.com/rapidsai/cudf/issues/3116 for details")
   void testCastNegativeTimestampAsString() {
     final String[] NEG_TIME_S_STRING = {"1965-10-26 14:01:12",
         "1960-02-06 19:22:11"};
