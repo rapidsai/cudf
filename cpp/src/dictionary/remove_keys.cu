@@ -57,11 +57,9 @@ std::unique_ptr<column> remove_keys_fn( dictionary_column_view const& dictionary
                                         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                         cudaStream_t stream = 0)
 {
-    auto keys_view = dictionary_column.keys();
-    auto indices_view = dictionary_column.indices();
-    auto execpol = rmm::exec_policy(stream);
-
     // create keys positions column to identify original key positions after removing they keys
+    auto keys_view = dictionary_column.keys();
+    auto execpol = rmm::exec_policy(stream);
     rmm::device_vector<int32_t> keys_positions(keys_view.size()); // needed for remapping indices
     thrust::sequence( execpol->on(stream), keys_positions.begin(), keys_positions.end() );
     column_view keys_positions_view( data_type{INT32}, keys_view.size(), keys_positions.data().get() );
@@ -81,6 +79,9 @@ std::unique_ptr<column> remove_keys_fn( dictionary_column_view const& dictionary
                          keys_positions_view.begin<int32_t>(), map_indices.begin() );
     } // frees up the temporary table_keys objects
 
+    column_view indices_view( data_type{INT32}, dictionary_column.size(), 
+                              dictionary_column.indices().data<int32_t>(),
+                              nullptr, 0, dictionary_column.offset() );
     // create new indices column
     // Example: gather([4,0,3,1,2,2,2,4,0],[0,-1,1,-1,2]) => [2,0,-1,-1,1,1,1,2,0]
     column_view map_indices_view( data_type{INT32}, keys_view.size(), map_indices.data().get() );
@@ -92,7 +93,7 @@ std::unique_ptr<column> remove_keys_fn( dictionary_column_view const& dictionary
     auto d_null_mask = dictionary_column.null_mask();
     auto d_indices = indices_column->view().data<int32_t>();
     auto new_nulls = experimental::detail::valid_if( thrust::make_counting_iterator<size_type>(dictionary_column.offset()),
-                    thrust::make_counting_iterator<size_type>(dictionary_column.size()),
+                    thrust::make_counting_iterator<size_type>(dictionary_column.offset()+dictionary_column.size()),
                     [d_null_mask, d_indices] __device__ (size_type idx) {
                         if( d_null_mask && !bit_is_set(d_null_mask,idx) )
                             return false;
