@@ -44,6 +44,15 @@ class data_sink {
   static std::unique_ptr<data_sink> create(std::vector<char>* buffer);
 
   /**
+   * @brief Create a void sink (one that does no actual io)
+   * 
+   * A useful code path for benchmarking, to eliminate physical
+   * hardware randomness from profiling.
+   *   
+   **/
+  static std::unique_ptr<data_sink> create();
+
+  /**
    * @brief Base class destructor
    **/
   virtual ~data_sink(){};
