@@ -19,15 +19,15 @@ cdef unique_ptr[aggregation] get_aggregation(op, kwargs):
     cdef string cpp_str
     cdef unique_ptr[aggregation] agg
 
-    if op is "sum":
+    if op == "sum":
         agg = move(make_sum_aggregation())
-    elif op is "min":
+    elif op == "min":
         agg = move(make_min_aggregation())
-    elif op is "max":
+    elif op == "max":
         agg = move(make_max_aggregation())
-    elif op is "mean":
+    elif op == "mean":
         agg = move(make_mean_aggregation())
-    elif op is "count":
+    elif op == "count":
         agg = move(make_count_aggregation())
     elif callable(op):
         # Handling UDF type
