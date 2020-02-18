@@ -614,10 +614,11 @@ add_library(cudf
             src/text/tokenize.cu
             src/scalar/scalar.cpp
             src/scalar/scalar_factories.cpp
+            src/dictionary/add_keys.cu
             src/dictionary/dictionary_column_view.cpp
             src/dictionary/dictionary_factories.cu
-            src/dictionary/encode.cu
             src/dictionary/decode.cu
+            src/dictionary/encode.cu
             src/groupby/groupby.cu
             src/groupby/hash/groupby.cu
             src/groupby/sort/groupby.cu
