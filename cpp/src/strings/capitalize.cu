@@ -151,6 +151,41 @@ namespace { // anonym.
     int32_t const* d_offsets_;
     char* d_chars_;
   };
+
+
+  struct probe_capitalize
+  {
+    probe_capitalize(column_device_view const d_column,
+                     character_flags_table_type const* d_flags,
+                     character_cases_table_type const* d_case_table):
+      d_column_(d_column),
+      d_flags_(d_flags),
+      d_case_table_(d_case_table)
+    {  
+    }
+    
+     __device__
+     int32_t operator()(size_type idx) {
+      if( d_column_.is_null(idx) )
+        return 0; // null string
+      
+      string_view d_str = d_column_.template element<string_view>(idx);
+      int32_t bytes = 0;
+      for( auto itr = d_str.begin(); itr != d_str.end(); ++itr ) {
+        uint32_t code_point = detail::utf8_to_codepoint(*itr);
+        detail::character_flags_table_type flag = code_point <= 0x00FFFF ? d_flags_[code_point] : 0;
+
+        if( (bytes && IS_UPPER(flag)) || (!bytes && IS_LOWER(flag)) ) {
+          bytes += detail::bytes_in_char_utf8(detail::codepoint_to_utf8(d_case_table_[code_point]));
+        }
+      }
+      return bytes;
+    }
+  private:
+    column_device_view const d_column_;
+    character_flags_table_type const* d_flags_;
+    character_cases_table_type const* d_case_table_;
+  };
          
 }//anonym.
 
