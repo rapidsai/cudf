@@ -15,6 +15,7 @@
 - PR #4053 Multi-column quantiles.
 - PR #4107 Add groupby nunique aggregation
 - PR #4153 Support Dask serialization protocol on cuDF objects
+- PR #4164 Add Buffer "constructor-kwargs" header
 
 ## Improvements
 
@@ -72,6 +73,8 @@
 - PR #4144 Release GIL when calling libcudf++ functions
 - PR #4149 Use "type-serialized" for pickled types like Dask
 - PR #4163 Assert Dask CUDA serializers have `Buffer` frames
+- PR #4165 List serializable classes once
+- PR #4177 Use `uint8` type for host array copy of `Buffer`
 
 ## Bug Fixes
 
