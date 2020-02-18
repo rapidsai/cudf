@@ -17,6 +17,7 @@ import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
 from cudf._libxx.column import Column
 from cudf._libxx.null_mask import (
+    MaskState,
     bitmask_allocation_size_bytes,
     create_null_mask,
 )
@@ -253,7 +254,7 @@ class ColumnBase(Column):
         # Allocate output mask only if there's nulls in the input objects
         mask = None
         if nulls:
-            mask = create_null_mask(newsize, state="uninitialized")
+            mask = create_null_mask(newsize, state=MaskState.UNINITIALIZED)
 
         col = build_column(
             data=data, dtype=head.dtype, mask=mask, children=children
@@ -871,7 +872,7 @@ def column_empty(row_count, dtype="object", masked=False):
         data = Buffer.empty(row_count * dtype.itemsize)
 
     if masked:
-        mask = create_null_mask(row_count, state="all_null")
+        mask = create_null_mask(row_count, state=MaskState.ALL_NULL)
     else:
         mask = None
 
@@ -1025,7 +1026,9 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
 
         nbuf = None
         if arbitrary.null_count() > 0:
-            nbuf = create_null_mask(arbitrary.size(), state="uninitialized")
+            nbuf = create_null_mask(
+                arbitrary.size(), state=MaskState.UNINITIALIZED
+            )
             arbitrary.set_null_bitmask(nbuf.ptr, bdevmem=True)
         arbitrary.to_offsets(sbuf.ptr, obuf.ptr, None, bdevmem=True)
         children = (

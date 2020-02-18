@@ -24,7 +24,7 @@ import rmm
 import cudf
 import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
-from cudf._libxx.null_mask import create_null_mask
+from cudf._libxx.null_mask import MaskState, create_null_mask
 from cudf._libxx.transform import bools_to_mask
 from cudf.core import column
 from cudf.core._sort import get_sorted_inds
@@ -508,7 +508,9 @@ class DataFrame(Frame):
 
                 out_mask = bools_to_mask(other[col]._column)
             else:
-                out_mask = create_null_mask(len(self[col]), state="all_null")
+                out_mask = create_null_mask(
+                    len(self[col]), state=MaskState.ALL_NULL
+                )
             df[col] = df[col].set_mask(out_mask)
         return df
 
@@ -934,7 +936,9 @@ class DataFrame(Frame):
                 if fill_value is None:
                     return Series.from_masked_array(
                         data=rmm.device_array(max_num_rows, dtype="float64"),
-                        mask=create_null_mask(max_num_rows, state="all_null"),
+                        mask=create_null_mask(
+                            max_num_rows, state=MaskState.ALL_NULL
+                        ),
                     ).set_index(col.index)
                 else:
                     return getattr(col, fn)(fill_value)

@@ -9,7 +9,9 @@ from numba import njit
 
 import rmm
 
+from cudf._lib.arrow._cuda import CudaBuffer as arrowCudaBuffer
 from cudf._libxx.null_mask import bitmask_allocation_size_bytes
+from cudf.core.buffer import Buffer
 
 mask_dtype = np.dtype(np.int32)
 mask_bitsize = mask_dtype.itemsize * 8
@@ -114,40 +116,54 @@ def buffers_from_pyarrow(pa_arr, dtype=None):
         - cudf.Buffer --> data
         - cudf.Buffer --> string characters
     """
-    from cudf.core.buffer import Buffer
-
     buffers = pa_arr.buffers()
 
     if pa_arr.null_count:
         mask_size = bitmask_allocation_size_bytes(len(pa_arr))
-        dbuf = rmm.DeviceBuffer(size=mask_size)
-        dbuf.copy_from_host(np.asarray(buffers[0]).view("u1"))
-        pamask = Buffer(dbuf)
+        pamask = pyarrow_buffer_to_cudf_buffer(buffers[0], mask_size=mask_size)
     else:
         pamask = None
 
     offset = pa_arr.offset
     size = len(pa_arr)
 
-    if dtype:
-        data_dtype = dtype
-    elif isinstance(pa_arr, pa.StringArray):
-        data_dtype = np.int32
-    else:
-        if isinstance(pa_arr, pa.DictionaryArray):
-            data_dtype = pa_arr.indices.type.to_pandas_dtype()
-        else:
-            data_dtype = pa_arr.type.to_pandas_dtype()
-
     if buffers[1]:
-        padata = Buffer(np.asarray(buffers[1]).view(data_dtype))
+        padata = pyarrow_buffer_to_cudf_buffer(buffers[1])
     else:
         padata = Buffer.empty(0)
 
     pastrs = None
     if isinstance(pa_arr, pa.StringArray):
-        pastrs = Buffer(np.asarray(buffers[2]).view(np.int8))
+        pastrs = pyarrow_buffer_to_cudf_buffer(buffers[2])
     return (size, offset, pamask, padata, pastrs)
+
+
+def pyarrow_buffer_to_cudf_buffer(arrow_buf, mask_size=0):
+    """
+    Given a PyArrow Buffer backed by either host or device memory, convert it
+    to a cuDF Buffer
+    """
+    # Try creating a PyArrow CudaBuffer from the PyArrow Buffer object, it
+    # fails with an ArrowTypeError if it's a host based Buffer so we catch and
+    # process as expected
+    try:
+        arrow_cuda_buf = arrowCudaBuffer.from_buffer(arrow_buf)
+        buf = Buffer(
+            data=arrow_cuda_buf.address,
+            size=arrow_cuda_buf.size,
+            owner=arrow_cuda_buf,
+        )
+        if buf.size < mask_size:
+            dbuf = rmm.DeviceBuffer(size=mask_size)
+            dbuf.copy_from_device(buf)
+            return Buffer(dbuf)
+        return buf
+    except pa.ArrowTypeError:
+        if arrow_buf.size < mask_size:
+            dbuf = rmm.DeviceBuffer(size=mask_size)
+            dbuf.copy_from_host(np.asarray(arrow_buf).view("u1"))
+            return Buffer(dbuf)
+        return Buffer(arrow_buf)
 
 
 def get_result_name(left, right):

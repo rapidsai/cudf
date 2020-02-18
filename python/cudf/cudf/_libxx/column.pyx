@@ -246,7 +246,7 @@ cdef class Column:
             if value.size < required_num_bytes:
                 raise ValueError(error_msg.format(str(value.size)))
             dbuf = rmm.DeviceBuffer(size=mask_size)
-            dbuf.copy_from_host()
+            dbuf.copy_from_host(value)
             mask = Buffer(dbuf)
         else:
             raise TypeError(

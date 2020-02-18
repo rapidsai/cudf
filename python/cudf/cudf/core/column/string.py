@@ -14,6 +14,7 @@ import rmm
 import cudf._lib as libcudf
 from cudf._lib.nvtx import nvtx_range_pop, nvtx_range_push
 from cudf._libxx.null_mask import (
+    MaskState,
     bitmask_allocation_size_bytes,
     create_null_mask,
 )
@@ -662,7 +663,9 @@ class StringColumn(column.ColumnBase):
         out_col = column.as_column(out_arr)
 
         if self.has_nulls:
-            out_mask = create_null_mask(len(self), state="uninitialized")
+            out_mask = create_null_mask(
+                len(self), state=MaskState.UNINITIALIZED
+            )
             out_mask_ptr = out_mask.ptr
             self.nvstrings.set_null_bitmask(out_mask_ptr, bdevmem=True)
             out_col = out_col.set_mask(out_mask)
