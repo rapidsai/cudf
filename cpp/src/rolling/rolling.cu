@@ -206,8 +206,8 @@ void gpu_rolling(column_device_view input,
     size_type following_window = following_window_begin[i];
 
     // compute bounds
-    size_type start = max(0, i - preceding_window);
-    size_type end = min(input.size(), i + following_window + 1);
+    size_type start = min(num_rows, max(0, i - preceding_window));
+    size_type end = min(num_rows, max(0, i + following_window + 1));
     size_type start_index = min(start, end);
     size_type end_index = max(start, end);
 
@@ -216,12 +216,9 @@ void gpu_rolling(column_device_view input,
     //       This might require separating the kernel into a special version
     //       for dynamic and static sizes.
 
-    bool output_is_valid = false;
-    if (start_index >= 0 and end_index >= 0) {
-        output_is_valid = process_rolling_window<InputType, OutputType, agg_op,
-                                                op, has_nulls>(input, output, start_index,
-                                                               end_index, i, min_periods, identity);
-    }
+    bool output_is_valid = process_rolling_window<InputType, OutputType, agg_op,
+                                            op, has_nulls>(input, output, start_index,
+                                                           end_index, i, min_periods, identity);
 
     // set the mask
     // We can't have gather map being created for Min and Max for string_view to be null

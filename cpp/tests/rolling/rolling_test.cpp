@@ -184,8 +184,8 @@ protected:
       // compute bounds
       auto preceding_window = preceding_window_col[i%preceding_window_col.size()];
       auto following_window = following_window_col[i%following_window_col.size()];
-      size_type start = std::max((size_type)0, i - preceding_window);
-      size_type end   = std::min(num_rows, i + following_window + 1);
+      size_type start = std::min(num_rows, std::max(0, i - preceding_window));
+      size_type end = std::min(num_rows, std::max(0, i + following_window + 1));
       size_type start_index = std::min(start, end);
       size_type end_index = std::max(start, end);
 
@@ -235,8 +235,8 @@ protected:
       // compute bounds
       auto preceding_window = preceding_window_col[i%preceding_window_col.size()];
       auto following_window = following_window_col[i%following_window_col.size()];
-      size_type start = std::max((size_type)0, i - preceding_window);
-      size_type end   = std::min(num_rows, i + following_window + 1);
+      size_type start = std::min(num_rows, std::max(0, i - preceding_window));
+      size_type end = std::min(num_rows, std::max(0, i + following_window + 1));
       size_type start_index = std::min(start, end);
       size_type end_index = std::max(start, end);
 
