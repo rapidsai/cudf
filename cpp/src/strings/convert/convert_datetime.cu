@@ -212,6 +212,8 @@ struct parse_datetime
         for( size_t idx=0; idx < items_count; ++idx )
         {
             auto item = d_format_items[idx];
+            if( length < item.length )
+                return 1;
             if(item.item_type==format_char_type::literal)
             {   // static character we'll just skip;
                 // consume item.length bytes from string
@@ -219,8 +221,6 @@ struct parse_datetime
                 length -= item.length;
                 continue;
             }
-            if( length < item.length )
-                return 1;
 
             // special logic for each specifier
             switch(item.value)
