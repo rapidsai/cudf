@@ -1,8 +1,9 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-import custreamz._lib as libcustreamz
+import custreamz._libxx as libcustreamz
 
-# This would be the function to get the actual offsets ... would replace existing stream logic.
+
+# This would be the function to get the actual offsets
 def get_kafka_offsets(
     *args, **kwargs,
 ):
@@ -11,13 +12,20 @@ def get_kafka_offsets(
     pass
 
 
-def read_gdf(parser, kafka_configs, *args, **kwargs):
-    """{docstring}"""
-    # Would call the read performance implementation while still using the existing parsers for code reusability.
-    pass
+# def read_json(
+#     kafka_configs=kafka_configs,
+#     partition=partition,
+#     start=low,
+#     end=high,
+#     *args,
+#     **kwargs,
+# ):
+#     """{docstring}"""
+#     pass
 
 
-def commit_offsets(offsets, *args, **kwargs):
+def commit_offsets(*args, **kwargs):
     """{docstring}"""
-    # would call cudf externaldatasource performance logic to commit the offsets
+
+    libcustreamz.commit_offsets()
     pass

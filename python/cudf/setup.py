@@ -81,6 +81,7 @@ setup(
         "cudf._lib.includes.groupby": ["*.pxd"],
         "cudf._lib.arrow": ["*.pxd"],
         "cudf._libxx": ["*.pxd"],
+        "cudf._libxx.io": ["*.pxd"],
         "cudf._libxx.includes": ["*.pxd"],
     },
     cmdclass=versioneer.get_cmdclass(),

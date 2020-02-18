@@ -44,6 +44,7 @@ extensions = [
             "../../cpp/build/include",
             "../../thirdparty/cub",
             "../../thirdparty/libcudacxx/include",
+            "../../external/kafka/include",
             os.path.dirname(sysconfig.get_path("include")),
             np.get_include(),
             cuda_include_dir,
@@ -77,8 +78,8 @@ setup(
     ext_modules=cythonize(extensions),
     packages=find_packages(include=["cudf", "cudf.*"]),
     package_data={
-        "custreamz._lib": ["*.pxd"],
-        "custreamz._lib.includes": ["*.pxd"],
+        "custreamz._libxx": ["*.pxd"],
+        "custreamz._libxx.includes": ["*.pxd"],
     },
     cmdclass=versioneer.get_cmdclass(),
     install_requires=install_requires,

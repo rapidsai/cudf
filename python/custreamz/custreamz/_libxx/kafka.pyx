@@ -5,11 +5,11 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
-from custreamz._lib.cudf cimport *
+from cudf._libxx.lib cimport *
 
 from libcpp.string cimport string
-from libcpp.vector cimport vector
+from libcpp.memory cimport unique_ptr
 
 
-cdef extern from "cudf/cudf.h" namespace "cudf::io::datasource" nogil:
-
+cpdef commit_offsets():
+    print("Committing offsets!!!")
