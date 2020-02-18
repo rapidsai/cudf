@@ -8,9 +8,10 @@ from pandas.api.types import is_integer_dtype
 import rmm
 
 import cudf._lib as libcudf
+import cudf._libxx as libcudfxx
 from cudf.core._sort import get_sorted_inds
 from cudf.core.buffer import Buffer
-from cudf.core.column import column
+from cudf.core.column import as_column, column
 from cudf.utils import cudautils, utils
 from cudf.utils.dtypes import (
     min_numeric_column_type,
@@ -606,4 +607,4 @@ def digitize(column, bins, right=False):
     assert column.dtype == bins.dtype
     bins_buf = Buffer(rmm.to_device(bins))
     bin_col = NumericalColumn(data=bins_buf, dtype=bins.dtype)
-    return libcudf.sort.digitize(column, bin_col, right)
+    return as_column(libcudfxx.sort.digitize(column.as_frame(), bin_col.as_frame(), right))
