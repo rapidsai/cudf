@@ -2084,7 +2084,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * to release (it is not stable yet) so be sure that your native code is complied against the
    * exact same version of libcudf as this is released for.
    */
-  final long getNativeView() {
+  public final long getNativeView() {
     if (offHeap.cudfColumnHandle == null) {
       //Data must have been dropped from device recreate it on device
       assert rows <= Integer.MAX_VALUE;
