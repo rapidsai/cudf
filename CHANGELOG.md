@@ -70,6 +70,7 @@
 - PR #4136 Add `Index.names` property
 - PR #4144 Release GIL when calling libcudf++ functions
 - PR #4149 Use "type-serialized" for pickled types like Dask
+- PR #4163 Assert Dask CUDA serializers have `Buffer` frames
 
 ## Bug Fixes
 
@@ -111,6 +112,7 @@
 - PR #4141 Fix NVStrings test_convert failure in 10.2 build
 - PR #4158 Fix merge issue with empty table return if one of the two tables are empty
 - PR #4175 Fix `__sizeof__` calculation in `StringColumn`
+- PR #4155 Update groupby group_offsets size and fix unnecessary device dispatch.
 
 
 # cuDF 0.12.0 (04 Feb 2020)
