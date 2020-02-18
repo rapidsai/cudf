@@ -25,9 +25,11 @@ enum statistics_dtype {
     dtype_int8,
     dtype_int16,
     dtype_int32,
+    dtype_date32,
     dtype_int64,
     dtype_timestamp64,
-    dtype_int128,
+    dtype_decimal64,
+    dtype_decimal128,
     dtype_float32,
     dtype_float64,
     dtype_string,
@@ -55,9 +57,9 @@ union statistics_val
     double fp_val;          //!< float columns
     int64_t i_val;          //!< integer columns
     struct {
-        int64_t hi64;
         uint64_t lo64;
-    } i128_val;             //!< int128 columns
+        int64_t hi64;
+    } i128_val;             //!< decimal128 columns
 };
 
 struct statistics_chunk
