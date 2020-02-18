@@ -38,8 +38,6 @@ namespace experimental {
  * @brief Base class for specifying the desired aggregation in an
  * `aggregation_request`.
  *
- * This type is meant to be opaque in the public interface.
- *
  * Other kinds of aggregations may derive from this class to encapsulate
  * additional information needed to compute the aggregation.
  */
