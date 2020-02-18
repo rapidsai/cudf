@@ -30,7 +30,7 @@ namespace cudf {
 namespace io {
 namespace external {
 
-// Default `EXTERNAL_DATASOURCE_LIB_PATH` to `/usr/local/lib/cudf_external_lib`.
+// Default `EXTERNAL_DATASOURCE_LIB_PATH` to `$CONDA_PREFIX/lib/external`.
 // This definition can be overridden at compile time by specifying a
 // `-DEXTERNAL_DATASOURCE_LIB_PATH=/home/lib/cudf_external_lib` CMake argument.
 // Use `boost::filesystem` for cross-platform path resolution and dir
