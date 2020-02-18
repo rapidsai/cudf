@@ -42,7 +42,7 @@ struct characters_tokenizer
 {
     __device__ characters_tokenizer( cudf::string_view const& d_str,
                                      cudf::string_view const& d_delimiter = cudf::string_view{} )
-    : d_str(d_str), d_delimiter(d_delimiter), spaces(true), itr(d_str.begin()),
+    : d_str{d_str}, d_delimiter{d_delimiter}, spaces{true}, itr{d_str.begin()},
       start_position(0), end_position(d_str.length()) {}
 
     /**
