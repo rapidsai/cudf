@@ -19,11 +19,11 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
-#include <nvtext/detail/tokenize.hpp>
-#include <nvtext/ngrams_tokenize.hpp>
 #include <cudf/utilities/error.hpp>
 #include <strings/utilities.hpp>
 #include <strings/utilities.cuh>
+#include <nvtext/detail/tokenize.hpp>
+#include <nvtext/ngrams_tokenize.hpp>
 #include <text/utilities/tokenize_ops.cuh>
 
 #include <thrust/transform.h>
@@ -87,7 +87,7 @@ struct ngram_builder_fn
 {
     cudf::column_device_view const d_strings; // strings to generate ngrams from
     cudf::string_view const d_separator;      // separator to place between them 'grams
-    cudf::size_type ngrams;                   // number of ngrams to generate
+    cudf::size_type ngrams;                   // ngram number to generate (2=bi-gram, 3=tri-gram)
     int32_t const* d_token_offsets;           // offsets for token position for each string
     position_pair const* d_token_positions;   // token positions for each string
     int32_t const* d_chars_offsets{}; // offsets for each string's ngrams
@@ -106,6 +106,7 @@ struct ngram_builder_fn
         cudf::size_type ngram_index = 0;
         char* out_ptr = d_chars ? d_chars + d_chars_offsets[idx] : nullptr;
         int32_t* d_sizes = d_ngram_sizes ? d_ngram_sizes + d_ngram_offsets[idx] : nullptr;
+        // for ngrams=2, this will turn string "a b c d e" into "a_bb_cc_dd_e"
         for( cudf::size_type token_index = (ngrams-1); token_index < token_count; ++token_index )
         {
             cudf::size_type length = 0; // calculate size of each ngram in bytes
@@ -190,7 +191,6 @@ std::unique_ptr<cudf::column> ngrams_tokenize( cudf::strings_column_view const& 
         [d_token_offsets, ngrams] __device__ (cudf::size_type idx)
         {
             auto token_count = d_token_offsets[idx+1] - d_token_offsets[idx];
-            //printf("%d:token_count=%d\n",(int)idx,(int)token_count);
             return (token_count >= ngrams) ? token_count - ngrams + 1 : 0;
         }, thrust::plus<int32_t>());
     CUDA_TRY(cudaMemsetAsync( d_ngram_offsets, 0, sizeof(int32_t), stream));
