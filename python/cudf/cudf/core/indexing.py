@@ -148,6 +148,10 @@ class _DataFrameIndexer(object):
             if type(arg[1]) is slice:
                 if not is_scalar(arg[0]):
                     return False
+            if isinstance(arg[1], tuple):
+                # Multiindex indexing with a slice
+                if any(isinstance(v, slice) for v in arg):
+                    return False
             return True
         return False
 
