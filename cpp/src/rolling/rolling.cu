@@ -216,8 +216,12 @@ void gpu_rolling(column_device_view input,
     //       This might require separating the kernel into a special version
     //       for dynamic and static sizes.
 
-    bool output_is_valid = process_rolling_window<InputType, OutputType, agg_op,
-                           op, has_nulls>(input, output, start_index, end_index, i, min_periods, identity); 
+    bool output_is_valid = false;
+    if (start_index >= 0 and end_index >= 0) {
+        output_is_valid = process_rolling_window<InputType, OutputType, agg_op,
+                                                op, has_nulls>(input, output, start_index,
+                                                               end_index, i, min_periods, identity);
+    }
 
     // set the mask
     // We can't have gather map being created for Min and Max for string_view to be null
