@@ -202,9 +202,11 @@ void __device__ gatherIntColumnStats(stats_state_s *s, statistics_dtype dtype, u
         if (is_valid) {
             switch (dtype) {
             case dtype_int32:
+            case dtype_date32:
                 v = reinterpret_cast<const int32_t *>(s->col.column_data_base)[row];
                 break;
             case dtype_int64:
+            case dtype_decimal64:
                 v = reinterpret_cast<const int64_t *>(s->col.column_data_base)[row];
                 break;
             case dtype_int16:
@@ -435,7 +437,7 @@ gpuGatherColumnStatistics(statistics_chunk *chunks, const statistics_group *grou
     }
     __syncthreads();
     dtype = s->col.stats_dtype;
-    if (dtype >= dtype_bool8 && dtype <= dtype_timestamp64) {
+    if (dtype >= dtype_bool8 && dtype <= dtype_decimal64) {
         gatherIntColumnStats(s, dtype, t);
     }
     else if (dtype >= dtype_float32 && dtype <= dtype_float64) {
@@ -703,7 +705,7 @@ gpuMergeColumnStatistics(statistics_chunk *chunks_out, const statistics_chunk *c
     __syncthreads();
     dtype = s->col.stats_dtype;
 
-    if (dtype >= dtype_bool8 && dtype <= dtype_timestamp64) {
+    if (dtype >= dtype_bool8 && dtype <= dtype_decimal64) {
         mergeIntColumnStats(s, dtype, chunks_in + s->group.start_chunk, s->group.num_chunks, t);
     }
     else if (dtype >= dtype_float32 && dtype <= dtype_float64) {

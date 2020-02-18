@@ -508,6 +508,7 @@ add_library(cudf
             src/io/orc/stripe_init.cu
             src/io/orc/stripe_enc.cu
             src/io/orc/dict_enc.cu
+            src/io/orc/stats_enc.cu
             src/io/orc/reader_impl.cu
             src/io/orc/writer_impl.cu
             src/io/parquet/page_data.cu
@@ -612,10 +613,11 @@ add_library(cudf
             src/strings/utilities.cu
             src/scalar/scalar.cpp
             src/scalar/scalar_factories.cpp
+            src/dictionary/add_keys.cu
             src/dictionary/dictionary_column_view.cpp
             src/dictionary/dictionary_factories.cu
-            src/dictionary/encode.cu
             src/dictionary/decode.cu
+            src/dictionary/encode.cu
             src/groupby/groupby.cu
             src/groupby/hash/groupby.cu
             src/groupby/sort/groupby.cu
@@ -625,6 +627,7 @@ add_library(cudf
             src/groupby/sort/group_min.cu
             src/groupby/sort/group_max.cu
             src/groupby/sort/group_count.cu
+            src/groupby/sort/group_nunique.cu
             src/groupby/sort/group_std.cu
             src/groupby/sort/group_quantiles.cu
             src/aggregation/aggregation.cpp
