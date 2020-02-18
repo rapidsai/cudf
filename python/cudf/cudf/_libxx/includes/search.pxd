@@ -20,3 +20,8 @@ cdef extern from "cudf/search.hpp" namespace "cudf::experimental" nogil:
         column_view haystack,
         column_view needles,
     )
+
+    # cdef bool contains(
+    #     column_view col,
+    #     scalar value,
+    # )

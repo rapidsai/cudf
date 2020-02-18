@@ -7,6 +7,7 @@
 
 from libc.stdint cimport int32_t, uint32_t
 from libcpp cimport bool
+from libcpp.string cimport string
 from libcpp.vector cimport vector
 from libcpp.memory cimport unique_ptr
 
@@ -50,6 +51,17 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         data_type(const data_type&)
         data_type(type_id id)
         type_id id()
+
+
+# cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
+#     cdef cppclass scalar:
+#         scalar()
+#         scalar(const scalar& other)
+# cdef extern from "cudf/scalar/scalar_factories.hpp" namespace "cudf" nogil:
+#     cdef unique_ptr[scalar] make_numeric_scalar(data_type t)
+#     cdef unique_ptr[scalar] make_timestamp_scalar(data_type t)
+#     cdef unique_ptr[scalar] make_string_scalar(string val)
+#     cdef unique_ptr[scalar] make_default_constructed_scalar(data_type t)
 
 
 cdef extern from "cudf/column/column.hpp" namespace "cudf" nogil:

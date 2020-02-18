@@ -59,7 +59,7 @@ def search_sorted(
 
 
 def contains(Column haystack, Column needles):
-    """Check whether column contains the value
+    """Check whether column contains multiple values
 
     Parameters
     ----------
