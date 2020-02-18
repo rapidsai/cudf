@@ -29,7 +29,7 @@ import java.util.function.Consumer;
  * Similar to a ColumnVector, but the data is stored in host memory and accessible directly from
  * the JVM. This class holds references to off heap memory and is reference counted to know when
  * to release it.  Call close to decrement the reference count when you are done with the column,
- * and call inRefCount to increment the reference count.
+ * and call incRefCount to increment the reference count.
  */
 public final class HostColumnVector implements AutoCloseable {
   /**
@@ -63,7 +63,7 @@ public final class HostColumnVector implements AutoCloseable {
    * @param nullCount          the number of nulls in the vector.
    * @param hostDataBuffer     The host side data for the vector. In the case of STRING
    *                           this is the string data stored as bytes.
-   * @param hostValidityBuffer arrow like validity buffer 1 bit per row, with padding for
+   * @param hostValidityBuffer Arrow-like validity buffer 1 bit per row, with padding for
    *                           64-bit alignment.
    * @param offsetBuffer       only valid for STRING this is the offsets into
    *                           the hostDataBuffer indicating the start and end of a string

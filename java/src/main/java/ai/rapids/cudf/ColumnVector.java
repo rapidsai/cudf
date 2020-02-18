@@ -29,7 +29,7 @@ import java.util.function.Consumer;
 /**
  * This class represents the immutable vector of data.  This class holds
  * references to device(GPU) memory and is reference counted to know when to release it.  Call
- * close to decrement the reference count when you are done with the column, and call inRefCount
+ * close to decrement the reference count when you are done with the column, and call incRefCount
  * to increment the reference count.
  */
 public final class ColumnVector implements AutoCloseable, BinaryOperable {
@@ -56,10 +56,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     MemoryCleaner.register(this, offHeap);
     this.type = offHeap.getNativeType();
     this.rows = offHeap.getNativeRowCount();
-    synchronized(this) {
-      this.refCount = 0;
-      incRefCountInternal(true);
-    }
+
+    this.refCount = 0;
+    incRefCountInternal(true);
+
     MemoryListener.deviceAllocation(getDeviceMemorySize(), internalId);
   }
 
@@ -89,10 +89,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     this.rows = rows;
     this.nullCount = nullCount;
     this.type = type;
-    synchronized(this) {
-      this.refCount = 0;
-      incRefCountInternal(true);
-    }
+
+    this.refCount = 0;
+    incRefCountInternal(true);
+
     MemoryListener.deviceAllocation(getDeviceMemorySize(), internalId);
   }
 
@@ -271,11 +271,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       BaseDeviceMemoryBuffer data = offHeap.getData();
       boolean needsCleanup = true;
       try {
-        if (!nullCount.isPresent()) {
-          // We don't have a good way to tell if it is cached on the device or recalculate it on
-          // the host for now, so take the hit here.
-          getNullCount();
-        }
+        // We don't have a good way to tell if it is cached on the device or recalculate it on
+        // the host for now, so take the hit here.
+        getNullCount();
+
         if (valid != null) {
           hostValidityBuffer = HostMemoryBuffer.allocate(valid.getLength());
           hostValidityBuffer.copyFromDeviceBuffer(valid);

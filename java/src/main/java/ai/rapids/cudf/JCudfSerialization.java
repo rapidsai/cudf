@@ -1321,8 +1321,8 @@ public class JCudfSerialization {
                                          HostMemoryBuffer[] dataBuffers,
                                          OutputStream out) throws IOException {
     ColumnBufferProvider[][] providers = providersFrom(headers, dataBuffers);
-    SerializedTableHeader combined = calcConcatedHeader(providers);
     try {
+      SerializedTableHeader combined = calcConcatedHeader(providers);
       DataWriter writer = writerFrom(out);
       combined.writeTo(writer);
       try (NvtxRange range = new NvtxRange("Concat Host Side", NvtxColor.GREEN)) {
