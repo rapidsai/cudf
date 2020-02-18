@@ -23,6 +23,7 @@ try:
     def cuda_serialize_cudf_dataframe(x):
         with log_errors():
             header, frames = x.serialize()
+            assert all(isinstance(f, cudf.core.buffer.Buffer) for f in frames)
             return header, frames
 
     # all (de-)serializtion are attached to cudf Objects:
@@ -31,7 +32,6 @@ try:
     def dask_serialize_cudf_dataframe(x):
         with log_errors():
             header, frames = x.serialize()
-            assert all(isinstance(f, cudf.core.buffer.Buffer) for f in frames)
             frames = [f.to_host_array().data for f in frames]
             return header, frames
 
