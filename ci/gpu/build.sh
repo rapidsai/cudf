@@ -99,7 +99,7 @@ else
     logger "GoogleTests..."
     cd $WORKSPACE/cpp/build
 
-    for gt in gtests; do
+    for gt in gtest/*; do
         test_name=$(basename ${gt})
         echo "Running GoogleTest $test_name"
         ${gt} --gtest_output=xml:${WORKSPACE}/test-results/
