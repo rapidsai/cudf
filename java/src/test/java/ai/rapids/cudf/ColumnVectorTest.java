@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -20,14 +20,9 @@ package ai.rapids.cudf;
 
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
-import org.opentest4j.AssertionFailedError;
 
-import java.lang.reflect.Array;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static ai.rapids.cudf.QuantileMethod.*;
@@ -1392,7 +1387,7 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  @Disabled("Negative timestamp values are not currently. " +
+  @Disabled("Negative timestamp values are not currently supported. " +
       "See github issue https://github.com/rapidsai/cudf/issues/3116 for details")
   void testCastNegativeTimestampAsString() {
     final String[] NEG_TIME_S_STRING = {"1965-10-26 14:01:12",
