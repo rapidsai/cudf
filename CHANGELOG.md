@@ -3,6 +3,7 @@
 ## New Features
 
 - PR #3577 Add initial dictionary support to column classes
+- PR #3917 Add dictionary add_keys function
 - PR #3777 Add support for dictionary column in gather
 - PR #3693 add string support, skipna to scan operation
 - PR #3662 Define and implement `shift`.
@@ -52,6 +53,7 @@
 - PR #3891 Port NVStrings (r)split_record to contiguous_(r)split_record
 - PR #4072 Allow round_robin_partition to single partition
 - PR #4064 Add cudaGetDeviceCount to JNI layer
+- PR #4087 Add support for writing large Parquet files in a chunked manner.
 - PR #3716 Update cudf.to_parquet to use new GPU accelerated Parquet writer
 - PR #4083 Use two partitions in test_groupby_multiindex_reset_index
 - PR #4071 Add Java bindings for round robin partition
@@ -64,10 +66,12 @@
 - PR #4111 Use `Buffer`'s to serialize `StringColumn`
 - PR #4113 Get `len` of `StringColumn`s without `nvstrings`
 - PR #4130 Renames in-place `cudf::experimental::fill` to `cudf::experimental::fill_in_place`
+- PR #4143 Renames in-place `cudf::experimental::copy_range` to `cudf::experimental::copy_range_in_place`
 - PR #4136 Add `Index.names` property
 - PR #4144 Release GIL when calling libcudf++ functions
 - PR #4149 Use "type-serialized" for pickled types like Dask
 - PR #4167 Port `search` to libcudf++ (support multi-column searchsorted)
+- PR #4163 Assert Dask CUDA serializers have `Buffer` frames
 
 ## Bug Fixes
 
@@ -102,10 +106,13 @@
 - PR #4109 Use rmm::device_vector instead of thrust::device_vector
 - PR #4113 Use `.nvstrings` in `StringColumn.sum(...)`
 - PR #4116 Fix a bug in contiguous_split() where tables with mixed column types could corrupt string output
+- PR #4138 Really fix strings concatenate logic with column offsets
 - PR #4119 Fix binary ops slowdown using jitify -remove-unused-globals
 - PR #4125 Fix type enum to account for added Dictionary type in `types.hpp`
 - PR #4137 Update Java for mutating fill and rolling window changes
 - PR #4141 Fix NVStrings test_convert failure in 10.2 build
+- PR #4158 Fix merge issue with empty table return if one of the two tables are empty
+- PR #4155 Update groupby group_offsets size and fix unnecessary device dispatch.
 
 
 # cuDF 0.12.0 (04 Feb 2020)
