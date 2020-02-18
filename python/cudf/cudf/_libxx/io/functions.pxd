@@ -6,10 +6,11 @@
 # cython: language_level = 3
 
 from cudf._libxx.lib cimport *
-from cudf._libxx.io.io_types cimport *
+from cudf._libxx.io.types cimport *
 
 from libcpp.string cimport string
 from libcpp.vector cimport vector
+from cudf._libxx.io.types cimport *
 
 
 cdef extern from "cudf/io/functions.hpp" \
@@ -29,9 +30,12 @@ cdef extern from "cudf/io/functions.hpp" \
         compression_type compression
         vector[string] dtype
         bool dayfirst
-        source_info source
         size_t byte_range_offset
         size_t byte_range_size
+
+        read_json_args() except +
+
+        read_json_args(source_info src) except +
 
     cdef table_with_metadata read_json(read_json_args &args) except +
 

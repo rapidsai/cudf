@@ -10,6 +10,7 @@ from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.map cimport map
 from libcpp.vector cimport vector
+from libcpp.pair cimport pair
 
 
 cdef extern from "cudf/io/types.hpp" \
@@ -53,6 +54,9 @@ cdef extern from "cudf/io/types.hpp" \
     cdef cppclass source_info:
         io_type type
         string filepath
+        pair[const char*, size_t] buffer
+
+        source_info() except +
 
     cdef cppclass sink_info:
         io_type type
