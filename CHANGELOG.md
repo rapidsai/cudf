@@ -99,6 +99,7 @@
 - PR #4119 Fix binary ops slowdown using jitify -remove-unused-globals
 - PR #4125 Fix type enum to account for added Dictionary type in `types.hpp`
 - PR #4137 Update Java for mutating fill and rolling window changes
+- PR #4184 Add missing except+ to Cython bindings
 
 
 # cuDF 0.12.0 (04 Feb 2020)
