@@ -59,7 +59,7 @@ std::unique_ptr<cudf::column> tokenize_fn( cudf::size_type strings_count, Tokeni
 {
     auto execpol = rmm::exec_policy(stream);
     // get the number of tokens in each string
-    auto token_counts = token_count_fn( strings_count, tokenizer, mr, stream );
+    auto const token_counts = token_count_fn( strings_count, tokenizer, mr, stream );
     auto d_token_counts = token_counts->view();
     // create token-index offsets from the counts
     rmm::device_vector<int32_t> token_offsets(strings_count+1);
