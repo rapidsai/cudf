@@ -113,13 +113,10 @@ struct format_compiler
     rmm::device_vector<format_item> d_items;
 
     std::map<char,int8_t> specifiers = {
-        {'a',0}, {'A',0},
-        {'w',1},
-        {'b',0}, {'B',0},
         {'Y',4},{'y',2}, {'m',2}, {'d',2},
         {'H',2},{'I',2},{'M',2},{'S',2},{'f',6},
-        {'p',2},{'z',5},
-        {'j',3},{'U',2},{'W',2}
+        {'z',5},{'Z',3},
+        {'p',2},{'j',3}
     };
 
     format_compiler( const char* format, timestamp_units units )
@@ -152,7 +149,10 @@ struct format_compiler
             }
             if( specifiers.find(ch)==specifiers.end() )
             {
-                CUDF_FAIL( "Invalid specifier" ); // show ch in here somehow
+                std::ostringstream message;
+                message << "cuDF failure at: " __FILE__ ":" << __LINE__ << ": ";
+                message << "invalid timestamp specifier: " << ch;
+                throw cudf::logic_error(message.str());
             }
 
             int8_t spec_length = specifiers[ch];
@@ -269,6 +269,8 @@ struct parse_datetime
                     timeparts[TP_TZ_MINUTES] = sign * ((hh*60)+mm);
                     break;
                 }
+                case 'Z':
+                    break; // skip
                 default:
                     return 3;
             }
@@ -373,7 +375,7 @@ struct dispatch_to_timestamps_fn
                      mutable_column_view& results_view,
                      cudaStream_t stream ) const
     {
-        CUDF_EXPECTS( cudf::is_timestamp<T>(), "Expecting timestamp type" );
+        //CUDF_EXPECTS( cudf::is_timestamp<T>(), "Expecting timestamp type" );
         format_compiler compiler(format.c_str(),units);
         auto d_items = compiler.compile_to_device();
         auto d_results = results_view.data<T>();
@@ -640,8 +642,16 @@ struct datetime_formatter
                     ptr = int2str(ptr,item.length,timeparts[TP_HOUR]);
                     break;
                 case 'I': // 12-hour
-                    ptr = int2str(ptr,item.length,timeparts[TP_HOUR] % 12);
+                {
+                    // 0 = 12am; 12 = 12pm; 6 = 06am; 18 = 06pm
+                    auto hour = timeparts[TP_HOUR];
+                    if( hour==0 )
+                        hour = 12;
+                    if( hour > 12 )
+                        hour -= 12;
+                    ptr = int2str(ptr,item.length,hour);
                     break;
+                }
                 case 'M': // minute
                     ptr = int2str(ptr,item.length,timeparts[TP_MINUTE]);
                     break;
@@ -652,14 +662,16 @@ struct datetime_formatter
                     ptr = int2str(ptr,item.length,timeparts[TP_SUBSECOND]);
                     break;
                 case 'p': // am or pm
-                    if( timeparts[TP_HOUR] <= 12 )
+                    // 0 = 12am, 12 = 12pm
+                    if( timeparts[TP_HOUR] < 12 )
                         memcpy(ptr,"AM",2);
                     else
                         memcpy(ptr,"PM",2);
                     ptr += 2;
                     break;
                 case 'z': // timezone
-                    break; // do nothing for this one
+                    memcpy(ptr,"+0000",5); // always UTC
+                    break;
                 case 'Z':
                     memcpy(ptr,"UTC",3);
                     ptr += 3;
