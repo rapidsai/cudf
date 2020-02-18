@@ -96,7 +96,7 @@ cdef class Table:
             it += 1
 
         index = None
-        if index_names not in [None, []]:
+        if index_names is not None and len(index_names) > 0:
             index_columns = []
             if index_pos is None:
                 index_pos = range(len(index_names))
