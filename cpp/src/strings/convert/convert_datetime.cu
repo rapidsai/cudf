@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,14 +23,12 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/error.hpp>
-#include "../utilities.hpp"
-#include "../utilities.cuh"
+#include <strings/utilities.hpp>
+#include <strings/utilities.cuh>
 
 #include <vector>
 #include <map>
 #include <rmm/thrust_rmm_allocator.h>
-#include <thrust/sort.h>
-#include <thrust/sequence.h>
 
 namespace cudf
 {
@@ -63,12 +61,13 @@ enum timestamp_parse_component {
     TP_YEAR        = 0,
     TP_MONTH       = 1,
     TP_DAY         = 2,
-    TP_HOUR        = 3,
-    TP_MINUTE      = 4,
-    TP_SECOND      = 5,
-    TP_SUBSECOND   = 6,
-    TP_TZ_MINUTES  = 7,
-    TP_ARRAYSIZE   = 8
+    TP_DAY_OF_YEAR = 3,
+    TP_HOUR        = 4,
+    TP_MINUTE      = 5,
+    TP_SECOND      = 6,
+    TP_SUBSECOND   = 7,
+    TP_TZ_MINUTES  = 8,
+    TP_ARRAYSIZE   = 9
 };
 
 enum class format_char_type : int8_t
@@ -79,7 +78,7 @@ enum class format_char_type : int8_t
 
 /**
  * @brief Represents a format specifier or literal from a timestamp format string.
- * 
+ *
  * Created by the format_compiler when parsing a format string.
  */
 struct alignas(4) format_item
@@ -101,7 +100,7 @@ struct alignas(4) format_item
 /**
  * @brief The format_compiler parses a timestamp format string into a vector of
  * format_items.
- * 
+ *
  * The vector of format_items are used when parsing a string into timestamp
  * components and when formatting a string from timestamp components.
  */
@@ -235,8 +234,10 @@ struct parse_datetime
                     timeparts[TP_MONTH] = str2int(ptr,item.length);
                     break;
                 case 'd':
-                case 'j':
                     timeparts[TP_DAY] = str2int(ptr,item.length);
+                    break;
+                case 'j':
+                    timeparts[TP_DAY_OF_YEAR] = str2int(ptr,item.length);
                     break;
                 case 'H':
                 case 'I':
@@ -254,14 +255,20 @@ struct parse_datetime
                 case 'p':
                 {
                     string_view am_pm(ptr,2);
-                    if( (timeparts[TP_HOUR] <= 12) &&
-                        ((am_pm.compare("PM",2)==0) || (am_pm.compare("pm",2)==0)) )
-                        timeparts[TP_HOUR] += 12;
+                    auto hour = timeparts[TP_HOUR];
+                    if((am_pm.compare("AM",2)==0) || (am_pm.compare("am",2)==0))
+                    {
+                        if( hour == 12 )
+                            hour = 0;
+                    }
+                    else if( hour < 12 )
+                        hour += 12;
+                    timeparts[TP_HOUR] = hour;
                     break;
                 }
                 case 'z':
                 {
-                    int sign = *ptr=='-' ? -1:1;
+                    int sign = *ptr=='-' ? 1:-1;
                     int hh = str2int(ptr+1,2);
                     int mm = str2int(ptr+3,2);
                     // ignoring the rest for now
@@ -375,7 +382,6 @@ struct dispatch_to_timestamps_fn
                      mutable_column_view& results_view,
                      cudaStream_t stream ) const
     {
-        //CUDF_EXPECTS( cudf::is_timestamp<T>(), "Expecting timestamp type" );
         format_compiler compiler(format.c_str(),units);
         auto d_items = compiler.compile_to_device();
         auto d_results = results_view.data<T>();
@@ -494,7 +500,7 @@ struct datetime_formatter
         constexpr int32_t daysInCentury = 36524; // (100*365) + 24;
         constexpr int32_t daysIn4Years = 1461; // (4*365) + 1;
         constexpr int32_t daysInYear = 365;
-        // day offsets for each month:   Mar Apr May June July  Aug  Sep  Oct  Nov  Dec  Jan  Feb
+        // day offsets for each month:   Mar Apr May June July  Aug Sep  Oct  Nov  Dec  Jan  Feb
         const int32_t monthDayOffset[] = { 0, 31, 61, 92, 122, 153, 184, 214, 245, 275, 306, 337, 366 };
 
         // code logic handles leap years in chunks: 400y,100y,4y,1y
@@ -529,6 +535,13 @@ struct datetime_formatter
                 break;
             }
         }
+
+        // compute day of the year
+        // for month >= 10, leap-year has been already been included
+        timeparts[TP_DAY_OF_YEAR] = (month >= 10) ? days - monthDayOffset[10] +1 // 306
+                                    : days + /*Jan=*/ 31  + /*Feb=*/ 28 + 1 + // 2-month shift
+                                      ((year % 4 == 0) && ((year % 100 != 0) || (year % 400 == 0)));
+
         int32_t day = days - monthDayOffset[month] +1; // compute day of month
         if( month >= 10 )
             ++year;
@@ -635,8 +648,10 @@ struct datetime_formatter
                     ptr = int2str(ptr,item.length,timeparts[TP_MONTH]);
                     break;
                 case 'd': // day of month
-                case 'j': // day of year
                     ptr = int2str(ptr,item.length,timeparts[TP_DAY]);
+                    break;
+                case 'j': // day of year
+                    ptr = int2str(ptr,item.length,timeparts[TP_DAY_OF_YEAR]);
                     break;
                 case 'H': // 24-hour
                     ptr = int2str(ptr,item.length,timeparts[TP_HOUR]);
