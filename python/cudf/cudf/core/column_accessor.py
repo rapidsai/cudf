@@ -202,7 +202,7 @@ class ColumnAccessor(MutableMapping):
     def get_by_label_list_like(self, key):
         return self.__class__(
             to_flat_dict(
-                to_nested_dict({k: self._grouped_data[k] for k in key})
+                {k: self._grouped_data[k] for k in key}
             ),
             multiindex=self.multiindex,
             level_names=self.level_names,

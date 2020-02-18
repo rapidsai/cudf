@@ -393,12 +393,9 @@ class NestedOrderedDict(NestedMappingMixin, OrderedDict):
 
 def to_flat_dict(d):
     """
-    Convert the given NestedOrderedDict to a flat dictionary
+    Convert the given nested dictionary to a flat dictionary
     with tuple keys.
     """
-    if not isinstance(d, NestedOrderedDict):
-        return d
-
     def _inner(d, parents=[]):
         for k, v in d.items():
             if not isinstance(v, d.__class__):
