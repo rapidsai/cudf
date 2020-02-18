@@ -76,7 +76,7 @@ class Index(Frame):
 
         header["name"] = pickle.dumps(self.name)
         header["dtype"] = pickle.dumps(self.dtype)
-        header["type"] = pickle.dumps(type(self))
+        header["type-serialized"] = pickle.dumps(type(self))
         header["frame_count"] = len(frames)
         return header, frames
 
@@ -88,10 +88,10 @@ class Index(Frame):
         """
         """
         h = header["index_column"]
-        idx_typ = pickle.loads(header["type"])
+        idx_typ = pickle.loads(header["type-serialized"])
         name = pickle.loads(header["name"])
 
-        col_typ = pickle.loads(h["type"])
+        col_typ = pickle.loads(h["type-serialized"])
         index = col_typ.deserialize(h, frames[: header["frame_count"]])
         return idx_typ(index, name=name)
 
@@ -103,6 +103,10 @@ class Index(Frame):
     def name(self, value):
         col = self._data.pop(self.name)
         self._data[value] = col
+
+    @property
+    def names(self):
+        return (self.name,)
 
     def dropna(self):
         """
@@ -624,7 +628,7 @@ class RangeIndex(Index):
 
         header["name"] = pickle.dumps(self.name)
         header["dtype"] = pickle.dumps(self.dtype)
-        header["type"] = pickle.dumps(type(self))
+        header["type-serialized"] = pickle.dumps(type(self))
         header["frame_count"] = 0
         return header, frames
 
@@ -981,10 +985,6 @@ class CategoricalIndex(GenericIndex):
                 pd.Categorical(values, categories=values)
             )
         super(CategoricalIndex, self).__init__(values, **kwargs)
-
-    @property
-    def names(self):
-        return [self._values.name]
 
     @property
     def codes(self):
