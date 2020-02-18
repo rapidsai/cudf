@@ -74,6 +74,7 @@
 - PR #4163 Assert Dask CUDA serializers have `Buffer` frames
 - PR #4165 List serializable classes once
 - PR #4177 Use `uint8` type for host array copy of `Buffer`
+- PR #4182 Rename cuDF serialize functions to be more generic
 
 ## Bug Fixes
 
