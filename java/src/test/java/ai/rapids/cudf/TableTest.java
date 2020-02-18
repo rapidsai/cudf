@@ -1228,8 +1228,8 @@ public class TableTest extends CudfTestBase {
       JCudfSerialization.writeToStream(t, bout, 0, 0);
       ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
       DataInputStream din = new DataInputStream(bin);
-      try (Table result = JCudfSerialization.readTableFrom(din)) {
-        assertTablesAreEqual(t, result);
+      try (JCudfSerialization.TableAndRowCountPair result = JCudfSerialization.readTableFrom(din)) {
+        assertTablesAreEqual(t, result.getTable());
       }
     }
   }
@@ -1503,10 +1503,10 @@ public class TableTest extends CudfTestBase {
               headers.toArray(new JCudfSerialization.SerializedTableHeader[headers.size()]),
               buffers.toArray(new HostMemoryBuffer[buffers.size()]), bout2);
           ByteArrayInputStream bin2 = new ByteArrayInputStream(bout2.toByteArray());
-          try (Table found = JCudfSerialization.readTableFrom(bin2)) {
-            assertPartialTablesAreEqual(t, 0, t.getRowCount(), found, false);
+          try (JCudfSerialization.TableAndRowCountPair found = JCudfSerialization.readTableFrom(bin2)) {
+            assertPartialTablesAreEqual(t, 0, t.getRowCount(), found.getTable(), false);
           }
-          assertNull(JCudfSerialization.readTableFrom(bin2));
+          assertNull(JCudfSerialization.readTableFrom(bin2).getTable());
         } finally {
           for (HostMemoryBuffer buff: buffers) {
             buff.close();
@@ -1538,10 +1538,10 @@ public class TableTest extends CudfTestBase {
           int len = (int) Math.min(t.getRowCount() - i, sliceAmount);
           JCudfSerialization.writeToStream(t, bout, i, len);
           ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
-          try (Table found = JCudfSerialization.readTableFrom(bin)) {
-            assertPartialTablesAreEqual(t, i, len, found, i == 0 && len == t.getRowCount());
+          try (JCudfSerialization.TableAndRowCountPair found = JCudfSerialization.readTableFrom(bin)) {
+            assertPartialTablesAreEqual(t, i, len, found.getTable(), i == 0 && len == t.getRowCount());
           }
-          assertNull(JCudfSerialization.readTableFrom(bin));
+          assertNull(JCudfSerialization.readTableFrom(bin).getTable());
         }
       }
     }
