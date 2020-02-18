@@ -104,11 +104,13 @@
 - PR #4109 Use rmm::device_vector instead of thrust::device_vector
 - PR #4113 Use `.nvstrings` in `StringColumn.sum(...)`
 - PR #4116 Fix a bug in contiguous_split() where tables with mixed column types could corrupt string output
+- PR #4138 Really fix strings concatenate logic with column offsets
 - PR #4119 Fix binary ops slowdown using jitify -remove-unused-globals
 - PR #4125 Fix type enum to account for added Dictionary type in `types.hpp`
 - PR #4137 Update Java for mutating fill and rolling window changes
 - PR #4141 Fix NVStrings test_convert failure in 10.2 build
 - PR #4158 Fix merge issue with empty table return if one of the two tables are empty
+- PR #4155 Update groupby group_offsets size and fix unnecessary device dispatch.
 
 
 # cuDF 0.12.0 (04 Feb 2020)

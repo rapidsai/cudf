@@ -204,17 +204,42 @@ TEST_F(TableTest, ConcatenateTablesWithOffsets)
   std::vector<cudf::table_view> partitioned2 =
     cudf::experimental::split( table_view_in2, split_indexes2);
 
-  std::vector<cudf::table_view> table_views_to_concat;
-  table_views_to_concat.push_back(partitioned1[1]);
-  table_views_to_concat.push_back(partitioned2[1]);
-  std::unique_ptr<cudf::experimental::table> concatenated_tables =
-    cudf::experimental::concatenate(table_views_to_concat);
+  {
+    std::vector<cudf::table_view> table_views_to_concat;
+    table_views_to_concat.push_back(partitioned1[1]);
+    table_views_to_concat.push_back(partitioned2[1]);
+    std::unique_ptr<cudf::experimental::table> concatenated_tables =
+      cudf::experimental::concatenate(table_views_to_concat);
 
-  column_wrapper<int32_t> exp1_1{{5, 8, 5, 6, 6, 15, 14, 13}};
-  cudf::test::strings_column_wrapper exp2_1({"dada", "kite", "dog", "ln", "ln", "dado", "greg", "spinach"});
-  cudf::table_view table_view_exp1 {{exp1_1, exp2_1}};
+    column_wrapper<int32_t> exp1_1{{5, 8, 5, 6, 6, 15, 14, 13}};
+    cudf::test::strings_column_wrapper exp2_1({"dada", "kite", "dog", "ln", "ln", "dado", "greg", "spinach"});
+    cudf::table_view table_view_exp1 {{exp1_1, exp2_1}};
+    cudf::test::expect_tables_equal( concatenated_tables->view(), table_view_exp1);
+  }
+  {
+    std::vector<cudf::table_view> table_views_to_concat;
+    table_views_to_concat.push_back(partitioned1[0]);
+    table_views_to_concat.push_back(partitioned2[1]);
+    std::unique_ptr<cudf::experimental::table> concatenated_tables =
+      cudf::experimental::concatenate(table_views_to_concat);
 
-  cudf::test::expect_tables_equal( concatenated_tables->view(), table_view_exp1);
+    column_wrapper<int32_t> exp1_1{{5, 4, 3, 6, 15, 14, 13}};
+    cudf::test::strings_column_wrapper exp2_1({"dada", "egg", "avocado", "ln", "dado", "greg", "spinach"});
+    cudf::table_view table_view_exp1 {{exp1_1, exp2_1}};
+    cudf::test::expect_tables_equal( concatenated_tables->view(), table_view_exp1);
+  }
+  {
+    std::vector<cudf::table_view> table_views_to_concat;
+    table_views_to_concat.push_back(partitioned1[1]);
+    table_views_to_concat.push_back(partitioned2[0]);
+    std::unique_ptr<cudf::experimental::table> concatenated_tables =
+      cudf::experimental::concatenate(table_views_to_concat);
+
+    column_wrapper<int32_t> exp1_1{{5, 8, 5, 6, 5, 8, 5}};
+    cudf::test::strings_column_wrapper exp2_1({"dada", "kite", "dog", "ln", "dada", "kite", "dog"});
+    cudf::table_view table_view_exp {{exp1_1, exp2_1}};
+    cudf::test::expect_tables_equal( concatenated_tables->view(), table_view_exp);
+  }
 }
 
 TEST_F(TableTest, ConcatenateTablesWithOffsetsAndNulls)
@@ -235,15 +260,28 @@ TEST_F(TableTest, ConcatenateTablesWithOffsetsAndNulls)
   std::vector<cudf::table_view> partitioned2 =
     cudf::experimental::split( table_view_in2, split_indexes2);
 
-  std::vector<cudf::table_view> table_views_to_concat;
-  table_views_to_concat.push_back(partitioned1[1]);
-  table_views_to_concat.push_back(partitioned2[1]);
-  std::unique_ptr<cudf::experimental::table> concatenated_tables =
-    cudf::experimental::concatenate(table_views_to_concat);
+  {
+    std::vector<cudf::table_view> table_views_to_concat;
+    table_views_to_concat.push_back(partitioned1[1]);
+    table_views_to_concat.push_back(partitioned2[1]);
+    std::unique_ptr<cudf::experimental::table> concatenated_tables =
+      cudf::experimental::concatenate(table_views_to_concat);
 
-  cudf::test::fixed_width_column_wrapper<int32_t> exp1_1{{5, 8, 5, 6, 6, 15, 14, 13},{1,1,1,1,1,1,1,0}};
-  cudf::test::strings_column_wrapper exp2_1({"dada", "kite", "dog", "ln", "ln", "dado", "greg", "spinach"},{0,1,1,1,1,1,1,1});
-  cudf::table_view table_view_exp1 {{exp1_1, exp2_1}};
+    cudf::test::fixed_width_column_wrapper<int32_t> exp1_1{{5, 8, 5, 6, 6, 15, 14, 13},{1,1,1,1,1,1,1,0}};
+    cudf::test::strings_column_wrapper exp2_1({"dada", "kite", "dog", "ln", "ln", "dado", "greg", "spinach"},{0,1,1,1,1,1,1,1});
+    cudf::table_view table_view_exp1 {{exp1_1, exp2_1}};
+    cudf::test::expect_tables_equal( concatenated_tables->view(), table_view_exp1);
+  }
+  {
+    std::vector<cudf::table_view> table_views_to_concat;
+    table_views_to_concat.push_back(partitioned1[1]);
+    table_views_to_concat.push_back(partitioned2[0]);
+    std::unique_ptr<cudf::experimental::table> concatenated_tables =
+      cudf::experimental::concatenate(table_views_to_concat);
 
-  cudf::test::expect_tables_equal( concatenated_tables->view(), table_view_exp1);
+    cudf::test::fixed_width_column_wrapper<int32_t> exp1_1{5, 8, 5, 6, 5, 8, 5};
+    cudf::test::strings_column_wrapper exp2_1({"dada", "kite", "dog", "ln", "dada", "kite", "dog"},{0,1,1,1,1,0,1});
+    cudf::table_view table_view_exp1 {{exp1_1, exp2_1}};
+    cudf::test::expect_tables_equal( concatenated_tables->view(), table_view_exp1);
+  }
 }

@@ -129,6 +129,7 @@ std::unique_ptr<column> group_quantiles(
     column_view const& values,
     column_view const& group_sizes,
     rmm::device_vector<size_type> const& group_offsets,
+    size_type const num_groups,
     std::vector<double> const& quantiles,
     interpolation interp,
     rmm::mr::device_memory_resource* mr,
@@ -151,7 +152,7 @@ std::unique_ptr<column> group_quantiles(
 std::unique_ptr<column> group_nunique(
     column_view const& values,
     rmm::device_vector<size_type> const& group_labels,
-    size_type num_groups,
+    size_type const num_groups,
     rmm::device_vector<size_type> const& group_offsets,
     include_nulls _include_nulls,
     rmm::mr::device_memory_resource* mr,
