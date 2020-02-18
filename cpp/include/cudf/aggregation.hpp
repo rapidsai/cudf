@@ -72,7 +72,7 @@ class aggregation {
 
   bool operator==(aggregation const& other) const { return kind == other.kind; }
 
-  ~aggregation(){};
+  ~aggregation() = default; 
 };
 
 enum class udf_type : bool {
