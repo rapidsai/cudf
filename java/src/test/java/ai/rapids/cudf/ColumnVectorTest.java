@@ -1387,10 +1387,6 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector allSupportedFormatsTimestampAsStrings = ns_timestamps.asStrings("%d::%m::%y::%Y::%H::%M::%S::%f");
          ColumnVector timestampsAsStrings = ns_timestamps.asStrings("%Y-%m-%d %H:%M:%S.%f")) {
       assertColumnsAreEqual(ns_string_times, timestampsAsStrings);
-      allSupportedFormatsTimestampAsStrings.ensureOnHost();
-      for (int i = 0 ; i < allSupportedFormatsTimestampAsStrings.getRowCount() ; i++) {
-        System.out.println(new String(allSupportedFormatsTimestampAsStrings.getUTF8(i)));
-      }
       assertColumnsAreEqual(allSupportedFormatsTimestampAsStrings, ns_string_times_all);
     }
   }
