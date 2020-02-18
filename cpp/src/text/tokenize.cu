@@ -19,9 +19,9 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/utilities/error.hpp>
 #include <nvtext/tokenize.hpp>
 #include <nvtext/detail/tokenize.hpp>
-#include <cudf/utilities/error.hpp>
 #include <text/utilities/tokenize_ops.cuh>
 
 #include <thrust/transform.h>
@@ -68,7 +68,7 @@ std::unique_ptr<cudf::column> tokenize_fn( cudf::size_type strings_count, Tokeni
                             d_token_counts.template end<int32_t>(),
                             token_offsets.begin()+1 );
     CUDA_TRY(cudaMemsetAsync( token_offsets.data().get(), 0, sizeof(int32_t), stream ));
-    auto total_tokens = token_offsets.back();
+    auto const total_tokens = token_offsets.back();
     // build a list of pointers to each token
     rmm::device_vector<string_index_pair> tokens(total_tokens);
     // now go get the tokens
