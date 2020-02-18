@@ -18,8 +18,8 @@ ARGS=$*
 # script, and that this script resides in the repo dir!
 REPODIR=$(cd $(dirname $0); pwd)
 
-VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks -v -g -n -x --allgpuarch --disable_nvtx -h"
-HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [-v] [-g] [-n] [-h] [-x]
+VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks tests -v -g -n -x --allgpuarch --disable_nvtx -h"
+HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [-v] [-g] [-n] [-h] [-x]
    clean            - remove all existing build artifacts and configuration (start
                       over)
    libnvstrings     - build the nvstrings C++ code only
@@ -28,6 +28,7 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [-v] [-g] [-n] [-h] [
    cudf             - build the cudf Python package
    dask_cudf        - build the dask_cudf Python package
    benchmarks       - build benchmarks
+   tests            - build tests
    -v               - verbose build mode
    -g               - build for debug
    -n               - no install step
@@ -51,6 +52,7 @@ INSTALL_TARGET=install
 BENCHMARKS=OFF
 BUILD_ALL_GPU_ARCH=0
 BUILD_NVTX=ON
+BUILD_TESTS=OFF
 
 # Set defaults for vars that may not have been defined externally
 #  FIXME: if INSTALL_PREFIX is not set, check PREFIX, then check
@@ -98,6 +100,9 @@ if hasArg --allgpuarch; then
 fi
 if hasArg benchmarks; then
     BENCHMARKS=ON
+fi
+if hasArg tests; then
+    BUILD_TESTS=ON
 fi
 if hasArg --disable_nvtx; then
     BUILD_NVTX="OFF"
@@ -148,6 +153,10 @@ if buildAll || hasArg libnvstrings; then
     else
         make -j${PARALLEL_LEVEL} nvstrings VERBOSE=${VERBOSE}
     fi
+
+    if [[ ${BUILD_TEST} == "ON" ]]; then
+        make -j${PARALLEL_LEVEL} build_tests_nvstrings VERBOSE=${VERBOSE}
+    fi
 fi
 
 # Build and install the nvstrings Python package
@@ -170,6 +179,10 @@ if buildAll || hasArg libcudf; then
         make -j${PARALLEL_LEVEL} install_cudf VERBOSE=${VERBOSE}
     else
         make -j${PARALLEL_LEVEL} cudf VERBOSE=${VERBOSE}
+    fi
+
+    if [[ ${BUILD_TEST} == "ON" ]]; then
+        make -j${PARALLEL_LEVEL} build_tests_cudf VERBOSE=${VERBOSE}
     fi
 fi
 

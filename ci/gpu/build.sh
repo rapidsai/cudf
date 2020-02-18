@@ -83,7 +83,7 @@ conda list
 ################################################################################
 
 logger "Build libcudf..."
-$WORKSPACE/build.sh clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks
+$WORKSPACE/build.sh clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks tests
 
 ################################################################################
 # TEST - Run GoogleTest and py.tests for libnvstrings, nvstrings, libcudf, and
@@ -96,13 +96,15 @@ else
     logger "Check GPU usage..."
     nvidia-smi
 
-    logger "GoogleTest for libnvstrings..."
+    logger "GoogleTests..."
     cd $WORKSPACE/cpp/build
-    GTEST_OUTPUT="xml:${WORKSPACE}/test-results/" make -j${PARALLEL_LEVEL} test_nvstrings
 
-    logger "GoogleTest for libcudf..."
-    cd $WORKSPACE/cpp/build
-    GTEST_OUTPUT="xml:${WORKSPACE}/test-results/" make -j${PARALLEL_LEVEL} test_cudf
+    for gt in gtests/*; do
+      test_name=$(basename ${gt})
+      echo "Running GoogleTest $test_name"
+      ${gt} --gtest_output=xml:${WORKSPACE}/test-results/
+    done
+
 
     # set environment variable for numpy 1.16
     # will be enabled for later versions by default
