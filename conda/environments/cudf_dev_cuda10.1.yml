@@ -44,6 +44,7 @@ dependencies:
   - rapidjson
   - flatbuffers
   - hypothesis
+  - nvstrings>=0.3
   - pip:
       - sphinx-markdown-tables
       - git+https://github.com/dask/dask.git
