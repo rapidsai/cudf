@@ -115,6 +115,7 @@
 - PR #4137 Update Java for mutating fill and rolling window changes
 - PR #4141 Fix NVStrings test_convert failure in 10.2 build
 - PR #4158 Fix merge issue with empty table return if one of the two tables are empty
+- PR #4175 Fix `__sizeof__` calculation in `StringColumn`
 - PR #4155 Update groupby group_offsets size and fix unnecessary device dispatch.
 
 
