@@ -1,6 +1,7 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 import os
 import shutil
+import argparse
 import sysconfig
 from distutils.sysconfig import get_python_lib
 
@@ -33,6 +34,13 @@ if not os.path.isdir(CUDA_HOME):
 
 cuda_include_dir = os.path.join(CUDA_HOME, "include")
 
+argparser = argparse.ArgumentParser()
+argparser.add_argument("-j", "--jobs", default=None, type=int)
+args, unknown = argparser.parse_known_args()
+if args.jobs is not None:
+    nthreads=int(args.jobs)
+else:
+    nthreads=int(os.environ.get("JOBS", "0"))
 
 extensions = [
     Extension(
@@ -73,7 +81,7 @@ setup(
     ],
     # Include the separately-compiled shared library
     setup_requires=["cython"],
-    ext_modules=cythonize(extensions),
+    ext_modules=cythonize(extensions, nthreads=nthreads),
     packages=find_packages(include=["cudf", "cudf.*"]),
     package_data={
         "cudf._lib": ["*.pxd"],
