@@ -280,7 +280,8 @@ struct elementwise_aggregator {
  * 
  * The initial value and validity of `R` depends on the aggregation:
  * SUM: 0 and NULL
- * COUNT: 0 and VALID
+ * COUNT_VALID: 0 and VALID
+ * COUNT_ALL:   0 and VALID
  * MIN: Max element of type and NULL
  * MAX: Min element of type and NULL
  * ARGMAX: `ARGMAX_SENTINEL` and NULL
@@ -293,7 +294,7 @@ struct elementwise_aggregator {
  * SUM, MIN, MAX, ARGMIN, ARGMAX:
  *  - `source`: Skipped
  *  - `target`: Updated from null to valid upon first successful aggregation
- * COUNT:
+ * COUNT_VALID, COUNT_ALL:
  *  - `source`: Skipped
  *  - `target`: Cannot be null
  *

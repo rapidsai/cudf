@@ -36,7 +36,7 @@ namespace experimental {
  * - instead of storing NA/NaN for output rows that do not meet the minimum number of observations
  *   this function updates the valid bitmask of the column to indicate which elements are valid.
  * 
- * The returned column for `op == COUNT` always has `INT32` type. All other operators return a 
+ * The returned column for count aggregation always has `INT32` type. All other operators return a 
  * column of the same type as the input. Therefore it is suggested to convert integer column types
  * (especially low-precision integers) to `FLOAT32` or `FLOAT64` before doing a rolling `MEAN`.
  *
@@ -72,7 +72,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
  * - support for dynamic rolling windows, i.e. window size can be specified for each element using
  *   an additional array.
  * 
- * The returned column for `op == COUNT` always has INT32 type. All other operators return a 
+ * The returned column for count aggregation always has INT32 type. All other operators return a 
  * column of the same type as the input. Therefore it is suggested to convert integer column types
  * (especially low-precision integers) to `FLOAT32` or `FLOAT64` before doing a rolling `MEAN`.
  * 
