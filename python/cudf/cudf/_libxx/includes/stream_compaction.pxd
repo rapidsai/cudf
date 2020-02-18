@@ -20,7 +20,7 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf::experimental" \
                                       vector[size_type] keys,
                                       size_type keep_threshold) except +
 
-    pcdef unique_ptr[table] apply_boolean_mask(
+    cdef unique_ptr[table] apply_boolean_mask(
         table_view source_table,
         column_view boolean_mask
     ) except +
