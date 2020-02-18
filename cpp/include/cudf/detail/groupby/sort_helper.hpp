@@ -126,7 +126,7 @@ struct sort_groupby_helper {
   /**
    * @brief Get the number of groups in `keys`
    */
-  size_type num_groups() { return group_offsets().size(); }
+  size_type num_groups() { return group_offsets().size() - 1; }
 
   /**
    * @brief Return the effective number of keys
@@ -152,10 +152,13 @@ struct sort_groupby_helper {
   /**
    * @brief Get each group's offset into the sorted order of `keys`. 
    * 
-   * Computes and stores the group offsets on first invocation and returns
-   * the stored group offsets on subsequent calls.
-   * 
-   * @return vector of offsets of the starting point of each group in the sorted key table
+   * Computes and stores the group offsets on first invocation and returns 
+   * the stored group offsets on subsequent calls. 
+   * This returns a vector of size `num_groups() + 1` such that the size of 
+   * group `i` is `group_offsets[i+1] - group_offsets[i]`
+   *
+   * @return vector of offsets of the starting point of each group in the sorted
+   * key table
    */
   index_vector const& group_offsets(cudaStream_t stream = 0);
 
