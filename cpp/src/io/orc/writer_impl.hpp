@@ -141,6 +141,7 @@ class writer::impl {
   /**
    * @brief Encodes the streams as a series of column data chunks
    *
+   * @param columns List of columns
    * @param num_columns Total number of columns
    * @param num_rows Total number of rows
    * @param num_rowgroups Total number of row groups
@@ -180,6 +181,29 @@ class writer::impl {
       size_t num_data_streams, std::vector<uint32_t> const& stripe_list,
       hostdevice_vector<gpu::EncChunk>& chunks,
       hostdevice_vector<gpu::StripeStream>& strm_desc, cudaStream_t stream);
+
+  /**
+   * @brief Returns per-stripe and per-file column statistics encoded
+   * in ORC protobuf format
+   *
+   * @param columns List of columns
+   * @param num_columns Total number of columns
+   * @param num_rows Total number of rows
+   * @param num_rowgroups Total number of row groups
+   * @param stripe_list List of stripe boundaries
+   * @param stripes Stripe information
+   * @param chunks List of column data chunks
+   * @param stream Stream to use for memory allocation and kernels
+   *
+   * @return The statistic blobs
+   **/
+  std::vector<std::vector<uint8_t>> gather_statistic_blobs(
+      orc_column_view const *columns,
+      size_t num_columns, size_t num_rows, size_t num_rowgroups,
+      std::vector<uint32_t> const& stripe_list,
+      std::vector<StripeInformation> const& stripes,
+      hostdevice_vector<gpu::EncChunk>& chunks,
+      cudaStream_t stream);
 
   /**
    * @brief Write the specified column's row index stream
@@ -255,6 +279,7 @@ class writer::impl {
   CompressionKind compression_kind_ = CompressionKind::NONE;
 
   bool enable_dictionary_ = true;
+  bool enable_statistics_ = true;
 
   std::vector<uint8_t> buffer_;
   std::unique_ptr<data_sink> out_sink_;
