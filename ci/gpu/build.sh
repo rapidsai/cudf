@@ -100,9 +100,9 @@ else
     cd $WORKSPACE/cpp/build
 
     for gt in gtests/*; do
-      test_name=$(basename ${gt})
-      echo "Running GoogleTest $test_name"
-      ${gt} --gtest_output=xml:${WORKSPACE}/test-results/
+        test_name=$(basename ${gt})
+        echo "Running GoogleTest $test_name"
+        ${gt} --gtest_output=xml:${WORKSPACE}/test-results/
     done
 
 
@@ -110,8 +110,8 @@ else
     # will be enabled for later versions by default
     np_ver=$(python -c "import numpy; print('.'.join(numpy.__version__.split('.')[:-1]))")
     if [ "$np_ver" == "1.16" ];then
-      logger "export NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=1"
-      export NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=1
+        logger "export NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=1"
+        export NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=1
     fi
 
     cd $WORKSPACE/python/nvstrings
