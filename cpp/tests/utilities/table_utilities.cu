@@ -19,5 +19,15 @@ void expect_tables_equal(cudf::table_view lhs, cudf::table_view rhs) {
   }
 }
 
+/**
+ * @copydoc cudf::test::expect_tables_equivalent
+ * 
+ **/
+void expect_tables_equivalent(cudf::table_view lhs, cudf::table_view rhs) {  
+  for (auto i=0; i<lhs.num_columns(); ++i) {
+    cudf::test::expect_columns_equivalent(lhs.column(i), rhs.column(i));
+  }
+}
+
 }  // namespace test
 }  // namespace cudf

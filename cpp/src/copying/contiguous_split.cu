@@ -209,7 +209,7 @@ struct column_buffer_size_functor {
    size_t operator()(column_view const& c, column_split_info &split_info)
    {      
       split_info.data_buf_size = cudf::util::round_up_safe(c.size() * sizeof(T), split_align);  
-      split_info.validity_buf_size = (c.nullable() ? cudf::bitmask_allocation_size_bytes(c.size(), split_align) : 0);
+      split_info.validity_buf_size = (c.has_nulls() ? cudf::bitmask_allocation_size_bytes(c.size(), split_align) : 0);
       return split_info.data_buf_size + split_info.validity_buf_size;
    }
 };
@@ -250,7 +250,7 @@ struct column_copy_functor {
       
       // output copied column
       mutable_column_view  mcv{in.type(), in.size(), data, validity, in.null_count()};
-      if(in.nullable()){
+      if(in.has_nulls()){
          copy_in_place_kernel<block_size, T, true><<<grid.num_blocks, block_size, 0, 0>>>(
                            *column_device_view::create(in),
                            *mutable_column_device_view::create(mcv));
@@ -290,7 +290,7 @@ void column_copy_functor::operator()<string_view>(column_view const& in, column_
    // this exists in the kernel brief.    
    constexpr int block_size = 256;
    cudf::experimental::detail::grid_1d grid{num_threads, block_size, 1};            
-   if(in.nullable()){
+   if(in.has_nulls()){
       copy_in_place_strings_kernel<block_size, true><<<grid.num_blocks, block_size, 0, 0>>>(
                         in.size(),                                            // num_rows
                         in_offsets.head<size_type>() + in.offset(),           // offsets_in
@@ -336,7 +336,7 @@ struct column_preprocess_info {
    size_type                  index;
    size_type                  offset;
    size_type                  size;
-   bool                       nullable;      
+   bool                       has_nulls;      
    cudf::column_device_view   offsets;
 };
 
@@ -364,7 +364,7 @@ thrust::host_vector<column_split_info> preprocess_string_column_info(cudf::table
    std::for_each(t.begin(), t.end(), [&offset_columns, &column_index](cudf::column_view const& c){
       if(c.type().id() == STRING){         
          cudf::column_device_view cdv((strings_column_view(c)).offsets(), 0, 0);
-         offset_columns.push_back(column_preprocess_info{column_index, c.offset(), c.size(), c.nullable(), cdv});
+         offset_columns.push_back(column_preprocess_info{column_index, c.offset(), c.size(), c.has_nulls(), cdv});
       }
       column_index++;
    });   
@@ -386,7 +386,7 @@ thrust::host_vector<column_split_info> preprocess_string_column_info(cudf::table
          int32_t offset_end = host_offsets[cpi.index].second;         
          auto num_chars = offset_end - offset_start;
          split_info[cpi.index].data_buf_size = cudf::util::round_up_safe(static_cast<size_t>(num_chars), split_align);         
-         split_info[cpi.index].validity_buf_size = cpi.nullable ? cudf::bitmask_allocation_size_bytes(cpi.size, split_align) : 0;         
+         split_info[cpi.index].validity_buf_size = cpi.has_nulls ? cudf::bitmask_allocation_size_bytes(cpi.size, split_align) : 0;         
          split_info[cpi.index].offsets_buf_size = cudf::util::round_up_safe((cpi.size+1) * sizeof(size_type), split_align);
          split_info[cpi.index].num_chars = num_chars;
          split_info[cpi.index].chars_offset = offset_start;
