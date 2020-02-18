@@ -117,10 +117,10 @@ TYPED_TEST(groupby_nth_element_test, null_keys_and_values)
     fixed_width_column_wrapper<V> vals(       { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 4},
                                               { 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0});
 
-                                          //  { 1, 1, 1     2, 2, 2,   3, 3,    4}
+                                          //  { 1, 1, 1   2,2,2,2    3, 3,    4}
     fixed_width_column_wrapper<K> expect_keys({ 1,        2,         3,       4}, all_valid());
-                // all unique values only //  { -,3,6,    1,4,-, 9,  2,8,     -}
-    fixed_width_column_wrapper<R> expect_vals ({0,        1,         2,       0}, 
+                                          //  { -,3,6,    1,4,-,9,  2,8,      -}
+    fixed_width_column_wrapper<R> expect_vals({-1,        1,         2,      -1}, 
                                                {0,        1,         1,       0});
 
 
@@ -142,7 +142,7 @@ TYPED_TEST(groupby_nth_element_test, null_keys_and_values_out_of_bounds)
     fixed_width_column_wrapper<K> expect_keys({ 1,        2,         3,       4}, all_valid());
                                           //  { -,3,6,    1,4,-, 9,  2,8,     -}
                                           //    value,    null,       out,     out
-    fixed_width_column_wrapper<R> expect_vals ({6,        5,         0,       0}, 
+    fixed_width_column_wrapper<R> expect_vals ({6,       -1,        -1,      -1}, 
                                                {1,        0,         0,       0});
 
     auto agg = cudf::experimental::make_nth_element_aggregation(2);

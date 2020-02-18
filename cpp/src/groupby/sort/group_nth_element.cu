@@ -22,9 +22,6 @@
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/types.hpp>
 
-//#include <thrust/iterator/constant_iterator.h>
-//#include <thrust/iterator/discard_iterator.h>
-//#include <thrust/adjacent_difference.h>
 #include <thrust/gather.h>
 #include "group_reductions.hpp"
 
@@ -38,7 +35,7 @@ namespace {
 template<bool include_nulls>
 struct nth_element_functor {
 
-  //include nulls
+  //include nulls (equivalent to pandas nth(dropna=None) but return nulls for n out of bounds)
   template <typename T>
   std::enable_if_t<is_fixed_width<T>() && include_nulls, std::unique_ptr<column>>
   operator()(column_view const &values,
@@ -97,7 +94,7 @@ struct nth_element_functor {
       result->set_null_mask(std::move(result_bitmask), result_null_count);
     return result;
   }
-  //skip nulls
+  //skip nulls (equivalent to pandas nth(dropna='any'))
    template <typename T>
   std::enable_if_t<is_fixed_width<T>() && !include_nulls, std::unique_ptr<column>>
   operator()(column_view const &values,

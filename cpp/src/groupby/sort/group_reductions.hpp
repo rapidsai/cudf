@@ -158,6 +158,19 @@ std::unique_ptr<column> group_nunique(
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream = 0);
 
+/**
+ * @brief Internal API to calculate nth values in each group of  @p values
+ *
+ * @param values Grouped and sorted (within group) values to get unique count of
+ * @param group_labels ID of group that the corresponding value belongs to
+ * @param group_offsets Offsets of groups' starting points within @p values
+ * @param num_groups Number of groups ( unique values in @p group_labels )
+ * @param n nth element to choose from each group of @p values
+ * @param _include_nulls Exclude nulls while counting if include_nulls::NO,
+ *  Include nulls if include_nulls::YES.
+ * @param mr Memory resource to allocate output with
+ * @param stream Stream to perform computation in
+ */
 std::unique_ptr<column> group_nth_element(
     column_view const& values,
     rmm::device_vector<size_type> const& group_labels,
