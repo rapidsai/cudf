@@ -26,14 +26,23 @@ namespace nvtext
  * @brief Returns a single column of strings by tokenizing the input strings
  * column and then producing ngrams of each string.
  *
- * The `delimiter` may be zero or more characters. If the `delimiter` is empty,
- * whitespace (character code-point <= ' ') is used for identifying tokens.
+ * An ngram is a grouping of 2 or more tokens with a separator. For example,
+ * generating bigrams groups all adjacent pairs of tokens for a string.
+ * ```
+ * ["a bb ccc"] can be tokenized to ["a", "bb", "ccc"]
+ * bigrams would generate ["a_bb", "bb_ccc"] and trigrams would generate ["a_bb_ccc"]
+ * ```
+ *
+ * The `delimiter` is used for tokenizing and may be zero or more characters.
+ * If the `delimiter` is empty, whitespace (character code-point <= ' ') is used
+ * for identifying tokens.
  *
  * Once tokens are identified, ngrams are produced by joining the tokens
  * with the specified separator. The generated ngrams use the tokens for each
  * string and not across strings in adjacent rows.
  * Any input string that contains fewer tokens than the specified ngrams value is
- * skipped and will not contribute to the output.
+ * skipped and will not contribute to the output. Therefore, a bigram of a single
+ * token is ignored as well as a trigram of 2 or less tokens.
  *
  * Tokens are found by locating delimiter(s) starting at the beginning of each string.
  * As each string is tokenized, the ngrams are generated using input column row order
@@ -52,8 +61,8 @@ namespace nvtext
  *
  * All null row entries are ignored and the output contains all valid rows.
  *
- * @param strings Strings column tokenize.
- * @param ngrams The number of ngrams to produce.
+ * @param strings Strings column to tokenize and produce ngrams from.
+ * @param ngrams The ngram number to generate.
  *               Default is 2 = bigram.
  * @param delimiter UTF-8 characters used to separate each string into tokens.
  *                  The default of empty string will separate tokens using whitespace.
