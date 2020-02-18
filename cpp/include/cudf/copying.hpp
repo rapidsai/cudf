@@ -258,10 +258,10 @@ std::unique_ptr<table> empty_like(table_view const& input_table);
  * @param target_begin The starting index of the target range (inclusive)
  * @return void
  */
-void copy_range(column_view const& source,
-                mutable_column_view& target,
-                size_type source_begin, size_type source_end,
-                size_type target_begin);
+void copy_range_in_place(column_view const& source,
+                         mutable_column_view& target,
+                         size_type source_begin, size_type source_end,
+                         size_type target_begin);
 
 /**
  * @brief Copies a range of elements out-of-place from one column to another.
