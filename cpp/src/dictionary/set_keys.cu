@@ -70,7 +70,7 @@ struct dispatch_compute_indices
         auto d_result = result->mutable_view().data<int32_t>();
         auto execpol = rmm::exec_policy(stream);
         thrust::lower_bound( execpol->on(stream), keys_itr, keys_itr + new_keys.size(),
-                             dictionary_itr + input.offset(), dictionary_itr + input.size(),
+                             dictionary_itr, dictionary_itr + input.size(),
                              d_result, thrust::less<Element>() );
         result->set_null_count(0);
         return result;
@@ -103,7 +103,7 @@ std::unique_ptr<column> set_keys( dictionary_column_view const& dictionary_colum
     auto d_null_mask = dictionary_column.null_mask();
     auto new_nulls = experimental::detail::valid_if( 
                     thrust::make_counting_iterator<size_type>(dictionary_column.offset()),
-                    thrust::make_counting_iterator<size_type>(dictionary_column.size()),
+                    thrust::make_counting_iterator<size_type>(dictionary_column.offset()+dictionary_column.size()),
                     [d_null_mask, d_indices, d_matches] __device__ (size_type idx) {
                         if( d_null_mask && !bit_is_set(d_null_mask,idx) )
                             return cudf::experimental::false_v;
