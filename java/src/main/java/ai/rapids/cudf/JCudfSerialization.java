@@ -721,9 +721,6 @@ public class JCudfSerialization {
                                                   int numRows) {
     DType[] types = new DType[columns.length];
     long[] nullCount = new long[columns.length];
-    if (columns.length == 0) {
-      return new SerializedTableHeader(numRows, types, nullCount, 0);
-    }
     for (int i = 0; i < columns.length; i++) {
       types[i] = columns[i].getType();
       nullCount[i] = columns[i].getNullCount();
@@ -1300,16 +1297,11 @@ public class JCudfSerialization {
       long[] nullCounts = header.nullCounts;
       long numRows = header.getNumRows();
       int numColumns = dataTypes.length;
-      ColumnVector[] vectors = new ColumnVector[Math.max(1,numColumns)];
+      ColumnVector[] vectors = new ColumnVector[numColumns];
       DeviceMemoryBuffer validity = null;
       DeviceMemoryBuffer data = null;
       DeviceMemoryBuffer offsets = null;
       try {
-        if (numColumns == 0) {
-          vectors[0] = new ColumnVector(DType.INT32, numRows, Optional.of(0L),
-              DeviceMemoryBuffer.allocate(DType.INT32.sizeInBytes * numRows), validity, offsets);
-          return new Table(vectors);
-        }
         for (int column = 0; column < numColumns; column++) {
           DType type = dataTypes[column];
           long nullCount = nullCounts[column];
