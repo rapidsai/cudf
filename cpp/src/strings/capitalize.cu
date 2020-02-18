@@ -154,10 +154,12 @@ namespace { // anonym.
          
 }//anonym.
 
-template<typename device_modifier_functor>
+template<typename device_probe_functor,
+         typename device_modifier_functor>
 std::unique_ptr<column> modify_strings( strings_column_view const& strings,
                                         character_flags_table_type case_flag,
-                                        device_modifier_functor d_fctr,
+                                        device_probe_functor d_probe_fctr,
+                                        device_modifier_functor d_modifier_fctr,
                                         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                         cudaStream_t stream = 0)
 {
@@ -176,15 +178,7 @@ std::unique_ptr<column> modify_strings( strings_column_view const& strings,
   auto d_flags = get_character_flags_table();
   auto d_case_table = get_character_cases_table();  
 
-  auto d_empty_fctr = [] __device__ (char* d_buffer,
-                                     detail::character_cases_table_type const* d_case_table,
-                                     detail::character_flags_table_type case_flag,
-                                     uint32_t code_point,
-                                     detail::character_flags_table_type flag){
-    //purposely empty; used just to instantiate a sizeOnly `case_manip` that doesn't need a functor
-  };
-
-  detail::case_manip<decltype(d_empty_fctr), pass_step::SizeOnly> cprobe{d_empty_fctr,
+  detail::case_manip<decltype(d_probe_fctr), pass_step::SizeOnly> cprobe{d_probe_fctr,
       d_column,
       case_flag,
       d_flags,
@@ -205,7 +199,7 @@ std::unique_ptr<column> modify_strings( strings_column_view const& strings,
   auto chars_view = chars_column->mutable_view();
   auto d_chars = chars_view.data<char>();
 
-  detail::case_manip<device_modifier_functor, pass_step::ExecuteOp> cmanip{d_fctr,
+  detail::case_manip<device_modifier_functor, pass_step::ExecuteOp> cmanip{d_modifier_fctr,
       d_column,
       case_flag,
       d_flags,
@@ -228,7 +222,18 @@ std::unique_ptr<column> capitalize( strings_column_view const& strings,
 {
   //TODO:
   //
-  auto fctr = [] __device__ (char* d_buffer,
+  auto d_probe_fctr = [] __device__ (char* d_buffer,
+                                     detail::character_cases_table_type const* d_case_table,
+                                     detail::character_flags_table_type case_flag,
+                                     uint32_t code_point,
+                                     detail::character_flags_table_type flag){
+    //purposely empty; used just to instantiate a sizeOnly `case_manip` that doesn't need a functor
+  };
+
+  
+  //TODO:
+  //
+  auto d_modifier_fctr = [] __device__ (char* d_buffer,
                              detail::character_cases_table_type const* d_case_table,
                              detail::character_flags_table_type case_flag,
                              uint32_t code_point,
@@ -239,7 +244,11 @@ std::unique_ptr<column> capitalize( strings_column_view const& strings,
 
   detail::character_flags_table_type case_flag = IS_LOWER(0xFF);// <- ????? for now; TODO
 
-  return detail::modify_strings(strings, case_flag, fctr, mr);
+  return detail::modify_strings(strings,
+                                case_flag,
+                                d_probe_fctr,
+                                d_modifier_fctr,
+                                mr);
 }
 
 std::unique_ptr<column> title( strings_column_view const& strings,
@@ -247,7 +256,18 @@ std::unique_ptr<column> title( strings_column_view const& strings,
 {
   //TODO:
   //
-  auto fctr = [] __device__ (char* d_buffer,
+  auto d_probe_fctr = [] __device__ (char* d_buffer,
+                                     detail::character_cases_table_type const* d_case_table,
+                                     detail::character_flags_table_type case_flag,
+                                     uint32_t code_point,
+                                     detail::character_flags_table_type flag){
+    //purposely empty; used just to instantiate a sizeOnly `case_manip` that doesn't need a functor
+  };
+
+  
+  //TODO:
+  //
+  auto d_modifier_fctr = [] __device__ (char* d_buffer,
                              detail::character_cases_table_type const* d_case_table,
                              detail::character_flags_table_type case_flag,
                              uint32_t code_point,
@@ -258,7 +278,11 @@ std::unique_ptr<column> title( strings_column_view const& strings,
 
   detail::character_flags_table_type case_flag = IS_LOWER(0xFF);// <- ????? for now; TODO
 
-  return detail::modify_strings(strings, case_flag, fctr, mr);
+  return detail::modify_strings(strings,
+                                case_flag,
+                                d_probe_fctr,
+                                d_modifier_fctr,
+                                mr);
 }
   
 }//namespace strings
