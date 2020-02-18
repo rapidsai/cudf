@@ -35,12 +35,15 @@ if not os.path.isdir(CUDA_HOME):
 cuda_include_dir = os.path.join(CUDA_HOME, "include")
 
 argparser = argparse.ArgumentParser()
-argparser.add_argument("-j", "--jobs", default=None, type=int)
-args, unknown = argparser.parse_known_args()
-if args.jobs is not None:
-    nthreads=int(args.jobs)
-else:
-    nthreads=int(os.environ.get("JOBS", "0"))
+argparser.add_argument("-j", "--jobs", required=False, const=None, default=None, type=int)
+try:
+    args, unknown = argparser.parse_known_args()
+except Exception:
+    args = argparse.Namespace()
+    setattr(args, 'jobs', None)
+
+nthreads=int(args.jobs if args.jobs is not None else
+             os.environ.get("JOBS", os.environ.get("PARALLEL_LEVEL", "0")))
 
 extensions = [
     Extension(
