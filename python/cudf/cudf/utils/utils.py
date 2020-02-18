@@ -396,6 +396,7 @@ def to_flat_dict(d):
     Convert the given nested dictionary to a flat dictionary
     with tuple keys.
     """
+
     def _inner(d, parents=[]):
         for k, v in d.items():
             if not isinstance(v, d.__class__):
