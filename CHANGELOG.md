@@ -70,6 +70,7 @@
 - PR #4136 Add `Index.names` property
 - PR #4144 Release GIL when calling libcudf++ functions
 - PR #4149 Use "type-serialized" for pickled types like Dask
+- PR #4177 Use `uint8` type for host array copy of `Buffer`
 
 ## Bug Fixes
 
