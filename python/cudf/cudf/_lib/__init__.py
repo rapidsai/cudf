@@ -12,7 +12,6 @@ from . import (
     hash,
     issorted,
     join,
-    json,
     nvtx,
     orc,
     parquet,

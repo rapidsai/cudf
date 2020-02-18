@@ -92,7 +92,7 @@ def to_parquet(
                     + "supported by the gpu accelerated parquet writer"
                 )
 
-        return libcudf.parquet.write_parquet(
+        return libcudf.parquet.write_parquet_libcudf(
             df, path, index, compression=compression, statistics=statistics
         )
     else:

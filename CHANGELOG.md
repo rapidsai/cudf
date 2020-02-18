@@ -37,7 +37,7 @@
 - PR #3897 Port cuIO JSON reader to cudf::column types
 - PR #4008 Eliminate extra copy in column constructor
 - PR #4013 Add cython definition for io readers cudf/io/io_types.hpp
-- PR #4028 Port json.pyx to use non-legacy libcudf APIs
+- PR #4028 Port json.pyx to use new libcudf APIs
 - PR #4014 ORC/Parquet: add count parameter to stripe/rowgroup-based reader API
 - PR #4042 Port cudf/io/functions.hpp to Cython for use in IO bindings
 - PR #3880 Add aggregation infrastructure support for reduction

@@ -12,14 +12,9 @@ from cudf._lib.utils import *
 from cudf._lib.includes.parquet cimport (
     reader as parquet_reader,
     reader_options as parquet_reader_options,
-    compression_type,
-    write_parquet_args,
-    sink_info,
-    table_view,
-    table_metadata,
-    statistics_freq,
-    write_parquet as parquet_writer
 )
+from cudf._libxx.io.functions cimport *
+from cudf._libxx.io.types cimport *
 from libc.stdlib cimport free
 from libcpp.memory cimport unique_ptr, make_unique
 from libcpp.string cimport string
@@ -149,7 +144,7 @@ cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
 
     return df
 
-cpdef write_parquet(
+cpdef write_parquet_libcudf(
         Table table,
         path,
         index=None,
@@ -219,4 +214,4 @@ cpdef write_parquet(
                                   tbl_meta.get(),
                                   comp_type,
                                   stat_freq)
-        parquet_writer(args)
+        write_parquet(args)

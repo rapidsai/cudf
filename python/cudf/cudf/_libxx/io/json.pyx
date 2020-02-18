@@ -6,6 +6,7 @@
 # cython: language_level = 3
 
 
+import cudf
 from cudf._libxx.lib cimport *
 from cudf._libxx.table cimport *
 from cudf._libxx.io.functions cimport *
@@ -46,16 +47,23 @@ cpdef read_json_libcudf(filepath_or_buffer, dtype,
         source.filepath = filepath
     else:
         source.type = io_type.HOST_BUFFER
-        source.buffer = pair[<char *>&buffer[0], buffer.shape[0]]
+        source.buffer.first = <char*>&buffer[0]
+        source.buffer.second = buffer.shape[0]
 
     # Setup arguments
     cdef read_json_args args = read_json_args(source)
 
     args.lines = lines
     if compression is not None:
-        args.compression = compression_type.AUTO
+        if compression == 'gzip':
+            args.compression = compression_type.GZIP
+        elif compression == 'bz2':
+            args.compression = compression_type.BZIP2
+        else:
+            args.compression = compression_type.AUTO
     else:
         args.compression = compression_type.NONE
+
     if dtype is False:
         raise ValueError("False value is unsupported for `dtype`")
     elif dtype is not True:
@@ -81,5 +89,7 @@ cpdef read_json_libcudf(filepath_or_buffer, dtype,
         c_out_table = move(read_json(args))
 
     column_names = list(c_out_table.metadata.column_names)
-    return Table.from_unique_ptr(move(c_out_table.tbl),
-                                 column_names=column_names)
+    column_names = [x.decode() for x in column_names]
+    tbl = Table.from_unique_ptr(move(c_out_table.tbl),
+                                column_names=column_names)
+    return cudf.DataFrame._from_table(tbl)
