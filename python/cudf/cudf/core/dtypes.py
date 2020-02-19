@@ -5,7 +5,6 @@ import pandas as pd
 from pandas.api.extensions import ExtensionDtype
 
 import cudf
-from cudf.utils.dtypes import min_signed_type
 
 
 class CategoricalDtype(ExtensionDtype):
@@ -32,10 +31,6 @@ class CategoricalDtype(ExtensionDtype):
     @property
     def name(self):
         return "category"
-
-    @property
-    def kind(self):
-        return np.dtype(min_signed_type(len(self._categories))).kind
 
     @property
     def str(self):

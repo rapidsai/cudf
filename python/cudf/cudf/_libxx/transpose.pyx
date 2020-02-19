@@ -27,12 +27,7 @@ def transpose(Table source):
     cats = None
     dtype = source._columns[0].dtype
 
-    if dtype.kind in 'OU':
-        raise NotImplementedError('Cannot transpose string columns')
-    elif not is_categorical_dtype(dtype):
-        if any(c.dtype != dtype for c in source._columns):
-            raise ValueError('Columns must all have the same dtype')
-    else:
+    if is_categorical_dtype(dtype):
         if any(not is_categorical_dtype(c.dtype) for c in source._columns):
             raise ValueError('Columns must all have the same dtype')
         cats = list(c.cat().categories for c in source._columns)
@@ -41,6 +36,10 @@ def transpose(Table source):
             (name, col.cat()._set_categories(cats, is_unique=True).codes)
             for name, col in source._data.items()
         ])
+    elif dtype.kind in 'OU':
+        raise NotImplementedError('Cannot transpose string columns')
+    elif any(c.dtype != dtype for c in source._columns):
+        raise ValueError('Columns must all have the same dtype')
 
     cdef unique_ptr[table] c_result
     cdef table_view c_input = source.data_view()
