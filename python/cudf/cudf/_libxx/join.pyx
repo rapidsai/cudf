@@ -1,5 +1,5 @@
 from cudf._libxx.lib cimport *
-from cudf._libxx.table cimport Table, TableColumns
+from cudf._libxx.table cimport Table
 from cudf._libxx.includes.join cimport *
 from libcpp.vector cimport vector
 from libcpp.pair cimport pair
@@ -34,17 +34,21 @@ cpdef join(lhs, rhs, left_on, right_on, how, method, left_index=False, right_ind
         if name not in lhs._data.keys():
             result_col_names.append(name)
 
+    # keep track of where the desired index column will end up
     result_index_pos = None
     # if left_index or right_index is true, then both indices must be processed as join columns
     if left_index or right_index:
+        # If one index is specified, it will be joined against some column from the other
+        # the result will be returned as a gather from the other column, and the index itself drops
+        # In addition, the opposite index ends up as the final index 
+        # Thus if either are true, we need to process both indices as join columns
         lhs_view = c_lhs.view()
         rhs_view = c_rhs.view()
 
         left_join_cols = [lhs.index.name] + list(lhs._data.keys())
         right_join_cols = [rhs.index.name] + list(rhs._data.keys())
         if left_index and right_index:
-            left_on_idx = 0
-            right_on_idx = 0
+            left_on_idx = right_on_idx = 0
             result_index_pos = 0
             result_index_name = rhs.index.name
 
@@ -68,14 +72,17 @@ cpdef join(lhs, rhs, left_on, right_on, how, method, left_index=False, right_ind
         columns_in_common.push_back(pair[int,int]((left_on_idx, right_on_idx)))
 
     else:
-        # if neither left_index nor right_index is specified,
-        # we will always get a new RangeIndex
+        # If neither index is specified, we can exclude them from the join completely
+        # cuDF's Python layer will create a new RangeIndex for this case
         lhs_view = c_lhs.data_view()
         rhs_view = c_rhs.data_view()
 
         left_join_cols = list(lhs._data.keys())
         right_join_cols = list(rhs._data.keys())
 
+    # If only one index is specified, there will only be one join column from other
+    # If neither are specified, we need to build libcudf arguments for the actual join columns
+    # If both, could be joining on the indices as well as other common cols, so we must search
     if left_index == right_index:
         for name in left_on:
             left_on_ind.push_back(left_join_cols.index(name))
@@ -119,10 +126,7 @@ cpdef join(lhs, rhs, left_on, right_on, how, method, left_index=False, right_ind
                 columns_in_common
             ))
 
-    cdef TableColumns all_cols
-    all_cols = Table.columns_from_ptr(move(c_result))
-    all_cols_py = all_cols.columns
-
+    all_cols_py = Table.columns_from_ptr(move(c_result))
     if left_index or right_index:
         index_ordered_dict = OrderedDict()
         index_ordered_dict[result_index_name] = all_cols_py.pop(result_index_pos)

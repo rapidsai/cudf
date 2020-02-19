@@ -172,7 +172,7 @@ cdef class Table:
         )
 
     @staticmethod
-    cdef TableColumns columns_from_ptr(
+    cdef columns_from_ptr(
         unique_ptr[table] c_tbl,
     ):
         """
@@ -191,8 +191,9 @@ cdef class Table:
         for i in range(num_columns):
             result.append(Column.from_unique_ptr(move(dereference(it))))
             it += 1
-        cdef TableColumns c_result  = TableColumns(result)
-        return c_result
+        #cdef TableColumns c_result  = TableColumns(result)
+        #return c_result
+        return result
 
 cdef table_view _make_table_view(columns) except*:
     """
