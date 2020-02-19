@@ -206,8 +206,8 @@ void gpu_rolling(column_device_view input,
     size_type following_window = following_window_begin[i];
 
     // compute bounds
-    size_type start = min(num_rows, max(0, i - preceding_window));
-    size_type end = min(num_rows, max(0, i + following_window + 1));
+    size_type start = min(input.size(), max(0, i - preceding_window));
+    size_type end = min(input.size(), max(0, i + following_window + 1));
     size_type start_index = min(start, end);
     size_type end_index = max(start, end);
 

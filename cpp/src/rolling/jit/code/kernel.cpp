@@ -78,18 +78,15 @@ void gpu_rolling_new(cudf::size_type nrows,
     // TODO: We should explore using shared memory to avoid redundant loads.
     //       This might require separating the kernel into a special version
     //       for dynamic and static sizes.
-    bool output_is_valid = false;
-    if (start_index >= 0 and end_index >=0){
-        count = end_index - start_index;
-        OutType val = agg_op::template operate<OutType, InType>(in_col, start_index, count);
+    count = min(nrows, max(0, end_index - start_index));
+    OutType val = agg_op::template operate<OutType, InType>(in_col, start_index, count);
 
-        // check if we have enough input samples
-        output_is_valid = (count >= min_periods);
+    // check if we have enough input samples
+    bool output_is_valid = (count >= min_periods);
 
-        // store the output value, one per thread
-        if (output_is_valid) {
-          out_col[i] = val;
-        }
+    // store the output value, one per thread
+    if (output_is_valid) {
+        out_col[i] = val;
     }
 
     // set the mask

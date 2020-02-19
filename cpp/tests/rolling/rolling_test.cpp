@@ -191,11 +191,9 @@ protected:
 
       // aggregate
       size_type count = 0;
-      if (start_index >= 0 and end_index >= 0) {
-          for (size_type j = start_index; j < end_index; j++) {
-              if (!input.nullable() || cudf::bit_is_set(valid_mask, j))
-                  count++;
-          }
+      for (size_type j = start_index; j < end_index; j++) {
+          if (!input.nullable() || cudf::bit_is_set(valid_mask, j))
+              count++;
       }
       ref_valid[i] = (count >= min_periods);
       if (ref_valid[i])
@@ -243,12 +241,10 @@ protected:
       
       // aggregate
       size_type count = 0;
-      if (start_index >= 0 and end_index >= 0) {
-          for (size_type j = start_index; j < end_index; j++) {
-              if (!input.nullable() || cudf::bit_is_set(valid_mask, j)) {
-                  val = op(static_cast<OutputType>(in_col[j]), val);
-                  count++;
-              }
+      for (size_type j = start_index; j < end_index; j++) {
+          if (!input.nullable() || cudf::bit_is_set(valid_mask, j)) {
+              val = op(static_cast<OutputType>(in_col[j]), val);
+              count++;
           }
       }
 
