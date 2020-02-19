@@ -142,7 +142,7 @@ std::unique_ptr<table> repeat(table_view const& input_table,
                       indices.begin());
 
   return gather(input_table, indices.begin(), indices.end(),
-                false, false, false, mr, stream);
+                false, mr, stream);
 }
 
 std::unique_ptr<table> repeat(table_view const& input_table,
@@ -170,7 +170,7 @@ std::unique_ptr<table> repeat(table_view const& input_table,
   auto map_end = map_begin + output_size;
 
   return gather(input_table, map_begin, map_end,
-                false, false, false, mr, stream);
+                false, mr, stream);
 }
 
 }  // namespace detail
