@@ -630,6 +630,7 @@ add_library(cudf
             src/groupby/sort/group_std.cu
             src/groupby/sort/group_quantiles.cu
             src/aggregation/aggregation.cpp
+            src/aggregation/aggregation.cu
             src/aggregation/result_cache.cpp
 )
 

@@ -324,16 +324,11 @@ struct identity_initializer {
  private:
   template <typename T, aggregation::Kind k>
   static constexpr bool is_supported() {
-    if (cudf::is_fixed_width<T>() and
+    return cudf::is_fixed_width<T>() and
        (k == aggregation::SUM or k == aggregation::MIN or 
         k == aggregation::MAX or k == aggregation::COUNT or
-        k == aggregation::ARGMAX or k == aggregation::ARGMIN)) {
-      return true;
+            k == aggregation::ARGMAX or k == aggregation::ARGMIN);
     } 
-    else {
-      return false;
-    }
-  }
 
   template <typename T, aggregation::Kind k>
   std::enable_if_t<not std::is_same<corresponding_operator_t<k>, void>::value, T>
@@ -384,17 +379,9 @@ struct identity_initializer {
  * @param aggs A vector of aggregation operations corresponding to the table 
  * columns. The aggregations determine the identity value for each column.
  */
-static void initialize_with_identity(mutable_table_view & table,
+void initialize_with_identity(mutable_table_view & table,
                               std::vector<aggregation::Kind> const& aggs,
-                              cudaStream_t stream = 0) {
-  // TODO: Initialize all the columns in a single kernel instead of invoking one
-  // kernel per column
-  for (size_type i = 0; i < table.num_columns(); ++i) {
-    auto col = table.column(i);
-    dispatch_type_and_aggregation(col.type(), aggs[i], identity_initializer{}, 
-                                  col, stream);
-  }
-}
+                              cudaStream_t stream = 0);
 
 }  // namespace detail
 }  // namespace experimental
