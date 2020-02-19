@@ -105,14 +105,15 @@ class Buffer:
 
     def serialize(self):
         header = {}
-        header["type"] = pickle.dumps(type(self))
+        header["type-serialized"] = pickle.dumps(type(self))
+        header["constructor-kwargs"] = {}
         header["desc"] = self.__cuda_array_interface__.copy()
         frames = [self]
         return header, frames
 
     @classmethod
     def deserialize(cls, header, frames):
-        buf = cls(frames[0])
+        buf = cls(frames[0], **header["constructor-kwargs"])
 
         if header["desc"]["shape"] != buf.__cuda_array_interface__["shape"]:
             raise ValueError(

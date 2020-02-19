@@ -116,6 +116,16 @@ class MultiIndex(Index):
         self._data = source_data._data
         self.names = names
 
+    @property
+    def names(self):
+        return self._names
+
+    @names.setter
+    def names(self, value):
+        value = [None] * self.nlevels if value is None else value
+        assert len(value) == self.nlevels
+        self._names = value
+
     @classmethod
     def _from_table(cls, table):
         df = cudf.DataFrame(table._data)
@@ -130,26 +140,12 @@ class MultiIndex(Index):
         self._data = value._data
 
     @property
-    def names(self):
-        return self._names
-
-    @names.setter
-    def names(self, value):
-        value = [None] * self.nlevels if value is None else value
-        assert len(value) == self.nlevels
-        self._names = value
-
-    @property
     def name(self):
         return self._name
 
     @name.setter
     def name(self, value):
         self._name = value
-
-    @property
-    def nlevels(self):
-        return self._source_data.shape[1]
 
     def _validate_levels_and_codes(self, levels, codes):
         if len(levels) != len(codes.columns):
@@ -197,7 +193,7 @@ class MultiIndex(Index):
 
         codes = DataFrame()
         for idx in self.codes.columns[n:]:
-            codes.add_column(idx, self.codes[idx])
+            codes.insert(len(codes.columns), idx, self.codes[idx])
         result = MultiIndex(self.levels[n:], codes)
         if self.names is not None:
             result.names = self.names[n:]
@@ -217,6 +213,10 @@ class MultiIndex(Index):
         if self._codes is None:
             self._compute_levels_and_codes()
         return self._codes
+
+    @property
+    def nlevels(self):
+        return self._source_data.shape[1]
 
     @property
     def levels(self):
@@ -334,15 +334,17 @@ class MultiIndex(Index):
                 name = k
             else:
                 name = index.names[k]
-            out_index.add_column(
-                name, index._source_data[index._source_data.columns[k]]
+            out_index.insert(
+                len(out_index.columns),
+                name,
+                index._source_data[index._source_data.columns[k]],
             )
 
         if len(result) == 1 and size == 0 and slice_access is False:
             # If the final result is one row and it was not mapped into
             # directly, return a Series with a tuple as name.
             result = result.T
-            result = result[result.columns[0]]
+            result = result[result._data.names[0]]
         elif len(result) == 0 and slice_access is False:
             # Pandas returns an empty Series with a tuple as name
             # the one expected result column
@@ -383,46 +385,6 @@ class MultiIndex(Index):
         final = self._index_and_downcast(result, result.index, row_tuple)
         return final
 
-    def _get_column_major(self, df, column_tuple):
-        from cudf import Series
-        from cudf import DataFrame
-
-        valid_indices = self._get_valid_indices_by_tuple(
-            df.columns, column_tuple, len(df._data)
-        )
-        result = df._take_columns(valid_indices)
-        if isinstance(column_tuple, (numbers.Number, slice)):
-            column_tuple = [column_tuple]
-        if len(result) == 0 and len(result.columns) == 0:
-            result_columns = df.columns.copy(deep=False)
-            clear_codes = DataFrame()
-            for name in df.columns.names:
-                clear_codes[name] = Series([])
-            result_columns._codes = clear_codes
-            result_columns._source_data = clear_codes
-            result.columns = result_columns
-        elif len(column_tuple) < len(self.levels) and (
-            not slice(None) in column_tuple
-            and not isinstance(column_tuple[0], (slice, numbers.Number))
-        ):
-            columns = self._popn(len(column_tuple))
-            result.columns = columns.take(valid_indices)
-        else:
-            result.columns = self.take(valid_indices)
-        if len(result.columns.levels) == 1:
-            columns = []
-            for code in result.columns.codes[result.columns.codes.columns[0]]:
-                columns.append(result.columns.levels[0][code])
-            name = result.columns.names[0]
-            result.columns = as_index(columns, name=name)
-        if len(column_tuple) == len(self.levels) and len(result.columns) == 1:
-            result = cudf.Series(
-                next(iter(result._data.values())),
-                name=column_tuple,
-                index=result.index,
-            )
-        return result
-
     def _split_tuples(self, tuples):
         if len(tuples) == 1:
             return tuples, slice(None)
@@ -439,7 +401,7 @@ class MultiIndex(Index):
             return tuples, slice(None)
 
     def __len__(self):
-        return len(next(iter(self._data.values())))
+        return len(next(iter(self._data.columns)))
 
     def equals(self, other):
         if self is other:
@@ -502,7 +464,7 @@ class MultiIndex(Index):
         transmission.
         """
         header = {}
-        header["type"] = pickle.dumps(type(self))
+        header["type-serialized"] = pickle.dumps(type(self))
         header["names"] = pickle.dumps(self.names)
 
         header["source_data"], frames = self._source_data.serialize()
@@ -515,7 +477,9 @@ class MultiIndex(Index):
         """
         names = pickle.loads(header["names"])
 
-        source_data_typ = pickle.loads(header["source_data"]["type"])
+        source_data_typ = pickle.loads(
+            header["source_data"]["type-serialized"]
+        )
         source_data = source_data_typ.deserialize(
             header["source_data"], frames
         )

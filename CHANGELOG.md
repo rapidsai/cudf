@@ -3,15 +3,19 @@
 ## New Features
 
 - PR #3577 Add initial dictionary support to column classes
+- PR #3917 Add dictionary add_keys function
 - PR #3777 Add support for dictionary column in gather
 - PR #3693 add string support, skipna to scan operation
 - PR #3662 Define and implement `shift`.
+- PR #3842 ORC writer: add support for column statistics
 - PR #3861 Added Series.sum feature for String
 - PR #4069 Added cast of numeric columns from/to String
 - PR #3681 Add cudf::experimental::boolean_mask_scatter
 - PR #4040 Add support for n-way merge of sorted tables
 - PR #4053 Multi-column quantiles.
 - PR #4107 Add groupby nunique aggregation
+- PR #4153 Support Dask serialization protocol on cuDF objects
+- PR #4164 Add Buffer "constructor-kwargs" header
 
 ## Improvements
 
@@ -50,6 +54,7 @@
 - PR #3891 Port NVStrings (r)split_record to contiguous_(r)split_record
 - PR #4072 Allow round_robin_partition to single partition
 - PR #4064 Add cudaGetDeviceCount to JNI layer
+- PR #4087 Add support for writing large Parquet files in a chunked manner.
 - PR #3716 Update cudf.to_parquet to use new GPU accelerated Parquet writer
 - PR #4083 Use two partitions in test_groupby_multiindex_reset_index
 - PR #4071 Add Java bindings for round robin partition
@@ -62,9 +67,17 @@
 - PR #4111 Use `Buffer`'s to serialize `StringColumn`
 - PR #4133 Mask cleanup and fixes: use `int32` dtype, ensure 64 byte padding, handle offsets
 - PR #4113 Get `len` of `StringColumn`s without `nvstrings`
+- PR #4147 Remove workaround for UNKNOWN_NULL_COUNT in contiguous_split.
 - PR #4130 Renames in-place `cudf::experimental::fill` to `cudf::experimental::fill_in_place`
+- PR #4143 Renames in-place `cudf::experimental::copy_range` to `cudf::experimental::copy_range_in_place`
 - PR #4136 Add `Index.names` property
 - PR #4144 Release GIL when calling libcudf++ functions
+- PR #4082 Rework MultiColumns in cuDF
+- PR #4149 Use "type-serialized" for pickled types like Dask
+- PR #4163 Assert Dask CUDA serializers have `Buffer` frames
+- PR #4165 List serializable classes once
+- PR #4177 Use `uint8` type for host array copy of `Buffer`
+- PR #4182 Rename cuDF serialize functions to be more generic
 
 ## Bug Fixes
 
@@ -99,10 +112,16 @@
 - PR #4109 Use rmm::device_vector instead of thrust::device_vector
 - PR #4113 Use `.nvstrings` in `StringColumn.sum(...)`
 - PR #4116 Fix a bug in contiguous_split() where tables with mixed column types could corrupt string output
+- PR #4138 Really fix strings concatenate logic with column offsets
 - PR #4119 Fix binary ops slowdown using jitify -remove-unused-globals
 - PR #4125 Fix type enum to account for added Dictionary type in `types.hpp`
+- PR #4132 Fix `hash_partition` null mask allocation
 - PR #4137 Update Java for mutating fill and rolling window changes
+- PR #4184 Add missing except+ to Cython bindings
 - PR #4141 Fix NVStrings test_convert failure in 10.2 build
+- PR #4158 Fix merge issue with empty table return if one of the two tables are empty
+- PR #4175 Fix `__sizeof__` calculation in `StringColumn`
+- PR #4155 Update groupby group_offsets size and fix unnecessary device dispatch.
 
 
 # cuDF 0.12.0 (04 Feb 2020)
