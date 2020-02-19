@@ -1,12 +1,18 @@
+import itertools
+import warnings
+
 import numpy as np
 import pandas as pd
-import itertools
 
 import cudf._libxx as libcudfxx
-from cudf.core.column import as_column, build_categorical_column
-from cudf.utils.dtypes import is_categorical_dtype, is_string_dtype, is_datetime_dtype
 from cudf.core import column
-import warnings
+from cudf.core.column import as_column, build_categorical_column
+from cudf.utils.dtypes import (
+    is_categorical_dtype,
+    is_datetime_dtype,
+    is_string_dtype,
+)
+
 
 class Frame(libcudfxx.table.Table):
     """
@@ -249,7 +255,18 @@ class Frame(libcudfxx.table.Table):
         return self._unaryop("sqrt")
 
     @staticmethod
-    def _validate_merge_cfg(lhs, rhs, left_on, right_on, on, how, left_index=False, right_index=False, lsuffix=None, rsuffix=None):
+    def _validate_merge_cfg(
+        lhs,
+        rhs,
+        left_on,
+        right_on,
+        on,
+        how,
+        left_index=False,
+        right_index=False,
+        lsuffix=None,
+        rsuffix=None,
+    ):
         """
         Error for various combinations of merge input parameters
         """
@@ -273,8 +290,10 @@ class Frame(libcudfxx.table.Table):
 
         # There must be the same total number of columns to join on in both operands
         if not (len_left_on + left_index) == (len_right_on + right_index):
-            raise ValueError('Merge operands must have same number of join key columns')
-        
+            raise ValueError(
+                "Merge operands must have same number of join key columns"
+            )
+
         # If nothing specified, must have common cols to use implicitly
         same_named_columns = set(lhs.columns) & set(rhs.columns)
         if not (left_index or right_index):
@@ -287,7 +306,7 @@ class Frame(libcudfxx.table.Table):
                 name in left_on
                 and name in right_on
                 and (left_on.index(name) == right_on.index(name))
-                ):
+            ):
                 if not (lsuffix or rsuffix):
                     raise ValueError(
                         "there are overlapping columns but "
@@ -298,7 +317,7 @@ class Frame(libcudfxx.table.Table):
             on_keys = [on] if not isinstance(on, list) else on
             for key in on_keys:
                 if not (key in lhs.columns and key in rhs.columns):
-                    raise KeyError('Key {} not in both operands'.format(on))
+                    raise KeyError("Key {} not in both operands".format(on))
         else:
             for key in left_on:
                 if key not in lhs.columns:
@@ -306,10 +325,21 @@ class Frame(libcudfxx.table.Table):
             for key in right_on:
                 if key not in rhs.columns:
                     raise KeyError('Key "{}" not in right operand'.format(key))
-            
 
-
-    def _merge(self, right, on, left_on, right_on, left_index, right_index, lsuffix, rsuffix, how, method, sort=False):
+    def _merge(
+        self,
+        right,
+        on,
+        left_on,
+        right_on,
+        left_index,
+        right_index,
+        lsuffix,
+        rsuffix,
+        how,
+        method,
+        sort=False,
+    ):
 
         if left_on == None:
             left_on = []
@@ -326,15 +356,24 @@ class Frame(libcudfxx.table.Table):
                 [right_on] if isinstance(right_on, str) else list(right_on)
             )
 
-        self._validate_merge_cfg(self, right, left_on, right_on, on, how, left_index=left_index, right_index=right_index, lsuffix=lsuffix, rsuffix=rsuffix)
+        self._validate_merge_cfg(
+            self,
+            right,
+            left_on,
+            right_on,
+            on,
+            how,
+            left_index=left_index,
+            right_index=right_index,
+            lsuffix=lsuffix,
+            rsuffix=rsuffix,
+        )
 
         if on:
             left_on = right_on = on
 
-
         lhs = self.copy(deep=False)
         rhs = right.copy(deep=False)
-
 
         same_named_columns = set(lhs.columns) & set(rhs.columns)
         if not (left_on or right_on) and not (left_index and right_index):
@@ -349,15 +388,12 @@ class Frame(libcudfxx.table.Table):
 
         for name in same_named_columns:
             if name not in no_suffix_cols:
-                    lhs.rename({name: "%s%s" % (name, lsuffix)}, inplace=True)
-                    rhs.rename({name: "%s%s" % (name, rsuffix)}, inplace=True)
-                    if name in left_on:
-                        left_on[left_on.index(name)] = "%s%s" % (name, lsuffix)
-                    if name in right_on:
-                        right_on[right_on.index(name)] = "%s%s" % (
-                            name,
-                            rsuffix,
-                        )
+                lhs.rename({name: "%s%s" % (name, lsuffix)}, inplace=True)
+                rhs.rename({name: "%s%s" % (name, rsuffix)}, inplace=True)
+                if name in left_on:
+                    left_on[left_on.index(name)] = "%s%s" % (name, lsuffix)
+                if name in right_on:
+                    right_on[right_on.index(name)] = "%s%s" % (name, rsuffix,)
 
         categorical_dtypes = {}
         for name, col in itertools.chain(lhs._data.items(), rhs._data.items()):
@@ -379,9 +415,18 @@ class Frame(libcudfxx.table.Table):
         # potentially do an implicit typecast
         (lhs, rhs, to_categorical) = self._typecast_before_merge(
             lhs, rhs, left_on, right_on, left_index, right_index, how
-        )  
+        )
 
-        gdf_result = libcudfxx.join.join(lhs, rhs, left_on, right_on, how, method, left_index=lhs_full_view, right_index=rhs_full_view)
+        gdf_result = libcudfxx.join.join(
+            lhs,
+            rhs,
+            left_on,
+            right_on,
+            how,
+            method,
+            left_index=lhs_full_view,
+            right_index=rhs_full_view,
+        )
 
         gdf_data = list(gdf_result._data.items())
         result_index = gdf_result._index
@@ -452,11 +497,14 @@ class Frame(libcudfxx.table.Table):
                 )
 
         from cudf import Index
+
         if result_index is not None:
             df.index = Index._from_table(result_index)
         return df
 
-    def _typecast_before_merge(self, lhs, rhs, left_on, right_on, left_index, right_index, how):
+    def _typecast_before_merge(
+        self, lhs, rhs, left_on, right_on, left_index, right_index, how
+    ):
         def casting_rules(lhs, rhs, dtype_l, dtype_r, how):
             cast_warn = "can't safely cast column {} from {} with type \
                          {} to {}, upcasting to {}"
@@ -518,7 +566,9 @@ class Frame(libcudfxx.table.Table):
 
         if left_index or right_index:
             if left_index and right_index:
-                to_dtype = casting_rules(lhs.index, rhs.index, lhs.index.dtype, rhs.index.dtype, how)
+                to_dtype = casting_rules(
+                    lhs.index, rhs.index, lhs.index.dtype, rhs.index.dtype, how
+                )
             elif left_index:
                 to_dtype = lhs.index.dtype
             elif right_index:
@@ -526,8 +576,6 @@ class Frame(libcudfxx.table.Table):
             lhs.index = lhs.index.astype(to_dtype)
             rhs.index = rhs.index.astype(to_dtype)
             return lhs, rhs, []
-
-        
 
         left_on = sorted(left_on)
         right_on = sorted(right_on)
