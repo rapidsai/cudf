@@ -12,6 +12,7 @@ from cudf.utils.dtypes import (
     is_datetime_dtype,
     is_string_dtype,
 )
+from collections import OrderedDict
 
 
 class Frame(libcudfxx.table.Table):
@@ -295,7 +296,7 @@ class Frame(libcudfxx.table.Table):
             )
 
         # If nothing specified, must have common cols to use implicitly
-        same_named_columns = set(lhs.columns) & set(rhs.columns)
+        same_named_columns = set(lhs._data.keys()) & set(rhs._data.keys())
         if not (left_index or right_index):
             if not (left_on or right_on):
                 if len(same_named_columns) == 0:
@@ -316,14 +317,14 @@ class Frame(libcudfxx.table.Table):
         if on:
             on_keys = [on] if not isinstance(on, list) else on
             for key in on_keys:
-                if not (key in lhs.columns and key in rhs.columns):
+                if not (key in lhs._data.keys() and key in rhs._data.keys()):
                     raise KeyError("Key {} not in both operands".format(on))
         else:
             for key in left_on:
-                if key not in lhs.columns:
+                if key not in lhs._data.keys():
                     raise KeyError('Key "{}" not in left operand'.format(key))
             for key in right_on:
-                if key not in rhs.columns:
+                if key not in rhs._data.keys():
                     raise KeyError('Key "{}" not in right operand'.format(key))
 
     def _merge(
@@ -375,7 +376,7 @@ class Frame(libcudfxx.table.Table):
         lhs = self.copy(deep=False)
         rhs = right.copy(deep=False)
 
-        same_named_columns = set(lhs.columns) & set(rhs.columns)
+        same_named_columns = set(lhs._data.keys()) & set(rhs._data.keys())
         if not (left_on or right_on) and not (left_index and right_index):
             left_on = right_on = list(same_named_columns)
 
@@ -476,31 +477,29 @@ class Frame(libcudfxx.table.Table):
         cat_codes = dict(cat_codes)
 
         # Build a new data frame based on the merged columns from GDF
-        df = self.__class__()
+        to_frame_data = OrderedDict()
         for name, col in result:
             if is_string_dtype(col):
-                df[name] = col
+                to_frame_data[name] = col
             elif is_categorical_dtype(categorical_dtypes.get(name, col.dtype)):
 
                 dtype = categorical_dtypes.get(name, col.dtype)
-                df[name] = column.build_categorical_column(
+                to_frame_data[name] = column.build_categorical_column(
                     categories=dtype.categories,
                     codes=cat_codes.get(name + "_codes", col),
                     mask=col.mask,
                     ordered=dtype.ordered,
                 )
             else:
-                df[name] = column.build_column(
+
+                to_frame_data[name] = column.build_column(
                     col.data,
                     dtype=categorical_dtypes.get(name, col.dtype),
                     mask=col.mask,
                 )
+        gdf_result._data = to_frame_data
 
-        from cudf import Index
-
-        if result_index is not None:
-            df.index = Index._from_table(result_index)
-        return df
+        return self.__class__._from_table(gdf_result)
 
     def _typecast_before_merge(
         self, lhs, rhs, left_on, right_on, left_index, right_index, how

@@ -135,7 +135,11 @@ class Series(Frame):
     def _from_table(cls, table):
         name = next(iter(table._data.keys()))
         data = next(iter(table._data.values()))
-        return cls(data=data, index=Index._from_table(table._index), name=name)
+        if table._index is None:
+            index = None
+        else:
+            index=Index._from_table(table._index)
+        return cls(data=data, index=index, name=name)
 
     @property
     def _column(self):
@@ -2615,6 +2619,35 @@ class Series(Frame):
         rhs = cudf.DataFrame(index=as_index(index))
         result = lhs.join(rhs, how=how, sort=sort)[0]
         return result
+    
+    def merge(self, other):
+
+        dummy = 'name'
+        l_name = self.name
+        r_name = other.name
+
+        if l_name is None and r_name is not None:
+            self.name = r_name
+            left_on = right_on = r_name
+        if r_name is None and l_name is not None:
+            other.name = l_name
+            left_on = right_on = l_name 
+        if l_name is None and r_name is None:
+            self.name = dummy
+            other.name = dummy
+            left_on = right_on = dummy
+
+        result = super()._merge(other, left_on=left_on, right_on=right_on, how='inner', left_index=False, right_index=False, on=None, lsuffix=None, rsuffix=None, method='hash')
+
+        return result
+
+
+    # a left join would just return self
+    # an outer join would return a dataframe
+    # 
+
+
+
 
 
 truediv_int_dtype_corrections = {
