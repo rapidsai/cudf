@@ -173,7 +173,7 @@ class DataFrame(Frame):
             return DataFrame._from_table(data)
 
         if isinstance(columns, cudf.MultiIndex):
-            self.multi_cols = columns
+            object.__setattr__(self, "multi_cols", columns)
             columns = RangeIndex(len(columns))
 
         if data is None:
@@ -1313,9 +1313,11 @@ class DataFrame(Frame):
                 new_names.append(name)
             self._rename_columns(new_names)
             """
-            self.multi_cols = columns
+            object.__setattr__(self, "multi_cols", columns)
         elif isinstance(columns, pd.MultiIndex):
-            self.multi_cols = cudf.MultiIndex.from_pandas(columns)
+            object.__setattr__(
+                self, "multi_cols", cudf.MultiIndex.from_pandas(columns)
+            )
         else:
             if hasattr(self, "multi_cols"):
                 delattr(self, "multi_cols")
@@ -1823,7 +1825,7 @@ class DataFrame(Frame):
             self._data = result._data
             self._index = result._index
             if hasattr(result, "multi_cols"):
-                self.multi_cols = result.multi_cols
+                object.__setattr__(self, "multi_cols", result.multi_cols)
             self._columns_name = result._columns_name
         else:
             return result
