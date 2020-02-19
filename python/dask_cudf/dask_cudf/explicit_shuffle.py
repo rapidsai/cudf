@@ -61,8 +61,7 @@ async def exchange_and_concat_parts(rank, eps, parts, sort_by):
         [df.copy(deep=False) for df in ret if df is not None and len(df)],
         sort_by=sort_by,
     )
-    for r in ret:
-        del r
+    del ret
     return new_df
 
 
