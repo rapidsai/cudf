@@ -419,6 +419,21 @@ TEST_F(ParquetWriterTest, HostBuffer) {
   EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
 }
 
+TEST_F(ParquetWriterTest, NonNullable)
+{
+  srand(31337);
+  auto expected = create_random_fixed_table<int>(9, 9, false);
+
+  auto filepath = temp_env->get_temp_filepath("NonNullable.parquet");
+  cudf_io::write_parquet_args args{cudf_io::sink_info{filepath}, *expected};
+  cudf_io::write_parquet(args);
+
+  cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
+  auto result = cudf_io::read_parquet(read_args);
+
+  expect_tables_equal(*result.tbl, *expected);
+}
+
 TEST_F(ParquetChunkedWriterTest, SingleTable)
 {
   srand(31337);

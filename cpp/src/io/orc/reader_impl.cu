@@ -762,7 +762,14 @@ table_with_metadata reader::impl::read(int skip_rows, int num_rows, int stripe,
 
       std::vector<column_buffer> out_buffers;
       for (size_t i = 0; i < column_types.size(); ++i) {
-        out_buffers.emplace_back(column_types[i], num_rows, stream, _mr);
+        bool is_nullable = false;
+        for (size_t j = 0; j < selected_stripes.size(); ++j) {
+          if (chunks[j * num_columns + i].strm_len[gpu::CI_PRESENT] != 0) {
+            is_nullable = true;
+            break;
+          }
+        }
+        out_buffers.emplace_back(column_types[i], num_rows, is_nullable, stream, _mr);
       }
 
       decode_stream_data(
