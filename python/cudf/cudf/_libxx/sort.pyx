@@ -69,8 +69,8 @@ def digitize(Table source_values_table, Table bins, bool right=False):
     cdef vector[order] column_order = vector[order](bins_view.num_columns(),
                                                     order.ASCENDING)
     cdef vector[null_order] null_precedence = vector[null_order](
-            bins_view.num_columns(),
-            null_order.BEFORE)
+        bins_view.num_columns(),
+        null_order.BEFORE)
 
     cdef unique_ptr[column] c_result
     if right is True:
