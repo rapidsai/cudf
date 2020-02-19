@@ -686,6 +686,7 @@ struct datetime_formatter
                     break;
                 case 'z': // timezone
                     memcpy(ptr,"+0000",5); // always UTC
+                    ptr += 5;
                     break;
                 case 'Z':
                     memcpy(ptr,"UTC",3);
