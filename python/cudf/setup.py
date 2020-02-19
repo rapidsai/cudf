@@ -33,7 +33,10 @@ if not os.path.isdir(CUDA_HOME):
 
 cuda_include_dir = os.path.join(CUDA_HOME, "include")
 
-nthreads=int(os.environ.get("JOBS", os.environ.get("PARALLEL_LEVEL", "0")))
+try:
+    nthreads = int(os.environ.get("PARALLEL_LEVEL", "0") or "0")
+except Exception:
+    nthreads = 0
 
 extensions = [
     Extension(
