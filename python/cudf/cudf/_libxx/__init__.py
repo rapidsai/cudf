@@ -2,6 +2,7 @@ import numpy as np
 
 from . import (
     copying,
+    merge,
     null_mask,
     rolling,
     search,

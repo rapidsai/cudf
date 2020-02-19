@@ -5,6 +5,7 @@ import cupy
 import pandas as pd
 
 import distributed
+from dask.distributed import wait
 from dask_cuda.explicit_comms import comms
 from distributed.protocol import to_serialize
 
@@ -94,7 +95,6 @@ def partition_table(df, partitions, n_chunks, sort_by=None):
                 df.scatter_by_map(partitions, map_size=n_chunks),
             )
         )
-    del df
     return result
 
 
@@ -108,21 +108,10 @@ async def distributed_shuffle(
 async def _explicit_shuffle(
     s, df_nparts, df_parts, index, sort_by, divisions, to_cpu
 ):
-    def df_concat(df_parts, sort_by=None):
-        """Making sure df_parts is a single dataframe or None"""
-        if len(df_parts) == 0:
-            return None
-        elif len(df_parts) == 1:
-            return df_parts[0]
-        else:
-            return concat(df_parts, sort_by=sort_by)
-
-    # Concatenate all parts owned by this worker into
-    # a single cudf DataFrame
-    if to_cpu:
-        df = df_concat([dfp.to_pandas() for dfp in df_parts[0]])
+    if len(df_parts[0]) == 0:
+        df = None
     else:
-        df = df_concat(df_parts[0], sort_by=sort_by)
+        df = df_parts[0][0].copy(deep=False)
 
     # Calculate new partition mapping
     if df is not None:
@@ -131,6 +120,7 @@ async def _explicit_shuffle(
             splits = df[index].searchsorted(divisions, side="left")
             splits[-1] = len(df[index])
             partitions = splits.tolist()
+            del splits
         else:
             partitions = divisions.searchsorted(df[index], side="right") - 1
             partitions[(df[index] >= divisions.iloc[-1]).values] = (
@@ -144,20 +134,51 @@ async def _explicit_shuffle(
     new_df = await distributed_shuffle(
         s["nworkers"], s["rank"], s["eps"], df, partitions, index, sort_by
     )
-    del df
+
     if to_cpu:
         return cudf.from_pandas(new_df)
     return new_df
 
 
+async def _explicit_aggregate(s, df_nparts, df_parts, sort_by, to_cpu):
+    def df_concat(df_parts, sort_by=None):
+        """Making sure df_parts is a single dataframe or None"""
+        if len(df_parts) == 0:
+            return None
+        elif len(df_parts) == 1:
+            return df_parts[0]
+        else:
+            return concat(df_parts, sort_by=sort_by)
+
+    # Concatenate all parts owned by this worker into
+    # a single cudf DataFrame
+    if to_cpu:
+        return df_concat([dfp.to_pandas() for dfp in df_parts[0]])
+    else:
+        return df_concat(df_parts[0], sort_by=sort_by)
+
+
 def explicit_sorted_shuffle(df, index, divisions, sort_by, client, **kwargs):
-    # Explict-comms shuffle
     client.rebalance(futures=distributed.futures_of(df))
     to_cpu = kwargs.get("to_cpu", False)
     if to_cpu:
         warnings.warn("Using CPU for shuffling. Performance will suffer!")
-    return comms.default_comms().dataframe_operation(
+
+    # Explict-comms Partition Aggregation
+    df2 = comms.default_comms().dataframe_operation(
+        _explicit_aggregate, df_list=(df,), extra_args=(sort_by, to_cpu)
+    )
+    wait(df2.persist())
+    wait(client.cancel(df))
+    del df
+
+    # Explict-comms shuffle
+    df3 = comms.default_comms().dataframe_operation(
         _explicit_shuffle,
-        df_list=(df,),
+        df_list=(df2,),
         extra_args=(index, sort_by, divisions, to_cpu),
     )
+    wait(df3.persist())
+    wait(client.cancel(df2))
+    del df2
+    return df3
