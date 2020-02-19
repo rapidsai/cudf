@@ -1362,22 +1362,22 @@ def test_dataframe_shape_empty():
 )
 @pytest.mark.parametrize("nulls", ["none", "some", "all"])
 def test_dataframe_transpose(nulls, num_cols, num_rows, dtype):
-    if dtype not in ["float32", "float64"] and nulls in ["some", "all"]:
-        pytest.skip(msg="nulls not supported in dtype: " + dtype)
 
     pdf = pd.DataFrame()
     from string import ascii_lowercase
 
+    null_rep = np.nan if dtype in ["float32", "float64"] else None
+
     for i in range(num_cols):
         colname = ascii_lowercase[i]
-        data = np.random.randint(0, 26, num_rows).astype(dtype)
+        data = pd.Series(np.random.randint(0, 26, num_rows).astype(dtype))
         if nulls == "some":
             idx = np.random.choice(
                 num_rows, size=int(num_rows / 2), replace=False
             )
-            data[idx] = np.nan
+            data[idx] = null_rep
         elif nulls == "all":
-            data[:] = np.nan
+            data[:] = null_rep
         pdf[colname] = data
 
     gdf = DataFrame.from_pandas(pdf)
@@ -1391,10 +1391,9 @@ def test_dataframe_transpose(nulls, num_cols, num_rows, dtype):
     assert_eq(expect, got_property)
 
 
-@pytest.mark.parametrize("num_cols", [0, 1, 2, 10])
-@pytest.mark.parametrize("num_rows", [0, 1, 2, 1000])
-def test_dataframe_tranpose_category(num_cols, num_rows):
-    pytest.xfail("category dtype not yet supported for transpose")
+@pytest.mark.parametrize("num_cols", [1, 2, 10])
+@pytest.mark.parametrize("num_rows", [1, 2, 20])
+def test_dataframe_transpose_category(num_cols, num_rows):
     pdf = pd.DataFrame()
     from string import ascii_lowercase
 
@@ -1409,10 +1408,17 @@ def test_dataframe_tranpose_category(num_cols, num_rows):
     got_function = gdf.transpose()
     got_property = gdf.T
 
+    # materialize our categoricals because pandas
+    for name, col in got_function._data.items():
+        got_function[name] = col.astype(col.dtype.type)
+
+    for name, col in got_property._data.items():
+        got_property[name] = col.astype(col.dtype.type)
+
     expect = pdf.transpose()
 
-    pd.testing.assert_frame_equal(expect, got_function.to_pandas())
-    pd.testing.assert_frame_equal(expect, got_property.to_pandas())
+    assert_eq(expect, got_function.to_pandas())
+    assert_eq(expect, got_property.to_pandas())
 
 
 def test_generated_column():

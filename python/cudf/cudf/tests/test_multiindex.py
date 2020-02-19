@@ -190,6 +190,12 @@ def test_from_pandas(pdf, pdfIndex):
     assert_eq(pdf, gdf)
 
 
+def test_multiindex_transpose(pdf, pdfIndex):
+    pdf.index = pdfIndex
+    gdf = cudf.from_pandas(pdf)
+    assert_eq(pdf.transpose(), gdf.transpose())
+
+
 def test_from_pandas_series():
     pdf = pd.DataFrame(
         {"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}
