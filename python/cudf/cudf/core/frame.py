@@ -30,7 +30,7 @@ class Frame(libcudfxx.table.Table):
         )
         result._copy_categories(self)
         return result
-    
+
     def _hash(self, initial_hash_values=None):
         return libcudfxx.hash.hash(self, initial_hash_values)
 

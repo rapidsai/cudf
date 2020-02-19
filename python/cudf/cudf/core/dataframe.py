@@ -24,7 +24,6 @@ import rmm
 import cudf
 import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
-from cudf._libxx.table import Table
 from cudf.core import column
 from cudf.core._sort import get_sorted_inds
 from cudf.core.column import (
@@ -171,7 +170,7 @@ class DataFrame(Frame):
 
         self._columns_name = None
 
-        if isinstance(data, Table):
+        if isinstance(data, libcudfx.table.Table):
             return DataFrame._from_table(data)
 
         if isinstance(columns, cudf.MultiIndex):
