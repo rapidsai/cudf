@@ -182,7 +182,6 @@ cdef class Table:
         ----------
         c_tbl : unique_ptr[cudf::table]
         """
-        print('hello')
         num_columns = c_tbl.get().num_columns()
         cdef vector[unique_ptr[column]] columns
         columns = c_tbl.get()[0].release()
