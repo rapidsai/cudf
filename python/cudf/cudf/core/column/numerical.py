@@ -8,6 +8,7 @@ from pandas.api.types import is_integer_dtype
 import rmm
 
 import cudf._lib as libcudf
+import cudf._libxx as libcudfxx
 from cudf.core._sort import get_sorted_inds
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
@@ -53,7 +54,10 @@ class NumericalColumn(column.ColumnBase):
                 return False
         except Exception:
             return False
-        return libcudf.search.contains(self, item)
+        # TODO: Use `scalar`-based `contains` wrapper
+        return libcudfxx.search.contains(
+            self, column.as_column([item], dtype=self.dtype)
+        ).any()
 
     def binary_operator(self, binop, rhs, reflect=False):
         int_dtypes = [

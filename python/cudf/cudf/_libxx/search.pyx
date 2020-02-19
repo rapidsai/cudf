@@ -27,6 +27,8 @@ def search_sorted(
     cdef vector[null_order] c_null_precedence
     cdef order c_order
     cdef null_order c_null_order
+    cdef table_view c_table_data = table.data_view()
+    cdef table_view c_values_data = values.data_view()
 
     # Note: We are ignoring index columns here
     c_order = order.ASCENDING if ascending else order.DESCENDING
@@ -38,23 +40,25 @@ def search_sorted(
         c_null_precedence.push_back(c_null_order)
 
     if side == 'left':
-        c_result = (
-            cpp_search.lower_bound(
-                table.data_view(),
-                values.data_view(),
-                c_column_order,
-                c_null_precedence,
+        with nogil:
+            c_result = (
+                cpp_search.lower_bound(
+                    c_table_data,
+                    c_values_data,
+                    c_column_order,
+                    c_null_precedence,
+                )
             )
-        )
     elif side == 'right':
-        c_result = (
-            cpp_search.upper_bound(
-                table.data_view(),
-                values.data_view(),
-                c_column_order,
-                c_null_precedence,
+        with nogil:
+            c_result = (
+                cpp_search.upper_bound(
+                    c_table_data,
+                    c_values_data,
+                    c_column_order,
+                    c_null_precedence,
+                )
             )
-        )
     return Column.from_unique_ptr(move(c_result))
 
 
@@ -69,9 +73,12 @@ def contains(Column haystack, Column needles):
         A column of values to search for
     """
     cdef unique_ptr[column] c_result
+    cdef column_view c_haystack = haystack.view()
+    cdef column_view c_needles = needles.view()
 
-    c_result = cpp_search.contains(
-        haystack.view(),
-        needles.view(),
-    )
+    with nogil:
+        c_result = cpp_search.contains(
+            c_haystack,
+            c_needles,
+        )
     return Column.from_unique_ptr(move(c_result))
