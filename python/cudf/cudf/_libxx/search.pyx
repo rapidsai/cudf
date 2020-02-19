@@ -40,7 +40,7 @@ def search_sorted(
 
     if side == 'left':
         with nogil:
-            c_result = (
+            c_result = move(
                 cpp_search.lower_bound(
                     c_table_data,
                     c_values_data,
@@ -50,7 +50,7 @@ def search_sorted(
             )
     elif side == 'right':
         with nogil:
-            c_result = (
+            c_result = move(
                 cpp_search.upper_bound(
                     c_table_data,
                     c_values_data,
@@ -76,8 +76,10 @@ def contains(Column haystack, Column needles):
     cdef column_view c_needles = needles.view()
 
     with nogil:
-        c_result = cpp_search.contains(
-            c_haystack,
-            c_needles,
+        c_result = move(
+            cpp_search.contains(
+                c_haystack,
+                c_needles,
+            )
         )
     return Column.from_unique_ptr(move(c_result))
