@@ -1,7 +1,6 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 import os
 import shutil
-import argparse
 import sysconfig
 from distutils.sysconfig import get_python_lib
 
@@ -34,16 +33,7 @@ if not os.path.isdir(CUDA_HOME):
 
 cuda_include_dir = os.path.join(CUDA_HOME, "include")
 
-argparser = argparse.ArgumentParser()
-argparser.add_argument("-j", "--jobs", required=False, const=None, default=None, type=int)
-try:
-    args, unknown = argparser.parse_known_args()
-except Exception:
-    args = argparse.Namespace()
-    setattr(args, 'jobs', None)
-
-nthreads=int(args.jobs if args.jobs is not None else
-             os.environ.get("JOBS", os.environ.get("PARALLEL_LEVEL", "0")))
+nthreads=int(os.environ.get("JOBS", os.environ.get("PARALLEL_LEVEL", "0")))
 
 extensions = [
     Extension(
