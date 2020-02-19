@@ -51,7 +51,7 @@ def transpose(Table source):
 
     result = Table.from_unique_ptr(
         move(c_result),
-        column_names=range(source._num_rows)
+        column_names=cudf.core.index.RangeIndex(0, source._num_rows)
     )
 
     if cats is not None:
