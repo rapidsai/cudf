@@ -73,6 +73,7 @@
 - PR #4149 Use "type-serialized" for pickled types like Dask
 - PR #4163 Assert Dask CUDA serializers have `Buffer` frames
 - PR #4177 Use `uint8` type for host array copy of `Buffer`
+- PR #4183 Update Google Test Execution
 
 ## Bug Fixes
 
