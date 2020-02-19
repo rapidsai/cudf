@@ -76,6 +76,7 @@
 - PR #4149 Use "type-serialized" for pickled types like Dask
 - PR #4163 Assert Dask CUDA serializers have `Buffer` frames
 - PR #4165 List serializable classes once
+- PR #4168 IO readers: do not create null mask for non-nullable columns
 - PR #4177 Use `uint8` type for host array copy of `Buffer`
 - PR #4182 Rename cuDF serialize functions to be more generic
 
@@ -124,6 +125,7 @@
 - PR #4175 Fix `__sizeof__` calculation in `StringColumn`
 - PR #4155 Update groupby group_offsets size and fix unnecessary device dispatch.
 - PR #4186 Fix from_timestamps 12-hour specifiers support
+- PR #4192 Parquet writer: fix OOB read when computing string hash
 
 
 # cuDF 0.12.0 (04 Feb 2020)
