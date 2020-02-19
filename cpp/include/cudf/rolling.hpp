@@ -31,8 +31,8 @@ namespace experimental {
  * static (the same for each element). This matches Pandas' API for DataFrame.rolling with a few
  * notable differences:
  * - instead of the center flag it uses a two-part window to allow for more flexible windows.
- *   The total window size = `preceding_window + following_window + 1`. Element `i` uses elements
- *   `[i-preceding_window, i+following_window]` to do the window computation.
+ *   The total window size = `preceding_window + following_window`. Element `i` uses elements
+ *   `[i-preceding_window+1, i+following_window]` to do the window computation.
  * - instead of storing NA/NaN for output rows that do not meet the minimum number of observations
  *   this function updates the valid bitmask of the column to indicate which elements are valid.
  * 
@@ -65,8 +65,8 @@ std::unique_ptr<column> rolling_window(column_view const& input,
  * dynamic (varying for each element). This matches Pandas' API for DataFrame.rolling with a few
  * notable differences:
  * - instead of the center flag it uses a two-part window to allow for more flexible windows.
- *   The total window size = `preceding_window + following_window + 1`. Element `i` uses elements
- *   `[i-preceding_window, i+following_window]` to do the window computation.
+ *   The total window size = `preceding_window + following_window`. Element `i` uses elements
+ *   `[i-preceding_window+1, i+following_window]` to do the window computation.
  * - instead of storing NA/NaN for output rows that do not meet the minimum number of observations
  *   this function updates the valid bitmask of the column to indicate which elements are valid.
  * - support for dynamic rolling windows, i.e. window size can be specified for each element using
