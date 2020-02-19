@@ -123,11 +123,14 @@ void store_result_functor::operator()<aggregation::COUNT_VALID>(
   if (cache.has_result(col_idx, agg))
     return;
 
-  cache.add_result(col_idx, agg, 
-                  detail::group_count(get_grouped_values(), 
-                            helper.group_labels(),
-                            helper.num_groups(), 
-                            include_nulls::NO, mr, stream));
+  cache.add_result(
+      col_idx, agg,
+      get_grouped_values().nullable()
+          ? detail::group_count_valid(get_grouped_values(),
+                                      helper.group_labels(),
+                                      helper.num_groups(), mr, stream)
+          : detail::group_count_all(helper.group_offsets(), 
+                                    helper.num_groups(), mr, stream));
 }
 
 template <>
@@ -138,10 +141,8 @@ void store_result_functor::operator()<aggregation::COUNT_ALL>(
     return;
 
   cache.add_result(col_idx, agg, 
-                  detail::group_count(get_grouped_values(), 
-                            helper.group_labels(),
-                            helper.num_groups(), 
-                            include_nulls::YES, mr, stream));
+                  detail::group_count_all(helper.group_offsets(),
+                            helper.num_groups(), mr, stream));
 }
 
 template <>

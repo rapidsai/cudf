@@ -28,11 +28,10 @@ namespace groupby {
 namespace detail {
 
 
-std::unique_ptr<column> group_count(
+std::unique_ptr<column> group_count_valid(
     column_view const& values,
     rmm::device_vector<size_type> const& group_labels,
     size_type num_groups,
-    include_nulls _include_nulls,
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream)
 {
@@ -47,7 +46,7 @@ std::unique_ptr<column> group_count(
     return result;
   }
 
-  if (_include_nulls==include_nulls::NO && values.nullable()) {
+  if (values.nullable()) {
     auto values_view = column_device_view::create(values);
     
     // make_validity_iterator returns a boolean iterator that sums to 1 (1+1=1)
@@ -71,6 +70,28 @@ std::unique_ptr<column> group_count(
                           result->mutable_view().begin<size_type>());
   }
 
+  return result;
+}
+
+std::unique_ptr<column> group_count_all(
+    rmm::device_vector<size_type> const& group_offsets,
+    size_type num_groups,
+    rmm::mr::device_memory_resource* mr,
+    cudaStream_t stream)
+{
+  CUDF_EXPECTS(num_groups >= 0, "number of groups cannot be negative");
+
+  auto result = make_numeric_column(data_type(type_to_id<size_type>()),
+                  num_groups, mask_state::UNALLOCATED, stream, mr);
+
+  if (num_groups == 0) {
+    return result;
+  }
+
+  thrust::adjacent_difference(rmm::exec_policy(stream)->on(stream),
+                              group_offsets.begin() + 1,
+                              group_offsets.end(),
+                              result->mutable_view().begin<size_type>());
   return result;
 }
 
