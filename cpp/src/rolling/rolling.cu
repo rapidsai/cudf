@@ -266,7 +266,7 @@ struct rolling_window_launcher
       auto input_device_view = column_device_view::create(input, stream);
       auto output_device_view = mutable_column_device_view::create(output, stream);
 
-      rmm::device_scalar<size_type> device_valid_count{200, stream};
+      rmm::device_scalar<size_type> device_valid_count{300, stream};
 
       if (input.has_nulls()) {
           gpu_rolling<T, target_type_t<InputType, op>, agg_op, op, block_size, op_argmin_agrmax, true><<<grid.num_blocks, block_size, 0, stream>>>
