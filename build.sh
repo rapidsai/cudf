@@ -178,10 +178,10 @@ if buildAll || hasArg cudf; then
 
     cd ${REPODIR}/python/cudf
     if [[ ${INSTALL_TARGET} != "" ]]; then
-        python setup.py build_ext -j${PARALLEL_LEVEL} --inplace
+        env PARALLEL_LEVEL=${PARALLEL_LEVEL} python setup.py build_ext --inplace
         python setup.py install --single-version-externally-managed --record=record.txt
     else
-        python setup.py build_ext -j${PARALLEL_LEVEL} --inplace --library-dir=${LIBCUDF_BUILD_DIR}
+        env PARALLEL_LEVEL=${PARALLEL_LEVEL} python setup.py build_ext --inplace --library-dir=${LIBCUDF_BUILD_DIR}
     fi
 fi
 
