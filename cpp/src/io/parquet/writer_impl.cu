@@ -115,7 +115,7 @@ class parquet_column_view {
         _data_count(col.size()),
         _null_count(col.null_count()),
         _data(col.data<uint8_t>()),
-        _nulls(col.has_nulls() ? col.null_mask() : nullptr) {
+        _nulls(col.nullable() ? col.null_mask() : nullptr) {
     switch(col.type().id()) {
       case cudf::type_id::INT8:
         _physical_type = Type::INT32;
@@ -207,6 +207,7 @@ class parquet_column_view {
   size_t type_width() const noexcept { return _type_width; }
   size_t data_count() const noexcept { return _data_count; }
   size_t null_count() const noexcept { return _null_count; }
+  bool nullable() const noexcept { return (_nulls != nullptr); }
   void const *data() const noexcept { return _data; }
   uint32_t const *nulls() const noexcept { return _nulls; }
 
@@ -460,7 +461,7 @@ void writer::impl::write_chunked(table_view const& table, pq_chunked_state& stat
       // if the user is explictly saying "I am only calling this once", fall back to the original behavior and assume
       // the columns in this one table tell us everything we need to know. 
       if(state.single_write_mode){
-        state.md.schema[1 + i].repetition_type = (col.null_count() || col.data_count() < (size_t)num_rows) ? OPTIONAL : REQUIRED;
+        state.md.schema[1 + i].repetition_type = (col.nullable() || col.data_count() < (size_t)num_rows) ? OPTIONAL : REQUIRED;
       } 
       // otherwise, if the user is explicitly telling us global information about all the tables that will ever get passed in
       else if(state.user_metadata_with_nullability.column_nullable.size() > 0){        

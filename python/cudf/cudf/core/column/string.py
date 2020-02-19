@@ -550,10 +550,12 @@ class StringColumn(column.ColumnBase):
         return StringMethods(self, index=index, name=name)
 
     def __sizeof__(self):
-        n = (
-            self.base_children[0].__sizeof__()
-            + self.base_children[1].__sizeof__()
-        )
+        n = 0
+        if self.base_children is not None and len(self.base_children) == 2:
+            n += (
+                self.base_children[0].__sizeof__()
+                + self.base_children[1].__sizeof__()
+            )
         if self.base_mask:
             n += self.base_mask.size
         return n
