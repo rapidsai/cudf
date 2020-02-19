@@ -474,23 +474,26 @@ TEST_F(ParquetChunkedWriterTest, SimpleTable)
 
 TEST_F(ParquetChunkedWriterTest, LargeTables)
 {
-  srand(31337);
-  auto table1 = create_random_fixed_table<int>(512, 4096, true);
-  auto table2 = create_random_fixed_table<int>(512, 8192, true);
-  
-  auto full_table = cudf::experimental::concatenate({*table1, *table2});          
+  int idx;
+  for(idx=0; idx<20; idx++){
+    srand(31337);
+    auto table1 = create_random_fixed_table<int>(512, 4096, true);
+    auto table2 = create_random_fixed_table<int>(512, 8192, true);
+    
+    auto full_table = cudf::experimental::concatenate({*table1, *table2});          
 
-  auto filepath = temp_env->get_temp_filepath("ChunkedLarge.parquet");
-  cudf_io::write_parquet_chunked_args args{cudf_io::sink_info{filepath}};
-  auto state = cudf_io::write_parquet_chunked_begin(args);  
-  cudf_io::write_parquet_chunked(*table1, state);
-  cudf_io::write_parquet_chunked(*table2, state);  
-  cudf_io::write_parquet_chunked_end(state);    
+    auto filepath = temp_env->get_temp_filepath("ChunkedLarge.parquet");
+    cudf_io::write_parquet_chunked_args args{cudf_io::sink_info{filepath}};
+    auto state = cudf_io::write_parquet_chunked_begin(args);  
+    cudf_io::write_parquet_chunked(*table1, state);
+    cudf_io::write_parquet_chunked(*table2, state);  
+    cudf_io::write_parquet_chunked_end(state);    
 
-  cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
-  auto result = cudf_io::read_parquet(read_args);
-  
-  expect_tables_equal(*result.tbl, *full_table);    
+    cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
+    auto result = cudf_io::read_parquet(read_args);
+    
+    expect_tables_equal(*result.tbl, *full_table);
+  }
 }
 
 TEST_F(ParquetChunkedWriterTest, ManyTables)
