@@ -4,7 +4,7 @@ import pandas as pd
 
 import cudf._libxx as libcudfxx
 from cudf.core.column import as_column, build_categorical_column
-from cudf.utils.dtypes import is_categorical_dtype
+from cudf.utils.dtypes import is_categorical_dtype, is_scalar
 
 
 class Frame(libcudfxx.table.Table):
@@ -22,6 +22,36 @@ class Frame(libcudfxx.table.Table):
     @classmethod
     def _from_table(cls, table):
         return cls(table._data, index=table._index)
+
+    def _get_columns_by_label(self, labels, downcast=False):
+        """
+        Returns columns of the Frame specified by `labels`
+
+        If downcast is True, try and downcast from a DataFrame to a Series
+        """
+        new_data = self._data.get_by_label(labels)
+        if downcast:
+            if is_scalar(labels):
+                nlevels = 1
+            elif isinstance(labels, tuple):
+                nlevels = len(labels)
+            if self._data.multiindex is False or nlevels == self._data.nlevels:
+                return self._constructor_sliced(
+                    new_data, name=labels, index=self.index
+                )
+        return self._constructor(
+            new_data, columns=new_data.to_pandas_index(), index=self.index,
+        )
+
+    def _get_columns_by_index(self, indices):
+        """
+        Returns columns of the Frame specified by `labels`
+
+        """
+        data = self._data.get_by_index(indices)
+        return self._constructor(
+            data, columns=data.to_pandas_index(), index=self.index,
+        )
 
     def _gather(self, gather_map):
         if not pd.api.types.is_integer_dtype(gather_map.dtype):

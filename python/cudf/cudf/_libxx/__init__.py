@@ -1,6 +1,14 @@
 import numpy as np
 
-from . import copying, null_mask, search, stream_compaction, table
+from . import (
+    copying,
+    null_mask,
+    rolling,
+    search,
+    stream_compaction,
+    table,
+    transpose,
+)
 
 MAX_COLUMN_SIZE = np.iinfo(np.int32).max
 MAX_COLUMN_SIZE_STR = "INT32_MAX"
