@@ -15,7 +15,8 @@ from cudf._libxx.includes.hash cimport (
 )
 
 
-def hash_partition(Table source_table, object columns_to_hash, int num_partitions):
+def hash_partition(Table source_table, object columns_to_hash,
+                   int num_partitions):
     cdef vector[size_type] c_columns_to_hash = columns_to_hash
     cdef int c_num_partitions = num_partitions
     cdef table_view source_view = source_table.view()
