@@ -115,6 +115,7 @@
 - PR #4125 Fix type enum to account for added Dictionary type in `types.hpp`
 - PR #4132 Fix `hash_partition` null mask allocation
 - PR #4137 Update Java for mutating fill and rolling window changes
+- PR #4184 Add missing except+ to Cython bindings
 - PR #4141 Fix NVStrings test_convert failure in 10.2 build
 - PR #4158 Fix merge issue with empty table return if one of the two tables are empty
 - PR #4175 Fix `__sizeof__` calculation in `StringColumn`
