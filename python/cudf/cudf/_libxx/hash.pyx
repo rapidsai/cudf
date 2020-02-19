@@ -33,8 +33,7 @@ def hash_partition(Table source_table, columns_to_hash, num_partitions):
     return (
         Table.from_unique_ptr(
             move(c_result.first),
-            column_names=source_table._column_names,
-            index_names=source_table._index._column_names),
+            column_names=source_table._column_names),
         list(c_result.second)
     )
 

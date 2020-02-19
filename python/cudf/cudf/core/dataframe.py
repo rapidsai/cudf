@@ -3153,7 +3153,7 @@ class DataFrame(Frame):
 
         Parameters
         ----------
-        column : sequence of str; optional
+        columns : sequence of str; optional
             Sequence of column names. If columns is *None* (unspecified),
             all columns in the frame are used.
         """
@@ -3180,21 +3180,12 @@ class DataFrame(Frame):
         -------
         partitioned: list of DataFrame
         """
-        cols = list(self._data.values())
+        # Call hash_partition
         names = list(self._data.keys())
         key_indices = [names.index(k) for k in columns]
-        # Allocate output buffers
-        outputs = [col.copy() for col in cols]
-        # Call hash_partition
-        offsets = libcudf.hash.hash_partition(
-            cols, key_indices, nparts, outputs
-        )
-        # Re-construct output partitions
-        outdf = DataFrame()
-        for k, col in zip(self._data, outputs):
-            outdf[k] = col
+        outputs, offsets = self._hash_partition(key_indices, nparts)
         # Slice into partition
-        return [outdf[s:e] for s, e in zip(offsets, offsets[1:] + [None])]
+        return [outputs[s:e] for s, e in zip(offsets, offsets[1:] + [None])]
 
     def replace(self, to_replace, replacement):
         """
