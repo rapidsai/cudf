@@ -76,6 +76,7 @@
 - PR #4144 Release GIL when calling libcudf++ functions
 - PR #4082 Rework MultiColumns in cuDF
 - PR #4149 Use "type-serialized" for pickled types like Dask
+- PR #4167 Port `search` to libcudf++ (support multi-column searchsorted)
 - PR #4163 Assert Dask CUDA serializers have `Buffer` frames
 - PR #4165 List serializable classes once
 - PR #4168 IO readers: do not create null mask for non-nullable columns
