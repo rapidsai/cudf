@@ -9,6 +9,7 @@ import pandas as pd
 
 from cudf._libxx.column cimport *
 from cudf._libxx.table cimport *
+from cudf._libxx.lib cimport *
 from cudf._libxx.includes.stream_compaction cimport (
     duplicate_keep_option,
     drop_nulls as cpp_drop_nulls,
@@ -203,8 +204,10 @@ def unique_count(Column source_column, ignore_nulls=True, nan_as_null=False):
 
     cdef column_view source_column_view = source_column.view()
     with nogil:
-        count = cpp_unique_count(source_column_view,
-                                 cpp_ignore_nulls,
-                                 cpp_nan_as_null)
+        count = cpp_unique_count(
+            source_column_view,
+            cpp_ignore_nulls,
+            cpp_nan_as_null
+        )
 
     return count

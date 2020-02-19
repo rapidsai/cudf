@@ -21,7 +21,7 @@ def gather(Table source_table, Column gather_map):
     cdef column_view gather_map_view = gather_map.view()
 
     with nogil:
-        c_result = (
+        c_result = move(
             cpp_copying.gather(
                 source_table_view,
                 gather_map_view

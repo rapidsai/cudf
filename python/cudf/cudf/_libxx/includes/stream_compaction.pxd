@@ -22,7 +22,8 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf::experimental" \
 
     cdef unique_ptr[table] apply_boolean_mask(
         table_view source_table,
-        column_view boolean_mask) except +
+        column_view boolean_mask
+    ) except +
 
     cdef unique_ptr[table] drop_duplicates(table_view source_table,
                                            vector[size_type] keys,
