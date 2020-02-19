@@ -20,7 +20,7 @@ try:
     from distributed.utils import log_errors
 
     @cuda_serialize.register(serializable_classes)
-    def cuda_serialize_cudf_dataframe(x):
+    def cuda_serialize_cudf_object(x):
         with log_errors():
             header, frames = x.serialize()
             assert all(isinstance(f, cudf.core.buffer.Buffer) for f in frames)
@@ -29,7 +29,7 @@ try:
     # all (de-)serializtion are attached to cudf Objects:
     # Series/DataFrame/Index/Column/Buffer/etc
     @dask_serialize.register(serializable_classes)
-    def dask_serialize_cudf_dataframe(x):
+    def dask_serialize_cudf_object(x):
         with log_errors():
             header, frames = x.serialize()
             frames = [f.to_host_array().data for f in frames]
@@ -37,7 +37,7 @@ try:
 
     @cuda_deserialize.register(serializable_classes)
     @dask_deserialize.register(serializable_classes)
-    def deserialize_cudf_dataframe(header, frames):
+    def deserialize_cudf_object(header, frames):
         with log_errors():
             cudf_typ = pickle.loads(header["type-serialized"])
             cudf_obj = cudf_typ.deserialize(header, frames)
