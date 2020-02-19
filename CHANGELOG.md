@@ -78,6 +78,7 @@
 - PR #4165 List serializable classes once
 - PR #4168 IO readers: do not create null mask for non-nullable columns
 - PR #4177 Use `uint8` type for host array copy of `Buffer`
+- PR #4183 Update Google Test Execution
 - PR #4182 Rename cuDF serialize functions to be more generic
 
 ## Bug Fixes
