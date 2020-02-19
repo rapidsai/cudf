@@ -9,6 +9,9 @@ from cudf._libxx.lib cimport *
 from cudf._libxx.column cimport Column
 from cudf.utils.utils import OrderedColumnDict
 
+cdef class TableColumns:
+    def __init__(self, cols):
+        self.columns = cols
 
 cdef class Table:
     def __init__(self, data=None, index=None):
@@ -168,6 +171,29 @@ cdef class Table:
             self._index._data.values()
         )
 
+    @staticmethod
+    cdef TableColumns columns_from_ptr(
+        unique_ptr[table] c_tbl,
+    ):
+        """
+        Return a list of table columns from a unique pointer
+
+        Parameters
+        ----------
+        c_tbl : unique_ptr[cudf::table]
+        """
+        print('hello')
+        num_columns = c_tbl.get().num_columns()
+        cdef vector[unique_ptr[column]] columns
+        columns = c_tbl.get()[0].release()
+        cdef vector[unique_ptr[column]].iterator it = columns.begin()
+
+        result = []
+        for i in range(num_columns):
+            result.append(Column.from_unique_ptr(move(dereference(it))))
+            it += 1
+        cdef TableColumns c_result  = TableColumns(result)
+        return c_result
 
 cdef table_view _make_table_view(columns) except*:
     """

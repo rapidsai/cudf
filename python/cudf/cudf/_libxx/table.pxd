@@ -17,3 +17,8 @@ cdef class Table:
     @staticmethod
     cdef Table from_unique_ptr(unique_ptr[table] c_tbl, column_names,
                                index_names=*)
+    @staticmethod
+    cdef TableColumns columns_from_ptr(unique_ptr[table] c_tbl)
+
+cdef class TableColumns:
+    cdef dict __dict__

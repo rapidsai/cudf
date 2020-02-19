@@ -266,7 +266,11 @@ class DataFrame(Frame):
 
     @classmethod
     def _from_table(cls, table):
-        return cls(data=table._data, index=Index._from_table(table._index))
+        if table._index is None:
+            index = None
+        else:
+            index = Index._from_table(table._index)
+        return cls(data=table._data, index=index)
 
     @staticmethod
     def _align_input_series_indices(data, index):
@@ -2267,87 +2271,6 @@ class DataFrame(Frame):
 
         return melt(self, **kwargs)
 
-    def _typecast_before_merge(self, lhs, rhs, left_on, right_on, how):
-        def casting_rules(lhs, rhs, dtype_l, dtype_r, how):
-            cast_warn = "can't safely cast column {} from {} with type \
-                         {} to {}, upcasting to {}"
-            ctgry_err = "can't implicitly cast column {0} to categories \
-                         from {1} during {1} join"
-
-            rtn = None
-            if pd.api.types.is_dtype_equal(dtype_l, dtype_r):
-                rtn = dtype_l
-            elif is_categorical_dtype(dtype_l) and is_categorical_dtype(
-                dtype_r
-            ):
-                raise TypeError("Left and right categories must be the same.")
-            elif how == "left":
-
-                check_col = rhs._data[rcol].fillna(0)
-                if not check_col.can_cast_safely(dtype_l):
-                    rtn = casting_rules(lhs, rhs, dtype_l, dtype_r, "inner")
-                    warnings.warn(
-                        cast_warn.format(rcol, "right", dtype_r, dtype_l, rtn)
-                    )
-                else:
-                    rtn = dtype_l
-            elif how == "right":
-                check_col = lhs._data[lcol].fillna(0)
-                if not check_col.can_cast_safely(dtype_r):
-                    rtn = casting_rules(lhs, rhs, dtype_l, dtype_r, "inner")
-                    warnings.warn(
-                        cast_warn.format(lcol, "left", dtype_l, dtype_r, rtn)
-                    )
-                else:
-                    rtn = dtype_r
-
-            elif is_categorical_dtype(dtype_l):
-                if how == "right":
-                    raise ValueError(ctgry_err.format(rcol, "right"))
-
-                rtn = lhs[lcol].cat.categories.dtype
-                to_categorical.append(lcol)
-                lhs[lcol + "_codes"] = lhs[lcol].cat.codes
-            elif is_categorical_dtype(dtype_r):
-                if how == "left":
-                    raise ValueError(ctgry_err.format(lcol, "left"))
-                rtn = rhs[rcol].cat.categories.dtype
-                to_categorical.append(rcol)
-                rhs[rcol + "_codes"] = rhs[rcol].cat.codes
-            elif how in ["inner", "outer"]:
-                if (np.issubdtype(dtype_l, np.number)) and (
-                    np.issubdtype(dtype_r, np.number)
-                ):
-                    if dtype_l.kind == dtype_r.kind:
-                        # both ints or both floats
-                        rtn = max(dtype_l, dtype_r)
-                    else:
-                        rtn = np.find_common_type([], [dtype_l, dtype_r])
-                elif is_datetime_dtype(dtype_l) and is_datetime_dtype(dtype_r):
-                    rtn = max(dtype_l, dtype_r)
-            return rtn
-
-        left_on = sorted(left_on)
-        right_on = sorted(right_on)
-        to_categorical = []
-        for lcol, rcol in zip(left_on, right_on):
-            if (lcol not in lhs._data) or (rcol not in rhs._data):
-                # probably wrong columns specified, let libcudf error
-                continue
-
-            dtype_l = lhs._data[lcol].dtype
-            dtype_r = rhs._data[rcol].dtype
-            if pd.api.types.is_dtype_equal(dtype_l, dtype_r):
-                continue
-
-            to_dtype = casting_rules(lhs, rhs, dtype_l, dtype_r, how)
-
-            if to_dtype is not None:
-                lhs[lcol] = lhs[lcol].astype(to_dtype)
-                rhs[rcol] = rhs[rcol].astype(to_dtype)
-
-        return lhs, rhs, to_categorical
-
     def merge(
         self,
         right,
@@ -2448,6 +2371,8 @@ class DataFrame(Frame):
         else:
             lsuffix, rsuffix = suffixes
 
+    
+
         if type != "":
             warnings.warn(
                 'type="' + type + '" parameter is deprecated.'
@@ -2455,92 +2380,9 @@ class DataFrame(Frame):
                 DeprecationWarning,
             )
             method = type
-        if how not in ["left", "inner", "outer"]:
-            raise NotImplementedError(
-                "{!r} merge not supported yet".format(how)
-            )
-
-        # Making sure that the "on" arguments are list of column names
-        if on:
-            on = [on] if isinstance(on, str) else list(on)
-        if left_on:
-            left_on = [left_on] if isinstance(left_on, str) else list(left_on)
-        if right_on:
-            right_on = (
-                [right_on] if isinstance(right_on, str) else list(right_on)
-            )
 
         lhs = self.copy(deep=False)
         rhs = right.copy(deep=False)
-
-        same_named_columns = set(lhs.columns) & set(rhs.columns)
-
-        # Since GDF doesn't take indexes, we insert indexes as regular columns.
-        # In order to do that we need some unique column names
-        result_index_name = _unique_name(
-            itertools.chain(lhs.columns, rhs.columns), suffix="_result_index"
-        )
-        merge_index_name = _unique_name(
-            itertools.chain(lhs.columns, rhs.columns), suffix="_merge_index"
-        )
-
-        # Let's find the columns to do the merge on.
-        if left_index and right_index:
-            lhs[merge_index_name] = lhs.index
-            rhs[merge_index_name] = rhs.index
-            left_on = right_on = [merge_index_name]
-        elif on:
-            if left_on or right_on:
-                raise ValueError(
-                    'Can only pass argument "on" OR "left_on" '
-                    'and "right_on", not a combination of both.'
-                )
-            left_on = right_on = on
-        elif left_index and right_on:
-            if len(right_on) != 1:  # TODO: support multi-index
-                raise ValueError("right_on should be a single column")
-            lhs[merge_index_name] = lhs.index
-            left_on = [merge_index_name]
-            rhs[result_index_name] = rhs.index
-        elif right_index and left_on:
-            if len(left_on) != 1:  # TODO: support multi-index
-                raise ValueError("left_on should be a single column")
-            rhs[merge_index_name] = rhs.index
-            right_on = [merge_index_name]
-            lhs[result_index_name] = lhs.index
-        elif not (left_on or right_on):
-            left_on = right_on = list(same_named_columns)
-            if len(left_on) == 0:
-                raise ValueError("No common columns to perform merge on")
-        else:
-            if len(right_on) != len(left_on):
-                raise ValueError(
-                    "right_on and left_on must have same " "number of columns"
-                )
-
-        # Fix column names by appending `suffixes`
-        for name in same_named_columns:
-            if not (
-                name in left_on
-                and name in right_on
-                and (left_on.index(name) == right_on.index(name))
-            ):
-                if not (lsuffix or rsuffix):
-                    raise ValueError(
-                        "there are overlapping columns but "
-                        "lsuffix and rsuffix are not defined"
-                    )
-                else:
-                    lhs.rename({name: "%s%s" % (name, lsuffix)}, inplace=True)
-                    rhs.rename({name: "%s%s" % (name, rsuffix)}, inplace=True)
-                    if name in left_on:
-                        left_on[left_on.index(name)] = "%s%s" % (name, lsuffix)
-                    if name in right_on:
-                        right_on[right_on.index(name)] = "%s%s" % (
-                            name,
-                            rsuffix,
-                        )
-
         # We save the original categories for the reconstruction of the
         # final data frame
         categorical_dtypes = {}
@@ -2551,101 +2393,12 @@ class DataFrame(Frame):
         # Save the order of the original column names for preservation later
         org_names = list(itertools.chain(lhs._data.keys(), rhs._data.keys()))
 
-        # potentially do an implicit typecast
-        (lhs, rhs, to_categorical) = self._typecast_before_merge(
-            lhs, rhs, left_on, right_on, how
-        )
+
         # Compute merge
-        gdf_result = join(lhs, rhs, left_on, right_on, how, method)
-        gdf_result = list(gdf_result._data.items())
+        gdf_result = super()._merge(rhs, on, left_on, right_on, left_index, right_index, lsuffix, rsuffix, how, method)
 
-        # Let's sort the columns of the GDF result. NB: Pandas doc says
-        # that it sorts when how='outer' but this is NOT the case.
-        result = []
-        cat_codes = []
-        if sort:
-            # Pandas lexicographically sort is NOT a sort of all columns.
-            # Instead, it sorts columns in lhs, then in "on", and then rhs.
-            left_of_on = []
-            for name in lhs._data.keys():
-                if name not in left_on:
-                    for i in range(len(gdf_result)):
-                        if gdf_result[i][0] == name:
-                            left_of_on.append(gdf_result.pop(i))
-                            break
-            in_on = []
-            for name in itertools.chain(lhs._data.keys(), rhs._data.keys()):
-                if name in left_on or name in right_on:
-                    for i in range(len(gdf_result)):
-                        if gdf_result[i][0] == name:
-                            in_on.append(gdf_result.pop(i))
-                            break
-            right_of_on = []
-            for name in rhs._data.keys():
-                if name not in right_on:
-                    for i in range(len(gdf_result)):
-                        if gdf_result[i][0] == name:
-                            right_of_on.append(gdf_result.pop(i))
-                            break
-            result = (
-                sorted(left_of_on, key=lambda x: str(x[0]))
-                + sorted(in_on, key=lambda x: str(x[0]))
-                + sorted(right_of_on, key=lambda x: str(x[0]))
-            )
-        else:
-            for org_name in org_names:
-                for i in range(len(gdf_result)):
-                    if gdf_result[i][0] == org_name:
-                        result.append(gdf_result.pop(i))
-                        break
-            for cat_name in to_categorical:
-                for i in range(len(gdf_result)):
-                    if gdf_result[i][0] == cat_name + "_codes":
-                        cat_codes.append(gdf_result.pop(i))
-            assert len(gdf_result) == 0
-        cat_codes = dict(cat_codes)
 
-        # Build a new data frame based on the merged columns from GDF
-        df = DataFrame()
-        for name, col in result:
-            if is_string_dtype(col):
-                df[name] = col
-            elif is_categorical_dtype(categorical_dtypes.get(name, col.dtype)):
-
-                dtype = categorical_dtypes.get(name, col.dtype)
-                df[name] = column.build_categorical_column(
-                    categories=dtype.categories,
-                    codes=cat_codes.get(name + "_codes", col),
-                    mask=col.mask,
-                    ordered=dtype.ordered,
-                )
-            else:
-                df[name] = column.build_column(
-                    col.data,
-                    dtype=categorical_dtypes.get(name, col.dtype),
-                    mask=col.mask,
-                )
-
-        # Let's make the "index as column" back into an index
-        if left_index and right_index:
-            df.index = df[merge_index_name]
-            df.index.name = lhs.index.name
-        elif result_index_name in df.columns:
-            df.index = df[result_index_name]
-            if left_index:
-                df.index.name = rhs.index.name
-            elif right_index:
-                df.index.name = lhs.index.name
-
-        # Remove all of the "index as column" columns
-        if merge_index_name in df.columns:
-            df._drop_column(merge_index_name)
-        if result_index_name in df.columns:
-            df._drop_column(result_index_name)
-
-        libcudf.nvtx.nvtx_range_pop()
-
-        return df
+        return gdf_result
 
     def join(
         self,
