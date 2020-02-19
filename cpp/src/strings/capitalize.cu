@@ -152,49 +152,57 @@ namespace { // anonym.
     char* d_chars_;
   };
 
-
-  struct probe_capitalize
+  //base class for probing string
+  //manipulation memory load requirements;
+  //
+  struct probe_base
   {
-    probe_capitalize(column_device_view const d_column,
-                     character_flags_table_type const* d_flags,
-                     character_cases_table_type const* d_case_table):
+    probe_base(column_device_view const d_column,
+               character_flags_table_type const* d_flags,
+               character_cases_table_type const* d_case_table):
       d_column_(d_column),
       d_flags_(d_flags),
       d_case_table_(d_case_table)
     {  
     }
-    
-     __device__
-     int32_t operator()(size_type idx) const {
-      if( d_column_.is_null(idx) )
-        return 0; // null string
-      
-      string_view d_str = d_column_.template element<string_view>(idx);
-      int32_t bytes = 0;
-      
-      for( auto itr = d_str.begin(); itr != d_str.end(); ++itr ) {
-        auto the_chr = *itr;
-        uint32_t code_point = detail::utf8_to_codepoint(the_chr);
-        detail::character_flags_table_type flag = code_point <= 0x00FFFF ? d_flags_[code_point] : 0;
-        if( (itr == d_str.begin()) ? IS_LOWER(flag) : IS_UPPER(flag) )
-          the_chr = detail::codepoint_to_utf8(d_case_table_[code_point]);
-        bytes += detail::bytes_in_char_utf8(the_chr);
-      }
-      return bytes;
+
+    __host__ __device__
+    column_device_view const get_column(void) const
+    {
+      return d_column_;
     }
+
+    __host__ __device__
+    character_flags_table_type const* get_flags(void) const
+    {
+      return d_flags_;
+    }
+
+    __host__ __device__
+    character_cases_table_type const* get_case_table(void) const
+    {
+      return d_case_table_;
+    }
+
+    __device__
+    virtual int32_t operator()(size_type idx) const = 0;
+    
   private:
     column_device_view const d_column_;
     character_flags_table_type const* d_flags_;
     character_cases_table_type const* d_case_table_;
   };
 
-  struct execute_capitalize
+  
+  //base class for executing string modification:
+  //
+  struct execute_base
   {
-    execute_capitalize(column_device_view const d_column,
-                       character_flags_table_type const* d_flags,
-                       character_cases_table_type const* d_case_table,
-                       int32_t const* d_offsets,
-                       char* d_chars):
+    execute_base(column_device_view const d_column,
+                 character_flags_table_type const* d_flags,
+                 character_cases_table_type const* d_case_table,
+                 int32_t const* d_offsets,
+                 char* d_chars):
       d_column_(d_column),
       d_flags_(d_flags),
       d_case_table_(d_case_table),
@@ -202,26 +210,39 @@ namespace { // anonym.
       d_chars_(d_chars)
     {
     }
-    
-    __device__
-    int32_t operator()(size_type idx) {
-      if( d_column_.is_null(idx) )
-        return 0; // null string
-      
-      string_view d_str = d_column_.template element<string_view>(idx);
-      char* d_buffer = d_chars_ + d_offsets_[idx];
-      
-      for( auto itr = d_str.begin(); itr != d_str.end(); ++itr ) {
-        auto the_chr = *itr;
-        uint32_t code_point = detail::utf8_to_codepoint(the_chr);
-        detail::character_flags_table_type flag = code_point <= 0x00FFFF ? d_flags_[code_point] : 0;
 
-        if( (itr == d_str.begin()) ? IS_LOWER(flag) : IS_UPPER(flag) )
-          the_chr = detail::codepoint_to_utf8(d_case_table_[code_point]);
-        d_buffer += detail::from_char_utf8(the_chr, d_buffer);
-      }
-      return 0;
+    __host__ __device__
+    column_device_view const get_column(void) const
+    {
+      return d_column_;
     }
+
+    __host__ __device__
+    character_flags_table_type const* get_flags(void) const
+    {
+      return d_flags_;
+    }
+
+    __host__ __device__
+    character_cases_table_type const* get_case_table(void) const
+    {
+      return d_case_table_;
+    }
+
+    __host__ __device__
+    int32_t const* get_offsets(void) const
+    {
+      return d_offsets_;
+    }
+
+    __host__ __device__
+    char* get_chars(void)
+    {
+      return d_chars_;
+    }
+
+    __device__
+    virtual int32_t operator()(size_type idx) = 0;
   private:
     column_device_view const d_column_;
     character_flags_table_type const* d_flags_;
@@ -229,6 +250,114 @@ namespace { // anonym.
     int32_t const* d_offsets_;
     char* d_chars_;
   };
+
+
+  //functor for probing string capitalization
+  //requirements:
+  //
+  struct probe_capitalize: probe_base
+  {
+    probe_capitalize(column_device_view const d_column,
+                     character_flags_table_type const* d_flags,
+                     character_cases_table_type const* d_case_table):
+      probe_base(d_column, d_flags, d_case_table)
+    {  
+    }
+    
+     __device__
+     int32_t operator()(size_type idx) const override {
+       if( get_column().is_null(idx) )
+         return 0; // null string
+      
+       string_view d_str = get_column().template element<string_view>(idx);
+       int32_t bytes = 0;
+      
+       for( auto itr = d_str.begin(); itr != d_str.end(); ++itr ) {
+         auto the_chr = *itr;
+         uint32_t code_point = detail::utf8_to_codepoint(the_chr);
+         detail::character_flags_table_type flag = code_point <= 0x00FFFF ? get_flags()[code_point] : 0;
+         if( (itr == d_str.begin()) ? IS_LOWER(flag) : IS_UPPER(flag) )
+           the_chr = detail::codepoint_to_utf8(get_case_table()[code_point]);
+         bytes += detail::bytes_in_char_utf8(the_chr);
+       }
+       return bytes;
+    }
+  };
+
+  //functor for executing string capitalization:
+  //
+  struct execute_capitalize: execute_base
+  {
+    execute_capitalize(column_device_view const d_column,
+                       character_flags_table_type const* d_flags,
+                       character_cases_table_type const* d_case_table,
+                       int32_t const* d_offsets,
+                       char* d_chars):
+      execute_base(d_column, d_flags, d_case_table, d_offsets, d_chars)
+    {
+    }
+    
+    __device__
+    int32_t operator()(size_type idx) override {
+      if( get_column().is_null(idx) )
+        return 0; // null string
+      
+      string_view d_str = get_column().template element<string_view>(idx);
+      char* d_buffer = get_chars() + get_offsets()[idx];
+      
+      for( auto itr = d_str.begin(); itr != d_str.end(); ++itr ) {
+        auto the_chr = *itr;
+        uint32_t code_point = detail::utf8_to_codepoint(the_chr);
+        detail::character_flags_table_type flag = code_point <= 0x00FFFF ? get_flags()[code_point] : 0;
+
+        if( (itr == d_str.begin()) ? IS_LOWER(flag) : IS_UPPER(flag) )
+          the_chr = detail::codepoint_to_utf8(get_case_table()[code_point]);
+        d_buffer += detail::from_char_utf8(the_chr, d_buffer);
+      }
+      return 0;
+    }
+  };
+
+
+  //functor for probing string title-ization
+  //requirements:
+  //
+  struct probe_title: probe_base
+  {
+    probe_title(column_device_view const d_column,
+                     character_flags_table_type const* d_flags,
+                     character_cases_table_type const* d_case_table):
+      probe_base(d_column, d_flags, d_case_table)
+    {  
+    }
+    
+     __device__
+     int32_t operator()(size_type idx) const override {
+       if( get_column().is_null(idx) )
+         return 0; // null string
+      
+       string_view d_str = get_column().template element<string_view>(idx);
+       int32_t bytes = 0;
+
+       bool bcapnext = true;
+       for( auto itr = d_str.begin(); itr != d_str.end(); ++itr ) {
+         auto the_chr = *itr;
+         uint32_t code_point = detail::utf8_to_codepoint(the_chr);
+         detail::character_flags_table_type flag = code_point <= 0x00FFFF ? get_flags()[code_point] : 0;
+
+         if( !IS_ALPHA(flag) ) {
+           bcapnext = true;
+           bytes += detail::bytes_in_char_utf8(the_chr);
+         }
+         else if( (bcapnext && IS_LOWER(flag)) || (!bcapnext && IS_UPPER(flag)) ) {
+           bcapnext = false;
+           bytes += detail::bytes_in_char_utf8(detail::codepoint_to_utf8(get_case_table()[code_point]));
+         }
+       }
+       return bytes;
+    }
+  };
+
          
 }//anonym.
 
