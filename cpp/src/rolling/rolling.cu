@@ -160,7 +160,7 @@ process_rolling_window(column_device_view input,
                 val, count);
     }
 
-    printf ("RGSL : output_is_valid value %d\n", output_is_valid);
+    printf ("RGSL1 : output_is_valid value %d\n", output_is_valid);
     return output_is_valid;
 }
 
