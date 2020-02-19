@@ -40,9 +40,9 @@ class RollingStringTest : public cudf::test::BaseFixture {};
 TEST_F (RollingStringTest, NoNullStringMinMaxCount) {
     cudf::test::strings_column_wrapper input ({"This", "is", "rolling", "test", "being", "operated", "on", "string", "column"});
     std::vector<size_type> window{2};
-    cudf::test::strings_column_wrapper expected_min ({"This", "This", "This", "being", "being", "being", "being", "column", "column"}, {1, 1, 1, 1, 1, 1, 1, 1, 1});
-    cudf::test::strings_column_wrapper expected_max ({"rolling", "test", "test", "test", "test", "test", "string", "string", "string"}, {1, 1, 1, 1, 1, 1, 1, 1, 1});
-    fixed_width_column_wrapper<size_type> expected_count ({3, 4, 5, 5, 5, 5, 5, 4, 3}, {1, 1, 1, 1, 1, 1, 1, 1, 1});
+    cudf::test::strings_column_wrapper expected_min ({"This", "This", "being", "being", "being", "being", "column", "column", "column"}, {1, 1, 1, 1, 1, 1, 1, 1, 1});
+    cudf::test::strings_column_wrapper expected_max ({"rolling", "test", "test", "test", "test", "string", "string", "string", "string"}, {1, 1, 1, 1, 1, 1, 1, 1, 1});
+    fixed_width_column_wrapper<size_type> expected_count ({3, 4, 4, 4, 4, 4, 4, 3, 2}, {1, 1, 1, 1, 1, 1, 1, 1, 1});
 
     auto got_min  = cudf::experimental::rolling_window(input, window[0], window[0], 1, cudf::experimental::make_min_aggregation());
     auto got_max  = cudf::experimental::rolling_window(input, window[0], window[0], 1, cudf::experimental::make_max_aggregation());
@@ -57,11 +57,11 @@ TEST_F (RollingStringTest, NullStringMinMaxCount) {
     cudf::test::strings_column_wrapper input ({"This", "is", "rolling", "test", "being", "operated", "on", "string", "column"}, 
                                               {     1,    0,         0,     1,        0,          1,    1,        1,       0});
     std::vector<size_type> window{2};
-    cudf::test::strings_column_wrapper expected_min ({"This", "This", "This", "operated", "on", "on", "on", "on", "on"},
+    cudf::test::strings_column_wrapper expected_min ({"This", "This", "test", "operated", "on", "on", "on", "on", "string"},
                                                      {     1,      1,    1,            1,    1,    1,    1,    1,    1});
-    cudf::test::strings_column_wrapper expected_max ({"This", "test", "test", "test", "test", "test", "string", "string", "string"},
+    cudf::test::strings_column_wrapper expected_max ({"This", "test", "test", "test", "test", "string", "string", "string", "string"},
                                                      {     1,      1,      1,      1,     1,       1,        1,        1,       1});
-    fixed_width_column_wrapper<size_type> expected_count ({1, 2, 2, 2, 3, 4, 3, 3, 2}, {1, 1, 1, 1, 1, 1, 1, 1, 1});
+    fixed_width_column_wrapper<size_type> expected_count ({1, 2, 1, 2, 3, 3, 3, 2, 1}, {1, 1, 1, 1, 1, 1, 1, 1, 1});
 
     auto got_min  = cudf::experimental::rolling_window(input, window[0], window[0], 1, cudf::experimental::make_min_aggregation());
     auto got_max  = cudf::experimental::rolling_window(input, window[0], window[0], 1, cudf::experimental::make_max_aggregation());
@@ -77,10 +77,10 @@ TEST_F (RollingStringTest, MinPeriods) {
                                               {     1,    0,         0,     1,        0,          1,    1,        1,       0});
     std::vector<size_type> window{2};
     cudf::test::strings_column_wrapper expected_min ({"This", "This", "This", "operated", "on", "on", "on", "on", "on"},
-                                                     {     0,      0,    0,            0,    1,    1,    1,    1,    0});
-    cudf::test::strings_column_wrapper expected_max ({"This", "test", "test", "test", "test", "test", "string", "string", "string"},
-                                                     {     0,      0,      0,      0,     1,       1,        1,        1,       0});
-    fixed_width_column_wrapper<size_type> expected_count ({0, 2, 2, 2, 3, 4, 3, 3, 2}, {0, 0, 0, 0, 1, 1, 1, 1, 0});
+                                                     {     0,      0,    0,            0,    1,    1,    1,    0,    0});
+    cudf::test::strings_column_wrapper expected_max ({"This", "test", "test", "test", "test", "string", "string", "string", "string"},
+                                                     {     0,      0,      0,      0,     1,       1,        1,        0,       0});
+    fixed_width_column_wrapper<size_type> expected_count ({0, 2, 2, 2, 3, 3, 3, 3, 2}, {0, 0, 0, 0, 1, 1, 1, 0, 0});
 
     auto got_min  = cudf::experimental::rolling_window(input, window[0], window[0], 3, cudf::experimental::make_min_aggregation());
     auto got_max  = cudf::experimental::rolling_window(input, window[0], window[0], 3, cudf::experimental::make_max_aggregation());
@@ -89,6 +89,16 @@ TEST_F (RollingStringTest, MinPeriods) {
     cudf::test::expect_columns_equal(expected_min, got_min->view());
     cudf::test::expect_columns_equal(expected_max, got_max->view());
     cudf::test::expect_columns_equal(expected_count, got_count->view());
+}
+
+TEST_F (RollingStringTest, ZeroWindowSize) {
+     cudf::test::strings_column_wrapper input ({"This", "is", "rolling", "test", "being", "operated", "on", "string", "column"},
+                                               {     1,    0,         0,     1,        0,          1,    1,        1,       0});
+     fixed_width_column_wrapper<size_type> expected_count ({0, 0, 0, 0, 0, 0, 0, 0, 0}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
+
+     auto got_count  = cudf::experimental::rolling_window(input, 0, 0, 0, cudf::experimental::make_count_aggregation());
+
+     cudf::test::expect_columns_equal(expected_count, got_count->view());
 }
 
 template <typename T>
@@ -184,7 +194,7 @@ protected:
       // compute bounds
       auto preceding_window = preceding_window_col[i%preceding_window_col.size()];
       auto following_window = following_window_col[i%following_window_col.size()];
-      size_type start = std::max((size_type)0, i - preceding_window);
+      size_type start = std::max((size_type)0, i - preceding_window + 1);
       size_type end   = std::min(num_rows, i + following_window + 1);
       size_type start_index = std::min(start, end);
       size_type end_index = std::max(start, end);
@@ -234,7 +244,7 @@ protected:
       // compute bounds
       auto preceding_window = preceding_window_col[i%preceding_window_col.size()];
       auto following_window = following_window_col[i%following_window_col.size()];
-      size_type start = std::max((size_type)0, i - preceding_window);
+      size_type start = std::max((size_type)0, i - preceding_window + 1);
       size_type end   = std::min(num_rows, i + following_window + 1);
       size_type start_index = std::min(start, end);
       size_type end_index = std::max(start, end);
@@ -770,13 +780,13 @@ TEST_F(RollingTestUdf, StaticWindow)
 
   auto start = cudf::test::make_counting_transform_iterator(0,
     [size] __device__(size_type row) { 
-      return std::accumulate(thrust::make_counting_iterator(std::max(0, row - 2)),
+      return std::accumulate(thrust::make_counting_iterator(std::max(0, row - 2 + 1)),
                              thrust::make_counting_iterator(std::min(size, row + 2 + 1)),
                              0); 
     });
 
   auto valid = cudf::test::make_counting_transform_iterator(0, 
-    [size] __device__ (size_type row) { return (row != 0 && row != size - 1); });
+    [size] __device__ (size_type row) { return (row != 0 && row != size - 2 && row != size - 1); });
 
   fixed_width_column_wrapper<int64_t> expected{start, start+size, valid};
   
@@ -809,7 +819,7 @@ TEST_F(RollingTestUdf, DynamicWindow)
 
   auto prec = cudf::test::make_counting_transform_iterator(0,
     [size] __device__(size_type row) { 
-      return row % 2 + 1;
+      return row % 2 + 2;
     });
 
   auto follow = cudf::test::make_counting_transform_iterator(0,
@@ -823,7 +833,7 @@ TEST_F(RollingTestUdf, DynamicWindow)
 
   auto start = cudf::test::make_counting_transform_iterator(0,
     [size] __device__(size_type row) { 
-      return std::accumulate(thrust::make_counting_iterator(std::max(0, row - (row % 2 + 1))),
+      return std::accumulate(thrust::make_counting_iterator(std::max(0, row - (row % 2 + 2) + 1)),
                              thrust::make_counting_iterator(std::min(size, row + (row % 2) + 1)),
                              0); 
     });
