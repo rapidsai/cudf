@@ -88,6 +88,7 @@ cpdef join(lhs, rhs, left_on, right_on, how, method, left_index=False, right_ind
         left_join_cols = list(lhs._data.keys())
         right_join_cols = list(rhs._data.keys())
 
+    if left_index == right_index:
         for name in left_on:
             left_on_ind.push_back(left_join_cols.index(name))
             if (name in right_on and
@@ -98,9 +99,9 @@ cpdef join(lhs, rhs, left_on, right_on, how, method, left_index=False, right_ind
                         left_join_cols.index(name),
                         right_join_cols.index(name)
                 )))
-
         for name in right_on:
             right_on_ind.push_back(right_join_cols.index(name))
+
     print(left_on_ind)
     print(right_on_ind)
     print(columns_in_common)
