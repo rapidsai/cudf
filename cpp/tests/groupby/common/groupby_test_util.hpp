@@ -57,11 +57,11 @@ inline void test_single_agg(column_view const& keys,
         expect_tables_equal(table_view({expect_keys}), result.first->view());
         expect_columns_equal(expect_vals, *result.second[0].results[0], true);
     } else {
-        auto sort_order = experimental::sorted_order(result.first->view(), {},
-            {null_order::AFTER});
-        auto sorted_keys = experimental::gather(result.first->view(),
+        auto const sort_order = experimental::sorted_order(result.first->view(),
+            {}, {null_order::AFTER});
+        auto const sorted_keys = experimental::gather(result.first->view(),
             *sort_order);
-        auto sorted_vals = experimental::gather(
+        auto const sorted_vals = experimental::gather(
             table_view({result.second[0].results[0]->view()}), *sort_order);
 
         expect_tables_equal(table_view({expect_keys}), *sorted_keys);

@@ -293,7 +293,7 @@ __device__ inline void aggregate_row(mutable_table_device_view target,
                                      size_type target_index,
                                      table_device_view source,
                                      size_type source_index,
-                                     aggregation::Kind* aggs) {
+                                     aggregation::Kind const* aggs) {
   for (auto i = 0; i < target.num_columns(); ++i) {
     dispatch_type_and_aggregation(
         source.column(i).type(), aggs[i],
@@ -325,10 +325,10 @@ struct identity_initializer {
   template <typename T, aggregation::Kind k>
   static constexpr bool is_supported() {
     return cudf::is_fixed_width<T>() and
-       (k == aggregation::SUM or k == aggregation::MIN or 
-        k == aggregation::MAX or k == aggregation::COUNT or
+           (k == aggregation::SUM or k == aggregation::MIN or 
+            k == aggregation::MAX or k == aggregation::COUNT or
             k == aggregation::ARGMAX or k == aggregation::ARGMIN);
-    } 
+  }
 
   template <typename T, aggregation::Kind k>
   std::enable_if_t<not std::is_same<corresponding_operator_t<k>, void>::value, T>
@@ -375,6 +375,9 @@ struct identity_initializer {
  * The `i`th column will be initialized with the identity value of the `i`th
  * aggregation operation in `aggs`.
  *
+ * @throw cudf::logic_error if column type and corresponging agg are incompatible
+ * @throw cudf::logic_error if column type is not fixed-width
+ * 
  * @param table The table of columns to initialize.
  * @param aggs A vector of aggregation operations corresponding to the table 
  * columns. The aggregations determine the identity value for each column.

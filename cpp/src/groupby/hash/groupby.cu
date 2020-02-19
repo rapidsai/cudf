@@ -102,26 +102,23 @@ flatten_single_pass_aggs(std::vector<aggregation_request> const& requests) {
       col_ids.push_back(i);
     };
 
-    std::for_each(agg_v.begin(), agg_v.end(),
-      [&columns, &agg_kinds, &request, &col_ids, insert_agg] 
-      (std::unique_ptr<aggregation> const& agg) {
-
-        if (is_hash_aggregation(agg->kind)) {
-          if (is_fixed_width(request.values.type())) {
+    for (auto &&agg : agg_v) {
+      if (is_hash_aggregation(agg->kind)) {
+        if (is_fixed_width(request.values.type())) {
+          insert_agg(agg->kind);
+        } else if (request.values.type().id() == type_id::STRING) {
+          // For string type, only ARGMIN, ARGMAX, MIN, and MAX are supported
+          if (agg->kind == aggregation::ARGMIN or 
+              agg->kind == aggregation::ARGMAX) {
             insert_agg(agg->kind);
-          } else if (request.values.type().id() == type_id::STRING) {
-            // For string type, only ARGMIN, ARGMAX, MIN, and MAX are supported
-            if (agg->kind == aggregation::ARGMIN or 
-                agg->kind == aggregation::ARGMAX) {
-              insert_agg(agg->kind);
-            } else if (agg->kind == aggregation::MIN) {
-              insert_agg(aggregation::ARGMIN);
-            } else if (agg->kind == aggregation::MAX) {
-              insert_agg(aggregation::ARGMAX);
-            }
+          } else if (agg->kind == aggregation::MIN) {
+            insert_agg(aggregation::ARGMIN);
+          } else if (agg->kind == aggregation::MAX) {
+            insert_agg(aggregation::ARGMAX);
           }
         }
-      });
+      }
+    }
   }
   return std::make_tuple(table_view(columns), 
                          std::move(agg_kinds), std::move(col_ids));
@@ -154,9 +151,8 @@ void sparse_to_dense_results(
           table_view({s}),
           gather_map.begin(),
           gather_map.end(),
-          false, false, false, mr, stream);
-      auto dense_result = std::move(dense_result_table->release()[0]);
-      return dense_result;
+          false, mr, stream);
+      return std::move(dense_result_table->release()[0]);
     };
 
     // Enables conversion of ARGMIN/ARGMAX into MIN/MAX
@@ -170,25 +166,22 @@ void sparse_to_dense_results(
       return std::move(transformed_result->release()[0]);
     };
 
-    std::for_each(agg_v.begin(), agg_v.end(),
-      [&sparse_results, &dense_results, to_dense_agg_result, transformed_result,
-       &col, i]
-      (auto const& agg) {
-        if (col.type().id() == type_id::STRING and
-            (agg->kind == aggregation::MAX or agg->kind == aggregation::MIN)) {
-          if (agg->kind == aggregation::MAX) {
-            dense_results.add_result(i, agg,
-              transformed_result(aggregation::ARGMAX));
-          }
-          else if (agg->kind == aggregation::MIN) {
-            dense_results.add_result(i, agg,
-              transformed_result(aggregation::ARGMIN));
-          }
+    for (auto &&agg : agg_v) {    
+      if (col.type().id() == type_id::STRING and
+          (agg->kind == aggregation::MAX or agg->kind == aggregation::MIN)) {
+        if (agg->kind == aggregation::MAX) {
+          dense_results.add_result(i, agg,
+            transformed_result(aggregation::ARGMAX));
         }
-        else if (sparse_results.has_result(i, agg)) {
-          dense_results.add_result(i, agg, to_dense_agg_result(agg));
+        else if (agg->kind == aggregation::MIN) {
+          dense_results.add_result(i, agg,
+            transformed_result(aggregation::ARGMIN));
         }
-      });
+      }
+      else if (sparse_results.has_result(i, agg)) {
+        dense_results.add_result(i, agg, to_dense_agg_result(agg));
+      }
+    }
   }
 }
 
@@ -240,15 +233,17 @@ void compute_single_pass_aggs(table_view const& keys,
 
   // make table that will hold sparse results
   std::vector<std::unique_ptr<column>> sparse_columns;
-  for (size_t i = 0; i < aggs.size(); i++) {
-    auto const& col = flattened_values.column(i);
-    bool nullable = (aggs[i] == aggregation::COUNT) ? false : col.has_nulls();
-    auto mask_state = (nullable) ? ALL_NULL : UNALLOCATED;
-    
-    sparse_columns.emplace_back(make_fixed_width_column(
-      experimental::detail::target_type(col.type(), aggs[i]),
-      col.size(), mask_state, stream));
-  }
+  std::transform(flattened_values.begin(), flattened_values.end(), 
+                 aggs.begin(), std::back_inserter(sparse_columns),
+    [stream] (auto const& col, auto const& agg) {
+      bool nullable = (agg == aggregation::COUNT) ? false : col.has_nulls();
+      auto mask_state = (nullable) ? ALL_NULL : UNALLOCATED;
+      
+      return make_fixed_width_column(
+        experimental::detail::target_type(col.type(), agg),
+        col.size(), mask_state, stream);
+    });
+
   table sparse_table(std::move(sparse_columns));
   mutable_table_view table_view = sparse_table.mutable_view();
   experimental::detail::initialize_with_identity(table_view, aggs, stream);
@@ -284,7 +279,7 @@ void compute_single_pass_aggs(table_view const& keys,
 }
 
 template <bool keys_have_nulls>
-auto groupby_null_templated(
+std::unique_ptr<table> groupby_null_templated(
     table_view const& keys, std::vector<aggregation_request> const& requests,
     experimental::detail::result_cache& cache,
     bool ignore_null_keys, cudaStream_t stream,
@@ -318,8 +313,7 @@ auto groupby_null_templated(
 
   // Extract unique keys and return
   auto unique_keys = experimental::detail::gather(
-    keys, gather_map.begin(), gather_map.end(),
-    false, false, false, mr, stream);
+    keys, gather_map.begin(), gather_map.end(), false, mr, stream);
   return unique_keys;
 }
 

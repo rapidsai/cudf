@@ -77,8 +77,9 @@ namespace hash {
 template <bool skip_rows_with_nulls, typename Map>
 __global__ void compute_single_pass_aggs(
     Map map, size_type num_keys, table_device_view input_values,
-    mutable_table_device_view output_values, aggregation::Kind* aggs,
-    bitmask_type const* const __restrict__ row_bitmask)
+    mutable_table_device_view output_values, 
+    aggregation::Kind const* __restrict__ aggs,
+    bitmask_type const*  __restrict__ row_bitmask)
 {  
   size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
