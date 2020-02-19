@@ -2215,7 +2215,7 @@ class Series(Frame):
         """
         assert stop > 0
 
-        initial_hash = np.asarray(hash(self.name)) if use_name else None
+        initial_hash = [hash(self.name) & 0xFFFFFFFF] if use_name else None
         hashed_values = self._hash(initial_hash)
 
         if hashed_values.has_nulls:
