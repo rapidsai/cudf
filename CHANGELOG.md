@@ -16,6 +16,7 @@
 - PR #4107 Add groupby nunique aggregation
 - PR #4153 Support Dask serialization protocol on cuDF objects
 - PR #4164 Add Buffer "constructor-kwargs" header
+- PR #4190 Add libcudf++ transpose Cython implementation
 
 ## Improvements
 
@@ -76,7 +77,9 @@
 - PR #4149 Use "type-serialized" for pickled types like Dask
 - PR #4163 Assert Dask CUDA serializers have `Buffer` frames
 - PR #4165 List serializable classes once
+- PR #4168 IO readers: do not create null mask for non-nullable columns
 - PR #4177 Use `uint8` type for host array copy of `Buffer`
+- PR #4183 Update Google Test Execution
 - PR #4182 Rename cuDF serialize functions to be more generic
 
 ## Bug Fixes
@@ -124,6 +127,7 @@
 - PR #4175 Fix `__sizeof__` calculation in `StringColumn`
 - PR #4155 Update groupby group_offsets size and fix unnecessary device dispatch.
 - PR #4198 Fix constructing `RangeIndex` from `range`
+- PR #4192 Parquet writer: fix OOB read when computing string hash
 
 
 # cuDF 0.12.0 (04 Feb 2020)
