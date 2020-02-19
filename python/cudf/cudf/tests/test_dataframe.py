@@ -2999,9 +2999,9 @@ def test_dataframe_sizeof(indexed):
 
     gdf = gd.DataFrame({"A": [8] * rows, "B": [32] * rows}, index=index)
 
-    for c in gdf._data.values():
+    for c in gdf._data.columns:
         assert gdf._index.__sizeof__() == gdf._index.__sizeof__()
-    cols_sizeof = sum(c.__sizeof__() for c in gdf._data.values())
+    cols_sizeof = sum(c.__sizeof__() for c in gdf._data.columns)
     assert gdf.__sizeof__() == (gdf._index.__sizeof__() + cols_sizeof)
 
 
@@ -4345,10 +4345,7 @@ def test_memory_usage_multi():
 def test_setitem_diff_size_list(list_input, key):
     gdf = gd.datasets.randomdata(5)
     with pytest.raises(
-        ValueError,
-        match=(
-            "Cannot insert Column of different length into OrderedColumnDict"
-        ),
+        ValueError, match=("All values must be of equal length"),
     ):
         gdf[key] = list_input
 
@@ -4407,6 +4404,15 @@ def test_init_multiindex_from_dict():
     gdf = DataFrame({("a", "b"): [1]})
     assert_eq(pdf, gdf)
     assert_eq(pdf.columns, gdf.columns)
+
+
+def test_change_column_dtype_in_empty():
+    pdf = pd.DataFrame({"a": [], "b": []})
+    gdf = gd.from_pandas(pdf)
+    assert_eq(pdf, gdf)
+    pdf["b"] = pdf["b"].astype("int64")
+    gdf["b"] = gdf["b"].astype("int64")
+    assert_eq(pdf, gdf)
 
 
 def test_dataframe_from_table_empty_index():

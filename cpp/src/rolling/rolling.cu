@@ -206,7 +206,7 @@ void gpu_rolling(column_device_view input,
     size_type following_window = following_window_begin[i];
 
     // compute bounds
-    size_type start = max(0, i - preceding_window);
+    size_type start = max(0, i - preceding_window + 1);
     size_type end = min(input.size(), i + following_window + 1);
     size_type start_index = min(start, end);
     size_type end_index = max(start, end);
@@ -469,7 +469,7 @@ std::unique_ptr<column> rolling_window_udf(column_view const &input,
 
   cudf::nvtx::range_push("CUDF_ROLLING_WINDOW", cudf::nvtx::color::ORANGE);
 
-  min_periods = std::max(min_periods, 1);
+  min_periods = std::max(min_periods, 0);
 
   auto udf_agg = static_cast<udf_aggregation*>(agg.get());
 
@@ -555,7 +555,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
   static_assert(warp_size == cudf::detail::size_in_bits<cudf::bitmask_type>(),
                 "bitmask_type size does not match CUDA warp size");
 
-  min_periods = std::max(min_periods, 1);
+  min_periods = std::max(min_periods, 0);
 
   return cudf::experimental::type_dispatcher(input.type(),
                                              dispatch_rolling{},
