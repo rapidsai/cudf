@@ -782,7 +782,7 @@ Read ``hexadecimal values`` from a csv file as integer column with cudf
 Create a test hex csv file
 
 >>> import cudf
->>> filename = 'test.csv'
+>>> fname = 'test.csv'
 >>> cdf = cudf.DataFrame()
 >>> cdf['hex_col'] = ['9512c20b']*10
 >>> cdf.to_csv(fname,index=False)
