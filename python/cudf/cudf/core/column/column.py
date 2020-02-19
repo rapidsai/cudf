@@ -778,6 +778,14 @@ class ColumnBase(Column):
 
         return output
 
+    def searchsorted(
+        self, value, side="left", ascending=True, na_position="last"
+    ):
+        values = as_column(value).as_frame()
+        return self.as_frame().searchsorted(
+            values, side, ascending=ascending, na_position=na_position
+        )
+
     def serialize(self):
         header = {}
         frames = []
