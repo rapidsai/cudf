@@ -163,27 +163,9 @@ namespace { // anonym.
       d_case_table_(d_case_table)
     {  
     }
-
-
-    {
-      if( d_strings.is_null(idx) )
-        return 0;
-      auto d_str = d_strings.element<string_view>(idx);
-      size_type bytes = 0;
-      for( auto itr = d_str.begin(); itr != d_str.end(); ++itr )
-        {
-          auto the_chr = *itr;
-          uint32_t code_point = detail::utf8_to_codepoint(the_chr);
-          detail::character_flags_table_type flag = code_point <= 0x00FFFF ? d_flags[code_point] : 0;
-          if( (itr == d_str.begin()) ? IS_LOWER(flag) : IS_UPPER(flag) )
-            the_chr = detail::codepoint_to_utf8(d_case_table[code_point]);
-          bytes += detail::bytes_in_char_utf8(the_chr);
-        }
-      return bytes;
-    }
     
      __device__
-     int32_t operator()(size_type idx) {
+     int32_t operator()(size_type idx) const {
       if( d_column_.is_null(idx) )
         return 0; // null string
       
