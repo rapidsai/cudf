@@ -36,7 +36,7 @@ def search_sorted(
         null_order.AFTER if na_position=="last" else null_order.BEFORE
     )
     c_column_order = vector[order](table._num_columns, c_order)
-    c_null_order = vector[null_order](table._num_columns, c_null_order)
+    c_null_precedence = vector[null_order](table._num_columns, c_null_order)
 
     if side == 'left':
         with nogil:
