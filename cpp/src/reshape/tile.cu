@@ -57,7 +57,7 @@ tile(const table_view &in, size_type count, rmm::mr::device_memory_resource *mr)
     auto tiled_it = thrust::make_transform_iterator(counting_it,
                                                     tile_functor{in_num_rows});
 
-    return detail::gather(in, tiled_it, tiled_it + out_num_rows, mr);
+    return detail::gather(in, tiled_it, tiled_it + out_num_rows, false, mr);
 }
 
 } // namespace experimental

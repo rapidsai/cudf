@@ -19,6 +19,13 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
     cdef enum:
         UNKNOWN_NULL_COUNT = -1
 
+    ctypedef enum interpolation:
+        LINEAR "cudf::experimental::interpolation::LINEAR"
+        LOWER "cudf::experimental::interpolation::LOWER"
+        HIGHER "cudf::experimental::interpolation::HIGHER"
+        MIDPOINT "cudf::experimental::interpolation::MIDPOINT"
+        NEAREST "cudf::experimental::interpolation::NEAREST"
+
     cdef enum type_id:
         EMPTY = 0
         INT8 = 1
@@ -148,8 +155,13 @@ cdef extern from "cudf/table/table.hpp" namespace "cudf::experimental" nogil:
         mutable_table_view mutable_view()
         vector[unique_ptr[column]] release()
 
+cdef extern from "cudf/aggregation.hpp" namespace "cudf::experimental" nogil:
+    cdef cppclass aggregation:
+        pass
+
 cdef extern from "<utility>" namespace "std" nogil:
     cdef unique_ptr[column] move(unique_ptr[column])
     cdef unique_ptr[table] move(unique_ptr[table])
+    cdef unique_ptr[aggregation] move(unique_ptr[aggregation])
     cdef vector[unique_ptr[column]] move(vector[unique_ptr[column]])
     cdef device_buffer move(device_buffer)
