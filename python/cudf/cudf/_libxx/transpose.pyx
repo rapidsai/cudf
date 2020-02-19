@@ -6,7 +6,6 @@
 # cython: language_level = 3
 
 import cudf
-from cudf.core.column.column import build_categorical_column
 from cudf.utils.dtypes import is_categorical_dtype
 
 from cudf._libxx.lib cimport *
@@ -56,7 +55,7 @@ def transpose(Table source):
 
     if cats is not None:
         result = Table(index=result._index, data=[
-            (name, build_categorical_column(
+            (name, cudf.core.column.column.build_categorical_column(
                 codes=col,
                 mask=col.mask,
                 categories=cats
