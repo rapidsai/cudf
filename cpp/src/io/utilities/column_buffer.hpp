@@ -64,14 +64,16 @@ struct column_buffer {
   using str_pair = thrust::pair<const char*, size_type>;
 
   column_buffer(
-      data_type type, size_type size, cudaStream_t stream = 0,
+      data_type type, size_type size, bool is_nullable = true, cudaStream_t stream = 0,
       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) {
     if (type.id() == type_id::STRING) {
       _strings.resize(size);
     } else {
       _data = create_data(type, size, stream, mr);
     }
-    _null_mask = create_null_mask(size, mask_state::ALL_NULL, stream, mr);
+    if (is_nullable) {
+      _null_mask = create_null_mask(size, mask_state::ALL_NULL, stream, mr);
+    }
     _null_count = 0;
   }
 
