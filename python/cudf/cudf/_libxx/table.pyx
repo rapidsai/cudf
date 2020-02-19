@@ -13,8 +13,9 @@ from cython.operator cimport dereference
 from libc.stdint cimport uintptr_t
 
 from cudf._libxx.lib cimport *
+
+from cudf.core.column_accessor import ColumnAccessor
 from cudf._libxx.column cimport Column
-from cudf.utils.utils import OrderedColumnDict
 
 
 cdef class Table:
@@ -31,7 +32,7 @@ cdef class Table:
         """
         if data is None:
             data = {}
-        self._data = OrderedColumnDict(data)
+        self._data = ColumnAccessor(data)
         self._index = index
 
     @property
@@ -44,23 +45,22 @@ cdef class Table:
             if len(self._index._data) == 0:
                 return 0
             return self._index._num_rows
-        return len(next(iter(self._data.values())))
+        return len(self._data.columns[0])
 
     @property
     def _column_names(self):
-        return tuple(self._data.keys())
+        return self._data.names
 
     @property
     def _index_names(self):
-        return None if self._index is None else tuple(
-            self._index._data.keys())
+        return None if self._index is None else self._index._data.names
 
     @property
     def _columns(self):
         """
         Return a list of Column objects backing this dataframe
         """
-        return tuple(self._data.values())
+        return self._data.columns
 
     @staticmethod
     cdef Table from_unique_ptr(
@@ -91,14 +91,14 @@ cdef class Table:
                     move(dereference(it))
                 ))
                 it += 1
-            index = Table(OrderedColumnDict(zip(index_names, index_columns)))
+            index = Table(dict(zip(index_names, index_columns)))
 
         # Construct the data OrderedColumnDict
         data_columns = []
         for _ in column_names:
             data_columns.append(Column.from_unique_ptr(move(dereference(it))))
             it += 1
-        data = OrderedColumnDict(zip(column_names, data_columns))
+        data = dict(zip(column_names, data_columns))
 
         return Table(data=data, index=index)
 
@@ -136,7 +136,7 @@ cdef class Table:
                     )
                 )
                 column_idx += 1
-            index = Table(OrderedColumnDict(zip(index_names, index_columns)))
+            index = Table(dict(zip(index_names, index_columns)))
 
         # Construct the data OrderedColumnDict
         data_columns = []
@@ -148,7 +148,7 @@ cdef class Table:
                 Column.from_column_view(tv.column(column_idx), column_owner)
             )
             column_idx += 1
-        data = OrderedColumnDict(zip(column_names, data_columns))
+        data = dict(zip(column_names, data_columns))
 
         return Table(data=data, index=index)
 
@@ -159,12 +159,12 @@ cdef class Table:
         """
         if self._index is None:
             return _make_table_view(
-                self._data.values()
+                self._data.columns
             )
         return _make_table_view(
             itertools.chain(
-                self._index._data.values(),
-                self._data.values(),
+                self._index._data.columns,
+                self._data.columns,
             )
         )
 
@@ -175,14 +175,15 @@ cdef class Table:
         """
         if self._index is None:
             return _make_mutable_table_view(
-                self._data.values()
+                self._data.columns
             )
         return _make_mutable_table_view(
             itertools.chain(
-                self._index._data.values(),
-                self._data.values(),
+                self._index._data.columns,
+                self._data.columns,
             )
         )
+        return _make_mutable_table_view(self._data.columns)
 
     cdef table_view data_view(self) except *:
         """
@@ -190,7 +191,7 @@ cdef class Table:
         of this Table.
         """
         return _make_table_view(
-            self._data.values()
+            self._data.columns
         )
 
     cdef mutable_table_view mutable_data_view(self) except *:
@@ -199,7 +200,7 @@ cdef class Table:
         of this Table.
         """
         return _make_mutable_table_view(
-            self._data.values()
+            self._data.columns
         )
 
     cdef table_view index_view(self) except *:
@@ -223,7 +224,7 @@ cdef class Table:
             raise ValueError("Cannot get mutable_index_view of a Table "
                              "that has no index")
         return _make_mutable_table_view(
-            self._index._data.values()
+            self._index._data.columns
         )
 
 

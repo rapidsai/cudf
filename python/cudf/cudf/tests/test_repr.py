@@ -186,9 +186,9 @@ def test_MI():
     levels = [["a", "b", "c", "d"], ["w", "x", "y", "z"], ["m", "n"]]
     codes = cudf.DataFrame(
         {
-            "a": np.random.randint(0, 4, 10),
-            "b": np.random.randint(0, 4, 10),
-            "c": np.random.randint(0, 2, 10),
+            "a": [0, 0, 0, 0, 1, 1, 2, 2, 3, 3],
+            "b": [0, 1, 2, 3, 0, 1, 2, 3, 0, 1],
+            "c": [0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
         }
     )
     pd.options.display.max_rows = 999
