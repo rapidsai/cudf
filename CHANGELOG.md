@@ -119,6 +119,7 @@
 - PR #4158 Fix merge issue with empty table return if one of the two tables are empty
 - PR #4175 Fix `__sizeof__` calculation in `StringColumn`
 - PR #4155 Update groupby group_offsets size and fix unnecessary device dispatch.
+- PR #4192 Parquet writer: fix OOB read when computing string hash
 
 
 # cuDF 0.12.0 (04 Feb 2020)
