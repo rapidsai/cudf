@@ -232,7 +232,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
    * Free the memory associated with a scalar.
    */
   @Override
-  public void close() {
+  public synchronized void close() {
     refCount--;
     offHeap.delRef();
     if (refCount == 0) {
