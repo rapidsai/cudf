@@ -68,7 +68,7 @@ inline __device__ uint32_t nvstr_hash16(const uint8_t *p, uint32_t len)
         }
         v = *p32;
         if (ofs) {
-            v = __funnelshift_r(v, (ofs + len > 4) ? p32[1] : 0, ofs);
+            v = __funnelshift_r(v, (align_p + len > 4) ? p32[1] : 0, ofs);
         }
         v &= ((2 << (len * 8 - 1)) - 1);
         hash = __funnelshift_l(hash, hash, 5) + v;
