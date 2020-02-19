@@ -161,7 +161,8 @@ std::unique_ptr<column> group_nunique(
 /**
  * @brief Internal API to calculate nth values in each group of  @p values
  *
- * @param values Grouped and sorted (within group) values to get unique count of
+ * @param values Grouped values to get nth value of
+ * @param group_sizes Number of elements per group
  * @param group_labels ID of group that the corresponding value belongs to
  * @param group_offsets Offsets of groups' starting points within @p values
  * @param num_groups Number of groups ( unique values in @p group_labels )
@@ -173,6 +174,7 @@ std::unique_ptr<column> group_nunique(
  */
 std::unique_ptr<column> group_nth_element(
     column_view const& values,
+    column_view const& group_sizes,
     rmm::device_vector<size_type> const& group_labels,
     rmm::device_vector<size_type> const& group_offsets,
     size_type num_groups,

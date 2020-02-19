@@ -116,15 +116,15 @@ include_nulls _include_nulls;    ///< include or exclude nulls
  * @brief Derived class for specifying a nth element aggregation
  */
 struct nth_element_aggregation : aggregation {
-  nth_element_aggregation(aggregation::Kind k, size_type n, include_nulls _include_nulls)
+  nth_element_aggregation(aggregation::Kind k, size_type n,
+                          include_nulls _include_nulls)
       : aggregation{k}, n{n}, _include_nulls{_include_nulls} {}
-size_type n;                     ///< nth index to return
-include_nulls _include_nulls;    ///< include or exclude nulls
+  size_type n;                  ///< nth index to return
+  include_nulls _include_nulls; ///< include or exclude nulls
 
-  bool operator==(nth_element_aggregation const& other) const {
-    return aggregation::operator==(other)
-       and n == other.n
-       and _include_nulls == other._include_nulls;
+  bool operator==(nth_element_aggregation const &other) const {
+    return aggregation::operator==(other) and n == other.n and
+           _include_nulls == other._include_nulls;
   }
 };
 

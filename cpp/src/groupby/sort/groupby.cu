@@ -306,11 +306,29 @@ void store_result_functor::operator()<aggregation::NTH_ELEMENT>(
   if (cache.has_result(col_idx, agg))
     return;
   
+  //FIXME TODO(kn): add include_nulls arg after PR #4159
+  auto count_agg = make_count_aggregation();
+  operator()<aggregation::COUNT>(count_agg);
+  column_view group_sizes = cache.get_result(col_idx, count_agg);
+  
   auto nth_element_agg =
     static_cast<experimental::detail::nth_element_aggregation const*>(agg.get());
 
+  //FIXME TODO(kn): remove next 3 lines after PR #4159
+  auto temp_group_sizes = make_numeric_column(
+      cudf::data_type{cudf::experimental::type_to_id<size_type>()},  group_sizes.size(),
+      cudf::UNALLOCATED, stream, mr); 
+  if (nth_element_agg->_include_nulls == include_nulls::YES || !get_grouped_values().has_nulls()) {
+  thrust::adjacent_difference(rmm::exec_policy(stream)->on(stream),
+                              helper.group_offsets().begin() + 1,
+                              helper.group_offsets().end(),
+                              temp_group_sizes->mutable_view().begin<size_type>());
+  group_sizes = temp_group_sizes->view();
+  }
+
   cache.add_result(col_idx, agg, 
-                  detail::group_nth_element(get_grouped_values(), 
+                  detail::group_nth_element(get_grouped_values(),
+                            group_sizes,
                             helper.group_labels(),
                             helper.group_offsets(),
                             helper.num_groups(), 
