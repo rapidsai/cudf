@@ -146,6 +146,13 @@ def pyarrow_buffer_to_cudf_buffer(arrow_buf, mask_size=0):
     # Try creating a PyArrow CudaBuffer from the PyArrow Buffer object, it
     # fails with an ArrowTypeError if it's a host based Buffer so we catch and
     # process as expected
+    if not isinstance(arrow_buf, pa.Buffer):
+        raise TypeError(
+            "Expected type: {}, got type: {}".format(
+                pa.Buffer.__name__, type(arrow_buf).__name__
+            )
+        )
+
     try:
         arrow_cuda_buf = arrowCudaBuffer.from_buffer(arrow_buf)
         buf = Buffer(
