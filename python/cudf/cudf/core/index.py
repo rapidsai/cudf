@@ -96,17 +96,17 @@ class Index(Frame):
         return idx_typ(index, name=name)
 
     @property
+    def names(self):
+        return (self.name,)
+
+    @property
     def name(self):
-        return next(iter(self._data.keys()))
+        return next(iter(self._data.names))
 
     @name.setter
     def name(self, value):
         col = self._data.pop(self.name)
         self._data[value] = col
-
-    @property
-    def names(self):
-        return (self.name,)
 
     def dropna(self):
         """
@@ -473,7 +473,7 @@ class Index(Frame):
             raise ValueError("Cannot construct Index from any empty Table")
         if table._num_columns == 1:
             return as_index(
-                next(iter(table._data.values())),
+                next(iter(table._data.columns)),
                 name=next(iter(table._data.keys())),
             )
         else:
@@ -530,9 +530,9 @@ class RangeIndex(Index):
 
     @property
     def _data(self):
-        from cudf.utils.utils import OrderedColumnDict
+        from cudf.core.column_accessor import ColumnAccessor
 
-        return OrderedColumnDict({self.name: self._values})
+        return ColumnAccessor({self.name: self._values})
 
     def __contains__(self, item):
         if not isinstance(
@@ -772,7 +772,7 @@ class GenericIndex(Index):
 
     @property
     def _values(self):
-        return next(iter(self._data.values()))
+        return next(iter(self._data.columns))
 
     def copy(self, deep=True):
         result = as_index(self._values.copy(deep=deep))
@@ -1075,9 +1075,7 @@ def as_index(arbitrary, **kwargs):
     elif isinstance(arbitrary, cudf.Series):
         return as_index(arbitrary._column, **kwargs)
     elif isinstance(arbitrary, pd.RangeIndex):
-        return RangeIndex(
-            start=arbitrary._start, stop=arbitrary._stop, **kwargs
-        )
+        return RangeIndex(start=arbitrary.start, stop=arbitrary.stop, **kwargs)
     elif isinstance(arbitrary, pd.MultiIndex):
         return cudf.MultiIndex.from_pandas(arbitrary)
     else:
