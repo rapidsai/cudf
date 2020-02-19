@@ -13,8 +13,6 @@ import rmm
 
 import cudf
 import cudf._lib as libcudf
-import cudf._libxx as libcudfxx
-from cudf._libxx.table import Table
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, DatetimeColumn, column
 from cudf.core.frame import Frame
