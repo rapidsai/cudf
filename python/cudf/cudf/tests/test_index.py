@@ -307,3 +307,19 @@ def test_from_pandas_gen():
 def test_index_names():
     idx = cudf.core.index.as_index([1, 2, 3], name="idx")
     assert idx.names == ("idx",)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        range(0),
+        range(1),
+        range(0, 1),
+        range(0, 5),
+        range(1, 10),
+        range(1, 10, 1),
+        range(-5, 10),
+    ],
+)
+def test_range_index_from_range(data):
+    assert_eq(pd.Index(data), cudf.core.index.as_index(data))

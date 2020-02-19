@@ -5,6 +5,7 @@ from . import (
     hash,
     null_mask,
     rolling,
+    search,
     stream_compaction,
     table,
     transpose,
