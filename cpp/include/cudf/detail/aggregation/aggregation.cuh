@@ -263,8 +263,8 @@ struct elementwise_aggregator {
  * The initial value and validity of `R` depends on the aggregation:
  * SUM: 0 and NULL
  * COUNT: 0 and VALID
- * MIN: Max element of type and NULL
- * MAX: Min element of type and NULL
+ * MIN: Max value of type and NULL
+ * MAX: Min value of type and NULL
  * ARGMAX: `ARGMAX_SENTINEL` and NULL
  * ARGMIN: `ARGMIN_SENTINEL` and NULL
  * 
@@ -306,19 +306,19 @@ __device__ inline void aggregate_row(mutable_table_device_view target,
  * @brief Dispatched functor to initialize a column with the identity of an
  * aggregation operation.
  * 
- * Given a type @p T and aggregation kind @p k, determines and sets the 
- * appropritate initial value of aggregation required by aggregate_row() as the 
- * value of each element of the passed column.
+ * Given a type `T` and `aggregation kind k`, determines and sets the value of 
+ * each element of the passed column to the appropriate initial value for the 
+ * aggregation.
  * 
  * The initial values set as per aggregation are:
  * SUM: 0
  * COUNT: 0
- * MIN: Max element of type @p T
- * MAX: Min element of type @p T
+ * MIN: Max value of type `T`
+ * MAX: Min value of type `T`
  * ARGMAX: `ARGMAX_SENTINEL`
  * ARGMIN: `ARGMIN_SENTINEL`
  * 
- * Only works on column of fixed-width types.
+ * Only works on columns of fixed-width types.
  */
 struct identity_initializer {
  private:
@@ -378,11 +378,11 @@ struct identity_initializer {
  * of an aggregation operation.
  *
  * The `i`th column will be initialized with the identity value of the `i`th
- * aggregation operation in @p aggs.
+ * aggregation operation in `aggs`.
  *
  * @param table The table of columns to initialize.
- * @param aggs The aggregation operations whose identity values will be used to
- * initialize the columns.
+ * @param aggs A vector of aggregation operations corresponding to the table 
+ * columns. The aggregations determine the identity value for each column.
  */
 static void initialize_with_identity(mutable_table_view & table,
                               std::vector<aggregation::Kind> const& aggs,
