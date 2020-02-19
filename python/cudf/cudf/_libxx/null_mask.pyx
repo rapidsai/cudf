@@ -21,30 +21,14 @@ from cudf._libxx.includes.null_mask cimport (
 from cudf.core.buffer import Buffer
 
 
-cdef class mask_state_value:
-    """
-    Wraps a ``mask_state`` enum class value in a Cython object
-    """
-    cdef mask_state c_value
-
-    def __cinit__(self):
-        pass
-
-    @staticmethod
-    cdef mask_state_value from_c_val(mask_state c_val):
-        cdef mask_state_value wrapper = mask_state_value()
-        wrapper.c_value = c_val
-        return wrapper
-
-
 class MaskState(Enum):
     """
     Enum for null mask creation state
     """
-    UNALLOCATED = mask_state_value.from_c_val(mask_state.UNALLOCATED)
-    UNINITIALIZED = mask_state_value.from_c_val(mask_state.UNINITIALIZED)
-    ALL_VALID = mask_state_value.from_c_val(mask_state.ALL_VALID)
-    ALL_NULL = mask_state_value.from_c_val(mask_state.ALL_NULL)
+    UNALLOCATED = <int>(mask_state.UNALLOCATED)
+    UNINITIALIZED = <int>(mask_state.UNINITIALIZED)
+    ALL_VALID = <int>(mask_state.ALL_VALID)
+    ALL_NULL = <int>(mask_state.ALL_NULL)
 
 
 def copy_bitmask(Column col):
@@ -101,8 +85,7 @@ def create_null_mask(size_type size, state=MaskState.UNINITIALIZED):
 
     cdef device_buffer db
     cdef unique_ptr[device_buffer] up_db
-    cdef mask_state_value cy_mask_state = state.value
-    cdef mask_state c_mask_state = cy_mask_state.c_value
+    cdef mask_state c_mask_state = <mask_state>(<int>(state.value))
 
     with nogil:
         db = cpp_create_null_mask(size, c_mask_state)
