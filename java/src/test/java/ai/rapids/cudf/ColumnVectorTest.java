@@ -1054,7 +1054,7 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testWindowStatic() {
-    WindowOptions options = WindowOptions.builder().window(1, 1)
+    WindowOptions options = WindowOptions.builder().window(2, 1)
         .minPeriods(2).build();
     try (ColumnVector v1 = ColumnVector.fromInts(5, 4, 7, 6, 8)) {
       try (ColumnVector expected = ColumnVector.fromLongs(9, 16, 17, 21, 14);
@@ -1087,7 +1087,7 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testWindowDynamicNegative() {
-    try (ColumnVector precedingCol = ColumnVector.fromInts(2, 2, 2, 3, 3);
+    try (ColumnVector precedingCol = ColumnVector.fromInts(3, 3, 3, 4, 4);
          ColumnVector followingCol = ColumnVector.fromInts(-1, -1, -1, -1, 0)) {
       WindowOptions window = WindowOptions.builder()
           .minPeriods(2).window(precedingCol, followingCol).build();
@@ -1101,23 +1101,18 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testWindowLag() {
-    //TODO negative only works for ColumnVectors.  We need to file something to make it work for
-    // static too
-    try (ColumnVector precedingCol = ColumnVector.fromInts(1, 1, 1, 1, 1);
-         ColumnVector followingCol = ColumnVector.fromInts(-1, -1, -1, -1, -1)) {
-      WindowOptions window = WindowOptions.builder().minPeriods(1)
-          .window(precedingCol, followingCol).build();
-      try (ColumnVector v1 = ColumnVector.fromInts(5, 4, 7, 6, 8);
-           ColumnVector expected = ColumnVector.fromBoxedInts(null, 5, 4, 7, 6);
-           ColumnVector result = v1.rollingWindow(AggregateOp.MAX, window)) {
-        assertColumnsAreEqual(expected, result);
-      }
+    WindowOptions window = WindowOptions.builder().minPeriods(1)
+        .window(2, -1).build();
+    try (ColumnVector v1 = ColumnVector.fromInts(5, 4, 7, 6, 8);
+         ColumnVector expected = ColumnVector.fromBoxedInts(null, 5, 4, 7, 6);
+         ColumnVector result = v1.rollingWindow(AggregateOp.MAX, window)) {
+      assertColumnsAreEqual(expected, result);
     }
   }
 
   @Test
   void testWindowDynamic() {
-    try (ColumnVector precedingCol = ColumnVector.fromInts(0, 1, 2, 0, 1);
+    try (ColumnVector precedingCol = ColumnVector.fromInts(1, 2, 3, 1, 2);
          ColumnVector followingCol = ColumnVector.fromInts(2, 2, 2, 2, 2)) {
       WindowOptions window = WindowOptions.builder().minPeriods(2)
           .window(precedingCol, followingCol).build();
