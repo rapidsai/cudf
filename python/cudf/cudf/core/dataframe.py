@@ -23,6 +23,7 @@ import rmm
 
 import cudf
 import cudf._lib as libcudf
+import cudf._libxx as libcudfxx
 from cudf.core import column
 from cudf.core._sort import get_sorted_inds
 from cudf.core.column import (
@@ -808,7 +809,8 @@ class DataFrame(Frame):
         )
         ncols = (
             1
-            if nrows == 1 and dtype in ["int8", "int16", "str", "category"]
+            if nrows == 1
+            and dtype in ["int8", "int16", "int64", "str", "category"]
             else ncols
         )
         ncols = 0 if ncols == 2 else ncols
@@ -2169,18 +2171,18 @@ class DataFrame(Frame):
         """
         # Never transpose a MultiIndex - remove the existing columns and
         # replace with a RangeIndex. Afterward, reassign.
-        inp = self.copy(deep=False)
-        temp_columns = inp.columns.copy(deep=False)
-        temp_index = inp.index.copy(deep=False)
-        if len(self._data) == 0:
-            return DataFrame(index=temp_columns, columns=temp_index)
-        inp.columns = pd.RangeIndex(start=0, stop=len(self.columns))
-        inp.index = RangeIndex(start=0, stop=len(self))
-        result = libcudf.transpose.transpose(inp)
-        result._index = as_index(temp_columns)
-        if not isinstance(temp_index, cudf.MultiIndex):
-            temp_index = temp_index.to_pandas()
-        result.columns = temp_index
+        columns = self.index.copy(deep=False)
+        index = self.columns.copy(deep=False)
+        if self._num_columns == 0 or self._num_rows == 0:
+            return DataFrame(index=index, columns=columns)
+        # Cython renames the columns to the range [0...ncols]
+        result = self.__class__._from_table(
+            libcudfxx.transpose.transpose(self)
+        )
+        # Set the old column names as the new index
+        result._index = as_index(index)
+        # Set the old index as the new column names
+        result.columns = columns
         return result
 
     @property
