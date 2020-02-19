@@ -808,7 +808,8 @@ class DataFrame(Frame):
         )
         ncols = (
             1
-            if nrows == 1 and dtype in ["int8", "int16", "str", "category"]
+            if nrows == 1
+            and dtype in ["int8", "int16", "int64", "str", "category"]
             else ncols
         )
         ncols = 0 if ncols == 2 else ncols
