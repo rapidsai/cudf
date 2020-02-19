@@ -5,7 +5,6 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
-from __future__ import print_function
 import pandas as pd
 
 from cudf._libxx.column cimport *
@@ -15,7 +14,7 @@ from cudf._libxx.lib cimport *
 from cudf._libxx.includes.sort cimport *
 
 
-def order_by(Table source_table, ascending, na_position):
+def order_by(Table source_table, object ascending, bool na_position):
     """
     Sorting the table ascending/descending
 
@@ -32,19 +31,17 @@ def order_by(Table source_table, ascending, na_position):
 
     cdef table_view source_table_view = source_table.data_view()
     cdef vector[order] column_order
-    cdef vector[null_order] null_precedence
+    column_order.reserve(len(ascending))
+    cdef null_order pred = (
+        null_order.BEFORE if na_position == 1 else null_order.AFTER)
+    cdef vector[null_order] null_precedence = vector[null_order](
+        source_table._num_columns, pred)
 
     for i in ascending:
         if i is True:
             column_order.push_back(order.ASCENDING)
         else:
             column_order.push_back(order.DESCENDING)
-
-    cdef null_order pred = (
-        null_order.BEFORE if na_position == 1 else null_order.AFTER)
-
-    for i in range(source_table._num_columns):
-        null_precedence.push_back(pred)
 
     cdef unique_ptr[column] c_result
     with nogil:
@@ -55,7 +52,7 @@ def order_by(Table source_table, ascending, na_position):
     return Column.from_unique_ptr(move(c_result))
 
 
-def digitize(Table source_values_table, Table bins, right=False):
+def digitize(Table source_values_table, Table bins, bool right=False):
     """
     Return the indices of the bins to which each value in source_table belongs.
 
@@ -69,11 +66,11 @@ def digitize(Table source_values_table, Table bins, right=False):
 
     cdef table_view bins_view = bins.view()
     cdef table_view source_values_table_view = source_values_table.view()
-    cdef vector[order] column_order
-    cdef vector[null_order] null_precedence
-    for i in range(bins_view.num_columns()):
-        column_order.push_back(order.ASCENDING)
-        null_precedence.push_back(null_order.BEFORE)
+    cdef vector[order] column_order = vector[order](bins_view.num_columns(),
+                                                    order.ASCENDING)
+    cdef vector[null_order] null_precedence = vector[null_order](
+            bins_view.num_columns(),
+            null_order.BEFORE)
 
     cdef unique_ptr[column] c_result
     if right is True:

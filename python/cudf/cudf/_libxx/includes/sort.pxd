@@ -19,10 +19,10 @@ cdef extern from "cudf/search.hpp" namespace "cudf::experimental" nogil:
         table_view source_table,
         table_view bins,
         vector[order] column_order,
-        vector[null_order] null_precedence)
+        vector[null_order] null_precedence) except +
 
     cdef unique_ptr[column] upper_bound(
         table_view source_table,
         table_view bins,
         vector[order] column_order,
-        vector[null_order] null_precedence)
+        vector[null_order] null_precedence) except +
