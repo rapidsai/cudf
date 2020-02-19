@@ -16,22 +16,32 @@ from cudf._libxx.includes.sort cimport *
 
 
 def order_by(Table source_table, ascending, na_position):
+    """
+    Sorting the table ascending/descending
+
+    Parameters
+    ----------
+    source_table : table which will be sorted
+    ascending : list of boolean values which correspond to each column
+                in source_table signifying order of each column
+                True - Ascending and False - Descending
+    na_position : whether null should be considered larget or smallest value
+                  0 - largest and 1 - smallest
+
+    """
+
     cdef table_view source_table_view  = source_table.data_view()
-    # Adding the first value which will meant for index column
-    # which would be added when view is created
-    #cdef vector[order] column_order = vector[order](source_table_view.num_columns() - source_table._num_columns , order.ASCENDING)
     cdef vector[order] column_order
     cdef vector[null_order] null_precedence
+   
     for i in ascending:
         if i is True:
             column_order.push_back(order.ASCENDING)
         else:
             column_order.push_back(order.DESCENDING)
-    #print ("RGSL : Size of order vector", column_order.size()) 
-    #print ("RGSL : number of columns", source_table._num_columns) 
-    #print ("RGSL : number of columns in table view", source_table_view.num_columns()) 
-    cdef null_order pred = null_order.BEFORE if na_position == 1 else null_order.AFTER
-    print ("RGSL : The null order ", na_position)
+    
+    cdef null_order pred = (
+            null_order.BEFORE if na_position == 1 else null_order.AFTER)
     
     for i in range(source_table._num_columns):
         null_precedence.push_back(pred)
@@ -44,7 +54,19 @@ def order_by(Table source_table, ascending, na_position):
 
     return Column.from_unique_ptr(move(c_result))
 
+
 def digitize(Table source_values_table, Table bins, right=False):
+    """
+    Return the indices of the bins to which each value in source_table belongs.
+
+    Parameters
+    ----------
+    source_table : Input table to be binned.
+    bins : Table containing columns of bins 
+    right : Indicating whether the intervals include the
+            right or the left bin edge.
+    """
+
     cdef table_view bins_view = bins.view()
     cdef table_view source_values_table_view = source_values_table.view()
     cdef vector[order] column_order
@@ -72,8 +94,3 @@ def digitize(Table source_values_table, Table bins, right=False):
             )
 
     return Column.from_unique_ptr(move(c_result))
-
-    
-
- 
-    
