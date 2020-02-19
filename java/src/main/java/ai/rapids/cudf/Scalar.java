@@ -215,7 +215,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
    * Increment the reference count for this scalar.  You need to call close on this
    * to decrement the reference count again.
    */
-  public Scalar incRefCount() {
+  public synchronized Scalar incRefCount() {
     if (offHeap.scalarHandle == 0) {
       offHeap.logRefCountDebug("INC AFTER CLOSE " + this);
       throw new IllegalStateException("Scalar is already closed");

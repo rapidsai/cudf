@@ -471,7 +471,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param len how many bytes to slice
    * @return a host buffer that will need to be closed independently from this buffer.
    */
-  final HostMemoryBuffer slice(long offset, long len) {
+  final synchronized HostMemoryBuffer slice(long offset, long len) {
     addressOutOfBoundsCheck(address + offset, len, "slice");
     refCount++;
     cleaner.addRef();

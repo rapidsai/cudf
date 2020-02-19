@@ -83,10 +83,9 @@ public final class HostColumnVector implements AutoCloseable {
     this.rows = rows;
     this.nullCount = nullCount;
     this.type = type;
-    synchronized(this) {
-      refCount = 0;
-      incRefCountInternal(true);
-    }
+
+    refCount = 0;
+    incRefCountInternal(true);
   }
 
   /**
@@ -467,10 +466,9 @@ public final class HostColumnVector implements AutoCloseable {
    * Holds the off heap state of the column vector so we can clean it up, even if it is leaked.
    */
   protected static final class OffHeapState extends MemoryCleaner.Cleaner {
-    public final HostMemoryBuffer data;
-    public final HostMemoryBuffer valid;
-    public final HostMemoryBuffer offsets;
-
+    public HostMemoryBuffer data;
+    public HostMemoryBuffer valid;
+    public HostMemoryBuffer offsets;
 
     OffHeapState(HostMemoryBuffer data, HostMemoryBuffer valid, HostMemoryBuffer offsets) {
       this.data = data;
@@ -483,14 +481,17 @@ public final class HostColumnVector implements AutoCloseable {
       boolean neededCleanup = false;
       if (data != null) {
         data.close();
+        data = null;
         neededCleanup = true;
       }
       if (valid != null) {
         valid.close();
+        valid = null;
         neededCleanup = true;
       }
       if (offsets != null) {
         offsets.close();
+        offsets = null;
         neededCleanup = true;
       }
       if (neededCleanup && logErrorIfNotClean) {

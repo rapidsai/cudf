@@ -1912,9 +1912,9 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     public static final long UNKNOWN_NULL_COUNT = -1;
     private long columnHandle;
     private long viewHandle = 0;
-    private final BaseDeviceMemoryBuffer data;
-    private final BaseDeviceMemoryBuffer valid;
-    private final BaseDeviceMemoryBuffer offsets;
+    private BaseDeviceMemoryBuffer data;
+    private BaseDeviceMemoryBuffer valid;
+    private BaseDeviceMemoryBuffer offsets;
 
     /**
      * Make a column form an existing cudf::column *.
@@ -2062,14 +2062,17 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       }
       if (data != null) {
         data.close();
+        data = null;
         neededCleanup = true;
       }
       if (valid != null) {
         valid.close();
+        valid = null;
         neededCleanup = true;
       }
       if (offsets != null) {
         offsets.close();
+        offsets = null;
         neededCleanup = true;
       }
       if (neededCleanup) {
