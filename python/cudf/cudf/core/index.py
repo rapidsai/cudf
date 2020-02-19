@@ -842,27 +842,6 @@ class GenericIndex(Index):
             end += 1
         return begin, end
 
-    def searchsorted(self, value, side="left"):
-        """Find indices where elements should be inserted to maintain order
-
-        Parameters
-        ----------
-        value : Column
-            Column of values to search for
-        side : str {‘left’, ‘right’} optional
-            If ‘left’, the index of the first suitable location found is given.
-            If ‘right’, return the last such index
-
-        Returns
-        -------
-        An index series of insertion points with the same shape as value
-        """
-        from cudf.core.series import Series
-
-        idx_series = Series(self, name=self.name)
-        result = idx_series.searchsorted(value, side)
-        return as_index(result)
-
     @property
     def is_unique(self):
         return self._values.is_unique
