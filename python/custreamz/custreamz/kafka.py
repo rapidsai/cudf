@@ -3,6 +3,10 @@
 import custreamz._libxx.kafka as libkafka
 
 
+def __init__(self, name):
+    self.name = name
+
+
 def read_gdf(
     engine="cudf",
     data_type="json",

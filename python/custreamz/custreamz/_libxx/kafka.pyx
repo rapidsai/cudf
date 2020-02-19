@@ -21,21 +21,31 @@ cpdef get_watermark_offsets(datasource_id=None,
                             kafka_configs=None,
                             topic=None,
                             partition=-1):
-    print("before")
-    cdef kafka_external *kds = new kafka_external()
+
+    kafka_conf = {
+        "ex_ds.kafka.topic": "libcudf-test",
+        "metadata.broker.list": "localhost:9092",
+        "enable.partition.eof": "true",
+        "group.id": "jeremy_test",
+        "auto.offset.reset": "earliest",
+        "enable.auto.commit": "false"
+    }
+    topic = "libcudf-test"
+
+    cdef map[string, string] kafka_confs
+    for key, value in kafka_conf.items():
+        kafka_confs[str.encode(key)] = str.encode(value)
+
+    cdef kafka_external *kds = new kafka_external(kafka_confs)
     cdef string ds_id = kds.libcudf_datasource_identifier()
-    print("Kafka Datasource ID: " + str(ds_id))
+    # print("Kafka Datasource ID: " + str(ds_id))
     cdef map[string, int64_t] offsets = \
-        kds.get_watermark_offset(topic, partition)
-    print("After getting watermarks")
+        kds.get_watermark_offset(str.encode(topic), partition)
     cdef map[string, int64_t].iterator it = offsets.begin()
 
-    print("Before loop")
     while(it != offsets.end()):
-        print("inside loop")
-        # let's pretend here I just want to print the key and the value
-        print(dereference(it).first)  # print the key
-        print(dereference(it).second)  # print the associated value
+        print("Topic: " + str(dereference(it).first) +
+              " Offset: " + str(dereference(it).second))
         postincrement(it)  # Increment the iterator to the net element
 
 cpdef read_json_example():

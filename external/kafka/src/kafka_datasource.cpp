@@ -40,8 +40,6 @@ namespace external {
   }
 
   bool kafka_datasource::configure_datasource(std::map<std::string, std::string> configs) {
-    // Populate the RdKafka::Conf using the user supplied configs
-    printf("Entering configure_datasource\n");
     std::map<std::string, std::string>::iterator it = configs.begin();
     while (it != configs.end())
     {
@@ -69,19 +67,15 @@ namespace external {
     // make sure that is present.
     conf_res_ = kafka_conf_.get()->get("group.id", conf_val);
 
-    printf("After getting group id\n");
-
     // Create the Rebalance callback so Partition Offsets can be assigned.
     KafkaRebalanceCB rebalance_cb(kafka_start_offset_);
     kafka_conf_->set("rebalance_cb", &rebalance_cb, errstr_);
 
-    printf("Before creating consumer\n");
     consumer_ = std::unique_ptr<RdKafka::KafkaConsumer>(RdKafka::KafkaConsumer::create(kafka_conf_.get(), errstr_));
 
-    printf("Before subscribing to topics\n");
     err_ = consumer_.get()->subscribe(topics_);
 
-    printf("Before consuming messages\n");
+    //printf("Before consuming messages\n");
     consume_messages(kafka_conf_);
 
     return true;
@@ -91,15 +85,16 @@ namespace external {
     std::vector<RdKafka::TopicPartition *> topic_parts;
     std::map<std::string, int64_t> results;
 
-    err_ = consumer_.get()->position(topic_parts);
+    err_ = consumer_.get()->assignment(topic_parts);
+    err_ = consumer_.get()->committed(topic_parts, 6000);
 
-    for(int i=0; i < topic_parts.size(); i++){
+    for (int i=0; i < topic_parts.size(); i++){
       std::string t = topic_parts[i]->topic();
-      printf("Topic from TopicPartition: '%s'\n", t.c_str());
-      //results.insert( std::pair<std::string, int64_t>('a', 20) );
+      int partition = topic_parts[i]->partition();
+      int64_t offset = topic_parts[i]->offset();
+      printf("TopicPartition Topic: '%s' Partition: '%d' Offset: '%lu'\n", t.c_str(), partition, offset);
+      results.insert( std::pair<std::string, int64_t>(t, offset) );
     }
-
-    printf("!!!!HEREE!!!!!!\n");
 
     return results;
   }
