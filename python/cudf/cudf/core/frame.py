@@ -248,11 +248,75 @@ class Frame(libcudfxx.table.Table):
     def sqrt(self):
         return self._unaryop("sqrt")
 
+    @staticmethod
+    def _validate_merge_cfg(lhs, rhs, left_on, right_on, on, how, left_index=False, right_index=False, lsuffix=None, rsuffix=None):
+        """
+        Error for various combinations of merge input parameters
+        """
+
+        len_left_on = len(left_on) if left_on is not None else 0
+        len_right_on = len(right_on) if right_on is not None else 0
+
+        # must actually support the requested merge type
+        if how not in ["left", "inner", "outer"]:
+            raise NotImplementedError(
+                "{!r} merge not supported yet".format(how)
+            )
+
+        # Passing 'on' with 'left_on' or 'right_on' is potentially ambiguous
+        if on:
+            if left_on or right_on:
+                raise ValueError(
+                    'Can only pass argument "on" OR "left_on" '
+                    'and "right_on", not a combination of both.'
+                )
+
+        # There must be the same total number of columns to join on in both operands
+        if not (len_left_on + left_index) == (len_right_on + right_index):
+            raise ValueError('Merge operands must have same number of join key columns')
+        
+        # If nothing specified, must have common cols to use implicitly
+        same_named_columns = set(lhs.columns) & set(rhs.columns)
+        if not (left_index or right_index):
+            if not (left_on or right_on):
+                if len(same_named_columns) == 0:
+                    raise ValueError("No common columns to perform merge on")
+
+        for name in same_named_columns:
+            if not (
+                name in left_on
+                and name in right_on
+                and (left_on.index(name) == right_on.index(name))
+                ):
+                if not (lsuffix or rsuffix):
+                    raise ValueError(
+                        "there are overlapping columns but "
+                        "lsuffix and rsuffix are not defined"
+                    )
+
+        if on:
+            on_keys = [on] if not isinstance(on, list) else on
+            for key in on_keys:
+                if not (key in lhs.columns and key in rhs.columns):
+                    raise KeyError('Key {} not in both operands'.format(on))
+        else:
+            for key in left_on:
+                if key not in lhs.columns:
+                    raise KeyError('Key "{}" not in left operand'.format(key))
+            for key in right_on:
+                if key not in rhs.columns:
+                    raise KeyError('Key "{}" not in right operand'.format(key))
+            
+
+
     def _merge(self, right, on, left_on, right_on, left_index, right_index, lsuffix, rsuffix, how, method, sort=False):
 
-        lhs = self.copy(deep=False)
-        rhs = right.copy(deep=False)
+        if left_on == None:
+            left_on = []
+        if right_on == None:
+            right_on = []
 
+        # Making sure that the "on" arguments are list of column names
         if on:
             on = [on] if isinstance(on, str) else list(on)
         if left_on:
@@ -262,53 +326,29 @@ class Frame(libcudfxx.table.Table):
                 [right_on] if isinstance(right_on, str) else list(right_on)
             )
 
-        # There are many cases in which a join cannot proceed.
-        # Basic Logical Errors
-        # 1. How not supported
-        if how not in ['left', 'inner', 'outer']:
-            msg = "new join api only supports left, inner or outer"
-            raise ValueError(msg)
+        self._validate_merge_cfg(self, right, left_on, right_on, on, how, left_index=left_index, right_index=right_index, lsuffix=lsuffix, rsuffix=rsuffix)
 
-        # 5. on and either left_on or right_on are mutually exclusive
         if on:
-            if left_on or right_on:
-                raise ValueError(
-                    'Can only pass argument "on" OR "left_on" '
-                    'and "right_on", not a combination of both.'
-                )
             left_on = right_on = on
 
-        # Logical errors involving left_on and right_on
-        # 2. Length mismatch in left_on and right_on 
-        # 3. Ambiguous index inclusion
-        if left_on is not None and right_on is not None:
-            if len(left_on) != len(right_on):
-                raise ValueError('length of left_on and right_on must match')
-            if (left_index != right_index):
-                raise ValueError('cannot pass left_on, right_on, and an index')
 
-        # 8. No join columns specified, and none in common
+        lhs = self.copy(deep=False)
+        rhs = right.copy(deep=False)
+
+
         same_named_columns = set(lhs.columns) & set(rhs.columns)
-        if not (left_on or right_on):
-            if len(same_named_columns) == 0 and not (left_index and right_index):
-                raise ValueError("No common columns to perform merge on")
-            else:
-                # Use the same named columns as on for both left and right
-                left_on = right_on = list(same_named_columns)
- 
-        # Fix column names by appending `suffixes`
+        if not (left_on or right_on) and not (left_index and right_index):
+            left_on = right_on = list(same_named_columns)
+
+        no_suffix_cols = []
         for name in same_named_columns:
-            if not (
-                name in left_on
-                and name in right_on
-                and (left_on.index(name) == right_on.index(name))
-            ):
-                if not (lsuffix or rsuffix):
-                    raise ValueError(
-                        "there are overlapping columns but "
-                        "lsuffix and rsuffix are not defined"
-                    )
-                else:
+            if left_on is not None and right_on is not None:
+                if name in left_on and name in right_on:
+                    if left_on.index(name) == right_on.index(name):
+                        no_suffix_cols.append(name)
+
+        for name in same_named_columns:
+            if name not in no_suffix_cols:
                     lhs.rename({name: "%s%s" % (name, lsuffix)}, inplace=True)
                     rhs.rename({name: "%s%s" % (name, rsuffix)}, inplace=True)
                     if name in left_on:
@@ -319,36 +359,6 @@ class Frame(libcudfxx.table.Table):
                             rsuffix,
                         )
 
-        # 3. Element of left_on or right_on not found in correspondng operand
-        missing_key_err = 'column "{}" not found in {}'
-
-        if left_on is not None:
-            for name in left_on:
-                if name not in lhs._data.keys():
-                    raise KeyError(missing_key_err.format(name, 'left'))
-        if right_on is not None:
-            for name in right_on:
-                if name not in rhs._data.keys():
-                    raise KeyError(missing_key_err.format(name, 'right'))
-
-        # Logical errors involving combinations of on and index
-        # 4. on is specified for one operand, need either on or index from other
-        if left_on is not None and ((right_on is None) and (right_index is None)):
-            raise ValueError('if left_on specified, need either right_on or right_index')
-        if right_on is not None and ((left_on is None) and (left_index is None)):
-            raise ValueError('if right_on specified, need either left_on or left_index')
-
-        # 6. For now, must assume all operands have only one index
-        # thus, if left_index or right_index, the other must only have one join key   
-        elif left_index and right_on:
-            if len(right_on) != 1:  # TODO: support multi-index
-                import pdb
-                pdb.set_trace()
-                raise ValueError("right_on should be a single column")
-        elif right_index and left_on:
-            if len(left_on) != 1:  # TODO: support multi-index
-                raise ValueError("left_on should be a single column")
-
         categorical_dtypes = {}
         for name, col in itertools.chain(lhs._data.items(), rhs._data.items()):
             if is_categorical_dtype(col):
@@ -356,8 +366,6 @@ class Frame(libcudfxx.table.Table):
 
         # Save the order of the original column names for preservation later
         org_names = list(itertools.chain(lhs._data.keys(), rhs._data.keys()))
-
-
 
         # If neither left_index or right_index specified, that data won't
         # be carried through the join. We'll get a new RangeIndex afterwards
@@ -371,7 +379,7 @@ class Frame(libcudfxx.table.Table):
         # potentially do an implicit typecast
         (lhs, rhs, to_categorical) = self._typecast_before_merge(
             lhs, rhs, left_on, right_on, left_index, right_index, how
-        )
+        )  
 
         gdf_result = libcudfxx.join.join(lhs, rhs, left_on, right_on, how, method, left_index=lhs_full_view, right_index=rhs_full_view)
 
@@ -447,10 +455,6 @@ class Frame(libcudfxx.table.Table):
         if result_index is not None:
             df.index = Index._from_table(result_index)
         return df
-
-
-
-        #return self.__class__._from_table(result)
 
     def _typecast_before_merge(self, lhs, rhs, left_on, right_on, left_index, right_index, how):
         def casting_rules(lhs, rhs, dtype_l, dtype_r, how):
