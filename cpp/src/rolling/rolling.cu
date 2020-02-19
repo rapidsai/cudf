@@ -143,6 +143,7 @@ process_rolling_window(column_device_view input,
 
     for (size_type j = start_index; j < end_index; j++) {
         if (!has_nulls || input.is_valid(j)) {
+            printf("RGSL : Inside valid");
             OutputType element = input.element<InputType>(j);
             val = agg_op{}(element, val);
             count++;
@@ -150,12 +151,16 @@ process_rolling_window(column_device_view input,
     }
 
     bool output_is_valid = (count >= min_periods);
+    printf ("RGSL : count is %d \n", count);
 
     // store the output value, one per thread
-    if (output_is_valid)
+    if (output_is_valid) {
+        printf("RGSL : output_is_valid\n");
         cudf::detail::store_output_functor<OutputType, op == aggregation::MEAN>{}(output.element<OutputType>(current_index),
                 val, count);
+    }
 
+    printf ("RGSL : output_is_valid value %d\n", output_is_valid);
     return output_is_valid;
 }
 
