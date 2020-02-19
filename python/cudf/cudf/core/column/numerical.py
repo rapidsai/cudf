@@ -607,4 +607,6 @@ def digitize(column, bins, right=False):
     assert column.dtype == bins.dtype
     bins_buf = Buffer(rmm.to_device(bins))
     bin_col = NumericalColumn(data=bins_buf, dtype=bins.dtype)
-    return as_column(libcudfxx.sort.digitize(column.as_frame(), bin_col.as_frame(), right))
+    return as_column(
+        libcudfxx.sort.digitize(column.as_frame(), bin_col.as_frame(), right)
+    )

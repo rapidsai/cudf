@@ -1,17 +1,13 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 
-import collections
 import logging
 
 import numpy as np
 
-import rmm
-
 import cudf
 import cudf._libxx as libcudf
-from cudf.core.column import as_column, ColumnBase, column
-from cudf.utils import cudautils
+from cudf.core.column import ColumnBase, as_column
 
 logging.basicConfig(format="%(levelname)s:%(message)s")
 
@@ -57,8 +53,8 @@ def get_sorted_inds(by, ascending=True, na_position="last"):
             na_position = 0
     else:
         logging.warning(
-            "When using a sequence of booleans for `ascending`, `na_position` "
-            "flag is not yet supported and defaults to treating nulls as "
+            "When using a sequence of booleans for `ascending`, `na_position`"
+            " flag is not yet supported and defaults to treating nulls as "
             "greater than all numbers"
         )
         na_position = 0

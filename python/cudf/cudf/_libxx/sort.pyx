@@ -30,19 +30,19 @@ def order_by(Table source_table, ascending, na_position):
 
     """
 
-    cdef table_view source_table_view  = source_table.data_view()
+    cdef table_view source_table_view = source_table.data_view()
     cdef vector[order] column_order
     cdef vector[null_order] null_precedence
-   
+
     for i in ascending:
         if i is True:
             column_order.push_back(order.ASCENDING)
         else:
             column_order.push_back(order.DESCENDING)
-    
+
     cdef null_order pred = (
-            null_order.BEFORE if na_position == 1 else null_order.AFTER)
-    
+        null_order.BEFORE if na_position == 1 else null_order.AFTER)
+
     for i in range(source_table._num_columns):
         null_precedence.push_back(pred)
 
@@ -62,7 +62,7 @@ def digitize(Table source_values_table, Table bins, right=False):
     Parameters
     ----------
     source_table : Input table to be binned.
-    bins : Table containing columns of bins 
+    bins : Table containing columns of bins
     right : Indicating whether the intervals include the
             right or the left bin edge.
     """
