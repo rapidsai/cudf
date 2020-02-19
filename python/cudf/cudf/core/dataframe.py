@@ -265,7 +265,11 @@ class DataFrame(Frame):
 
     @classmethod
     def _from_table(cls, table):
-        return cls(data=table._data, index=Index._from_table(table._index))
+        if table._index is None:
+            index = None
+        else:
+            index = Index._from_table(table._index)
+        return cls(data=table._data, index=index)
 
     @staticmethod
     def _align_input_series_indices(data, index):
@@ -313,7 +317,7 @@ class DataFrame(Frame):
     def serialize(self):
         header = {}
         frames = []
-        header["type"] = pickle.dumps(type(self))
+        header["type-serialized"] = pickle.dumps(type(self))
         header["index"], index_frames = self._index.serialize()
         header["index_frame_count"] = len(index_frames)
         frames.extend(index_frames)
@@ -332,7 +336,7 @@ class DataFrame(Frame):
         # Reconstruct the index
         index_frames = frames[: header["index_frame_count"]]
 
-        idx_typ = pickle.loads(header["index"]["type"])
+        idx_typ = pickle.loads(header["index"]["type-serialized"])
         index = idx_typ.deserialize(header["index"], index_frames)
 
         # Reconstruct the columns
