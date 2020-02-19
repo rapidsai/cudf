@@ -314,7 +314,7 @@ struct rolling_window_launcher
       auto valid_count = kernel_launcher<T, agg_op, op, WindowIterator>(input, output_view, preceding_window_begin,
               following_window_begin, min_periods, agg, agg_op::template identity<T>(), stream);
 
-      std::cout<<"RGSL : In numerical launch the value of valid elements"<<valid_count<<std::endl;
+      std::cout<<"RGSL1 : In numerical launch the value of valid elements"<<valid_count<<std::endl;
       std::cout<<"RGSL : In numerical launch the value of size elements"<<output->size()<<std::endl;
       output->set_null_count(output->size() - valid_count);
       std::cout<<"RGSL : In numerical launch null count"<<output->null_count()<<std::endl;
