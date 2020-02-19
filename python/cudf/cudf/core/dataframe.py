@@ -3158,12 +3158,12 @@ class DataFrame(Frame):
             all columns in the frame are used.
         """
         if columns is None:
-            table_to_hash = Table(data=self._data)
+            table_to_hash = self
         else:
             cols = [self[k]._column for k in columns]
-            table_to_hash = Table(data=OrderedColumnDict(zip(columns, cols)))
+            table_to_hash = Frame(data=OrderedColumnDict(zip(columns, cols)))
 
-        return Series(libcudfxx.hash.hash(table_to_hash)).values
+        return Series(table_to_hash._hash()).values
 
     def partition_by_hash(self, columns, nparts):
         """Partition the dataframe by the hashed value of data in *columns*.
