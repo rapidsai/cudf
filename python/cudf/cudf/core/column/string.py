@@ -550,10 +550,12 @@ class StringColumn(column.ColumnBase):
         return StringMethods(self, index=index, name=name)
 
     def __sizeof__(self):
-        n = (
-            self.base_children[0].__sizeof__()
-            + self.base_children[1].__sizeof__()
-        )
+        n = 0
+        if self.base_children is not None and len(self.base_children) == 2:
+            n += (
+                self.base_children[0].__sizeof__()
+                + self.base_children[1].__sizeof__()
+            )
         if self.base_mask:
             n += self.base_mask.size
         return n
@@ -719,7 +721,7 @@ class StringColumn(column.ColumnBase):
 
     def serialize(self):
         header = {"null_count": self.null_count}
-        header["type"] = pickle.dumps(type(self))
+        header["type-serialized"] = pickle.dumps(type(self))
         frames = []
         sub_headers = []
 
@@ -747,7 +749,7 @@ class StringColumn(column.ColumnBase):
 
         children = []
         for h, b in zip(header["subheaders"], buffers[:2]):
-            column_type = pickle.loads(h["type"])
+            column_type = pickle.loads(h["type-serialized"])
             children.append(column_type.deserialize(h, [b]))
 
         col = column.build_column(
