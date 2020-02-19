@@ -1,5 +1,6 @@
 import itertools
 import warnings
+from collections import OrderedDict
 
 import numpy as np
 import pandas as pd
@@ -10,10 +11,10 @@ from cudf.core.column import as_column, build_categorical_column
 from cudf.utils.dtypes import (
     is_categorical_dtype,
     is_datetime_dtype,
+    is_scalar,
     is_string_dtype,
-    is_scalar
 )
-from collections import OrderedDict
+
 
 class Frame(libcudfxx.table.Table):
     """

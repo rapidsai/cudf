@@ -2318,8 +2318,6 @@ class DataFrame(Frame):
         else:
             lsuffix, rsuffix = suffixes
 
-    
-
         if type != "":
             warnings.warn(
                 'type="' + type + '" parameter is deprecated.'
@@ -2341,7 +2339,18 @@ class DataFrame(Frame):
         org_names = list(itertools.chain(lhs._data.names, rhs._data.names))
 
         # Compute merge
-        gdf_result = super()._merge(rhs, on, left_on, right_on, left_index, right_index, lsuffix, rsuffix, how, method)
+        gdf_result = super()._merge(
+            rhs,
+            on,
+            left_on,
+            right_on,
+            left_index,
+            right_index,
+            lsuffix,
+            rsuffix,
+            how,
+            method,
+        )
 
         return gdf_result
 
