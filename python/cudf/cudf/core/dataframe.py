@@ -170,7 +170,7 @@ class DataFrame(Frame):
 
         self._columns_name = None
 
-        if isinstance(data, libcudfx.table.Table):
+        if isinstance(data, libcudfxx.table.Table):
             return DataFrame._from_table(data)
 
         if isinstance(columns, cudf.MultiIndex):
