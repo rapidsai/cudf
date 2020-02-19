@@ -303,7 +303,7 @@ struct rolling_window_launcher
          rmm::mr::device_memory_resource *mr,
          cudaStream_t stream) {
 
-      std::cout<<"RGSL : In numerical launch"<<std::endl;
+      std::cout<<"RGSL1 : In numerical launch"<<std::endl;
 
       if (input.is_empty()) return empty_like(input);
 
