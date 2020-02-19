@@ -21,8 +21,8 @@
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/table/row_operators.cuh>
-#include <cudf/detail/scatter.hpp>
 #include <cudf/detail/scatter.cuh>
+#include <cudf/detail/gather.cuh>
 
 #include <thrust/tabulate.h>
 
@@ -562,7 +562,8 @@ hash_partition_table(table_view const& input,
           grid_size, stream);
 
       // Handle bitmask using gather to take advantage of ballot_sync
-      experimental::detail::gather_bitmask(input, gather_map.begin(), output_cols, mr, stream);
+      experimental::detail::gather_bitmask(input, gather_map.begin(), output_cols,
+        experimental::detail::gather_bitmask_op::DONT_CHECK, mr, stream);
     }
 
     auto output {std::make_unique<experimental::table>(std::move(output_cols))};

@@ -128,6 +128,14 @@ list_types_tuple = (list, np.array)
 
 
 def buffers_from_pyarrow(pa_arr, dtype=None):
+    """
+    Given a pyarrow array returns a 5 length tuple of:
+        - size
+        - offset
+        - cudf.Buffer --> mask
+        - cudf.Buffer --> data
+        - cudf.Buffer --> string characters
+    """
     from cudf.core.buffer import Buffer
     from cudf.utils.cudautils import copy_array
 
@@ -142,13 +150,12 @@ def buffers_from_pyarrow(pa_arr, dtype=None):
         pamask = None
 
     offset = pa_arr.offset
-    size = pa_arr.offset + len(pa_arr)
+    size = len(pa_arr)
 
     if dtype:
         data_dtype = dtype
     elif isinstance(pa_arr, pa.StringArray):
         data_dtype = np.int32
-        size = size + 1  # extra element holds number of bytes
     else:
         if isinstance(pa_arr, pa.DictionaryArray):
             data_dtype = pa_arr.indices.type.to_pandas_dtype()
@@ -156,16 +163,14 @@ def buffers_from_pyarrow(pa_arr, dtype=None):
             data_dtype = pa_arr.type.to_pandas_dtype()
 
     if buffers[1]:
-        padata = Buffer(
-            np.asarray(buffers[1]).view(data_dtype)[offset : offset + size]
-        )
+        padata = Buffer(np.asarray(buffers[1]).view(data_dtype))
     else:
         padata = Buffer.empty(0)
 
     pastrs = None
     if isinstance(pa_arr, pa.StringArray):
         pastrs = Buffer(np.asarray(buffers[2]).view(np.int8))
-    return (pamask, padata, pastrs)
+    return (size, offset, pamask, padata, pastrs)
 
 
 def get_result_name(left, right):
@@ -326,39 +331,86 @@ class cached_property:
             return value
 
 
-class OrderedColumnDict(OrderedDict):
+class ColumnValuesMappingMixin:
     """
-    An OrderedDict with the following restrictions:
-
-    - All values must be of type ColumnBase (or its derivatives)
-    - All values must be of the same length
+    Coerce provided values for the mapping to Columns.
     """
 
     def __setitem__(self, key, value):
-        from cudf.core.column import ColumnBase
+        from cudf.core.column import as_column
 
-        if not isinstance(value, ColumnBase):
-            raise TypeError(
-                f"Cannot insert object of type "
-                f"{value.__class__.__name__} into OrderedColumnDict"
-            )
-
-        if self.first is not None and len(self.first) > 0:
-            if len(value) != len(self.first):
-                raise ValueError(
-                    f"Cannot insert Column of different length "
-                    "into OrderedColumnDict"
-                )
-
+        value = as_column(value)
         super().__setitem__(key, value)
 
-    @property
-    def first(self):
-        """
-        Returns the first value if self is non-empty;
-        returns None otherwise.
-        """
-        if len(self) == 0:
-            return None
+
+class EqualLengthValuesMappingMixin:
+    """
+    Require all values in the mapping to have the same length.
+    """
+
+    def __setitem__(self, key, value):
+        if len(self) > 0:
+            first = next(iter(self.values()))
+            if len(value) != len(first):
+                raise ValueError("All values must be of equal length")
+        super().__setitem__(key, value)
+
+
+class OrderedColumnDict(
+    ColumnValuesMappingMixin, EqualLengthValuesMappingMixin, OrderedDict
+):
+    pass
+
+
+class NestedMappingMixin:
+    """
+    Make missing values of a mapping empty instances
+    of the same type as the mapping.
+    """
+
+    def __getitem__(self, key):
+        if isinstance(key, tuple):
+            d = self
+            for k in key[:-1]:
+                d = d[k]
+            return d.__getitem__(key[-1])
         else:
-            return next(iter(self.values()))
+            return super().__getitem__(key)
+
+    def __setitem__(self, key, value):
+        if isinstance(key, tuple):
+            d = self
+            for k in key[:-1]:
+                d = d.setdefault(k, self.__class__())
+            d.__setitem__(key[-1], value)
+        else:
+            super().__setitem__(key, value)
+
+
+class NestedOrderedDict(NestedMappingMixin, OrderedDict):
+    pass
+
+
+def to_flat_dict(d):
+    """
+    Convert the given nested dictionary to a flat dictionary
+    with tuple keys.
+    """
+
+    def _inner(d, parents=[]):
+        for k, v in d.items():
+            if not isinstance(v, d.__class__):
+                if parents:
+                    k = tuple(parents + [k])
+                yield (k, v)
+            else:
+                yield from _inner(d=v, parents=parents + [k])
+
+    return {k: v for k, v in _inner(d)}
+
+
+def to_nested_dict(d):
+    """
+    Convert the given dictionary with tuple keys to a NestedOrderedDict.
+    """
+    return NestedOrderedDict(d)

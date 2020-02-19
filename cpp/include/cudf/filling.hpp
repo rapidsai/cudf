@@ -50,8 +50,8 @@ namespace experimental {
  * @param value The scalar value to fill
  * @return void
  *---------------------------------------------------------------------------**/
-void fill(mutable_column_view& destination, size_type begin, size_type end,
-          scalar const& value);
+void fill_in_place(mutable_column_view& destination, size_type begin,
+                   size_type end, scalar const& value);
 
 /**---------------------------------------------------------------------------*
  * @brief Fills a range of elements in a column out-of-place with a scalar
