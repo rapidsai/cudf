@@ -35,9 +35,8 @@ def search_sorted(
     c_null_order = (
         null_order.AFTER if na_position=="last" else null_order.BEFORE
     )
-    for i in range(table._num_columns):
-        c_column_order.push_back(c_order)
-        c_null_precedence.push_back(c_null_order)
+    c_column_order = vector[order](table._num_columns, c_order)
+    c_null_order = vector[null_order](table._num_columns, c_null_order)
 
     if side == 'left':
         with nogil:

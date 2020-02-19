@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 
 import cudf._libxx as libcudfxx
-from cudf.core.column import ColumnBase, as_column, build_categorical_column
+from cudf.core.column import as_column, build_categorical_column
 from cudf.utils.dtypes import is_categorical_dtype
 
 
@@ -227,7 +227,7 @@ class Frame(libcudfxx.table.Table):
 
         Parameters
         ----------
-        value : Frame or Column (Shape must be consistent with self)
+        value : Frame (Shape must be consistent with self)
             Values to be hypothetically inserted into Self
         side : str {‘left’, ‘right’} optional, default ‘left‘
             If ‘left’, the index of the first suitable location found is given
@@ -241,12 +241,6 @@ class Frame(libcudfxx.table.Table):
         -------
         1-D cupy array of insertion points
         """
-        # Convert column-typed `values` to Series
-        if isinstance(values, ColumnBase):
-            from cudf.core.series import Series
-
-            values = Series(values)
-
         # Call libcudf++ search_sorted primitive
         outcol = libcudfxx.search.search_sorted(
             self, values, side, ascending=ascending, na_position=na_position

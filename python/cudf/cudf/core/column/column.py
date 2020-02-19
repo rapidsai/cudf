@@ -781,11 +781,10 @@ class ColumnBase(Column):
     def searchsorted(
         self, value, side="left", ascending=True, na_position="last"
     ):
-        values = cudf.Series(as_column(value))
-        col = cudf.Series(self).searchsorted(
+        values = as_column(value).as_frame()
+        return self.as_frame().searchsorted(
             values, side, ascending=ascending, na_position=na_position
         )
-        return cudf.Series(col).values
 
     def serialize(self):
         header = {}

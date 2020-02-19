@@ -7,16 +7,16 @@ cdef extern from "cudf/search.hpp" namespace "cudf::experimental" nogil:
         table_view values,
         vector[order] column_order,
         vector[null_order] null_precedence,
-    )
+    ) except +
 
     cdef unique_ptr[column] upper_bound(
         table_view t,
         table_view values,
         vector[order] column_order,
         vector[null_order] null_precedence,
-    )
+    ) except +
 
     cdef unique_ptr[column] contains(
         column_view haystack,
         column_view needles,
-    )
+    ) except +
