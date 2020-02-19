@@ -215,8 +215,10 @@ namespace { // anonym.
         auto the_chr = *itr;
         uint32_t code_point = detail::utf8_to_codepoint(the_chr);
         detail::character_flags_table_type flag = code_point <= 0x00FFFF ? d_flags_[code_point] : 0;
+
         if( (itr == d_str.begin()) ? IS_LOWER(flag) : IS_UPPER(flag) )
-          d_buffer += detail::from_char_utf8(detail::codepoint_to_utf8(d_case_table_[code_point]),d_buffer);
+          the_chr = detail::codepoint_to_utf8(d_case_table_[code_point]);
+        d_buffer += detail::from_char_utf8(the_chr, d_buffer);
       }
       return 0;
     }
