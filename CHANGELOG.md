@@ -123,6 +123,7 @@
 - PR #4162 Properly handle no index metadata generation for to_parquet
 - PR #4175 Fix `__sizeof__` calculation in `StringColumn`
 - PR #4155 Update groupby group_offsets size and fix unnecessary device dispatch.
+- PR #4198 Fix constructing `RangeIndex` from `range`
 
 
 # cuDF 0.12.0 (04 Feb 2020)
