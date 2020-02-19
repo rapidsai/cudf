@@ -20,11 +20,11 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
     cdef enum:
         UNKNOWN_NULL_COUNT = -1
 
-    cdef enum mask_state:
-        UNALLOCATED,
-        UNINITIALIZED,
-        ALL_VALID,
-        ALL_NULL
+    ctypedef enum mask_state:
+        UNALLOCATED "cudf::mask_state::UNALLOCATED"
+        UNINITIALIZED "cudf::mask_state::UNINITIALIZED"
+        ALL_VALID "cudf::mask_state::ALL_VALID"
+        ALL_NULL "cudf::mask_state::ALL_NULL"
 
     cdef enum type_id:
         EMPTY = 0

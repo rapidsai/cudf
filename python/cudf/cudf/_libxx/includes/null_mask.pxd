@@ -8,6 +8,8 @@
 from cudf._libxx.lib cimport *
 
 
+ctypedef int mask_state_underlying_type
+
 cdef extern from "cudf/null_mask.hpp" namespace "cudf" nogil:
     cdef device_buffer copy_bitmask "cudf::copy_bitmask" (
         column_view view

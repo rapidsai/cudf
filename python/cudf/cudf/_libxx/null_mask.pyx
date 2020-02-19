@@ -25,10 +25,10 @@ class MaskState(Enum):
     """
     Enum for null mask creation state
     """
-    UNALLOCATED = <int>(mask_state.UNALLOCATED)
-    UNINITIALIZED = <int>(mask_state.UNINITIALIZED)
-    ALL_VALID = <int>(mask_state.ALL_VALID)
-    ALL_NULL = <int>(mask_state.ALL_NULL)
+    UNALLOCATED = <mask_state_underlying_type>(mask_state.UNALLOCATED)
+    UNINITIALIZED = <mask_state_underlying_type>(mask_state.UNINITIALIZED)
+    ALL_VALID = <mask_state_underlying_type>(mask_state.ALL_VALID)
+    ALL_NULL = <mask_state_underlying_type>(mask_state.ALL_NULL)
 
 
 def copy_bitmask(Column col):
@@ -85,7 +85,9 @@ def create_null_mask(size_type size, state=MaskState.UNINITIALIZED):
 
     cdef device_buffer db
     cdef unique_ptr[device_buffer] up_db
-    cdef mask_state c_mask_state = <mask_state>(<int>(state.value))
+    cdef mask_state c_mask_state = <mask_state>(
+        <mask_state_underlying_type>(state.value)
+    )
 
     with nogil:
         db = cpp_create_null_mask(size, c_mask_state)
