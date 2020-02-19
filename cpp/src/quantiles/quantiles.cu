@@ -56,8 +56,6 @@ quantiles(table_view const& input,
                           quantile_idx_iter,
                           quantile_idx_iter + q.size(),
                           false,
-                          false,
-                          false,
                           mr);
 }
 
