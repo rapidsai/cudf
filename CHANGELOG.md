@@ -66,6 +66,7 @@
 - PR #4098 Remove legacy calls from libcudf strings column code
 - PR #4111 Use `Buffer`'s to serialize `StringColumn`
 - PR #4113 Get `len` of `StringColumn`s without `nvstrings`
+- PR #4147 Remove workaround for UNKNOWN_NULL_COUNT in contiguous_split.
 - PR #4130 Renames in-place `cudf::experimental::fill` to `cudf::experimental::fill_in_place`
 - PR #4143 Renames in-place `cudf::experimental::copy_range` to `cudf::experimental::copy_range_in_place`
 - PR #4136 Add `Index.names` property
@@ -74,6 +75,7 @@
 - PR #4163 Assert Dask CUDA serializers have `Buffer` frames
 - PR #4165 List serializable classes once
 - PR #4177 Use `uint8` type for host array copy of `Buffer`
+- PR #4182 Rename cuDF serialize functions to be more generic
 
 ## Bug Fixes
 
@@ -111,11 +113,13 @@
 - PR #4138 Really fix strings concatenate logic with column offsets
 - PR #4119 Fix binary ops slowdown using jitify -remove-unused-globals
 - PR #4125 Fix type enum to account for added Dictionary type in `types.hpp`
+- PR #4132 Fix `hash_partition` null mask allocation
 - PR #4137 Update Java for mutating fill and rolling window changes
 - PR #4141 Fix NVStrings `test_convert` failure in 10.2 build
 - PR #4158 Fix merge issue with empty table return if one of the two tables are empty
 - PR #4155 Update groupby `group_offsets` size and fix unnecessary device dispatch.
-- PR #4185 Fix rolling test issue with CI 
+- PR #4175 Fix `__sizeof__` calculation in `StringColumn`
+- PR #4185 Fix rolling test issue with CI
 
 
 # cuDF 0.12.0 (04 Feb 2020)
