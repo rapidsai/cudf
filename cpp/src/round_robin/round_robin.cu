@@ -97,7 +97,7 @@ degenerate_partitions(cudf::table_view const& input,
 
     auto uniq_tbl = cudf::experimental::detail::gather(input,
                                                        rotated_iter_begin, rotated_iter_begin + nrows,//map
-                                                       false, false, false,
+                                                       false,
                                                        mr,
                                                        stream);
 
@@ -128,7 +128,7 @@ degenerate_partitions(cudf::table_view const& input,
     //
     auto uniq_tbl = cudf::experimental::detail::gather(input,
                                                        d_row_indices.begin(), d_row_indices.end(),//map
-                                                       false, false, false,
+                                                       false,
                                                        mr,
                                                        stream);
 
@@ -230,7 +230,7 @@ round_robin_partition(table_view const& input,
 
   auto uniq_tbl = cudf::experimental::detail::gather(input,
                                                      iter_begin, iter_begin + nrows,
-                                                     false, false, false,
+                                                     false,
                                                      mr,
                                                      stream);
   auto ret_pair =
