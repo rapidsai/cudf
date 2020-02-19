@@ -37,7 +37,7 @@ def get_sorted_inds(by, ascending=True, na_position="last"):
     number_of_columns = 1
     if isinstance(by, (ColumnBase)):
         by = by.as_frame()
-    elif isinstance(by, (cudf.Frame)):
+    elif isinstance(by, (cudf.core.frame.Frame)):
         number_of_columns = by._num_columns
 
     # This needs to be updated to handle list of bools for ascending
