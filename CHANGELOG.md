@@ -84,6 +84,8 @@
 - PR #4183 Update Google Test Execution
 - PR #4182 Rename cuDF serialize functions to be more generic
 - PR #4191 Porting sort.pyx to use new libcudf APIs
+- PR #4196 reduce CHANGELOG.md merge conflicts
+- PR #4197 Added notebook testing to gpuCI gpu build
 
 ## Bug Fixes
 
@@ -129,6 +131,7 @@
 - PR #4162 Properly handle no index metadata generation for to_parquet
 - PR #4175 Fix `__sizeof__` calculation in `StringColumn`
 - PR #4155 Update groupby group_offsets size and fix unnecessary device dispatch.
+- PR #4198 Fix constructing `RangeIndex` from `range`
 - PR #4192 Parquet writer: fix OOB read when computing string hash
 
 
