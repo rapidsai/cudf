@@ -300,7 +300,7 @@ std::unique_ptr<table> sort_groupby_helper::unique_keys(
 
   return cudf::experimental::detail::gather(_keys, gather_map_it,
                                             gather_map_it + num_groups(),
-                                            false, false, false, mr, stream);
+                                            false, mr, stream);
 }
 
 
