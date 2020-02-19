@@ -353,8 +353,52 @@ namespace { // anonym.
            bcapnext = false;
            bytes += detail::bytes_in_char_utf8(detail::codepoint_to_utf8(get_case_table()[code_point]));
          }
+         else
+           bytes += detail::bytes_in_char_utf8(the_chr);
        }
        return bytes;
+    }
+  };
+
+  //functor for executing string title-ization:
+  //
+  struct execute_title: execute_base
+  {
+    execute_title(column_device_view const d_column,
+                  character_flags_table_type const* d_flags,
+                  character_cases_table_type const* d_case_table,
+                  int32_t const* d_offsets,
+                  char* d_chars):
+      execute_base(d_column, d_flags, d_case_table, d_offsets, d_chars)
+    {
+    }
+    
+    __device__
+    int32_t operator()(size_type idx) override {
+      if( get_column().is_null(idx) )
+        return 0; // null string
+      
+      string_view d_str = get_column().template element<string_view>(idx);
+      char* d_buffer = get_chars() + get_offsets()[idx];
+
+      bool bcapnext = true;
+      for( auto itr = d_str.begin(); itr != d_str.end(); ++itr ) {
+        auto the_chr = *itr;
+        uint32_t code_point = detail::utf8_to_codepoint(the_chr);
+        detail::character_flags_table_type flag = code_point <= 0x00FFFF ? get_flags()[code_point] : 0;
+
+        if( !IS_ALPHA(flag) )
+          bcapnext = true;
+        else
+          {
+            if( bcapnext ? IS_LOWER(flag) : IS_UPPER(flag) )
+              the_chr = detail::codepoint_to_utf8(get_case_table()[code_point]);
+            bcapnext = false;
+          }
+        
+        d_buffer += detail::from_char_utf8(the_chr, d_buffer);
+      }
+      return 0;
     }
   };
 
