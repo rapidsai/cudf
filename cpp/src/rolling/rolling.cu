@@ -257,7 +257,7 @@ struct rolling_window_launcher
                        T identity,
                        cudaStream_t stream) {
      
-      std::cout<<"RGSL : The Kind is "<<op<<std::endl; 
+      std::cout<<"RGSL 1 : The Kind is "<<op<<std::endl; 
       cudf::nvtx::range_push("CUDF_ROLLING_WINDOW", cudf::nvtx::color::ORANGE);
 
       constexpr cudf::size_type block_size = 256;
