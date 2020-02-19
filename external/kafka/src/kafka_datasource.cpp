@@ -89,10 +89,18 @@ namespace external {
 
   std::map<std::string, int64_t> kafka_datasource::get_watermark_offset(std::string topic, int partition) {
     std::vector<RdKafka::TopicPartition *> topic_parts;
+    std::map<std::string, int64_t> results;
 
     err_ = consumer_.get()->position(topic_parts);
 
-    std::map<std::string, int64_t> results;
+    for(int i=0; i < topic_parts.size(); i++){
+      std::string t = topic_parts[i]->topic();
+      printf("Topic from TopicPartition: '%s'\n", t.c_str());
+      //results.insert( std::pair<std::string, int64_t>('a', 20) );
+    }
+
+    printf("!!!!HEREE!!!!!!\n");
+
     return results;
   }
 

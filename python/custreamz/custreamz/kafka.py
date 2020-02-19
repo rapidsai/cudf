@@ -1,31 +1,34 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-import custreamz._libxx as libcustreamz
+import custreamz._libxx.kafka as libkafka
 
 
-# This would be the function to get the actual offsets
-def get_kafka_offsets(
-    *args, **kwargs,
+def read_gdf(
+    engine="cudf",
+    data_type="json",
+    lines=True,
+    kafka_configs=None,
+    partition=None,
+    start=-1,
+    end=-1,
+    *args,
+    **kwargs,
 ):
-    """{docstring}"""
-    # would call cudf externaldatasource performance logic
-    pass
+    libkafka.read_json_example()
 
 
-# def read_json(
-#     kafka_configs=kafka_configs,
-#     partition=partition,
-#     start=low,
-#     end=high,
-#     *args,
-#     **kwargs,
-# ):
-#     """{docstring}"""
-#     pass
+def get_watermark_offsets(
+    datasource_id=None,
+    kafka_configs=None,
+    topic=None,
+    partition=-1,
+    *args,
+    **kwargs,
+):
+    libkafka.get_watermark_offsets(
+        datasource_id, kafka_configs, topic, partition
+    )
 
 
 def commit_offsets(*args, **kwargs):
-    """{docstring}"""
-
-    libcustreamz.commit_offsets()
-    pass
+    libkafka.commit_offsets()

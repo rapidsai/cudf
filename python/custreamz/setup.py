@@ -11,7 +11,6 @@ from setuptools import find_packages, setup
 from setuptools.extension import Extension
 
 install_requires = ["numba", "cython"]
-
 cython_files = ["custreamz/**/*.pyx"]
 
 CUDA_HOME = os.environ.get("CUDA_HOME", False)
@@ -33,6 +32,7 @@ if not os.path.isdir(CUDA_HOME):
 
 cuda_include_dir = os.path.join(CUDA_HOME, "include")
 
+external_lib_dir = os.path.join(os.path.join(os.sys.prefix, "lib"), "external")
 
 extensions = [
     Extension(
@@ -41,6 +41,7 @@ extensions = [
         include_dirs=[
             "../../cpp/include/cudf",
             "../../cpp/include",
+            "../../cpp/src/io/utilities",
             "../../cpp/build/include",
             "../../thirdparty/cub",
             "../../thirdparty/libcudacxx/include",
@@ -49,11 +50,15 @@ extensions = [
             np.get_include(),
             cuda_include_dir,
         ],
-        library_dirs=[get_python_lib(), os.path.join(os.sys.prefix, "lib")],
-        libraries=["cudf"],
+        library_dirs=[
+            get_python_lib(),
+            os.path.join(os.sys.prefix, "lib"),
+            external_lib_dir,
+        ],
+        libraries=["cudf", "cudf_kafka"],
         language="c++",
         extra_compile_args=["-std=c++14"],
-    )
+    ),
 ]
 
 setup(
@@ -76,7 +81,7 @@ setup(
     # Include the separately-compiled shared library
     setup_requires=["cython"],
     ext_modules=cythonize(extensions),
-    packages=find_packages(include=["cudf", "cudf.*"]),
+    packages=find_packages(include=["custreamz", "custreamz.*"]),
     package_data={
         "custreamz._libxx": ["*.pxd"],
         "custreamz._libxx.includes": ["*.pxd"],

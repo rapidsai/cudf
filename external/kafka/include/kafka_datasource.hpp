@@ -65,7 +65,7 @@ class kafka_datasource : public external_datasource {
 
   bool commit(std::string topic, int partition, int64_t offset);
 
-  std::map<std::string, int64_t>get_watermark_offset(std::string topic, int partition);
+  std::map<std::string, int64_t> get_watermark_offset(std::string topic, int partition);
 
   bool configure_datasource(std::map<std::string, std::string> configs);
 

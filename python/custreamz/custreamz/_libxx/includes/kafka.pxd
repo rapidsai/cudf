@@ -7,8 +7,22 @@
 
 from libcpp.string cimport string
 from libcpp.vector cimport vector
+from libcpp.map cimport map
+from libcpp cimport bool
+from libc.stdint cimport uint32_t, int64_t
 
 
 cdef extern from "kafka_datasource.hpp" namespace "cudf::io::external" nogil:
 
-    bool commit(string topic, int partition, int64_t offset)
+    cdef cppclass kafka_datasource:
+
+        kafka_datasource() except +
+
+        kafka_datasource(map[string, string] configs) except +
+
+        string libcudf_datasource_identifier() except +
+
+        bool commit(string topic, int partition, int offset) except +
+
+        map[string, int64_t] get_watermark_offset(string topic,
+                                                  int partition) except +
