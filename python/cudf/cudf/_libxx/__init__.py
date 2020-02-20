@@ -6,6 +6,7 @@ from . import (
     null_mask,
     rolling,
     search,
+    sort,
     stream_compaction,
     table,
     transpose,
