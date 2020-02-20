@@ -10,7 +10,6 @@ cdef extern from "cudf/join.hpp" namespace "cudf::experimental" nogil:
         const vector[int] right_on,
         const vector[pair[int, int]] columns_in_common
     ) except +
-cdef extern from "cudf/join.hpp" namespace "cudf::experimental" nogil:
     cdef unique_ptr[table] cpp_left_join "cudf::experimental::left_join" (
         const table_view left,
         const table_view right,
@@ -18,7 +17,6 @@ cdef extern from "cudf/join.hpp" namespace "cudf::experimental" nogil:
         const vector[int] right_on,
         const vector[pair[int, int]] columns_in_common
     ) except +
-cdef extern from "cudf/join.hpp" namespace "cudf::experimental" nogil:
     cdef unique_ptr[table] cpp_full_join "cudf::experimental::full_join" (
         const table_view left,
         const table_view right,
