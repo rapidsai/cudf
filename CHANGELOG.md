@@ -18,6 +18,7 @@
 - PR #4153 Support Dask serialization protocol on cuDF objects
 - PR #4164 Add Buffer "constructor-kwargs" header
 - PR #4190 Add libcudf++ transpose Cython implementation
+- PR #4063 Define and implement string capitalize and title API
 
 ## Improvements
 
