@@ -403,8 +403,8 @@ void writer::impl::write(table_view const &table, const table_metadata *metadata
 void writer::impl::write_chunked_begin(pq_chunked_state& state){
   if(PQ_chk_buf == nullptr){
     PQ_chk_buf = new char[64 * 1024 * 1024];
-    memset(PQ_chk_buf, 0, 64 * 1024 * 1024);
-  }  
+  }
+  memset(PQ_chk_buf, 0, 64 * 1024 * 1024);
   PQ_chk_buf_size = 0;
 
   // Write file header
