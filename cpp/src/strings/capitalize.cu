@@ -341,13 +341,13 @@ std::unique_ptr<column> modify_strings( strings_column_view const& strings,
 }//namespace detail
 
 std::unique_ptr<column> capitalize( strings_column_view const& strings,
-                                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+                                    rmm::mr::device_memory_resource* mr)
 {
   return detail::modify_strings<detail::probe_capitalize, detail::execute_capitalize>(strings, mr);
 }
 
 std::unique_ptr<column> title( strings_column_view const& strings,
-                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+                               rmm::mr::device_memory_resource* mr)
 {
   return detail::modify_strings<detail::probe_title, detail::execute_title>(strings, mr);
 }
