@@ -235,7 +235,7 @@ struct pq_chunked_state {
   /// Overall file metadata.  Filled in during the process and written during write_chunked_end()
   cudf::io::parquet::FileMetaData     md;  
   /// current write position for rowgroups/chunks
-  size_t                              current_chunk_offset;
+  size_t                              current_chunk_offset;  
   /// optional user metadata
   table_metadata const*               user_metadata = nullptr;
   /// only used in the write_chunked() case. copied from the (optionally) user supplied
@@ -244,6 +244,8 @@ struct pq_chunked_state {
   /// special parameter only used by detail::write() to indicate that we are guaranteeing 
   /// a single table write.  this enables some internal optimizations.
   bool                                single_write_mode = false;
+
+  uint64_t                            data_hash = 0;
 };
 
 }  // namespace parquet

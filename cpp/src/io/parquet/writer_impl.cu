@@ -31,6 +31,8 @@
 #include <rmm/thrust_rmm_allocator.h>
 #include <rmm/device_buffer.hpp>
 
+#include <arrow/util/hash_util.h>
+
 namespace cudf {
 namespace experimental {
 namespace io {
@@ -410,7 +412,7 @@ void writer::impl::write_chunked(table_view const& table, pq_chunked_state& stat
   size_type num_columns = table.num_columns();
   size_type num_rows = 0;
 
-  //printf("PQD : Write chunked\n");
+  printf("PQD : Write chunked\n");
 
   // Wrapper around cudf columns to attach parquet-specific type info.
   // Note : I wish we could do this in the begin() function but since the
@@ -427,14 +429,14 @@ void writer::impl::write_chunked(table_view const& table, pq_chunked_state& stat
   }  
 
   if(state.user_metadata_with_nullability.column_nullable.size() > 0){
-    //printf("PQD :   Have column_nullable data\n");
+    printf("PQD :   Have column_nullable data\n");
     CUDF_EXPECTS(state.user_metadata_with_nullability.column_nullable.size() == static_cast<size_t>(num_columns), "When passing values in user_metadata_with_nullability, data for all columns must be specified");
   }
 
   // first call. setup metadata. num_rows will get incremented as write_chunked is 
   // called multiple times.
   if(state.md.version == 0){  
-    //printf("PQD :    Pass 0 : stream : %lu, num_rows %d, num_columns %d, user metadata : %s\n", reinterpret_cast<int64_t>(state.stream), num_rows, num_columns, state.user_metadata == nullptr ? "no" : "yes");
+    printf("PQD :    Pass 0 : stream : %lu, num_rows %d, num_columns %d, user metadata : %s\n", reinterpret_cast<int64_t>(state.stream), num_rows, num_columns, state.user_metadata == nullptr ? "no" : "yes");
 
     state.md.version = 1;
     state.md.num_rows = num_rows;
@@ -485,7 +487,7 @@ void writer::impl::write_chunked(table_view const& table, pq_chunked_state& stat
     // increment num rows
     state.md.num_rows += num_rows;
 
-    //printf("PQD :    Pass N : stream : %lu, num_rows %d, total rows %lu, num_columns %d, user metadata : %s\n", reinterpret_cast<int64_t>(state.stream), num_rows, state.md.num_rows, num_columns, state.user_metadata == nullptr ? "no" : "yes");
+    printf("PQD :    Pass N : stream : %lu, num_rows %d, total rows %lu, num_columns %d, user metadata : %s\n", reinterpret_cast<int64_t>(state.stream), num_rows, state.md.num_rows, num_columns, state.user_metadata == nullptr ? "no" : "yes");
   }
 
   // Initialize column description    
@@ -558,7 +560,7 @@ void writer::impl::write_chunked(table_view const& table, pq_chunked_state& stat
     }
   }
 
-  //printf("PQD :    num_rowgroups %d, global num_rowgroups %lu\n", num_rowgroups, global_rowgroup_base + num_rowgroups);
+  printf("PQD :    num_rowgroups %d, global num_rowgroups %lu\n", num_rowgroups, global_rowgroup_base + num_rowgroups);
 
   // Allocate column chunks and gather fragment statistics
   rmm::device_vector<statistics_chunk> frag_stats;
@@ -750,6 +752,9 @@ void writer::impl::write_chunked(table_view const& table, pq_chunked_state& stat
         state.md.row_groups[global_r].columns[i].meta_data.total_uncompressed_size = ck->bfr_size;
         state.md.row_groups[global_r].columns[i].meta_data.total_compressed_size = ck->compressed_size;        
         out_sink_->write(host_bfr.get() + ck->ck_stat_size, ck->compressed_size);
+        
+        state.data_hash = arrow::HashUtil::MurmurHash2_64(host_bfr.get() + ck->ck_stat_size, ck->compressed_size, state.data_hash);        
+
         if (ck->ck_stat_size != 0) {
           state.md.row_groups[global_r].columns[i].meta_data.statistics_blob.resize(ck->ck_stat_size);
           memcpy(state.md.row_groups[global_r].columns[i].meta_data.statistics_blob.data(), host_bfr.get(), ck->ck_stat_size);
@@ -760,7 +765,7 @@ void writer::impl::write_chunked(table_view const& table, pq_chunked_state& stat
     }
   }
 
-  //printf("PQD :    Bytes written : %lu\n", out_sink_->bytes_written());
+  printf("HASH :    %lu\n", state.data_hash);  
 }
 
 void writer::impl::write_chunked_end(pq_chunked_state &state){    
@@ -770,7 +775,7 @@ void writer::impl::write_chunked_end(pq_chunked_state &state){
   fendr.magic = PARQUET_MAGIC;
   out_sink_->write(buffer_.data(), buffer_.size());  
   out_sink_->write(&fendr, sizeof(fendr));  
-  printf("PQD : Write chunked End : Bytes written : %lu\n", out_sink_->bytes_written());
+  printf("PQD : Write chunked End : Bytes written %lu, Final hash : %lu\n", out_sink_->bytes_written(), state.data_hash);
   out_sink_->flush();
 }
 
