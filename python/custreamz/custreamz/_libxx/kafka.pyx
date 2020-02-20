@@ -20,7 +20,7 @@ from libc.stdint cimport uint32_t, int64_t
 cpdef get_watermark_offsets(datasource_id=None,
                             kafka_configs=None,
                             topic=None,
-                            partition=-1):
+                            partition=1):
 
     kafka_conf = {
         "ex_ds.kafka.topic": "libcudf-test",
@@ -46,10 +46,42 @@ cpdef get_watermark_offsets(datasource_id=None,
     while(it != offsets.end()):
         print("Topic: " + str(dereference(it).first) +
               " Offset: " + str(dereference(it).second))
-        postincrement(it)  # Increment the iterator to the net element
+        postincrement(it)
 
-cpdef read_json_example():
-    print("Reading JSON .....")
+cpdef read_gdf(data_format="blob",
+               lines=True,
+               kafka_configs=None,
+               partition=None,
+               start=0,
+               end=1000):
+
+    kafka_configs = {
+        "ex_ds.kafka.topic": "libcudf-test",
+        "metadata.broker.list": "localhost:9092",
+        "enable.partition.eof": "true",
+        "group.id": "jeremy_test",
+        "auto.offset.reset": "earliest",
+        "enable.auto.commit": "false"
+    }
+
+    cdef map[string, string] kafka_confs
+    for key, value in kafka_configs.items():
+        kafka_confs[str.encode(key)] = str.encode(value)
+
+    cdef kafka_external *kds = new kafka_external(kafka_confs)
+
+    if data_format == 'blob':
+        print("Reading Kafka messages as raw blobs ....")
+        json_str = kds.consume_range(kafka_confs,
+                                     start,
+                                     end)
+        print("JSON -> " + str(json_str))
+        print("something")
+    else:
+        print("Need to do something else here .... like use libcudf ....")
+
+    return json_str
+
 
 cpdef commit_offsets():
     cdef kafka_external *kds = new kafka_external()

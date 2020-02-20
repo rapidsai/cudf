@@ -74,26 +74,72 @@ namespace external {
     consumer_ = std::unique_ptr<RdKafka::KafkaConsumer>(RdKafka::KafkaConsumer::create(kafka_conf_.get(), errstr_));
 
     err_ = consumer_.get()->subscribe(topics_);
+    if (err_) {
+      printf("Error Subscribing to Topics: '%s'\n", err2str(err_).c_str());
+    }
 
-    //printf("Before consuming messages\n");
     consume_messages(kafka_conf_);
 
     return true;
   }
 
-  std::map<std::string, int64_t> kafka_datasource::get_watermark_offset(std::string topic, int partition) {
+  std::string kafka_datasource::consume_range(std::map<std::string, std::string> configs, int64_t start_offset, int64_t end_offset) {
+    std::string json_str = "";
+    int64_t messages_read = 0;
+    int64_t batch_size = end_offset - start_offset;
+
+    printf("Start Offset: '%lu' End Offset: '%lu' Batch Size: '%lu'\n", start_offset, end_offset, batch_size);
+
+    while (messages_read < batch_size) {
+      printf("Entering while loop ...\n");
+      RdKafka::Message *msg = consumer_.get()->consume(6000);
+      printf("After consume in the while loop .....\n");
+
+      switch (msg->err()) {
+        case RdKafka::ErrorCode::ERR__TIMED_OUT:
+          printf("Inside timeout .... \n");
+          delete msg;
+          break;
+
+        case RdKafka::ErrorCode::ERR_NO_ERROR:
+          printf("Inside no error ... \n");
+          json_str.append(static_cast<char *>(msg->payload()));
+          printf("After appending messages.... \n");
+          messages_read++;
+          printf("Message Read\n");
+          break;
+
+        default:
+          printf("Inside default .... \n");
+          printf("'%s' Consumer error\n", msg->errstr().c_str());
+          delete msg;
+      }
+    }
+
+    return json_str;
+  }
+
+  std::map<std::string, int64_t> kafka_datasource::get_watermark_offset(std::string topic, int32_t partition) {
+    int64_t *low;
+    int64_t *high;
     std::vector<RdKafka::TopicPartition *> topic_parts;
     std::map<std::string, int64_t> results;
 
     err_ = consumer_.get()->assignment(topic_parts);
-    err_ = consumer_.get()->committed(topic_parts, 6000);
+    if (err_ != RdKafka::ErrorCode::ERR_NO_ERROR) {
+      printf("Error: '%s'\n", err2str(err_).c_str());
+    }
+    printf("TopicPartition Size: '%lu'\n", topic_parts.size());
+    printf("Topic: '%s' Partition: '%d'\n", topic_parts[0]->topic().c_str(), topic_parts[0]->partition());
+    err_ = consumer_.get()->get_watermark_offsets(topic_parts[0]->topic().c_str(), topic_parts[0]->partition(), low, high);
+    printf("Before\n");
 
-    for (int i=0; i < topic_parts.size(); i++){
-      std::string t = topic_parts[i]->topic();
-      int partition = topic_parts[i]->partition();
-      int64_t offset = topic_parts[i]->offset();
-      printf("TopicPartition Topic: '%s' Partition: '%d' Offset: '%lu'\n", t.c_str(), partition, offset);
-      results.insert( std::pair<std::string, int64_t>(t, offset) );
+    if (err_ != RdKafka::ErrorCode::ERR_NO_ERROR) {
+      printf("Error: '%s'\n", err2str(err_).c_str());
+    } else {
+      printf("Low Offset: '%ld' High Offset: '%ld'\n", *low, *high);
+      results.insert(std::pair<std::string, int64_t>("low", *low));
+      results.insert(std::pair<std::string, int64_t>("high", *high));
     }
 
     return results;

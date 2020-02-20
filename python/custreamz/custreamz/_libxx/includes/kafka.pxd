@@ -9,7 +9,7 @@ from libcpp.string cimport string
 from libcpp.vector cimport vector
 from libcpp.map cimport map
 from libcpp cimport bool
-from libc.stdint cimport uint32_t, int64_t
+from libc.stdint cimport int32_t, int64_t
 
 
 cdef extern from "kafka_datasource.hpp" namespace "cudf::io::external" nogil:
@@ -25,4 +25,8 @@ cdef extern from "kafka_datasource.hpp" namespace "cudf::io::external" nogil:
         bool commit(string topic, int partition, int offset) except +
 
         map[string, int64_t] get_watermark_offset(string topic,
-                                                  int partition) except +
+                                                  int32_t partition) except +
+
+        string consume_range(map[string, string] configs,
+                             int64_t start_offset,
+                             int64_t end_offset) except +

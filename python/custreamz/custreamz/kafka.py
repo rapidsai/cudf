@@ -8,8 +8,7 @@ def __init__(self, name):
 
 
 def read_gdf(
-    engine="cudf",
-    data_type="json",
+    data_format="blob",
     lines=True,
     kafka_configs=None,
     partition=None,
@@ -18,7 +17,7 @@ def read_gdf(
     *args,
     **kwargs,
 ):
-    libkafka.read_json_example()
+    libkafka.read_gdf()
 
 
 def get_watermark_offsets(

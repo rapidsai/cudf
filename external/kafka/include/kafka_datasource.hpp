@@ -69,6 +69,8 @@ class kafka_datasource : public external_datasource {
 
   bool configure_datasource(std::map<std::string, std::string> configs);
 
+  std::string consume_range(std::map<std::string, std::string> configs, int64_t start_offset, int64_t end_offset);
+
   const std::shared_ptr<arrow::Buffer> get_buffer(size_t offset,
                                                   size_t size) override {
     return arrow::Buffer::Wrap(buffer_.c_str(), buffer_.size());
@@ -117,7 +119,9 @@ class kafka_datasource : public external_datasource {
 
         void rebalance_cb(RdKafka::KafkaConsumer *consumer, RdKafka::ErrorCode err,
                           std::vector<RdKafka::TopicPartition *> &partitions) {
+          printf("Kafka rebalance was called\n");
           if (err == RdKafka::ERR__ASSIGN_PARTITIONS) {
+            printf("Assigning partitions\n");
             // NOTICE: We currently purposely only support a single partition. Enhancement PR to be opened later.
             partitions.at(0)->set_offset(start_offset_);
             err = consumer->assign(partitions);
