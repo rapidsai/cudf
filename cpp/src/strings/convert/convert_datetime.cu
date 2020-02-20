@@ -111,11 +111,11 @@ struct format_compiler
     timestamp_units units;
     rmm::device_vector<format_item> d_items;
 
-    std::map<char,int8_t> specifiers = {
-        {'Y',4},{'y',2}, {'m',2}, {'d',2},
-        {'H',2},{'I',2},{'M',2},{'S',2},{'f',6},
-        {'z',5},{'Z',3},
-        {'p',2},{'j',3}
+    std::map<char,int8_t> specifier_lengths = {
+        {'Y',4}, {'y',2}, {'m',2}, {'d',2},
+        {'H',2}, {'I',2}, {'M',2}, {'S',2}, {'f',6},
+        {'z',5}, {'Z',3},
+        {'p',2}, {'j',3}
     };
 
     format_compiler( const char* format, timestamp_units units )
@@ -146,7 +146,7 @@ struct format_compiler
                 template_string.append(1,ch);
                 continue;
             }
-            if( specifiers.find(ch)==specifiers.end() )
+            if( specifier_lengths.find(ch)==specifier_lengths.end() )
             {
                 std::ostringstream message;
                 message << "cuDF failure at: " __FILE__ ":" << __LINE__ << ": ";
@@ -154,7 +154,7 @@ struct format_compiler
                 throw cudf::logic_error(message.str());
             }
 
-            int8_t spec_length = specifiers[ch];
+            int8_t spec_length = specifier_lengths[ch];
             if( ch=='f' )
             {
                 // adjust spec_length based on units (default is 6 for micro-seconds)
@@ -268,7 +268,7 @@ struct parse_datetime
                 }
                 case 'z':
                 {
-                    int sign = *ptr=='-' ? 1:-1;
+                    int sign = *ptr=='-' ? 1:-1; // revert timezone back to UTC
                     int hh = str2int(ptr+1,2);
                     int mm = str2int(ptr+3,2);
                     // ignoring the rest for now
@@ -500,7 +500,9 @@ struct datetime_formatter
         constexpr int32_t daysInCentury = 36524; // (100*365) + 24;
         constexpr int32_t daysIn4Years = 1461; // (4*365) + 1;
         constexpr int32_t daysInYear = 365;
-        // day offsets for each month:   Mar Apr May June July  Aug Sep  Oct  Nov  Dec  Jan  Feb
+        // The months are shifted so that March is the starting month and February
+        // (with possible leap day in it) is the last month for the linear calculation.
+        // Day offsets for each month:   Mar Apr May June July  Aug Sep  Oct  Nov  Dec  Jan  Feb
         const int32_t monthDayOffset[] = { 0, 31, 61, 92, 122, 153, 184, 214, 245, 275, 306, 337, 366 };
 
         // code logic handles leap years in chunks: 400y,100y,4y,1y
@@ -536,9 +538,9 @@ struct datetime_formatter
             }
         }
 
-        // compute day of the year
-        // for month >= 10, leap-year has been already been included
-        timeparts[TP_DAY_OF_YEAR] = (month >= 10) ? days - monthDayOffset[10] +1 // 306
+        // compute day of the year and account for calculating with March being the first month
+        // for month >= 10, leap-day has been already been included
+        timeparts[TP_DAY_OF_YEAR] = (month >= 10) ? days - monthDayOffset[10] + 1
                                     : days + /*Jan=*/ 31  + /*Feb=*/ 28 + 1 + // 2-month shift
                                       ((year % 4 == 0) && ((year % 100 != 0) || (year % 400 == 0)));
 
