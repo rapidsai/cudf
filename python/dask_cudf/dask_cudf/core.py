@@ -183,8 +183,11 @@ class DataFrame(_Frame, dd.core.DataFrame):
         if experimental and not sorted:
             # Use sort values for the shuffle
             divisions = divisions = kwargs.get("divisions", None)
+            by = other
+            if not isinstance(other, list):
+                by = [by]
             df = self.sort_values(
-                [other],
+                by,
                 experimental=experimental,
                 explicit_client=explicit_client,
                 max_branch=max_branch,
@@ -192,6 +195,11 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 sorted_split=kwargs.get("sorted_split", False),
                 upsample=kwargs.get("upsample", 1.0),
             )
+
+            # Ignore divisions if its a dataframe
+            if isinstance(divisions, cudf.DataFrame):
+                divisions = None
+
             # Set index and repartition
             npartitions = kwargs.get("npartitions", self.npartitions)
             partition_size = kwargs.get("partition_size", None)

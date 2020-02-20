@@ -10,12 +10,14 @@ import dask
 from dask import compute, delayed
 from dask.base import tokenize
 from dask.dataframe.core import DataFrame, _concat
-from dask.dataframe.shuffle import shuffle_group_get
+from dask.dataframe.shuffle import rearrange_by_column, shuffle_group_get
 from dask.dataframe.utils import group_split_dispatch
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import M, digit, insert
 
 import cudf as gd
+
+from .partitionquantiles import partition_quantiles
 
 try:
     from .explicit_shuffle import explicit_sorted_shuffle
@@ -163,7 +165,12 @@ def sort_delayed_frame(parts, by):
 
 def set_partitions_pre(s, divisions):
     partitions = divisions.searchsorted(s, side="right") - 1
-    partitions[(s >= divisions.iloc[-1]).values] = len(divisions) - 2
+
+    # Use searchsorted to avoid string-compare limitations
+    partitions[divisions.tail(1).searchsorted(s, side="right")] = (
+        len(divisions) - 2
+    )
+
     return partitions
 
 
@@ -407,7 +414,10 @@ def sort_values_experimental(
 
     # Make sure first column is numeric
     # (Cannot handle string column here yet)
-    if isinstance(df[by[0]]._meta._column, gd.core.column.string.StringColumn):
+    if divisions is None and isinstance(
+        df[by[0]]._meta._column, gd.core.column.string.StringColumn
+    ):
+        # TODO: Remove when quantile support is added
         return df.sort_values(
             by, ignore_index=ignore_index, experimental=False
         )
@@ -433,67 +443,68 @@ def sort_values_experimental(
         npartitions = len(explicit_client.cluster.workers)
 
     # Step 2 - Calculate new divisions (if necessary)
-    if not divisions or (use_explicit and len(divisions) != npartitions + 1):
+    if divisions is None or (
+        use_explicit and len(divisions) != npartitions + 1
+    ):
         # TODO: Use input divisions for use_explicit==True
 
-        partition_size = None  # 10e6
-        repartition = False
-        if partition_size and not use_explicit:
-            repartition = True
         index2 = df2[index]
-        if repartition:
-            index2, df2 = dask.base.optimize(index2, df2)
-            parts = df2.to_delayed(optimize_graph=False)
-            sizes = [delayed(dask.sizeof.sizeof)(part) for part in parts]
-        else:
-            (index2,) = dask.base.optimize(index2)
-            sizes = []
+        (index2,) = dask.base.optimize(index2)
 
         doubledivs = (
-            index2._repartition_quantiles(npartitions * 2, upsample=upsample)
+            partition_quantiles(index2, npartitions * 2, upsample=upsample)
             .compute()
             .to_list()
         )
         # Heuristic: Start with 2x divisions and coarsening
         divisions = [doubledivs[i] for i in range(0, len(doubledivs), 2)]
         divisions[-1] += 1  # Make sure the last division is large enough
+    else:
+        # For now we can accept multi-column divisions as a dataframe
+        if isinstance(divisions, gd.DataFrame):
+            index = by
 
-        if repartition:
-            iparts = index2.to_delayed(optimize_graph=False)
-            mins = [ipart.min() for ipart in iparts]
-            maxes = [ipart.max() for ipart in iparts]
-            sizes, mins, maxes = dask.base.optimize(sizes, mins, maxes)
-            sizes, mins, maxes = dask.base.compute(
-                sizes, mins, maxes, optimize_graph=False
-            )
-
-            total = sum(sizes)
-            npartitions = max(math.ceil(total / partition_size), 1)
-            npartitions = min(npartitions, df2.npartitions)
-            n = len(divisions)
-            try:
-                divisions = np.interp(
-                    x=np.linspace(0, n - 1, npartitions + 1),
-                    xp=np.linspace(0, n - 1, n),
-                    fp=divisions,
-                ).tolist()
-            except (TypeError, ValueError):  # str type
-                indexes = np.linspace(0, n - 1, npartitions + 1).astype(int)
-                divisions = [divisions[i] for i in indexes]
+    # Make sure index is a list
+    if not isinstance(index, list):
+        index = [index]
 
     # Step 3 - Perform repartitioning shuffle
     sort_by = None
     if sorted_split:
         sort_by = by
-    if use_explicit:
+    if use_explicit and len(index) == 1:
+        # TODO: Handle len(index) > 1
         warnings.warn("Using explicit comms - This is an advanced feature.")
         df3 = explicit_sorted_shuffle(
-            df2, index, divisions, sort_by, explicit_client
+            df2, index[0], divisions, sort_by, explicit_client
+        )
+    elif sorted_split and len(index) == 1:
+        # Need to pass around divisions
+        # TODO: Handle len(index) > 1
+        df3 = rearrange_by_division_list(
+            df2, index[0], divisions, max_branch=max_branch, sort_by=sort_by
         )
     else:
-        df3 = rearrange_by_division_list(
-            df2, index, divisions, max_branch=max_branch, sort_by=sort_by
+        # Lets assign a new partitions column
+        # (That is: Use main-line dask shuffle)
+        # TODO: Handle len(index) > 1
+        meta = df2._meta._constructor_sliced([0])
+        # meta = df2._meta_nonempty
+        if not isinstance(divisions, (gd.Series, gd.DataFrame)):
+            dtype = df2[index[0]].dtype
+            divisions = df2._meta._constructor_sliced(divisions, dtype=dtype)
+
+        partitions = df2[index].map_partitions(
+            set_partitions_pre, divisions=divisions, meta=meta
         )
+        df2b = df2.assign(_partitions=partitions)
+        df3 = rearrange_by_column(
+            df2b,
+            "_partitions",
+            max_branch=max_branch,
+            npartitions=len(divisions) - 1,
+            shuffle="tasks",
+        ).drop(columns=["_partitions"])
     df3.divisions = (None,) * (df3.npartitions + 1)
 
     # Step 4 - Return final sorted df
