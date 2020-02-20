@@ -6,7 +6,7 @@ from libcpp.pair cimport pair
 
 from collections import OrderedDict
 
-cpdef join(lhs, rhs, left_on, right_on, how, method, left_index=False, right_index=False):
+cpdef join(Table lhs, Table rhs, object left_on, object right_on, object how, object method, bool left_index=False, bool right_index=False):
     """
     Call libcudf++ join for full outer, inner and left joins.
     Returns a list of tuples [(column, valid, name), ...]
@@ -15,10 +15,6 @@ cpdef join(lhs, rhs, left_on, right_on, how, method, left_index=False, right_ind
     cdef vector[int] left_on_ind
     cdef vector[int] right_on_ind
     cdef vector[pair[int, int]] columns_in_common
-
-    # convert both left and right to c table objects
-    cdef Table c_lhs = lhs
-    cdef Table c_rhs = rhs
 
     # create the two views that will be set later to include or not include the index column 
     cdef table_view lhs_view
@@ -42,8 +38,8 @@ cpdef join(lhs, rhs, left_on, right_on, how, method, left_index=False, right_ind
         # the result will be returned as a gather from the other column, and the index itself drops
         # In addition, the opposite index ends up as the final index 
         # Thus if either are true, we need to process both indices as join columns
-        lhs_view = c_lhs.view()
-        rhs_view = c_rhs.view()
+        lhs_view = lhs.view()
+        rhs_view = rhs.view()
 
         left_join_cols = [lhs.index.name] + list(lhs._data.keys())
         right_join_cols = [rhs.index.name] + list(rhs._data.keys())
@@ -74,8 +70,8 @@ cpdef join(lhs, rhs, left_on, right_on, how, method, left_index=False, right_ind
     else:
         # If neither index is specified, we can exclude them from the join completely
         # cuDF's Python layer will create a new RangeIndex for this case
-        lhs_view = c_lhs.data_view()
-        rhs_view = c_rhs.data_view()
+        lhs_view = lhs.data_view()
+        rhs_view = rhs.data_view()
 
         left_join_cols = list(lhs._data.keys())
         right_join_cols = list(rhs._data.keys())
