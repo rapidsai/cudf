@@ -131,7 +131,7 @@ flatten_single_pass_aggs(std::vector<aggregation_request> const& requests) {
 void sparse_to_dense_results(
     std::vector<aggregation_request> const& requests,
     experimental::detail::result_cache const& sparse_results,
-    experimental::detail::result_cache& dense_results,
+    experimental::detail::result_cache* dense_results,
     rmm::device_vector<size_type> const& gather_map,
     cudaStream_t stream,
     rmm::mr::device_memory_resource* mr)
@@ -170,16 +170,16 @@ void sparse_to_dense_results(
       if (col.type().id() == type_id::STRING and
           (agg->kind == aggregation::MAX or agg->kind == aggregation::MIN)) {
         if (agg->kind == aggregation::MAX) {
-          dense_results.add_result(i, agg,
+          dense_results->add_result(i, agg,
             transformed_result(aggregation::ARGMAX));
         }
         else if (agg->kind == aggregation::MIN) {
-          dense_results.add_result(i, agg,
+          dense_results->add_result(i, agg,
             transformed_result(aggregation::ARGMIN));
         }
       }
       else if (sparse_results.has_result(i, agg)) {
-        dense_results.add_result(i, agg, to_dense_agg_result(agg));
+        dense_results->add_result(i, agg, to_dense_agg_result(agg));
       }
     }
   }
@@ -221,7 +221,7 @@ auto create_hash_map(table_device_view const& d_keys, bool ignore_null_keys,
 template <bool keys_have_nulls, typename Map>
 void compute_single_pass_aggs(table_view const& keys,
                               std::vector<aggregation_request> const& requests,
-                              experimental::detail::result_cache& sparse_results,
+                              experimental::detail::result_cache* sparse_results,
                               Map& map, bool ignore_null_keys,
                               cudaStream_t stream)
 {
@@ -273,9 +273,9 @@ void compute_single_pass_aggs(table_view const& keys,
   // Add results back to sparse_results cache
   auto sparse_result_cols = sparse_table.release();
   for (size_t i = 0; i < aggs.size(); i++) {
-    sparse_results.add_result(col_ids[i],
-                              std::make_unique<aggregation>(aggs[i]),
-                              std::move(sparse_result_cols[i]));
+    sparse_results->add_result(col_ids[i],
+                               std::make_unique<aggregation>(aggs[i]),
+                               std::move(sparse_result_cols[i]));
   }
 }
 
@@ -311,7 +311,7 @@ rmm::device_vector<size_type> extract_populated_keys(Map map,
 template <bool keys_have_nulls>
 std::unique_ptr<table> groupby_null_templated(
     table_view const& keys, std::vector<aggregation_request> const& requests,
-    experimental::detail::result_cache& cache,
+    experimental::detail::result_cache* cache,
     bool ignore_null_keys, cudaStream_t stream,
     rmm::mr::device_memory_resource* mr)
 {
@@ -324,7 +324,7 @@ std::unique_ptr<table> groupby_null_templated(
 
   // Compute all single pass aggs first
   compute_single_pass_aggs<keys_have_nulls>(
-    keys, requests, sparse_results, *map, ignore_null_keys, stream);
+    keys, requests, &sparse_results, *map, ignore_null_keys, stream);
 
   // Now continue with remaining multi-pass aggs
   // <placeholder>
@@ -374,10 +374,10 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
 
   std::unique_ptr<table> unique_keys;
   if (has_nulls(keys)) {
-    unique_keys = groupby_null_templated<true>(keys, requests, cache, 
+    unique_keys = groupby_null_templated<true>(keys, requests, &cache, 
                                                ignore_null_keys, stream, mr);
   } else {
-    unique_keys = groupby_null_templated<false>(keys, requests, cache,
+    unique_keys = groupby_null_templated<false>(keys, requests, &cache,
                                                 ignore_null_keys, stream, mr);
   }
 
