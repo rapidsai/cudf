@@ -136,6 +136,7 @@
 - PR #4198 Fix constructing `RangeIndex` from `range`
 - PR #4192 Parquet writer: fix OOB read when computing string hash
 - PR #4199 Fix potential race condition in memcpy_block
+- PR #4215 Fix performance regression in strings::detail::concatenate
 
 
 # cuDF 0.12.0 (04 Feb 2020)
