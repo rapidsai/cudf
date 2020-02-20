@@ -33,7 +33,9 @@ cdef class Scalar:
 
         if dtype is None:
             if value is None:
-                raise TypeError("dtype required when constructing a null scalar")
+                raise TypeError(
+                    "dtype required when constructing a null scalar"
+                )
             else:
                 dtype = value.dtype
 
@@ -44,10 +46,15 @@ cdef class Scalar:
         elif pd.api.types.is_numeric_dtype(dtype):
             _set_numeric_from_np_scalar(self.c_value, value, dtype, valid)
         elif pd.api.types.is_datetime64_dtype(dtype):
-            _set_datetime64_from_np_scalar(self.c_value, value, dtype, valid)
+            _set_datetime64_from_np_scalar(
+                self.c_value, value, dtype, valid
+            )
         else:
-            raise ValueError("Cannot convert value of type {} to cudf scalar".format(
-                type(value).__name__))
+            raise ValueError(
+                "Cannot convert value of type {} to cudf scalar".format(
+                    type(value).__name__
+                )
+            )
 
     @property
     def dtype(self):
@@ -70,7 +77,9 @@ cdef class Scalar:
         elif pd.api.types.is_datetime64_dtype(self.dtype):
             return _get_np_scalar_from_timestamp64(self.c_value)
         else:
-            raise ValueError("Could not convert cudf::scalar to a Python value")
+            raise ValueError(
+                "Could not convert cudf::scalar to a Python value"
+            )
 
     def __repr__(self):
         if self.value is None:
@@ -93,7 +102,10 @@ cdef _set_string_from_np_string(unique_ptr[scalar]& s, value, bool valid=True):
     s.reset(new string_scalar(value.encode(), valid))
 
 
-cdef _set_numeric_from_np_scalar(unique_ptr[scalar]& s, value, dtype, bool valid=True):
+cdef _set_numeric_from_np_scalar(unique_ptr[scalar]& s,
+                                 value,
+                                 dtype,
+                                 bool valid=True):
     value = value if valid else 0
     if dtype == "int8":
         s.reset(new numeric_scalar[int8_t](value, valid))
@@ -113,16 +125,27 @@ cdef _set_numeric_from_np_scalar(unique_ptr[scalar]& s, value, dtype, bool valid
         raise ValueError("dtype not supported: {}".format(dtype))
 
 
-cdef _set_datetime64_from_np_scalar(unique_ptr[scalar]& s, value, dtype, bool valid=True):
+cdef _set_datetime64_from_np_scalar(unique_ptr[scalar]& s,
+                                    value,
+                                    dtype,
+                                    bool valid=True):
     value = value if valid else 0
     if dtype == "datetime64[s]":
-        s.reset(new timestamp_scalar[timestamp_s](<int64_t>np.int64(value), valid))
+        s.reset(
+            new timestamp_scalar[timestamp_s](<int64_t>np.int64(value), valid)
+        )
     elif dtype == "datetime64[ms]":
-        s.reset(new timestamp_scalar[timestamp_ms](<int64_t>np.int64(value), valid))
+        s.reset(
+            new timestamp_scalar[timestamp_ms](<int64_t>np.int64(value), valid)
+        )
     elif dtype == "datetime64[us]":
-        s.reset(new timestamp_scalar[timestamp_us](<int64_t>np.int64(value), valid))
+        s.reset(
+            new timestamp_scalar[timestamp_us](<int64_t>np.int64(value), valid)
+        )
     elif dtype == "datetime64[ns]":
-        s.reset(new timestamp_scalar[timestamp_ns](<int64_t>np.int64(value), valid))
+        s.reset(
+            new timestamp_scalar[timestamp_ns](<int64_t>np.int64(value), valid)
+        )
     else:
         raise ValueError("dtype not supported: {}".format(dtypne))
 
@@ -165,22 +188,30 @@ cdef _get_np_scalar_from_timestamp64(unique_ptr[scalar]& s):
 
     if cdtype.id() == TIMESTAMP_SECONDS:
         return np.datetime64(
-            (<timestamp_scalar[timestamp_ms]*>s.get())[0].ticks_since_epoch_64(),
+            (
+                <timestamp_scalar[timestamp_ms]*> s.get()
+            )[0].ticks_since_epoch_64(),
             "s"
         )
     elif cdtype.id() == TIMESTAMP_MILLISECONDS:
         return np.datetime64(
-            (<timestamp_scalar[timestamp_ms]*>s.get())[0].ticks_since_epoch_64(),
+            (
+                <timestamp_scalar[timestamp_ms]*> s.get()
+            )[0].ticks_since_epoch_64(),
             "ms"
         )
     elif cdtype.id() == TIMESTAMP_MICROSECONDS:
         return np.datetime64(
-            (<timestamp_scalar[timestamp_ms]*>s.get())[0].ticks_since_epoch_64(),
+            (
+                <timestamp_scalar[timestamp_ms]*> s.get()
+            )[0].ticks_since_epoch_64(),
             "us"
         )
     elif cdtype.id() == TIMESTAMP_NANOSECONDS:
         return np.datetime64(
-            (<timestamp_scalar[timestamp_ms]*>s.get())[0].ticks_since_epoch_64(),
+            (
+                <timestamp_scalar[timestamp_ms]*> s.get()
+            )[0].ticks_since_epoch_64(),
             "ns"
         )
     else:

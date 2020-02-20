@@ -24,6 +24,7 @@ from cudf._libxx.null_mask import bitmask_allocation_size_bytes
 from cudf.core.buffer import Buffer
 from cudf.utils.dtypes import is_categorical_dtype
 
+
 @cython.auto_pickle(True)
 cdef class Column:
     """

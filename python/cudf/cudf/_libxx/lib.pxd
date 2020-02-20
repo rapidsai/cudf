@@ -17,18 +17,9 @@ from libcpp.pair cimport pair
 from rmm._lib.device_buffer cimport device_buffer, DeviceBuffer, move
 
 
-
 cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
     ctypedef int32_t size_type
     ctypedef uint32_t bitmask_type
-
-    ctypedef enum order:
-        ASCENDING "cudf::order::ASCENDING"
-        DESCENDING "cudf::order::DESCENDING"
-
-    ctypedef enum null_order:
-        AFTER "cudf::null_order::AFTER"
-        BEFORE "cudf::null_order::BEFORE"
 
     cdef enum:
         UNKNOWN_NULL_COUNT = -1
