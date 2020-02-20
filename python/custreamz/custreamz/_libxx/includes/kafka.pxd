@@ -29,4 +29,5 @@ cdef extern from "kafka_datasource.hpp" namespace "cudf::io::external" nogil:
 
         string consume_range(map[string, string] configs,
                              int64_t start_offset,
-                             int64_t end_offset) except +
+                             int64_t end_offset,
+                             int batch_timeout) except +

@@ -58,4 +58,6 @@ TEST_F(ExternalDatasource, Basic)
     cudf::io::external::datasource_factory dfs("/home/jdyer/anaconda3/envs/cudf_dev/lib/external");
     cudf::io::external::external_datasource* ex_datasource = dfs.external_datasource_by_id("librdkafka-1.2.2", datasource_confs);
     ex_datasource->configure_datasource(datasource_confs);
+
+    std::string json_str = ex_datasource->consume_range(datasource_confs, 0, 3, 10000);
 }

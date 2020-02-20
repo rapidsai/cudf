@@ -25,6 +25,7 @@
 
 #include <chrono>
 #include <thread>
+#include <sys/time.h>
 
 #include <cudf/cudf.h>
 #include <librdkafka/rdkafkacpp.h>
@@ -39,8 +40,8 @@ namespace external {
 class kafka_datasource : public external_datasource {
 
  private:
-    std::unique_ptr<RdKafka::Conf> kafka_conf_;
-    std::unique_ptr<RdKafka::KafkaConsumer> consumer_;
+    RdKafka::Conf* kafka_conf_;
+    RdKafka::KafkaConsumer* consumer_;
     RdKafka::Conf::ConfResult conf_res_;
     RdKafka::ErrorCode err_;
 
@@ -69,7 +70,7 @@ class kafka_datasource : public external_datasource {
 
   bool configure_datasource(std::map<std::string, std::string> configs);
 
-  std::string consume_range(std::map<std::string, std::string> configs, int64_t start_offset, int64_t end_offset);
+  std::string consume_range(std::map<std::string, std::string> configs, int64_t start_offset, int64_t end_offset, int batch_timeout);
 
   const std::shared_ptr<arrow::Buffer> get_buffer(size_t offset,
                                                   size_t size) override {
@@ -81,9 +82,17 @@ class kafka_datasource : public external_datasource {
   /**
    * @brief Base class destructor
    **/
-  virtual ~kafka_datasource(){};
+  virtual ~kafka_datasource(){
+    printf("!!!!!! destructor called for kafka datasource!!!!!\n");
+  };
 
   private:
+
+    int64_t now() {
+      struct timeval tv;
+      gettimeofday(&tv, NULL);
+      return ((int64_t)tv.tv_sec * 1000) + (tv.tv_usec / 1000);
+    }
 
     void consume_messages(std::unique_ptr<RdKafka::Conf> const &kafka_conf) {
       // Kafka messages are already stored in a queue outside of libcudf. Here the

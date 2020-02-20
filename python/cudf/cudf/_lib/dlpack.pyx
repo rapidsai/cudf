@@ -21,6 +21,8 @@ import pyarrow as pa
 import warnings
 
 from cudf._lib.includes.dlpack cimport *
+from cudf._libxx.null_mask import bitmask_allocation_size_bytes
+from cudf.utils.utils import mask_dtype
 
 
 cpdef from_dlpack(dlpack_capsule):
@@ -74,10 +76,12 @@ cpdef from_dlpack(dlpack_capsule):
 
         valid_ptr = <uintptr_t>result_cols[idx].valid
         if valid_ptr:
+            nbytes = bitmask_allocation_size_bytes(result_cols[idx].size)
+            nelem = int(nbytes / mask_dtype.itemsize)
             valids.append(
                 rmm.device_array_from_ptr(
                     ptr=valid_ptr,
-                    nelem=calc_chunk_size(result_cols[idx].size, mask_bitsize),
+                    nelem=nelem,
                     dtype=mask_dtype,
                     finalizer=rmm._make_finalizer(valid_ptr, 0)
                 )

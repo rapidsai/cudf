@@ -26,7 +26,7 @@ cpdef get_watermark_offsets(datasource_id=None,
         "ex_ds.kafka.topic": "libcudf-test",
         "metadata.broker.list": "localhost:9092",
         "enable.partition.eof": "true",
-        "group.id": "jeremy_test",
+        "group.id": "jeremy",
         "auto.offset.reset": "earliest",
         "enable.auto.commit": "false"
     }
@@ -53,7 +53,8 @@ cpdef read_gdf(data_format="blob",
                kafka_configs=None,
                partition=None,
                start=0,
-               end=1000):
+               end=1000,
+               timeout=10000):
 
     kafka_configs = {
         "ex_ds.kafka.topic": "libcudf-test",
@@ -74,7 +75,8 @@ cpdef read_gdf(data_format="blob",
         print("Reading Kafka messages as raw blobs ....")
         json_str = kds.consume_range(kafka_confs,
                                      start,
-                                     end)
+                                     end,
+                                     timeout)
         print("JSON -> " + str(json_str))
         print("something")
     else:

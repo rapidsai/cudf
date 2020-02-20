@@ -58,6 +58,7 @@ BENCHMARKS=OFF
 BUILD_EXTERNAL_DATASOURCES=OFF
 BUILD_ALL_GPU_ARCH=0
 BUILD_NVTX=ON
+BUILD_TESTS="OFF"
 
 # Set defaults for vars that may not have been defined externally
 #  FIXME: if INSTALL_PREFIX is not set, check PREFIX, then check
@@ -104,7 +105,10 @@ if hasArg --allgpuarch; then
     BUILD_ALL_GPU_ARCH=1
 fi
 if hasArg benchmarks; then
-    BENCHMARKS=ON
+    BENCHMARKS="ON"
+fi
+if hasArg tests; then
+    BUILD_TESTS=ON
 fi
 if hasArg external; then
     BUILD_EXTERNAL_DATASOURCES="ON"
@@ -162,6 +166,10 @@ if buildAll || hasArg libnvstrings; then
     else
         make -j${PARALLEL_LEVEL} nvstrings VERBOSE=${VERBOSE}
     fi
+
+    if [[ ${BUILD_TESTS} == "ON" ]]; then
+        make -j${PARALLEL_LEVEL} build_tests_nvstrings VERBOSE=${VERBOSE}
+    fi
 fi
 
 # Build and install the nvstrings Python package
@@ -185,6 +193,10 @@ if buildAll || hasArg libcudf; then
     else
         make -j${PARALLEL_LEVEL} cudf VERBOSE=${VERBOSE}
     fi
+
+    if [[ ${BUILD_TESTS} == "ON" ]]; then
+        make -j${PARALLEL_LEVEL} build_tests_cudf VERBOSE=${VERBOSE}
+    fi
 fi
 
 # Build and install the cudf Python package
@@ -192,10 +204,10 @@ if buildAll || hasArg cudf; then
 
     cd ${REPODIR}/python/cudf
     if [[ ${INSTALL_TARGET} != "" ]]; then
-        python setup.py build_ext --inplace
+        PARALLEL_LEVEL=${PARALLEL_LEVEL} python setup.py build_ext --inplace
         python setup.py install --single-version-externally-managed --record=record.txt
     else
-        python setup.py build_ext --inplace --library-dir=${LIBCUDF_BUILD_DIR}
+        PARALLEL_LEVEL=${PARALLEL_LEVEL} python setup.py build_ext --inplace --library-dir=${LIBCUDF_BUILD_DIR}
     fi
 fi
 
