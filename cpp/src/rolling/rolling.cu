@@ -305,7 +305,7 @@ struct rolling_window_launcher
       if (input.is_empty()) return empty_like(input);
 
       auto output = make_fixed_width_column(target_type(input.type(), op), input.size(),
-              UNINITIALIZED, stream, mr);
+              mask_state::UNINITIALIZED, stream, mr);
 
       cudf::mutable_column_view output_view = output->mutable_view();
       auto valid_count = kernel_launcher<T, agg_op, op, WindowIterator>(input, output_view, preceding_window_begin,
@@ -333,7 +333,7 @@ struct rolling_window_launcher
       if (input.is_empty()) return empty_like(input);
 
       auto output = make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<size_type>()},
-            input.size(), cudf::UNINITIALIZED, stream, mr);
+            input.size(), cudf::mask_state::UNINITIALIZED, stream, mr);
 
       cudf::mutable_column_view output_view = output->mutable_view();
 
@@ -486,7 +486,7 @@ std::unique_ptr<column> rolling_window_udf(column_view const &input,
   }
 
   std::unique_ptr<column> output = make_numeric_column(udf_agg->_output_type, input.size(),
-                                                       cudf::UNINITIALIZED, stream, mr);
+                                                       cudf::mask_state::UNINITIALIZED, stream, mr);
 
   auto output_view = output->mutable_view();
   rmm::device_scalar<size_type> device_valid_count{0, stream};

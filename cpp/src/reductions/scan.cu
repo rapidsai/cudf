@@ -90,7 +90,7 @@ struct ScanDispatcher {
                                          cudaStream_t stream)
   {
     rmm::device_buffer mask =
-        create_null_mask(input_view.size(), UNINITIALIZED, stream, mr);
+        create_null_mask(input_view.size(), mask_state::UNINITIALIZED, stream, mr);
     auto d_input = column_device_view::create(input_view, stream);
     auto v = experimental::detail::make_validity_iterator(*d_input);
     auto first_null_position = thrust::find_if_not(

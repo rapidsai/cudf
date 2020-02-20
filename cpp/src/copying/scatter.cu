@@ -339,7 +339,7 @@ std::unique_ptr<column> boolean_mask_scatter(
     cudaStream_t stream) {
 
     auto indices = cudf::make_numeric_column(data_type{INT32},
-                                  target.size(), UNALLOCATED, stream, mr);
+                                  target.size(), mask_state::UNALLOCATED, stream, mr);
     auto mutable_indices = indices->mutable_view();
 
     thrust::sequence(rmm::exec_policy(stream)->on(stream),
