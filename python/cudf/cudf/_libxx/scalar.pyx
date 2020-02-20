@@ -29,11 +29,18 @@ cdef class Scalar:
         from cudf.utils.dtypes import to_cudf_compatible_scalar
 
         value = to_cudf_compatible_scalar(value, dtype=dtype)
-        dtype = dtype or value.dtype
         valid = value is not None
 
+        if dtype is None:
+            if value is None:
+                raise TypeError("dtype required when constructing a null scalar")
+            else:
+                dtype = value.dtype
+
+        dtype = np.dtype(dtype)
+
         if pd.api.types.is_string_dtype(dtype):
-            _set_string_from_py_string(self.c_value, value.item(), valid)
+            _set_string_from_np_string(self.c_value, value, valid)
         elif pd.api.types.is_numeric_dtype(dtype):
             _set_numeric_from_np_scalar(self.c_value, value, dtype, valid)
         elif pd.api.types.is_datetime64_dtype(dtype):
@@ -81,15 +88,15 @@ cdef class Scalar:
         return s
 
 
-cdef _set_string_from_py_string(unique_ptr[scalar]& s, value, bool valid=True):
-    value = value if valid else ""
+cdef _set_string_from_np_string(unique_ptr[scalar]& s, value, bool valid=True):
+    value = value.item() if valid else ""
     s.reset(new string_scalar(value.encode(), valid))
 
 
 cdef _set_numeric_from_np_scalar(unique_ptr[scalar]& s, value, dtype, bool valid=True):
     value = value if valid else 0
     if dtype == "int8":
-        s.reset(new numeric_scalar[int32_t](value, valid))
+        s.reset(new numeric_scalar[int8_t](value, valid))
     elif dtype == "int16":
         s.reset(new numeric_scalar[int16_t](value, valid))
     elif dtype == "int32":
@@ -103,7 +110,7 @@ cdef _set_numeric_from_np_scalar(unique_ptr[scalar]& s, value, dtype, bool valid
     elif dtype == "bool":
         s.reset(new numeric_scalar[bool8](<bool>value, valid))
     else:
-        raise ValueError("dtype not supported: {}".format(value.dtype.name))
+        raise ValueError("dtype not supported: {}".format(dtype))
 
 
 cdef _set_datetime64_from_np_scalar(unique_ptr[scalar]& s, value, dtype, bool valid=True):
@@ -117,7 +124,7 @@ cdef _set_datetime64_from_np_scalar(unique_ptr[scalar]& s, value, dtype, bool va
     elif dtype == "datetime64[ns]":
         s.reset(new timestamp_scalar[timestamp_ns](<int64_t>np.int64(value), valid))
     else:
-        raise ValueError("dtype not supported: {}".format(value.dtype.name))
+        raise ValueError("dtype not supported: {}".format(dtypne))
 
 
 cdef _get_py_string_from_string(unique_ptr[scalar]& s):

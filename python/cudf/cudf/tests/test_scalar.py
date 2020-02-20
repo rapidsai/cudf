@@ -42,3 +42,25 @@ from cudf._libxx.scalar import Scalar
 def test_round_trip_scalar(value):
     s = Scalar(value)
     assert s.value == value
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "float32",
+        "float64",
+        "datetime64[s]",
+        "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
+        "object",
+    ],
+)
+def test_null_scalar(dtype):
+    s = Scalar(None, dtype=dtype)
+    assert s.value is None
+    assert s.dtype == np.dtype(dtype)
