@@ -164,6 +164,9 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf::experimental" nogil:
     cdef cppclass aggregation:
         pass
 
+cdef extern from "cudf/wrappers/bool.hpp" namespace "cudf::experimental" nogil:
+    ctypedef bool bool8
+
 cdef extern from "cudf/wrappers/timestamps.hpp" namespace "cudf" nogil:
     ctypedef int64_t timestamp_s
     ctypedef int64_t timestamp_ms

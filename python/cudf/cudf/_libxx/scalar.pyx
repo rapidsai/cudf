@@ -3,6 +3,7 @@ import pandas as pd
 
 from libc.stdint cimport int8_t
 from libcpp.memory cimport *
+from libcpp cimport bool
 from cudf._libxx.lib cimport *
 from cudf._libxx.lib import *
 
@@ -100,7 +101,7 @@ cdef _set_numeric_from_np_scalar(unique_ptr[scalar]& s, value, dtype, bool valid
     elif dtype == "float64":
         s.reset(new numeric_scalar[double](value, valid))
     elif dtype == "bool":
-        s.reset(new numeric_scalar[bool](value, valid))
+        s.reset(new numeric_scalar[bool8](<bool>value, valid))
     else:
         raise ValueError("dtype not supported: {}".format(value.dtype.name))
 
@@ -144,7 +145,7 @@ cdef _get_np_scalar_from_numeric(unique_ptr[scalar]& s):
     elif cdtype.id() == FLOAT64:
         return np.float32((<numeric_scalar[double]*>s.get())[0].value())
     elif cdtype.id() == BOOL8:
-        return np.bool((<numeric_scalar[uint8_t]*>s.get())[0].value())
+        return np.bool((<numeric_scalar[bool8]*>s.get())[0].value())
     else:
         raise ValueError("Could not convert cudf::scalar to numpy scalar")
 
