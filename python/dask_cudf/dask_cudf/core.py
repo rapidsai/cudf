@@ -186,12 +186,15 @@ class DataFrame(_Frame, dd.core.DataFrame):
             by = other
             if not isinstance(other, list):
                 by = [by]
+            if len(by) > 1:
+                raise ValueError("Dask does not support MultiIndex (yet).")
             df = self.sort_values(
                 by,
                 experimental=experimental,
                 explicit_client=explicit_client,
                 max_branch=max_branch,
                 divisions=divisions,
+                set_divisions=True,
                 sorted_split=kwargs.get("sorted_split", False),
                 upsample=kwargs.get("upsample", 1.0),
             )
@@ -278,6 +281,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
                     sorted_split=sorted_split,
                     upsample=upsample,
                     divisions=kwargs.get("divisions", None),
+                    set_divisions=kwargs.get("set_divisions", False),
                 )
             else:
                 # Legacy sorting algorithm based on "batcher-sortnet"

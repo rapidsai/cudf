@@ -167,9 +167,9 @@ def set_partitions_pre(s, divisions):
     partitions = divisions.searchsorted(s, side="right") - 1
 
     # Use searchsorted to avoid string-compare limitations
-    partitions[divisions.tail(1).searchsorted(s, side="right")] = (
-        len(divisions) - 2
-    )
+    partitions[
+        divisions.tail(1).searchsorted(s, side="right").astype("bool")
+    ] = (len(divisions) - 2)
 
     return partitions
 
@@ -397,6 +397,7 @@ def sort_values_experimental(
     divisions=None,
     sorted_split=False,
     upsample=1.0,
+    set_divisions=False,
 ):
     """ Experimental sort_values implementation.
 
@@ -489,7 +490,6 @@ def sort_values_experimental(
         # (That is: Use main-line dask shuffle)
         # TODO: Handle len(index) > 1
         meta = df2._meta._constructor_sliced([0])
-        # meta = df2._meta_nonempty
         if not isinstance(divisions, (gd.Series, gd.DataFrame)):
             dtype = df2[index[0]].dtype
             divisions = df2._meta._constructor_sliced(divisions, dtype=dtype)
@@ -497,6 +497,7 @@ def sort_values_experimental(
         partitions = df2[index].map_partitions(
             set_partitions_pre, divisions=divisions, meta=meta
         )
+
         df2b = df2.assign(_partitions=partitions)
         df3 = rearrange_by_column(
             df2b,
@@ -513,5 +514,8 @@ def sort_values_experimental(
         df4 = df3
     else:
         df4 = df3.map_partitions(M.sort_values, by)
-    df4.divisions = tuple(divisions)
+
+    if not isinstance(divisions, gd.DataFrame) and set_divisions:
+        # Can't have multi-column divisions elsewhere in dask (yet)
+        df4.divisions = tuple(divisions)
     return df4
