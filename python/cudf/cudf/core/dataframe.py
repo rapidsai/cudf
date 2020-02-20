@@ -3126,11 +3126,10 @@ class DataFrame(Frame):
         -------
         partitioned: list of DataFrame
         """
-        # Call hash_partition
         key_indices = [self._data.names.index(k) for k in columns]
-        outputs, offsets = self._hash_partition(key_indices, nparts)
+        outdf, offsets = self._hash_partition(key_indices, nparts)
         # Slice into partition
-        return [outputs[s:e] for s, e in zip(offsets, offsets[1:] + [None])]
+        return [outdf[s:e] for s, e in zip(offsets, offsets[1:] + [None])]
 
     def replace(self, to_replace, replacement):
         """

@@ -19,13 +19,13 @@ def hash_partition(Table source_table, object columns_to_hash,
                    int num_partitions):
     cdef vector[size_type] c_columns_to_hash = columns_to_hash
     cdef int c_num_partitions = num_partitions
-    cdef table_view source_view = source_table.view()
+    cdef table_view c_source_view = source_table.view()
 
     cdef pair[unique_ptr[table], vector[size_type]] c_result
     with nogil:
         c_result = move(
             cpp_hash_partition(
-                source_view,
+                c_source_view,
                 c_columns_to_hash,
                 c_num_partitions
             )
@@ -42,13 +42,13 @@ def hash_partition(Table source_table, object columns_to_hash,
 
 def hash(Table source_table, object initial_hash_values=None):
     cdef vector[uint32_t] c_initial_hash = initial_hash_values or []
-    cdef table_view source_view = source_table.data_view()
+    cdef table_view c_source_view = source_table.data_view()
 
     cdef unique_ptr[column] c_result
     with nogil:
         c_result = move(
             cpp_hash(
-                source_view,
+                c_source_view,
                 c_initial_hash
             )
         )
