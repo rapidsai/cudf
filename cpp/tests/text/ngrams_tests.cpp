@@ -17,11 +17,12 @@
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-#include <nvtext/generate_ngrams.hpp>
-
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/column_utilities.hpp>
+#include <tests/strings/utilities.h>
+
+#include <nvtext/generate_ngrams.hpp>
 
 #include <vector>
 
@@ -49,3 +50,25 @@ TEST_F(TextGenerateNgramsTest, Ngrams)
     }
 }
 
+TEST_F(TextGenerateNgramsTest, Empty)
+{
+    cudf::column_view zero_size_strings_column( cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
+    auto results = nvtext::generate_ngrams(cudf::strings_column_view(zero_size_strings_column));
+    cudf::test::expect_strings_empty(results->view());
+
+    std::vector<const char*> h_strings{ "", nullptr, "", nullptr };
+    cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
+        thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+    results = nvtext::generate_ngrams(cudf::strings_column_view(strings));
+    cudf::test::expect_strings_empty(results->view());
+}
+
+TEST_F(TextGenerateNgramsTest, Errors)
+{
+    cudf::test::strings_column_wrapper strings{ "this string intentionally left blank" };
+    // invalid parameter value
+    EXPECT_THROW( nvtext::generate_ngrams(cudf::strings_column_view(strings),1), cudf::logic_error );
+    // not enough strings to generate ngrams
+    EXPECT_THROW( nvtext::generate_ngrams(cudf::strings_column_view(strings),3), cudf::logic_error );
+}
