@@ -12,6 +12,9 @@ cpdef join(Table lhs, Table rhs, object left_on, object right_on, object how, ob
     Returns a list of tuples [(column, valid, name), ...]
     """
 
+    cdef Table c_lhs = lhs
+    cdef Table c_rhs = rhs
+
     cdef vector[int] left_on_ind
     cdef vector[int] right_on_ind
     cdef vector[pair[int, int]] columns_in_common
@@ -38,8 +41,8 @@ cpdef join(Table lhs, Table rhs, object left_on, object right_on, object how, ob
         # the result will be returned as a gather from the other column, and the index itself drops
         # In addition, the opposite index ends up as the final index 
         # Thus if either are true, we need to process both indices as join columns
-        lhs_view = lhs.view()
-        rhs_view = rhs.view()
+        lhs_view = c_lhs.view()
+        rhs_view = c_rhs.view()
 
         left_join_cols = [lhs.index.name] + list(lhs._data.keys())
         right_join_cols = [rhs.index.name] + list(rhs._data.keys())
@@ -70,8 +73,8 @@ cpdef join(Table lhs, Table rhs, object left_on, object right_on, object how, ob
     else:
         # If neither index is specified, we can exclude them from the join completely
         # cuDF's Python layer will create a new RangeIndex for this case
-        lhs_view = lhs.data_view()
-        rhs_view = rhs.data_view()
+        lhs_view = c_lhs.data_view()
+        rhs_view = c_rhs.data_view()
 
         left_join_cols = list(lhs._data.keys())
         right_join_cols = list(rhs._data.keys())
