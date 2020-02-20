@@ -573,20 +573,6 @@ def _normalize_find_and_replace_input(input_column_dtype, col_to_normalize):
     return normalized_column.astype(input_column_dtype)
 
 
-def column_hash_values(column0, *other_columns, initial_hash_values=None):
-    """Hash all values in the given columns.
-    Returns a new NumericalColumn[int32]
-    """
-    from cudf.core.column import column_empty
-
-    columns = [column0] + list(other_columns)
-    result = column_empty(len(column0), dtype=np.int32, masked=False)
-    if initial_hash_values:
-        initial_hash_values = rmm.to_device(initial_hash_values)
-    libcudf.hash.hash_columns(columns, result, initial_hash_values)
-    return result
-
-
 def digitize(column, bins, right=False):
     """Return the indices of the bins to which each value in column belongs.
 
