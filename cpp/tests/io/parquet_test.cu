@@ -502,7 +502,7 @@ TEST_F(ParquetChunkedWriterTest, LargeTables)
       fseek(f, 0, SEEK_END);
       size_t raw_size = ftell(f);      
       fseek(f, 0, SEEK_SET);      
-      
+
       char *raw = new char[raw_size];
       size_t read = fread(raw, raw_size, 1, f);
       if(read != 1){
@@ -519,6 +519,7 @@ TEST_F(ParquetChunkedWriterTest, LargeTables)
           printf("RAW BUFFER MISMATCH\n");
         }
       }
+      delete[] raw;
     }
 
     cudf_io::read_parquet_args v_read_args{cudf_io::source_info{PQ_chk_buf, PQ_chk_buf_size}};
