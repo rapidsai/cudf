@@ -475,7 +475,7 @@ TEST_F(ParquetChunkedWriterTest, SimpleTable)
 TEST_F(ParquetChunkedWriterTest, LargeTables)
 {
   int idx;
-  for(idx=0; idx<128; idx++){
+  for(idx=0; idx<256; idx++){
     srand(31337);
     auto table1 = create_random_fixed_table<int>(512, 4096, true);
     auto table2 = create_random_fixed_table<int>(512, 8192, true);

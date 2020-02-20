@@ -410,7 +410,7 @@ void writer::impl::write_chunked(table_view const& table, pq_chunked_state& stat
   size_type num_columns = table.num_columns();
   size_type num_rows = 0;
 
-  printf("PQD : Write chunked\n");
+  //printf("PQD : Write chunked\n");
 
   // Wrapper around cudf columns to attach parquet-specific type info.
   // Note : I wish we could do this in the begin() function but since the
@@ -427,14 +427,14 @@ void writer::impl::write_chunked(table_view const& table, pq_chunked_state& stat
   }  
 
   if(state.user_metadata_with_nullability.column_nullable.size() > 0){
-    printf("PQD :   Have column_nullable data\n");
+    //printf("PQD :   Have column_nullable data\n");
     CUDF_EXPECTS(state.user_metadata_with_nullability.column_nullable.size() == static_cast<size_t>(num_columns), "When passing values in user_metadata_with_nullability, data for all columns must be specified");
   }
 
   // first call. setup metadata. num_rows will get incremented as write_chunked is 
   // called multiple times.
   if(state.md.version == 0){  
-    printf("PQD :    Pass 0 : stream : %lu, num_rows %d, num_columns %d, user metadata : %s\n", reinterpret_cast<int64_t>(state.stream), num_rows, num_columns, state.user_metadata == nullptr ? "no" : "yes");
+    //printf("PQD :    Pass 0 : stream : %lu, num_rows %d, num_columns %d, user metadata : %s\n", reinterpret_cast<int64_t>(state.stream), num_rows, num_columns, state.user_metadata == nullptr ? "no" : "yes");
 
     state.md.version = 1;
     state.md.num_rows = num_rows;
@@ -485,7 +485,7 @@ void writer::impl::write_chunked(table_view const& table, pq_chunked_state& stat
     // increment num rows
     state.md.num_rows += num_rows;
 
-    printf("PQD :    Pass N : stream : %lu, num_rows %d, total rows %lu, num_columns %d, user metadata : %s\n", reinterpret_cast<int64_t>(state.stream), num_rows, state.md.num_rows, num_columns, state.user_metadata == nullptr ? "no" : "yes");
+    //printf("PQD :    Pass N : stream : %lu, num_rows %d, total rows %lu, num_columns %d, user metadata : %s\n", reinterpret_cast<int64_t>(state.stream), num_rows, state.md.num_rows, num_columns, state.user_metadata == nullptr ? "no" : "yes");
   }
 
   // Initialize column description    
@@ -558,7 +558,7 @@ void writer::impl::write_chunked(table_view const& table, pq_chunked_state& stat
     }
   }
 
-  printf("PQD :    num_rowgroups %d, global num_rowgroups %lu\n", num_rowgroups, global_rowgroup_base + num_rowgroups);
+  //printf("PQD :    num_rowgroups %d, global num_rowgroups %lu\n", num_rowgroups, global_rowgroup_base + num_rowgroups);
 
   // Allocate column chunks and gather fragment statistics
   rmm::device_vector<statistics_chunk> frag_stats;
@@ -697,7 +697,7 @@ void writer::impl::write_chunked(table_view const& table, pq_chunked_state& stat
       }
     }
   }
-  printf("PQD :    num chunks %d, num pages %d, num_stats_bfr %d\n", num_chunks, num_pages, num_stats_bfr);
+  //printf("PQD :    num chunks %d, num pages %d, num_stats_bfr %d\n", num_chunks, num_pages, num_stats_bfr);
 
   if (num_pages != 0) {    
     init_encoder_pages(chunks, col_desc, pages.data().get(),
@@ -723,7 +723,7 @@ void writer::impl::write_chunked(table_view const& table, pq_chunked_state& stat
     uint32_t first_page_in_batch = chunks[r * num_columns].first_page;
     uint32_t first_page_in_next_batch = (rnext < num_rowgroups) ? chunks[rnext * num_columns].first_page : num_pages;
     uint32_t pages_in_batch = first_page_in_next_batch - first_page_in_batch;
-    printf("PQD :    first page %d, first page next %d, pages in batch %d\n", first_page_in_batch, first_page_in_next_batch, pages_in_batch);
+    //printf("PQD :    first page %d, first page next %d, pages in batch %d\n", first_page_in_batch, first_page_in_next_batch, pages_in_batch);
     encode_pages(chunks, pages.data().get(), num_columns, pages_in_batch, first_page_in_batch, 
                  batch_list[b], r, comp_in.data().get(), comp_out.data().get(),
                  (stats_granularity_ == statistics_freq::STATISTICS_PAGE) ? page_stats.data().get() : nullptr,
@@ -743,7 +743,7 @@ void writer::impl::write_chunked(table_view const& table, pq_chunked_state& stat
         CUDA_TRY(cudaMemcpyAsync(host_bfr.get(), dev_bfr, ck->ck_stat_size + ck->compressed_size,
                                  cudaMemcpyDeviceToHost, state.stream));
         CUDA_TRY(cudaStreamSynchronize(state.stream));
-        printf("(%d %d %d) ", ck->compressed_size, ck->ck_stat_size, ck->dictionary_size);
+        //printf("(%d %d %d) ", ck->compressed_size, ck->ck_stat_size, ck->dictionary_size);
         state.md.row_groups[global_r].total_byte_size += ck->compressed_size;
         state.md.row_groups[global_r].columns[i].meta_data.data_page_offset = state.current_chunk_offset + ((ck->has_dictionary) ? ck->dictionary_size : 0);
         state.md.row_groups[global_r].columns[i].meta_data.dictionary_page_offset = (ck->has_dictionary) ? state.current_chunk_offset : 0;
@@ -756,11 +756,11 @@ void writer::impl::write_chunked(table_view const& table, pq_chunked_state& stat
         }
         state.current_chunk_offset += ck->compressed_size;
       }
-      printf("\n");
+      //printf("\n");
     }
   }
 
-  printf("PQD :    Bytes written : %lu\n", out_sink_->bytes_written());
+  //printf("PQD :    Bytes written : %lu\n", out_sink_->bytes_written());
 }
 
 void writer::impl::write_chunked_end(pq_chunked_state &state){    
