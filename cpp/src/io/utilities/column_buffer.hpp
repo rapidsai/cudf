@@ -72,7 +72,7 @@ struct column_buffer {
       _data = create_data(type, size, stream, mr);
     }
     if (is_nullable) {
-      _null_mask = create_null_mask(size, ALL_NULL, stream, mr);
+      _null_mask = create_null_mask(size, mask_state::ALL_NULL, stream, mr);
     }
     _null_count = 0;
   }
