@@ -58,26 +58,25 @@ std::unique_ptr<column> remove_keys_fn( dictionary_column_view const& dictionary
                                         cudaStream_t stream = 0)
 {
     // create keys positions column to identify original key positions after removing they keys
-    auto keys_view = dictionary_column.keys();
+    auto const keys_view = dictionary_column.keys();
     auto execpol = rmm::exec_policy(stream);
     rmm::device_vector<int32_t> keys_positions(keys_view.size()); // needed for remapping indices
     thrust::sequence( execpol->on(stream), keys_positions.begin(), keys_positions.end() );
     column_view keys_positions_view( data_type{INT32}, keys_view.size(), keys_positions.data().get() );
 
     // copy the non-removed keys ( keys_to_keep_fn(idx)==true )
-    std::unique_ptr<column> keys_column;
     rmm::device_vector<int32_t> map_indices(keys_view.size(),-1); // init -1 to identify new nulls
-    {
+    std::unique_ptr<column> keys_column = [&] {
         auto table_keys = experimental::detail::copy_if( table_view{{keys_view, keys_positions_view}},
                                                          keys_to_keep_fn, mr, stream )->release();
-        keys_column = std::move(table_keys.front());
         keys_positions_view = table_keys[1]->view();
         // build indices mapper
         // Example scatter([0,1,2][0,2,4][-1,-1,-1,-1,-1]) => [0,-1,1,-1,2]
         thrust::scatter( execpol->on(stream), thrust::make_counting_iterator<int32_t>(0),
                          thrust::make_counting_iterator<int32_t>(keys_positions_view.size()),
                          keys_positions_view.begin<int32_t>(), map_indices.begin() );
-    } // frees up the temporary table_keys objects
+        return std::move(table_keys.front());
+    } (); // frees up the temporary table_keys objects
 
     column_view indices_view( data_type{INT32}, dictionary_column.size(), 
                               dictionary_column.indices().data<int32_t>(),
@@ -99,9 +98,7 @@ std::unique_ptr<column> remove_keys_fn( dictionary_column_view const& dictionary
                             return false;
                         return (d_indices[idx] >= 0); // new nulls have negative values
                     }, stream, mr);
-    rmm::device_buffer new_null_mask;
-    if( new_nulls.second > 0 )
-        new_null_mask = std::move(new_nulls.first);
+    rmm::device_buffer new_null_mask = (new_nulls.second > 0) ? std::move(new_nulls.first) : rmm::device_buffer{};
 
     // create column with keys_column and indices_column
     return make_dictionary_column( std::move(keys_column), std::move(indices_column),
