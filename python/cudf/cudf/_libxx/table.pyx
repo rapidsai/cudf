@@ -17,10 +17,6 @@ from cudf._libxx.lib cimport *
 from cudf.core.column_accessor import ColumnAccessor
 from cudf._libxx.column cimport Column
 
-cdef class TableColumns:
-    def __init__(self, cols):
-        self.columns = cols
-
 cdef class Table:
     def __init__(self, data=None, index=None):
         """
