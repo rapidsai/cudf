@@ -15,7 +15,8 @@ from cudf._libxx.column cimport Column
 from cudf._libxx.includes.null_mask cimport (
     copy_bitmask as cpp_copy_bitmask,
     create_null_mask as cpp_create_null_mask,
-    bitmask_allocation_size_bytes as cpp_bitmask_allocation_size_bytes
+    bitmask_allocation_size_bytes as cpp_bitmask_allocation_size_bytes,
+    mask_state_underlying_type
 )
 
 from cudf.core.buffer import Buffer
