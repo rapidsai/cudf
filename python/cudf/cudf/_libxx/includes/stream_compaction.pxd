@@ -1,7 +1,13 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+# cython: profile=False
+# distutils: language = c++
+# cython: embedsignature = True
+# cython: language_level = 3
+
 from cudf._libxx.lib import *
 from cudf._libxx.lib cimport *
+
 
 cdef extern from "cudf/stream_compaction.hpp" namespace "cudf::experimental" \
         nogil:
@@ -12,16 +18,18 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf::experimental" \
 
     cdef unique_ptr[table] drop_nulls(table_view source_table,
                                       vector[size_type] keys,
-                                      size_type keep_threshold)
+                                      size_type keep_threshold) except +
 
-    cdef unique_ptr[table] apply_boolean_mask(table_view source_table,
-                                              column_view boolean_mask)
+    cdef unique_ptr[table] apply_boolean_mask(
+        table_view source_table,
+        column_view boolean_mask
+    ) except +
 
     cdef unique_ptr[table] drop_duplicates(table_view source_table,
                                            vector[size_type] keys,
                                            duplicate_keep_option keep,
-                                           bool nulls_are_equal)
+                                           bool nulls_are_equal) except +
 
     cdef size_type unique_count(column_view source_table,
                                 bool ignore_nulls,
-                                bool nan_as_null)
+                                bool nan_as_null) except +

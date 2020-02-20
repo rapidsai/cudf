@@ -444,7 +444,7 @@ def test_dataframe_to_string():
     df = DataFrame({"a": [1, 2, 3, 4, 5, 6], "b": [11, 12, 13, 14, 15, 16]})
 
     data = np.arange(6)
-    mask = np.zeros(1, dtype=np.uint8)
+    mask = np.zeros(1, dtype=gd.utils.utils.mask_dtype)
     mask[0] = 0b00101101
 
     masked = Series.from_masked_array(data, mask)
@@ -1203,8 +1203,8 @@ def test_to_from_arrow_nulls(data_type):
     # We have 64B padded buffers for nulls whereas Arrow returns a minimal
     # number of bytes, so only check the first byte in this case
     np.testing.assert_array_equal(
-        np.array(s1.buffers()[0])[0],
-        gs1._column.mask_array_view.copy_to_host()[0],
+        np.asarray(s1.buffers()[0]).view("u1")[0],
+        gs1._column.mask_array_view.copy_to_host().view("u1")[0],
     )
     assert pa.Array.equals(s1, gs1.to_arrow())
 
@@ -1214,8 +1214,8 @@ def test_to_from_arrow_nulls(data_type):
     # We have 64B padded buffers for nulls whereas Arrow returns a minimal
     # number of bytes, so only check the first byte in this case
     np.testing.assert_array_equal(
-        np.array(s2.buffers()[0])[0],
-        gs2._column.mask_array_view.copy_to_host()[0],
+        np.asarray(s2.buffers()[0]).view("u1")[0],
+        gs2._column.mask_array_view.copy_to_host().view("u1")[0],
     )
     assert pa.Array.equals(s2, gs2.to_arrow())
 
@@ -1362,22 +1362,22 @@ def test_dataframe_shape_empty():
 )
 @pytest.mark.parametrize("nulls", ["none", "some", "all"])
 def test_dataframe_transpose(nulls, num_cols, num_rows, dtype):
-    if dtype not in ["float32", "float64"] and nulls in ["some", "all"]:
-        pytest.skip(msg="nulls not supported in dtype: " + dtype)
 
     pdf = pd.DataFrame()
     from string import ascii_lowercase
 
+    null_rep = np.nan if dtype in ["float32", "float64"] else None
+
     for i in range(num_cols):
         colname = ascii_lowercase[i]
-        data = np.random.randint(0, 26, num_rows).astype(dtype)
+        data = pd.Series(np.random.randint(0, 26, num_rows).astype(dtype))
         if nulls == "some":
             idx = np.random.choice(
                 num_rows, size=int(num_rows / 2), replace=False
             )
-            data[idx] = np.nan
+            data[idx] = null_rep
         elif nulls == "all":
-            data[:] = np.nan
+            data[:] = null_rep
         pdf[colname] = data
 
     gdf = DataFrame.from_pandas(pdf)
@@ -1391,10 +1391,9 @@ def test_dataframe_transpose(nulls, num_cols, num_rows, dtype):
     assert_eq(expect, got_property)
 
 
-@pytest.mark.parametrize("num_cols", [0, 1, 2, 10])
-@pytest.mark.parametrize("num_rows", [0, 1, 2, 1000])
-def test_dataframe_tranpose_category(num_cols, num_rows):
-    pytest.xfail("category dtype not yet supported for transpose")
+@pytest.mark.parametrize("num_cols", [1, 2, 10])
+@pytest.mark.parametrize("num_rows", [1, 2, 20])
+def test_dataframe_transpose_category(num_cols, num_rows):
     pdf = pd.DataFrame()
     from string import ascii_lowercase
 
@@ -1409,10 +1408,17 @@ def test_dataframe_tranpose_category(num_cols, num_rows):
     got_function = gdf.transpose()
     got_property = gdf.T
 
+    # materialize our categoricals because pandas
+    for name, col in got_function._data.items():
+        got_function[name] = col.astype(col.dtype.type)
+
+    for name, col in got_property._data.items():
+        got_property[name] = col.astype(col.dtype.type)
+
     expect = pdf.transpose()
 
-    pd.testing.assert_frame_equal(expect, got_function.to_pandas())
-    pd.testing.assert_frame_equal(expect, got_property.to_pandas())
+    assert_eq(expect, got_function.to_pandas())
+    assert_eq(expect, got_property.to_pandas())
 
 
 def test_generated_column():
@@ -2999,9 +3005,9 @@ def test_dataframe_sizeof(indexed):
 
     gdf = gd.DataFrame({"A": [8] * rows, "B": [32] * rows}, index=index)
 
-    for c in gdf._data.values():
+    for c in gdf._data.columns:
         assert gdf._index.__sizeof__() == gdf._index.__sizeof__()
-    cols_sizeof = sum(c.__sizeof__() for c in gdf._data.values())
+    cols_sizeof = sum(c.__sizeof__() for c in gdf._data.columns)
     assert gdf.__sizeof__() == (gdf._index.__sizeof__() + cols_sizeof)
 
 
@@ -4345,10 +4351,7 @@ def test_memory_usage_multi():
 def test_setitem_diff_size_list(list_input, key):
     gdf = gd.datasets.randomdata(5)
     with pytest.raises(
-        ValueError,
-        match=(
-            "Cannot insert Column of different length into OrderedColumnDict"
-        ),
+        ValueError, match=("All values must be of equal length")
     ):
         gdf[key] = list_input
 
@@ -4407,3 +4410,22 @@ def test_init_multiindex_from_dict():
     gdf = DataFrame({("a", "b"): [1]})
     assert_eq(pdf, gdf)
     assert_eq(pdf.columns, gdf.columns)
+
+
+def test_change_column_dtype_in_empty():
+    pdf = pd.DataFrame({"a": [], "b": []})
+    gdf = gd.from_pandas(pdf)
+    assert_eq(pdf, gdf)
+    pdf["b"] = pdf["b"].astype("int64")
+    gdf["b"] = gdf["b"].astype("int64")
+    assert_eq(pdf, gdf)
+
+
+def test_dataframe_from_table_empty_index():
+    from cudf._libxx.table import Table
+
+    df = DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    odict = df._data
+    tbl = Table(odict)
+
+    result = DataFrame._from_table(tbl)  # noqa: F841

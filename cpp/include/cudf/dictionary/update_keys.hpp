@@ -31,10 +31,14 @@ namespace dictionary
  * before any of the existing dictionary elements.
  *
  * ```
- * d1 = {["a","c","d"],[2,0,1,0]}
- * d2 = add_keys(d1,["b","c"])
- * d2 is now {["a","b","c","d"],[3,0,2,0]}
+ * d1 = { keys=["a", "c", "d"], indices=[2, 0, 1, 0, 1]}
+ * d2 = add_keys( d1, ["b", "c"] )
+ * d2 is now {keys=["a", "b", "c", "d"], indices=[3, 0, 2, 0, 2]}
  * ```
+ *
+ * The output column will have the same number of rows as the input column.
+ * Null entries from the input column are copied to the output column.
+ * No new null entries are created by this operation.
  *
  * @throw cudf_logic_error if the new_keys type does not match the keys type in
  *        the dictionary_column.

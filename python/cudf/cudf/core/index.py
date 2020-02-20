@@ -5,6 +5,7 @@ from __future__ import division, print_function
 import functools
 import pickle
 
+import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -75,7 +76,7 @@ class Index(Frame):
 
         header["name"] = pickle.dumps(self.name)
         header["dtype"] = pickle.dumps(self.dtype)
-        header["type"] = pickle.dumps(type(self))
+        header["type-serialized"] = pickle.dumps(type(self))
         header["frame_count"] = len(frames)
         return header, frames
 
@@ -87,16 +88,20 @@ class Index(Frame):
         """
         """
         h = header["index_column"]
-        idx_typ = pickle.loads(header["type"])
+        idx_typ = pickle.loads(header["type-serialized"])
         name = pickle.loads(header["name"])
 
-        col_typ = pickle.loads(h["type"])
+        col_typ = pickle.loads(h["type-serialized"])
         index = col_typ.deserialize(h, frames[: header["frame_count"]])
         return idx_typ(index, name=name)
 
     @property
+    def names(self):
+        return (self.name,)
+
+    @property
     def name(self):
-        return next(iter(self._data.keys()))
+        return next(iter(self._data.names))
 
     @name.setter
     def name(self, value):
@@ -125,7 +130,16 @@ class Index(Frame):
 
     @property
     def values(self):
-        return np.asarray([i for i in self._values])
+        if is_categorical_dtype(self.dtype) or np.issubdtype(
+            self.dtype, np.dtype("object")
+        ):
+            raise TypeError("Data must be numeric")
+        if len(self) == 0:
+            return cupy.asarray([], dtype=self.dtype)
+        if self._values.null_count > 0:
+            raise ValueError("Column must have no nulls.")
+
+        return cupy.asarray(self._values.data_array_view)
 
     def to_pandas(self):
         return pd.Index(self._values.to_pandas(), name=self.name)
@@ -459,7 +473,7 @@ class Index(Frame):
             raise ValueError("Cannot construct Index from any empty Table")
         if table._num_columns == 1:
             return as_index(
-                next(iter(table._data.values())),
+                next(iter(table._data.columns)),
                 name=next(iter(table._data.keys())),
             )
         else:
@@ -516,9 +530,9 @@ class RangeIndex(Index):
 
     @property
     def _data(self):
-        from cudf.utils.utils import OrderedColumnDict
+        from cudf.core.column_accessor import ColumnAccessor
 
-        return OrderedColumnDict({self.name: self._values})
+        return ColumnAccessor({self.name: self._values})
 
     def __contains__(self, item):
         if not isinstance(
@@ -614,7 +628,7 @@ class RangeIndex(Index):
 
         header["name"] = pickle.dumps(self.name)
         header["dtype"] = pickle.dumps(self.dtype)
-        header["type"] = pickle.dumps(type(self))
+        header["type-serialized"] = pickle.dumps(type(self))
         header["frame_count"] = 0
         return header, frames
 
@@ -758,7 +772,7 @@ class GenericIndex(Index):
 
     @property
     def _values(self):
-        return next(iter(self._data.values()))
+        return next(iter(self._data.columns))
 
     def copy(self, deep=True):
         result = as_index(self._values.copy(deep=deep))
@@ -827,27 +841,6 @@ class GenericIndex(Index):
             end = col.find_last_value(last, closest=True)
             end += 1
         return begin, end
-
-    def searchsorted(self, value, side="left"):
-        """Find indices where elements should be inserted to maintain order
-
-        Parameters
-        ----------
-        value : Column
-            Column of values to search for
-        side : str {‘left’, ‘right’} optional
-            If ‘left’, the index of the first suitable location found is given.
-            If ‘right’, return the last such index
-
-        Returns
-        -------
-        An index series of insertion points with the same shape as value
-        """
-        from cudf.core.series import Series
-
-        idx_series = Series(self, name=self.name)
-        result = idx_series.searchsorted(value, side)
-        return as_index(result)
 
     @property
     def is_unique(self):
@@ -973,10 +966,6 @@ class CategoricalIndex(GenericIndex):
         super(CategoricalIndex, self).__init__(values, **kwargs)
 
     @property
-    def names(self):
-        return [self._values.name]
-
-    @property
     def codes(self):
         return self._values.cat().codes
 
@@ -1005,7 +994,7 @@ class StringIndex(GenericIndex):
         super(StringIndex, self).__init__(values, **kwargs)
 
     def to_pandas(self):
-        return pd.Index(self.values, name=self.name, dtype="object")
+        return pd.Index(self.to_array(), name=self.name, dtype="object")
 
     def take(self, indices):
         return self._values[indices]
@@ -1065,13 +1054,13 @@ def as_index(arbitrary, **kwargs):
     elif isinstance(arbitrary, cudf.Series):
         return as_index(arbitrary._column, **kwargs)
     elif isinstance(arbitrary, pd.RangeIndex):
-        return RangeIndex(
-            start=arbitrary._start, stop=arbitrary._stop, **kwargs
-        )
+        return RangeIndex(start=arbitrary.start, stop=arbitrary.stop, **kwargs)
     elif isinstance(arbitrary, pd.MultiIndex):
         return cudf.MultiIndex.from_pandas(arbitrary)
-    else:
-        return as_index(column.as_column(arbitrary), **kwargs)
+    elif isinstance(arbitrary, range):
+        if arbitrary.step == 1:
+            return RangeIndex(arbitrary.start, arbitrary.stop, **kwargs)
+    return as_index(column.as_column(arbitrary), **kwargs)
 
 
 def _setdefault_name(values, kwargs):

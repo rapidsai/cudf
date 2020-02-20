@@ -19,49 +19,14 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/detail/utilities/release_assert.cuh>
+#include <cudf/aggregation.hpp>
 #include <cudf/types.hpp>
 
 namespace cudf {
 namespace experimental {
-/**
- * @brief Base class for specifying the desired aggregation in an
- * `aggregation_request`.
- *
- * This type is meant to be opaque in the public interface.
- *
- * Other kinds of aggregations may derive from this class to encapsulate
- * additional information needed to compute the aggregation.
- */
-class aggregation {
- public:
-  /**
-   * @brief Possible aggregation operations
-   */
-  enum Kind {
-    SUM,       ///< sum reduction
-    PRODUCT,   ///< product reduction
-    MIN,       ///< min reduction
-    MAX,       ///< max reduction
-    COUNT,     ///< count number of elements
-    ANY,       ///< any reduction
-    ALL,       ///< all reduction
-    SUM_OF_SQUARES, ///< sum of squares reduction
-    MEAN,      ///< arithmetic mean reduction
-    VARIANCE,  ///< groupwise variance
-    STD,       ///< groupwise standard deviation
-    MEDIAN,    ///< median reduction
-    QUANTILE,  ///< compute specified quantile(s)
-    ARGMAX,    ///< Index of max element
-    ARGMIN,    ///< Index of min element
-    PTX,       ///< PTX UDF based reduction
-    CUDA       ///< CUDA UDf based reduction
-  };
 
-  aggregation(aggregation::Kind a) : kind{a} {}
-  Kind kind;  ///< The aggregation to perform
+enum class include_nulls : bool; //forward declaration
 
-  bool operator==(aggregation const& other) const { return kind == other.kind; }
-};
 namespace detail {
 /**
  * @brief Derived class for specifying a quantile aggregation
@@ -92,6 +57,20 @@ struct std_var_aggregation : aggregation {
   bool operator==(std_var_aggregation const& other) const {
     return aggregation::operator==(other)
        and _ddof == other._ddof;
+  }
+};
+
+/**
+ * @brief Derived class for specifying a nunique aggregation
+ */
+struct nunique_aggregation : aggregation {
+  nunique_aggregation(aggregation::Kind k, include_nulls _include_nulls)
+      : aggregation{k}, _include_nulls{_include_nulls} {}
+include_nulls _include_nulls;    ///< include or exclude nulls
+
+  bool operator==(nunique_aggregation const& other) const {
+    return aggregation::operator==(other)
+       and _include_nulls == other._include_nulls;
   }
 };
 
@@ -172,10 +151,17 @@ struct target_type_impl<Source, aggregation::ALL> {
 };
 
 // Always use `double` for MEAN
-// TODO (dm): Except for timestamp where result is timestamp. (Use FloorDiv)
-template <typename Source>
-struct target_type_impl<Source, aggregation::MEAN> {
+// Except for timestamp where result is timestamp. (Use FloorDiv)
+template <typename Source, aggregation::Kind k>
+struct target_type_impl<Source, k,
+                        std::enable_if_t<!is_timestamp<Source>() && (k == aggregation::MEAN)>> {
   using type = double;
+};
+
+template <typename Source, aggregation::Kind k>
+struct target_type_impl<Source, k,
+                        std::enable_if_t<is_timestamp<Source>() && (k == aggregation::MEAN)>> {
+  using type = Source;
 };
 
 constexpr bool is_sum_product_agg(aggregation::Kind k) {
@@ -240,6 +226,12 @@ struct target_type_impl<Source, aggregation::ARGMAX> {
 template <typename Source>
 struct target_type_impl<Source, aggregation::ARGMIN> {
   using type = size_type;
+};
+
+// Always use size_type accumulator for NUNIQUE
+template <typename Source>
+struct target_type_impl<Source, aggregation::NUNIQUE> {
+  using type = cudf::size_type;
 };
 
 /**
@@ -324,6 +316,9 @@ CUDA_HOST_DEVICE_CALLABLE decltype(auto) aggregation_dispatcher(
           std::forward<Ts>(args)...);
     case aggregation::ARGMIN:
       return f.template operator()<aggregation::ARGMIN>(
+          std::forward<Ts>(args)...);
+    case aggregation::NUNIQUE:
+      return f.template operator()<aggregation::NUNIQUE>(
           std::forward<Ts>(args)...);
     default: {
 #ifndef __CUDA_ARCH__

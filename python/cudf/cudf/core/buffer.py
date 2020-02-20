@@ -74,14 +74,14 @@ class Buffer:
             "data": (self.ptr, False),
             "shape": (self.size,),
             "strides": (1,),
-            "typestr": "|u1",
+            "typestr": "|i1",
             "version": 0,
         }
         return intf
 
     def to_host_array(self):
-        data = np.empty((self.size,), "i1")
-        rmm._lib.device_buffer.copy_ptr_to_host(self.ptr, data.view("u1"))
+        data = np.empty((self.size,), "u1")
+        rmm._lib.device_buffer.copy_ptr_to_host(self.ptr, data)
         return data
 
     def _init_from_array_like(self, data):
@@ -105,14 +105,15 @@ class Buffer:
 
     def serialize(self):
         header = {}
-        header["type"] = pickle.dumps(type(self))
+        header["type-serialized"] = pickle.dumps(type(self))
+        header["constructor-kwargs"] = {}
         header["desc"] = self.__cuda_array_interface__.copy()
         frames = [self]
         return header, frames
 
     @classmethod
     def deserialize(cls, header, frames):
-        buf = cls(frames[0])
+        buf = cls(frames[0], **header["constructor-kwargs"])
 
         if header["desc"]["shape"] != buf.__cuda_array_interface__["shape"]:
             raise ValueError(

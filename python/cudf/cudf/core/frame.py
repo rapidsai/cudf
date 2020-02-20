@@ -1,12 +1,13 @@
+import cupy
 import numpy as np
 import pandas as pd
 
 import cudf._libxx as libcudfxx
 from cudf.core.column import as_column, build_categorical_column
-from cudf.utils.dtypes import is_categorical_dtype
+from cudf.utils.dtypes import is_categorical_dtype, is_scalar
 
 
-class Frame(libcudfxx.Table):
+class Frame(libcudfxx.table.Table):
     """
     Frame: A collection of Column objects with an optional index.
 
@@ -22,11 +23,41 @@ class Frame(libcudfxx.Table):
     def _from_table(cls, table):
         return cls(table._data, index=table._index)
 
+    def _get_columns_by_label(self, labels, downcast=False):
+        """
+        Returns columns of the Frame specified by `labels`
+
+        If downcast is True, try and downcast from a DataFrame to a Series
+        """
+        new_data = self._data.get_by_label(labels)
+        if downcast:
+            if is_scalar(labels):
+                nlevels = 1
+            elif isinstance(labels, tuple):
+                nlevels = len(labels)
+            if self._data.multiindex is False or nlevels == self._data.nlevels:
+                return self._constructor_sliced(
+                    new_data, name=labels, index=self.index
+                )
+        return self._constructor(
+            new_data, columns=new_data.to_pandas_index(), index=self.index,
+        )
+
+    def _get_columns_by_index(self, indices):
+        """
+        Returns columns of the Frame specified by `labels`
+
+        """
+        data = self._data.get_by_index(indices)
+        return self._constructor(
+            data, columns=data.to_pandas_index(), index=self.index,
+        )
+
     def _gather(self, gather_map):
         if not pd.api.types.is_integer_dtype(gather_map.dtype):
             gather_map = gather_map.astype("int32")
         result = self.__class__._from_table(
-            libcudfxx.gather(self, as_column(gather_map))
+            libcudfxx.copying.gather(self, as_column(gather_map))
         )
         result._copy_categories(self)
         return result
@@ -109,7 +140,9 @@ class Frame(libcudfxx.Table):
         if len(subset_cols) == 0:
             return self.copy(deep=True)
         result = self.__class__._from_table(
-            libcudfxx.drop_nulls(self, how=how, keys=subset, thresh=thresh)
+            libcudfxx.stream_compaction.drop_nulls(
+                self, how=how, keys=subset, thresh=thresh
+            )
         )
         result._copy_categories(self)
         return result
@@ -144,7 +177,9 @@ class Frame(libcudfxx.Table):
         rows corresponding to `False` is dropped
         """
         result = self._from_table(
-            libcudfxx.apply_boolean_mask(self, as_column(boolean_mask))
+            libcudfxx.stream_compaction.apply_boolean_mask(
+                self, as_column(boolean_mask)
+            )
         )
         result._copy_categories(self)
         return result
@@ -179,7 +214,7 @@ class Frame(libcudfxx.Table):
             return self.copy(deep=True)
 
         result = self._from_table(
-            libcudfxx.drop_duplicates(
+            libcudfxx.stream_compaction.drop_duplicates(
                 self, keys=subset, keep=keep, nulls_are_equal=nulls_are_equal
             )
         )
@@ -214,6 +249,35 @@ class Frame(libcudfxx.Table):
         for name, col in result._data.items():
             result._data[name] = col.unary_operator(op)
         return result
+
+    def searchsorted(
+        self, values, side="left", ascending=True, na_position="last"
+    ):
+        """Find indices where elements should be inserted to maintain order
+
+        Parameters
+        ----------
+        value : Frame (Shape must be consistent with self)
+            Values to be hypothetically inserted into Self
+        side : str {‘left’, ‘right’} optional, default ‘left‘
+            If ‘left’, the index of the first suitable location found is given
+            If ‘right’, return the last such index
+        ascending : bool optional, default True
+            Sorted Frame is in ascending order (otherwise descending)
+        na_position : str {‘last’, ‘first’} optional, default ‘last‘
+            Position of null values in sorted order
+
+        Returns
+        -------
+        1-D cupy array of insertion points
+        """
+        # Call libcudf++ search_sorted primitive
+        outcol = libcudfxx.search.search_sorted(
+            self, values, side, ascending=ascending, na_position=na_position
+        )
+
+        # Retrun result as cupy array
+        return cupy.asarray(outcol.data_array_view)
 
     def sin(self):
         return self._unaryop("sin")

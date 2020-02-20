@@ -574,3 +574,42 @@ TEST_F(ContiguousSplitTableCornerCases, EmptyOutputColumn) {
         }
     );
 }
+
+TEST_F(ContiguousSplitTableCornerCases, MixedColumnTypes) {
+  cudf::size_type start = 0;    
+  auto valids = cudf::test::make_counting_transform_iterator(start, [](auto i) { return true; });    
+  
+  std::vector<std::string> strings[2]     = { {"", "this", "is", "a", "column", "of", "strings", "with", "in", "valid"}, 
+                                              {"", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"} };
+  
+  std::vector<std::unique_ptr<cudf::column>> cols;   
+  
+  auto iter0 = cudf::test::make_counting_transform_iterator(0, [](auto i) { return (i);});
+  auto c0 = cudf::test::fixed_width_column_wrapper<int>(iter0, iter0 + 10, valids);
+  cols.push_back(c0.release());
+  
+  auto iter1 = cudf::test::make_counting_transform_iterator(10, [](auto i) { return (i);});
+  auto c1 = cudf::test::fixed_width_column_wrapper<int>(iter1, iter1 + 10, valids);
+  cols.push_back(c1.release());
+
+  auto c2 = cudf::test::strings_column_wrapper(strings[0].begin(), strings[0].end(), valids);
+  cols.push_back(c2.release());
+
+  auto c3 = cudf::test::strings_column_wrapper(strings[1].begin(), strings[1].end(), valids);
+  cols.push_back(c3.release());
+
+  auto iter4 = cudf::test::make_counting_transform_iterator(20, [](auto i) { return (i);});
+  auto c4 = cudf::test::fixed_width_column_wrapper<int>(iter4, iter4 + 10, valids);
+  cols.push_back(c4.release());
+
+  auto tbl = cudf::experimental::table(std::move(cols));
+  
+  std::vector<cudf::size_type> splits{5};
+
+  auto result = cudf::experimental::contiguous_split(tbl, splits);
+  auto expected = cudf::experimental::split(tbl, splits);
+  
+  for (unsigned long index = 0; index < expected.size(); index++) {      
+    cudf::test::expect_tables_equivalent(expected[index], result[index].table);
+  }
+}
