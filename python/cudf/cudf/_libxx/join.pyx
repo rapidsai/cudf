@@ -1,5 +1,5 @@
 from cudf._libxx.lib cimport *
-from cudf._libxx.table cimport Table
+from cudf._libxx.table cimport Table, columns_from_ptr
 from cudf._libxx.includes.join cimport *
 from libcpp.vector cimport vector
 from libcpp.pair cimport pair
@@ -125,7 +125,7 @@ cpdef join(Table lhs, Table rhs, object left_on, object right_on, object how, ob
                 columns_in_common
             ))
 
-    all_cols_py = Table.columns_from_ptr(move(c_result))
+    all_cols_py = columns_from_ptr(move(c_result))
     if left_index or right_index:
         index_ordered_dict = OrderedDict()
         index_ordered_dict[result_index_name] = all_cols_py.pop(result_index_pos)

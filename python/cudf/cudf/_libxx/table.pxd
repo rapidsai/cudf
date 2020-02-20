@@ -36,5 +36,4 @@ cdef class Table:
         index_names=*
     )
 
-    @staticmethod
-    cdef columns_from_ptr(unique_ptr[table] c_tbl)
+cdef columns_from_ptr(unique_ptr[table] c_tbl)
