@@ -34,26 +34,13 @@ namespace detail
 namespace
 {
 
-struct ngram_sizer_fn
-{
-    cudf::column_device_view const d_strings;
-    cudf::size_type ngrams;
-    cudf::string_view const d_separator;
-
-    __device__ cudf::size_type operator()(cudf::size_type idx)
-    {
-        cudf::size_type bytes = 0;
-        for( cudf::size_type n=0; n < ngrams; ++n )
-        {
-            cudf::string_view d_str = d_strings.element<cudf::string_view>(n+idx);
-            bytes += d_str.size_bytes();
-            if( (n+1) < ngrams )
-                bytes += d_separator.size_bytes();
-        }
-        return bytes;
-    }
-};
-
+/**
+ * @brief Generate ngrams from strings column.
+ *
+ * Adjacent strings are concatented with the provided separator.
+ * The number of adjacent strings join depends on the specified ngrams value.
+ * For example: for bigrams (ngrams=2), pairs of strings are concatenated.
+ */
 struct ngram_generator_fn
 {
     cudf::column_device_view const d_strings;
@@ -62,13 +49,22 @@ struct ngram_generator_fn
     int32_t const* d_offsets{};
     char* d_chars{};
 
+    /**
+     * @brief Build ngram for each string.
+     *
+     * This is called for each thread and processed for each string.
+     * Each string will produce the number of ngrams specified.
+     *
+     * @param idx Index of the kernel thread.
+     * @return Number of bytes required for the string for this thread.
+     */
     __device__ cudf::size_type operator()(cudf::size_type idx)
     {
         char* out_ptr = d_chars ? d_chars + d_offsets[idx] : nullptr;
         cudf::size_type bytes = 0;
         for( cudf::size_type n=0; n < ngrams; ++n )
         {
-            cudf::string_view d_str = d_strings.element<cudf::string_view>(n+idx);
+            auto d_str = d_strings.element<cudf::string_view>(n+idx);
             bytes += d_str.size_bytes();
             if( out_ptr )
                 out_ptr = cudf::strings::detail::copy_string(out_ptr,d_str);
@@ -103,8 +99,7 @@ std::unique_ptr<cudf::column> generate_ngrams( cudf::strings_column_view const& 
     auto d_strings = *strings_column;
 
     // first create a new offsets vector removing nulls and empty strings from the input column
-    std::unique_ptr<cudf::column> non_empty_offsets_column;
-    {
+    std::unique_ptr<cudf::column> non_empty_offsets_column = [&] {
         cudf::column_view offsets_view( cudf::data_type{cudf::INT32}, strings_count+1, 
                                         strings.offsets().data<int32_t>() );
         auto table_offsets = cudf::experimental::detail::copy_if( cudf::table_view({offsets_view}),
@@ -115,9 +110,10 @@ std::unique_ptr<cudf::column> generate_ngrams( cudf::strings_column_view const& 
                         return false;
                     return !d_strings.element<cudf::string_view>(idx).empty();
                 }, mr, stream )->release();
-        non_empty_offsets_column = std::move(table_offsets.front());
-        strings_count = non_empty_offsets_column->size()-1;
-    }
+        strings_count = table_offsets.front()->size()-1;
+        return std::move(table_offsets.front());
+    } (); // this allows freeint the temporary table_offsets
+
     if( strings_count==0 ) // if no non-empty strings, return an empty column
         return cudf::make_empty_column(cudf::data_type{cudf::STRING});
     CUDF_EXPECTS( strings_count >= ngrams , "Insufficient number of strings to generate ngrams");
