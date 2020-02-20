@@ -82,7 +82,7 @@ struct out_of_place_fill_range_dispatch {
     if (end != begin) {  // otherwise no fill
       if (!p_ret->nullable() && !value.is_valid()) {
         p_ret->set_null_mask(
-          cudf::create_null_mask(p_ret->size(), cudf::ALL_VALID, stream, mr), 0);
+          cudf::create_null_mask(p_ret->size(), cudf::mask_state::ALL_VALID, stream, mr), 0);
       }
 
       auto ret_view = p_ret->mutable_view();
