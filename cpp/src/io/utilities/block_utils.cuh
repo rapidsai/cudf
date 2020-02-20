@@ -82,7 +82,7 @@ inline __device__ void memcpy_block(void *dstv, const void *srcv, uint32_t len, 
             b = src[t];
         }
         if (sync_before_store) {
-            SYNCWARP();
+            __syncthreads();
         }
         if (t < align_len) {
             dst[t] = b;
@@ -119,7 +119,7 @@ inline __device__ void memcpy_block(void *dstv, const void *srcv, uint32_t len, 
             b = src[t];
         }
         if (sync_before_store) {
-            SYNCWARP();
+            __syncthreads();
         }
         if (t < len) {
             dst[t] = b;

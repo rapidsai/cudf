@@ -16,8 +16,24 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
     ctypedef int32_t size_type
     ctypedef uint32_t bitmask_type
 
+    ctypedef enum order:
+        ASCENDING "cudf::order::ASCENDING"
+        DESCENDING "cudf::order::DESCENDING"
+
+    ctypedef enum null_order:
+        AFTER "cudf::null_order::AFTER"
+        BEFORE "cudf::null_order::BEFORE"
+
     cdef enum:
         UNKNOWN_NULL_COUNT = -1
+
+    ctypedef enum order "cudf::order":
+        ASCENDING "cudf::order::ASCENDING"
+        DESCENDING "cudf::order::DESCENDING"
+
+    ctypedef enum null_order "cudf::null_order":
+        AFTER "cudf::null_order::AFTER"
+        BEFORE "cudf::null_order::BEFORE"
 
     ctypedef enum interpolation:
         LINEAR "cudf::experimental::interpolation::LINEAR"
