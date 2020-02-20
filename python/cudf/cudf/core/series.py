@@ -2631,24 +2631,33 @@ class Series(Frame):
         return result
 
     def merge(self, other):
-
+        # An inner join shuold return a series containing matching elements
+        # a Left join should return just self
+        # an outer join should return a two column
+        # dataframe containing all elements from both
         dummy = "name"
+
         l_name = self.name
         r_name = other.name
+        lhs = self.copy(deep=False)
+        rhs = other.copy(deep=False)
 
         if l_name is None and r_name is not None:
-            self.name = r_name
+            lhs.name = r_name
             left_on = right_on = r_name
-        if r_name is None and l_name is not None:
-            other.name = l_name
+        elif r_name is None and l_name is not None:
+            rhs.name = l_name
             left_on = right_on = l_name
-        if l_name is None and r_name is None:
-            self.name = dummy
-            other.name = dummy
+        elif l_name is None and r_name is None:
+            lhs.name = dummy
+            rhs.name = dummy
             left_on = right_on = dummy
+        elif l_name is not None and r_name is not None:
+            left_on = l_name
+            right_on = r_name
 
-        result = super()._merge(
-            other,
+        result = super(Series, lhs)._merge(
+            rhs,
             left_on=left_on,
             right_on=right_on,
             how="inner",
@@ -2659,6 +2668,8 @@ class Series(Frame):
             rsuffix=None,
             method="hash",
         )
+
+        result.name = other.name
 
         return result
 
