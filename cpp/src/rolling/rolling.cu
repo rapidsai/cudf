@@ -155,7 +155,7 @@ process_rolling_window(column_device_view input,
 
     // store the output value, one per thread
     if (output_is_valid) {
-        printf("RGSL12 : output_is_valid\n");
+        printf("RGSL123 : output_is_valid\n");
         cudf::detail::store_output_functor<OutputType, op == aggregation::MEAN>{}(output.element<OutputType>(current_index),
                 val, count);
     }
