@@ -52,8 +52,8 @@ public:
 
     // test the in-place version second
 
-    EXPECT_NO_THROW(cudf::experimental::copy_range(source, target,
-                      source_begin, source_end, target_begin));
+    EXPECT_NO_THROW(cudf::experimental::copy_range_in_place(
+      source, target, source_begin, source_end, target_begin));
     cudf::test::expect_columns_equal(target, expected);
   }
 };
@@ -392,8 +392,8 @@ TEST_F(CopyRangeErrorTestFixture, InvalidInplaceCall)
 
   cudf::mutable_column_view target_view{target};
   // source has null values but target is not nullable.
-  EXPECT_THROW(cudf::experimental::copy_range(source, target_view,
-                                              0, size, 0),
+  EXPECT_THROW(cudf::experimental::copy_range_in_place(
+                source, target_view, 0, size, 0),
                cudf::logic_error);
 
   std::vector<std::string>
@@ -404,7 +404,7 @@ TEST_F(CopyRangeErrorTestFixture, InvalidInplaceCall)
     cudf::test::strings_column_wrapper(strings.begin(), strings.end());
 
   cudf::mutable_column_view target_view_string{target_string};
-  EXPECT_THROW(cudf::experimental::copy_range(
+  EXPECT_THROW(cudf::experimental::copy_range_in_place(
                  source_string, target_view_string, 0, size, 0),
                cudf::logic_error);
 }
@@ -424,13 +424,13 @@ TEST_F(CopyRangeErrorTestFixture, InvalidRange)
   cudf::mutable_column_view target_view{target};
 
   // empty_range == no-op, this is valid
-  EXPECT_NO_THROW(cudf::experimental::copy_range(
+  EXPECT_NO_THROW(cudf::experimental::copy_range_in_place(
                     source, target_view, 0, 0, 0));
   EXPECT_NO_THROW(auto p_ret = cudf::experimental::copy_range(
                     source, target, 0, 0, 0));
 
   // source_begin is negative
-  EXPECT_THROW(cudf::experimental::copy_range(
+  EXPECT_THROW(cudf::experimental::copy_range_in_place(
                  source, target_view, -1, size, 0),
                cudf::logic_error);
   EXPECT_THROW(auto p_ret = cudf::experimental::copy_range(
@@ -438,7 +438,7 @@ TEST_F(CopyRangeErrorTestFixture, InvalidRange)
                cudf::logic_error);
 
   // source_begin > source_end
-  EXPECT_THROW(cudf::experimental::copy_range(
+  EXPECT_THROW(cudf::experimental::copy_range_in_place(
                  source, target_view, 10, 5, 0),
                cudf::logic_error);
   EXPECT_THROW(auto p_ret = cudf::experimental::copy_range(
@@ -446,7 +446,7 @@ TEST_F(CopyRangeErrorTestFixture, InvalidRange)
                cudf::logic_error);
 
   // source_begin >= source.size()
-  EXPECT_THROW(cudf::experimental::copy_range(
+  EXPECT_THROW(cudf::experimental::copy_range_in_place(
                  source, target_view, 100, 100, 0),
                cudf::logic_error);
   EXPECT_THROW(auto p_ret = cudf::experimental::copy_range(
@@ -454,7 +454,7 @@ TEST_F(CopyRangeErrorTestFixture, InvalidRange)
                cudf::logic_error);
 
   // source_end > source.size()
-  EXPECT_THROW(cudf::experimental::copy_range(
+  EXPECT_THROW(cudf::experimental::copy_range_in_place(
                  source, target_view, 99, 101, 0),
                cudf::logic_error);
   EXPECT_THROW(auto p_ret = cudf::experimental::copy_range(
@@ -462,7 +462,7 @@ TEST_F(CopyRangeErrorTestFixture, InvalidRange)
                cudf::logic_error);
 
   // target_begin < 0
-  EXPECT_THROW(cudf::experimental::copy_range(
+  EXPECT_THROW(cudf::experimental::copy_range_in_place(
                  source, target_view, 50, 100, -5),
                cudf::logic_error);
   EXPECT_THROW(auto p_ret = cudf::experimental::copy_range(
@@ -470,7 +470,7 @@ TEST_F(CopyRangeErrorTestFixture, InvalidRange)
                cudf::logic_error);
 
   // target_begin >= target.size()
-  EXPECT_THROW(cudf::experimental::copy_range(
+  EXPECT_THROW(cudf::experimental::copy_range_in_place(
                  source, target_view, 50, 100, 100),
                cudf::logic_error);
   EXPECT_THROW(auto p_ret = cudf::experimental::copy_range(
@@ -478,7 +478,7 @@ TEST_F(CopyRangeErrorTestFixture, InvalidRange)
                cudf::logic_error);
 
   // target_begin + (source_end - source_begin) > target.size()
-  EXPECT_THROW(cudf::experimental::copy_range(
+  EXPECT_THROW(cudf::experimental::copy_range_in_place(
                  source, target_view, 50, 100, 80),
                cudf::logic_error);
   EXPECT_THROW(auto p_ret = cudf::experimental::copy_range(
@@ -500,7 +500,7 @@ TEST_F(CopyRangeErrorTestFixture, DTypeMismatch)
 
   cudf::mutable_column_view target_view{target};
 
-  EXPECT_THROW(cudf::experimental::copy_range(
+  EXPECT_THROW(cudf::experimental::copy_range_in_place(
                  source, target_view, 0, 100, 0),
                cudf::logic_error);
   EXPECT_THROW(auto p_ret = cudf::experimental::copy_range(

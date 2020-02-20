@@ -165,7 +165,7 @@ class orc_column_view {
         _data_count(col.size()),
         _null_count(col.null_count()),
         _data(col.data<uint8_t>()),
-        _nulls(col.has_nulls() ? col.null_mask() : nullptr),
+        _nulls(col.nullable() ? col.null_mask() : nullptr),
         _clockscale(to_clockscale<uint8_t>(col.type().id())),
         _type_kind(to_orc_type(col.type().id())) {
     if (_string_type && _data_count > 0) {
@@ -222,6 +222,7 @@ class orc_column_view {
   size_t type_width() const noexcept { return _type_width; }
   size_t data_count() const noexcept { return _data_count; }
   size_t null_count() const noexcept { return _null_count; }
+  bool nullable() const noexcept { return (_nulls != nullptr); }
   void const *data() const noexcept { return _data; }
   uint32_t const *nulls() const noexcept { return _nulls; }
   uint8_t clockscale() const noexcept { return _clockscale; }
@@ -373,7 +374,7 @@ std::vector<Stream> writer::impl::gather_streams(
     int64_t data_stream_size = 0;
     int64_t data2_stream_size = 0;
     int64_t dict_stream_size = 0;
-    if (columns[i].null_count() != 0 || columns[i].data_count() != num_rows) {
+    if (columns[i].nullable() || columns[i].data_count() != num_rows) {
       present_stream_size = ((row_index_stride_ + 7) >> 3);
       present_stream_size += (present_stream_size + 0x7f) >> 7;
     }
@@ -1214,6 +1215,10 @@ writer::writer(std::string const& filepath, writer_options const& options,
 writer::writer(std::vector<char>* buffer, writer_options const& options,
                    rmm::mr::device_memory_resource *mr)
         : _impl(std::make_unique<impl>(data_sink::create(buffer), options, mr)) {}
+
+writer::writer(writer_options const& options,
+                   rmm::mr::device_memory_resource *mr)
+        : _impl(std::make_unique<impl>(data_sink::create(), options, mr)) {}  
 
 // Destructor within this translation unit
 writer::~writer() = default;

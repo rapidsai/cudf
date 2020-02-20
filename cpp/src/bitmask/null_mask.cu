@@ -42,13 +42,13 @@ namespace cudf {
 
 size_type state_null_count(mask_state state, size_type size) {
   switch (state) {
-    case UNALLOCATED:
+    case mask_state::UNALLOCATED:
       return 0;
-    case UNINITIALIZED:
+    case mask_state::UNINITIALIZED:
       return UNKNOWN_NULL_COUNT;
-    case ALL_NULL:
+    case mask_state::ALL_NULL:
       return size;
-    case ALL_VALID:
+    case mask_state::ALL_VALID:
       return 0;
     default:
       CUDF_FAIL("Invalid null mask state.");
@@ -80,14 +80,14 @@ rmm::device_buffer create_null_mask(size_type size, mask_state state,
                                     rmm::mr::device_memory_resource *mr) {
   size_type mask_size{0};
 
-  if (state != UNALLOCATED) {
+  if (state != mask_state::UNALLOCATED) {
     mask_size = bitmask_allocation_size_bytes(size);
   }
 
   rmm::device_buffer mask(mask_size, stream, mr);
 
-  if (state != UNINITIALIZED) {
-    uint8_t fill_value = (state == ALL_VALID) ? 0xff : 0x00;
+  if (state != mask_state::UNINITIALIZED) {
+    uint8_t fill_value = (state == mask_state::ALL_VALID) ? 0xff : 0x00;
     CUDA_TRY(cudaMemsetAsync(static_cast<bitmask_type *>(mask.data()),
                              fill_value, mask_size, stream));
   }
@@ -731,7 +731,7 @@ rmm::device_buffer concatenate_masks(std::vector<column_view> const &views,
    size_type total_element_count =
      std::accumulate(views.begin(), views.end(), 0,
          [](auto accumulator, auto const& v) { return accumulator + v.size(); });
-    null_mask = create_null_mask(total_element_count, UNINITIALIZED, stream, mr);
+    null_mask = create_null_mask(total_element_count, mask_state::UNINITIALIZED, stream, mr);
 
     detail::concatenate_masks(
         views, static_cast<bitmask_type *>(null_mask.data()), stream);

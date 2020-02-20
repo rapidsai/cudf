@@ -828,7 +828,7 @@ std::unique_ptr<experimental::table> split_fn( size_type strings_count,
     {
         results.push_back(std::make_unique<column>( data_type{STRING}, strings_count,
                           rmm::device_buffer{0,stream,mr}, // no data
-                          create_null_mask(strings_count, ALL_NULL, stream, mr), strings_count ));
+                          create_null_mask(strings_count, mask_state::ALL_NULL, stream, mr), strings_count ));
     }
 
     // Create each column.
