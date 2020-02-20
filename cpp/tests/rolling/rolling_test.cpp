@@ -456,6 +456,7 @@ TYPED_TEST(RollingTest, SimpleStatic)
 // negative sizes
 TYPED_TEST(RollingTest, NegativeWindowSizes)
 {
+  for (int i = 0; i<25; i++) {
   const std::vector<TypeParam> col_data  = {0, 1, 2, 0, 4};
   const std::vector<bool>      col_valid = {1, 1, 1, 0, 1};
   fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_valid.begin());
@@ -465,6 +466,7 @@ TYPED_TEST(RollingTest, NegativeWindowSizes)
   this->run_test_col_agg(input, negative_window, window, 1);
   this->run_test_col_agg(input, window, negative_window, 1);
   this->run_test_col_agg(input, negative_window, negative_window, 1);
+  }
 }
 
 // simple example from Pandas docs:
