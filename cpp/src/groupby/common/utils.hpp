@@ -25,7 +25,7 @@ namespace experimental {
 namespace groupby {
 namespace detail {    
 
-static std::vector<aggregation_result> extract_results(
+inline std::vector<aggregation_result> extract_results(
     std::vector<aggregation_request> const& requests,
     experimental::detail::result_cache& cache)
 {

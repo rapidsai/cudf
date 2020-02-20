@@ -125,8 +125,8 @@ flatten_single_pass_aggs(std::vector<aggregation_request> const& requests) {
 }
 
 /**
- * @brief Gather sparse results into dense using @p gather_map and add to 
- * @p dense_cache
+ * @brief Gather sparse results into dense using `gather_map` and add to 
+ * `dense_cache`
  */
 void sparse_to_dense_results(
     std::vector<aggregation_request> const& requests,
@@ -187,7 +187,7 @@ void sparse_to_dense_results(
 
 /**
  * @brief Construct hash map that uses row comparator and row hasher on 
- * @p d_keys table and stores indices
+ * `d_keys` table and stores indices
  */
 template <bool keys_have_nulls>
 auto create_hash_map(table_device_view const& d_keys, bool ignore_null_keys,
@@ -215,8 +215,8 @@ auto create_hash_map(table_device_view const& d_keys, bool ignore_null_keys,
 }
 
 /**
- * @brief Computes all aggregations from @p requests that require a single pass
- * over the data and stores the results in @p sparse_results
+ * @brief Computes all aggregations from `requests` that require a single pass
+ * over the data and stores the results in `sparse_results`
  */
 template <bool keys_have_nulls, typename Map>
 void compute_single_pass_aggs(table_view const& keys,
@@ -255,18 +255,19 @@ void compute_single_pass_aggs(table_view const& keys,
 
   bool skip_key_rows_with_nulls = keys_have_nulls and ignore_null_keys;
 
-  experimental::detail::grid_1d grid(keys.num_rows(), 256);
   if (skip_key_rows_with_nulls) {
     auto row_bitmask{bitmask_and(keys, rmm::mr::get_default_resource(), stream)};
-    hash::compute_single_pass_aggs<true>
-      <<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
+    thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+      thrust::make_counting_iterator(0), keys.num_rows(),
+      hash::compute_single_pass_aggs<true, Map>{
         map, keys.num_rows(), *d_values, *d_sparse_table, d_aggs.data().get(),
-        static_cast<bitmask_type*>(row_bitmask.data()));
+        static_cast<bitmask_type*>(row_bitmask.data())});
   } else {
-    hash::compute_single_pass_aggs<false>
-      <<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
+    thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+      thrust::make_counting_iterator(0), keys.num_rows(),
+      hash::compute_single_pass_aggs<false, Map>{
         map, keys.num_rows(), *d_values, *d_sparse_table, d_aggs.data().get(),
-        nullptr);
+        nullptr});
   }
 
   // Add results back to sparse_results cache
@@ -276,6 +277,35 @@ void compute_single_pass_aggs(table_view const& keys,
                               std::make_unique<aggregation>(aggs[i]),
                               std::move(sparse_result_cols[i]));
   }
+}
+
+/**
+ * @brief Computes and returns a device vector containing all populated keys in
+ * `map`. 
+ */
+template <typename Map>
+rmm::device_vector<size_type> extract_populated_keys(Map map,
+  size_type num_keys, cudaStream_t stream = 0)
+{
+  rmm::device_vector<size_type> populated_keys(num_keys);
+
+  auto get_key = [] __device__ (auto const& element) {
+    size_type key, value;
+    thrust::tie(key, value) = element;
+    return key;
+  };
+
+  auto end_it = thrust::copy_if(rmm::exec_policy(stream)->on(stream),
+    thrust::make_transform_iterator(map.data(), get_key),
+    thrust::make_transform_iterator(map.data() + map.capacity(), get_key),
+    populated_keys.begin(),
+    [unused_key = map.get_unused_key()] __device__ (size_type key) {
+      return key != unused_key;
+    });
+
+  populated_keys.resize(end_it - populated_keys.begin());
+
+  return populated_keys;
 }
 
 template <bool keys_have_nulls>
@@ -301,12 +331,7 @@ std::unique_ptr<table> groupby_null_templated(
 
   // Extract the populated indices from the hash map and create a gather map.
   // Gathering using this map from sparse results will give dense results.
-  rmm::device_vector<size_type> gather_map(keys.num_rows());
-  rmm::device_scalar<size_type> num_groups(0);
-  experimental::detail::grid_1d grid(keys.num_rows(), 256);
-  extract_gather_map<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>
-    (*map, gather_map.data().get(), num_groups.data());
-  gather_map.resize(num_groups.value());
+  auto gather_map = extract_populated_keys(*map, keys.num_rows(), stream);
 
   // Compact all results from sparse_results and insert into cache
   sparse_to_dense_results(requests, sparse_results, cache, gather_map, stream, mr);

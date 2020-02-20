@@ -63,88 +63,58 @@ namespace hash {
  * null values should be skipped. It `true`, it is assumed `row_bitmask` is a
  * bitmask where bit `i` indicates the presence of a null value in row `i`.
  * @tparam Map The type of the hash map
- * @param map Hash map object to insert key,value pairs into.
- * @param num_keys The number of rows in input keys table
- * @param input_values The table whose rows will be aggregated in the values of
- * the hash map
- * @param output_values Table that stores the results of aggregating rows of
- * `input_values`.
- * @param aggs The set of aggregation operations to perform accross the columns
- * of the `input_values` rows
- * @param row_bitmask Bitmask where bit `i` indicates the presence of a null
- * value in row `i` of input keys. Only used if `skip_rows_with_nulls` is `true`
  */
 template <bool skip_rows_with_nulls, typename Map>
-__global__ void compute_single_pass_aggs(
-    Map map, size_type num_keys, table_device_view input_values,
+struct compute_single_pass_aggs {
+  Map map;
+  size_type num_keys;
+  table_device_view input_values;
+  mutable_table_device_view output_values; 
+  aggregation::Kind const* __restrict__ aggs;
+  bitmask_type const*  __restrict__ row_bitmask;
+
+  /**
+   * @brief Construct a new compute_single_pass_aggs functor object
+   * 
+   * @param map Hash map object to insert key,value pairs into.
+   * @param num_keys The number of rows in input keys table
+   * @param input_values The table whose rows will be aggregated in the values 
+   * of the hash map
+   * @param output_values Table that stores the results of aggregating rows of
+   * `input_values`.
+   * @param aggs The set of aggregation operations to perform accross the 
+   * columns of the `input_values` rows
+   * @param row_bitmask Bitmask where bit `i` indicates the presence of a null
+   * value in row `i` of input keys. Only used if `skip_rows_with_nulls` is `true`
+   */
+  compute_single_pass_aggs(
+    Map map,
+    size_type num_keys,
+    table_device_view input_values,
     mutable_table_device_view output_values, 
-    aggregation::Kind const* __restrict__ aggs,
-    bitmask_type const*  __restrict__ row_bitmask)
-{  
-  size_type i = threadIdx.x + blockIdx.x * blockDim.x;
+    aggregation::Kind const* aggs,
+    bitmask_type const* row_bitmask)
+  : map(map),
+    num_keys(num_keys),
+    input_values(input_values),
+    output_values(output_values),
+    aggs(aggs),
+    row_bitmask(row_bitmask)
+  {}
 
-  while (i < num_keys) {
-    if (skip_rows_with_nulls and not cudf::bit_is_set(row_bitmask, i)) {
-      i += blockDim.x * gridDim.x;
-      continue;
+  __device__ void operator()(size_type i) {
+    if (not skip_rows_with_nulls or
+        cudf::bit_is_set(row_bitmask, i))
+    {
+      auto result = map.insert(thrust::make_pair(i, i));
+
+      experimental::detail::aggregate_row<true, true>(
+        output_values, result.first->second, input_values, i, aggs);
     }
-
-    auto result = map.insert(thrust::make_pair(i, i));
-
-    experimental::detail::aggregate_row<true, true>(
-      output_values, result.first->second, input_values, i, aggs);
-    i += blockDim.x * gridDim.x;
   }
-}
+};
 
 // TODO (dm): variance kernel
-
-/**
- * @brief Extracts the populated elements from a hash map to get the indices of
- * result values in a groupby operation.
- * 
- * The hash map should be constructed such that it stores the indices of the
- * populated values in a sparse result table.
- * 
- * This method uses the @p map to check for populated map elements. It then 
- * gets the element and appends its value to the  @p gather_map.
- * The @p gather_map can be used in conjunction with sparse result values
- * written by compute_single_pass_aggs() to get the results in a dense form,
- * using a gather() operation.
- *
- * @tparam Map The type of the hash map object
- * @param map[in] The hash map that contains the indices into input keys that 
- * are unique and sparse values that are populated with aggregation results.
- * @param gather_map[out] The compressed array of populated values from @p map
- * @param output_write_index[in/out] Global counter used for determining write
- * location for output keys/values. When kernel is complete, indicates the final
- * result size.
- */
-template <typename Map>
-__global__ void extract_gather_map(Map map,
-                                   size_type * const __restrict__ gather_map,
-                                   size_type* output_write_index) {
-  size_type i = threadIdx.x + blockIdx.x * blockDim.x;
-
-  using pair_type = typename Map::value_type;
-
-  pair_type const* const __restrict__ table_pairs{map.data()};
-
-  while (i < map.capacity()) {
-    size_type source_key_row_index;
-    size_type source_value_row_index;
-
-    // The way the aggregation map is built, these two indices will always be
-    // equal.
-    thrust::tie(source_key_row_index, source_value_row_index) = table_pairs[i];
-
-    if (source_key_row_index != map.get_unused_key()) {
-      auto output_index = atomicAdd(output_write_index, 1);
-      gather_map[output_index] = source_value_row_index;
-    }
-    i += gridDim.x * blockDim.x;
-  }
-}
 
 }  // namespace hash
 }  // namespace detail
