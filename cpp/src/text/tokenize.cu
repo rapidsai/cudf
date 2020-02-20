@@ -41,7 +41,7 @@ std::unique_ptr<cudf::column> token_count_fn( cudf::size_type strings_count, Tok
 {
     // create output column
     auto token_counts = cudf::make_numeric_column( cudf::data_type{cudf::INT32}, strings_count,
-                                                   cudf::UNALLOCATED, stream, mr);
+                                                   cudf::mask_state::UNALLOCATED, stream, mr);
     auto d_token_counts = token_counts->mutable_view().data<int32_t>();
     // add the counts to the column
     thrust::transform( rmm::exec_policy(stream)->on(stream),
