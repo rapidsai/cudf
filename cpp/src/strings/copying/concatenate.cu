@@ -152,7 +152,7 @@ std::unique_ptr<column> concatenate( std::vector<strings_column_view> const& str
     // create blank null mask -- caller will be setting this
     rmm::device_buffer null_mask;
     if( null_count > 0 )
-        null_mask = create_null_mask( strings_count, UNINITIALIZED, stream,mr );
+        null_mask = create_null_mask( strings_count, mask_state::UNINITIALIZED, stream,mr );
     offsets_column->set_null_count(0);  // reset the null counts
     chars_column->set_null_count(0);    // for children columns
     return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),

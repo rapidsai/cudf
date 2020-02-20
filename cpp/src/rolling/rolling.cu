@@ -206,7 +206,7 @@ void gpu_rolling(column_device_view input,
     size_type following_window = following_window_begin[i];
 
     // compute bounds
-    size_type start = min(input.size(), max(0, i - preceding_window));
+    size_type start = min(input.size(), max(0, i - preceding_window + 1));
     size_type end = min(input.size(), max(0, i + following_window + 1));
     size_type start_index = min(start, end);
     size_type end_index = max(start, end);
@@ -306,7 +306,7 @@ struct rolling_window_launcher
       if (input.is_empty()) return empty_like(input);
 
       auto output = make_fixed_width_column(target_type(input.type(), op), input.size(),
-              UNINITIALIZED, stream, mr);
+              mask_state::UNINITIALIZED, stream, mr);
 
       cudf::mutable_column_view output_view = output->mutable_view();
       auto valid_count = kernel_launcher<T, agg_op, op, WindowIterator>(input, output_view, preceding_window_begin,
@@ -334,7 +334,7 @@ struct rolling_window_launcher
       if (input.is_empty()) return empty_like(input);
 
       auto output = make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<size_type>()},
-            input.size(), cudf::UNINITIALIZED, stream, mr);
+            input.size(), cudf::mask_state::UNINITIALIZED, stream, mr);
 
       cudf::mutable_column_view output_view = output->mutable_view();
 
@@ -461,7 +461,7 @@ std::unique_ptr<column> rolling_window_udf(column_view const &input,
 
   cudf::nvtx::range_push("CUDF_ROLLING_WINDOW", cudf::nvtx::color::ORANGE);
 
-  min_periods = std::max(min_periods, 1);
+  min_periods = std::max(min_periods, 0);
 
   auto udf_agg = static_cast<udf_aggregation*>(agg.get());
 
@@ -487,7 +487,7 @@ std::unique_ptr<column> rolling_window_udf(column_view const &input,
   }
 
   std::unique_ptr<column> output = make_numeric_column(udf_agg->_output_type, input.size(),
-                                                       cudf::UNINITIALIZED, stream, mr);
+                                                       cudf::mask_state::UNINITIALIZED, stream, mr);
 
   auto output_view = output->mutable_view();
   rmm::device_scalar<size_type> device_valid_count{0, stream};
@@ -547,7 +547,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
   static_assert(warp_size == cudf::detail::size_in_bits<cudf::bitmask_type>(),
                 "bitmask_type size does not match CUDA warp size");
 
-  min_periods = std::max(min_periods, 1);
+  min_periods = std::max(min_periods, 0);
 
   return cudf::experimental::type_dispatcher(input.type(),
                                              dispatch_rolling{},

@@ -13,8 +13,8 @@ import rmm
 
 import cudf
 import cudf._lib as libcudf
-from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, DatetimeColumn, column
+from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
@@ -77,7 +77,7 @@ class Series(Frame):
         data : 1D array-like
             The values.  Null values must not be skipped.  They can appear
             as garbage values.
-        mask : 1D array-like of numpy.uint8
+        mask : 1D array-like
             The null-mask.  Valid values are marked as ``1``; otherwise ``0``.
             The mask bit given the data index ``idx`` is computed as::
 
@@ -86,7 +86,6 @@ class Series(Frame):
             The number of null values.
             If None, it is calculated automatically.
         """
-        mask = Buffer(mask)
         col = column.as_column(data).set_mask(mask)
         return cls(data=col)
 
@@ -110,6 +109,8 @@ class Series(Frame):
             data = data._values
             if dtype is not None:
                 data = data.astype(dtype)
+        elif isinstance(data, ColumnAccessor):
+            name, data = data.names[0], data.columns[0]
 
         if isinstance(data, Series):
             index = data._index if index is None else index
@@ -136,7 +137,7 @@ class Series(Frame):
     @classmethod
     def _from_table(cls, table):
         name = next(iter(table._data.keys()))
-        data = next(iter(table._data.values()))
+        data = next(iter(table._data.columns))
         return cls(data=data, index=Index._from_table(table._index), name=name)
 
     @property
@@ -224,7 +225,7 @@ class Series(Frame):
     def name(self):
         """Returns name of the Series.
         """
-        return next(iter(self._data))
+        return self._data.names[0]
 
     @name.setter
     def name(self, value):
@@ -378,7 +379,7 @@ class Series(Frame):
 
         Parameters
         ----------
-        mask : 1D array-like of numpy.uint8
+        mask : 1D array-like
             The null-mask.  Valid values are marked as ``1``; otherwise ``0``.
             The mask bit given the data index ``idx`` is computed as::
 
@@ -388,8 +389,6 @@ class Series(Frame):
             If None, it is calculated automatically.
 
         """
-        if mask is not None:
-            mask = Buffer(mask)
         col = self._column.set_mask(mask)
         return self._copy_construct(data=col)
 
@@ -479,12 +478,6 @@ class Series(Frame):
         """Return Series by taking values from the corresponding *indices*.
         """
         return self[indices]
-
-    def _get_mask_as_series(self):
-        mask = Series(cudautils.ones(len(self), dtype=np.bool))
-        if self._column.nullable:
-            mask = mask.set_mask(self._column.mask).fillna(False)
-        return mask
 
     def __bool__(self):
         """Always raise TypeError when converting a Series
@@ -1464,9 +1457,7 @@ class Series(Frame):
         -------
         device array
         """
-        if self.has_nulls:
-            raise ValueError("Column must have no nulls.")
-        return cudautils.compact_mask_bytes(self._column.data_array_view)
+        return self._column.as_mask()
 
     def astype(self, dtype, errors="raise", **kwargs):
         """
@@ -2558,24 +2549,6 @@ class Series(Frame):
             out.name = index
 
         return out.copy(deep=copy)
-
-    def searchsorted(self, value, side="left"):
-        """Find indices where elements should be inserted to maintain order
-
-        Parameters
-        ----------
-        value : array_like
-            Column of values to search for
-        side : str {‘left’, ‘right’} optional
-            If ‘left’, the index of the first suitable location found is given.
-            If ‘right’, return the last such index
-
-        Returns
-        -------
-        A Column of insertion points with the same shape as value
-        """
-        outcol = self._column.searchsorted(value, side)
-        return Series(outcol).values
 
     @property
     def is_unique(self):
