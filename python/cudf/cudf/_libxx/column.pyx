@@ -10,6 +10,7 @@ import pandas as pd
 import cython
 import rmm
 
+from cpython.buffer cimport PyObject_CheckBuffer
 from libc.stdint cimport uintptr_t
 from libcpp.pair cimport pair
 from libcpp cimport bool
@@ -18,10 +19,10 @@ from libcpp.memory cimport unique_ptr, make_unique
 import cudf._libxx as libcudfxx
 from cudf._libxx.lib cimport *
 from cudf._libxx.lib import *
+from cudf._libxx.null_mask import bitmask_allocation_size_bytes
 
 from cudf.core.buffer import Buffer
 from cudf.utils.dtypes import is_categorical_dtype
-from cudf.utils.utils import calc_chunk_size, mask_bitsize
 
 @cython.auto_pickle(True)
 cdef class Column:
@@ -62,9 +63,13 @@ cdef class Column:
         self._offset = int(offset)
         self._size = int(size)
         self.dtype = dtype
+        self.set_base_children(children)
         self.set_base_data(data)
         self.set_base_mask(mask)
-        self.set_base_children(children)
+
+    @property
+    def base_size(self):
+        return int(self.base_data.size / self.dtype.itemsize)
 
     @property
     def size(self):
@@ -153,22 +158,22 @@ cdef class Column:
         if value is not None and not isinstance(value, Buffer):
             raise TypeError("Expected a Buffer or None for mask, got " +
                             type(value).__name__)
+
         if value is not None:
-            offsetted_size = self.size + self.offset
-            required_size = -(-self.size // mask_bitsize)  # ceiling divide
+            required_size = bitmask_allocation_size_bytes(self.base_size)
             if value.size < required_size:
                 error_msg = (
                     "The Buffer for mask is smaller than expected, got " +
-                    str(value.size) + " bytes, expected " + str(required_size)
-                    + " bytes."
+                    str(value.size) + " bytes, expected " +
+                    str(required_size) + " bytes."
                 )
-                if self.offset != 0:
+                if self.offset > 0 or self.size < self.base_size:
                     error_msg += (
-                        " Note: the column has a non-zero offset and the mask "
-                        "is expected to be sized according to the base "
-                        "allocation as opposed to the offsetted allocation."
+                        "\n\nNote: The mask is expected to be sized according "
+                        "to the base allocation as opposed to the offsetted or"
+                        " sized allocation."
                     )
-                raise RuntimeError(error_msg)
+                raise ValueError(error_msg)
 
         self._mask = None
         self._null_count = None
@@ -182,16 +187,48 @@ cdef class Column:
         and compute new data Buffers zero-copy that use pointer arithmetic to
         properly adjust the pointer.
         """
-        if value is not None and not isinstance(value, Buffer):
-            raise TypeError("Expected a Buffer or None for mask, got " +
-                            type(value).__name__)
+        mask_size = bitmask_allocation_size_bytes(self.size)
+        required_num_bytes = -(-self.size // 8)  # ceiling divide
+        error_msg = (
+            "The value for mask is smaller than expected, got {}  bytes, "
+            "expected " + str(required_num_bytes) + " bytes."
+        )
+        if value is None:
+            mask = None
+        elif hasattr(value, "__cuda_array_interface__"):
+            mask = Buffer(value)
+            if mask.size < required_num_bytes:
+                raise ValueError(error_msg.format(str(value.size)))
+            if mask.size < mask_size:
+                dbuf = rmm.DeviceBuffer(size=mask_size)
+                dbuf.copy_from_device(value)
+                mask = Buffer(dbuf)
+        elif hasattr(value, "__array_interface__"):
+            value = np.asarray(value).view("u1")[:mask_size]
+            if value.size < required_num_bytes:
+                raise ValueError(error_msg.format(str(value.size)))
+            dbuf = rmm.DeviceBuffer(size=mask_size)
+            dbuf.copy_from_host(value)
+            mask = Buffer(dbuf)
+        elif PyObject_CheckBuffer(value):
+            value = np.asarray(value).view("u1")[:mask_size]
+            if value.size < required_num_bytes:
+                raise ValueError(error_msg.format(str(value.size)))
+            dbuf = rmm.DeviceBuffer(size=mask_size)
+            dbuf.copy_from_host(value)
+            mask = Buffer(dbuf)
+        else:
+            raise TypeError(
+                "Expected a Buffer-like object or None for mask, got "
+                + type(value).__name__
+            )
 
         from cudf.core.column import build_column
 
         return build_column(
             self.data,
             self.dtype,
-            value,
+            mask,
             self.size,
             offset=0,
             children=self.children
@@ -407,13 +444,13 @@ cdef class Column:
                 mask = Buffer(
                     rmm.DeviceBuffer(
                         ptr=mask_ptr,
-                        size=calc_chunk_size(size, mask_bitsize)
+                        size=bitmask_allocation_size_bytes(size)
                     )
                 )
             else:
                 mask = Buffer(
                     mask=mask_ptr,
-                    size=calc_chunk_size(size, mask_bitsize),
+                    size=bitmask_allocation_size_bytes(size),
                     owner=mask_owner
                 )
 

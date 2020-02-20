@@ -12,6 +12,7 @@ from libcpp cimport bool
 from libcpp.vector cimport vector
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
+from libcpp.pair cimport pair
 
 from rmm._lib.device_buffer cimport device_buffer, DeviceBuffer, move
 
@@ -21,8 +22,30 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
     ctypedef int32_t size_type
     ctypedef uint32_t bitmask_type
 
+    ctypedef enum order:
+        ASCENDING "cudf::order::ASCENDING"
+        DESCENDING "cudf::order::DESCENDING"
+
+    ctypedef enum null_order:
+        AFTER "cudf::null_order::AFTER"
+        BEFORE "cudf::null_order::BEFORE"
+
     cdef enum:
         UNKNOWN_NULL_COUNT = -1
+
+    ctypedef enum mask_state:
+        UNALLOCATED "cudf::mask_state::UNALLOCATED"
+        UNINITIALIZED "cudf::mask_state::UNINITIALIZED"
+        ALL_VALID "cudf::mask_state::ALL_VALID"
+        ALL_NULL "cudf::mask_state::ALL_NULL"
+
+    ctypedef enum order "cudf::order":
+        ASCENDING "cudf::order::ASCENDING"
+        DESCENDING "cudf::order::DESCENDING"
+
+    ctypedef enum null_order "cudf::null_order":
+        AFTER "cudf::null_order::AFTER"
+        BEFORE "cudf::null_order::BEFORE"
 
     ctypedef enum interpolation:
         LINEAR "cudf::experimental::interpolation::LINEAR"
@@ -217,3 +240,6 @@ cdef extern from "<utility>" namespace "std" nogil:
     cdef vector[unique_ptr[column]] move(vector[unique_ptr[column]])
     cdef device_buffer move(device_buffer)
     cdef unique_ptr[scalar] move(unique_ptr[scalar])
+    cdef pair[unique_ptr[device_buffer], size_type] move(
+        pair[unique_ptr[device_buffer], size_type]
+    )

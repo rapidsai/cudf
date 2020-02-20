@@ -1684,7 +1684,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * For Strings:
    * Casting strings from/to timestamp isn't supported atm.
    * Please look at {@link ColumnVector#asTimestamp(DType, String)}
-   * for casting string to timestamp when the format is known
+   * and {@link ColumnVector#asStrings(String)} for casting string to timestamp when the format
+   * is known
    *
    * Float values when converted to String could be different from the expected default behavior in
    * Java
@@ -1913,10 +1914,67 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   /**
    * Cast to Strings.
+   * Negative timestamp values are not currently supported and will yield undesired results. See
+   * github issue https://github.com/rapidsai/cudf/issues/3116 for details
+   * In case of timestamps it follows the following formats
+   *    {@link DType#TIMESTAMP_DAYS} - "%Y-%m-%d"
+   *    {@link DType#TIMESTAMP_SECONDS} - "%Y-%m-%d %H:%M:%S"
+   *    {@link DType#TIMESTAMP_MICROSECONDS} - "%Y-%m-%d %H:%M:%S.%f"
+   *    {@link DType#TIMESTAMP_MILLISECONDS} - "%Y-%m-%d %H:%M:%S.%f"
+   *    {@link DType#TIMESTAMP_NANOSECONDS} - "%Y-%m-%d %H:%M:%S.%f"
+   *
    * @return A new vector allocated on the GPU.
    */
   public ColumnVector asStrings() {
-    return castTo(DType.STRING);
+    switch(type) {
+      case TIMESTAMP_SECONDS:
+        return asStrings("%Y-%m-%d %H:%M:%S");
+      case TIMESTAMP_DAYS:
+        return asStrings("%Y-%m-%d");
+      case TIMESTAMP_MICROSECONDS:
+      case TIMESTAMP_MILLISECONDS:
+      case TIMESTAMP_NANOSECONDS:
+        return asStrings("%Y-%m-%d %H:%M:%S.%f");
+      default:
+        return castTo(DType.STRING);
+    }
+  }
+
+  /**
+   * Method to parse and convert a timestamp column vector to string column vector. A unix
+   * timestamp is a long value representing how many units since 1970-01-01 00:00:00:000 in either
+   * positive or negative direction.
+
+   * No checking is done for invalid formats or invalid timestamp units.
+   * Negative timestamp values are not currently supported and will yield undesired results. See
+   * github issue https://github.com/rapidsai/cudf/issues/3116 for details
+   *
+   * @param format - strftime format specifier string of the timestamp. Its used to parse and convert
+   *               the timestamp with. Supports %m,%j,%d,%H,%M,%S,%y,%Y,%f format specifiers.
+   *               %d 	Day of the month: 01-31
+   *               %m 	Month of the year: 01-12
+   *               %y 	Year without century: 00-99c
+   *               %Y 	Year with century: 0001-9999
+   *               %H 	24-hour of the day: 00-23
+   *               %M 	Minute of the hour: 00-59
+   *               %S 	Second of the minute: 00-59
+   *               %f 	6-digit microsecond: 000000-999999
+   *               See https://github.com/rapidsai/custrings/blob/branch-0.10/docs/source/datetime.md
+   *
+   * Reported bugs
+   * https://github.com/rapidsai/cudf/issues/4160 after the bug is fixed this method should
+   * also support
+   *               %I 	12-hour of the day: 01-12
+   *               %p 	Only 'AM', 'PM'
+   *               %j   day of the year
+   *
+   * @return A new vector allocated on the GPU
+   */
+  public ColumnVector asStrings(String format) {
+    assert type.isTimestamp() : "unsupported conversion from non-timestamp DType";
+    assert format != null || format.isEmpty(): "Format string may not be NULL or empty";
+
+    return new ColumnVector(timestampToStringTimestamp(this.getNativeView(), format));
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -2094,11 +2152,15 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Native method to parse and convert a NVString column vector to unix timestamp. A unix
+   * Native method to parse and convert a string column vector to unix timestamp. A unix
    * timestamp is a long value representing how many units since 1970-01-01 00:00:00.000 in either
    * positive or negative direction. This mirrors the functionality spark sql's to_unix_timestamp.
    * Strings that fail to parse will default to 0. Supported time units are second, millisecond,
    * microsecond, and nanosecond. Larger time units for column vectors are not supported yet in cudf.
+   * No checking is done for invalid formats or invalid timestamp units.
+   * Negative timestamp values are not currently supported and will yield undesired results. See
+   * github issue https://github.com/rapidsai/cudf/issues/3116 for details
+   *
    * @param unit integer native ID of the time unit to parse the timestamp into.
    * @param format strptime format specifier string of the timestamp. Used to parse and convert
    *               the timestamp with. Supports %Y,%y,%m,%d,%H,%I,%p,%M,%S,%f,%z format specifiers.
@@ -2108,6 +2170,37 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    *         by the timestampToLong method.
    */
   private static native long stringTimestampToTimestamp(long viewHandle, int unit, String format);
+
+  /**
+   * Native method to parse and convert a timestamp column vector to string column vector. A unix
+   * timestamp is a long value representing how many units since 1970-01-01 00:00:00:000 in either
+   * positive or negative direction. This mirrors the functionality spark sql's from_unixtime.
+   * No checking is done for invalid formats or invalid timestamp units.
+   * Negative timestamp values are not currently supported and will yield undesired results. See
+   * github issue https://github.com/rapidsai/cudf/issues/3116 for details
+   *
+   * @param format - strftime format specifier string of the timestamp. Its used to parse and convert
+   *               the timestamp with. Supports %Y,%y,%m,%d,%H,%M,%S,%f format specifiers.
+   *               %d 	Day of the month: 01-31
+   *               %m 	Month of the year: 01-12
+   *               %y 	Year without century: 00-99c
+   *               %Y 	Year with century: 0001-9999
+   *               %H 	24-hour of the day: 00-23
+   *               %M 	Minute of the hour: 00-59
+   *               %S 	Second of the minute: 00-59
+   *               %f 	6-digit microsecond: 000000-999999
+   *               See http://man7.org/linux/man-pages/man3/strftime.3.html for details
+   *
+   * Reported bugs
+   * https://github.com/rapidsai/cudf/issues/4160 after the bug is fixed this method should
+   * also support
+   *               %I 	12-hour of the day: 01-12
+   *               %p 	Only 'AM', 'PM'
+   *               %j   day of the year
+   *
+   * @return - native handle of the resulting cudf column used to construct the Java column vector
+   */
+  private static native long timestampToStringTimestamp(long viewHandle, String format);
 
   /**
    * Native method for locating the starting index of the first instance of a given substring
