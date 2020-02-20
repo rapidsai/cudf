@@ -226,7 +226,7 @@ void gpu_rolling(column_device_view input,
 
     // set the mask
     // We can't have gather map being created for Min and Max for string_view to be null
-    printf ("RGSL : The active threads before is %u and output_is_valid value %d\n", active_threads, output_is_valid);
+    printf ("RGSL1 : The active threads before is %u and output_is_valid value %d\n", active_threads, output_is_valid);
     cudf::bitmask_type result_mask{__ballot_sync(active_threads, arg_min_max? true : output_is_valid)};
     printf ("RGSL : The active threads after is %u and output_is_valid value %d\n", active_threads, output_is_valid);
     printf ("RGSL : The mask outside %u\n", result_mask);
