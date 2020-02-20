@@ -89,8 +89,8 @@ TEST_F(StringsCaseTest, EmptyStringsColumn)
 
 TEST_F(StringsCaseTest, Capitalize)
 {
-    std::vector<const char*> h_strings{ "Examples aBc", "thesé", nullptr, "ARE THE", "tést strings", ""};
-    std::vector<const char*> h_expected{"Examples abc", "Thesé", nullptr, "Are the", "Tést strings", ""};
+    std::vector<const char*> h_strings{ "Examples aBc", "thesé", nullptr, "ARE THE", "tést strings", "" };
+    std::vector<const char*> h_expected{ "Examples abc", "Thesé", nullptr, "Are the", "Tést strings", "" };
 
     cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
         thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
@@ -103,3 +103,18 @@ TEST_F(StringsCaseTest, Capitalize)
     cudf::test::expect_columns_equal(*results,expected);
 }
 
+TEST_F(StringsCaseTest, Title)
+{
+    std::vector<const char*> h_strings{ "Examples aBc", "thesé", nullptr, "ARE THE", "tést strings", "" };
+    std::vector<const char*> h_expected{ "Examples Abc", "Thesé", nullptr, "Are The", "Tést Strings", "" };
+
+    cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
+        thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
+    auto strings_view = cudf::strings_column_view(strings);
+
+    auto results = cudf::strings::title(strings_view);
+
+    cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
+        thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
+    cudf::test::expect_columns_equal(*results,expected);
+}
