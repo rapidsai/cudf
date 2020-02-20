@@ -5,6 +5,7 @@ from collections import OrderedDict
 import numpy as np
 import pandas as pd
 
+import cudf
 import cudf._libxx as libcudfxx
 from cudf.core import column
 from cudf.core.column import as_column, build_categorical_column
@@ -302,6 +303,8 @@ class Frame(libcudfxx.table.Table):
         """
         Error for various combinations of merge input parameters
         """
+        if isinstance(lhs.index, cudf.core.multiindex.MultiIndex) or isinstance(rhs.index, cudf.core.multiindex.MultiIndex):
+            raise TypeError('MultiIndex joins not yet supported.')
 
         len_left_on = len(left_on) if left_on is not None else 0
         len_right_on = len(right_on) if right_on is not None else 0
