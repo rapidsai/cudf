@@ -429,8 +429,9 @@ def sort_values_experimental(
     else:
         df2 = df
 
-    # Only handle single-column partitioning (for now)
-    #     TODO: Handle partitioning on multiple columns?
+    # Only handle single-column partitioning (for now),
+    # UNLESS multi-column divisions are provided by user
+    #     TODO: Add multicolumn quantiles logic...
     if len(by) > 1:
         warnings.warn(
             "Using experimental version of sort_values."
