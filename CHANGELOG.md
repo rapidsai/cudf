@@ -83,6 +83,7 @@
 - PR #4177 Use `uint8` type for host array copy of `Buffer`
 - PR #4183 Update Google Test Execution
 - PR #4182 Rename cuDF serialize functions to be more generic
+- PR #4191 Porting sort.pyx to use new libcudf APIs
 - PR #4196 reduce CHANGELOG.md merge conflicts
 - PR #4197 Added notebook testing to gpuCI gpu build
 

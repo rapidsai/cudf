@@ -1,16 +1,13 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 
-import collections
 import logging
 
 import numpy as np
 
-import rmm
-
-import cudf._lib as libcudf
-from cudf.core.column import ColumnBase, column
-from cudf.utils import cudautils
+import cudf
+import cudf._libxx as libcudf
+from cudf.core.column import ColumnBase, as_column
 
 logging.basicConfig(format="%(levelname)s:%(message)s")
 
@@ -30,17 +27,18 @@ def get_sorted_inds(by, ascending=True, na_position="last"):
             the end.
         Returns
         -------
-        col_inds : cuDF Column of indices sorted based on input
+        out_column_inds : cuDF Column of indices sorted based on input
 
         Difference from pandas:
           * Support axis='index' only.
           * Not supporting: inplace, kind
           * Ascending can be a list of bools to control per column
     """
+    number_of_columns = 1
     if isinstance(by, (ColumnBase)):
-        by = [by]
-
-    col_inds = column.as_column(cudautils.arange(len(by[0]), dtype="int32"))
+        by = by.as_frame()
+    elif isinstance(by, (cudf.core.frame.Frame)):
+        number_of_columns = by._num_columns
 
     # This needs to be updated to handle list of bools for ascending
     if ascending is True:
@@ -55,23 +53,16 @@ def get_sorted_inds(by, ascending=True, na_position="last"):
             na_position = 0
     else:
         logging.warning(
-            "When using a sequence of booleans for `ascending`, `na_position` "
-            "flag is not yet supported and defaults to treating nulls as "
+            "When using a sequence of booleans for `ascending`, `na_position`"
+            " flag is not yet supported and defaults to treating nulls as "
             "greater than all numbers"
         )
         na_position = 0
 
     # If given a scalar need to construct a sequence of length # of columns
     if np.isscalar(ascending):
-        ascending = [ascending] * len(by)
-    # If given a list-like need to convert to a numpy array and copy to device
-    if isinstance(ascending, collections.abc.Sequence):
-        # Need to flip the boolean here since libcudf has 0 as ascending
-        ascending = [not val for val in ascending]
-        ascending = rmm.to_device(np.array(ascending, dtype="int8"))
-    else:
-        raise ValueError("Must use a boolean or list of booleans")
+        ascending = [ascending] * number_of_columns
 
-    libcudf.sort.order_by(by, col_inds, ascending, na_position)
+    out_inds_column = libcudf.sort.order_by(by, ascending, na_position)
 
-    return col_inds
+    return as_column(out_inds_column)
