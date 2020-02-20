@@ -78,21 +78,22 @@ def to_parquet(
     """{docstring}"""
 
     if engine == "cudf":
-
-        if index is not None:
-            ValueError(
-                "'index' is currently not supported by the gpu "
-                + "accelerated parquet writer"
-            )
-
         if partition_cols is not None:
             ValueError(
                 "'partition_cols' is currently not supported by the "
                 + "gpu accelerated parquet writer"
             )
 
+        # Ensure that no columns dtype is 'category'
+        for col in df.columns:
+            if df[col].dtype.name == "category":
+                ValueError(
+                    "'category' column dtypes are currently not "
+                    + "supported by the gpu accelerated parquet writer"
+                )
+
         return libcudf.parquet.write_parquet(
-            df, path, compression=compression, statistics=statistics
+            df, path, index, compression=compression, statistics=statistics
         )
     else:
 
@@ -102,5 +103,5 @@ def to_parquet(
 
         pa_table = df.to_arrow(preserve_index=index)
         pq.write_to_dataset(
-            pa_table, path, partition_cols=partition_cols, *args, **kwargs,
+            pa_table, path, partition_cols=partition_cols, *args, **kwargs
         )

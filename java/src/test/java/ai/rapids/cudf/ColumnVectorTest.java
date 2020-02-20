@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -18,9 +18,11 @@
 
 package ai.rapids.cudf;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.function.Supplier;
 import java.util.stream.IntStream;
 
 import static ai.rapids.cudf.QuantileMethod.*;
@@ -228,6 +230,142 @@ public class ColumnVectorTest extends CudfTestBase {
     }
   }
 
+   @Test
+  void isNanTestWithNulls() {
+    try (ColumnVector v = ColumnVector.fromBoxedDoubles(null, null, Double.NaN, null, Double.NaN, null);
+         ColumnVector vF = ColumnVector.fromBoxedFloats(null, null, Float.NaN, null, Float.NaN, null);
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(false, false, true, false, true, false);
+         ColumnVector result = v.isNan();
+         ColumnVector resultF = vF.isNan()) {
+      assertColumnsAreEqual(expected, result);
+      assertColumnsAreEqual(expected, resultF);
+    }
+  }
+
+  @Test
+  void isNanForTypeMismatch() {
+    assertThrows(CudfException.class, () -> {
+      try (ColumnVector v = ColumnVector.fromStrings("foo", "bar", "baz");
+           ColumnVector result = v.isNan()) {}
+    });
+  }
+
+  @Test
+  void isNanTest() {
+    try (ColumnVector v = ColumnVector.fromBoxedDoubles(1.0, 2.0, Double.NaN, 4.0, Double.NaN, 6.0);
+         ColumnVector vF = ColumnVector.fromBoxedFloats(1.1f, 2.2f, Float.NaN, 4.4f, Float.NaN, 6.6f);
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(false, false, true, false, true, false);
+         ColumnVector result = v.isNan();
+         ColumnVector resultF = vF.isNan()) {
+      assertColumnsAreEqual(expected, result);
+      assertColumnsAreEqual(expected, resultF);
+    }
+  }
+
+  @Test
+  void isNanTestEmptyColumn() {
+    try (ColumnVector v = ColumnVector.fromBoxedDoubles();
+         ColumnVector vF = ColumnVector.fromBoxedFloats();
+         ColumnVector expected = ColumnVector.fromBoxedBooleans();
+         ColumnVector result = v.isNan();
+         ColumnVector resultF = vF.isNan()) {
+      assertColumnsAreEqual(expected, result);
+      assertColumnsAreEqual(expected, resultF);
+    }
+  }
+
+  @Test
+  void isNanTestAllNotNans() {
+    try (ColumnVector v = ColumnVector.fromBoxedDoubles(1.0, 2.0, 3.0, 4.0, 5.0, 6.0);
+         ColumnVector vF = ColumnVector.fromBoxedFloats(1.1f, 2.2f, 3.3f, 4.4f, 5.5f, 6.6f);
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(false, false, false, false, false, false);
+         ColumnVector result = v.isNan();
+         ColumnVector resultF = vF.isNan()) {
+      assertColumnsAreEqual(expected, result);
+      assertColumnsAreEqual(expected, resultF);
+    }
+  }
+
+  @Test
+  void isNanTestAllNans() {
+    try (ColumnVector v = ColumnVector.fromBoxedDoubles(Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN);
+         ColumnVector vF = ColumnVector.fromBoxedFloats(Float.NaN, Float.NaN, Float.NaN, Float.NaN, Float.NaN, Float.NaN);
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(true, true, true, true, true, true);
+         ColumnVector result = v.isNan();
+         ColumnVector resultF = vF.isNan()) {
+      assertColumnsAreEqual(expected, result);
+      assertColumnsAreEqual(expected, resultF);
+    }
+  }
+
+  @Test
+  void isNotNanTestWithNulls() {
+    try (ColumnVector v = ColumnVector.fromBoxedDoubles(null, null, Double.NaN, null, Double.NaN, null);
+         ColumnVector vF = ColumnVector.fromBoxedFloats(null, null, Float.NaN, null, Float.NaN, null);
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(true, true, false, true, false, true);
+         ColumnVector result = v.isNotNan();
+         ColumnVector resultF = vF.isNotNan()) {
+      assertColumnsAreEqual(expected, result);
+      assertColumnsAreEqual(expected, resultF);
+    }
+  }
+
+  @Test
+  void isNotNanForTypeMismatch() {
+    assertThrows(CudfException.class, () -> {
+      try (ColumnVector v = ColumnVector.fromStrings("foo", "bar", "baz");
+           ColumnVector result = v.isNotNan()) {}
+    });
+  }
+
+  @Test
+  void isNotNanTest() {
+    try (ColumnVector v = ColumnVector.fromBoxedDoubles(1.0, 2.0, Double.NaN, 4.0, Double.NaN, 6.0);
+         ColumnVector vF = ColumnVector.fromBoxedFloats(1.1f, 2.2f, Float.NaN, 4.4f, Float.NaN, 6.6f);
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(true, true, false, true, false, true);
+         ColumnVector result = v.isNotNan();
+         ColumnVector resultF = vF.isNotNan()) {
+      assertColumnsAreEqual(expected, result);
+      assertColumnsAreEqual(expected, resultF);
+    }
+  }
+
+  @Test
+  void isNotNanTestEmptyColumn() {
+    try (ColumnVector v = ColumnVector.fromBoxedDoubles();
+         ColumnVector vF = ColumnVector.fromBoxedFloats();
+         ColumnVector expected = ColumnVector.fromBoxedBooleans();
+         ColumnVector result = v.isNotNan();
+         ColumnVector resultF = vF.isNotNan()) {
+      assertColumnsAreEqual(expected, result);
+      assertColumnsAreEqual(expected, resultF);
+    }
+  }
+
+  @Test
+  void isNotNanTestAllNotNans() {
+    try (ColumnVector v = ColumnVector.fromBoxedDoubles(1.0, 2.0, 3.0, 4.0, 5.0, 6.0);
+         ColumnVector vF = ColumnVector.fromBoxedFloats(1.1f, 2.2f, 3.3f, 4.4f, 5.5f, 6.6f);
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(true, true, true, true, true, true);
+         ColumnVector result = v.isNotNan();
+         ColumnVector resultF = vF.isNotNan()) {
+      assertColumnsAreEqual(expected, result);
+      assertColumnsAreEqual(expected, resultF);
+    }
+  }
+
+  @Test
+  void isNotNanTestAllNans() {
+    try (ColumnVector v = ColumnVector.fromBoxedDoubles(Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN);
+         ColumnVector vF = ColumnVector.fromBoxedFloats(Float.NaN, Float.NaN, Float.NaN, Float.NaN, Float.NaN, Float.NaN);
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(false, false, false, false, false, false);
+         ColumnVector result = v.isNotNan();
+         ColumnVector resultF = vF.isNotNan()) {
+      assertColumnsAreEqual(expected, result);
+      assertColumnsAreEqual(expected, resultF);
+    }
+  }
+
   @Test
   void testGetDeviceMemorySizeNonStrings() {
     try (ColumnVector v0 = ColumnVector.fromBoxedInts(1, 2, 3, 4, 5, 6);
@@ -286,7 +424,6 @@ public class ColumnVectorTest extends CudfTestBase {
           s = Scalar.fromString("hello, world!");
           break;
         case EMPTY:
-        case CATEGORY:
           continue;
         default:
           throw new IllegalArgumentException("Unexpected type: " + type);
@@ -391,7 +528,6 @@ public class ColumnVectorTest extends CudfTestBase {
           break;
         }
         case EMPTY:
-        case CATEGORY:
           continue;
         default:
           throw new IllegalArgumentException("Unexpected type: " + type);
@@ -417,7 +553,7 @@ public class ColumnVectorTest extends CudfTestBase {
   void testFromScalarNull() {
     final int rowCount = 4;
     for (DType type : DType.values()) {
-      if (type == DType.EMPTY || type == DType.CATEGORY) {
+      if (type == DType.EMPTY) {
         continue;
       }
       try (Scalar s = Scalar.fromNull(type);
@@ -918,7 +1054,7 @@ public class ColumnVectorTest extends CudfTestBase {
     WindowOptions options = WindowOptions.builder().window(1, 1)
         .minPeriods(2).build();
     try (ColumnVector v1 = ColumnVector.fromInts(5, 4, 7, 6, 8)) {
-      try (ColumnVector expected = ColumnVector.fromInts(9, 16, 17, 21, 14);
+      try (ColumnVector expected = ColumnVector.fromLongs(9, 16, 17, 21, 14);
            ColumnVector result = v1.rollingWindow(AggregateOp.SUM, options)) {
         assertColumnsAreEqual(expected, result);
       }
@@ -934,7 +1070,7 @@ public class ColumnVectorTest extends CudfTestBase {
       }
 
       // The rolling window produces the same result type as the input
-      try (ColumnVector expected = ColumnVector.fromInts(4, 5, 5, 7, 7);
+      try (ColumnVector expected = ColumnVector.fromDoubles(4.5, 16.0 / 3, 17.0 / 3, 7, 7);
            ColumnVector result = v1.rollingWindow(AggregateOp.MEAN, options)) {
         assertColumnsAreEqual(expected, result);
       }
@@ -953,7 +1089,7 @@ public class ColumnVectorTest extends CudfTestBase {
       WindowOptions window = WindowOptions.builder()
           .minPeriods(2).window(precedingCol, followingCol).build();
       try (ColumnVector v1 = ColumnVector.fromInts(5, 4, 7, 6, 8);
-           ColumnVector expected = ColumnVector.fromBoxedInts(null, null, 9, 16, 25);
+           ColumnVector expected = ColumnVector.fromBoxedLongs(null, null, 9L, 16L, 25L);
            ColumnVector result = v1.rollingWindow(AggregateOp.SUM, window)) {
         assertColumnsAreEqual(expected, result);
       }
@@ -983,7 +1119,7 @@ public class ColumnVectorTest extends CudfTestBase {
       WindowOptions window = WindowOptions.builder().minPeriods(2)
           .window(precedingCol, followingCol).build();
       try (ColumnVector v1 = ColumnVector.fromInts(5, 4, 7, 6, 8);
-           ColumnVector expected = ColumnVector.fromInts(16, 22, 30, 14, 14);
+           ColumnVector expected = ColumnVector.fromLongs(16, 22, 30, 14, 14);
            ColumnVector result = v1.rollingWindow(AggregateOp.SUM, window)) {
         assertColumnsAreEqual(expected, result);
       }
@@ -1097,7 +1233,7 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testCast() {
+  void testFixedWidthCast() {
     int[] values = new int[]{1,3,4,5,2};
     long[] longValues = Arrays.stream(values).asLongStream().toArray();
     double[] doubleValues = Arrays.stream(values).asDoubleStream().toArray();
@@ -1141,6 +1277,139 @@ public class ColumnVectorTest extends CudfTestBase {
       assertColumnsAreEqual(expectedMs, ms);
       assertColumnsAreEqual(expectedNs, ns);
       assertColumnsAreEqual(expectedS, s);
+    }
+  }
+
+  @Test
+  void testStringCast() {
+
+    Short[] shortValues = {1, 3, 45, -0, null};
+    String[] stringShortValues = getStringArray(shortValues);
+
+    testCastFixedWidthToStringsAndBack(DType.INT16, () -> ColumnVector.fromBoxedShorts(shortValues), () -> ColumnVector.fromStrings(stringShortValues));
+
+    Integer[] integerArray = {1, -2, 3, null, 8};
+    String[] stringIntValues = getStringArray(integerArray);
+
+    testCastFixedWidthToStringsAndBack(DType.INT32, () -> ColumnVector.fromBoxedInts(integerArray), () -> ColumnVector.fromStrings(stringIntValues));
+
+    Long[] longValues = {null, 3l, 2l, -43l, null};
+    String[] stringLongValues = getStringArray(longValues);
+
+    testCastFixedWidthToStringsAndBack(DType.INT64, () -> ColumnVector.fromBoxedLongs(longValues), () -> ColumnVector.fromStrings(stringLongValues));
+
+    Float[] floatValues = {Float.NaN, null, 03f, -004f, 12f};
+    String[] stringFloatValues = getStringArray(floatValues);
+
+    testCastFixedWidthToStringsAndBack(DType.FLOAT32, () -> ColumnVector.fromBoxedFloats(floatValues), () -> ColumnVector.fromStrings(stringFloatValues));
+
+    Double[] doubleValues = {Double.NaN, Double.NEGATIVE_INFINITY, 4d, 98d, null, Double.POSITIVE_INFINITY};
+    //Creating the string array manually because of the way cudf converts POSITIVE_INFINITY to "Inf" instead of "INFINITY"
+    String[] stringDoubleValues = {"NaN","-Inf", "4.0", "98.0", null, "Inf"};
+
+    testCastFixedWidthToStringsAndBack(DType.FLOAT64, () -> ColumnVector.fromBoxedDoubles(doubleValues), () -> ColumnVector.fromStrings(stringDoubleValues));
+
+    Boolean[] booleans = {true, false, false};
+    String[] stringBools = getStringArray(booleans);
+
+    testCastFixedWidthToStringsAndBack(DType.BOOL8, () -> ColumnVector.fromBoxedBooleans(booleans), () -> ColumnVector.fromStrings(stringBools));
+  }
+
+  private static <T> String[] getStringArray(T[] input) {
+    String[] result = new String[input.length];
+    for (int i = 0 ; i < input.length ; i++) {
+      if (input[i] == null) {
+        result[i] = null;
+      } else {
+        result[i] = String.valueOf(input[i]);
+      }
+    }
+    return result;
+  }
+
+  private static void testCastFixedWidthToStringsAndBack(DType type, Supplier<ColumnVector> fixedWidthSupplier,
+                                                         Supplier<ColumnVector> stringColumnSupplier) {
+    try (ColumnVector fixedWidthColumn = fixedWidthSupplier.get();
+         ColumnVector stringColumn = stringColumnSupplier.get();
+         ColumnVector fixedWidthCastedToString = fixedWidthColumn.castTo(DType.STRING);
+         ColumnVector stringCastedToFixedWidth = stringColumn.castTo(type)) {
+      assertColumnsAreEqual(stringColumn, fixedWidthCastedToString);
+      assertColumnsAreEqual(fixedWidthColumn, stringCastedToFixedWidth);
+    }
+  }
+
+  @Test
+  void testCastTimestampAsString() {
+    final String[] TIMES_S_STRING = {
+        "2018-07-04 12:00:00",
+        "2023-01-25 07:32:12",
+        "2018-07-04 12:00:00"};
+
+    final long[] TIMES_S = {
+        1530705600L,   //'2018-07-04 12:00:00'
+        1674631932L,   //'2023-01-25 07:32:12'
+        1530705600L};  //'2018-07-04 12:00:00'
+
+    final long[] TIMES_NS = {
+        1530705600115254330L,   //'2018-07-04 12:00:00.115254330'
+        1674631932929861604L,   //'2023-01-25 07:32:12.929861604'
+        1530705600115254330L};  //'2018-07-04 12:00:00.115254330'
+
+    final String[] TIMES_NS_STRING = {
+        "2018-07-04 12:00:00.115254330",
+        "2023-01-25 07:32:12.929861604",
+        "2018-07-04 12:00:00.115254330"};
+
+    // all supported formats by cudf
+    final String[] TIMES_NS_STRING_ALL = {
+        "04::07::18::2018::12::00::00::115254330",
+        "25::01::23::2023::07::32::12::929861604",
+        "04::07::18::2018::12::00::00::115254330"};
+
+    // Seconds
+    try (ColumnVector s_string_times = ColumnVector.fromStrings(TIMES_S_STRING);
+         ColumnVector s_timestamps = ColumnVector.timestampSecondsFromLongs(TIMES_S);
+         ColumnVector timestampsAsStrings = s_timestamps.asStrings("%Y-%m-%d %H:%M:%S");
+         ColumnVector timestampsAsStringsUsingDefaultFormat = s_timestamps.asStrings()) {
+      assertColumnsAreEqual(s_string_times, timestampsAsStrings);
+      assertColumnsAreEqual(timestampsAsStringsUsingDefaultFormat, timestampsAsStrings);
+    }
+
+    // Nanoseconds
+    try (ColumnVector ns_string_times = ColumnVector.fromStrings(TIMES_NS_STRING);
+         ColumnVector ns_timestamps = ColumnVector.timestampNanoSecondsFromLongs(TIMES_NS);
+         ColumnVector ns_string_times_all = ColumnVector.fromStrings(TIMES_NS_STRING_ALL);
+         ColumnVector allSupportedFormatsTimestampAsStrings = ns_timestamps.asStrings("%d::%m::%y::%Y::%H::%M::%S::%f");
+         ColumnVector timestampsAsStrings = ns_timestamps.asStrings("%Y-%m-%d %H:%M:%S.%f")) {
+      assertColumnsAreEqual(ns_string_times, timestampsAsStrings);
+      assertColumnsAreEqual(allSupportedFormatsTimestampAsStrings, ns_string_times_all);
+    }
+  }
+
+  @Test
+  @Disabled("Negative timestamp values are not currently supported. " +
+      "See github issue https://github.com/rapidsai/cudf/issues/3116 for details")
+  void testCastNegativeTimestampAsString() {
+    final String[] NEG_TIME_S_STRING = {"1965-10-26 14:01:12",
+        "1960-02-06 19:22:11"};
+
+    final long[] NEG_TIME_S = {-131968728L,   //'1965-10-26 14:01:12'
+        -312439069L};   //'1960-02-06 19:22:11'
+
+    final long[] NEG_TIME_NS = {-131968727761702469L};   //'1965-10-26 14:01:12.238297531'
+
+    final String[] NEG_TIME_NS_STRING = {"1965-10-26 14:01:12.238297531"};
+
+    // Seconds
+    try (ColumnVector unsupported_s_string_times = ColumnVector.fromStrings(NEG_TIME_S_STRING);
+         ColumnVector unsupported_s_timestamps = ColumnVector.timestampSecondsFromLongs(NEG_TIME_S)) {
+      assertColumnsAreEqual(unsupported_s_string_times, unsupported_s_timestamps);
+    }
+
+    // Nanoseconds
+    try (ColumnVector unsupported_ns_string_times = ColumnVector.fromStrings(NEG_TIME_NS_STRING);
+         ColumnVector unsupported_ns_timestamps = ColumnVector.timestampSecondsFromLongs(NEG_TIME_NS)) {
+      assertColumnsAreEqual(unsupported_ns_string_times, unsupported_ns_timestamps);
     }
   }
 

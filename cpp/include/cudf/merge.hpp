@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,10 +24,10 @@ namespace cudf {
 namespace experimental {
 
 /**
- * @brief Merge sorted tables.
+ * @brief Merge a set of sorted tables.
  * 
- * Merges two sorted tables into one sorted table
- * containing data from both tables.
+ * Merges sorted tables into one sorted table
+ * containing data from all tables.
  *
  * Example 1:
  * input:
@@ -35,9 +35,11 @@ namespace experimental {
  *            col 2 {4, 5, 6, 7}
  * table 2 => col 1 {1, 2}
  *            col 2 {8, 9}
+ * table 3 => col 1 {2, 4}
+ *            col 2 {8, 9}
  * output:
- * table => col 1 {0, 1, 1, 2, 2, 3}
- *          col 2 {4, 5, 8, 6, 9, 7}
+ * table => col 1 {0, 1, 1, 2, 2, 2, 3, 4}
+ *          col 2 {4, 5, 8, 6, 8, 9, 7, 9}
  *
  * Example 2: 
  * input:
@@ -65,18 +67,27 @@ namespace experimental {
  *   Res0 = {0,1,1}
  *   Res1 = {'b', 'a', 'c'}
  *   Res2 = {GREEN, NULL, RED}
- *
- * @Param[in] left_table A sorted table to be merged
- * @Param[in] right_table A sorted table to be merged
+ * 
+ * 
+ * @throws cudf::logic_error if tables in `tables_to_merge` have different 
+ * number of columns
+ * @throws cudf::logic_error if tables in `tables_to_merge` have columns with 
+ * mismatched types
+ * @throws cudf::logic_error if `key_cols` is empty
+ * @throws cudf::logic_error if `key_cols` size is larger than the number of 
+ * columns in `tables_to_merge` tables
+ * @throws cudf::logic_error if `key_cols` size and `column_order` size mismatches
+ * 
+ * @Param[in] tables_to_merge Non-empty list of tables to be merged
  * @Param[in] key_cols Indices of left_cols and right_cols to be used
  *                     for comparison criteria
  * @Param[in] column_order Sort order types of columns indexed by key_cols
- * @Param[in] null_precedence Array indicating the order of nulls with respect to non-nulls for the indexing columns (key_cols)
+ * @Param[in] null_precedence Array indicating the order of nulls with respect
+ * to non-nulls for the indexing columns (key_cols)
  *
- * @Returns A table containing sorted data from left_table and right_table
+ * @Returns A table containing sorted data from all input tables
  */
-std::unique_ptr<cudf::experimental::table> merge(table_view const& left_table,
-                                                 table_view const& right_table,
+std::unique_ptr<cudf::experimental::table> merge(std::vector<table_view> const& tables_to_merge,
                                                  std::vector<cudf::size_type> const& key_cols,
                                                  std::vector<cudf::order> const& column_order,
                                                  std::vector<cudf::null_order> const& null_precedence = {},

@@ -23,7 +23,7 @@ _numpy_to_pandas_conversion = {
 
 
 class DatetimeColumn(column.ColumnBase):
-    def __init__(self, data, dtype, mask=None, offset=0):
+    def __init__(self, data, dtype, mask=None, size=None, offset=0):
         """
         Parameters
         ----------
@@ -37,8 +37,12 @@ class DatetimeColumn(column.ColumnBase):
         dtype = np.dtype(dtype)
         if data.size % dtype.itemsize:
             raise ValueError("Buffer size must be divisible by element size")
-        size = data.size // dtype.itemsize
-        super().__init__(data, size=size, dtype=dtype, mask=mask)
+        if size is None:
+            size = data.size // dtype.itemsize
+            size = size - offset
+        super().__init__(
+            data, size=size, dtype=dtype, mask=mask, offset=offset
+        )
         assert self.dtype.type is np.datetime64
         self._time_unit, _ = np.datetime_data(self.dtype)
 
@@ -166,10 +170,10 @@ class DatetimeColumn(column.ColumnBase):
         from cudf.core.column import string
 
         if len(self) > 0:
-            dev_ptr = self.data.ptr
+            dev_ptr = self.data_ptr
             null_ptr = None
             if self.nullable:
-                null_ptr = self.mask.ptr
+                null_ptr = self.mask_ptr
             kwargs.update(
                 {
                     "count": len(self),
@@ -222,16 +226,16 @@ class DatetimeColumn(column.ColumnBase):
                 "datetime column of {} has no NaN value".format(self.dtype)
             )
 
-    def fillna(self, fill_value, inplace=False):
+    def fillna(self, fill_value):
         if is_scalar(fill_value):
             fill_value = np.datetime64(fill_value, self.time_unit)
         else:
             fill_value = column.as_column(fill_value, nan_as_null=False)
 
         result = libcudf.replace.replace_nulls(self, fill_value)
+        result = column.build_column(result.data, result.dtype, mask=None)
 
-        result.mask = None
-        return self._mimic_inplace(result, inplace)
+        return result
 
     def sort_by_values(self, ascending=True, na_position="last"):
         col_inds = get_sorted_inds(self, ascending, na_position)
@@ -259,10 +263,6 @@ class DatetimeColumn(column.ColumnBase):
         value = pd.to_datetime(value)
         value = column.as_column(value).as_numerical[0]
         return self.as_numerical.find_last_value(value, closest=closest)
-
-    def searchsorted(self, value, side="left"):
-        value_col = column.as_column(value)
-        return libcudf.search.search_sorted(self, value_col, side)
 
     def unique(self, method="sort"):
         # method variable will indicate what algorithm to use to

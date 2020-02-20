@@ -14,6 +14,7 @@ import rmm
 import cudf
 import cudf._lib as libcudf
 from cudf.core.column import ColumnBase, DatetimeColumn, column
+from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
@@ -76,7 +77,7 @@ class Series(Frame):
         data : 1D array-like
             The values.  Null values must not be skipped.  They can appear
             as garbage values.
-        mask : 1D array-like of numpy.uint8
+        mask : 1D array-like
             The null-mask.  Valid values are marked as ``1``; otherwise ``0``.
             The mask bit given the data index ``idx`` is computed as::
 
@@ -108,6 +109,8 @@ class Series(Frame):
             data = data._values
             if dtype is not None:
                 data = data.astype(dtype)
+        elif isinstance(data, ColumnAccessor):
+            name, data = data.names[0], data.columns[0]
 
         if isinstance(data, Series):
             index = data._index if index is None else index
@@ -134,7 +137,7 @@ class Series(Frame):
     @classmethod
     def _from_table(cls, table):
         name = next(iter(table._data.keys()))
-        data = next(iter(table._data.values()))
+        data = next(iter(table._data.columns))
         return cls(data=data, index=Index._from_table(table._index), name=name)
 
     @property
@@ -191,7 +194,7 @@ class Series(Frame):
         frames.extend(index_frames)
         header["index_frame_count"] = len(index_frames)
         header["column"], column_frames = self._column.serialize()
-        header["type"] = pickle.dumps(type(self))
+        header["type-serialized"] = pickle.dumps(type(self))
         frames.extend(column_frames)
         header["column_frame_count"] = len(column_frames)
 
@@ -222,7 +225,7 @@ class Series(Frame):
     def name(self):
         """Returns name of the Series.
         """
-        return next(iter(self._data))
+        return self._data.names[0]
 
     @name.setter
     def name(self, value):
@@ -233,14 +236,14 @@ class Series(Frame):
     def deserialize(cls, header, frames):
 
         index_nframes = header["index_frame_count"]
-        idx_typ = pickle.loads(header["index"]["type"])
+        idx_typ = pickle.loads(header["index"]["type-serialized"])
         index = idx_typ.deserialize(header["index"], frames[:index_nframes])
         name = pickle.loads(header["name"])
 
         frames = frames[index_nframes:]
 
         column_nframes = header["column_frame_count"]
-        col_typ = pickle.loads(header["column"]["type"])
+        col_typ = pickle.loads(header["column"]["type-serialized"])
         column = col_typ.deserialize(header["column"], frames[:column_nframes])
 
         return Series(column, index=index, name=name)
@@ -376,7 +379,7 @@ class Series(Frame):
 
         Parameters
         ----------
-        mask : 1D array-like of numpy.uint8
+        mask : 1D array-like
             The null-mask.  Valid values are marked as ``1``; otherwise ``0``.
             The mask bit given the data index ``idx`` is computed as::
 
@@ -475,12 +478,6 @@ class Series(Frame):
         """Return Series by taking values from the corresponding *indices*.
         """
         return self[indices]
-
-    def _get_mask_as_series(self):
-        mask = Series(cudautils.ones(len(self), dtype=np.bool))
-        if self._column.nullable:
-            mask = mask.set_mask(self._column.mask).fillna(False)
-        return mask
 
     def __bool__(self):
         """Always raise TypeError when converting a Series
@@ -1145,7 +1142,7 @@ class Series(Frame):
 
     @property
     def cat(self):
-        return self._column.cat()
+        return self._column.cat(parent=self)
 
     @property
     def str(self):
@@ -1194,26 +1191,18 @@ class Series(Frame):
     def has_nulls(self):
         return self._column.has_nulls
 
+    def dropna(self):
+        """
+        Return a Series with null values removed.
+        """
+        return super().dropna(subset=[self.name])
+
     def drop_duplicates(self, keep="first", inplace=False):
         """
         Return Series with duplicate values removed
         """
-        in_cols = [self._column]
-        in_index = self.index
-        from cudf.core.multiindex import MultiIndex
+        result = super().drop_duplicates(subset=[self.name], keep=keep)
 
-        if isinstance(in_index, MultiIndex):
-            in_index = RangeIndex(len(in_index))
-        out_cols, new_index = libcudf.stream_compaction.drop_duplicates(
-            [in_index._values], in_cols, None, keep
-        )
-        new_index = as_index(new_index)
-        if self.index.equals(new_index):
-            new_index = self.index
-        if isinstance(self.index, MultiIndex):
-            new_index = self.index.take(new_index)
-
-        result = Series(out_cols[0], index=new_index, name=self.name)
         return self._mimic_inplace(result, inplace=inplace)
 
     def _mimic_inplace(self, result, inplace=False):
@@ -1224,19 +1213,6 @@ class Series(Frame):
             self.name = result.name
         else:
             return result
-
-    def dropna(self):
-        """
-        Return a Series with null values removed.
-        """
-        if not self.has_nulls:
-            return self
-        name = self.name
-        result = self.to_frame(name="_").dropna()
-        result = result["_"]
-        result.name = name
-        self.name = name
-        return result
 
     def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
         """Fill null values with ``value``.
@@ -1260,9 +1236,11 @@ class Series(Frame):
         if axis:
             raise NotImplementedError("The axis keyword is not supported")
 
-        data = self._column.fillna(value, inplace=inplace)
+        data = self._column.fillna(value)
 
-        if not inplace:
+        if inplace:
+            self._column._mimic_inplace(data, inplace=True)
+        else:
             return self._copy_construct(data=data)
 
     def where(self, cond, other=None, axis=None):
@@ -1377,8 +1355,9 @@ class Series(Frame):
         if self.dtype.kind == "f":
             sr = self.fillna(np.nan)
             newmask = libcudf.unaryops.nans_to_nulls(sr._column)
-            self._column.mask = newmask
-        return self
+            return self.set_mask(newmask)
+        else:
+            return self
 
     def all(self, axis=0, skipna=True, level=None):
         """
@@ -1478,9 +1457,7 @@ class Series(Frame):
         -------
         device array
         """
-        if self.has_nulls:
-            raise ValueError("Column must have no nulls.")
-        return cudautils.compact_mask_bytes(self._column.data_array_view)
+        return self._column.as_mask()
 
     def astype(self, dtype, errors="raise", **kwargs):
         """
@@ -2148,8 +2125,7 @@ class Series(Frame):
             raise NotImplementedError(msg)
         if self.null_count == len(self):
             return 0
-        return self._column.unique_count(method=method, dropna=dropna)
-        # return len(self._column.unique())
+        return self._column.unique_count(method, dropna)
 
     def value_counts(self, sort=True):
         """Returns unique values of this Series.
@@ -2573,24 +2549,6 @@ class Series(Frame):
             out.name = index
 
         return out.copy(deep=copy)
-
-    def searchsorted(self, value, side="left"):
-        """Find indices where elements should be inserted to maintain order
-
-        Parameters
-        ----------
-        value : array_like
-            Column of values to search for
-        side : str {‘left’, ‘right’} optional
-            If ‘left’, the index of the first suitable location found is given.
-            If ‘right’, return the last such index
-
-        Returns
-        -------
-        A Column of insertion points with the same shape as value
-        """
-        outcol = self._column.searchsorted(value, side)
-        return Series(outcol).values
 
     @property
     def is_unique(self):

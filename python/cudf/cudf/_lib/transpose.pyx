@@ -40,7 +40,7 @@ def transpose(df):
 
     if any(t != dtype for t in df.dtypes):
         raise ValueError('all columns must have the same dtype')
-    has_null = any(c.null_count for c in df._data.values())
+    has_null = any(c.null_count for c in df._data.columns)
 
     out_df = cudf.DataFrame()
 

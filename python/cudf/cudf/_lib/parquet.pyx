@@ -23,11 +23,67 @@ from cudf._lib.includes.parquet cimport (
 from libc.stdlib cimport free
 from libcpp.memory cimport unique_ptr, make_unique
 from libcpp.string cimport string
+from libcpp.map cimport map
 
 import errno
 import os
+import json
+import pandas as pd
+import pyarrow as pa
 
 from cudf._libxx.table cimport *
+
+
+cpdef generate_pandas_metadata(Table table, index):
+    col_names = []
+    types = []
+    index_levels = []
+    index_descriptors = []
+
+    # Columns
+    for name, col in table._data.items():
+        col_names.append(name)
+        types.append(col.to_arrow().type)
+
+    # Indexes
+    if index is not False:
+        for name in table._index.names:
+            if name is not None:
+                if isinstance(table._index, cudf.core.multiindex.MultiIndex):
+                    idx = table.index.get_level_values(name)
+                else:
+                    idx = table.index
+
+                if isinstance(idx, cudf.core.index.RangeIndex):
+                    descr = {
+                        "kind": "range",
+                        "name": table.index.name,
+                        "start": table.index._start,
+                        "stop": table.index._stop,
+                        "step": 1,
+                    }
+                else:
+                    index_arrow = idx.to_arrow()
+                    descr = name
+                    types.append(index_arrow.type)
+                    col_names.append(name)
+                    index_levels.append(idx)
+                index_descriptors.append(descr)
+            else:
+                col_names.append(name)
+
+    metadata = pa.pandas_compat.construct_metadata(
+        table,
+        col_names,
+        index_levels,
+        index_descriptors,
+        index,
+        types,
+    )
+
+    md = metadata[b'pandas']
+    json_str = md.decode("utf-8")
+    return json_str
 
 cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
                    skip_rows=None, num_rows=None,
@@ -99,6 +155,7 @@ cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
 cpdef write_parquet(
         Table table,
         path,
+        index=None,
         compression=None,
         statistics="ROWGROUP"):
     """
@@ -115,15 +172,37 @@ cpdef write_parquet(
     cdef unique_ptr[table_metadata] tbl_meta = \
         make_unique[table_metadata]()
 
-    # Set the column names from the existing Table object
-    cdef vector[string] cols = [str.encode(s) for s in table._data.keys()]
-    tbl_meta.get().column_names = cols
+    cdef vector[string] column_names
+    cdef map[string, string] user_data
+    cdef table_view tv = table.data_view()
+
+    if index is not False:
+        tv = table.view()
+        if isinstance(table._index, cudf.core.multiindex.MultiIndex):
+            for idx_name in table._index.names:
+                column_names.push_back(str.encode(idx_name))
+        else:
+            if table._index.name is not None:
+                column_names.push_back(str.encode(table._index.name))
+            else:
+                # No named index exists so just write out columns
+                tv = table.data_view()
+
+    for col_name in table._column_names:
+        column_names.push_back(str.encode(col_name))
+
+    pandas_metadata = generate_pandas_metadata(table, index)
+    user_data[str.encode("pandas")] = str.encode(pandas_metadata)
+
+    # Set the table_metadata
+    tbl_meta.get().column_names = column_names
+    tbl_meta.get().user_data = user_data
 
     cdef compression_type comp_type
     if compression is None:
-        comp_type = compression_type.none
+        comp_type = compression_type.NONE
     elif compression == "snappy":
-        comp_type = compression_type.snappy
+        comp_type = compression_type.SNAPPY
     else:
         raise ValueError("Unsupported `compression` type")
 
@@ -138,7 +217,6 @@ cpdef write_parquet(
     else:
         raise ValueError("Unsupported `statistics_freq` type")
 
-    cdef table_view tv = table.view()
     cdef write_parquet_args args
 
     # Perform write

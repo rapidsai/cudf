@@ -12,6 +12,7 @@ from libcpp.string cimport string
 from libcpp.vector cimport vector
 from libcpp.map cimport map
 
+
 cdef extern from "cudf/cudf.h" namespace "cudf::io::parquet" nogil:
 
     cdef cppclass reader_options:
@@ -53,18 +54,24 @@ cdef extern from "cudf/io/functions.hpp" \
         namespace "cudf::experimental::io" nogil:
 
     ctypedef enum compression_type:
-        none "cudf::experimental::io::compression_type::NONE"
-        snappy "cudf::experimental::io::compression_type::SNAPPY"
+        NONE "cudf::experimental::io::compression_type::NONE"
+        SNAPPY "cudf::experimental::io::compression_type::SNAPPY"
 
     ctypedef enum statistics_freq:
-        STATISTICS_NONE = 0
-        STATISTICS_ROWGROUP = 1
-        STATISTICS_PAGE = 2
+        STATISTICS_NONE \
+            "cudf::experimental::io::statistics_freq::STATISTICS_NONE"
+        STATISTICS_ROWGROUP \
+            "cudf::experimental::io::statistics_freq::STATISTICS_ROWGROUP"
+        STATISTICS_PAGE \
+            "cudf::experimental::io::statistics_freq::STATISTICS_PAGE"
 
     ctypedef enum io_type:
-        FILEPATH
-        HOST_BUFFER
-        ARROW_RANDOM_ACCESS_FILE
+        FILEPATH \
+            "cudf::experimental::io::io_types::FILEPATH"
+        HOST_BUFFER \
+            "cudf::experimental::io::io_types::HOST_BUFFER"
+        ARROW_RANDOM_ACCESS_FILE \
+            "cudf::experimental::io::io_types::ARROW_RANDOM_ACCESS_FILE"
 
     cdef cppclass sink_info:
         io_type type

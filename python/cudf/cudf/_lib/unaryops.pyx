@@ -17,8 +17,10 @@ import rmm
 from rmm._lib.lib cimport cudaStream_t, c_free
 
 from cudf.utils import cudautils
+from cudf.core.buffer import Buffer
 
 from cudf._libxx.column cimport Column
+from cudf._libxx.null_mask import bitmask_allocation_size_bytes
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
 from cudf._lib.GDFError import GDFError
@@ -140,10 +142,6 @@ def apply_dt_extract_op(Column incol, Column outcol, op):
 
 
 def nans_to_nulls(Column py_col):
-    from cudf.core.column import as_column
-    from cudf.core.buffer import Buffer
-    from cudf.utils.utils import mask_bitsize, calc_chunk_size
-
     cdef gdf_column* c_col = column_view_from_column(py_col)
     cdef pair[cpp_unaryops.bit_mask_t_ptr, size_type] result
     cdef cudaStream_t stream = <cudaStream_t><size_t>(0)
@@ -151,19 +149,19 @@ def nans_to_nulls(Column py_col):
     with nogil:
         result = cpp_unaryops.nans_to_nulls(c_col[0])
 
-    mask = None
+    mask_buf = None
     if result.second > 0:
-        mask_ptr = int(<uintptr_t>result.first)
-        mask_buf = rmm.DeviceBuffer(
-            ptr=mask_ptr,
-            size=calc_chunk_size(len(py_col), mask_bitsize)
+        mask_ptr = rmm._DevicePointer(int(<uintptr_t>result.first))
+        mask_buf = Buffer(
+            mask_ptr,
+            bitmask_allocation_size_bytes(len(py_col))
         )
-        mask = Buffer(mask_buf)
-        c_free(result.first, stream)
+    else:
+        c_free(<void*><uintptr_t>result.first, <cudaStream_t><uintptr_t>0)
 
     free_column(c_col)
 
-    return mask
+    return mask_buf
 
 
 def is_null(Column col):

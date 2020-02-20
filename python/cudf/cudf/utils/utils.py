@@ -1,6 +1,6 @@
 import functools
 from collections import OrderedDict
-from math import ceil, floor, isinf, isnan
+from math import floor, isinf, isnan
 
 import numpy as np
 import pandas as pd
@@ -9,25 +9,17 @@ from numba import njit
 
 import rmm
 
-mask_dtype = np.dtype(np.int8)
+from cudf._lib.arrow._cuda import CudaBuffer as arrowCudaBuffer
+from cudf._libxx.null_mask import bitmask_allocation_size_bytes
+from cudf.core.buffer import Buffer
+
+mask_dtype = np.dtype(np.int32)
 mask_bitsize = mask_dtype.itemsize * 8
-mask_byte_padding = 64
-
-
-def calc_chunk_size(size, chunksize):
-    return mask_byte_padding * ceil(
-        ((size + chunksize - 1) // chunksize) / mask_byte_padding
-    )
 
 
 @njit
 def mask_get(mask, pos):
     return (mask[pos // mask_bitsize] >> (pos % mask_bitsize)) & 1
-
-
-@njit
-def mask_set(mask, pos):
-    mask[pos // mask_bitsize] |= 1 << (pos % mask_bitsize)
 
 
 @njit
@@ -63,18 +55,6 @@ def rint(x):
 @njit
 def check_equals_int(a, b):
     return a == b
-
-
-def make_mask(size):
-    """Create mask to obtain at least *size* number of bits.
-    """
-    size = calc_chunk_size(size, mask_bitsize)
-    return rmm.device_array(shape=size, dtype=mask_dtype)
-
-
-def require_writeable_array(arr):
-    # This should be fixed in numba (numba issue #2521)
-    return np.require(arr, requirements="W")
 
 
 def scalar_broadcast_to(scalar, size, dtype=None):
@@ -128,44 +108,69 @@ list_types_tuple = (list, np.array)
 
 
 def buffers_from_pyarrow(pa_arr, dtype=None):
-    from cudf.core.buffer import Buffer
-    from cudf.utils.cudautils import copy_array
-
+    """
+    Given a pyarrow array returns a 5 length tuple of:
+        - size
+        - offset
+        - cudf.Buffer --> mask
+        - cudf.Buffer --> data
+        - cudf.Buffer --> string characters
+    """
     buffers = pa_arr.buffers()
 
     if pa_arr.null_count:
-        mask_dev_array = make_mask(len(pa_arr))
-        arrow_dev_array = rmm.to_device(np.asarray(buffers[0]).view("int8"))
-        copy_array(arrow_dev_array, mask_dev_array)
-        pamask = Buffer(mask_dev_array)
+        mask_size = bitmask_allocation_size_bytes(len(pa_arr))
+        pamask = pyarrow_buffer_to_cudf_buffer(buffers[0], mask_size=mask_size)
     else:
         pamask = None
 
     offset = pa_arr.offset
-    size = pa_arr.offset + len(pa_arr)
-
-    if dtype:
-        data_dtype = dtype
-    elif isinstance(pa_arr, pa.StringArray):
-        data_dtype = np.int32
-        size = size + 1  # extra element holds number of bytes
-    else:
-        if isinstance(pa_arr, pa.DictionaryArray):
-            data_dtype = pa_arr.indices.type.to_pandas_dtype()
-        else:
-            data_dtype = pa_arr.type.to_pandas_dtype()
+    size = len(pa_arr)
 
     if buffers[1]:
-        padata = Buffer(
-            np.asarray(buffers[1]).view(data_dtype)[offset : offset + size]
-        )
+        padata = pyarrow_buffer_to_cudf_buffer(buffers[1])
     else:
         padata = Buffer.empty(0)
 
     pastrs = None
     if isinstance(pa_arr, pa.StringArray):
-        pastrs = Buffer(np.asarray(buffers[2]).view(np.int8))
-    return (pamask, padata, pastrs)
+        pastrs = pyarrow_buffer_to_cudf_buffer(buffers[2])
+    return (size, offset, pamask, padata, pastrs)
+
+
+def pyarrow_buffer_to_cudf_buffer(arrow_buf, mask_size=0):
+    """
+    Given a PyArrow Buffer backed by either host or device memory, convert it
+    to a cuDF Buffer
+    """
+    # Try creating a PyArrow CudaBuffer from the PyArrow Buffer object, it
+    # fails with an ArrowTypeError if it's a host based Buffer so we catch and
+    # process as expected
+    if not isinstance(arrow_buf, pa.Buffer):
+        raise TypeError(
+            "Expected type: {}, got type: {}".format(
+                pa.Buffer.__name__, type(arrow_buf).__name__
+            )
+        )
+
+    try:
+        arrow_cuda_buf = arrowCudaBuffer.from_buffer(arrow_buf)
+        buf = Buffer(
+            data=arrow_cuda_buf.address,
+            size=arrow_cuda_buf.size,
+            owner=arrow_cuda_buf,
+        )
+        if buf.size < mask_size:
+            dbuf = rmm.DeviceBuffer(size=mask_size)
+            dbuf.copy_from_device(buf)
+            return Buffer(dbuf)
+        return buf
+    except pa.ArrowTypeError:
+        if arrow_buf.size < mask_size:
+            dbuf = rmm.DeviceBuffer(size=mask_size)
+            dbuf.copy_from_host(np.asarray(arrow_buf).view("u1"))
+            return Buffer(dbuf)
+        return Buffer(arrow_buf)
 
 
 def get_result_name(left, right):
@@ -326,39 +331,86 @@ class cached_property:
             return value
 
 
-class OrderedColumnDict(OrderedDict):
+class ColumnValuesMappingMixin:
     """
-    An OrderedDict with the following restrictions:
-
-    - All values must be of type ColumnBase (or its derivatives)
-    - All values must be of the same length
+    Coerce provided values for the mapping to Columns.
     """
 
     def __setitem__(self, key, value):
-        from cudf.core.column import ColumnBase
+        from cudf.core.column import as_column
 
-        if not isinstance(value, ColumnBase):
-            raise TypeError(
-                f"Cannot insert object of type "
-                f"{value.__class__.__name__} into OrderedColumnDict"
-            )
-
-        if self.first is not None and len(self.first) > 0:
-            if len(value) != len(self.first):
-                raise ValueError(
-                    f"Cannot insert Column of different length "
-                    "into OrderedColumnDict"
-                )
-
+        value = as_column(value)
         super().__setitem__(key, value)
 
-    @property
-    def first(self):
-        """
-        Returns the first value if self is non-empty;
-        returns None otherwise.
-        """
-        if len(self) == 0:
-            return None
+
+class EqualLengthValuesMappingMixin:
+    """
+    Require all values in the mapping to have the same length.
+    """
+
+    def __setitem__(self, key, value):
+        if len(self) > 0:
+            first = next(iter(self.values()))
+            if len(value) != len(first):
+                raise ValueError("All values must be of equal length")
+        super().__setitem__(key, value)
+
+
+class OrderedColumnDict(
+    ColumnValuesMappingMixin, EqualLengthValuesMappingMixin, OrderedDict
+):
+    pass
+
+
+class NestedMappingMixin:
+    """
+    Make missing values of a mapping empty instances
+    of the same type as the mapping.
+    """
+
+    def __getitem__(self, key):
+        if isinstance(key, tuple):
+            d = self
+            for k in key[:-1]:
+                d = d[k]
+            return d.__getitem__(key[-1])
         else:
-            return next(iter(self.values()))
+            return super().__getitem__(key)
+
+    def __setitem__(self, key, value):
+        if isinstance(key, tuple):
+            d = self
+            for k in key[:-1]:
+                d = d.setdefault(k, self.__class__())
+            d.__setitem__(key[-1], value)
+        else:
+            super().__setitem__(key, value)
+
+
+class NestedOrderedDict(NestedMappingMixin, OrderedDict):
+    pass
+
+
+def to_flat_dict(d):
+    """
+    Convert the given nested dictionary to a flat dictionary
+    with tuple keys.
+    """
+
+    def _inner(d, parents=[]):
+        for k, v in d.items():
+            if not isinstance(v, d.__class__):
+                if parents:
+                    k = tuple(parents + [k])
+                yield (k, v)
+            else:
+                yield from _inner(d=v, parents=parents + [k])
+
+    return {k: v for k, v in _inner(d)}
+
+
+def to_nested_dict(d):
+    """
+    Convert the given dictionary with tuple keys to a NestedOrderedDict.
+    """
+    return NestedOrderedDict(d)

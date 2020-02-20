@@ -32,6 +32,9 @@
 #include <cudf/transform.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/strings/convert/convert_booleans.hpp>
+#include <cudf/strings/convert/convert_floats.hpp>
+#include <cudf/strings/convert/convert_integers.hpp>
 
 #include "jni_utils.hpp"
 
@@ -96,7 +99,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromScalar(JNIEnv *env,
     } else if (cudf::is_fixed_width(dtype)) {
       col = cudf::make_fixed_width_column(dtype, row_count, mask_state);
       auto mut_view = col->mutable_view();
-      cudf::experimental::fill(mut_view, 0, row_count, *scalar_val);
+      cudf::experimental::fill_in_place(mut_view, 0, row_count, *scalar_val);
     } else if (dtype.id() == cudf::type_id::STRING) {
       // create a string column of all empty strings to fill (cheapest string column to create)
       auto offsets = cudf::make_numeric_column(cudf::data_type{cudf::INT32}, row_count + 1, cudf::mask_state::UNALLOCATED);
@@ -187,13 +190,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_ifElseSS(JNIEnv *env, j
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_reduce(JNIEnv *env, jclass,
-    jlong j_col_view, jint j_reduce_op, jint j_dtype) {
+    jlong j_col_view, jint agg_type, jint j_dtype) {
   JNI_NULL_CHECK(env, j_col_view, "column view is null", 0);
   try {
     auto col = reinterpret_cast<cudf::column_view*>(j_col_view);
-    auto op = static_cast<cudf::experimental::reduction_op>(j_reduce_op);
+    auto agg = cudf::jni::map_jni_aggregation(agg_type);
     cudf::data_type out_dtype{static_cast<cudf::type_id>(j_dtype)};
-    std::unique_ptr<cudf::scalar> result = cudf::experimental::reduce(*col, op, out_dtype);
+    std::unique_ptr<cudf::scalar> result = cudf::experimental::reduce(*col, agg, out_dtype);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
@@ -208,13 +211,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_quantile(JNIEnv *env, j
     cudf::column_view *n_input_column = reinterpret_cast<cudf::column_view *>(input_column);
     cudf::experimental::interpolation n_quantile_method =
         static_cast<cudf::experimental::interpolation>(quantile_method);
-    std::vector<cudf::column_view> views(1, *n_input_column);
-
-    // The new API is a table level API. We don't really have many use cases for a table level
-    // API so for now lets keep it column level
-    std::vector<std::unique_ptr<cudf::scalar>> result =
-        cudf::experimental::quantiles(cudf::table_view(views), quantile, n_quantile_method);
-    return reinterpret_cast<jlong>(result[0].release());
+    std::unique_ptr<cudf::scalar> result =
+        cudf::experimental::quantile(*n_input_column, quantile, n_quantile_method);
+    return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
 }
@@ -370,6 +369,26 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_isNotNullNative(JNIEnv 
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_isNanNative(JNIEnv *env, jclass, jlong handle) {
+  JNI_NULL_CHECK(env, handle, "input column is null", 0);
+  try {
+    const cudf::column_view *input = reinterpret_cast<cudf::column_view *>(handle);
+    std::unique_ptr<cudf::column> ret = cudf::experimental::is_nan(*input);
+    return reinterpret_cast<jlong>(ret.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_isNotNanNative(JNIEnv *env, jclass, jlong handle) {
+  JNI_NULL_CHECK(env, handle, "input column is null", 0);
+  try {
+    const cudf::column_view *input = reinterpret_cast<cudf::column_view *>(handle);
+    std::unique_ptr<cudf::column> ret = cudf::experimental::is_not_nan(*input);
+    return reinterpret_cast<jlong>(ret.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_unaryOperation(JNIEnv *env, jclass,
         jlong input_ptr, jint int_op) {
   JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
@@ -455,7 +474,54 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_castTo(JNIEnv *env,
   try {
     cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
     cudf::data_type n_data_type(static_cast<cudf::type_id>(type));
-    std::unique_ptr<cudf::column> result = cudf::experimental::cast(*column, n_data_type);
+    std::unique_ptr<cudf::column> result;
+    if (n_data_type.id() == cudf::type_id::STRING) {
+        switch (column->type().id()) {
+        case cudf::type_id::BOOL8:
+            result = cudf::strings::from_booleans(*column);
+            break;
+        case cudf::type_id::FLOAT32:
+        case cudf::type_id::FLOAT64:
+            result = cudf::strings::from_floats(*column);
+            break;
+        case cudf::type_id::INT8:
+        case cudf::type_id::INT16:
+        case cudf::type_id::INT32:
+        case cudf::type_id::INT64:
+            result = cudf::strings::from_integers(*column);
+            break;
+        default:
+            JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Invalid data type", 0);
+        }
+    } else if (column->type().id() == cudf::type_id::STRING) {
+        switch (n_data_type.id()) {
+        case cudf::type_id::BOOL8:
+            result = cudf::strings::to_booleans(*column);
+            break;
+        case cudf::type_id::FLOAT32:
+            result = cudf::strings::to_floats(*column, cudf::data_type{cudf::type_id::FLOAT32});
+            break;
+        case cudf::type_id::FLOAT64:
+            result = cudf::strings::to_floats(*column, cudf::data_type{cudf::type_id::FLOAT64});
+            break;
+        case cudf::type_id::INT8:
+            result = cudf::strings::to_integers(*column, cudf::data_type{cudf::type_id::INT8});
+            break;
+        case cudf::type_id::INT16:
+            result = cudf::strings::to_integers(*column, cudf::data_type{cudf::type_id::INT16});
+            break;
+        case cudf::type_id::INT32:
+            result = cudf::strings::to_integers(*column, cudf::data_type{cudf::type_id::INT32});
+            break;
+        case cudf::type_id::INT64:
+            result = cudf::strings::to_integers(*column, cudf::data_type{cudf::type_id::INT64});
+            break;
+        default:
+            JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Invalid data type", 0);
+        }
+    } else {
+        result = cudf::experimental::cast(*column, n_data_type);
+    }
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
@@ -472,6 +538,21 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringTimestampToTimest
     cudf::strings_column_view strings_column(*column);
 
     std::unique_ptr<cudf::column> result = cudf::strings::to_timestamps(strings_column, cudf::data_type(static_cast<cudf::type_id>(time_unit)), format.get());
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_timestampToStringTimestamp(
+    JNIEnv *env, jobject j_object, jlong handle, jstring j_format) {
+  JNI_NULL_CHECK(env, handle, "column is null", 0);
+  JNI_NULL_CHECK(env, j_format, "format is null", 0);
+
+  try {
+    cudf::jni::native_jstring format(env, j_format);
+    cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
+
+    std::unique_ptr<cudf::column> result = cudf::strings::from_timestamps(*column, format.get());
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
@@ -630,7 +711,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeCudfColumnView(
     jlong j_offset, jlong j_valid, jint j_null_count, jint size) {
 
   JNI_ARG_CHECK(env, (size != 0), "size is 0", 0);
-  JNI_NULL_CHECK(env, j_data, "char data is null", 0);
 
   cudf::type_id n_type = static_cast<cudf::type_id>(j_type);
   cudf::data_type n_data_type(n_type);

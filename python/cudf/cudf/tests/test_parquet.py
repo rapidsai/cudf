@@ -20,13 +20,9 @@ def datadir(datadir):
     return datadir / "parquet"
 
 
-@pytest.fixture(params=[0, 1, 10, 100])
+@pytest.fixture(params=[1, 5, 10, 100])
 def simple_pdf(request):
-    types = [
-        "int8",
-        "int16",
-        "int32",
-    ]
+    types = ["bool", "int8", "int16", "int32", "int64", "float32", "float64"]
     renamer = {
         "C_l0_g" + str(idx): "col_" + val for (idx, val) in enumerate(types)
     }
@@ -45,10 +41,6 @@ def simple_pdf(request):
     # Cast all the column dtypes to objects, rename them, and then cast to
     # appropriate types
     test_pdf = test_pdf.astype("object").rename(renamer, axis=1).astype(typer)
-
-    # Create non-numeric categorical data otherwise parquet may typecast it
-    data = [ascii_letters[np.random.randint(0, 52)] for i in range(nrows)]
-    test_pdf["col_category"] = pd.Series(data, dtype="category")
 
     return test_pdf
 
@@ -478,15 +470,83 @@ def test_multifile_warning(datadir):
 
 
 # Validates the integrity of the GPU accelerated parquet writer.
-def test_parquet_writer_gpu(tmpdir, simple_gdf):
+def test_parquet_writer_gpu_none_index(tmpdir, simple_pdf, simple_gdf):
     gdf_fname = tmpdir.join("gdf.parquet")
+    pdf_fname = tmpdir.join("pdf.parquet")
 
-    simple_gdf.to_parquet(gdf_fname.strpath, engine="cudf")
+    assert_eq(simple_pdf, simple_gdf)
+
+    # Write out the gdf using the GPU accelerated writer
+    simple_gdf.to_parquet(gdf_fname.strpath, index=None)
+    simple_pdf.to_parquet(pdf_fname.strpath, index=None)
+
     assert os.path.exists(gdf_fname)
-    expect = simple_gdf
-    got = cudf.read_parquet(gdf_fname)
+    assert os.path.exists(pdf_fname)
 
-    print(expect)
-    print(got)
+    expect = pd.read_parquet(pdf_fname)
+    got = pd.read_parquet(gdf_fname)
+
+    assert_eq(expect, got, check_categorical=False)
+
+
+def test_parquet_writer_gpu_true_index(tmpdir, simple_pdf, simple_gdf):
+    gdf_fname = tmpdir.join("gdf.parquet")
+    pdf_fname = tmpdir.join("pdf.parquet")
+
+    assert_eq(simple_pdf, simple_gdf)
+
+    # Write out the gdf using the GPU accelerated writer
+    simple_gdf.to_parquet(gdf_fname.strpath, index=True)
+    simple_pdf.to_parquet(pdf_fname.strpath, index=True)
+
+    assert os.path.exists(gdf_fname)
+    assert os.path.exists(pdf_fname)
+
+    expect = pd.read_parquet(pdf_fname)
+    got = pd.read_parquet(gdf_fname)
+
+    assert_eq(expect, got, check_categorical=False)
+
+
+def test_parquet_writer_gpu_false_index(tmpdir, simple_pdf, simple_gdf):
+    gdf_fname = tmpdir.join("gdf.parquet")
+    pdf_fname = tmpdir.join("pdf.parquet")
+
+    assert_eq(simple_pdf, simple_gdf)
+
+    # Write out the gdf using the GPU accelerated writer
+    simple_gdf.to_parquet(gdf_fname.strpath, index=False)
+    simple_pdf.to_parquet(pdf_fname.strpath, index=False)
+
+    assert os.path.exists(gdf_fname)
+    assert os.path.exists(pdf_fname)
+
+    expect = pd.read_parquet(pdf_fname)
+    got = pd.read_parquet(gdf_fname)
+
+    assert_eq(expect, got, check_categorical=False)
+
+
+def test_parquet_writer_gpu_multi_index(tmpdir, simple_pdf, simple_gdf):
+    gdf_fname = tmpdir.join("gdf.parquet")
+    pdf_fname = tmpdir.join("pdf.parquet")
+
+    simple_pdf = simple_pdf.set_index(["col_bool", "col_int8"])
+    simple_gdf = simple_gdf.set_index(["col_bool", "col_int8"])
+
+    assert_eq(simple_pdf, simple_gdf)
+
+    print("PDF Index Type: " + str(type(simple_pdf.index)))
+    print("GDF Index Type: " + str(type(simple_gdf.index)))
+
+    # Write out the gdf using the GPU accelerated writer
+    simple_gdf.to_parquet(gdf_fname.strpath, index=None)
+    simple_pdf.to_parquet(pdf_fname.strpath, index=None)
+
+    assert os.path.exists(gdf_fname)
+    assert os.path.exists(pdf_fname)
+
+    expect = pd.read_parquet(pdf_fname)
+    got = pd.read_parquet(gdf_fname)
 
     assert_eq(expect, got, check_categorical=False)

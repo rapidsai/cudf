@@ -107,10 +107,18 @@ enum class null_order : bool {
 };
 
 /**---------------------------------------------------------------------------*
+ * @brief Indicates whether a collection of values is known to be sorted.
+ *---------------------------------------------------------------------------**/
+enum class sorted : bool {
+    NO,
+    YES
+};
+
+/**---------------------------------------------------------------------------*
  * @brief Indicates how a collection of values has been ordered.
  *---------------------------------------------------------------------------**/
 struct order_info {
-   bool is_ordered;
+   sorted is_sorted;
    order ordering;
    null_order null_ordering;
 };
@@ -118,7 +126,7 @@ struct order_info {
 /**---------------------------------------------------------------------------*
  * @brief Controls the allocation/initialization of a null mask.
  *---------------------------------------------------------------------------**/
-enum mask_state {
+enum class mask_state : int32_t {
   UNALLOCATED,    ///< Null mask not allocated, (all elements are valid)
   UNINITIALIZED,  ///< Null mask allocated, but not initialized
   ALL_VALID,      ///< Null mask allocated, initialized to all elements valid
@@ -156,7 +164,7 @@ enum type_id {
   TIMESTAMP_MILLISECONDS,  ///< duration of milliseconds since Unix Epoch in int64
   TIMESTAMP_MICROSECONDS,  ///< duration of microseconds since Unix Epoch in int64
   TIMESTAMP_NANOSECONDS,  ///< duration of nanoseconds since Unix Epoch in int64
-  CATEGORY,   ///< Categorial/Dictionary type
+  DICTIONARY32, ///< Dictionary type using int32 indices
   STRING,     ///< String elements
   // `NUM_TYPE_IDS` must be last!
   NUM_TYPE_IDS  ///< Total number of type ids
@@ -221,5 +229,6 @@ inline bool operator==(data_type const& lhs, data_type const& rhs) {
  * @return Size in bytes of an element of the specified `data_type`
  */
 std::size_t size_of(data_type t);
+
 
 }  // namespace cudf

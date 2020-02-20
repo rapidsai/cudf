@@ -33,6 +33,10 @@ if not os.path.isdir(CUDA_HOME):
 
 cuda_include_dir = os.path.join(CUDA_HOME, "include")
 
+try:
+    nthreads = int(os.environ.get("PARALLEL_LEVEL", "0") or "0")
+except Exception:
+    nthreads = 0
 
 extensions = [
     Extension(
@@ -73,7 +77,7 @@ setup(
     ],
     # Include the separately-compiled shared library
     setup_requires=["cython"],
-    ext_modules=cythonize(extensions),
+    ext_modules=cythonize(extensions, nthreads=nthreads),
     packages=find_packages(include=["cudf", "cudf.*"]),
     package_data={
         "cudf._lib": ["*.pxd"],
@@ -81,6 +85,7 @@ setup(
         "cudf._lib.includes.groupby": ["*.pxd"],
         "cudf._lib.arrow": ["*.pxd"],
         "cudf._libxx": ["*.pxd"],
+        "cudf._libxx.includes": ["*.pxd"],
     },
     cmdclass=versioneer.get_cmdclass(),
     install_requires=install_requires,
