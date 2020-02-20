@@ -113,12 +113,12 @@ std::unique_ptr<column> remove_keys( dictionary_column_view const& dictionary_co
                                      cudaStream_t stream = 0)
 {
     CUDF_EXPECTS( !keys_to_remove.has_nulls(), "keys_to_remove must not have nulls" );
-    auto keys_view = dictionary_column.keys();
+    auto const keys_view = dictionary_column.keys();
     CUDF_EXPECTS( keys_view.type()==keys_to_remove.type(), "keys types must match");
 
     // locate keys to remove by searching the keys column
-    auto matches = experimental::detail::contains( keys_view, keys_to_remove, mr, stream);
-    auto d_matches = matches->mutable_view().data<experimental::bool8>();
+    auto const matches = experimental::detail::contains( keys_view, keys_to_remove, mr, stream);
+    auto d_matches = matches->view().data<experimental::bool8>();
     // call common utility method to keep the keys not matched to keys_to_remove
     auto key_matcher = [d_matches] __device__ (size_type idx) { return !d_matches[idx]; };
     return remove_keys_fn( dictionary_column, key_matcher, mr, stream );
@@ -129,8 +129,8 @@ std::unique_ptr<column> remove_unused_keys( dictionary_column_view const& dictio
                                             cudaStream_t stream = 0)
 {
     // locate the keys to remove
-    auto keys = dictionary_column.keys();
-    auto indices = dictionary_column.indices();
+    auto const keys = dictionary_column.keys();
+    auto const indices = dictionary_column.indices();
     auto execpol = rmm::exec_policy(stream);
 
     // build keys index to verify against indices values
@@ -143,8 +143,8 @@ std::unique_ptr<column> remove_unused_keys( dictionary_column_view const& dictio
         dictionary_column.null_mask(), dictionary_column.null_count(), dictionary_column.offset() );
 
     // search the indices values with key indices to look for any holes
-    auto matches = experimental::detail::contains( keys_positions_view, indices_view, mr, stream);
-    auto d_matches = matches->mutable_view().data<experimental::bool8>();
+    auto const matches = experimental::detail::contains( keys_positions_view, indices_view, mr, stream);
+    auto d_matches = matches->view().data<experimental::bool8>();
 
     // call common utility method to keep the keys that match
     auto key_matcher = [d_matches]__device__(size_type idx) { return d_matches[idx]; };
