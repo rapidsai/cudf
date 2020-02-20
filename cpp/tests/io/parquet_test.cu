@@ -474,7 +474,11 @@ TEST_F(ParquetChunkedWriterTest, SimpleTable)
 
 TEST_F(ParquetChunkedWriterTest, LargeTables)
 {
-  int idx;
+  int idx;      
+
+  extern char* PQ_chk_buf;
+  extern size_t PQ_chk_buf_size;
+
   for(idx=0; idx<256; idx++){
     srand(31337);
     auto table1 = create_random_fixed_table<int>(512, 4096, true);
@@ -489,10 +493,45 @@ TEST_F(ParquetChunkedWriterTest, LargeTables)
     cudf_io::write_parquet_chunked(*table2, state);  
     cudf_io::write_parquet_chunked_end(state);    
 
-    cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
-    auto result = cudf_io::read_parquet(read_args);
+    printf("-------------------\n");
     
+    FILE *f = fopen(filepath.c_str(), "rb");    
+    if(f == nullptr){
+      printf("ERROR OPENING RAW FILE %s\n", filepath.c_str());
+    } else {
+      fseek(f, 0, SEEK_END);
+      size_t raw_size = ftell(f);      
+      fseek(f, 0, SEEK_SET);      
+      
+      char *raw = new char[raw_size];
+      size_t read = fread(raw, raw_size, 1, f);
+      if(read != 1){
+        printf("ERROR READING RAW FILE (%lu, %lu)\n", read, raw_size);
+      }
+      fclose(f);
+
+      if(raw_size != PQ_chk_buf_size){
+        printf("RAW BUFFER SIZE MISMATCH\n");
+      } else {
+        if(memcmp(raw, PQ_chk_buf, raw_size) == 0){
+          printf("RAW BUFFER MATCH\n");
+        } else {
+          printf("RAW BUFFER MISMATCH\n");
+        }
+      }
+    }
+
+    cudf_io::read_parquet_args v_read_args{cudf_io::source_info{PQ_chk_buf, PQ_chk_buf_size}};
+    auto v_result = cudf_io::read_parquet(v_read_args);    
+    expect_tables_equal(*v_result.tbl, *full_table);
+    printf("VRESULT OK\n");
+    
+    cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
+    auto result = cudf_io::read_parquet(read_args);    
     expect_tables_equal(*result.tbl, *full_table);
+    printf("RESULT OK\n");
+
+    printf("-------------------\n");
   }
 }
 

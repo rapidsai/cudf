@@ -33,6 +33,9 @@
 
 #include <arrow/util/hash_util.h>
 
+char* PQ_chk_buf = nullptr;
+size_t PQ_chk_buf_size = 0; 
+
 namespace cudf {
 namespace experimental {
 namespace io {
@@ -398,12 +401,22 @@ void writer::impl::write(table_view const &table, const table_metadata *metadata
 }
 
 void writer::impl::write_chunked_begin(pq_chunked_state& state){
+  if(PQ_chk_buf == nullptr){
+    PQ_chk_buf = new char[64 * 1024 * 1024];
+    memset(PQ_chk_buf, 0, 64 * 1024 * 1024);
+  }  
+  PQ_chk_buf_size = 0;
+
   // Write file header
   file_header_s fhdr;
   fhdr.magic = PARQUET_MAGIC;
-  out_sink_->write(&fhdr, sizeof(fhdr));
   
-  state.current_chunk_offset = sizeof(file_header_s);
+  out_sink_->write(&fhdr, sizeof(fhdr));    
+  state.data_hash = arrow::HashUtil::MurmurHash2_64(&fhdr, sizeof(fhdr), state.data_hash);  
+  memcpy(PQ_chk_buf + PQ_chk_buf_size, &fhdr, sizeof(fhdr));
+  PQ_chk_buf_size += sizeof(fhdr);
+  
+  state.current_chunk_offset = sizeof(file_header_s);  
 
   printf("PQD : Write chunked Begin : stream %lu, current_chunk_offset %lu\n", reinterpret_cast<int64_t>(state.stream), state.current_chunk_offset);
 }
@@ -751,9 +764,11 @@ void writer::impl::write_chunked(table_view const& table, pq_chunked_state& stat
         state.md.row_groups[global_r].columns[i].meta_data.dictionary_page_offset = (ck->has_dictionary) ? state.current_chunk_offset : 0;
         state.md.row_groups[global_r].columns[i].meta_data.total_uncompressed_size = ck->bfr_size;
         state.md.row_groups[global_r].columns[i].meta_data.total_compressed_size = ck->compressed_size;        
-        out_sink_->write(host_bfr.get() + ck->ck_stat_size, ck->compressed_size);
         
+        out_sink_->write(host_bfr.get() + ck->ck_stat_size, ck->compressed_size);      
         state.data_hash = arrow::HashUtil::MurmurHash2_64(host_bfr.get() + ck->ck_stat_size, ck->compressed_size, state.data_hash);        
+        memcpy(PQ_chk_buf + PQ_chk_buf_size, host_bfr.get() + ck->ck_stat_size, ck->compressed_size);
+        PQ_chk_buf_size += ck->compressed_size;
 
         if (ck->ck_stat_size != 0) {
           state.md.row_groups[global_r].columns[i].meta_data.statistics_blob.resize(ck->ck_stat_size);
@@ -773,8 +788,17 @@ void writer::impl::write_chunked_end(pq_chunked_state &state){
   file_ender_s fendr;
   fendr.footer_len = (uint32_t)cpw.write(&state.md);  
   fendr.magic = PARQUET_MAGIC;
+  
   out_sink_->write(buffer_.data(), buffer_.size());  
+  state.data_hash = arrow::HashUtil::MurmurHash2_64(buffer_.data(), buffer_.size(), state.data_hash);
+  memcpy(PQ_chk_buf + PQ_chk_buf_size, buffer_.data(), buffer_.size());
+  PQ_chk_buf_size += buffer_.size();
+
   out_sink_->write(&fendr, sizeof(fendr));  
+  state.data_hash = arrow::HashUtil::MurmurHash2_64(&fendr, sizeof(fendr), state.data_hash);
+  memcpy(PQ_chk_buf + PQ_chk_buf_size, &fendr, sizeof(fendr));
+  PQ_chk_buf_size += sizeof(fendr);
+
   printf("PQD : Write chunked End : Bytes written %lu, Final hash : %lu\n", out_sink_->bytes_written(), state.data_hash);
   out_sink_->flush();
 }

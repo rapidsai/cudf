@@ -246,6 +246,9 @@ struct pq_chunked_state {
   bool                                single_write_mode = false;
 
   uint64_t                            data_hash = 0;
+
+  uint8_t*                            chk_buf = nullptr;
+  size_t                              chk_buf_size = 0;
 };
 
 }  // namespace parquet
