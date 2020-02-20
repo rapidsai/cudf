@@ -4,11 +4,11 @@ import pandas as pd
 import numba
 import numpy as np
 from libcpp.string cimport string
+from libcpp.memory cimport *
 from cudf.utils import cudautils
 
 from cudf._libxx.lib cimport *
 
-from cudf._libxx.column import np_to_cudf_types
 from cudf._libxx.aggregation cimport *
 
 # need to update as and when we add new aggregations with additional options

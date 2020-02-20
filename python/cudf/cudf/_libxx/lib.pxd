@@ -5,12 +5,17 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
-from libc.stdint cimport int32_t, uint32_t
+import numpy as np
+
+from libc.stdint cimport *
 from libcpp cimport bool
 from libcpp.vector cimport vector
 from libcpp.memory cimport unique_ptr
+from libcpp.string cimport string
 
 from rmm._lib.device_buffer cimport device_buffer, DeviceBuffer, move
+
+
 
 cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
     ctypedef int32_t size_type
@@ -159,9 +164,53 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf::experimental" nogil:
     cdef cppclass aggregation:
         pass
 
+cdef extern from "cudf/wrappers/timestamps.hpp" namespace "cudf" nogil:
+    ctypedef int64_t timestamp_s
+    ctypedef int64_t timestamp_ms
+    ctypedef int64_t timestamp_us
+    ctypedef int64_t timestamp_ns
+
+cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
+    cdef cppclass scalar:
+        scalar()
+        scalar(scalar other)
+        data_type type()
+        void set_valid(bool is_valid)
+        bool is_valid()
+
+    cdef cppclass numeric_scalar[T](scalar):
+        numeric_scalar()
+        numeric_scalar(numeric_scalar other)
+        numeric_scalar(T value)
+        numeric_scalar(T value, bool is_valid)
+        void set_value(T value)
+        T value()
+
+    cdef cppclass timestamp_scalar[T](scalar):
+        timestamp_scalar()
+        timestamp_scalar(timestamp_scalar other)
+        timestamp_scalar(int64_t value)
+        timestamp_scalar(int64_t value, bool is_valid)
+        timestamp_scalar(int32_t value)
+        timestamp_scalar(int32_t value, bool is_valid)
+        int64_t ticks_since_epoch_64 "ticks_since_epoch"()
+        int32_t ticks_since_epoch_32 "ticks_since_epoch"()
+        T value()
+
+    cdef cppclass string_scalar(scalar):
+        string_scalar()
+        string_scalar(string st)
+        string_scalar(string st, bool is_valid)
+        string_scalar(string_scalar other)
+        string to_string()
+
+cdef extern from "cudf/scalar/scalar_factories.hpp" namespace "cudf" nogil:
+    cdef unique_ptr[scalar] make_numeric_scalar(data_type dtype)
+
 cdef extern from "<utility>" namespace "std" nogil:
     cdef unique_ptr[column] move(unique_ptr[column])
     cdef unique_ptr[table] move(unique_ptr[table])
     cdef unique_ptr[aggregation] move(unique_ptr[aggregation])
     cdef vector[unique_ptr[column]] move(vector[unique_ptr[column]])
     cdef device_buffer move(device_buffer)
+    cdef unique_ptr[scalar] move(unique_ptr[scalar])
