@@ -151,7 +151,7 @@ process_rolling_window(column_device_view input,
     }
 
     bool output_is_valid = (count >= min_periods);
-    printf ("RGSL1 : count is %d \n", count);
+    printf ("RGSL12 : count is %d \n", count);
 
     // store the output value, one per thread
     if (output_is_valid) {
