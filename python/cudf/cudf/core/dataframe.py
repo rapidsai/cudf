@@ -3126,7 +3126,8 @@ class DataFrame(Frame):
         -------
         partitioned: list of DataFrame
         """
-        key_indices = [self._data.names.index(k) for k in columns]
+        # Add one to indices to account for index column
+        key_indices = [self._data.names.index(k) + 1 for k in columns]
         outdf, offsets = self._hash_partition(key_indices, nparts)
         # Slice into partition
         return [outdf[s:e] for s, e in zip(offsets, offsets[1:] + [None])]
