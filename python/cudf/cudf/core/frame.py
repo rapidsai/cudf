@@ -1,3 +1,4 @@
+import cupy
 import numpy as np
 import pandas as pd
 
@@ -248,6 +249,35 @@ class Frame(libcudfxx.table.Table):
         for name, col in result._data.items():
             result._data[name] = col.unary_operator(op)
         return result
+
+    def searchsorted(
+        self, values, side="left", ascending=True, na_position="last"
+    ):
+        """Find indices where elements should be inserted to maintain order
+
+        Parameters
+        ----------
+        value : Frame (Shape must be consistent with self)
+            Values to be hypothetically inserted into Self
+        side : str {‘left’, ‘right’} optional, default ‘left‘
+            If ‘left’, the index of the first suitable location found is given
+            If ‘right’, return the last such index
+        ascending : bool optional, default True
+            Sorted Frame is in ascending order (otherwise descending)
+        na_position : str {‘last’, ‘first’} optional, default ‘last‘
+            Position of null values in sorted order
+
+        Returns
+        -------
+        1-D cupy array of insertion points
+        """
+        # Call libcudf++ search_sorted primitive
+        outcol = libcudfxx.search.search_sorted(
+            self, values, side, ascending=ascending, na_position=na_position
+        )
+
+        # Retrun result as cupy array
+        return cupy.asarray(outcol.data_array_view)
 
     def sin(self):
         return self._unaryop("sin")
