@@ -48,7 +48,7 @@ group_nth_element(column_view const &values,
 
   auto output = make_numeric_column(
       cudf::data_type{cudf::experimental::type_to_id<size_type>()}, num_groups,
-      cudf::UNALLOCATED, stream, mr); // UNINITIALIZED
+      cudf::UNALLOCATED, stream);
   cudf::mutable_column_view output_view = output->mutable_view();
   auto exec = rmm::exec_policy(stream)->on(stream);
 
