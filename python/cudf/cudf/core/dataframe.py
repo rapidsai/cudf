@@ -2070,9 +2070,8 @@ class DataFrame(Frame):
         return outdf
 
     def argsort(self, ascending=True, na_position="last"):
-        cols = list(self._data.columns)
         return get_sorted_inds(
-            cols, ascending=ascending, na_position=na_position
+            self, ascending=ascending, na_position=na_position
         )
 
     def sort_index(self, ascending=True):
