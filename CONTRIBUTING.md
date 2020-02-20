@@ -159,8 +159,7 @@ git submodule update --init --remote --recursive
 # create the conda environment (assuming in base `cudf` directory)
 conda env create --name cudf_dev --file conda/environments/cudf_dev_cuda10.0.yml
 # activate the environment
-source activate cudf_dev
-#If conda is already in PATH, perform `conda activate cudf_dev`
+conda activate cudf_dev
 ```
 - If using CUDA 9.2, create the environment with `conda env create --name cudf_dev --file conda/environments/cudf_dev_cuda9.2.yml` instead.
 - For other CUDA versions, check the corresponding cudf_dev_cuda*.yml file in conda/environments
@@ -175,8 +174,6 @@ $ cd build                                                                # ente
 # -DCMAKE_INSTALL_PREFIX set to the install path for your libraries or $CONDA_PREFIX if you're using Anaconda, i.e. -DCMAKE_INSTALL_PREFIX=/install/path or -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX
 # -DCMAKE_CXX11_ABI set to ON or OFF depending on the ABI version you want, defaults to ON. When turned ON, ABI compability for C++11 is used. When OFF, pre-C++11 ABI compability is used.
 $ cmake .. -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DCMAKE_CXX11_ABI=ON      # configure cmake ...
-
-$ make nvstrings                                                          # compile libnvstrings dependency for libcudf
 $ make -j                                                                 # compile the libraries librmm.so, libcudf.so ... '-j' will start a parallel job using the number of physical cores available on your system
 $ make install                                                            # install the libraries librmm.so, libcudf.so to the CMAKE_INSTALL_PREFIX
 ```
