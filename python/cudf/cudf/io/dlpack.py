@@ -66,7 +66,7 @@ def to_dlpack(cudf_obj):
         raise ValueError("Cannot create DLPack tensor of 0 size")
 
     if isinstance(cudf_obj, DataFrame):
-        gdf_cols = list(cudf_obj._data.values())
+        gdf_cols = list(cudf_obj._data.columns)
     elif isinstance(cudf_obj, Series):
         gdf_cols = [cudf_obj._column]
     elif isinstance(cudf_obj, Index):
