@@ -33,6 +33,10 @@ from cudf._libxx.scalar import Scalar
         "",
         "one",
         "1",
+        True,
+        False,
+        np.bool_(True),
+        np.bool_(False),
     ],
 )
 def test_round_trip_scalar(value):
