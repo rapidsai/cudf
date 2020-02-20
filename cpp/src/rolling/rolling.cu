@@ -143,7 +143,7 @@ process_rolling_window(column_device_view input,
 
     for (size_type j = start_index; j < end_index; j++) {
         if (!has_nulls || input.is_valid(j)) {
-            printf("RGSL : Inside valid\n");
+            printf("RGSL : Inside valid117\n");
             OutputType element = input.element<InputType>(j);
             val = agg_op{}(element, val);
             count++;
