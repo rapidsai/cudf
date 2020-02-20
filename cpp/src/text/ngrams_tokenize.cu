@@ -223,7 +223,7 @@ std::unique_ptr<cudf::column> ngrams_tokenize( cudf::strings_column_view const& 
     // Generate the ngrams into the chars column data buffer.
     // The ngram_builder_fn functor also fills the d_ngram_sizes vector with the
     // size of each ngram.
-    thrust::for_each_n( execpol->on(0), thrust::make_counting_iterator<int32_t>(0), strings_count,
+    thrust::for_each_n( execpol->on(stream), thrust::make_counting_iterator<int32_t>(0), strings_count,
         ngram_builder_fn{d_strings, d_separator, ngrams, d_token_offsets, d_token_positions,
                          d_chars_offsets, d_chars, d_ngram_offsets, d_ngram_sizes});
     // build the offsets column -- converting the ngram sizes into offsets
