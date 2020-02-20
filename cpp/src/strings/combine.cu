@@ -209,7 +209,7 @@ std::unique_ptr<column> join_strings( strings_column_view const& strings,
     rmm::device_buffer null_mask; // init to null null-mask
     if( strings.null_count()==strings_count )
     {
-        null_mask = create_null_mask(1,cudf::ALL_NULL,stream,mr);
+        null_mask = create_null_mask(1,cudf::mask_state::ALL_NULL,stream,mr);
         null_count = 1;
     }
     auto chars_column = detail::create_chars_child_column( strings_count, null_count, bytes, mr, stream );

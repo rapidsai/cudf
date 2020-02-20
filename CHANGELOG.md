@@ -67,6 +67,7 @@
 - PR #4101 Redux serialize `Buffer` directly with `__cuda_array_interface__`
 - PR #4098 Remove legacy calls from libcudf strings column code
 - PR #4111 Use `Buffer`'s to serialize `StringColumn`
+- PR #4133 Mask cleanup and fixes: use `int32` dtype, ensure 64 byte padding, handle offsets
 - PR #4113 Get `len` of `StringColumn`s without `nvstrings`
 - PR #4147 Remove workaround for UNKNOWN_NULL_COUNT in contiguous_split.
 - PR #4130 Renames in-place `cudf::experimental::fill` to `cudf::experimental::fill_in_place`
