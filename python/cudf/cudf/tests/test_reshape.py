@@ -127,7 +127,6 @@ def _prepare_merge_sorted_test(
     series=False,
     index=False,
 ):
-    # TODO: Add null values for `na_position` testing
     if index:
         df = (
             cudf.datasets.timeseries()[:size]
