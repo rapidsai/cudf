@@ -19,7 +19,7 @@
 
 ## Improvements
 
-- PR #4187 exposed the getNativeView method to public 
+- PR #4187 exposed getNativeView method in Java bindings
 - PR #3525 build.sh option to disable nvtx
 - PR #3748 Optimize hash_partition using shared memory
 - PR #3808 Optimize hash_partition using shared memory and cub block scan
