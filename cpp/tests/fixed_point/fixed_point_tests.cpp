@@ -51,9 +51,9 @@ TYPED_TEST(FixedPointTestBothReps, SimpleDecimalXXConstruction) {
     EXPECT_EQ(1,        num0.to_double());
     EXPECT_EQ(1.2,      num1.to_double());
     EXPECT_EQ(1.23,     num2.to_double());
-    EXPECT_EQ(1.234,    num3.to_double());
-    EXPECT_EQ(1.2345,   num4.to_double());
-    EXPECT_EQ(1.23456,  num5.to_double());
+    EXPECT_EQ(1.235,    num3.to_double()); // rounds up
+    EXPECT_EQ(1.2346,   num4.to_double()); // rounds up
+    EXPECT_EQ(1.23457,  num5.to_double()); // rounds up
     EXPECT_EQ(1.234567, num6.to_double());
 
 }
@@ -73,9 +73,9 @@ TYPED_TEST(FixedPointTestBothReps, SimpleNegativeDecimalXXConstruction) {
     EXPECT_EQ(-1,        num0.to_double());
     EXPECT_EQ(-1.2,      num1.to_double());
     EXPECT_EQ(-1.23,     num2.to_double());
-    EXPECT_EQ(-1.234,    num3.to_double());
-    EXPECT_EQ(-1.2345,   num4.to_double());
-    EXPECT_EQ(-1.23456,  num5.to_double());
+    EXPECT_EQ(-1.235,    num3.to_double()); // rounds up
+    EXPECT_EQ(-1.2346,   num4.to_double()); // rounds up
+    EXPECT_EQ(-1.23457,  num5.to_double()); // rounds up
     EXPECT_EQ(-1.234567, num6.to_double());
 
 }
@@ -101,7 +101,7 @@ TYPED_TEST(FixedPointTestBothReps, PaddedDecimalXXConstruction) {
     EXPECT_EQ(1.00001,  e.to_double());
     EXPECT_EQ(1.000001, f.to_double());
 
-    EXPECT_EQ(1.000123, x.to_double());
+    EXPECT_TRUE(1.000123 - x.to_double() < std::numeric_limits<double>::epsilon());
     EXPECT_EQ(0.000123, y.to_double());
 
 }
@@ -181,8 +181,8 @@ TYPED_TEST(FixedPointTestBothReps, DecimalXXTrickyDivision) {
 
     decimalXX ZERO = ONE_1;
 
-    EXPECT_EQ(ONE_1.to_int32(),    0); // 1 / 10 = 0
-    EXPECT_EQ(SIX_1.to_int32(),    0); // 6 / 10 = 0
+    EXPECT_EQ(ONE_1.to_int32(),    0); // round(1 / 10) = 0
+    EXPECT_EQ(SIX_1.to_int32(),   10); // round(6 / 10) = 10
     EXPECT_EQ(TEN_0.to_int32(),   10);
     EXPECT_EQ(SIXTY_1.to_int32(), 60);
 
@@ -193,9 +193,11 @@ TYPED_TEST(FixedPointTestBothReps, DecimalXXTrickyDivision) {
     decimalXX B{1.234, scale_type{-3}};
     decimalXX C{1,     scale_type{-2}};
 
-    EXPECT_EQ((A / B).to_int32(),       20);
+    EXPECT_EQ((A / B).to_int32(),       20); // TODO should be 30 now
     EXPECT_EQ(((A * C) / B).to_int32(), 28);
 
+    decimalXX n{28, scale_type{1}};
+    EXPECT_EQ(n.to_int32(), 30);
 }
 
 TYPED_TEST(FixedPointTestBothReps, DecimalXXThrust) {

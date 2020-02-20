@@ -40,43 +40,6 @@ enum class Radix : int32_t {
     BASE_10 = 10
 };
 
-namespace detail {
-    // helper function to negate strongly typed scale_type
-    CUDA_HOST_DEVICE_CALLABLE
-    auto negate(scale_type const& scale) {
-        return scale_type{-scale};
-    }
-
-    // perform this operation when constructing with positive scale
-    template <Radix Rad, typename T>
-    CUDA_HOST_DEVICE_CALLABLE
-    constexpr auto right_shift(T const& val, scale_type const& scale) {
-        assert(scale > 0);
-        return val / std::pow(static_cast<int32_t>(Rad), static_cast<int32_t>(scale));
-    }
-
-    // perform this operation when constructing with negative scale
-    template <Radix Rad, typename T>
-    CUDA_HOST_DEVICE_CALLABLE
-    constexpr auto left_shift(T const& val, scale_type const& scale) {
-        assert(scale < 0);
-        return val * std::pow(static_cast<int32_t>(Rad), static_cast<int32_t>(negate(scale)));
-    }
-
-    // convenience generic shift function
-    template <Radix Rad, typename T>
-    CUDA_HOST_DEVICE_CALLABLE
-    constexpr auto shift(T const& val, scale_type const& scale) {
-        // TODO sort out casting
-        // situation where you are constructing with floating point type makes val float/double
-        // scale will be int32_t
-        // and the Rep (which is what we want at the end of the day) is either int32_t or int64_t
-        if      (scale == 0) return val;
-        else if (scale >  0) return static_cast<T>(right_shift<Rad>(val, scale));
-        else                 return static_cast<T>(left_shift <Rad>(val, scale));
-    }
-}
-
 template <typename T>
 constexpr inline auto is_supported_representation_type() {
   return std::is_same<T, int32_t>::value
@@ -87,6 +50,75 @@ template <typename T>
 constexpr inline auto is_supported_construction_value_type() {
   return std::is_integral      <T>::value
       || std::is_floating_point<T>::value;
+}
+
+namespace detail {
+
+    // `exponent` comes from using scale_type = weak_typedef<int32_t>
+    //  we still need Rep to know what type we want for accumulator of ipow
+    template <typename Rep, Radix Base, typename T,
+              typename std::enable_if_t<(std::is_same<int32_t, T>::value
+                                      && is_supported_representation_type<Rep>())>* = nullptr>
+    Rep ipow(T exponent) {
+        // Integer Exponentiation by Squaring:
+        // https://simple.wikipedia.org/wiki/Exponentiation_by_squaring
+        // Note: this is the iterative equivalent of the recursive definition (faster)
+        // Quick-bench: http://quick-bench.com/Wg7o7HYQC9FW5M0CO0wQAjSwP_Y
+        if (exponent == 0) return static_cast<Rep>(Base);
+        auto extra  = static_cast<Rep>(1);
+        auto square = static_cast<Rep>(Base);
+        while (exponent > 1) {
+            if (exponent & 1 /* odd */) {
+                extra *= square;
+                exponent -= 1;
+            }
+            exponent /= 2;
+            square *= square;
+        }
+        return square * extra;
+    }
+
+    // helper function to negate strongly typed scale_type
+    CUDA_HOST_DEVICE_CALLABLE
+    auto negate(scale_type const& scale) {
+        return scale_type{-scale};
+    }
+
+    // perform this operation when constructing with positive scale
+    template <typename Rep, Radix Rad, typename T>
+    CUDA_HOST_DEVICE_CALLABLE
+    constexpr T right_shift(T const& val, scale_type const& scale) {
+        assert(scale > 0);
+        return val / ipow<Rep, Rad>(scale._t);
+    }
+
+    // perform this operation when constructing with negative scale
+    template <typename Rep, Radix Rad, typename T>
+    CUDA_HOST_DEVICE_CALLABLE
+    constexpr T left_shift(T const& val, scale_type const& scale) {
+        assert(scale < 0);
+        return val * ipow<Rep, Rad>(-scale._t);
+    }
+
+    // convenience generic shift function
+    template <typename Rep, Radix Rad, typename T>
+    CUDA_HOST_DEVICE_CALLABLE
+    constexpr T shift(T const& val, scale_type const& scale) {
+        if      (scale == 0) return val;
+        else if (scale >  0) return right_shift<Rep, Rad>(val, scale);
+        else                 return left_shift <Rep, Rad>(val, scale);
+    }
+
+    template <typename Rep, Radix Rad, typename T,
+              typename std::enable_if_t<is_supported_construction_value_type<T>()>* = nullptr>
+    auto shift_with_precise_round(T const& value, scale_type const& scale) -> int64_t {
+        if (scale == 0) return value;
+        int64_t const base   = static_cast<int64_t>(Rad);
+        int64_t const factor = ipow<int64_t, Rad>(std::abs(scale));
+        int64_t const temp   = scale <= 0 ? value * (factor * base) : value / (factor / base);
+        return std::roundf(static_cast<double>(temp) / base);
+    }
+
 }
 
 // helper struct for constructing fixed_point when value is already shifted
@@ -112,7 +144,9 @@ public:
               typename std::enable_if_t<is_supported_construction_value_type<T>()
                                      && is_supported_representation_type<Rep>()>* = nullptr>
     explicit fixed_point(T const& value, scale_type const& scale) :
-        _value{static_cast<Rep>(detail::shift<Rad>(value, scale))},
+        _value{Rad != Radix::BASE_10
+            ? static_cast<Rep>(detail::shift                   <Rep, Rad>(value, scale))
+            : static_cast<Rep>(detail::shift_with_precise_round<Rep, Rad>(value, scale))},
         _scale{scale}
     {
     }
@@ -135,7 +169,7 @@ public:
               typename std::enable_if_t<is_supported_construction_value_type<U>()>* = nullptr>
     CUDA_HOST_DEVICE_CALLABLE
     explicit constexpr operator U() const {
-        return detail::shift<Rad>(static_cast<U>(_value), detail::negate(_scale));
+        return detail::shift<Rep, Rad>(static_cast<U>(_value), detail::negate(_scale));
     }
 
     auto to_int32() const noexcept {
@@ -255,8 +289,8 @@ CUDA_HOST_DEVICE_CALLABLE
 fixed_point<Rep1, Rad1> operator+(fixed_point<Rep1, Rad1> const& lhs,
                                   fixed_point<Rep1, Rad1> const& rhs) {
 
-    auto const rhsv  = lhs._scale > rhs._scale ? detail::shift<Rad1>(rhs._value, scale_type{lhs._scale - rhs._scale}) : rhs._value;
-    auto const lhsv  = lhs._scale < rhs._scale ? detail::shift<Rad1>(lhs._value, scale_type{rhs._scale - lhs._scale}) : lhs._value;
+    auto const rhsv  = lhs._scale > rhs._scale ? detail::shift<Rep1, Rad1>(rhs._value, scale_type{lhs._scale - rhs._scale}) : rhs._value;
+    auto const lhsv  = lhs._scale < rhs._scale ? detail::shift<Rep1, Rad1>(lhs._value, scale_type{rhs._scale - lhs._scale}) : lhs._value;
     auto const scale = lhs._scale > rhs._scale ? lhs._scale : rhs._scale;
 
     #if defined(__CUDACC_DEBUG__)
@@ -275,8 +309,8 @@ CUDA_HOST_DEVICE_CALLABLE
 fixed_point<Rep1, Rad1> operator-(fixed_point<Rep1, Rad1> const& lhs,
                                   fixed_point<Rep1, Rad1> const& rhs) {
 
-    auto const rhsv  = lhs._scale > rhs._scale ? detail::shift<Rad1>(rhs._value, scale_type{lhs._scale - rhs._scale}) : rhs._value;
-    auto const lhsv  = lhs._scale < rhs._scale ? detail::shift<Rad1>(lhs._value, scale_type{rhs._scale - lhs._scale}) : lhs._value;
+    auto const rhsv  = lhs._scale > rhs._scale ? detail::shift<Rep1, Rad1>(rhs._value, scale_type{lhs._scale - rhs._scale}) : rhs._value;
+    auto const lhsv  = lhs._scale < rhs._scale ? detail::shift<Rep1, Rad1>(lhs._value, scale_type{rhs._scale - lhs._scale}) : lhs._value;
     auto const scale = lhs._scale > rhs._scale ? lhs._scale : rhs._scale;
 
     #if defined(__CUDACC_DEBUG__)
@@ -326,8 +360,8 @@ template<typename Rep1, Radix Rad1>
 CUDA_HOST_DEVICE_CALLABLE
 bool operator==(fixed_point<Rep1, Rad1> const& lhs,
                 fixed_point<Rep1, Rad1> const& rhs) {
-    auto const rhsv = lhs._scale > rhs._scale ? detail::shift<Rad1>(rhs._value, scale_type{lhs._scale - rhs._scale}) : rhs._value;
-    auto const lhsv = lhs._scale < rhs._scale ? detail::shift<Rad1>(lhs._value, scale_type{rhs._scale - lhs._scale}) : lhs._value;
+    auto const rhsv = lhs._scale > rhs._scale ? detail::shift<Rep1, Rad1>(rhs._value, scale_type{lhs._scale - rhs._scale}) : rhs._value;
+    auto const lhsv = lhs._scale < rhs._scale ? detail::shift<Rep1, Rad1>(lhs._value, scale_type{rhs._scale - lhs._scale}) : lhs._value;
     return rhsv == lhsv;
 }
 
