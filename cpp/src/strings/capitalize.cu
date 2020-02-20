@@ -406,11 +406,8 @@ namespace { // anonym.
 }//anonym.
 
 template<typename device_probe_functor,
-         typename device_modifier_functor>
+         typename device_execute_functor>
 std::unique_ptr<column> modify_strings( strings_column_view const& strings,
-                                        character_flags_table_type case_flag,
-                                        device_probe_functor d_probe_fctr,
-                                        device_modifier_functor d_modifier_fctr,
                                         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                         cudaStream_t stream = 0)
 {
@@ -429,15 +426,10 @@ std::unique_ptr<column> modify_strings( strings_column_view const& strings,
   auto d_flags = get_character_flags_table();
   auto d_case_table = get_character_cases_table();  
 
-  detail::case_manip<decltype(d_probe_fctr), pass_step::SizeOnly> cprobe{d_probe_fctr,
-      d_column,
-      case_flag,
-      d_flags,
-      d_case_table};
-
+  device_probe_functor d_probe_fctr{d_column, d_flags, d_case_table};
 
   // build offsets column -- calculate the size of each output string
-  auto offsets_transformer_itr = thrust::make_transform_iterator( thrust::make_counting_iterator<size_type>(0), cprobe);
+  auto offsets_transformer_itr = thrust::make_transform_iterator( thrust::make_counting_iterator<size_type>(0), d_probe_fctr);
   auto offsets_column = detail::make_offsets_child_column(offsets_transformer_itr,
                                                           offsets_transformer_itr+strings_count,
                                                           mr, stream);
@@ -450,16 +442,14 @@ std::unique_ptr<column> modify_strings( strings_column_view const& strings,
   auto chars_view = chars_column->mutable_view();
   auto d_chars = chars_view.data<char>();
 
-  detail::case_manip<device_modifier_functor, pass_step::ExecuteOp> cmanip{d_modifier_fctr,
-      d_column,
-      case_flag,
+  device_execute_functor d_execute_fctr{d_column,
       d_flags,
       d_case_table,
       d_new_offsets,
       d_chars};
   
   thrust::for_each_n(execpol->on(stream),
-                     thrust::make_counting_iterator<size_type>(0), strings_count, cmanip);
+                     thrust::make_counting_iterator<size_type>(0), strings_count, d_execute_fctr);
   
   //
   return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
@@ -471,69 +461,13 @@ std::unique_ptr<column> modify_strings( strings_column_view const& strings,
 std::unique_ptr<column> capitalize( strings_column_view const& strings,
                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
 {
-  //TODO:
-  //
-  auto d_probe_fctr = [] __device__ (char* d_buffer,
-                                     detail::character_cases_table_type const* d_case_table,
-                                     detail::character_flags_table_type case_flag,
-                                     uint32_t code_point,
-                                     detail::character_flags_table_type flag){
-    //purposely empty; used just to instantiate a sizeOnly `case_manip` that doesn't need a functor
-  };
-
-  
-  //TODO:
-  //
-  auto d_modifier_fctr = [] __device__ (char* d_buffer,
-                             detail::character_cases_table_type const* d_case_table,
-                             detail::character_flags_table_type case_flag,
-                             uint32_t code_point,
-                             detail::character_flags_table_type flag){
-    //TODO:
-    //....
-  };//nothing for now...
-
-  detail::character_flags_table_type case_flag = IS_LOWER(0xFF);// <- ????? for now; TODO
-
-  return detail::modify_strings(strings,
-                                case_flag,
-                                d_probe_fctr,
-                                d_modifier_fctr,
-                                mr);
+  return detail::modify_strings<detail::probe_capitalize, detail::execute_capitalize>(strings, mr);
 }
 
 std::unique_ptr<column> title( strings_column_view const& strings,
                                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
 {
-  //TODO:
-  //
-  auto d_probe_fctr = [] __device__ (char* d_buffer,
-                                     detail::character_cases_table_type const* d_case_table,
-                                     detail::character_flags_table_type case_flag,
-                                     uint32_t code_point,
-                                     detail::character_flags_table_type flag){
-    //purposely empty; used just to instantiate a sizeOnly `case_manip` that doesn't need a functor
-  };
-
-  
-  //TODO:
-  //
-  auto d_modifier_fctr = [] __device__ (char* d_buffer,
-                             detail::character_cases_table_type const* d_case_table,
-                             detail::character_flags_table_type case_flag,
-                             uint32_t code_point,
-                             detail::character_flags_table_type flag){
-    //TODO:
-    //....
-  };//nothing for now...
-
-  detail::character_flags_table_type case_flag = IS_LOWER(0xFF);// <- ????? for now; TODO
-
-  return detail::modify_strings(strings,
-                                case_flag,
-                                d_probe_fctr,
-                                d_modifier_fctr,
-                                mr);
+  return detail::modify_strings<detail::probe_title, detail::execute_title>(strings, mr);
 }
   
 }//namespace strings
