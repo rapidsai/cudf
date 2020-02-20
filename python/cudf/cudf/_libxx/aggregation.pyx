@@ -12,7 +12,7 @@ from cudf._libxx.column import np_to_cudf_types
 from cudf._libxx.aggregation cimport *
 
 # need to update as and when we add new aggregations with additional options
-cdef unique_ptr[aggregation] get_aggregation(op, kwargs):
+cdef unique_ptr[aggregation] get_aggregation(op, kwargs) except *:
 
     cdef type_id tid
     cdef data_type out_dtype
