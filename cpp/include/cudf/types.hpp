@@ -126,7 +126,7 @@ struct order_info {
 /**---------------------------------------------------------------------------*
  * @brief Controls the allocation/initialization of a null mask.
  *---------------------------------------------------------------------------**/
-enum class mask_state : int {
+enum class mask_state : int32_t {
   UNALLOCATED,    ///< Null mask not allocated, (all elements are valid)
   UNINITIALIZED,  ///< Null mask allocated, but not initialized
   ALL_VALID,      ///< Null mask allocated, initialized to all elements valid
