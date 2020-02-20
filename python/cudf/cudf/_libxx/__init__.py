@@ -1,16 +1,16 @@
 import numpy as np
 
 from . import (
-    lib
     copying,
+    lib,
     null_mask,
+    quantiles,
     rolling,
     search,
     sort,
     stream_compaction,
     table,
     transpose,
-    quantiles
 )
 
 MAX_COLUMN_SIZE = np.iinfo(np.int32).max
