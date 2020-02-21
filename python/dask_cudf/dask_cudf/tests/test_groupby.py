@@ -340,3 +340,21 @@ def test_groupby_mean_sort_false():
     gf = gr.compute().sort_values(by=["b"]).reset_index(drop=True)
     pf = pr.compute().sort_values(by=["b"]).reset_index(drop=True)
     dd.assert_eq(gf, pf)
+
+
+def test_groupby_reset_index_dtype():
+
+    # Make sure int8 dtype is properly preserved
+    # Through various cudf/dask_cudf ops
+    #
+    # Note: GitHub Issue#4090 reproducer
+
+    df = cudf.DataFrame()
+    df["a"] = np.arange(10, dtype="int8")
+    df["b"] = np.arange(10, dtype="int8")
+    df = dask_cudf.from_cudf(df, 1)
+
+    a = df.groupby("a").agg({"b": ["count"]})
+
+    assert a.index.dtype == "int8"
+    assert a.reset_index().dtypes[0] == "int8"
