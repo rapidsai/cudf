@@ -60,6 +60,13 @@ def to_dlpack(Table source_table):
                   "order) output. If the output tensor needs to be row major, "
                   "transpose the output of this function.")
 
+    for column in source_table._data:
+        if source_table._data[column].null_count:
+            raise ValueError(
+                "Cannot create a DLPack tensor with null values. \
+                    Input is required to have null count as zero."
+            )
+
     cdef DLManagedTensor *dlpack_tensor
     cdef table_view source_table_view = source_table.data_view()
 

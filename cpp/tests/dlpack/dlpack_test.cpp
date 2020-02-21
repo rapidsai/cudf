@@ -73,6 +73,17 @@ TEST_F(DLPackUntypedTests, EmptyTableToDlpack)
   EXPECT_EQ(nullptr, cudf::to_dlpack(empty));
 }
 
+TYPED_TEST(DLPackNumericTests, FromDlpackEmpty1D)
+{
+  // Use to_dlpack to generate an input tensor
+  cudf::table_view input(std::vector<cudf::column_view>{});
+  unique_managed_tensor tensor(cudf::to_dlpack(input));
+
+  // Verify that from_dlpack(to_dlpack(input)) == input
+  auto result = cudf::from_dlpack(tensor.get());
+  expect_tables_equal(input, result->view());
+}
+
 TEST_F(DLPackUntypedTests, EmptyColsToDlpack)
 {
   fixed_width_column_wrapper<int32_t> col1({});

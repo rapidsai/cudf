@@ -63,18 +63,7 @@ def to_dlpack(cudf_obj):
 
     if isinstance(cudf_obj, (DataFrame, Series, Index)):
         gdf_cols = cudf_obj
-        for column in cudf_obj._data:
-            if cudf_obj._data[column].null_count:
-                raise ValueError(
-                    "Cannot create a DLPack tensor with null values. \
-                        Input is required to have null count as zero."
-                )
     elif isinstance(cudf_obj, ColumnBase):
-        if cudf_obj.null_count:
-            raise ValueError(
-                "Cannot create a DLPack tensor with null values. \
-                    Input is required to have null count as zero."
-            )
         gdf_cols = cudf_obj.as_frame()
     else:
         raise TypeError(
