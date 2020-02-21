@@ -63,9 +63,6 @@ namespace { // anonym.
     }
 
     __device__
-    virtual int32_t operator()(size_type idx) const = 0;
-
-    __device__
     char_info get_char_info(char_utf8 chr) const
     {
       uint32_t code_point = detail::utf8_to_codepoint(chr);
@@ -136,9 +133,6 @@ namespace { // anonym.
     {
       return detail::codepoint_to_utf8(d_case_table_[info.first]);
     }
-
-    __device__
-    virtual int32_t operator()(size_type idx) = 0;
   private:
     column_device_view const d_column_;
     character_flags_table_type const* d_flags_;
@@ -161,7 +155,7 @@ namespace { // anonym.
     }
     
      __device__
-     int32_t operator()(size_type idx) const override {
+     int32_t operator()(size_type idx) const {
        if( get_column().is_null(idx) )
          return 0; // null string
       
@@ -196,7 +190,7 @@ namespace { // anonym.
     }
     
     __device__
-    int32_t operator()(size_type idx) override {
+    int32_t operator()(size_type idx) {
       if( get_column().is_null(idx) )
         return 0; // null string
       
@@ -231,7 +225,7 @@ namespace { // anonym.
     }
     
      __device__
-     int32_t operator()(size_type idx) const override {
+     int32_t operator()(size_type idx) const {
        if( get_column().is_null(idx) )
          return 0; // null string
       
@@ -276,7 +270,7 @@ namespace { // anonym.
     }
     
     __device__
-    int32_t operator()(size_type idx) override {
+    int32_t operator()(size_type idx) {
       if( get_column().is_null(idx) )
         return 0; // null string
       
