@@ -163,7 +163,7 @@ std::unique_ptr<experimental::table> from_dlpack(
   // Allocate columns and copy data from tensor
   std::vector<std::unique_ptr<column>> columns(num_columns);
   for (auto& col : columns) {
-    col = make_numeric_column(dtype, num_rows, UNALLOCATED, stream, mr);
+    col = make_numeric_column(dtype, num_rows, mask_state::UNALLOCATED, stream, mr);
 
     CUDA_TRY(cudaMemcpyAsync(col->mutable_view().head<void>(),
       reinterpret_cast<void*>(tensor_data), bytes, cudaMemcpyDefault, stream));

@@ -13,7 +13,6 @@ import rmm
 
 import cudf
 import cudf._lib as libcudf
-from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, DatetimeColumn, column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
@@ -78,7 +77,7 @@ class Series(Frame):
         data : 1D array-like
             The values.  Null values must not be skipped.  They can appear
             as garbage values.
-        mask : 1D array-like of numpy.uint8
+        mask : 1D array-like
             The null-mask.  Valid values are marked as ``1``; otherwise ``0``.
             The mask bit given the data index ``idx`` is computed as::
 
@@ -87,7 +86,6 @@ class Series(Frame):
             The number of null values.
             If None, it is calculated automatically.
         """
-        mask = Buffer(mask)
         col = column.as_column(data).set_mask(mask)
         return cls(data=col)
 
@@ -381,7 +379,7 @@ class Series(Frame):
 
         Parameters
         ----------
-        mask : 1D array-like of numpy.uint8
+        mask : 1D array-like
             The null-mask.  Valid values are marked as ``1``; otherwise ``0``.
             The mask bit given the data index ``idx`` is computed as::
 
@@ -391,8 +389,6 @@ class Series(Frame):
             If None, it is calculated automatically.
 
         """
-        if mask is not None:
-            mask = Buffer(mask)
         col = self._column.set_mask(mask)
         return self._copy_construct(data=col)
 
@@ -482,12 +478,6 @@ class Series(Frame):
         """Return Series by taking values from the corresponding *indices*.
         """
         return self[indices]
-
-    def _get_mask_as_series(self):
-        mask = Series(cudautils.ones(len(self), dtype=np.bool))
-        if self._column.nullable:
-            mask = mask.set_mask(self._column.mask).fillna(False)
-        return mask
 
     def __bool__(self):
         """Always raise TypeError when converting a Series
@@ -1467,9 +1457,7 @@ class Series(Frame):
         -------
         device array
         """
-        if self.has_nulls:
-            raise ValueError("Column must have no nulls.")
-        return cudautils.compact_mask_bytes(self._column.data_array_view)
+        return self._column.as_mask()
 
     def astype(self, dtype, errors="raise", **kwargs):
         """
@@ -2197,9 +2185,7 @@ class Series(Frame):
     def hash_values(self):
         """Compute the hash of values in this column.
         """
-        from cudf.core.column import numerical
-
-        return Series(numerical.column_hash_values(self._column)).values
+        return Series(self._hash()).values
 
     def hash_encode(self, stop, use_name=False):
         """Encode column values as ints in [0, stop) using hash function.
@@ -2220,12 +2206,8 @@ class Series(Frame):
         """
         assert stop > 0
 
-        from cudf.core.column import numerical
-
-        initial_hash = np.asarray(hash(self.name)) if use_name else None
-        hashed_values = numerical.column_hash_values(
-            self._column, initial_hash_values=initial_hash
-        )
+        initial_hash = [hash(self.name) & 0xFFFFFFFF] if use_name else None
+        hashed_values = self._hash(initial_hash)
 
         if hashed_values.has_nulls:
             raise ValueError("Column must have no nulls.")

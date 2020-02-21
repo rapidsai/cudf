@@ -40,13 +40,15 @@ namespace detail
     constexpr bool is_operation_supported = (op == experimental::aggregation::SUM) or
                                              (op == experimental::aggregation::MIN) or
                                              (op == experimental::aggregation::MAX) or
-                                             (op == experimental::aggregation::COUNT) or
+                                             (op == experimental::aggregation::COUNT_VALID) or
+                                             (op == experimental::aggregation::COUNT_ALL) or
                                              (op == experimental::aggregation::MEAN);
 
     constexpr bool is_valid_timestamp_agg = cudf::is_timestamp<ColumnType>() and
                                              (op == experimental::aggregation::MIN or
                                               op == experimental::aggregation::MAX or 
-                                              op == experimental::aggregation::COUNT or
+                                              op == experimental::aggregation::COUNT_VALID or
+                                              op == experimental::aggregation::COUNT_ALL or
                                               op == experimental::aggregation::MEAN);
 
 
@@ -67,7 +69,8 @@ namespace detail
       return std::is_same<ColumnType, cudf::string_view>::value and
           ((cudf::experimental::aggregation::MIN == Op and std::is_same<AggOp, DeviceMin>::value) or
            (cudf::experimental::aggregation::MAX == Op and std::is_same<AggOp, DeviceMax>::value) or
-           (cudf::experimental::aggregation::COUNT == Op and std::is_same<AggOp, DeviceCount>::value));
+           (cudf::experimental::aggregation::COUNT_VALID == Op and std::is_same<AggOp, DeviceCount>::value) or
+           (cudf::experimental::aggregation::COUNT_ALL == Op and std::is_same<AggOp, DeviceCount>::value));
   }
 
   // store functor

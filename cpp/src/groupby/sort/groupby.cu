@@ -117,15 +117,31 @@ struct store_result_functor {
 };
 
 template <>
-void store_result_functor::operator()<aggregation::COUNT>(
+void store_result_functor::operator()<aggregation::COUNT_VALID>(
+  std::unique_ptr<aggregation> const& agg)
+{
+  if (cache.has_result(col_idx, agg))
+    return;
+
+  cache.add_result(
+      col_idx, agg,
+      get_grouped_values().nullable()
+          ? detail::group_count_valid(get_grouped_values(),
+                                      helper.group_labels(),
+                                      helper.num_groups(), mr, stream)
+          : detail::group_count_all(helper.group_offsets(), 
+                                    helper.num_groups(), mr, stream));
+}
+
+template <>
+void store_result_functor::operator()<aggregation::COUNT_ALL>(
   std::unique_ptr<aggregation> const& agg)
 {
   if (cache.has_result(col_idx, agg))
     return;
 
   cache.add_result(col_idx, agg, 
-                  detail::group_count(get_grouped_values(), 
-                            helper.group_labels(),
+                  detail::group_count_all(helper.group_offsets(),
                             helper.num_groups(), mr, stream));
 }
 
@@ -137,7 +153,7 @@ void store_result_functor::operator()<aggregation::SUM>(
     return;
 
   auto count_agg = make_count_aggregation();
-  operator()<aggregation::COUNT>(count_agg);
+  operator()<aggregation::COUNT_VALID>(count_agg);
   column_view count_result = cache.get_result(col_idx, count_agg);
 
   cache.add_result(col_idx, agg, 
@@ -154,7 +170,7 @@ void store_result_functor::operator()<aggregation::MIN>(
     return;
 
   auto count_agg = make_count_aggregation();
-  operator()<aggregation::COUNT>(count_agg);
+  operator()<aggregation::COUNT_VALID>(count_agg);
   column_view count_result = cache.get_result(col_idx, count_agg);
 
   cache.add_result(col_idx, agg, 
@@ -171,7 +187,7 @@ void store_result_functor::operator()<aggregation::MAX>(
     return;
 
   auto count_agg = make_count_aggregation();
-  operator()<aggregation::COUNT>(count_agg);
+  operator()<aggregation::COUNT_VALID>(count_agg);
   column_view count_result = cache.get_result(col_idx, count_agg);
 
   cache.add_result(col_idx, agg, 
@@ -190,7 +206,7 @@ void store_result_functor::operator()<aggregation::MEAN>(
   auto sum_agg = make_sum_aggregation();
   auto count_agg = make_count_aggregation();
   operator()<aggregation::SUM>(sum_agg);
-  operator()<aggregation::COUNT>(count_agg);
+  operator()<aggregation::COUNT_VALID>(count_agg);
   column_view sum_result = cache.get_result(col_idx, sum_agg);
   column_view count_result = cache.get_result(col_idx, count_agg);
 
@@ -216,7 +232,7 @@ void store_result_functor::operator()<aggregation::VARIANCE>(
   auto mean_agg = make_mean_aggregation();
   auto count_agg = make_count_aggregation();
   operator()<aggregation::MEAN>(mean_agg);
-  operator()<aggregation::COUNT>(count_agg);
+  operator()<aggregation::COUNT_VALID>(count_agg);
   column_view mean_result = cache.get_result(col_idx, mean_agg);
   column_view group_sizes = cache.get_result(col_idx, count_agg);
 
@@ -252,7 +268,7 @@ void store_result_functor::operator()<aggregation::QUANTILE>(
     return;
 
   auto count_agg = make_count_aggregation();
-  operator()<aggregation::COUNT>(count_agg);
+  operator()<aggregation::COUNT_VALID>(count_agg);
   column_view group_sizes = cache.get_result(col_idx, count_agg);
   auto quantile_agg =
     static_cast<experimental::detail::quantile_aggregation const*>(agg.get());
@@ -271,7 +287,7 @@ void store_result_functor::operator()<aggregation::MEDIAN>(
     return;
 
   auto count_agg = make_count_aggregation();
-  operator()<aggregation::COUNT>(count_agg);
+  operator()<aggregation::COUNT_VALID>(count_agg);
   column_view group_sizes = cache.get_result(col_idx, count_agg);
 
   auto result = detail::group_quantiles(
