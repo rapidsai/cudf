@@ -144,8 +144,10 @@ namespace { // anonym.
 
   //functor for probing string capitalization
   //requirements:
+  //(private inheritance to prevent polymorphic use,
+  // a requirement that came up in code review)
   //
-  struct probe_capitalize: probe_base
+  struct probe_capitalize: private probe_base
   {
     probe_capitalize(column_device_view const d_column,
                      character_flags_table_type const* d_flags,
@@ -177,8 +179,10 @@ namespace { // anonym.
   };
 
   //functor for executing string capitalization:
+  //(private inheritance to prevent polymorphic use,
+  // a requirement that came up in code review)
   //
-  struct execute_capitalize: execute_base
+  struct execute_capitalize: private execute_base
   {
     execute_capitalize(column_device_view const d_column,
                        character_flags_table_type const* d_flags,
@@ -214,8 +218,10 @@ namespace { // anonym.
 
   //functor for probing string title-ization
   //requirements:
+  //(private inheritance to prevent polymorphic use,
+  // a requirement that came up in code review)
   //
-  struct probe_title: probe_base
+  struct probe_title: private probe_base
   {
     probe_title(column_device_view const d_column,
                      character_flags_table_type const* d_flags,
@@ -257,8 +263,10 @@ namespace { // anonym.
   };
 
   //functor for executing string title-ization:
+  //(private inheritance to prevent polymorphic use,
+  // a requirement that came up in code review)
   //
-  struct execute_title: execute_base
+  struct execute_title: private execute_base
   {
     execute_title(column_device_view const d_column,
                   character_flags_table_type const* d_flags,
