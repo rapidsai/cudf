@@ -104,7 +104,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromScalar(JNIEnv *env,
       // create a string column of all empty strings to fill (cheapest string column to create)
       auto offsets = cudf::make_numeric_column(cudf::data_type{cudf::INT32}, row_count + 1, cudf::mask_state::UNALLOCATED);
       auto data = cudf::make_empty_column(cudf::data_type{cudf::INT8});
-      auto mask_buffer = cudf::create_null_mask(row_count, cudf::UNALLOCATED);
+      auto mask_buffer = cudf::create_null_mask(row_count, cudf::mask_state::UNALLOCATED);
       auto str_col = cudf::make_strings_column(row_count, std::move(offsets), std::move(data), 0, std::move(mask_buffer));
 
       col = cudf::experimental::fill(str_col->view(), 0, row_count, *scalar_val);

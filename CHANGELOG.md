@@ -22,6 +22,7 @@
 
 ## Improvements
 
+- PR #4187 exposed getNativeView method in Java bindings
 - PR #3525 build.sh option to disable nvtx
 - PR #3748 Optimize hash_partition using shared memory
 - PR #3808 Optimize hash_partition using shared memory and cub block scan
@@ -36,6 +37,7 @@
 - PR #3911 Adding null boolean handling for copy_if_else
 - PR #4003 Drop old `to_device` utility wrapper function
 - PR #4002 Adding to_frame and fix for categorical column issue
+- PR #4035 Port NVText tokenize function to libcudf++
 - PR #4009 build script update to enable cudf build without installing
 - PR #3897 Port cuIO JSON reader to cudf::column types
 - PR #4008 Eliminate extra copy in column constructor
@@ -91,6 +93,7 @@
 - PR #4196 reduce CHANGELOG.md merge conflicts
 - PR #4197 Added notebook testing to gpuCI gpu build
 - PR #4204 Port nvtext create-ngrams function
+- PR #4225 Remove stale notebooks
 
 ## Bug Fixes
 
@@ -125,6 +128,7 @@
 - PR #4109 Use rmm::device_vector instead of thrust::device_vector
 - PR #4113 Use `.nvstrings` in `StringColumn.sum(...)`
 - PR #4116 Fix a bug in contiguous_split() where tables with mixed column types could corrupt string output
+- PR #4108 Fix dtype bugs in dask_cudf metadata (metadata_nonempty overhaul)
 - PR #4138 Really fix strings concatenate logic with column offsets
 - PR #4119 Fix binary ops slowdown using jitify -remove-unused-globals
 - PR #4125 Fix type enum to account for added Dictionary type in `types.hpp`
@@ -138,7 +142,9 @@
 - PR #4155 Update groupby group_offsets size and fix unnecessary device dispatch.
 - PR #4198 Fix constructing `RangeIndex` from `range`
 - PR #4192 Parquet writer: fix OOB read when computing string hash
+- PR #4201 Fix java window tests
 - PR #4199 Fix potential race condition in memcpy_block
+- PR #4215 Fix performance regression in strings::detail::concatenate
 - PR #4214 Alter ValueError exception for GPU accelerated Parquet writer to properly report `categorical` columns are not supported.
 
 
