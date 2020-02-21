@@ -1318,7 +1318,12 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
             // WARP0: Decode definition and repetition levels, outputs row indices
             gpuDecodeLevels(s, target_pos, t);
         }
+#if 0
         else if (t < out_thread0)
+#else
+        __syncthreads();
+        if (t >= 32 && t < out_thread0)
+#endif
         {
             // WARP1: Decode dictionary indices, booleans or string positions
             if (s->dict_base)
@@ -1338,7 +1343,12 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
                 *(volatile int32_t *)&s->dict_pos = target_pos;
             }
         }
+#if 0
         else
+#else
+        __syncthreads();
+        if (t >= out_thread0)
+#endif
         {
             // WARP1..WARP3: Decode values
             int dtype = s->col.data_type & 7;
