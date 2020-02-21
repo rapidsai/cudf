@@ -8,9 +8,10 @@ from pandas.api.types import is_integer_dtype
 import rmm
 
 import cudf._lib as libcudf
+import cudf._libxx as libcudfxx
 from cudf.core._sort import get_sorted_inds
 from cudf.core.buffer import Buffer
-from cudf.core.column import column
+from cudf.core.column import as_column, column
 from cudf.utils import cudautils, utils
 from cudf.utils.dtypes import (
     min_numeric_column_type,
@@ -53,7 +54,10 @@ class NumericalColumn(column.ColumnBase):
                 return False
         except Exception:
             return False
-        return libcudf.search.contains(self, item)
+        # TODO: Use `scalar`-based `contains` wrapper
+        return libcudfxx.search.contains(
+            self, column.as_column([item], dtype=self.dtype)
+        ).any()
 
     def binary_operator(self, binop, rhs, reflect=False):
         int_dtypes = [
@@ -391,10 +395,6 @@ class NumericalColumn(column.ColumnBase):
             raise ValueError("value not found")
         return found
 
-    def searchsorted(self, value, side="left"):
-        value_col = column.as_column(value)
-        return libcudf.search.search_sorted(self, value_col, side)
-
     @property
     def is_monotonic_increasing(self):
         if not hasattr(self, "_is_monotonic_increasing"):
@@ -573,20 +573,6 @@ def _normalize_find_and_replace_input(input_column_dtype, col_to_normalize):
     return normalized_column.astype(input_column_dtype)
 
 
-def column_hash_values(column0, *other_columns, initial_hash_values=None):
-    """Hash all values in the given columns.
-    Returns a new NumericalColumn[int32]
-    """
-    from cudf.core.column import column_empty
-
-    columns = [column0] + list(other_columns)
-    result = column_empty(len(column0), dtype=np.int32, masked=False)
-    if initial_hash_values:
-        initial_hash_values = rmm.to_device(initial_hash_values)
-    libcudf.hash.hash_columns(columns, result, initial_hash_values)
-    return result
-
-
 def digitize(column, bins, right=False):
     """Return the indices of the bins to which each value in column belongs.
 
@@ -606,4 +592,6 @@ def digitize(column, bins, right=False):
     assert column.dtype == bins.dtype
     bins_buf = Buffer(rmm.to_device(bins))
     bin_col = NumericalColumn(data=bins_buf, dtype=bins.dtype)
-    return libcudf.sort.digitize(column, bin_col, right)
+    return as_column(
+        libcudfxx.sort.digitize(column.as_frame(), bin_col.as_frame(), right)
+    )

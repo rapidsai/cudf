@@ -91,7 +91,7 @@ class _Frame(dd.core._Frame, OperatorMethodMixin):
                     self._partition_type.__name__, type(meta).__name__
                 )
             )
-        self._meta = dd.core.make_meta(meta)
+        self._meta = meta
         self.divisions = tuple(divisions)
 
     def __getstate__(self):

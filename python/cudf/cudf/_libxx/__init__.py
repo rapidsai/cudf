@@ -2,9 +2,11 @@ import numpy as np
 
 from . import (
     copying,
+    hash,
     null_mask,
-    reshape,
     rolling,
+    search,
+    sort,
     stream_compaction,
     table,
     transpose,

@@ -1,6 +1,6 @@
 import functools
 from collections import OrderedDict
-from math import ceil, floor, isinf, isnan
+from math import floor, isinf, isnan
 
 import numpy as np
 import pandas as pd
@@ -9,25 +9,17 @@ from numba import njit
 
 import rmm
 
-mask_dtype = np.dtype(np.int8)
+from cudf._lib.arrow._cuda import CudaBuffer as arrowCudaBuffer
+from cudf._libxx.null_mask import bitmask_allocation_size_bytes
+from cudf.core.buffer import Buffer
+
+mask_dtype = np.dtype(np.int32)
 mask_bitsize = mask_dtype.itemsize * 8
-mask_byte_padding = 64
-
-
-def calc_chunk_size(size, chunksize):
-    return mask_byte_padding * ceil(
-        ((size + chunksize - 1) // chunksize) / mask_byte_padding
-    )
 
 
 @njit
 def mask_get(mask, pos):
     return (mask[pos // mask_bitsize] >> (pos % mask_bitsize)) & 1
-
-
-@njit
-def mask_set(mask, pos):
-    mask[pos // mask_bitsize] |= 1 << (pos % mask_bitsize)
 
 
 @njit
@@ -63,18 +55,6 @@ def rint(x):
 @njit
 def check_equals_int(a, b):
     return a == b
-
-
-def make_mask(size):
-    """Create mask to obtain at least *size* number of bits.
-    """
-    size = calc_chunk_size(size, mask_bitsize)
-    return rmm.device_array(shape=size, dtype=mask_dtype)
-
-
-def require_writeable_array(arr):
-    # This should be fixed in numba (numba issue #2521)
-    return np.require(arr, requirements="W")
 
 
 def scalar_broadcast_to(scalar, size, dtype=None):
@@ -136,41 +116,61 @@ def buffers_from_pyarrow(pa_arr, dtype=None):
         - cudf.Buffer --> data
         - cudf.Buffer --> string characters
     """
-    from cudf.core.buffer import Buffer
-    from cudf.utils.cudautils import copy_array
-
     buffers = pa_arr.buffers()
 
     if pa_arr.null_count:
-        mask_dev_array = make_mask(len(pa_arr))
-        arrow_dev_array = rmm.to_device(np.asarray(buffers[0]).view("int8"))
-        copy_array(arrow_dev_array, mask_dev_array)
-        pamask = Buffer(mask_dev_array)
+        mask_size = bitmask_allocation_size_bytes(len(pa_arr))
+        pamask = pyarrow_buffer_to_cudf_buffer(buffers[0], mask_size=mask_size)
     else:
         pamask = None
 
     offset = pa_arr.offset
     size = len(pa_arr)
 
-    if dtype:
-        data_dtype = dtype
-    elif isinstance(pa_arr, pa.StringArray):
-        data_dtype = np.int32
-    else:
-        if isinstance(pa_arr, pa.DictionaryArray):
-            data_dtype = pa_arr.indices.type.to_pandas_dtype()
-        else:
-            data_dtype = pa_arr.type.to_pandas_dtype()
-
     if buffers[1]:
-        padata = Buffer(np.asarray(buffers[1]).view(data_dtype))
+        padata = pyarrow_buffer_to_cudf_buffer(buffers[1])
     else:
         padata = Buffer.empty(0)
 
     pastrs = None
     if isinstance(pa_arr, pa.StringArray):
-        pastrs = Buffer(np.asarray(buffers[2]).view(np.int8))
+        pastrs = pyarrow_buffer_to_cudf_buffer(buffers[2])
     return (size, offset, pamask, padata, pastrs)
+
+
+def pyarrow_buffer_to_cudf_buffer(arrow_buf, mask_size=0):
+    """
+    Given a PyArrow Buffer backed by either host or device memory, convert it
+    to a cuDF Buffer
+    """
+    # Try creating a PyArrow CudaBuffer from the PyArrow Buffer object, it
+    # fails with an ArrowTypeError if it's a host based Buffer so we catch and
+    # process as expected
+    if not isinstance(arrow_buf, pa.Buffer):
+        raise TypeError(
+            "Expected type: {}, got type: {}".format(
+                pa.Buffer.__name__, type(arrow_buf).__name__
+            )
+        )
+
+    try:
+        arrow_cuda_buf = arrowCudaBuffer.from_buffer(arrow_buf)
+        buf = Buffer(
+            data=arrow_cuda_buf.address,
+            size=arrow_cuda_buf.size,
+            owner=arrow_cuda_buf,
+        )
+        if buf.size < mask_size:
+            dbuf = rmm.DeviceBuffer(size=mask_size)
+            dbuf.copy_from_device(buf)
+            return Buffer(dbuf)
+        return buf
+    except pa.ArrowTypeError:
+        if arrow_buf.size < mask_size:
+            dbuf = rmm.DeviceBuffer(size=mask_size)
+            dbuf.copy_from_host(np.asarray(arrow_buf).view("u1"))
+            return Buffer(dbuf)
+        return Buffer(arrow_buf)
 
 
 def get_result_name(left, right):

@@ -11,16 +11,20 @@
 - PR #3861 Added Series.sum feature for String
 - PR #4069 Added cast of numeric columns from/to String
 - PR #3681 Add cudf::experimental::boolean_mask_scatter
+- PR #4088 Added asString() on ColumnVector in Java that takes a format string
 - PR #4040 Add support for n-way merge of sorted tables
 - PR #4053 Multi-column quantiles.
 - PR #4107 Add groupby nunique aggregation
 - PR #4153 Support Dask serialization protocol on cuDF objects
 - PR #4164 Add Buffer "constructor-kwargs" header
+- PR #4159 Add COUNT aggregation that includes null values
 - PR #4190 Add libcudf++ transpose Cython implementation
 - PR #4129 Add libcudf++ interleave_columns and tile Cython implementation
+- PR #4216 Add cudf.Scalar Python type
 
 ## Improvements
 
+- PR #4187 exposed getNativeView method in Java bindings
 - PR #3525 build.sh option to disable nvtx
 - PR #3748 Optimize hash_partition using shared memory
 - PR #3808 Optimize hash_partition using shared memory and cub block scan
@@ -35,6 +39,7 @@
 - PR #3911 Adding null boolean handling for copy_if_else
 - PR #4003 Drop old `to_device` utility wrapper function
 - PR #4002 Adding to_frame and fix for categorical column issue
+- PR #4035 Port NVText tokenize function to libcudf++
 - PR #4009 build script update to enable cudf build without installing
 - PR #3897 Port cuIO JSON reader to cudf::column types
 - PR #4008 Eliminate extra copy in column constructor
@@ -45,6 +50,7 @@
 - PR #3880 Add aggregation infrastructure support for cudf::reduce
 - PR #4059 Add aggregation infrastructure support for cudf::scan
 - PR #4021 Change quantiles signature for clarity.
+- PR #4058 Port hash.pyx to use libcudf++ APIs
 - PR #4057 Handle offsets in cython Column class
 - PR #4045 Reorganize `libxx` directory
 - PR #4029 Port stream_compaction.pyx to use libcudf++ APIs
@@ -67,6 +73,7 @@
 - PR #4101 Redux serialize `Buffer` directly with `__cuda_array_interface__`
 - PR #4098 Remove legacy calls from libcudf strings column code
 - PR #4111 Use `Buffer`'s to serialize `StringColumn`
+- PR #4133 Mask cleanup and fixes: use `int32` dtype, ensure 64 byte padding, handle offsets
 - PR #4113 Get `len` of `StringColumn`s without `nvstrings`
 - PR #4147 Remove workaround for UNKNOWN_NULL_COUNT in contiguous_split.
 - PR #4130 Renames in-place `cudf::experimental::fill` to `cudf::experimental::fill_in_place`
@@ -76,12 +83,18 @@
 - PR #4144 Release GIL when calling libcudf++ functions
 - PR #4082 Rework MultiColumns in cuDF
 - PR #4149 Use "type-serialized" for pickled types like Dask
+- PR #4167 Port `search` to libcudf++ (support multi-column searchsorted)
 - PR #4163 Assert Dask CUDA serializers have `Buffer` frames
 - PR #4165 List serializable classes once
 - PR #4168 IO readers: do not create null mask for non-nullable columns
 - PR #4177 Use `uint8` type for host array copy of `Buffer`
 - PR #4183 Update Google Test Execution
 - PR #4182 Rename cuDF serialize functions to be more generic
+- PR #4176 Add option to parallelize setup.py's cythonize
+- PR #4191 Porting sort.pyx to use new libcudf APIs
+- PR #4196 reduce CHANGELOG.md merge conflicts
+- PR #4197 Added notebook testing to gpuCI gpu build
+- PR #4225 Remove stale notebooks
 
 ## Bug Fixes
 
@@ -116,6 +129,7 @@
 - PR #4109 Use rmm::device_vector instead of thrust::device_vector
 - PR #4113 Use `.nvstrings` in `StringColumn.sum(...)`
 - PR #4116 Fix a bug in contiguous_split() where tables with mixed column types could corrupt string output
+- PR #4108 Fix dtype bugs in dask_cudf metadata (metadata_nonempty overhaul)
 - PR #4138 Really fix strings concatenate logic with column offsets
 - PR #4119 Fix binary ops slowdown using jitify -remove-unused-globals
 - PR #4125 Fix type enum to account for added Dictionary type in `types.hpp`
@@ -127,7 +141,13 @@
 - PR #4162 Properly handle no index metadata generation for to_parquet
 - PR #4175 Fix `__sizeof__` calculation in `StringColumn`
 - PR #4155 Update groupby group_offsets size and fix unnecessary device dispatch.
+- PR #4198 Fix constructing `RangeIndex` from `range`
 - PR #4192 Parquet writer: fix OOB read when computing string hash
+- PR #4201 Fix java window tests
+- PR #4199 Fix potential race condition in memcpy_block
+- PR #4218 Fix `get_aggreagtion` definition with `except *`
+- PR #4215 Fix performance regression in strings::detail::concatenate
+- PR #4214 Alter ValueError exception for GPU accelerated Parquet writer to properly report `categorical` columns are not supported.
 
 
 # cuDF 0.12.0 (04 Feb 2020)
