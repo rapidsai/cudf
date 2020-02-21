@@ -306,7 +306,7 @@ def test_from_pandas_gen():
 
 def test_index_names():
     idx = cudf.core.index.as_index([1, 2, 3], name="idx")
-    assert idx.names == ["idx"]
+    assert idx.names == ("idx",)
 
 
 @pytest.mark.parametrize(

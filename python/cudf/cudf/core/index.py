@@ -97,7 +97,7 @@ class Index(Frame):
 
     @property
     def names(self):
-        return [self.name]
+        return (self.name,)
 
     @names.setter
     def names(self, values):
