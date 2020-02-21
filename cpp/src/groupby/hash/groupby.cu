@@ -190,7 +190,8 @@ void sparse_to_dense_results(
  * `d_keys` table and stores indices
  */
 template <bool keys_have_nulls>
-auto create_hash_map(table_device_view const& d_keys, bool ignore_null_keys,
+auto create_hash_map(table_device_view const& d_keys,
+                     include_nulls include_null_keys,
                      cudaStream_t stream = 0)
 {
   size_type constexpr unused_key{std::numeric_limits<size_type>::max()};
@@ -203,7 +204,7 @@ auto create_hash_map(table_device_view const& d_keys, bool ignore_null_keys,
 
   using allocator_type = typename map_type::allocator_type;
 
-  bool const null_keys_are_equal{not ignore_null_keys};
+  bool const null_keys_are_equal{include_null_keys == include_nulls::YES};
 
   row_hasher<default_hash, keys_have_nulls> hasher{d_keys};
   row_equality_comparator<keys_have_nulls> rows_equal{
@@ -222,7 +223,7 @@ template <bool keys_have_nulls, typename Map>
 void compute_single_pass_aggs(table_view const& keys,
                               std::vector<aggregation_request> const& requests,
                               experimental::detail::result_cache* sparse_results,
-                              Map& map, bool ignore_null_keys,
+                              Map& map, include_nulls include_null_keys,
                               cudaStream_t stream)
 {
   // flatten the aggs to a table that can be operated on by aggregate_row
@@ -254,7 +255,8 @@ void compute_single_pass_aggs(table_view const& keys,
   auto d_values = table_device_view::create(flattened_values);
   rmm::device_vector<aggregation::Kind> d_aggs(aggs);
 
-  bool skip_key_rows_with_nulls = keys_have_nulls and ignore_null_keys;
+  bool skip_key_rows_with_nulls = keys_have_nulls and 
+                                  include_null_keys == include_nulls::NO;
 
   if (skip_key_rows_with_nulls) {
     auto row_bitmask{bitmask_and(keys, rmm::mr::get_default_resource(), stream)};
@@ -313,11 +315,11 @@ template <bool keys_have_nulls>
 std::unique_ptr<table> groupby_null_templated(
     table_view const& keys, std::vector<aggregation_request> const& requests,
     experimental::detail::result_cache* cache,
-    bool ignore_null_keys, cudaStream_t stream,
+    include_nulls include_null_keys, cudaStream_t stream,
     rmm::mr::device_memory_resource* mr)
 {
   auto d_keys = table_device_view::create(keys);
-  auto map = create_hash_map<keys_have_nulls>(*d_keys, ignore_null_keys, stream);
+  auto map = create_hash_map<keys_have_nulls>(*d_keys, include_null_keys, stream);
 
   // Cache of sparse results where the location of aggregate value in each
   // column is indexed by the hash map
@@ -325,7 +327,7 @@ std::unique_ptr<table> groupby_null_templated(
 
   // Compute all single pass aggs first
   compute_single_pass_aggs<keys_have_nulls>(
-    keys, requests, &sparse_results, *map, ignore_null_keys, stream);
+    keys, requests, &sparse_results, *map, include_null_keys, stream);
 
   // Now continue with remaining multi-pass aggs
   // <placeholder>
@@ -367,7 +369,7 @@ bool can_use_hash_groupby(table_view const& keys,
 // Hash-based groupby
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
     table_view const& keys, std::vector<aggregation_request> const& requests,
-    bool ignore_null_keys, cudaStream_t stream,
+    include_nulls include_null_keys, cudaStream_t stream,
     rmm::mr::device_memory_resource* mr)
 {
   experimental::detail::result_cache cache(requests.size());
@@ -375,10 +377,10 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
   std::unique_ptr<table> unique_keys;
   if (has_nulls(keys)) {
     unique_keys = groupby_null_templated<true>(keys, requests, &cache, 
-                                               ignore_null_keys, stream, mr);
+                                               include_null_keys, stream, mr);
   } else {
     unique_keys = groupby_null_templated<false>(keys, requests, &cache,
-                                                ignore_null_keys, stream, mr);
+                                                include_null_keys, stream, mr);
   }
 
   return std::make_pair(std::move(unique_keys), extract_results(requests, cache));  

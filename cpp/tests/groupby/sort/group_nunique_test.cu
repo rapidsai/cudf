@@ -174,7 +174,7 @@ TYPED_TEST(groupby_nunique_test, include_nulls)
     fixed_width_column_wrapper<R> expect_bool_vals { 2, 2, 1, 1};
 
 
-    auto agg = cudf::experimental::make_nunique_aggregation(cudf::include_nulls::YES);
+    auto agg = cudf::experimental::make_nunique_aggregation(include_nulls::YES);
     if(std::is_same<V, cudf::experimental::bool8>())
         test_single_agg(keys, vals, expect_keys, expect_bool_vals, std::move(agg));
     else 
