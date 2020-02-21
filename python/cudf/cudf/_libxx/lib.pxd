@@ -7,6 +7,7 @@
 
 from libc.stdint cimport int32_t, uint32_t
 from libcpp cimport bool
+from libcpp.pair cimport pair
 from libcpp.vector cimport vector
 from libcpp.memory cimport unique_ptr
 from libcpp.pair cimport pair
@@ -16,14 +17,6 @@ from rmm._lib.device_buffer cimport device_buffer, DeviceBuffer, move
 cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
     ctypedef int32_t size_type
     ctypedef uint32_t bitmask_type
-
-    ctypedef enum order:
-        ASCENDING "cudf::order::ASCENDING"
-        DESCENDING "cudf::order::DESCENDING"
-
-    ctypedef enum null_order:
-        AFTER "cudf::null_order::AFTER"
-        BEFORE "cudf::null_order::BEFORE"
 
     cdef enum:
         UNKNOWN_NULL_COUNT = -1
@@ -187,6 +180,8 @@ cdef extern from "<utility>" namespace "std" nogil:
     cdef unique_ptr[table] move(unique_ptr[table])
     cdef unique_ptr[aggregation] move(unique_ptr[aggregation])
     cdef vector[unique_ptr[column]] move(vector[unique_ptr[column]])
+    cdef pair[unique_ptr[table], vector[size_type]] move(
+        pair[unique_ptr[table], vector[size_type]])
     cdef device_buffer move(device_buffer)
     cdef pair[unique_ptr[device_buffer], size_type] \
         move(pair[unique_ptr[device_buffer], size_type])
