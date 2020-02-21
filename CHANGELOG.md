@@ -94,6 +94,7 @@
 - PR #4196 reduce CHANGELOG.md merge conflicts
 - PR #4197 Added notebook testing to gpuCI gpu build
 - PR #4225 Remove stale notebooks
+- PR #4233 Porting replace.pyx to use new libcudf APIs
 
 ## Bug Fixes
 
