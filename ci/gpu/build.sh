@@ -62,7 +62,7 @@ conda install "rmm=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL" \
               "rapidjson" "flatbuffers" "boost-cpp" "fsspec>=0.3.3" "dlpack" \
               "feather-format" "cupy>=6.6.0,<8.0.0a0,!=7.1.0" "arrow-cpp=0.15.0" "pyarrow=0.15.0" \
               "fastavro>=0.22.0" "pandas>=0.25,<0.26" "hypothesis" "s3fs" "gcsfs" \
-              "boto3" "moto" "httpretty" "streamz"
+              "boto3" "moto" "httpretty" "streamz" "ipython=7.3*" "jupyterlab"
 
 # Install the master version of dask, distributed, and streamz
 logger "pip install git+https://github.com/dask/distributed.git --upgrade --no-deps"
@@ -130,4 +130,6 @@ else
     logger "Python py.test for cuStreamz..."
     py.test --cache-clear --junitxml=${WORKSPACE}/junit-custreamz.xml -v --cov-config=.coveragerc --cov=custreamz --cov-report=xml:${WORKSPACE}/python/custreamz/custreamz-coverage.xml --cov-report term
 
+    ${WORKSPACE}/ci/gpu/test-notebooks.sh 2>&1 | tee nbtest.log
+    python ${WORKSPACE}/ci/utils/nbtestlog2junitxml.py nbtest.log
 fi

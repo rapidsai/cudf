@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -18,14 +18,11 @@
 
 package ai.rapids.cudf;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.Array;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static ai.rapids.cudf.QuantileMethod.*;
@@ -1054,7 +1051,7 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testWindowStatic() {
-    WindowOptions options = WindowOptions.builder().window(1, 1)
+    WindowOptions options = WindowOptions.builder().window(2, 1)
         .minPeriods(2).build();
     try (ColumnVector v1 = ColumnVector.fromInts(5, 4, 7, 6, 8)) {
       try (ColumnVector expected = ColumnVector.fromLongs(9, 16, 17, 21, 14);
@@ -1087,7 +1084,7 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testWindowDynamicNegative() {
-    try (ColumnVector precedingCol = ColumnVector.fromInts(2, 2, 2, 3, 3);
+    try (ColumnVector precedingCol = ColumnVector.fromInts(3, 3, 3, 4, 4);
          ColumnVector followingCol = ColumnVector.fromInts(-1, -1, -1, -1, 0)) {
       WindowOptions window = WindowOptions.builder()
           .minPeriods(2).window(precedingCol, followingCol).build();
@@ -1101,23 +1098,18 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testWindowLag() {
-    //TODO negative only works for ColumnVectors.  We need to file something to make it work for
-    // static too
-    try (ColumnVector precedingCol = ColumnVector.fromInts(1, 1, 1, 1, 1);
-         ColumnVector followingCol = ColumnVector.fromInts(-1, -1, -1, -1, -1)) {
-      WindowOptions window = WindowOptions.builder().minPeriods(1)
-          .window(precedingCol, followingCol).build();
-      try (ColumnVector v1 = ColumnVector.fromInts(5, 4, 7, 6, 8);
-           ColumnVector expected = ColumnVector.fromBoxedInts(null, 5, 4, 7, 6);
-           ColumnVector result = v1.rollingWindow(AggregateOp.MAX, window)) {
-        assertColumnsAreEqual(expected, result);
-      }
+    WindowOptions window = WindowOptions.builder().minPeriods(1)
+        .window(2, -1).build();
+    try (ColumnVector v1 = ColumnVector.fromInts(5, 4, 7, 6, 8);
+         ColumnVector expected = ColumnVector.fromBoxedInts(null, 5, 4, 7, 6);
+         ColumnVector result = v1.rollingWindow(AggregateOp.MAX, window)) {
+      assertColumnsAreEqual(expected, result);
     }
   }
 
   @Test
   void testWindowDynamic() {
-    try (ColumnVector precedingCol = ColumnVector.fromInts(0, 1, 2, 0, 1);
+    try (ColumnVector precedingCol = ColumnVector.fromInts(1, 2, 3, 1, 2);
          ColumnVector followingCol = ColumnVector.fromInts(2, 2, 2, 2, 2)) {
       WindowOptions window = WindowOptions.builder().minPeriods(2)
           .window(precedingCol, followingCol).build();
@@ -1331,13 +1323,88 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   private static void testCastFixedWidthToStringsAndBack(DType type, Supplier<ColumnVector> fixedWidthSupplier,
-                                                  Supplier<ColumnVector> stringColumnSupplier) {
+                                                         Supplier<ColumnVector> stringColumnSupplier) {
     try (ColumnVector fixedWidthColumn = fixedWidthSupplier.get();
          ColumnVector stringColumn = stringColumnSupplier.get();
          ColumnVector fixedWidthCastedToString = fixedWidthColumn.castTo(DType.STRING);
          ColumnVector stringCastedToFixedWidth = stringColumn.castTo(type)) {
       assertColumnsAreEqual(stringColumn, fixedWidthCastedToString);
       assertColumnsAreEqual(fixedWidthColumn, stringCastedToFixedWidth);
+    }
+  }
+
+  @Test
+  void testCastTimestampAsString() {
+    final String[] TIMES_S_STRING = {
+        "2018-07-04 12:00:00",
+        "2023-01-25 07:32:12",
+        "2018-07-04 12:00:00"};
+
+    final long[] TIMES_S = {
+        1530705600L,   //'2018-07-04 12:00:00'
+        1674631932L,   //'2023-01-25 07:32:12'
+        1530705600L};  //'2018-07-04 12:00:00'
+
+    final long[] TIMES_NS = {
+        1530705600115254330L,   //'2018-07-04 12:00:00.115254330'
+        1674631932929861604L,   //'2023-01-25 07:32:12.929861604'
+        1530705600115254330L};  //'2018-07-04 12:00:00.115254330'
+
+    final String[] TIMES_NS_STRING = {
+        "2018-07-04 12:00:00.115254330",
+        "2023-01-25 07:32:12.929861604",
+        "2018-07-04 12:00:00.115254330"};
+
+    // all supported formats by cudf
+    final String[] TIMES_NS_STRING_ALL = {
+        "04::07::18::2018::12::00::00::115254330",
+        "25::01::23::2023::07::32::12::929861604",
+        "04::07::18::2018::12::00::00::115254330"};
+
+    // Seconds
+    try (ColumnVector s_string_times = ColumnVector.fromStrings(TIMES_S_STRING);
+         ColumnVector s_timestamps = ColumnVector.timestampSecondsFromLongs(TIMES_S);
+         ColumnVector timestampsAsStrings = s_timestamps.asStrings("%Y-%m-%d %H:%M:%S");
+         ColumnVector timestampsAsStringsUsingDefaultFormat = s_timestamps.asStrings()) {
+      assertColumnsAreEqual(s_string_times, timestampsAsStrings);
+      assertColumnsAreEqual(timestampsAsStringsUsingDefaultFormat, timestampsAsStrings);
+    }
+
+    // Nanoseconds
+    try (ColumnVector ns_string_times = ColumnVector.fromStrings(TIMES_NS_STRING);
+         ColumnVector ns_timestamps = ColumnVector.timestampNanoSecondsFromLongs(TIMES_NS);
+         ColumnVector ns_string_times_all = ColumnVector.fromStrings(TIMES_NS_STRING_ALL);
+         ColumnVector allSupportedFormatsTimestampAsStrings = ns_timestamps.asStrings("%d::%m::%y::%Y::%H::%M::%S::%f");
+         ColumnVector timestampsAsStrings = ns_timestamps.asStrings("%Y-%m-%d %H:%M:%S.%f")) {
+      assertColumnsAreEqual(ns_string_times, timestampsAsStrings);
+      assertColumnsAreEqual(allSupportedFormatsTimestampAsStrings, ns_string_times_all);
+    }
+  }
+
+  @Test
+  @Disabled("Negative timestamp values are not currently supported. " +
+      "See github issue https://github.com/rapidsai/cudf/issues/3116 for details")
+  void testCastNegativeTimestampAsString() {
+    final String[] NEG_TIME_S_STRING = {"1965-10-26 14:01:12",
+        "1960-02-06 19:22:11"};
+
+    final long[] NEG_TIME_S = {-131968728L,   //'1965-10-26 14:01:12'
+        -312439069L};   //'1960-02-06 19:22:11'
+
+    final long[] NEG_TIME_NS = {-131968727761702469L};   //'1965-10-26 14:01:12.238297531'
+
+    final String[] NEG_TIME_NS_STRING = {"1965-10-26 14:01:12.238297531"};
+
+    // Seconds
+    try (ColumnVector unsupported_s_string_times = ColumnVector.fromStrings(NEG_TIME_S_STRING);
+         ColumnVector unsupported_s_timestamps = ColumnVector.timestampSecondsFromLongs(NEG_TIME_S)) {
+      assertColumnsAreEqual(unsupported_s_string_times, unsupported_s_timestamps);
+    }
+
+    // Nanoseconds
+    try (ColumnVector unsupported_ns_string_times = ColumnVector.fromStrings(NEG_TIME_NS_STRING);
+         ColumnVector unsupported_ns_timestamps = ColumnVector.timestampSecondsFromLongs(NEG_TIME_NS)) {
+      assertColumnsAreEqual(unsupported_ns_string_times, unsupported_ns_timestamps);
     }
   }
 

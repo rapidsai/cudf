@@ -23,6 +23,9 @@ import rmm
 
 import cudf
 import cudf._lib as libcudf
+import cudf._libxx as libcudfxx
+from cudf._libxx.null_mask import MaskState, create_null_mask
+from cudf._libxx.transform import bools_to_mask
 from cudf.core import column
 from cudf.core._sort import get_sorted_inds
 from cudf.core.column import (
@@ -47,6 +50,7 @@ from cudf.utils.dtypes import (
     is_scalar,
     is_string_dtype,
 )
+from cudf.utils.utils import OrderedColumnDict
 
 
 def _unique_name(existing_names, suffix="_unique_name"):
@@ -193,7 +197,7 @@ class DataFrame(Frame):
                         column.column_empty(
                             len(self), dtype="object", masked=True
                         ),
-                    ),
+                    )
                 )
         else:
             if is_list_like(data):
@@ -491,12 +495,12 @@ class DataFrame(Frame):
                 if other[col].has_nulls:
                     raise ValueError("Column must have no nulls.")
 
-                boolbits = cudautils.compact_mask_bytes(
-                    other[col]._column.data_array_view
-                )
+                out_mask = bools_to_mask(other[col]._column)
             else:
-                boolbits = cudautils.make_empty_mask(len(self[col]))
-            df[col] = df[col].set_mask(boolbits)
+                out_mask = create_null_mask(
+                    len(self[col]), state=MaskState.ALL_NULL
+                )
+            df[col] = df[col].set_mask(out_mask)
         return df
 
     def __setitem__(self, arg, value):
@@ -807,7 +811,8 @@ class DataFrame(Frame):
         )
         ncols = (
             1
-            if nrows == 1 and dtype in ["int8", "int16", "str", "category"]
+            if nrows == 1
+            and dtype in ["int8", "int16", "int64", "str", "category"]
             else ncols
         )
         ncols = 0 if ncols == 2 else ncols
@@ -931,7 +936,9 @@ class DataFrame(Frame):
                 if fill_value is None:
                     return Series.from_masked_array(
                         data=rmm.device_array(max_num_rows, dtype="float64"),
-                        mask=cudautils.make_empty_mask(max_num_rows),
+                        mask=create_null_mask(
+                            max_num_rows, state=MaskState.ALL_NULL
+                        ),
                     ).set_index(col.index)
                 else:
                     return getattr(col, fn)(fill_value)
@@ -2064,9 +2071,8 @@ class DataFrame(Frame):
         return outdf
 
     def argsort(self, ascending=True, na_position="last"):
-        cols = list(self._data.columns)
         return get_sorted_inds(
-            cols, ascending=ascending, na_position=na_position
+            self, ascending=ascending, na_position=na_position
         )
 
     def sort_index(self, ascending=True):
@@ -2168,18 +2174,18 @@ class DataFrame(Frame):
         """
         # Never transpose a MultiIndex - remove the existing columns and
         # replace with a RangeIndex. Afterward, reassign.
-        inp = self.copy(deep=False)
-        temp_columns = inp.columns.copy(deep=False)
-        temp_index = inp.index.copy(deep=False)
-        if len(self._data) == 0:
-            return DataFrame(index=temp_columns, columns=temp_index)
-        inp.columns = pd.RangeIndex(start=0, stop=len(self.columns))
-        inp.index = RangeIndex(start=0, stop=len(self))
-        result = libcudf.transpose.transpose(inp)
-        result._index = as_index(temp_columns)
-        if not isinstance(temp_index, cudf.MultiIndex):
-            temp_index = temp_index.to_pandas()
-        result.columns = temp_index
+        columns = self.index.copy(deep=False)
+        index = self.columns.copy(deep=False)
+        if self._num_columns == 0 or self._num_rows == 0:
+            return DataFrame(index=index, columns=columns)
+        # Cython renames the columns to the range [0...ncols]
+        result = self.__class__._from_table(
+            libcudfxx.transpose.transpose(self)
+        )
+        # Set the old column names as the new index
+        result._index = as_index(index)
+        # Set the old index as the new column names
+        result.columns = columns
         return result
 
     @property
@@ -3096,17 +3102,17 @@ class DataFrame(Frame):
 
         Parameters
         ----------
-        column : sequence of str; optional
+        columns : sequence of str; optional
             Sequence of column names. If columns is *None* (unspecified),
             all columns in the frame are used.
         """
-        from cudf.core.column import numerical
-
         if columns is None:
-            columns = self.columns
+            table_to_hash = self
+        else:
+            cols = [self[k]._column for k in columns]
+            table_to_hash = Frame(data=OrderedColumnDict(zip(columns, cols)))
 
-        cols = [self[k]._column for k in columns]
-        return Series(numerical.column_hash_values(*cols)).values
+        return Series(table_to_hash._hash()).values
 
     def partition_by_hash(self, columns, nparts):
         """Partition the dataframe by the hashed value of data in *columns*.
@@ -3123,19 +3129,9 @@ class DataFrame(Frame):
         -------
         partitioned: list of DataFrame
         """
-        cols = list(self._data.columns)
-        names = list(self._data.names)
-        key_indices = [names.index(k) for k in columns]
-        # Allocate output buffers
-        outputs = [col.copy() for col in cols]
-        # Call hash_partition
-        offsets = libcudf.hash.hash_partition(
-            cols, key_indices, nparts, outputs
-        )
-        # Re-construct output partitions
-        outdf = DataFrame()
-        for k, col in zip(self._data, outputs):
-            outdf[k] = col
+        idx = 0 if self._index is None else self._index._num_columns
+        key_indices = [self._data.names.index(k) + idx for k in columns]
+        outdf, offsets = self._hash_partition(key_indices, nparts)
         # Slice into partition
         return [outdf[s:e] for s, e in zip(offsets, offsets[1:] + [None])]
 
