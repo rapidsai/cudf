@@ -4524,7 +4524,7 @@ class DataFrame(Frame):
         )
         df.columns = self.columns
         return df
-    
+
     def corr(self):
         """Compute the correlation matrix of a DataFrame.
         """
@@ -4534,6 +4534,7 @@ class DataFrame(Frame):
         )
         df.columns = self.columns
         return df
+
 
 def from_pandas(obj):
     """
