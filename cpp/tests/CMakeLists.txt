@@ -443,59 +443,6 @@ set(TRANSFORM_TEST_SRC
 ConfigureTest(TRANSFORM_TEST "${TRANSFORM_TEST_SRC}")
 
 ###################################################################################################
-# - legacy jit cache tests ------------------------------------------------------------------------
-
-set(LEGACY_JITCACHE_TEST_SRC
-    "${CMAKE_SOURCE_DIR}/src/jit/cache.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/legacy/unit/jit-cache-test.cu")
-
-ConfigureTest(LEGACY_JITCACHE_TEST "${LEGACY_JITCACHE_TEST_SRC}")
-
-set(LEGACY_JITCACHE_MULTI_TEST_SRC
-    "${CMAKE_SOURCE_DIR}/src/jit/cache.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/legacy/unit/jit-cache-multiprocess-test.cpp")
-
-ConfigureTest(LEGACY_JITCACHE_MULTIPROC_TEST "${LEGACY_JITCACHE_MULTI_TEST_SRC}")
-
-###################################################################################################
-# - io tests --------------------------------------------------------------------------------------
-
-set(DECOMPRESSION_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/comp/decomp_test.cu")
-set(LEGACY_AVRO_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/legacy/avro_test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/legacy/io_test_utils.cpp")
-set(LEGACY_CSV_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/legacy/csv_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/legacy/io_test_utils.cpp")
-set(LEGACY_JSON_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/legacy/json_test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/legacy/io_test_utils.cpp")
-set(LEGACY_ORC_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/legacy/orc_test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/legacy/io_test_utils.cpp")
-
-ConfigureTest(DECOMPRESSION_TEST "${DECOMPRESSION_TEST_SRC}")
-ConfigureTest(LEGACY_AVRO_TEST "${LEGACY_AVRO_TEST_SRC}")
-ConfigureTest(LEGACY_CSV_TEST "${LEGACY_CSV_TEST_SRC}")
-ConfigureTest(LEGACY_JSON_TEST "${LEGACY_JSON_TEST_SRC}")
-ConfigureTest(LEGACY_ORC_TEST "${LEGACY_ORC_TEST_SRC}")
-
-set(CSV_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/csv_test.cu")
-set(ORC_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/orc_test.cu")
-set(PARQUET_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/parquet_test.cu")
-set(JSON_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/json_test.cu")
-
-ConfigureTest(CSV_TEST "${CSV_TEST_SRC}")
-ConfigureTest(ORC_TEST "${ORC_TEST_SRC}")
-ConfigureTest(PARQUET_TEST "${PARQUET_TEST_SRC}")
-ConfigureTest(JSON_TEST "${JSON_TEST_SRC}")
-
-###################################################################################################
 # - sort tests ------------------------------------------------------------------------------------
 
 set(SORT_TEST_SRC
