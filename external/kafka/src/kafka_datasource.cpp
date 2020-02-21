@@ -70,8 +70,8 @@ namespace external {
     conf_res_ = kafka_conf_->get("group.id", conf_val);
 
     // Create the Rebalance callback so Partition Offsets can be assigned.
-    KafkaRebalanceCB rebalance_cb(kafka_start_offset_);
-    kafka_conf_->set("rebalance_cb", &rebalance_cb, errstr_);
+    //KafkaRebalanceCB rebalance_cb(kafka_start_offset_);
+    //kafka_conf_->set("rebalance_cb", &rebalance_cb, errstr_);
 
     //consumer_ = std::unique_ptr<RdKafka::KafkaConsumer>(RdKafka::KafkaConsumer::create(kafka_conf_.get(), errstr_));
     consumer_ = RdKafka::KafkaConsumer::create(kafka_conf_, errstr_);
