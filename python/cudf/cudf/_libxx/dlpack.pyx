@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2020, NVIDIA CORPORATION.
 
 # cython: profile=False
 # distutils: language = c++
@@ -7,7 +7,6 @@
 
 # Copyright (c) 2018, NVIDIA CORPORATION.
 import cudf
-from cudf._libxx.table cimport *
 from cudf._libxx.table cimport *
 from cudf._libxx.lib cimport *
 
