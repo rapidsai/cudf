@@ -232,7 +232,7 @@ cdef extern from "cudf/scalar/scalar_factories.hpp" namespace "cudf" nogil:
 # If `move()` is declared with `except +`, the generated C++ code
 # looks something like this:
 #
-#    std::unique_ptr<int>  __pyx_v_y;
+#    std::unique_ptr<int>  __pyx_v_x;
 #    std::unique_ptr<int>  __pyx_v_y;
 #    std::unique_ptr<int>  __pyx_t_1;
 #    try {
