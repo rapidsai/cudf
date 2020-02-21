@@ -3,6 +3,7 @@ import numpy as np
 from . import (
     copying,
     lib,
+    hash,
     null_mask,
     quantiles,
     rolling,
