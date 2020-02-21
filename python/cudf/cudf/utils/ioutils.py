@@ -776,20 +776,21 @@ Read the file with ``cudf.read_csv``
 """
 Examples
 --------
-
-Read ``hexadecimal values`` from a csv file as integer column with cudf  
+Read ``hexadecimal values`` from a csv file as integer column with cudf
 
 Create a test hex csv file
 
 >>> import cudf
->>> fname = 'test.csv'
+>>> filename = 'test.csv'
 >>> cdf = cudf.DataFrame()
 >>> cdf['hex_col'] = ['9512c20b']*10
 >>> cdf.to_csv(fname,index=False)
 
-Read the file with ``cudf.read_csv`` and use `hex64` for dtype. dtype can be 'hex64`, 'hex32' and 'hex` (alias for hex64) for hexadecimal parsing.
+Read the file with ``cudf.read_csv`` and use `hex64` as dtype.
+dtype: 'hex64', 'hex32' or 'hex` (alias for hex64) for hexadecimal parsing.
 
->>> gdf = cudf.read_csv(fname, converters={'hex_col': partial(int, base=16)}, dtype = {"hex_col" : "hex64"})
+>>> gdf = cudf.read_csv(fname, converters={'hex_col': partial(int, base=16)},
+                        dtype = {"hex_col" : "hex64"})
 >>> gdf
     hex_col
 0   2501034507
@@ -807,6 +808,7 @@ cudf.io.csv.to_csv
 doc_read_csv = docfmt_partial(docstring=_docstring_read_csv)
 
 _docstring_to_csv = """
+
 Write a dataframe to csv file format.
 
 Parameters
