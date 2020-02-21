@@ -157,60 +157,62 @@ cdef _get_py_string_from_string(unique_ptr[scalar]& s):
 
 
 cdef _get_np_scalar_from_numeric(unique_ptr[scalar]& s):
-    if not s.get()[0].is_valid():
+    cdef scalar* s_ptr = s.get()
+    if not s_ptr[0].is_valid():
         return None
 
-    cdef data_type cdtype = s.get()[0].type()
+    cdef data_type cdtype = s_ptr[0].type()
 
     if cdtype.id() == INT8:
-        return np.int8((<numeric_scalar[int8_t]*>s.get())[0].value())
+        return np.int8((<numeric_scalar[int8_t]*>s_ptr)[0].value())
     elif cdtype.id() == INT16:
-        return np.int16((<numeric_scalar[int16_t]*>s.get())[0].value())
+        return np.int16((<numeric_scalar[int16_t]*>s_ptr)[0].value())
     elif cdtype.id() == INT32:
-        return np.int32((<numeric_scalar[int32_t]*>s.get())[0].value())
+        return np.int32((<numeric_scalar[int32_t]*>s_ptr)[0].value())
     elif cdtype.id() == INT64:
-        return np.int64((<numeric_scalar[int64_t]*>s.get())[0].value())
+        return np.int64((<numeric_scalar[int64_t]*>s_ptr)[0].value())
     elif cdtype.id() == FLOAT32:
-        return np.float32((<numeric_scalar[float]*>s.get())[0].value())
+        return np.float32((<numeric_scalar[float]*>s_ptr)[0].value())
     elif cdtype.id() == FLOAT64:
-        return np.float32((<numeric_scalar[double]*>s.get())[0].value())
+        return np.float32((<numeric_scalar[double]*>s_ptr)[0].value())
     elif cdtype.id() == BOOL8:
-        return np.bool((<numeric_scalar[bool8]*>s.get())[0].value())
+        return np.bool((<numeric_scalar[bool8]*>s_ptr)[0].value())
     else:
         raise ValueError("Could not convert cudf::scalar to numpy scalar")
-
-
 cdef _get_np_scalar_from_timestamp64(unique_ptr[scalar]& s):
-    if not s.get()[0].is_valid():
+
+    cdef scalar* s_ptr = s.get()
+
+    if not s_ptr[0].is_valid():
         return None
 
-    cdef data_type cdtype = s.get()[0].type()
+    cdef data_type cdtype = s_ptr[0].type()
 
     if cdtype.id() == TIMESTAMP_SECONDS:
         return np.datetime64(
             (
-                <timestamp_scalar[timestamp_ms]*> s.get()
+                <timestamp_scalar[timestamp_ms]*> s_ptr
             )[0].ticks_since_epoch_64(),
             "s"
         )
     elif cdtype.id() == TIMESTAMP_MILLISECONDS:
         return np.datetime64(
             (
-                <timestamp_scalar[timestamp_ms]*> s.get()
+                <timestamp_scalar[timestamp_ms]*> s_ptr
             )[0].ticks_since_epoch_64(),
             "ms"
         )
     elif cdtype.id() == TIMESTAMP_MICROSECONDS:
         return np.datetime64(
             (
-                <timestamp_scalar[timestamp_ms]*> s.get()
+                <timestamp_scalar[timestamp_ms]*> s_ptr
             )[0].ticks_since_epoch_64(),
             "us"
         )
     elif cdtype.id() == TIMESTAMP_NANOSECONDS:
         return np.datetime64(
             (
-                <timestamp_scalar[timestamp_ms]*> s.get()
+                <timestamp_scalar[timestamp_ms]*> s_ptr
             )[0].ticks_since_epoch_64(),
             "ns"
         )
