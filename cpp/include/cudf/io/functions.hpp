@@ -404,7 +404,7 @@ struct write_parquet_args {
                               const table_metadata *metadata_ = nullptr,
                               compression_type compression_ = compression_type::AUTO,
                               statistics_freq stats_lvl_ = statistics_freq::STATISTICS_ROWGROUP)
-      : sink(sink_), table(table_), metadata(metadata_), compression(compression_), stats_level(stats_lvl_) {}
+      : sink(sink_), compression(compression_), stats_level(stats_lvl_), table(table_), metadata(metadata_)  {}
 };
 
 /**
@@ -444,7 +444,7 @@ struct write_parquet_chunked_args {
                               const table_metadata_with_nullability *metadata_ = nullptr,
                               compression_type compression_ = compression_type::AUTO,
                               statistics_freq stats_lvl_ = statistics_freq::STATISTICS_ROWGROUP)
-      : sink(sink_), metadata(metadata_), compression(compression_), stats_level(stats_lvl_) {}
+      : sink(sink_), compression(compression_), stats_level(stats_lvl_), metadata(metadata_) {}
 };
 
 /**

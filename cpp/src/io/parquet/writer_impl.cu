@@ -384,7 +384,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink, writer_options const &option
   stats_granularity_(options.stats_granularity),
   out_sink_(std::move(sink)){}
 
-void writer::impl::write(table_view const &table, const table_metadata *metadata, cudaStream_t stream) {    
+void writer::impl::write(table_view const &table, const table_metadata *metadata, cudaStream_t stream) {
   pq_chunked_state state;
   state.user_metadata = metadata;
   state.stream = stream;
@@ -404,8 +404,8 @@ void writer::impl::write_chunked_begin(pq_chunked_state& state){
   state.current_chunk_offset = sizeof(file_header_s);
 }
 
-void writer::impl::write_chunked(table_view const& table, pq_chunked_state& state){  
-size_type num_columns = table.num_columns();
+void writer::impl::write_chunked(table_view const& table, pq_chunked_state& state){
+  size_type num_columns = table.num_columns();
   size_type num_rows = 0;
 
   // Wrapper around cudf columns to attach parquet-specific type info.
@@ -746,7 +746,7 @@ size_type num_columns = table.num_columns();
   }
 }
 
-void writer::impl::write_chunked_end(pq_chunked_state &state){    
+void writer::impl::write_chunked_end(pq_chunked_state &state){
   CompactProtocolWriter cpw(&buffer_);
   file_ender_s fendr;
   fendr.footer_len = (uint32_t)cpw.write(&state.md);  
@@ -757,17 +757,9 @@ void writer::impl::write_chunked_end(pq_chunked_state &state){
 }
 
 // Forward to implementation
-writer::writer(std::string const& filepath, writer_options const& options,
-               rmm::mr::device_memory_resource *mr)
-    : _impl(std::make_unique<impl>(data_sink::create(filepath), options, mr)) {}
-
-writer::writer(std::vector<char>* buffer, writer_options const& options,
-      rmm::mr::device_memory_resource *mr)
-: _impl(std::make_unique<impl>(data_sink::create(buffer), options, mr)) {}
-
-writer::writer(writer_options const& options,
-      rmm::mr::device_memory_resource *mr)
-: _impl(std::make_unique<impl>(data_sink::create(), options, mr)) {}
+writer::writer(std::unique_ptr<data_sink> sink, writer_options const& options,
+                rmm::mr::device_memory_resource* mr)
+    : _impl(std::make_unique<impl>(std::move(sink), options, mr)) {}
 
 // Destructor within this translation unit
 writer::~writer() = default;

@@ -53,6 +53,18 @@ class data_sink {
   static std::unique_ptr<data_sink> create();
 
   /**
+   * @brief Create a wrapped custom user data sink
+   * 
+   * @param[in] User-provided data sink (typically custom class)
+   *
+   * The data sink returned here is not the one passed by the user. It is an internal
+   * class that wraps the user pointer.  The principle is to allow the user to declare
+   * a custom sink instance and use it across multiple write() calls.
+   *   
+   **/
+  static std::unique_ptr<data_sink> create(std::shared_ptr<cudf::io::data_sink> user_sink);
+
+  /**
    * @brief Base class destructor
    **/
   virtual ~data_sink(){};

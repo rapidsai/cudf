@@ -46,13 +46,15 @@ std::unique_ptr<reader> make_reader(source_info const& source,
 template <typename writer, typename writer_options>
 std::unique_ptr<writer> make_writer(sink_info const& sink,
                                     writer_options const& options,
-                                    rmm::mr::device_memory_resource* mr) {
+                                    rmm::mr::device_memory_resource* mr){
   if (sink.type == io_type::FILEPATH) {
-    return std::make_unique<writer>(sink.filepath, options, mr);
+    return std::make_unique<writer>(cudf::io::data_sink::create(sink.filepath), options, mr);
   } if (sink.type == io_type::HOST_BUFFER) {
-    return std::make_unique<writer>(sink.buffer, options, mr);
+    return std::make_unique<writer>(cudf::io::data_sink::create(sink.buffer), options, mr);
   } if (sink.type == io_type::VOID) {
-    return std::make_unique<writer>(options, mr);
+    return std::make_unique<writer>(cudf::io::data_sink::create(), options, mr);
+  } if (sink.type == io_type::USER_SINK) {
+    return std::make_unique<writer>(cudf::io::data_sink::create(sink.user_sink), options, mr);
   } else {
     CUDF_FAIL("Unsupported sink type");
   }

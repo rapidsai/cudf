@@ -110,6 +110,28 @@ class void_sink : public data_sink {
   size_t bytes_written_;  
 };
 
+class user_sink_wrapper : public data_sink { 
+public:
+  explicit user_sink_wrapper(std::shared_ptr<data_sink> user_sink_) : user_sink(user_sink_){}
+
+  virtual ~user_sink_wrapper() {}
+
+  void write(void const* data, size_t size) override {
+    user_sink->write(data, size);
+  }
+
+  void flush() override {
+    user_sink->flush();
+  }
+
+  size_t bytes_written() override {
+    return user_sink->bytes_written();
+  }
+
+private:
+   std::shared_ptr<data_sink>   user_sink;
+};
+
 std::unique_ptr<data_sink> data_sink::create(const std::string& filepath) {
   return std::make_unique<file_sink>(filepath);
 }
@@ -120,6 +142,10 @@ std::unique_ptr<data_sink> data_sink::create(std::vector<char>* buffer) {
 
 std::unique_ptr<data_sink> data_sink::create() {
   return std::make_unique<void_sink>();
+}
+
+std::unique_ptr<data_sink> data_sink::create(std::shared_ptr<cudf::io::data_sink> user_sink) {
+  return std::make_unique<user_sink_wrapper>(user_sink);
 }
 
 }  // namespace io
