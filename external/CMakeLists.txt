@@ -16,6 +16,7 @@
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
 project(CUDA_DATAFRAME_EXTERNAL VERSION 0.13.0 LANGUAGES C CXX)
+set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/" ${CMAKE_MODULE_PATH})
 
 ###################################################################################################
 # - build type ------------------------------------------------------------------------------------
@@ -70,6 +71,25 @@ elseif(DEFINED ENV{CONDA_PREFIX})
     set(CONDA_LINK_DIRS "$ENV{CONDA_PREFIX}/lib")
     message(STATUS "Conda environment detected, CMAKE_SYSTEM_PREFIX_PATH set to: ${CMAKE_SYSTEM_PREFIX_PATH}")
 endif("$ENV{CONDA_BUILD}" STREQUAL "1")
+
+###################################################################################################
+# - add gtest -------------------------------------------------------------------------------------
+
+if(BUILD_TESTS)
+    include(CTest)
+    include(ConfigureGoogleTest)
+
+    if(GTEST_FOUND)
+        message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
+        include_directories(${GTEST_INCLUDE_DIR})
+        add_subdirectory(${CMAKE_SOURCE_DIR}/kafka/tests)
+    else()
+        message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
+    endif(GTEST_FOUND)
+
+    message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
+    message(STATUS "NVSTRINGS_TEST_LIST set to: ${NVSTRINGS_TEST_LIST}")
+endif(BUILD_TESTS)
 
 ###################################################################################################
 # - set libcudf headers ---------------------------------------------------------------------------
@@ -140,3 +160,6 @@ target_link_libraries(cudf_kafka rdkafka rdkafka++)
 install(TARGETS cudf_kafka
         DESTINATION lib/external
         COMPONENT cudf_kafka)
+
+add_custom_target(build_tests_cudf
+                  DEPENDS ${CUDF_TEST_LIST})
