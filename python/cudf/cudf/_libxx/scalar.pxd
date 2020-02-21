@@ -13,4 +13,4 @@ cdef class Scalar:
     cdef unique_ptr[scalar] c_value
 
     @staticmethod
-    cdef Scalar from_unique_ptr(unique_ptr[scalar] ptr) 
+    cdef Scalar from_unique_ptr(unique_ptr[scalar] ptr)

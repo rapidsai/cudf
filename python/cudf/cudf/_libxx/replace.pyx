@@ -63,7 +63,7 @@ def replace_nulls_column(Column input_col, Column replacement_values):
     cdef unique_ptr[column] c_result
     with nogil:
         c_result = move(cpp_replace_nulls(input_col_view,
-                                         replacement_values_view))
+                                          replacement_values_view))
 
     return Column.from_unique_ptr(move(c_result))
 
@@ -124,9 +124,10 @@ def clamp(Column input_col, Scalar lo, Scalar lo_replace,
 
     cdef unique_ptr[column] c_result
     with nogil:
-        c_result = move(cpp_clamp(input_col_view, lo_value[0], lo_replace_value[0],
-                                  hi_value[0], hi_replace_value[0]))
-    
+        c_result = move(cpp_clamp(
+            input_col_view, lo_value[0],
+            lo_replace_value[0], hi_value[0], hi_replace_value[0]))
+
     return Column.from_unique_ptr(move(c_result))
 
 
@@ -158,10 +159,10 @@ def normalize_nans_and_zeros_inplace(Column input_col):
     Inplace normalizing
     """
 
-    cdef mutable_column_view input_col_view = input_col.mutable_view();
+    cdef mutable_column_view input_col_view = input_col.mutable_view()
     cdef unique_ptr[column] c_result
     with nogil:
-       cpp_normalize_nans_and_zeros(input_col_view)
+        cpp_normalize_nans_and_zeros(input_col_view)
 
     return Column.from_unique_ptr(move(c_result))
 
@@ -171,7 +172,7 @@ def normalize_nans_and_zeros_column(Column input_col):
     Returns a new  normalized Column
     """
 
-    cdef column_view input_col_view = input_col.view();
+    cdef column_view input_col_view = input_col.view()
     cdef unique_ptr[column] c_result
     with nogil:
         c_result = move(cpp_normalize_nans_and_zeros(input_col_view))
@@ -179,7 +180,7 @@ def normalize_nans_and_zeros_column(Column input_col):
     return Column.from_unique_ptr(move(c_result))
 
 
-def normalize_nans_and_zeros(Column input_col, bool in_place = False):
+def normalize_nans_and_zeros(Column input_col, bool in_place=False):
     """
     Normalize the NaN and zeros in input_col
     Convert  -NaN  -> NaN
