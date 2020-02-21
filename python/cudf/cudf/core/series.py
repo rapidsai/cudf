@@ -1584,37 +1584,13 @@ class Series(Frame):
             raise ValueError('keep must be either "first", "last"')
 
     def nlargest(self, n=5, keep="first"):
+        """Returns a new Series of the *n* largest element.
         """
-        Returns a new Series of the *n* largest element.
-       
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series([1, 122, 5, 2, 4, 3, 1, 7, 20, 99])
-        >>> ser.nlargest(n=4)
-        1    122
-        9     99
-        8     20
-        7      7
-        """
-        
         return self._n_largest_or_smallest(n=n, keep=keep, largest=True)
 
     def nsmallest(self, n=5, keep="first"):
+        """Returns a new Series of the *n* smallest element.
         """
-        Returns a new Series of the *n* smallest element.
-        
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series([1, 122, 5, 2, 4, 3, 1, 7, 20, 99])
-        >>> ser.nsmallest(n=4)
-        0    1
-        6    1
-        3    2
-        5    3
-        """
-        
         return self._n_largest_or_smallest(n=n, keep=keep, largest=False)
 
     def _sort(self, ascending=True, na_position="last"):
@@ -1868,47 +1844,19 @@ class Series(Frame):
         return self.valid_count
 
     def min(self, axis=None, skipna=True, dtype=None):
+        """Compute the min of the series
         """
-        Compute the min of the series
-        
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series([1, 122, 5, 0.2, 4, 3, 1, 7, 20, 99], dtype='float64')
-        >>> ser.min()
-        0.2
-        """
-
         assert axis in (None, 0) and skipna is True
         return self._column.min(dtype=dtype)
 
     def max(self, axis=None, skipna=True, dtype=None):
+        """Compute the max of the series
         """
-        Compute the max of the series
-        
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series([1, 122, 5, 2, 4, 3, 6, 7, 20, 99])
-        >>> ser.max()
-        122
-        """
-
         assert axis in (None, 0) and skipna is True
         return self._column.max(dtype=dtype)
 
     def sum(self, axis=None, skipna=True, dtype=None):
-        """
-        Compute the sum of the series
-        
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series([1, 5, 2, 4, 3, 6, 7])
-        >>> ser.sum()
-        28
-        """
-        
+        """Compute the sum of the series"""
         assert axis in (None, 0) and skipna is True
         return self._column.sum(dtype=dtype)
 
@@ -1918,22 +1866,13 @@ class Series(Frame):
         return self._column.product(dtype=dtype)
 
     def prod(self, axis=None, skipna=True, dtype=None):
-        """Alias for product
-        
-         Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series([1, 2, 5, 2, 4, 3, 6, 10])
-        >>> ser.prod()
-        14400
-        """
-        
+        """Alias for product"""
         return self.product(axis=axis, skipna=skipna, dtype=dtype)
 
     def cummin(self, axis=0, skipna=True):
         """
         Compute the cumulative minimum of the series
-        
+
         Examples
         --------
         >>> import cudf
@@ -1945,6 +1884,7 @@ class Series(Frame):
         3    1
         4    1
         """
+
         assert axis in (None, 0) and skipna is True
         return Series(
             self._column._apply_scan_op("min"),
@@ -1955,7 +1895,7 @@ class Series(Frame):
     def cummax(self, axis=0, skipna=True):
         """
         Compute the cumulative maximum of the series
-        
+
         Examples
         --------
         >>> import cudf
@@ -1967,7 +1907,6 @@ class Series(Frame):
         3    5
         4    5
         """
-        
         assert axis in (None, 0) and skipna is True
         return Series(
             self._column._apply_scan_op("max"),
@@ -1978,7 +1917,7 @@ class Series(Frame):
     def cumsum(self, axis=0, skipna=True):
         """
         Compute the cumulative sum of the series
-        
+
         Examples
         --------
         >>> import cudf
@@ -1990,7 +1929,7 @@ class Series(Frame):
         3    12
         4    15
         """
-        
+
         assert axis in (None, 0) and skipna is True
 
         # pandas always returns int64 dtype if original dtype is int or `bool`
@@ -2012,7 +1951,7 @@ class Series(Frame):
     def cumprod(self, axis=0, skipna=True):
         """
         Compute the cumulative product of the series
-        
+
         Examples
         --------
         >>> import cudf
@@ -2024,7 +1963,6 @@ class Series(Frame):
         3    40
         4    120
         """
-        
         assert axis in (None, 0) and skipna is True
 
         # pandas always returns int64 dtype if original dtype is int or `bool`
@@ -2045,46 +1983,28 @@ class Series(Frame):
 
     def mean(self, axis=None, skipna=True):
         """
+
         Compute the mean of the series
-        
+
         Examples
         --------
         >>> import cudf
-        >>> ser = cudf.Series([10, 25, 3, 25, 24, 6]) 
+        >>> ser = cudf.Series([10, 25, 3, 25, 24, 6])
         >>> ser.mean()
         15.5
         """
-        
         assert axis in (None, 0) and skipna is True
         return self._column.mean()
 
     def std(self, ddof=1, axis=None, skipna=True):
+        """Compute the standard deviation of the series
         """
-        Compute the standard deviation of the series
-        
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series([10, 25, 3, 25, 24, 6]) 
-        >>> ser.std()
-        10.290772565750347
-        """
-        
         assert axis in (None, 0) and skipna is True
         return self._column.std(ddof=ddof)
 
     def var(self, ddof=1, axis=None, skipna=True):
+        """Compute the variance of the series
         """
-        Compute the variance of the series
-        
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series([10, 25, 3, 25, 24, 6]) 
-        >>> ser.var()
-        105.89999999999998
-        """
-
         assert axis in (None, 0) and skipna is True
         return self._column.var(ddof=ddof)
 
@@ -2092,17 +2012,8 @@ class Series(Frame):
         return self._column.sum_of_squares(dtype=dtype)
 
     def median(self, skipna=True):
+        """Compute the median of the series
         """
-        Compute the median of the series
-        
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series([1, 3, 1, 6, 2, 2, 10, 3, 4, 10])
-        >>> ser.median()
-        3.0
-        """
-
         if not skipna and self.has_nulls:
             return np.nan
         # enforce linear in case the default ever changes
@@ -2183,7 +2094,7 @@ class Series(Frame):
     def cov(self, other, min_periods=None):
         """Calculates the sample covariance between two Series,
         excluding missing values.
-        
+
         Examples
         --------
         >>> import cudf
@@ -2192,7 +2103,6 @@ class Series(Frame):
         >>> ser1.cov(ser2)
         -0.015750000000000004
         """
-
         assert min_periods in (None,)
 
         if self.empty or other.empty:
@@ -2213,7 +2123,7 @@ class Series(Frame):
     def corr(self, other, method="pearson", min_periods=None):
         """Calculates the sample correlation between two Series,
         excluding missing values.
-        
+
         Examples
         --------
         >>> import cudf
@@ -2294,22 +2204,9 @@ class Series(Frame):
         return self.unique()
 
     def unique(self, method="sort", sort=True):
-        """Returns unique values of this Series.
+        """Returns unique values of a Series.
         default='sort' will be changed to 'hash' when implemented.
-        
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series([1, 2, 3, 3, 1, 6, 2, 2, 10, 3, 4, 10, 10])
-        >>> ser.unique()
-        0     1
-        1     2
-        2     3
-        3     4
-        4     6
-        5    10
         """
-
         if method != "sort":
             msg = "non sort based unique() not implemented yet"
             raise NotImplementedError(msg)
@@ -2335,20 +2232,7 @@ class Series(Frame):
         # return len(self._column.unique())
 
     def value_counts(self, sort=True):
-        """
-        Returns unique values of this Series.
-        
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series([1, 2, 3, 3, 1, 6, 2, 2, 10, 3, 4, 10, 10])
-        >>> ser.value_counts()
-        2     3
-        3     3
-        10    3
-        1     2
-        4     1
-        6     1
+        """Returns unique values of this Series.
         """
 
         if self.null_count == len(self):
@@ -2663,15 +2547,7 @@ class Series(Frame):
         -----
         Diff currently only supports float and integer dtype columns with
         no null values.
-        
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series([1, 2, 3, 3, 1, 6, 2, 2, 10])
-        >>> ser.value_counts()
-
         """
-
         if self.has_nulls:
             raise AssertionError(
                 "Diff currently requires columns with no " "null values"
@@ -2752,9 +2628,9 @@ class Series(Frame):
 
     def rename(self, index=None, copy=True):
         """
-        Alter Series name.
+        Alter Series name
 
-        Change Series.name with a scalar value.
+        Change Series.name with a scalar value
 
         Parameters
         ----------
