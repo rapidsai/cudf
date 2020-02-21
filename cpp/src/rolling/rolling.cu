@@ -228,7 +228,6 @@ void gpu_rolling(column_device_view input,
 
     // only one thread writes the mask
     if (0 == threadIdx.x % cudf::experimental::detail::warp_size) {
-      printf("RGSL : Result Mask is %u \n", result_mask);
       output.set_mask_word(cudf::word_index(i), result_mask);
       warp_valid_count += __popc(result_mask);
     }
