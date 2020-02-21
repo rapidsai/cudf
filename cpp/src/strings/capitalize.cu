@@ -230,13 +230,13 @@ namespace { // anonym.
          if( !IS_ALPHA(flag) ) {
            bcapnext = true;
            bytes += detail::bytes_in_char_utf8(the_chr);
-         }
-         else if( (bcapnext && IS_LOWER(flag)) || (!bcapnext && IS_UPPER(flag)) ) {
+         } else {
            bcapnext = false;
-           bytes += detail::bytes_in_char_utf8(detail::codepoint_to_utf8(get_case_table()[code_point]));
-         }
-         else
-           bytes += detail::bytes_in_char_utf8(the_chr);
+           if( (bcapnext && IS_LOWER(flag)) || (!bcapnext && IS_UPPER(flag)) )
+             bytes += detail::bytes_in_char_utf8(detail::codepoint_to_utf8(get_case_table()[code_point]));
+           else
+             bytes += detail::bytes_in_char_utf8(the_chr);
+         }         
        }
        return bytes;
     }
