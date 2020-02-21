@@ -17,6 +17,7 @@
 - PR #4107 Add groupby nunique aggregation
 - PR #4153 Support Dask serialization protocol on cuDF objects
 - PR #4164 Add Buffer "constructor-kwargs" header
+- PR #4159 Add COUNT aggregation that includes null values
 - PR #4190 Add libcudf++ transpose Cython implementation
 
 ## Improvements
@@ -138,6 +139,7 @@
 - PR #4192 Parquet writer: fix OOB read when computing string hash
 - PR #4199 Fix potential race condition in memcpy_block
 - PR #4215 Fix performance regression in strings::detail::concatenate
+- PR #4214 Alter ValueError exception for GPU accelerated Parquet writer to properly report `categorical` columns are not supported.
 
 
 # cuDF 0.12.0 (04 Feb 2020)
