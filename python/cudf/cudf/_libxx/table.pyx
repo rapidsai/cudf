@@ -183,7 +183,6 @@ cdef class Table:
                 self._data.columns,
             )
         )
-        return _make_mutable_table_view(self._data.columns)
 
     cdef table_view data_view(self) except *:
         """
