@@ -7,7 +7,7 @@
 
 import numpy as np
 
-from libc.stdint cimport *
+from libc.stdint cimport int32_t, uint32_t, int64_t
 from libcpp cimport bool
 from libcpp.vector cimport vector
 from libcpp.memory cimport unique_ptr

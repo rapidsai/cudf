@@ -4,7 +4,7 @@ import pandas as pd
 import numba
 import numpy as np
 from libcpp.string cimport string
-from libcpp.memory cimport *
+from libcpp.memory cimport unique_ptr
 from cudf.utils import cudautils
 
 from cudf._libxx.lib cimport *

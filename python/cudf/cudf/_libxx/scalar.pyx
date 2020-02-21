@@ -1,8 +1,8 @@
 import numpy as np
 import pandas as pd
 
-from libc.stdint cimport int8_t
-from libcpp.memory cimport *
+from libc.stdint cimport int8_t, int16_t, int32_t, int64_t
+from libcpp.memory cimport unique_ptr
 from libcpp cimport bool
 from cudf._libxx.lib cimport *
 from cudf._libxx.lib import *
