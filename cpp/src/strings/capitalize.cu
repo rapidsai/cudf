@@ -39,6 +39,8 @@ namespace { // anonym.
   //
   struct probe_base
   {
+    using char_info = thrust::pair<uint32_t,detail::character_flags_table_type>;
+    
     probe_base(column_device_view const d_column,
                character_flags_table_type const* d_flags,
                character_cases_table_type const* d_case_table):
@@ -68,6 +70,14 @@ namespace { // anonym.
 
     __device__
     virtual int32_t operator()(size_type idx) const = 0;
+
+    __device__
+    char_info get_char_info(char_utf8 chr) const
+    {
+      uint32_t code_point = detail::utf8_to_codepoint(chr);
+      detail::character_flags_table_type flag = code_point <= 0x00FFFF ? d_flags_[code_point] : 0;
+      return char_info{code_point,flag};
+    }
     
   private:
     column_device_view const d_column_;
@@ -156,8 +166,12 @@ namespace { // anonym.
       
        for( auto itr = d_str.begin(); itr != d_str.end(); ++itr ) {
          auto the_chr = *itr;
-         uint32_t code_point = detail::utf8_to_codepoint(the_chr);
-         detail::character_flags_table_type flag = code_point <= 0x00FFFF ? get_flags()[code_point] : 0;
+
+         auto pair_char_info = get_char_info(the_chr);
+         
+         uint32_t code_point = pair_char_info.first;
+         detail::character_flags_table_type flag = pair_char_info.second;
+         
          if( (itr == d_str.begin()) ? IS_LOWER(flag) : IS_UPPER(flag) )
            the_chr = detail::codepoint_to_utf8(get_case_table()[code_point]);
          bytes += detail::bytes_in_char_utf8(the_chr);
