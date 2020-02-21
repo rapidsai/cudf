@@ -11,6 +11,7 @@
 - PR #3861 Added Series.sum feature for String
 - PR #4069 Added cast of numeric columns from/to String
 - PR #3681 Add cudf::experimental::boolean_mask_scatter
+- PR #4088 Added asString() on ColumnVector in Java that takes a format string
 - PR #4040 Add support for n-way merge of sorted tables
 - PR #4053 Multi-column quantiles.
 - PR #4107 Add groupby nunique aggregation
@@ -44,6 +45,7 @@
 - PR #3880 Add aggregation infrastructure support for cudf::reduce
 - PR #4059 Add aggregation infrastructure support for cudf::scan
 - PR #4021 Change quantiles signature for clarity.
+- PR #4058 Port hash.pyx to use libcudf++ APIs
 - PR #4057 Handle offsets in cython Column class
 - PR #4045 Reorganize `libxx` directory
 - PR #4029 Port stream_compaction.pyx to use libcudf++ APIs
@@ -66,6 +68,7 @@
 - PR #4101 Redux serialize `Buffer` directly with `__cuda_array_interface__`
 - PR #4098 Remove legacy calls from libcudf strings column code
 - PR #4111 Use `Buffer`'s to serialize `StringColumn`
+- PR #4133 Mask cleanup and fixes: use `int32` dtype, ensure 64 byte padding, handle offsets
 - PR #4113 Get `len` of `StringColumn`s without `nvstrings`
 - PR #4147 Remove workaround for UNKNOWN_NULL_COUNT in contiguous_split.
 - PR #4130 Renames in-place `cudf::experimental::fill` to `cudf::experimental::fill_in_place`
@@ -75,12 +78,17 @@
 - PR #4144 Release GIL when calling libcudf++ functions
 - PR #4082 Rework MultiColumns in cuDF
 - PR #4149 Use "type-serialized" for pickled types like Dask
+- PR #4167 Port `search` to libcudf++ (support multi-column searchsorted)
 - PR #4163 Assert Dask CUDA serializers have `Buffer` frames
 - PR #4165 List serializable classes once
 - PR #4168 IO readers: do not create null mask for non-nullable columns
 - PR #4177 Use `uint8` type for host array copy of `Buffer`
 - PR #4183 Update Google Test Execution
 - PR #4182 Rename cuDF serialize functions to be more generic
+- PR #4176 Add option to parallelize setup.py's cythonize
+- PR #4191 Porting sort.pyx to use new libcudf APIs
+- PR #4196 reduce CHANGELOG.md merge conflicts
+- PR #4197 Added notebook testing to gpuCI gpu build
 
 ## Bug Fixes
 
@@ -126,7 +134,9 @@
 - PR #4162 Properly handle no index metadata generation for to_parquet
 - PR #4175 Fix `__sizeof__` calculation in `StringColumn`
 - PR #4155 Update groupby group_offsets size and fix unnecessary device dispatch.
+- PR #4198 Fix constructing `RangeIndex` from `range`
 - PR #4192 Parquet writer: fix OOB read when computing string hash
+- PR #4199 Fix potential race condition in memcpy_block
 
 
 # cuDF 0.12.0 (04 Feb 2020)
