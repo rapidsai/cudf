@@ -4429,3 +4429,21 @@ def test_dataframe_from_table_empty_index():
     tbl = Table(odict)
 
     result = DataFrame._from_table(tbl)  # noqa: F841
+
+
+def test_dataframe_from_dictionary_series_same_name_index():
+    pd_idx1 = pd.Index([1, 2, 0], name="test_index")
+    pd_idx2 = pd.Index([2, 0, 1], name="test_index")
+    pd_series1 = pd.Series([1, 2, 3], index=pd_idx1)
+    pd_series2 = pd.Series([1, 2, 3], index=pd_idx2)
+
+    gd_idx1 = gd.from_pandas(pd_idx1)
+    gd_idx2 = gd.from_pandas(pd_idx2)
+    gd_series1 = gd.Series([1, 2, 3], index=gd_idx1)
+    gd_series2 = gd.Series([1, 2, 3], index=gd_idx2)
+
+    expect = pd.DataFrame({"a": pd_series1, "b": pd_series2})
+    got = gd.DataFrame({"a": gd_series1, "b": gd_series2})
+
+    assert_eq(expect, got)
+    assert expect.index.names == got.index.names

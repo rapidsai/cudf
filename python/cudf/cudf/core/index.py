@@ -97,7 +97,20 @@ class Index(Frame):
 
     @property
     def names(self):
-        return (self.name,)
+        return [self.name]
+
+    @names.setter
+    def names(self, values):
+        if not pd.api.types.is_list_like(values):
+            raise ValueError("Names must be a list-like")
+
+        num_values = len(values)
+        if num_values > 1:
+            raise ValueError(
+                "Length of new names must be 1, got %d" % num_values
+            )
+
+        self.name = values[0]
 
     @property
     def name(self):

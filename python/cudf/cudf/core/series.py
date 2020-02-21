@@ -2594,6 +2594,7 @@ class Series(Frame):
         lhs = self.to_frame(0)
         rhs = cudf.DataFrame(index=as_index(index))
         result = lhs.join(rhs, how=how, sort=sort)[0]
+        result.index.names = index.names
         return result
 
 
@@ -2672,6 +2673,15 @@ def _align_indices(series_list, how="outer", allow_non_unique=False):
             all_index_equal = False
             break
 
+    # check if all names are the same
+    all_names_equal = True
+    for sr in series_list[1:]:
+        if not sr.index.names == head.names:
+            all_names_equal = False
+    new_index_names = [None]
+    if all_names_equal:
+        new_index_names = head.names
+
     if all_index_equal:
         return series_list
 
@@ -2679,6 +2689,7 @@ def _align_indices(series_list, how="outer", allow_non_unique=False):
         combined_index = cudf.core.reshape.concat(
             [sr.index for sr in series_list]
         ).unique()
+        combined_index.names = new_index_names
     else:
         combined_index = series_list[0].index
         for sr in series_list[1:]:
@@ -2689,6 +2700,7 @@ def _align_indices(series_list, how="outer", allow_non_unique=False):
                     how="inner",
                 )
             ).index
+        combined_index.names = new_index_names
 
     # align all Series to the combined index
     result = [
