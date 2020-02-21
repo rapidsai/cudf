@@ -17,11 +17,12 @@
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-#include <nvtext/normalize.hpp>
 
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/column_utilities.hpp>
+
+#include <nvtext/normalize.hpp>
 
 #include <vector>
 
@@ -48,7 +49,7 @@ TEST_F(TextNormalizeTest, Normalize)
     cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
         thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
 
-    auto results = nvtext::normalize_spaces(strings_view);
+    auto const results = nvtext::normalize_spaces(strings_view);
     cudf::test::expect_columns_equal(*results,expected);
 
 }
@@ -58,7 +59,7 @@ TEST_F(TextNormalizeTest, NormalizeEmptyTest)
 {
     auto strings = cudf::make_empty_column(cudf::data_type{cudf::STRING});
     cudf::strings_column_view strings_view( strings->view() );
-    auto results = nvtext::normalize_spaces(strings_view);
+    auto const results = nvtext::normalize_spaces(strings_view);
     EXPECT_EQ( results->size(), 0 );
     EXPECT_EQ( results->has_nulls(), false);
 }

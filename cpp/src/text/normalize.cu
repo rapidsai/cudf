@@ -20,9 +20,10 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
-#include <nvtext/normalize.hpp>
 #include <strings/utilities.cuh>
 #include <strings/utilities.hpp>
+
+#include <nvtext/normalize.hpp>
 #include <text/utilities/tokenize_ops.cuh>
 
 #include <thrust/for_each.h>
@@ -54,7 +55,7 @@ struct normalize_spaces_fn
         if( d_strings.is_null(idx) )
             return 0;
         cudf::string_view single_space(" ",1);
-        cudf::string_view d_str = d_strings.element<cudf::string_view>(idx);
+        auto const d_str = d_strings.element<cudf::string_view>(idx);
         char* buffer = d_offsets ? d_buffer + d_offsets[idx] : nullptr;
         char* optr = buffer; // running output pointer
         int32_t nbytes = 0;  // holds the number of bytes per output string
