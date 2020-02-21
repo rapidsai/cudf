@@ -531,6 +531,7 @@ void reader::impl::decode_page_data(
   CUDA_TRY(cudaStreamSynchronize(stream));
 
   for (size_t i = 0; i < pages.size(); i++) {
+    CUDF_EXPECTS(pages[i].valid_count >= 0, "*** Page data decoding error!!! ***\n");
     if (pages[i].num_rows > 0) {
       const size_t c = pages[i].chunk_idx;
       if (c < chunks.size()) {
