@@ -43,13 +43,13 @@ group_nth_element(column_view const &values,
                "Size of values column should be same as that of group labels");
 
   if (num_groups == 0) {
-    return cudf::experimental::empty_like(values);
+    return experimental::empty_like(values);
   }
 
   auto output = make_numeric_column(
-      cudf::data_type{cudf::experimental::type_to_id<size_type>()}, num_groups,
-      cudf::UNALLOCATED, stream);
-  cudf::mutable_column_view output_view = output->mutable_view();
+      data_type{experimental::type_to_id<size_type>()}, num_groups,
+      mask_state::UNALLOCATED, stream);
+  mutable_column_view output_view = output->mutable_view();
   auto exec = rmm::exec_policy(stream)->on(stream);
 
   // include nulls (equivalent to pandas nth(dropna=None) but return nulls for n
@@ -105,7 +105,7 @@ group_nth_element(column_view const &values,
   auto output_table =
       experimental::detail::gather(table_view{{values}}, output->view(), false,
                                    nullify_out_of_bounds, false, mr, stream);
-  return std::make_unique<cudf::column>(std::move(output_table->get_column(0)));
+  return std::make_unique<column>(std::move(output_table->get_column(0)));
 }
 } // namespace detail
 } // namespace groupby
