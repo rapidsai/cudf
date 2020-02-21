@@ -1,7 +1,7 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
-from cudf._lib import dlpack as cpp_dlpack
 from cudf._lib.GDFError import GDFError
+from cudf._libxx import dlpack as libdlpack
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, column
 from cudf.core.dataframe import DataFrame
@@ -32,7 +32,7 @@ def from_dlpack(pycapsule_obj):
     or 2D.
     """
     try:
-        res, valids = cpp_dlpack.from_dlpack(pycapsule_obj)
+        res = libdlpack.from_dlpack(pycapsule_obj)
     except GDFError as err:
         if str(err) == "b'GDF_DATASET_EMPTY'":
             raise ValueError(
@@ -40,23 +40,11 @@ def from_dlpack(pycapsule_obj):
             )
         else:
             raise err
-    cols = []
-    for idx in range(len(valids)):
-        mask = None
-        if valids[idx]:
-            mask = Buffer(valids[idx])
-        cols.append(
-            column.build_column(
-                Buffer(res[idx]), dtype=res[idx].dtype, mask=mask
-            )
-        )
-    if len(cols) == 1:
-        return Series(cols[0])
+
+    if len(res._data) == 1:
+        return Series(res._data[0])
     else:
-        df = DataFrame()
-        for idx, col in enumerate(cols):
-            df[idx] = col
-        return df
+        return DataFrame(data=res._data)
 
 
 @ioutils.doc_to_dlpack()
@@ -65,18 +53,14 @@ def to_dlpack(cudf_obj):
     if len(cudf_obj) == 0:
         raise ValueError("Cannot create DLPack tensor of 0 size")
 
-    if isinstance(cudf_obj, DataFrame):
-        gdf_cols = list(cudf_obj._data.columns)
-    elif isinstance(cudf_obj, Series):
-        gdf_cols = [cudf_obj._column]
-    elif isinstance(cudf_obj, Index):
-        gdf_cols = [cudf_obj._values]
+    if isinstance(cudf_obj, (DataFrame, Series, Index)):
+        gdf_cols = cudf_obj
     elif isinstance(cudf_obj, ColumnBase):
-        gdf_cols = [cudf_obj]
+        gdf_cols = cudf_obj.as_frame()
     else:
         raise TypeError(
             f"Input of type {type(cudf_obj)} cannot be converted "
             "to DLPack tensor"
         )
 
-    return cpp_dlpack.to_dlpack(gdf_cols)
+    return libdlpack.to_dlpack(gdf_cols)
