@@ -51,7 +51,7 @@ class kafka_datasource : public external_datasource {
     std::string conf_val;
     int64_t kafka_start_offset_ = 0;
     int32_t kafka_batch_size_ = 10000;  // 10K is the Kafka standard. Max is 999,999
-    int32_t default_timeout_ = 10000;  // 10 seconds
+    int32_t default_timeout_ = 6000;  // 10 seconds
     int64_t msg_count_ = 0;  // Running tally of the messages consumed. Useful for retry logic.
 
     std::string buffer_;
@@ -92,45 +92,45 @@ class kafka_datasource : public external_datasource {
       return ((int64_t)tv.tv_sec * 1000) + (tv.tv_usec / 1000);
     }
 
-    void consume_messages(std::unique_ptr<RdKafka::Conf> const &kafka_conf) {
-      // Kafka messages are already stored in a queue outside of libcudf. Here the
-      // messages will be transferred from the external queue directly to the
-      // arrow::Buffer.
-      RdKafka::Message *msg;
-
-      for (int i = 0; i < kafka_batch_size_; i++) {
-        printf("\tMessage read\n");
-        msg = consumer_->consume(default_timeout_);
-        if (msg->err() == RdKafka::ErrorCode::ERR_NO_ERROR) {
-          buffer_.append(static_cast<char *>(msg->payload()));
-          buffer_.append("\n");
-          msg_count_++;
-        } else {
-          handle_error(msg, kafka_conf);
-
-          // handle_error handles specific errors. Any coded logic error case will
-          // generate an exception and cease execution. Kafka has hundreds of
-          // possible exceptions however. To be safe its best break the consumer loop.
-          break;
+    class ExampleRebalanceCb : public RdKafka::RebalanceCb {
+      private:
+        static void part_list_print (const std::vector<RdKafka::TopicPartition*>&partitions){
+          for (unsigned int i = 0 ; i < partitions.size() ; i++)
+            std::cerr << partitions[i]->topic() <<
+        "[" << partitions[i]->partition() << "], ";
+          std::cerr << "\n";
         }
-      }
 
-      printf("Buffer: '%s'\n", buffer_.c_str());
+      public:
+        void rebalance_cb (RdKafka::KafkaConsumer *consumer,
+              RdKafka::ErrorCode err,
+                          std::vector<RdKafka::TopicPartition*> &partitions) {
+          std::cerr << "RebalanceCb: " << RdKafka::err2str(err) << ": ";
 
-      delete msg;
-    }
+          part_list_print(partitions);
+
+          if (err == RdKafka::ERR__ASSIGN_PARTITIONS) {
+            consumer->assign(partitions);
+            //partition_cnt = (int)partitions.size();
+          } else {
+            consumer->unassign();
+            //partition_cnt = 0;
+          }
+          //eof_cnt = 0;
+        }
+      };
+
 
     class KafkaRebalanceCB : public RdKafka::RebalanceCb {
       public:
-        KafkaRebalanceCB(int64_t start_offset) : start_offset_(start_offset) {}
-
-        void rebalance_cb(RdKafka::KafkaConsumer *consumer, RdKafka::ErrorCode err,
-                          std::vector<RdKafka::TopicPartition *> &partitions) {
+        void rebalance_cb(RdKafka::KafkaConsumer *consumer, 
+                          RdKafka::ErrorCode err,
+                          std::vector<RdKafka::TopicPartition*> &partitions) {
           printf("Kafka rebalance was called\n");
           if (err == RdKafka::ERR__ASSIGN_PARTITIONS) {
             printf("Assigning partitions\n");
             // NOTICE: We currently purposely only support a single partition. Enhancement PR to be opened later.
-            partitions.at(0)->set_offset(start_offset_);
+            //partitions.at(0)->set_offset(start_offset_);
             err = consumer->assign(partitions);
             //CUDF_EXPECTS(err == RdKafka::ErrorCode::ERR_NO_ERROR,
               //          "Error occured while reassigning the topic partition offset");
@@ -138,12 +138,9 @@ class kafka_datasource : public external_datasource {
             consumer->unassign();
           }
         }
-
-      private:
-        int64_t start_offset_;
     };
 
-    void handle_error(RdKafka::Message *msg, std::unique_ptr<RdKafka::Conf> const &kafka_conf) {
+    void handle_error(RdKafka::Message *msg) {
       err_ = msg->err();
       const std::string err_str = msg->errstr();
       std::string error_msg;
@@ -161,11 +158,11 @@ class kafka_datasource : public external_datasource {
                 err_ == RdKafka::ErrorCode::ERR__TIMED_OUT) {
         // unable to connect to the specified Kafka Broker(s)
         std::string brokers_val;
-        conf_res_ = kafka_conf->get("metadata.broker.list", brokers_val);
+        conf_res_ = kafka_conf_->get("metadata.broker.list", brokers_val);
         if (brokers_val.empty()) {
           // 'bootstrap.servers' is an alias configuration so its valid that
           // either 'metadata.broker.list' or 'bootstrap.servers' is set
-          conf_res_ = kafka_conf->get("bootstrap.servers", brokers_val);
+          conf_res_ = kafka_conf_->get("bootstrap.servers", brokers_val);
         }
 
         if (conf_res_ == RdKafka::Conf::ConfResult::CONF_OK) {

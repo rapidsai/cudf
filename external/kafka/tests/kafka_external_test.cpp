@@ -32,7 +32,7 @@ TEST(ExternalDatasource, Basic)
 
     //General Conf
     datasource_confs.insert({"bootstrap.servers", "localhost:9092"});
-    datasource_confs.insert({"group.id", "jeremy_test"});
+    datasource_confs.insert({"group.id", "jeremy_test_last_57"});
     datasource_confs.insert({"auto.offset.reset", "beginning"});
 
     cudf::io::external::kafka_datasource ex_datasource = cudf::io::external::kafka_datasource(datasource_confs);

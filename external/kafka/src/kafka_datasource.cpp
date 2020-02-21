@@ -71,17 +71,25 @@ namespace external {
 
     // Create the Rebalance callback so Partition Offsets can be assigned.
     //KafkaRebalanceCB rebalance_cb(kafka_start_offset_);
+    //KafkaRebalanceCB rebalance_cb;
     //kafka_conf_->set("rebalance_cb", &rebalance_cb, errstr_);
+    ExampleRebalanceCb ex_rebalance_cb;
+    kafka_conf_->set("rebalance_cb", &ex_rebalance_cb, errstr_);
 
     //consumer_ = std::unique_ptr<RdKafka::KafkaConsumer>(RdKafka::KafkaConsumer::create(kafka_conf_.get(), errstr_));
     consumer_ = RdKafka::KafkaConsumer::create(kafka_conf_, errstr_);
+    if (!consumer_) {
+      printf("Failed to create kafka consumer!\n");
+    }
+
+    delete kafka_conf_;
 
     err_ = consumer_->subscribe(topics_);
     if (err_) {
       printf("Error Subscribing to Topics: '%s'\n", err2str(err_).c_str());
     }
 
-    //consume_messages(kafka_conf_);
+    std::string js = consume_range(configs, 0, 5, 50000);
 
     return true;
   }
@@ -90,44 +98,26 @@ namespace external {
                                               int64_t start_offset,
                                               int64_t end_offset,
                                               int batch_timeout) {
-    std::string json_str = "";
+    std::string json_str;
     int64_t messages_read = 0;
     int64_t batch_size = end_offset - start_offset;
+    int64_t end = now() + batch_timeout;
+    int remaining_timeout = batch_timeout;
+    RdKafka::Message *msg;
 
     printf("Start Offset: '%lu' End Offset: '%lu' Batch Size: '%lu'\n", start_offset, end_offset, batch_size);
 
-    int64_t end = now() + batch_timeout;
-    int remaining_timeout = batch_timeout;
-
-    RdKafka::Message *msg;
     while (messages_read < batch_size) {
-      printf("Entering while loop ...\n");
-      if (consumer_) {
-        printf("Consumer_ seems to point to a valid unique_ptr instance...\n");
+      msg = consumer_->consume(remaining_timeout);
+
+      if (msg->err() == RdKafka::ErrorCode::ERR_NO_ERROR) {
+        json_str.append(static_cast<char *>(msg->payload()));
+        json_str.append("\n");
+        messages_read++;
+        printf("Message Read -> '%s'\n", static_cast<char *>(msg->payload()));
       } else {
-        printf("Consumer_ is NULL\n");
-      }
-      msg = consumer_->consume(default_timeout_);
-      printf("After consume in the while loop .....\n");
-
-      switch (msg->err()) {
-        case RdKafka::ErrorCode::ERR__TIMED_OUT:
-          printf("Inside timeout .... \n");
-          delete msg;
-          break;
-
-        case RdKafka::ErrorCode::ERR_NO_ERROR:
-          printf("Inside no error ... \n");
-          json_str.append(static_cast<char *>(msg->payload()));
-          printf("After appending messages.... \n");
-          messages_read++;
-          printf("Message Read\n");
-          break;
-
-        default:
-          printf("Inside default .... \n");
-          printf("'%s' Consumer error\n", msg->errstr().c_str());
-          delete msg;
+        handle_error(msg);
+        break;
       }
 
       remaining_timeout = end - now();
@@ -136,6 +126,9 @@ namespace external {
       }
     }
 
+    delete msg;
+
+    printf("Returning JSON String: '%s'\n", json_str.c_str());
     return json_str;
   }
 
