@@ -21,6 +21,12 @@
 #define NTHREADS        (1 << LOG2_NTHREADS)
 #define NZ_BFRSZ        (NTHREADS*2)
 
+#if 1
+#define VOLATILE volatile
+#else
+#define VOLATILE
+#endif
+
 
 inline __device__ uint32_t rotl32(uint32_t x, uint32_t r)
 {
@@ -168,7 +174,7 @@ inline __device__ uint32_t get_vlq32(const uint8_t *&cur, const uint8_t *end)
  * @param[in] level_bits The bits required
  * @param[in] idx The index into the output section
  **/
-__device__ uint32_t InitLevelSection(page_state_s *s, const uint8_t *cur, const uint8_t *end, int encoding, int level_bits, int idx)
+__device__ uint32_t InitLevelSection(VOLATILE page_state_s *s, const uint8_t *cur, const uint8_t *end, int encoding, int level_bits, int idx)
 {
     int32_t len;
     if (level_bits == 0)
@@ -232,7 +238,7 @@ __device__ uint32_t InitLevelSection(page_state_s *s, const uint8_t *cur, const 
  * @param[in] t target_count Target count of non-NULL values on output
  * @param[in] t Warp0 thread ID (0..31)
  **/
-__device__ void gpuDecodeLevels(page_state_s *s, int32_t target_count, int t)
+__device__ void gpuDecodeLevels(VOLATILE page_state_s *s, int32_t target_count, int t)
 {
     const uint8_t *cur_def = s->lvl_start[0];
     const uint8_t *end = s->data_start;
@@ -1098,7 +1104,7 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
 {
     __shared__ __align__(16) page_state_s state_g;
 
-    page_state_s * const s = &state_g;
+    VOLATILE page_state_s * const s = &state_g;
     int page_idx = blockIdx.x;
     int t = threadIdx.x;
     int chunk_idx, out_thread0;
@@ -1302,7 +1308,7 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
 
         if (t < out_thread0)
         {
-        #if 0
+        #if 1
             target_pos = min(s->out_pos + 2 * (NTHREADS - out_thread0), s->nz_count + (NTHREADS - out_thread0));
         #else
             target_pos = s->out_pos + (NTHREADS - out_thread0);
