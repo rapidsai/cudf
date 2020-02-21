@@ -92,6 +92,7 @@
 - PR #4191 Porting sort.pyx to use new libcudf APIs
 - PR #4196 reduce CHANGELOG.md merge conflicts
 - PR #4197 Added notebook testing to gpuCI gpu build
+- PR #XXXX Remove stale notebooks
 
 ## Bug Fixes
 
