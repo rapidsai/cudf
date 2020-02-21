@@ -35,6 +35,6 @@ TEST(ExternalDatasource, Basic)
     datasource_confs.insert({"group.id", "jeremy_test"});
     datasource_confs.insert({"auto.offset.reset", "beginning"});
 
-    cudf::io::external::kafka_datasource *ex_datasource(datasource_confs);
-    std::string json_str = ex_datasource->consume_range(datasource_confs, 0, 3, 10000);
+    cudf::io::external::kafka_datasource ex_datasource = cudf::io::external::kafka_datasource(datasource_confs);
+    std::string json_str = ex_datasource.consume_range(datasource_confs, 0, 3, 10000);
 }

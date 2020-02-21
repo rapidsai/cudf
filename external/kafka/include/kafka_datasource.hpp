@@ -82,9 +82,7 @@ class kafka_datasource : public external_datasource {
   /**
    * @brief Base class destructor
    **/
-  virtual ~kafka_datasource(){
-    printf("!!!!!! destructor called for kafka datasource!!!!!\n");
-  };
+  //virtual ~kafka_datasource(){};
 
   private:
 
