@@ -17,9 +17,6 @@ from libc.stdint cimport uintptr_t, int8_t
 from libc.stdlib cimport calloc, malloc, free
 from cpython cimport pycapsule
 
-import numpy as np
-import pandas as pd
-import pyarrow as pa
 import warnings
 
 from cudf._libxx.includes.dlpack cimport (
