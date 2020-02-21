@@ -237,11 +237,12 @@ void compute_single_pass_aggs(table_view const& keys,
                  aggs.begin(), std::back_inserter(sparse_columns),
     [stream] (auto const& col, auto const& agg) {
       bool nullable = (agg == aggregation::COUNT) ? false : col.has_nulls();
-      auto mask_state = (nullable) ? ALL_NULL : UNALLOCATED;
+      auto mask_flag = (nullable) ? mask_state::ALL_NULL
+                                  : mask_state::UNALLOCATED;
       
       return make_fixed_width_column(
         experimental::detail::target_type(col.type(), agg),
-        col.size(), mask_state, stream);
+        col.size(), mask_flag, stream);
     });
 
   table sparse_table(std::move(sparse_columns));

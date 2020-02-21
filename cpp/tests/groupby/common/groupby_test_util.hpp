@@ -34,9 +34,9 @@ inline void test_single_agg(column_view const& keys,
                             column_view const& expect_keys,
                             column_view const& expect_vals,
                             std::unique_ptr<experimental::aggregation>&& agg,
-                            bool ignore_null_keys = true,
+                            include_nulls include_null_keys = include_nulls::NO,
                             bool stable_order = false,
-                            bool keys_are_sorted = false,
+                            sorted keys_are_sorted = sorted::NO,
                             std::vector<order> const& column_order = {},
                             std::vector<null_order> const& null_precedence = {})
 {
@@ -48,7 +48,7 @@ inline void test_single_agg(column_view const& keys,
     requests[0].aggregations.push_back(std::move(agg));
 
     experimental::groupby::groupby gb_obj(table_view({keys}),
-        ignore_null_keys, keys_are_sorted, column_order, null_precedence);
+        include_null_keys, keys_are_sorted, column_order, null_precedence);
 
     auto result = gb_obj.aggregate(requests);
 

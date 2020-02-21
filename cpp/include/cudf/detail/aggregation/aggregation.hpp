@@ -24,10 +24,8 @@
 
 namespace cudf {
 namespace experimental {
-
-enum class include_nulls : bool; //forward declaration
-
 namespace detail {
+
 /**
  * @brief Derived class for specifying a quantile aggregation
  */

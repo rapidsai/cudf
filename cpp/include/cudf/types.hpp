@@ -98,6 +98,14 @@ enum class order : bool {
   DESCENDING  ///< Elements ordered from large to small
 };
 
+/**
+ * @brief Enum to specify whether to include nulls or exclude nulls
+ */
+enum class include_nulls : bool {
+   YES, 
+   NO
+};
+
 /**---------------------------------------------------------------------------*
  * @brief Indicates how null values compare against all other values.
  *---------------------------------------------------------------------------**/
