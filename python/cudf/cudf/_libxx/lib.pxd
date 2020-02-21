@@ -37,7 +37,7 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         AFTER "cudf::null_order::AFTER"
         BEFORE "cudf::null_order::BEFORE"
 
-    ctypedef sorted_t int32_t
+    ctypedef sorted_t bool
     ctypedef enum sorted "cudf::sorted":
         NO "cudf::sorted::NO"
         YES "cudf::sorted::YES"
