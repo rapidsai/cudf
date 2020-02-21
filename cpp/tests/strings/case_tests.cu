@@ -89,8 +89,8 @@ TEST_F(StringsCaseTest, EmptyStringsColumn)
 
 TEST_F(StringsCaseTest, Capitalize)
 {
-    std::vector<const char*> h_strings{ "Examples aBc", "thesé", nullptr, "ARE THE", "tést strings", "" };
-    std::vector<const char*> h_expected{ "Examples abc", "Thesé", nullptr, "Are the", "Tést strings", "" };
+    std::vector<const char*> h_strings{ "SȺȺnich xyZ", "Examples aBc", "thesé", nullptr, "ARE THE", "tést strings", "" };
+    std::vector<const char*> h_expected{ "Sⱥⱥnich xyz", "Examples abc", "Thesé", nullptr, "Are the", "Tést strings", "" };
 
     cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
         thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
