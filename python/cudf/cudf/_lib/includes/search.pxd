@@ -1,5 +1,3 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
-
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 from cudf._lib.cudf cimport *
