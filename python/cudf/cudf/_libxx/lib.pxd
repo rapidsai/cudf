@@ -78,7 +78,13 @@ cdef extern from "cudf/column/column.hpp" namespace "cudf" nogil:
     cdef cppclass column:
         column() except +
         column(const column& other) except +
-        column(data_type dtype, size_type size, device_buffer&& data) except +
+
+        column(
+            data_type dtype,
+            size_type size,
+            device_buffer&& data
+        ) except +
+
         size_type size() except +
         bool has_nulls() except +
         data_type type() except +
@@ -93,17 +99,47 @@ cdef extern from "cudf/column/column_view.hpp" namespace "cudf" nogil:
 
         column_view& operator=(const column_view&) except +
         column_view& operator=(column_view&&) except +
-        column_view(data_type type, size_type size, const void* data) except +
-        column_view(data_type type, size_type size, const void* data,
-                    const bitmask_type* null_mask) except +
-        column_view(data_type type, size_type size, const void* data,
-                    const bitmask_type* null_mask, size_type null_count) except +
-        column_view(data_type type, size_type size, const void* data,
-                    const bitmask_type* null_mask, size_type null_count,
-                    size_type offset) except +
-        column_view(data_type type, size_type size, const void* data,
-                    const bitmask_type* null_mask, size_type null_count,
-                    size_type offset, vector[column_view] children) except +
+
+        column_view(
+            data_type type,
+            size_type size,
+            const void* data
+        ) except +
+
+        column_view(
+            data_type type,
+            size_type size,
+            const void* data,
+            const bitmask_type* null_mask
+        ) except +
+
+        column_view(
+            data_type type,
+            size_type size,
+            const void* data,
+            const bitmask_type* null_mask,
+            size_type null_count
+        ) except +
+
+        column_view(
+            data_type type,
+            size_type size,
+            const void* data,
+            const bitmask_type* null_mask,
+            size_type null_count,
+            size_type offset
+        ) except +
+
+        column_view(
+            data_type type,
+            size_type size,
+            const void* data,
+            const bitmask_type* null_mask,
+            size_type null_count,
+            size_type offset,
+            vector[column_view] children
+        ) except +
+
         const T* data[T]() except +
         const T* head[T]() except +
         const bitmask_type* null_mask() except +
@@ -120,23 +156,43 @@ cdef extern from "cudf/column/column_view.hpp" namespace "cudf" nogil:
         mutable_column_view() except +
         mutable_column_view(const mutable_column_view&) except +
         mutable_column_view& operator=(const mutable_column_view&) except +
-        mutable_column_view(data_type type, size_type size, const void* data) except +
-        mutable_column_view(data_type type, size_type size, const void* data,
-                            const bitmask_type* null_mask) except +
+
         mutable_column_view(
-            data_type type, size_type size, const void* data,
-            const bitmask_type* null_mask, size_type null_count
+            data_type type,
+            size_type size,
+            const void* data
         ) except +
+
         mutable_column_view(
-            data_type type, size_type size, const void* data,
-            const bitmask_type* null_mask, size_type null_count,
+            data_type type,
+            size_type size,
+            const void* data,
+            const bitmask_type* null_mask
+        ) except +
+
+        mutable_column_view(
+            data_type type,
+            size_type size,
+            const void* data,
+            const bitmask_type* null_mask,
+            size_type null_count
+        ) except +
+
+        mutable_column_view(
+            data_type type,
+            size_type size,
+            const void* data,
+            const bitmask_type* null_mask,
+            size_type null_count,
             size_type offset
         ) except +
+
         mutable_column_view(
             data_type type, size_type size, const void* data,
             const bitmask_type* null_mask, size_type null_count,
             size_type offset, vector[mutable_column_view] children
         ) except +
+
         T* data[T]() except +
         T* head[T]() except +
         bitmask_type* null_mask() except +
