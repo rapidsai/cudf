@@ -62,6 +62,17 @@ class Frame(libcudfxx.table.Table):
         result._copy_categories(self)
         return result
 
+    def _hash(self, initial_hash_values=None):
+        return libcudfxx.hash.hash(self, initial_hash_values)
+
+    def _hash_partition(self, columns_to_hash, num_partitions):
+        output, offsets = libcudfxx.hash.hash_partition(
+            self, columns_to_hash, num_partitions
+        )
+        output = self.__class__._from_table(output)
+        output._copy_categories(self)
+        return output, offsets
+
     def _as_column(self):
         """
         _as_column : Converts a single columned Frame to Column
