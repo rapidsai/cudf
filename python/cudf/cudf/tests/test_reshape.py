@@ -2,11 +2,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from cudf import (
-    melt as cudf_melt
-)
+from cudf import melt as cudf_melt
 from cudf.core import DataFrame
 from cudf.tests.utils import assert_eq
+
 
 @pytest.mark.parametrize("num_id_vars", [0, 1, 2, 10])
 @pytest.mark.parametrize("num_value_vars", [0, 1, 2, 10])
@@ -116,6 +115,7 @@ def test_df_stack(nulls, num_cols, num_rows, dtype):
     assert_eq(expect, got)
     pass
 
+
 @pytest.mark.debug
 @pytest.mark.parametrize("num_rows", [2, 1000])
 @pytest.mark.parametrize("num_cols", [2, 10])
@@ -129,16 +129,13 @@ def test_df_stack(nulls, num_cols, num_rows, dtype):
         "float32",
         "float64",
         "datetime64[ms]",
-        "str",
     ],
 )
 @pytest.mark.parametrize("nulls", ["none", "some"])
 def test_interleave_columns(nulls, num_cols, num_rows, dtype):
     if dtype not in ["float32", "float64"] and nulls in ["some"]:
         pytest.skip(msg="nulls not supported in dtype: " + dtype)
-    if dtype is "str":
-        pytest.skip(msg="Only fixed-width types are supported in interleave_columns.")
-    
+
     pdf = pd.DataFrame()
     for i in range(num_cols):
         colname = str(i)
@@ -151,12 +148,13 @@ def test_interleave_columns(nulls, num_cols, num_rows, dtype):
         pdf[colname] = data
 
     gdf = DataFrame.from_pandas(pdf)
-    
+
     got = gdf.interleave_columns()
-    
+
     expect = pd.Series(np.vstack(pdf.to_numpy()).reshape((-1,)))
-    
+
     assert_eq(expect, got)
+
 
 @pytest.mark.parametrize("num_cols", [1, 2, 10])
 @pytest.mark.parametrize("num_rows", [1, 2, 1000])
@@ -194,11 +192,7 @@ def test_tile(nulls, num_cols, num_rows, dtype, count):
     gdf = DataFrame.from_pandas(pdf)
 
     got = gdf.tile(count)
-    expect = pd.concat([pdf]*count)
+    expect = pd.concat([pdf] * count)
 
     assert_eq(expect, got)
     pass
-
-
-
-

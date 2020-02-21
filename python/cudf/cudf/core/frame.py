@@ -149,7 +149,7 @@ class Frame(libcudfxx.table.Table):
     def interleave_columns(self):
         """
        Interleave Series columns of a table into a single column.
- 
+
         Converts the column major table `cols` into a row major column.
         Parameters
         ----------
@@ -168,21 +168,24 @@ class Frame(libcudfxx.table.Table):
         3    B2
         4    A3
         5    B3
- 
+
         Returns
         -------
         The interleaved columns as a single column
         """
-        
-        return self._constructor_sliced(libcudfxx.reshape.interleave_columns(self))
+
+        return self._constructor_sliced(
+            libcudfxx.reshape.interleave_columns(self)
+        )
 
     def tile(self, count):
         """
-        Repeats the rows from `self` DataFrame `count` times to form a new DataFrame. 
-    
-        Different from DataFrame.tile() which repeats the DataFrame sequentially
-        with the filling function. This repeats the columns by "count" number
-        of times.
+        Repeats the rows from `self` DataFrame `count` times to form a
+        new DataFrame.
+
+        Different from DataFrame.tile() which repeats the DataFrame
+        sequentially with the filling function. This repeats the
+        columns by "count" number of times.
 
         Parameters
         ----------
