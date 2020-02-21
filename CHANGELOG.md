@@ -19,6 +19,7 @@
 - PR #4164 Add Buffer "constructor-kwargs" header
 - PR #4159 Add COUNT aggregation that includes null values
 - PR #4190 Add libcudf++ transpose Cython implementation
+- PR #4216 Add cudf.Scalar Python type
 
 ## Improvements
 
