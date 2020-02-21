@@ -2,8 +2,7 @@
 
 from cudf._lib.GDFError import GDFError
 from cudf._libxx import dlpack as libdlpack
-from cudf.core.buffer import Buffer
-from cudf.core.column import ColumnBase, column
+from cudf.core.column import ColumnBase
 from cudf.core.dataframe import DataFrame
 from cudf.core.index import Index
 from cudf.core.series import Series
