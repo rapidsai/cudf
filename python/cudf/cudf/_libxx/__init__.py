@@ -4,6 +4,7 @@ from . import (
     copying,
     hash,
     null_mask,
+    replace,
     rolling,
     search,
     sort,

@@ -8,6 +8,7 @@ import pyarrow as pa
 
 import cudf
 import cudf._lib as libcudf
+import cudf._libxx as libcudfxx
 from cudf._libxx.transform import bools_to_mask
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
@@ -476,7 +477,7 @@ class CategoricalColumn(column.ColumnBase):
             )
         )
 
-        output = libcudf.replace.replace(
+        output = libcudfxx.replace.replace(
             replaced, to_replace_col, replacement_col
         )
 
@@ -516,7 +517,7 @@ class CategoricalColumn(column.ColumnBase):
                 self.codes.dtype
             )
 
-        result = libcudf.replace.replace_nulls(self, fill_value)
+        result = libcudfxx.replace.replace_nulls(self, fill_value)
 
         result = column.build_categorical_column(
             categories=self.dtype.categories,
