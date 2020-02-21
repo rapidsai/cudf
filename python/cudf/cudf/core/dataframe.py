@@ -24,6 +24,8 @@ import rmm
 import cudf
 import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
+from cudf._libxx.null_mask import MaskState, create_null_mask
+from cudf._libxx.transform import bools_to_mask
 from cudf.core import column
 from cudf.core._sort import get_sorted_inds
 from cudf.core.column import (
@@ -32,6 +34,7 @@ from cudf.core.column import (
     as_column,
     column_empty,
 )
+from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
@@ -47,6 +50,7 @@ from cudf.utils.dtypes import (
     is_scalar,
     is_string_dtype,
 )
+from cudf.utils.utils import OrderedColumnDict
 
 
 def _unique_name(existing_names, suffix="_unique_name"):
@@ -167,14 +171,19 @@ class DataFrame(Frame):
     def __init__(self, data=None, index=None, columns=None, dtype=None):
         super().__init__()
 
-        self._columns_name = None
+        if isinstance(data, ColumnAccessor):
+            self._data = data
+            if index is None:
 
-        if isinstance(data, libcudfxx.table.Table):
-            return DataFrame._from_table(data)
+                index = as_index(range(self._data.nrows))
+            self._index = as_index(index)
+            return None
 
-        if isinstance(columns, cudf.MultiIndex):
-            self.multi_cols = columns
-            columns = RangeIndex(len(columns))
+        if isinstance(data, DataFrame):
+            self._data = data._data
+            self._index = data._index
+            self.columns = data.columns
+            return
 
         if data is None:
             if index is None:
@@ -182,11 +191,13 @@ class DataFrame(Frame):
             else:
                 self._index = as_index(index)
             if columns is not None:
-                self._data = OrderedDict.fromkeys(
-                    columns,
-                    column.column_empty(
-                        len(self), dtype="object", masked=True
-                    ),
+                self._data = ColumnAccessor(
+                    OrderedDict.fromkeys(
+                        columns,
+                        column.column_empty(
+                            len(self), dtype="object", masked=True
+                        ),
+                    )
                 )
         else:
             if is_list_like(data):
@@ -214,14 +225,10 @@ class DataFrame(Frame):
         self._index = as_index(index)
         data = list(itertools.zip_longest(*data))
 
-        if columns is None:
-            columns = range(len(data))
-
         for col_name, col in enumerate(data):
             self._data[col_name] = column.as_column(col)
 
-        if not hasattr(self, "multi_cols"):
-            self.columns = columns
+        self.columns = columns
 
     def _init_from_dict_like(self, data, index=None, columns=None):
         data = data.copy()
@@ -239,29 +246,26 @@ class DataFrame(Frame):
                 # in `columns` that don't exist in `keys`:
                 extra_cols = [col for col in columns if col not in data.keys()]
                 data.update({key: None for key in extra_cols})
+        else:
+            columns = pd.Index(data.keys(), tupleize_cols=True)
 
         data, index = self._align_input_series_indices(data, index=index)
 
         if index is None:
-            for i, col_name in enumerate(data):
+            if data:
+                col_name = next(iter(data))
                 if is_scalar(data[col_name]):
                     num_rows = num_rows or 1
                 else:
-                    data[col_name] = column.as_column(data[col_name])
-                    num_rows = data[col_name].size
+                    num_rows = len(column.as_column(data[col_name]))
             self._index = RangeIndex(0, num_rows)
         else:
             self._index = as_index(index)
 
-        if len(data.keys()) != 0 and all(
-            isinstance(key, tuple) for key in data.keys()
-        ):
-            for (i, col_name) in enumerate(data):
-                self.insert(i, i, data[col_name])
-            self.columns = cudf.MultiIndex.from_tuples(data.keys())
-        else:
-            for (i, col_name) in enumerate(data):
-                self.insert(i, col_name, data[col_name])
+        for (i, col_name) in enumerate(data):
+            self.insert(i, col_name, data[col_name])
+
+        self.columns = columns
 
     @classmethod
     def _from_table(cls, table):
@@ -324,7 +328,7 @@ class DataFrame(Frame):
 
         # Use the column directly to avoid duplicating the index
         # need to pickle column names to handle numpy integer columns
-        header["column_names"] = pickle.dumps(tuple(self._data.keys()))
+        header["column_names"] = pickle.dumps(tuple(self._data.names))
         column_header, column_frames = column.serialize_columns(self._columns)
         header["columns"] = column_header
         frames.extend(column_frames)
@@ -351,7 +355,7 @@ class DataFrame(Frame):
     def dtypes(self):
         """Return the dtypes in this object."""
         return pd.Series(
-            [x.dtype for x in self._data.values()], index=self._data.keys()
+            [x.dtype for x in self._data.columns], index=self._data.names
         )
 
     @property
@@ -450,16 +454,15 @@ class DataFrame(Frame):
         # returning the rows specified in the boolean mask
         """
         if is_scalar(arg) or isinstance(arg, tuple):
-            if isinstance(self.columns, cudf.MultiIndex):
-                if is_scalar(arg):
-                    arg = [arg]
-                return self.columns._get_column_major(self, tuple(arg))
-            return cudf.Series(self._data[arg], name=arg, index=self.index)
+            return self._get_columns_by_label(arg, downcast=True)
+
         elif isinstance(arg, slice):
             df = DataFrame(index=self.index[arg])
             for k, col in self._data.items():
                 df[k] = col[arg]
+            df.columns = self.columns
             return df
+
         elif isinstance(
             arg,
             (
@@ -474,23 +477,11 @@ class DataFrame(Frame):
         ):
             mask = arg
             if isinstance(mask, list):
-                mask = np.array(mask)
-            df = DataFrame()
-
+                mask = pd.Series(mask)
             if mask.dtype == "bool":
-                # New df-wide index
-                index = self.index.take(mask)
-                for col in self._data:
-                    df[col] = self[col][arg]
-                df = df.set_index(index)
+                return self._apply_boolean_mask(mask)
             else:
-                if len(arg) == 0:
-                    df.index = self.index
-                    return df
-                for col in arg:
-                    df[col] = self[col]
-                df.index = self.index
-            return df
+                return self._get_columns_by_label(mask)
         elif isinstance(arg, DataFrame):
             return self.mask(arg)
         else:
@@ -504,12 +495,12 @@ class DataFrame(Frame):
                 if other[col].has_nulls:
                     raise ValueError("Column must have no nulls.")
 
-                boolbits = cudautils.compact_mask_bytes(
-                    other[col]._column.data_array_view
-                )
+                out_mask = bools_to_mask(other[col]._column)
             else:
-                boolbits = cudautils.make_empty_mask(len(self[col]))
-            df[col] = df[col].set_mask(boolbits)
+                out_mask = create_null_mask(
+                    len(self[col]), state=MaskState.ALL_NULL
+                )
+            df[col] = df[col].set_mask(out_mask)
         return df
 
     def __setitem__(self, arg, value):
@@ -548,6 +539,18 @@ class DataFrame(Frame):
                             self._index = as_index(value.index)
                         elif len(value) > 0:
                             self._index = RangeIndex(start=0, stop=len(value))
+                        value = column.as_column(value)
+                        new_data = self._data.__class__()
+                        for key in self._data:
+                            if key == arg:
+                                new_data[key] = value
+                            else:
+                                new_data[key] = column.column_empty_like(
+                                    self._data[key],
+                                    masked=True,
+                                    newsize=len(value),
+                                )
+                        self._data = new_data
                     elif isinstance(value, (pd.Series, Series)):
                         value = Series(value)._align_to_index(
                             self._index, how="right", allow_non_unique=True
@@ -608,13 +611,13 @@ class DataFrame(Frame):
         self._drop_column(name)
 
     def __sizeof__(self):
-        columns = sum(col.__sizeof__() for col in self._data.values())
+        columns = sum(col.__sizeof__() for col in self._data.columns)
         index = self._index.__sizeof__()
         return columns + index
 
     def memory_usage(self, index=True, deep=False):
         ind = list(self.columns)
-        sizes = [col._memory_usage(deep=deep) for col in self._data.values()]
+        sizes = [col._memory_usage(deep=deep) for col in self._data.columns]
         if index:
             ind.append("Index")
             sizes.append(self.index.memory_usage(deep=deep))
@@ -808,7 +811,8 @@ class DataFrame(Frame):
         )
         ncols = (
             1
-            if nrows == 1 and dtype in ["int8", "int16", "str", "category"]
+            if nrows == 1
+            and dtype in ["int8", "int16", "int64", "str", "category"]
             else ncols
         )
         ncols = 0 if ncols == 2 else ncols
@@ -870,7 +874,6 @@ class DataFrame(Frame):
             upper = cudf.concat([upper_left, upper_right], axis=1)
             lower = cudf.concat([lower_left, lower_right], axis=1)
             output = cudf.concat([upper, lower])
-        temp_mi_columns = output.columns
 
         for col in output._data:
             if (
@@ -881,8 +884,7 @@ class DataFrame(Frame):
                 output[col] = output._data[col].astype("str").fillna("null")
             else:
                 output[col] = output._data[col]
-        if isinstance(self.columns, cudf.MultiIndex):
-            output.columns = temp_mi_columns
+
         return output
 
     def __repr__(self):
@@ -934,7 +936,9 @@ class DataFrame(Frame):
                 if fill_value is None:
                     return Series.from_masked_array(
                         data=rmm.device_array(max_num_rows, dtype="float64"),
-                        mask=cudautils.make_empty_mask(max_num_rows),
+                        mask=create_null_mask(
+                            max_num_rows, state=MaskState.ALL_NULL
+                        ),
                     ).set_index(col.index)
                 else:
                     return getattr(col, fn)(fill_value)
@@ -1291,40 +1295,32 @@ class DataFrame(Frame):
     def columns(self):
         """Returns a tuple of columns
         """
-        if hasattr(self, "multi_cols"):
-            return self.multi_cols
-        else:
-            name = self._columns_name
-            return pd.Index(self._data.keys(), name=name, tupleize_cols=False)
+        return self._data.to_pandas_index()
 
     @columns.setter
     def columns(self, columns):
-        if isinstance(columns, cudf.MultiIndex):
-            if len(columns) != len(self.columns):
-                msg = (
-                    f"Length mismatch: Expected axis has %d elements, "
-                    "new values have %d elements"
-                    % (len(self.columns), len(columns))
-                )
-                raise ValueError(msg)
-            """
-            new_names = []
-            for idx, name in enumerate(columns):
-                new_names.append(name)
-            self._rename_columns(new_names)
-            """
-            self.multi_cols = columns
-        elif isinstance(columns, pd.MultiIndex):
-            self.multi_cols = cudf.MultiIndex.from_pandas(columns)
-        else:
-            if hasattr(self, "multi_cols"):
-                delattr(self, "multi_cols")
-            self._rename_columns(columns)
-            if hasattr(columns, "name"):
-                self._columns_name = columns.name
+        if isinstance(columns, (cudf.MultiIndex, cudf.Index)):
+            columns = columns.to_pandas()
+        if columns is None:
+            columns = pd.Index(range(len(self._data.columns)))
+        is_multiindex = isinstance(columns, pd.MultiIndex)
+
+        if not isinstance(columns, pd.Index):
+            columns = pd.Index(columns, tupleize_cols=is_multiindex)
+
+        if not len(columns) == len(self.columns):
+            raise ValueError(
+                f"Length mismatch: expected {len(self.columns)} elements ,"
+                f"got {len(columns)} elements"
+            )
+        self._data = ColumnAccessor(
+            dict(zip(columns, self._data.columns)),
+            multiindex=is_multiindex,
+            level_names=columns.names,
+        )
 
     def _rename_columns(self, new_names):
-        old_cols = iter(self._data.keys())
+        old_cols = iter(self._data.names)
         l_old_cols = len(self._data)
         l_new_cols = len(new_names)
         if l_new_cols != l_old_cols:
@@ -1495,44 +1491,31 @@ class DataFrame(Frame):
             return df
 
     def reset_index(self, drop=False, inplace=False):
-        if isinstance(self.columns, pd.MultiIndex):
-            self.columns = cudf.MultiIndex.from_pandas(self.columns)
-        out = DataFrame()
-        if not drop:
-            if isinstance(self.index, cudf.core.multiindex.MultiIndex):
-                framed = self.index.to_frame()
-                name = framed.columns
-                name_len = len(name)
-                for col_name, col_value in framed._data.items():
-                    out[col_name] = col_value
+        if inplace:
+            result = self
+        else:
+            result = self.copy()
+        index_columns = self.index._data.columns
+        if all(name is None for name in self.index.names):
+            if isinstance(self.index, cudf.MultiIndex):
+                names = tuple(
+                    f"level_{i}" for i, _ in enumerate(self.index.names)
+                )
             else:
-                name = "index"
-                if self.index.name is not None:
-                    name = self.index.name
-                out[name] = self.index._values
-                name_len = 1
-            for col_name, col_value in self._data.items():
-                out[col_name] = col_value
-            if isinstance(self.columns, cudf.core.multiindex.MultiIndex):
-                ncols = len(self.columns.levels)
-                mi_columns = dict(zip(range(ncols), [name, name_len * [""]]))
-                top = DataFrame(mi_columns)
-                bottom = self.columns.to_frame().reset_index(drop=True)
-                index_frame = cudf.concat([top, bottom])
-                mc_df = DataFrame()
-                for idx, key in enumerate(out._data):
-                    mc_df[idx] = out[key]
-                mc_df.columns = cudf.MultiIndex.from_frame(index_frame)
-                out = mc_df
+                names = ("index",)
         else:
-            out = self
-        if inplace is True:
-            for column_name in set(out.columns) - set(self.columns):
-                self[column_name] = out._data[column_name]
-                self._data.move_to_end(column_name, last=False)
-            self.index = RangeIndex(len(self))
+            names = self.index.names
+
+        if not drop:
+            for name, index_column in zip(
+                reversed(names), reversed(index_columns)
+            ):
+                result.insert(0, name, index_column)
+        result.index = RangeIndex(len(self))
+        if inplace:
+            return
         else:
-            return out.set_index(RangeIndex(len(self)))
+            return result
 
     def take(self, positions):
         """
@@ -1572,30 +1555,6 @@ class DataFrame(Frame):
         out.columns = self.columns
         return out
 
-    def _take_columns(self, positions):
-        positions = Series(positions)
-        columns = self.columns
-        column_values = list(self._data.values())
-
-        result = DataFrame()
-        for idx in range(len(positions)):
-            if isinstance(columns, cudf.MultiIndex):
-                colname = positions[idx]
-            else:
-                colname = columns[positions[idx]]
-            if len(self) == 0:
-                result[colname] = as_column([])
-            else:
-                result[colname] = column_values[positions[idx]]
-
-        result.index = self._index
-        if isinstance(columns, cudf.MultiIndex):
-            columns = columns.take(positions)
-        else:
-            columns = columns.take(positions.to_pandas())
-        result.columns = columns
-        return result
-
     def copy(self, deep=True):
         """
         Returns a copy of this dataframe
@@ -1618,9 +1577,7 @@ class DataFrame(Frame):
                 data[k] = self._data[k]
 
         out = DataFrame(data=data, columns=self.columns.copy(deep=deep))
-
         out.index = index
-
         return out
 
     def __copy__(self):
@@ -1673,22 +1630,21 @@ class DataFrame(Frame):
                 self._index = as_index(value.index)
             elif len(value) > 0:
                 self._index = RangeIndex(start=0, stop=len(value))
+                new_data = self._data.__class__()
                 if num_cols != 0:
                     for col_name in self._data:
-                        self._data[col_name] = column.column_empty_like(
+                        new_data[col_name] = column.column_empty_like(
                             self._data[col_name],
                             masked=True,
                             newsize=len(value),
                         )
+                self._data = new_data
         elif isinstance(value, (pd.Series, Series)):
             value = Series(value)._align_to_index(self._index, how="right")
 
         value = column.as_column(value)
 
-        self._data[name] = value
-        keys = list(self._data.keys())
-        for i, col in enumerate(keys[loc:-1]):
-            self._data.move_to_end(col)
+        self._data.insert(name, value, loc=loc)
 
     def add_column(self, name, data, forceindex=False):
         """Add a column
@@ -1813,7 +1769,6 @@ class DataFrame(Frame):
         Return DataFrame with duplicate rows removed, optionally only
         considering certain subset of columns.
         """
-
         outdf = super().drop_duplicates(subset=subset, keep=keep)
 
         return self._mimic_inplace(outdf, inplace=inplace)
@@ -1822,9 +1777,6 @@ class DataFrame(Frame):
         if inplace:
             self._data = result._data
             self._index = result._index
-            if hasattr(result, "multi_cols"):
-                self.multi_cols = result.multi_cols
-            self._columns_name = result._columns_name
         else:
             return result
 
@@ -1943,7 +1895,7 @@ class DataFrame(Frame):
 
         out.index = index
 
-        if isinstance(objs[0].columns, cudf.MultiIndex):
+        if isinstance(objs[0].columns, pd.MultiIndex):
             out.columns = objs[0].columns
         else:
             out.columns = unique_columns_ordered_ls
@@ -2119,9 +2071,8 @@ class DataFrame(Frame):
         return outdf
 
     def argsort(self, ascending=True, na_position="last"):
-        cols = list(self._data.values())
         return get_sorted_inds(
-            cols, ascending=ascending, na_position=na_position
+            self, ascending=ascending, na_position=na_position
         )
 
     def sort_index(self, ascending=True):
@@ -2223,18 +2174,18 @@ class DataFrame(Frame):
         """
         # Never transpose a MultiIndex - remove the existing columns and
         # replace with a RangeIndex. Afterward, reassign.
-        inp = self.copy(deep=False)
-        temp_columns = inp.columns.copy(deep=False)
-        temp_index = inp.index.copy(deep=False)
-        if len(self._data) == 0:
-            return DataFrame(index=temp_columns, columns=temp_index)
-        inp.columns = pd.RangeIndex(start=0, stop=len(self.columns))
-        inp.index = RangeIndex(start=0, stop=len(self))
-        result = libcudf.transpose.transpose(inp)
-        result._index = as_index(temp_columns)
-        if not isinstance(temp_index, cudf.MultiIndex):
-            temp_index = temp_index.to_pandas()
-        result.columns = temp_index
+        columns = self.index.copy(deep=False)
+        index = self.columns.copy(deep=False)
+        if self._num_columns == 0 or self._num_rows == 0:
+            return DataFrame(index=index, columns=columns)
+        # Cython renames the columns to the range [0...ncols]
+        result = self.__class__._from_table(
+            libcudfxx.transpose.transpose(self)
+        )
+        # Set the old column names as the new index
+        result._index = as_index(index)
+        # Set the old index as the new column names
+        result.columns = columns
         return result
 
     @property
@@ -2553,7 +2504,7 @@ class DataFrame(Frame):
                 categorical_dtypes[name] = col.dtype
 
         # Save the order of the original column names for preservation later
-        org_names = list(itertools.chain(lhs._data.keys(), rhs._data.keys()))
+        org_names = list(itertools.chain(lhs._data.names, rhs._data.names))
 
         # potentially do an implicit typecast
         (lhs, rhs, to_categorical) = self._typecast_before_merge(
@@ -2572,21 +2523,21 @@ class DataFrame(Frame):
             # Pandas lexicographically sort is NOT a sort of all columns.
             # Instead, it sorts columns in lhs, then in "on", and then rhs.
             left_of_on = []
-            for name in lhs._data.keys():
+            for name in lhs._data.names:
                 if name not in left_on:
                     for i in range(len(gdf_result)):
                         if gdf_result[i][1] == name:
                             left_of_on.append(gdf_result.pop(i))
                             break
             in_on = []
-            for name in itertools.chain(lhs._data.keys(), rhs._data.keys()):
+            for name in itertools.chain(lhs._data.names, rhs._data.keys()):
                 if name in left_on or name in right_on:
                     for i in range(len(gdf_result)):
                         if gdf_result[i][1] == name:
                             in_on.append(gdf_result.pop(i))
                             break
             right_of_on = []
-            for name in rhs._data.keys():
+            for name in rhs._data.names:
                 if name not in right_on:
                     for i in range(len(gdf_result)):
                         if gdf_result[i][1] == name:
@@ -3151,17 +3102,17 @@ class DataFrame(Frame):
 
         Parameters
         ----------
-        column : sequence of str; optional
+        columns : sequence of str; optional
             Sequence of column names. If columns is *None* (unspecified),
             all columns in the frame are used.
         """
-        from cudf.core.column import numerical
-
         if columns is None:
-            columns = self.columns
+            table_to_hash = self
+        else:
+            cols = [self[k]._column for k in columns]
+            table_to_hash = Frame(data=OrderedColumnDict(zip(columns, cols)))
 
-        cols = [self[k]._column for k in columns]
-        return Series(numerical.column_hash_values(*cols)).values
+        return Series(table_to_hash._hash()).values
 
     def partition_by_hash(self, columns, nparts):
         """Partition the dataframe by the hashed value of data in *columns*.
@@ -3178,19 +3129,9 @@ class DataFrame(Frame):
         -------
         partitioned: list of DataFrame
         """
-        cols = list(self._data.values())
-        names = list(self._data.keys())
-        key_indices = [names.index(k) for k in columns]
-        # Allocate output buffers
-        outputs = [col.copy() for col in cols]
-        # Call hash_partition
-        offsets = libcudf.hash.hash_partition(
-            cols, key_indices, nparts, outputs
-        )
-        # Re-construct output partitions
-        outdf = DataFrame()
-        for k, col in zip(self._data, outputs):
-            outdf[k] = col
+        idx = 0 if self._index is None else self._index._num_columns
+        key_indices = [self._data.names.index(k) + idx for k in columns]
+        outdf, offsets = self._hash_partition(key_indices, nparts)
         # Slice into partition
         return [outdf[s:e] for s, e in zip(offsets, offsets[1:] + [None])]
 
@@ -3514,10 +3455,7 @@ class DataFrame(Frame):
                         df[i] = Series(vals[idx], nan_as_null=nan_as_null)
 
         # Set columns
-        if isinstance(dataframe.columns, pd.MultiIndex):
-            df.columns = cudf.MultiIndex.from_pandas(dataframe.columns)
-        else:
-            df.columns = dataframe.columns
+        df.columns = dataframe.columns
 
         # Set index
         if isinstance(dataframe.index, pd.MultiIndex):
@@ -4015,17 +3953,17 @@ class DataFrame(Frame):
         if axis in (None, 0):
             result = [
                 getattr(self[col], method)(*args, **kwargs)
-                for col in self._data.keys()
+                for col in self._data.names
             ]
 
             if isinstance(result[0], Series):
                 support_result = result
                 result = DataFrame(index=support_result[0].index)
-                for idx, col in enumerate(self._data.keys()):
+                for idx, col in enumerate(self._data.names):
                     result[col] = support_result[idx]
             else:
                 result = Series(result)
-                result = result.set_index(self._data.keys())
+                result = result.set_index(self._data.names)
             return result
 
         elif axis == 1:
@@ -4297,7 +4235,7 @@ class DataFrame(Frame):
         new_index = self.index.repeat(repeats)
         cols = libcudf.filling.repeat(self._columns, repeats)
         # to preserve col names, need to get it from old _cols dict
-        column_names = self._data.keys()
+        column_names = self._data.names
         result = DataFrame(data=dict(zip(column_names, cols)))
         return result.set_index(new_index)
 
@@ -4315,7 +4253,7 @@ class DataFrame(Frame):
         The tiled output cudf.DataFrame
         """
         cols = libcudf.filling.tile(self._columns, reps)
-        column_names = self._data.keys()
+        column_names = self._data.names
         return DataFrame(data=dict(zip(column_names, cols)))
 
     def stack(self, level=-1, dropna=True):

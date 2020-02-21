@@ -1,9 +1,10 @@
+import cupy
 import numpy as np
 import pandas as pd
 
 import cudf._libxx as libcudfxx
 from cudf.core.column import as_column, build_categorical_column
-from cudf.utils.dtypes import is_categorical_dtype
+from cudf.utils.dtypes import is_categorical_dtype, is_scalar
 
 
 class Frame(libcudfxx.table.Table):
@@ -22,6 +23,36 @@ class Frame(libcudfxx.table.Table):
     def _from_table(cls, table):
         return cls(table._data, index=table._index)
 
+    def _get_columns_by_label(self, labels, downcast=False):
+        """
+        Returns columns of the Frame specified by `labels`
+
+        If downcast is True, try and downcast from a DataFrame to a Series
+        """
+        new_data = self._data.get_by_label(labels)
+        if downcast:
+            if is_scalar(labels):
+                nlevels = 1
+            elif isinstance(labels, tuple):
+                nlevels = len(labels)
+            if self._data.multiindex is False or nlevels == self._data.nlevels:
+                return self._constructor_sliced(
+                    new_data, name=labels, index=self.index
+                )
+        return self._constructor(
+            new_data, columns=new_data.to_pandas_index(), index=self.index,
+        )
+
+    def _get_columns_by_index(self, indices):
+        """
+        Returns columns of the Frame specified by `labels`
+
+        """
+        data = self._data.get_by_index(indices)
+        return self._constructor(
+            data, columns=data.to_pandas_index(), index=self.index,
+        )
+
     def _gather(self, gather_map):
         if not pd.api.types.is_integer_dtype(gather_map.dtype):
             gather_map = gather_map.astype("int32")
@@ -30,6 +61,17 @@ class Frame(libcudfxx.table.Table):
         )
         result._copy_categories(self)
         return result
+
+    def _hash(self, initial_hash_values=None):
+        return libcudfxx.hash.hash(self, initial_hash_values)
+
+    def _hash_partition(self, columns_to_hash, num_partitions):
+        output, offsets = libcudfxx.hash.hash_partition(
+            self, columns_to_hash, num_partitions
+        )
+        output = self.__class__._from_table(output)
+        output._copy_categories(self)
+        return output, offsets
 
     def _as_column(self):
         """
@@ -218,6 +260,35 @@ class Frame(libcudfxx.table.Table):
         for name, col in result._data.items():
             result._data[name] = col.unary_operator(op)
         return result
+
+    def searchsorted(
+        self, values, side="left", ascending=True, na_position="last"
+    ):
+        """Find indices where elements should be inserted to maintain order
+
+        Parameters
+        ----------
+        value : Frame (Shape must be consistent with self)
+            Values to be hypothetically inserted into Self
+        side : str {‘left’, ‘right’} optional, default ‘left‘
+            If ‘left’, the index of the first suitable location found is given
+            If ‘right’, return the last such index
+        ascending : bool optional, default True
+            Sorted Frame is in ascending order (otherwise descending)
+        na_position : str {‘last’, ‘first’} optional, default ‘last‘
+            Position of null values in sorted order
+
+        Returns
+        -------
+        1-D cupy array of insertion points
+        """
+        # Call libcudf++ search_sorted primitive
+        outcol = libcudfxx.search.search_sorted(
+            self, values, side, ascending=ascending, na_position=na_position
+        )
+
+        # Retrun result as cupy array
+        return cupy.asarray(outcol.data_array_view)
 
     def sin(self):
         return self._unaryop("sin")

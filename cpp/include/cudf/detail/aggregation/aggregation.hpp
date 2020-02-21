@@ -19,51 +19,11 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/detail/utilities/release_assert.cuh>
+#include <cudf/aggregation.hpp>
 #include <cudf/types.hpp>
 
 namespace cudf {
 namespace experimental {
-/**
- * @brief Base class for specifying the desired aggregation in an
- * `aggregation_request`.
- *
- * This type is meant to be opaque in the public interface.
- *
- * Other kinds of aggregations may derive from this class to encapsulate
- * additional information needed to compute the aggregation.
- */
-class aggregation {
- public:
-  /**
-   * @brief Possible aggregation operations
-   */
-  enum Kind {
-    SUM,       ///< sum reduction
-    PRODUCT,   ///< product reduction
-    MIN,       ///< min reduction
-    MAX,       ///< max reduction
-    COUNT,     ///< count number of elements
-    ANY,       ///< any reduction
-    ALL,       ///< all reduction
-    SUM_OF_SQUARES, ///< sum of squares reduction
-    MEAN,      ///< arithmetic mean reduction
-    VARIANCE,  ///< groupwise variance
-    STD,       ///< groupwise standard deviation
-    MEDIAN,    ///< median reduction
-    QUANTILE,  ///< compute specified quantile(s)
-    ARGMAX,    ///< Index of max element
-    ARGMIN,    ///< Index of min element
-    NUNIQUE,   ///< count number of unique elements
-    PTX,       ///< PTX UDF based reduction
-    CUDA       ///< CUDA UDf based reduction
-  };
-
-  aggregation(aggregation::Kind a) : kind{a} {}
-  Kind kind;  ///< The aggregation to perform
-
-  bool operator==(aggregation const& other) const { return kind == other.kind; }
-};
-enum class include_nulls : bool; //forward declaration
 namespace detail {
 /**
  * @brief Derived class for specifying a quantile aggregation
@@ -169,9 +129,15 @@ struct target_type_impl<Source, aggregation::MAX> {
   using type = Source;
 };
 
-// Always use size_type accumulator for COUNT
+// Always use size_type accumulator for COUNT_VALID
 template <typename Source>
-struct target_type_impl<Source, aggregation::COUNT> {
+struct target_type_impl<Source, aggregation::COUNT_VALID> {
+  using type = cudf::size_type;
+};
+
+// Always use size_type accumulator for COUNT_ALL
+template <typename Source>
+struct target_type_impl<Source, aggregation::COUNT_ALL> {
   using type = cudf::size_type;
 };
 
@@ -324,8 +290,11 @@ CUDA_HOST_DEVICE_CALLABLE decltype(auto) aggregation_dispatcher(
       return f.template operator()<aggregation::MIN>(std::forward<Ts>(args)...);
     case aggregation::MAX:
       return f.template operator()<aggregation::MAX>(std::forward<Ts>(args)...);
-    case aggregation::COUNT:
-      return f.template operator()<aggregation::COUNT>(
+    case aggregation::COUNT_VALID:
+      return f.template operator()<aggregation::COUNT_VALID>(
+          std::forward<Ts>(args)...);
+    case aggregation::COUNT_ALL:
+      return f.template operator()<aggregation::COUNT_ALL>(
           std::forward<Ts>(args)...);
     case aggregation::ANY:
       return f.template operator()<aggregation::ANY>(std::forward<Ts>(args)...);
