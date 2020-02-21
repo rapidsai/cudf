@@ -61,7 +61,7 @@ def to_dlpack(Table source_table):
                   "transpose the output of this function.")
 
     for column in source_table._columns:
-        if source_table._data[column].null_count:
+        if column.null_count:
             raise ValueError(
                 "Cannot create a DLPack tensor with null values. \
                     Input is required to have null count as zero."
