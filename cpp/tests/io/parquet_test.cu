@@ -474,10 +474,10 @@ TEST_F(ParquetChunkedWriterTest, SimpleTable)
 
 TEST_F(ParquetChunkedWriterTest, LargeTables)
 {
-  srand(31337);
-  auto table1 = create_random_fixed_table<int>(512, 4096, true);
-  auto table2 = create_random_fixed_table<int>(512, 8192, true);
-  for (int i = 0; i < 256; i++) {
+  for (int i = 0; i < 10; i++) {
+   srand(31337);
+   auto table1 = create_random_fixed_table<int>(512, 4096, true);
+   auto table2 = create_random_fixed_table<int>(512, 8192, true);
   
    auto full_table = cudf::experimental::concatenate({*table1, *table2});          
 
