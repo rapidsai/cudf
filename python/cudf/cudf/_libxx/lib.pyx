@@ -10,20 +10,20 @@ from enum import Enum
 
 
 class InterpolationEnum(Enum):
-    LINEAR   = <int32_t> interpolation.LINEAR
-    LOWER    = <int32_t> interpolation.LOWER
-    HIGHER   = <int32_t> interpolation.HIGHER
-    MIDPOINT = <int32_t> interpolation.MIDPOINT
-    NEAREST  = <int32_t> interpolation.NEAREST
+    LINEAR   = <underlying_type_t_interpolation> interpolation.LINEAR
+    LOWER    = <underlying_type_t_interpolation> interpolation.LOWER
+    HIGHER   = <underlying_type_t_interpolation> interpolation.HIGHER
+    MIDPOINT = <underlying_type_t_interpolation> interpolation.MIDPOINT
+    NEAREST  = <underlying_type_t_interpolation> interpolation.NEAREST
 
 class OrderEnum(Enum):
-    ASCENDING  = <bool> order.ASCENDING
-    DESCENDING = <bool> order.DESCENDING
+    ASCENDING  = <underlying_type_t_order> order.ASCENDING
+    DESCENDING = <underlying_type_t_order> order.DESCENDING
 
 class SortedEnum(Enum):
-    YES = <bool> sorted.YES
-    NO  = <bool> sorted.NO
+    YES = <underlying_type_t_sorted> sorted.YES
+    NO  = <underlying_type_t_sorted> sorted.NO
 
 class NullOrderEnum(Enum):
-    BEFORE = <bool> null_order.BEFORE
-    AFTER  = <bool> null_order.AFTER
+    BEFORE = <underlying_type_t_order> null_order.BEFORE
+    AFTER  = <underlying_type_t_order> null_order.AFTER

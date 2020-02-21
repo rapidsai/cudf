@@ -12,7 +12,6 @@ from cudf._libxx.column cimport Column
 from cudf._libxx.table cimport Table
 cimport cudf._libxx.includes.quantiles as cpp_quantiles
 
-
 def quantiles(Table source_table, q, interp, is_input_sorted, column_order, null_precedence):
     cdef unique_ptr[table] c_result
     cdef table_view c_input = source_table.view()
