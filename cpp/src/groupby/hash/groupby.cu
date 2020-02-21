@@ -337,7 +337,6 @@ std::unique_ptr<table> groupby_null_templated(
   // Compact all results from sparse_results and insert into cache
   sparse_to_dense_results(requests, sparse_results, cache, gather_map, stream, mr);
 
-  // Extract unique keys and return
   auto unique_keys = experimental::detail::gather(
     keys, gather_map.begin(), gather_map.end(), false, mr, stream);
   return unique_keys;
