@@ -1302,7 +1302,11 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
 
         if (t < out_thread0)
         {
+        #if 0
             target_pos = min(s->out_pos + 2 * (NTHREADS - out_thread0), s->nz_count + (NTHREADS - out_thread0));
+        #else
+            target_pos = s->out_pos + (NTHREADS - out_thread0);
+        #endif
         }
         else
         {
@@ -1318,7 +1322,7 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
             // WARP0: Decode definition and repetition levels, outputs row indices
             gpuDecodeLevels(s, target_pos, t);
         }
-#if 0
+#if 1
         else if (t < out_thread0)
 #else
         __syncthreads();
@@ -1343,7 +1347,7 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
                 *(volatile int32_t *)&s->dict_pos = target_pos;
             }
         }
-#if 0
+#if 1
         else
 #else
         __syncthreads();
