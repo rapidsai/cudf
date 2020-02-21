@@ -57,12 +57,6 @@ namespace { // anonym.
     }
 
     __host__ __device__
-    character_flags_table_type const* get_flags(void) const
-    {
-      return d_flags_;
-    }
-
-    __host__ __device__
     character_cases_table_type const* get_case_table(void) const
     {
       return d_case_table_;
@@ -238,8 +232,11 @@ namespace { // anonym.
        bool bcapnext = true;
        for( auto itr = d_str.begin(); itr != d_str.end(); ++itr ) {
          auto the_chr = *itr;
-         uint32_t code_point = detail::utf8_to_codepoint(the_chr);
-         detail::character_flags_table_type flag = code_point <= 0x00FFFF ? get_flags()[code_point] : 0;
+
+         auto pair_char_info = get_char_info(the_chr);
+         
+         uint32_t code_point = pair_char_info.first;
+         detail::character_flags_table_type flag = pair_char_info.second;
 
          if( !IS_ALPHA(flag) ) {
            bcapnext = true;
