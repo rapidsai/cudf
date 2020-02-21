@@ -233,6 +233,7 @@ cdef extern from "cudf/scalar/scalar_factories.hpp" namespace "cudf" nogil:
 # looks something like this:
 #
 #    std::unique_ptr<int>  __pyx_v_y;
+#    std::unique_ptr<int>  __pyx_v_y;
 #    std::unique_ptr<int>  __pyx_t_1;
 #    try {
 #      __pyx_t_1 = std::move(__pyx_v_y);
