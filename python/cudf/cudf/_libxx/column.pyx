@@ -382,7 +382,7 @@ cdef class Column:
         has_nulls = c_col.get()[0].has_nulls()
 
         # After call to release(), c_col is unusable
-        cdef column_contents contents = c_col.get()[0].release()
+        cdef column_contents contents = move(c_col.get()[0].release())
 
         data = DeviceBuffer.c_from_unique_ptr(move(contents.data))
         data = Buffer(data)
