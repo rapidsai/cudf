@@ -12,14 +12,18 @@ from cudf._libxx.column cimport Column
 from cudf._libxx.table cimport Table
 cimport cudf._libxx.includes.quantiles as cpp_quantiles
 
-def quantiles(Table source_table, q, interp, is_input_sorted, column_order, null_precedence):
-    cdef unique_ptr[table] c_result
+def quantiles(Table source_table,
+              vector[double] q,
+              interp,
+              is_input_sorted,
+              column_order,
+              null_precedence):
     cdef table_view c_input = source_table.view()
-    cdef vector[double] c_q
+    cdef vector[double] c_q = q
     cdef interpolation c_interp = <interpolation>(<underlying_type_t_interpolation> interp)
     cdef sorted c_is_input_sorted = <sorted>(<underlying_type_t_sorted> is_input_sorted)
-    cdef vector[order] c_column_order
-    cdef vector[null_order] c_null_precedence
+    cdef vector[order] c_column_order = vector[order](len(column_order))
+    cdef vector[null_order] c_null_precedence = vector[null_order](len(null_precedence))
 
     for value in column_order:
         c_column_order.push_back(
@@ -30,6 +34,8 @@ def quantiles(Table source_table, q, interp, is_input_sorted, column_order, null
         c_null_precedence.push_back(
             <null_order>(<underlying_type_t_null_order> value)
         )
+
+    cdef unique_ptr[table] c_result
 
     with nogil:
         c_result = move(
@@ -46,5 +52,5 @@ def quantiles(Table source_table, q, interp, is_input_sorted, column_order, null
     return Table.from_unique_ptr(
         move(c_result),
         column_names=source_table._column_names,
-        index_names=source_table._index._column_names
+        index_names=source_table._index_names
     )
