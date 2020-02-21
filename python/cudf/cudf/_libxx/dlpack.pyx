@@ -60,7 +60,7 @@ def to_dlpack(Table source_table):
                   "order) output. If the output tensor needs to be row major, "
                   "transpose the output of this function.")
 
-    for column in source_table._data:
+    for column in source_table._columns:
         if source_table._data[column].null_count:
             raise ValueError(
                 "Cannot create a DLPack tensor with null values. \
