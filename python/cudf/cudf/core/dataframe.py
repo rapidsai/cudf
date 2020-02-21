@@ -50,6 +50,7 @@ from cudf.utils.dtypes import (
     is_scalar,
     is_string_dtype,
 )
+from cudf.utils.utils import OrderedColumnDict
 
 
 def _unique_name(existing_names, suffix="_unique_name"):
@@ -3101,17 +3102,17 @@ class DataFrame(Frame):
 
         Parameters
         ----------
-        column : sequence of str; optional
+        columns : sequence of str; optional
             Sequence of column names. If columns is *None* (unspecified),
             all columns in the frame are used.
         """
-        from cudf.core.column import numerical
-
         if columns is None:
-            columns = self.columns
+            table_to_hash = self
+        else:
+            cols = [self[k]._column for k in columns]
+            table_to_hash = Frame(data=OrderedColumnDict(zip(columns, cols)))
 
-        cols = [self[k]._column for k in columns]
-        return Series(numerical.column_hash_values(*cols)).values
+        return Series(table_to_hash._hash()).values
 
     def partition_by_hash(self, columns, nparts):
         """Partition the dataframe by the hashed value of data in *columns*.
@@ -3128,19 +3129,9 @@ class DataFrame(Frame):
         -------
         partitioned: list of DataFrame
         """
-        cols = list(self._data.columns)
-        names = list(self._data.names)
-        key_indices = [names.index(k) for k in columns]
-        # Allocate output buffers
-        outputs = [col.copy() for col in cols]
-        # Call hash_partition
-        offsets = libcudf.hash.hash_partition(
-            cols, key_indices, nparts, outputs
-        )
-        # Re-construct output partitions
-        outdf = DataFrame()
-        for k, col in zip(self._data, outputs):
-            outdf[k] = col
+        idx = 0 if self._index is None else self._index._num_columns
+        key_indices = [self._data.names.index(k) + idx for k in columns]
+        outdf, offsets = self._hash_partition(key_indices, nparts)
         # Slice into partition
         return [outdf[s:e] for s, e in zip(offsets, offsets[1:] + [None])]
 

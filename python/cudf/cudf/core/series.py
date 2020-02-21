@@ -2185,9 +2185,7 @@ class Series(Frame):
     def hash_values(self):
         """Compute the hash of values in this column.
         """
-        from cudf.core.column import numerical
-
-        return Series(numerical.column_hash_values(self._column)).values
+        return Series(self._hash()).values
 
     def hash_encode(self, stop, use_name=False):
         """Encode column values as ints in [0, stop) using hash function.
@@ -2208,12 +2206,8 @@ class Series(Frame):
         """
         assert stop > 0
 
-        from cudf.core.column import numerical
-
-        initial_hash = np.asarray(hash(self.name)) if use_name else None
-        hashed_values = numerical.column_hash_values(
-            self._column, initial_hash_values=initial_hash
-        )
+        initial_hash = [hash(self.name) & 0xFFFFFFFF] if use_name else None
+        hashed_values = self._hash(initial_hash)
 
         if hashed_values.has_nulls:
             raise ValueError("Column must have no nulls.")
