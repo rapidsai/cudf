@@ -110,6 +110,19 @@ void verify_valid_requests(std::vector<aggregation_request> const& requests) {
 
 }  // namespace
 
+
+column_view groupby::key_sort_order(cudaStream_t stream) {
+  return helper().key_sort_order(stream);
+}
+
+column_view groupby::group_offsets(cudaStream_t stream) {
+  auto const size = helper().num_groups() + 1;
+  auto const data = thrust::raw_pointer_cast(helper().group_offsets().data());
+  return column_view(data_type(type_to_id<size_type>()),
+                     size,
+                     data);
+}
+
 // Compute aggregation requests
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>>
 groupby::aggregate(std::vector<aggregation_request> const& requests,

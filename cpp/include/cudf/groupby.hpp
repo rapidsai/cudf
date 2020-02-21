@@ -19,7 +19,9 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <rmm/device_buffer.hpp>
 
+#include <memory>
 #include <utility>
 #include <vector>
 
@@ -161,6 +163,11 @@ class groupby {
   std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> aggregate(
       std::vector<aggregation_request> const& requests,
       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+
+  column_view key_sort_order(cudaStream_t stream = 0);
+
+  column_view group_offsets(cudaStream_t stream = 0);
 
  private:
   table_view _keys;                    ///< Keys that determine grouping
