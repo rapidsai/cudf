@@ -16,19 +16,19 @@ def quantiles(Table source_table, q, interp, is_input_sorted, column_order, null
     cdef unique_ptr[table] c_result
     cdef table_view c_input = source_table.view()
     cdef vector[double] c_q
-    cdef interpolation c_interp = <interpolation>(<interpolation_t> interp)
-    cdef sorted c_is_input_sorted = <sorted>(<sorted_t> is_input_sorted)
+    cdef interpolation c_interp = <interpolation>(<underlying_type_t_interpolation> interp)
+    cdef sorted c_is_input_sorted = <sorted>(<underlying_type_t_sorted> is_input_sorted)
     cdef vector[order] c_column_order
     cdef vector[null_order] c_null_precedence
 
     for value in column_order:
         c_column_order.push_back(
-            <order>(<order_t> value)
+            <order>(<underlying_type_t_order> value)
         )
 
     for value in null_precedence:
         c_null_precedence.push_back(
-            <null_order>(<null_order_t> value)
+            <null_order>(<underlying_type_t_null_order> value)
         )
 
     with nogil:
