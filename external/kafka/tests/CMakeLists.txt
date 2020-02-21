@@ -3,6 +3,11 @@ cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 project(CUDF_EXTERNAL_TESTS LANGUAGES C CXX CUDA)
 
 ###################################################################################################
+# - set libcudf headers ---------------------------------------------------------------------------
+
+set(CUDF_INCLUDE "${PROJECT_SOURCE_DIR}/../../../cpp/src/io/utilities")
+
+###################################################################################################
 # - compiler function -----------------------------------------------------------------------------
 
 set(CUDF_TEST_LIST CACHE INTERNAL "CUDF_TEST_LIST")
@@ -32,12 +37,6 @@ elseif(DEFINED ENV{CONDA_PREFIX})
     set(CONDA_LINK_DIRS "$ENV{CONDA_PREFIX}/lib")
     message(STATUS "Conda environment detected, CMAKE_SYSTEM_PREFIX_PATH set to: ${CMAKE_SYSTEM_PREFIX_PATH}")
 endif("$ENV{CONDA_BUILD}" STREQUAL "1")
-
-###################################################################################################
-# - set libcudf headers ---------------------------------------------------------------------------
-
-set(CUDF_INCLUDE "${PROJECT_SOURCE_DIR}/../cpp/src/io/utilities")
-message(STATUS "CUDF_INCLUDE: CUDF_INCLUDE set to ${CUDF_INCLUDE}")
 
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------

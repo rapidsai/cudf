@@ -21,9 +21,9 @@
 #include <vector>
 #include <map>
 
-#include "kafka_datasource.hpp"
+#include <kafka_datasource.hpp>
 
-TEST_F(ExternalDatasource, Basic)
+TEST(ExternalDatasource, Basic)
 {
     std::map<std::string, std::string> datasource_confs;
 

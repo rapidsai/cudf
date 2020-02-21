@@ -27,7 +27,7 @@
 #include <thread>
 #include <sys/time.h>
 
-#include <cudf/cudf.h>
+//#include <cudf/cudf.h>
 #include <librdkafka/rdkafkacpp.h>
 
 namespace cudf {
