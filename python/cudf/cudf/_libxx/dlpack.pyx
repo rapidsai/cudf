@@ -80,7 +80,7 @@ def to_dlpack(Table source_table):
 
 
 cdef void dlmanaged_tensor_pycapsule_deleter(object pycap_obj):
-    cdef DLManagedTensor* dlpack_tensor= <DLManagedTensor*>0
+    cdef DLManagedTensor* dlpack_tensor = <DLManagedTensor*>0
     try:
         dlpack_tensor = <DLManagedTensor*>pycapsule.PyCapsule_GetPointer(
             pycap_obj, 'used_dltensor')
