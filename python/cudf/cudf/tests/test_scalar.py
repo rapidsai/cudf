@@ -37,6 +37,8 @@ from cudf._libxx.scalar import Scalar
         False,
         np.bool_(True),
         np.bool_(False),
+        np.str_("asdf"),
+        np.object_("asdf"),
     ],
 )
 def test_round_trip_scalar(value):
