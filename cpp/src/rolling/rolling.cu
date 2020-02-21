@@ -158,6 +158,7 @@ process_rolling_window(column_device_view input,
         cudf::detail::store_output_functor<OutputType, op == aggregation::MEAN>{}(output.element<OutputType>(current_index),
                 val, count);
 
+    printf("RGSL : output_is_valid %d \n", output_is_valid);
     return output_is_valid;
 }
 
@@ -243,6 +244,7 @@ void gpu_rolling(column_device_view input,
 
   if(threadIdx.x == 0) {
     atomicAdd(output_valid_count, block_valid_count);
+    printf("RGSL : Valid count is %d \n", *output_valid_count);
   }
 }
 
@@ -314,6 +316,7 @@ struct rolling_window_launcher
       auto valid_count = kernel_launcher<T, agg_op, op, WindowIterator>(input, output_view, preceding_window_begin,
               following_window_begin, min_periods, agg, agg_op::template identity<T>(), stream);
 
+      std::cout<<"RGSL : The valid count and size is "<<valid_count<<" "<<output->size()<<std::endl;
       output->set_null_count(output->size() - valid_count);
 
       return output;
