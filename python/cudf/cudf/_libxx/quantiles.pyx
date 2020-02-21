@@ -8,7 +8,6 @@
 import pandas as pd
 
 from cudf._libxx.lib cimport *
-from cudf._libxx.lib import *
 from cudf._libxx.column cimport Column
 from cudf._libxx.table cimport Table
 cimport cudf._libxx.includes.quantiles as cpp_quantiles
