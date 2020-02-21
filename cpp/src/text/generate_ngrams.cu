@@ -64,7 +64,7 @@ struct ngram_generator_fn
         cudf::size_type bytes = 0;
         for( cudf::size_type n=0; n < ngrams; ++n )
         {
-            auto d_str = d_strings.element<cudf::string_view>(n+idx);
+            auto const d_str = d_strings.element<cudf::string_view>(n+idx);
             bytes += d_str.size_bytes();
             if( out_ptr )
                 out_ptr = cudf::strings::detail::copy_string(out_ptr,d_str);

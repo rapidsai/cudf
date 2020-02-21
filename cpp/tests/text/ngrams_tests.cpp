@@ -49,7 +49,7 @@ TEST_F(TextGenerateNgramsTest, Ngrams)
 
 TEST_F(TextGenerateNgramsTest, NgramsWithNulls)
 {
-    std::vector<const char*> h_strings{ "the", "fox", "", nullptr, "jumped", "over", "the", "dog" };
+    std::vector<const char*> h_strings{ "the", "fox", "", "jumped", "over", nullptr, "the", "dog" };
     cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
         thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
 
