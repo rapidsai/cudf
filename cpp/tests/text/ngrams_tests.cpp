@@ -31,23 +31,33 @@ struct TextGenerateNgramsTest : public cudf::test::BaseFixture {};
 
 TEST_F(TextGenerateNgramsTest, Ngrams)
 {
-    std::vector<const char*> h_strings{ "the", "fox", "jumped", "over", "the", "dog" };
-    cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
-        thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
-
+    cudf::test::strings_column_wrapper strings{ "the", "fox", "jumped", "over", "the", "dog" };
     cudf::strings_column_view strings_view( strings );
 
     {
         cudf::test::strings_column_wrapper expected{ "the_fox","fox_jumped","jumped_over","over_the","the_dog" };
-        auto results = nvtext::generate_ngrams(strings_view);
+        auto const results = nvtext::generate_ngrams(strings_view);
         cudf::test::expect_columns_equal(*results,expected);
     }
 
     {
         cudf::test::strings_column_wrapper expected{ "the_fox_jumped","fox_jumped_over","jumped_over_the","over_the_dog" };
-        auto results = nvtext::generate_ngrams(strings_view,3);
+        auto const results = nvtext::generate_ngrams(strings_view,3);
         cudf::test::expect_columns_equal(*results,expected);
     }
+}
+
+TEST_F(TextGenerateNgramsTest, NgramsWithNulls)
+{
+    std::vector<const char*> h_strings{ "the", "fox", "", nullptr, "jumped", "over", "the", "dog" };
+    cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
+        thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
+
+    cudf::strings_column_view strings_view( strings );
+    auto const results = nvtext::generate_ngrams(strings_view,3);
+
+    cudf::test::strings_column_wrapper expected{ "the_fox_jumped","fox_jumped_over","jumped_over_the","over_the_dog" };
+    cudf::test::expect_columns_equal(*results,expected);
 }
 
 TEST_F(TextGenerateNgramsTest, Empty)
