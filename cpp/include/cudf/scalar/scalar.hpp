@@ -350,6 +350,19 @@ class timestamp_scalar : public detail::fixed_width_scalar<T> {
    : detail::fixed_width_scalar<T>(value, is_valid, stream, mr)
   {}
 
+  /**
+   * @brief Construct a new timestamp scalar object from an integer
+   *
+   * @param value Integer representing number of ticks since the UNIX epoch
+   * @param is_valid Whether the value held by the scalar is valid
+   * @param stream The CUDA stream to do the allocation in
+   * @param mr The memory resource to use for allocation
+   */
+  timestamp_scalar(typename T::duration::rep value, bool is_valid, cudaStream_t stream = 0,
+                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource())
+    : detail::fixed_width_scalar<T>(value, is_valid, stream, mr)
+  {}
+
   /**---------------------------------------------------------------------------*
    * @brief Construct a new timestamp scalar object from existing device memory.
    *
@@ -360,6 +373,13 @@ class timestamp_scalar : public detail::fixed_width_scalar<T> {
       rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource())
    : detail::fixed_width_scalar<T>(std::forward<rmm::device_scalar<T>>(data), is_valid, stream, mr)
   {}
+
+  /**---------------------------------------------------------------------------*
+   * @brief Return the duration in number of ticks since the UNIX epoch.
+   *---------------------------------------------------------------------------**/
+  typename T::duration::rep ticks_since_epoch() {
+    return this->value().time_since_epoch().count();
+  }
 };
 
 }  // namespace cudf
