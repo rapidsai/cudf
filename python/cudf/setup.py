@@ -77,7 +77,14 @@ setup(
     ],
     # Include the separately-compiled shared library
     setup_requires=["cython"],
-    ext_modules=cythonize(extensions, nthreads=nthreads, language_level="3"),
+    ext_modules=cythonize(
+        extensions,
+        nthreads=nthreads,
+        language="c++",
+        compiler_directives=dict(
+            profile=False, language_level=3, embedsignature=True
+        ),
+    ),
     packages=find_packages(include=["cudf", "cudf.*"]),
     package_data={
         "cudf._lib": ["*.pxd"],
