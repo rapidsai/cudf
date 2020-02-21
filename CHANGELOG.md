@@ -17,6 +17,7 @@
 - PR #4107 Add groupby nunique aggregation
 - PR #4153 Support Dask serialization protocol on cuDF objects
 - PR #4164 Add Buffer "constructor-kwargs" header
+- PR #4159 Add COUNT aggregation that includes null values
 - PR #4190 Add libcudf++ transpose Cython implementation
 
 ## Improvements
@@ -45,6 +46,7 @@
 - PR #3880 Add aggregation infrastructure support for cudf::reduce
 - PR #4059 Add aggregation infrastructure support for cudf::scan
 - PR #4021 Change quantiles signature for clarity.
+- PR #4058 Port hash.pyx to use libcudf++ APIs
 - PR #4057 Handle offsets in cython Column class
 - PR #4045 Reorganize `libxx` directory
 - PR #4029 Port stream_compaction.pyx to use libcudf++ APIs
@@ -136,7 +138,9 @@
 - PR #4155 Update groupby group_offsets size and fix unnecessary device dispatch.
 - PR #4198 Fix constructing `RangeIndex` from `range`
 - PR #4192 Parquet writer: fix OOB read when computing string hash
+- PR #4201 Fix java window tests
 - PR #4199 Fix potential race condition in memcpy_block
+- PR #4214 Alter ValueError exception for GPU accelerated Parquet writer to properly report `categorical` columns are not supported.
 
 
 # cuDF 0.12.0 (04 Feb 2020)

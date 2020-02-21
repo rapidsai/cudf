@@ -80,15 +80,30 @@ std::unique_ptr<column> group_max(
  * @brief Internal API to calculate number of non-null values in each group of
  *  @p values
  * 
- * @param values Grouped values to get count of
+ * @param values Grouped values to get valid count of
  * @param group_labels ID of group that the corresponding value belongs to
  * @param num_groups Number of groups ( unique values in @p group_labels )
  * @param mr Memory resource to allocate output with
  * @param stream Stream to perform computation in
  */
-std::unique_ptr<column> group_count(
+std::unique_ptr<column> group_count_valid(
     column_view const& values,
     rmm::device_vector<size_type> const& group_labels,
+    size_type num_groups,
+    rmm::mr::device_memory_resource* mr,
+    cudaStream_t stream = 0);
+
+
+/**
+ * @brief Internal API to calculate number of values in each group of @p values
+ * 
+ * @param group_offsets Offsets of groups' starting points within @p values
+ * @param num_groups Number of groups ( unique values in @p group_labels )
+ * @param mr Memory resource to allocate output with
+ * @param stream Stream to perform computation in
+ */
+std::unique_ptr<column> group_count_all(
+    rmm::device_vector<size_type> const& group_offsets,
     size_type num_groups,
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream = 0);
