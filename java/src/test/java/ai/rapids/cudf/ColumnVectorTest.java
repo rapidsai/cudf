@@ -443,6 +443,14 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testGetNativeView() {
+    try (ColumnVector cv = ColumnVector.fromInts(1, 3, 4, 5)) {
+      //not a real test whats being returned is a view but this is the best we can do
+      assertNotEquals(0, cv.getNativeView());
+    }
+  }
+
+  @Test
   void testFromScalar() {
     final int rowCount = 4;
     for (DType type : DType.values()) {
