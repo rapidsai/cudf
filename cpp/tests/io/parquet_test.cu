@@ -482,7 +482,11 @@ TEST_F(ParquetChunkedWriterTest, LargeTables)
    auto full_table = cudf::experimental::concatenate({*table1, *table2});          
 
    auto filepath = temp_env->get_temp_filepath("ChunkedLarge.parquet");
+#if 1
+   cudf_io::write_parquet_chunked_args args{cudf_io::sink_info{filepath}, nullptr, cudf_io::compression_type::NONE};
+#else
    cudf_io::write_parquet_chunked_args args{cudf_io::sink_info{filepath}};
+#endif
    auto state = cudf_io::write_parquet_chunked_begin(args);  
    cudf_io::write_parquet_chunked(*table1, state);
    cudf_io::write_parquet_chunked(*table2, state);  
