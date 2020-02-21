@@ -27,14 +27,17 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         ALL_VALID "cudf::mask_state::ALL_VALID"
         ALL_NULL "cudf::mask_state::ALL_NULL"
 
+    ctypedef order_t bool
     ctypedef enum order "cudf::order":
         ASCENDING "cudf::order::ASCENDING"
         DESCENDING "cudf::order::DESCENDING"
 
+    ctypedef null_order_t bool
     ctypedef enum null_order "cudf::null_order":
         AFTER "cudf::null_order::AFTER"
         BEFORE "cudf::null_order::BEFORE"
 
+    ctypedef sorted_t int32_t
     ctypedef enum sorted "cudf::sorted":
         NO "cudf::sorted::NO"
         YES "cudf::sorted::YES"
@@ -64,6 +67,7 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         type_id id()
 
 cdef extern from "cudf/types.hpp" namespace "cudf::experimental" nogil:
+    ctypedef interpolation_t int32_t
     ctypedef enum interpolation:
         LINEAR   "cudf::experimental::interpolation::LINEAR"
         LOWER    "cudf::experimental::interpolation::LOWER"
