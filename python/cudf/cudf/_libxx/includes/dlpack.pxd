@@ -11,7 +11,7 @@ from cudf._libxx.column cimport *
 
 cdef extern from "dlpack/dlpack.h" nogil:
     ctypedef struct DLManagedTensor:
-        void(*deleter)(DLManagedTensor*)
+        void(*deleter)(DLManagedTensor*) except +
 
 cdef extern from "cudf/dlpack.hpp" namespace "cudf" \
         nogil:
