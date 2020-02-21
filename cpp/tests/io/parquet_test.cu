@@ -665,3 +665,60 @@ TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize2)
 
   expect_tables_equal(*result.tbl, *expected);      
 }
+
+
+class custom_data_sink : public cudf::io::data_sink {
+public:
+  explicit custom_data_sink(){
+    printf("CUSTOM DATA SINK CONSTRUCTOR\n");
+  }
+
+  virtual ~custom_data_sink() {
+    printf("CUSTOM DATA SINK DESTRUCTOR\n");
+  }
+
+  void write(void const* data, size_t size) override {
+    printf("CUSTOM DATA SINK WRITE : %lu, %lu\n", reinterpret_cast<int64_t>(data), size);
+  }
+
+  bool supports_gpu_write(){
+    return true;
+  }
+
+  void write_gpu(void const* gpu_data, size_t size){        
+    printf("CUSTOM DATA SINK GPU WRITE : %lu, %lu\n", reinterpret_cast<int64_t>(gpu_data), size);
+  }
+
+  void flush() override {
+    printf("CUSTOM DATA SINK FLUSH\n");  
+  }
+
+  size_t bytes_written() override {
+    printf("CUSTOM DATA SINK BYTES WRITTEN\n");  
+    return 0;
+  }
+};
+
+void custom_sink_example()
+{
+  auto custom_sink = std::make_shared<custom_data_sink>();  
+
+  namespace cudf_io = cudf::experimental::io;
+
+  srand(31337);
+  auto table1 = create_random_fixed_table<int>(5, 5, false);  
+
+  // custom_sink lives across multiple write_parquet() calls
+  {
+    cudf_io::write_parquet_args args{cudf_io::sink_info{custom_sink}, *table1};  
+    cudf_io::write_parquet(args);
+  }
+  {
+    cudf_io::write_parquet_args args{cudf_io::sink_info{custom_sink}, *table1};  
+    cudf_io::write_parquet(args);
+  }
+  {
+    cudf_io::write_parquet_args args{cudf_io::sink_info{custom_sink}, *table1};  
+    cudf_io::write_parquet(args);
+  }  
+}

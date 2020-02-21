@@ -696,12 +696,17 @@ void writer::impl::write_chunked(table_view const& table, pq_chunked_state& stat
   }
 
   auto host_bfr = [&]() {
-    return pinned_buffer<uint8_t>{[](size_t size) {
+    // if the writer supports write_gpu(), we don't need this scratch space
+    if(out_sink_->supports_gpu_write()){
+      return pinned_buffer<uint8_t>{nullptr, cudaFreeHost};
+    } else {
+      return pinned_buffer<uint8_t>{[](size_t size) {
                                     uint8_t *ptr = nullptr;
-                                    CUDA_TRY(cudaMallocHost(&ptr, size));
+                                      CUDA_TRY(cudaMallocHost(&ptr, size));
                                     return ptr;
-                                  }(max_chunk_bfr_size),
+                                    }(max_chunk_bfr_size),
                                   cudaFreeHost};
+    }
   }();
 
   // Encode row groups in batches  
@@ -719,7 +724,7 @@ void writer::impl::write_chunked(table_view const& table, pq_chunked_state& stat
     for (; r < rnext; r++, global_r++) {
       for (auto i = 0; i < num_columns; i++) {
         gpu::EncColumnChunk *ck = &chunks[r * num_columns + i];
-        void *dev_bfr;
+        uint8_t *dev_bfr;
         if (ck->is_compressed) {
           state.md.row_groups[global_r].columns[i].meta_data.codec = compression_;
           dev_bfr = ck->compressed_bfr;
@@ -727,19 +732,33 @@ void writer::impl::write_chunked(table_view const& table, pq_chunked_state& stat
         else {
           dev_bfr = ck->uncompressed_bfr;
         }
-        CUDA_TRY(cudaMemcpyAsync(host_bfr.get(), dev_bfr, ck->ck_stat_size + ck->compressed_size,
-                                 cudaMemcpyDeviceToHost, state.stream));
-        CUDA_TRY(cudaStreamSynchronize(state.stream));
+        
+        if(out_sink_->supports_gpu_write()){
+          // let the writer do what it wants to retrieve the data from the gpu. 
+          out_sink_->write_gpu(dev_bfr + ck->ck_stat_size, ck->compressed_size);
+          // we still need to do a (much smaller) memcpy for the statistics.
+          if (ck->ck_stat_size != 0) {
+            state.md.row_groups[global_r].columns[i].meta_data.statistics_blob.resize(ck->ck_stat_size);
+            CUDA_TRY(cudaMemcpyAsync(state.md.row_groups[global_r].columns[i].meta_data.statistics_blob.data(), dev_bfr, ck->ck_stat_size,
+                     cudaMemcpyDeviceToHost, state.stream));
+            CUDA_TRY(cudaStreamSynchronize(state.stream));          
+          }
+        } else {
+          // copy the full data
+          CUDA_TRY(cudaMemcpyAsync(host_bfr.get(), dev_bfr, ck->ck_stat_size + ck->compressed_size,
+                                  cudaMemcpyDeviceToHost, state.stream));
+          CUDA_TRY(cudaStreamSynchronize(state.stream));
+          out_sink_->write(host_bfr.get() + ck->ck_stat_size, ck->compressed_size);            
+          if (ck->ck_stat_size != 0) {          
+            state.md.row_groups[global_r].columns[i].meta_data.statistics_blob.resize(ck->ck_stat_size);
+            memcpy(state.md.row_groups[global_r].columns[i].meta_data.statistics_blob.data(), host_bfr.get(), ck->ck_stat_size);
+          }
+        }
         state.md.row_groups[global_r].total_byte_size += ck->compressed_size;
         state.md.row_groups[global_r].columns[i].meta_data.data_page_offset = state.current_chunk_offset + ((ck->has_dictionary) ? ck->dictionary_size : 0);
         state.md.row_groups[global_r].columns[i].meta_data.dictionary_page_offset = (ck->has_dictionary) ? state.current_chunk_offset : 0;
         state.md.row_groups[global_r].columns[i].meta_data.total_uncompressed_size = ck->bfr_size;
         state.md.row_groups[global_r].columns[i].meta_data.total_compressed_size = ck->compressed_size;
-        out_sink_->write(host_bfr.get() + ck->ck_stat_size, ck->compressed_size);
-        if (ck->ck_stat_size != 0) {
-          state.md.row_groups[global_r].columns[i].meta_data.statistics_blob.resize(ck->ck_stat_size);
-          memcpy(state.md.row_groups[global_r].columns[i].meta_data.statistics_blob.data(), host_bfr.get(), ck->ck_stat_size);
-        }
         state.current_chunk_offset += ck->compressed_size;
       }
     }

@@ -44,6 +44,14 @@ class file_sink : public data_sink {
     outfile_.write(reinterpret_cast<char const*>(data), size);
   }
 
+  bool supports_gpu_write(){
+    return false;
+  }
+
+  void write_gpu(void const* gpu_data, size_t size){
+    CUDF_FAIL("file_sink does not support gpu writes");
+  }
+
   void flush() override {
     outfile_.flush();
   }
@@ -75,6 +83,14 @@ class host_buffer_sink : public data_sink {
     buffer_->insert(buffer_->end(), char_array, char_array + size);
   }
 
+  bool supports_gpu_write(){
+    return false;
+  }
+
+  void write_gpu(void const* gpu_data, size_t size){
+    CUDF_FAIL("host_buffer_sink does not support gpu writes");
+  }
+
   void flush() override {}
 
   size_t bytes_written() override {
@@ -100,6 +116,14 @@ class void_sink : public data_sink {
     bytes_written_ += size;
   }
 
+  bool supports_gpu_write(){
+    return true;
+  }
+
+  void write_gpu(void const* gpu_data, size_t size){
+    bytes_written_ += size;
+  }
+
   void flush() override {}
 
   size_t bytes_written() override {
@@ -118,6 +142,15 @@ public:
 
   void write(void const* data, size_t size) override {
     user_sink->write(data, size);
+  }
+
+  bool supports_gpu_write(){
+    return user_sink->supports_gpu_write();
+  }
+
+  void write_gpu(void const* gpu_data, size_t size){
+    CUDF_EXPECTS(user_sink->supports_gpu_write(), "write_gpu() being called on a data_sink that doesn't support it");
+    user_sink->write_gpu(gpu_data, size);
   }
 
   void flush() override {

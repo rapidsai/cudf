@@ -80,6 +80,40 @@ class data_sink {
   virtual void write(void const* data, size_t size) = 0;
 
   /**
+   * @brief Whether or not this sink supports writing from gpu memory addresses.
+   * 
+   * Internal to some of the file format writers, we have code that does things like
+   * 
+   * tmp_buffer = alloc_temp_buffer();
+   * cudaMemcpy(tmp_buffer, device_buffer, size);
+   * sink->write(tmp_buffer, size);
+   * 
+   * In the case where the sink type is itself a memory buffered write, this ends up
+   * being effectively a second memcpy.  So a useful optimization for a "smart" 
+   * custom data_sink is to do it's own internal management of the movement 
+   * of data between cpu and gpu; turning the internals of the writer into simply
+   * 
+   * sink->write_gpu(device_buffer, size)
+   * 
+   * If this function returns true, the data_sink will receive calls to write_gpu() 
+   * instead of write() when possible.  However, it is still possible to receive
+   * write() calls as well.
+   *
+   * @return bool If this writer supports write_gpu() calls.
+   **/
+  virtual bool supports_gpu_write() = 0;
+
+  /**
+   * @brief Append the buffer content to the sink from a gpu address
+   *
+   * @param[in] data Pointer to the buffer to be written into the sink object
+   * @param[in] size Number of bytes to write
+   *
+   * @return void
+   **/
+  virtual void write_gpu(void const* gpu_data, size_t size) = 0;
+
+  /**
    * @brief Flush the data written into the sink
    * 
    * @return void
