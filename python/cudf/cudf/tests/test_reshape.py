@@ -117,7 +117,7 @@ def test_df_stack(nulls, num_cols, num_rows, dtype):
     pass
 
 @pytest.mark.debug
-@pytest.mark.parametrize("num_rows", [1, 2, 1000])
+@pytest.mark.parametrize("num_rows", [2, 1000])
 @pytest.mark.parametrize("num_cols", [2, 10])
 @pytest.mark.parametrize(
     "dtype",
@@ -136,7 +136,9 @@ def test_df_stack(nulls, num_cols, num_rows, dtype):
 def test_interleave_columns(nulls, num_cols, num_rows, dtype):
     if dtype not in ["float32", "float64"] and nulls in ["some"]:
         pytest.skip(msg="nulls not supported in dtype: " + dtype)
-
+    if dtype is "str":
+        pytest.skip(msg="Only fixed-width types are supported in interleave_columns.")
+    
     pdf = pd.DataFrame()
     for i in range(num_cols):
         colname = str(i)
@@ -152,13 +154,9 @@ def test_interleave_columns(nulls, num_cols, num_rows, dtype):
     
     got = gdf.interleave_columns()
     
-    expect = pdf.fillna("null")
-    if {None} == set(expect.index.names):
-        expect.rename_axis(
-            list(range(0, len(expect.index.names))), inplace=True
-        )
+    expect = pd.Series(np.vstack(pdf.to_numpy()).reshape((-1,)))
+    
     assert_eq(expect, got)
-    pass
 
 @pytest.mark.parametrize("num_cols", [1, 2, 10])
 @pytest.mark.parametrize("num_rows", [1, 2, 1000])

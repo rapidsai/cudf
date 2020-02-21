@@ -34,7 +34,7 @@ def interleave_columns(Table source_table):
     -------
     The interleaved columns as a single column
     """
-    cdef table_view c_view = source_table.view()
+    cdef table_view c_view = source_table.data_view()
     
     cdef unique_ptr[column] c_result = move(cpp_interleave_columns(c_view))
 
@@ -69,7 +69,6 @@ def tile(Table source_table, size_type count):
     cdef table_view c_view = source_table.view()
     
     cdef unique_ptr[table] c_result = move(cpp_tile(c_view, c_count))
-
     
     return Table.from_unique_ptr(
           move(c_result),

@@ -3,7 +3,7 @@
 import numpy as np
 
 import cudf
-from cudf.core import DataFrame, Index, MultiIndex, RangeIndex, Series
+from cudf.core import DataFrame, Index, RangeIndex, Series
 from cudf.core.column import build_categorical_column
 from cudf.core.index import as_index
 from cudf.utils import cudautils
@@ -62,22 +62,27 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
     if axis == 1:
         assert typs.issubset(allowed_typs)
         df = DataFrame()
+
+        sr_name = 0
+        for idx, o in enumerate(objs):
+            if isinstance(o, Series):
+                name = o.name
+                if name is None:
+                    name = sr_name
+                    sr_name += 1
+                objs[idx] = o.to_frame(name=name)
+
         for idx, o in enumerate(objs):
             if idx == 0:
                 df.index = o.index
-            if isinstance(o, Series):
-                name = o.name
-                if o.name is None:
-                    # pandas uses 0-offset
-                    name = idx - 1
-                df[name] = o._column
-            else:
-                for col in o.columns:
-                    df[col] = o[col]._column
-        if isinstance(objs[0], DataFrame) and isinstance(
-            objs[0].columns, MultiIndex
-        ):
-            df.columns = MultiIndex._concat([obj.columns for obj in objs])
+            for col in o.columns:
+                df[col] = o[col]._column
+
+        result_columns = objs[0].columns
+        for o in objs[1:]:
+            result_columns = result_columns.append(o.columns)
+
+        df.columns = result_columns.unique()
         return df
 
     typ = list(typs)[0]
