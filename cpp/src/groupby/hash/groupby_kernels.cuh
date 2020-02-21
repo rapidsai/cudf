@@ -62,9 +62,14 @@ namespace hash {
  * @tparam skip_rows_with_nulls Indicates if rows in `input_keys` containing
  * null values should be skipped. It `true`, it is assumed `row_bitmask` is a
  * bitmask where bit `i` indicates the presence of a null value in row `i`.
+ * @tparam target_nullable Indicates if target (output values) table has 
+ * nullable columns
+ * @tparam target_nullable Indicates if source (input values) table has 
+ * nullable columns
  * @tparam Map The type of the hash map
  */
-template <bool skip_rows_with_nulls, typename Map>
+template <bool skip_rows_with_nulls, bool target_nullable, bool source_nullable,
+          typename Map>
 struct compute_single_pass_aggs {
   Map map;
   size_type num_keys;
@@ -108,7 +113,7 @@ struct compute_single_pass_aggs {
     {
       auto result = map.insert(thrust::make_pair(i, i));
 
-      experimental::detail::aggregate_row<true, true>(
+      experimental::detail::aggregate_row<target_nullable, source_nullable>(
         output_values, result.first->second, input_values, i, aggs);
     }
   }
