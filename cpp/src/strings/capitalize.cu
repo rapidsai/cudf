@@ -72,6 +72,12 @@ namespace { // anonym.
       detail::character_flags_table_type flag = code_point <= 0x00FFFF ? d_flags_[code_point] : 0;
       return char_info{code_point,flag};
     }
+
+    __device__
+    char_utf8 convert_char(char_info const& info) const
+    {
+      return detail::codepoint_to_utf8(d_case_table_[info.first]);
+    }
     
   private:
     column_device_view const d_column_;
@@ -84,6 +90,8 @@ namespace { // anonym.
   //
   struct execute_base
   {
+    using char_info = thrust::pair<uint32_t,detail::character_flags_table_type>;
+    
     execute_base(column_device_view const d_column,
                  character_flags_table_type const* d_flags,
                  character_cases_table_type const* d_case_table,
@@ -104,18 +112,6 @@ namespace { // anonym.
     }
 
     __host__ __device__
-    character_flags_table_type const* get_flags(void) const
-    {
-      return d_flags_;
-    }
-
-    __host__ __device__
-    character_cases_table_type const* get_case_table(void) const
-    {
-      return d_case_table_;
-    }
-
-    __host__ __device__
     int32_t const* get_offsets(void) const
     {
       return d_offsets_;
@@ -125,6 +121,20 @@ namespace { // anonym.
     char* get_chars(void)
     {
       return d_chars_;
+    }
+
+    __device__
+    char_info get_char_info(char_utf8 chr) const
+    {
+      uint32_t code_point = detail::utf8_to_codepoint(chr);
+      detail::character_flags_table_type flag = code_point <= 0x00FFFF ? d_flags_[code_point] : 0;
+      return char_info{code_point,flag};
+    }
+
+    __device__
+    char_utf8 convert_char(char_info const& info) const
+    {
+      return detail::codepoint_to_utf8(d_case_table_[info.first]);
     }
 
     __device__
@@ -162,12 +172,10 @@ namespace { // anonym.
          auto the_chr = *itr;
 
          auto pair_char_info = get_char_info(the_chr);
-         
-         uint32_t code_point = pair_char_info.first;
          detail::character_flags_table_type flag = pair_char_info.second;
          
          if( (itr == d_str.begin()) ? IS_LOWER(flag) : IS_UPPER(flag) )
-           the_chr = detail::codepoint_to_utf8(get_case_table()[code_point]);
+           the_chr = convert_char(pair_char_info);
          bytes += detail::bytes_in_char_utf8(the_chr);
        }
        return bytes;
@@ -197,11 +205,12 @@ namespace { // anonym.
       
       for( auto itr = d_str.begin(); itr != d_str.end(); ++itr ) {
         auto the_chr = *itr;
-        uint32_t code_point = detail::utf8_to_codepoint(the_chr);
-        detail::character_flags_table_type flag = code_point <= 0x00FFFF ? get_flags()[code_point] : 0;
+
+        auto pair_char_info = get_char_info(the_chr); 
+        detail::character_flags_table_type flag = pair_char_info.second;
 
         if( (itr == d_str.begin()) ? IS_LOWER(flag) : IS_UPPER(flag) )
-          the_chr = detail::codepoint_to_utf8(get_case_table()[code_point]);
+          the_chr = convert_char(pair_char_info);
         d_buffer += detail::from_char_utf8(the_chr, d_buffer);
       }
       return 0;
@@ -277,15 +286,16 @@ namespace { // anonym.
       bool bcapnext = true;
       for( auto itr = d_str.begin(); itr != d_str.end(); ++itr ) {
         auto the_chr = *itr;
-        uint32_t code_point = detail::utf8_to_codepoint(the_chr);
-        detail::character_flags_table_type flag = code_point <= 0x00FFFF ? get_flags()[code_point] : 0;
+
+        auto pair_char_info = get_char_info(the_chr); 
+        detail::character_flags_table_type flag = pair_char_info.second;
 
         if( !IS_ALPHA(flag) )
           bcapnext = true;
         else
           {
             if( bcapnext ? IS_LOWER(flag) : IS_UPPER(flag) )
-              the_chr = detail::codepoint_to_utf8(get_case_table()[code_point]);
+              the_chr = convert_char(pair_char_info);
             bcapnext = false;
           }
         
