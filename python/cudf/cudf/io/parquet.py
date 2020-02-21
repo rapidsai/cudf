@@ -79,7 +79,7 @@ def to_parquet(
 
     if engine == "cudf":
         if partition_cols is not None:
-            ValueError(
+            raise ValueError(
                 "'partition_cols' is currently not supported by the "
                 + "gpu accelerated parquet writer"
             )
@@ -87,7 +87,7 @@ def to_parquet(
         # Ensure that no columns dtype is 'category'
         for col in df.columns:
             if df[col].dtype.name == "category":
-                ValueError(
+                raise ValueError(
                     "'category' column dtypes are currently not "
                     + "supported by the gpu accelerated parquet writer"
                 )

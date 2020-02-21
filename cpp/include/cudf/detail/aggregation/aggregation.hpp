@@ -24,9 +24,6 @@
 
 namespace cudf {
 namespace experimental {
-
-enum class include_nulls : bool; //forward declaration
-
 namespace detail {
 /**
  * @brief Derived class for specifying a quantile aggregation
@@ -132,9 +129,15 @@ struct target_type_impl<Source, aggregation::MAX> {
   using type = Source;
 };
 
-// Always use size_type accumulator for COUNT
+// Always use size_type accumulator for COUNT_VALID
 template <typename Source>
-struct target_type_impl<Source, aggregation::COUNT> {
+struct target_type_impl<Source, aggregation::COUNT_VALID> {
+  using type = cudf::size_type;
+};
+
+// Always use size_type accumulator for COUNT_ALL
+template <typename Source>
+struct target_type_impl<Source, aggregation::COUNT_ALL> {
   using type = cudf::size_type;
 };
 
@@ -287,8 +290,11 @@ CUDA_HOST_DEVICE_CALLABLE decltype(auto) aggregation_dispatcher(
       return f.template operator()<aggregation::MIN>(std::forward<Ts>(args)...);
     case aggregation::MAX:
       return f.template operator()<aggregation::MAX>(std::forward<Ts>(args)...);
-    case aggregation::COUNT:
-      return f.template operator()<aggregation::COUNT>(
+    case aggregation::COUNT_VALID:
+      return f.template operator()<aggregation::COUNT_VALID>(
+          std::forward<Ts>(args)...);
+    case aggregation::COUNT_ALL:
+      return f.template operator()<aggregation::COUNT_ALL>(
           std::forward<Ts>(args)...);
     case aggregation::ANY:
       return f.template operator()<aggregation::ANY>(std::forward<Ts>(args)...);
