@@ -1,6 +1,5 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
-from cudf._lib.GDFError import GDFError
 from cudf._libxx import dlpack as libdlpack
 from cudf.core.column import ColumnBase
 from cudf.core.dataframe import DataFrame
@@ -30,15 +29,8 @@ def from_dlpack(pycapsule_obj):
     A cuDF DataFrame or Series depending on if the input DLPack tensor is 1D
     or 2D.
     """
-    try:
-        res = libdlpack.from_dlpack(pycapsule_obj)
-    except GDFError as err:
-        if str(err) == "b'GDF_DATASET_EMPTY'":
-            raise ValueError(
-                "Cannot create a cuDF Object from a DLPack tensor of 0 size"
-            )
-        else:
-            raise err
+
+    res = libdlpack.from_dlpack(pycapsule_obj)
 
     if res._num_columns == 1:
         return Series(res._data[0])
@@ -48,7 +40,24 @@ def from_dlpack(pycapsule_obj):
 
 @ioutils.doc_to_dlpack()
 def to_dlpack(cudf_obj):
-    """{docstring}"""
+    """Converts a cuDF object to a DLPack tensor.
+
+    DLPack is an open-source memory tensor structure:
+    `dmlc/dlpack <https://github.com/dmlc/dlpack>`_.
+
+    This function takes a cuDF object as input, and returns a PyCapsule object
+    which contains a pointer to DLPack tensor. This function deep
+    copies the data in the cuDF object into the DLPack tensor.
+
+    Parameters
+    ----------
+    cudf_obj : cuDF Object
+        Input cuDF object.
+
+    Returns
+    -------
+    A  DLPack tensor pointer which is encapsulated in a PyCapsule object.
+    """
     if len(cudf_obj) == 0:
         raise ValueError("Cannot create DLPack tensor of 0 size")
 

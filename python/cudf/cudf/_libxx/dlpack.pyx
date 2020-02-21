@@ -10,11 +10,8 @@ import cudf
 from cudf._libxx.table cimport *
 from cudf._libxx.table cimport *
 from cudf._libxx.lib cimport *
-import rmm
 
 
-from libc.stdint cimport uintptr_t, int8_t
-from libc.stdlib cimport calloc, malloc, free
 from cpython cimport pycapsule
 
 import warnings
@@ -28,7 +25,7 @@ from cudf._libxx.includes.dlpack cimport (
 
 def from_dlpack(dlpack_capsule):
     """
-    Converts a DLPack Tensor PyCapsule into a list of cudf Column objects.
+    Converts a DLPack Tensor PyCapsule into a cudf Table object.
 
     DLPack Tensor PyCapsule is expected to have the name "dltensor".
     """
@@ -43,9 +40,9 @@ def from_dlpack(dlpack_capsule):
     cdef unique_ptr[table] c_result
 
     with nogil:
-        c_result = move(cpp_from_dlpack(
-            dlpack_tensor
-        ))
+        c_result = move(
+            cpp_from_dlpack(dlpack_tensor)
+        )
 
     return Table.from_unique_ptr(
         move(c_result),
@@ -55,7 +52,7 @@ def from_dlpack(dlpack_capsule):
 
 def to_dlpack(Table source_table):
     """
-    Converts a a list of cudf Column objects into a DLPack Tensor PyCapsule.
+    Converts a Table cudf object into a DLPack Tensor PyCapsule.
 
     DLPack Tensor PyCapsule will have the name "dltensor".
     """
