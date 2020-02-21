@@ -771,11 +771,7 @@ Read the file with ``cudf.read_csv``
 0  123 2018-11-13T12:00:00.000 5451
 1  456 2018-11-14T12:35:01.000 5784
 2  789 2018-11-15T18:02:59.000 6117
-"""
 
-"""
-Examples
---------
 Read ``hexadecimal values`` from a csv file as integer column with cudf
 
 Create a test hex csv file
