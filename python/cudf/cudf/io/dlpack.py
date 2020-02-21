@@ -40,7 +40,7 @@ def from_dlpack(pycapsule_obj):
         else:
             raise err
 
-    if len(res._data) == 1:
+    if res._num_columns == 1:
         return Series(res._data[0])
     else:
         return DataFrame(data=res._data)
