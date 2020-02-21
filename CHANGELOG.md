@@ -138,6 +138,7 @@
 - PR #4198 Fix constructing `RangeIndex` from `range`
 - PR #4192 Parquet writer: fix OOB read when computing string hash
 - PR #4199 Fix potential race condition in memcpy_block
+- PR #4214 Alter ValueError exception for GPU accelerated Parquet writer to properly report `categorical` columns are not supported.
 
 
 # cuDF 0.12.0 (04 Feb 2020)
