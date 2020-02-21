@@ -53,7 +53,7 @@ namespace { // anonymous
  *        valid, else false.
  */
 template <typename InputType, typename OutputType, typename agg_op, aggregation::Kind op, bool has_nulls>
-std::enable_if_t<op == aggregation::COUNT, bool>
+std::enable_if_t<op == aggregation::COUNT_VALID || op == aggregation::COUNT_ALL, bool>
 __device__
 process_rolling_window(column_device_view input,
                         mutable_column_device_view output,
@@ -68,7 +68,7 @@ process_rolling_window(column_device_view input,
     volatile cudf::size_type count = 0;
     
     for (size_type j = start_index; j < end_index; j++) {
-        if (!has_nulls || input.is_valid(j)) {
+        if (op == aggregation::COUNT_ALL || !has_nulls || input.is_valid(j)) {
             count++;
         }
     }
@@ -128,7 +128,7 @@ process_rolling_window(column_device_view input,
  *        operation was valid, else false.
  */
 template <typename InputType, typename OutputType, typename agg_op, aggregation::Kind op, bool has_nulls>
-std::enable_if_t<!std::is_same<InputType, cudf::string_view>::value and !(op == aggregation::COUNT), bool>
+std::enable_if_t<!std::is_same<InputType, cudf::string_view>::value and !(op == aggregation::COUNT_VALID || op == aggregation::COUNT_ALL), bool>
 __device__
 process_rolling_window(column_device_view input,
                         mutable_column_device_view output,
@@ -352,7 +352,15 @@ struct rolling_window_launcher
           kernel_launcher<T, DeviceMax, aggregation::ARGMAX, WindowIterator>(input, output_view, preceding_window_begin,
                   following_window_begin, min_periods, agg, DeviceMax::template identity<T>(), stream);
       } else {
-          auto valid_count = kernel_launcher<T, DeviceCount, aggregation::COUNT, WindowIterator>(input, output_view, preceding_window_begin,
+          CUDF_EXPECTS(op == aggregation::COUNT_VALID || 	     
+                       op == aggregation::COUNT_ALL,
+                       "COUNT_VALID or COUNT_ALL aggregation only is expected");
+          size_type valid_count;
+          if (op == aggregation::COUNT_ALL)
+            valid_count = kernel_launcher<T, DeviceCount, aggregation::COUNT_ALL, WindowIterator>(input, output_view, preceding_window_begin,
+                  following_window_begin, min_periods, agg, string_view{}, stream);
+          else
+            valid_count = kernel_launcher<T, DeviceCount, aggregation::COUNT_VALID, WindowIterator>(input, output_view, preceding_window_begin,
                   following_window_begin, min_periods, agg, string_view{}, stream);
           output->set_null_count(output->size() - valid_count);
       }
