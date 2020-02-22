@@ -132,7 +132,7 @@ void sparse_to_dense_results(
     std::vector<aggregation_request> const& requests,
     experimental::detail::result_cache const& sparse_results,
     experimental::detail::result_cache* dense_results,
-    rmm::device_vector<size_type> const& gather_map,
+    rmm::device_vector<size_type> const& gather_map, size_type map_size,
     cudaStream_t stream,
     rmm::mr::device_memory_resource* mr)
 {
@@ -143,14 +143,14 @@ void sparse_to_dense_results(
     // Given an aggregation, this will get the result from sparse_results and 
     // convert and return dense, compacted result
     auto to_dense_agg_result =
-    [&sparse_results, &gather_map, i, mr, stream]
+    [&sparse_results, &gather_map, map_size, i, mr, stream]
     (auto const& agg) {
       auto s = sparse_results.get_result(i, agg);
       auto dense_result_table = 
         experimental::detail::gather(
           table_view({s}),
           gather_map.begin(),
-          gather_map.end(),
+          gather_map.begin() + map_size,
           false, mr, stream);
       return std::move(dense_result_table->release()[0]);
     };
@@ -287,8 +287,8 @@ void compute_single_pass_aggs(table_view const& keys,
  * `map`. 
  */
 template <typename Map>
-rmm::device_vector<size_type> extract_populated_keys(Map map,
-  size_type num_keys, cudaStream_t stream = 0)
+std::pair<rmm::device_vector<size_type>, size_type> extract_populated_keys(
+  Map map, size_type num_keys, cudaStream_t stream = 0)
 {
   rmm::device_vector<size_type> populated_keys(num_keys);
 
@@ -306,9 +306,9 @@ rmm::device_vector<size_type> extract_populated_keys(Map map,
       return key != unused_key;
     });
 
-  populated_keys.resize(end_it - populated_keys.begin());
+  size_type map_size = end_it - populated_keys.begin();
 
-  return populated_keys;
+  return std::make_pair(std::move(populated_keys), map_size);
 }
 
 template <bool keys_have_nulls>
@@ -334,13 +334,17 @@ std::unique_ptr<table> groupby_null_templated(
 
   // Extract the populated indices from the hash map and create a gather map.
   // Gathering using this map from sparse results will give dense results.
-  auto gather_map = extract_populated_keys(*map, keys.num_rows(), stream);
+  rmm::device_vector<size_type> gather_map;
+  size_type map_size;
+  std::tie(gather_map, map_size) = 
+    extract_populated_keys(*map, keys.num_rows(), stream);
 
   // Compact all results from sparse_results and insert into cache
-  sparse_to_dense_results(requests, sparse_results, cache, gather_map, stream, mr);
+  sparse_to_dense_results(requests, sparse_results, cache, gather_map, map_size,
+                          stream, mr);
 
   auto unique_keys = experimental::detail::gather(
-    keys, gather_map.begin(), gather_map.end(), false, mr, stream);
+    keys, gather_map.begin(), gather_map.begin() + map_size, false, mr, stream);
   return unique_keys;
 }
 
