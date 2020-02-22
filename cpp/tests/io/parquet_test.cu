@@ -475,21 +475,27 @@ TEST_F(ParquetChunkedWriterTest, SimpleTable)
 TEST_F(ParquetChunkedWriterTest, LargeTables)
 {
   rmm::device_vector<uint32_t> buf;
-  for (int i = 0; i < 512; i++) {
+#if 1
+  srand(31337);
+  auto table1 = create_random_fixed_table<int>(1000, 4096*5, true);
+  auto table2 = create_random_fixed_table<int>(1000, 8192*5, true);
+#endif
+  for (int i = 0; i < 256; i++) {
    buf.resize(i * 16384); // Somewhat randomizes addresses
    srand(31337);
- #if 1
+#if 0
+ #if 0
    auto table1 = create_random_fixed_table<int>(1000, 4096*5, true);
    auto table2 = create_random_fixed_table<int>(1000, 8192*5, true);
  #else
    auto table1 = create_random_fixed_table<int64_t>(1024, 4096, true);
    auto table2 = create_random_fixed_table<int64_t>(1024, 8192, true);
  #endif
-  
+#endif
    auto full_table = cudf::experimental::concatenate({*table1, *table2});          
 
    auto filepath = temp_env->get_temp_filepath("ChunkedLarge.parquet");
-#if 0
+#if 1
    cudf_io::write_parquet_chunked_args args{cudf_io::sink_info{filepath}, nullptr, cudf_io::compression_type::NONE};
 #else
    cudf_io::write_parquet_chunked_args args{cudf_io::sink_info{filepath}};
