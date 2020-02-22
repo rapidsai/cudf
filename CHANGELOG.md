@@ -9,6 +9,7 @@
 
 
 ## Improvements
+
 - PR #4140 Add cudf series examples in docs and corr() method for dataframe in dataframe.py
 - PR #3525 build.sh option to disable nvtx
 - PR #3748 Optimize hash_partition using shared memory
