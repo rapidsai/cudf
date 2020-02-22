@@ -690,6 +690,11 @@ table_with_metadata reader::impl::read(int skip_rows, int num_rows, int row_grou
                                 .schema_idx];
         bool is_nullable = (col_schema.max_definition_level != 0);
         out_buffers.emplace_back(column_types[i], num_rows, is_nullable, stream, _mr);
+      #if 1
+        if (column_types[i].id() == type_id::INT32) {
+          cudaMemsetAsync(out_buffers[i].data(), 0xff, num_rows * sizeof(int32_t), stream);
+        }
+      #endif
       }
 
       decode_page_data(chunks, pages, skip_rows, num_rows, chunk_map,
