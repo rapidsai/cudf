@@ -475,12 +475,12 @@ TEST_F(ParquetChunkedWriterTest, SimpleTable)
 TEST_F(ParquetChunkedWriterTest, LargeTables)
 {
   rmm::device_vector<uint32_t> buf;
-  for (int i = 0; i < 256; i++) {
+  for (int i = 0; i < 512; i++) {
    buf.resize(i * 16384); // Somewhat randomizes addresses
    srand(31337);
  #if 1
-   auto table1 = create_random_fixed_table<int>(512, 4096, true);
-   auto table2 = create_random_fixed_table<int>(512, 8192, true);
+   auto table1 = create_random_fixed_table<int>(1000, 40960, true);
+   auto table2 = create_random_fixed_table<int>(1000, 81920, true);
  #else
    auto table1 = create_random_fixed_table<int64_t>(1024, 4096, true);
    auto table2 = create_random_fixed_table<int64_t>(1024, 8192, true);
