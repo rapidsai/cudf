@@ -61,15 +61,22 @@ def write_to_dataset(df, root_path, partition_cols=None, fs=None, **kwargs):
     _mkdir_if_not_exists(fs, root_path)
 
     if partition_cols is not None and len(partition_cols) > 0:
-        df = df.reset_index(drop=True)
+
+        if len(partition_cols) > 1:
+            raise ValueError(
+                "Only single-column is supported with cudf (for now)"
+            )
+
         data_cols = df.columns.drop(partition_cols)
         if len(data_cols) == 0:
             raise ValueError("No data left to save outside partition columns")
 
-        # Not sure if this will work for multiindex?
-        data_df = df.set_index(partition_cols).sort_index()
-        for keys in data_df.index.unique():
-            sub_df = data_df[data_df.index == keys].reset_index(drop=True)
+        #  Won't work for multiple `partition_cols`..
+        data_df = df.sort_values(partition_cols)
+        for keys in data_df[partition_cols[0]].unique():
+            sub_df = data_df[data_df[partition_cols[0]] == keys].drop(
+                columns=partition_cols
+            )
 
             if not isinstance(keys, tuple):
                 keys = (keys,)
