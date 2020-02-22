@@ -4,15 +4,16 @@ import pandas as pd
 import numba
 import numpy as np
 from libcpp.string cimport string
+from libcpp.memory cimport unique_ptr
 from cudf.utils import cudautils
 
 from cudf._libxx.lib cimport *
+from cudf._libxx.lib import *
 
-from cudf._libxx.column import np_to_cudf_types
 from cudf._libxx.aggregation cimport *
 
 # need to update as and when we add new aggregations with additional options
-cdef unique_ptr[aggregation] get_aggregation(op, kwargs):
+cdef unique_ptr[aggregation] get_aggregation(op, kwargs) except *:
 
     cdef type_id tid
     cdef data_type out_dtype
