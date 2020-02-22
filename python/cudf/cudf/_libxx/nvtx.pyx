@@ -8,6 +8,7 @@
 from cudf._libxx.lib cimport *
 from cudf._libxx.lib import *
 
+
 def range_push(name, color='green'):
     """
     Demarcate the beginning of a user-defined NVTX range.
