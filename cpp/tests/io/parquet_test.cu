@@ -479,8 +479,8 @@ TEST_F(ParquetChunkedWriterTest, LargeTables)
    buf.resize(i * 16384); // Somewhat randomizes addresses
    srand(31337);
  #if 1
-   auto table1 = create_random_fixed_table<int>(1000, 40960, true);
-   auto table2 = create_random_fixed_table<int>(1000, 81920, true);
+   auto table1 = create_random_fixed_table<int>(1000, 4096*5, true);
+   auto table2 = create_random_fixed_table<int>(1000, 8192*5, true);
  #else
    auto table1 = create_random_fixed_table<int64_t>(1024, 4096, true);
    auto table2 = create_random_fixed_table<int64_t>(1024, 8192, true);
