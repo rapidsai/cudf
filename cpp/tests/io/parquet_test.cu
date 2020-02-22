@@ -482,6 +482,7 @@ TEST_F(ParquetChunkedWriterTest, LargeTables)
 #endif
   for (int i = 0; i < 256; i++) {
    buf.resize(i * 16384); // Somewhat randomizes addresses
+   buf.shrink_to_fit();
    srand(31337);
 #if 0
  #if 0
