@@ -2,12 +2,92 @@ import warnings
 from functools import partial
 
 import pyarrow.parquet as pq
+from pyarrow.compat import guid
 
 import dask.dataframe as dd
 from dask.dataframe.io.parquet.arrow import ArrowEngine
 
 import cudf
 from cudf.core.column import build_categorical_column
+
+
+def _mkdir_if_not_exists(fs, path):
+    if fs._isfilestore() and not fs.exists(path):
+        try:
+            fs.mkdir(path)
+        except OSError:
+            assert fs.exists(path)
+
+
+# Mostly borrowed from...
+# https://arrow.apache.org/
+# docs/_modules/pyarrow/parquet.html#write_to_dataset
+def write_to_dataset(df, root_path, partition_cols=None, fs=None, **kwargs):
+    """Wrapper around parquet.write_table for writing a Table to
+    Parquet format by partitions.
+    For each combination of partition columns and values,
+    a subdirectories are created in the following
+    manner:
+
+    root_dir/
+      group1=value1
+        group2=value1
+          <uuid>.parquet
+        group2=value2
+          <uuid>.parquet
+      group1=valueN
+        group2=value1
+          <uuid>.parquet
+        group2=valueN
+          <uuid>.parquet
+
+    Parameters
+    ----------
+    table : pyarrow.Table
+    root_path : string,
+        The root directory of the dataset
+    filesystem : FileSystem, default None
+        If nothing passed, paths assumed to be found in the local on-disk
+        filesystem
+    partition_cols : list,
+        Column names by which to partition the dataset
+        Columns are partitioned in the order they are given
+    **kwargs : dict,
+        kwargs for write_table function. Using `metadata_collector` in
+        kwargs allows one to collect the file metadata instances of
+        dataset pieces. See docstring for `write_table` or
+        `ParquetWriter` for more information.
+    """
+    _mkdir_if_not_exists(fs, root_path)
+
+    if partition_cols is not None and len(partition_cols) > 0:
+        df = df.reset_index(drop=True)
+        data_cols = df.columns.drop(partition_cols)
+        if len(data_cols) == 0:
+            raise ValueError("No data left to save outside partition columns")
+
+        # Not sure if this will work for multiindex?
+        data_df = df.set_index(partition_cols).sort_index()
+        for keys in data_df.index.unique():
+            sub_df = data_df[data_df.index == keys].reset_index(drop=True)
+
+            if not isinstance(keys, tuple):
+                keys = (keys,)
+            subdir = "/".join(
+                [
+                    "{colname}={value}".format(colname=name, value=val)
+                    for name, val in zip(partition_cols, keys)
+                ]
+            )
+            prefix = "/".join([root_path, subdir])
+            _mkdir_if_not_exists(fs, prefix)
+            outfile = guid() + ".parquet"
+            full_path = "/".join([prefix, outfile])
+            sub_df.to_parquet(full_path, **kwargs)
+    else:
+        outfile = guid() + ".parquet"
+        full_path = "/".join([root_path, outfile])
+        df.to_parquet(full_path, **kwargs)
 
 
 class CudfEngine(ArrowEngine):
@@ -106,34 +186,55 @@ class CudfEngine(ArrowEngine):
         # TODO: Replace `pq.write_table` with gpu-accelerated
         #       write after cudf.io.to_parquet is supported.
 
-        md_list = []
         preserve_index = False
         if index_cols:
             df = df.set_index(index_cols)
             preserve_index = True
 
         # NOTE: `to_arrow` does not accept `schema` argument
-        t = df.to_arrow(preserve_index=preserve_index)
-        if partition_on:
-            pq.write_to_dataset(
-                t,
-                path,
-                partition_cols=partition_on,
-                filesystem=fs,
-                metadata_collector=md_list,
-                **kwargs,
-            )
+        if return_metadata:
+            md_list = []
+            t = df.to_arrow(preserve_index=preserve_index)
         else:
-            with fs.open(fs.sep.join([path, filename]), "wb") as fil:
-                pq.write_table(
+            md_list = [None]
+            t = df.head(0).to_arrow(preserve_index=preserve_index)
+        if partition_on:
+            if return_metadata:
+                pq.write_to_dataset(
                     t,
-                    fil,
-                    compression=compression,
+                    path,
+                    partition_cols=partition_on,
+                    filesystem=fs,
                     metadata_collector=md_list,
                     **kwargs,
                 )
-            if md_list:
-                md_list[0].set_file_path(filename)
+            else:
+                write_to_dataset(
+                    df,
+                    path,
+                    partition_cols=partition_on,
+                    metadata_collector=md_list,
+                    fs=fs,
+                    **kwargs,
+                )
+        else:
+            if return_metadata:
+                with fs.open(fs.sep.join([path, filename]), "wb") as fil:
+                    pq.write_table(
+                        t,
+                        fil,
+                        compression=compression,
+                        metadata_collector=md_list,
+                        **kwargs,
+                    )
+                if md_list:
+                    md_list[0].set_file_path(filename)
+            else:
+                df.to_parquet(
+                    fs.sep.join([path, filename]),
+                    compression=compression,
+                    **kwargs,
+                )
         # Return the schema needed to write the metadata
         if return_metadata:
             return [{"schema": t.schema, "meta": md_list[0]}]
