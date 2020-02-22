@@ -216,28 +216,6 @@ auto create_hash_map(table_device_view const& d_keys,
 }
 
 /**
- * @brief Convenience function to run single-pass multi-agg using different
- * template types
- * @see compute_single_pass_aggs()
- */
-template <bool skip_rows_with_nulls, bool target_nullable, bool source_nullable,
-          typename Map>
-void compute_single_pass_aggs_templated(size_type num_keys, Map map,
-    table_device_view source, mutable_table_device_view target, 
-    rmm::device_vector<aggregation::Kind> const& aggs,
-    void * row_bitmask = nullptr, cudaStream_t stream = 0)
-{
-  using functor_type = hash::compute_single_pass_aggs<skip_rows_with_nulls, 
-                                  target_nullable, source_nullable, Map>;
-
-  thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
-    thrust::make_counting_iterator(0), num_keys,
-    functor_type{
-      map, num_keys, source, target, aggs.data().get(),
-      static_cast<bitmask_type*>(row_bitmask)});
-}
-
-/**
  * @brief Computes all aggregations from `requests` that require a single pass
  * over the data and stores the results in `sparse_results`
  */
@@ -253,10 +231,6 @@ void compute_single_pass_aggs(table_view const& keys,
   std::vector<aggregation::Kind> aggs;
   std::vector<size_t> col_ids;
   std::tie(flattened_values, aggs, col_ids) = flatten_single_pass_aggs(requests);
-
-  bool source_nullable = 
-    std::any_of(flattened_values.begin(), flattened_values.end(),
-      [] (auto const& col) { return col.nullable(); });
 
   // make table that will hold sparse results
   std::vector<std::unique_ptr<column>> sparse_columns;
@@ -276,10 +250,6 @@ void compute_single_pass_aggs(table_view const& keys,
   mutable_table_view table_view = sparse_table.mutable_view();
   experimental::detail::initialize_with_identity(table_view, aggs, stream);
 
-  bool target_nullable = 
-    std::any_of(table_view.begin(), table_view.end(),
-      [] (auto const& col) { return col.nullable(); });
-
   // prepare to launch kernel to do the actual aggregation
   auto d_sparse_table = mutable_table_device_view::create(sparse_table);
   auto d_values = table_device_view::create(flattened_values);
@@ -288,45 +258,20 @@ void compute_single_pass_aggs(table_view const& keys,
   bool skip_key_rows_with_nulls = keys_have_nulls and 
                                   include_null_keys == include_nulls::NO;
 
-  auto templated_compute_function = 
-    [skip_key_rows_with_nulls, target_nullable, source_nullable] () {
-      if (skip_key_rows_with_nulls) {
-        if (target_nullable) {
-          if (source_nullable) {
-            return compute_single_pass_aggs_templated<true, true, true, Map>;
-          } else {
-            return compute_single_pass_aggs_templated<true, true, false, Map>;
-          }
-        } else {
-          if (source_nullable) {
-            return compute_single_pass_aggs_templated<true, false, true, Map>;
-          } else {
-            return compute_single_pass_aggs_templated<true, false, false, Map>;
-          }
-        }
-      } else {
-        if (target_nullable) {
-          if (source_nullable) {
-            return compute_single_pass_aggs_templated<false, true, true, Map>;
-          } else {
-            return compute_single_pass_aggs_templated<false, true, false, Map>;
-          }
-        } else {
-          if (source_nullable) {
-            return compute_single_pass_aggs_templated<false, false, true, Map>;
-          } else {
-            return compute_single_pass_aggs_templated<false, false, false, Map>;
-          }
-        }
-      }
-    }();
-
-  auto row_bitmask = (skip_key_rows_with_nulls) 
-                   ? bitmask_and(keys, rmm::mr::get_default_resource(), stream)
-                   : rmm::device_buffer{};
-
-  templated_compute_function(keys.num_rows(), map, *d_values, *d_sparse_table, 
-                             d_aggs, row_bitmask.data(), stream);
+  if (skip_key_rows_with_nulls) {
+    auto row_bitmask{bitmask_and(keys, rmm::mr::get_default_resource(), stream)};
+    thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+      thrust::make_counting_iterator(0), keys.num_rows(),
+      hash::compute_single_pass_aggs<true, Map>{
+        map, keys.num_rows(), *d_values, *d_sparse_table, d_aggs.data().get(),
+        static_cast<bitmask_type*>(row_bitmask.data())});
+  } else {
+    thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+      thrust::make_counting_iterator(0), keys.num_rows(),
+      hash::compute_single_pass_aggs<false, Map>{
+        map, keys.num_rows(), *d_values, *d_sparse_table, d_aggs.data().get(),
+        nullptr});
+  }
 
   // Add results back to sparse_results cache
   auto sparse_result_cols = sparse_table.release();
