@@ -478,8 +478,13 @@ TEST_F(ParquetChunkedWriterTest, LargeTables)
   for (int i = 0; i < 256; i++) {
    buf.resize(i * 16384); // Somewhat randomizes addresses
    srand(31337);
+ #if 0
    auto table1 = create_random_fixed_table<int>(512, 4096, true);
    auto table2 = create_random_fixed_table<int>(512, 8192, true);
+ #else
+   auto table1 = create_random_fixed_table<int64_t>(1024, 4096, true);
+   auto table2 = create_random_fixed_table<int64_t>(1024, 8192, true);
+ #endif
   
    auto full_table = cudf::experimental::concatenate({*table1, *table2});          
 
