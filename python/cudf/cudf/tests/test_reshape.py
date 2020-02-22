@@ -195,4 +195,3 @@ def test_tile(nulls, num_cols, num_rows, dtype, count):
     expect = pd.concat([pdf] * count)
 
     assert_eq(expect, got)
-    pass
