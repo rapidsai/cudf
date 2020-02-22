@@ -21,7 +21,7 @@
 #define NTHREADS        (1 << LOG2_NTHREADS)
 #define NZ_BFRSZ        (NTHREADS*2)
 
-#if 1
+#if 0
 #define VOLATILE volatile
 #else
 #define VOLATILE
