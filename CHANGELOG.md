@@ -141,6 +141,7 @@
 - PR #4162 Properly handle no index metadata generation for to_parquet
 - PR #4175 Fix `__sizeof__` calculation in `StringColumn`
 - PR #4155 Update groupby group_offsets size and fix unnecessary device dispatch.
+- PR #4186 Fix from_timestamps 12-hour specifiers support
 - PR #4198 Fix constructing `RangeIndex` from `range`
 - PR #4192 Parquet writer: fix OOB read when computing string hash
 - PR #4201 Fix java window tests
