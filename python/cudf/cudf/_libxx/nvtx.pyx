@@ -5,13 +5,10 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
-from cudf._libxx.nvtx cimport (
-    range_push as cpp_range_push,
-    range_push_hex as cpp_range_push_hex,
-    range_pop as cpp_range_pop
-)
+from cudf._libxx.lib cimport *
+from cudf._libxx.lib import *
 
-def nvtx_range_push(name, color='green'):
+def range_push(name, color='green'):
     """
     Demarcate the beginning of a user-defined NVTX range.
 
@@ -26,16 +23,15 @@ def nvtx_range_push(name, color='green'):
     name = name.encode('ascii')
     try:
         color = int(color, 16)
-        result = cpp_range_push_hex(name, color)
+        result = range_push_hex(name, color)
     except ValueError:
-        color = _GDF_COLORS[color]
-        result = cpp_range_push(name, color)
+        result = range_push(name, color)
     check_gdf_error(result)
 
 
-def nvtx_range_pop():
+def range_pop():
     """
     Demarcate the end of a user-defined NVTX range.
     """
-    result = gdf_nvtx_range_pop()
+    result = range_pop()
     check_gdf_error(result)
