@@ -20,12 +20,15 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/strings/copying.hpp>
 #include <cudf/strings/detail/concatenate.hpp>
 #include <cudf/copying.hpp>
 
 #include <rmm/device_buffer.hpp>
+
+#include <thrust/transform_scan.h>
 
 #include <algorithm>
 #include <numeric>
@@ -276,22 +279,71 @@ struct create_column_from_view_vector {
 };
 
 struct concatenate_using_partition_map {
-  std::vector<cudf::column_view> const& views;
+  std::vector<column_view> const& views;
   cudaStream_t stream;
-  rmm::mr::device_memory_resource *mr;
+  rmm::mr::device_memory_resource* mr;
 
- template <typename ColumnType,
-           std::enable_if_t<is_fixed_width<ColumnType>()>* = nullptr>
- std::unique_ptr<column> operator()() {
-   // TODO implement optimization
-   return experimental::empty_like(views.front());
- }
+  template <typename T,
+      std::enable_if_t<is_fixed_width<T>()>* = nullptr>
+  std::unique_ptr<column> operator()() {
 
- template <typename ColumnType,
-           std::enable_if_t<not is_fixed_width<ColumnType>()>* = nullptr>
- std::unique_ptr<column> operator()() {
-   CUDF_FAIL("non-fixed-width types not yet supported");
- }
+    // Compute the partition offsets
+    thrust::host_vector<size_type> offsets(views.size() + 1);
+    thrust::transform_inclusive_scan(thrust::host,
+      views.begin(), views.end(), offsets.begin() + 1,
+      [](column_view const& col) {
+        return col.size();
+      },
+      thrust::plus<size_type>{});
+    thrust::device_vector<size_type> d_offsets(offsets);
+    auto const output_size = offsets.back();
+
+    // Compute partition map
+    // NOTE instead of scattering `i` and doing a "max scan", scatter 1s
+    // for all but the first offset and do an inclusive scan
+    thrust::device_vector<size_type> d_partition_map(output_size);
+    auto const const_it = thrust::make_constant_iterator(size_type{1});
+    thrust::scatter(rmm::exec_policy(stream)->on(stream),
+      const_it, const_it + (d_offsets.size() - 2), // skip first and last offset
+      d_offsets.begin() + 1, // skip first offset, leaving it set to 0
+      d_partition_map.begin());
+    thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream),
+      d_partition_map.begin(), d_partition_map.end(),
+      d_partition_map.begin());
+
+    // Transform views to array of data pointers
+    thrust::host_vector<T const*> data_ptrs(views.size());
+    std::transform(views.begin(), views.end(), data_ptrs.begin(),
+      [](column_view const& col) {
+        return col.data<T>();
+      });
+    thrust::device_vector<T const*> d_data_ptrs(data_ptrs);
+
+    // TODO add null mask support
+    auto out_col = experimental::detail::allocate_like(views.front(), output_size,
+      experimental::mask_allocation_policy::NEVER, mr, stream);
+    auto out_view = out_col->mutable_view();
+
+    // Initialize each output row from its corresponding input view
+    auto const* offsets_ptr = d_offsets.data().get();
+    auto const* partition_ptr = d_partition_map.data().get();
+    auto const** data_ptr = d_data_ptrs.data().get();
+    thrust::tabulate(rmm::exec_policy(stream)->on(stream),
+      out_view.begin<T>(), out_view.end<T>(),
+      [offsets_ptr, partition_ptr, data_ptr] __device__ (auto i) {
+        auto const partition_num = partition_ptr[i];
+        auto const offset = offsets_ptr[i];
+        return data_ptr[partition_num][i - offset];
+      });
+
+    return out_col;
+  }
+
+  template <typename ColumnType,
+      std::enable_if_t<not is_fixed_width<ColumnType>()>* = nullptr>
+  std::unique_ptr<column> operator()() {
+    CUDF_FAIL("non-fixed-width types not yet supported");
+  }
 };
 
 struct concatenate_using_binary_search {
@@ -299,18 +351,18 @@ struct concatenate_using_binary_search {
   cudaStream_t stream;
   rmm::mr::device_memory_resource *mr;
 
- template <typename ColumnType,
-           std::enable_if_t<is_fixed_width<ColumnType>()>* = nullptr>
- std::unique_ptr<column> operator()() {
-   // TODO implement optimization
-   return experimental::empty_like(views.front());
- }
+  template <typename ColumnType,
+      std::enable_if_t<is_fixed_width<ColumnType>()>* = nullptr>
+  std::unique_ptr<column> operator()() {
+    // TODO implement optimization
+    return experimental::empty_like(views.front());
+  }
 
- template <typename ColumnType,
-           std::enable_if_t<not is_fixed_width<ColumnType>()>* = nullptr>
- std::unique_ptr<column> operator()() {
-   CUDF_FAIL("non-fixed-width types not yet supported");
- }
+  template <typename ColumnType,
+      std::enable_if_t<not is_fixed_width<ColumnType>()>* = nullptr>
+  std::unique_ptr<column> operator()() {
+    CUDF_FAIL("non-fixed-width types not yet supported");
+  }
 };
 
 // Copy from a view
