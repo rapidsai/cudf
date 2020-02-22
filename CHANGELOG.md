@@ -145,7 +145,8 @@
 - PR #4192 Parquet writer: fix OOB read when computing string hash
 - PR #4201 Fix java window tests
 - PR #4199 Fix potential race condition in memcpy_block
-- PR #4218 Fix `get_aggreagtion` definition with `except *`
+- PR #4221 Fix series dict alignment to not drop index name
+- PR #4218 Fix `get_aggregation` definition with `except *`
 - PR #4215 Fix performance regression in strings::detail::concatenate
 - PR #4214 Alter ValueError exception for GPU accelerated Parquet writer to properly report `categorical` columns are not supported.
 
