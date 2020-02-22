@@ -312,6 +312,15 @@ class column {
                     ///< columns may contain additional data
 };
 
+// Allow strategy switching at runtime for easier benchmarking
+// TODO remove when done
+enum class concatenate_mode {
+  UNOPTIMIZED,
+  PARTITION_MAP,
+  BINARY_SEARCH,
+};
+void temp_set_concatenate_mode(concatenate_mode mode);
+
 /**---------------------------------------------------------------------------*
  * @brief Concatenates multiple columns into a single column.
  *

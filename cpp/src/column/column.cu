@@ -275,6 +275,44 @@ struct create_column_from_view_vector {
 
 };
 
+struct concatenate_using_partition_map {
+  std::vector<cudf::column_view> const& views;
+  cudaStream_t stream;
+  rmm::mr::device_memory_resource *mr;
+
+ template <typename ColumnType,
+           std::enable_if_t<is_fixed_width<ColumnType>()>* = nullptr>
+ std::unique_ptr<column> operator()() {
+   // TODO implement optimization
+   return experimental::empty_like(views.front());
+ }
+
+ template <typename ColumnType,
+           std::enable_if_t<not is_fixed_width<ColumnType>()>* = nullptr>
+ std::unique_ptr<column> operator()() {
+   CUDF_FAIL("non-fixed-width types not yet supported");
+ }
+};
+
+struct concatenate_using_binary_search {
+  std::vector<cudf::column_view> const& views;
+  cudaStream_t stream;
+  rmm::mr::device_memory_resource *mr;
+
+ template <typename ColumnType,
+           std::enable_if_t<is_fixed_width<ColumnType>()>* = nullptr>
+ std::unique_ptr<column> operator()() {
+   // TODO implement optimization
+   return experimental::empty_like(views.front());
+ }
+
+ template <typename ColumnType,
+           std::enable_if_t<not is_fixed_width<ColumnType>()>* = nullptr>
+ std::unique_ptr<column> operator()() {
+   CUDF_FAIL("non-fixed-width types not yet supported");
+ }
+};
+
 // Copy from a view
 column::column(column_view view, cudaStream_t stream,
                rmm::mr::device_memory_resource *mr) :
@@ -282,6 +320,13 @@ column::column(column_view view, cudaStream_t stream,
   // an lvalue reference, which would otherwise dispatch to the copy constructor
   column{std::move(*experimental::type_dispatcher(view.type(),
                     create_column_from_view{view, stream, mr}))} {}
+
+// Allow strategy switching at runtime for easier benchmarking
+// TODO remove when done
+static concatenate_mode current_mode = concatenate_mode::UNOPTIMIZED;
+void temp_set_concatenate_mode(concatenate_mode mode) {
+  current_mode = mode;
+}
 
 // Concatenates the elements from a vector of column_views
 std::unique_ptr<column>
@@ -293,8 +338,20 @@ concatenate(std::vector<column_view> const& columns_to_concat,
   CUDF_EXPECTS(std::all_of(columns_to_concat.begin(), columns_to_concat.end(),
         [type](auto const& c) { return c.type() == type; }),
       "Type mismatch in columns to concatenate.");
-  return cudf::experimental::type_dispatcher(type,
-      create_column_from_view_vector{columns_to_concat, stream, mr});
+  
+  switch (current_mode) {
+    case concatenate_mode::UNOPTIMIZED:
+      return experimental::type_dispatcher(type,
+          create_column_from_view_vector{columns_to_concat, stream, mr});
+    case concatenate_mode::PARTITION_MAP:
+      return experimental::type_dispatcher(type,
+          concatenate_using_partition_map{columns_to_concat, stream, mr});
+    case concatenate_mode::BINARY_SEARCH:
+      return experimental::type_dispatcher(type,
+          concatenate_using_binary_search{columns_to_concat, stream, mr});
+    default:
+      CUDF_FAIL("Invalid concatenate mode");
+  }
 }
 
 }  // namespace cudf
