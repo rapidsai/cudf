@@ -22,7 +22,9 @@ def _mkdir_if_not_exists(fs, path):
 # Mostly borrowed from...
 # https://arrow.apache.org/
 # docs/_modules/pyarrow/parquet.html#write_to_dataset
-def write_to_dataset(df, root_path, partition_cols=None, fs=None, **kwargs):
+def write_to_dataset(
+    df, root_path, partition_cols=None, fs=None, preserve_index=False, **kwargs
+):
     """Wrapper around parquet.write_table for writing a Table to
     Parquet format by partitions.
     For each combination of partition columns and values,
@@ -72,12 +74,12 @@ def write_to_dataset(df, root_path, partition_cols=None, fs=None, **kwargs):
             raise ValueError("No data left to save outside partition columns")
 
         #  Won't work for multiple `partition_cols`..
-        data_df = df.sort_values(partition_cols)
-        for keys in data_df[partition_cols[0]].unique():
-            sub_df = data_df[data_df[partition_cols[0]] == keys].drop(
-                columns=partition_cols
-            )
-
+        for i, sub_df in enumerate(
+            df.scatter_by_map(partition_cols[0], keep_index=preserve_index)
+        ):
+            if sub_df is None or len(sub_df) < 1:
+                continue
+            keys = sub_df[partition_cols[0]].iloc[0]
             if not isinstance(keys, tuple):
                 keys = (keys,)
             subdir = "/".join(
@@ -90,7 +92,7 @@ def write_to_dataset(df, root_path, partition_cols=None, fs=None, **kwargs):
             _mkdir_if_not_exists(fs, prefix)
             outfile = guid() + ".parquet"
             full_path = "/".join([prefix, outfile])
-            sub_df.to_parquet(full_path, **kwargs)
+            sub_df.drop(columns=partition_cols).to_parquet(full_path, **kwargs)
     else:
         outfile = guid() + ".parquet"
         full_path = "/".join([root_path, outfile])
@@ -198,15 +200,16 @@ class CudfEngine(ArrowEngine):
             df = df.set_index(index_cols)
             preserve_index = True
 
+        use_arrow = return_metadata or (partition_on and len(partition_on) > 1)
+
         # NOTE: `to_arrow` does not accept `schema` argument
-        if return_metadata:
+        if use_arrow:
             md_list = []
             t = df.to_arrow(preserve_index=preserve_index)
         else:
             md_list = [None]
-            t = df.head(0).to_arrow(preserve_index=preserve_index)
         if partition_on:
-            if return_metadata:
+            if use_arrow:
                 pq.write_to_dataset(
                     t,
                     path,
@@ -222,10 +225,11 @@ class CudfEngine(ArrowEngine):
                     partition_cols=partition_on,
                     metadata_collector=md_list,
                     fs=fs,
+                    preserve_index=preserve_index,
                     **kwargs,
                 )
         else:
-            if return_metadata:
+            if use_arrow:
                 with fs.open(fs.sep.join([path, filename]), "wb") as fil:
                     pq.write_table(
                         t,
