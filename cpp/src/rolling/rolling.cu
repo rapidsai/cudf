@@ -225,7 +225,7 @@ void gpu_rolling(column_device_view input,
     // set the mask
     cudf::bitmask_type result_mask{__ballot_sync(active_threads, output_is_valid)};
 
-    printf("RGSL : Active masks are %u for i %d\n", __activemask(), i);
+    printf("RGSL1 : Active masks are %u for i %d\n", __activemask(), i);
     printf("RGSL414 : output_is_valid %d \n", output_is_valid);
     // only one thread writes the mask
     if (0 == threadIdx.x % cudf::experimental::detail::warp_size) {
