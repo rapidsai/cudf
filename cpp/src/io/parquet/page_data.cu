@@ -133,6 +133,7 @@ __device__ uint32_t device_str2hash32(const char* key, size_t len, uint32_t seed
     return h1;
 }
 
+   
 /**
  * @brief Read a 32-bit varint integer
  *
@@ -716,19 +717,18 @@ inline __device__ void gpuStoreOutput(uint32_t *dst, const uint8_t *src8, uint32
     uint32_t bytebuf;
     unsigned int ofs = 3 & reinterpret_cast<size_t>(src8);
     src8 -= ofs;    // align to 32-bit boundary
-    ofs <<= 3;      // bytes -> bits
     if (dict_pos < dict_size)
     {
         bytebuf = *(const uint32_t *)(src8 + dict_pos);
         if (ofs)
         {
             uint32_t bytebufnext = *(const uint32_t *)(src8 + dict_pos + 4);
-            bytebuf = __funnelshift_r(bytebuf, bytebufnext, ofs);
+            bytebuf = __funnelshift_r(bytebuf, bytebufnext, ofs * 8);
         }
     }
     else
     {
-        bytebuf = 0;
+        bytebuf = 1001;
     }
     *dst = bytebuf;
 }
