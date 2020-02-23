@@ -1,9 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
-
-# cython: profile=False
-# distutils: language = c++
-# cython: embedsignature = True
-# cython: language_level = 3
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
@@ -27,7 +22,7 @@ def cast(Column incol, dtype=np.float64):
 
     cdef gdf_column* c_incol = column_view_from_column(incol)
     cdef gdf_dtype c_out_dtype = gdf_dtype_from_dtype(dtype)
-    cdef uintptr_t c_category
+    cdef uintptr_t c_category = 0
     cdef gdf_dtype_extra_info c_out_info = gdf_dtype_extra_info(
         time_unit=np_dtype_to_gdf_time_unit(dtype),
         category=<void*>c_category
