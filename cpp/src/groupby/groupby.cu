@@ -132,12 +132,11 @@ groupby::aggregate(std::vector<aggregation_request> const& requests,
   return dispatch_aggregation(requests, 0, mr);
 }
 
-groupby_groups groupby::groups(table_view values, rmm::mr::device_memory_resource*  mr,
-      cudaStream_t stream) {
+groupby_groups groupby::groups(table_view values, rmm::mr::device_memory_resource*  mr) {
 
-  auto group_keys = helper().sorted_keys(mr, stream);
+  auto group_keys = helper().sorted_keys(mr, 0);
 
-  auto group_offsets = helper().group_offsets(stream);
+  auto group_offsets = helper().group_offsets(0);
   std::vector<size_type> group_offsets_vector(group_offsets.size());
   thrust::copy(group_offsets.begin(),
       group_offsets.end(),
