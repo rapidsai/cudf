@@ -786,7 +786,7 @@ Read the file with ``cudf.read_csv`` and use `hex64` as dtype.
 dtype: 'hex64', 'hex32' or 'hex` (alias for hex64) for hexadecimal parsing.
 
 >>> gdf = cudf.read_csv(fname, converters={'hex_col': partial(int, base=16)},
-                        dtype = {"hex_col" : "hex64"})
+...                     dtype = {"hex_col" : "hex64"})
 >>> gdf
     hex_col
 0   2501034507
