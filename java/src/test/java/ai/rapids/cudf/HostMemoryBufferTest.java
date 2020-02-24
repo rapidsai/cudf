@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -22,7 +22,13 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.channels.FileChannel;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.Random;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -108,6 +114,55 @@ public class HostMemoryBufferTest extends CudfTestBase {
       tmp.copyFromHostBuffer(init);
       to.copyFromDeviceBuffer(tmp);
       assertEquals(123456789, to.getLong(0));
+    }
+  }
+
+  @Test
+  public void testFilemap() throws Exception {
+    Random random = new Random(12345L);
+    final int pageSize = UnsafeMemoryAccessor.pageSize();
+    final int bufferSize = pageSize * 5;
+    byte[] testbuf = new byte[bufferSize];
+    random.nextBytes(testbuf);
+    Path tempFile = Files.createTempFile("mmaptest", ".data");
+    try {
+      Files.write(tempFile, testbuf);
+
+      // verify we can map the whole file
+      try (HostMemoryBuffer hmb = HostMemoryBuffer.mapFile(tempFile.toString(),
+          FileChannel.MapMode.READ_ONLY, 0,bufferSize)) {
+        assertEquals(bufferSize, hmb.length);
+        byte[] bytes = new byte[(int) hmb.length];
+        hmb.getBytes(bytes, 0, 0, hmb.length);
+        assertArrayEquals(testbuf, bytes);
+      }
+
+      // verify we can map at offsets that aren't a page boundary
+      int mapOffset = pageSize + 1;
+      int mapLength = pageSize * 2 + 7;
+      try (HostMemoryBuffer hmb = HostMemoryBuffer.mapFile(tempFile.toString(),
+          FileChannel.MapMode.READ_ONLY, mapOffset, mapLength)) {
+        assertEquals(mapLength, hmb.length);
+        byte[] expected = Arrays.copyOfRange(testbuf, mapOffset, mapOffset + mapLength);
+        byte[] bytes = new byte[(int) hmb.length];
+        hmb.getBytes(bytes, 0, 0, hmb.length);
+        assertArrayEquals(expected, bytes);
+      }
+
+      // verify we can modify the file via a writable mapping
+      mapOffset = pageSize * 3 + 123;
+      mapLength = bufferSize - mapOffset - 456;
+      byte[] newData = new byte[mapLength];
+      random.nextBytes(newData);
+      try (HostMemoryBuffer hmb = HostMemoryBuffer.mapFile(tempFile.toString(),
+          FileChannel.MapMode.READ_WRITE, mapOffset, mapLength)) {
+        hmb.setBytes(0, newData, 0, newData.length);
+      }
+      byte[] data = Files.readAllBytes(tempFile);
+      System.arraycopy(newData, 0, testbuf, mapOffset, mapLength);
+      assertArrayEquals(testbuf, data);
+    } finally {
+      Files.delete(tempFile);
     }
   }
 }

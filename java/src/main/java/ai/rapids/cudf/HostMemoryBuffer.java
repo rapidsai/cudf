@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -26,6 +26,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.channels.FileChannel.MapMode;
+
 
 /**
  * This class holds an off-heap buffer in the host/CPU memory.
@@ -43,7 +45,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
   private static final Logger log = LoggerFactory.getLogger(HostMemoryBuffer.class);
 
   // Make sure we loaded the native dependencies so we have a way to create a ByteBuffer
-  {
+  static {
     NativeDepsLoader.loadNativeDeps();
   }
 
@@ -53,6 +55,9 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * be used if the corresponding HostMemoryBuffer is closed.
    */
   private static native ByteBuffer wrapRangeInBuffer(long address, long len);
+
+  private static native long mmap(String file, int mode, long offset, long len) throws IOException;
+  private static native void munmap(long address, long length);
 
   private static final class HostBufferCleaner extends MemoryBufferCleaner {
     private long address;
@@ -75,6 +80,31 @@ public class HostMemoryBuffer extends MemoryBuffer {
       if (neededCleanup && logErrorIfNotClean) {
         log.error("A HOST BUFFER WAS LEAKED!!!!");
         logRefCountDebug("Leaked host buffer");
+      }
+      return neededCleanup;
+    }
+  }
+
+  private static final class MmapCleaner extends MemoryBufferCleaner {
+    private long address;
+    private final long length;
+
+    MmapCleaner(long address, long length) {
+      this.address = address;
+      this.length = length;
+    }
+
+    @Override
+    protected boolean cleanImpl(boolean logErrorIfNotClean) {
+      boolean neededCleanup = false;
+      if (address != 0) {
+        munmap(address, length);
+        address = 0;
+        neededCleanup = true;
+      }
+      if (neededCleanup && logErrorIfNotClean) {
+        log.error("A MEMORY MAPPED BUFFER WAS LEAKED!!!!");
+        logRefCountDebug("Leaked mmap buffer");
       }
       return neededCleanup;
     }
@@ -107,6 +137,38 @@ public class HostMemoryBuffer extends MemoryBuffer {
    */
   public static HostMemoryBuffer allocate(long bytes) {
     return allocate(bytes, defaultPreferPinned);
+  }
+
+  /**
+   * Create a host buffer that is memory-mapped to a file.
+   * @param path path to the file to map into host memory
+   * @param mode mapping type
+   * @param offset file offset where the map will start
+   * @param length the number of bytes to map
+   * @return file-mapped buffer
+   */
+  public static HostMemoryBuffer mapFile(String path, MapMode mode,
+      long offset, long length) throws IOException {
+    // mapping offset must be a multiple of the system page size
+    long offsetDelta = offset & (UnsafeMemoryAccessor.pageSize() - 1);
+    long address;
+    try {
+      address = mmap(path, modeAsInt(mode), offset - offsetDelta, length + offsetDelta);
+    } catch (IOException e) {
+      throw new IOException("Error creating memory map for " + path, e);
+    }
+    return new HostMemoryBuffer(address + offsetDelta, length,
+        new MmapCleaner(address, length + offsetDelta));
+  }
+
+  private static int modeAsInt(MapMode mode) {
+    if (MapMode.READ_ONLY.equals(mode)) {
+      return 0;
+    } else if (MapMode.READ_WRITE.equals(mode)) {
+      return 1;
+    } else {
+      throw new UnsupportedOperationException("Unsupported mapping mode: " + mode);
+    }
   }
 
   HostMemoryBuffer(long address, long length) {
