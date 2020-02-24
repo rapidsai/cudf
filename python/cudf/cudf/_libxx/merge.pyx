@@ -2,7 +2,7 @@ from cudf._libxx.lib cimport *
 from cudf._libxx.column cimport Column
 from cudf._libxx.table cimport Table
 from libcpp.vector cimport vector
-cimport cudf._libxx.includes.merge as cpp_merge
+from cudf._libxx.includes.merge cimport merge as cpp_merge
 
 
 def merge_sorted(
@@ -74,7 +74,7 @@ def merge_sorted(
     cdef unique_ptr[table] c_result
     with nogil:
         c_result = move(
-            cpp_merge.merge(
+            cpp_merge(
                 c_input_tables,
                 c_column_keys,
                 c_column_order,
