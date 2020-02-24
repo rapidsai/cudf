@@ -217,12 +217,19 @@ bool column_comparison(cudf::column_view const& lhs, cudf::column_view const& rh
       //
       std::vector<std::string> h_left_strings = to_strings(diff_table->get_column(0));
       std::vector<std::string> h_right_strings = to_strings(diff_table->get_column(1));
-            
+
+      /*      
       size_t count = (size_t)min(100, (int)differences.size());
       printf("Column index : %d (%d differences)\n", column_index, (int)differences.size());
       for (size_t i = 0 ; i < count ; ++i) {
           buffer << "lhs[" << differences[i] << "] = " << h_left_strings[i]
                  << ", rhs[" << differences[i] << "] = " << h_right_strings[i] << std::endl;
+      }
+      */
+      printf("Column index : %d (%d differences, first difference : %d) Printing (up to) 100 values\n", column_index, (int)differences.size(), (int)differences[0]);
+      int idx;
+      for(idx=differences[0]; idx<100 && idx < lhs.size(); idx++){
+        printf("Row %d   lhs : %s    rhs : %s\n", idx, h_left_strings[idx].c_str(), h_right_strings[idx].c_str());
       }
 
       // EXPECT_EQ(differences.size(), size_t{0}) << buffer.str();
