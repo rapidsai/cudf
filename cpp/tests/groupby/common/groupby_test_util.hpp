@@ -28,32 +28,32 @@
 namespace cudf {
 namespace test {
 
-inline void test_grouping_keys(column_view const& keys,
-                               column_view const& expect_group_keys,
-                               std::vector<size_type> const& expect_group_offsets) {
+inline void test_groups(column_view const& keys,
+                        column_view const& expect_group_keys,
+                        std::vector<size_type> const& expect_group_offsets,
+                        column_view const& values={},
+                        column_view const& expect_group_values={})
+{
   experimental::groupby::groupby gb (table_view({keys}));
-  auto groups = gb.groups();
+  experimental::groupby::groupby_groups groups;
+  groups = gb.groups();
+
+  if (values.size()) {
+     groups = gb.groups(table_view({values}));
+  }
+  else {
+     groups = gb.groups();
+  }
   expect_tables_equal(table_view({expect_group_keys}), groups.group_keys->view());
+
   auto got_offsets = groups.group_offsets;
   EXPECT_EQ(expect_group_offsets.size(), got_offsets.size());
   for (auto i = 0u; i != expect_group_offsets.size(); ++i) {
     EXPECT_EQ(expect_group_offsets[i], got_offsets[i]);
   }
-}
 
-inline void test_grouping_keys_and_values(column_view const& keys,
-                                          column_view const& values,
-                                          column_view const& expect_group_keys,
-                                          column_view const& expect_group_values,
-                                          std::vector<size_type> const& expect_group_offsets) {
-  experimental::groupby::groupby gb (table_view({keys}));
-  auto groups = gb.groups(table_view({values}));
-  expect_tables_equal(table_view({expect_group_keys}), groups.group_keys->view());
-  expect_tables_equal(table_view({expect_group_values}), groups.group_values->view());
-  auto got_offsets = groups.group_offsets;
-  EXPECT_EQ(expect_group_offsets.size(), got_offsets.size());
-  for (auto i = 0u; i != expect_group_offsets.size(); ++i) {
-    EXPECT_EQ(expect_group_offsets[i], got_offsets[i]);
+  if (values.size()) {
+    expect_tables_equal(table_view({expect_group_values}), groups.group_values->view());
   }
 }
 
