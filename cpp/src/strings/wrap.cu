@@ -117,12 +117,14 @@ namespace { // anonym.
                  character_flags_table_type const* d_flags,
                  character_cases_table_type const* d_case_table,
                  int32_t const* d_offsets,
-                 char* d_chars):
+                 char* d_chars,
+                 size_type width):
       d_column_(d_column),
       d_flags_(d_flags),
       d_case_table_(d_case_table),
       d_offsets_(d_offsets),
-      d_chars_(d_chars)
+      d_chars_(d_chars),
+      width_(width)
     {
     }
 
@@ -189,6 +191,7 @@ namespace { // anonym.
     character_cases_table_type const* d_case_table_;
     int32_t const* d_offsets_;
     char* d_chars_;
+    size_type width_;
   };
          
 }//anonym.
@@ -239,7 +242,8 @@ std::unique_ptr<column> wrap_strings( strings_column_view const& strings,
       d_flags,
       d_case_table,
       d_new_offsets,
-      d_chars};
+      d_chars,
+      width};
   
   thrust::for_each_n(execpol->on(stream),
                      thrust::make_counting_iterator<size_type>(0), strings_count, d_execute_fctr);
