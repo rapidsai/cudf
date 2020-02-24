@@ -51,7 +51,8 @@ class aggregation {
     PRODUCT,   ///< product reduction
     MIN,       ///< min reduction
     MAX,       ///< max reduction
-    COUNT,     ///< count number of elements
+    COUNT_VALID,    ///< count number of valid elements
+    COUNT_ALL,      ///< count number of elements
     ANY,       ///< any reduction
     ALL,       ///< all reduction
     SUM_OF_SQUARES, ///< sum of squares reduction
@@ -92,8 +93,12 @@ std::unique_ptr<aggregation> make_min_aggregation();
 /// Factory to create a MAX aggregation
 std::unique_ptr<aggregation> make_max_aggregation();
 
-/// Factory to create a COUNT aggregation
-std::unique_ptr<aggregation> make_count_aggregation();
+/**
+ * @brief Factory to create a COUNT aggregation
+ * 
+ * @param _include_nulls Indicates if null values will be counted.
+*/
+std::unique_ptr<aggregation> make_count_aggregation(include_nulls _include_nulls = include_nulls::NO);
 
 /// Factory to create a ANY aggregation
 std::unique_ptr<aggregation> make_any_aggregation();
@@ -153,6 +158,7 @@ std::unique_ptr<aggregation> make_argmin_aggregation();
  * @brief Factory to create a `nunique` aggregation
  * 
  * `nunique` returns the number of unique elements.
+ * @param _include_nulls Indicates if null values will be counted.
 */
 std::unique_ptr<aggregation>
 make_nunique_aggregation(include_nulls _include_nulls = include_nulls::NO);

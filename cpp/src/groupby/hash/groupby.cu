@@ -54,8 +54,9 @@ namespace {
  * @brief List of aggregation operations that can be computed with a hash-based
  * implementation.
  */
-constexpr std::array<aggregation::Kind, 5> hash_aggregations{
-    aggregation::SUM, aggregation::MIN, aggregation::MAX, aggregation::COUNT,
+constexpr std::array<aggregation::Kind, 7> hash_aggregations{
+    aggregation::SUM, aggregation::MIN, aggregation::MAX,
+    aggregation::COUNT_VALID, aggregation::COUNT_ALL,
     aggregation::ARGMIN, aggregation::ARGMAX};
 
 template <class T, size_t N>
@@ -80,7 +81,8 @@ bool constexpr is_hash_aggregation(aggregation::Kind t) {
   // constexpr once cuda 10.2 becomes RAPIDS's minimum compiler version
   // return array_contains(hash_aggregations, t);
   return (t == aggregation::SUM) or (t == aggregation::MIN) or
-         (t == aggregation::MAX) or (t == aggregation::COUNT) or
+         (t == aggregation::MAX) or (t == aggregation::COUNT_VALID) or
+         (t == aggregation::COUNT_ALL) or
          (t == aggregation::ARGMIN) or (t == aggregation::ARGMAX);
 }
 

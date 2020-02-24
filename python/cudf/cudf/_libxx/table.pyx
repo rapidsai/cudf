@@ -1,10 +1,5 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-# cython: profile=False
-# distutils: language = c++
-# cython: embedsignature = True
-# cython: language_level = 3
-
 import itertools
 
 import numpy as np
@@ -78,7 +73,7 @@ cdef class Table:
         column_names : iterable
         """
         cdef vector[unique_ptr[column]] columns
-        columns = c_tbl.get()[0].release()
+        columns = move(c_tbl.get()[0].release())
 
         cdef vector[unique_ptr[column]].iterator it = columns.begin()
 
@@ -183,7 +178,6 @@ cdef class Table:
                 self._data.columns,
             )
         )
-        return _make_mutable_table_view(self._data.columns)
 
     cdef table_view data_view(self) except *:
         """
