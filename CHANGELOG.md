@@ -19,6 +19,7 @@
 - PR #4164 Add Buffer "constructor-kwargs" header
 - PR #4159 Add COUNT aggregation that includes null values
 - PR #4190 Add libcudf++ transpose Cython implementation
+- PR #4216 Add cudf.Scalar Python type
 
 ## Improvements
 
@@ -94,6 +95,8 @@
 - PR #4197 Added notebook testing to gpuCI gpu build
 - PR #4204 Port nvtext create-ngrams function
 - PR #4225 Remove stale notebooks
+- PR #4223 Fix a few of the Cython warnings
+- PR #4234 Add BUILD_LEGACY_TESTS cmake option
 
 ## Bug Fixes
 
@@ -140,12 +143,16 @@
 - PR #4162 Properly handle no index metadata generation for to_parquet
 - PR #4175 Fix `__sizeof__` calculation in `StringColumn`
 - PR #4155 Update groupby group_offsets size and fix unnecessary device dispatch.
+- PR #4186 Fix from_timestamps 12-hour specifiers support
 - PR #4198 Fix constructing `RangeIndex` from `range`
 - PR #4192 Parquet writer: fix OOB read when computing string hash
 - PR #4201 Fix java window tests
 - PR #4199 Fix potential race condition in memcpy_block
+- PR #4221 Fix series dict alignment to not drop index name
+- PR #4218 Fix `get_aggregation` definition with `except *`
 - PR #4215 Fix performance regression in strings::detail::concatenate
 - PR #4214 Alter ValueError exception for GPU accelerated Parquet writer to properly report `categorical` columns are not supported.
+- PR #4222 Fix no-return compile error in binop-null-test
 
 
 # cuDF 0.12.0 (04 Feb 2020)
