@@ -38,7 +38,7 @@ namespace
 /**
  * @brief Normalize spaces in a strings column.
  *
- * Repeated whitespace is replaced with a single space.
+ * Repeated whitespace (code-point <= ' ') is replaced with a single space.
  * Also, whitespace is trimmed from the beginning and end of each string.
  *
  * This functor can be called to compute the output size in bytes
@@ -83,8 +83,8 @@ struct normalize_spaces_fn
 
 // details API
 std::unique_ptr<cudf::column> normalize_spaces( cudf::strings_column_view const& strings,
-                                          rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                          cudaStream_t stream = 0 )
+                                                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                                cudaStream_t stream = 0 )
 {
     cudf::size_type strings_count = strings.size();
     if( strings_count == 0 )
