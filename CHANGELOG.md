@@ -155,7 +155,7 @@
 - PR #4215 Fix performance regression in strings::detail::concatenate
 - PR #4214 Alter ValueError exception for GPU accelerated Parquet writer to properly report `categorical` columns are not supported.
 - PR #4222 Fix no-return compile error in binop-null-test
-- PR #4185 Fix for rolling tests CI failure
+- PR #4242 Fix for rolling tests CI failure
 
 
 # cuDF 0.12.0 (04 Feb 2020)
