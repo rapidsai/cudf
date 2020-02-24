@@ -18,6 +18,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/gather.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/groupby.hpp>
 #include <cudf/detail/groupby/sort_helper.hpp>
@@ -26,6 +27,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+
+#include <thrust/copy.h>
 
 #include <memory>
 #include <utility>
@@ -110,19 +113,6 @@ void verify_valid_requests(std::vector<aggregation_request> const& requests) {
 
 }  // namespace
 
-
-column_view groupby::key_sort_order(cudaStream_t stream) {
-  return helper().key_sort_order(stream);
-}
-
-column_view groupby::group_offsets(cudaStream_t stream) {
-  auto const size = helper().num_groups() + 1;
-  auto const data = thrust::raw_pointer_cast(helper().group_offsets().data());
-  return column_view(data_type(type_to_id<size_type>()),
-                     size,
-                     data);
-}
-
 // Compute aggregation requests
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>>
 groupby::aggregate(std::vector<aggregation_request> const& requests,
@@ -141,6 +131,38 @@ groupby::aggregate(std::vector<aggregation_request> const& requests,
 
   return dispatch_aggregation(requests, 0, mr);
 }
+
+groupby_groups groupby::groups(rmm::mr::device_memory_resource*  mr,
+      cudaStream_t stream) {
+  auto sort_order = helper().key_sort_order(stream);
+  auto group_keys = cudf::experimental::detail::gather(_keys, sort_order);
+  auto group_offsets = helper().group_offsets(stream);
+
+  std::vector<size_type> group_offsets_vector(group_offsets.size());
+
+  thrust::copy(group_offsets.begin(),
+      group_offsets.end(),
+      group_offsets_vector.begin());
+
+  return groupby_groups{std::move(group_keys), group_offsets_vector};
+}
+
+groupby_groups groupby::groups(table_view values, rmm::mr::device_memory_resource*  mr,
+      cudaStream_t stream) {
+  auto sort_order = helper().key_sort_order(stream);
+  auto group_keys = cudf::experimental::detail::gather(_keys, sort_order);
+  auto group_values = cudf::experimental::detail::gather(values, sort_order);
+  auto group_offsets = helper().group_offsets(stream);
+
+  std::vector<size_type> group_offsets_vector(group_offsets.size());
+
+  thrust::copy(group_offsets.begin(),
+      group_offsets.end(),
+      group_offsets_vector.begin());
+
+  return groupby_groups{std::move(group_keys), group_offsets_vector, std::move(group_values)};
+}
+
 
 // Get the sort helper object
 detail::sort::sort_groupby_helper& groupby::helper() {

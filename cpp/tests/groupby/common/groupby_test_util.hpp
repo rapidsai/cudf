@@ -20,12 +20,42 @@
 #include <tests/utilities/table_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 
+#include <cudf/types.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/groupby.hpp>
 
 namespace cudf {
 namespace test {
+
+inline void test_grouping_keys(column_view const& keys,
+                               column_view const& expect_group_keys,
+                               std::vector<size_type> const& expect_group_offsets) {
+  experimental::groupby::groupby gb (table_view({keys}));
+  auto groups = gb.groups();
+  expect_tables_equal(table_view({expect_group_keys}), groups.group_keys->view());
+  auto got_offsets = groups.group_offsets;
+  EXPECT_EQ(expect_group_offsets.size(), got_offsets.size());
+  for (auto i = 0u; i != expect_group_offsets.size(); ++i) {
+    EXPECT_EQ(expect_group_offsets[i], got_offsets[i]);
+  }
+}
+
+inline void test_grouping_keys_and_values(column_view const& keys,
+                                          column_view const& values,
+                                          column_view const& expect_group_keys,
+                                          column_view const& expect_group_values,
+                                          std::vector<size_type> const& expect_group_offsets) {
+  experimental::groupby::groupby gb (table_view({keys}));
+  auto groups = gb.groups(table_view({values}));
+  expect_tables_equal(table_view({expect_group_keys}), groups.group_keys->view());
+  expect_tables_equal(table_view({expect_group_values}), groups.group_values->view());
+  auto got_offsets = groups.group_offsets;
+  EXPECT_EQ(expect_group_offsets.size(), got_offsets.size());
+  for (auto i = 0u; i != expect_group_offsets.size(); ++i) {
+    EXPECT_EQ(expect_group_offsets[i], got_offsets[i]);
+  }
+}
 
 inline void test_single_agg(column_view const& keys,
                             column_view const& values,
@@ -41,7 +71,7 @@ inline void test_single_agg(column_view const& keys,
     requests.emplace_back(
         experimental::groupby::aggregation_request());
     requests[0].values = values;
-    
+
     requests[0].aggregations.push_back(std::move(agg));
 
     experimental::groupby::groupby gb_obj(table_view({keys}),
