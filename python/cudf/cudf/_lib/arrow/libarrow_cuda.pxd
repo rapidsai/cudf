@@ -17,11 +17,6 @@
 
 # flake8: noqa
 
-# cython: profile=False
-# distutils: language = c++
-# cython: embedsignature = True
-# cython: language_level = 3
-
 from pyarrow.includes.libarrow cimport *
 
 cdef extern from "arrow/gpu/cuda_api.h" namespace "arrow::cuda" nogil:

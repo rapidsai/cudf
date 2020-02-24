@@ -1,10 +1,5 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
-# cython: profile=False
-# distutils: language = c++
-# cython: embedsignature = True
-# cython: language_level = 3
-
 import numpy as np
 
 from libc.stdint cimport int32_t, uint32_t, int64_t
