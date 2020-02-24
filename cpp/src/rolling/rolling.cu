@@ -231,7 +231,6 @@ void gpu_rolling(column_device_view input,
       output.set_mask_word(cudf::word_index(i), result_mask);
       warp_valid_count += __popc(result_mask);
     }
-    printf("RGSL4 : At the end of itr i %d\n", i);
 
     // process next element 
     i += stride;
