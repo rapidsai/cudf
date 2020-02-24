@@ -1,6 +1,7 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 from contextlib import ExitStack as does_not_raise
+from sys import getsizeof
 from unittest.mock import patch
 
 import numpy as np
@@ -12,6 +13,7 @@ from numba import cuda
 import nvstrings
 import rmm
 
+import cudf
 from cudf import concat
 from cudf.core import DataFrame, Series
 from cudf.core.index import StringIndex
@@ -957,3 +959,15 @@ def test_string_misc_name(ps_gs, name):
     assert_eq(ps + ps, gs + gs)
     assert_eq(ps + "RAPIDS", gs + "RAPIDS")
     assert_eq("RAPIDS" + ps, "RAPIDS" + gs)
+
+
+def test_string_no_children_properties():
+    empty_col = cudf.core.column.string.StringColumn(children=())
+    assert empty_col.base_children == ()
+    assert empty_col.base_size == 0
+
+    assert empty_col.children == ()
+    assert empty_col.size == 0
+
+    assert empty_col._nbytes == 0
+    assert getsizeof(empty_col) == 24  # Accounts for Python GC overhead
