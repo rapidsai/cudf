@@ -23,12 +23,12 @@ def merge_sorted(
 
     # Create vector of tables
     # Use metadata from 0th table for names, etc
-    c_input_tables = vector[table_view](len(tables))
-    for i, source_table in enumerate(tables):
+    c_input_tables.reserve(len(tables))
+    for source_table in tables:
         if ignore_index:
-            c_input_tables[i] = source_table.data_view()
+            c_input_tables.push_back(source_table.data_view())
         else:
-            c_input_tables[i] = source_table.view()
+            c_input_tables.push_back(source_table.view())
     source_table = tables[0]
 
     # Define sorting order and null precedence
@@ -37,7 +37,7 @@ def merge_sorted(
         null_order.BEFORE if na_position == "first" else null_order.AFTER
     )
 
-    # Determine index-column offset
+    # Determine index-column offset and index names
     if ignore_index:
         num_index_columns = 0
         index_names = None
@@ -50,10 +50,12 @@ def merge_sorted(
 
     # Define C vectors for each key column
     if not by_index and keys is not None:
-        key_cols = [
-            num_index_columns + source_table._column_names.index(name)
-            for name in keys
-        ]
+        num_keys = len(keys)
+        c_column_keys.reserve(num_keys)
+        for name in keys:
+            c_column_keys.push_back(
+                num_index_columns + source_table._column_names.index(name)
+            )
     else:
         if by_index:
             start = 0
@@ -61,10 +63,12 @@ def merge_sorted(
         else:
             start = num_index_columns
             stop = num_index_columns + source_table._num_columns
-        key_cols = [key for key in range(start, stop)]
-    c_column_keys = key_cols
-    c_column_order = vector[order](len(key_cols), column_order)
-    c_null_precedence = vector[null_order](len(key_cols), null_precedence)
+        num_keys = stop - start
+        c_column_keys.reserve(num_keys)
+        for key in range(start, stop):
+            c_column_keys.push_back(key)
+    c_column_order = vector[order](num_keys, column_order)
+    c_null_precedence = vector[null_order](num_keys, null_precedence)
 
     # Perform sorted merge operation
     cdef unique_ptr[table] c_result

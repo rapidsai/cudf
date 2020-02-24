@@ -413,7 +413,10 @@ def merge_sorted(
         raise TypeError("objs must be a list-like of Frame-like objects")
 
     if len(objs) < 1:
-        raise TypeError("objs must be non-empty")
+        raise ValueError("objs must be non-empty")
+
+    if not all(isinstance(table, cudf.core.frame.Frame) for table in objs):
+        raise TypeError("Elements of objs must be Frame-like")
 
     if len(objs) == 1:
         return objs[0]
@@ -421,7 +424,7 @@ def merge_sorted(
     if by_index and ignore_index:
         raise ValueError("`by_index` and `ignore_index` cannot both be True")
 
-    result = objs[0]._constructor._from_table(
+    result = objs[0].__class__._from_table(
         cudf._libxx.merge.merge_sorted(
             objs,
             keys=keys,
