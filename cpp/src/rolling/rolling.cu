@@ -229,9 +229,8 @@ void gpu_rolling(column_device_view input,
     if (0 == threadIdx.x % cudf::experimental::detail::warp_size) {
       output.set_mask_word(cudf::word_index(i), result_mask);
       warp_valid_count += __popc(result_mask);
-      printf("RGSL : Result Mask is %u \n", result_mask);
     }
-    printf("RGSL4 : output_is_valid %d for i %d\n", output_is_valid, i);
+    printf("RGSL4 : At the end of itr i %d\n", i);
 
     // process next element 
     i += stride;
