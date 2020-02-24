@@ -316,10 +316,9 @@ class NumericalColumn(column.ColumnBase):
         to_replace_col, replacement_col, replaced = numeric_normalize_types(
             to_replace_col, replacement_col, replaced
         )
-        output = libcudfxx.replace.replace(
+        return libcudfxx.replace.replace(
             replaced, to_replace_col, replacement_col
         )
-        return column.as_column(output)
 
     def fillna(self, fill_value):
         """

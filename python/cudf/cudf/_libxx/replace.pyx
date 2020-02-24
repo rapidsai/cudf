@@ -1,10 +1,5 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-# cython: profile=False
-# distutils: language = c++
-# cython: embedsignature = True
-# cython: language_level = 3
-
 import pandas as pd
 
 from cudf._libxx.column cimport *
@@ -28,9 +23,9 @@ def replace(Column input_col, Column values_to_replace,
 
     Parameters
     ----------
-    input_col - Column whose value will be updated
-    values_to_replace - Column with values which needs to be replaced
-    replacement_values - Column with values which will replace
+    input_col : Column whose value will be updated
+    values_to_replace : Column with values which needs to be replaced
+    replacement_values : Column with values which will replace
     """
 
     cdef column_view input_col_view = input_col.view()
@@ -53,8 +48,8 @@ def replace_nulls_column(Column input_col, Column replacement_values):
 
     Parameters
     ----------
-    input_col - Column whose value will be updated
-    replacement_values - Column with values which will replace nulls
+    input_col : Column whose value will be updated
+    replacement_values : Column with values which will replace nulls
     """
 
     cdef column_view input_col_view = input_col.view()
@@ -74,8 +69,8 @@ def replace_nulls_scalar(Column input_col, Scalar replacement_value):
 
     Parameters
     ----------
-    input_col - Column whose value will be updated
-    replacement_value - Scalar with value which will replace nulls
+    input_col : Column whose value will be updated
+    replacement_value : Scalar with value which will replace nulls
     """
 
     cdef column_view input_col_view = input_col.view()
@@ -109,11 +104,11 @@ def clamp(Column input_col, Scalar lo, Scalar lo_replace,
 
     Parameters
     ----------
-    input_col - Column whose value will be updated
-    lo - Scalar value for clipping lower values
-    lo_replace- Scalar value which will replace clipped with lo
-    hi - Scalar value for clipping upper values
-    lo_replace- Scalar value which will replace clipped with hi
+    input_col : Column whose value will be updated
+    lo : Scalar value for clipping lower values
+    lo_replace : Scalar value which will replace clipped with lo
+    hi : Scalar value for clipping upper values
+    lo_replace : Scalar value which will replace clipped with hi
     """
 
     cdef column_view input_col_view = input_col.view()
@@ -138,9 +133,9 @@ def clamp(Column input_col, Scalar lo, Scalar hi):
 
     Parameters
     ----------
-    input_col - Column whose value will be updated
-    lo - Scalar value for clipping lower values
-    hi - Scalar value for clipping upper values
+    input_col : Column whose value will be updated
+    lo : Scalar value for clipping lower values
+    hi : Scalar value for clipping upper values
     """
 
     cdef column_view input_col_view = input_col.view()
@@ -188,8 +183,8 @@ def normalize_nans_and_zeros(Column input_col, bool in_place=False):
 
     Parameters
     ----------
-    input_col - Column that needs to be normalized
-    in_place - boolean whether to normalize in place or return new column
+    input_col : Column that needs to be normalized
+    in_place : boolean whether to normalize in place or return new column
     """
 
     if in_place is True:
