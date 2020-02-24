@@ -28,6 +28,8 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <thrust/copy.h>
+
 #include <memory>
 #include <utility>
 
@@ -138,8 +140,9 @@ groupby_groups groupby::groups(rmm::mr::device_memory_resource*  mr,
 
   std::vector<size_type> group_offsets_vector(group_offsets.size());
 
-  auto exec = rmm::exec_policy(stream)->on(stream);
-  thrust::copy(group_offsets.begin(), group_offsets.end(), group_offsets_vector.begin());
+  thrust::copy(group_offsets.begin(),
+      group_offsets.end(),
+      group_offsets_vector.begin());
 
   return groupby_groups{std::move(group_keys), group_offsets_vector};
 }
