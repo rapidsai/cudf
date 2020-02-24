@@ -106,7 +106,10 @@ size_type sort_groupby_helper::num_keys(cudaStream_t stream) {
 
 column_view sort_groupby_helper::key_sort_order(cudaStream_t stream) {
   if (_key_sorted_order)
-    return _key_sorted_order->view();
+    return cudf::experimental::detail::slice(
+      _key_sorted_order->view(),
+      0,
+      num_keys(stream));
 
   // TODO (dm): optimization. When keys are pre sorted but ignore nulls is true,
   //            we still want all rows with nulls in the end. Sort is costly, so
@@ -307,11 +310,8 @@ std::unique_ptr<table> sort_groupby_helper::sorted_keys(
   rmm::mr::device_memory_resource* mr,
   cudaStream_t stream)
 {
-  auto gather_map = cudf::experimental::detail::slice(
-    key_sort_order(), 0, num_keys(stream));
-
   return cudf::experimental::detail::gather(
-    _keys, gather_map, false, false, false, mr, stream);
+    _keys, key_sort_order(), false, false, false, mr, stream);
 }
 
 }  // namespace sort
