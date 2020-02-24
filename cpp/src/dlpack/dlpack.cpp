@@ -134,11 +134,11 @@ std::unique_ptr<experimental::table> from_dlpack(
   CUDF_EXPECTS(tensor.ndim > 0 && tensor.ndim <= 2,
                "DLTensor must be 1D or 2D");
 
-  CUDF_EXPECTS(tensor.shape[0] > 0, "DLTensor first dim empty");
+  CUDF_EXPECTS(tensor.shape[0] >= 0, "DLTensor first dim should be of shape greater than or equal-to 0.");
   CUDF_EXPECTS(tensor.shape[0] < std::numeric_limits<size_type>::max(),
                "DLTensor first dim exceeds size supported by cudf");
   if (tensor.ndim > 1) {
-    CUDF_EXPECTS(tensor.shape[1] > 0, "DLTensor second dim empty");
+    CUDF_EXPECTS(tensor.shape[1] >= 0, "DLTensor second dim should be of shape greater than or equal-to 0.");
     CUDF_EXPECTS(tensor.shape[1] < std::numeric_limits<size_type>::max(),
                "DLTensor second dim exceeds size supported by cudf");
   }

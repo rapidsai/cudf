@@ -60,6 +60,7 @@
 - PR #3786 Adding string support to rolling_windows
 - PR #4067 Removed unused `CATEGORY` type ID.
 - PR #3891 Port NVStrings (r)split_record to contiguous_(r)split_record
+- PR #4070 Port NVText normalize_spaces to use libcudf strings column
 - PR #4072 Allow round_robin_partition to single partition
 - PR #4064 Add cudaGetDeviceCount to JNI layer
 - PR #4075 Port nvtext ngrams-tokenize to libcudf++
@@ -96,6 +97,7 @@
 - PR #4196 reduce CHANGELOG.md merge conflicts
 - PR #4197 Added notebook testing to gpuCI gpu build
 - PR #4204 Port nvtext create-ngrams function
+- PR #4219 Port dlpack.pyx to use new libcudf APIs
 - PR #4225 Remove stale notebooks
 - PR #4223 Fix a few of the Cython warnings
 - PR #4234 Add BUILD_LEGACY_TESTS cmake option

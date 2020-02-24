@@ -853,6 +853,7 @@ ConfigureTest(STRINGS_TEST "${STRINGS_TEST_SRC}")
 set(TEXT_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/text/ngrams_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/text/ngrams_tokenize_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/text/normalize_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/text/tokenize_tests.cpp")
 
 ConfigureTest(TEXT_TEST "${TEXT_TEST_SRC}")

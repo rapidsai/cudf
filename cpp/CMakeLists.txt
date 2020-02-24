@@ -612,6 +612,7 @@ add_library(cudf
             src/strings/translate.cu
             src/strings/utilities.cu
             src/text/generate_ngrams.cu
+            src/text/normalize.cu
             src/text/tokenize.cu
             src/text/ngrams_tokenize.cu
             src/scalar/scalar.cpp
