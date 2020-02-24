@@ -14,6 +14,7 @@
 - PR #4088 Added asString() on ColumnVector in Java that takes a format string
 - PR #4040 Add support for n-way merge of sorted tables
 - PR #4053 Multi-column quantiles.
+- PR #3894 Add remove_keys functions for dictionary columns
 - PR #4107 Add groupby nunique aggregation
 - PR #4153 Support Dask serialization protocol on cuDF objects
 - PR #4164 Add Buffer "constructor-kwargs" header
@@ -61,6 +62,7 @@
 - PR #3891 Port NVStrings (r)split_record to contiguous_(r)split_record
 - PR #4072 Allow round_robin_partition to single partition
 - PR #4064 Add cudaGetDeviceCount to JNI layer
+- PR #4075 Port nvtext ngrams-tokenize to libcudf++
 - PR #4087 Add support for writing large Parquet files in a chunked manner.
 - PR #3716 Update cudf.to_parquet to use new GPU accelerated Parquet writer
 - PR #4083 Use two partitions in test_groupby_multiindex_reset_index
