@@ -30,6 +30,7 @@ from cudf.core import column
 from cudf.core._sort import get_sorted_inds
 from cudf.core.column import (
     CategoricalColumn,
+    ColumnBase,
     StringColumn,
     as_column,
     column_empty,
@@ -1879,21 +1880,18 @@ class DataFrame(Frame):
         # Concatenate cudf.series for all columns
 
         data = {
-            i: Series._concat(
+            i: ColumnBase._concat(
                 [
-                    o[c]
+                    o[c]._column
                     if c in o.columns
-                    else utils.get_null_series(size=len(o), dtype=np.bool)
+                    else column_empty(len(o), dtype=np.bool, masked=True)
                     for o in objs
-                ],
-                index=index,
+                ]
             )
             for i, c in enumerate(unique_columns_ordered_ls)
         }
 
-        out = cls(data)
-
-        out.index = index
+        out = cls(data, index=index)
 
         if isinstance(objs[0].columns, pd.MultiIndex):
             out.columns = objs[0].columns
