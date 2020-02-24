@@ -355,6 +355,5 @@ TYPED_TEST(DLPackNumericTests, FromDlpackEmpty1D)
   unique_managed_tensor tensor(cudf::to_dlpack(input));
 
   // Verify that from_dlpack(to_dlpack(input)) == input
-  auto result = cudf::from_dlpack(tensor.get());
-  expect_tables_equal(input, result->view());
+  EXPECT_THROW(cudf::from_dlpack(tensor.get()), cudf::logic_error);
 }
