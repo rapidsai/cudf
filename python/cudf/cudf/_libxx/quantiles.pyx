@@ -7,10 +7,10 @@ cimport cudf._libxx.includes.quantiles as cpp_quantiles
 
 def quantiles(Table source_table,
               vector[double] q,
-              interp,
-              is_input_sorted,
-              column_order,
-              null_precedence):
+              object interp,
+              object is_input_sorted,
+              object column_order,
+              object null_precedence):
     cdef table_view c_input = source_table.view()
     cdef vector[double] c_q = q
     cdef interpolation c_interp = <interpolation>(<underlying_type_t_interpolation> interp)

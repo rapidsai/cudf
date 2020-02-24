@@ -14,6 +14,8 @@ from libcpp.pair cimport pair
 
 from rmm._lib.device_buffer cimport device_buffer, DeviceBuffer, move
 
+
+ctypedef int32_t underlying_type_t_mask_state
 ctypedef bool underlying_type_t_order
 ctypedef bool underlying_type_t_null_order
 ctypedef bool underlying_type_t_sorted
