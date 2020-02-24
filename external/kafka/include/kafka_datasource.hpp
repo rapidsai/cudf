@@ -70,6 +70,10 @@ class kafka_datasource : public external_datasource {
 
   bool configure_datasource(std::map<std::string, std::string> configs);
 
+  void print_consumer_metadata();
+
+  void dump_configs();
+
   std::string consume_range(std::map<std::string, std::string> configs, int64_t start_offset, int64_t end_offset, int batch_timeout);
 
   const std::shared_ptr<arrow::Buffer> get_buffer(size_t offset,
@@ -82,7 +86,7 @@ class kafka_datasource : public external_datasource {
   /**
    * @brief Base class destructor
    **/
-  //virtual ~kafka_datasource(){};
+  virtual ~kafka_datasource(){};
 
   private:
 
@@ -91,6 +95,44 @@ class kafka_datasource : public external_datasource {
       gettimeofday(&tv, NULL);
       return ((int64_t)tv.tv_sec * 1000) + (tv.tv_usec / 1000);
     }
+
+    class ExampleEventCb : public RdKafka::EventCb {
+      public:
+        void event_cb (RdKafka::Event &event) {
+          switch (event.type())
+          {
+            case RdKafka::Event::EVENT_ERROR:
+              if (event.fatal()) {
+                printf("FATAL");
+              }
+              std::cerr << "ERROR (" << RdKafka::err2str(event.err()) << "): " <<
+                  event.str() << std::endl;
+              break;
+
+            case RdKafka::Event::EVENT_STATS:
+              std::cerr << "\"STATS\": " << event.str() << std::endl;
+              break;
+
+            case RdKafka::Event::EVENT_LOG:
+              fprintf(stderr, "LOG-%i-%s: %s\n",
+                      event.severity(), event.fac().c_str(), event.str().c_str());
+              break;
+
+            default:
+              std::cerr << "EVENT " << event.type() <<
+                  " (" << RdKafka::err2str(event.err()) << "): " <<
+                  event.str() << std::endl;
+              break;
+          }
+        }
+    };
+
+    class ExampleConsumeCb : public RdKafka::ConsumeCb {
+      public:
+        void consume_cb (RdKafka::Message &message, void *opaque) {
+          printf("Message consumed callback\n");
+        }
+    };
 
     class ExampleRebalanceCb : public RdKafka::RebalanceCb {
       private:
@@ -119,26 +161,6 @@ class kafka_datasource : public external_datasource {
           //eof_cnt = 0;
         }
       };
-
-
-    class KafkaRebalanceCB : public RdKafka::RebalanceCb {
-      public:
-        void rebalance_cb(RdKafka::KafkaConsumer *consumer, 
-                          RdKafka::ErrorCode err,
-                          std::vector<RdKafka::TopicPartition*> &partitions) {
-          printf("Kafka rebalance was called\n");
-          if (err == RdKafka::ERR__ASSIGN_PARTITIONS) {
-            printf("Assigning partitions\n");
-            // NOTICE: We currently purposely only support a single partition. Enhancement PR to be opened later.
-            //partitions.at(0)->set_offset(start_offset_);
-            err = consumer->assign(partitions);
-            //CUDF_EXPECTS(err == RdKafka::ErrorCode::ERR_NO_ERROR,
-              //          "Error occured while reassigning the topic partition offset");
-          } else {
-            consumer->unassign();
-          }
-        }
-    };
 
     void handle_error(RdKafka::Message *msg) {
       err_ = msg->err();

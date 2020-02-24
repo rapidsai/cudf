@@ -23,18 +23,41 @@
 
 #include <kafka_datasource.hpp>
 
-TEST(ExternalDatasource, Basic)
+// TEST(ExternalDatasource, Basic)
+// {
+//     std::map<std::string, std::string> datasource_confs;
+
+//     //Topic
+//     datasource_confs.insert({"ex_ds.kafka.topic", "libcudf-test"});
+
+//     //General Conf
+//     datasource_confs.insert({"bootstrap.servers", "localhost:9092"});
+//     datasource_confs.insert({"group.id", "jeremy_test_last_59"});
+//     datasource_confs.insert({"auto.offset.reset", "beginning"});
+
+//     cudf::io::external::kafka_datasource ex_datasource = cudf::io::external::kafka_datasource(datasource_confs);
+//     std::string json_str = ex_datasource.consume_range(datasource_confs, 0, 15, 5000);
+// }
+
+TEST(ExternalDatasource, WaterMark)
 {
+    std::string topic = "libcudf-test";
+    int partition = 0;
+
     std::map<std::string, std::string> datasource_confs;
 
     //Topic
-    datasource_confs.insert({"ex_ds.kafka.topic", "libcudf-test"});
+    datasource_confs.insert({"ex_ds.kafka.topic", topic});
 
     //General Conf
     datasource_confs.insert({"bootstrap.servers", "localhost:9092"});
-    datasource_confs.insert({"group.id", "jeremy_test_last_57"});
+    datasource_confs.insert({"group.id", "jeremy_test_last"});
     datasource_confs.insert({"auto.offset.reset", "beginning"});
+    datasource_confs.insert({"enable.partition.eof", "true"});
 
     cudf::io::external::kafka_datasource ex_datasource = cudf::io::external::kafka_datasource(datasource_confs);
-    std::string json_str = ex_datasource.consume_range(datasource_confs, 0, 3, 10000);
+    //std::map<std::string, int64_t> offsets = ex_datasource.get_watermark_offset(topic, partition);
+    //ex_datasource.print_consumer_metadata();
+    ex_datasource.dump_configs();
+    printf("After everything ..... \n");
 }
