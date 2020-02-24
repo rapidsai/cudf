@@ -520,7 +520,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * Method to copy from a DeviceMemoryBuffer to a HostMemoryBuffer
    * @param deviceMemoryBuffer - Buffer to copy data from
    */
-  final void copyFromDeviceBuffer(BaseDeviceMemoryBuffer deviceMemoryBuffer) {
+  public final void copyFromDeviceBuffer(BaseDeviceMemoryBuffer deviceMemoryBuffer) {
     addressOutOfBoundsCheck(address, deviceMemoryBuffer.length, "copy range dest");
     assert !deviceMemoryBuffer.closed;
     Cuda.memcpy(address, deviceMemoryBuffer.address, deviceMemoryBuffer.length,
@@ -533,7 +533,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param len how many bytes to slice
    * @return a host buffer that will need to be closed independently from this buffer.
    */
-  final synchronized HostMemoryBuffer slice(long offset, long len) {
+  public final synchronized HostMemoryBuffer slice(long offset, long len) {
     addressOutOfBoundsCheck(address + offset, len, "slice");
     refCount++;
     cleaner.addRef();
@@ -546,7 +546,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param len how many bytes to slice
    * @return a host buffer that will need to be closed independently from this buffer.
    */
-  final HostMemoryBuffer sliceWithCopy(long offset, long len) {
+  public final HostMemoryBuffer sliceWithCopy(long offset, long len) {
     addressOutOfBoundsCheck(address + offset, len, "slice");
 
     HostMemoryBuffer ret = null;
