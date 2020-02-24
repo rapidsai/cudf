@@ -11,71 +11,72 @@ import cudf
 from cudf.core.column import build_categorical_column
 
 
-def _mkdir_if_not_exists(fs, path):
-    if fs._isfilestore() and not fs.exists(path):
-        try:
-            fs.mkdir(path)
-        except OSError:
-            assert fs.exists(path)
+def _get_partition_groups(df, partition_cols, preserve_index=False):
+    df = df.sort_values(partition_cols)
+    if not preserve_index:
+        df = df.reset_index(drop=True)
+    divisions = df[partition_cols].drop_duplicates()
+    splits = df[partition_cols].searchsorted(divisions, side="left")
+    splits = splits.tolist() + [len(df[partition_cols])]
+    return [
+        df.iloc[splits[i] : splits[i + 1]].copy(deep=False)
+        for i in range(0, len(splits) - 1)
+    ]
 
 
-# Mostly borrowed from...
-# https://arrow.apache.org/
+# Logic chosen to match: https://arrow.apache.org/
 # docs/_modules/pyarrow/parquet.html#write_to_dataset
 def write_to_dataset(
     df, root_path, partition_cols=None, fs=None, preserve_index=False, **kwargs
 ):
-    """Wrapper around parquet.write_table for writing a Table to
-    Parquet format by partitions.
-    For each combination of partition columns and values,
-    a subdirectories are created in the following
-    manner:
+    """Wrapper around cudf's `to_parquet` for writing partitioned
+    Parquet datasets. For each combination of partition group and value,
+    subdirectories are created as follows:
 
     root_dir/
-      group1=value1
-        group2=value1
-          <uuid>.parquet
-        group2=value2
-          <uuid>.parquet
-      group1=valueN
-        group2=value1
-          <uuid>.parquet
-        group2=valueN
-          <uuid>.parquet
+      group=value1
+        <uuid>.parquet
+      ...
+      group=valueN
+        <uuid>.parquet
 
     Parameters
     ----------
-    table : pyarrow.Table
+    df : cudf.DataFrame
     root_path : string,
         The root directory of the dataset
-    filesystem : FileSystem, default None
+    fs : FileSystem, default None
         If nothing passed, paths assumed to be found in the local on-disk
         filesystem
+    preserve_index : bool, default False
+        Preserve index values in each parquet file.
     partition_cols : list,
         Column names by which to partition the dataset
         Columns are partitioned in the order they are given
     **kwargs : dict,
-        kwargs for write_table function. Using `metadata_collector` in
-        kwargs allows one to collect the file metadata instances of
-        dataset pieces. See docstring for `write_table` or
-        `ParquetWriter` for more information.
+        kwargs for to_parquet function.
     """
+
+    def _mkdir_if_not_exists(fs, path):
+        if fs._isfilestore() and not fs.exists(path):
+            try:
+                fs.mkdir(path)
+            except OSError:
+                assert fs.exists(path)
+
     _mkdir_if_not_exists(fs, root_path)
 
     if partition_cols is not None and len(partition_cols) > 0:
-
-        if len(partition_cols) > 1:
-            raise ValueError(
-                "Only single-column is supported with cudf (for now)"
-            )
 
         data_cols = df.columns.drop(partition_cols)
         if len(data_cols) == 0:
             raise ValueError("No data left to save outside partition columns")
 
-        #  Won't work for multiple `partition_cols`..
+        #  Loop through the partition groups
         for i, sub_df in enumerate(
-            df.scatter_by_map(partition_cols[0], keep_index=preserve_index)
+            _get_partition_groups(
+                df, partition_cols, preserve_index=preserve_index
+            )
         ):
             if sub_df is None or len(sub_df) < 1:
                 continue
@@ -192,18 +193,15 @@ class CudfEngine(ArrowEngine):
         index_cols=None,
         **kwargs,
     ):
-        # TODO: Replace `pq.write_table` with gpu-accelerated
-        #       write after cudf.io.to_parquet is supported.
-
         preserve_index = False
-        if index_cols:
-            df = df.set_index(index_cols)
-            preserve_index = True
 
-        use_arrow = return_metadata or (partition_on and len(partition_on) > 1)
-
-        # NOTE: `to_arrow` does not accept `schema` argument
+        # Must use arrow engine if return_metadata=True
+        # (cudf does not collect/return metadata on write)
+        use_arrow = return_metadata
         if use_arrow:
+            if index_cols:
+                df = df.set_index(index_cols)
+                preserve_index = True
             md_list = []
             t = df.to_arrow(preserve_index=preserve_index)
         else:
