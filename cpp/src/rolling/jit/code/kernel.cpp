@@ -71,8 +71,10 @@ void gpu_rolling_new(cudf::size_type nrows,
     cudf::size_type following_window = get_window(following_window_begin, i);
 
     // compute bounds
-    cudf::size_type start_index = max(0, i - preceding_window + 1);
-    cudf::size_type end_index = min(nrows, i + following_window + 1);
+    cudf::size_type start = min(nrows, max(0, i - preceding_window + 1));
+    cudf::size_type end = min(nrows, max(0, i + following_window + 1));
+    cudf::size_type start_index = min(start, end);
+    cudf::size_type end_index = max(start, end);
 
     // aggregate
     // TODO: We should explore using shared memory to avoid redundant loads.
