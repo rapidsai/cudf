@@ -20,12 +20,26 @@
 #include <tests/utilities/table_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 
+#include <cudf/types.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/groupby.hpp>
 
 namespace cudf {
 namespace test {
+
+inline void test_grouping_keys(column_view const& keys,
+                               column_view const& expect_group_keys,
+                               std::vector<size_type> const& expect_offsets) {
+  experimental::groupby::groupby gb (table_view({keys}));
+  auto groups = gb.groups();
+  expect_tables_equal(table_view({expect_group_keys}), groups.group_keys->view());
+  auto got_offsets = groups.group_offsets;
+  EXPECT_EQ(expect_offsets.size(), got_offsets.size());
+  for (auto i = 0u; i != expect_offsets.size(); ++i) {
+    EXPECT_EQ(expect_offsets[i], got_offsets[i]);
+  }
+}
 
 inline void test_single_agg(column_view const& keys,
                             column_view const& values,
