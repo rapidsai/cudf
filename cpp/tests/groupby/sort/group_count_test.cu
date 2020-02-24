@@ -116,5 +116,25 @@ TYPED_TEST(groupby_count_test, null_keys_and_values)
 }
 
 
+struct groupby_count_string_test : public cudf::test::BaseFixture {};
+
+TEST_F(groupby_count_string_test, basic)
+{
+    using K = int32_t;
+    using V = cudf::string_view;
+    using R = experimental::detail::target_type_t<V, experimental::aggregation::COUNT_VALID>;
+
+    fixed_width_column_wrapper<K> keys        {   1,   3,   3,   5,   5,   0};
+    strings_column_wrapper        vals        { "1", "1", "1", "1", "1", "1"};
+
+    fixed_width_column_wrapper<K> expect_keys   {   0,   1,   3,   5};
+    fixed_width_column_wrapper<R> expect_vals   {   1,   1,   2,   2};
+
+    auto agg = cudf::experimental::make_count_aggregation();
+
+    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+}
+
+
 } // namespace test
 } // namespace cudf
