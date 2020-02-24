@@ -56,12 +56,6 @@ namespace { // anonym.
       return d_column_;
     }
 
-    __host__ __device__
-    character_cases_table_type const* get_case_table(void) const
-    {
-      return d_case_table_;
-    }
-
     __device__
     char_info get_char_info(char_utf8 chr) const
     {
@@ -244,19 +238,18 @@ namespace { // anonym.
 
          auto pair_char_info = get_char_info(the_chr);
          
-         uint32_t code_point = pair_char_info.first;
          detail::character_flags_table_type flag = pair_char_info.second;
 
          if( !IS_ALPHA(flag) ) {
            bcapnext = true;
-           bytes += detail::bytes_in_char_utf8(the_chr);
          } else {
+           if( bcapnext ? IS_LOWER(flag) : IS_UPPER(flag) )
+             the_chr = convert_char(pair_char_info);
+           
            bcapnext = false;
-           if( (bcapnext && IS_LOWER(flag)) || (!bcapnext && IS_UPPER(flag)) )
-             bytes += detail::bytes_in_char_utf8(detail::codepoint_to_utf8(get_case_table()[code_point]));
-           else
-             bytes += detail::bytes_in_char_utf8(the_chr);
-         }         
+         }
+
+         bytes += detail::bytes_in_char_utf8(the_chr);
        }
        return bytes;
     }
