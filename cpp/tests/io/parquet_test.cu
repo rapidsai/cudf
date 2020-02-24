@@ -131,14 +131,20 @@ inline auto random_values(size_t size) {
 }
 
 // Helper function to compare two tables
-void expect_tables_equal(cudf::table_view const& lhs,
+bool expect_tables_equal(cudf::table_view const& lhs,
                          cudf::table_view const& rhs) {
   EXPECT_EQ(lhs.num_columns(), rhs.num_columns());
   auto expected = lhs.begin();
   auto result = rhs.begin();
+  bool success = true;
+  int column_index = 0;
   while (result != rhs.end()) {
-    cudf::test::expect_columns_equal(*expected++, *result++);
+    if(!cudf::test::expect_columns_equal(*expected++, *result++, column_index)){
+      success = false;
+    }
+    column_index++;
   }
+  return success;
 }
 
 }  // namespace
@@ -472,6 +478,7 @@ TEST_F(ParquetChunkedWriterTest, SimpleTable)
   expect_tables_equal(*result.tbl, *full_table);    
 }
 
+#include <cudf/copying.hpp>
 TEST_F(ParquetChunkedWriterTest, LargeTables)
 {
   int idx;      
@@ -520,17 +527,24 @@ TEST_F(ParquetChunkedWriterTest, LargeTables)
         }
       }
       delete[] raw;
-    }
+    }    
 
     cudf_io::read_parquet_args v_read_args{cudf_io::source_info{PQ_chk_buf, PQ_chk_buf_size}};
     auto v_result = cudf_io::read_parquet(v_read_args);    
-    expect_tables_equal(*v_result.tbl, *full_table);
+    bool vsuccess = expect_tables_equal(*v_result.tbl, *full_table);
     printf("VRESULT OK\n");
+
+    auto whee = cudf::experimental::allocate_like(v_result.tbl->view().column(0));
+    cudf::test::expect_columns_equal(*whee, full_table->view().column(0));
     
     cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
     auto result = cudf_io::read_parquet(read_args);    
-    expect_tables_equal(*result.tbl, *full_table);
+    bool success = expect_tables_equal(*result.tbl, *full_table);
     printf("RESULT OK\n");
+
+    if(!vsuccess || !success){
+      CUDF_FAIL("LargeTable test failed");
+    }
 
     printf("-------------------\n");
   }

@@ -55,8 +55,8 @@ void expect_column_properties_equivalent(cudf::column_view const& lhs, cudf::col
  * @param rhs                   The second column
  * @param print_all_differences If true display all differences
  *---------------------------------------------------------------------------**/
-void expect_columns_equal(cudf::column_view const& lhs, cudf::column_view const& rhs,
-                          bool print_all_differences = false);
+bool expect_columns_equal(cudf::column_view const& lhs, cudf::column_view const& rhs,
+                          bool print_all_differences = false, int column_index = 0);
 
 /**
  * @brief Verifies the element-wise equivalence of two columns.
