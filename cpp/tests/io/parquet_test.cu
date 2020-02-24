@@ -532,10 +532,7 @@ TEST_F(ParquetChunkedWriterTest, LargeTables)
     cudf_io::read_parquet_args v_read_args{cudf_io::source_info{PQ_chk_buf, PQ_chk_buf_size}};
     auto v_result = cudf_io::read_parquet(v_read_args);    
     bool vsuccess = expect_tables_equal(*v_result.tbl, *full_table);
-    printf("VRESULT OK\n");
-
-    auto whee = cudf::experimental::allocate_like(v_result.tbl->view().column(0));
-    cudf::test::expect_columns_equal(*whee, full_table->view().column(0));
+    printf("VRESULT OK\n");    
     
     cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
     auto result = cudf_io::read_parquet(read_args);    
