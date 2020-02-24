@@ -457,6 +457,7 @@ TEST_F(ParquetChunkedWriterTest, SimpleTable)
   expect_tables_equal(*result.tbl, *full_table);    
 }
 
+/*
 TEST_F(ParquetChunkedWriterTest, LargeTables)
 {
   srand(31337);
@@ -477,6 +478,7 @@ TEST_F(ParquetChunkedWriterTest, LargeTables)
   
   expect_tables_equal(*result.tbl, *full_table);    
 }
+*/
 
 TEST_F(ParquetChunkedWriterTest, ManyTables)
 {
