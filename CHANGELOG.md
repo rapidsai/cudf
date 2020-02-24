@@ -14,6 +14,7 @@
 - PR #4088 Added asString() on ColumnVector in Java that takes a format string
 - PR #4040 Add support for n-way merge of sorted tables
 - PR #4053 Multi-column quantiles.
+- PR #3894 Add remove_keys functions for dictionary columns
 - PR #4107 Add groupby nunique aggregation
 - PR #4153 Support Dask serialization protocol on cuDF objects
 - PR #4164 Add Buffer "constructor-kwargs" header
