@@ -44,15 +44,20 @@ install(TARGETS cudftestutil
 
 set(CUDF_TEST_LIST CACHE INTERNAL "CUDF_TEST_LIST")
 
+option(BUILD_LEGACY_TESTS "Build cuDF legacy tests" ON)
+
 function(ConfigureTest CMAKE_TEST_NAME CMAKE_TEST_SRC)
-    add_executable(${CMAKE_TEST_NAME}
-                   ${CMAKE_TEST_SRC})
-    set_target_properties(${CMAKE_TEST_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
-    target_link_libraries(${CMAKE_TEST_NAME} gmock gtest gmock_main gtest_main pthread cudf cudftestutil)
-    set_target_properties(${CMAKE_TEST_NAME} PROPERTIES
-                            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/gtests")
-    add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
-    set(CUDF_TEST_LIST ${CUDF_TEST_LIST} ${CMAKE_TEST_NAME} CACHE INTERNAL "CUDF_TEST_LIST")
+    string(REGEX MATCH "LEGACY_(.*)?_TEST" is_legacy_test "${CMAKE_TEST_NAME}")
+    if(BUILD_LEGACY_TESTS OR (NOT is_legacy_test))
+        add_executable(${CMAKE_TEST_NAME}
+                       ${CMAKE_TEST_SRC})
+        set_target_properties(${CMAKE_TEST_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
+        target_link_libraries(${CMAKE_TEST_NAME} gmock gtest gmock_main gtest_main pthread cudf cudftestutil)
+        set_target_properties(${CMAKE_TEST_NAME} PROPERTIES
+                                RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/gtests")
+        add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
+        set(CUDF_TEST_LIST ${CUDF_TEST_LIST} ${CMAKE_TEST_NAME} CACHE INTERNAL "CUDF_TEST_LIST")
+    endif(BUILD_LEGACY_TESTS OR (NOT is_legacy_test))
 endfunction(ConfigureTest)
 
 option(CMAKE_ENABLE_BENCHMARKS "Enable building cuDF benchmarks" OFF)
@@ -843,6 +848,16 @@ set(STRINGS_TEST_SRC
 ConfigureTest(STRINGS_TEST "${STRINGS_TEST_SRC}")
 
 ###################################################################################################
+# - nvtext test ----------------------------------------------------------------------------------
+
+set(TEXT_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/text/tokenize_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/text/ngrams_tokenize_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/text/normalize_tests.cpp")
+
+ConfigureTest(TEXT_TEST "${TEXT_TEST_SRC}")
+
+###################################################################################################
 # - bitmask tests ---------------------------------------------------------------------------------
 
 set(BITMASK_TEST_SRC
@@ -858,10 +873,11 @@ ConfigureTest(BITMASK_TEST "${BITMASK_TEST_SRC}")
 
 set(DICTIONARY_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/add_keys_test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/factories_test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/encode_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/decode_test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/gather_test.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/encode_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/factories_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/gather_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/remove_keys_test.cpp")
 
 ConfigureTest(DICTIONARY_TEST "${DICTIONARY_TEST_SRC}")
 

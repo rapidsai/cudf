@@ -71,7 +71,11 @@ struct corresponding_operator<aggregation::SUM_OF_SQUARES> {
   using type = DeviceSum;
 };
 template <>
-struct corresponding_operator<aggregation::COUNT> {
+struct corresponding_operator<aggregation::COUNT_VALID> {
+  using type = DeviceCount;
+};
+template <>
+struct corresponding_operator<aggregation::COUNT_ALL> {
   using type = DeviceCount;
 };
  
@@ -154,8 +158,8 @@ struct update_target_element<Source, aggregation::SUM, target_has_nulls,
 
 template <typename Source, bool target_has_nulls, bool source_has_nulls>
 struct update_target_element<
-    Source, aggregation::COUNT, target_has_nulls, source_has_nulls,
-    std::enable_if_t<is_valid_aggregation<Source, aggregation::COUNT>()>> {
+    Source, aggregation::COUNT_VALID, target_has_nulls, source_has_nulls,
+    std::enable_if_t<is_valid_aggregation<Source, aggregation::COUNT_VALID>()>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index, column_device_view source,
                              size_type source_index) const noexcept {
@@ -163,10 +167,24 @@ struct update_target_element<
       return;
     }
 
-    using Target = target_type_t<Source, aggregation::COUNT>;
+    using Target = target_type_t<Source, aggregation::COUNT_VALID>;
     atomicAdd(&target.element<Target>(target_index), Target{1});
 
-    // It is assumed the output for COUNT is initialized to be all valid
+    // It is assumed the output for COUNT_VALID is initialized to be all valid
+  }
+};
+
+template <typename Source, bool target_has_nulls, bool source_has_nulls>
+struct update_target_element<
+    Source, aggregation::COUNT_ALL, target_has_nulls, source_has_nulls,
+    std::enable_if_t<is_valid_aggregation<Source, aggregation::COUNT_ALL>()>> {
+  __device__ void operator()(mutable_column_device_view target,
+                             size_type target_index, column_device_view source,
+                             size_type source_index) const noexcept {
+    using Target = target_type_t<Source, aggregation::COUNT_ALL>;
+    atomicAdd(&target.element<Target>(target_index), Target{1});
+
+    // It is assumed the output for COUNT_ALL is initialized to be all valid
   }
 };
 
@@ -262,7 +280,8 @@ struct elementwise_aggregator {
  * 
  * The initial value and validity of `R` depends on the aggregation:
  * SUM: 0 and NULL
- * COUNT: 0 and VALID
+ * COUNT_VALID: 0 and VALID
+ * COUNT_ALL:   0 and VALID
  * MIN: Max element of type and NULL
  * MAX: Min element of type and NULL
  * ARGMAX: `ARGMAX_SENTINEL` and NULL
@@ -275,7 +294,7 @@ struct elementwise_aggregator {
  * SUM, MIN, MAX, ARGMIN, ARGMAX:
  *  - `source`: Skipped
  *  - `target`: Updated from null to valid upon first successful aggregation
- * COUNT:
+ * COUNT_VALID, COUNT_ALL:
  *  - `source`: Skipped
  *  - `target`: Cannot be null
  *
