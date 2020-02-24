@@ -33,33 +33,6 @@ namespace strings
 namespace detail
 {
 namespace { // anonym.
-
-  //probe string wrap
-  //
-  struct probe_wrap
-  {
-    explicit probe_wrap(column_device_view const d_column):
-      d_column_(d_column)
-    {  
-    }
-
-    __device__
-    size_type operator()(size_type idx) const {
-       if( d_column_.is_null(idx) )
-         return 0; // null string
-      
-       string_view d_str = d_column_.template element<string_view>(idx);
-
-       //TODO:
-       //check!
-       //
-       return d_str.size_bytes();
-    }
-    
-  private:
-    column_device_view const d_column_;
-  };
-
   
   //execute string wrap:
   //
@@ -126,8 +99,7 @@ namespace { // anonym.
          
 }//anonym.
 
-template<typename device_probe_functor,
-         typename device_execute_functor>
+template<typename device_execute_functor>
 std::unique_ptr<column> wrap_strings( strings_column_view const& strings,
                                       size_type width,
                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
@@ -144,23 +116,13 @@ std::unique_ptr<column> wrap_strings( strings_column_view const& strings,
 
   // copy null mask
   rmm::device_buffer null_mask = copy_bitmask(strings.parent(),stream,mr);
-  // get the lookup tables used for case conversion
-  
-  device_probe_functor d_probe_fctr{d_column};
 
-  // build offsets column -- calculate the size of each output string
-  auto offsets_transformer_itr = thrust::make_transform_iterator( thrust::make_counting_iterator<size_type>(0), d_probe_fctr);
-  auto offsets_column = detail::make_offsets_child_column(offsets_transformer_itr,
-                                                          offsets_transformer_itr+strings_count,
-                                                          mr, stream);
-  auto offsets_view = offsets_column->view();
-  auto d_new_offsets = offsets_view.template data<int32_t>();//not sure why this requires `.template` and the next one (`d_chars = ...`) doesn't
+  // build offsets column
+  auto offsets_column = std::make_unique<column>( strings.offsets(), stream, mr ); // makes a copy
+  auto d_new_offsets = offsets_column->view().template data<int32_t>();
 
-  // build the chars column -- convert characters based on case_flag parameter
-  size_type bytes = thrust::device_pointer_cast(d_new_offsets)[strings_count];
-  auto chars_column = strings::detail::create_chars_child_column( strings_count, d_column.null_count(), bytes, mr, stream );
-  auto chars_view = chars_column->mutable_view();
-  auto d_chars = chars_view.data<char>();
+  auto chars_column = std::make_unique<column>( strings.chars(), stream, mr ); // makes a copy
+  auto d_chars = chars_column->mutable_view().data<char>();
 
   device_execute_functor d_execute_fctr{d_column,
       d_new_offsets,
@@ -181,7 +143,7 @@ std::unique_ptr<column> wrap( strings_column_view const& strings,
                               size_type width,
                               rmm::mr::device_memory_resource* mr)
 {
-  return detail::wrap_strings<detail::probe_wrap, detail::execute_wrap>(strings, width, mr);
+  return detail::wrap_strings<detail::execute_wrap>(strings, width, mr);
 }
 
   
