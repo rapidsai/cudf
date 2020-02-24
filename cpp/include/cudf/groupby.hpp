@@ -65,6 +65,12 @@ struct aggregation_result {
   std::vector<std::unique_ptr<column>> results{};
 };
 
+struct groupby_groups {
+  std::unique_ptr<table> group_keys;
+  std::vector<size_type> group_offsets;
+  std::unique_ptr<table> group_values;
+};
+
 /**
  * @brief Groups values by keys and computes aggregations on those groups.
  */
@@ -161,6 +167,10 @@ class groupby {
   std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> aggregate(
       std::vector<aggregation_request> const& requests,
       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+  groupby_groups groups(
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+    cudaStream_t stream = 0);
 
  private:
   table_view _keys;                    ///< Keys that determine grouping

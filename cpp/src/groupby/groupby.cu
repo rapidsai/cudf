@@ -18,6 +18,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/gather.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/groupby.hpp>
 #include <cudf/detail/groupby/sort_helper.hpp>
@@ -127,6 +128,20 @@ groupby::aggregate(std::vector<aggregation_request> const& requests,
   }
 
   return dispatch_aggregation(requests, 0, mr);
+}
+
+groupby_groups groupby::groups(rmm::mr::device_memory_resource*  mr,
+      cudaStream_t stream) {
+  auto sort_order = helper().key_sort_order(stream);
+  auto group_keys = cudf::experimental::detail::gather(_keys, sort_order);
+  auto group_offsets = helper().group_offsets(stream);
+
+  std::vector<size_type> group_offsets_vector(group_offsets.size());
+
+  auto exec = rmm::exec_policy(stream)->on(stream);
+  thrust::copy(group_offsets.begin(), group_offsets.end(), group_offsets_vector.begin());
+
+  return groupby_groups{std::move(group_keys), group_offsets_vector};
 }
 
 // Get the sort helper object
