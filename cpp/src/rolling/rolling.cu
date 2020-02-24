@@ -242,7 +242,7 @@ void gpu_rolling(column_device_view input,
 
   if(threadIdx.x == 0) {
     atomicAdd(output_valid_count, block_valid_count);
-    printf("RGSL : Valid count is %d \n", *output_valid_count);
+    printf("RGSL1 : Valid count is %d \n", *output_valid_count);
   }
 }
 
