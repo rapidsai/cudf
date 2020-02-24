@@ -158,7 +158,7 @@ process_rolling_window(column_device_view input,
         cudf::detail::store_output_functor<OutputType, op == aggregation::MEAN>{}(output.element<OutputType>(current_index),
                 val, count);
 
-    printf ("RGSL4 : output_is_valid %d\n", output_is_valid);
+    printf ("RGSL1 : output_is_valid %d\n", output_is_valid);
     return output_is_valid;
 }
 
