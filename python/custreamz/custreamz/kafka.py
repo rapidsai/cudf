@@ -8,10 +8,10 @@ class KafkaHandle(object):
         self.kafka_configs = kafka_configs
         libkafka.create_kafka_handle(kafka_configs)
 
-    def print_consumer_metadata():
+    def print_consumer_metadata(self):
         libkafka.print_consumer_metadata()
 
-    def dump_configs():
+    def dump_configs(self):
         libkafka.dump_configs()
 
     def read_gdf(

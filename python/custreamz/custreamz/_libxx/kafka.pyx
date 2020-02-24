@@ -28,6 +28,22 @@ cpdef create_kafka_handle(kafka_conf):
     kds = new kafka_external(kafka_confs)
     ds_id = kds.libcudf_datasource_identifier()
 
+cpdef read_gdf(lines=True,
+               start=0,
+               end=1000,
+               timeout=10000):
+
+    json_str = kds.consume_range(start,
+                                 end,
+                                 timeout)
+    print("JSON -> " + str(json_str))
+    return json_str
+
+cpdef dump_configs():
+    kds.dump_configs()
+
+cpdef print_consumer_metadata():
+    kds.print_consumer_metadata()
 
 cpdef get_watermark_offsets(datasource_id=None,
                             topic=None,
@@ -44,24 +60,6 @@ cpdef get_watermark_offsets(datasource_id=None,
               " Offset: " + str(dereference(it).second))
         postincrement(it)
 
-cpdef read_gdf(data_format="blob",
-               lines=True,
-               start=0,
-               end=1000,
-               timeout=10000):
-
-    if data_format == 'blob':
-        json_str = kds.consume_range(start,
-                                     end,
-                                     timeout)
-        print("JSON -> " + str(json_str))
-    else:
-        print("Need to do something else here .... like use libcudf ....")
-
-    return json_str
-
-
 cpdef commit_offsets():
-    cdef kafka_external *kds = new kafka_external()
-    cdef string ds_id = kds.libcudf_datasource_identifier()
-    print("Kafka Datasource ID: " + str(ds_id))
+    kds = new kafka_external()
+    print("`commit_offsets()` is not yet implemented")
