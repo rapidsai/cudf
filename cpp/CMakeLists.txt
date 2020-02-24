@@ -611,6 +611,7 @@ add_library(cudf
             src/strings/substring.cu
             src/strings/translate.cu
             src/strings/utilities.cu
+            src/text/normalize.cu
             src/text/tokenize.cu
             src/text/ngrams_tokenize.cu
             src/scalar/scalar.cpp
