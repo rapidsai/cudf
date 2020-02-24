@@ -231,7 +231,7 @@ void gpu_rolling(column_device_view input,
       warp_valid_count += __popc(result_mask);
       printf("RGSL : Result Mask is %u \n", result_mask);
     }
-    printf("RGSL3 : output_is_valid %d for i %d\n", output_is_valid, i);
+    printf("RGSL4 : output_is_valid %d for i %d\n", output_is_valid, i);
 
     // process next element 
     i += stride;
