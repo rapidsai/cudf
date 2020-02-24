@@ -303,6 +303,16 @@ std::unique_ptr<table> sort_groupby_helper::unique_keys(
                                             false, mr, stream);
 }
 
+std::unique_ptr<table> sort_groupby_helper::sorted_keys(
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream)
+{
+  auto gather_map = cudf::experimental::detail::slice(
+    key_sort_order(), 0, num_keys(stream));
+
+  return cudf::experimental::detail::gather(
+    _keys, gather_map, false, false, false, mr, stream);
+}
 
 }  // namespace sort
 }  // namespace detail

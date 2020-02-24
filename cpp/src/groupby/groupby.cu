@@ -135,9 +135,7 @@ groupby::aggregate(std::vector<aggregation_request> const& requests,
 groupby_groups groupby::groups(table_view values, rmm::mr::device_memory_resource*  mr,
       cudaStream_t stream) {
 
-  auto sort_order = helper().key_sort_order(stream);
-
-  auto group_keys = cudf::experimental::detail::gather(_keys, sort_order);
+  auto group_keys = helper().sorted_keys(mr, stream);
 
   auto group_offsets = helper().group_offsets(stream);
   std::vector<size_type> group_offsets_vector(group_offsets.size());
@@ -147,7 +145,7 @@ groupby_groups groupby::groups(table_view values, rmm::mr::device_memory_resourc
 
   std::unique_ptr<table> group_values{nullptr};
   if (values.num_columns()) {
-    group_values = cudf::experimental::detail::gather(values, sort_order);
+    group_values = cudf::experimental::detail::gather(values, helper().key_sort_order());
     return groupby_groups{std::move(group_keys), group_offsets_vector, std::move(group_values)};
   }
   else {
