@@ -8,7 +8,8 @@ cimport cudf._libxx.includes.merge as cpp_merge
 def merge_sorted(
     object tables,
     object keys=None,
-    bool index=False,
+    bool by_index=False,
+    bool ignore_index=False,
     bool ascending=True,
     object na_position="last",
 ):
@@ -24,7 +25,10 @@ def merge_sorted(
     # Use metadata from 0th table for names, etc
     c_input_tables = vector[table_view](len(tables))
     for i, source_table in enumerate(tables):
-        c_input_tables[i] = source_table.view()
+        if ignore_index:
+            c_input_tables[i] = source_table.data_view()
+        else:
+            c_input_tables[i] = source_table.view()
     source_table = tables[0]
 
     # Define sorting order and null precedence
@@ -34,19 +38,24 @@ def merge_sorted(
     )
 
     # Determine index-column offset
-    num_index_columns = (
-        0 if source_table._index is None
-        else source_table._index._num_columns
-    )
+    if ignore_index:
+        num_index_columns = 0
+        index_names = None
+    else:
+        num_index_columns = (
+            0 if source_table._index is None
+            else source_table._index._num_columns
+        )
+        index_names = source_table._index_names
 
     # Define C vectors for each key column
-    if not index and keys is not None:
+    if not by_index and keys is not None:
         key_cols = [
             num_index_columns + source_table._column_names.index(name)
             for name in keys
         ]
     else:
-        if index:
+        if by_index:
             start = 0
             stop = num_index_columns
         else:
@@ -73,5 +82,5 @@ def merge_sorted(
     return Table.from_unique_ptr(
         move(c_result),
         column_names=source_table._column_names,
-        index_names=source_table._index_names
+        index_names=index_names,
     )
