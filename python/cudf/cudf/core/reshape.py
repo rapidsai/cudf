@@ -1,6 +1,7 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 import numpy as np
+import pandas as pd
 
 import cudf
 from cudf.core import DataFrame, Index, RangeIndex, Series
@@ -400,8 +401,8 @@ def merge_sorted(
     A new, lexocographically sorted, DataFrame/Series.
     """
 
-    if not isinstance(objs, list):
-        raise TypeError("objs must be a list of Frame-like objects")
+    if not pd.api.types.is_list_like(objs):
+        raise TypeError("objs must be a list-like of Frame-like objects")
 
     if len(objs) < 1:
         raise TypeError("objs must be non-empty")
