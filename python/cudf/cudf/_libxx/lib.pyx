@@ -1,3 +1,5 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 import numpy as np
 from cudf._libxx.lib cimport *
 
