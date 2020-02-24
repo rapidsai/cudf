@@ -21,7 +21,8 @@ namespace io {
 namespace external {
 
   kafka_datasource::kafka_datasource() {
-    DATASOURCE_ID = "librdkafka-1.2.2";
+    DATASOURCE_ID = "librdkafka-";
+    DATASOURCE_ID.append(RdKafka::version_str());
 
     // Create an empty RdKafka::Conf instance. The configurations will be constructed later
     //kafka_conf_ = std::unique_ptr<RdKafka::Conf>(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL));
@@ -29,7 +30,8 @@ namespace external {
   }
 
   kafka_datasource::kafka_datasource(std::map<std::string, std::string> configs) {
-    DATASOURCE_ID = "librdkafka-1.2.2";
+    DATASOURCE_ID = "librdkafka-";
+    DATASOURCE_ID.append(RdKafka::version_str());
 
     // Construct the RdKafka::Conf object
     //kafka_conf_ = std::unique_ptr<RdKafka::Conf>(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL));
@@ -47,11 +49,14 @@ namespace external {
     {
       std::string name = it->first;
       std::string value = it->second;
-      printf("Configuring '%s' - '%s' -> '%s'\n", DATASOURCE_ID.c_str(), name.c_str(), value.c_str());
 
-      conf_res_ = kafka_conf_->set(name, value, errstr_);
-  
-      // Increment the Iterator to point to next entry
+      if (name.rfind("ex_ds", 0) == 0) {
+        printf("Ignoring configuration value '%s' -> '%s'\n", name.c_str(), value.c_str());
+      } else {
+        printf("Configuring '%s' - '%s' -> '%s'\n", DATASOURCE_ID.c_str(), name.c_str(), value.c_str());
+        conf_res_ = kafka_conf_->set(name, value, errstr_);
+      }
+    
       it++;
     }
 
@@ -72,8 +77,8 @@ namespace external {
     ExampleRebalanceCb ex_rebalance_cb;
     kafka_conf_->set("rebalance_cb", &ex_rebalance_cb, errstr_);
 
-    ExampleConsumeCb ex_consume_cb;
-    kafka_conf_->set("consume_cb", &ex_consume_cb, errstr_);
+    ExampleEventCb ex_event_cb;
+    kafka_conf_->set("event_cb", &ex_event_cb, errstr_);
 
     consumer_ = RdKafka::KafkaConsumer::create(kafka_conf_, errstr_);
     if (!consumer_) {
@@ -87,6 +92,7 @@ namespace external {
     consumer_->assign(partitions);
 
     //consume_range(configs, 0, 15, 3000);
+    //get_watermark_offset("libcudf-test", 0);
 
     return true;
   }
@@ -172,8 +178,7 @@ namespace external {
     printf("\n====== END - LIBRDKAFKA GLOBAL CONFIGS ======\n");
   }
 
-  std::string kafka_datasource::consume_range(std::map<std::string, std::string> configs,
-                                              int64_t start_offset,
+  std::string kafka_datasource::consume_range(int64_t start_offset,
                                               int64_t end_offset,
                                               int batch_timeout) {
     std::string json_str;
@@ -211,8 +216,8 @@ namespace external {
   }
 
   std::map<std::string, int64_t> kafka_datasource::get_watermark_offset(std::string topic, int32_t partition) {
-    int64_t *low = 0;
-    int64_t *high = 0;
+    int64_t *low;
+    int64_t *high;
     std::vector<RdKafka::TopicPartition *> topic_parts;
     std::map<std::string, int64_t> results;
 
@@ -222,12 +227,12 @@ namespace external {
     }
     printf("# Consumer Partition(s) -> '%lu'\n", topic_parts.size());
     printf("Topic: '%s' Partition: '%d'\n", topic_parts[0]->topic().c_str(), topic_parts[0]->partition());
-    err_ = consumer_->get_watermark_offsets(topic_parts[0]->topic().c_str(), topic_parts[0]->partition(), low, high);
+    err_ = consumer_->query_watermark_offsets(topic_parts[0]->topic().c_str(), topic_parts[0]->partition(), low, high, 10000);
 
     if (err_ != RdKafka::ErrorCode::ERR_NO_ERROR) {
       printf("Error: '%s'\n", err2str(err_).c_str());
     } else {
-      //printf("Low Offset: '%ld' High Offset: '%ld'\n", &low, &high);
+      printf("Low Offset: '%ld' High Offset: '%ld'\n", *low, *high);
       results.insert(std::pair<std::string, int64_t>("low", *low));
       results.insert(std::pair<std::string, int64_t>("high", *high));
     }

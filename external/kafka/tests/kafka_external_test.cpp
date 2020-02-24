@@ -56,8 +56,8 @@ TEST(ExternalDatasource, WaterMark)
     datasource_confs.insert({"enable.partition.eof", "true"});
 
     cudf::io::external::kafka_datasource ex_datasource = cudf::io::external::kafka_datasource(datasource_confs);
-    //std::map<std::string, int64_t> offsets = ex_datasource.get_watermark_offset(topic, partition);
-    //ex_datasource.print_consumer_metadata();
+    ex_datasource.print_consumer_metadata();
     ex_datasource.dump_configs();
-    printf("After everything ..... \n");
+    ex_datasource.consume_range(0, 1, 6000);
+    std::map<std::string, int64_t> offsets = ex_datasource.get_watermark_offset(topic, partition);
 }

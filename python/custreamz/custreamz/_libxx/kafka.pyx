@@ -16,29 +16,25 @@ from libcpp.map cimport map
 from cython.operator cimport dereference, postincrement
 from libc.stdint cimport uint32_t, int64_t
 
+# Global Kafka configurations
+cdef kafka_external *kds
+cdef string ds_id
 
-cpdef get_watermark_offsets(datasource_id=None,
-                            kafka_configs=None,
-                            topic=None,
-                            partition=1):
-
-    kafka_conf = {
-        "ex_ds.kafka.topic": "libcudf-test",
-        "metadata.broker.list": "localhost:9092",
-        "enable.partition.eof": "true",
-        "group.id": "jeremy",
-        "auto.offset.reset": "earliest",
-        "enable.auto.commit": "false"
-    }
-    topic = "libcudf-test"
-
+cpdef create_kafka_handle(kafka_conf):
+    global kds, ds_id
     cdef map[string, string] kafka_confs
     for key, value in kafka_conf.items():
         kafka_confs[str.encode(key)] = str.encode(value)
+    kds = new kafka_external(kafka_confs)
+    ds_id = kds.libcudf_datasource_identifier()
 
-    cdef kafka_external *kds = new kafka_external(kafka_confs)
-    cdef string ds_id = kds.libcudf_datasource_identifier()
-    # print("Kafka Datasource ID: " + str(ds_id))
+
+cpdef get_watermark_offsets(datasource_id=None,
+                            topic=None,
+                            partition=1):
+
+    topic = "libcudf-test"
+
     cdef map[string, int64_t] offsets = \
         kds.get_watermark_offset(str.encode(topic), partition)
     cdef map[string, int64_t].iterator it = offsets.begin()
@@ -50,35 +46,15 @@ cpdef get_watermark_offsets(datasource_id=None,
 
 cpdef read_gdf(data_format="blob",
                lines=True,
-               kafka_configs=None,
-               partition=None,
                start=0,
                end=1000,
                timeout=10000):
 
-    kafka_configs = {
-        "ex_ds.kafka.topic": "libcudf-test",
-        "metadata.broker.list": "localhost:9092",
-        "enable.partition.eof": "true",
-        "group.id": "jeremy_test",
-        "auto.offset.reset": "earliest",
-        "enable.auto.commit": "false"
-    }
-
-    cdef map[string, string] kafka_confs
-    for key, value in kafka_configs.items():
-        kafka_confs[str.encode(key)] = str.encode(value)
-
-    cdef kafka_external *kds = new kafka_external(kafka_confs)
-
     if data_format == 'blob':
-        print("Reading Kafka messages as raw blobs ....")
-        json_str = kds.consume_range(kafka_confs,
-                                     start,
+        json_str = kds.consume_range(start,
                                      end,
                                      timeout)
         print("JSON -> " + str(json_str))
-        print("something")
     else:
         print("Need to do something else here .... like use libcudf ....")
 

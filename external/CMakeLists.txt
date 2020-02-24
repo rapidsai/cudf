@@ -102,19 +102,15 @@ message(STATUS "CUDF_INCLUDE: CUDF_INCLUDE set to ${CUDF_INCLUDE}")
 
 find_path(RDKAFKA_INCLUDE "librdkafka"
         HINTS "$ENV{RDKAFKA_ROOT}/include")
-#find_library(RDKAFKA_LIBRARY "rdkafka"
-#        HINTS "$ENV{RDKAFKA_ROOT}/lib" "$ENV{RDKAFKA_ROOT}/build")
 find_library(RDKAFKA++_LIBRARY "rdkafka++"
         HINTS "$ENV{RDKAFKA_ROOT}/lib" "$ENV{RDKAFKA_ROOT}/build")
 
-#message(STATUS "RDKAFKA: RDKAFKA_LIBRARY set to ${RDKAFKA_LIBRARY}")
 message(STATUS "RDKAFKA: RDKAFKA++_LIBRARY set to ${RDKAFKA++_LIBRARY}")
 message(STATUS "RDKAFKA: RDKAFKA_INCLUDE set to ${RDKAFKA_INCLUDE}")
 
 #add_library(rdkafka SHARED IMPORTED ${RDKAFKA_LIBRARY})
 add_library(rdkafka++ SHARED IMPORTED ${RDKAFKA++_LIBRARY})
 if(RDKAFKA_INCLUDE AND RDKAFKA++_LIBRARY)
-    #set_target_properties(rdkafka PROPERTIES IMPORTED_LOCATION ${RDKAFKA_LIBRARY})
     set_target_properties(rdkafka++ PROPERTIES IMPORTED_LOCATION ${RDKAFKA++_LIBRARY})
 endif(RDKAFKA_INCLUDE AND RDKAFKA++_LIBRARY)
 

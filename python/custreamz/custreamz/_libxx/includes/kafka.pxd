@@ -22,12 +22,15 @@ cdef extern from "kafka_datasource.hpp" namespace "cudf::io::external" nogil:
 
         string libcudf_datasource_identifier() except +
 
+        print_consumer_metadata() except +
+
+        dump_configs() except +
+
         bool commit(string topic, int partition, int offset) except +
 
         map[string, int64_t] get_watermark_offset(string topic,
                                                   int32_t partition) except +
 
-        string consume_range(map[string, string] configs,
-                             int64_t start_offset,
+        string consume_range(int64_t start_offset,
                              int64_t end_offset,
                              int batch_timeout) except +

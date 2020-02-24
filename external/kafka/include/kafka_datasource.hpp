@@ -74,7 +74,7 @@ class kafka_datasource : public external_datasource {
 
   void dump_configs();
 
-  std::string consume_range(std::map<std::string, std::string> configs, int64_t start_offset, int64_t end_offset, int batch_timeout);
+  std::string consume_range(int64_t start_offset, int64_t end_offset, int batch_timeout);
 
   const std::shared_ptr<arrow::Buffer> get_buffer(size_t offset,
                                                   size_t size) override {
@@ -124,13 +124,6 @@ class kafka_datasource : public external_datasource {
                   event.str() << std::endl;
               break;
           }
-        }
-    };
-
-    class ExampleConsumeCb : public RdKafka::ConsumeCb {
-      public:
-        void consume_cb (RdKafka::Message &message, void *opaque) {
-          printf("Message consumed callback\n");
         }
     };
 
