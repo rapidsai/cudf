@@ -33,57 +33,16 @@ namespace strings
 namespace detail
 {
 namespace { // anonym.
-  
+
   //base class for probing string
   //manipulation memory load requirements;
+  //and for executing string modification:
   //
-  struct probe_base
+  struct probe_execute_base
   {
     using char_info = thrust::pair<uint32_t,detail::character_flags_table_type>;
     
-    probe_base(column_device_view const d_column,
-               character_flags_table_type const* d_flags,
-               character_cases_table_type const* d_case_table):
-      d_column_(d_column),
-      d_flags_(d_flags),
-      d_case_table_(d_case_table)
-    {  
-    }
-
-    __host__ __device__
-    column_device_view const get_column(void) const
-    {
-      return d_column_;
-    }
-
-    __device__
-    char_info get_char_info(char_utf8 chr) const
-    {
-      uint32_t code_point = detail::utf8_to_codepoint(chr);
-      detail::character_flags_table_type flag = code_point <= 0x00FFFF ? d_flags_[code_point] : 0;
-      return char_info{code_point,flag};
-    }
-
-    __device__
-    char_utf8 convert_char(char_info const& info) const
-    {
-      return detail::codepoint_to_utf8(d_case_table_[info.first]);
-    }
-    
-  private:
-    column_device_view const d_column_;
-    character_flags_table_type const* d_flags_;
-    character_cases_table_type const* d_case_table_;
-  };
-
-  
-  //base class for executing string modification:
-  //
-  struct execute_base
-  {
-    using char_info = thrust::pair<uint32_t,detail::character_flags_table_type>;
-    
-    execute_base(column_device_view const d_column,
+    probe_execute_base(column_device_view const d_column,
                  character_flags_table_type const* d_flags,
                  character_cases_table_type const* d_case_table,
                  int32_t const* d_offsets,
@@ -95,6 +54,18 @@ namespace { // anonym.
       d_chars_(d_chars)
     {
     }
+
+    probe_execute_base(column_device_view const d_column,
+                       character_flags_table_type const* d_flags,
+                       character_cases_table_type const* d_case_table):
+      d_column_(d_column),
+      d_flags_(d_flags),
+      d_case_table_(d_case_table),
+      d_offsets_(nullptr),
+      d_chars_(nullptr)
+    {  
+    }
+
 
     __host__ __device__
     column_device_view const get_column(void) const
@@ -141,12 +112,12 @@ namespace { // anonym.
   //(private inheritance to prevent polymorphic use,
   // a requirement that came up in code review)
   //
-  struct probe_capitalize: private probe_base
+  struct probe_capitalize: private probe_execute_base
   {
     probe_capitalize(column_device_view const d_column,
                      character_flags_table_type const* d_flags,
                      character_cases_table_type const* d_case_table):
-      probe_base(d_column, d_flags, d_case_table)
+      probe_execute_base(d_column, d_flags, d_case_table)
     {  
     }
     
@@ -176,14 +147,14 @@ namespace { // anonym.
   //(private inheritance to prevent polymorphic use,
   // a requirement that came up in code review)
   //
-  struct execute_capitalize: private execute_base
+  struct execute_capitalize: private probe_execute_base
   {
     execute_capitalize(column_device_view const d_column,
                        character_flags_table_type const* d_flags,
                        character_cases_table_type const* d_case_table,
                        int32_t const* d_offsets,
                        char* d_chars):
-      execute_base(d_column, d_flags, d_case_table, d_offsets, d_chars)
+      probe_execute_base(d_column, d_flags, d_case_table, d_offsets, d_chars)
     {
     }
     
@@ -215,12 +186,12 @@ namespace { // anonym.
   //(private inheritance to prevent polymorphic use,
   // a requirement that came up in code review)
   //
-  struct probe_title: private probe_base
+  struct probe_title: private probe_execute_base
   {
     probe_title(column_device_view const d_column,
                      character_flags_table_type const* d_flags,
                      character_cases_table_type const* d_case_table):
-      probe_base(d_column, d_flags, d_case_table)
+      probe_execute_base(d_column, d_flags, d_case_table)
     {  
     }
     
@@ -259,14 +230,14 @@ namespace { // anonym.
   //(private inheritance to prevent polymorphic use,
   // a requirement that came up in code review)
   //
-  struct execute_title: private execute_base
+  struct execute_title: private probe_execute_base
   {
     execute_title(column_device_view const d_column,
                   character_flags_table_type const* d_flags,
                   character_cases_table_type const* d_case_table,
                   int32_t const* d_offsets,
                   char* d_chars):
-      execute_base(d_column, d_flags, d_case_table, d_offsets, d_chars)
+      probe_execute_base(d_column, d_flags, d_case_table, d_offsets, d_chars)
     {
     }
     
