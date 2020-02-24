@@ -34,76 +34,30 @@ namespace detail
 {
 namespace { // anonym.
 
-  //TODO (Maybe):
-  //After PR #4063 is merged, consolidate
-  //all that + this logic into a detail header
-  //to be reused for all three (capitalize, title, wrap);
-  //
-  //(Provided there is enough common functionality
-  // between `modify_strings()` and `wrap_strings()`
-  //
-  
   //probe string wrap
   //
   struct probe_wrap
   {
-    using char_info = thrust::pair<uint32_t,detail::character_flags_table_type>;
-    
-    probe_wrap(column_device_view const d_column,
-               character_flags_table_type const* d_flags,
-               character_cases_table_type const* d_case_table):
-      d_column_(d_column),
-      d_flags_(d_flags),
-      d_case_table_(d_case_table)
+    explicit probe_wrap(column_device_view const d_column):
+      d_column_(d_column)
     {  
     }
 
-    __host__ __device__
-    column_device_view const get_column(void) const
-    {
-      return d_column_;
-    }
-
     __device__
-    char_info get_char_info(char_utf8 chr) const
-    {
-      uint32_t code_point = detail::utf8_to_codepoint(chr);
-      detail::character_flags_table_type flag = code_point <= 0x00FFFF ? d_flags_[code_point] : 0;
-      return char_info{code_point,flag};
-    }
-
-    __device__
-    char_utf8 convert_char(char_info const& info) const
-    {
-      return detail::codepoint_to_utf8(d_case_table_[info.first]);
-    }
-
-    __device__
-     int32_t operator()(size_type idx) const {
-       if( get_column().is_null(idx) )
+    size_type operator()(size_type idx) const {
+       if( d_column_.is_null(idx) )
          return 0; // null string
       
-       string_view d_str = get_column().template element<string_view>(idx);
-       int32_t bytes = 0;
-      
-       for( auto itr = d_str.begin(); itr != d_str.end(); ++itr ) {
-         auto the_chr = *itr;
+       string_view d_str = d_column_.template element<string_view>(idx);
 
-         auto pair_char_info = get_char_info(the_chr);
-         detail::character_flags_table_type flag = pair_char_info.second;
-         
-         //TODO:
-         //
-         //(probe conditions):
-         //
-       }
-       return bytes;
+       //TODO:
+       //check!
+       //
+       return d_str.size_bytes();
     }
     
   private:
     column_device_view const d_column_;
-    character_flags_table_type const* d_flags_;
-    character_cases_table_type const* d_case_table_;
   };
 
   
@@ -111,84 +65,60 @@ namespace { // anonym.
   //
   struct execute_wrap
   {
-    using char_info = thrust::pair<uint32_t,detail::character_flags_table_type>;
-    
     execute_wrap(column_device_view const d_column,
-                 character_flags_table_type const* d_flags,
-                 character_cases_table_type const* d_case_table,
                  int32_t const* d_offsets,
                  char* d_chars,
                  size_type width):
       d_column_(d_column),
-      d_flags_(d_flags),
-      d_case_table_(d_case_table),
       d_offsets_(d_offsets),
       d_chars_(d_chars),
       width_(width)
     {
     }
 
-    __host__ __device__
-    column_device_view const get_column(void) const
-    {
-      return d_column_;
-    }
-
-    __host__ __device__
-    int32_t const* get_offsets(void) const
-    {
-      return d_offsets_;
-    }
-
-    __host__ __device__
-    char* get_chars(void)
-    {
-      return d_chars_;
-    }
-
-    __device__
-    char_info get_char_info(char_utf8 chr) const
-    {
-      uint32_t code_point = detail::utf8_to_codepoint(chr);
-      detail::character_flags_table_type flag = code_point <= 0x00FFFF ? d_flags_[code_point] : 0;
-      return char_info{code_point,flag};
-    }
-
-    __device__
-    char_utf8 convert_char(char_info const& info) const
-    {
-      return detail::codepoint_to_utf8(d_case_table_[info.first]);
-    }
-
     __device__
     int32_t operator()(size_type idx) {
-      if( get_column().is_null(idx) )
+      if( d_column_.is_null(idx) )
         return 0; // null string
       
-      string_view d_str = get_column().template element<string_view>(idx);
-      char* d_buffer = get_chars() + get_offsets()[idx];
+      string_view d_str = d_column_.template element<string_view>(idx);
+      char* d_buffer = d_chars_ + d_offsets_[idx];
+
+      int charOffsetToLastSpace = -1;
+      int byteOffsetToLastSpace = -1;
+      int spos=0;
+      int bidx=0;
       
       for( auto itr = d_str.begin(); itr != d_str.end(); ++itr ) {
         auto the_chr = *itr;
 
-        auto pair_char_info = get_char_info(the_chr); 
-        detail::character_flags_table_type flag = pair_char_info.second;
+        auto pos = itr.position();//thrust::distance(d_str.begin(), itr);
 
-        //TODO:
-        //
         //execute conditions:
         //
-        //if( (itr == d_str.begin()) ? IS_LOWER(flag) : IS_UPPER(flag) )
-        //  the_chr = convert_char(pair_char_info);
+        if( the_chr <= ' ' )
+        {   // convert all whitespace to space
+          d_buffer[bidx] = ' ';
+          byteOffsetToLastSpace = bidx;
+          charOffsetToLastSpace = pos;
+        }
+        if( (pos - spos) >= width_ )
+        {
+          if( byteOffsetToLastSpace >=0 )
+          {
+            d_buffer[byteOffsetToLastSpace] = '\n';
+            spos = charOffsetToLastSpace;
+            byteOffsetToLastSpace = charOffsetToLastSpace = -1;
+          }
+        }
+        bidx += detail::bytes_in_char_utf8(the_chr);
         
-        d_buffer += detail::from_char_utf8(the_chr, d_buffer);
+        ///d_buffer += detail::from_char_utf8(the_chr, d_buffer);
       }
       return 0;
     }
   private:
     column_device_view const d_column_;
-    character_flags_table_type const* d_flags_;
-    character_cases_table_type const* d_case_table_;
     int32_t const* d_offsets_;
     char* d_chars_;
     size_type width_;
@@ -203,10 +133,6 @@ std::unique_ptr<column> wrap_strings( strings_column_view const& strings,
                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                       cudaStream_t stream = 0)
 {
-  //TODO:
-  //modify to include `width` functionality;
-  //
-  
   auto strings_count = strings.size();
   if( strings_count == 0 )
     return detail::make_empty_strings_column(mr,stream);
@@ -219,10 +145,8 @@ std::unique_ptr<column> wrap_strings( strings_column_view const& strings,
   // copy null mask
   rmm::device_buffer null_mask = copy_bitmask(strings.parent(),stream,mr);
   // get the lookup tables used for case conversion
-  auto d_flags = get_character_flags_table();
-  auto d_case_table = get_character_cases_table();  
-
-  device_probe_functor d_probe_fctr{d_column, d_flags, d_case_table};
+  
+  device_probe_functor d_probe_fctr{d_column};
 
   // build offsets column -- calculate the size of each output string
   auto offsets_transformer_itr = thrust::make_transform_iterator( thrust::make_counting_iterator<size_type>(0), d_probe_fctr);
@@ -239,8 +163,6 @@ std::unique_ptr<column> wrap_strings( strings_column_view const& strings,
   auto d_chars = chars_view.data<char>();
 
   device_execute_functor d_execute_fctr{d_column,
-      d_flags,
-      d_case_table,
       d_new_offsets,
       d_chars,
       width};
