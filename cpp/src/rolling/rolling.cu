@@ -218,10 +218,10 @@ void gpu_rolling(column_device_view input,
     //       This might require separating the kernel into a special version
     //       for dynamic and static sizes.
 
-    bool output_is_valid = process_rolling_window<InputType, OutputType, agg_op,
+    bool output_is_valid = false;
+    output_is_valid = process_rolling_window<InputType, OutputType, agg_op,
                                             op, has_nulls>(input, output, start_index,
                                                            end_index, i, min_periods, identity);
-    __syncwarp();
     // set the mask
     cudf::bitmask_type result_mask{__ballot_sync(active_threads, output_is_valid)};
 
