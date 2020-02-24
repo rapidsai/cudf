@@ -221,7 +221,7 @@ void gpu_rolling(column_device_view input,
     // set the mask
     cudf::bitmask_type result_mask{__ballot_sync(active_threads, process_rolling_window<InputType, OutputType, agg_op,
                                             op, has_nulls>(input, output, start_index,
-                                                           end_index, i, min_periods, identity);)};
+                                                           end_index, i, min_periods, identity))};
 
     // only one thread writes the mask
     if (0 == threadIdx.x % cudf::experimental::detail::warp_size) {
