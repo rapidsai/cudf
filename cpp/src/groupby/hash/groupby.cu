@@ -239,7 +239,9 @@ void compute_single_pass_aggs(table_view const& keys,
   std::transform(flattened_values.begin(), flattened_values.end(), 
                  aggs.begin(), std::back_inserter(sparse_columns),
     [stream] (auto const& col, auto const& agg) {
-      bool nullable = (agg == aggregation::COUNT) ? false : col.has_nulls();
+      bool nullable = 
+          (agg == aggregation::COUNT_VALID or agg == aggregation::COUNT_ALL) 
+        ? false : col.has_nulls();
       auto mask_flag = (nullable) ? mask_state::ALL_NULL
                                   : mask_state::UNALLOCATED;
       

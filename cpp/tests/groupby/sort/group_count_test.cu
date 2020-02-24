@@ -21,7 +21,6 @@
 #include <tests/utilities/type_lists.hpp>
 
 #include <cudf/detail/aggregation/aggregation.hpp>
-using cudf::experimental::include_nulls;
 
 namespace cudf {
 namespace test {

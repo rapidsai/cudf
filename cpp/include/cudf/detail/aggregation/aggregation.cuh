@@ -331,7 +331,8 @@ __device__ inline void aggregate_row(mutable_table_device_view target,
  * 
  * The initial values set as per aggregation are:
  * SUM: 0
- * COUNT: 0
+ * COUNT_VALID: 0 and VALID
+ * COUNT_ALL:   0 and VALID
  * MIN: Max value of type `T`
  * MAX: Min value of type `T`
  * ARGMAX: `ARGMAX_SENTINEL`
@@ -345,7 +346,8 @@ struct identity_initializer {
   static constexpr bool is_supported() {
     return cudf::is_fixed_width<T>() and
            (k == aggregation::SUM or k == aggregation::MIN or 
-            k == aggregation::MAX or k == aggregation::COUNT or
+            k == aggregation::MAX or
+            k == aggregation::COUNT_VALID or k == aggregation::COUNT_ALL or
             k == aggregation::ARGMAX or k == aggregation::ARGMIN);
   }
 
