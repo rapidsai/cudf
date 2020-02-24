@@ -25,12 +25,16 @@
 namespace cudf {
 namespace test {
 
-template <typename V>
+template <typename K>
 struct groupby_group_keys_test : public cudf::test::BaseFixture {};
+
+template <typename V>
+struct groupby_group_keys_and_values_test : public cudf::test::BaseFixture {};
 
 using KeyTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
 
 TYPED_TEST_CASE(groupby_group_keys_test, KeyTypes);
+TYPED_TEST_CASE(groupby_group_keys_and_values_test, NumericTypes);
 
 TYPED_TEST(groupby_group_keys_test, basic)
 {
@@ -62,6 +66,20 @@ TYPED_TEST(groupby_group_keys_test, all_null_keys)
   std::vector<size_type> expect_group_offsets = {0};
   test_grouping_keys(keys, expect_group_keys, expect_group_offsets);
 }
+
+TYPED_TEST(groupby_group_keys_and_values_test, basic)
+{
+  using K = int32_t;
+  using V = TypeParam;
+
+  fixed_width_column_wrapper<K> keys ({5, 4, 3, 2, 1, 0});
+  fixed_width_column_wrapper<K> expect_group_keys {0, 1, 2, 3, 4, 5};
+  fixed_width_column_wrapper<V> values ({0, 0, 1, 1, 2, 2});
+  fixed_width_column_wrapper<V> expect_group_values {2, 2, 1, 1, 0, 0};
+  std::vector<size_type> expect_group_offsets = {0, 1, 2, 3, 4, 5, 6};
+  test_grouping_keys_and_values(keys, values, expect_group_keys, expect_group_values, expect_group_offsets);
+}
+
 
 } //namespace test
 } //namespace cudf

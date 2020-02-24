@@ -172,7 +172,12 @@ class groupby {
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
     cudaStream_t stream = 0);
 
- private:
+  groupby_groups groups(
+    cudf::table_view values,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+    cudaStream_t stream = 0);
+
+private:
   table_view _keys;                    ///< Keys that determine grouping
   bool _ignore_null_keys{true};        ///< Ignore rows in keys with NULLs
   bool _keys_are_sorted{false};        ///< Whether or not the keys are sorted

@@ -147,6 +147,23 @@ groupby_groups groupby::groups(rmm::mr::device_memory_resource*  mr,
   return groupby_groups{std::move(group_keys), group_offsets_vector};
 }
 
+groupby_groups groupby::groups(table_view values, rmm::mr::device_memory_resource*  mr,
+      cudaStream_t stream) {
+  auto sort_order = helper().key_sort_order(stream);
+  auto group_keys = cudf::experimental::detail::gather(_keys, sort_order);
+  auto group_values = cudf::experimental::detail::gather(values, sort_order);
+  auto group_offsets = helper().group_offsets(stream);
+
+  std::vector<size_type> group_offsets_vector(group_offsets.size());
+
+  thrust::copy(group_offsets.begin(),
+      group_offsets.end(),
+      group_offsets_vector.begin());
+
+  return groupby_groups{std::move(group_keys), group_offsets_vector, std::move(group_values)};
+}
+
+
 // Get the sort helper object
 detail::sort::sort_groupby_helper& groupby::helper() {
   if (_helper)
