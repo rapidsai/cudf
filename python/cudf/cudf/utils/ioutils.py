@@ -777,13 +777,13 @@ Read ``hexadecimal values`` from a csv file as integer column with cudf
 Create a test hex csv file
 
 >>> import cudf
->>> filename = 'test.csv'
+>>> fname = 'test.csv'
 >>> cdf = cudf.DataFrame()
 >>> cdf['hex_col'] = ['9512c20b']*10
 >>> cdf.to_csv(fname,index=False)
 
 Read the file with ``cudf.read_csv`` and use `hex64` as dtype.
-dtype: 'hex64', 'hex32' or 'hex` (alias for hex64) for hexadecimal parsing.
+dtype: `hex64`, `hex32` or `hex` (alias for hex64) for hexadecimal parsing.
 
 >>> gdf = cudf.read_csv(fname, converters={'hex_col': partial(int, base=16)},
 ...                     dtype = {"hex_col" : "hex64"})
