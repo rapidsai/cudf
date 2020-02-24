@@ -15,20 +15,17 @@ class KafkaHandle(object):
         libkafka.dump_configs()
 
     def read_gdf(
-        data_format="blob",
-        lines=True,
-        partition=None,
-        start=-1,
-        end=-1,
-        *args,
-        **kwargs,
+        lines=True, start=-1, end=-1, timeout=10000, *args, **kwargs,
     ):
-        libkafka.read_gdf()
+        libkafka.read_gdf(lines, start, end, timeout)
+
+    def get_committed_offset(self):
+        libkafka.get_committed_offset()
 
     def get_watermark_offsets(
-        datasource_id=None, topic=None, partition=-1, *args, **kwargs,
+        topic=None, partition=-1, *args, **kwargs,
     ):
-        libkafka.get_watermark_offsets(datasource_id, topic, partition)
+        libkafka.get_watermark_offsets(topic, partition)
 
     def commit_offsets(*args, **kwargs):
         libkafka.commit_offsets()

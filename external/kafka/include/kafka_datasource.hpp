@@ -42,6 +42,7 @@ class kafka_datasource : public external_datasource {
  private:
     RdKafka::Conf* kafka_conf_;
     RdKafka::KafkaConsumer* consumer_;
+    std::vector<RdKafka::TopicPartition*> partitions_;
     RdKafka::Conf::ConfResult conf_res_;
     RdKafka::ErrorCode err_;
 
@@ -73,6 +74,8 @@ class kafka_datasource : public external_datasource {
   void print_consumer_metadata();
 
   void dump_configs();
+
+  int64_t get_committed_offset();
 
   std::string consume_range(int64_t start_offset, int64_t end_offset, int batch_timeout);
 
@@ -146,12 +149,9 @@ class kafka_datasource : public external_datasource {
 
           if (err == RdKafka::ERR__ASSIGN_PARTITIONS) {
             consumer->assign(partitions);
-            //partition_cnt = (int)partitions.size();
           } else {
             consumer->unassign();
-            //partition_cnt = 0;
           }
-          //eof_cnt = 0;
         }
       };
 

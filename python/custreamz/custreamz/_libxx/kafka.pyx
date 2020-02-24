@@ -36,8 +36,11 @@ cpdef read_gdf(lines=True,
     json_str = kds.consume_range(start,
                                  end,
                                  timeout)
-    print("JSON -> " + str(json_str))
+    print("Python - Kafka result bytes -> " + str(json_str))
     return json_str
+
+cpdef get_committed_offset():
+    print(kds.get_committed_offset())
 
 cpdef dump_configs():
     kds.dump_configs()
@@ -45,11 +48,8 @@ cpdef dump_configs():
 cpdef print_consumer_metadata():
     kds.print_consumer_metadata()
 
-cpdef get_watermark_offsets(datasource_id=None,
-                            topic=None,
+cpdef get_watermark_offsets(topic=None,
                             partition=1):
-
-    topic = "libcudf-test"
 
     cdef map[string, int64_t] offsets = \
         kds.get_watermark_offset(str.encode(topic), partition)

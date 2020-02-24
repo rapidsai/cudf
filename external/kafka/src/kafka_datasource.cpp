@@ -50,10 +50,8 @@ namespace external {
       std::string name = it->first;
       std::string value = it->second;
 
-      if (name.rfind("ex_ds", 0) == 0) {
-        printf("Ignoring configuration value '%s' -> '%s'\n", name.c_str(), value.c_str());
-      } else {
-        printf("Configuring '%s' - '%s' -> '%s'\n", DATASOURCE_ID.c_str(), name.c_str(), value.c_str());
+      if (!name.rfind("ex_ds", 0) == 0) {
+        //printf("Configuring '%s' - '%s' -> '%s'\n", DATASOURCE_ID.c_str(), name.c_str(), value.c_str());
         conf_res_ = kafka_conf_->set(name, value, errstr_);
       }
     
@@ -63,7 +61,7 @@ namespace external {
     std::map<std::string, std::string>::iterator conf_it;
     conf_it = configs.find("ex_ds.kafka.topic");
     if (conf_it != configs.end()) {
-      printf("Setting topic name to '%s'\n", conf_it->second.c_str());
+      //printf("Setting topic name to '%s'\n", conf_it->second.c_str());
       topics_.push_back(conf_it->second);
     } else {
       printf("Unable to find topic configuration value\n");
@@ -85,14 +83,10 @@ namespace external {
       printf("Failed to create kafka consumer!\n");
     }
 
-    std::vector<RdKafka::TopicPartition*> partitions;
     for (int i = 0; i < topics_.size(); i++) {
-      partitions.push_back(RdKafka::TopicPartition::create(topics_[i], 0, 0));
+      partitions_.push_back(RdKafka::TopicPartition::create(topics_[i], 0, 0));
     }
-    consumer_->assign(partitions);
-
-    //consume_range(configs, 0, 15, 3000);
-    //get_watermark_offset("libcudf-test", 0);
+    consumer_->assign(partitions_);
 
     return true;
   }
@@ -178,6 +172,11 @@ namespace external {
     printf("\n====== END - LIBRDKAFKA GLOBAL CONFIGS ======\n");
   }
 
+  int64_t kafka_datasource::get_committed_offset() {
+    err_ = consumer_->committed(partitions_, default_timeout_);
+    return partitions_[0]->offset();
+  }
+
   std::string kafka_datasource::consume_range(int64_t start_offset,
                                               int64_t end_offset,
                                               int batch_timeout) {
@@ -197,7 +196,7 @@ namespace external {
         json_str.append(static_cast<char *>(msg->payload()));
         json_str.append("\n");
         messages_read++;
-        printf("Message Read -> '%s'\n", static_cast<char *>(msg->payload()));
+        //printf("Message Read -> '%s'\n", static_cast<char *>(msg->payload()));
       } else {
         handle_error(msg);
         break;
@@ -211,7 +210,6 @@ namespace external {
 
     delete msg;
 
-    printf("Returning JSON String: '%s'\n", json_str.c_str());
     return json_str;
   }
 
