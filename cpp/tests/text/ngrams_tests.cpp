@@ -65,13 +65,6 @@ TEST_F(TextGenerateNgramsTest, Empty)
     cudf::column_view zero_size_strings_column( cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
     auto results = nvtext::generate_ngrams(cudf::strings_column_view(zero_size_strings_column));
     cudf::test::expect_strings_empty(results->view());
-
-    std::vector<const char*> h_strings{ "", nullptr, "", nullptr };
-    cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
-        thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
-
-    results = nvtext::generate_ngrams(cudf::strings_column_view(strings));
-    cudf::test::expect_strings_empty(results->view());
 }
 
 TEST_F(TextGenerateNgramsTest, Errors)
@@ -81,4 +74,9 @@ TEST_F(TextGenerateNgramsTest, Errors)
     EXPECT_THROW( nvtext::generate_ngrams(cudf::strings_column_view(strings),1), cudf::logic_error );
     // not enough strings to generate ngrams
     EXPECT_THROW( nvtext::generate_ngrams(cudf::strings_column_view(strings),3), cudf::logic_error );
+
+    std::vector<const char*> h_strings{ "", nullptr, "", nullptr };
+    cudf::test::strings_column_wrapper strings_no_tokens( h_strings.begin(), h_strings.end(),
+        thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
+    EXPECT_THROW( nvtext::generate_ngrams(cudf::strings_column_view(strings_no_tokens)), cudf::logic_error );
 }
