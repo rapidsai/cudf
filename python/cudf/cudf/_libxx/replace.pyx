@@ -2,9 +2,9 @@
 
 import pandas as pd
 
-from cudf._libxx.column cimport *
+from cudf._libxx.column cimport Column
 from cudf._libxx.lib cimport *
-from cudf._libxx.scalar cimport *
+from cudf._libxx.scalar cimport Scalar
 from cudf.utils.dtypes import is_scalar
 
 from cudf._libxx.includes.replace cimport (
@@ -84,7 +84,7 @@ def replace_nulls_scalar(Column input_col, Scalar replacement_value):
     return Column.from_unique_ptr(move(c_result))
 
 
-def replace_nulls(Column input_col, replacement):
+def replace_nulls(Column input_col, object replacement):
     """
     Calls one of the version of replace_nulls depedning on type
     of replacement
