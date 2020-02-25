@@ -73,7 +73,6 @@ class StringMethods(object):
         from cudf.core.series import Series
 
         if hasattr(self._parent.nvstrings, attr):
-            print("Going to NVSTRINGS")
             passed_attr = getattr(self._parent.nvstrings, attr)
             if callable(passed_attr):
 
@@ -407,7 +406,7 @@ class StringMethods(object):
             self._parent.nvstrings.lower(), index=self._index, name=self._name
         )
 
-    def slice(self, start, stop=None, step=None):
+    def slice(self, start=None, stop=None, step=None):
         """
         Returns a substring of each string.
 
@@ -419,7 +418,7 @@ class StringMethods(object):
         stop : int
             Ending position of the string to extract.
             Default is end of each string.
-        step : str
+        step : int
             Characters that are to be captured within the specified section.
             Default is every character.
 
@@ -432,6 +431,13 @@ class StringMethods(object):
 
         from cudf.core import Series
 
+        if start is None:
+            start = 0
+        if stop is None:
+            stop = -1
+        if step is None:
+            step = 1
+        
         return Series(
             cpp_slice_strings(self._parent, start, stop, step),
             index=self._index,
@@ -442,15 +448,14 @@ class StringMethods(object):
         """
         Return substring of each string using positions for each string.
 
-        The starts and stops parameters are device memory pointers.
-        If specified, each must contain size() of int32 values.
+        The starts and stops parameters are of Column type.
 
         Parameters
         ----------
-        starts : GPU memory pointer
+        starts : Column
             Beginning position of each the string to extract.
             Default is beginning of the each string.
-        stops : GPU memory pointer
+        stops : Column
             Ending position of the each string to extract.
             Default is end of each string.
             Use -1 to specify to the end of that string.
@@ -492,6 +497,14 @@ class StringMethods(object):
             replaced with `repl` string.
 
         """
+        if start is None:
+            start = 0
+
+        if stop is None:
+            stop = -1
+
+        if repl is None:
+            repl = ""
 
         from cudf.core import Series
         from cudf._libxx.scalar import Scalar
@@ -523,6 +536,8 @@ class StringMethods(object):
             inserted at the specified position.
 
         """
+        if repl is None:
+            repl = ""
 
         from cudf.core import Series
         from cudf._libxx.scalar import Scalar

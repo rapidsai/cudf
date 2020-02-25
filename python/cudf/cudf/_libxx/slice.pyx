@@ -28,9 +28,10 @@ def slice_strings(Column source_strings,
                   size_type end,
                   size_type step):
     """
-    Converts a DLPack Tensor PyCapsule into a cudf Table object.
-
-    DLPack Tensor PyCapsule is expected to have the name "dltensor".
+    Returns a Column by extracting a substring of each string
+    at given start and end positions. Slicing can also be
+    performed in steps by skipping `step` number of
+    characters in a string.
     """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
@@ -50,9 +51,9 @@ def slice_from(Column source_strings,
                Column starts,
                Column stops):
     """
-    Converts a DLPack Tensor PyCapsule into a cudf Table object.
-
-    DLPack Tensor PyCapsule is expected to have the name "dltensor".
+    Returns a Column by extracting a substring of each string
+    at given starts and stops positions. `starts` and `stops`
+    here are positions per element in the string-column.
     """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
@@ -73,16 +74,21 @@ def slice_replace(Column source_strings,
                   size_type start,
                   size_type stop,
                   Scalar repl):
+    """
+    Returns a Column by replacing specified section
+    of each string with `repl`. Positions can be
+    specified with `start` and `stop` params.
+    """
 
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    cdef string_scalar* x = <string_scalar*>(repl.c_value.get())
+    cdef string_scalar* scalar_str = <string_scalar*>(repl.c_value.get())
 
     with nogil:
         c_result = move(cpp_replace_slice(
             source_view,
-            x[0],
+            scalar_str[0],
             start,
             stop
         ))
@@ -93,16 +99,19 @@ def slice_replace(Column source_strings,
 def insert(Column source_strings,
            size_type start,
            Scalar repl):
-
+    """
+    Returns a Column by inserting a specified
+    string `repl` at a specific position in all strings.
+    """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    cdef string_scalar* x = <string_scalar*>(repl.c_value.get())
+    cdef string_scalar* scalar_str = <string_scalar*>(repl.c_value.get())
 
     with nogil:
         c_result = move(cpp_replace_slice(
             source_view,
-            x[0],
+            scalar_str[0],
             start,
             start
         ))
@@ -111,11 +120,11 @@ def insert(Column source_strings,
 
 
 def get(Column source_strings,
-        size_type i):
+        size_type index):
     """
-    Converts a DLPack Tensor PyCapsule into a cudf Table object.
-
-    DLPack Tensor PyCapsule is expected to have the name "dltensor".
+    Returns a Column which contains only single
+    charater from each input string. The index of
+    characters required can be controlled by passing `index`.
     """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
@@ -123,8 +132,8 @@ def get(Column source_strings,
     with nogil:
         c_result = move(cpp_slice_strings(
             source_view,
-            i,
-            i+1,
+            index,
+            index + 1,
             1
         ))
 
