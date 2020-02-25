@@ -258,7 +258,7 @@ struct rolling_window_launcher
                        std::unique_ptr<aggregation> const& agg,
                        T identity,
                        cudaStream_t stream) {
-      std::cudf<<"RGSL5 : Print kernel_launcher"<<std::endl;
+      std::cudf<<"RGSL6 : Print kernel_launcher"<<std::endl;
       cudf::nvtx::range_push("CUDF_ROLLING_WINDOW", cudf::nvtx::color::ORANGE);
 
       constexpr cudf::size_type block_size = 256;
