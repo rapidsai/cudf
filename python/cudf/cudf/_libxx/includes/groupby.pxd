@@ -13,6 +13,12 @@ cdef extern from "cudf/groupby.hpp" \
     cdef cppclass aggregation_result
         vector[unique_ptr[column]] results
 
+    cdef cppclass groups \
+            "cudf::experimental::groupby::groupby::groups" nogil:
+        unique_ptr[table] group_keys
+        vector[size_type] group_offsets
+        unique_ptr[table] group_values
+
     cdef cppclass groupby:
         groupby(table_view keys) except +
         groupby(table_view keys, bool ignore_null_keys) except +
@@ -44,3 +50,5 @@ cdef extern from "cudf/groupby.hpp" \
         ] aggregate(
             vector[aggregation_request] requests,
         ) except +
+
+        groups get_groups() except +
