@@ -73,18 +73,6 @@ namespace { // anonym.
       return d_column_;
     }
 
-    __host__ __device__
-    int32_t const* get_offsets(void) const
-    {
-      return d_offsets_;
-    }
-
-    __host__ __device__
-    char* get_chars(void)
-    {
-      return d_chars_;
-    }
-
     __device__
     char_info get_char_info(char_utf8 chr) const
     {
@@ -97,6 +85,11 @@ namespace { // anonym.
     char_utf8 convert_char(char_info const& info) const
     {
       return detail::codepoint_to_utf8(d_case_table_[info.first]);
+    }
+
+    __device__ char* get_output_ptr(size_type idx)
+    {
+      return d_chars_ && d_offsets_ ? d_chars_ + d_offsets_[idx] : nullptr;
     }
   private:
     column_device_view const d_column_;
@@ -164,7 +157,7 @@ namespace { // anonym.
         return 0; // null string
       
       string_view d_str = get_column().template element<string_view>(idx);
-      char* d_buffer = get_chars() + get_offsets()[idx];
+      char* d_buffer = get_output_ptr(idx);
       
       for( auto itr = d_str.begin(); itr != d_str.end(); ++itr ) {
         auto the_chr = *itr;
@@ -247,7 +240,7 @@ namespace { // anonym.
         return 0; // null string
       
       string_view d_str = get_column().template element<string_view>(idx);
-      char* d_buffer = get_chars() + get_offsets()[idx];
+      char* d_buffer = get_output_ptr(idx);
 
       bool bcapnext = true;
       for( auto itr = d_str.begin(); itr != d_str.end(); ++itr ) {
