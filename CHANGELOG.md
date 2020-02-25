@@ -160,6 +160,7 @@
 - PR #4232 Fix handling empty tuples of children in string columns
 - PR #4222 Fix no-return compile error in binop-null-test
 - PR #4245 Fix race condition in parquet reader
+- PR #4253 Fix dictionary decode with column offset
 
 
 # cuDF 0.12.0 (04 Feb 2020)
