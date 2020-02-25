@@ -51,9 +51,10 @@ rmm::device_vector<T> scatter_to_gather(MapIterator scatter_map_begin,
   return gather_map;
 }
 
-template <typename MapIterator>
-struct column_scatterer {
-  template <typename T, std::enable_if_t<is_fixed_width<T>()>* = nullptr>
+template <typename Element, typename MapIterator>
+struct column_scatterer_impl
+{
+//  template <typename T, std::enable_if_t<is_fixed_width<T>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& source,
       MapIterator scatter_map_begin, MapIterator scatter_map_end, column_view const& target,
       rmm::mr::device_memory_resource* mr, cudaStream_t stream)
@@ -63,15 +64,19 @@ struct column_scatterer {
 
     // NOTE use source.begin + scatter rows rather than source.end in case the
     // scatter map is smaller than the number of source rows
-    thrust::scatter(rmm::exec_policy(stream)->on(stream), source.begin<T>(),
-      source.begin<T>() + std::distance(scatter_map_begin, scatter_map_end), 
+    thrust::scatter(rmm::exec_policy(stream)->on(stream), source.begin<Element>(),
+      source.begin<Element>() + std::distance(scatter_map_begin, scatter_map_end), 
       scatter_map_begin,
-      result_view.begin<T>());
+      result_view.begin<Element>());
 
     return result;
   }
+};
 
-  template <typename T, std::enable_if_t<not is_fixed_width<T>()>* = nullptr>
+//template <typename T, std::enable_if_t<not is_fixed_width<T>()>* = nullptr>
+template <typename MapIterator>
+struct column_scatterer_impl<string_view, MapIterator>
+{
   std::unique_ptr<column> operator()(column_view const& source,
       MapIterator scatter_map_begin, MapIterator scatter_map_end, column_view const& target,
       rmm::mr::device_memory_resource* mr, cudaStream_t stream)
@@ -81,6 +86,35 @@ struct column_scatterer {
     auto const begin = source_vector.begin();
     auto const end = begin + std::distance(scatter_map_begin, scatter_map_end);
     return strings::detail::scatter(begin, end, scatter_map_begin, target, mr, stream);
+  }
+};
+
+template <typename MapIterator>
+struct column_scatterer_impl<dictionary32, MapIterator>
+{
+  std::unique_ptr<column> operator()(column_view const& source,
+      MapIterator scatter_map_begin, MapIterator scatter_map_end, column_view const& target,
+      rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+  {
+    //using strings::detail::create_string_vector_from_column;
+    //auto const source_vector = create_string_vector_from_column(source, stream);
+    //auto const begin = source_vector.begin();
+    //auto const end = begin + std::distance(scatter_map_begin, scatter_map_end);
+    CUDF_FAIL("not implemented yet");
+    return nullptr;
+  }
+};
+
+template <typename MapIterator>
+struct column_scatterer
+{
+  template <typename Element>
+  std::unique_ptr<column> operator()(column_view const& source,
+      MapIterator scatter_map_begin, MapIterator scatter_map_end, column_view const& target,
+      rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+  {
+      column_scatterer_impl<Element, MapIterator> scatterer{};
+      return scatterer(source, scatter_map_begin, scatter_map_end, target, mr, stream);
   }
 };
 

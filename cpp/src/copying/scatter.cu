@@ -116,9 +116,9 @@ void scatter_scalar_bitmask(std::vector<std::unique_ptr<scalar>> const& source,
   }
 }
 
-template <typename MapIterator>
-struct column_scalar_scatterer {
-  template <typename T, std::enable_if_t<is_fixed_width<T>()>* = nullptr>
+template <typename Element, typename MapIterator>
+struct column_scalar_scatterer_impl 
+{
   std::unique_ptr<column> operator()(std::unique_ptr<scalar> const& source,
       MapIterator scatter_iter, size_type scatter_rows, column_view const& target,
       rmm::mr::device_memory_resource* mr, cudaStream_t stream)
@@ -127,18 +127,21 @@ struct column_scalar_scatterer {
     auto result_view = result->mutable_view();
 
     // Use permutation iterator with constant index to dereference scalar data
-    auto scalar_impl = static_cast<scalar_type_t<T>*>(source.get());
+    auto scalar_impl = static_cast<scalar_type_t<Element>*>(source.get());
     auto scalar_iter = thrust::make_permutation_iterator(
       scalar_impl->data(), thrust::make_constant_iterator(0));
 
     thrust::scatter(rmm::exec_policy(stream)->on(stream), scalar_iter,
       scalar_iter + scatter_rows, scatter_iter,
-      result_view.begin<T>());
+      result_view.begin<Element>());
 
     return result;
   }
+};
 
-  template <typename T, std::enable_if_t<not is_fixed_width<T>()>* = nullptr>
+template <typename MapIterator>
+struct column_scalar_scatterer_impl<string_view, MapIterator>
+{
   std::unique_ptr<column> operator()(std::unique_ptr<scalar> const& source,
       MapIterator scatter_iter, size_type scatter_rows, column_view const& target,
       rmm::mr::device_memory_resource* mr, cudaStream_t stream)
@@ -148,6 +151,35 @@ struct column_scalar_scatterer {
     auto const begin = thrust::make_constant_iterator(source_view);
     auto const end = begin + scatter_rows;
     return strings::detail::scatter(begin, end, scatter_iter, target, mr, stream);
+  }
+};
+
+template <typename MapIterator>
+struct column_scalar_scatterer_impl<dictionary32, MapIterator>
+{
+  std::unique_ptr<column> operator()(std::unique_ptr<scalar> const& source,
+      MapIterator scatter_iter, size_type scatter_rows, column_view const& target,
+      rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+  {
+    //auto const scalar_impl = static_cast<string_scalar*>(source.get());
+    //auto const source_view = string_view(scalar_impl->data(), scalar_impl->size());
+    //auto const begin = thrust::make_constant_iterator(source_view);
+    //auto const end = begin + scatter_rows;
+    CUDF_FAIL("not implemented yet");
+    return nullptr;
+  }
+};
+
+template <typename MapIterator>
+struct column_scalar_scatterer
+{
+  template <typename Element>
+  std::unique_ptr<column> operator()(std::unique_ptr<scalar> const& source,
+      MapIterator scatter_iter, size_type scatter_rows, column_view const& target,
+      rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+  {
+      column_scalar_scatterer_impl<Element, MapIterator> scatterer{};
+      return scatterer(source, scatter_iter, scatter_rows, target, mr, stream);
   }
 };
 
