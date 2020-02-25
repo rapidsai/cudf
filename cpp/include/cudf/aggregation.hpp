@@ -174,8 +174,13 @@ make_nunique_aggregation(include_nulls _include_nulls = include_nulls::NO);
  * @brief Factory to create a `nth_element` aggregation
  * 
  * `nth_element` returns the n'th element of the group/series.
+ *
+ * If @p n is not within the range [-group_size, group_size), the result of the
+ * respective group will be null. Negative indices starts from end of the group.
+ *
+ * @param n index of nth element in each group
  * @param _include_nulls include nulls during indexing
-*/
+ */
 std::unique_ptr<aggregation>
 make_nth_element_aggregation(size_type n, include_nulls _include_nulls = include_nulls::YES);
 

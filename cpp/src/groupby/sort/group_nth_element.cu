@@ -46,65 +46,56 @@ group_nth_element(column_view const &values,
     return experimental::empty_like(values);
   }
 
-  auto output = make_numeric_column(
-      data_type{experimental::type_to_id<size_type>()}, num_groups,
-      mask_state::UNALLOCATED, stream);
-  mutable_column_view output_view = output->mutable_view();
-  auto exec = rmm::exec_policy(stream)->on(stream);
+  auto nth_index = rmm::device_vector<size_type>(num_groups, values.size());
 
   // include nulls (equivalent to pandas nth(dropna=None) but return nulls for n
   if (_include_nulls == include_nulls::YES || !values.has_nulls()) {
     // Returns index of nth value.
-    thrust::transform(exec, group_sizes.begin<size_type>(),
+    thrust::transform_if(rmm::exec_policy(stream)->on(stream), 
+                      group_sizes.begin<size_type>(),
                       group_sizes.end<size_type>(),
-                      group_offsets.begin(), output_view.begin<size_type>(),
-                      [n, out_of_bounds = values.size()] __device__(
-                          auto group_size, auto group_offset) {
-                        bool nth_within_group =
-                            (n < 0) ? group_size >= (-n) : group_size > n;
-                        if (nth_within_group)
+                      group_offsets.begin(), 
+                      group_sizes.begin<size_type>(), //stencil
+                      nth_index.begin(),
+                      [n] __device__(auto group_size, auto group_offset) {
                           return group_offset + ((n < 0) ? group_size + n : n);
-                        else
-                          return out_of_bounds;
+                      },
+                      [n] __device__(auto group_size) { //nth within group
+                      return (n < 0) ? group_size >= (-n) : group_size > n;
                       });
   } else { // skip nulls (equivalent to pandas nth(dropna='any'))
     // Returns index of nth value.
-    thrust::fill(exec, output->mutable_view().begin<size_type>(),
-                 output->mutable_view().end<size_type>(),
-                 values.size()); // for out of bounds
     auto values_view = column_device_view::create(values);
     auto bitmask_iterator = thrust::make_transform_iterator(
         experimental::detail::make_validity_iterator(*values_view),
         [] __device__(auto b) { return static_cast<size_type>(b); });
     rmm::device_vector<size_type> intra_group_index(values.size());
     // intra group index for valids only.
-    thrust::exclusive_scan_by_key(exec, group_labels.begin(),
+    thrust::exclusive_scan_by_key(rmm::exec_policy(stream)->on(stream),
+                                  group_labels.begin(),
                                   group_labels.end(), bitmask_iterator,
                                   intra_group_index.begin());
     // gather the valid index == n
-    thrust::scatter_if(
-        exec, thrust::make_counting_iterator<size_type>(0),
-        thrust::make_counting_iterator<size_type>(0) + values.size(),
+    thrust::scatter_if(rmm::exec_policy(stream)->on(stream),
+        thrust::make_counting_iterator<size_type>(0),
+        thrust::make_counting_iterator<size_type>(values.size()),
         group_labels.begin(),                         // map
         thrust::make_counting_iterator<size_type>(0), // stencil
-        output->mutable_view().begin<size_type>(),
+        nth_index.begin(),
         [n, bitmask_iterator,
          intra_group_index =
              intra_group_index.begin()] __device__(auto i) -> bool {
           return (bitmask_iterator[i] && intra_group_index[i] == n);
         });
   }
-  bool nullify_out_of_bounds = thrust::transform_reduce(
-      exec, group_sizes.begin<size_type>(),
-      group_sizes.end<size_type>(),
-      [n] __device__(const size_type group_size) {
-        bool nth_within_group = (n < 0) ? group_size >= (-n) : group_size > n;
-        return !nth_within_group;
-      },
-      false, thrust::logical_or<bool>{});
+  column_view nth_index_view =
+      column_view(data_type{experimental::type_to_id<size_type>()},
+                  nth_index.size(), nth_index.data().get());
   auto output_table =
-      experimental::detail::gather(table_view{{values}}, output->view(), false,
-                                   nullify_out_of_bounds, false, mr, stream);
+      experimental::detail::gather(table_view{{values}}, nth_index_view, false,
+                                   true, false, mr, stream);
+  if(!output_table->get_column(0).has_nulls())
+    output_table->get_column(0).set_null_mask({},0);
   return std::make_unique<column>(std::move(output_table->get_column(0)));
 }
 } // namespace detail

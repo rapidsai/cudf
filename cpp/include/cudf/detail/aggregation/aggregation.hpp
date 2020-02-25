@@ -253,7 +253,7 @@ struct target_type_impl<Source, aggregation::NUNIQUE> {
   using type = cudf::size_type;
 };
 
-// Always use size_type accumulator for NTH_ELEMENT
+// Always use Source for NTH_ELEMENT
 template <typename Source>
 struct target_type_impl<Source, aggregation::NTH_ELEMENT> {
   using type = Source;
