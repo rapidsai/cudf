@@ -157,7 +157,9 @@
 - PR #4218 Fix `get_aggregation` definition with `except *`
 - PR #4215 Fix performance regression in strings::detail::concatenate
 - PR #4214 Alter ValueError exception for GPU accelerated Parquet writer to properly report `categorical` columns are not supported.
+- PR #4232 Fix handling empty tuples of children in string columns
 - PR #4222 Fix no-return compile error in binop-null-test
+- PR #4245 Fix race condition in parquet reader
 
 
 # cuDF 0.12.0 (04 Feb 2020)
