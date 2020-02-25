@@ -6,6 +6,7 @@ from . import (
     copying,
     dlpack,
     hash,
+    merge,
     null_mask,
     rolling,
     search,
