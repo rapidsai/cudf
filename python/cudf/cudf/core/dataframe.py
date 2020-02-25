@@ -24,7 +24,6 @@ import rmm
 import cudf
 import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
-from cudf._libxx.join import join
 from cudf._libxx.null_mask import MaskState, create_null_mask
 from cudf._libxx.transform import bools_to_mask
 from cudf.core import column
@@ -50,7 +49,6 @@ from cudf.utils.dtypes import (
     is_datetime_dtype,
     is_list_like,
     is_scalar,
-    is_string_dtype,
 )
 from cudf.utils.utils import OrderedColumnDict
 
@@ -2330,18 +2328,9 @@ class DataFrame(Frame):
 
         lhs = self.copy(deep=False)
         rhs = right.copy(deep=False)
-        # We save the original categories for the reconstruction of the
-        # final data frame
-        categorical_dtypes = {}
-        for name, col in itertools.chain(lhs._data.items(), rhs._data.items()):
-            if is_categorical_dtype(col):
-                categorical_dtypes[name] = col.dtype
-
-        # Save the order of the original column names for preservation later
-        org_names = list(itertools.chain(lhs._data.names, rhs._data.names))
 
         # Compute merge
-        gdf_result = super()._merge(
+        gdf_result = super(DataFrame, lhs)._merge(
             rhs,
             on,
             left_on,

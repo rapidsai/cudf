@@ -344,8 +344,10 @@ class Frame(libcudfxx.table.Table):
         """
         Error for various combinations of merge input parameters
         """
-        if isinstance(lhs.index, cudf.core.multiindex.MultiIndex) or isinstance(rhs.index, cudf.core.multiindex.MultiIndex):
-            raise TypeError('MultiIndex joins not yet supported.')
+        if isinstance(
+            lhs.index, cudf.core.multiindex.MultiIndex
+        ) or isinstance(rhs.index, cudf.core.multiindex.MultiIndex):
+            raise TypeError("MultiIndex joins not yet supported.")
 
         len_left_on = len(left_on) if left_on is not None else 0
         len_right_on = len(right_on) if right_on is not None else 0
@@ -364,7 +366,7 @@ class Frame(libcudfxx.table.Table):
                     'and "right_on", not a combination of both.'
                 )
 
-        # There must be the same total number of columns to join on in both operands
+        # Require same total number of columns to join on in both operands
         if not (len_left_on + left_index) == (len_right_on + right_index):
             raise ValueError(
                 "Merge operands must have same number of join key columns"
@@ -417,9 +419,9 @@ class Frame(libcudfxx.table.Table):
         sort=False,
     ):
 
-        if left_on == None:
+        if left_on is None:
             left_on = []
-        if right_on == None:
+        if right_on is None:
             right_on = []
 
         # Making sure that the "on" arguments are list of column names
@@ -505,7 +507,6 @@ class Frame(libcudfxx.table.Table):
         )
 
         gdf_data = list(gdf_result._data.items())
-        result_index = gdf_result._index
 
         result = []
         cat_codes = []

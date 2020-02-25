@@ -6,7 +6,15 @@ from libcpp.pair cimport pair
 
 from collections import OrderedDict
 
-cpdef join(Table lhs, Table rhs, object left_on, object right_on, object how, object method, bool left_index=False, bool right_index=False):
+cpdef join(Table lhs,
+           Table rhs,
+           object left_on,
+           object right_on,
+           object how,
+           object method,
+           bool left_index=False,
+           bool right_index=False
+           ):
     """
     Call libcudf++ join for full outer, inner and left joins.
     Returns a list of tuples [(column, valid, name), ...]
@@ -24,11 +32,11 @@ cpdef join(Table lhs, Table rhs, object left_on, object right_on, object how, ob
 
     cdef vector[pair[int, int]] columns_in_common
 
-    # create the two views that will be set later to include or not include the index column 
+    # Views might or might not include index
     cdef table_view lhs_view
     cdef table_view rhs_view
 
-    # the result columns are all the left columns (including common ones) 
+    # the result columns are all the left columns (including common ones)
     # + all the right columns (excluding the common ones)
     result_col_names = []
 
@@ -40,12 +48,9 @@ cpdef join(Table lhs, Table rhs, object left_on, object right_on, object how, ob
 
     # keep track of where the desired index column will end up
     result_index_pos = None
-    # if left_index or right_index is true, then both indices must be processed as join columns
+
     if left_index or right_index:
-        # If one index is specified, it will be joined against some column from the other
-        # the result will be returned as a gather from the other column, and the index itself drops
-        # In addition, the opposite index ends up as the final index 
-        # Thus if either are true, we need to process both indices as join columns
+        # If either true, we need to process both indices as columns
         lhs_view = c_lhs.view()
         rhs_view = c_rhs.view()
 
@@ -62,6 +67,7 @@ cpdef join(Table lhs, Table rhs, object left_on, object right_on, object how, ob
             result_index_pos = len(left_join_cols)
             result_index_name = rhs.index.name
 
+            # common col gathered from the left
             common = result_col_names.pop(result_col_names.index(right_on[0]))
             result_col_names = [common] + result_col_names
         elif right_index:
@@ -72,11 +78,12 @@ cpdef join(Table lhs, Table rhs, object left_on, object right_on, object how, ob
 
         left_on_ind.push_back(left_on_idx)
         right_on_ind.push_back(right_on_idx)
-        
-        columns_in_common.push_back(pair[int,int]((left_on_idx, right_on_idx)))
+
+        columns_in_common.push_back(pair[int, int](
+            (left_on_idx, right_on_idx)
+        ))
 
     else:
-        # If neither index is specified, we can exclude them from the join completely
         # cuDF's Python layer will create a new RangeIndex for this case
         lhs_view = c_lhs.data_view()
         rhs_view = c_rhs.data_view()
@@ -84,20 +91,20 @@ cpdef join(Table lhs, Table rhs, object left_on, object right_on, object how, ob
         left_join_cols = list(lhs._data.keys())
         right_join_cols = list(rhs._data.keys())
 
-    # If only one index is specified, there will only be one join column from other
-    # If neither are specified, we need to build libcudf arguments for the actual join columns
-    # If both, could be joining on the indices as well as other common cols, so we must search
+    # If one index is specified, there will only be one join column from other
+    # If neither, must build libcudf arguments for the actual join columns
+    # If both, could be joining on indices and cols, so must search
     if left_index == right_index:
         for name in left_on:
             left_on_ind.push_back(left_join_cols.index(name))
-            if (name in right_on and
-            (left_on.index(name) == right_on.index(name))):
-                columns_in_common.push_back(
-                    pair[int, int](
-                    (
-                        left_join_cols.index(name),
-                        right_join_cols.index(name)
-                )))
+            if name in right_on:
+                if (left_on.index(name) == right_on.index(name)):
+                    columns_in_common.push_back(
+                        pair[int, int]((
+                            left_join_cols.index(name),
+                            right_join_cols.index(name)
+                        ))
+                    )
         for name in right_on:
             right_on_ind.push_back(right_join_cols.index(name))
 
@@ -132,12 +139,12 @@ cpdef join(Table lhs, Table rhs, object left_on, object right_on, object how, ob
 
     all_cols_py = columns_from_ptr(move(c_result))
     if left_index or right_index:
-        index_ordered_dict = OrderedDict()
-        index_ordered_dict[result_index_name] = all_cols_py.pop(result_index_pos)
-        index_col = Table(index_ordered_dict)
+        ix_odict = OrderedDict()
+        ix_odict[result_index_name] = all_cols_py.pop(result_index_pos)
+        index_col = Table(ix_odict)
     else:
         index_col = None
 
-    data_ordered_dict = OrderedDict(zip(result_col_names,all_cols_py))
+    data_ordered_dict = OrderedDict(zip(result_col_names, all_cols_py))
 
     return Table(data=data_ordered_dict, index=index_col)

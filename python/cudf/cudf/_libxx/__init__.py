@@ -13,6 +13,7 @@ from . import (
     stream_compaction,
     table,
     transpose,
+    join
 )
 
 MAX_COLUMN_SIZE = np.iinfo(np.int32).max

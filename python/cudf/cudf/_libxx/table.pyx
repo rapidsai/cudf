@@ -247,9 +247,7 @@ cdef mutable_table_view _make_mutable_table_view(columns) except*:
 
     return mutable_table_view(mutable_column_views)
 
-cdef columns_from_ptr(
-        unique_ptr[table] c_tbl,
-    ):
+cdef columns_from_ptr(unique_ptr[table] c_tbl):
     """
     Return a list of table columns from a unique pointer
 
