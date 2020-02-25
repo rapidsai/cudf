@@ -15,8 +15,13 @@ cpdef join(Table lhs, Table rhs, object left_on, object right_on, object how, ob
     cdef Table c_lhs = lhs
     cdef Table c_rhs = rhs
 
+    num_inds_left = len(left_on) + left_index
+    num_inds_right = len(right_on) + right_index
     cdef vector[int] left_on_ind
     cdef vector[int] right_on_ind
+    left_on_ind.reserve(num_inds_left)
+    right_on_ind.reserve(num_inds_right)
+
     cdef vector[pair[int, int]] columns_in_common
 
     # create the two views that will be set later to include or not include the index column 
