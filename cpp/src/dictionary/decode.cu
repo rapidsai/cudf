@@ -37,20 +37,20 @@ std::unique_ptr<column> decode( dictionary_column_view const& source,
                                 rmm::mr::device_memory_resource* mr,
                                 cudaStream_t stream)
 {
-    if( source.size()==0 || source.keys_size()==0 )
+    if( source.size()==0 )
         return make_empty_column( data_type{EMPTY} );
-    auto keys = source.keys();
-    auto indices = source.indices();
-    if( indices.size()==0 )
-        return make_empty_column( keys.type() );
-
+        
+    column_view indices{ cudf::data_type{cudf::INT32}, source.size(), 
+                         source.indices().data<int32_t>(),
+                         nullptr, 0, source.offset() }; // no nulls for gather indices
     // use gather to create the output column -- use ignore_out_of_bounds=true
-    auto table_column = experimental::detail::gather( table_view{{keys}}, indices, // no nulls here
+    auto table_column = experimental::detail::gather( table_view{{source.keys()}}, indices,
                                                       false, true, false, mr, stream )->release();
     auto output_column = std::unique_ptr<column>(std::move(table_column.front()));
 
     // apply any nulls to the output column
-    output_column->set_null_mask( copy_bitmask(source.parent(),stream,mr), source.null_count() );
+    rmm::device_buffer null_mask = source.null_count() ? copy_bitmask(source.parent(),stream,mr) : rmm::device_buffer{};
+    output_column->set_null_mask( null_mask, source.null_count() );
 
     return output_column;
 }
