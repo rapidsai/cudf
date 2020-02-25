@@ -325,3 +325,36 @@ def test_groupby_reset_index_drop_True():
     gf = gr.compute().sort_values(by=["b"]).reset_index(drop=True)
     pf = pr.compute().sort_values(by=[("b", "count")]).reset_index(drop=True)
     dd.assert_eq(gf, pf)
+
+
+def test_groupby_mean_sort_false():
+    df = cudf.datasets.randomdata(nrows=150, dtypes={"a": int, "b": int})
+    ddf = dask_cudf.from_cudf(df, 1)
+    pddf = dd.from_pandas(df.to_pandas(), 1)
+
+    gr = ddf.groupby(["a"]).agg({"b": "mean"})
+    pr = pddf.groupby(["a"]).agg({"b": "mean"})
+    assert pr.index.name == gr.index.name
+    assert pr.head(0).index.name == gr.head(0).index.name
+
+    gf = gr.compute().sort_values(by=["b"]).reset_index(drop=True)
+    pf = pr.compute().sort_values(by=["b"]).reset_index(drop=True)
+    dd.assert_eq(gf, pf)
+
+
+def test_groupby_reset_index_dtype():
+
+    # Make sure int8 dtype is properly preserved
+    # Through various cudf/dask_cudf ops
+    #
+    # Note: GitHub Issue#4090 reproducer
+
+    df = cudf.DataFrame()
+    df["a"] = np.arange(10, dtype="int8")
+    df["b"] = np.arange(10, dtype="int8")
+    df = dask_cudf.from_cudf(df, 1)
+
+    a = df.groupby("a").agg({"b": ["count"]})
+
+    assert a.index.dtype == "int8"
+    assert a.reset_index().dtypes[0] == "int8"

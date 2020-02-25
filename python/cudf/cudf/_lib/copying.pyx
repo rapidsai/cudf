@@ -1,9 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
-
-# cython: profile=False
-# distutils: language = c++
-# cython: embedsignature = True
-# cython: language_level = 3
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
 import cudf
 from cudf.core.buffer import Buffer

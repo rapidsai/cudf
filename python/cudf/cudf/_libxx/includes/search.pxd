@@ -1,3 +1,5 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 from cudf._libxx.lib cimport *
 
 cdef extern from "cudf/search.hpp" namespace "cudf::experimental" nogil:
