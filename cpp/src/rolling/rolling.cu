@@ -155,8 +155,7 @@ process_rolling_window(column_device_view input,
     bool output_is_valid = (count >= min_periods);
 
     // store the output value, one per thread
-    if (output_is_valid)
-        cudf::detail::store_output_functor<OutputType, op == aggregation::MEAN>{}(output.element<OutputType>(current_index),
+    cudf::detail::store_output_functor<OutputType, op == aggregation::MEAN>{}(output.element<OutputType>(current_index),
                 val, count);
 
     return output_is_valid;
@@ -258,7 +257,6 @@ struct rolling_window_launcher
                        std::unique_ptr<aggregation> const& agg,
                        T identity,
                        cudaStream_t stream) {
-      std::cout<<"RGSL5 : Print kernel_launcher"<<std::endl;
       cudf::nvtx::range_push("CUDF_ROLLING_WINDOW", cudf::nvtx::color::ORANGE);
 
       constexpr cudf::size_type block_size = 256;
