@@ -444,7 +444,7 @@ def test_dataframe_to_string():
     df = DataFrame({"a": [1, 2, 3, 4, 5, 6], "b": [11, 12, 13, 14, 15, 16]})
 
     data = np.arange(6)
-    mask = np.zeros(1, dtype=np.uint8)
+    mask = np.zeros(1, dtype=gd.utils.utils.mask_dtype)
     mask[0] = 0b00101101
 
     masked = Series.from_masked_array(data, mask)
@@ -1203,8 +1203,8 @@ def test_to_from_arrow_nulls(data_type):
     # We have 64B padded buffers for nulls whereas Arrow returns a minimal
     # number of bytes, so only check the first byte in this case
     np.testing.assert_array_equal(
-        np.array(s1.buffers()[0])[0],
-        gs1._column.mask_array_view.copy_to_host()[0],
+        np.asarray(s1.buffers()[0]).view("u1")[0],
+        gs1._column.mask_array_view.copy_to_host().view("u1")[0],
     )
     assert pa.Array.equals(s1, gs1.to_arrow())
 
@@ -1214,8 +1214,8 @@ def test_to_from_arrow_nulls(data_type):
     # We have 64B padded buffers for nulls whereas Arrow returns a minimal
     # number of bytes, so only check the first byte in this case
     np.testing.assert_array_equal(
-        np.array(s2.buffers()[0])[0],
-        gs2._column.mask_array_view.copy_to_host()[0],
+        np.asarray(s2.buffers()[0]).view("u1")[0],
+        gs2._column.mask_array_view.copy_to_host().view("u1")[0],
     )
     assert pa.Array.equals(s2, gs2.to_arrow())
 
@@ -4351,7 +4351,7 @@ def test_memory_usage_multi():
 def test_setitem_diff_size_list(list_input, key):
     gdf = gd.datasets.randomdata(5)
     with pytest.raises(
-        ValueError, match=("All values must be of equal length"),
+        ValueError, match=("All values must be of equal length")
     ):
         gdf[key] = list_input
 
@@ -4429,3 +4429,21 @@ def test_dataframe_from_table_empty_index():
     tbl = Table(odict)
 
     result = DataFrame._from_table(tbl)  # noqa: F841
+
+
+def test_dataframe_from_dictionary_series_same_name_index():
+    pd_idx1 = pd.Index([1, 2, 0], name="test_index")
+    pd_idx2 = pd.Index([2, 0, 1], name="test_index")
+    pd_series1 = pd.Series([1, 2, 3], index=pd_idx1)
+    pd_series2 = pd.Series([1, 2, 3], index=pd_idx2)
+
+    gd_idx1 = gd.from_pandas(pd_idx1)
+    gd_idx2 = gd.from_pandas(pd_idx2)
+    gd_series1 = gd.Series([1, 2, 3], index=gd_idx1)
+    gd_series2 = gd.Series([1, 2, 3], index=gd_idx2)
+
+    expect = pd.DataFrame({"a": pd_series1, "b": pd_series2})
+    got = gd.DataFrame({"a": gd_series1, "b": gd_series2})
+
+    assert_eq(expect, got)
+    assert expect.index.names == got.index.names
