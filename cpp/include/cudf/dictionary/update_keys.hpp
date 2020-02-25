@@ -108,21 +108,23 @@ std::unique_ptr<column> remove_unused_keys( dictionary_column_view const& dictio
  * Any new elements found in the keys parameter are added to the output dictionary.
  * Any existing keys not in the keys parameter are removed.
  *
+ * The number of rows in the output column will be the same as the number of rows
+ * in the input column. Existing null entries are copied to the output column.
  * The indices are updated to reflect the position values of the new keys.
- * Any indices pointing to removed keys are set to null.
+ * Any indices pointing to removed keys sets those rows to null.
  *
  * ```
- * d1 = {["a","c","d"],[2,0,1,0]}
- * d2 = set_keys(d1,["a","b","c"])
- * d2 is now {["a","b","c"],[null,0,2,0]}
+ * d1 = {keys=["a", "b", "c"], indices=[2, 0, 1, 2, 1]}
+ * d2 = set_keys(existing_dict, ["b","c","d"])
+ * d2 is now {keys=["b", "c", "d"], indices=[1, x, 0, 1, 0], nulls=[1, 0, 1, 1, 1]}
  * ```
- *
+ * 
  * @throw cudf_logic_error if the keys type does not match the keys type in
  *        the dictionary_column.
  * @throw cudf_logic_error if the keys contain nulls.
  *
  * @param dictionary_column Existing dictionary column.
- * @param keys New keys to use for the output column.
+ * @param keys New keys to use for the output column. Must not contain nulls.
  * @param mr Resource for allocating memory for the output.
  * @return New dictionary column.
  */
