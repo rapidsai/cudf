@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from enum import Enum as PyEnum # as PyEnum so we don't conflict with cython
+from enum import IntEnum
 from cudf._libxx.lib cimport *
 
 
@@ -36,21 +36,21 @@ cudf_to_np_types = {
     BOOL8: np.dtype("bool"),
 }
 
-class Interpolation(PyEnum):
+class Interpolation(IntEnum):
     LINEAR   = <underlying_type_t_interpolation> interpolation.LINEAR
     LOWER    = <underlying_type_t_interpolation> interpolation.LOWER
     HIGHER   = <underlying_type_t_interpolation> interpolation.HIGHER
     MIDPOINT = <underlying_type_t_interpolation> interpolation.MIDPOINT
     NEAREST  = <underlying_type_t_interpolation> interpolation.NEAREST
 
-class Order(PyEnum):
+class Order(IntEnum):
     ASCENDING  = <underlying_type_t_order> order.ASCENDING
     DESCENDING = <underlying_type_t_order> order.DESCENDING
 
-class Sorted(PyEnum):
+class Sorted(IntEnum):
     YES = <underlying_type_t_sorted> sorted.YES
     NO  = <underlying_type_t_sorted> sorted.NO
 
-class NullOrder(PyEnum):
+class NullOrder(IntEnum):
     BEFORE = <underlying_type_t_order> null_order.BEFORE
     AFTER  = <underlying_type_t_order> null_order.AFTER
