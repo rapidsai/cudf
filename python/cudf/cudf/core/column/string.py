@@ -18,7 +18,7 @@ from cudf._libxx.null_mask import (
     bitmask_allocation_size_bytes,
     create_null_mask,
 )
-from cudf._libxx.slice import (
+from cudf._libxx.strings.slice import (
     get as cpp_string_get,
     insert as cpp_string_insert,
     slice_from as cpp_slice_from,
@@ -64,10 +64,11 @@ class StringMethods(object):
     This mimicks pandas `df.str` interface.
     """
 
-    def __init__(self, parent, index=None, name=None):
+    def __init__(self, parent, index=None, name=None, owner=None):
         self._parent = parent
         self._index = index
         self._name = name
+        self._owner = owner
 
     def __getattr__(self, attr, *args, **kwargs):
         from cudf.core.series import Series
@@ -92,6 +93,26 @@ class StringMethods(object):
                 return passed_attr
         else:
             raise AttributeError(attr)
+
+    def _return_or_inplace(self, new_col, **kwargs):
+        """
+        Returns an object of the type of the column owner or updates the column
+        of the owner (Series or Index) to mimic an inplace operation
+        """
+        from cudf import Series
+        from cudf.core.index import Index, as_index
+
+        inplace = kwargs.get("inplace", False)
+
+        if inplace:
+            self._column._mimic_inplace(new_col, inplace=True)
+        else:
+            if isinstance(self._owner, Series):
+                return Series(new_col, index=self._index, name=self._name)
+            elif isinstance(self._owner, Index):
+                return as_index(new_col, name=self._name)
+            else:
+                return new_col
 
     def __dir__(self):
         keys = dir(type(self))
@@ -406,7 +427,7 @@ class StringMethods(object):
             self._parent.nvstrings.lower(), index=self._index, name=self._name
         )
 
-    def slice(self, start=None, stop=None, step=None):
+    def slice(self, start=None, stop=None, step=None, **kwargs):
         """
         Returns a substring of each string.
 
@@ -429,8 +450,6 @@ class StringMethods(object):
 
         """
 
-        from cudf.core import Series
-
         if start is None:
             start = 0
         if stop is None:
@@ -438,13 +457,11 @@ class StringMethods(object):
         if step is None:
             step = 1
 
-        return Series(
-            cpp_slice_strings(self._parent, start, stop, step),
-            index=self._index,
-            name=self._name,
+        return self._return_or_inplace(
+            cpp_slice_strings(self._parent, start, stop, step), **kwargs
         )
 
-    def slice_from(self, starts=0, stops=0):
+    def slice_from(self, starts=0, stops=0, **kwargs):
         """
         Return substring of each string using positions for each string.
 
@@ -467,15 +484,11 @@ class StringMethods(object):
 
         """
 
-        from cudf.core import Series
-
-        return Series(
-            cpp_slice_from(self._parent, starts, stops),
-            index=self._index,
-            name=self._name,
+        return self._return_or_inplace(
+            cpp_slice_from(self._parent, starts, stops), **kwargs
         )
 
-    def slice_replace(self, start=None, stop=None, repl=None):
+    def slice_replace(self, start=None, stop=None, repl=None, **kwargs):
         """
         Replace the specified section of each string with a new string.
 
@@ -506,16 +519,14 @@ class StringMethods(object):
         if repl is None:
             repl = ""
 
-        from cudf.core import Series
         from cudf._libxx.scalar import Scalar
 
-        return Series(
+        return self._return_or_inplace(
             cpp_slice_replace(self._parent, start, stop, Scalar(repl)),
-            index=self._index,
-            name=self._name,
+            **kwargs,
         )
 
-    def insert(self, start=0, repl=None):
+    def insert(self, start=0, repl=None, **kwargs):
         """
         Insert the specified string into each string in the specified
         position.
@@ -539,16 +550,13 @@ class StringMethods(object):
         if repl is None:
             repl = ""
 
-        from cudf.core import Series
         from cudf._libxx.scalar import Scalar
 
-        return Series(
-            cpp_string_insert(self._parent, start, Scalar(repl)),
-            index=self._index,
-            name=self._name,
+        return self._return_or_inplace(
+            cpp_string_insert(self._parent, start, Scalar(repl)), **kwargs
         )
 
-    def get(self, i=0):
+    def get(self, i=0, **kwargs):
         """
         Returns the character specified in each string as a new string.
         The nvstrings returned contains a list of single character strings.
@@ -567,12 +575,8 @@ class StringMethods(object):
 
         """
 
-        from cudf.core import Series
-
-        return Series(
-            cpp_string_get(self._parent, i),
-            index=self._index,
-            name=self._name,
+        return self._return_or_inplace(
+            cpp_string_get(self._parent, i), **kwargs
         )
 
     def split(self, pat=None, n=-1, expand=True):
@@ -738,8 +742,8 @@ class StringColumn(column.ColumnBase):
         cpumem = self.to_arrow()
         return column.as_column, (cpumem, False, np.dtype("object"))
 
-    def str(self, index=None, name=None):
-        return StringMethods(self, index=index, name=name)
+    def str(self, index=None, name=None, owner=None):
+        return StringMethods(self, index=index, name=name, owner=owner)
 
     def __sizeof__(self):
         n = 0

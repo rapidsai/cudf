@@ -1146,7 +1146,7 @@ class Series(Frame):
 
     @property
     def str(self):
-        return self._column.str(self.index, self.name)
+        return self._column.str(self.index, self.name, owner=self)
 
     @property
     def dtype(self):

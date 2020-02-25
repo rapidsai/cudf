@@ -1,25 +1,17 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
-# cython: profile=False
-# distutils: language = c++
-# cython: embedsignature = True
-# cython: language_level = 3
-
-# Copyright (c) 2018, NVIDIA CORPORATION.
-import cudf
-from cudf._libxx.table cimport *
 from cudf._libxx.lib cimport *
 from cudf._libxx.lib import *
+from cudf._libxx.column cimport Column
 from cudf._libxx.scalar cimport Scalar
 from cudf._libxx.scalar import Scalar
 
-from cpython cimport pycapsule
-
-import warnings
-
-from cudf._libxx.strings.slice cimport (
-    slice_strings as cpp_slice_strings,
+from cudf._libxx.strings.replace cimport (
     replace_slice as cpp_replace_slice
+)
+
+from cudf._libxx.strings.substring cimport (
+    slice_strings as cpp_slice_strings
 )
 
 

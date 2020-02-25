@@ -10,7 +10,6 @@ from . import (
     null_mask,
     rolling,
     search,
-    slice,
     sort,
     stream_compaction,
     table,
