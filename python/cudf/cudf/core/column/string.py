@@ -18,6 +18,13 @@ from cudf._libxx.null_mask import (
     bitmask_allocation_size_bytes,
     create_null_mask,
 )
+from cudf._libxx.slice import (
+    get as cpp_string_get,
+    insert as cpp_string_insert,
+    slice_from as cpp_slice_from,
+    slice_replace as cpp_slice_replace,
+    slice_strings as cpp_slice_strings,
+)
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.utils import utils
@@ -66,6 +73,7 @@ class StringMethods(object):
         from cudf.core.series import Series
 
         if hasattr(self._parent.nvstrings, attr):
+            print("Going to NVSTRINGS")
             passed_attr = getattr(self._parent.nvstrings, attr)
             if callable(passed_attr):
 
@@ -397,6 +405,159 @@ class StringMethods(object):
 
         return Series(
             self._parent.nvstrings.lower(), index=self._index, name=self._name
+        )
+
+    def slice(self, start, stop=None, step=None):
+        """
+        Returns a substring of each string.
+
+        Parameters
+        ----------
+        start : int
+            Beginning position of the string to extract.
+            Default is beginning of the each string.
+        stop : int
+            Ending position of the string to extract.
+            Default is end of each string.
+        step : str
+            Characters that are to be captured within the specified section.
+            Default is every character.
+
+        Returns
+        -------
+        Series/Index of str dtype
+            A substring of each string.
+
+        """
+
+        from cudf.core import Series
+
+        return Series(
+            cpp_slice_strings(self._parent, start, stop, step),
+            index=self._index,
+            name=self._name,
+        )
+
+    def slice_from(self, starts=0, stops=0):
+        """
+        Return substring of each string using positions for each string.
+
+        The starts and stops parameters are device memory pointers.
+        If specified, each must contain size() of int32 values.
+
+        Parameters
+        ----------
+        starts : GPU memory pointer
+            Beginning position of each the string to extract.
+            Default is beginning of the each string.
+        stops : GPU memory pointer
+            Ending position of the each string to extract.
+            Default is end of each string.
+            Use -1 to specify to the end of that string.
+
+        Returns
+        -------
+        Series/Index of str dtype
+            A substring of each string using positions for each string.
+
+        """
+
+        from cudf.core import Series
+
+        return Series(
+            cpp_slice_from(self._parent, starts, stops),
+            index=self._index,
+            name=self._name,
+        )
+
+    def slice_replace(self, start=None, stop=None, repl=None):
+        """
+        Replace the specified section of each string with a new string.
+
+        Parameters
+        ----------
+        start : int
+            Beginning position of the string to replace.
+            Default is beginning of the each string.
+        stop : int
+            Ending position of the string to replace.
+            Default is end of each string.
+        repl : str
+            String to insert into the specified position values.
+
+        Returns
+        -------
+        Series/Index of str dtype
+            A new string with the specified section of the string
+            replaced with `repl` string.
+
+        """
+
+        from cudf.core import Series
+        from cudf._libxx.scalar import Scalar
+
+        return Series(
+            cpp_slice_replace(self._parent, start, stop, Scalar(repl)),
+            index=self._index,
+            name=self._name,
+        )
+
+    def insert(self, start=0, repl=None):
+        """
+        Insert the specified string into each string in the specified
+        position.
+
+        Parameters
+        ----------
+        start : int
+            Beginning position of the string to replace.
+            Default is beginning of the each string.
+            Specify -1 to insert at the end of each string.
+        repl : str
+            String to insert into the specified position valus.
+
+        Returns
+        -------
+        Series/Index of str dtype
+            A new string series with the specified string
+            inserted at the specified position.
+
+        """
+
+        from cudf.core import Series
+        from cudf._libxx.scalar import Scalar
+
+        return Series(
+            cpp_string_insert(self._parent, start, Scalar(repl)),
+            index=self._index,
+            name=self._name,
+        )
+
+    def get(self, i=0):
+        """
+        Returns the character specified in each string as a new string.
+        The nvstrings returned contains a list of single character strings.
+
+        Parameters
+        ----------
+        i : int
+            The character position identifying the character
+            in each string to return.
+
+        Returns
+        -------
+        Series/Index of str dtype
+            A new string series with character at the position
+            `i` of each `i` inserted at the specified position.
+
+        """
+
+        from cudf.core import Series
+
+        return Series(
+            cpp_string_get(self._parent, i),
+            index=self._index,
+            name=self._name,
         )
 
     def split(self, pat=None, n=-1, expand=True):

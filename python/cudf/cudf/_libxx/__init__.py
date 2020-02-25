@@ -4,10 +4,12 @@ import numpy as np
 
 from . import (
     copying,
+    dlpack,
     hash,
     null_mask,
     rolling,
     search,
+    slice,
     sort,
     stream_compaction,
     table,
