@@ -241,9 +241,7 @@ namespace { // anonym.
       return 0;
     }
   };
-
-  
-         
+       
 }//anonym.
 
 template<typename device_probe_functor,
