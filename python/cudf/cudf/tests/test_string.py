@@ -960,6 +960,7 @@ def test_string_misc_name(ps_gs, name):
     assert_eq(ps + "RAPIDS", gs + "RAPIDS")
     assert_eq("RAPIDS" + ps, "RAPIDS" + gs)
 
+
 def test_string_no_children_properties():
     empty_col = cudf.core.column.string.StringColumn(children=())
     assert empty_col.base_children == ()
