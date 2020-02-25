@@ -45,8 +45,8 @@ namespace { // anonym.
     probe_execute_base(column_device_view const d_column,
                  character_flags_table_type const* d_flags,
                  character_cases_table_type const* d_case_table,
-                 int32_t const* d_offsets,
-                 char* d_chars):
+                 int32_t const* d_offsets = nullptr,
+                 char* d_chars = nullptr):
       d_column_(d_column),
       d_flags_(d_flags),
       d_case_table_(d_case_table),
@@ -54,18 +54,6 @@ namespace { // anonym.
       d_chars_(d_chars)
     {
     }
-
-    probe_execute_base(column_device_view const d_column,
-                       character_flags_table_type const* d_flags,
-                       character_cases_table_type const* d_case_table):
-      d_column_(d_column),
-      d_flags_(d_flags),
-      d_case_table_(d_case_table),
-      d_offsets_(nullptr),
-      d_chars_(nullptr)
-    {  
-    }
-
 
     __host__ __device__
     column_device_view const get_column(void) const
