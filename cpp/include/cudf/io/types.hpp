@@ -27,14 +27,19 @@
 #include <map>
 #include <cudf/types.hpp>
 
-#include <io/utilities/data_sink.hpp>
-
 // Forward declarations
 namespace arrow {
 namespace io {
 class RandomAccessFile;
 }
 }  // namespace arrow
+
+// <io/utilities/data_sink.hpp>
+namespace cudf {
+namespace io {
+  class data_sink;
+}
+}
 
 //! cuDF interfaces
 namespace cudf {
@@ -170,7 +175,7 @@ struct sink_info {
   explicit sink_info(std::vector<char>* buffer)
       : type(io_type::HOST_BUFFER), buffer(buffer) {}  
 
-  explicit sink_info(cudf::io::data_sink *const user_sink_)
+  explicit sink_info(class cudf::io::data_sink *const user_sink_)
       : type(io_type::USER_SINK), user_sink(user_sink_) {}
 };
 

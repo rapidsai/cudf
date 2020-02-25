@@ -26,6 +26,8 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
+#include <io/utilities/data_sink.hpp>
+
 #include <fstream>
 #include <type_traits>
 
