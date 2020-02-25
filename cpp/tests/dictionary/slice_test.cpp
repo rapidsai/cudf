@@ -16,6 +16,7 @@
 
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/encode.hpp>
+#include <cudf/dictionary/update_keys.hpp>
 #include <cudf/copying.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
@@ -38,6 +39,10 @@ TEST_F(DictionarySliceTest, SliceColumn)
     cudf::test::strings_column_wrapper expected{ {"aaa", "ddd", "bbb", "ccc", ""},
                                                  {   1,     1,     1,     1,   0} };
     cudf::test::expect_column_properties_equal(expected,*output);
+
+    auto defragged = cudf::dictionary::remove_unused_keys( cudf::dictionary_column_view(result.front()) );
+    output = cudf::dictionary::decode( cudf::dictionary_column_view(*defragged) );
+    cudf::test::expect_column_properties_equal(expected,*output); // should be the same output
 }
 
 TEST_F(DictionarySliceTest, SplitColumn)
