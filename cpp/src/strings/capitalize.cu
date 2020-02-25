@@ -86,18 +86,53 @@ namespace { // anonym.
   };
 
 
+  //class that factors out the common inside-loop behavior
+  //of operator() between capitalize's `probe` and `execute`;
+  //(public inheritance to allow getters pass-through
+  //in derived classes);
+  //
+  struct probe_execute_capitalize: public probe_execute_base
+  {
+    explicit probe_execute_capitalize(column_device_view const d_column):
+      probe_execute_base(d_column)
+    {
+    }
+
+    probe_execute_capitalize(column_device_view const d_column,
+                             int32_t const* d_offsets,
+                             char* d_chars):
+      probe_execute_base(d_column, d_offsets, d_chars)
+    {
+    }
+    
+    __device__
+    char_utf8 generate_chr(string_view::const_iterator itr, string_view d_str) const {
+      auto the_chr = *itr;
+
+      auto pair_char_info = get_char_info(the_chr);
+      detail::character_flags_table_type flag = pair_char_info.second;
+         
+      if( (itr == d_str.begin()) ? IS_LOWER(flag) : IS_UPPER(flag) )
+        the_chr = convert_char(pair_char_info);
+
+      return the_chr;
+    }
+  };
+
+
   //functor for probing string capitalization
   //requirements:
   //(private inheritance to prevent polymorphic use,
   // a requirement that came up in code review)
   //
-  struct probe_capitalize: private probe_execute_base
+  struct probe_capitalize: private probe_execute_capitalize
   {
     explicit probe_capitalize(column_device_view const d_column):
-      probe_execute_base(d_column)
+      //probe_execute_base(d_column)
+      probe_execute_capitalize(d_column)
     {  
     }
-    
+
      __device__
      int32_t operator()(size_type idx) const {
        if( get_column().is_null(idx) )
@@ -106,15 +141,8 @@ namespace { // anonym.
        string_view d_str = get_column().template element<string_view>(idx);
        int32_t bytes = 0;
       
-       for( auto itr = d_str.begin(); itr != d_str.end(); ++itr ) {
-         auto the_chr = *itr;
-
-         auto pair_char_info = get_char_info(the_chr);
-         detail::character_flags_table_type flag = pair_char_info.second;
-         
-         if( (itr == d_str.begin()) ? IS_LOWER(flag) : IS_UPPER(flag) )
-           the_chr = convert_char(pair_char_info);
-         bytes += detail::bytes_in_char_utf8(the_chr);
+       for( auto itr = d_str.begin(); itr != d_str.end(); ++itr ) {         
+         bytes += detail::bytes_in_char_utf8(generate_chr(itr, d_str));
        }
        return bytes;
     }
@@ -124,12 +152,13 @@ namespace { // anonym.
   //(private inheritance to prevent polymorphic use,
   // a requirement that came up in code review)
   //
-  struct execute_capitalize: private probe_execute_base
+  struct execute_capitalize: private probe_execute_capitalize
   {
     execute_capitalize(column_device_view const d_column,
                        int32_t const* d_offsets,
                        char* d_chars):
-      probe_execute_base(d_column, d_offsets, d_chars)
+      //probe_execute_base(d_column, d_offsets, d_chars)
+      probe_execute_capitalize(d_column, d_offsets, d_chars)
     {
     }
     
@@ -142,16 +171,49 @@ namespace { // anonym.
       char* d_buffer = get_output_ptr(idx);
       
       for( auto itr = d_str.begin(); itr != d_str.end(); ++itr ) {
-        auto the_chr = *itr;
-
-        auto pair_char_info = get_char_info(the_chr); 
-        detail::character_flags_table_type flag = pair_char_info.second;
-
-        if( (itr == d_str.begin()) ? IS_LOWER(flag) : IS_UPPER(flag) )
-          the_chr = convert_char(pair_char_info);
-        d_buffer += detail::from_char_utf8(the_chr, d_buffer);
+        d_buffer += detail::from_char_utf8(generate_chr(itr, d_str), d_buffer);
       }
       return 0;
+    }
+  };
+
+
+  //class that factors out the common inside-loop behavior
+  //of operator() between title's `probe` and `execute`;
+  //(public inheritance to allow getters pass-through
+  //in derived classes);
+  //
+  struct probe_execute_title: public probe_execute_base
+  {
+    explicit probe_execute_title(column_device_view const d_column):
+      probe_execute_base(d_column)
+    {
+    }
+
+    probe_execute_title(column_device_view const d_column,
+                             int32_t const* d_offsets,
+                             char* d_chars):
+      probe_execute_base(d_column, d_offsets, d_chars)
+    {
+    }
+    
+    __device__
+    thrust::pair<char_utf8, bool> generate_chr(string_view::const_iterator itr, string_view d_str, bool bcapnext) const {
+      auto the_chr = *itr;
+
+      auto pair_char_info = get_char_info(the_chr);
+      detail::character_flags_table_type flag = pair_char_info.second;
+
+      if( !IS_ALPHA(flag) ) {
+        bcapnext = true;
+      } else {
+        if( bcapnext ? IS_LOWER(flag) : IS_UPPER(flag) )
+          the_chr = convert_char(pair_char_info);
+           
+        bcapnext = false;
+      }
+
+      return thrust::make_pair(the_chr, bcapnext);
     }
   };
 
@@ -161,10 +223,10 @@ namespace { // anonym.
   //(private inheritance to prevent polymorphic use,
   // a requirement that came up in code review)
   //
-  struct probe_title: private probe_execute_base
+  struct probe_title: private probe_execute_title
   {
     explicit probe_title(column_device_view const d_column):
-      probe_execute_base(d_column)
+      probe_execute_title(d_column)
     {  
     }
     
@@ -178,22 +240,10 @@ namespace { // anonym.
 
        bool bcapnext = true;
        for( auto itr = d_str.begin(); itr != d_str.end(); ++itr ) {
-         auto the_chr = *itr;
-
-         auto pair_char_info = get_char_info(the_chr);
-         
-         detail::character_flags_table_type flag = pair_char_info.second;
-
-         if( !IS_ALPHA(flag) ) {
-           bcapnext = true;
-         } else {
-           if( bcapnext ? IS_LOWER(flag) : IS_UPPER(flag) )
-             the_chr = convert_char(pair_char_info);
-           
-           bcapnext = false;
-         }
-
-         bytes += detail::bytes_in_char_utf8(the_chr);
+         auto pair_char_flag = generate_chr(itr, d_str, bcapnext);
+         bcapnext = pair_char_flag.second;
+        
+         bytes += detail::bytes_in_char_utf8(pair_char_flag.first);
        }
        return bytes;
     }
@@ -203,12 +253,12 @@ namespace { // anonym.
   //(private inheritance to prevent polymorphic use,
   // a requirement that came up in code review)
   //
-  struct execute_title: private probe_execute_base
+  struct execute_title: private probe_execute_title
   {
     execute_title(column_device_view const d_column,
                   int32_t const* d_offsets,
                   char* d_chars):
-      probe_execute_base(d_column, d_offsets, d_chars)
+      probe_execute_title(d_column, d_offsets, d_chars)
     {
     }
     
@@ -222,21 +272,10 @@ namespace { // anonym.
 
       bool bcapnext = true;
       for( auto itr = d_str.begin(); itr != d_str.end(); ++itr ) {
-        auto the_chr = *itr;
-
-        auto pair_char_info = get_char_info(the_chr); 
-        detail::character_flags_table_type flag = pair_char_info.second;
-
-        if( !IS_ALPHA(flag) )
-          bcapnext = true;
-        else
-          {
-            if( bcapnext ? IS_LOWER(flag) : IS_UPPER(flag) )
-              the_chr = convert_char(pair_char_info);
-            bcapnext = false;
-          }
+        auto pair_char_flag = generate_chr(itr, d_str, bcapnext);
+        bcapnext = pair_char_flag.second;
         
-        d_buffer += detail::from_char_utf8(the_chr, d_buffer);
+        d_buffer += detail::from_char_utf8(pair_char_flag.first, d_buffer);
       }
       return 0;
     }
