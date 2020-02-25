@@ -1,6 +1,6 @@
 from cudf._libxx.lib cimport *
 from cudf._libxx.lib import *
-
+from libcpp.vector cimport vector
 from libcpp.pair cimport pair
 
 cdef extern from "cudf/groupby.hpp" \
@@ -10,7 +10,7 @@ cdef extern from "cudf/groupby.hpp" \
         column_view values
         vector[unique_ptr[aggregation]] aggregations
 
-    cdef cppclass aggregation_result
+    cdef cppclass aggregation_result:
         vector[unique_ptr[column]] results
 
     cdef cppclass groups \
@@ -52,3 +52,6 @@ cdef extern from "cudf/groupby.hpp" \
         ) except +
 
         groups get_groups() except +
+
+cdef extern from "<utility>" namespace "std" nogil:
+    cdef groups move(groups)
