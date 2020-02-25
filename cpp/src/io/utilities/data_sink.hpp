@@ -21,6 +21,8 @@
 #include <vector>
 #include <string>
 
+#include <cudf/types.hpp>
+
 namespace cudf {
 namespace io {
 
@@ -62,7 +64,7 @@ class data_sink {
    * a custom sink instance and use it across multiple write() calls.
    *   
    **/
-  static std::unique_ptr<data_sink> create(std::shared_ptr<cudf::io::data_sink> user_sink);
+  static std::unique_ptr<data_sink> create(cudf::io::data_sink *const user_sink);
 
   /**
    * @brief Base class destructor
@@ -77,7 +79,7 @@ class data_sink {
    *
    * @return void
    **/
-  virtual void write(void const* data, size_t size) = 0;
+  virtual void host_write(void const* data, size_t size) = 0;
 
   /**
    * @brief Whether or not this sink supports writing from gpu memory addresses.
@@ -93,15 +95,15 @@ class data_sink {
    * custom data_sink is to do it's own internal management of the movement 
    * of data between cpu and gpu; turning the internals of the writer into simply
    * 
-   * sink->write_gpu(device_buffer, size)
+   * sink->device_write(device_buffer, size)
    * 
-   * If this function returns true, the data_sink will receive calls to write_gpu() 
+   * If this function returns true, the data_sink will receive calls to device_write() 
    * instead of write() when possible.  However, it is still possible to receive
    * write() calls as well.
    *
-   * @return bool If this writer supports write_gpu() calls.
+   * @return bool If this writer supports device_write() calls.
    **/
-  virtual bool supports_gpu_write() = 0;
+  virtual bool supports_device_write() = 0;
 
   /**
    * @brief Append the buffer content to the sink from a gpu address
@@ -111,7 +113,7 @@ class data_sink {
    *
    * @return void
    **/
-  virtual void write_gpu(void const* gpu_data, size_t size) = 0;
+  virtual void device_write(void const* gpu_data, size_t size, cudaStream_t stream) = 0;
 
   /**
    * @brief Flush the data written into the sink

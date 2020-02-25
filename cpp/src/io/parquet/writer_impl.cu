@@ -399,7 +399,7 @@ void writer::impl::write_chunked_begin(pq_chunked_state& state){
   // Write file header
   file_header_s fhdr;
   fhdr.magic = PARQUET_MAGIC;
-  out_sink_->write(&fhdr, sizeof(fhdr));
+  out_sink_->host_write(&fhdr, sizeof(fhdr));
 
   state.current_chunk_offset = sizeof(file_header_s);
 }
@@ -696,8 +696,8 @@ void writer::impl::write_chunked(table_view const& table, pq_chunked_state& stat
   }
 
   auto host_bfr = [&]() {
-    // if the writer supports write_gpu(), we don't need this scratch space
-    if(out_sink_->supports_gpu_write()){
+    // if the writer supports device_write(), we don't need this scratch space
+    if(out_sink_->supports_device_write()){
       return pinned_buffer<uint8_t>{nullptr, cudaFreeHost};
     } else {
       return pinned_buffer<uint8_t>{[](size_t size) {
@@ -733,23 +733,23 @@ void writer::impl::write_chunked(table_view const& table, pq_chunked_state& stat
           dev_bfr = ck->uncompressed_bfr;
         }
         
-        if(out_sink_->supports_gpu_write()){
+        if(out_sink_->supports_device_write()){
           // let the writer do what it wants to retrieve the data from the gpu. 
-          out_sink_->write_gpu(dev_bfr + ck->ck_stat_size, ck->compressed_size);
+          out_sink_->device_write(dev_bfr + ck->ck_stat_size, ck->compressed_size, state.stream);
           // we still need to do a (much smaller) memcpy for the statistics.
           if (ck->ck_stat_size != 0) {
             state.md.row_groups[global_r].columns[i].meta_data.statistics_blob.resize(ck->ck_stat_size);
             CUDA_TRY(cudaMemcpyAsync(state.md.row_groups[global_r].columns[i].meta_data.statistics_blob.data(), dev_bfr, ck->ck_stat_size,
                      cudaMemcpyDeviceToHost, state.stream));
-            CUDA_TRY(cudaStreamSynchronize(state.stream));          
+            CUDA_TRY(cudaStreamSynchronize(state.stream));
           }
         } else {
           // copy the full data
           CUDA_TRY(cudaMemcpyAsync(host_bfr.get(), dev_bfr, ck->ck_stat_size + ck->compressed_size,
                                   cudaMemcpyDeviceToHost, state.stream));
           CUDA_TRY(cudaStreamSynchronize(state.stream));
-          out_sink_->write(host_bfr.get() + ck->ck_stat_size, ck->compressed_size);            
-          if (ck->ck_stat_size != 0) {          
+          out_sink_->host_write(host_bfr.get() + ck->ck_stat_size, ck->compressed_size);
+          if (ck->ck_stat_size != 0) {        
             state.md.row_groups[global_r].columns[i].meta_data.statistics_blob.resize(ck->ck_stat_size);
             memcpy(state.md.row_groups[global_r].columns[i].meta_data.statistics_blob.data(), host_bfr.get(), ck->ck_stat_size);
           }
@@ -770,8 +770,8 @@ void writer::impl::write_chunked_end(pq_chunked_state &state){
   file_ender_s fendr;
   fendr.footer_len = (uint32_t)cpw.write(&state.md);  
   fendr.magic = PARQUET_MAGIC;
-  out_sink_->write(buffer_.data(), buffer_.size());  
-  out_sink_->write(&fendr, sizeof(fendr));  
+  out_sink_->host_write(buffer_.data(), buffer_.size());  
+  out_sink_->host_write(&fendr, sizeof(fendr));  
   out_sink_->flush();
 }
 
