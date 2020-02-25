@@ -43,13 +43,11 @@ namespace { // anonym.
     using char_info = thrust::pair<uint32_t,detail::character_flags_table_type>;
     
     probe_execute_base(column_device_view const d_column,
-                 character_flags_table_type const* d_flags,
-                 character_cases_table_type const* d_case_table,
-                 int32_t const* d_offsets = nullptr,
-                 char* d_chars = nullptr):
+                       int32_t const* d_offsets = nullptr,
+                       char* d_chars = nullptr):
       d_column_(d_column),
-      d_flags_(d_flags),
-      d_case_table_(d_case_table),
+      d_flags_(get_character_flags_table()),      // set flag table
+      d_case_table_(get_character_cases_table()), // set case table
       d_offsets_(d_offsets),
       d_chars_(d_chars)
     {
@@ -95,10 +93,8 @@ namespace { // anonym.
   //
   struct probe_capitalize: private probe_execute_base
   {
-    probe_capitalize(column_device_view const d_column,
-                     character_flags_table_type const* d_flags,
-                     character_cases_table_type const* d_case_table):
-      probe_execute_base(d_column, d_flags, d_case_table)
+    explicit probe_capitalize(column_device_view const d_column):
+      probe_execute_base(d_column)
     {  
     }
     
@@ -131,11 +127,9 @@ namespace { // anonym.
   struct execute_capitalize: private probe_execute_base
   {
     execute_capitalize(column_device_view const d_column,
-                       character_flags_table_type const* d_flags,
-                       character_cases_table_type const* d_case_table,
                        int32_t const* d_offsets,
                        char* d_chars):
-      probe_execute_base(d_column, d_flags, d_case_table, d_offsets, d_chars)
+      probe_execute_base(d_column, d_offsets, d_chars)
     {
     }
     
@@ -169,10 +163,8 @@ namespace { // anonym.
   //
   struct probe_title: private probe_execute_base
   {
-    probe_title(column_device_view const d_column,
-                     character_flags_table_type const* d_flags,
-                     character_cases_table_type const* d_case_table):
-      probe_execute_base(d_column, d_flags, d_case_table)
+    explicit probe_title(column_device_view const d_column):
+      probe_execute_base(d_column)
     {  
     }
     
@@ -214,11 +206,9 @@ namespace { // anonym.
   struct execute_title: private probe_execute_base
   {
     execute_title(column_device_view const d_column,
-                  character_flags_table_type const* d_flags,
-                  character_cases_table_type const* d_case_table,
                   int32_t const* d_offsets,
                   char* d_chars):
-      probe_execute_base(d_column, d_flags, d_case_table, d_offsets, d_chars)
+      probe_execute_base(d_column, d_offsets, d_chars)
     {
     }
     
@@ -272,11 +262,9 @@ std::unique_ptr<column> modify_strings( strings_column_view const& strings,
 
   // copy null mask
   rmm::device_buffer null_mask = copy_bitmask(strings.parent(),stream,mr);
-  // get the lookup tables used for case conversion
-  auto d_flags = get_character_flags_table();
-  auto d_case_table = get_character_cases_table();  
+  // get the lookup tables used for case conversion  
 
-  device_probe_functor d_probe_fctr{d_column, d_flags, d_case_table};
+  device_probe_functor d_probe_fctr{d_column};
 
   // build offsets column -- calculate the size of each output string
   auto offsets_transformer_itr = thrust::make_transform_iterator( thrust::make_counting_iterator<size_type>(0), d_probe_fctr);
@@ -293,8 +281,6 @@ std::unique_ptr<column> modify_strings( strings_column_view const& strings,
   auto d_chars = chars_view.data<char>();
 
   device_execute_functor d_execute_fctr{d_column,
-      d_flags,
-      d_case_table,
       d_new_offsets,
       d_chars};
   
