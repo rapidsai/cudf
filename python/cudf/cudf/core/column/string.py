@@ -437,7 +437,7 @@ class StringMethods(object):
             stop = -1
         if step is None:
             step = 1
-        
+
         return Series(
             cpp_slice_strings(self._parent, start, stop, step),
             index=self._index,

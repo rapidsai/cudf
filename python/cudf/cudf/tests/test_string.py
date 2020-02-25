@@ -968,16 +968,13 @@ def test_string_misc_name(ps_gs, name):
     ],
 )
 @pytest.mark.parametrize(
-    "index",
-    [
-        0, 1, 2, 3, 9, 10
-    ],
+    "index", [0, 1, 2, 3, 9, 10],
 )
 def test_string_get(string, index):
     pds = pd.Series(string)
     gds = Series(string)
 
-    assert_eq(pds.str.get(index).fillna(''), gds.str.get(index).fillna(''))
+    assert_eq(pds.str.get(index).fillna(""), gds.str.get(index).fillna(""))
 
 
 @pytest.mark.parametrize(
@@ -985,45 +982,39 @@ def test_string_get(string, index):
     [
         ["abc", "xyz", "a", "ab", "123", "097"],
         ["abcdefghij", "0123456789", "9876543210", None, "accénted", ""],
-        ["koala", "fox", "chameleon"]
+        ["koala", "fox", "chameleon"],
     ],
 )
 @pytest.mark.parametrize(
-    "number",
-    [
-        0, 1, 3, 10
-    ],
+    "number", [0, 1, 3, 10],
 )
 @pytest.mark.parametrize(
-    "diff",
-    [
-        0, 2, 5, 9
-    ],
+    "diff", [0, 2, 5, 9],
 )
-def test_string_slice(string, number, diff):
+def test_string_slice_str(string, number, diff):
     pds = pd.Series(string)
     gds = Series(string)
 
     assert_eq(pds.str.slice(start=number), gds.str.slice(start=number))
     assert_eq(pds.str.slice(stop=number), gds.str.slice(stop=number))
     assert_eq(pds.str.slice(), gds.str.slice())
-    assert_eq(pds.str.slice(start=number, stop=number+diff), gds.str.slice(start=number, stop=number+diff))
+    assert_eq(
+        pds.str.slice(start=number, stop=number + diff),
+        gds.str.slice(start=number, stop=number + diff),
+    )
     if diff != 0:
         assert_eq(pds.str.slice(step=diff), gds.str.slice(step=diff))
-        assert_eq(pds.str.slice(start=number, stop=number+diff, step=diff), gds.str.slice(start=number, stop=number+diff, step=diff))
-
+        assert_eq(
+            pds.str.slice(start=number, stop=number + diff, step=diff),
+            gds.str.slice(start=number, stop=number + diff, step=diff),
+        )
 
 
 def test_string_slice_from():
-    gs = Series(
-        ["hello world", "holy accéntéd", "batman", None, ""]
-    )
+    gs = Series(["hello world", "holy accéntéd", "batman", None, ""])
     d_starts = Series([2, 3, 0, -1, -1], dtype=np.int32)
     d_stops = Series([-1, -1, 0, -1, -1], dtype=np.int32)
-    got = gs.str.slice_from(
-        starts=d_starts._column,
-        stops=d_stops._column,
-    )
+    got = gs.str.slice_from(starts=d_starts._column, stops=d_stops._column,)
     expected = Series(["llo world", "y accéntéd", "", None, ""])
     assert_eq(got, expected)
 
@@ -1033,47 +1024,52 @@ def test_string_slice_from():
     [
         ["abc", "xyz", "a", "ab", "123", "097"],
         ["abcdefghij", "0123456789", "9876543210", None, "accénted", ""],
-        ["koala", "fox", "chameleon"]
+        ["koala", "fox", "chameleon"],
     ],
 )
 @pytest.mark.parametrize(
-    "number",
-    [
-        0, 1, 10
-    ],
+    "number", [0, 1, 10],
 )
 @pytest.mark.parametrize(
-    "diff",
-    [
-        0, 2, 9
-    ],
+    "diff", [0, 2, 9],
 )
 @pytest.mark.parametrize(
-    "repr",
-    [
-         "2", "!!"
-    ],
+    "repr", ["2", "!!"],
 )
 def test_string_slice_replace(string, number, diff, repr):
     pds = pd.Series(string)
     gds = Series(string)
 
-    assert_eq(pds.str.slice_replace(start=number,repl=repr), gds.str.slice_replace(start=number,repl=repr), check_dtype=False)
-    assert_eq(pds.str.slice_replace(stop=number, repl=repr), gds.str.slice_replace(stop=number, repl=repr))
+    assert_eq(
+        pds.str.slice_replace(start=number, repl=repr),
+        gds.str.slice_replace(start=number, repl=repr),
+        check_dtype=False,
+    )
+    assert_eq(
+        pds.str.slice_replace(stop=number, repl=repr),
+        gds.str.slice_replace(stop=number, repl=repr),
+    )
     assert_eq(pds.str.slice_replace(), gds.str.slice_replace())
-    assert_eq(pds.str.slice_replace(start=number, stop=number+diff), gds.str.slice_replace(start=number, stop=number+diff))
-    assert_eq(pds.str.slice_replace(start=number, stop=number+diff, repl=repr), gds.str.slice_replace(start=number, stop=number+diff, repl=repr), check_dtype=False)
+    assert_eq(
+        pds.str.slice_replace(start=number, stop=number + diff),
+        gds.str.slice_replace(start=number, stop=number + diff),
+    )
+    assert_eq(
+        pds.str.slice_replace(start=number, stop=number + diff, repl=repr),
+        gds.str.slice_replace(start=number, stop=number + diff, repl=repr),
+        check_dtype=False,
+    )
+
 
 def test_string_insert():
-    gs = Series(
-        ["hello world", "holy accéntéd", "batman", None, ""]
-    )
+    gs = Series(["hello world", "holy accéntéd", "batman", None, ""])
 
-    ps = pd.Series(
-        ["hello world", "holy accéntéd", "batman", None, ""]
-    )
+    ps = pd.Series(["hello world", "holy accéntéd", "batman", None, ""])
 
     assert_eq(gs.str.insert(0, ""), gs)
     assert_eq(gs.str.insert(0, "+"), "+" + ps)
     assert_eq(gs.str.insert(-1, "---"), ps + "---")
-    assert_eq(gs.str.insert(5, "---"), ps.str.slice(stop=5) + "---" + ps.str.slice(start=5))
+    assert_eq(
+        gs.str.insert(5, "---"),
+        ps.str.slice(stop=5) + "---" + ps.str.slice(start=5),
+    )
