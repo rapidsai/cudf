@@ -14,9 +14,11 @@
 - PR #4088 Added asString() on ColumnVector in Java that takes a format string
 - PR #4040 Add support for n-way merge of sorted tables
 - PR #4053 Multi-column quantiles.
+- PR #4100 Add set_keys function for dictionary columns
 - PR #3894 Add remove_keys functions for dictionary columns
 - PR #4107 Add groupby nunique aggregation
 - PR #4153 Support Dask serialization protocol on cuDF objects
+- PR #4127 Add python API for n-way sorted merge (merge_sorted)
 - PR #4164 Add Buffer "constructor-kwargs" header
 - PR #4159 Add COUNT aggregation that includes null values
 - PR #4190 Add libcudf++ transpose Cython implementation
@@ -60,6 +62,7 @@
 - PR #3786 Adding string support to rolling_windows
 - PR #4067 Removed unused `CATEGORY` type ID.
 - PR #3891 Port NVStrings (r)split_record to contiguous_(r)split_record
+- PR #4070 Port NVText normalize_spaces to use libcudf strings column
 - PR #4072 Allow round_robin_partition to single partition
 - PR #4064 Add cudaGetDeviceCount to JNI layer
 - PR #4075 Port nvtext ngrams-tokenize to libcudf++
