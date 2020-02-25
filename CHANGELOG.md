@@ -21,6 +21,7 @@
 - PR #4159 Add COUNT aggregation that includes null values
 - PR #4190 Add libcudf++ transpose Cython implementation
 - PR #4216 Add cudf.Scalar Python type
+- PR #4240 Add groupby::groups()
 
 ## Improvements
 
