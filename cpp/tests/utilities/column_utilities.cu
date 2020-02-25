@@ -202,8 +202,8 @@ bool column_comparison(cudf::column_view const& lhs, cudf::column_view const& rh
       //
       //  If there are differences, display them all
       //
-      std::ostringstream buffer;
-      buffer << "differences:" << std::endl;
+      // std::ostringstream buffer;
+      // buffer << "differences:" << std::endl;
       
       cudf::table_view source_table ({lhs, rhs});
 
@@ -227,14 +227,14 @@ bool column_comparison(cudf::column_view const& lhs, cudf::column_view const& rh
       }
       */
       printf("Column index : %d (%d differences, first difference : %d) Printing (up to) 100 values\n", column_index, (int)differences.size(), (int)differences[0]);
-      int idx;
-      for(idx=differences[0]; idx<100 && idx < lhs.size(); idx++){
+      int idx, count;
+      for(idx=differences[0], count = 0; count<100 && idx < lhs.size(); idx++, count++){
         printf("Row %d   lhs : %s    rhs : %s\n", idx, h_left_strings[idx].c_str(), h_right_strings[idx].c_str());
       }
 
       // EXPECT_EQ(differences.size(), size_t{0}) << buffer.str();
       // buffer << "Found diffs : " << buffer.str();
-      printf("Found diffs : %s\n", buffer.str().c_str());
+      // printf("Found diffs : %s\n", buffer.str().c_str());
     } 
     /* 
     else {
