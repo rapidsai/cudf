@@ -1,7 +1,9 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+import numpy as np
+
+from enum import Enum as PyEnum # as PyEnum so we don't conflict with cython
 from cudf._libxx.lib cimport *
-from enum import Enum
 
 
 np_to_cudf_types = {
@@ -34,30 +36,21 @@ cudf_to_np_types = {
     BOOL8: np.dtype("bool"),
 }
 
-class MaskState(Enum):
-    """
-    Enum for null mask creation state
-    """
-    UNALLOCATED   = <underlying_type_t_mask_state> mask_state.UNALLOCATED
-    UNINITIALIZED = <underlying_type_t_mask_state> mask_state.UNINITIALIZED
-    ALL_VALID     = <underlying_type_t_mask_state> mask_state.ALL_VALID
-    ALL_NULL      = <underlying_type_t_mask_state> mask_state.ALL_NULL
-
-class Interpolation(Enum):
+class Interpolation(PyEnum):
     LINEAR   = <underlying_type_t_interpolation> interpolation.LINEAR
     LOWER    = <underlying_type_t_interpolation> interpolation.LOWER
     HIGHER   = <underlying_type_t_interpolation> interpolation.HIGHER
     MIDPOINT = <underlying_type_t_interpolation> interpolation.MIDPOINT
     NEAREST  = <underlying_type_t_interpolation> interpolation.NEAREST
 
-class Order(Enum):
+class Order(PyEnum):
     ASCENDING  = <underlying_type_t_order> order.ASCENDING
     DESCENDING = <underlying_type_t_order> order.DESCENDING
 
-class Sorted(Enum):
+class Sorted(PyEnum):
     YES = <underlying_type_t_sorted> sorted.YES
     NO  = <underlying_type_t_sorted> sorted.NO
 
-class NullOrder(Enum):
+class NullOrder(PyEnum):
     BEFORE = <underlying_type_t_order> null_order.BEFORE
     AFTER  = <underlying_type_t_order> null_order.AFTER
