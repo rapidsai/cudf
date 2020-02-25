@@ -132,7 +132,7 @@ groupby::aggregate(std::vector<aggregation_request> const& requests,
   return dispatch_aggregation(requests, 0, mr);
 }
 
-groupby_groups groupby::groups(table_view values, rmm::mr::device_memory_resource*  mr) {
+groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_resource*  mr) {
 
   auto group_keys = helper().sorted_keys(mr, 0);
 
@@ -145,10 +145,10 @@ groupby_groups groupby::groups(table_view values, rmm::mr::device_memory_resourc
   std::unique_ptr<table> group_values{nullptr};
   if (values.num_columns()) {
     group_values = cudf::experimental::detail::gather(values, helper().key_sort_order());
-    return groupby_groups{std::move(group_keys), group_offsets_vector, std::move(group_values)};
+    return groupby::groups{std::move(group_keys), group_offsets_vector, std::move(group_values)};
   }
   else {
-    return groupby_groups{std::move(group_keys), group_offsets_vector};
+    return groupby::groups{std::move(group_keys), group_offsets_vector};
   }
 }
 

@@ -25,7 +25,7 @@
 namespace cudf {
 namespace test {
 
-struct groupby_group_keys_test : public cudf::test::BaseFixture {};
+struct groupby_group_keys_test : public BaseFixture {};
 
 template <typename V>
 struct groupby_group_keys_and_values_test : public cudf::test::BaseFixture {};

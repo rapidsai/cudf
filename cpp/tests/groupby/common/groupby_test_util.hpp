@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,25 +35,24 @@ inline void test_groups(column_view const& keys,
                         column_view const& expect_group_values={})
 {
   experimental::groupby::groupby gb (table_view({keys}));
-  experimental::groupby::groupby_groups groups;
-  groups = gb.groups();
+  experimental::groupby::groupby::groups gb_groups;
 
   if (values.size()) {
-     groups = gb.groups(table_view({values}));
+     gb_groups = gb.get_groups(table_view({values}));
   }
   else {
-     groups = gb.groups();
+     gb_groups = gb.get_groups();
   }
-  expect_tables_equal(table_view({expect_group_keys}), groups.group_keys->view());
+  expect_tables_equal(table_view({expect_group_keys}), gb_groups.group_keys->view());
 
-  auto got_offsets = groups.group_offsets;
+  auto got_offsets = gb_groups.group_offsets;
   EXPECT_EQ(expect_group_offsets.size(), got_offsets.size());
   for (auto i = 0u; i != expect_group_offsets.size(); ++i) {
     EXPECT_EQ(expect_group_offsets[i], got_offsets[i]);
   }
 
   if (values.size()) {
-    expect_tables_equal(table_view({expect_group_values}), groups.group_values->view());
+    expect_tables_equal(table_view({expect_group_values}), gb_groups.group_values->view());
   }
 }
 

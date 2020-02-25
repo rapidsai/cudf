@@ -150,6 +150,9 @@ struct sort_groupby_helper {
    * @brief Get the sorted order of `keys`.
    *
    * Gathering `keys` by sort order indices will produce the sorted key table.
+   *
+   * When ignore_null_keys = true, the result will not include indices
+   * for null keys.
    * 
    * Computes and stores the key sorted order on first invocation, and returns
    * the stored order on subsequent calls.
