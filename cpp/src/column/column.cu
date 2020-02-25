@@ -286,7 +286,7 @@ struct partition_map_fn {
 
   T __device__ operator()(size_type i) {
     auto const partition = partition_ptr[i];
-    auto const offset = offsets_ptr[i];
+    auto const offset = offsets_ptr[partition];
     return data_ptr[partition][i - offset];
   }
 };
@@ -317,7 +317,7 @@ struct concatenate_using_partition_map {
     // Compute the partition offsets
     thrust::host_vector<size_type> offsets(views.size() + 1);
     // NOTE tried to use thrust::transform_inclusive_scan here, but got
-    // __host__ called from __host__ __device__ error
+    // error: __host__ called from __host__ __device__
     thrust::transform(views.cbegin(), views.cend(), std::next(offsets.begin()),
       [](column_view const& col) {
         return col.size();
@@ -427,10 +427,12 @@ concatenate(std::vector<column_view> const& columns_to_concat,
           create_column_from_view_vector{columns_to_concat, stream, mr});
     case concatenate_mode::PARTITION_MAP:
       return experimental::type_dispatcher(type,
-          concatenate_using_partition_map{}, columns_to_concat, mr, stream);
+          concatenate_using_partition_map{},
+          columns_to_concat, mr, stream);
     case concatenate_mode::BINARY_SEARCH:
       return experimental::type_dispatcher(type,
-          concatenate_using_binary_search{}, columns_to_concat, mr, stream);
+          concatenate_using_binary_search{},
+          columns_to_concat, mr, stream);
     default:
       CUDF_FAIL("Invalid concatenate mode");
   }
