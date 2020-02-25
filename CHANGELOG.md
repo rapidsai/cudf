@@ -17,6 +17,7 @@
 - PR #3894 Add remove_keys functions for dictionary columns
 - PR #4107 Add groupby nunique aggregation
 - PR #4153 Support Dask serialization protocol on cuDF objects
+- PR #4127 Add python API for n-way sorted merge (merge_sorted)
 - PR #4164 Add Buffer "constructor-kwargs" header
 - PR #4159 Add COUNT aggregation that includes null values
 - PR #4190 Add libcudf++ transpose Cython implementation

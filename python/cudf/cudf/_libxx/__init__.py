@@ -5,6 +5,7 @@ import numpy as np
 from . import (
     copying,
     hash,
+    merge,
     null_mask,
     rolling,
     search,
