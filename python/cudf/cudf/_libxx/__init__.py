@@ -5,6 +5,7 @@ import numpy as np
 from . import (
     copying,
     hash,
+    join,
     merge,
     null_mask,
     rolling,
@@ -13,7 +14,6 @@ from . import (
     stream_compaction,
     table,
     transpose,
-    join
 )
 
 MAX_COLUMN_SIZE = np.iinfo(np.int32).max
