@@ -28,7 +28,7 @@
 
 #include <rmm/device_buffer.hpp>
 
-#include <thrust/transform_scan.h>
+#include <thrust/binary_search.h>
 
 #include <algorithm>
 #include <numeric>
@@ -278,34 +278,62 @@ struct create_column_from_view_vector {
 
 };
 
-struct concatenate_using_partition_map {
-  std::vector<column_view> const& views;
-  cudaStream_t stream;
-  rmm::mr::device_memory_resource* mr;
+template <typename T>
+struct partition_map_fn {
+  size_type const* offsets_ptr;
+  size_type const* partition_ptr;
+  T const** data_ptr;
 
+  T __device__ operator()(size_type i) {
+    auto const partition = partition_ptr[i];
+    auto const offset = offsets_ptr[i];
+    return data_ptr[partition][i - offset];
+  }
+};
+
+template <typename T>
+struct binary_search_fn {
+  size_type const* offsets_ptr;
+  size_type const num_partitions;
+  T const** data_ptr;
+
+  T __device__ operator()(size_type i) {
+    auto const offset_it = thrust::upper_bound(thrust::seq,
+      offsets_ptr, offsets_ptr + num_partitions, 1) - 1;
+    auto const partition = offset_it - offsets_ptr;
+    auto const offset = *offset_it;
+    return data_ptr[partition][i - offset];
+  }
+};
+
+struct concatenate_using_partition_map {
   template <typename T,
       std::enable_if_t<is_fixed_width<T>()>* = nullptr>
-  std::unique_ptr<column> operator()() {
+  std::unique_ptr<column> operator()(
+      std::vector<column_view> const& views,
+      rmm::mr::device_memory_resource* mr,
+      cudaStream_t stream) {
 
     // Compute the partition offsets
     thrust::host_vector<size_type> offsets(views.size() + 1);
-    thrust::transform_inclusive_scan(thrust::host,
-      views.begin(), views.end(), offsets.begin() + 1,
+    // NOTE tried to use thrust::transform_inclusive_scan here, but got
+    // __host__ called from __host__ __device__ error
+    thrust::transform(views.cbegin(), views.cend(), std::next(offsets.begin()),
       [](column_view const& col) {
         return col.size();
-      },
-      thrust::plus<size_type>{});
+      });
+    thrust::inclusive_scan(std::next(offsets.cbegin()), offsets.cend(),
+      std::next(offsets.begin()));
     thrust::device_vector<size_type> d_offsets(offsets);
     auto const output_size = offsets.back();
 
     // Compute partition map
-    // NOTE instead of scattering `i` and doing a "max scan", scatter 1s
-    // for all but the first offset and do an inclusive scan
+    // Scatter 1s at the start of each partition, then scan to fill the map
     thrust::device_vector<size_type> d_partition_map(output_size);
     auto const const_it = thrust::make_constant_iterator(size_type{1});
     thrust::scatter(rmm::exec_policy(stream)->on(stream),
       const_it, const_it + (d_offsets.size() - 2), // skip first and last offset
-      d_offsets.begin() + 1, // skip first offset, leaving it set to 0
+      std::next(d_offsets.begin()), // skip first offset, leaving it set to 0
       d_partition_map.begin());
     thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream),
       d_partition_map.begin(), d_partition_map.end(),
@@ -325,42 +353,44 @@ struct concatenate_using_partition_map {
     auto out_view = out_col->mutable_view();
 
     // Initialize each output row from its corresponding input view
+    // NOTE device lambdas were giving weird errors, so use functor instead
     auto const* offsets_ptr = d_offsets.data().get();
     auto const* partition_ptr = d_partition_map.data().get();
     auto const** data_ptr = d_data_ptrs.data().get();
     thrust::tabulate(rmm::exec_policy(stream)->on(stream),
       out_view.begin<T>(), out_view.end<T>(),
-      [offsets_ptr, partition_ptr, data_ptr] __device__ (auto i) {
-        auto const partition_num = partition_ptr[i];
-        auto const offset = offsets_ptr[i];
-        return data_ptr[partition_num][i - offset];
-      });
+      partition_map_fn<T>{offsets_ptr, partition_ptr, data_ptr});
 
     return out_col;
   }
 
   template <typename ColumnType,
       std::enable_if_t<not is_fixed_width<ColumnType>()>* = nullptr>
-  std::unique_ptr<column> operator()() {
+  std::unique_ptr<column> operator()(
+      std::vector<column_view> const& views,
+      rmm::mr::device_memory_resource* mr,
+      cudaStream_t stream) {
     CUDF_FAIL("non-fixed-width types not yet supported");
   }
 };
 
 struct concatenate_using_binary_search {
-  std::vector<cudf::column_view> const& views;
-  cudaStream_t stream;
-  rmm::mr::device_memory_resource *mr;
-
   template <typename ColumnType,
       std::enable_if_t<is_fixed_width<ColumnType>()>* = nullptr>
-  std::unique_ptr<column> operator()() {
+  std::unique_ptr<column> operator()(
+      std::vector<column_view> const& views,
+      rmm::mr::device_memory_resource* mr,
+      cudaStream_t stream) {
     // TODO implement optimization
     return experimental::empty_like(views.front());
   }
 
   template <typename ColumnType,
       std::enable_if_t<not is_fixed_width<ColumnType>()>* = nullptr>
-  std::unique_ptr<column> operator()() {
+  std::unique_ptr<column> operator()(
+      std::vector<column_view> const& views,
+      rmm::mr::device_memory_resource* mr,
+      cudaStream_t stream) {
     CUDF_FAIL("non-fixed-width types not yet supported");
   }
 };
@@ -397,10 +427,10 @@ concatenate(std::vector<column_view> const& columns_to_concat,
           create_column_from_view_vector{columns_to_concat, stream, mr});
     case concatenate_mode::PARTITION_MAP:
       return experimental::type_dispatcher(type,
-          concatenate_using_partition_map{columns_to_concat, stream, mr});
+          concatenate_using_partition_map{}, columns_to_concat, mr, stream);
     case concatenate_mode::BINARY_SEARCH:
       return experimental::type_dispatcher(type,
-          concatenate_using_binary_search{columns_to_concat, stream, mr});
+          concatenate_using_binary_search{}, columns_to_concat, mr, stream);
     default:
       CUDF_FAIL("Invalid concatenate mode");
   }
