@@ -131,6 +131,8 @@ flatten_single_pass_aggs(std::vector<aggregation_request> const& requests) {
 /**
  * @brief Gather sparse results into dense using `gather_map` and add to 
  * `dense_cache`
+ * 
+ * @see groupby_null_templated()
  */
 void sparse_to_dense_results(
     std::vector<aggregation_request> const& requests,
@@ -226,6 +228,8 @@ auto create_hash_map(table_device_view const& d_keys,
 /**
  * @brief Computes all aggregations from `requests` that require a single pass
  * over the data and stores the results in `sparse_results`
+ * 
+ * @see groupby_null_templated()
  */
 template <bool keys_have_nulls, typename Map>
 void compute_single_pass_aggs(table_view const& keys,
@@ -293,7 +297,7 @@ void compute_single_pass_aggs(table_view const& keys,
 }
 
 /**
- * @brief Computes and returns a device vector containing all populated keys in
+ * @brief Compute and returns a device vector containing all populated keys in
  * `map`. 
  */
 template <typename Map>
@@ -321,6 +325,33 @@ std::pair<rmm::device_vector<size_type>, size_type> extract_populated_keys(
   return std::make_pair(std::move(populated_keys), map_size);
 }
 
+/**
+ * @brief Computes groupby using hash table.
+ * 
+ * First, we create a hash table that stores the indices of unique rows in 
+ * `keys`. The upper limit on the number of values in this map is the number
+ * of rows in `keys`. 
+ * 
+ * To store the results of aggregations, we create temporary sparse columns
+ * which have the same size as input value columns. Using the hash map, we
+ * determine the location within the sparse column to write the result of the 
+ * aggregation into.
+ * 
+ * The sparse column results of all aggregations are stored into the cache
+ * `sparse_results`. This enables the use of previously calculated results in
+ * other aggregations.
+ * 
+ * All the aggregations which can be computed in a single pass are computed
+ * first, in a combined kernel. Then using these results, aggregations that
+ * require multiple passes, will be computed.
+ * 
+ * Finally, using the hash map, we generate a vector of indices of populated 
+ * values in sparse result columns. Then, for each aggregation originally
+ * requested in `requests`, we gather sparse results into a column of dense
+ * results using the aforementioned index vector. Dense results are stored into
+ * the in/out parameter `cache`.
+ * 
+ */
 template <bool keys_have_nulls>
 std::unique_ptr<table> groupby_null_templated(
     table_view const& keys, std::vector<aggregation_request> const& requests,
