@@ -15,8 +15,11 @@ def quantiles(Table source_table,
     cdef vector[double] c_q = q
     cdef interpolation c_interp = <interpolation>(<underlying_type_t_interpolation> interp)
     cdef sorted c_is_input_sorted = <sorted>(<underlying_type_t_sorted> is_input_sorted)
-    cdef vector[order] c_column_order = vector[order](len(column_order))
-    cdef vector[null_order] c_null_precedence = vector[null_order](len(null_precedence))
+    cdef vector[order] c_column_order
+    cdef vector[null_order] c_null_precedence
+
+    c_column_order.reserve(len(column_order))
+    c_null_precedence.reserve(len(null_precedence))
 
     for value in column_order:
         c_column_order.push_back(
