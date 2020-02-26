@@ -6,10 +6,10 @@ from cudf._libxx.column cimport Column
 from cudf._libxx.table cimport Table
 from cudf._libxx.move cimport move
 
-cimport cudf._libxx.includes.types as cudf_types
 from cudf._libxx.includes.table.table cimport table
 from cudf._libxx.includes.table.table_view cimport table_view
 from cudf._libxx.includes.merge cimport merge as cpp_merge
+cimport cudf._libxx.includes.types as cudf_types
 
 
 def merge_sorted(
@@ -78,7 +78,10 @@ def merge_sorted(
         for key in range(start, stop):
             c_column_keys.push_back(key)
     c_column_order = vector[cudf_types.order](num_keys, column_order)
-    c_null_precedence = vector[cudf_types.null_order](num_keys, null_precedence)
+    c_null_precedence = vector[cudf_types.null_order](
+        num_keys,
+        null_precedence
+    )
 
     # Perform sorted merge operation
     cdef unique_ptr[table] c_result

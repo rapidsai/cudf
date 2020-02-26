@@ -6,11 +6,10 @@ from libcpp.memory cimport unique_ptr, make_unique
 
 from rmm._lib.device_buffer cimport device_buffer, DeviceBuffer
 
-import cudf._libxx as libcudfxx
 from cudf._libxx.column cimport Column
 from cudf._libxx.move cimport move
+import cudf._libxx as libcudfxx
 
-cimport cudf._libxx.includes.types as cudf_types
 from cudf._libxx.includes.column.column_view cimport column_view
 from cudf._libxx.includes.null_mask cimport (
     copy_bitmask as cpp_copy_bitmask,
@@ -20,16 +19,25 @@ from cudf._libxx.includes.null_mask cimport (
 )
 
 from cudf.core.buffer import Buffer
+cimport cudf._libxx.includes.types as cudf_types
 
 
 class MaskState(Enum):
     """
     Enum for null mask creation state
     """
-    UNALLOCATED = <mask_state_underlying_type>(cudf_types.mask_state.UNALLOCATED)
-    UNINITIALIZED = <mask_state_underlying_type>(cudf_types.mask_state.UNINITIALIZED)
-    ALL_VALID = <mask_state_underlying_type>(cudf_types.mask_state.ALL_VALID)
-    ALL_NULL = <mask_state_underlying_type>(cudf_types.mask_state.ALL_NULL)
+    UNALLOCATED = <mask_state_underlying_type>(
+        cudf_types.mask_state.UNALLOCATED
+    )
+    UNINITIALIZED = <mask_state_underlying_type>(
+        cudf_types.mask_state.UNINITIALIZED
+    )
+    ALL_VALID = <mask_state_underlying_type>(
+        cudf_types.mask_state.ALL_VALID
+    )
+    ALL_NULL = <mask_state_underlying_type>(
+        cudf_types.mask_state.ALL_NULL
+    )
 
 
 def copy_bitmask(Column col):

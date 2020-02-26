@@ -2,10 +2,10 @@
 from libcpp.vector cimport vector
 from libcpp.memory cimport unique_ptr
 
-cimport cudf._libxx.includes.types as cudf_types
 from cudf._libxx.includes.column.column cimport column
 from cudf._libxx.includes.column.column_view cimport column_view
 from cudf._libxx.includes.table.table_view cimport table_view
+cimport cudf._libxx.includes.types as cudf_types
 
 
 cdef extern from "cudf/search.hpp" namespace "cudf::experimental" nogil:

@@ -5,6 +5,10 @@ import pandas as pd
 import cython
 import rmm
 
+from cudf.core.buffer import Buffer
+from cudf.utils.dtypes import is_categorical_dtype
+import cudf._libxx as libcudfxx
+
 from cpython.buffer cimport PyObject_CheckBuffer
 from libc.stdint cimport uintptr_t
 from libcpp.pair cimport pair
@@ -14,17 +18,13 @@ from libcpp.vector cimport vector
 
 from rmm._lib.device_buffer cimport DeviceBuffer
 
-import cudf._libxx as libcudfxx
 from cudf._libxx.types import np_to_cudf_types, cudf_to_np_types
 from cudf._libxx.null_mask import bitmask_allocation_size_bytes
 from cudf._libxx.move cimport move
 
-cimport cudf._libxx.includes.types as cudf_types
 from cudf._libxx.includes.column.column cimport column, column_contents
 from cudf._libxx.includes.column.column_view cimport column_view
-
-from cudf.core.buffer import Buffer
-from cudf.utils.dtypes import is_categorical_dtype
+cimport cudf._libxx.includes.types as cudf_types
 
 
 @cython.auto_pickle(True)

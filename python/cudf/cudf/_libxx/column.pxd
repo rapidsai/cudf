@@ -8,7 +8,9 @@ from rmm._lib.device_buffer cimport device_buffer
 from cudf._libxx.includes.types cimport size_type
 
 from cudf._libxx.includes.column.column cimport column
-from cudf._libxx.includes.column.column_view cimport column_view, mutable_column_view
+from cudf._libxx.includes.column.column_view cimport (
+    column_view, mutable_column_view
+)
 
 
 cdef class Column:

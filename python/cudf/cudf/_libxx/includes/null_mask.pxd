@@ -4,10 +4,11 @@ from libc.stdint cimport int32_t
 
 from rmm._lib.device_buffer cimport device_buffer
 
-cimport cudf._libxx.includes.types as cudf_types
 from cudf._libxx.includes.column.column_view cimport column_view
+cimport cudf._libxx.includes.types as cudf_types
 
 ctypedef int32_t mask_state_underlying_type
+
 
 cdef extern from "cudf/null_mask.hpp" namespace "cudf" nogil:
     cdef device_buffer copy_bitmask "cudf::copy_bitmask" (

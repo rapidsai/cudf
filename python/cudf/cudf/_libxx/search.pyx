@@ -7,10 +7,10 @@ from cudf._libxx.column cimport Column
 from cudf._libxx.table cimport Table
 from cudf._libxx.move cimport move
 
-cimport cudf._libxx.includes.types as cudf_types
 from cudf._libxx.includes.column.column cimport column
 from cudf._libxx.includes.column.column_view cimport column_view
 from cudf._libxx.includes.table.table_view cimport table_view
+cimport cudf._libxx.includes.types as cudf_types
 cimport cudf._libxx.includes.search as cpp_search
 
 
@@ -38,14 +38,18 @@ def search_sorted(
     cdef table_view c_values_data = values.data_view()
 
     # Note: We are ignoring index columns here
-    c_order = cudf_types.order.ASCENDING if ascending else cudf_types.order.DESCENDING
+    c_order = (cudf_types.order.ASCENDING
+               if ascending
+               else cudf_types.order.DESCENDING)
     c_null_order = (
         cudf_types.null_order.AFTER
         if na_position=="last"
         else cudf_types.null_order.BEFORE
     )
     c_column_order = vector[cudf_types.order](table._num_columns, c_order)
-    c_null_precedence = vector[cudf_types.null_order](table._num_columns, c_null_order)
+    c_null_precedence = vector[cudf_types.null_order](
+        table._num_columns, c_null_order
+    )
 
     if side == 'left':
         with nogil:

@@ -1,9 +1,9 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-cimport cudf._libxx.includes.io.io_types as cudf_io_types
-
 from libcpp.string cimport string
 from libcpp.vector cimport vector
+
+cimport cudf._libxx.includes.io.io_types as cudf_io_types
 
 
 cdef extern from "cudf/io/functions.hpp" \
@@ -73,7 +73,9 @@ cdef extern from "cudf/io/functions.hpp" \
         bool na_filter
         bool dayfirst
 
-    cdef cudf_io_types.table_with_metadata read_csv(read_csv_args &args) except +
+    cdef cudf_io_types.table_with_metadata read_csv(
+        read_csv_args &args
+    ) except +
 
     cdef cppclass read_orc_args:
         source_info source
@@ -86,4 +88,6 @@ cdef extern from "cudf/io/functions.hpp" \
         bool decimals_as_float
         int forced_decimals_scale
 
-    cdef cudf_io_types.table_with_metadata read_orc(read_orc_args &args) except +
+    cdef cudf_io_types.table_with_metadata read_orc(
+        read_orc_args &args
+    ) except +

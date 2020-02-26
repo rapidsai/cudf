@@ -10,12 +10,12 @@ from cudf._libxx.column cimport Column
 from cudf._libxx.table cimport Table
 from cudf._libxx.move cimport move
 
-cimport cudf._libxx.includes.types as cudf_types
 from cudf._libxx.includes.column.column cimport column
 from cudf._libxx.includes.table.table_view cimport table_view
 from cudf._libxx.includes.sort cimport (
     sorted_order, lower_bound, upper_bound
 )
+cimport cudf._libxx.includes.types as cudf_types
 
 
 def order_by(Table source_table, object ascending, bool na_position):
@@ -37,9 +37,16 @@ def order_by(Table source_table, object ascending, bool na_position):
     cdef vector[cudf_types.order] column_order
     column_order.reserve(len(ascending))
     cdef cudf_types.null_order pred = (
-        cudf_types.null_order.BEFORE if na_position == 1 else cudf_types.null_order.AFTER)
-    cdef vector[cudf_types.null_order] null_precedence = vector[cudf_types.null_order](
-        source_table._num_columns, pred)
+        cudf_types.null_order.BEFORE
+        if na_position == 1
+        else cudf_types.null_order.AFTER
+    )
+    cdef vector[cudf_types.null_order] null_precedence = (
+        vector[cudf_types.null_order](
+            source_table._num_columns,
+            pred
+        )
+    )
 
     for i in ascending:
         if i is True:
@@ -74,9 +81,12 @@ def digitize(Table source_values_table, Table bins, bool right=False):
         bins_view.num_columns(),
         cudf_types.order.ASCENDING
     )
-    cdef vector[cudf_types.null_order] null_precedence = vector[cudf_types.null_order](
-        bins_view.num_columns(),
-        cudf_types.null_order.BEFORE)
+    cdef vector[cudf_types.null_order] null_precedence = (
+        vector[cudf_types.null_order](
+            bins_view.num_columns(),
+            cudf_types.null_order.BEFORE
+        )
+    )
 
     cdef unique_ptr[column] c_result
     if right is True:

@@ -10,7 +10,6 @@ from libcpp cimport bool
 from cudf._libxx.types import np_to_cudf_types, cudf_to_np_types
 from cudf._libxx.move cimport move
 
-cimport cudf._libxx.includes.types as cudf_types
 from cudf._libxx.includes.wrappers.bool cimport bool8
 from cudf._libxx.includes.wrappers.timestamps cimport (
     timestamp_s,
@@ -24,6 +23,7 @@ from cudf._libxx.includes.scalar.scalar cimport (
     timestamp_scalar,
     string_scalar
 )
+cimport cudf._libxx.includes.types as cudf_types
 
 
 cdef class Scalar:

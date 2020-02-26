@@ -11,6 +11,7 @@ from cudf.utils import cudautils
 from cudf._libxx.types import np_to_cudf_types, cudf_to_np_types
 from cudf._libxx.move cimport move
 
+from cudf._libxx.aggregation cimport get_aggregation
 from cudf._libxx.includes.types cimport (
     type_id,
     size_type,
@@ -18,7 +19,6 @@ from cudf._libxx.includes.types cimport (
     interpolation
 )
 cimport cudf._libxx.includes.aggregation as cudf_aggregation
-from cudf._libxx.aggregation cimport get_aggregation
 
 
 # need to update as and when we add new aggregations with additional options
