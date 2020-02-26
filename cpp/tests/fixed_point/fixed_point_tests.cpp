@@ -186,14 +186,14 @@ TYPED_TEST(FixedPointTestBothReps, DecimalXXTrickyDivision) {
     EXPECT_EQ(TEN_0.to_int32(),   10);
     EXPECT_EQ(SIXTY_1.to_int32(), 60);
 
-    EXPECT_EQ(SIXTY_1 / TEN_0, ZERO);
+    EXPECT_EQ(SIXTY_1 / TEN_0, TEN_1);
     EXPECT_EQ(SIXTY_1 / TEN_1, SIX_0);
 
     decimalXX A{34.56, scale_type{-2}};
     decimalXX B{1.234, scale_type{-3}};
     decimalXX C{1,     scale_type{-2}};
 
-    EXPECT_EQ((A / B).to_int32(),       20); // TODO should be 30 now
+    EXPECT_EQ((A / B).to_int32(),       30);
     EXPECT_EQ(((A * C) / B).to_int32(), 28);
 
     decimalXX n{28, scale_type{1}};
