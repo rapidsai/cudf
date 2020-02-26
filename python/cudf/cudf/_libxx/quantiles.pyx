@@ -11,7 +11,7 @@ def quantiles(Table source_table,
               object is_input_sorted,
               list column_order,
               list null_precedence):
-    cdef table_view c_input = source_table.view()
+    cdef table_view c_input = source_table.data_view()
     cdef vector[double] c_q = q
     cdef interpolation c_interp = <interpolation>(<underlying_type_t_interpolation> interp)
     cdef sorted c_is_input_sorted = <sorted>(<underlying_type_t_sorted> is_input_sorted)
@@ -44,6 +44,5 @@ def quantiles(Table source_table,
 
     return Table.from_unique_ptr(
         move(c_result),
-        column_names=source_table._column_names,
-        index_names=source_table._index_names
+        column_names=source_table._column_names
     )

@@ -213,7 +213,7 @@ class Frame(libcudfxx.table.Table):
         null_precedence = \
             [libcudfxx.lib.NullOrder[key] for key in null_precedence]
 
-        result = self._from_table(
+        result = self.__class__._from_table(
             libcudfxx.quantiles.quantiles(
                 self,
                 q,
