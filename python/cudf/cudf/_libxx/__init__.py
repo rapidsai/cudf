@@ -4,8 +4,8 @@ import numpy as np
 
 from . import (
     copying,
-    lib,
     hash,
+    lib,
     merge,
     null_mask,
     quantiles,
