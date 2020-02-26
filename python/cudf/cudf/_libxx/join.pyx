@@ -83,9 +83,7 @@ cpdef join(Table lhs,
         left_on_ind.push_back(left_on_idx)
         right_on_ind.push_back(right_on_idx)
 
-        columns_in_common[pair[int, int](
-            (left_on_idx, right_on_idx)
-        )] = None
+        columns_in_common[(left_on_idx, right_on_idx)] = None
 
     else:
         # cuDF's Python layer will create a new RangeIndex for this case
@@ -103,12 +101,10 @@ cpdef join(Table lhs,
             left_on_ind.push_back(left_join_cols.index(name))
             if name in right_on:
                 if (left_on.index(name) == right_on.index(name)):
-                    columns_in_common[
-                        pair[int, int]((
+                    columns_in_common[(
                             left_join_cols.index(name),
                             right_join_cols.index(name)
-                        ))
-                    ] = None
+                        )] = None
         for name in right_on:
             right_on_ind.push_back(right_join_cols.index(name))
 
