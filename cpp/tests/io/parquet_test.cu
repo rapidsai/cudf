@@ -469,7 +469,7 @@ public:
     outfile_.write(reinterpret_cast<char const*>(data), size);
   }
 
-  bool supports_device_write(){
+  bool supports_device_write() const override {
     return true;
   }
 
@@ -794,7 +794,7 @@ public:
     mm_writer->host_write(reinterpret_cast<char const*>(data), size);
   }
 
-  bool supports_device_write(){
+  bool supports_device_write() const override {
     return supports_device_writes;
   }
 

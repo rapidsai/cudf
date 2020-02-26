@@ -103,7 +103,7 @@ class data_sink {
    *
    * @return bool If this writer supports device_write() calls.
    **/
-  virtual bool supports_device_write() = 0;
+  virtual bool supports_device_write() const { return false; }
 
   /**
    * @brief Append the buffer content to the sink from a gpu address

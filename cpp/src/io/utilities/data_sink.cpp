@@ -44,10 +44,6 @@ class file_sink : public data_sink {
     outfile_.write(reinterpret_cast<char const*>(data), size);
   }
 
-  bool supports_device_write(){
-    return false;
-  }
-
   void device_write(void const* gpu_data, size_t size, cudaStream_t stream){
     CUDF_FAIL("file_sink does not support gpu writes");
   }
@@ -83,11 +79,7 @@ class host_buffer_sink : public data_sink {
     buffer_->insert(buffer_->end(), char_array, char_array + size);
   }
 
-  bool supports_device_write(){
-    return false;
-  }
-
-  void device_write(void const* gpu_data, size_t size, cudaStream_t stream){
+  void device_write(void const* gpu_data, size_t size, cudaStream_t stream) override {
     CUDF_FAIL("host_buffer_sink does not support gpu writes");
   }
 
@@ -116,11 +108,11 @@ class void_sink : public data_sink {
     bytes_written_ += size;
   }
 
-  bool supports_device_write(){
+  bool supports_device_write() const override {
     return true;
   }
 
-  void device_write(void const* gpu_data, size_t size, cudaStream_t stream){
+  void device_write(void const* gpu_data, size_t size, cudaStream_t stream) override {
     bytes_written_ += size;
   }
 
@@ -144,11 +136,11 @@ public:
     user_sink->host_write(data, size);
   }
 
-  bool supports_device_write(){
+  bool supports_device_write() const override {
     return user_sink->supports_device_write();
   }
 
-  void device_write(void const* gpu_data, size_t size, cudaStream_t stream){
+  void device_write(void const* gpu_data, size_t size, cudaStream_t stream) override {
     CUDF_EXPECTS(user_sink->supports_device_write(), "device_write() being called on a data_sink that doesn't support it");
     user_sink->device_write(gpu_data, size, stream);
   }
