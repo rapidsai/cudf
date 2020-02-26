@@ -65,6 +65,7 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         data_type(type_id id) except +
         type_id id() except +
 
+
 cdef extern from "cudf/column/column.hpp" namespace "cudf" nogil:
     cdef cppclass column_contents "cudf::column::contents":
         unique_ptr[device_buffer] data

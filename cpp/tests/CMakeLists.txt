@@ -851,8 +851,10 @@ ConfigureTest(STRINGS_TEST "${STRINGS_TEST_SRC}")
 # - nvtext test ----------------------------------------------------------------------------------
 
 set(TEXT_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/text/tokenize_tests.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/text/ngrams_tokenize_tests.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/text/ngrams_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/text/ngrams_tokenize_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/text/normalize_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/text/tokenize_tests.cpp")
 
 ConfigureTest(TEXT_TEST "${TEXT_TEST_SRC}")
 
@@ -876,7 +878,8 @@ set(DICTIONARY_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/encode_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/factories_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/gather_test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/remove_keys_test.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/remove_keys_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/set_keys_test.cpp")
 
 ConfigureTest(DICTIONARY_TEST "${DICTIONARY_TEST_SRC}")
 

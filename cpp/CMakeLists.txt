@@ -611,6 +611,8 @@ add_library(cudf
             src/strings/substring.cu
             src/strings/translate.cu
             src/strings/utilities.cu
+            src/text/generate_ngrams.cu
+            src/text/normalize.cu
             src/text/tokenize.cu
             src/text/ngrams_tokenize.cu
             src/scalar/scalar.cpp
@@ -621,6 +623,7 @@ add_library(cudf
             src/dictionary/decode.cu
             src/dictionary/encode.cu
             src/dictionary/remove_keys.cu
+            src/dictionary/set_keys.cu
             src/groupby/groupby.cu
             src/groupby/hash/groupby.cu
             src/groupby/sort/groupby.cu
