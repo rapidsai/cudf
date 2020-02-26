@@ -1,9 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
-
-# cython: profile=False
-# distutils: language = c++
-# cython: embedsignature = True
-# cython: language_level = 3
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 from cudf._lib.includes.join cimport *
 from cudf._lib.cudf cimport *

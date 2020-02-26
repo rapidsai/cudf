@@ -30,6 +30,7 @@ from cudf.core import column
 from cudf.core._sort import get_sorted_inds
 from cudf.core.column import (
     CategoricalColumn,
+    ColumnBase,
     StringColumn,
     as_column,
     column_empty,
@@ -1879,21 +1880,18 @@ class DataFrame(Frame):
         # Concatenate cudf.series for all columns
 
         data = {
-            i: Series._concat(
+            i: ColumnBase._concat(
                 [
-                    o[c]
+                    o[c]._column
                     if c in o.columns
-                    else utils.get_null_series(size=len(o), dtype=np.bool)
+                    else column_empty(len(o), dtype=np.bool, masked=True)
                     for o in objs
-                ],
-                index=index,
+                ]
             )
             for i, c in enumerate(unique_columns_ordered_ls)
         }
 
-        out = cls(data)
-
-        out.index = index
+        out = cls(data, index=index)
 
         if isinstance(objs[0].columns, pd.MultiIndex):
             out.columns = objs[0].columns
@@ -3766,7 +3764,7 @@ class DataFrame(Frame):
         numeric_only : boolean
             numeric_only is a NON-FUNCTIONAL parameter
         interpolation : {`linear`, `lower`, `higher`, `midpoint`, `nearest`}
-            This  parameter specifies the interpolation method to use,
+            This parameter specifies the interpolation method to use,
             when the desired quantile lies between two data points i and j.
             Default 'linear'.
         columns : list of str
@@ -3814,6 +3812,48 @@ class DataFrame(Frame):
         else:
             q = list(map(float, q))
             result.index = q
+            return result
+
+    def quantiles(
+        self, q=0.5, interpolation="nearest",
+    ):
+        """
+        Return values at the given quantile.
+
+        Parameters
+        ----------
+
+        q : float or array-like
+            0 <= q <= 1, the quantile(s) to compute
+        interpolation : {`lower`, `higher`, `nearest`}
+            This parameter specifies the interpolation method to use,
+            when the desired quantile lies between two data points i and j.
+            Default 'nearest'.
+
+        Returns
+        -------
+
+        DataFrame
+
+        """
+        if isinstance(q, numbers.Number):
+            q_is_number = True
+            q = [float(q)]
+        elif isinstance(q, (list, tuple)):
+            q_is_number = False
+        else:
+            msg = "`q` must be either a single element or list"
+            raise TypeError(msg)
+
+        result = self._quantiles(q, interpolation.upper())
+
+        if q_is_number:
+            result = result.transpose()
+            return Series(
+                data=result._columns[0], index=result.index, name=q[0]
+            )
+        else:
+            result.index = as_index(q)
             return result
 
     #

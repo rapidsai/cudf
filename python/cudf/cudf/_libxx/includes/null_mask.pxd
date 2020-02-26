@@ -1,16 +1,11 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-# cython: profile=False
-# distutils: language = c++
-# cython: embedsignature = True
-# cython: language_level = 3
-
 from libc.stdint cimport int32_t
 
 from cudf._libxx.lib cimport *
 
 
-ctypedef int32_t mask_state_underlying_type
+ctypedef int32_t underlying_type_t_mask_state
 
 cdef extern from "cudf/null_mask.hpp" namespace "cudf" nogil:
     cdef device_buffer copy_bitmask "cudf::copy_bitmask" (
