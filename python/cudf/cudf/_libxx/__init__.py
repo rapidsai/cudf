@@ -7,6 +7,7 @@ from . import (
     hash,
     merge,
     null_mask,
+    replace,
     rolling,
     search,
     sort,
