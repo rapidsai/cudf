@@ -118,7 +118,7 @@ class StringMethods(object):
         keys = dir(type(self))
         return set(keys + dir(self._parent.nvstrings))
 
-    def len(self):
+    def len(self, **kwargs):
         """
         Computes the length of each element in the Series/Index.
 
@@ -127,7 +127,6 @@ class StringMethods(object):
           Series or Index of int: A Series or Index of integer values
             indicating the length of each element in the Series or Index.
         """
-        from cudf.core.series import Series
 
         out_dev_arr = rmm.device_array(len(self._parent), dtype="int32")
         ptr = libcudf.cudf.get_ctype_ptr(out_dev_arr)
@@ -137,10 +136,12 @@ class StringMethods(object):
         if self._parent.has_nulls:
             mask = self._parent.mask
 
-        col = column.build_column(
-            Buffer(out_dev_arr), np.dtype("int32"), mask=mask
+        return self._return_or_inplace(
+            column.build_column(
+                Buffer(out_dev_arr), np.dtype("int32"), mask=mask
+            ),
+            **kwargs,
         )
-        return Series(col, index=self._index, name=self._name)
 
     def cat(self, others=None, sep=None, na_rep=None):
         """
@@ -314,7 +315,9 @@ class StringMethods(object):
                 out_df[idx] = val
             return out_df
 
-    def contains(self, pat, case=True, flags=0, na=np.nan, regex=True):
+    def contains(
+        self, pat, case=True, flags=0, na=np.nan, regex=True, **kwargs
+    ):
         """
         Test if pattern or regex is contained within a string of a Series or
         Index.
@@ -350,8 +353,6 @@ class StringMethods(object):
         elif na is not np.nan:
             raise NotImplementedError("`na` parameter is not yet supported")
 
-        from cudf.core import Series
-
         out_dev_arr = rmm.device_array(len(self._parent), dtype="bool")
         ptr = libcudf.cudf.get_ctype_ptr(out_dev_arr)
         self._parent.nvstrings.contains(pat, regex=regex, devptr=ptr)
@@ -360,13 +361,16 @@ class StringMethods(object):
         if self._parent.has_nulls:
             mask = self._parent.mask
 
-        col = column.build_column(
-            Buffer(out_dev_arr), dtype=np.dtype("bool"), mask=mask
+        return self._return_or_inplace(
+            column.build_column(
+                Buffer(out_dev_arr), dtype=np.dtype("bool"), mask=mask
+            ),
+            **kwargs,
         )
 
-        return Series(col, index=self._index, name=self._name)
-
-    def replace(self, pat, repl, n=-1, case=None, flags=0, regex=True):
+    def replace(
+        self, pat, repl, n=-1, case=None, flags=0, regex=True, **kwargs
+    ):
         """
         Replace occurences of pattern/regex in the Series/Index with some other
         string.
@@ -404,15 +408,12 @@ class StringMethods(object):
         if n == 0:
             n = -1
 
-        from cudf.core import Series
-
-        return Series(
+        return self._return_or_inplace(
             self._parent.nvstrings.replace(pat, repl, n=n, regex=regex),
-            index=self._index,
-            name=self._name,
+            **kwargs,
         )
 
-    def lower(self):
+    def lower(self, **kwargs):
         """
         Convert strings in the Series/Index to lowercase.
 
@@ -421,10 +422,9 @@ class StringMethods(object):
         Series/Index of str dtype
             A copy of the object with all strings converted to lowercase.
         """
-        from cudf.core import Series
 
-        return Series(
-            self._parent.nvstrings.lower(), index=self._index, name=self._name
+        return self._return_or_inplace(
+            self._parent.nvstrings.lower(), **kwargs
         )
 
     def slice(self, start=None, stop=None, step=None, **kwargs):
@@ -736,7 +736,7 @@ class StringColumn(column.ColumnBase):
         return self._children
 
     def __contains__(self, item):
-        return True in self.str().contains(f"^{item}$")._column
+        return True in self.str().contains(f"^{item}$")
 
     def __reduce__(self):
         cpumem = self.to_arrow()
@@ -1027,7 +1027,7 @@ class StringColumn(column.ColumnBase):
         return result
 
     def _find_first_and_last(self, value):
-        found_indices = self.str().contains(f"^{value}$")._column
+        found_indices = self.str().contains(f"^{value}$")
         found_indices = libcudf.typecast.cast(found_indices, dtype=np.int32)
         first = column.as_column(found_indices).find_first_value(1)
         last = column.as_column(found_indices).find_last_value(1)
