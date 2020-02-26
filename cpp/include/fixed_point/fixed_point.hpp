@@ -287,8 +287,8 @@ CUDA_HOST_DEVICE_CALLABLE
 fixed_point<Rep1, Rad1> operator+(fixed_point<Rep1, Rad1> const& lhs,
                                   fixed_point<Rep1, Rad1> const& rhs) {
 
-    auto const rhsv  = lhs._scale > rhs._scale ? detail::shift<Rep1, Rad1>(rhs._value, scale_type{lhs._scale - rhs._scale}) : rhs._value;
-    auto const lhsv  = lhs._scale < rhs._scale ? detail::shift<Rep1, Rad1>(lhs._value, scale_type{rhs._scale - lhs._scale}) : lhs._value;
+    auto const rhsv  = lhs._scale > rhs._scale ? detail::shift_with_precise_round<Rep1, Rad1>(rhs._value, scale_type{lhs._scale - rhs._scale}) : rhs._value;
+    auto const lhsv  = lhs._scale < rhs._scale ? detail::shift_with_precise_round<Rep1, Rad1>(lhs._value, scale_type{rhs._scale - lhs._scale}) : lhs._value;
     auto const scale = lhs._scale > rhs._scale ? lhs._scale : rhs._scale;
 
     #if defined(__CUDACC_DEBUG__)
@@ -307,8 +307,8 @@ CUDA_HOST_DEVICE_CALLABLE
 fixed_point<Rep1, Rad1> operator-(fixed_point<Rep1, Rad1> const& lhs,
                                   fixed_point<Rep1, Rad1> const& rhs) {
 
-    auto const rhsv  = lhs._scale > rhs._scale ? detail::shift<Rep1, Rad1>(rhs._value, scale_type{lhs._scale - rhs._scale}) : rhs._value;
-    auto const lhsv  = lhs._scale < rhs._scale ? detail::shift<Rep1, Rad1>(lhs._value, scale_type{rhs._scale - lhs._scale}) : lhs._value;
+    auto const rhsv  = lhs._scale > rhs._scale ? detail::shift_with_precise_round<Rep1, Rad1>(rhs._value, scale_type{lhs._scale - rhs._scale}) : rhs._value;
+    auto const lhsv  = lhs._scale < rhs._scale ? detail::shift_with_precise_round<Rep1, Rad1>(lhs._value, scale_type{rhs._scale - lhs._scale}) : lhs._value;
     auto const scale = lhs._scale > rhs._scale ? lhs._scale : rhs._scale;
 
     #if defined(__CUDACC_DEBUG__)
@@ -358,8 +358,8 @@ template<typename Rep1, Radix Rad1>
 CUDA_HOST_DEVICE_CALLABLE
 bool operator==(fixed_point<Rep1, Rad1> const& lhs,
                 fixed_point<Rep1, Rad1> const& rhs) {
-    auto const rhsv = lhs._scale > rhs._scale ? detail::shift<Rep1, Rad1>(rhs._value, scale_type{lhs._scale - rhs._scale}) : rhs._value;
-    auto const lhsv = lhs._scale < rhs._scale ? detail::shift<Rep1, Rad1>(lhs._value, scale_type{rhs._scale - lhs._scale}) : lhs._value;
+    auto const rhsv = lhs._scale > rhs._scale ? detail::shift_with_precise_round<Rep1, Rad1>(rhs._value, scale_type{lhs._scale - rhs._scale}) : rhs._value;
+    auto const lhsv = lhs._scale < rhs._scale ? detail::shift_with_precise_round<Rep1, Rad1>(lhs._value, scale_type{rhs._scale - lhs._scale}) : lhs._value;
     return rhsv == lhsv;
 }
 
