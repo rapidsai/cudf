@@ -1,4 +1,4 @@
-name: custreamz_dev
+name: cudf_dev
 channels:
   - rapidsai
   - nvidia
