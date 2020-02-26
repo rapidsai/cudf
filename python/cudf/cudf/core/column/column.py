@@ -537,22 +537,23 @@ class ColumnBase(Column):
     def isnull(self):
         """Identify missing values in a Column.
         """
-        return libcudf.unaryops.is_null(self)
+        return libcudfxx.unary.is_null(self)
 
     def isna(self):
         """Identify missing values in a Column. Alias for isnull.
         """
         return self.isnull()
 
-    def notna(self):
+    def notnull(self):
         """Identify non-missing values in a Column.
         """
-        return libcudf.unaryops.is_not_null(self)
+        return libcudfxx.unary.is_valid(self)
+        return None
 
-    def notnull(self):
-        """Identify non-missing values in a Column. Alias for notna.
+    def notna(self):
+        """Identify non-missing values in a Column. Alias for notnull.
         """
-        return self.notna()
+        return self.notnull()
 
     def find_first_value(self, value):
         """
