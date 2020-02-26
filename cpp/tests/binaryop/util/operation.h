@@ -23,23 +23,83 @@
 #include <type_traits>
 #include <cstdint>
 
+#include <cudf/utilities/traits.hpp>
+
 namespace cudf {
 namespace library {
 namespace operation {
 
     template <typename TypeOut, typename TypeLhs, typename TypeRhs>
     struct Add {
+        template <typename O = TypeOut,
+                  typename L = TypeLhs,
+                  typename R = TypeRhs,
+                  typename std::enable_if_t<cudf::is_numeric<L>() and
+                                            cudf::is_numeric<R>()>* = nullptr>
         TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
-            using TypeCommon = typename std::common_type<TypeLhs, TypeRhs>::type;
-            return (TypeOut)((TypeCommon)lhs + (TypeCommon)rhs);
+            return static_cast<TypeOut>(lhs + rhs);
+        }
+        template <typename O = TypeOut,
+                  typename L = TypeLhs,
+                  typename R = TypeRhs,
+                  typename std::enable_if_t<cudf::is_timestamp<L>() and
+                                            cudf::is_numeric<R>()>* = nullptr>
+        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+            return static_cast<TypeOut>(lhs.time_since_epoch().count() + rhs);
+        }
+        template <typename O = TypeOut,
+                  typename L = TypeLhs,
+                  typename R = TypeRhs,
+                  typename std::enable_if_t<cudf::is_numeric<L>() and
+                                            cudf::is_timestamp<R>()>* = nullptr>
+        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+            return static_cast<TypeOut>(lhs + rhs.time_since_epoch().count());
+        }
+        template <typename O = TypeOut,
+                  typename L = TypeLhs,
+                  typename R = TypeRhs,
+                  typename std::enable_if_t<cudf::is_timestamp<L>() and
+                                            cudf::is_timestamp<R>()>* = nullptr>
+        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+            return static_cast<TypeOut>(lhs.time_since_epoch().count() +
+                                        rhs.time_since_epoch().count());
         }
     };
 
     template <typename TypeOut, typename TypeLhs, typename TypeRhs>
     struct Sub {
+        template <typename O = TypeOut,
+                  typename L = TypeLhs,
+                  typename R = TypeRhs,
+                  typename std::enable_if_t<cudf::is_numeric<L>() and
+                                            cudf::is_numeric<R>()>* = nullptr>
         TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
-            using TypeCommon = typename std::common_type<TypeLhs, TypeRhs>::type;
-            return (TypeOut)((TypeCommon)lhs - (TypeCommon)rhs);
+            return static_cast<TypeOut>(lhs - rhs);
+        }
+        template <typename O = TypeOut,
+                  typename L = TypeLhs,
+                  typename R = TypeRhs,
+                  typename std::enable_if_t<cudf::is_timestamp<L>() and
+                                            cudf::is_numeric<R>()>* = nullptr>
+        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+            return static_cast<TypeOut>(lhs.time_since_epoch().count() - rhs);
+        }
+        template <typename O = TypeOut,
+                  typename L = TypeLhs,
+                  typename R = TypeRhs,
+                  typename std::enable_if_t<cudf::is_numeric<L>() and
+                                            cudf::is_timestamp<R>()>* = nullptr>
+        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+            return static_cast<TypeOut>(lhs - rhs.time_since_epoch().count());
+        }
+        template <typename O = TypeOut,
+                  typename L = TypeLhs,
+                  typename R = TypeRhs,
+                  typename std::enable_if_t<cudf::is_timestamp<L>() and
+                                            cudf::is_timestamp<R>()>* = nullptr>
+        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+            return static_cast<TypeOut>(lhs.time_since_epoch().count() -
+                                        rhs.time_since_epoch().count());
         }
     };
 

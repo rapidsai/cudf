@@ -38,6 +38,17 @@ R"***(
     template <typename T>
     constexpr bool is_floating_point_v = simt::std::is_floating_point<T>::value;
 
+    // Simplifying is_integral_v or is_floating_point_v
+    template <typename T>
+    constexpr bool is_numeric_v = (is_integral_v<T> or is_floating_point_v<T>);
+
+    template <typename T>
+    constexpr bool is_timestamp_v = (simt::std::is_same<cudf::timestamp_D, T>::value  or
+                                     simt::std::is_same<cudf::timestamp_s, T>::value  or
+                                     simt::std::is_same<cudf::timestamp_ms, T>::value or
+                                     simt::std::is_same<cudf::timestamp_us, T>::value or
+                                     simt::std::is_same<cudf::timestamp_ns, T>::value );
+
     // -------------------------------------------------------------------------
     // type_traits cannot tell the difference between float and double
     template <typename Type>

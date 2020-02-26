@@ -30,25 +30,106 @@ R"***(
     using namespace simt::std;
 
     struct Add {
-        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        template <typename TypeOut,
+                  typename TypeLhs,
+                  typename TypeRhs,
+                  enable_if_t<(is_numeric_v<TypeLhs> and is_numeric_v<TypeRhs>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (static_cast<TypeOut>(x) + static_cast<TypeOut>(y));
+            return static_cast<TypeOut>(x + y);
+        }
+
+        template <typename TypeOut,
+                  typename TypeLhs,
+                  typename TypeRhs,
+                  enable_if_t<(is_timestamp_v<TypeLhs> and is_numeric_v<TypeRhs>)>* = nullptr>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return static_cast<TypeOut>(x.time_since_epoch().count() + y);
+        }
+
+        template <typename TypeOut,
+                  typename TypeLhs,
+                  typename TypeRhs,
+                  enable_if_t<(is_numeric_v<TypeLhs> and is_timestamp_v<TypeRhs>)>* = nullptr>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return static_cast<TypeOut>(x + y.time_since_epoch().count());
+        }
+
+        template <typename TypeOut,
+                  typename TypeLhs,
+                  typename TypeRhs,
+                  enable_if_t<(is_timestamp_v<TypeLhs> and is_timestamp_v<TypeRhs>)>* = nullptr>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return static_cast<TypeOut>(x.time_since_epoch().count() + y.time_since_epoch().count());
         }
     };
 
     using RAdd = Add;
 
     struct Sub {
-        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        template <typename TypeOut,
+                  typename TypeLhs,
+                  typename TypeRhs,
+                  enable_if_t<(is_numeric_v<TypeLhs> and is_numeric_v<TypeRhs>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (static_cast<TypeOut>(x) - static_cast<TypeOut>(y));
+            return static_cast<TypeOut>(x - y);
+        }
+
+        template <typename TypeOut,
+                  typename TypeLhs,
+                  typename TypeRhs,
+                  enable_if_t<(is_timestamp_v<TypeLhs> and is_numeric_v<TypeRhs>)>* = nullptr>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return static_cast<TypeOut>(x.time_since_epoch().count() - y);
+        }
+
+        template <typename TypeOut,
+                  typename TypeLhs,
+                  typename TypeRhs,
+                  enable_if_t<(is_numeric_v<TypeLhs> and is_timestamp_v<TypeRhs>)>* = nullptr>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return static_cast<TypeOut>(x - y.time_since_epoch().count());
+        }
+
+        template <typename TypeOut,
+                  typename TypeLhs,
+                  typename TypeRhs,
+                  enable_if_t<(is_timestamp_v<TypeLhs> and is_timestamp_v<TypeRhs>)>* = nullptr>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return static_cast<TypeOut>(x.time_since_epoch().count() - y.time_since_epoch().count());
         }
     };
 
     struct RSub {
-        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        template <typename TypeOut,
+                  typename TypeLhs,
+                  typename TypeRhs,
+                  enable_if_t<(is_numeric_v<TypeLhs> and is_numeric_v<TypeRhs>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (static_cast<TypeOut>(y) - static_cast<TypeOut>(x));
+            return static_cast<TypeOut>(y - x);
+        }
+
+        template <typename TypeOut,
+                  typename TypeLhs,
+                  typename TypeRhs,
+                  enable_if_t<(is_timestamp_v<TypeLhs> and is_numeric_v<TypeRhs>)>* = nullptr>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return static_cast<TypeOut>(y - x.time_since_epoch().count());
+        }
+
+        template <typename TypeOut,
+                  typename TypeLhs,
+                  typename TypeRhs,
+                  enable_if_t<(is_numeric_v<TypeLhs> and is_timestamp_v<TypeRhs>)>* = nullptr>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return static_cast<TypeOut>(y.time_since_epoch().count() - x);
+        }
+
+        template <typename TypeOut,
+                  typename TypeLhs,
+                  typename TypeRhs,
+                  enable_if_t<(is_timestamp_v<TypeLhs> and is_timestamp_v<TypeRhs>)>* = nullptr>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return static_cast<TypeOut>(y.time_since_epoch().count() - x.time_since_epoch().count());
         }
     };
 

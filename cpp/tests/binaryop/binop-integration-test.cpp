@@ -319,6 +319,105 @@ TEST_F(BinaryOperationIntegrationTest, Logical_Or_Vector_Vector_B8_SI16_SI64) {
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, OR());
 }
 
+TEST_F(BinaryOperationIntegrationTest, Sub_Scalar_Vector_SI32_SI32_TSD) {
+  using TypeOut = int32_t;
+  using TypeLhs = int32_t;
+  using TypeRhs = cudf::timestamp_D;
+
+  using SUB = cudf::library::operation::Sub<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = make_random_wrapped_scalar<TypeLhs>();
+  auto rhs = make_random_wrapped_column<TypeRhs>(10000);
+
+  auto out = cudf::experimental::binary_operation(
+      lhs, rhs, cudf::experimental::binary_operator::SUB,
+      data_type(experimental::type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SUB());
+}
+
+TEST_F(BinaryOperationIntegrationTest, Sub_Scalar_Vector_TSD_SI32_TSD) {
+  using TypeOut = cudf::timestamp_D;
+  using TypeLhs = int32_t;
+  using TypeRhs = cudf::timestamp_D;
+
+  using SUB = cudf::library::operation::Sub<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = make_random_wrapped_scalar<TypeLhs>();
+  auto rhs = make_random_wrapped_column<TypeRhs>(10000);
+
+  auto out = cudf::experimental::binary_operation(
+      lhs, rhs, cudf::experimental::binary_operator::SUB,
+      data_type(experimental::type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SUB());
+}
+
+TEST_F(BinaryOperationIntegrationTest, Sub_Vector_Vector_TSD_SI32_TSD) {
+  using TypeOut = cudf::timestamp_D;
+  using TypeLhs = int32_t;
+  using TypeRhs = cudf::timestamp_D;
+
+  using SUB = cudf::library::operation::Sub<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = make_random_wrapped_column<TypeLhs>(10000);
+  auto rhs = make_random_wrapped_column<TypeRhs>(10000);
+
+  auto out = cudf::experimental::binary_operation(
+      lhs, rhs, cudf::experimental::binary_operator::SUB,
+      data_type(experimental::type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SUB());
+}
+
+TEST_F(BinaryOperationIntegrationTest, Add_Vector_Scalar_SI32_TSD_SI32) {
+  using TypeOut = int32_t;
+  using TypeLhs = cudf::timestamp_D;
+  using TypeRhs = int32_t;
+
+  using ADD = cudf::library::operation::Add<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = make_random_wrapped_column<TypeLhs>(100);
+  auto rhs = make_random_wrapped_scalar<TypeRhs>();
+  auto out = cudf::experimental::binary_operation(
+      lhs, rhs, cudf::experimental::binary_operator::ADD,
+      data_type(experimental::type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
+}
+
+TEST_F(BinaryOperationIntegrationTest, Add_Vector_Scalar_TSD_TSD_SI32) {
+  using TypeOut = cudf::timestamp_D;
+  using TypeLhs = cudf::timestamp_D;
+  using TypeRhs = int32_t;
+
+  using ADD = cudf::library::operation::Add<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = make_random_wrapped_column<TypeLhs>(100);
+  auto rhs = make_random_wrapped_scalar<TypeRhs>();
+  auto out = cudf::experimental::binary_operation(
+      lhs, rhs, cudf::experimental::binary_operator::ADD,
+      data_type(experimental::type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
+}
+
+TEST_F(BinaryOperationIntegrationTest, Add_Vector_Vector_TSD_TSD_SI32) {
+  using TypeOut = cudf::timestamp_D;
+  using TypeLhs = cudf::timestamp_D;
+  using TypeRhs = int32_t;
+
+  using ADD = cudf::library::operation::Add<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = make_random_wrapped_column<TypeLhs>(100);
+  auto rhs = make_random_wrapped_column<TypeRhs>(100);
+  auto out = cudf::experimental::binary_operation(
+      lhs, rhs, cudf::experimental::binary_operator::ADD,
+      data_type(experimental::type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
+}
+
 TEST_F(BinaryOperationIntegrationTest, Less_Scalar_Vector_B8_TSS_TSS) {
   using TypeOut = cudf::experimental::bool8;
   using TypeLhs = cudf::timestamp_s;
