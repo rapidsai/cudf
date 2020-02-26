@@ -358,3 +358,23 @@ def test_groupby_reset_index_dtype():
 
     assert a.index.dtype == "int8"
     assert a.reset_index().dtypes[0] == "int8"
+
+
+def test_groupby_reset_index_names():
+    df = cudf.datasets.randomdata(
+        nrows=10, dtypes={"a": str, "b": int, "c": int}
+    )
+    pdf = df.to_pandas()
+
+    gddf = dask_cudf.from_cudf(df, 2)
+    pddf = dd.from_pandas(pdf, 2)
+
+    g_res = gddf.groupby("a", sort=True).sum()
+    p_res = pddf.groupby("a", sort=True).sum()
+
+    print(g_res.index.name)
+
+    got = g_res.reset_index().compute().sort_values(["a", "b", "c"])
+    expect = p_res.reset_index().compute().sort_values(["a", "b", "c"])
+
+    dd.assert_eq(got, expect)
