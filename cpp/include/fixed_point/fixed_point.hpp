@@ -122,6 +122,8 @@ namespace detail {
 }
 
 // helper struct for constructing fixed_point when value is already shifted
+// example: using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
+//          auto n = decimal32{scaled_integer{1001, 3}}; // n = 1.001
 template <typename Rep,
           typename std::enable_if_t<is_supported_representation_type<Rep>()>* = nullptr>
 struct scaled_integer{
