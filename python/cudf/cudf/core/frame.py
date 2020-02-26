@@ -201,7 +201,7 @@ class Frame(libcudfxx.table.Table):
         interpolation="LINEAR",
         is_sorted=False,
         column_order=(),
-        null_precedence=[],
+        null_precedence=(),
     ):
         interpolation = libcudfxx.lib.Interpolation[interpolation]
 
