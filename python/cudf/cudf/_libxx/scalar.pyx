@@ -12,8 +12,6 @@ from cudf._libxx.lib import *
 
 cdef class Scalar:
 
-    cdef unique_ptr[scalar] c_value
-
     def __init__(self, value, dtype=None):
         """
         cudf.Scalar: Type representing a scalar value on the device

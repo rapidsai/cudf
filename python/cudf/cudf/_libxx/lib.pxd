@@ -13,6 +13,10 @@ from libcpp.pair cimport pair
 from rmm._lib.device_buffer cimport device_buffer, DeviceBuffer, move
 
 
+ctypedef bool underlying_type_t_order
+ctypedef bool underlying_type_t_null_order
+ctypedef bool underlying_type_t_sorted
+
 cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
     ctypedef int32_t size_type
     ctypedef uint32_t bitmask_type
@@ -34,12 +38,9 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         AFTER "cudf::null_order::AFTER"
         BEFORE "cudf::null_order::BEFORE"
 
-    ctypedef enum interpolation:
-        LINEAR "cudf::experimental::interpolation::LINEAR"
-        LOWER "cudf::experimental::interpolation::LOWER"
-        HIGHER "cudf::experimental::interpolation::HIGHER"
-        MIDPOINT "cudf::experimental::interpolation::MIDPOINT"
-        NEAREST "cudf::experimental::interpolation::NEAREST"
+    ctypedef enum sorted "cudf::sorted":
+        NO "cudf::sorted::NO"
+        YES "cudf::sorted::YES"
 
     cdef enum type_id:
         EMPTY = 0
@@ -64,6 +65,16 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         data_type(const data_type&) except +
         data_type(type_id id) except +
         type_id id() except +
+
+ctypedef int32_t underlying_type_t_interpolation
+
+cdef extern from "cudf/types.hpp" namespace "cudf::experimental" nogil:
+    ctypedef enum interpolation:
+        LINEAR   "cudf::experimental::interpolation::LINEAR"
+        LOWER    "cudf::experimental::interpolation::LOWER"
+        HIGHER   "cudf::experimental::interpolation::HIGHER"
+        MIDPOINT "cudf::experimental::interpolation::MIDPOINT"
+        NEAREST  "cudf::experimental::interpolation::NEAREST"
 
 cdef extern from "cudf/column/column.hpp" namespace "cudf" nogil:
     cdef cppclass column_contents "cudf::column::contents":
