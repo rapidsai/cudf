@@ -20,6 +20,7 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
+#include <cudf/strings/detail/convert/convert_datetime.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/error.hpp>
@@ -407,8 +408,8 @@ struct dispatch_to_timestamps_fn
 std::unique_ptr<cudf::column> to_timestamps( strings_column_view const& strings,
                                              data_type timestamp_type,
                                              std::string const& format,
-                                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                             cudaStream_t stream = 0 )
+                                             rmm::mr::device_memory_resource* mr,
+                                             cudaStream_t stream)
 {
     size_type strings_count = strings.size();
     if( strings_count==0 )
@@ -742,9 +743,9 @@ struct dispatch_from_timestamps_fn
 
 //
 std::unique_ptr<column> from_timestamps( column_view const& timestamps,
-                                         std::string const& format = "%Y-%m-%dT%H:%M:%SZ",
-                                         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                         cudaStream_t stream = 0 )
+                                         std::string const& format,
+                                         rmm::mr::device_memory_resource* mr,
+                                         cudaStream_t stream)
 {
     size_type strings_count = timestamps.size();
     if( strings_count == 0 )

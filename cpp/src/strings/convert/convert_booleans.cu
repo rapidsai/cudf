@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/strings/convert/convert_booleans.hpp>
+#include <cudf/strings/detail/convert/convert_booleans.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -37,9 +38,9 @@ namespace detail
 
 // Convert strings column to boolean column
 std::unique_ptr<column> to_booleans( strings_column_view const& strings,
-                                     string_scalar const& true_string = string_scalar("true"),
-                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                     cudaStream_t stream = 0)
+                                     string_scalar const& true_string,
+                                     rmm::mr::device_memory_resource* mr,
+                                     cudaStream_t stream)
 {
     size_type strings_count = strings.size();
     if( strings_count == 0 )
@@ -85,10 +86,10 @@ namespace detail
 
 // Convert boolean column to strings column
 std::unique_ptr<column> from_booleans( column_view const& booleans,
-                                       string_scalar const& true_string = string_scalar("true"),
-                                       string_scalar const& false_string = string_scalar("false"),
-                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                       cudaStream_t stream = 0)
+                                       string_scalar const& true_string,
+                                       string_scalar const& false_string,
+                                       rmm::mr::device_memory_resource* mr,
+                                       cudaStream_t stream)
 {
     size_type strings_count = booleans.size();
     if( strings_count == 0 )

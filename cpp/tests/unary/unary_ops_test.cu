@@ -807,6 +807,57 @@ TYPED_TEST(CastFromTimestamps, WithNulls) {
   validate_cast_result<T, T>(timestamps_ns_exp, *timestamps_ns_got);
 }
 
+// There are already several test cases under tests/strings/ for
+// type conversion to and from strings. The test cases here are just
+// to validate the plumbing to cast
+struct CastToAndFromString : public cudf::test::BaseFixture {};
+
+TEST_F(CastToAndFromString, TimeStampToAndFromString) {
+    // Timestamp in mili to string
+    cudf::test::fixed_width_column_wrapper<cudf::timestamp_ms> timestamps_ms{ 1530705600123, 1582934461007,
+                                                                              1451430122421, 1318302183999 };
+    auto results_string = cudf::experimental::cast(timestamps_ms, make_data_type<cudf::string_view>(), "%Y-%m-%d %H:%M:%S.%f");
+    cudf::test::strings_column_wrapper expected_ms{ "2018-07-04 12:00:00.123", "2020-02-29 00:01:01.007", "2015-12-29 23:02:02.421", "2011-10-11 03:03:03.999" };
+    cudf::test::expect_columns_equal(*results_string, expected_ms);
+
+    // Timestamp in string to timestamp
+    auto results_timestamp = cudf::experimental::cast(expected_ms,  cudf::data_type{cudf::TIMESTAMP_MILLISECONDS}, "%Y-%m-%d %H:%M:%S.%f");
+    cudf::test::expect_columns_equal(*results_timestamp, timestamps_ms);
+}
+
+TEST_F(CastToAndFromString, BooleanToAndFromString) {
+    cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> boolean_col{ true, false, true, false, false, true};
+    auto results_string = cudf::experimental::cast(boolean_col, make_data_type<cudf::string_view>(), "", cudf::string_scalar("True"), cudf::string_scalar("False"));
+    cudf::test::strings_column_wrapper expected_string{ "True", "False", "True", "False", "False", "True"};
+
+    cudf::test::expect_columns_equal(*results_string, expected_string);
+    auto results_boolean = cudf::experimental::cast(expected_string, make_data_type<cudf::experimental::bool8>(), "", cudf::string_scalar("True"));
+
+    cudf::test::expect_columns_equal(*results_boolean, boolean_col);
+}
+
+TEST_F(CastToAndFromString, IntegerToAndFromString) {
+    cudf::test::fixed_width_column_wrapper<int32_t> integer_col{ 1, 2, 3, 4, 5, 6};
+    auto results_string = cudf::experimental::cast(integer_col, make_data_type<cudf::string_view>());
+    cudf::test::strings_column_wrapper expected_string{ "1", "2", "3", "4", "5", "6"};
+
+    cudf::test::expect_columns_equal(*results_string, expected_string);
+    auto results_integer = cudf::experimental::cast(expected_string, make_data_type<int32_t>());
+
+    cudf::test::expect_columns_equal(*results_integer, integer_col);
+}
+
+TEST_F(CastToAndFromString, FloatToAndFromString) {
+    cudf::test::fixed_width_column_wrapper<float> float_col{ 1.0, 2.0, 3.0, 4.0, 5.0, 6.0};
+    auto results_string = cudf::experimental::cast(float_col, make_data_type<cudf::string_view>());
+    cudf::test::strings_column_wrapper expected_string{ "1.0", "2.0", "3.0", "4.0", "5.0", "6.0"};
+
+    cudf::test::expect_columns_equal(*results_string, expected_string);
+    auto results_float = cudf::experimental::cast(expected_string, make_data_type<float>());
+
+    cudf::test::expect_columns_equal(*results_float, float_col);
+}
+
 template <typename T>
 struct IsNAN : public cudf::test::BaseFixture {};
 

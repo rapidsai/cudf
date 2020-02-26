@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -69,21 +69,17 @@ std::unique_ptr<cudf::column> unary_operation(cudf::column_view const& input,
                                               rmm::mr::get_default_resource(),
                                               cudaStream_t stream = 0);
 
-
 /**
- * @brief  Casts data from dtype specified in input to dtype specified in output.
- * Supports only fixed-width types.
+ * @copydoc cudf::experimental::cast
  *
- * @param column_view Input column
- * @param out_type Desired datatype of output column
- * @param mr Optional, The resource to use for all allocations
- * @param stream Optional CUDA stream on which to execute kernels
- *
- * @returns unique_ptr<column> Result of the cast operation
- * @throw cudf::logic_error if `out_type` is not a fixed-width type
+ * @param[in] stream Optional CUDA stream on which to execute kernels
  */
+
 std::unique_ptr<column> cast(column_view const& input,
                              data_type type,
+                             std::string const& timestamp_format = "%Y-%m-%dT%H:%M:%SZ",
+                             string_scalar const& true_string = string_scalar("true"),
+                             string_scalar const& false_string = string_scalar("false"),
                              rmm::mr::device_memory_resource* mr =
                                 rmm::mr::get_default_resource(),
                              cudaStream_t stream = 0);

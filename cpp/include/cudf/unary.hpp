@@ -18,6 +18,7 @@
 
 #include <memory>
 #include <cudf/types.hpp>
+#include <cudf/scalar/scalar.hpp>
 
 namespace cudf {
 namespace experimental {
@@ -91,14 +92,29 @@ std::unique_ptr<cudf::column> is_valid(cudf::column_view const& input,
  * @brief  Casts data from dtype specified in input to dtype specified in output.
  * Supports only fixed-width types.
  *
- * @param column_view Input column
- * @param out_type Desired datatype of output column
+ * @note For string to timestamp or vice-versa conversion
+ * `timestamp_format` must include strptime format specifiers though only the
+ * following are supported: %Y,%y,%m,%d,%H,%I,%p,%M,%S,%f,%z
+ * Reference:  http://man7.org/linux/man-pages/man3/strptime.3.html
+ *
+ * @param input Input column
+ * @param type Desired datatype of output column
+ * @param timestamp_format Optional, to handle timestamp with string_view
+ *                         The String specifying format.
+ *                         Default format is "%Y-%m-%dT%H:%M:%SZ".
+ * @param true_string Optional, to handle booleans with string_view
+ *                    String representing true
+ * @param false_string Optional, to handle booleans with string_view
+ *                     String representing false
  * @param mr Optional, The resource to use for all allocations
  *
  * @returns unique_ptr<column> Result of the cast operation
  * @throw cudf::logic_error if `out_type` is not a fixed-width type
  */
 std::unique_ptr<column> cast(column_view const& input, data_type out_type,
+                             std::string const& timestamp_format = "%Y-%m-%dT%H:%M:%SZ",
+                             string_scalar const& true_string = string_scalar("true"),
+                             string_scalar const& false_string = string_scalar("false"),
                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
