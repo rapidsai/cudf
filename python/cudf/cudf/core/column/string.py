@@ -107,7 +107,7 @@ class StringMethods(object):
         else:
             if isinstance(self._parent, Series):
                 return Series(new_col, index=self.index, name=self.name)
-            elif isinstance(self._owner, Index):
+            elif isinstance(self._parent, Index):
                 return as_index(new_col, name=self.name)
             else:
                 return new_col
