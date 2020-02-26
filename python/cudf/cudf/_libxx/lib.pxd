@@ -113,26 +113,3 @@ cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
 
 cdef extern from "cudf/scalar/scalar_factories.hpp" namespace "cudf" nogil:
     cdef unique_ptr[scalar] make_numeric_scalar(data_type dtype) except +
-
-# Note: declaring `move()` with `except +` doesn't work.
-#
-# Consider:
-#     cdef unique_ptr[int] x = move(y)
-#
-# If `move()` is declared with `except +`, the generated C++ code
-# looks something like this:
-#
-#    std::unique_ptr<int>  __pyx_v_x;
-#    std::unique_ptr<int>  __pyx_v_y;
-#    std::unique_ptr<int>  __pyx_t_1;
-#    try {
-#      __pyx_t_1 = std::move(__pyx_v_y);
-#    } catch(...) {
-#      __Pyx_CppExn2PyErr();
-#      __PYX_ERR(0, 8, __pyx_L1_error)
-#    }
-#    __pyx_v_x = __pyx_t_1;
-#
-# where the last statement will result in a compiler error
-# (copying a unique_ptr).
-#
