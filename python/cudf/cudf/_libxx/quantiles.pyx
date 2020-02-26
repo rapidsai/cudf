@@ -5,6 +5,7 @@ from cudf._libxx.column cimport Column
 from cudf._libxx.table cimport Table
 cimport cudf._libxx.includes.quantiles as cpp_quantiles
 
+
 def quantiles(Table source_table,
               vector[double] q,
               object interp,
@@ -13,8 +14,12 @@ def quantiles(Table source_table,
               list null_precedence):
     cdef table_view c_input = source_table.data_view()
     cdef vector[double] c_q = q
-    cdef interpolation c_interp = <interpolation>(<underlying_type_t_interpolation> interp)
-    cdef sorted c_is_input_sorted = <sorted>(<underlying_type_t_sorted> is_input_sorted)
+    cdef interpolation c_interp = <interpolation>(
+        <underlying_type_t_interpolation> interp
+    )
+    cdef sorted c_is_input_sorted = <sorted>(
+        <underlying_type_t_sorted> is_input_sorted
+    )
     cdef vector[order] c_column_order
     cdef vector[null_order] c_null_precedence
 

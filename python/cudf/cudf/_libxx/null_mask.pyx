@@ -21,10 +21,11 @@ class MaskState(Enum):
     """
     Enum for null mask creation state
     """
-    UNALLOCATED   = <underlying_type_t_mask_state> mask_state.UNALLOCATED
+    UNALLOCATED = <underlying_type_t_mask_state> mask_state.UNALLOCATED
     UNINITIALIZED = <underlying_type_t_mask_state> mask_state.UNINITIALIZED
-    ALL_VALID     = <underlying_type_t_mask_state> mask_state.ALL_VALID
-    ALL_NULL      = <underlying_type_t_mask_state> mask_state.ALL_NULL
+    ALL_VALID = <underlying_type_t_mask_state> mask_state.ALL_VALID
+    ALL_NULL = <underlying_type_t_mask_state> mask_state.ALL_NULL
+
 
 def copy_bitmask(Column col):
     """
