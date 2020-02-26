@@ -3,6 +3,7 @@
 from cudf._libxx.lib import *
 from cudf._libxx.lib cimport *
 
+from cudf._libxx.includes.scalar.scalar cimport scalar
 from cudf._libxx.includes.column.column cimport column
 from cudf._libxx.includes.column.column_view cimport (
     column_view,

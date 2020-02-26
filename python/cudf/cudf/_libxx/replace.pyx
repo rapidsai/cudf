@@ -6,7 +6,7 @@ from cudf._libxx.scalar cimport Scalar
 from cudf.utils.dtypes import is_scalar
 from cudf._libxx.move cimport move
 
-
+from cudf._libxx.includes.scalar.scalar cimport scalar
 from cudf._libxx.includes.column.column cimport column
 from cudf._libxx.includes.column.column_view cimport (
     column_view,

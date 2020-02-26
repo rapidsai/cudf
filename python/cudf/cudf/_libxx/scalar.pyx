@@ -6,9 +6,25 @@ import pandas as pd
 from libc.stdint cimport int8_t, int16_t, int32_t, int64_t
 from libcpp.memory cimport unique_ptr
 from libcpp cimport bool
+
 from cudf._libxx.lib cimport *
 from cudf._libxx.lib import *
 from cudf._libxx.move cimport move
+
+from cudf._libxx.includes.wrappers.bool cimport bool8
+from cudf._libxx.includes.wrappers.timestamps cimport (
+    timestamp_s,
+    timestamp_ms,
+    timestamp_us,
+    timestamp_ns
+)
+from cudf._libxx.includes.scalar.scalar cimport (
+    scalar,
+    numeric_scalar,
+    timestamp_scalar,
+    string_scalar
+)
+
 
 cdef class Scalar:
 
