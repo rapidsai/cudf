@@ -306,10 +306,10 @@ struct binary_search_fn {
   }
 };
 
-auto compute_partition_map(thrust::device_vector<size_type> const& d_offsets,
+auto compute_partition_map(rmm::device_vector<size_type> const& d_offsets,
     size_t output_size, cudaStream_t stream) {
 
-  thrust::device_vector<size_type> d_partition_map(output_size);
+  rmm::device_vector<size_type> d_partition_map(output_size);
 
   // Scatter 1s at the start of each partition, then scan to fill the map
   auto const const_it = thrust::make_constant_iterator(size_type{1});
@@ -350,7 +350,7 @@ struct optimized_concatenate {
       });
     thrust::inclusive_scan(std::next(offsets.cbegin()), offsets.cend(),
       std::next(offsets.begin()));
-    thrust::device_vector<size_type> d_offsets(offsets);
+    rmm::device_vector<size_type> d_offsets(offsets);
     auto const output_size = offsets.back();
 
     // Transform views to array of data pointers
@@ -359,7 +359,7 @@ struct optimized_concatenate {
       [](column_view const& col) {
         return col.data<T>();
       });
-    thrust::device_vector<T const*> d_data_ptrs(data_ptrs);
+    rmm::device_vector<T const*> d_data_ptrs(data_ptrs);
 
     // TODO add null mask support
     auto out_col = experimental::detail::allocate_like(views.front(), output_size,
