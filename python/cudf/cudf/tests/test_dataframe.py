@@ -4431,9 +4431,10 @@ def test_dataframe_from_table_empty_index():
     result = DataFrame._from_table(tbl)  # noqa: F841
 
 
-def test_dataframe_from_dictionary_series_same_name_index():
-    pd_idx1 = pd.Index([1, 2, 0], name="test_index")
-    pd_idx2 = pd.Index([2, 0, 1], name="test_index")
+@pytest.mark.parametrize("dtype", ["int64", "str"])
+def test_dataframe_from_dictionary_series_same_name_index(dtype):
+    pd_idx1 = pd.Index([1, 2, 0], name="test_index").astype(dtype)
+    pd_idx2 = pd.Index([2, 0, 1], name="test_index").astype(dtype)
     pd_series1 = pd.Series([1, 2, 3], index=pd_idx1)
     pd_series2 = pd.Series([1, 2, 3], index=pd_idx2)
 
@@ -4444,6 +4445,10 @@ def test_dataframe_from_dictionary_series_same_name_index():
 
     expect = pd.DataFrame({"a": pd_series1, "b": pd_series2})
     got = gd.DataFrame({"a": gd_series1, "b": gd_series2})
+
+    if dtype == "str":
+        # Pandas actually loses its index name erroneously here...
+        expect.index.name = "test_index"
 
     assert_eq(expect, got)
     assert expect.index.names == got.index.names

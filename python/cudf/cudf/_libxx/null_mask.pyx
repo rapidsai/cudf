@@ -11,7 +11,7 @@ from cudf._libxx.includes.null_mask cimport (
     copy_bitmask as cpp_copy_bitmask,
     create_null_mask as cpp_create_null_mask,
     bitmask_allocation_size_bytes as cpp_bitmask_allocation_size_bytes,
-    mask_state_underlying_type
+    underlying_type_t_mask_state
 )
 
 from cudf.core.buffer import Buffer
@@ -21,10 +21,10 @@ class MaskState(Enum):
     """
     Enum for null mask creation state
     """
-    UNALLOCATED = <mask_state_underlying_type>(mask_state.UNALLOCATED)
-    UNINITIALIZED = <mask_state_underlying_type>(mask_state.UNINITIALIZED)
-    ALL_VALID = <mask_state_underlying_type>(mask_state.ALL_VALID)
-    ALL_NULL = <mask_state_underlying_type>(mask_state.ALL_NULL)
+    UNALLOCATED = <underlying_type_t_mask_state> mask_state.UNALLOCATED
+    UNINITIALIZED = <underlying_type_t_mask_state> mask_state.UNINITIALIZED
+    ALL_VALID = <underlying_type_t_mask_state> mask_state.ALL_VALID
+    ALL_NULL = <underlying_type_t_mask_state> mask_state.ALL_NULL
 
 
 def copy_bitmask(Column col):
@@ -82,7 +82,7 @@ def create_null_mask(size_type size, state=MaskState.UNINITIALIZED):
     cdef device_buffer db
     cdef unique_ptr[device_buffer] up_db
     cdef mask_state c_mask_state = <mask_state>(
-        <mask_state_underlying_type>(state.value)
+        <underlying_type_t_mask_state>(state.value)
     )
 
     with nogil:

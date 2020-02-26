@@ -22,6 +22,7 @@
 - PR #4164 Add Buffer "constructor-kwargs" header
 - PR #4159 Add COUNT aggregation that includes null values
 - PR #4190 Add libcudf++ transpose Cython implementation
+- PR #4217 Add libcudf++ quantiles Cython implementation
 - PR #4216 Add cudf.Scalar Python type
 - PR #4240 Add groupby::groups()
 
@@ -164,6 +165,7 @@
 - PR #4232 Fix handling empty tuples of children in string columns
 - PR #4222 Fix no-return compile error in binop-null-test
 - PR #4245 Fix race condition in parquet reader
+- PR #4258 Fix dask-cudf losing index name in `reset_index`
 
 
 # cuDF 0.12.0 (04 Feb 2020)
