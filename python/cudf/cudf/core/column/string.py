@@ -99,22 +99,31 @@ class StringMethods(object):
         Returns an object of the type of the column owner or updates the column
         of the owner (Series or Index) to mimic an inplace operation
         """
-        from cudf import Series
+        from cudf import Series, DataFrame, MultiIndex
         from cudf.core.index import Index, as_index
 
         inplace = kwargs.get("inplace", False)
 
         if inplace:
-            self._column._mimic_inplace(new_col, inplace=True)
+            self._parent._mimic_inplace(new_col, inplace=True)
         else:
-            if isinstance(self._parent, Series):
+            expand = kwargs.get("expand", False)
+            if expand or isinstance(self._parent, (DataFrame, MultiIndex)):
+                return self._parent._constructor_expanddim(
+                    {index: value for index, value in enumerate(new_col)},
+                    index=self._parent.index,
+                )
+            elif isinstance(self._parent, Series):
                 return Series(
                     new_col, index=self._parent.index, name=self._parent.name
                 )
             elif isinstance(self._parent, Index):
                 return as_index(new_col, name=self._parent.index)
             else:
-                return new_col
+                if self._parent is None:
+                    return new_col
+                else:
+                    return self._parent._mimic_inplace(new_col, inplace=False)
 
     def __dir__(self):
         keys = dir(type(self))
@@ -145,7 +154,7 @@ class StringMethods(object):
             **kwargs,
         )
 
-    def cat(self, others=None, sep=None, na_rep=None):
+    def cat(self, others=None, sep=None, na_rep=None, **kwargs):
         """
         Concatenate strings in the Series/Index with given separator.
 
@@ -261,7 +270,8 @@ class StringMethods(object):
         data = self._column.nvstrings.cat(
             others=others, sep=sep, na_rep=na_rep
         )
-        out = Series(data, index=self._parent.index, name=self._parent.name)
+
+        out = self._return_or_inplace(data, **kwargs)
         if len(out) == 1 and others is None:
             out = out[0]
         return out
@@ -275,7 +285,7 @@ class StringMethods(object):
             "Columns of arrays / lists are not yet " "supported"
         )
 
-    def extract(self, pat, flags=0, expand=True):
+    def extract(self, pat, flags=0, expand=True, **kwargs):
         """
         Extract capture groups in the regex `pat` as columns in a DataFrame.
 
@@ -306,18 +316,12 @@ class StringMethods(object):
         if flags != 0:
             raise NotImplementedError("`flags` parameter is not yet supported")
 
-        from cudf.core import DataFrame, Series
-
         out = self._column.nvstrings.extract(pat)
         if len(out) == 1 and expand is False:
-            return Series(
-                out[0], index=self._parent.index, name=self._parent.name
-            )
+            return self._return_or_inplace(out[0], **kwargs,)
         else:
-            out_df = DataFrame(index=self._parent.index)
-            for idx, val in enumerate(out):
-                out_df[idx] = val
-            return out_df
+            kwargs.setdefault("expand", expand)
+            return self._return_or_inplace(out, **kwargs)
 
     def contains(
         self, pat, case=True, flags=0, na=np.nan, regex=True, **kwargs
@@ -583,7 +587,7 @@ class StringMethods(object):
             cpp_string_get(self._column, i), **kwargs
         )
 
-    def split(self, pat=None, n=-1, expand=True):
+    def split(self, pat=None, n=-1, expand=True, **kwargs):
         """
         Split strings around given separator/delimiter.
 
@@ -615,14 +619,11 @@ class StringMethods(object):
         if n == 0:
             n = -1
 
-        from cudf.core import DataFrame
+        kwargs.setdefault("expand", expand)
 
-        out_df = DataFrame(index=self._parent.index)
-        out = self._column.nvstrings.split(delimiter=pat, n=n)
-
-        for idx, val in enumerate(out):
-            out_df[idx] = val
-        return out_df
+        return self._return_or_inplace(
+            self._column.nvstrings.split(delimiter=pat, n=n), **kwargs
+        )
 
 
 class StringColumn(column.ColumnBase):
