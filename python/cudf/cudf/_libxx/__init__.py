@@ -6,6 +6,7 @@ from . import (
     copying,
     lib,
     hash,
+    merge,
     null_mask,
     quantiles,
     rolling,
