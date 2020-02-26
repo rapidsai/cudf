@@ -182,7 +182,7 @@ class groupby {
    *
    * Returns a `groups` object representing the grouped keys and values.
    * If values is not provided, only a grouping of the keys is performed,
-   * and the `group_values` will be `nullptr`.
+   * and the `values` of the `groups` object will be `nullptr`.
    *
    * @param values Table representing values on which a groupby operation is to be performed
    * @param mr Memory resource used to allocate the returned tables
