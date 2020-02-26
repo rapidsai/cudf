@@ -5,6 +5,7 @@ import pandas as pd
 from cudf._libxx.lib cimport *
 from cudf._libxx.column cimport Column
 from cudf._libxx.table cimport Table
+from cudf._libxx.move cimport move
 cimport cudf._libxx.includes.copying as cpp_copying
 
 

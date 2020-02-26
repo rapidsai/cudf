@@ -9,8 +9,7 @@ from libcpp.vector cimport vector
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.pair cimport pair
-
-from rmm._lib.device_buffer cimport device_buffer, DeviceBuffer, move
+from rmm._lib.device_buffer cimport device_buffer, DeviceBuffer
 
 
 cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
@@ -299,16 +298,3 @@ cdef extern from "cudf/scalar/scalar_factories.hpp" namespace "cudf" nogil:
 # where the last statement will result in a compiler error
 # (copying a unique_ptr).
 #
-cdef extern from "<utility>" namespace "std" nogil:
-    cdef unique_ptr[column] move(unique_ptr[column])
-    cdef unique_ptr[table] move(unique_ptr[table])
-    cdef unique_ptr[aggregation] move(unique_ptr[aggregation])
-    cdef vector[unique_ptr[column]] move(vector[unique_ptr[column]])
-    cdef pair[unique_ptr[table], vector[size_type]] move(
-        pair[unique_ptr[table], vector[size_type]])
-    cdef device_buffer move(device_buffer)
-    cdef unique_ptr[scalar] move(unique_ptr[scalar])
-    cdef pair[unique_ptr[device_buffer], size_type] move(
-        pair[unique_ptr[device_buffer], size_type]
-    )
-    cdef column_contents move(column_contents)

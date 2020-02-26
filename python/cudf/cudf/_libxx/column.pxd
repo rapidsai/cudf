@@ -3,7 +3,9 @@
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 
+from rmm._lib.device_buffer cimport device_buffer
 from cudf._libxx.lib cimport *
+
 
 cdef class Column:
     cdef dict __dict__

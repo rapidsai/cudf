@@ -7,6 +7,7 @@ from libcpp.pair cimport pair
 import cudf._libxx as libcudfxx
 from cudf._libxx.lib cimport *
 from cudf._libxx.column cimport Column
+from cudf._libxx.move cimport move
 from cudf._libxx.includes.transform cimport bools_to_mask as cpp_bools_to_mask
 
 from cudf.core.buffer import Buffer

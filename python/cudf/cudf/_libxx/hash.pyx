@@ -3,6 +3,7 @@
 from cudf._libxx.lib cimport *
 from cudf._libxx.column cimport Column
 from cudf._libxx.table cimport Table
+from cudf._libxx.move cimport move
 
 from cudf._libxx.includes.hash cimport (
     hash_partition as cpp_hash_partition,

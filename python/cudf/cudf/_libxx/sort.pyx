@@ -5,7 +5,7 @@ import pandas as pd
 from cudf._libxx.column cimport *
 from cudf._libxx.table cimport *
 from cudf._libxx.lib cimport *
-
+from cudf._libxx.move cimport move
 from cudf._libxx.includes.sort cimport *
 
 

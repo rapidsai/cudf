@@ -15,6 +15,7 @@ import cudf._libxx as libcudfxx
 from cudf._libxx.lib cimport *
 from cudf._libxx.lib import *
 from cudf._libxx.null_mask import bitmask_allocation_size_bytes
+from cudf._libxx.move cimport move
 
 from cudf.core.buffer import Buffer
 from cudf.utils.dtypes import is_categorical_dtype

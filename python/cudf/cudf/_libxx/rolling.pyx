@@ -7,6 +7,7 @@ import numba
 
 from cudf._libxx.lib cimport *
 from cudf._libxx.column cimport *
+from cudf._libxx.move cimport move
 
 from cudf._libxx.includes.rolling cimport (
     rolling_window as cpp_rolling_window

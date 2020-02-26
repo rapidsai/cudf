@@ -8,7 +8,7 @@ from libcpp.memory cimport unique_ptr
 from libcpp cimport bool
 from cudf._libxx.lib cimport *
 from cudf._libxx.lib import *
-
+from cudf._libxx.move cimport move
 
 cdef class Scalar:
 

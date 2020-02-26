@@ -4,6 +4,7 @@ from cudf._libxx.column cimport Column
 from cudf._libxx.lib cimport *
 from cudf._libxx.scalar cimport Scalar
 from cudf.utils.dtypes import is_scalar
+from cudf._libxx.move cimport move
 
 from cudf._libxx.includes.replace cimport (
     find_and_replace_all as cpp_find_and_replace_all,

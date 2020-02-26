@@ -8,6 +8,7 @@ from cython.operator cimport dereference
 from libc.stdint cimport uintptr_t
 
 from cudf._libxx.lib cimport *
+from cudf._libxx.move cimport move
 
 from cudf.core.column_accessor import ColumnAccessor
 from cudf._libxx.column cimport Column

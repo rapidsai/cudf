@@ -9,6 +9,7 @@ from cudf.utils import cudautils
 
 from cudf._libxx.lib cimport *
 from cudf._libxx.lib import *
+from cudf._libxx.move cimport move
 
 from cudf._libxx.includes.aggregation cimport *
 from cudf._libxx.aggregation cimport *
