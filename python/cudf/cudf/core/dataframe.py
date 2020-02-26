@@ -3815,9 +3815,7 @@ class DataFrame(Frame):
             return result
 
     def quantiles(
-        self,
-        q=0.5,
-        interpolation="nearest",
+        self, q=0.5, interpolation="nearest",
     ):
         """
         Return values at the given quantile.
@@ -3851,7 +3849,9 @@ class DataFrame(Frame):
 
         if q_is_number:
             result = result.transpose()
-            return Series(data=result._columns[0], index=result.index, name=q[0])
+            return Series(
+                data=result._columns[0], index=result.index, name=q[0]
+            )
         else:
             result.index = as_index(q)
             return result
