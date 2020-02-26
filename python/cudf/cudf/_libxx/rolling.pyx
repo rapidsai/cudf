@@ -8,13 +8,14 @@ import numba
 from cudf._libxx.lib cimport *
 from cudf._libxx.column cimport *
 from cudf._libxx.move cimport move
+from cudf._libxx.aggregation cimport get_aggregation
 
+from cudf._libxx.includes.column.column cimport column
+from cudf._libxx.includes.column.column_view cimport column_view
+from cudf._libxx.includes.aggregation cimport aggregation
 from cudf._libxx.includes.rolling cimport (
     rolling_window as cpp_rolling_window
 )
-
-from cudf._libxx.aggregation cimport get_aggregation
-from cudf._libxx.includes.aggregation cimport aggregation
 
 
 def rolling(Column source_column, Column pre_column_window,

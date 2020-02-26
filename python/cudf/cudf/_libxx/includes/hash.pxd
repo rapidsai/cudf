@@ -2,6 +2,10 @@
 
 from cudf._libxx.lib cimport *
 
+from cudf._libxx.includes.column.column cimport column
+from cudf._libxx.includes.table.table cimport table
+from cudf._libxx.includes.table.table_view cimport table_view
+
 cdef extern from "cudf/hashing.hpp" namespace "cudf" nogil:
     cdef pair[unique_ptr[table], vector[size_type]] \
         hash_partition "cudf::hash_partition" (

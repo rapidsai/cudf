@@ -7,7 +7,9 @@
 
 from cudf._libxx.lib import *
 from cudf._libxx.lib cimport *
-from cudf._libxx.column cimport *
+
+from cudf._libxx.includes.table.table cimport table
+from cudf._libxx.includes.table.table_view cimport table_view
 
 cdef extern from "dlpack/dlpack.h" nogil:
     ctypedef struct DLManagedTensor:

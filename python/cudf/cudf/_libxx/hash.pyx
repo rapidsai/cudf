@@ -5,6 +5,9 @@ from cudf._libxx.column cimport Column
 from cudf._libxx.table cimport Table
 from cudf._libxx.move cimport move
 
+from cudf._libxx.includes.column.column cimport column
+from cudf._libxx.includes.table.table cimport table
+from cudf._libxx.includes.table.table_view cimport table_view
 from cudf._libxx.includes.hash cimport (
     hash_partition as cpp_hash_partition,
     hash as cpp_hash

@@ -1,9 +1,14 @@
+from libcpp.vector cimport vector
+
 from cudf._libxx.lib cimport *
 from cudf._libxx.column cimport Column
 from cudf._libxx.table cimport Table
-from libcpp.vector cimport vector
-from cudf._libxx.includes.merge cimport merge as cpp_merge
 from cudf._libxx.move cimport move
+
+from cudf._libxx.includes.table.table cimport table
+from cudf._libxx.includes.table.table_view cimport table_view
+from cudf._libxx.includes.merge cimport merge as cpp_merge
+
 
 def merge_sorted(
     object tables,

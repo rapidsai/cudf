@@ -2,7 +2,10 @@
 
 from libc.stdint cimport int32_t
 
+from rmm._lib.device_buffer cimport device_buffer
+
 from cudf._libxx.lib cimport *
+from cudf._libxx.includes.column.column_view cimport column_view
 
 
 ctypedef int32_t mask_state_underlying_type

@@ -1,10 +1,13 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
+from libcpp.vector cimport vector
 
 from cudf._libxx.lib cimport *
 from cudf._libxx.column cimport Column
 from cudf._libxx.table cimport Table
 from cudf._libxx.move cimport move
-from libcpp.vector cimport vector
+from cudf._libxx.includes.column.column cimport column
+from cudf._libxx.includes.column.column_view cimport column_view
+from cudf._libxx.includes.table.table_view cimport table_view
 cimport cudf._libxx.includes.search as cpp_search
 
 

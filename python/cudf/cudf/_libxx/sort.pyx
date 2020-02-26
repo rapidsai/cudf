@@ -6,6 +6,9 @@ from cudf._libxx.column cimport *
 from cudf._libxx.table cimport *
 from cudf._libxx.lib cimport *
 from cudf._libxx.move cimport move
+
+from cudf._libxx.includes.column.column cimport column
+from cudf._libxx.includes.table.table_view cimport table_view
 from cudf._libxx.includes.sort cimport *
 
 

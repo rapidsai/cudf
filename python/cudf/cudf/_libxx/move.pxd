@@ -4,12 +4,11 @@ from libcpp.pair cimport pair
 from rmm._lib.device_buffer cimport device_buffer
 from cudf._libxx.lib cimport (
     size_type,
-    column,
-    table,
     scalar,
     aggregation,
-    column_contents
 )
+from cudf._libxx.includes.column.column cimport column, column_contents
+from cudf._libxx.includes.table.table cimport table
 
 cdef extern from "<utility>" namespace "std" nogil:
     cdef unique_ptr[column] move(unique_ptr[column])

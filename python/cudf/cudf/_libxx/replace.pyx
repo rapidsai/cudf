@@ -6,6 +6,12 @@ from cudf._libxx.scalar cimport Scalar
 from cudf.utils.dtypes import is_scalar
 from cudf._libxx.move cimport move
 
+
+from cudf._libxx.includes.column.column cimport column
+from cudf._libxx.includes.column.column_view cimport (
+    column_view,
+    mutable_column_view
+)
 from cudf._libxx.includes.replace cimport (
     find_and_replace_all as cpp_find_and_replace_all,
     replace_nulls as cpp_replace_nulls,

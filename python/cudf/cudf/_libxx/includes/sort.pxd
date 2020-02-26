@@ -3,6 +3,10 @@
 from cudf._libxx.lib import *
 from cudf._libxx.lib cimport *
 
+from cudf._libxx.includes.column.column cimport column
+from cudf._libxx.includes.table.table_view cimport table_view
+
+
 cdef extern from "cudf/sorting.hpp" namespace "cudf::experimental" nogil:
     cdef unique_ptr[column] sorted_order(
         table_view source_table,

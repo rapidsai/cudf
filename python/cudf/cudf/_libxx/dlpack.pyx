@@ -14,6 +14,8 @@ from cpython cimport pycapsule
 
 import warnings
 
+from cudf._libxx.includes.table.table cimport table
+from cudf._libxx.includes.table.table_view cimport table_view
 from cudf._libxx.includes.dlpack cimport (
     from_dlpack as cpp_from_dlpack,
     to_dlpack as cpp_to_dlpack,

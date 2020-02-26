@@ -9,6 +9,9 @@ from cudf._libxx.lib cimport *
 from cudf._libxx.column cimport Column
 from cudf._libxx.move cimport move
 
+from cudf._libxx.includes.column.column_view cimport column_view
+
+
 from cudf._libxx.includes.null_mask cimport (
     copy_bitmask as cpp_copy_bitmask,
     create_null_mask as cpp_create_null_mask,

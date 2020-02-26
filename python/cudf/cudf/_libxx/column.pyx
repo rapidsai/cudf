@@ -14,6 +14,8 @@ from libcpp.memory cimport unique_ptr, make_unique
 import cudf._libxx as libcudfxx
 from cudf._libxx.lib cimport *
 from cudf._libxx.lib import *
+from cudf._libxx.includes.column.column cimport column, column_contents
+from cudf._libxx.includes.column.column_view cimport column_view
 from cudf._libxx.null_mask import bitmask_allocation_size_bytes
 from cudf._libxx.move cimport move
 
