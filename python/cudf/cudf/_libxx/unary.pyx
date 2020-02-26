@@ -5,11 +5,13 @@ from enum import IntEnum
 from cudf._libxx.column cimport Column
 from cudf._libxx.lib cimport *
 from cudf._libxx.lib import np_to_cudf_types
-cimport cudf._libxx.includes.unary as cpp_unary
 from cudf._libxx.includes.unary cimport (
     underlying_type_t_unary_op,
     unary_op
 )
+
+cimport cudf._libxx.includes.unary as cpp_unary
+
 
 class UnaryOp(IntEnum):
     SIN = <underlying_type_t_unary_op> unary_op.SIN
