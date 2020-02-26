@@ -64,7 +64,7 @@ class StringMethods(object):
     This mimicks pandas `df.str` interface.
     """
 
-    def __init__(self, parent, index=None, name=None, owner=None):
+    def __init__(self, column, parent=None):
         self._parent = parent
         self._index = index
         self._name = name
