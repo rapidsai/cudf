@@ -18,6 +18,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/nvtx_utils.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/detail/copy.hpp>
@@ -403,17 +404,24 @@ column::column(column_view view, cudaStream_t stream,
   column{std::move(*experimental::type_dispatcher(view.type(),
                     create_column_from_view{view, stream, mr}))} {}
 
+struct nvtx_raii {
+  nvtx_raii(char const* name, nvtx::color color) { nvtx::range_push(name, color); }
+  ~nvtx_raii() { nvtx::range_pop(); }
+};
+
 // Concatenates the elements from a vector of column_views
 std::unique_ptr<column>
 concatenate(std::vector<column_view> const& columns_to_concat,
             rmm::mr::device_memory_resource *mr, cudaStream_t stream) {
+  nvtx_raii range("cudf::concatenate", nvtx::color::DARK_GREEN);
+
   if (columns_to_concat.empty()) { return std::make_unique<column>(); }
 
   data_type type = columns_to_concat.front().type();
   CUDF_EXPECTS(std::all_of(columns_to_concat.begin(), columns_to_concat.end(),
         [type](auto const& c) { return c.type() == type; }),
       "Type mismatch in columns to concatenate.");
-  
+
   switch (current_mode) {
     case concatenate_mode::UNOPTIMIZED:
       return experimental::type_dispatcher(type,

@@ -604,7 +604,7 @@ hash_partition(table_view const& input,
                cudaStream_t stream)
 {
   // Push/pop nvtx range around the scope of this function
-  nvtx_raii("CUDF_HASH_PARTITION", nvtx::PARTITION_COLOR);
+  nvtx_raii range("CUDF_HASH_PARTITION", nvtx::PARTITION_COLOR);
 
   auto table_to_hash = input.select(columns_to_hash);
 
