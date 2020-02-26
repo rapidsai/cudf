@@ -5,8 +5,8 @@ from rmm._lib.device_buffer cimport device_buffer
 from cudf._libxx.lib cimport (
     size_type,
     scalar,
-    aggregation,
 )
+from cudf._libxx.includes.aggregation cimport aggregation
 from cudf._libxx.includes.column.column cimport column, column_contents
 from cudf._libxx.includes.table.table cimport table
 

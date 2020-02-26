@@ -64,10 +64,6 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         data_type(type_id id) except +
         type_id id() except +
 
-cdef extern from "cudf/aggregation.hpp" namespace "cudf::experimental" nogil:
-    cdef cppclass aggregation:
-        pass
-
 cdef extern from "cudf/wrappers/bool.hpp" namespace "cudf::experimental" nogil:
     ctypedef bool bool8
 

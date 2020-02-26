@@ -7,6 +7,9 @@ from cudf._libxx.lib import *
 from cudf._libxx.lib cimport *
 
 cdef extern from "cudf/aggregation.hpp" namespace "cudf::experimental" nogil:
+    cdef cppclass aggregation:
+        pass
+
     ctypedef enum udf_type:
         CUDA 'cudf::experimental::udf_type::CUDA'
         PTX 'cudf::experimental::udf_type::PTX'
