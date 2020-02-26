@@ -148,7 +148,7 @@ groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_re
     return groupby::groups{std::move(grouped_keys), std::move(group_offsets_vector), std::move(grouped_values)};
   }
   else {
-    return groupby::groups{std::move(grouped_keys), group_offsets_vector};
+    return groupby::groups{std::move(grouped_keys), std::move(group_offsets_vector)};
   }
 }
 
