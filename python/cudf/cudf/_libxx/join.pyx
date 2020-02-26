@@ -30,7 +30,8 @@ cpdef join(Table lhs,
     left_on_ind.reserve(num_inds_left)
     right_on_ind.reserve(num_inds_right)
 
-    cdef vector[pair[int, int]] columns_in_common
+    columns_in_common = set()
+    cdef vector[pair[int, int]] c_columns_in_common
 
     # Views might or might not include index
     cdef table_view lhs_view
@@ -82,7 +83,7 @@ cpdef join(Table lhs,
         left_on_ind.push_back(left_on_idx)
         right_on_ind.push_back(right_on_idx)
 
-        columns_in_common.push_back(pair[int, int](
+        columns_in_common.add(pair[int, int](
             (left_on_idx, right_on_idx)
         ))
 
@@ -102,7 +103,7 @@ cpdef join(Table lhs,
             left_on_ind.push_back(left_join_cols.index(name))
             if name in right_on:
                 if (left_on.index(name) == right_on.index(name)):
-                    columns_in_common.push_back(
+                    columns_in_common.add(
                         pair[int, int]((
                             left_join_cols.index(name),
                             right_join_cols.index(name)
@@ -111,6 +112,7 @@ cpdef join(Table lhs,
         for name in right_on:
             right_on_ind.push_back(right_join_cols.index(name))
 
+    c_columns_in_common = list(columns_in_common)
     cdef unique_ptr[table] c_result
     if how == 'inner':
         with nogil:
@@ -119,7 +121,7 @@ cpdef join(Table lhs,
                 rhs_view,
                 left_on_ind,
                 right_on_ind,
-                columns_in_common
+                c_columns_in_common
             ))
     elif how == 'left':
         with nogil:
@@ -128,7 +130,7 @@ cpdef join(Table lhs,
                 rhs_view,
                 left_on_ind,
                 right_on_ind,
-                columns_in_common
+                c_columns_in_common
             ))
     elif how == 'outer':
         with nogil:
@@ -137,7 +139,7 @@ cpdef join(Table lhs,
                 rhs_view,
                 left_on_ind,
                 right_on_ind,
-                columns_in_common
+                c_columns_in_common
             ))
 
     all_cols_py = columns_from_ptr(move(c_result))
