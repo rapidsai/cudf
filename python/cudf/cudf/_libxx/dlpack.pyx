@@ -7,7 +7,7 @@
 
 # Copyright (c) 2018, NVIDIA CORPORATION.
 import cudf
-from cudf._libxx.table cimport *
+from cudf._libxx.table cimport Table
 
 from libcpp.memory cimport unique_ptr
 

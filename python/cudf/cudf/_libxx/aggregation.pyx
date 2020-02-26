@@ -17,8 +17,8 @@ from cudf._libxx.includes.types cimport (
     data_type,
     interpolation
 )
-from cudf._libxx.includes.aggregation cimport *
-from cudf._libxx.aggregation cimport *
+cimport cudf._libxx.includes.aggregation as cudf_aggregation
+from cudf._libxx.aggregation cimport get_aggregation
 
 
 # need to update as and when we add new aggregations with additional options
@@ -30,15 +30,15 @@ cdef unique_ptr[aggregation] get_aggregation(op, kwargs) except *:
     cdef unique_ptr[aggregation] agg
 
     if op == "sum":
-        agg = move(make_sum_aggregation())
+        agg = move(cudf_aggregation.make_sum_aggregation())
     elif op == "min":
-        agg = move(make_min_aggregation())
+        agg = move(cudf_aggregation.make_min_aggregation())
     elif op == "max":
-        agg = move(make_max_aggregation())
+        agg = move(cudf_aggregation.make_max_aggregation())
     elif op == "mean":
-        agg = move(make_mean_aggregation())
+        agg = move(cudf_aggregation.make_mean_aggregation())
     elif op == "count":
-        agg = move(make_count_aggregation())
+        agg = move(cudf_aggregation.make_count_aggregation())
     elif callable(op):
         # Handling UDF type
         nb_type = numba.numpy_support.from_dtype(kwargs['dtype'])
@@ -55,7 +55,9 @@ cdef unique_ptr[aggregation] get_aggregation(op, kwargs) except *:
 
         out_dtype = data_type(tid)
 
-        agg = move(make_udf_aggregation(udf_type.PTX, cpp_str, out_dtype))
+        agg = move(cudf_aggregation.make_udf_aggregation(
+            cudf_aggregation.udf_type.PTX, cpp_str, out_dtype
+        ))
     else:
         assert False, "Invalid aggreagtion operation"
 

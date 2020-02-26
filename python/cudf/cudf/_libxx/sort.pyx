@@ -13,7 +13,9 @@ from cudf._libxx.move cimport move
 cimport cudf._libxx.includes.types as cudf_types
 from cudf._libxx.includes.column.column cimport column
 from cudf._libxx.includes.table.table_view cimport table_view
-from cudf._libxx.includes.sort cimport *
+from cudf._libxx.includes.sort cimport (
+    sorted_order, lower_bound, upper_bound
+)
 
 
 def order_by(Table source_table, object ascending, bool na_position):

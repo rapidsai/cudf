@@ -7,7 +7,7 @@ import numba
 
 from libcpp.memory cimport unique_ptr
 
-from cudf._libxx.column cimport *
+from cudf._libxx.column cimport Column
 from cudf._libxx.move cimport move
 from cudf._libxx.aggregation cimport get_aggregation
 
