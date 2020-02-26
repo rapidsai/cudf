@@ -103,6 +103,7 @@
 - PR #4204 Port nvtext create-ngrams function
 - PR #4219 Port dlpack.pyx to use new libcudf APIs
 - PR #4225 Remove stale notebooks
+- PR #4233 Porting replace.pyx to use new libcudf APIs
 - PR #4223 Fix a few of the Cython warnings
 - PR #4234 Add BUILD_LEGACY_TESTS cmake option
 

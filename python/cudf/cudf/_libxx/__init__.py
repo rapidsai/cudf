@@ -9,6 +9,7 @@ from . import (
     merge,
     null_mask,
     quantiles,
+    replace,
     rolling,
     search,
     sort,
