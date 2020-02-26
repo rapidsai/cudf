@@ -26,6 +26,7 @@
 
 ## Improvements
 
+- PR #4260 added mvn wrapper for the user to build Java bindings with
 - PR #4187 exposed getNativeView method in Java bindings
 - PR #3525 build.sh option to disable nvtx
 - PR #3748 Optimize hash_partition using shared memory
