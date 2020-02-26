@@ -18,6 +18,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/padding.hpp>
+#include <cudf/strings/wrap.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <tests/utilities/base_fixture.hpp>
@@ -120,3 +121,21 @@ TEST_F(StringsPadTest, ZFill)
         thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
     cudf::test::expect_columns_equal(*results,expected);
 }
+
+TEST_F(StringsPadTest, Wrap)
+{
+    std::vector<const char*> h_strings{ "12345", "thesé", nullptr, "ARE THE", "tést strings", "" };
+    cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
+        thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
+    cudf::size_type width = 3;
+    
+    auto strings_view = cudf::strings_column_view(strings);
+
+    auto results = cudf::strings::wrap(strings_view, width);
+
+    std::vector<const char*> h_expected{ "12345", "thesé", nullptr, "ARE\nTHE", "tést\nstrings", ""  };
+    cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
+        thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
+    cudf::test::expect_columns_equal(*results,expected);
+}
+
