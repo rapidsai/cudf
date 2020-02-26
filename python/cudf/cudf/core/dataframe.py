@@ -258,7 +258,8 @@ class DataFrame(Frame):
                 if is_scalar(data[col_name]):
                     num_rows = num_rows or 1
                 else:
-                    num_rows = len(column.as_column(data[col_name]))
+                    data[col_name] = column.as_column(data[col_name])
+                    num_rows = len(data[col_name])
             self._index = RangeIndex(0, num_rows)
         else:
             self._index = as_index(index)
