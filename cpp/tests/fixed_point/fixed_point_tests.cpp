@@ -116,17 +116,17 @@ TYPED_TEST(FixedPointTestBothReps, SimpleBinaryFPConstruction) {
     binary_fp num3{10, scale_type{3}};
     binary_fp num4{10, scale_type{4}};
 
-    binary_fp num5{1.49, scale_type{ 0}};
-    binary_fp num6{1.49, scale_type{-1}};
-    binary_fp num7{1.49, scale_type{-2}};
-    binary_fp num8{1.49, scale_type{-3}};
-    binary_fp num9{1.49, scale_type{-4}};
+    binary_fp num5{1.24, scale_type{ 0}};
+    binary_fp num6{1.24, scale_type{-1}};
+    binary_fp num7{1.32, scale_type{-2}};
+    binary_fp num8{1.41, scale_type{-3}};
+    binary_fp num9{1.45, scale_type{-4}};
 
     EXPECT_EQ(10, num0.to_double());
     EXPECT_EQ(10, num1.to_double());
-    EXPECT_EQ(8,  num2.to_double());
+    EXPECT_EQ(12, num2.to_double());
     EXPECT_EQ(8,  num3.to_double());
-    EXPECT_EQ(0,  num4.to_double());
+    EXPECT_EQ(16, num4.to_double());
 
     EXPECT_EQ(1,      num5.to_double());
     EXPECT_EQ(1,      num6.to_double());
@@ -144,7 +144,7 @@ TYPED_TEST(FixedPointTestBothReps, MoreSimpleBinaryFPConstruction) {
     binary_fp num1{2.1,  scale_type{-4}};
 
     EXPECT_EQ(1.25,   num0.to_double());
-    EXPECT_EQ(2.0625, num1.to_double());
+    EXPECT_EQ(2.125,  num1.to_double());
 
 }
 

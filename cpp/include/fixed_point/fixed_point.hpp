@@ -144,9 +144,7 @@ public:
               typename std::enable_if_t<is_supported_construction_value_type<T>()
                                      && is_supported_representation_type<Rep>()>* = nullptr>
     explicit fixed_point(T const& value, scale_type const& scale) :
-        _value{Rad != Radix::BASE_10
-            ? static_cast<Rep>(detail::shift                   <Rep, Rad>(value, scale))
-            : static_cast<Rep>(detail::shift_with_precise_round<Rep, Rad>(value, scale))},
+        _value{static_cast<Rep>(detail::shift_with_precise_round<Rep, Rad>(value, scale))},
         _scale{scale}
     {
     }
