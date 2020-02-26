@@ -419,6 +419,9 @@ class Frame(libcudfxx.table.Table):
         sort=False,
     ):
 
+        lhs = self
+        rhs = right
+
         if left_on is None:
             left_on = []
         if right_on is None:
@@ -449,9 +452,6 @@ class Frame(libcudfxx.table.Table):
 
         if on:
             left_on = right_on = on
-
-        lhs = self.copy(deep=False)
-        rhs = right.copy(deep=False)
 
         same_named_columns = set(lhs._data.keys()) & set(rhs._data.keys())
         if not (left_on or right_on) and not (left_index and right_index):
