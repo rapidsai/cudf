@@ -1,8 +1,12 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from cudf._libxx.lib import *
-from cudf._libxx.lib cimport *
+from libcpp.memory cimport unique_ptr
+from libcpp.vector cimport vector
+from libcpp cimport bool
 
+from cudf._libxx.types import np_to_cudf_types, cudf_to_np_types
+
+from cudf._libxx.includes.types cimport size_type
 from cudf._libxx.includes.column.column_view cimport column_view
 from cudf._libxx.includes.table.table cimport table
 from cudf._libxx.includes.table.table_view cimport table_view

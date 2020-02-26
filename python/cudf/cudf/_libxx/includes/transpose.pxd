@@ -1,6 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from cudf._libxx.lib cimport *
+from libcpp.memory cimport unique_ptr
 
 from cudf._libxx.includes.table.table cimport table
 from cudf._libxx.includes.table.table_view cimport table_view

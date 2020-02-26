@@ -2,11 +2,15 @@
 
 import pandas as pd
 
-from cudf._libxx.column cimport *
-from cudf._libxx.table cimport *
-from cudf._libxx.lib cimport *
+from libcpp cimport bool
+from libcpp.memory cimport unique_ptr
+from libcpp.vector cimport vector
+
+from cudf._libxx.column cimport Column
+from cudf._libxx.table cimport Table
 from cudf._libxx.move cimport move
 
+cimport cudf._libxx.includes.types as cudf_types
 from cudf._libxx.includes.column.column cimport column
 from cudf._libxx.includes.table.table_view cimport table_view
 from cudf._libxx.includes.sort cimport *
@@ -28,18 +32,18 @@ def order_by(Table source_table, object ascending, bool na_position):
     """
 
     cdef table_view source_table_view = source_table.data_view()
-    cdef vector[order] column_order
+    cdef vector[cudf_types.order] column_order
     column_order.reserve(len(ascending))
-    cdef null_order pred = (
-        null_order.BEFORE if na_position == 1 else null_order.AFTER)
-    cdef vector[null_order] null_precedence = vector[null_order](
+    cdef cudf_types.null_order pred = (
+        cudf_types.null_order.BEFORE if na_position == 1 else cudf_types.null_order.AFTER)
+    cdef vector[cudf_types.null_order] null_precedence = vector[cudf_types.null_order](
         source_table._num_columns, pred)
 
     for i in ascending:
         if i is True:
-            column_order.push_back(order.ASCENDING)
+            column_order.push_back(cudf_types.order.ASCENDING)
         else:
-            column_order.push_back(order.DESCENDING)
+            column_order.push_back(cudf_types.order.DESCENDING)
 
     cdef unique_ptr[column] c_result
     with nogil:
@@ -64,11 +68,13 @@ def digitize(Table source_values_table, Table bins, bool right=False):
 
     cdef table_view bins_view = bins.view()
     cdef table_view source_values_table_view = source_values_table.view()
-    cdef vector[order] column_order = vector[order](bins_view.num_columns(),
-                                                    order.ASCENDING)
-    cdef vector[null_order] null_precedence = vector[null_order](
+    cdef vector[cudf_types.order] column_order = vector[cudf_types.order](
         bins_view.num_columns(),
-        null_order.BEFORE)
+        cudf_types.order.ASCENDING
+    )
+    cdef vector[cudf_types.null_order] null_precedence = vector[cudf_types.null_order](
+        bins_view.num_columns(),
+        cudf_types.null_order.BEFORE)
 
     cdef unique_ptr[column] c_result
     if right is True:

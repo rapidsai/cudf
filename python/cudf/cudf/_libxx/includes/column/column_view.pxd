@@ -1,7 +1,11 @@
 from libcpp.vector cimport vector
 from libcpp cimport bool
 
-from cudf._libxx.lib cimport size_type, data_type, bitmask_type
+from cudf._libxx.includes.types cimport (
+    size_type,
+    data_type,
+    bitmask_type
+)
 
 
 cdef extern from "cudf/column/column_view.hpp" namespace "cudf" nogil:

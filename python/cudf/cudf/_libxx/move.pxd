@@ -2,7 +2,7 @@ from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 from libcpp.pair cimport pair
 from rmm._lib.device_buffer cimport device_buffer
-from cudf._libxx.lib cimport (
+from cudf._libxx.includes.types cimport (
     size_type,
 )
 from cudf._libxx.includes.aggregation cimport aggregation

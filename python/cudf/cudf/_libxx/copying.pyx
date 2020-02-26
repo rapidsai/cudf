@@ -2,7 +2,8 @@
 
 import pandas as pd
 
-from cudf._libxx.lib cimport *
+from libcpp.memory cimport unique_ptr
+
 from cudf._libxx.column cimport Column
 from cudf._libxx.table cimport Table
 from cudf._libxx.move cimport move

@@ -1,9 +1,11 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from cudf._libxx.column cimport Column
-from cudf._libxx.lib cimport *
-from cudf._libxx.scalar cimport Scalar
+from libcpp.memory cimport unique_ptr
+
 from cudf.utils.dtypes import is_scalar
+
+from cudf._libxx.column cimport Column
+from cudf._libxx.scalar cimport Scalar
 from cudf._libxx.move cimport move
 
 from cudf._libxx.includes.scalar.scalar cimport scalar
@@ -180,7 +182,7 @@ def normalize_nans_and_zeros_column(Column input_col):
     return Column.from_unique_ptr(move(c_result))
 
 
-def normalize_nans_and_zeros(Column input_col, bool in_place=False):
+def normalize_nans_and_zeros(Column input_col, in_place=False):
     """
     Normalize the NaN and zeros in input_col
     Convert  -NaN  -> NaN

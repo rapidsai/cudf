@@ -4,7 +4,7 @@ from libc.stdint cimport (
 from libcpp cimport bool
 from libcpp.string cimport string
 
-from cudf._libxx.lib cimport data_type
+from cudf._libxx.includes.types cimport data_type
 
 from cudf._libxx.includes.wrappers.bool cimport bool8
 

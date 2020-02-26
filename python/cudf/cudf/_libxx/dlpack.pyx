@@ -8,7 +8,9 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 import cudf
 from cudf._libxx.table cimport *
-from cudf._libxx.lib cimport *
+
+from libcpp.memory cimport unique_ptr
+
 from cudf._libxx.move cimport move
 from cpython cimport pycapsule
 

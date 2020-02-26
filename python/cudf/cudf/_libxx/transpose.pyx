@@ -3,7 +3,8 @@
 import cudf
 from cudf.utils.dtypes import is_categorical_dtype
 
-from cudf._libxx.lib cimport *
+from libcpp.memory cimport unique_ptr
+
 from cudf._libxx.table cimport Table
 from cudf._libxx.move cimport move
 

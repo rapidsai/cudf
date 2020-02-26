@@ -5,7 +5,6 @@ from libcpp.vector cimport vector
 from libcpp.map cimport map
 
 from cudf._lib.cudf cimport *
-from cudf._libxx.lib cimport *
 from cudf._libxx.includes.table.table_view cimport table_view
 
 

@@ -1,6 +1,6 @@
 from libcpp.vector cimport vector
 
-from cudf._libxx.lib cimport size_type
+from cudf._libxx.includes.types cimport size_type
 from cudf._libxx.includes.column.column_view cimport (
     column_view,
     mutable_column_view

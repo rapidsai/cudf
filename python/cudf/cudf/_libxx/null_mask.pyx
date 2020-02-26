@@ -4,14 +4,14 @@ from enum import Enum
 
 from libcpp.memory cimport unique_ptr, make_unique
 
+from rmm._lib.device_buffer cimport device_buffer, DeviceBuffer
+
 import cudf._libxx as libcudfxx
-from cudf._libxx.lib cimport *
 from cudf._libxx.column cimport Column
 from cudf._libxx.move cimport move
 
+cimport cudf._libxx.includes.types as cudf_types
 from cudf._libxx.includes.column.column_view cimport column_view
-
-
 from cudf._libxx.includes.null_mask cimport (
     copy_bitmask as cpp_copy_bitmask,
     create_null_mask as cpp_create_null_mask,
@@ -26,10 +26,10 @@ class MaskState(Enum):
     """
     Enum for null mask creation state
     """
-    UNALLOCATED = <mask_state_underlying_type>(mask_state.UNALLOCATED)
-    UNINITIALIZED = <mask_state_underlying_type>(mask_state.UNINITIALIZED)
-    ALL_VALID = <mask_state_underlying_type>(mask_state.ALL_VALID)
-    ALL_NULL = <mask_state_underlying_type>(mask_state.ALL_NULL)
+    UNALLOCATED = <mask_state_underlying_type>(cudf_types.mask_state.UNALLOCATED)
+    UNINITIALIZED = <mask_state_underlying_type>(cudf_types.mask_state.UNINITIALIZED)
+    ALL_VALID = <mask_state_underlying_type>(cudf_types.mask_state.ALL_VALID)
+    ALL_NULL = <mask_state_underlying_type>(cudf_types.mask_state.ALL_NULL)
 
 
 def copy_bitmask(Column col):
@@ -53,7 +53,7 @@ def copy_bitmask(Column col):
     return buf
 
 
-def bitmask_allocation_size_bytes(size_type num_bits):
+def bitmask_allocation_size_bytes(cudf_types.size_type num_bits):
     """
     Given a size, calculates the number of bytes that should be allocated for a
     column validity mask
@@ -66,7 +66,7 @@ def bitmask_allocation_size_bytes(size_type num_bits):
     return output_size
 
 
-def create_null_mask(size_type size, state=MaskState.UNINITIALIZED):
+def create_null_mask(cudf_types.size_type size, state=MaskState.UNINITIALIZED):
     """
     Given a size and a mask state, allocate a mask that can properly represent
     the given size with the given mask state
@@ -86,7 +86,7 @@ def create_null_mask(size_type size, state=MaskState.UNINITIALIZED):
 
     cdef device_buffer db
     cdef unique_ptr[device_buffer] up_db
-    cdef mask_state c_mask_state = <mask_state>(
+    cdef cudf_types.mask_state c_mask_state = <cudf_types.mask_state>(
         <mask_state_underlying_type>(state.value)
     )
 
