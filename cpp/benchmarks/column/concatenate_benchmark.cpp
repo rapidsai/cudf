@@ -67,8 +67,8 @@ BENCHMARK_TEMPLATE_DEFINE_F(Concatenate, name, type)  \
   BM_concatenate<type>(state);                        \
 }                                                     \
 BENCHMARK_REGISTER_F(Concatenate, name)               \
-  ->RangeMultiplier(2)                                \
-  ->Ranges({{2, 32}, {1<<14, 1<<16}})                 \
+  ->RangeMultiplier(4)                                \
+  ->Ranges({{2, 1024}, {1<<6, 1<<18}})                 \
   ->Unit(benchmark::kMillisecond)                     \
   ->UseManualTime();
 
