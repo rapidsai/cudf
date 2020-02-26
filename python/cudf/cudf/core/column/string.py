@@ -18,11 +18,13 @@ from cudf._libxx.null_mask import (
     bitmask_allocation_size_bytes,
     create_null_mask,
 )
-from cudf._libxx.strings.slice import (
-    get as cpp_string_get,
+from cudf._libxx.strings.replace import (
     insert as cpp_string_insert,
-    slice_from as cpp_slice_from,
     slice_replace as cpp_slice_replace,
+)
+from cudf._libxx.strings.substring import (
+    get as cpp_string_get,
+    slice_from as cpp_slice_from,
     slice_strings as cpp_slice_strings,
 )
 from cudf.core.buffer import Buffer
@@ -71,8 +73,8 @@ class StringMethods(object):
     def __getattr__(self, attr, *args, **kwargs):
         from cudf.core.series import Series
 
-        if hasattr(self._parent.nvstrings, attr):
-            passed_attr = getattr(self._parent.nvstrings, attr)
+        if hasattr(self._column.nvstrings, attr):
+            passed_attr = getattr(self._column.nvstrings, attr)
             if callable(passed_attr):
 
                 @functools.wraps(passed_attr)
@@ -81,8 +83,8 @@ class StringMethods(object):
                     if isinstance(ret, nvstrings.nvstrings):
                         ret = Series(
                             column.as_column(ret),
-                            index=self._index,
-                            name=self._name,
+                            index=self._parent.index,
+                            name=self._parent.name,
                         )
                     return ret
 
@@ -106,9 +108,11 @@ class StringMethods(object):
             self._column._mimic_inplace(new_col, inplace=True)
         else:
             if isinstance(self._parent, Series):
-                return Series(new_col, index=self.index, name=self.name)
+                return Series(
+                    new_col, index=self._parent.index, name=self._parent.name
+                )
             elif isinstance(self._parent, Index):
-                return as_index(new_col, name=self.name)
+                return as_index(new_col, name=self._parent.index)
             else:
                 return new_col
 
@@ -126,13 +130,13 @@ class StringMethods(object):
             indicating the length of each element in the Series or Index.
         """
 
-        out_dev_arr = rmm.device_array(len(self._parent), dtype="int32")
+        out_dev_arr = rmm.device_array(len(self._column), dtype="int32")
         ptr = libcudf.cudf.get_ctype_ptr(out_dev_arr)
-        self._parent.nvstrings.len(ptr)
+        self._column.nvstrings.len(ptr)
 
         mask = None
-        if self._parent.has_nulls:
-            mask = self._parent.mask
+        if self._column.has_nulls:
+            mask = self._column.mask
 
         return self._return_or_inplace(
             column.build_column(
@@ -254,10 +258,10 @@ class StringMethods(object):
             others = Series(others)
             others = others._column.nvstrings
 
-        data = self._parent.nvstrings.cat(
+        data = self._column.nvstrings.cat(
             others=others, sep=sep, na_rep=na_rep
         )
-        out = Series(data, index=self._index, name=self._name)
+        out = Series(data, index=self._parent.index, name=self._parent.name)
         if len(out) == 1 and others is None:
             out = out[0]
         return out
@@ -304,11 +308,13 @@ class StringMethods(object):
 
         from cudf.core import DataFrame, Series
 
-        out = self._parent.nvstrings.extract(pat)
+        out = self._column.nvstrings.extract(pat)
         if len(out) == 1 and expand is False:
-            return Series(out[0], index=self._index, name=self._name)
+            return Series(
+                out[0], index=self._parent.index, name=self._parent.name
+            )
         else:
-            out_df = DataFrame(index=self._index)
+            out_df = DataFrame(index=self._parent.index)
             for idx, val in enumerate(out):
                 out_df[idx] = val
             return out_df
@@ -351,13 +357,13 @@ class StringMethods(object):
         elif na is not np.nan:
             raise NotImplementedError("`na` parameter is not yet supported")
 
-        out_dev_arr = rmm.device_array(len(self._parent), dtype="bool")
+        out_dev_arr = rmm.device_array(len(self._column), dtype="bool")
         ptr = libcudf.cudf.get_ctype_ptr(out_dev_arr)
-        self._parent.nvstrings.contains(pat, regex=regex, devptr=ptr)
+        self._column.nvstrings.contains(pat, regex=regex, devptr=ptr)
 
         mask = None
-        if self._parent.has_nulls:
-            mask = self._parent.mask
+        if self._column.has_nulls:
+            mask = self._column.mask
 
         return self._return_or_inplace(
             column.build_column(
@@ -407,7 +413,7 @@ class StringMethods(object):
             n = -1
 
         return self._return_or_inplace(
-            self._parent.nvstrings.replace(pat, repl, n=n, regex=regex),
+            self._column.nvstrings.replace(pat, repl, n=n, regex=regex),
             **kwargs,
         )
 
@@ -422,7 +428,7 @@ class StringMethods(object):
         """
 
         return self._return_or_inplace(
-            self._parent.nvstrings.lower(), **kwargs
+            self._column.nvstrings.lower(), **kwargs
         )
 
     def slice(self, start=None, stop=None, step=None, **kwargs):
@@ -456,7 +462,7 @@ class StringMethods(object):
             step = 1
 
         return self._return_or_inplace(
-            cpp_slice_strings(self._parent, start, stop, step), **kwargs
+            cpp_slice_strings(self._column, start, stop, step), **kwargs
         )
 
     def slice_from(self, starts=0, stops=0, **kwargs):
@@ -483,7 +489,7 @@ class StringMethods(object):
         """
 
         return self._return_or_inplace(
-            cpp_slice_from(self._parent, starts, stops), **kwargs
+            cpp_slice_from(self._column, starts, stops), **kwargs
         )
 
     def slice_replace(self, start=None, stop=None, repl=None, **kwargs):
@@ -520,7 +526,7 @@ class StringMethods(object):
         from cudf._libxx.scalar import Scalar
 
         return self._return_or_inplace(
-            cpp_slice_replace(self._parent, start, stop, Scalar(repl)),
+            cpp_slice_replace(self._column, start, stop, Scalar(repl)),
             **kwargs,
         )
 
@@ -551,7 +557,7 @@ class StringMethods(object):
         from cudf._libxx.scalar import Scalar
 
         return self._return_or_inplace(
-            cpp_string_insert(self._parent, start, Scalar(repl)), **kwargs
+            cpp_string_insert(self._column, start, Scalar(repl)), **kwargs
         )
 
     def get(self, i=0, **kwargs):
@@ -574,7 +580,7 @@ class StringMethods(object):
         """
 
         return self._return_or_inplace(
-            cpp_string_get(self._parent, i), **kwargs
+            cpp_string_get(self._column, i), **kwargs
         )
 
     def split(self, pat=None, n=-1, expand=True):
@@ -611,8 +617,8 @@ class StringMethods(object):
 
         from cudf.core import DataFrame
 
-        out_df = DataFrame(index=self._index)
-        out = self._parent.nvstrings.split(delimiter=pat, n=n)
+        out_df = DataFrame(index=self._parent.index)
+        out = self._column.nvstrings.split(delimiter=pat, n=n)
 
         for idx, val in enumerate(out):
             out_df[idx] = val
@@ -740,8 +746,8 @@ class StringColumn(column.ColumnBase):
         cpumem = self.to_arrow()
         return column.as_column, (cpumem, False, np.dtype("object"))
 
-    def str(self, index=None, name=None, owner=None):
-        return StringMethods(self, index=index, name=name, owner=owner)
+    def str(self, parent=None):
+        return StringMethods(self, parent=parent)
 
     def __sizeof__(self):
         n = 0

@@ -13,6 +13,7 @@ from . import (
     search,
     sort,
     stream_compaction,
+    strings,
     table,
     transpose,
 )
