@@ -297,7 +297,7 @@ void compute_single_pass_aggs(table_view const& keys,
 }
 
 /**
- * @brief Compute and returns a device vector containing all populated keys in
+ * @brief Computes and returns a device vector containing all populated keys in
  * `map`. 
  */
 template <typename Map>

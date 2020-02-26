@@ -28,7 +28,7 @@ namespace detail {
 namespace hash {
  
 /**
- * @brief Computes single-pass aggregations and store results into a sparse 
+ * @brief Compute single-pass aggregations and store results into a sparse 
  * `output_values` table, and populate `map` with indices of unique keys
  *
  * The hash map is built by inserting every row `i` from the `keys` and
