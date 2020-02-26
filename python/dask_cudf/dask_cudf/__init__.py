@@ -9,6 +9,7 @@ from .core import (
     from_cudf,
     from_dask_dataframe,
     from_delayed,
+    split_partitions,
 )
 from .io import read_csv, read_json, read_orc, to_orc
 
