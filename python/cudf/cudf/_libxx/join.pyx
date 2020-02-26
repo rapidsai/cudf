@@ -30,7 +30,7 @@ cpdef join(Table lhs,
     left_on_ind.reserve(num_inds_left)
     right_on_ind.reserve(num_inds_right)
 
-    columns_in_common = set()
+    columns_in_common = OrderedDict()
     cdef vector[pair[int, int]] c_columns_in_common
 
     # Views might or might not include index
@@ -83,9 +83,9 @@ cpdef join(Table lhs,
         left_on_ind.push_back(left_on_idx)
         right_on_ind.push_back(right_on_idx)
 
-        columns_in_common.add(pair[int, int](
+        columns_in_common[pair[int, int](
             (left_on_idx, right_on_idx)
-        ))
+        )] = None
 
     else:
         # cuDF's Python layer will create a new RangeIndex for this case
@@ -103,16 +103,16 @@ cpdef join(Table lhs,
             left_on_ind.push_back(left_join_cols.index(name))
             if name in right_on:
                 if (left_on.index(name) == right_on.index(name)):
-                    columns_in_common.add(
+                    columns_in_common[
                         pair[int, int]((
                             left_join_cols.index(name),
                             right_join_cols.index(name)
                         ))
-                    )
+                    ] = None
         for name in right_on:
             right_on_ind.push_back(right_join_cols.index(name))
 
-    c_columns_in_common = list(columns_in_common)
+    c_columns_in_common = list(columns_in_common.keys())
     cdef unique_ptr[table] c_result
     if how == 'inner':
         with nogil:
