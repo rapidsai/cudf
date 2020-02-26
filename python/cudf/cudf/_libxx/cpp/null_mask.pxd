@@ -7,7 +7,7 @@ from rmm._lib.device_buffer cimport device_buffer
 from cudf._libxx.cpp.column.column_view cimport column_view
 cimport cudf._libxx.cpp.types as cudf_types
 
-ctypedef int32_t mask_state_underlying_type
+ctypedef int32_t underlying_type_t_mask_state
 
 
 cdef extern from "cudf/null_mask.hpp" namespace "cudf" nogil:

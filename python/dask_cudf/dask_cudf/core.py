@@ -179,29 +179,6 @@ class DataFrame(_Frame, dd.core.DataFrame):
             )
         return super().set_index(other, shuffle="tasks", **kwargs)
 
-    def reset_index(self, force=False, drop=False):
-        """Reset index to range based
-        """
-        if force:
-            dfs = self.to_delayed()
-            sizes = np.asarray(compute(*map(delayed(len), dfs)))
-            prefixes = np.zeros_like(sizes)
-            prefixes[1:] = np.cumsum(sizes[:-1])
-
-            @delayed
-            def fix_index(df, startpos):
-                stoppos = startpos + len(df)
-                return df.set_index(
-                    cudf.core.index.RangeIndex(start=startpos, stop=stoppos)
-                )
-
-            outdfs = [
-                fix_index(df, startpos) for df, startpos in zip(dfs, prefixes)
-            ]
-            return from_delayed(outdfs, meta=self._meta.reset_index(drop=True))
-        else:
-            return self.map_partitions(M.reset_index, drop=drop)
-
     def sort_values(self, by, ignore_index=False):
         """Sort by the given column
 

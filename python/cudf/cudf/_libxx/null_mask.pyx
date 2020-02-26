@@ -10,34 +10,26 @@ from cudf._libxx.column cimport Column
 from cudf._libxx.move cimport move
 import cudf._libxx as libcudfxx
 
+from cudf._libxx.cpp.types cimport mask_state, size_type
 from cudf._libxx.cpp.column.column_view cimport column_view
 from cudf._libxx.cpp.null_mask cimport (
     copy_bitmask as cpp_copy_bitmask,
     create_null_mask as cpp_create_null_mask,
     bitmask_allocation_size_bytes as cpp_bitmask_allocation_size_bytes,
-    mask_state_underlying_type
+    underlying_type_t_mask_state
 )
 
 from cudf.core.buffer import Buffer
-cimport cudf._libxx.cpp.types as cudf_types
 
 
 class MaskState(Enum):
     """
     Enum for null mask creation state
     """
-    UNALLOCATED = <mask_state_underlying_type>(
-        cudf_types.mask_state.UNALLOCATED
-    )
-    UNINITIALIZED = <mask_state_underlying_type>(
-        cudf_types.mask_state.UNINITIALIZED
-    )
-    ALL_VALID = <mask_state_underlying_type>(
-        cudf_types.mask_state.ALL_VALID
-    )
-    ALL_NULL = <mask_state_underlying_type>(
-        cudf_types.mask_state.ALL_NULL
-    )
+    UNALLOCATED = <underlying_type_t_mask_state> mask_state.UNALLOCATED
+    UNINITIALIZED = <underlying_type_t_mask_state> mask_state.UNINITIALIZED
+    ALL_VALID = <underlying_type_t_mask_state> mask_state.ALL_VALID
+    ALL_NULL = <underlying_type_t_mask_state> mask_state.ALL_NULL
 
 
 def copy_bitmask(Column col):
@@ -61,7 +53,7 @@ def copy_bitmask(Column col):
     return buf
 
 
-def bitmask_allocation_size_bytes(cudf_types.size_type num_bits):
+def bitmask_allocation_size_bytes(size_type num_bits):
     """
     Given a size, calculates the number of bytes that should be allocated for a
     column validity mask
@@ -74,7 +66,7 @@ def bitmask_allocation_size_bytes(cudf_types.size_type num_bits):
     return output_size
 
 
-def create_null_mask(cudf_types.size_type size, state=MaskState.UNINITIALIZED):
+def create_null_mask(size_type size, state=MaskState.UNINITIALIZED):
     """
     Given a size and a mask state, allocate a mask that can properly represent
     the given size with the given mask state
@@ -94,8 +86,8 @@ def create_null_mask(cudf_types.size_type size, state=MaskState.UNINITIALIZED):
 
     cdef device_buffer db
     cdef unique_ptr[device_buffer] up_db
-    cdef cudf_types.mask_state c_mask_state = <cudf_types.mask_state>(
-        <mask_state_underlying_type>(state.value)
+    cdef mask_state c_mask_state = <mask_state>(
+        <underlying_type_t_mask_state>(state.value)
     )
 
     with nogil:

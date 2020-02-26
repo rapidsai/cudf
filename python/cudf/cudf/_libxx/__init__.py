@@ -1,5 +1,4 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
-
 import numpy as np
 
 from . import (
@@ -7,6 +6,7 @@ from . import (
     hash,
     merge,
     null_mask,
+    quantiles,
     replace,
     rolling,
     search,

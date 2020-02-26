@@ -195,9 +195,41 @@ class Frame(libcudfxx.table.Table):
         result._copy_categories(self)
         return result
 
+    def _quantiles(
+        self,
+        q,
+        interpolation="LINEAR",
+        is_sorted=False,
+        column_order=(),
+        null_precedence=(),
+    ):
+        interpolation = libcudfxx.types.Interpolation[interpolation]
+
+        is_sorted = libcudfxx.types.Sorted["YES" if is_sorted else "NO"]
+
+        column_order = [libcudfxx.types.Order[key] for key in column_order]
+
+        null_precedence = [
+            libcudfxx.types.NullOrder[key] for key in null_precedence
+        ]
+
+        result = self.__class__._from_table(
+            libcudfxx.quantiles.quantiles(
+                self,
+                q,
+                interpolation,
+                is_sorted,
+                column_order,
+                null_precedence,
+            )
+        )
+
+        result._copy_categories(self)
+        return result
+
     def drop_duplicates(self, subset=None, keep="first", nulls_are_equal=True):
         """
-        Drops rows in frame as per duplicate rows in `seubset` columns from
+        Drops rows in frame as per duplicate rows in `subset` columns from
         self.
 
         subset : list, optional
