@@ -357,7 +357,7 @@ class EqualLengthValuesMappingMixin:
 
 
 class OrderedColumnDict(
-    ColumnValuesMappingMixin, EqualLengthValuesMappingMixin, OrderedDict
+    ColumnValuesMappingMixin, OrderedDict
 ):
     pass
 

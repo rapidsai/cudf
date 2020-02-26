@@ -27,6 +27,12 @@ class ColumnAccessor(MutableMapping):
             For a non-hierarchical index, a tuple of size 1
             may be passe.
         """
+        if isinstance(data, ColumnAccessor):
+            self._data = data._data
+            self.multiindex = data.multiindex
+            self.level_names = data.level_names
+            return
+        
         # TODO: we should validate the keys of `data`
         self._data = OrderedColumnDict(data)
         self.multiindex = multiindex
@@ -63,6 +69,14 @@ class ColumnAccessor(MutableMapping):
             level_names_repr,
         )
 
+    def meta(self):
+        empty = cudf.core.column.as_column([])
+        return self.__class__(
+            self._data.__class__.fromkeys(self._data.keys(), empty),
+            multiindex=self.multiindex,
+            level_names=self.level_names
+        )
+    
     @property
     def nlevels(self):
         if not self.multiindex:

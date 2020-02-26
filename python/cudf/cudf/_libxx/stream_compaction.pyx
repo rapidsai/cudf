@@ -67,10 +67,7 @@ def drop_nulls(Table source_table, how="any", keys=None, thresh=None):
 
     return Table.from_unique_ptr(
         move(c_result),
-        column_names=source_table._column_names,
-        index_names=(
-            None if source_table._index is None
-            else source_table._index_names)
+        column_meta=source_table._column_meta
     )
 
 
@@ -104,10 +101,7 @@ def apply_boolean_mask(Table source_table, Column boolean_mask):
 
     return Table.from_unique_ptr(
         move(c_result),
-        column_names=source_table._column_names,
-        index_names=(
-            None if source_table._index
-            is None else source_table._index_names)
+        column_meta=source_table._column_meta
     )
 
 
@@ -170,10 +164,7 @@ def drop_duplicates(Table source_table, keys=None,
 
     return Table.from_unique_ptr(
         move(c_result),
-        column_names=source_table._column_names,
-        index_names=(
-            None if source_table._index
-            is None else source_table._index_names)
+        column_meta=source_table._column_meta
     )
 
 

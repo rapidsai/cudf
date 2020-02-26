@@ -44,7 +44,7 @@ def transpose(Table source):
 
     result = Table.from_unique_ptr(
         move(c_result),
-        column_names=cudf.core.index.RangeIndex(0, source._num_rows)
+        column_meta={"data": dict.fromkeys(range(source._num_rows), [])}
     )
 
     if cats is not None:

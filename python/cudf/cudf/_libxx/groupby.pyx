@@ -3,6 +3,7 @@ from cudf._libxx.lib cimport *
 from cudf._libxx.table cimport Table
 cimport cudf._libxx.includes.groupby as libgroupby
 
+
 cdef class GroupBy:
     cdef unique_ptr[libgroupby.groupby] c_obj
     cdef dict __dict__

@@ -45,9 +45,12 @@ def from_dlpack(dlpack_capsule):
 
     return Table.from_unique_ptr(
         move(c_result),
-        column_names=range(0, c_result.get()[0].num_columns())
-    )
-
+        column_meta={
+            "data":dict.fromkeys(
+                range(c_result.get()[0].num_columns()),
+                []
+            )
+        })
 
 def to_dlpack(Table source_table):
     """
