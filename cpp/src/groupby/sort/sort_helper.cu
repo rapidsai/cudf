@@ -105,11 +105,14 @@ size_type sort_groupby_helper::num_keys(cudaStream_t stream) {
 }
 
 column_view sort_groupby_helper::key_sort_order(cudaStream_t stream) {
+  auto sliced_key_sorted_order = [stream, this]() {
+      return cudf::experimental::detail::slice(
+        this->_key_sorted_order->view(),
+        0,
+        this->num_keys(stream));};
+
   if (_key_sorted_order) {
-    return cudf::experimental::detail::slice(
-      _key_sorted_order->view(),
-      0,
-      num_keys(stream));
+    return sliced_key_sorted_order();
   }
 
   // TODO (dm): optimization. When keys are pre sorted but ignore nulls is true,
@@ -125,10 +128,7 @@ column_view sort_groupby_helper::key_sort_order(cudaStream_t stream) {
                      d_key_sorted_order,
                      d_key_sorted_order + _key_sorted_order->size(), 0);
 
-    return cudf::experimental::detail::slice(
-      _key_sorted_order->view(),
-      0,
-      num_keys(stream));
+    return sliced_key_sorted_order();
   }
 
   if (not _ignore_null_keys || !cudf::has_nulls(_keys)) {  // SQL style
@@ -152,10 +152,7 @@ column_view sort_groupby_helper::key_sort_order(cudaStream_t stream) {
     // All rows with one or more null values are at the end of the resulting sorted order.
   }
 
-  return cudf::experimental::detail::slice(
-      _key_sorted_order->view(),
-      0,
-      num_keys(stream));
+  return sliced_key_sorted_order();
 }
 
 sort_groupby_helper::index_vector const& 
