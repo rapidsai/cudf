@@ -149,7 +149,7 @@ abstract class MemoryBuffer implements AutoCloseable {
   /**
    * Close this buffer and free memory
    */
-  public void close() {
+  public synchronized void close() {
     if (cleaner != null) {
       refCount--;
       cleaner.delRef();

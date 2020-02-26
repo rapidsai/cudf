@@ -480,10 +480,13 @@ class StringColumn(column.ColumnBase):
 
     @property
     def base_size(self):
-        return int(
-            (self.base_children[0].size - 1)
-            / self.base_children[0].dtype.itemsize
-        )
+        if len(self.base_children) == 0:
+            return 0
+        else:
+            return int(
+                (self.base_children[0].size - 1)
+                / self.base_children[0].dtype.itemsize
+            )
 
     def set_base_data(self, value):
         if value is not None:
@@ -510,9 +513,10 @@ class StringColumn(column.ColumnBase):
     @property
     def children(self):
         if self._children is None:
-            if self.base_children is None or (
-                self.offset == 0
-                and self.base_children[0].size == (self.size + 1)
+            if len(self.base_children) == 0:
+                self._children = ()
+            elif self.offset == 0 and self.base_children[0].size == (
+                self.size + 1
             ):
                 self._children = self.base_children
             else:
@@ -563,12 +567,12 @@ class StringColumn(column.ColumnBase):
 
     def __sizeof__(self):
         n = 0
-        if self.base_children is not None and len(self.base_children) == 2:
+        if len(self.base_children) == 2:
             n += (
                 self.base_children[0].__sizeof__()
                 + self.base_children[1].__sizeof__()
             )
-        if self.base_mask:
+        if self.base_mask is not None:
             n += self.base_mask.size
         return n
 
@@ -632,7 +636,10 @@ class StringColumn(column.ColumnBase):
 
     @property
     def _nbytes(self):
-        return self.children[1].size
+        if self.size == 0:
+            return 0
+        else:
+            return self.children[1].size
 
     def as_numerical_column(self, dtype, **kwargs):
 

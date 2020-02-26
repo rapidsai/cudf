@@ -19,7 +19,7 @@ from cudf.core.ops import (
     sqrt,
     tan,
 )
-from cudf.core.reshape import concat, get_dummies, melt
+from cudf.core.reshape import concat, get_dummies, melt, merge_sorted
 from cudf.io import (
     from_dlpack,
     read_avro,
