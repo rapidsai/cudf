@@ -23,10 +23,10 @@ cpdef join(Table lhs,
     cdef Table c_lhs = lhs
     cdef Table c_rhs = rhs
 
-    num_inds_left = len(left_on) + left_index
-    num_inds_right = len(right_on) + right_index
     cdef vector[int] left_on_ind
     cdef vector[int] right_on_ind
+    num_inds_left = len(left_on) + left_index
+    num_inds_right = len(right_on) + right_index
     left_on_ind.reserve(num_inds_left)
     right_on_ind.reserve(num_inds_right)
 
@@ -38,13 +38,16 @@ cpdef join(Table lhs,
 
     # the result columns are all the left columns (including common ones)
     # + all the right columns (excluding the common ones)
-    result_col_names = []
+    result_col_names = [None] * len(lhs._data.keys() | rhs._data.keys())
 
+    ix = 0
     for name in lhs._data.keys():
-        result_col_names.append(name)
+        result_col_names[ix] = name
+        ix += 1
     for name in rhs._data.keys():
         if name not in lhs._data.keys():
-            result_col_names.append(name)
+            result_col_names[ix] = name
+            ix += 1
 
     # keep track of where the desired index column will end up
     result_index_pos = None
