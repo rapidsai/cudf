@@ -230,8 +230,7 @@ column_view sort_groupby_helper::unsorted_keys_labels(cudaStream_t stream) {
                               group_labels().size(),
                               group_labels().data().get());
   
-  auto scatter_map = cudf::experimental::detail::slice(
-    key_sort_order(), 0, num_keys(stream));
+  auto scatter_map = key_sort_order();
 
   std::unique_ptr<table> t_unsorted_keys_labels = 
     cudf::experimental::detail::scatter(
@@ -287,8 +286,7 @@ sort_groupby_helper::grouped_values(column_view const& values,
   rmm::mr::device_memory_resource* mr,
   cudaStream_t stream)
 {
-  auto gather_map = cudf::experimental::detail::slice(
-    key_sort_order(), 0, num_keys(stream));
+  auto gather_map = key_sort_order();
 
   auto grouped_values_table = cudf::experimental::detail::gather(
     table_view({values}), gather_map, false, false, false, mr, stream);
