@@ -66,7 +66,7 @@ class StringMethods(object):
 
     def __init__(self, column, parent=None):
         self._column = column
-        self._owner = owner
+        self._parent = parent
 
     def __getattr__(self, attr, *args, **kwargs):
         from cudf.core.series import Series
