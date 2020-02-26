@@ -59,6 +59,8 @@ static void BM_concatenate(benchmark::State& state) {
     cuda_event_timer raii(state, true, 0);
     auto result = cudf::concatenate(column_views);
   }
+
+  state.SetBytesProcessed(state.iterations() * num_cols * num_rows * sizeof(T));
 }
 
 #define CONCAT_BENCHMARK_DEFINE(name, type)           \
