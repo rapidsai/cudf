@@ -105,7 +105,7 @@ class StringMethods(object):
         if inplace:
             self._column._mimic_inplace(new_col, inplace=True)
         else:
-            if isinstance(self._owner, Series):
+            if isinstance(self._parent, Series):
                 return Series(new_col, index=self.index, name=self.name)
             elif isinstance(self._owner, Index):
                 return as_index(new_col, name=self._name)
