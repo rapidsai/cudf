@@ -102,9 +102,9 @@ cpdef join(Table lhs,
             if name in right_on:
                 if (left_on.index(name) == right_on.index(name)):
                     columns_in_common[(
-                            left_join_cols.index(name),
-                            right_join_cols.index(name)
-                        )] = None
+                        left_join_cols.index(name),
+                        right_join_cols.index(name)
+                    )] = None
         for name in right_on:
             right_on_ind.push_back(right_join_cols.index(name))
 
