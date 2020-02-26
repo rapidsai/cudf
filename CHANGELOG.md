@@ -87,6 +87,7 @@
 - PR #4144 Release GIL when calling libcudf++ functions
 - PR #4082 Rework MultiColumns in cuDF
 - PR #4149 Use "type-serialized" for pickled types like Dask
+- PR #4171 Split java host and device vectors to make a vector truly immutable
 - PR #4167 Port `search` to libcudf++ (support multi-column searchsorted)
 - PR #4163 Assert Dask CUDA serializers have `Buffer` frames
 - PR #4165 List serializable classes once
@@ -101,6 +102,7 @@
 - PR #4204 Port nvtext create-ngrams function
 - PR #4219 Port dlpack.pyx to use new libcudf APIs
 - PR #4225 Remove stale notebooks
+- PR #4233 Porting replace.pyx to use new libcudf APIs
 - PR #4223 Fix a few of the Cython warnings
 - PR #4234 Add BUILD_LEGACY_TESTS cmake option
 - PR #4244 Port nvstrings Substring Gather/Scatter functions to cuDF Python/Cython
