@@ -109,8 +109,11 @@ class StringMethods(object):
         else:
             expand = kwargs.get("expand", False)
             if expand or isinstance(self._parent, (DataFrame, MultiIndex)):
+                # This branch indicates the passed as new_col
+                # is actually a table-like data
+                table = new_col
                 return self._parent._constructor_expanddim(
-                    {index: value for index, value in enumerate(new_col)},
+                    {index: value for index, value in enumerate(table)},
                     index=self._parent.index,
                 )
             elif isinstance(self._parent, Series):
