@@ -86,13 +86,13 @@ void gpu_rolling_new(cudf::size_type nrows,
     // check if we have enough input samples
     bool output_is_valid = (count >= min_periods);
 
+    // set the mask
+    const unsigned int result_mask = __ballot_sync(active_threads, output_is_valid);
+
     // store the output value, one per thread
     if (output_is_valid) {
       out_col[i] = val;
     }
-
-    // set the mask
-    const unsigned int result_mask = __ballot_sync(active_threads, output_is_valid);
 
     // only one thread writes the mask
     if (0 == cudf::intra_word_index(i)) {
