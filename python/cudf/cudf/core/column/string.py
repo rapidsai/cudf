@@ -66,7 +66,6 @@ class StringMethods(object):
 
     def __init__(self, column, parent=None):
         self._column = column
-        self._name = name
         self._owner = owner
 
     def __getattr__(self, attr, *args, **kwargs):
