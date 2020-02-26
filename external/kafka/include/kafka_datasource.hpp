@@ -41,7 +41,8 @@ class kafka_datasource : public external_datasource {
 
  private:
     RdKafka::Conf* kafka_conf_;
-    RdKafka::KafkaConsumer* consumer_;
+    RdKafka::KafkaConsumer* consumer_ = NULL;
+    RdKafka::Producer* producer_ = NULL;
     std::vector<RdKafka::TopicPartition*> partitions_;
     RdKafka::Conf::ConfResult conf_res_;
     RdKafka::ErrorCode err_;
@@ -65,7 +66,7 @@ class kafka_datasource : public external_datasource {
 
   std::string libcudf_datasource_identifier();
 
-  bool commit(std::string topic, int partition, int64_t offset);
+  bool commit_offset(std::string topic, int partition, int64_t offset);
 
   std::map<std::string, int64_t> get_watermark_offset(std::string topic, int partition);
 
@@ -77,7 +78,9 @@ class kafka_datasource : public external_datasource {
 
   int64_t get_committed_offset();
 
-  std::string consume_range(int64_t start_offset, int64_t end_offset, int batch_timeout);
+  std::string consume_range(int64_t start_offset, int64_t end_offset, int batch_timeout, std::string delimiter);
+
+  bool produce_message(std::string topic, std::string message_val, std::string message_key);
 
   const std::shared_ptr<arrow::Buffer> get_buffer(size_t offset,
                                                   size_t size) override {
@@ -98,6 +101,13 @@ class kafka_datasource : public external_datasource {
       gettimeofday(&tv, NULL);
       return ((int64_t)tv.tv_sec * 1000) + (tv.tv_usec / 1000);
     }
+
+    class ExampleOffsetCommitCb : public RdKafka::OffsetCommitCb {
+      public:
+        void offset_commit_cb (RdKafka::ErrorCode err, std::vector<RdKafka::TopicPartition*> &offsets) {
+          printf("Offsets have been committed!!!!!\n");
+        }
+    };
 
     class ExampleEventCb : public RdKafka::EventCb {
       public:

@@ -26,7 +26,7 @@ cdef extern from "kafka_datasource.hpp" namespace "cudf::io::external" nogil:
 
         void dump_configs() except +
 
-        bool commit(string topic, int partition, int offset) except +
+        bool commit_offset(string topic, int partition, int offset) except +
 
         int64_t get_committed_offset() except +
 
@@ -35,4 +35,5 @@ cdef extern from "kafka_datasource.hpp" namespace "cudf::io::external" nogil:
 
         string consume_range(int64_t start_offset,
                              int64_t end_offset,
-                             int batch_timeout) except +
+                             int batch_timeout,
+                             string delimiter) except +

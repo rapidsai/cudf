@@ -78,6 +78,9 @@ namespace external {
     ExampleEventCb ex_event_cb;
     kafka_conf_->set("event_cb", &ex_event_cb, errstr_);
 
+    ExampleOffsetCommitCb ex_offset_commit_cb;
+    kafka_conf_->set("offset_commit_cb", &ex_offset_commit_cb, errstr_);
+
     consumer_ = RdKafka::KafkaConsumer::create(kafka_conf_, errstr_);
     if (!consumer_) {
       printf("Failed to create kafka consumer!\n");
@@ -87,6 +90,9 @@ namespace external {
       partitions_.push_back(RdKafka::TopicPartition::create(topics_[i], 0, 0));
     }
     consumer_->assign(partitions_);
+
+    // Create the Kafka producer instance
+    producer_ = RdKafka::Producer::create(kafka_conf_, errstr_);
 
     return true;
   }
@@ -179,7 +185,8 @@ namespace external {
 
   std::string kafka_datasource::consume_range(int64_t start_offset,
                                               int64_t end_offset,
-                                              int batch_timeout) {
+                                              int batch_timeout,
+                                              std::string delimiter) {
     std::string json_str;
     int64_t messages_read = 0;
     int64_t batch_size = end_offset - start_offset;
@@ -196,7 +203,6 @@ namespace external {
         json_str.append(static_cast<char *>(msg->payload()));
         json_str.append("\n");
         messages_read++;
-        //printf("Message Read -> '%s'\n", static_cast<char *>(msg->payload()));
       } else {
         handle_error(msg);
         break;
@@ -211,6 +217,10 @@ namespace external {
     delete msg;
 
     return json_str;
+  }
+
+  bool kafka_datasource::produce_message(std::string topic, std::string message_val, std::string message_key) {
+    return true;
   }
 
   std::map<std::string, int64_t> kafka_datasource::get_watermark_offset(std::string topic, int32_t partition) {
@@ -238,8 +248,18 @@ namespace external {
     return results;
   }
 
-  bool kafka_datasource::commit(std::string topic, int partition, int64_t offset) {
-    return true;
+  bool kafka_datasource::commit_offset(std::string topic, int partition, int64_t offset) {
+
+    // Find the Topic in the partitions_
+    for (int i = 0; i < partitions_.size(); i++) {
+      if ((partitions_[i]->topic().compare(topic) == 0) && partitions_[i]->partition() == partition) {
+        partitions_[i]->set_offset(offset);
+        ExampleOffsetCommitCb ex_offset_commit_cb;
+        err_ = consumer_->commitSync(partitions_);
+        return true;
+      }
+    }
+    return false;
   }
 
 }  // namespace external

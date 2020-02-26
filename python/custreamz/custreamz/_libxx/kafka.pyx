@@ -31,16 +31,18 @@ cpdef create_kafka_handle(kafka_conf):
 cpdef read_gdf(lines=True,
                start=0,
                end=1000,
-               timeout=10000):
+               timeout=10000,
+               delimiter="\n"):
 
     json_str = kds.consume_range(start,
                                  end,
-                                 timeout)
-    print("Python - Kafka result bytes -> " + str(json_str))
+                                 timeout,
+                                 str.encode(delimiter))
+    # return read_json_libcudf(json_str, True, True)
     return json_str
 
 cpdef get_committed_offset():
-    print(kds.get_committed_offset())
+    return kds.get_committed_offset()
 
 cpdef dump_configs():
     kds.dump_configs()
@@ -60,6 +62,5 @@ cpdef get_watermark_offsets(topic=None,
               " Offset: " + str(dereference(it).second))
         postincrement(it)
 
-cpdef commit_offsets():
-    kds = new kafka_external()
-    print("`commit_offsets()` is not yet implemented")
+cpdef commit_topic_offset(topic=None, partition=0, offset=-1001):
+    kds.commit_offset(str.encode(topic), partition, offset)

@@ -1,5 +1,6 @@
-name: custreamz_dev
+name: cudf_dev
 channels:
+  - jdye64
   - rapidsai
   - nvidia
   - rapidsai-nightly
@@ -27,7 +28,7 @@ dependencies:
   - ipython
   - recommonmark
   - pandoc=<2.0.0
-  - cudatoolkit=10.0
+  - cudatoolkit=10.1
   - pip
   - partd
   - flake8
@@ -44,6 +45,9 @@ dependencies:
   - rapidjson
   - flatbuffers
   - hypothesis
+  - cudf-kafka-datasource
+  - custreamz
+  - librdkafka
   - pip:
       - sphinx-markdown-tables
       - git+https://github.com/dask/dask.git

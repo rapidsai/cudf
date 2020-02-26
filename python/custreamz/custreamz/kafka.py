@@ -8,24 +8,33 @@ class KafkaHandle(object):
         self.kafka_configs = kafka_configs
         libkafka.create_kafka_handle(kafka_configs)
 
-    def print_consumer_metadata(self):
+    def metadata(self):
         libkafka.print_consumer_metadata()
 
     def dump_configs(self):
         libkafka.dump_configs()
 
     def read_gdf(
-        lines=True, start=-1, end=-1, timeout=10000, *args, **kwargs,
+        self,
+        lines=True,
+        start=-1,
+        end=-1,
+        timeout=10000,
+        delimiter="\n",
+        *args,
+        **kwargs,
     ):
-        libkafka.read_gdf(lines, start, end, timeout)
+        return libkafka.read_gdf(lines, start, end, timeout, delimiter)
 
-    def get_committed_offset(self):
-        libkafka.get_committed_offset()
+    def committed(self):
+        return libkafka.get_committed_offset()
 
     def get_watermark_offsets(
-        topic=None, partition=-1, *args, **kwargs,
+        self, topic=None, partition=-1, *args, **kwargs,
     ):
         libkafka.get_watermark_offsets(topic, partition)
 
-    def commit_offsets(*args, **kwargs):
-        libkafka.commit_offsets()
+    def commit(
+        self, topic=None, partition=0, offset=-1001, *args, **kwargs,
+    ):
+        libkafka.commit_topic_offset(topic, partition, offset)
