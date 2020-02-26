@@ -5,7 +5,7 @@ from libcpp.vector cimport vector
 from libcpp.map cimport map
 
 from cudf._lib.cudf cimport *
-from cudf._libxx.includes.table.table_view cimport table_view
+from cudf._libxx.cpp.table.table_view cimport table_view
 
 
 cdef extern from "cudf/cudf.h" namespace "cudf::io::parquet" nogil:

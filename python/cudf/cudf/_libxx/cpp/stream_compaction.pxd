@@ -6,10 +6,10 @@ from libcpp cimport bool
 
 from cudf._libxx.types import np_to_cudf_types, cudf_to_np_types
 
-from cudf._libxx.includes.types cimport size_type
-from cudf._libxx.includes.column.column_view cimport column_view
-from cudf._libxx.includes.table.table cimport table
-from cudf._libxx.includes.table.table_view cimport table_view
+from cudf._libxx.cpp.types cimport size_type
+from cudf._libxx.cpp.column.column_view cimport column_view
+from cudf._libxx.cpp.table.table cimport table
+from cudf._libxx.cpp.table.table_view cimport table_view
 
 
 cdef extern from "cudf/stream_compaction.hpp" namespace "cudf::experimental" \

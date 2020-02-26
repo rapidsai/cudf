@@ -10,9 +10,9 @@ from cudf.core.buffer import Buffer
 from cudf._libxx.column cimport Column
 from cudf._libxx.move cimport move
 
-from cudf._libxx.includes.types cimport size_type
-from cudf._libxx.includes.transform cimport bools_to_mask as cpp_bools_to_mask
-from cudf._libxx.includes.column.column_view cimport column_view
+from cudf._libxx.cpp.types cimport size_type
+from cudf._libxx.cpp.transform cimport bools_to_mask as cpp_bools_to_mask
+from cudf._libxx.cpp.column.column_view cimport column_view
 
 
 def bools_to_mask(Column col):

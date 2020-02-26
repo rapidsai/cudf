@@ -2,13 +2,13 @@ from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 from libcpp.pair cimport pair
 from rmm._lib.device_buffer cimport device_buffer
-from cudf._libxx.includes.types cimport (
+from cudf._libxx.cpp.types cimport (
     size_type,
 )
-from cudf._libxx.includes.aggregation cimport aggregation
-from cudf._libxx.includes.scalar.scalar cimport scalar
-from cudf._libxx.includes.column.column cimport column, column_contents
-from cudf._libxx.includes.table.table cimport table
+from cudf._libxx.cpp.aggregation cimport aggregation
+from cudf._libxx.cpp.scalar.scalar cimport scalar
+from cudf._libxx.cpp.column.column cimport column, column_contents
+from cudf._libxx.cpp.table.table cimport table
 
 
 # Note: declaring `move()` with `except +` doesn't work.

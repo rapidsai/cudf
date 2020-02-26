@@ -4,9 +4,9 @@ from libc.stdint cimport (
 from libcpp cimport bool
 from libcpp.string cimport string
 
-from cudf._libxx.includes.types cimport data_type
+from cudf._libxx.cpp.types cimport data_type
 
-from cudf._libxx.includes.wrappers.bool cimport bool8
+from cudf._libxx.cpp.wrappers.bool cimport bool8
 
 
 cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:

@@ -10,12 +10,12 @@ from cudf._libxx.column cimport Column
 from cudf._libxx.table cimport Table
 from cudf._libxx.move cimport move
 
-from cudf._libxx.includes.column.column cimport column
-from cudf._libxx.includes.table.table_view cimport table_view
-from cudf._libxx.includes.sort cimport (
+from cudf._libxx.cpp.column.column cimport column
+from cudf._libxx.cpp.table.table_view cimport table_view
+from cudf._libxx.cpp.sort cimport (
     sorted_order, lower_bound, upper_bound
 )
-cimport cudf._libxx.includes.types as cudf_types
+cimport cudf._libxx.cpp.types as cudf_types
 
 
 def order_by(Table source_table, object ascending, bool na_position):

@@ -10,11 +10,11 @@ from cudf._libxx.column cimport Column
 from cudf._libxx.table cimport Table
 from cudf._libxx.move cimport move
 
-from cudf._libxx.includes.types cimport size_type
-from cudf._libxx.includes.table.table cimport table
-from cudf._libxx.includes.table.table_view cimport table_view
-from cudf._libxx.includes.column.column_view cimport column_view
-from cudf._libxx.includes.stream_compaction cimport (
+from cudf._libxx.cpp.types cimport size_type
+from cudf._libxx.cpp.table.table cimport table
+from cudf._libxx.cpp.table.table_view cimport table_view
+from cudf._libxx.cpp.column.column_view cimport column_view
+from cudf._libxx.cpp.stream_compaction cimport (
     duplicate_keep_option,
     drop_nulls as cpp_drop_nulls,
     apply_boolean_mask as cpp_apply_boolean_mask,

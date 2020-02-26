@@ -2,8 +2,8 @@
 
 from libcpp.memory cimport unique_ptr
 
-from cudf._libxx.includes.table.table cimport table
-from cudf._libxx.includes.table.table_view cimport (
+from cudf._libxx.cpp.table.table cimport table
+from cudf._libxx.cpp.table.table_view cimport (
     table_view, mutable_table_view
 )
 

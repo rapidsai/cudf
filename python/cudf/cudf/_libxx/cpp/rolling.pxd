@@ -4,10 +4,10 @@ from libcpp.memory cimport unique_ptr
 
 from cudf._libxx.types import np_to_cudf_types, cudf_to_np_types
 
-from cudf._libxx.includes.types cimport size_type
-from cudf._libxx.includes.column.column cimport column
-from cudf._libxx.includes.column.column_view cimport column_view
-from cudf._libxx.includes.aggregation cimport aggregation
+from cudf._libxx.cpp.types cimport size_type
+from cudf._libxx.cpp.column.column cimport column
+from cudf._libxx.cpp.column.column_view cimport column_view
+from cudf._libxx.cpp.aggregation cimport aggregation
 
 
 cdef extern from "cudf/rolling.hpp" namespace "cudf::experimental" nogil:

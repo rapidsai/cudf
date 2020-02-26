@@ -14,14 +14,14 @@ from libcpp.memory cimport unique_ptr
 from cudf._libxx.move cimport move
 from cudf._libxx.column cimport Column
 
-from cudf._libxx.includes.types cimport size_type
-from cudf._libxx.includes.column.column cimport column
-from cudf._libxx.includes.column.column_view cimport (
+from cudf._libxx.cpp.types cimport size_type
+from cudf._libxx.cpp.column.column cimport column
+from cudf._libxx.cpp.column.column_view cimport (
     column_view,
     mutable_column_view
 )
-from cudf._libxx.includes.table.table cimport table
-from cudf._libxx.includes.table.table_view cimport (
+from cudf._libxx.cpp.table.table cimport table
+from cudf._libxx.cpp.table.table_view cimport (
     table_view,
     mutable_table_view
 )

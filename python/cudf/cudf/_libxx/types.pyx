@@ -1,7 +1,7 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 import numpy as np
-cimport cudf._libxx.includes.types as cudf_types
+cimport cudf._libxx.cpp.types as cudf_types
 
 
 np_to_cudf_types = {

@@ -8,13 +8,13 @@ from cudf._libxx.column cimport Column
 from cudf._libxx.scalar cimport Scalar
 from cudf._libxx.move cimport move
 
-from cudf._libxx.includes.scalar.scalar cimport scalar
-from cudf._libxx.includes.column.column cimport column
-from cudf._libxx.includes.column.column_view cimport (
+from cudf._libxx.cpp.scalar.scalar cimport scalar
+from cudf._libxx.cpp.column.column cimport column
+from cudf._libxx.cpp.column.column_view cimport (
     column_view,
     mutable_column_view
 )
-from cudf._libxx.includes.replace cimport (
+from cudf._libxx.cpp.replace cimport (
     find_and_replace_all as cpp_find_and_replace_all,
     replace_nulls as cpp_replace_nulls,
     clamp as cpp_clamp,

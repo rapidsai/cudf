@@ -9,8 +9,8 @@ from libcpp.memory cimport unique_ptr
 
 from cudf._libxx.types import np_to_cudf_types, cudf_to_np_types
 
-from cudf._libxx.includes.table.table cimport table
-from cudf._libxx.includes.table.table_view cimport table_view
+from cudf._libxx.cpp.table.table cimport table
+from cudf._libxx.cpp.table.table_view cimport table_view
 
 cdef extern from "dlpack/dlpack.h" nogil:
     ctypedef struct DLManagedTensor:

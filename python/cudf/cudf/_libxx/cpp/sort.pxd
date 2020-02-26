@@ -4,9 +4,9 @@ from libcpp.vector cimport vector
 
 from cudf._libxx.types import np_to_cudf_types, cudf_to_np_types
 
-from cudf._libxx.includes.column.column cimport column
-from cudf._libxx.includes.table.table_view cimport table_view
-cimport cudf._libxx.includes.types as cudf_types
+from cudf._libxx.cpp.column.column cimport column
+from cudf._libxx.cpp.table.table_view cimport table_view
+cimport cudf._libxx.cpp.types as cudf_types
 
 
 cdef extern from "cudf/sorting.hpp" namespace "cudf::experimental" nogil:

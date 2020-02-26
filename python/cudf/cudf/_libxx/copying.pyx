@@ -8,10 +8,10 @@ from cudf._libxx.column cimport Column
 from cudf._libxx.table cimport Table
 from cudf._libxx.move cimport move
 
-from cudf._libxx.includes.table.table cimport table
-from cudf._libxx.includes.table.table_view cimport table_view
-from cudf._libxx.includes.column.column_view cimport column_view
-cimport cudf._libxx.includes.copying as cpp_copying
+from cudf._libxx.cpp.table.table cimport table
+from cudf._libxx.cpp.table.table_view cimport table_view
+from cudf._libxx.cpp.column.column_view cimport column_view
+cimport cudf._libxx.cpp.copying as cpp_copying
 
 
 def gather(Table source_table, Column gather_map):

@@ -1,9 +1,9 @@
 from libcpp.vector cimport vector
 from libcpp.memory cimport unique_ptr
 
-from cudf._libxx.includes.types cimport size_type
-from cudf._libxx.includes.column.column cimport column
-from cudf._libxx.includes.table.table_view cimport (
+from cudf._libxx.cpp.types cimport size_type
+from cudf._libxx.cpp.column.column cimport column
+from cudf._libxx.cpp.table.table_view cimport (
     table_view,
     mutable_table_view
 )

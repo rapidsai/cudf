@@ -4,8 +4,8 @@ from libc.stdint cimport int32_t
 
 from rmm._lib.device_buffer cimport device_buffer
 
-from cudf._libxx.includes.column.column_view cimport column_view
-cimport cudf._libxx.includes.types as cudf_types
+from cudf._libxx.cpp.column.column_view cimport column_view
+cimport cudf._libxx.cpp.types as cudf_types
 
 ctypedef int32_t mask_state_underlying_type
 

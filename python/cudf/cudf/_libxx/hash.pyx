@@ -9,14 +9,14 @@ from cudf._libxx.column cimport Column
 from cudf._libxx.table cimport Table
 from cudf._libxx.move cimport move
 
-from cudf._libxx.includes.column.column cimport column
-from cudf._libxx.includes.table.table cimport table
-from cudf._libxx.includes.table.table_view cimport table_view
-from cudf._libxx.includes.hash cimport (
+from cudf._libxx.cpp.column.column cimport column
+from cudf._libxx.cpp.table.table cimport table
+from cudf._libxx.cpp.table.table_view cimport table_view
+from cudf._libxx.cpp.hash cimport (
     hash_partition as cpp_hash_partition,
     hash as cpp_hash
 )
-cimport cudf._libxx.includes.types as cudf_types
+cimport cudf._libxx.cpp.types as cudf_types
 
 
 def hash_partition(Table source_table, object columns_to_hash,

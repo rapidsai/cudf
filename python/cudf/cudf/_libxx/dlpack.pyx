@@ -16,9 +16,9 @@ from cpython cimport pycapsule
 
 import warnings
 
-from cudf._libxx.includes.table.table cimport table
-from cudf._libxx.includes.table.table_view cimport table_view
-from cudf._libxx.includes.dlpack cimport (
+from cudf._libxx.cpp.table.table cimport table
+from cudf._libxx.cpp.table.table_view cimport table_view
+from cudf._libxx.cpp.dlpack cimport (
     from_dlpack as cpp_from_dlpack,
     to_dlpack as cpp_to_dlpack,
     DLManagedTensor

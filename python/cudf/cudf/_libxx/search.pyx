@@ -7,11 +7,11 @@ from cudf._libxx.column cimport Column
 from cudf._libxx.table cimport Table
 from cudf._libxx.move cimport move
 
-from cudf._libxx.includes.column.column cimport column
-from cudf._libxx.includes.column.column_view cimport column_view
-from cudf._libxx.includes.table.table_view cimport table_view
-cimport cudf._libxx.includes.types as cudf_types
-cimport cudf._libxx.includes.search as cpp_search
+from cudf._libxx.cpp.column.column cimport column
+from cudf._libxx.cpp.column.column_view cimport column_view
+from cudf._libxx.cpp.table.table_view cimport table_view
+cimport cudf._libxx.cpp.types as cudf_types
+cimport cudf._libxx.cpp.search as cpp_search
 
 
 def search_sorted(

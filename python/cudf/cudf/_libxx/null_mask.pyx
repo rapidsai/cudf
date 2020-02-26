@@ -10,8 +10,8 @@ from cudf._libxx.column cimport Column
 from cudf._libxx.move cimport move
 import cudf._libxx as libcudfxx
 
-from cudf._libxx.includes.column.column_view cimport column_view
-from cudf._libxx.includes.null_mask cimport (
+from cudf._libxx.cpp.column.column_view cimport column_view
+from cudf._libxx.cpp.null_mask cimport (
     copy_bitmask as cpp_copy_bitmask,
     create_null_mask as cpp_create_null_mask,
     bitmask_allocation_size_bytes as cpp_bitmask_allocation_size_bytes,
@@ -19,7 +19,7 @@ from cudf._libxx.includes.null_mask cimport (
 )
 
 from cudf.core.buffer import Buffer
-cimport cudf._libxx.includes.types as cudf_types
+cimport cudf._libxx.cpp.types as cudf_types
 
 
 class MaskState(Enum):

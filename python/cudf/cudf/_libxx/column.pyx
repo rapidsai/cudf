@@ -22,9 +22,9 @@ from cudf._libxx.types import np_to_cudf_types, cudf_to_np_types
 from cudf._libxx.null_mask import bitmask_allocation_size_bytes
 from cudf._libxx.move cimport move
 
-from cudf._libxx.includes.column.column cimport column, column_contents
-from cudf._libxx.includes.column.column_view cimport column_view
-cimport cudf._libxx.includes.types as cudf_types
+from cudf._libxx.cpp.column.column cimport column, column_contents
+from cudf._libxx.cpp.column.column_view cimport column_view
+cimport cudf._libxx.cpp.types as cudf_types
 
 
 @cython.auto_pickle(True)

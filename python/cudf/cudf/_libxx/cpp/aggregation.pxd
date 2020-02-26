@@ -4,7 +4,7 @@ from libcpp.string cimport string
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 
-from cudf._libxx.includes.types cimport size_type, data_type, interpolation
+from cudf._libxx.cpp.types cimport size_type, data_type, interpolation
 
 
 cdef extern from "cudf/aggregation.hpp" namespace "cudf::experimental" nogil:

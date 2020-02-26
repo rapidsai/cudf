@@ -3,7 +3,7 @@
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 
-cimport cudf._libxx.includes.io.io_types as cudf_io_types
+cimport cudf._libxx.cpp.io.io_types as cudf_io_types
 
 
 cdef extern from "cudf/io/functions.hpp" \
