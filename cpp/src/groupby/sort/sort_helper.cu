@@ -91,9 +91,9 @@ size_type sort_groupby_helper::num_keys(cudaStream_t stream) {
   if (_num_keys > -1)
     return _num_keys;
 
-  if (_ignore_null_keys and has_nulls(_keys)) {
+  if (_include_null_keys == include_nulls::NO and has_nulls(_keys)) {
     // The number of rows w/o null values `n` is indicated by number of valid bits
-    // in the row bitmask. When `_ignore_null_keys == true`, then only rows `[0, n)` 
+    // in the row bitmask. When `_include_null_keys == NO`, then only rows `[0, n)` 
     // in the sorted keys are considered for grouping. 
     _num_keys = keys_bitmask_column(stream).size() - 
                 keys_bitmask_column(stream).null_count();
@@ -111,7 +111,7 @@ column_view sort_groupby_helper::key_sort_order(cudaStream_t stream) {
   // TODO (dm): optimization. When keys are pre sorted but ignore nulls is true,
   //            we still want all rows with nulls in the end. Sort is costly, so
   //            do a copy_if(counting, sorted_order, {bitmask.isvalid(i)})
-  if (_keys_pre_sorted) {
+  if (_keys_pre_sorted == sorted::YES) {
     _key_sorted_order = make_numeric_column(data_type(type_to_id<size_type>()),
                           _keys.num_rows(), mask_state::UNALLOCATED, stream);
 
@@ -124,7 +124,7 @@ column_view sort_groupby_helper::key_sort_order(cudaStream_t stream) {
     return _key_sorted_order->view();
   }
 
-  if (not _ignore_null_keys || !cudf::has_nulls(_keys)) {  // SQL style
+  if (_include_null_keys == include_nulls::YES || !cudf::has_nulls(_keys)) {  // SQL style
     _key_sorted_order = cudf::experimental::detail::sorted_order(_keys, {},
       std::vector<null_order>(_keys.num_columns(), null_order::AFTER),
       rmm::mr::get_default_resource(), stream);
@@ -153,7 +153,7 @@ sort_groupby_helper::group_offsets(cudaStream_t stream) {
   if (_group_offsets)
     return *_group_offsets;
 
-  _group_offsets = std::make_unique<index_vector>(num_keys(stream));
+  _group_offsets = std::make_unique<index_vector>(num_keys(stream) + 1);
 
   auto device_input_table = table_device_view::create(_keys, stream);
   auto sorted_order = key_sort_order().data<size_type>();
@@ -175,7 +175,8 @@ sort_groupby_helper::group_offsets(cudaStream_t stream) {
   }
 
   size_type num_groups = thrust::distance(_group_offsets->begin(), result_end);
-  _group_offsets->resize(num_groups);
+  (*_group_offsets)[num_groups] = num_keys();
+  _group_offsets->resize(num_groups + 1);
 
   return *_group_offsets;
 }
@@ -299,7 +300,7 @@ std::unique_ptr<table> sort_groupby_helper::unique_keys(
 
   return cudf::experimental::detail::gather(_keys, gather_map_it,
                                             gather_map_it + num_groups(),
-                                            false, false, false, mr, stream);
+                                            false, mr, stream);
 }
 
 

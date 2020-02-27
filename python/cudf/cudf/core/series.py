@@ -14,9 +14,10 @@ import rmm
 import cudf
 import cudf._lib as libcudf
 from cudf.core.column import ColumnBase, DatetimeColumn, column
+from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.frame import Frame
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
-from cudf.core.table import Table
 from cudf.core.window import Rolling
 from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.docutils import copy_docstring
@@ -30,7 +31,7 @@ from cudf.utils.dtypes import (
 )
 
 
-class Series(Table):
+class Series(Frame):
     """
     Data and null-masks.
 
@@ -76,7 +77,7 @@ class Series(Table):
         data : 1D array-like
             The values.  Null values must not be skipped.  They can appear
             as garbage values.
-        mask : 1D array-like of numpy.uint8
+        mask : 1D array-like
             The null-mask.  Valid values are marked as ``1``; otherwise ``0``.
             The mask bit given the data index ``idx`` is computed as::
 
@@ -105,9 +106,11 @@ class Series(Table):
             data = data.values
         elif isinstance(data, Index):
             name = data.name
-            data = data.as_column()
+            data = data._values
             if dtype is not None:
                 data = data.astype(dtype)
+        elif isinstance(data, ColumnAccessor):
+            name, data = data.names[0], data.columns[0]
 
         if isinstance(data, Series):
             index = data._index if index is None else index
@@ -128,8 +131,18 @@ class Series(Table):
 
         assert isinstance(data, column.ColumnBase)
 
-        super().__init__([data], [name])
+        super().__init__({name: data})
         self._index = RangeIndex(len(data)) if index is None else index
+
+    @classmethod
+    def _from_table(cls, table):
+        name = next(iter(table._data.keys()))
+        data = next(iter(table._data.values()))
+        if table._index is None:
+            index = None
+        else:
+            index = Index._from_table(table._index)
+        return cls(data=data, index=index, name=name)
 
     @property
     def _column(self):
@@ -181,10 +194,11 @@ class Series(Table):
         header = {}
         frames = []
         header["index"], index_frames = self._index.serialize()
+        header["name"] = pickle.dumps(self.name)
         frames.extend(index_frames)
         header["index_frame_count"] = len(index_frames)
         header["column"], column_frames = self._column.serialize()
-        header["type"] = pickle.dumps(type(self))
+        header["type-serialized"] = pickle.dumps(type(self))
         frames.extend(column_frames)
         header["column_frame_count"] = len(column_frames)
 
@@ -215,7 +229,7 @@ class Series(Table):
     def name(self):
         """Returns name of the Series.
         """
-        return next(iter(self._data))
+        return self._data.names[0]
 
     @name.setter
     def name(self, value):
@@ -226,15 +240,17 @@ class Series(Table):
     def deserialize(cls, header, frames):
 
         index_nframes = header["index_frame_count"]
-        idx_typ = pickle.loads(header["index"]["type"])
+        idx_typ = pickle.loads(header["index"]["type-serialized"])
         index = idx_typ.deserialize(header["index"], frames[:index_nframes])
+        name = pickle.loads(header["name"])
 
         frames = frames[index_nframes:]
 
         column_nframes = header["column_frame_count"]
-        col_typ = pickle.loads(header["column"]["type"])
+        col_typ = pickle.loads(header["column"]["type-serialized"])
         column = col_typ.deserialize(header["column"], frames[:column_nframes])
-        return Series(column, index=index)
+
+        return Series(column, index=index, name=name)
 
     def _copy_construct_defaults(self):
         return dict(data=self._column, index=self._index, name=self.name)
@@ -367,7 +383,7 @@ class Series(Table):
 
         Parameters
         ----------
-        mask : 1D array-like of numpy.uint8
+        mask : 1D array-like
             The null-mask.  Valid values are marked as ``1``; otherwise ``0``.
             The mask bit given the data index ``idx`` is computed as::
 
@@ -462,21 +478,10 @@ class Series(Table):
 
         self._column[key] = value
 
-    def take(self, indices, ignore_index=False):
+    def take(self, indices):
         """Return Series by taking values from the corresponding *indices*.
         """
-        result = self[indices]
-        if ignore_index:
-            index = RangeIndex(len(result))
-            return result._copy_construct(index=index)
-        else:
-            return result
-
-    def _get_mask_as_series(self):
-        mask = Series(cudautils.ones(len(self), dtype=np.bool))
-        if self._column.nullable:
-            mask = mask.set_mask(self._column.mask).fillna(False)
-        return mask
+        return self[indices]
 
     def __bool__(self):
         """Always raise TypeError when converting a Series
@@ -1141,7 +1146,7 @@ class Series(Table):
 
     @property
     def cat(self):
-        return self._column.cat()
+        return self._column.cat(parent=self)
 
     @property
     def str(self):
@@ -1190,26 +1195,18 @@ class Series(Table):
     def has_nulls(self):
         return self._column.has_nulls
 
+    def dropna(self):
+        """
+        Return a Series with null values removed.
+        """
+        return super().dropna(subset=[self.name])
+
     def drop_duplicates(self, keep="first", inplace=False):
         """
         Return Series with duplicate values removed
         """
-        in_cols = [self._column]
-        in_index = self.index
-        from cudf.core.multiindex import MultiIndex
+        result = super().drop_duplicates(subset=[self.name], keep=keep)
 
-        if isinstance(in_index, MultiIndex):
-            in_index = RangeIndex(len(in_index))
-        out_cols, new_index = libcudf.stream_compaction.drop_duplicates(
-            [in_index.as_column()], in_cols, None, keep
-        )
-        new_index = as_index(new_index)
-        if self.index.equals(new_index):
-            new_index = self.index
-        if isinstance(self.index, MultiIndex):
-            new_index = self.index.take(new_index)
-
-        result = Series(out_cols[0], index=new_index, name=self.name)
         return self._mimic_inplace(result, inplace=inplace)
 
     def _mimic_inplace(self, result, inplace=False):
@@ -1220,19 +1217,6 @@ class Series(Table):
             self.name = result.name
         else:
             return result
-
-    def dropna(self):
-        """
-        Return a Series with null values removed.
-        """
-        if not self.has_nulls:
-            return self
-        name = self.name
-        result = self.to_frame(name="_").dropna()
-        result = result["_"]
-        result.name = name
-        self.name = name
-        return result
 
     def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
         """Fill null values with ``value``.
@@ -1256,9 +1240,11 @@ class Series(Table):
         if axis:
             raise NotImplementedError("The axis keyword is not supported")
 
-        data = self._column.fillna(value, inplace=inplace)
+        data = self._column.fillna(value)
 
-        if not inplace:
+        if inplace:
+            self._column._mimic_inplace(data, inplace=True)
+        else:
             return self._copy_construct(data=data)
 
     def where(self, cond, other=None, axis=None):
@@ -1373,8 +1359,9 @@ class Series(Table):
         if self.dtype.kind == "f":
             sr = self.fillna(np.nan)
             newmask = libcudf.unaryops.nans_to_nulls(sr._column)
-            self._column.mask = newmask
-        return self
+            return self.set_mask(newmask)
+        else:
+            return self
 
     def all(self, axis=0, skipna=True, level=None):
         """
@@ -1474,9 +1461,7 @@ class Series(Table):
         -------
         device array
         """
-        if self.has_nulls:
-            raise ValueError("Column must have no nulls.")
-        return cudautils.compact_mask_bytes(self._column.data_array_view)
+        return self._column.as_mask()
 
     def astype(self, dtype, errors="raise", **kwargs):
         """
@@ -1630,7 +1615,7 @@ class Series(Table):
             Series after replacement. The mask and index are preserved.
         """
         # if all the elements of replacement column are None then propagate the
-        # same dtype as self.dtype in column.as_column() for replacement
+        # same dtype as self.dtype in column._values for replacement
         all_nan = False
         if not is_scalar(to_replace):
             if is_scalar(replacement):
@@ -1683,7 +1668,7 @@ class Series(Table):
         """
         rinds = cudautils.arange_reversed(self._column.size, dtype=np.int32)
         col = self._column[rinds]
-        index = self.index.as_column()[rinds]
+        index = self.index._values[rinds]
         return self._copy_construct(data=col, index=index)
 
     def one_hot_encoding(self, cats, dtype="float64"):
@@ -2085,8 +2070,8 @@ class Series(Table):
 
         # If categorical, combine categories first
         if is_categorical_dtype(lhs):
-            lhs_cats = lhs.cat.categories.as_column()
-            rhs_cats = rhs.cat.categories.as_column()
+            lhs_cats = lhs.cat.categories._values
+            rhs_cats = rhs.cat.categories._values
             if np.issubdtype(rhs_cats.dtype, lhs_cats.dtype):
                 # if the categories are the same dtype, we can combine them
                 cats = Series(lhs_cats.append(rhs_cats)).drop_duplicates()
@@ -2144,8 +2129,7 @@ class Series(Table):
             raise NotImplementedError(msg)
         if self.null_count == len(self):
             return 0
-        return self._column.unique_count(method=method, dropna=dropna)
-        # return len(self._column.unique())
+        return self._column.unique_count(method, dropna)
 
     def value_counts(self, sort=True):
         """Returns unique values of this Series.
@@ -2205,9 +2189,7 @@ class Series(Table):
     def hash_values(self):
         """Compute the hash of values in this column.
         """
-        from cudf.core.column import numerical
-
-        return Series(numerical.column_hash_values(self._column)).values
+        return Series(self._hash()).values
 
     def hash_encode(self, stop, use_name=False):
         """Encode column values as ints in [0, stop) using hash function.
@@ -2228,12 +2210,8 @@ class Series(Table):
         """
         assert stop > 0
 
-        from cudf.core.column import numerical
-
-        initial_hash = np.asarray(hash(self.name)) if use_name else None
-        hashed_values = numerical.column_hash_values(
-            self._column, initial_hash_values=initial_hash
-        )
+        initial_hash = [hash(self.name) & 0xFFFFFFFF] if use_name else None
+        hashed_values = self._hash(initial_hash)
 
         if hashed_values.has_nulls:
             raise ValueError("Column must have no nulls.")
@@ -2570,24 +2548,6 @@ class Series(Table):
 
         return out.copy(deep=copy)
 
-    def searchsorted(self, value, side="left"):
-        """Find indices where elements should be inserted to maintain order
-
-        Parameters
-        ----------
-        value : array_like
-            Column of values to search for
-        side : str {‘left’, ‘right’} optional
-            If ‘left’, the index of the first suitable location found is given.
-            If ‘right’, return the last such index
-
-        Returns
-        -------
-        A Column of insertion points with the same shape as value
-        """
-        outcol = self._column.searchsorted(value, side)
-        return Series(outcol).values
-
     @property
     def is_unique(self):
         return self._column.is_unique
@@ -2632,6 +2592,50 @@ class Series(Table):
         lhs = self.to_frame(0)
         rhs = cudf.DataFrame(index=as_index(index))
         result = lhs.join(rhs, how=how, sort=sort)[0]
+        result.index.names = index.names
+        return result
+
+    def merge(self, other):
+        # An inner join shuold return a series containing matching elements
+        # a Left join should return just self
+        # an outer join should return a two column
+        # dataframe containing all elements from both
+        dummy = "name"
+
+        l_name = self.name
+        r_name = other.name
+        lhs = self.copy(deep=False)
+        rhs = other.copy(deep=False)
+
+        if l_name is None and r_name is not None:
+            lhs.name = r_name
+            left_on = right_on = r_name
+        elif r_name is None and l_name is not None:
+            rhs.name = l_name
+            left_on = right_on = l_name
+        elif l_name is None and r_name is None:
+            lhs.name = dummy
+            rhs.name = dummy
+            left_on = right_on = dummy
+        elif l_name is not None and r_name is not None:
+            left_on = l_name
+            right_on = r_name
+
+        result = super(Series, lhs)._merge(
+            rhs,
+            left_on=left_on,
+            right_on=right_on,
+            how="inner",
+            left_index=False,
+            right_index=False,
+            on=None,
+            lsuffix=None,
+            rsuffix=None,
+            method="hash",
+        )
+
+        result.name = other.name
+
         return result
 
 
@@ -2710,6 +2714,15 @@ def _align_indices(series_list, how="outer", allow_non_unique=False):
             all_index_equal = False
             break
 
+    # check if all names are the same
+    all_names_equal = True
+    for sr in series_list[1:]:
+        if not sr.index.names == head.names:
+            all_names_equal = False
+    new_index_names = [None]
+    if all_names_equal:
+        new_index_names = head.names
+
     if all_index_equal:
         return series_list
 
@@ -2717,6 +2730,7 @@ def _align_indices(series_list, how="outer", allow_non_unique=False):
         combined_index = cudf.core.reshape.concat(
             [sr.index for sr in series_list]
         ).unique()
+        combined_index.names = new_index_names
     else:
         combined_index = series_list[0].index
         for sr in series_list[1:]:
@@ -2727,6 +2741,7 @@ def _align_indices(series_list, how="outer", allow_non_unique=False):
                     how="inner",
                 )
             ).index
+        combined_index.names = new_index_names
 
     # align all Series to the combined index
     result = [

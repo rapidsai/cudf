@@ -61,22 +61,12 @@ std::unique_ptr<cudf::column> gather( strings_column_view const& strings,
 {
     auto output_count = std::distance(begin, end);
     auto strings_count = strings.size();
-    if( output_count == 0 || strings_count == 0 )
+    if( output_count == 0 )
         return make_empty_strings_column(mr,stream);
 
     auto execpol = rmm::exec_policy(stream);
     auto strings_column = column_device_view::create(strings.parent(),stream);
     auto d_strings = *strings_column;
-
-    mask_state mstate = mask_state::UNINITIALIZED;
-    if( NullifyOutOfBounds ) {
-      mstate = ALL_NULL;
-    }
-    // create null mask -- caller must update this
-
-    auto null_mask  = (strings.parent().nullable() or NullifyOutOfBounds)
-                    ? create_null_mask(output_count, mstate, stream, mr)
-                    : rmm::device_buffer{};
 
     // build offsets column
     auto offsets_transformer = [d_strings, strings_count] __device__ (size_type idx) {
@@ -111,7 +101,7 @@ std::unique_ptr<cudf::column> gather( strings_column_view const& strings,
     thrust::for_each_n(execpol->on(stream), thrust::make_counting_iterator<size_type>(0), output_count, gather_chars);
 
     return make_strings_column(output_count, std::move(offsets_column), std::move(chars_column),
-                               UNKNOWN_NULL_COUNT, std::move(null_mask), stream, mr);
+                               0, rmm::device_buffer{}, stream, mr);
 }
 
 /**

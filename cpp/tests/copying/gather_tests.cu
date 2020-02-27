@@ -33,7 +33,7 @@ TYPED_TEST(GatherTest, GatherDetailDeviceVectorTest) {
   // test with device vector iterators
   {
     std::unique_ptr<cudf::experimental::table> result =
-      cudf::experimental::detail::gather(source_table, gather_map.begin(), gather_map.end(), true);
+      cudf::experimental::detail::gather(source_table, gather_map.begin(), gather_map.end());
 
     for (auto i=0; i<source_table.num_columns(); ++i) {
       cudf::test::expect_columns_equal(source_table.column(i), result->view().column(i));
@@ -46,8 +46,7 @@ TYPED_TEST(GatherTest, GatherDetailDeviceVectorTest) {
   {
     std::unique_ptr<cudf::experimental::table> result =
       cudf::experimental::detail::gather(source_table, gather_map.data().get(),
-                                         gather_map.data().get() + gather_map.size(),
-                                         true);
+                                         gather_map.data().get() + gather_map.size());
 
     for (auto i=0; i<source_table.num_columns(); ++i) {
       cudf::test::expect_columns_equal(source_table.column(i), result->view().column(i));
@@ -412,6 +411,6 @@ TEST_F(GatherTestStr, GatherZeroSizeStringsColumn)
 {
     cudf::column_view zero_size_strings_column( cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
     rmm::device_vector<cudf::size_type> gather_map{};
-    auto results = cudf::experimental::detail::gather(cudf::table_view({zero_size_strings_column}), gather_map.begin(), gather_map.end(), false, true);
+    auto results = cudf::experimental::detail::gather(cudf::table_view({zero_size_strings_column}), gather_map.begin(), gather_map.end(), true);
     cudf::test::expect_strings_empty(results->get_column(0).view());
 }

@@ -1,9 +1,6 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
-# cython: profile=False
-# distutils: language = c++
-# cython: embedsignature = True
-# cython: language_level = 3
+# cython: boundscheck = False
 
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
@@ -11,15 +8,79 @@ from cudf._lib.utils cimport *
 from cudf._lib.utils import *
 from cudf._lib.includes.parquet cimport (
     reader as parquet_reader,
-    reader_options as parquet_reader_options
+    reader_options as parquet_reader_options,
+    compression_type,
+    write_parquet_args,
+    sink_info,
+    table_view,
+    table_metadata,
+    statistics_freq,
+    write_parquet as parquet_writer
 )
 from libc.stdlib cimport free
-from libcpp.memory cimport unique_ptr
+from libcpp.memory cimport unique_ptr, make_unique
 from libcpp.string cimport string
+from libcpp.map cimport map
 
 import errno
 import os
+import json
+import pandas as pd
+import pyarrow as pa
 
+from cudf._libxx.table cimport *
+
+
+cpdef generate_pandas_metadata(Table table, index):
+    col_names = []
+    types = []
+    index_levels = []
+    index_descriptors = []
+
+    # Columns
+    for name, col in table._data.items():
+        col_names.append(name)
+        types.append(col.to_arrow().type)
+
+    # Indexes
+    if index is not False:
+        for name in table._index.names:
+            if name is not None:
+                if isinstance(table._index, cudf.core.multiindex.MultiIndex):
+                    idx = table.index.get_level_values(name)
+                else:
+                    idx = table.index
+
+                if isinstance(idx, cudf.core.index.RangeIndex):
+                    descr = {
+                        "kind": "range",
+                        "name": table.index.name,
+                        "start": table.index._start,
+                        "stop": table.index._stop,
+                        "step": 1,
+                    }
+                else:
+                    index_arrow = idx.to_arrow()
+                    descr = name
+                    types.append(index_arrow.type)
+                    col_names.append(name)
+                    index_levels.append(idx)
+                index_descriptors.append(descr)
+            else:
+                col_names.append(name)
+
+    metadata = pa.pandas_compat.construct_metadata(
+        table,
+        col_names,
+        index_levels,
+        index_descriptors,
+        index,
+        types,
+    )
+
+    md = metadata[b'pandas']
+    json_str = md.decode("utf-8")
+    return json_str
 
 cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
                    skip_rows=None, num_rows=None,
@@ -87,3 +148,79 @@ cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
         df.index.name = new_index_name
 
     return df
+
+cpdef write_parquet(
+        Table table,
+        path,
+        index=None,
+        compression=None,
+        statistics="ROWGROUP"):
+    """
+    Cython function to call into libcudf API, see `write_parquet`.
+
+    See Also
+    --------
+    cudf.io.parquet.write_parquet
+    """
+
+    # Create the write options
+    cdef string filepath = <string>str(path).encode()
+    cdef sink_info sink = sink_info(filepath)
+    cdef unique_ptr[table_metadata] tbl_meta = \
+        make_unique[table_metadata]()
+
+    cdef vector[string] column_names
+    cdef map[string, string] user_data
+    cdef table_view tv = table.data_view()
+
+    if index is not False:
+        tv = table.view()
+        if isinstance(table._index, cudf.core.multiindex.MultiIndex):
+            for idx_name in table._index.names:
+                column_names.push_back(str.encode(idx_name))
+        else:
+            if table._index.name is not None:
+                column_names.push_back(str.encode(table._index.name))
+            else:
+                # No named index exists so just write out columns
+                tv = table.data_view()
+
+    for col_name in table._column_names:
+        column_names.push_back(str.encode(col_name))
+
+    pandas_metadata = generate_pandas_metadata(table, index)
+    user_data[str.encode("pandas")] = str.encode(pandas_metadata)
+
+    # Set the table_metadata
+    tbl_meta.get().column_names = column_names
+    tbl_meta.get().user_data = user_data
+
+    cdef compression_type comp_type
+    if compression is None:
+        comp_type = compression_type.NONE
+    elif compression == "snappy":
+        comp_type = compression_type.SNAPPY
+    else:
+        raise ValueError("Unsupported `compression` type")
+
+    cdef statistics_freq stat_freq
+    statistics = statistics.upper()
+    if statistics == "NONE":
+        stat_freq = statistics_freq.STATISTICS_NONE
+    elif statistics == "ROWGROUP":
+        stat_freq = statistics_freq.STATISTICS_ROWGROUP
+    elif statistics == "PAGE":
+        stat_freq = statistics_freq.STATISTICS_PAGE
+    else:
+        raise ValueError("Unsupported `statistics_freq` type")
+
+    cdef write_parquet_args args
+
+    # Perform write
+    with nogil:
+        args = write_parquet_args(sink,
+                                  tv,
+                                  tbl_meta.get(),
+                                  comp_type,
+                                  stat_freq)
+        parquet_writer(args)

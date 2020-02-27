@@ -16,7 +16,6 @@
 
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
-#include <rmm/mr/device_memory_resource.hpp>
 #include <cudf/utilities/error.hpp>
 
 namespace cudf {
@@ -46,7 +45,7 @@ table::table(std::vector<std::unique_ptr<column>>&& columns)
 
 // Copy the contents of a `table_view`
 table::table(table_view view, cudaStream_t stream,
-             rmm::mr::device_memory_resource* mr) {
+             rmm::mr::device_memory_resource* mr) : _num_rows{view.num_rows()} {
   _columns.reserve(view.num_columns());
   for (auto const& c : view) {
     _columns.emplace_back(std::make_unique<column>(c, stream, mr));

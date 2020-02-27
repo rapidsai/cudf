@@ -1,5 +1,6 @@
 import functools
 import operator
+import pickle
 
 import numpy as np
 
@@ -40,28 +41,48 @@ class Buffer:
             self._init_from_array_like(data)
         elif isinstance(data, memoryview):
             self._init_from_array_like(np.asarray(data))
-        else:
-            if data is None:
-                self.ptr = 0
-                self.size = 0
-            else:
-                if not isinstance(data, int):
-                    raise TypeError(
-                        "data must be Buffer, array-like or integer"
-                    )
-                if not isinstance(size, int):
-                    raise TypeError("size must be integer")
-                self.ptr = data
-                self.size = size
+        elif isinstance(data, int):
+            if not isinstance(size, int):
+                raise TypeError("size must be integer")
+            self.ptr = data
+            self.size = size
             self._owner = owner
+        elif data is None:
+            self.ptr = 0
+            self.size = 0
+            self._owner = None
+        else:
+            try:
+                data = memoryview(data)
+            except TypeError:
+                raise TypeError("data must be Buffer, array-like or integer")
+            self._init_from_array_like(np.asarray(data))
 
     def __reduce__(self):
         return self.__class__, (self.to_host_array(),)
 
+    def __len__(self):
+        return self.size
+
+    @property
+    def nbytes(self):
+        return self.size
+
+    @property
+    def __cuda_array_interface__(self):
+        intf = {
+            "data": (self.ptr, False),
+            "shape": (self.size,),
+            "strides": (1,),
+            "typestr": "|i1",
+            "version": 0,
+        }
+        return intf
+
     def to_host_array(self):
-        return rmm.device_array_from_ptr(
-            self.ptr, nelem=self.size, dtype="int8"
-        ).copy_to_host()
+        data = np.empty((self.size,), "u1")
+        rmm._lib.device_buffer.copy_ptr_to_host(self.ptr, data)
+        return data
 
     def _init_from_array_like(self, data):
         if hasattr(data, "__cuda_array_interface__"):
@@ -82,9 +103,32 @@ class Buffer:
                 f"Cannot construct Buffer from {data.__class__.__name__}"
             )
 
+    def serialize(self):
+        header = {}
+        header["type-serialized"] = pickle.dumps(type(self))
+        header["constructor-kwargs"] = {}
+        header["desc"] = self.__cuda_array_interface__.copy()
+        frames = [self]
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, header, frames):
+        buf = cls(frames[0], **header["constructor-kwargs"])
+
+        if header["desc"]["shape"] != buf.__cuda_array_interface__["shape"]:
+            raise ValueError(
+                "Recieved a `Buffer` with the wrong size."
+                " Expected {0}, but got {1}".format(
+                    header["desc"]["shape"],
+                    buf.__cuda_array_interface__["shape"],
+                )
+            )
+
+        return buf
+
     @classmethod
     def empty(cls, size):
-        dbuf = DeviceBuffer(ptr=None, size=size)
+        dbuf = DeviceBuffer(size=size)
         return Buffer(dbuf)
 
 

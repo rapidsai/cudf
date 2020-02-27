@@ -91,7 +91,7 @@ class _Frame(dd.core._Frame, OperatorMethodMixin):
                     self._partition_type.__name__, type(meta).__name__
                 )
             )
-        self._meta = dd.core.make_meta(meta)
+        self._meta = meta
         self.divisions = tuple(divisions)
 
     def __getstate__(self):
@@ -179,29 +179,6 @@ class DataFrame(_Frame, dd.core.DataFrame):
             )
         return super().set_index(other, shuffle="tasks", **kwargs)
 
-    def reset_index(self, force=False, drop=False):
-        """Reset index to range based
-        """
-        if force:
-            dfs = self.to_delayed()
-            sizes = np.asarray(compute(*map(delayed(len), dfs)))
-            prefixes = np.zeros_like(sizes)
-            prefixes[1:] = np.cumsum(sizes[:-1])
-
-            @delayed
-            def fix_index(df, startpos):
-                stoppos = startpos + len(df)
-                return df.set_index(
-                    cudf.core.index.RangeIndex(start=startpos, stop=stoppos)
-                )
-
-            outdfs = [
-                fix_index(df, startpos) for df, startpos in zip(dfs, prefixes)
-            ]
-            return from_delayed(outdfs, meta=self._meta.reset_index(drop=True))
-        else:
-            return self.map_partitions(M.reset_index, drop=drop)
-
     def sort_values(self, by, ignore_index=False):
         """Sort by the given column
 
@@ -209,11 +186,15 @@ class DataFrame(_Frame, dd.core.DataFrame):
         ---------
         by : str
         """
-        parts = self.to_delayed()
-        sorted_parts = batcher_sortnet.sort_delayed_frame(parts, by)
-        return from_delayed(sorted_parts, meta=self._meta).reset_index(
-            force=not ignore_index
-        )
+        if self.npartitions == 1:
+            df = self.map_partitions(M.sort_values, by)
+        else:
+            parts = self.to_delayed()
+            sorted_parts = batcher_sortnet.sort_delayed_frame(parts, by)
+            df = from_delayed(sorted_parts, meta=self._meta)
+        if ignore_index:
+            return df.reset_index(drop=True)
+        return df
 
     def sort_values_binned(self, by):
         """Sorty by the given column and ensure that the same key

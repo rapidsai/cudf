@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/column/column.hpp>
+#include <cudf/aggregation.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 
@@ -79,15 +80,30 @@ std::unique_ptr<column> group_max(
  * @brief Internal API to calculate number of non-null values in each group of
  *  @p values
  * 
- * @param values Grouped values to get count of
+ * @param values Grouped values to get valid count of
  * @param group_labels ID of group that the corresponding value belongs to
  * @param num_groups Number of groups ( unique values in @p group_labels )
  * @param mr Memory resource to allocate output with
  * @param stream Stream to perform computation in
  */
-std::unique_ptr<column> group_count(
+std::unique_ptr<column> group_count_valid(
     column_view const& values,
     rmm::device_vector<size_type> const& group_labels,
+    size_type num_groups,
+    rmm::mr::device_memory_resource* mr,
+    cudaStream_t stream = 0);
+
+
+/**
+ * @brief Internal API to calculate number of values in each group of @p values
+ * 
+ * @param group_offsets Offsets of groups' starting points within @p values
+ * @param num_groups Number of groups ( unique values in @p group_labels )
+ * @param mr Memory resource to allocate output with
+ * @param stream Stream to perform computation in
+ */
+std::unique_ptr<column> group_count_all(
+    rmm::device_vector<size_type> const& group_offsets,
     size_type num_groups,
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream = 0);
@@ -128,8 +144,32 @@ std::unique_ptr<column> group_quantiles(
     column_view const& values,
     column_view const& group_sizes,
     rmm::device_vector<size_type> const& group_offsets,
+    size_type const num_groups,
     std::vector<double> const& quantiles,
     interpolation interp,
+    rmm::mr::device_memory_resource* mr,
+    cudaStream_t stream = 0);
+
+/**
+ * @brief Internal API to calculate number of unique values in each group of
+ *  @p values
+ *
+ * @param values Grouped and sorted (within group) values to get unique count of
+ * @param group_labels ID of group that the corresponding value belongs to
+ * @param num_groups Number of groups ( unique values in @p group_labels )
+ * @param group_offsets Offsets of groups' starting points within @p values
+ * @param _include_nulls Exclude nulls while counting if include_nulls::NO,
+ *  Include nulls if include_nulls::YES.
+ *  Nulls are treated equal.
+ * @param mr Memory resource to allocate output with
+ * @param stream Stream to perform computation in
+ */
+std::unique_ptr<column> group_nunique(
+    column_view const& values,
+    rmm::device_vector<size_type> const& group_labels,
+    size_type const num_groups,
+    rmm::device_vector<size_type> const& group_offsets,
+    include_nulls _include_nulls,
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream = 0);
 

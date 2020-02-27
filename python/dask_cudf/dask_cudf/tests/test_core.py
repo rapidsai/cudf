@@ -461,10 +461,62 @@ def test_memory_usage(gdf, gddf, index, deep):
 @pytest.mark.parametrize("index", [True, False])
 def test_hash_object_dispatch(index):
     obj = cudf.DataFrame(
-        {"x": ["a", "b", "c"], "y": [1, 2, 3]}, index=[2, 4, 6]
+        {"x": ["a", "b", "c"], "y": [1, 2, 3], "z": [1, 1, 0]}, index=[2, 4, 6]
     )
 
+    # DataFrame
     result = dd.utils.hash_object_dispatch(obj, index=index)
     expected = dgd.backends.hash_object_cudf(obj, index=index)
-
     dd.assert_eq(cudf.Series(result), cudf.Series(expected))
+
+    # Series
+    result = dd.utils.hash_object_dispatch(obj["x"], index=index)
+    expected = dgd.backends.hash_object_cudf(obj["x"], index=index)
+    dd.assert_eq(cudf.Series(result), cudf.Series(expected))
+
+    # DataFrame with MultiIndex
+    obj_multi = obj.set_index(["x", "z"], drop=True)
+    result = dd.utils.hash_object_dispatch(obj_multi, index=index)
+    expected = dgd.backends.hash_object_cudf(obj_multi, index=index)
+    dd.assert_eq(cudf.Series(result), cudf.Series(expected))
+
+
+@pytest.mark.parametrize(
+    "index",
+    [
+        "int8",
+        "int32",
+        "int64",
+        "float64",
+        "strings",
+        "cats",
+        "time_s",
+        "time_ms",
+        "time_ns",
+        ["int32", "int64"],
+        ["int8", "float64", "strings"],
+        ["cats", "int8", "float64"],
+        ["time_ms", "cats"],
+    ],
+)
+def test_make_meta_backends(index):
+
+    dtypes = ["int8", "int32", "int64", "float64"]
+    df = cudf.DataFrame(
+        {dt: np.arange(start=0, stop=3, dtype=dt) for dt in dtypes}
+    )
+    df["strings"] = ["cat", "dog", "fish"]
+    df["cats"] = df["strings"].astype("category")
+    df["time_s"] = np.array(
+        ["2018-10-07", "2018-10-08", "2018-10-09"], dtype="datetime64[s]"
+    )
+    df["time_ms"] = df["time_s"].astype("datetime64[ms]")
+    df["time_ns"] = df["time_s"].astype("datetime64[ns]")
+    df = df.set_index(index)
+    ddf = dgd.from_cudf(df, npartitions=1)
+
+    # Check "empty" metadata types
+    dd.assert_eq(ddf._meta.dtypes, df.dtypes)
+
+    # Check "non-empty" metadata types
+    dd.assert_eq(ddf._meta.dtypes, ddf._meta_nonempty.dtypes)
