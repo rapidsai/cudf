@@ -1061,7 +1061,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
             and arbitrary.size > 0
         ):
             if nan_as_null:
-                mask = libcudf.unaryops.nans_to_nulls(data)
+                mask = libcudfxx.transform.nans_to_nulls(data)
                 data = data.set_mask(mask)
 
         elif data.dtype.kind == "M":

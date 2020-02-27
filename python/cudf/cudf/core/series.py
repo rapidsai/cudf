@@ -10,9 +10,9 @@ import pandas as pd
 from pandas.api.types import is_dict_like
 
 import rmm
-
 import cudf
 import cudf._lib as libcudf
+import cudf._libxx as libcudfxx
 from cudf.core.column import ColumnBase, DatetimeColumn, column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
@@ -1354,7 +1354,7 @@ class Series(Frame):
         """
         if self.dtype.kind == "f":
             sr = self.fillna(np.nan)
-            newmask = libcudf.unaryops.nans_to_nulls(sr._column)
+            newmask = libcudfxx.transform.nans_to_nulls(sr._column)
             return self.set_mask(newmask)
         else:
             return self
