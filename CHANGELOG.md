@@ -168,6 +168,7 @@
 - PR #4242 Fix for rolling tests CI failure
 - PR #4245 Fix race condition in parquet reader
 - PR #4258 Fix dask-cudf losing index name in `reset_index`
+- PR #4268 Fix java build for hash aggregate
 
 
 # cuDF 0.12.0 (04 Feb 2020)
