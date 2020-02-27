@@ -335,8 +335,8 @@ __global__ void copy_offset_bitmask(bitmask_type *__restrict__ destination,
 __global__
 void
 concatenate_masks_kernel(
-    column_device_view* views,
-    size_type* output_offsets,
+    column_device_view const* views,
+    size_type const* output_offsets,
     size_type number_of_views,
     bitmask_type* dest_mask,
     size_type number_of_mask_bits) {
@@ -622,9 +622,28 @@ segmented_count_unset_bits(bitmask_type const* bitmask,
 }
 
 // Create a bitmask from a vector of column views
+void concatenate_masks(
+    rmm::device_vector<column_device_view> const& d_views,
+    rmm::device_vector<size_type> const& d_offsets,
+    bitmask_type * dest_mask,
+    size_type output_size,
+    cudaStream_t stream) {
+
+  constexpr size_type block_size{256};
+  cudf::experimental::detail::grid_1d config(output_size, block_size);
+  concatenate_masks_kernel<<<config.num_blocks, config.num_threads_per_block,
+                             0, stream>>>(
+    d_views.data().get(),
+    d_offsets.data().get(),
+    static_cast<size_type>(d_views.size()),
+    dest_mask, output_size);
+}
+
+// Create a bitmask from a vector of column views
 void concatenate_masks(std::vector<column_view> const &views,
     bitmask_type * dest_mask,
     cudaStream_t stream) {
+
   using CDViewPtr =
     decltype(column_device_view::create(std::declval<column_view>(), std::declval<cudaStream_t>()));
   std::vector<CDViewPtr> cols;
@@ -644,14 +663,8 @@ void concatenate_masks(std::vector<column_view> const &views,
   rmm::device_vector<size_type> d_offsets{view_offsets};
 
   auto number_of_mask_bits = view_offsets.back();
-  constexpr size_type block_size{256};
-  cudf::experimental::detail::grid_1d config(number_of_mask_bits, block_size);
-  concatenate_masks_kernel<<<config.num_blocks, config.num_threads_per_block,
-                             0, stream>>>(
-    d_views.data().get(),
-    d_offsets.data().get(),
-    static_cast<size_type>(d_views.size()),
-    dest_mask, number_of_mask_bits);
+
+  concatenate_masks(d_views, d_offsets, dest_mask, number_of_mask_bits, stream);
 }
 
 }  // namespace detail

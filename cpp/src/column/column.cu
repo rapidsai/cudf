@@ -16,12 +16,14 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/column/column_device_view.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/nvtx_utils.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/concatenate.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/strings/copying.hpp>
 #include <cudf/strings/detail/concatenate.hpp>
@@ -30,6 +32,7 @@
 #include <rmm/device_buffer.hpp>
 
 #include <thrust/binary_search.h>
+#include <thrust/transform_scan.h>
 
 #include <algorithm>
 #include <numeric>
@@ -343,17 +346,36 @@ struct optimized_concatenate {
       cudaStream_t stream) {
     using mask_policy = cudf::experimental::mask_allocation_policy;
 
+    // Create device views for each input view
+    using CDViewPtr = decltype(column_device_view::create(
+        std::declval<column_view>(), std::declval<cudaStream_t>()));
+    auto device_view_owners = std::vector<CDViewPtr>(views.size());
+    std::transform(views.cbegin(), views.cend(),
+        device_view_owners.begin(),
+        [stream](auto const& col) {
+          return column_device_view::create(col, stream);
+        });
+
+    // Assemble contiguous array of device views
+    auto device_views = thrust::host_vector<column_device_view>();
+    device_views.reserve(views.size());
+    std::transform(device_view_owners.cbegin(), device_view_owners.cend(),
+        std::back_inserter(device_views),
+        [](auto const& col) {
+          return *col;
+        });
+    auto d_views = rmm::device_vector<column_device_view>{device_views};
+
     // Compute the partition offsets
     auto offsets = thrust::host_vector<size_type>(views.size() + 1);
-    // TODO This should be thrust::transform_inclusive_scan, but getting
-    // error related to https://github.com/rapidsai/rmm/pull/312
-    thrust::transform(views.cbegin(), views.cend(), std::next(offsets.begin()),
-        [](column_view const& col) {
+    thrust::transform_inclusive_scan(thrust::host,
+        device_views.cbegin(), device_views.cend(),
+        std::next(offsets.begin()), 
+        [](auto const& col) {
           return col.size();
-        });
-    thrust::inclusive_scan(std::next(offsets.cbegin()), offsets.cend(),
-        std::next(offsets.begin()));
-    auto const d_offsets = rmm::device_vector<size_type>(offsets);
+        },
+        thrust::plus<size_type>{});
+    auto const d_offsets = rmm::device_vector<size_type>{offsets};
     auto const output_size = offsets.back();
 
     // Transform views to array of data pointers
@@ -362,7 +384,7 @@ struct optimized_concatenate {
         [](column_view const& col) {
           return col.data<T>();
         });
-    auto const d_data_ptrs = rmm::device_vector<T const*>(data_ptrs);
+    auto const d_data_ptrs = rmm::device_vector<T const*>{data_ptrs};
 
     // Allocate output column, with null mask if any columns have nulls
     bool const has_nulls = std::any_of(views.begin(), views.end(),
@@ -391,7 +413,8 @@ struct optimized_concatenate {
     // If concatenated column is nullable, proceed to calculate it
     // TODO try to fuse this with the data kernel so they share binary search
     if (has_nulls) {
-      cudf::detail::concatenate_masks(views, out_view.null_mask(), stream);
+      detail::concatenate_masks(d_views, d_offsets, out_view.null_mask(),
+          output_size, stream);
     }
 
     return out_col;
