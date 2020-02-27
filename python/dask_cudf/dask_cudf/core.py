@@ -15,11 +15,17 @@ from dask.context import _globals
 from dask.core import flatten
 from dask.dataframe import from_delayed
 from dask.dataframe.core import Scalar, handle_out, map_partitions
-from dask.dataframe.utils import raise_on_meta_error
+from dask.dataframe.utils import is_series_like, raise_on_meta_error
 from dask.delayed import delayed
 from dask.highlevelgraph import HighLevelGraph
 from dask.optimization import cull, fuse
-from dask.utils import M, OperatorMethodMixin, derived_from, funcname
+from dask.utils import (
+    M,
+    OperatorMethodMixin,
+    derived_from,
+    funcname,
+    parse_bytes,
+)
 
 import cudf
 import cudf._lib as libcudf
@@ -612,13 +618,17 @@ def reduction(
     return dd.core.new_dd_object(dsk, b, meta, (None, None))
 
 
-def split_evenly(df, k):
-    """ Split dataframe into k roughly equal parts """
-    divisions = np.linspace(0, len(df), k + 1).astype(int)
-    return {i: df.iloc[divisions[i] : divisions[i + 1]] for i in range(k)}
+def _total_mem_usage(df):
+    mem_usage = df.memory_usage(deep=True)
+    if is_series_like(mem_usage):
+        mem_usage = mem_usage.sum()
+    return mem_usage
 
 
-def split_unique(df, k):
+def _split_func(df, k):
+    """ Split dataframe along index boundaries.
+        If boundaries don't exist, use linear division.
+    """
     df = df.sort_index()
     q = [float(i + 1) / k for i in range(k - 1)]
     splits = (
@@ -626,9 +636,9 @@ def split_unique(df, k):
         .quantile(q, interpolation="nearest")
         .astype(df.index.dtype)
     )
-    divisions = (
-        [0] + df.index.searchsorted(splits, side="left").tolist() + [len(df)]
-    )
+    divisions = df.index.searchsorted(splits, side="left").tolist()
+    divisions.insert(0, 0)
+    divisions.append(len(df))
     if len(set(divisions)) != len(divisions):
         i = 0
         while i < len(divisions) - 2:
@@ -648,28 +658,45 @@ def split_unique(df, k):
     return {i: df.iloc[divisions[i] : divisions[i + 1]] for i in range(k)}
 
 
-def _split_partitions(df, nsplits, new_name, split_type):
-    """ Split a Dask dataframe into new partitions
+def split_partitions(df, max_size=None, max_length=None):
+    """ Split each partition of a dask DataFrame (by rule)
 
     Parameters
     ----------
     df: DataFrame or Series
-    nsplits: List[int]
-        Number of target dataframes for each partition
-        The length of nsplits should be the same as df.npartitions
-    new_name: str
+    max_size: int or str
+        Maximum data size allowed in an output partition
+    max_length: int or str
+        Maximum row-count allowed in an output partition
 
-    See Also
-    --------
-    repartition_npartitions
-    repartition_size
+    Note: User must specify max_size or max_length.
+    If both are specified, max_length is ignored.
     """
-    if len(nsplits) != df.npartitions:
-        raise ValueError("nsplits should have len={}".format(df.npartitions))
 
-    split_func = split_evenly if split_type == "evenly" else split_unique
+    # Ensure split criteria is specified
+    if not (bool(max_size) or bool(max_length)):
+        raise ValueError("Must specify max_size or max_length")
 
+    # Determine the number of splits in each partition
+    if max_size is not None:
+
+        if isinstance(max_size, str):
+            max_size = parse_bytes(max_size)
+        max_size = int(max_size)
+        mem_usages = df.map_partitions(_total_mem_usage).compute()
+        nsplits = 1 + mem_usages // max_size
+    else:
+        max_length = int(max_length)
+        lengths = df.map_partitions(lambda x: len(x)).compute()
+        nsplits = 1 + lengths // max_length
+
+    # Return if none of the partitions need splitting
+    if not np.any(nsplits > 1):
+        return df
+
+    # Build new Dask DataFrame
     dsk = {}
+    new_name = "repartition-split-{}-{}".format(max_length, tokenize(df))
     split_name = "split-{}".format(tokenize(df, nsplits))
     j = 0
     for i, k in enumerate(nsplits):
@@ -677,7 +704,7 @@ def _split_partitions(df, nsplits, new_name, split_type):
             dsk[new_name, j] = (df._name, i)
             j += 1
         else:
-            dsk[split_name, i] = (split_func, (df._name, i), k)
+            dsk[split_name, i] = (_split_func, (df._name, i), k)
             for jj in range(k):
                 dsk[new_name, j] = (getitem, (split_name, i), jj)
                 j += 1
@@ -685,19 +712,6 @@ def _split_partitions(df, nsplits, new_name, split_type):
     divisions = [None] * (1 + sum(nsplits))
     graph = HighLevelGraph.from_collections(new_name, dsk, dependencies=[df])
     return dd.core.new_dd_object(graph, new_name, df._meta, divisions)
-
-
-def split_partitions(df, max_len=None, split_type="evenly"):
-    # from dask.dataframe.core import _split_partitions
-    max_len = max_len or 1_000_000_000
-
-    # Split each partition that is larger than partition_size
-    lengths = df.map_partitions(lambda x: len(x)).compute()
-    nsplits = 1 + lengths // max_len
-    if np.any(nsplits > 1):
-        split_name = "repartition-split-{}-{}".format(max_len, tokenize(df))
-        return _split_partitions(df, nsplits, split_name, split_type)
-    return df
 
 
 from_cudf = dd.from_pandas
