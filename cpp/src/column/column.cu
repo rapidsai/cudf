@@ -345,8 +345,8 @@ struct optimized_concatenate {
 
     // Compute the partition offsets
     auto offsets = thrust::host_vector<size_type>(views.size() + 1);
-    // NOTE tried to use thrust::transform_inclusive_scan here, but got
-    // error: __host__ called from __host__ __device__
+    // TODO This should be thrust::transform_inclusive_scan, but getting
+    // error related to https://github.com/rapidsai/rmm/pull/312
     thrust::transform(views.cbegin(), views.cend(), std::next(offsets.begin()),
         [](column_view const& col) {
           return col.size();
@@ -424,7 +424,30 @@ struct nvtx_raii {
 std::unique_ptr<column>
 concatenate(std::vector<column_view> const& columns_to_concat,
             rmm::mr::device_memory_resource *mr, cudaStream_t stream) {
+//#if defined(BUILD_BENCHMARKS)
+// TODO this doesn't seem to work, so remove after testing
+// This shows additional information for profiling in NVTX ranges,
+// but at the expense of some extra computation
+#if true // for testing, print [num_cols][rows_per_col]
+  auto const num_cols = columns_to_concat.size();
+  // This should be thrust::transform_reduce, but getting
+  // error related to https://github.com/rapidsai/rmm/pull/312
+  auto col_sizes = std::vector<size_type>(num_cols);
+  thrust::transform(
+      columns_to_concat.cbegin(), columns_to_concat.cend(),
+      col_sizes.begin(),
+      [] __host__ (auto const& col) {
+        return col.size();
+      });
+  auto const rows_per_col = std::accumulate(
+      col_sizes.begin(), col_sizes.end(), size_type{0});
+  auto const message = std::string("cudf::concatenate[")
+      + std::to_string(num_cols) + "]["
+      + std::to_string(rows_per_col / num_cols) + "]";
+  nvtx_raii range(message.c_str(), nvtx::color::DARK_GREEN);
+#else
   nvtx_raii range("cudf::concatenate", nvtx::color::DARK_GREEN);
+#endif
 
   if (columns_to_concat.empty()) { return std::make_unique<column>(); }
 
