@@ -60,3 +60,4 @@ cdef extern from "cudf/groupby.hpp" \
         ) except +
 
         groups get_groups() except +
+        groups get_groups(table_view values) except +
