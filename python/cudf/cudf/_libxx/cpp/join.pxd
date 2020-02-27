@@ -1,6 +1,9 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 from libcpp.pair cimport pair
+from libcpp cimport bool
 
 from cudf._libxx.cpp.table.table cimport table
 from cudf._libxx.cpp.table.table_view cimport table_view
