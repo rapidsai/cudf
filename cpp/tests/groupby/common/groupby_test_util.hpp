@@ -29,10 +29,10 @@ namespace cudf {
 namespace test {
 
 inline void test_groups(column_view const& keys,
-                        column_view const& expect_group_keys,
+                        column_view const& expect_grouped_keys,
                         std::vector<size_type> const& expect_group_offsets,
                         column_view const& values={},
-                        column_view const& expect_group_values={})
+                        column_view const& expect_grouped_values={})
 {
   experimental::groupby::groupby gb (table_view({keys}));
   experimental::groupby::groupby::groups gb_groups;
@@ -43,16 +43,16 @@ inline void test_groups(column_view const& keys,
   else {
      gb_groups = gb.get_groups();
   }
-  expect_tables_equal(table_view({expect_group_keys}), gb_groups.group_keys->view());
+  expect_tables_equal(table_view({expect_grouped_keys}), gb_groups.keys->view());
 
-  auto got_offsets = gb_groups.group_offsets;
+  auto got_offsets = gb_groups.offsets;
   EXPECT_EQ(expect_group_offsets.size(), got_offsets.size());
   for (auto i = 0u; i != expect_group_offsets.size(); ++i) {
     EXPECT_EQ(expect_group_offsets[i], got_offsets[i]);
   }
 
   if (values.size()) {
-    expect_tables_equal(table_view({expect_group_values}), gb_groups.group_values->view());
+    expect_tables_equal(table_view({expect_grouped_values}), gb_groups.values->view());
   }
 }
 

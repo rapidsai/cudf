@@ -171,12 +171,12 @@ class groupby {
    * A `groups` object holds two tables of identical number of rows:
    * a table of grouped keys and a table of grouped values. In addition, it holds
    * a vector of integer offsets into the rows of the tables, such that
-   * `group_offsets[i+1] - group_offsets[i]` gives the size of group `i`.
+   * `offsets[i+1] - offsets[i]` gives the size of group `i`.
    */
   struct groups {
-    std::unique_ptr<table> group_keys;
-    std::vector<size_type> group_offsets;
-    std::unique_ptr<table> group_values;
+    std::unique_ptr<table> keys;
+    std::vector<size_type> offsets;
+    std::unique_ptr<table> values;
   };
 
   /**
@@ -184,7 +184,7 @@ class groupby {
    *
    * Returns a `groups` object representing the grouped keys and values.
    * If values is not provided, only a grouping of the keys is performed,
-   * and accessing the `group_values` will be `nullptr`.
+   * and the `values` of the `groups` object will be `nullptr`.
    *
    * @param values Table representing values on which a groupby operation is to be performed
    * @param mr Memory resource used to allocate the returned tables

@@ -134,7 +134,7 @@ groupby::aggregate(std::vector<aggregation_request> const& requests,
 
 groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_resource*  mr) {
 
-  auto group_keys = helper().sorted_keys(mr, 0);
+  auto grouped_keys = helper().sorted_keys(mr, 0);
 
   auto group_offsets = helper().group_offsets(0);
   std::vector<size_type> group_offsets_vector(group_offsets.size());
@@ -142,13 +142,13 @@ groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_re
       group_offsets.end(),
       group_offsets_vector.begin());
 
-  std::unique_ptr<table> group_values{nullptr};
+  std::unique_ptr<table> grouped_values{nullptr};
   if (values.num_columns()) {
-    group_values = cudf::experimental::detail::gather(values, helper().key_sort_order());
-    return groupby::groups{std::move(group_keys), std::move(group_offsets_vector), std::move(group_values)};
+    grouped_values = cudf::experimental::detail::gather(values, helper().key_sort_order());
+    return groupby::groups{std::move(grouped_keys), std::move(group_offsets_vector), std::move(grouped_values)};
   }
   else {
-    return groupby::groups{std::move(group_keys), group_offsets_vector};
+    return groupby::groups{std::move(grouped_keys), std::move(group_offsets_vector)};
   }
 }
 
