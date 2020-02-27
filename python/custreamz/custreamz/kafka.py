@@ -39,3 +39,6 @@ class KafkaHandle(object):
         self, topic=None, partition=0, offset=-1001, *args, **kwargs,
     ):
         libkafka.commit_topic_offset(topic, partition, offset)
+
+    def produce(self, topic=None, message_val=None, message_key=None):
+        return libkafka.produce_message(topic, message_val, message_key)

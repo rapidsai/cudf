@@ -59,3 +59,8 @@ cpdef get_watermark_offsets(topic=None,
 
 cpdef commit_topic_offset(topic=None, partition=0, offset=-1001):
     kds.commit_offset(str.encode(topic), partition, offset)
+
+cpdef produce_message(topic=None, message_val=None, message_key=None):
+    return kds.produce_message(str.encode(topic),
+                               str.encode(message_val),
+                               str.encode(message_key))

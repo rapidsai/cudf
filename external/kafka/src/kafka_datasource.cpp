@@ -220,7 +220,22 @@ namespace external {
   }
 
   bool kafka_datasource::produce_message(std::string topic, std::string message_val, std::string message_key) {
-    return true;
+    err_ = producer_->produce(topic,
+                       RdKafka::Topic::PARTITION_UA,
+                       RdKafka::Producer::RK_MSG_COPY,
+                       const_cast<char *>(message_val.c_str()),
+                       message_val.size(),
+                       const_cast<char *>(message_key.c_str()),
+                       message_key.size(),
+                       0,
+                       NULL,
+                       NULL);
+    if (err_ != RdKafka::ERR_NO_ERROR) {
+      printf("Failed to produce to topic '%s' : '%s'\n", topic.c_str(), RdKafka::err2str(err_).c_str());
+      return false;
+    } else {
+      return true;
+    }
   }
 
   std::map<std::string, int64_t> kafka_datasource::get_watermark_offset(std::string topic, int32_t partition) {

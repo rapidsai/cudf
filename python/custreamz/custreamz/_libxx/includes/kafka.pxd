@@ -37,3 +37,7 @@ cdef extern from "kafka_datasource.hpp" namespace "cudf::io::external" nogil:
                              int64_t end_offset,
                              int batch_timeout,
                              string delimiter) except +
+
+        bool produce_message(string topic,
+                             string message_val,
+                             string message_key) except +
