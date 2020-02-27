@@ -618,16 +618,28 @@ def reduction(
     return dd.core.new_dd_object(dsk, b, meta, (None, None))
 
 
-def _total_mem_usage(df):
-    mem_usage = df.memory_usage(deep=True)
-    if is_series_like(mem_usage):
-        mem_usage = mem_usage.sum()
-    return mem_usage
+def _get_nsplits(df, criteria):
+    if criteria["max_size"] is not None:
+        if isinstance(criteria["max_size"], str):
+            max_size = parse_bytes(criteria["max_size"])
+        max_size = int(criteria["max_size"])
+        mem_usage = df.memory_usage(deep=True)
+        if is_series_like(mem_usage):
+            mem_usage = mem_usage.sum()
+        nsplit = 1 + mem_usage // max_size
+    elif criteria["max_length"] is not None:
+        max_length = int(criteria["max_length"])
+        length = len(df)
+        nsplit = 1 + length // max_length
+    else:
+        raise ValueError("Must specify max_size or max_length")
+
+    nunique = len(cudf.Series(df.index).unique())
+    return min(nsplit, nunique)
 
 
 def _split_func(df, k):
     """ Split dataframe along index boundaries.
-        If boundaries don't exist, use linear division.
     """
     df = df.sort_index()
     q = [float(i + 1) / k for i in range(k - 1)]
@@ -639,22 +651,24 @@ def _split_func(df, k):
     divisions = df.index.searchsorted(splits, side="left").tolist()
     divisions.insert(0, 0)
     divisions.append(len(df))
-    if len(set(divisions)) != len(divisions):
-        i = 0
-        while i < len(divisions) - 2:
-            j = i
-            while divisions[i] == divisions[j + 1]:
-                j += 1
-            if j != i:
-                for ind, val in enumerate(
-                    np.linspace(
-                        divisions[i], divisions[j + 1], j - i + 2
-                    ).astype(int)[:-1]
-                ):
-                    divisions[i + ind] = val
-                i = j
-            else:
-                i += 1
+    missing = len(divisions) - len(set(divisions))
+    if missing > 0:
+        # Drop Duplicates and then look for other ways to spit
+        original = list(set(divisions))
+        divisions = [0]
+        for i in range(1, len(original)):
+            if missing > 0:
+                sub_index = df.index[original[i - 1] : original[i]]
+                n = len(sub_index.unique())
+                if n > 1:
+                    ind = n // 2
+                    ind = df.index.searchsorted(
+                        sub_index.unique()[ind : ind + 1], side="left"
+                    ).tolist()[0]
+                    divisions.append(ind)
+                    missing -= 1
+            divisions.append(original[i])
+
     return {i: df.iloc[divisions[i] : divisions[i + 1]] for i in range(k)}
 
 
@@ -673,22 +687,11 @@ def split_partitions(df, max_size=None, max_length=None):
     If both are specified, max_length is ignored.
     """
 
-    # Ensure split criteria is specified
-    if not (bool(max_size) or bool(max_length)):
-        raise ValueError("Must specify max_size or max_length")
-
-    # Determine the number of splits in each partition
-    if max_size is not None:
-
-        if isinstance(max_size, str):
-            max_size = parse_bytes(max_size)
-        max_size = int(max_size)
-        mem_usages = df.map_partitions(_total_mem_usage).compute()
-        nsplits = 1 + mem_usages // max_size
-    else:
-        max_length = int(max_length)
-        lengths = df.map_partitions(lambda x: len(x)).compute()
-        nsplits = 1 + lengths // max_length
+    # How many splits can/should we make in each partition
+    criteria = {"max_size": max_size, "max_length": max_length}
+    nsplits = df.map_partitions(_get_nsplits, criteria).compute(
+        scheduler="single-threaded"
+    )
 
     # Return if none of the partitions need splitting
     if not np.any(nsplits > 1):

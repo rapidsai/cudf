@@ -541,7 +541,7 @@ def test_split_divisions(length):
     else:
         new_ddf = dgd.split_partitions(ddf, max_size=70)
     for part in new_ddf.partitions:
-        assert len(part) < small
         keys = part.compute().index.unique().values.tolist()
-        if len(keys) > 1:
-            assert not set(big_data).intersection(set(keys))
+        if not set(big_data).intersection(set(keys)):
+            assert len(part) < small
+        assert len(keys) == 1
