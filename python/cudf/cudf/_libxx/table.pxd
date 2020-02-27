@@ -32,3 +32,5 @@ cdef class Table:
         column_names,
         index_names=*
     )
+
+cdef columns_from_ptr(unique_ptr[table] c_tbl)
