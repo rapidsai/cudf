@@ -17,11 +17,12 @@
 #include <cudf/column/column.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/substring.hpp>
+#include <cudf/scalar/scalar.hpp>
 
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/column_utilities.hpp>
-#include "./utilities.h"
+#include <tests/strings/utilities.h>
 
 #include <string>
 #include <vector>
@@ -40,8 +41,8 @@ TEST_F(StringsSubstringsTest, Substring)
     cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
         thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
 
-    auto strings_column = cudf::strings_column_view(strings);
-    auto results = cudf::strings::slice_strings(strings_column, 2, 5);
+    auto strings_column = static_cast<cudf::strings_column_view>(strings);
+    auto results = cudf::strings::slice_strings(strings_column, 2,5);
     cudf::test::expect_columns_equal(*results, expected);
 }
 
@@ -149,4 +150,42 @@ TEST_F(StringsSubstringsTest, ZeroSizeStringsColumn)
     cudf::column_view stops_column( cudf::data_type{cudf::INT32}, 0, nullptr, nullptr, 0);
     results = cudf::strings::slice_strings(strings_column, starts_column, stops_column);
     cudf::test::expect_strings_empty(results->view());
+}
+
+TEST_F(StringsSubstringsTest, NegativePositions)
+{
+    cudf::test::strings_column_wrapper strings{ "a", "bc", "def", "ghij", "klmno", "pqrstu", "vwxyz" };
+    auto strings_column = cudf::strings_column_view(strings);
+    {
+        auto results = cudf::strings::slice_strings(strings_column, -1);
+        cudf::test::strings_column_wrapper expected{ "a", "c", "f", "j", "o", "u", "z" };
+        cudf::test::expect_columns_equal(*results, expected);
+    }
+    {
+        auto results = cudf::strings::slice_strings(strings_column, 0, -1);
+        cudf::test::strings_column_wrapper expected{ "", "b", "de", "ghi", "klmn", "pqrst", "vwxy" };
+        cudf::test::expect_columns_equal(*results, expected);
+    }
+    {
+        auto results = cudf::strings::slice_strings(strings_column, 7, -2, -1);
+        cudf::test::strings_column_wrapper expected{ "a", "c", "f", "j", "o", "u", "z" };
+        cudf::test::expect_columns_equal(*results, expected);
+    }
+    {
+        auto results = cudf::strings::slice_strings(strings_column, 7, -7, -1 );
+        cudf::test::strings_column_wrapper expected{ "a", "cb", "fed", "jihg", "onmlk", "utsrqp", "zyxwv" };
+        cudf::test::expect_columns_equal(*results, expected);
+    }
+    {
+        auto results = cudf::strings::slice_strings(strings_column, -3, -1 );
+        cudf::test::strings_column_wrapper expected{ "", "b", "de", "hi", "mn", "st", "xy" };
+        cudf::test::expect_columns_equal(*results, expected);
+    }
+}
+
+TEST_F(StringsSubstringsTest, Error)
+{
+    cudf::test::strings_column_wrapper strings{ "this string intentionally left blank" };
+    auto strings_column = cudf::strings_column_view(strings);
+    EXPECT_THROW( cudf::strings::slice_strings(strings_column,0,0,0), cudf::logic_error );
 }
