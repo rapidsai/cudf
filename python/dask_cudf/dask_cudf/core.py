@@ -622,7 +622,7 @@ def split_unique(df, k):
     df = df.sort_index()
     q = [float(i + 1) / k for i in range(k - 1)]
     splits = (
-        cudf.Series(df.index.unique())
+        cudf.Series(df.index)
         .quantile(q, interpolation="nearest")
         .astype(df.index.dtype)
     )
@@ -639,9 +639,9 @@ def split_unique(df, k):
                 for ind, val in enumerate(
                     np.linspace(
                         divisions[i], divisions[j + 1], j - i + 2
-                    ).astype(int)
+                    ).astype(int)[:-1]
                 ):
-                    divisions[ind] = val
+                    divisions[i + ind] = val
                 i = j
             else:
                 i += 1
