@@ -48,13 +48,13 @@ TYPED_TEST(FixedPointTestBothReps, SimpleDecimalXXConstruction) {
     decimalXX num5{1.234567, scale_type{-5}};
     decimalXX num6{1.234567, scale_type{-6}};
 
-    EXPECT_EQ(1,        num0.to_double());
-    EXPECT_EQ(1.2,      num1.to_double());
-    EXPECT_EQ(1.23,     num2.to_double());
-    EXPECT_EQ(1.235,    num3.to_double()); // rounds up
-    EXPECT_EQ(1.2346,   num4.to_double()); // rounds up
-    EXPECT_EQ(1.23457,  num5.to_double()); // rounds up
-    EXPECT_EQ(1.234567, num6.to_double());
+    EXPECT_EQ(1,        static_cast<double>(num0));
+    EXPECT_EQ(1.2,      static_cast<double>(num1));
+    EXPECT_EQ(1.23,     static_cast<double>(num2));
+    EXPECT_EQ(1.235,    static_cast<double>(num3)); // rounds up
+    EXPECT_EQ(1.2346,   static_cast<double>(num4)); // rounds up
+    EXPECT_EQ(1.23457,  static_cast<double>(num5)); // rounds up
+    EXPECT_EQ(1.234567, static_cast<double>(num6));
 
 }
 
@@ -70,13 +70,13 @@ TYPED_TEST(FixedPointTestBothReps, SimpleNegativeDecimalXXConstruction) {
     decimalXX num5{-1.234567, scale_type{-5}};
     decimalXX num6{-1.234567, scale_type{-6}};
 
-    EXPECT_EQ(-1,        num0.to_double());
-    EXPECT_EQ(-1.2,      num1.to_double());
-    EXPECT_EQ(-1.23,     num2.to_double());
-    EXPECT_EQ(-1.235,    num3.to_double()); // rounds up
-    EXPECT_EQ(-1.2346,   num4.to_double()); // rounds up
-    EXPECT_EQ(-1.23457,  num5.to_double()); // rounds up
-    EXPECT_EQ(-1.234567, num6.to_double());
+    EXPECT_EQ(-1,        static_cast<double>(num0));
+    EXPECT_EQ(-1.2,      static_cast<double>(num1));
+    EXPECT_EQ(-1.23,     static_cast<double>(num2));
+    EXPECT_EQ(-1.235,    static_cast<double>(num3)); // rounds up
+    EXPECT_EQ(-1.2346,   static_cast<double>(num4)); // rounds up
+    EXPECT_EQ(-1.23457,  static_cast<double>(num5)); // rounds up
+    EXPECT_EQ(-1.234567, static_cast<double>(num6));
 
 }
 
@@ -94,15 +94,15 @@ TYPED_TEST(FixedPointTestBothReps, PaddedDecimalXXConstruction) {
     decimalXX x{1.000123, scale_type{-8}};
     decimalXX y{0.000123, scale_type{-8}};
 
-    EXPECT_EQ(1.1,      a.to_double());
-    EXPECT_EQ(1.01,     b.to_double());
-    EXPECT_EQ(1.001,    c.to_double());
-    EXPECT_EQ(1.0001,   d.to_double());
-    EXPECT_EQ(1.00001,  e.to_double());
-    EXPECT_EQ(1.000001, f.to_double());
+    EXPECT_EQ(1.1,      static_cast<double>(a));
+    EXPECT_EQ(1.01,     static_cast<double>(b));
+    EXPECT_EQ(1.001,    static_cast<double>(c));
+    EXPECT_EQ(1.0001,   static_cast<double>(d));
+    EXPECT_EQ(1.00001,  static_cast<double>(e));
+    EXPECT_EQ(1.000001, static_cast<double>(f));
 
-    EXPECT_TRUE(1.000123 - x.to_double() < std::numeric_limits<double>::epsilon());
-    EXPECT_EQ(0.000123, y.to_double());
+    EXPECT_TRUE(1.000123 - static_cast<double>(x) < std::numeric_limits<double>::epsilon());
+    EXPECT_EQ(0.000123, static_cast<double>(y));
 
 }
 
@@ -122,17 +122,17 @@ TYPED_TEST(FixedPointTestBothReps, SimpleBinaryFPConstruction) {
     binary_fp num8{1.41, scale_type{-3}};
     binary_fp num9{1.45, scale_type{-4}};
 
-    EXPECT_EQ(10, num0.to_double());
-    EXPECT_EQ(10, num1.to_double());
-    EXPECT_EQ(12, num2.to_double());
-    EXPECT_EQ(8,  num3.to_double());
-    EXPECT_EQ(16, num4.to_double());
+    EXPECT_EQ(10, static_cast<double>(num0));
+    EXPECT_EQ(10, static_cast<double>(num1));
+    EXPECT_EQ(12, static_cast<double>(num2));
+    EXPECT_EQ(8,  static_cast<double>(num3));
+    EXPECT_EQ(16, static_cast<double>(num4));
 
-    EXPECT_EQ(1,      num5.to_double());
-    EXPECT_EQ(1,      num6.to_double());
-    EXPECT_EQ(1.25,   num7.to_double());
-    EXPECT_EQ(1.375,  num8.to_double());
-    EXPECT_EQ(1.4375, num9.to_double());
+    EXPECT_EQ(1,      static_cast<double>(num5));
+    EXPECT_EQ(1,      static_cast<double>(num6));
+    EXPECT_EQ(1.25,   static_cast<double>(num7));
+    EXPECT_EQ(1.375,  static_cast<double>(num8));
+    EXPECT_EQ(1.4375, static_cast<double>(num9));
 
 }
 
@@ -143,8 +143,8 @@ TYPED_TEST(FixedPointTestBothReps, MoreSimpleBinaryFPConstruction) {
     binary_fp num0{1.25, scale_type{-2}};
     binary_fp num1{2.1,  scale_type{-4}};
 
-    EXPECT_EQ(1.25,   num0.to_double());
-    EXPECT_EQ(2.125,  num1.to_double());
+    EXPECT_EQ(1.25,   static_cast<double>(num0));
+    EXPECT_EQ(2.125,  static_cast<double>(num1));
 
 }
 
@@ -181,10 +181,10 @@ TYPED_TEST(FixedPointTestBothReps, DecimalXXTrickyDivision) {
 
     decimalXX ZERO = ONE_1;
 
-    EXPECT_EQ(ONE_1.to_int32(),    0); // round(1 / 10) = 0
-    EXPECT_EQ(SIX_1.to_int32(),   10); // round(6 / 10) = 10
-    EXPECT_EQ(TEN_0.to_int32(),   10);
-    EXPECT_EQ(SIXTY_1.to_int32(), 60);
+    EXPECT_EQ(static_cast<int32_t>(ONE_1),    0); // round(1 / 10) = 0
+    EXPECT_EQ(static_cast<int32_t>(SIX_1),   10); // round(6 / 10) = 10
+    EXPECT_EQ(static_cast<int32_t>(TEN_0),   10);
+    EXPECT_EQ(static_cast<int32_t>(SIXTY_1), 60);
 
     EXPECT_EQ(SIXTY_1 / TEN_0, TEN_1);
     EXPECT_EQ(SIXTY_1 / TEN_1, SIX_0);
@@ -193,11 +193,11 @@ TYPED_TEST(FixedPointTestBothReps, DecimalXXTrickyDivision) {
     decimalXX B{1.234, scale_type{-3}};
     decimalXX C{1,     scale_type{-2}};
 
-    EXPECT_EQ((A / B).to_int32(),       30);
-    EXPECT_EQ(((A * C) / B).to_int32(), 28);
+    EXPECT_EQ(static_cast<int32_t>(A / B),       30);
+    EXPECT_EQ(static_cast<int32_t>((A * C) / B), 28);
 
     decimalXX n{28, scale_type{1}};
-    EXPECT_EQ(n.to_int32(), 30);
+    EXPECT_EQ(static_cast<int32_t>(n), 30);
 }
 
 TYPED_TEST(FixedPointTestBothReps, DecimalXXRounding) {
@@ -235,7 +235,7 @@ TYPED_TEST(FixedPointTestBothReps, DecimalXXThrust) {
         std::cend(vec2),
         0);
 
-    EXPECT_EQ(res1.to_int32(), res2);
+    EXPECT_EQ(static_cast<int32_t>(res1), res2);
 
     std::vector<int32_t> vec3(vec1.size());
 
@@ -243,7 +243,7 @@ TYPED_TEST(FixedPointTestBothReps, DecimalXXThrust) {
         std::cbegin(vec1),
         std::cend(vec1),
         std::begin(vec3),
-        [] (auto const& e) { return e.to_int32(); });
+        [] (auto const& e) { return static_cast<int32_t>(e); });
 
     EXPECT_EQ(vec2, vec3);
 
@@ -332,7 +332,7 @@ void integer_vector_test(ValueType const initial_value,
         std::cend(vec2),
         static_cast<ValueType>(0));
 
-    EXPECT_EQ(res1.to_int32(), res2);
+    EXPECT_EQ(static_cast<int32_t>(res1), res2);
 
     std::vector<ValueType> vec3(vec1.size());
 
@@ -340,7 +340,7 @@ void integer_vector_test(ValueType const initial_value,
         std::cbegin(vec1),
         std::cend(vec1),
         std::begin(vec3),
-        [] (auto const& e) { return e.to_int32(); });
+        [] (auto const& e) { return static_cast<int32_t>(e); });
 
     EXPECT_EQ(vec2, vec3);
 }
@@ -373,7 +373,7 @@ void float_vector_test(ValueType const initial_value,
         std::cend(vec1),
         std::cbegin(vec2),
         [] (auto const& a, auto const& b) {
-            return a.to_double() - b <= std::numeric_limits<ValueType>::epsilon();
+            return static_cast<double>(a) - b <= std::numeric_limits<ValueType>::epsilon();
         });
 
     EXPECT_TRUE(equal);

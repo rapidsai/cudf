@@ -172,14 +172,6 @@ public:
         return detail::shift<Rep, Rad>(static_cast<U>(_value), detail::negate(_scale));
     }
 
-    auto to_int32() const noexcept {
-        return static_cast<int32_t>(*this);
-    }
-
-    auto to_double() const noexcept {
-        return static_cast<double>(*this);
-    }
-
     template <typename Rep1, Radix Rad1>
     CUDA_HOST_DEVICE_CALLABLE
     fixed_point<Rep1, Rad1>& operator+=(fixed_point<Rep1, Rad1> const& rhs) {
@@ -367,7 +359,7 @@ bool operator==(fixed_point<Rep1, Rad1> const& lhs,
 
 template <typename Rep, Radix Radix>
 std::ostream& operator<<(std::ostream& os, fixed_point<Rep, Radix> const& fp) {
-    return os << fp.to_double();
+    return os << static_cast<double>(fp);
 }
 
-} // namespace fixed_point
+} // namespace numeric
