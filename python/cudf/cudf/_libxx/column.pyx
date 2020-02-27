@@ -24,7 +24,7 @@ from cudf._libxx.move cimport move
 
 from cudf._libxx.cpp.column.column cimport column, column_contents
 from cudf._libxx.cpp.column.column_view cimport column_view
-cimport cudf._libxx.cpp.types as cudf_types
+cimport cudf._libxx.cpp.types as libcudf_types
 
 
 @cython.auto_pickle(True)
@@ -289,8 +289,8 @@ cdef class Column:
         else:
             return other_col
 
-    cdef cudf_types.size_type compute_null_count(self) except? 0:
-        return self._view(cudf_types.UNKNOWN_NULL_COUNT).null_count()
+    cdef libcudf_types.size_type compute_null_count(self) except? 0:
+        return self._view(libcudf_types.UNKNOWN_NULL_COUNT).null_count()
 
     cdef mutable_column_view mutable_view(self) except *:
         if is_categorical_dtype(self.dtype):
@@ -299,9 +299,9 @@ cdef class Column:
             col = self
         data_dtype = col.dtype
 
-        cdef cudf_types.type_id tid = np_to_cudf_types[np.dtype(data_dtype)]
-        cdef cudf_types.data_type dtype = cudf_types.data_type(tid)
-        cdef cudf_types.size_type offset = self.offset
+        cdef libcudf_types.type_id tid = np_to_cudf_types[np.dtype(data_dtype)]
+        cdef libcudf_types.data_type dtype = libcudf_types.data_type(tid)
+        cdef libcudf_types.size_type offset = self.offset
         cdef vector[mutable_column_view] children
         cdef void* data
 
@@ -312,16 +312,16 @@ cdef class Column:
             for child_column in self.base_children:
                 children.push_back(child_column.mutable_view())
 
-        cdef cudf_types.bitmask_type* mask
+        cdef libcudf_types.bitmask_type* mask
         if self.nullable:
-            mask = <cudf_types.bitmask_type*><uintptr_t>(self.base_mask_ptr)
+            mask = <libcudf_types.bitmask_type*><uintptr_t>(self.base_mask_ptr)
         else:
             mask = NULL
 
         null_count = self.null_count
         if null_count is None:
-            null_count = cudf_types.UNKNOWN_NULL_COUNT
-        cdef cudf_types.size_type c_null_count = null_count
+            null_count = libcudf_types.UNKNOWN_NULL_COUNT
+        cdef libcudf_types.size_type c_null_count = null_count
 
         return mutable_column_view(
             dtype,
@@ -335,19 +335,19 @@ cdef class Column:
     cdef column_view view(self) except *:
         null_count = self.null_count
         if null_count is None:
-            null_count = cudf_types.UNKNOWN_NULL_COUNT
-        cdef cudf_types.size_type c_null_count = null_count
+            null_count = libcudf_types.UNKNOWN_NULL_COUNT
+        cdef libcudf_types.size_type c_null_count = null_count
         return self._view(c_null_count)
 
-    cdef column_view _view(self, cudf_types.size_type null_count) except *:
+    cdef column_view _view(self, libcudf_types.size_type null_count) except *:
         if is_categorical_dtype(self.dtype):
             col = self.codes
         else:
             col = self
         data_dtype = col.dtype
-        cdef cudf_types.type_id tid = np_to_cudf_types[np.dtype(data_dtype)]
-        cdef cudf_types.data_type dtype = cudf_types.data_type(tid)
-        cdef cudf_types.size_type offset = self.offset
+        cdef libcudf_types.type_id tid = np_to_cudf_types[np.dtype(data_dtype)]
+        cdef libcudf_types.data_type dtype = libcudf_types.data_type(tid)
+        cdef libcudf_types.size_type offset = self.offset
         cdef vector[column_view] children
         cdef void* data
 
@@ -358,13 +358,13 @@ cdef class Column:
             for child_column in self.base_children:
                 children.push_back(child_column.view())
 
-        cdef cudf_types.bitmask_type* mask
+        cdef libcudf_types.bitmask_type* mask
         if self.nullable:
-            mask = <cudf_types.bitmask_type*><uintptr_t>(self.base_mask_ptr)
+            mask = <libcudf_types.bitmask_type*><uintptr_t>(self.base_mask_ptr)
         else:
             mask = NULL
 
-        cdef cudf_types.size_type c_null_count = null_count
+        cdef libcudf_types.size_type c_null_count = null_count
 
         return column_view(
             dtype,

@@ -23,7 +23,7 @@ from cudf._libxx.cpp.scalar.scalar cimport (
     timestamp_scalar,
     string_scalar
 )
-cimport cudf._libxx.cpp.types as cudf_types
+cimport cudf._libxx.cpp.types as libcudf_types
 
 
 cdef class Scalar:
@@ -78,7 +78,7 @@ cdef class Scalar:
         The NumPy dtype corresponding to the data type of the underlying
         device scalar.
         """
-        cdef cudf_types.data_type cdtype = self.c_value.get()[0].type()
+        cdef libcudf_types.data_type cdtype = self.c_value.get()[0].type()
         return cudf_to_np_types[cdtype.id()]
 
     @property
@@ -177,21 +177,21 @@ cdef _get_np_scalar_from_numeric(unique_ptr[scalar]& s):
     if not s_ptr[0].is_valid():
         return None
 
-    cdef cudf_types.data_type cdtype = s_ptr[0].type()
+    cdef libcudf_types.data_type cdtype = s_ptr[0].type()
 
-    if cdtype.id() == cudf_types.INT8:
+    if cdtype.id() == libcudf_types.INT8:
         return np.int8((<numeric_scalar[int8_t]*>s_ptr)[0].value())
-    elif cdtype.id() == cudf_types.INT16:
+    elif cdtype.id() == libcudf_types.INT16:
         return np.int16((<numeric_scalar[int16_t]*>s_ptr)[0].value())
-    elif cdtype.id() == cudf_types.INT32:
+    elif cdtype.id() == libcudf_types.INT32:
         return np.int32((<numeric_scalar[int32_t]*>s_ptr)[0].value())
-    elif cdtype.id() == cudf_types.INT64:
+    elif cdtype.id() == libcudf_types.INT64:
         return np.int64((<numeric_scalar[int64_t]*>s_ptr)[0].value())
-    elif cdtype.id() == cudf_types.FLOAT32:
+    elif cdtype.id() == libcudf_types.FLOAT32:
         return np.float32((<numeric_scalar[float]*>s_ptr)[0].value())
-    elif cdtype.id() == cudf_types.FLOAT64:
+    elif cdtype.id() == libcudf_types.FLOAT64:
         return np.float32((<numeric_scalar[double]*>s_ptr)[0].value())
-    elif cdtype.id() == cudf_types.BOOL8:
+    elif cdtype.id() == libcudf_types.BOOL8:
         return np.bool((<numeric_scalar[bool8]*>s_ptr)[0].value())
     else:
         raise ValueError("Could not convert cudf::scalar to numpy scalar")
@@ -202,30 +202,30 @@ cdef _get_np_scalar_from_timestamp64(unique_ptr[scalar]& s):
     if not s_ptr[0].is_valid():
         return None
 
-    cdef cudf_types.data_type cdtype = s_ptr[0].type()
+    cdef libcudf_types.data_type cdtype = s_ptr[0].type()
 
-    if cdtype.id() == cudf_types.TIMESTAMP_SECONDS:
+    if cdtype.id() == libcudf_types.TIMESTAMP_SECONDS:
         return np.datetime64(
             (
                 <timestamp_scalar[timestamp_ms]*> s_ptr
             )[0].ticks_since_epoch_64(),
             "s"
         )
-    elif cdtype.id() == cudf_types.TIMESTAMP_MILLISECONDS:
+    elif cdtype.id() == libcudf_types.TIMESTAMP_MILLISECONDS:
         return np.datetime64(
             (
                 <timestamp_scalar[timestamp_ms]*> s_ptr
             )[0].ticks_since_epoch_64(),
             "ms"
         )
-    elif cdtype.id() == cudf_types.TIMESTAMP_MICROSECONDS:
+    elif cdtype.id() == libcudf_types.TIMESTAMP_MICROSECONDS:
         return np.datetime64(
             (
                 <timestamp_scalar[timestamp_ms]*> s_ptr
             )[0].ticks_since_epoch_64(),
             "us"
         )
-    elif cdtype.id() == cudf_types.TIMESTAMP_NANOSECONDS:
+    elif cdtype.id() == libcudf_types.TIMESTAMP_NANOSECONDS:
         return np.datetime64(
             (
                 <timestamp_scalar[timestamp_ms]*> s_ptr

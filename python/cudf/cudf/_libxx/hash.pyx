@@ -16,16 +16,16 @@ from cudf._libxx.cpp.hash cimport (
     hash_partition as cpp_hash_partition,
     hash as cpp_hash
 )
-cimport cudf._libxx.cpp.types as cudf_types
+cimport cudf._libxx.cpp.types as libcudf_types
 
 
 def hash_partition(Table source_table, object columns_to_hash,
                    int num_partitions):
-    cdef vector[cudf_types.size_type] c_columns_to_hash = columns_to_hash
+    cdef vector[libcudf_types.size_type] c_columns_to_hash = columns_to_hash
     cdef int c_num_partitions = num_partitions
     cdef table_view c_source_view = source_table.view()
 
-    cdef pair[unique_ptr[table], vector[cudf_types.size_type]] c_result
+    cdef pair[unique_ptr[table], vector[libcudf_types.size_type]] c_result
     with nogil:
         c_result = move(
             cpp_hash_partition(

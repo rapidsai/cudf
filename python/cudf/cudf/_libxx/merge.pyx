@@ -9,7 +9,7 @@ from cudf._libxx.move cimport move
 from cudf._libxx.cpp.table.table cimport table
 from cudf._libxx.cpp.table.table_view cimport table_view
 from cudf._libxx.cpp.merge cimport merge as cpp_merge
-cimport cudf._libxx.cpp.types as cudf_types
+cimport cudf._libxx.cpp.types as libcudf_types
 
 
 def merge_sorted(
@@ -20,12 +20,12 @@ def merge_sorted(
     bool ascending=True,
     object na_position="last",
 ):
-    cdef vector[cudf_types.size_type] c_column_keys
+    cdef vector[libcudf_types.size_type] c_column_keys
     cdef vector[table_view] c_input_tables
-    cdef vector[cudf_types.order] c_column_order
-    cdef vector[cudf_types.null_order] c_null_precedence
-    cdef cudf_types.order column_order
-    cdef cudf_types.null_order null_precedence
+    cdef vector[libcudf_types.order] c_column_order
+    cdef vector[libcudf_types.null_order] c_null_precedence
+    cdef libcudf_types.order column_order
+    cdef libcudf_types.null_order null_precedence
     cdef Table source_table
 
     # Create vector of tables
@@ -39,12 +39,12 @@ def merge_sorted(
     source_table = tables[0]
 
     # Define sorting order and null precedence
-    column_order = (cudf_types.order.ASCENDING
+    column_order = (libcudf_types.order.ASCENDING
                     if ascending
-                    else cudf_types.order.DESCENDING)
+                    else libcudf_types.order.DESCENDING)
     null_precedence = (
-        cudf_types.null_order.BEFORE if na_position == "first"
-        else cudf_types.null_order.AFTER
+        libcudf_types.null_order.BEFORE if na_position == "first"
+        else libcudf_types.null_order.AFTER
     )
 
     # Determine index-column offset and index names
@@ -77,8 +77,8 @@ def merge_sorted(
         c_column_keys.reserve(num_keys)
         for key in range(start, stop):
             c_column_keys.push_back(key)
-    c_column_order = vector[cudf_types.order](num_keys, column_order)
-    c_null_precedence = vector[cudf_types.null_order](
+    c_column_order = vector[libcudf_types.order](num_keys, column_order)
+    c_null_precedence = vector[libcudf_types.null_order](
         num_keys,
         null_precedence
     )

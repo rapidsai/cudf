@@ -15,7 +15,7 @@ from cudf._libxx.types cimport (
 
 from cudf._libxx.cpp.table.table cimport table
 from cudf._libxx.cpp.table.table_view cimport table_view
-cimport cudf._libxx.cpp.types as cudf_types
+cimport cudf._libxx.cpp.types as libcudf_types
 cimport cudf._libxx.cpp.quantiles as cpp_quantiles
 
 
@@ -27,26 +27,26 @@ def quantiles(Table source_table,
               list null_precedence):
     cdef table_view c_input = source_table.data_view()
     cdef vector[double] c_q = q
-    cdef cudf_types.interpolation c_interp = <cudf_types.interpolation>(
+    cdef libcudf_types.interpolation c_interp = <libcudf_types.interpolation>(
         <underlying_type_t_interpolation> interp
     )
-    cdef cudf_types.sorted c_is_input_sorted = <cudf_types.sorted>(
+    cdef libcudf_types.sorted c_is_input_sorted = <libcudf_types.sorted>(
         <underlying_type_t_sorted> is_input_sorted
     )
-    cdef vector[cudf_types.order] c_column_order
-    cdef vector[cudf_types.null_order] c_null_precedence
+    cdef vector[libcudf_types.order] c_column_order
+    cdef vector[libcudf_types.null_order] c_null_precedence
 
     c_column_order.reserve(len(column_order))
     c_null_precedence.reserve(len(null_precedence))
 
     for value in column_order:
         c_column_order.push_back(
-            <cudf_types.order>(<underlying_type_t_order> value)
+            <libcudf_types.order>(<underlying_type_t_order> value)
         )
 
     for value in null_precedence:
         c_null_precedence.push_back(
-            <cudf_types.null_order>(<underlying_type_t_null_order> value)
+            <libcudf_types.null_order>(<underlying_type_t_null_order> value)
         )
 
     cdef unique_ptr[table] c_result
