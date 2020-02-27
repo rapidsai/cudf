@@ -3,8 +3,8 @@ import warnings
 
 import numpy as np
 import pandas as pd
-from toolz import partition_all
 from distutils.version import LooseVersion
+from toolz import partition_all
 
 import dask
 import dask.dataframe as dd
