@@ -9,6 +9,7 @@ from cudf._libxx.cpp.aggregation cimport aggregation
 from cudf._libxx.cpp.scalar.scalar cimport scalar
 from cudf._libxx.cpp.column.column cimport column, column_contents
 from cudf._libxx.cpp.table.table cimport table
+from cudf._libxx.cpp.groupby cimport groups
 
 
 # Note: declaring `move()` with `except +` doesn't work.
@@ -47,3 +48,4 @@ cdef extern from "<utility>" namespace "std" nogil:
         pair[unique_ptr[device_buffer], size_type]
     )
     cdef column_contents move(column_contents)
+    cdef groups move(groups)

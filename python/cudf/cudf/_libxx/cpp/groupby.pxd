@@ -1,7 +1,15 @@
-from cudf._libxx.lib cimport *
-from cudf._libxx.lib import *
 from libcpp.vector cimport vector
+from libcpp.memory cimport unique_ptr
 from libcpp.pair cimport pair
+from libcpp cimport bool
+
+from cudf._libxx.cpp.table.table cimport table
+from cudf._libxx.cpp.table.table_view cimport table_view
+from cudf._libxx.cpp.column.column_view cimport column_view
+from cudf._libxx.cpp.column.column cimport column
+from cudf._libxx.cpp.aggregation cimport aggregation
+from cudf._libxx.cpp.types cimport size_type, order, null_order
+
 
 cdef extern from "cudf/groupby.hpp" \
         namespace "cudf::experimental::groupby" nogil:
@@ -15,9 +23,9 @@ cdef extern from "cudf/groupby.hpp" \
 
     cdef cppclass groups \
             "cudf::experimental::groupby::groupby::groups" nogil:
-        unique_ptr[table] group_keys
-        vector[size_type] group_offsets
-        unique_ptr[table] group_values
+        unique_ptr[table] keys
+        vector[size_type] offsets
+        unique_ptr[table] values
 
     cdef cppclass groupby:
         groupby(table_view keys) except +
@@ -52,6 +60,3 @@ cdef extern from "cudf/groupby.hpp" \
         ) except +
 
         groups get_groups() except +
-
-cdef extern from "<utility>" namespace "std" nogil:
-    cdef groups move(groups)

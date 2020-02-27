@@ -65,5 +65,5 @@ def quantiles(Table source_table,
 
     return Table.from_unique_ptr(
         move(c_result),
-        column_names=source_table._column_names
+        column_meta=source_table._column_meta
     )
