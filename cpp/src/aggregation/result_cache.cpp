@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
-#include "result_cache.hpp"
+#include <cudf/detail/aggregation/result_cache.hpp>
 
 namespace cudf {
 namespace experimental {
-namespace groupby {
 namespace detail {
 
 namespace {
@@ -49,7 +48,7 @@ copy_to_shared_ptr(std::unique_ptr<aggregation> const& agg) {
 } // namespace
 
 bool result_cache::has_result(size_t col_idx, 
-                              std::unique_ptr<aggregation> const& agg)
+                              std::unique_ptr<aggregation> const& agg) const
 {
   if (col_idx < 0 or col_idx > _cache.size())
     return false;
@@ -72,8 +71,8 @@ void result_cache::add_result(size_t col_idx,
   _cache[col_idx].emplace(std::move(key), std::unique_ptr<column>(col_ptr));
 }
 
-column_view result_cache::get_result(size_t col_idx,
-                                     std::unique_ptr<aggregation> const& agg)
+column_view result_cache::get_result(
+  size_t col_idx, std::unique_ptr<aggregation> const& agg) const
 {
   CUDF_EXPECTS(has_result(col_idx, agg), "Result does not exist in cache");
 
@@ -98,6 +97,5 @@ result_cache::release_result(size_t col_idx,
 }
 
 }  // namespace detail
-}  // namespace groupby
 }  // namespace experimental
 }  // namespace cudf

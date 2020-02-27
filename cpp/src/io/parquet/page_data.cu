@@ -1299,14 +1299,15 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
     while (!s->error && (s->value_count < s->num_values || s->out_pos < s->nz_count))
     {
         int target_pos;
+        int out_pos = s->out_pos;
 
         if (t < out_thread0)
         {
-            target_pos = min(s->out_pos + 2 * (NTHREADS - out_thread0), s->nz_count + (NTHREADS - out_thread0));
+            target_pos = min(out_pos + 2 * (NTHREADS - out_thread0), s->nz_count + (NTHREADS - out_thread0));
         }
         else
         {
-            target_pos = min(s->nz_count, s->out_pos + NTHREADS - out_thread0);
+            target_pos = min(s->nz_count, out_pos + NTHREADS - out_thread0);
             if (out_thread0 > 32)
             {
                 target_pos = min(target_pos, s->dict_pos);
@@ -1342,7 +1343,7 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
         {
             // WARP1..WARP3: Decode values
             int dtype = s->col.data_type & 7;
-            int out_pos = s->out_pos + t - out_thread0;
+            out_pos += t - out_thread0;
             int row_idx = s->nz_idx[out_pos & (NZ_BFRSZ - 1)];
             if (out_pos < target_pos && row_idx >= 0 && s->first_row + row_idx < s->num_rows)
             {
