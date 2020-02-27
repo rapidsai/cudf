@@ -16,13 +16,14 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/strings/substring.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/utilities/traits.hpp>
-#include "./utilities.hpp"
-#include "./utilities.cuh"
+#include <strings/utilities.hpp>
+#include <strings/utilities.cuh>
 
 namespace
 {
@@ -56,11 +57,10 @@ namespace
  * This will perform a substring operation on each string
  * using the provided start, stop, and step parameters.
  */
-template <TwoPass Pass=SizeOnly>
 struct substring_fn
 {
     const column_device_view d_column;
-    int32_t start, stop, step;
+    numeric_scalar_device_view<size_type> d_start, d_stop, d_step;
     const int32_t* d_offsets{};
     char* d_chars{};
 
@@ -70,19 +70,33 @@ struct substring_fn
             return 0; // null string
         string_view d_str = d_column.template element<string_view>(idx);
         auto length = d_str.length();
-        if( start >= length )
-            return 0; // empty string
-        auto itr = d_str.begin() + start;
-        auto end_itr = d_str.begin() + (((stop<0) || (stop>length) ) ? length : stop);
+        auto step = d_step.is_valid() ? *(d_step.data()) : 1;
+        auto begin = [&] {  // inclusive
+            auto start = d_start.is_valid() ? d_start.value() : 0;
+            if( start >=0 )
+            {
+                if( start < length )
+                    return d_str.begin() + start;
+                return (length > 0) ? d_str.end()-1 : d_str.begin();
+            }
+            auto adjust = length + start; // handle negative position
+            return d_str.begin() + ((adjust > 0) ? adjust : 0);
+        } ();
+        auto end = [&] {  // exclusive
+            auto stop = d_stop.is_valid() ? d_stop.value() : length;
+            if( stop >=0 )
+                return stop < length ? (d_str.begin() + stop) : d_str.end();
+            auto adjust = length + stop;  // handle negative position
+            return d_str.begin() + ((adjust >= 0) ? adjust: -1);
+        } ();
+
         size_type bytes = 0;
-        char* d_buffer = nullptr;
-        if( Pass==ExecuteOp )
-            d_buffer = d_chars + d_offsets[idx];
-        while( itr < end_itr )
+        char* d_buffer = d_chars ? d_chars + d_offsets[idx] : nullptr;
+        auto itr = begin;
+        while( step > 0 ? itr < end : end < itr )
         {
-            if( Pass==SizeOnly )
-                bytes += bytes_in_char_utf8(*itr);
-            else
+            bytes += bytes_in_char_utf8(*itr);
+            if( d_buffer )
                 d_buffer += from_char_utf8(*itr,d_buffer);
             itr += step;
         }
@@ -95,39 +109,42 @@ struct substring_fn
 
 //
 std::unique_ptr<column> slice_strings( strings_column_view const& strings,
-                                       size_type start, size_type stop=-1, size_type step=1,
+                                       numeric_scalar<size_type> const& start = numeric_scalar<size_type>(0,false),
+                                       numeric_scalar<size_type> const& stop = numeric_scalar<size_type>(0,false),
+                                       numeric_scalar<size_type> const& step = numeric_scalar<size_type>(1),
                                        rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                        cudaStream_t stream = 0 )
 {
     size_type strings_count = strings.size();
     if( strings_count == 0 )
         return make_empty_strings_column(mr,stream);
-    CUDF_EXPECTS( start >= 0, "Parameter start must be zero or positive integer.");
-    CUDF_EXPECTS( step > 0, "Parameter step must be positive integer.");
-    if( (stop > 0) && (start > stop) )
-        CUDF_FAIL("Invalid start or stop parameter value.");
+
+    if( step.is_valid() )
+        CUDF_EXPECTS( step.value(stream)!=0, "Step parameter must not be 0");
 
     auto strings_column = column_device_view::create(strings.parent(),stream);
     auto d_column = *strings_column;
+    auto d_start = get_scalar_device_view(const_cast<numeric_scalar<size_type>&>(start));
+    auto d_stop = get_scalar_device_view(const_cast<numeric_scalar<size_type>&>(stop));
+    auto d_step = get_scalar_device_view(const_cast<numeric_scalar<size_type>&>(step));
 
     // copy the null mask
     rmm::device_buffer null_mask = copy_bitmask( strings.parent(), stream, mr);
+
     // build offsets column
     auto offsets_transformer_itr = thrust::make_transform_iterator( thrust::make_counting_iterator<int32_t>(0),
-        substring_fn<SizeOnly>{d_column, start, stop, step} );
+        substring_fn{d_column, d_start, d_stop, d_step} );
     auto offsets_column = make_offsets_child_column(offsets_transformer_itr,
                                        offsets_transformer_itr+strings_count,
                                        mr, stream);
-    auto offsets_view = offsets_column->view();
-    auto d_new_offsets = offsets_view.data<int32_t>();
+    auto d_new_offsets = offsets_column->view().data<int32_t>();
 
     // build chars column
     size_type bytes = thrust::device_pointer_cast(d_new_offsets)[strings_count];
     auto chars_column = strings::detail::create_chars_child_column( strings_count, strings.null_count(), bytes, mr, stream );
-    auto chars_view = chars_column->mutable_view();
-    auto d_chars = chars_view.data<char>();
+    auto d_chars = chars_column->mutable_view().data<char>();
     thrust::for_each_n(rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count,
-        substring_fn<ExecuteOp>{d_column, start, stop, step, d_new_offsets, d_chars} );
+        substring_fn{d_column, d_start, d_stop, d_step, d_new_offsets, d_chars} );
     //
     return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
                                strings.null_count(), std::move(null_mask), stream, mr);
@@ -138,7 +155,9 @@ std::unique_ptr<column> slice_strings( strings_column_view const& strings,
 // external API
 
 std::unique_ptr<column> slice_strings( strings_column_view const& strings,
-                                       size_type start, size_type stop, size_type step,
+                                       numeric_scalar<size_type> const& start,
+                                       numeric_scalar<size_type> const& stop,
+                                       numeric_scalar<size_type> const& step,
                                        rmm::mr::device_memory_resource* mr )
 {
     return detail::slice_strings(strings, start, stop, step, mr );
