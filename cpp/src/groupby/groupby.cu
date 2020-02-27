@@ -35,11 +35,12 @@ namespace experimental {
 namespace groupby {
 
 // Constructor
-groupby::groupby(table_view const& keys, bool ignore_null_keys,
-                 bool keys_are_sorted, std::vector<order> const& column_order,
+groupby::groupby(table_view const& keys,
+                 include_nulls include_null_keys,
+                 sorted keys_are_sorted, std::vector<order> const& column_order,
                  std::vector<null_order> const& null_precedence)
     : _keys{keys},
-      _ignore_null_keys{ignore_null_keys},
+      _include_null_keys{include_null_keys},
       _keys_are_sorted{keys_are_sorted},
       _column_order{column_order},
       _null_precedence{null_precedence} {}
@@ -55,10 +56,10 @@ groupby::dispatch_aggregation(std::vector<aggregation_request> const& requests,
   // sort groupby as well.
   // Only use hash groupby if the keys aren't sorted and all requests can be
   // satisfied with a hash implementation
-  if (not _keys_are_sorted and
+  if (_keys_are_sorted == sorted::NO and
       not _helper and
       detail::hash::can_use_hash_groupby(_keys, requests)) {
-    return detail::hash::groupby(_keys, requests, _ignore_null_keys, stream,
+    return detail::hash::groupby(_keys, requests, _include_null_keys, stream,
                                  mr);
   } else {
     return sort_aggregate(requests, stream, mr);
@@ -134,7 +135,7 @@ detail::sort::sort_groupby_helper& groupby::helper() {
   if (_helper)
     return *_helper;
   _helper = std::make_unique<detail::sort::sort_groupby_helper>(
-    _keys, _ignore_null_keys, _keys_are_sorted);
+    _keys, _include_null_keys, _keys_are_sorted);
   return *_helper;
 };
 
