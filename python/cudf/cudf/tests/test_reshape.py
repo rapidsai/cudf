@@ -118,8 +118,8 @@ def test_df_stack(nulls, num_cols, num_rows, dtype):
 
 
 @pytest.mark.debug
-@pytest.mark.parametrize("num_rows", [2, 1000])
-@pytest.mark.parametrize("num_cols", [2, 10])
+@pytest.mark.parametrize("num_rows", [1, 2, 1000])
+@pytest.mark.parametrize("num_cols", [1, 2, 10])
 @pytest.mark.parametrize(
     "dtype",
     [
@@ -130,6 +130,7 @@ def test_df_stack(nulls, num_cols, num_rows, dtype):
         "float32",
         "float64",
         "datetime64[ms]",
+        "category",
     ],
 )
 @pytest.mark.parametrize("nulls", ["none", "some"])
@@ -137,10 +138,12 @@ def test_interleave_columns(nulls, num_cols, num_rows, dtype):
     if dtype not in ["float32", "float64"] and nulls in ["some"]:
         pytest.skip(msg="nulls not supported in dtype: " + dtype)
 
-    pdf = pd.DataFrame()
+    pdf = pd.DataFrame(dtype=dtype)
     for i in range(num_cols):
         colname = str(i)
-        data = np.random.randint(0, 26, num_rows).astype(dtype)
+        data = pd.Series(np.random.randint(num_cols, 26, num_rows))
+        data = data if dtype == "category" else data.astype(dtype)
+
         if nulls == "some":
             idx = np.random.choice(
                 num_rows, size=int(num_rows / 2), replace=False
@@ -180,10 +183,12 @@ def test_tile(nulls, num_cols, num_rows, dtype, count):
     if dtype not in ["float32", "float64"] and nulls in ["some"]:
         pytest.skip(msg="nulls not supported in dtype: " + dtype)
 
-    pdf = pd.DataFrame()
+    pdf = pd.DataFrame(dtype=dtype)
     for i in range(num_cols):
         colname = str(i)
-        data = np.random.randint(0, 26, num_rows).astype(dtype)
+        data = pd.Series(np.random.randint(num_cols, 26, num_rows))
+        data = data if dtype == "category" else data.astype(dtype)
+
         if nulls == "some":
             idx = np.random.choice(
                 num_rows, size=int(num_rows / 2), replace=False
@@ -194,9 +199,11 @@ def test_tile(nulls, num_cols, num_rows, dtype, count):
     gdf = DataFrame.from_pandas(pdf)
 
     got = gdf.tile(count)
-    expect = pd.concat([pdf] * count)
+    expect = pd.DataFrame(pd.concat([pdf] * count))
 
     assert_eq(expect, got)
+
+
 def _prepare_merge_sorted_test(
     size,
     nparts,

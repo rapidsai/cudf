@@ -37,7 +37,7 @@ def interleave_columns(Table source_table):
     -------
     The interleaved columns as a single column
     """
-    
+
     cdef table_view c_view = source_table.data_view()
 
     with nogil:
@@ -82,6 +82,4 @@ def tile(Table source_table, size_type count):
         move(c_result),
         column_names=source_table._column_names,
         index_names=source_table._index_names
-            None if source_table._index
-            is None else source_table._index_names)
     )
