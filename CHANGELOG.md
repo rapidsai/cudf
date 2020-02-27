@@ -24,6 +24,7 @@
 - PR #4190 Add libcudf++ transpose Cython implementation
 - PR #4217 Add libcudf++ quantiles Cython implementation
 - PR #4216 Add cudf.Scalar Python type
+- PR #4272 Add stable sorted order
 
 ## Improvements
 
