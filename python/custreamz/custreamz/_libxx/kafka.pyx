@@ -5,7 +5,7 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
-from cudf._libxx.lib cimport *
+# from cudf._libxx.lib cimport *
 from custreamz._libxx.includes.kafka cimport (
     kafka_datasource as kafka_external,
 )

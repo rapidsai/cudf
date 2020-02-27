@@ -45,9 +45,8 @@ dependencies:
   - rapidjson
   - flatbuffers
   - hypothesis
-  - cudf-kafka-datasource
   - custreamz
-  - librdkafka
+  - cudf-kafka-datasource
   - pip:
       - sphinx-markdown-tables
       - git+https://github.com/dask/dask.git

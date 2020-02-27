@@ -4,7 +4,6 @@ import shutil
 import sysconfig
 from distutils.sysconfig import get_python_lib
 
-import numpy as np
 import versioneer
 from Cython.Build import cythonize
 from setuptools import find_packages, setup
@@ -47,8 +46,6 @@ extensions = [
             "../../thirdparty/libcudacxx/include",
             "../../external/kafka/include",
             os.path.dirname(sysconfig.get_path("include")),
-            np.get_include(),
-            cuda_include_dir,
         ],
         library_dirs=[
             get_python_lib(),

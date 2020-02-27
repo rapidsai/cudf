@@ -157,5 +157,9 @@ install(TARGETS cudf_kafka
         DESTINATION lib/external
         COMPONENT cudf_kafka)
 
+install(TARGETS cudf_kafka
+        DESTINATION lib
+        COMPONENT cudf_kafka)
+
 add_custom_target(build_tests_cudf
                   DEPENDS ${CUDF_TEST_LIST})

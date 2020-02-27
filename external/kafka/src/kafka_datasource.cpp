@@ -224,8 +224,8 @@ namespace external {
   }
 
   std::map<std::string, int64_t> kafka_datasource::get_watermark_offset(std::string topic, int32_t partition) {
-    int64_t *low;
-    int64_t *high;
+    int64_t low;
+    int64_t high;
     std::vector<RdKafka::TopicPartition *> topic_parts;
     std::map<std::string, int64_t> results;
 
@@ -235,14 +235,14 @@ namespace external {
     }
     printf("# Consumer Partition(s) -> '%lu'\n", topic_parts.size());
     printf("Topic: '%s' Partition: '%d'\n", topic_parts[0]->topic().c_str(), topic_parts[0]->partition());
-    err_ = consumer_->query_watermark_offsets(topic_parts[0]->topic().c_str(), topic_parts[0]->partition(), low, high, 10000);
+    err_ = consumer_->query_watermark_offsets(topic_parts[0]->topic().c_str(), topic_parts[0]->partition(), &low, &high, 10000);
 
     if (err_ != RdKafka::ErrorCode::ERR_NO_ERROR) {
       printf("Error: '%s'\n", err2str(err_).c_str());
     } else {
-      printf("Low Offset: '%ld' High Offset: '%ld'\n", *low, *high);
-      results.insert(std::pair<std::string, int64_t>("low", *low));
-      results.insert(std::pair<std::string, int64_t>("high", *high));
+      printf("Low Offset: '%ld' High Offset: '%ld'\n", low, high);
+      results.insert(std::pair<std::string, int64_t>("low", low));
+      results.insert(std::pair<std::string, int64_t>("high", high));
     }
 
     return results;
