@@ -163,6 +163,7 @@
 - PR #4214 Alter ValueError exception for GPU accelerated Parquet writer to properly report `categorical` columns are not supported.
 - PR #4232 Fix handling empty tuples of children in string columns
 - PR #4222 Fix no-return compile error in binop-null-test
+- PR #4242 Fix for rolling tests CI failure
 - PR #4245 Fix race condition in parquet reader
 - PR #4258 Fix dask-cudf losing index name in `reset_index`
 
