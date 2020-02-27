@@ -665,9 +665,9 @@ def split_partitions(df, max_size=None, max_length=None):
     ----------
     df: DataFrame or Series
     max_size: int or str
-        Maximum data size allowed in an output partition
+        Maximum data size desired in an output partition
     max_length: int or str
-        Maximum row-count allowed in an output partition
+        Maximum row-count desired in an output partition
 
     Note: User must specify max_size or max_length.
     If both are specified, max_length is ignored.

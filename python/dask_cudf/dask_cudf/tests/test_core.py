@@ -520,3 +520,28 @@ def test_make_meta_backends(index):
 
     # Check "non-empty" metadata types
     dd.assert_eq(ddf._meta.dtypes, ddf._meta_nonempty.dtypes)
+
+
+@pytest.mark.parametrize("length", [True, False])
+def test_split_divisions(length):
+    big = 90
+    small = 10
+    big_data = [3, 4]
+    small_data = [1, 2]
+    index = np.concatenate(
+        [np.random.choice(small_data, small), np.random.choice(big_data, big)]
+    )
+    index = sorted(index)
+    df = cudf.DataFrame(
+        {"a": np.arange(len(index)), "index": index}
+    ).set_index("index")
+    ddf = dgd.from_cudf(df, npartitions=2)
+    if length:
+        new_ddf = dgd.split_partitions(ddf, max_length=5)
+    else:
+        new_ddf = dgd.split_partitions(ddf, max_size=70)
+    for part in new_ddf.partitions:
+        assert len(part) < small
+        keys = part.compute().index.unique().values.tolist()
+        if len(keys) > 1:
+            assert not set(big_data).intersection(set(keys))
