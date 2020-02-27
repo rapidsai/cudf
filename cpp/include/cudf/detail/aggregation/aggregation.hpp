@@ -25,6 +25,7 @@
 namespace cudf {
 namespace experimental {
 namespace detail {
+
 /**
  * @brief Derived class for specifying a quantile aggregation
  */

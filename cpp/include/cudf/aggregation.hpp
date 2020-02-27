@@ -82,12 +82,6 @@ enum class udf_type : bool {
    PTX
 };
 
-// @brief Enum to describe include nulls or exclude nulls in an aggregation
-enum class include_nulls : bool {
-   YES, 
-   NO
-};
-
 /// Factory to create a SUM aggregation
 std::unique_ptr<aggregation> make_sum_aggregation();
 
