@@ -129,6 +129,14 @@ set(LEGACY_QUANTILES_BENCH_SRC
 ConfigureBench(LEGACY_QUANTILES_BENCH "${LEGACY_QUANTILES_BENCH_SRC}")
 
 ###################################################################################################
+# - compiled binops benchmark ---------------------------------------------------------------------------
+
+set(COMPILED_BINOP_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/compiled_binary_op_benchmark.cu")
+
+ConfigureBench(COMPILED_BINOP_BENCH "${COMPILED_BINOP_BENCH_SRC}")
+
+###################################################################################################
 # - groupby benchmark -----------------------------------------------------------------------------
 
 set(GROUPBY_BENCH_SRC

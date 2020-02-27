@@ -420,6 +420,9 @@ add_library(cudf
             src/jit/parser.cpp
             src/jit/cache.cpp
             src/jit/launcher.cpp
+            src/binaryop/compiled_binop1.cu
+            src/binaryop/compiled_binop2.cu
+            src/binaryop/compiled_binop3.cu
             src/transform/legacy/transform.cpp
             src/transform/jit/code/kernel.cpp
             src/transform/legacy/nans_to_nulls.cu
