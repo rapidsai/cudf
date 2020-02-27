@@ -18,6 +18,7 @@
 
 package ai.rapids.cudf;
 
+import ai.rapids.cudf.HostColumnVector.Builder;
 import org.junit.jupiter.api.Test;
 
 import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
@@ -36,56 +37,60 @@ public class BinaryOpTest extends CudfTestBase {
   private static final Boolean[] BOOLEANS_2 = new Boolean[]{true, false, true, false, true};
 
   interface CpuOpVV {
-    void computeNullSafe(ColumnVector.Builder ret, ColumnVector lhs, ColumnVector rhs, int index);
+    void computeNullSafe(Builder ret, HostColumnVector lhs, HostColumnVector rhs, int index);
   }
 
   interface CpuOpVS<S> {
-    void computeNullSafe(ColumnVector.Builder ret, ColumnVector lhs, S rhs, int index);
+    void computeNullSafe(Builder ret, HostColumnVector lhs, S rhs, int index);
   }
 
   interface CpuOpSV<S> {
-    void computeNullSafe(ColumnVector.Builder ret, S lhs, ColumnVector rhs, int index);
+    void computeNullSafe(Builder ret, S lhs, HostColumnVector rhs, int index);
   }
 
   public static ColumnVector forEach(DType retType, ColumnVector lhs, ColumnVector rhs, CpuOpVV op) {
     int len = (int)lhs.getRowCount();
-    try (ColumnVector.Builder builder = ColumnVector.builder(retType, len)) {
+    try (HostColumnVector hostLHS  = lhs.copyToHost();
+         HostColumnVector hostRHS = rhs.copyToHost();
+         Builder builder = HostColumnVector.builder(retType, len)) {
       for (int i = 0; i < len; i++) {
-        if (lhs.isNull(i) || rhs.isNull(i)) {
+        if (hostLHS.isNull(i) || hostRHS.isNull(i)) {
           builder.appendNull();
         } else {
-          op.computeNullSafe(builder, lhs, rhs, i);
+          op.computeNullSafe(builder, hostLHS, hostRHS, i);
         }
       }
-      return builder.build();
+      return builder.buildAndPutOnDevice();
     }
   }
 
   public static <S> ColumnVector forEachS(DType retType, ColumnVector lhs, S rhs, CpuOpVS<S> op) {
     int len = (int)lhs.getRowCount();
-    try (ColumnVector.Builder builder = ColumnVector.builder(retType, len)) {
+    try (HostColumnVector hostLHS = lhs.copyToHost();
+         Builder builder = HostColumnVector.builder(retType, len)) {
       for (int i = 0; i < len; i++) {
-        if (lhs.isNull(i) || rhs == null) {
+        if (hostLHS.isNull(i) || rhs == null) {
           builder.appendNull();
         } else {
-          op.computeNullSafe(builder, lhs, rhs, i);
+          op.computeNullSafe(builder, hostLHS, rhs, i);
         }
       }
-      return builder.build();
+      return builder.buildAndPutOnDevice();
     }
   }
 
   public static <S> ColumnVector forEachS(DType retType, S lhs, ColumnVector rhs, CpuOpSV<S> op) {
     int len = (int)rhs.getRowCount();
-    try (ColumnVector.Builder builder = ColumnVector.builder(retType, len)) {
+    try (HostColumnVector hostRHS = rhs.copyToHost();
+        Builder builder = HostColumnVector.builder(retType, len)) {
       for (int i = 0; i < len; i++) {
-        if (rhs.isNull(i) || lhs == null) {
+        if (hostRHS.isNull(i) || lhs == null) {
           builder.appendNull();
         } else {
-          op.computeNullSafe(builder, lhs, rhs, i);
+          op.computeNullSafe(builder, lhs, hostRHS, i);
         }
       }
-      return builder.build();
+      return builder.buildAndPutOnDevice();
     }
   }
 
