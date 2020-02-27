@@ -301,7 +301,7 @@ struct binary_search_fn {
   T __device__ operator()(size_type i) {
     // Look up the current index in the offsets table to find the partition
     auto const offset_it = thrust::prev(thrust::upper_bound(thrust::seq,
-      offsets_ptr, offsets_ptr + input_size, i));
+        offsets_ptr, offsets_ptr + input_size, i));
     auto const partition = offset_it - offsets_ptr;
     auto const offset = *offset_it;
     return data_ptr[partition][i - offset];
@@ -316,13 +316,13 @@ auto compute_partition_map(rmm::device_vector<size_type> const& d_offsets,
   // Scatter 1s at the start of each partition, then scan to fill the map
   auto const const_it = thrust::make_constant_iterator(size_type{1});
   thrust::scatter(rmm::exec_policy(stream)->on(stream),
-    const_it, const_it + (d_offsets.size() - 2), // skip first and last offset
-    std::next(d_offsets.cbegin()), // skip first offset, leaving it set to 0
-    d_partition_map.begin());
+      const_it, const_it + (d_offsets.size() - 2), // skip first and last offset
+      std::next(d_offsets.cbegin()), // skip first offset, leaving it set to 0
+      d_partition_map.begin());
 
   thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream),
-    d_partition_map.cbegin(), d_partition_map.cend(),
-    d_partition_map.begin());
+      d_partition_map.cbegin(), d_partition_map.cend(),
+      d_partition_map.begin());
 
   return d_partition_map;
 }
@@ -348,28 +348,28 @@ struct optimized_concatenate {
     // NOTE tried to use thrust::transform_inclusive_scan here, but got
     // error: __host__ called from __host__ __device__
     thrust::transform(views.cbegin(), views.cend(), std::next(offsets.begin()),
-      [](column_view const& col) {
-        return col.size();
-      });
+        [](column_view const& col) {
+          return col.size();
+        });
     thrust::inclusive_scan(std::next(offsets.cbegin()), offsets.cend(),
-      std::next(offsets.begin()));
+        std::next(offsets.begin()));
     auto const d_offsets = rmm::device_vector<size_type>(offsets);
     auto const output_size = offsets.back();
 
     // Transform views to array of data pointers
     auto data_ptrs = thrust::host_vector<T const*>(views.size());
     std::transform(views.begin(), views.end(), data_ptrs.begin(),
-      [](column_view const& col) {
-        return col.data<T>();
-      });
+        [](column_view const& col) {
+          return col.data<T>();
+        });
     auto const d_data_ptrs = rmm::device_vector<T const*>(data_ptrs);
 
+    // Allocate output column, with null mask if any columns have nulls
     bool const has_nulls = std::any_of(views.begin(), views.end(),
-      [](auto const& col) { return col.has_nulls(); });
-
+        [](auto const& col) { return col.has_nulls(); });
     auto const policy = has_nulls ? mask_policy::ALWAYS : mask_policy::NEVER;
     auto out_col = experimental::detail::allocate_like(views.front(),
-      output_size, policy, mr, stream);
+        output_size, policy, mr, stream);
     auto out_view = out_col->mutable_view();
 
     // Initialize each output row from its corresponding input view
@@ -380,12 +380,12 @@ struct optimized_concatenate {
       auto const d_partition_map = compute_partition_map(d_offsets, output_size, stream);
       auto const* partition_ptr = d_partition_map.data().get();
       thrust::tabulate(rmm::exec_policy(stream)->on(stream),
-        out_view.begin<T>(), out_view.end<T>(),
-        partition_map_fn<T>{offsets_ptr, partition_ptr, data_ptr});
+          out_view.begin<T>(), out_view.end<T>(),
+          partition_map_fn<T>{offsets_ptr, partition_ptr, data_ptr});
     } else {
       thrust::tabulate(rmm::exec_policy(stream)->on(stream),
-        out_view.begin<T>(), out_view.end<T>(),
-        binary_search_fn<T>{offsets_ptr, views.size(), data_ptr});
+          out_view.begin<T>(), out_view.end<T>(),
+          binary_search_fn<T>{offsets_ptr, views.size(), data_ptr});
     }
 
     // If concatenated column is nullable, proceed to calculate it
