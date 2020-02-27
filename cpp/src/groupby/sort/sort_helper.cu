@@ -91,9 +91,9 @@ size_type sort_groupby_helper::num_keys(cudaStream_t stream) {
   if (_num_keys > -1)
     return _num_keys;
 
-  if (_ignore_null_keys and has_nulls(_keys)) {
+  if (_include_null_keys == include_nulls::NO and has_nulls(_keys)) {
     // The number of rows w/o null values `n` is indicated by number of valid bits
-    // in the row bitmask. When `_ignore_null_keys == true`, then only rows `[0, n)` 
+    // in the row bitmask. When `_include_null_keys == NO`, then only rows `[0, n)` 
     // in the sorted keys are considered for grouping. 
     _num_keys = keys_bitmask_column(stream).size() - 
                 keys_bitmask_column(stream).null_count();
@@ -118,7 +118,7 @@ column_view sort_groupby_helper::key_sort_order(cudaStream_t stream) {
   // TODO (dm): optimization. When keys are pre sorted but ignore nulls is true,
   //            we still want all rows with nulls in the end. Sort is costly, so
   //            do a copy_if(counting, sorted_order, {bitmask.isvalid(i)})
-  if (_keys_pre_sorted) {
+  if (_keys_pre_sorted == sorted::YES) {
     _key_sorted_order = make_numeric_column(data_type(type_to_id<size_type>()),
                           _keys.num_rows(), mask_state::UNALLOCATED, stream);
 
@@ -131,7 +131,7 @@ column_view sort_groupby_helper::key_sort_order(cudaStream_t stream) {
     return sliced_key_sorted_order();
   }
 
-  if (not _ignore_null_keys || !cudf::has_nulls(_keys)) {  // SQL style
+  if (_include_null_keys == include_nulls::YES || !cudf::has_nulls(_keys)) {  // SQL style
     _key_sorted_order = cudf::experimental::detail::sorted_order(_keys, {},
       std::vector<null_order>(_keys.num_columns(), null_order::AFTER),
       rmm::mr::get_default_resource(), stream);
