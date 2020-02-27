@@ -52,7 +52,7 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         data_type(type_id id) except +
         type_id id() except +
 
-cdef extern from "cudf/types.hpp" namespace "cudf::experimental" nogil:                
+cdef extern from "cudf/types.hpp" namespace "cudf::experimental" nogil:
     ctypedef enum interpolation:
         LINEAR "cudf::experimental::interpolation::LINEAR"
         LOWER "cudf::experimental::interpolation::LOWER"
