@@ -129,7 +129,7 @@ public class HostMemoryBufferTest extends CudfTestBase {
       Files.write(tempFile, testbuf);
 
       // verify we can map the whole file
-      try (HostMemoryBuffer hmb = HostMemoryBuffer.mapFile(tempFile.toString(),
+      try (HostMemoryBuffer hmb = HostMemoryBuffer.mapFile(tempFile.toFile(),
           FileChannel.MapMode.READ_ONLY, 0,bufferSize)) {
         assertEquals(bufferSize, hmb.length);
         byte[] bytes = new byte[(int) hmb.length];
@@ -140,7 +140,7 @@ public class HostMemoryBufferTest extends CudfTestBase {
       // verify we can map at offsets that aren't a page boundary
       int mapOffset = pageSize + 1;
       int mapLength = pageSize * 2 + 7;
-      try (HostMemoryBuffer hmb = HostMemoryBuffer.mapFile(tempFile.toString(),
+      try (HostMemoryBuffer hmb = HostMemoryBuffer.mapFile(tempFile.toFile(),
           FileChannel.MapMode.READ_ONLY, mapOffset, mapLength)) {
         assertEquals(mapLength, hmb.length);
         byte[] expected = Arrays.copyOfRange(testbuf, mapOffset, mapOffset + mapLength);
@@ -154,7 +154,7 @@ public class HostMemoryBufferTest extends CudfTestBase {
       mapLength = bufferSize - mapOffset - 456;
       byte[] newData = new byte[mapLength];
       random.nextBytes(newData);
-      try (HostMemoryBuffer hmb = HostMemoryBuffer.mapFile(tempFile.toString(),
+      try (HostMemoryBuffer hmb = HostMemoryBuffer.mapFile(tempFile.toFile(),
           FileChannel.MapMode.READ_WRITE, mapOffset, mapLength)) {
         hmb.setBytes(0, newData, 0, newData.length);
       }

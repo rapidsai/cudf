@@ -22,6 +22,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.EOFException;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -147,13 +148,13 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param length the number of bytes to map
    * @return file-mapped buffer
    */
-  public static HostMemoryBuffer mapFile(String path, MapMode mode,
+  public static HostMemoryBuffer mapFile(File path, MapMode mode,
       long offset, long length) throws IOException {
     // mapping offset must be a multiple of the system page size
     long offsetDelta = offset & (UnsafeMemoryAccessor.pageSize() - 1);
     long address;
     try {
-      address = mmap(path, modeAsInt(mode), offset - offsetDelta, length + offsetDelta);
+      address = mmap(path.getPath(), modeAsInt(mode), offset - offsetDelta, length + offsetDelta);
     } catch (IOException e) {
       throw new IOException("Error creating memory map for " + path, e);
     }
