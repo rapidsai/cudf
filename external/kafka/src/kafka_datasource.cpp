@@ -178,9 +178,26 @@ namespace external {
     printf("\n====== END - LIBRDKAFKA GLOBAL CONFIGS ======\n");
   }
 
-  int64_t kafka_datasource::get_committed_offset() {
-    err_ = consumer_->committed(partitions_, default_timeout_);
-    return partitions_[0]->offset();
+  std::map<int, int64_t> kafka_datasource::get_committed_offset(std::string topic, std::vector<int> partitions) {
+    std::vector<RdKafka::TopicPartition*> toppar_list;
+    std::map<int, int64_t> offsets;
+
+    std::vector<int>::iterator it = partitions.begin();
+    while (it != partitions.end()) {
+      toppar_list.push_back(find_toppar(topic, *it));
+      it++;
+    }
+
+    // Query Kafka to populate the TopicPartitions with the desired offsets
+    err_ = consumer_->committed(toppar_list, default_timeout_);
+
+    std::vector<RdKafka::TopicPartition*>::iterator top_it = toppar_list.begin();
+    while (top_it != toppar_list.end()) {
+      offsets.insert({(*top_it)->partition(), (*top_it)->offset()});
+      top_it++;
+    }
+
+    return offsets;
   }
 
   std::string kafka_datasource::consume_range(int64_t start_offset,
@@ -261,17 +278,14 @@ namespace external {
   }
 
   bool kafka_datasource::commit_offset(std::string topic, int partition, int64_t offset) {
-
-    // Find the Topic in the partitions_
-    for (int i = 0; i < partitions_.size(); i++) {
-      if ((partitions_[i]->topic().compare(topic) == 0) && partitions_[i]->partition() == partition) {
-        partitions_[i]->set_offset(offset);
-        ExampleOffsetCommitCb ex_offset_commit_cb;
-        err_ = consumer_->commitSync(partitions_);
-        return true;
-      }
+    RdKafka::TopicPartition* toppar = find_toppar(topic, partition);
+    if (toppar != NULL) {
+      toppar->set_offset(offset);
+      err_ = consumer_->commitSync(partitions_);
+      return true;
+    } else {
+      return false;
     }
-    return false;
   }
 
 }  // namespace external

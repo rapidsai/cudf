@@ -76,7 +76,7 @@ class kafka_datasource : public external_datasource {
 
   void dump_configs();
 
-  int64_t get_committed_offset();
+  std::map<int, int64_t> get_committed_offset(std::string topic, std::vector<int> partitions);
 
   std::string consume_range(int64_t start_offset, int64_t end_offset, int batch_timeout, std::string delimiter);
 
@@ -95,6 +95,15 @@ class kafka_datasource : public external_datasource {
   virtual ~kafka_datasource(){};
 
   private:
+
+    RdKafka::TopicPartition* find_toppar(std::string topic, int partition) {
+      for (int i = 0; i < partitions_.size(); i++) {
+        if ((partitions_[i]->topic().compare(topic) == 0) && partitions_[i]->partition() == partition) {
+          return partitions_[i];
+        }
+      }
+      return NULL;
+    }
 
     int64_t now() {
       struct timeval tv;

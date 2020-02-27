@@ -41,8 +41,8 @@ cpdef read_gdf(lines=True,
     # return read_json_libcudf(json_str, True, True)
     return json_str
 
-cpdef get_committed_offset():
-    return kds.get_committed_offset()
+cpdef get_committed_offset(topic=None, partition=[]):
+    return kds.get_committed_offset(str.encode(topic), partition)
 
 cpdef dump_configs():
     kds.dump_configs()

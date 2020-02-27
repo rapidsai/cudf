@@ -28,7 +28,8 @@ cdef extern from "kafka_datasource.hpp" namespace "cudf::io::external" nogil:
 
         bool commit_offset(string topic, int partition, int offset) except +
 
-        int64_t get_committed_offset() except +
+        map[int, int64_t] get_committed_offset(string topic,
+                                               vector[int] partitions) except +
 
         map[string, int64_t] get_watermark_offset(string topic,
                                                   int32_t partition) except +
