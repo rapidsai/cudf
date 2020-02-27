@@ -31,5 +31,6 @@ def gather(Table source_table, Column gather_map):
 
     return Table.from_unique_ptr(
         move(c_result),
-        column_meta=source_table._column_meta
+        column_names=source_table._column_names,
+        index_names=source_table._index._column_names
     )

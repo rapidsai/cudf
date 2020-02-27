@@ -6,7 +6,6 @@ from cudf._libxx.move cimport move
 
 cimport cudf._libxx.cpp.groupby as libcudf_groupby
 
-
 cdef class GroupBy:
     cdef unique_ptr[libcudf_groupby.groupby] c_obj
     cdef dict __dict__

@@ -21,12 +21,14 @@ cdef class Table:
     @staticmethod
     cdef Table from_unique_ptr(
         unique_ptr[table] c_tbl,
-        object column_meta
+        column_names,
+        index_names=*
     )
 
     @staticmethod
     cdef Table from_table_view(
         table_view,
         owner,
-        object column_meta
+        column_names,
+        index_names=*
     )

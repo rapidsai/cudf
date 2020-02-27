@@ -91,6 +91,15 @@ def test_all_columns(simple_data):
         assert isinstance(col, cudf.core.column.ColumnBase)
 
 
+def test_column_size_mismatch():
+    """
+    Test that constructing a CA from columns of
+    differing sizes throws an error.
+    """
+    with pytest.raises(ValueError):
+        _ = ColumnAccessor({"a": [1], "b": [1, 2]})
+
+
 def test_get_by_label_simple():
     """
     Test getting a column by label

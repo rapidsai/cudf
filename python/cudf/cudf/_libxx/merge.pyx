@@ -50,11 +50,13 @@ def merge_sorted(
     # Determine index-column offset and index names
     if ignore_index:
         num_index_columns = 0
+        index_names = None
     else:
         num_index_columns = (
             0 if source_table._index is None
             else source_table._index._num_columns
         )
+        index_names = source_table._index_names
 
     # Define C vectors for each key column
     if not by_index and keys is not None:
@@ -93,12 +95,9 @@ def merge_sorted(
             )
         )
 
-    column_meta = source_table._column_meta
-    if ignore_index:
-        del column_meta["index"]
-        
     # Return libxx table
     return Table.from_unique_ptr(
         move(c_result),
-        column_meta=column_meta
+        column_names=source_table._column_names,
+        index_names=index_names,
     )

@@ -23,13 +23,6 @@ class Frame(libcudfxx.table.Table):
     def _from_table(cls, table):
         return cls(table._data, index=table._index)
 
-    @property
-    def _column_meta(self):
-        meta = {"data": self._data.meta()}
-        if self._index is not None:
-            meta.update({"index": self._index._data.meta()})
-        return meta
-    
     def _get_columns_by_label(self, labels, downcast=False):
         """
         Returns columns of the Frame specified by `labels`
@@ -49,7 +42,7 @@ class Frame(libcudfxx.table.Table):
         return self._constructor(
             new_data, columns=new_data.to_pandas_index(), index=self.index,
         )
-    
+
     def _get_columns_by_index(self, indices):
         """
         Returns columns of the Frame specified by `labels`

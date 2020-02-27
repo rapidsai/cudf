@@ -270,12 +270,12 @@ class DataFrame(Frame):
         self.columns = columns
 
     @classmethod
-    def _from_table(cls, table, column_meta=None):
+    def _from_table(cls, table):
         if table._index is None:
             index = None
         else:
             index = Index._from_table(table._index)
-        return cls(data=table._data, index=index, )
+        return cls(data=table._data, index=index)
 
     @staticmethod
     def _align_input_series_indices(data, index):
@@ -557,11 +557,7 @@ class DataFrame(Frame):
                         value = Series(value)._align_to_index(
                             self._index, how="right", allow_non_unique=True
                         )
-                    value = column.as_column(value)
-                    if len(value) != len(self):
-                        raise ValueError("Length of values does not match "
-                                         "length of index")
-                    self._data[arg] = value
+                    self._data[arg] = column.as_column(value)
                 else:
                     # disc. with pandas here
                     # pandas raises key error here
@@ -602,14 +598,10 @@ class DataFrame(Frame):
                     )
                 else:
                     for col in arg:
-                        value = column.as_column(value)
                         # we will raise a key error if col not in dataframe
                         # this behavior will make it
                         # consistent to pandas >0.21.0
-                        if len(value) != len(self):
-                            raise ValueError("Length of values does not match "
-                                             "length of index")
-                        self._data[col] = value
+                        self._data[col] = column.as_column(value)
         else:
             msg = "__setitem__ on type {!r} is not supported"
             raise TypeError(msg.format(type(arg)))
@@ -1653,9 +1645,7 @@ class DataFrame(Frame):
             value = Series(value)._align_to_index(self._index, how="right")
 
         value = column.as_column(value)
-        if len(value) != len(self):
-            raise ValueError("Length of values does not match "
-                             "length of index")
+
         self._data.insert(name, value, loc=loc)
 
     def add_column(self, name, data, forceindex=False):

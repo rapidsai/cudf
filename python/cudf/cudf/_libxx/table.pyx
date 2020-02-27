@@ -74,7 +74,8 @@ cdef class Table:
     @staticmethod
     cdef Table from_unique_ptr(
         unique_ptr[table] c_tbl,
-        object column_meta
+        object column_names,
+        object index_names=None
     ):
         """
         Construct a Table from a unique_ptr to a cudf::table.
@@ -82,7 +83,8 @@ cdef class Table:
         Parameters
         ----------
         c_tbl : unique_ptr[cudf::table]
-        column_meta
+        index_names : iterable
+        column_names : iterable
         """
         cdef vector[unique_ptr[column]] columns
         columns = move(c_tbl.get()[0].release())
@@ -91,18 +93,21 @@ cdef class Table:
 
         # First construct the index, if any
         index = None
-        if "index" in column_meta:
-            index_data = column_meta["index"]
-            for k in index_data:
-                index_data[k] = Column.from_unique_ptr(move(dereference(it)))
+        if index_names is not None:
+            index_columns = []
+            for _ in index_names:
+                index_columns.append(Column.from_unique_ptr(
+                    move(dereference(it))
+                ))
                 it += 1
-            index = Table(index_data)
+            index = Table(dict(zip(index_names, index_columns)))
 
-        # Construct the data dict
-        data = column_meta["data"]
-        for k in data:
-            data[k] = Column.from_unique_ptr(move(dereference(it)))
+        # Construct the data OrderedColumnDict
+        data_columns = []
+        for _ in column_names:
+            data_columns.append(Column.from_unique_ptr(move(dereference(it))))
             it += 1
+        data = dict(zip(column_names, data_columns))
 
         return Table(data=data, index=index)
 
@@ -110,7 +115,8 @@ cdef class Table:
     cdef Table from_table_view(
         table_view tv,
         object owner,
-        object column_meta
+        object column_names,
+        object index_names=None
     ):
         """
         Given a ``cudf::table_view``, constructs a ``cudf.Table`` from it,
@@ -126,30 +132,32 @@ cdef class Table:
 
         # First construct the index, if any
         index = None
-        if "index" in column_meta:
-            index_data = column_meta["index"]
-            for k in index_data:
+        if index_names is not None:
+            index_columns = []
+            for _ in index_names:
                 column_owner = owner
                 if table_owner:
                     column_owner = table_owner._columns[column_idx]
-                index_data[k] = Column.from_column_view(
-                    tv.column(column_idx),
-                    column_owner
+                index_columns.append(
+                    Column.from_column_view(
+                        tv.column(column_idx),
+                        column_owner
+                    )
                 )
                 column_idx += 1
-            index = Table(index_data)
+            index = Table(dict(zip(index_names, index_columns)))
 
-        # Construct the data dict
-        data = column_meta["data"]
-        for k in data:
+        # Construct the data OrderedColumnDict
+        data_columns = []
+        for _ in column_names:
             column_owner = owner
             if table_owner:
                 column_owner = table_owner._columns[column_idx]
-            data[k] = Column.from_column_view(
-                tv.column(column_idx),
-                column_owner
+            data_columns.append(
+                Column.from_column_view(tv.column(column_idx), column_owner)
             )
             column_idx += 1
+        data = dict(zip(column_names, data_columns))
 
         return Table(data=data, index=index)
 
