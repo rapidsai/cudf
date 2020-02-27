@@ -36,7 +36,7 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 using aggregation = cudf::experimental::aggregation;
 using cudf::experimental::scan_type;
-using cudf::experimental::include_nulls;
+using cudf::include_nulls;
 using cudf::column_view;
 
 void print_view(column_view const& view, const char* msg = nullptr) {

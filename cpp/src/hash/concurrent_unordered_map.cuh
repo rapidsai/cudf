@@ -17,6 +17,7 @@
 #ifndef CONCURRENT_UNORDERED_MAP_CUH
 #define CONCURRENT_UNORDERED_MAP_CUH
 
+#include <hash/managed.cuh>
 #include <utilities/legacy/device_atomics.cuh>
 #include <hash/helper_functions.cuh>
 #include <hash/hash_allocator.cuh>
@@ -215,7 +216,7 @@ class concurrent_unordered_map {
     return const_iterator(m_hashtbl_values, m_hashtbl_values + m_capacity,
                           m_hashtbl_values + m_capacity);
   }
-  __device__ value_type* data() const { return m_hashtbl_values; }
+  __host__ __device__ value_type* data() const { return m_hashtbl_values; }
 
   __host__ __device__ key_type get_unused_key() const { return m_unused_key; }
 

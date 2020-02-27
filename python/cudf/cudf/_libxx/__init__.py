@@ -5,8 +5,11 @@ import numpy as np
 from . import (
     copying,
     hash,
+    join,
+    lib,
     merge,
     null_mask,
+    quantiles,
     replace,
     rolling,
     search,
