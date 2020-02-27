@@ -104,12 +104,12 @@ __host__ __device__ inline bool string_view::is_null() const
 
 // the custom iterator knows about UTF8 encoding
 __device__ inline string_view::const_iterator::const_iterator(const string_view& str, size_type pos)
-    : p{str.data()}, cpos{pos}, offset{str.byte_offset(pos)}
+    : p{str.data()}, cpos{pos}
 {}
 
 __device__ inline string_view::const_iterator& string_view::const_iterator::operator++()
 {
-    offset += bytes_in_utf8_byte((BYTE)p[offset]);
+    //offset += bytes_in_utf8_byte((BYTE)p[offset]);
     ++cpos;
     return *this;
 }
@@ -117,28 +117,29 @@ __device__ inline string_view::const_iterator& string_view::const_iterator::oper
 __device__ inline string_view::const_iterator string_view::const_iterator::operator++(int)
 {
     string_view::const_iterator tmp(*this);
-    operator++();
+    ++cpos;//operator++();
     return tmp;
 }
 
-__device__ inline string_view::const_iterator string_view::const_iterator::operator+(string_view::const_iterator::difference_type off)
+__device__ inline string_view::const_iterator string_view::const_iterator::operator+(string_view::const_iterator::difference_type offset)
 {
     const_iterator tmp(*this);
-    while(off-- > 0)
-        ++tmp;
-    return tmp;
+    //while(off-- > 0)
+    //    ++tmp;
+    return tmp += offset;
 }
 
-__device__ inline string_view::const_iterator& string_view::const_iterator::operator+=(string_view::const_iterator::difference_type off)
-{
-    while(off-- > 0)
-        operator++();
+__device__ inline string_view::const_iterator& string_view::const_iterator::operator+=(string_view::const_iterator::difference_type offset)
+{//
+    //while(off-- > 0)
+    //    operator++();
+    cpos += offset;
     return *this;
 }
 
 __device__ inline string_view::const_iterator& string_view::const_iterator::operator--()
 {
-    while( bytes_in_utf8_byte((BYTE)p[--offset])==0 );
+    //while( bytes_in_utf8_byte((BYTE)p[--offset])==0 );
     --cpos;
     return *this;
 }
@@ -146,23 +147,24 @@ __device__ inline string_view::const_iterator& string_view::const_iterator::oper
 __device__ inline string_view::const_iterator string_view::const_iterator::operator--(int)
 {
     string_view::const_iterator tmp(*this);
-    operator--();
+    --cpos;//operator--();
     return tmp;
 }
 
 __device__ inline string_view::const_iterator& string_view::const_iterator::operator-=(string_view::const_iterator::difference_type offset)
 {
-    while(offset-- > 0)
-        operator--();
+    //while(offset-- > 0)
+    //    operator--();
+    cpos -= offset;
     return *this;
 }
 
 __device__ inline string_view::const_iterator string_view::const_iterator::operator-(string_view::const_iterator::difference_type offset)
 {
     string_view::const_iterator tmp(*this);
-    while(offset-- > 0)
-        --tmp;
-    return tmp;
+    //while(offset-- > 0)
+    //    --tmp;
+    return tmp -= offset;
 }
 
 __device__ inline bool string_view::const_iterator::operator==(const string_view::const_iterator& rhs) const
@@ -180,11 +182,10 @@ __device__ inline bool string_view::const_iterator::operator<(const string_view:
     return (p == rhs.p) && (cpos < rhs.cpos);
 }
 
-// unsigned int can hold 1-4 bytes for the UTF8 char
 __device__ inline char_utf8 string_view::const_iterator::operator*() const
 {
     char_utf8 chr = 0;
-    strings::detail::to_char_utf8(p + offset, chr);
+    strings::detail::to_char_utf8(p + byte_offset(), chr);
     return chr;
 }
 
@@ -195,6 +196,14 @@ __device__ inline size_type string_view::const_iterator::position() const
 
 __device__ inline size_type string_view::const_iterator::byte_offset() const
 {
+    size_type offset = 0;
+    const char* sptr = p;
+    for( size_type pos=0; pos < cpos; ++pos )
+    {
+        size_type charbytes = bytes_in_utf8_byte((BYTE)*sptr);
+        offset += charbytes;
+        sptr += charbytes;
+    }
     return offset;
 }
 

@@ -117,7 +117,7 @@ class string_view
       __device__ size_type byte_offset() const;
     private:
       const char* p{};
-      size_type cpos{}, offset{};
+      size_type cpos{};
   };
 
   /**
