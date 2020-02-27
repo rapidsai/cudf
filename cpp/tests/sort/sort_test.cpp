@@ -202,6 +202,32 @@ TYPED_TEST(Sort, WithAllValid)
     }
 }
 
+namespace cudf {
+namespace test {
+
+TYPED_TEST(Sort, Stable)
+{
+    using T = TypeParam;
+    using R = int32_t;
+
+    fixed_width_column_wrapper<T> col1     ({ 0,  1,  1,  0,  0,  1,  0,  1},    
+                                            { 0,  1,  1,  1,  1,  1,  1,  1});
+    strings_column_wrapper        col2     ({"2","a","b","x","k","a","x","a"}, 
+                                            { 1,  1,  1,  1,  0,  1,  1,  1});
+
+    fixed_width_column_wrapper<R> expected  {{4,  3,  6,  1,  5,  7,  2,  0}};
+
+    auto got = experimental::stable_sorted_order(
+        table_view({col1, col2}),
+        {order::ASCENDING, order::ASCENDING}, 
+        {null_order::AFTER, null_order::BEFORE});
+
+    expect_columns_equal(expected, got->view());
+}
+
+} // namespace test
+} // namespace cudf
+
 TYPED_TEST(Sort, MisMatchInColumnOrderSize)
 {
     using T = TypeParam;
