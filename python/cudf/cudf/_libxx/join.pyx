@@ -1,8 +1,11 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 from collections import OrderedDict
 
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 from libcpp.pair cimport pair
+from libcpp cimport bool
 
 from cudf._libxx.table cimport Table, columns_from_ptr
 from cudf._libxx.move cimport move
@@ -10,7 +13,6 @@ cimport cudf._libxx.cpp.join as cpp_join
 
 from cudf._libxx.cpp.table.table cimport table
 from cudf._libxx.cpp.table.table_view cimport table_view
-
 
 
 cpdef join(Table lhs,

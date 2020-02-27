@@ -1,3 +1,5 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 from libcpp.vector cimport vector
 from libcpp.memory cimport unique_ptr
 

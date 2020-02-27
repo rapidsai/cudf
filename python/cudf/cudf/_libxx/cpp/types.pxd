@@ -1,3 +1,5 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 from libc.stdint cimport int32_t, uint32_t
 
 
