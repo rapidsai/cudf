@@ -70,6 +70,7 @@
 - PR #4105 Change threshold of using optimized hash partition code
 - PR #4101 Redux serialize `Buffer` directly with `__cuda_array_interface__`
 - PR #4098 Remove legacy calls from libcudf strings column code
+- PR #4044 Port join.pyx to use libcudf++ APIs
 - PR #4111 Use `Buffer`'s to serialize `StringColumn`
 - PR #4113 Get `len` of `StringColumn`s without `nvstrings`
 - PR #4147 Remove workaround for UNKNOWN_NULL_COUNT in contiguous_split.
@@ -151,6 +152,7 @@
 - PR #4214 Alter ValueError exception for GPU accelerated Parquet writer to properly report `categorical` columns are not supported.
 - PR #4232 Fix handling empty tuples of children in string columns
 - PR #4222 Fix no-return compile error in binop-null-test
+- PR #4242 Fix for rolling tests CI failure
 - PR #4245 Fix race condition in parquet reader
 - PR #4258 Fix dask-cudf losing index name in `reset_index`
 
