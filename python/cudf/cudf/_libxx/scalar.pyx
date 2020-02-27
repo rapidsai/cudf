@@ -1,3 +1,5 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 import numpy as np
 import pandas as pd
 
@@ -9,8 +11,6 @@ from cudf._libxx.lib import *
 
 
 cdef class Scalar:
-
-    cdef unique_ptr[scalar] c_value
 
     def __init__(self, value, dtype=None):
         """
