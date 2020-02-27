@@ -24,6 +24,7 @@
 - PR #4190 Add libcudf++ transpose Cython implementation
 - PR #4217 Add libcudf++ quantiles Cython implementation
 - PR #4216 Add cudf.Scalar Python type
+- PR #3782 Add `fixed_point` class to support DecimalType
 
 ## Improvements
 
@@ -197,7 +198,6 @@
 - PR #3683 Added support for multiple delimiters in `nvtext.token_count()`
 - PR #3792 Adding is_nan and is_notnan
 - PR #3594 Adding clamp support to libcudf++
-- PR #3782 Add `fixed_point` class to support DecimalType 
 
 ## Improvements
 
