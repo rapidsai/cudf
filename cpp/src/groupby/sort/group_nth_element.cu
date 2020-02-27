@@ -17,13 +17,10 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/copying.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
-#include <cudf/detail/gather.hpp>
+#include <cudf/detail/gather.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/types.hpp>
-
-#include <thrust/gather.h>
 
 namespace cudf {
 namespace experimental {
@@ -88,12 +85,9 @@ group_nth_element(column_view const &values,
           return (bitmask_iterator[i] && intra_group_index[i] == n);
         });
   }
-  column_view nth_index_view =
-      column_view(data_type{experimental::type_to_id<size_type>()},
-                  nth_index.size(), nth_index.data().get());
   auto output_table =
-      experimental::detail::gather(table_view{{values}}, nth_index_view, false,
-                                   true, false, mr, stream);
+      experimental::detail::gather(table_view{{values}}, nth_index.begin(),
+                                   nth_index.end(), true, mr, stream);
   if(!output_table->get_column(0).has_nulls())
     output_table->get_column(0).set_null_mask({},0);
   return std::make_unique<column>(std::move(output_table->get_column(0)));
