@@ -124,7 +124,8 @@ TYPED_TEST(groupby_quantile_test, multiple_quantile)
 
     auto agg = cudf::experimental::make_quantile_aggregation({0.25, 0.75},
                                         experimental::interpolation::LINEAR);
-    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg),
+        include_nulls::NO, true /*  stable_order */);
 }
 
 TYPED_TEST(groupby_quantile_test, interpolation_types)

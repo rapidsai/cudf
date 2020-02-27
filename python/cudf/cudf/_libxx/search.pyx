@@ -10,7 +10,7 @@ from cudf._libxx.move cimport move
 from cudf._libxx.cpp.column.column cimport column
 from cudf._libxx.cpp.column.column_view cimport column_view
 from cudf._libxx.cpp.table.table_view cimport table_view
-cimport cudf._libxx.cpp.types as cudf_types
+cimport cudf._libxx.cpp.types as libcudf_types
 cimport cudf._libxx.cpp.search as cpp_search
 
 
@@ -30,24 +30,24 @@ def search_sorted(
         If ‘right’, return the last such index
     """
     cdef unique_ptr[column] c_result
-    cdef vector[cudf_types.order] c_column_order
-    cdef vector[cudf_types.null_order] c_null_precedence
-    cdef cudf_types.order c_order
-    cdef cudf_types.null_order c_null_order
+    cdef vector[libcudf_types.order] c_column_order
+    cdef vector[libcudf_types.null_order] c_null_precedence
+    cdef libcudf_types.order c_order
+    cdef libcudf_types.null_order c_null_order
     cdef table_view c_table_data = table.data_view()
     cdef table_view c_values_data = values.data_view()
 
     # Note: We are ignoring index columns here
-    c_order = (cudf_types.order.ASCENDING
+    c_order = (libcudf_types.order.ASCENDING
                if ascending
-               else cudf_types.order.DESCENDING)
+               else libcudf_types.order.DESCENDING)
     c_null_order = (
-        cudf_types.null_order.AFTER
+        libcudf_types.null_order.AFTER
         if na_position=="last"
-        else cudf_types.null_order.BEFORE
+        else libcudf_types.null_order.BEFORE
     )
-    c_column_order = vector[cudf_types.order](table._num_columns, c_order)
-    c_null_precedence = vector[cudf_types.null_order](
+    c_column_order = vector[libcudf_types.order](table._num_columns, c_order)
+    c_null_precedence = vector[libcudf_types.null_order](
         table._num_columns, c_null_order
     )
 
