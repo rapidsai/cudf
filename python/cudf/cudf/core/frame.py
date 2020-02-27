@@ -210,14 +210,14 @@ class Frame(libcudfxx.table.Table):
         column_order=(),
         null_precedence=(),
     ):
-        interpolation = libcudfxx.lib.Interpolation[interpolation]
+        interpolation = libcudfxx.types.Interpolation[interpolation]
 
-        is_sorted = libcudfxx.lib.Sorted["YES" if is_sorted else "NO"]
+        is_sorted = libcudfxx.types.Sorted["YES" if is_sorted else "NO"]
 
-        column_order = [libcudfxx.lib.Order[key] for key in column_order]
+        column_order = [libcudfxx.types.Order[key] for key in column_order]
 
         null_precedence = [
-            libcudfxx.lib.NullOrder[key] for key in null_precedence
+            libcudfxx.types.NullOrder[key] for key in null_precedence
         ]
 
         result = self.__class__._from_table(

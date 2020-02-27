@@ -1,9 +1,22 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from cudf._libxx.lib cimport *
+from libcpp.vector cimport vector
+from libcpp.memory cimport unique_ptr
+
 from cudf._libxx.column cimport Column
 from cudf._libxx.table cimport Table
-cimport cudf._libxx.includes.quantiles as cpp_quantiles
+from cudf._libxx.move cimport move
+from cudf._libxx.types cimport (
+    underlying_type_t_order,
+    underlying_type_t_null_order,
+    underlying_type_t_sorted,
+    underlying_type_t_interpolation
+)
+
+from cudf._libxx.cpp.table.table cimport table
+from cudf._libxx.cpp.table.table_view cimport table_view
+cimport cudf._libxx.cpp.types as cudf_types
+cimport cudf._libxx.cpp.quantiles as cpp_quantiles
 
 
 def quantiles(Table source_table,
@@ -14,26 +27,26 @@ def quantiles(Table source_table,
               list null_precedence):
     cdef table_view c_input = source_table.data_view()
     cdef vector[double] c_q = q
-    cdef interpolation c_interp = <interpolation>(
+    cdef cudf_types.interpolation c_interp = <cudf_types.interpolation>(
         <underlying_type_t_interpolation> interp
     )
-    cdef sorted c_is_input_sorted = <sorted>(
+    cdef cudf_types.sorted c_is_input_sorted = <cudf_types.sorted>(
         <underlying_type_t_sorted> is_input_sorted
     )
-    cdef vector[order] c_column_order
-    cdef vector[null_order] c_null_precedence
+    cdef vector[cudf_types.order] c_column_order
+    cdef vector[cudf_types.null_order] c_null_precedence
 
     c_column_order.reserve(len(column_order))
     c_null_precedence.reserve(len(null_precedence))
 
     for value in column_order:
         c_column_order.push_back(
-            <order>(<underlying_type_t_order> value)
+            <cudf_types.order>(<underlying_type_t_order> value)
         )
 
     for value in null_precedence:
         c_null_precedence.push_back(
-            <null_order>(<underlying_type_t_null_order> value)
+            <cudf_types.null_order>(<underlying_type_t_null_order> value)
         )
 
     cdef unique_ptr[table] c_result

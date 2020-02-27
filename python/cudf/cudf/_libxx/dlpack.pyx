@@ -7,15 +7,18 @@
 
 # Copyright (c) 2018, NVIDIA CORPORATION.
 import cudf
-from cudf._libxx.table cimport *
-from cudf._libxx.lib cimport *
+from cudf._libxx.table cimport Table
 
+from libcpp.memory cimport unique_ptr
 
+from cudf._libxx.move cimport move
 from cpython cimport pycapsule
 
 import warnings
 
-from cudf._libxx.includes.dlpack cimport (
+from cudf._libxx.cpp.table.table cimport table
+from cudf._libxx.cpp.table.table_view cimport table_view
+from cudf._libxx.cpp.dlpack cimport (
     from_dlpack as cpp_from_dlpack,
     to_dlpack as cpp_to_dlpack,
     DLManagedTensor

@@ -4,13 +4,27 @@ import itertools
 
 import numpy as np
 
+from cudf.core.column_accessor import ColumnAccessor
+
 from cython.operator cimport dereference
 from libc.stdint cimport uintptr_t
+from libcpp.vector cimport vector
+from libcpp.memory cimport unique_ptr
 
-from cudf._libxx.lib cimport *
-
-from cudf.core.column_accessor import ColumnAccessor
+from cudf._libxx.move cimport move
 from cudf._libxx.column cimport Column
+
+from cudf._libxx.cpp.types cimport size_type
+from cudf._libxx.cpp.column.column cimport column
+from cudf._libxx.cpp.column.column_view cimport (
+    column_view,
+    mutable_column_view
+)
+from cudf._libxx.cpp.table.table cimport table
+from cudf._libxx.cpp.table.table_view cimport (
+    table_view,
+    mutable_table_view
+)
 
 
 cdef class Table:

@@ -1,10 +1,17 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from cudf._libxx.lib cimport *
+from libcpp.vector cimport vector
+from libcpp.memory cimport unique_ptr
+
 from cudf._libxx.column cimport Column
 from cudf._libxx.table cimport Table
-from libcpp.vector cimport vector
-cimport cudf._libxx.includes.search as cpp_search
+from cudf._libxx.move cimport move
+
+from cudf._libxx.cpp.column.column cimport column
+from cudf._libxx.cpp.column.column_view cimport column_view
+from cudf._libxx.cpp.table.table_view cimport table_view
+cimport cudf._libxx.cpp.types as cudf_types
+cimport cudf._libxx.cpp.search as cpp_search
 
 
 def search_sorted(
@@ -23,20 +30,26 @@ def search_sorted(
         If ‘right’, return the last such index
     """
     cdef unique_ptr[column] c_result
-    cdef vector[order] c_column_order
-    cdef vector[null_order] c_null_precedence
-    cdef order c_order
-    cdef null_order c_null_order
+    cdef vector[cudf_types.order] c_column_order
+    cdef vector[cudf_types.null_order] c_null_precedence
+    cdef cudf_types.order c_order
+    cdef cudf_types.null_order c_null_order
     cdef table_view c_table_data = table.data_view()
     cdef table_view c_values_data = values.data_view()
 
     # Note: We are ignoring index columns here
-    c_order = order.ASCENDING if ascending else order.DESCENDING
+    c_order = (cudf_types.order.ASCENDING
+               if ascending
+               else cudf_types.order.DESCENDING)
     c_null_order = (
-        null_order.AFTER if na_position=="last" else null_order.BEFORE
+        cudf_types.null_order.AFTER
+        if na_position=="last"
+        else cudf_types.null_order.BEFORE
     )
-    c_column_order = vector[order](table._num_columns, c_order)
-    c_null_precedence = vector[null_order](table._num_columns, c_null_order)
+    c_column_order = vector[cudf_types.order](table._num_columns, c_order)
+    c_null_precedence = vector[cudf_types.null_order](
+        table._num_columns, c_null_order
+    )
 
     if side == 'left':
         with nogil:

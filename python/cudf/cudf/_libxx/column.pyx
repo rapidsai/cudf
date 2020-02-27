@@ -5,19 +5,26 @@ import pandas as pd
 import cython
 import rmm
 
+from cudf.core.buffer import Buffer
+from cudf.utils.dtypes import is_categorical_dtype
+import cudf._libxx as libcudfxx
+
 from cpython.buffer cimport PyObject_CheckBuffer
 from libc.stdint cimport uintptr_t
 from libcpp.pair cimport pair
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr, make_unique
+from libcpp.vector cimport vector
 
-import cudf._libxx as libcudfxx
-from cudf._libxx.lib cimport *
-from cudf._libxx.lib import *
+from rmm._lib.device_buffer cimport DeviceBuffer
+
+from cudf._libxx.types import np_to_cudf_types, cudf_to_np_types
 from cudf._libxx.null_mask import bitmask_allocation_size_bytes
+from cudf._libxx.move cimport move
 
-from cudf.core.buffer import Buffer
-from cudf.utils.dtypes import is_categorical_dtype
+from cudf._libxx.cpp.column.column cimport column, column_contents
+from cudf._libxx.cpp.column.column_view cimport column_view
+cimport cudf._libxx.cpp.types as cudf_types
 
 
 @cython.auto_pickle(True)
@@ -282,8 +289,8 @@ cdef class Column:
         else:
             return other_col
 
-    cdef size_type compute_null_count(self) except? 0:
-        return self._view(UNKNOWN_NULL_COUNT).null_count()
+    cdef cudf_types.size_type compute_null_count(self) except? 0:
+        return self._view(cudf_types.UNKNOWN_NULL_COUNT).null_count()
 
     cdef mutable_column_view mutable_view(self) except *:
         if is_categorical_dtype(self.dtype):
@@ -292,9 +299,9 @@ cdef class Column:
             col = self
         data_dtype = col.dtype
 
-        cdef type_id tid = np_to_cudf_types[np.dtype(data_dtype)]
-        cdef data_type dtype = data_type(tid)
-        cdef size_type offset = self.offset
+        cdef cudf_types.type_id tid = np_to_cudf_types[np.dtype(data_dtype)]
+        cdef cudf_types.data_type dtype = cudf_types.data_type(tid)
+        cdef cudf_types.size_type offset = self.offset
         cdef vector[mutable_column_view] children
         cdef void* data
 
@@ -305,16 +312,16 @@ cdef class Column:
             for child_column in self.base_children:
                 children.push_back(child_column.mutable_view())
 
-        cdef bitmask_type* mask
+        cdef cudf_types.bitmask_type* mask
         if self.nullable:
-            mask = <bitmask_type*><uintptr_t>(self.base_mask_ptr)
+            mask = <cudf_types.bitmask_type*><uintptr_t>(self.base_mask_ptr)
         else:
             mask = NULL
 
         null_count = self.null_count
         if null_count is None:
-            null_count = UNKNOWN_NULL_COUNT
-        cdef size_type c_null_count = null_count
+            null_count = cudf_types.UNKNOWN_NULL_COUNT
+        cdef cudf_types.size_type c_null_count = null_count
 
         return mutable_column_view(
             dtype,
@@ -328,19 +335,19 @@ cdef class Column:
     cdef column_view view(self) except *:
         null_count = self.null_count
         if null_count is None:
-            null_count = UNKNOWN_NULL_COUNT
-        cdef size_type c_null_count = null_count
+            null_count = cudf_types.UNKNOWN_NULL_COUNT
+        cdef cudf_types.size_type c_null_count = null_count
         return self._view(c_null_count)
 
-    cdef column_view _view(self, size_type null_count) except *:
+    cdef column_view _view(self, cudf_types.size_type null_count) except *:
         if is_categorical_dtype(self.dtype):
             col = self.codes
         else:
             col = self
         data_dtype = col.dtype
-        cdef type_id tid = np_to_cudf_types[np.dtype(data_dtype)]
-        cdef data_type dtype = data_type(tid)
-        cdef size_type offset = self.offset
+        cdef cudf_types.type_id tid = np_to_cudf_types[np.dtype(data_dtype)]
+        cdef cudf_types.data_type dtype = cudf_types.data_type(tid)
+        cdef cudf_types.size_type offset = self.offset
         cdef vector[column_view] children
         cdef void* data
 
@@ -351,13 +358,13 @@ cdef class Column:
             for child_column in self.base_children:
                 children.push_back(child_column.view())
 
-        cdef bitmask_type* mask
+        cdef cudf_types.bitmask_type* mask
         if self.nullable:
-            mask = <bitmask_type*><uintptr_t>(self.base_mask_ptr)
+            mask = <cudf_types.bitmask_type*><uintptr_t>(self.base_mask_ptr)
         else:
             mask = NULL
 
-        cdef size_type c_null_count = null_count
+        cdef cudf_types.size_type c_null_count = null_count
 
         return column_view(
             dtype,

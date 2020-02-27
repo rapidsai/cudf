@@ -1,8 +1,12 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 from libcpp.pair cimport pair
+from libcpp.memory cimport unique_ptr
 
-from cudf._libxx.lib cimport *
+from rmm._lib.device_buffer cimport device_buffer
+
+from cudf._libxx.cpp.types cimport size_type
+from cudf._libxx.cpp.column.column_view cimport column_view
 
 
 cdef extern from "cudf/transform.hpp" namespace "cudf::experimental" nogil:
