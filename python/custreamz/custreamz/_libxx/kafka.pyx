@@ -55,12 +55,7 @@ cpdef get_watermark_offsets(topic=None,
 
     cdef map[string, int64_t] offsets = \
         kds.get_watermark_offset(str.encode(topic), partition)
-    cdef map[string, int64_t].iterator it = offsets.begin()
-
-    while(it != offsets.end()):
-        print("Topic: " + str(dereference(it).first) +
-              " Offset: " + str(dereference(it).second))
-        postincrement(it)
+    return offsets
 
 cpdef commit_topic_offset(topic=None, partition=0, offset=-1001):
     kds.commit_offset(str.encode(topic), partition, offset)

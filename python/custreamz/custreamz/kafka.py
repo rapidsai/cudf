@@ -32,7 +32,8 @@ class KafkaHandle(object):
     def get_watermark_offsets(
         self, topic=None, partition=-1, *args, **kwargs,
     ):
-        libkafka.get_watermark_offsets(topic, partition)
+        offsets = libkafka.get_watermark_offsets(topic, partition)
+        return offsets[b"low"], offsets[b"high"]
 
     def commit(
         self, topic=None, partition=0, offset=-1001, *args, **kwargs,
