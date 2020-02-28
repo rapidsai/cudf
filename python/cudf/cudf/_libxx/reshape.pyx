@@ -7,7 +7,6 @@ from cudf._libxx.move cimport move
 
 from cudf._libxx.cpp.types cimport size_type
 from cudf._libxx.cpp.column.column cimport column
-from cudf._libxx.cpp.column.column_view cimport column_view
 from cudf._libxx.cpp.table.table cimport table
 from cudf._libxx.cpp.table.table_view cimport table_view
 
