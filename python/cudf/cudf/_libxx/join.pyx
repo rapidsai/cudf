@@ -1,10 +1,19 @@
-from cudf._libxx.lib cimport *
-from cudf._libxx.table cimport Table, columns_from_ptr
-from cudf._libxx.includes.join cimport *
-from libcpp.vector cimport vector
-from libcpp.pair cimport pair
+# Copyright (c) 2020, NVIDIA CORPORATION.
 
 from collections import OrderedDict
+
+from libcpp.memory cimport unique_ptr
+from libcpp.vector cimport vector
+from libcpp.pair cimport pair
+from libcpp cimport bool
+
+from cudf._libxx.table cimport Table, columns_from_ptr
+from cudf._libxx.move cimport move
+
+from cudf._libxx.cpp.table.table cimport table
+from cudf._libxx.cpp.table.table_view cimport table_view
+cimport cudf._libxx.cpp.join as cpp_join
+
 
 cpdef join(Table lhs,
            Table rhs,
@@ -112,7 +121,7 @@ cpdef join(Table lhs,
     cdef unique_ptr[table] c_result
     if how == 'inner':
         with nogil:
-            c_result = move(cpp_inner_join(
+            c_result = move(cpp_join.inner_join(
                 lhs_view,
                 rhs_view,
                 left_on_ind,
@@ -121,7 +130,7 @@ cpdef join(Table lhs,
             ))
     elif how == 'left':
         with nogil:
-            c_result = move(cpp_left_join(
+            c_result = move(cpp_join.left_join(
                 lhs_view,
                 rhs_view,
                 left_on_ind,
@@ -130,7 +139,7 @@ cpdef join(Table lhs,
             ))
     elif how == 'outer':
         with nogil:
-            c_result = move(cpp_full_join(
+            c_result = move(cpp_join.full_join(
                 lhs_view,
                 rhs_view,
                 left_on_ind,
