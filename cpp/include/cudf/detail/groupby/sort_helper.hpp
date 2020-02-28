@@ -124,6 +124,15 @@ struct sort_groupby_helper {
     cudaStream_t stream = 0);
 
   /**
+   * @brief Get a table of sorted keys
+   *
+   * @return a new table containing the sorted keys.
+   */
+  std::unique_ptr<table> sorted_keys(
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+    cudaStream_t stream = 0);
+
+  /**
    * @brief Get the number of groups in `keys`
    */
   size_type num_groups() { return group_offsets().size() - 1; }
@@ -141,6 +150,9 @@ struct sort_groupby_helper {
    * @brief Get the sorted order of `keys`.
    *
    * Gathering `keys` by sort order indices will produce the sorted key table.
+   *
+   * When ignore_null_keys = true, the result will not include indices
+   * for null keys.
    * 
    * Computes and stores the key sorted order on first invocation, and returns
    * the stored order on subsequent calls.
