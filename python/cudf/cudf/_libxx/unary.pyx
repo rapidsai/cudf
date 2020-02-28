@@ -19,7 +19,6 @@ from cudf._libxx.cpp.types cimport (
 )
 from cudf._libxx.move cimport move
 from cudf._libxx.column import np_to_cudf_types, cudf_to_np_types
-from cudf._libxx.lib import np_to_cudf_types
 from cudf._libxx.cpp.unary cimport (
     underlying_type_t_unary_op,
     unary_op

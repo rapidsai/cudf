@@ -7,7 +7,6 @@ from cudf._libxx.column cimport Column
 from rmm._lib.device_buffer cimport device_buffer, DeviceBuffer
 from cudf.core.buffer import Buffer
 
-
 from cudf._libxx.column cimport Column
 from cudf._libxx.move cimport move
 
