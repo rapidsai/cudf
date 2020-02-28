@@ -40,6 +40,8 @@ cdef unique_ptr[aggregation] get_aggregation(op, kwargs) except *:
         agg = move(make_sum_of_squares_aggregation())
     elif op == "var":
         agg = move(make_variance_aggregation(kwargs['ddof']))
+    elif op == "std":
+        agg = move(make_std_aggregation(kwargs['ddof']))
     elif callable(op):
         # Handling UDF type
         nb_type = numba.numpy_support.from_dtype(kwargs['dtype'])
