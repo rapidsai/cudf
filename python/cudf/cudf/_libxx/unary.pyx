@@ -31,9 +31,9 @@ class UnaryOp(IntEnum):
     SIN = <underlying_type_t_unary_op> unary_op.SIN
     COS = <underlying_type_t_unary_op> unary_op.COS
     TAN = <underlying_type_t_unary_op> unary_op.TAN
-    ARCSIN = <underlying_type_t_unary_op> unary_op.ARCSIN
-    ARCCOS = <underlying_type_t_unary_op> unary_op.ARCCOS
-    ARCTAN = <underlying_type_t_unary_op> unary_op.ARCTAN
+    ASIN = <underlying_type_t_unary_op> unary_op.ARCSIN
+    ACOS = <underlying_type_t_unary_op> unary_op.ARCCOS
+    ATAN = <underlying_type_t_unary_op> unary_op.ARCTAN
     SINH = <underlying_type_t_unary_op> unary_op.SINH
     COSH = <underlying_type_t_unary_op> unary_op.COSH
     TANH = <underlying_type_t_unary_op> unary_op.TANH
@@ -48,7 +48,7 @@ class UnaryOp(IntEnum):
     FLOOR = <underlying_type_t_unary_op> unary_op.FLOOR
     ABS = <underlying_type_t_unary_op> unary_op.ABS
     RINT = <underlying_type_t_unary_op> unary_op.RINT
-    BIT_INVERT = <underlying_type_t_unary_op> unary_op.BIT_INVERT
+    INVERT = <underlying_type_t_unary_op> unary_op.BIT_INVERT
     NOT = <underlying_type_t_unary_op> unary_op.NOT
 
 
