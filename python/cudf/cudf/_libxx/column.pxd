@@ -3,7 +3,15 @@
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 
-from cudf._libxx.lib cimport *
+from rmm._lib.device_buffer cimport device_buffer
+
+from cudf._libxx.cpp.types cimport size_type
+
+from cudf._libxx.cpp.column.column cimport column
+from cudf._libxx.cpp.column.column_view cimport (
+    column_view, mutable_column_view
+)
+
 
 cdef class Column:
     cdef dict __dict__

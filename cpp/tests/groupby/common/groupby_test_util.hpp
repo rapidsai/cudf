@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <tests/utilities/table_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 
+#include <cudf/types.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/sorting.hpp>
@@ -28,6 +29,34 @@
 
 namespace cudf {
 namespace test {
+
+inline void test_groups(column_view const& keys,
+                        column_view const& expect_grouped_keys,
+                        std::vector<size_type> const& expect_group_offsets,
+                        column_view const& values={},
+                        column_view const& expect_grouped_values={})
+{
+  experimental::groupby::groupby gb (table_view({keys}));
+  experimental::groupby::groupby::groups gb_groups;
+
+  if (values.size()) {
+     gb_groups = gb.get_groups(table_view({values}));
+  }
+  else {
+     gb_groups = gb.get_groups();
+  }
+  expect_tables_equal(table_view({expect_grouped_keys}), gb_groups.keys->view());
+
+  auto got_offsets = gb_groups.offsets;
+  EXPECT_EQ(expect_group_offsets.size(), got_offsets.size());
+  for (auto i = 0u; i != expect_group_offsets.size(); ++i) {
+    EXPECT_EQ(expect_group_offsets[i], got_offsets[i]);
+  }
+
+  if (values.size()) {
+    expect_tables_equal(table_view({expect_grouped_values}), gb_groups.values->view());
+  }
+}
 
 inline void test_single_agg(column_view const& keys,
                             column_view const& values,
@@ -44,7 +73,7 @@ inline void test_single_agg(column_view const& keys,
     requests.emplace_back(
         experimental::groupby::aggregation_request());
     requests[0].values = values;
-    
+
     requests[0].aggregations.push_back(std::move(agg));
 
     experimental::groupby::groupby gb_obj(table_view({keys}),
