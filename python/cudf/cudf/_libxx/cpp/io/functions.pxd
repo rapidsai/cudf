@@ -1,10 +1,9 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from cudf._libxx.lib cimport *
-from cudf._libxx.io.io_types cimport *
-
 from libcpp.string cimport string
 from libcpp.vector cimport vector
+
+cimport cudf._libxx.cpp.io.io_types as cudf_io_types
 
 
 cdef extern from "cudf/io/functions.hpp" \
@@ -34,7 +33,7 @@ cdef extern from "cudf/io/functions.hpp" \
         source_info source
 
         # Reader settings
-        compression_type compression
+        cudf_io_types.compression_type compression
         size_t byte_range_offset
         size_t byte_range_size
         vector[string] names
@@ -59,7 +58,7 @@ cdef extern from "cudf/io/functions.hpp" \
         bool delim_whitespace
         bool skipinitialspace
         bool skip_blank_lines
-        quote_style quoting
+        cudf_io_types.quote_style quoting
         char quotechar
         bool doublequote
         vector[string] infer_date_names
@@ -74,7 +73,9 @@ cdef extern from "cudf/io/functions.hpp" \
         bool na_filter
         bool dayfirst
 
-    cdef table_with_metadata read_csv(read_csv_args &args) except +
+    cdef cudf_io_types.table_with_metadata read_csv(
+        read_csv_args &args
+    ) except +
 
     cdef cppclass read_orc_args:
         source_info source
@@ -87,4 +88,6 @@ cdef extern from "cudf/io/functions.hpp" \
         bool decimals_as_float
         int forced_decimals_scale
 
-    cdef table_with_metadata read_orc(read_orc_args &args) except +
+    cdef cudf_io_types.table_with_metadata read_orc(
+        read_orc_args &args
+    ) except +
