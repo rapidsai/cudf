@@ -20,6 +20,7 @@
 - PR #4153 Support Dask serialization protocol on cuDF objects
 - PR #4127 Add python API for n-way sorted merge (merge_sorted)
 - PR #4164 Add Buffer "constructor-kwargs" header
+- PR #4172 Add groupby nth aggregation
 - PR #4159 Add COUNT aggregation that includes null values
 - PR #4190 Add libcudf++ transpose Cython implementation
 - PR #4217 Add libcudf++ quantiles Cython implementation
