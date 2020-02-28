@@ -6,9 +6,8 @@ from libcpp.map cimport map
 from libcpp.pair cimport pair
 from libcpp.vector cimport vector
 from libcpp.pair cimport pair
-cimport cudf._libxx.cpp.table.table as cudf_table
-
 from pyarrow.includes.libarrow cimport RandomAccessFile
+cimport cudf._libxx.cpp.table.table as cudf_table
 
 
 cdef extern from "cudf/io/types.hpp" \
