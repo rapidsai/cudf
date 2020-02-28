@@ -19,8 +19,8 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/stream_compaction.hpp>
+#include <cudf/concatenate.hpp>
 #include <cudf/detail/stream_compaction.hpp>
-#include <cudf/detail/concatenate.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/search.hpp>
 

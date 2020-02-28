@@ -19,27 +19,18 @@
 #include <cudf/table/table_view.hpp>
 
 #include <memory>
+#include <vector>
 
 namespace cudf {
-namespace detail {
 
-/**---------------------------------------------------------------------------*
- * @brief Concatenates `views[i]`'s bitmask from the bits
- * `[views[i].offset(), views[i].offset() + views[i].size())` for all elements
- * views[i] in views into an array
- *
- * @param views Vector of column views whose bitmask needs to be copied
- * @param dest_mask Pointer to array that contains the combined bitmask
- * of the column views
- * @param stream stream on which all memory allocations and copies
- * will be performed
- *---------------------------------------------------------------------------**/
-void concatenate_masks(
-    std::vector<column_view> const &views,
-    bitmask_type * dest_mask,
-    cudaStream_t stream);
-
-}  // namespace detail
+// Allow strategy switching at runtime for easier benchmarking
+// TODO remove when done
+enum class concatenate_mode {
+  UNOPTIMIZED,
+  PARTITION_MAP,
+  BINARY_SEARCH,
+};
+void temp_set_concatenate_mode(concatenate_mode mode);
 
 /**---------------------------------------------------------------------------*
  * @brief Concatenates `views[i]`'s bitmask from the bits
@@ -59,15 +50,6 @@ void concatenate_masks(
 rmm::device_buffer concatenate_masks(std::vector<column_view> const &views,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
     cudaStream_t stream = 0);
-
-// Allow strategy switching at runtime for easier benchmarking
-// TODO remove when done
-enum class concatenate_mode {
-  UNOPTIMIZED,
-  PARTITION_MAP,
-  BINARY_SEARCH,
-};
-void temp_set_concatenate_mode(concatenate_mode mode);
 
 /**---------------------------------------------------------------------------*
  * @brief Concatenates multiple columns into a single column.

@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/detail/concatenate.hpp>
+#include <cudf/detail/concatenate.cuh>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -78,7 +78,6 @@ concatenate_masks_kernel(
   }
 }
 
-// Create a bitmask from a vector of column views
 void concatenate_masks(
     rmm::device_vector<column_device_view> const& d_views,
     rmm::device_vector<size_type> const& d_offsets,
@@ -96,7 +95,6 @@ void concatenate_masks(
     dest_mask, output_size);
 }
 
-// Create a bitmask from a vector of column views
 void concatenate_masks(std::vector<column_view> const &views,
     bitmask_type * dest_mask,
     cudaStream_t stream) {
@@ -126,7 +124,6 @@ void concatenate_masks(std::vector<column_view> const &views,
 
 }  // namespace detail
 
-// Create a bitmask from a vector of column views
 rmm::device_buffer concatenate_masks(std::vector<column_view> const &views,
                                      rmm::mr::device_memory_resource *mr,
                                      cudaStream_t stream) {

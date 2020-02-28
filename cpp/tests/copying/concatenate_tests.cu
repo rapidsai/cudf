@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/detail/concatenate.hpp>
+#include <cudf/concatenate.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/copying.hpp>
