@@ -611,6 +611,10 @@ add_library(cudf
             src/strings/substring.cu
             src/strings/translate.cu
             src/strings/utilities.cu
+            src/text/generate_ngrams.cu
+            src/text/normalize.cu
+            src/text/tokenize.cu
+            src/text/ngrams_tokenize.cu
             src/scalar/scalar.cpp
             src/scalar/scalar_factories.cpp
             src/dictionary/add_keys.cu
@@ -618,11 +622,12 @@ add_library(cudf
             src/dictionary/dictionary_factories.cu
             src/dictionary/decode.cu
             src/dictionary/encode.cu
+            src/dictionary/remove_keys.cu
+            src/dictionary/set_keys.cu
             src/groupby/groupby.cu
             src/groupby/hash/groupby.cu
             src/groupby/sort/groupby.cu
             src/groupby/sort/sort_helper.cu
-            src/groupby/sort/result_cache.cpp
             src/groupby/sort/group_sum.cu
             src/groupby/sort/group_min.cu
             src/groupby/sort/group_max.cu
@@ -631,6 +636,8 @@ add_library(cudf
             src/groupby/sort/group_std.cu
             src/groupby/sort/group_quantiles.cu
             src/aggregation/aggregation.cpp
+            src/aggregation/aggregation.cu
+            src/aggregation/result_cache.cpp
 )
 
 # Rename installation to proper names for later finding

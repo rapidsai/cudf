@@ -1,16 +1,11 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
-
-# cython: profile=False
-# distutils: language = c++
-# cython: embedsignature = True
-# cython: language_level = 3
-
-from cudf._lib.cudf cimport *
-from cudf._libxx.lib cimport *
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 from libcpp.map cimport map
+
+from cudf._lib.cudf cimport *
+from cudf._libxx.cpp.table.table_view cimport table_view
 
 
 cdef extern from "cudf/cudf.h" namespace "cudf::io::parquet" nogil:

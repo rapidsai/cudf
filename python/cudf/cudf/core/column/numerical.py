@@ -316,10 +316,9 @@ class NumericalColumn(column.ColumnBase):
         to_replace_col, replacement_col, replaced = numeric_normalize_types(
             to_replace_col, replacement_col, replaced
         )
-        output = libcudf.replace.replace(
+        return libcudfxx.replace.replace(
             replaced, to_replace_col, replacement_col
         )
-        return output
 
     def fillna(self, fill_value):
         """
@@ -342,7 +341,7 @@ class NumericalColumn(column.ColumnBase):
                 fill_value = _safe_cast_to_int(fill_value, self.dtype)
             else:
                 fill_value = fill_value.astype(self.dtype)
-        result = libcudf.replace.replace_nulls(self, fill_value)
+        result = libcudfxx.replace.replace_nulls(self, fill_value)
         result = column.build_column(result.data, result.dtype, mask=None)
 
         return result
@@ -571,20 +570,6 @@ def _normalize_find_and_replace_input(input_column_dtype, col_to_normalize):
             f"to {input_column_dtype.name}"
         )
     return normalized_column.astype(input_column_dtype)
-
-
-def column_hash_values(column0, *other_columns, initial_hash_values=None):
-    """Hash all values in the given columns.
-    Returns a new NumericalColumn[int32]
-    """
-    from cudf.core.column import column_empty
-
-    columns = [column0] + list(other_columns)
-    result = column_empty(len(column0), dtype=np.int32, masked=False)
-    if initial_hash_values:
-        initial_hash_values = rmm.to_device(initial_hash_values)
-    libcudf.hash.hash_columns(columns, result, initial_hash_values)
-    return result
 
 
 def digitize(column, bins, right=False):

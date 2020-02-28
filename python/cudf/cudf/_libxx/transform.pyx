@@ -1,20 +1,18 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-# cython: profile=False
-# distutils: language = c++
-# cython: embedsignature = True
-# cython: language_level = 3
-
-
 from libcpp.memory cimport unique_ptr, make_unique
 from libcpp.pair cimport pair
 
-import cudf._libxx as libcudfxx
-from cudf._libxx.lib cimport *
-from cudf._libxx.column cimport Column
-from cudf._libxx.includes.transform cimport bools_to_mask as cpp_bools_to_mask
+from rmm._lib.device_buffer cimport device_buffer, DeviceBuffer
 
 from cudf.core.buffer import Buffer
+
+from cudf._libxx.column cimport Column
+from cudf._libxx.move cimport move
+
+from cudf._libxx.cpp.types cimport size_type
+from cudf._libxx.cpp.transform cimport bools_to_mask as cpp_bools_to_mask
+from cudf._libxx.cpp.column.column_view cimport column_view
 
 
 def bools_to_mask(Column col):

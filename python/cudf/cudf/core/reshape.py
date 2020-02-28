@@ -1,6 +1,7 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 import numpy as np
+import pandas as pd
 
 import cudf
 from cudf.core import DataFrame, Index, RangeIndex, Series
@@ -375,12 +376,17 @@ def get_dummies(
 
 
 def merge_sorted(
-    objs, keys=None, index=False, ascending=True, na_position="last"
+    objs,
+    keys=None,
+    by_index=False,
+    ignore_index=False,
+    ascending=True,
+    na_position="last",
 ):
     """Merge a list of sorted DataFrame or Series objects.
 
     Dataframes/Series in objs list MUST be pre-sorted by columns
-    listed in `keys`, or by the index (if `index=True`).
+    listed in `keys`, or by the index (if `by_index=True`).
 
     Parameters
     ----------
@@ -388,8 +394,11 @@ def merge_sorted(
     keys : list, default None
         List of Column names to sort by. If None, all columns used
         (Ignored if `index=True`)
-    index : bool, default False
+    by_index : bool, default False
         Use index for sorting. `keys` input will be ignored if True
+    ignore_index : bool, default False
+        Drop and ignore index during merge. Default range index will
+        be used in the output dataframe.
     ascending : bool, default True
         Sorting is in ascending order, otherwise it is descending
     na_position : {‘first’, ‘last’}, default ‘last’
@@ -400,20 +409,27 @@ def merge_sorted(
     A new, lexocographically sorted, DataFrame/Series.
     """
 
-    if not isinstance(objs, list):
-        raise TypeError("objs must be a list of Frame-like objects")
+    if not pd.api.types.is_list_like(objs):
+        raise TypeError("objs must be a list-like of Frame-like objects")
 
     if len(objs) < 1:
-        raise TypeError("objs must be non-empty")
+        raise ValueError("objs must be non-empty")
+
+    if not all(isinstance(table, cudf.core.frame.Frame) for table in objs):
+        raise TypeError("Elements of objs must be Frame-like")
 
     if len(objs) == 1:
         return objs[0]
 
-    result = objs[0]._constructor._from_table(
+    if by_index and ignore_index:
+        raise ValueError("`by_index` and `ignore_index` cannot both be True")
+
+    result = objs[0].__class__._from_table(
         cudf._libxx.merge.merge_sorted(
             objs,
             keys=keys,
-            index=index,
+            by_index=by_index,
+            ignore_index=ignore_index,
             ascending=ascending,
             na_position=na_position,
         )

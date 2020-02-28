@@ -127,7 +127,6 @@ def _prepare_merge_sorted_test(
     series=False,
     index=False,
 ):
-    # TODO: Add null values for `na_position` testing
     if index:
         df = (
             cudf.datasets.timeseries()[:size]
@@ -194,6 +193,7 @@ def test_df_merge_sorted(nparts, keys, na_position, ascending):
         expect = expect[keys]
         result = result[keys]
 
+    assert expect.index.dtype == result.index.dtype
     assert_eq(expect.reset_index(drop=True), result.reset_index(drop=True))
 
 
@@ -207,9 +207,45 @@ def test_df_merge_sorted_index(nparts, index, ascending):
     )
 
     expect = df.sort_index(ascending=ascending)
-    result = cudf.merge_sorted(dfs, index=True, ascending=ascending)
+    result = cudf.merge_sorted(dfs, by_index=True, ascending=ascending)
 
     assert_eq(expect.index, result.index)
+
+
+@pytest.mark.parametrize("ascending", [True, False])
+@pytest.mark.parametrize("na_position", ["first", "last"])
+@pytest.mark.parametrize("keys", [None, ["name", "timestamp"]])
+def test_df_merge_sorted_ignore_index(keys, na_position, ascending):
+    size = 100
+    nparts = 3
+    keys_1 = keys or ["timestamp"]
+    # Null values NOT currently supported with Categorical data
+    # or when `ascending=False`
+    add_null = ascending and keys_1[0] not in ("name")
+    df, dfs = _prepare_merge_sorted_test(
+        size,
+        nparts,
+        keys_1,
+        add_null=add_null,
+        na_position=na_position,
+        ascending=ascending,
+    )
+
+    expect = df.sort_values(
+        keys_1, na_position=na_position, ascending=ascending
+    )
+    result = cudf.merge_sorted(
+        dfs,
+        keys=keys,
+        na_position=na_position,
+        ascending=ascending,
+        ignore_index=True,
+    )
+    if keys:
+        expect = expect[keys]
+        result = result[keys]
+
+    assert_eq(expect.reset_index(drop=True), result)
 
 
 @pytest.mark.parametrize("ascending", [True, False])
