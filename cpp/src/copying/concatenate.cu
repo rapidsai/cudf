@@ -363,11 +363,6 @@ struct optimized_concatenate {
   }
 };
 
-struct nvtx_raii {
-  nvtx_raii(char const* name, nvtx::color color) { nvtx::range_push(name, color); }
-  ~nvtx_raii() { nvtx::range_pop(); }
-};
-
 // Concatenates the elements from a vector of column_views
 std::unique_ptr<column>
 concatenate(std::vector<column_view> const& columns_to_concat,
@@ -392,9 +387,9 @@ concatenate(std::vector<column_view> const& columns_to_concat,
   auto const message = std::string("cudf::concatenate[")
       + std::to_string(num_cols) + "]["
       + std::to_string(rows_per_col / num_cols) + "]";
-  nvtx_raii range(message.c_str(), nvtx::color::DARK_GREEN);
+  nvtx::raii_range range(message.c_str(), nvtx::color::DARK_GREEN);
 #else
-  nvtx_raii range("cudf::concatenate", nvtx::color::DARK_GREEN);
+  nvtx::raii_range range("cudf::concatenate", nvtx::color::DARK_GREEN);
 #endif
 
   if (columns_to_concat.empty()) { return std::make_unique<column>(); }
