@@ -1,38 +1,22 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
-from cudf._libxx.lib cimport *
+from libcpp.memory cimport unique_ptr
 from cudf._libxx.column cimport Column
 from cudf._libxx.table cimport Table
+from cudf._libxx.move cimport move
 
-from libcpp.memory cimport unique_ptr
+from cudf._libxx.cpp.types cimport size_type
+from cudf._libxx.cpp.column.column cimport column
+from cudf._libxx.cpp.column.column_view cimport column_view
+from cudf._libxx.cpp.table.table cimport table
+from cudf._libxx.cpp.table.table_view cimport table_view
 
-from cudf._libxx.includes.reshape cimport (
+from cudf._libxx.cpp.reshape cimport (
     interleave_columns as cpp_interleave_columns,
     tile as cpp_tile
 )
 
-
 def interleave_columns(Table source_table):
-    """
-    Interleave columns of a table into a single column.
-
-    Converts the column major table `input` into a row
-    major column.
-
-    Parameters
-    ----------
-    source_table : input Table containing columns to interleave.
-
-    Example
-    -------
-    in     = [[A1, A2, A3], [B1, B2, B3]]
-    return = [A1, B1, A2, B2, A3, B3]
-
-    Returns
-    -------
-    The interleaved columns as a single column
-    """
-
     cdef table_view c_view = source_table.data_view()
     cdef unique_ptr[column] c_result
 
@@ -45,36 +29,13 @@ def interleave_columns(Table source_table):
 
 
 def tile(Table source_table, size_type count):
-    """
-    Repeats the rows from `input` table `count` times to
-    form a new table.
-
-    Parameters
-    ----------
-    source_table : input Table containing columns to
-    interleave. count : Number of times to tile "rows".
-    Must be non-negative.
-
-    Example
-    -------
-    `output.num_columns() == input.num_columns()`
-    `output.num_rows() == input.num_rows() * count`
-
-    source_table  = [[8, 4, 7], [5, 2, 3]]
-    count  = 2
-    return = [[8, 4, 7, 8, 4, 7], [5, 2, 3, 5, 2, 3]]
-
-    Returns
-    -------
-    The table containing the tiled "rows".
-    """
     cdef size_type c_count = count
     cdef table_view c_view = source_table.view()
     cdef unique_ptr[table] c_result
 
     with nogil:
         c_result = move(cpp_tile(c_view, c_count))
-
+        
     return Table.from_unique_ptr(
         move(c_result),
         column_names=source_table._column_names,
