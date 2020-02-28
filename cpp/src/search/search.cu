@@ -104,7 +104,7 @@ std::unique_ptr<column> search_ordered(table_view const& t,
   rmm::device_vector<order> d_column_order(column_order.begin(), column_order.end());
   rmm::device_vector<null_order> d_null_precedence(null_precedence.begin(), null_precedence.end());
 
-  if (has_nulls(t)) {
+  if (has_nulls(t) or has_nulls(values)) {
     auto ineq_op = (find_first)
       ? row_lexicographic_comparator<true>(*d_t, *d_values, d_column_order.data().get(), d_null_precedence.data().get())
       : row_lexicographic_comparator<true>(*d_values, *d_t, d_column_order.data().get(), d_null_precedence.data().get());
