@@ -26,7 +26,6 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/rolling.hpp>
 #include <src/rolling/rolling_detail.hpp>
-using cudf::experimental::include_nulls;
 
 #include <thrust/iterator/constant_iterator.h>
 
@@ -48,7 +47,7 @@ TEST_F (RollingStringTest, NoNullStringMinMaxCount) {
     auto got_min  = cudf::experimental::rolling_window(input, window[0], window[0], 1, cudf::experimental::make_min_aggregation());
     auto got_max  = cudf::experimental::rolling_window(input, window[0], window[0], 1, cudf::experimental::make_max_aggregation());
     auto got_count_valid = cudf::experimental::rolling_window(input, window[0], window[0], 1, cudf::experimental::make_count_aggregation());
-    auto got_count_all   = cudf::experimental::rolling_window(input, window[0], window[0], 1, cudf::experimental::make_count_aggregation(include_nulls::YES));
+    auto got_count_all   = cudf::experimental::rolling_window(input, window[0], window[0], 1, cudf::experimental::make_count_aggregation(cudf::include_nulls::YES));
 
     cudf::test::expect_columns_equal(expected_min, got_min->view());
     cudf::test::expect_columns_equal(expected_max, got_max->view());
@@ -70,7 +69,7 @@ TEST_F (RollingStringTest, NullStringMinMaxCount) {
     auto got_min  = cudf::experimental::rolling_window(input, window[0], window[0], 1, cudf::experimental::make_min_aggregation());
     auto got_max  = cudf::experimental::rolling_window(input, window[0], window[0], 1, cudf::experimental::make_max_aggregation());
     auto got_count_valid = cudf::experimental::rolling_window(input, window[0], window[0], 1, cudf::experimental::make_count_aggregation());
-    auto got_count_all   = cudf::experimental::rolling_window(input, window[0], window[0], 1, cudf::experimental::make_count_aggregation(include_nulls::YES));
+    auto got_count_all   = cudf::experimental::rolling_window(input, window[0], window[0], 1, cudf::experimental::make_count_aggregation(cudf::include_nulls::YES));
    
     cudf::test::expect_columns_equal(expected_min, got_min->view());
     cudf::test::expect_columns_equal(expected_max, got_max->view());
@@ -92,7 +91,7 @@ TEST_F (RollingStringTest, MinPeriods) {
     auto got_min  = cudf::experimental::rolling_window(input, window[0], window[0], 3, cudf::experimental::make_min_aggregation());
     auto got_max  = cudf::experimental::rolling_window(input, window[0], window[0], 3, cudf::experimental::make_max_aggregation());
     auto got_count_valid = cudf::experimental::rolling_window(input, window[0], window[0], 3, cudf::experimental::make_count_aggregation());
-    auto got_count_all   = cudf::experimental::rolling_window(input, window[0], window[0], 4, cudf::experimental::make_count_aggregation(include_nulls::YES));
+    auto got_count_all   = cudf::experimental::rolling_window(input, window[0], window[0], 4, cudf::experimental::make_count_aggregation(cudf::include_nulls::YES));
 
     cudf::test::expect_columns_equal(expected_min, got_min->view());
     cudf::test::expect_columns_equal(expected_max, got_max->view());
@@ -168,7 +167,7 @@ protected:
     // test all supported aggregators
     run_test_col(input, preceding_window, following_window, min_periods, cudf::experimental::make_min_aggregation());
     run_test_col(input, preceding_window, following_window, min_periods, cudf::experimental::make_count_aggregation());
-    run_test_col(input, preceding_window, following_window, min_periods, cudf::experimental::make_count_aggregation(include_nulls::YES));
+    run_test_col(input, preceding_window, following_window, min_periods, cudf::experimental::make_count_aggregation(cudf::include_nulls::YES));
     run_test_col(input, preceding_window, following_window, min_periods, cudf::experimental::make_max_aggregation());
     run_test_col(input, preceding_window, following_window, min_periods, cudf::experimental::make_mean_aggregation());
 
