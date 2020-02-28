@@ -182,7 +182,7 @@ sort_groupby_helper::group_offsets(cudaStream_t stream) {
   }
 
   size_type num_groups = thrust::distance(_group_offsets->begin(), result_end);
-  (*_group_offsets)[num_groups] = num_keys();
+  (*_group_offsets)[num_groups] = num_keys(stream);
   _group_offsets->resize(num_groups + 1);
 
   return *_group_offsets;

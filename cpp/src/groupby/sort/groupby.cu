@@ -316,6 +316,35 @@ void store_result_functor::operator()<aggregation::NUNIQUE>(
   cache.add_result(col_idx, agg, std::move(result));
 };
 
+template <>
+void store_result_functor::operator()<aggregation::NTH_ELEMENT>(
+  std::unique_ptr<aggregation> const& agg)
+{
+  if (cache.has_result(col_idx, agg))
+    return;
+    
+  auto nth_element_agg =
+    static_cast<experimental::detail::nth_element_aggregation const*>(agg.get());
+
+  auto count_agg = make_count_aggregation(nth_element_agg->_include_nulls);
+  if(count_agg->kind==aggregation::COUNT_VALID)
+    operator()<aggregation::COUNT_VALID>(count_agg);
+  else if (count_agg->kind==aggregation::COUNT_ALL)
+    operator()<aggregation::COUNT_ALL>(count_agg);
+  else
+    CUDF_FAIL("Wrong count aggregation kind");
+  column_view group_sizes = cache.get_result(col_idx, count_agg);
+
+  cache.add_result(col_idx, agg, 
+                  detail::group_nth_element(get_grouped_values(),
+                            group_sizes,
+                            helper.group_labels(),
+                            helper.group_offsets(),
+                            helper.num_groups(), 
+                            nth_element_agg->n,
+                            nth_element_agg->_include_nulls,
+                            mr, stream));
+}
 }  // namespace detail
 
 // Sort-based groupby
