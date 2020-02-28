@@ -169,6 +169,7 @@
 - PR #4245 Fix race condition in parquet reader
 - PR #4258 Fix dask-cudf losing index name in `reset_index`
 - PR #4268 Fix java build for hash aggregate
+- PR #4275 Fix bug in searching nullable values in non-nullable search space in `upper_bound`
 
 
 # cuDF 0.12.0 (04 Feb 2020)
