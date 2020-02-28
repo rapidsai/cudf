@@ -30,6 +30,14 @@
 #include <numeric>
 
 namespace cudf {
+
+// Allow strategy switching at runtime for easier benchmarking
+// TODO remove when done
+static concatenate_mode current_mode = concatenate_mode::UNOPTIMIZED;
+void temp_set_concatenate_mode(concatenate_mode mode) {
+  current_mode = mode;
+}
+
 namespace detail {
 
 /**---------------------------------------------------------------------------*
@@ -122,29 +130,8 @@ void concatenate_masks(std::vector<column_view> const &views,
   concatenate_masks(d_views, d_offsets, dest_mask, number_of_mask_bits, stream);
 }
 
-}  // namespace detail
 
-rmm::device_buffer concatenate_masks(std::vector<column_view> const &views,
-                                     rmm::mr::device_memory_resource *mr,
-                                     cudaStream_t stream) {
-  rmm::device_buffer null_mask{};
-  bool has_nulls = std::any_of(views.begin(), views.end(),
-                     [](const column_view col) { return col.has_nulls(); });
-  if (has_nulls) {
-   size_type total_element_count =
-     std::accumulate(views.begin(), views.end(), 0,
-         [](auto accumulator, auto const& v) { return accumulator + v.size(); });
-    null_mask = create_null_mask(total_element_count, mask_state::UNINITIALIZED, stream, mr);
-
-    detail::concatenate_masks(
-        views, static_cast<bitmask_type *>(null_mask.data()), stream);
-  }
-
-  return null_mask;
-}
-
-
-struct create_column_from_view_vector {
+struct for_each_concatenate {
   std::vector<cudf::column_view> views;
   cudaStream_t stream;
   rmm::mr::device_memory_resource *mr;
@@ -214,6 +201,25 @@ struct create_column_from_view_vector {
 
 };
 
+auto compute_partition_map(rmm::device_vector<size_type> const& d_offsets,
+    size_t output_size, cudaStream_t stream) {
+
+  auto d_partition_map = rmm::device_vector<size_type>(output_size);
+
+  // Scatter 1s at the start of each partition, then scan to fill the map
+  auto const const_it = thrust::make_constant_iterator(size_type{1});
+  thrust::scatter(rmm::exec_policy(stream)->on(stream),
+      const_it, const_it + (d_offsets.size() - 2), // skip first and last offset
+      std::next(d_offsets.cbegin()), // skip first offset, leaving it set to 0
+      d_partition_map.begin());
+
+  thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream),
+      d_partition_map.cbegin(), d_partition_map.cend(),
+      d_partition_map.begin());
+
+  return d_partition_map;
+}
+
 template <typename T>
 struct partition_map_fn {
   size_type const* offsets_ptr;
@@ -243,32 +249,6 @@ struct binary_search_fn {
     return data_ptr[partition][i - offset];
   }
 };
-
-auto compute_partition_map(rmm::device_vector<size_type> const& d_offsets,
-    size_t output_size, cudaStream_t stream) {
-
-  auto d_partition_map = rmm::device_vector<size_type>(output_size);
-
-  // Scatter 1s at the start of each partition, then scan to fill the map
-  auto const const_it = thrust::make_constant_iterator(size_type{1});
-  thrust::scatter(rmm::exec_policy(stream)->on(stream),
-      const_it, const_it + (d_offsets.size() - 2), // skip first and last offset
-      std::next(d_offsets.cbegin()), // skip first offset, leaving it set to 0
-      d_partition_map.begin());
-
-  thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream),
-      d_partition_map.cbegin(), d_partition_map.cend(),
-      d_partition_map.begin());
-
-  return d_partition_map;
-}
-
-// Allow strategy switching at runtime for easier benchmarking
-// TODO remove when done
-static concatenate_mode current_mode = concatenate_mode::UNOPTIMIZED;
-void temp_set_concatenate_mode(concatenate_mode mode) {
-  current_mode = mode;
-}
 
 struct optimized_concatenate {
   template <typename T,
@@ -363,6 +343,27 @@ struct optimized_concatenate {
   }
 };
 
+}  // namespace detail
+
+rmm::device_buffer concatenate_masks(std::vector<column_view> const &views,
+                                     rmm::mr::device_memory_resource *mr,
+                                     cudaStream_t stream) {
+  rmm::device_buffer null_mask{};
+  bool has_nulls = std::any_of(views.begin(), views.end(),
+                     [](const column_view col) { return col.has_nulls(); });
+  if (has_nulls) {
+   size_type total_element_count =
+     std::accumulate(views.begin(), views.end(), 0,
+         [](auto accumulator, auto const& v) { return accumulator + v.size(); });
+    null_mask = create_null_mask(total_element_count, mask_state::UNINITIALIZED, stream, mr);
+
+    detail::concatenate_masks(
+        views, static_cast<bitmask_type *>(null_mask.data()), stream);
+  }
+
+  return null_mask;
+}
+
 // Concatenates the elements from a vector of column_views
 std::unique_ptr<column>
 concatenate(std::vector<column_view> const& columns_to_concat,
@@ -402,11 +403,11 @@ concatenate(std::vector<column_view> const& columns_to_concat,
   switch (current_mode) {
     case concatenate_mode::UNOPTIMIZED:
       return experimental::type_dispatcher(type,
-          create_column_from_view_vector{columns_to_concat, stream, mr});
+          detail::for_each_concatenate{columns_to_concat, stream, mr});
     case concatenate_mode::PARTITION_MAP:
     case concatenate_mode::BINARY_SEARCH:
       return experimental::type_dispatcher(type,
-          optimized_concatenate{}, columns_to_concat, mr, stream);
+          detail::optimized_concatenate{}, columns_to_concat, mr, stream);
     default:
       CUDF_FAIL("Invalid concatenate mode");
   }
