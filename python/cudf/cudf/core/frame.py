@@ -342,10 +342,6 @@ class Frame(libcudfxx.table.Table):
         Repeats the rows from `self` DataFrame `count` times to form a
         new DataFrame.
 
-        Different from DataFrame.tile() which repeats the DataFrame
-        sequentially with the filling function. This repeats the
-        columns by "count" number of times.
-
         Parameters
         ----------
         self : input Table containing columns to interleave.
