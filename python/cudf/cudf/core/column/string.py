@@ -18,6 +18,13 @@ from cudf._libxx.null_mask import (
     bitmask_allocation_size_bytes,
     create_null_mask,
 )
+from cudf._libxx.strings.char_types import (
+    is_alnum as cpp_is_alnum,
+    is_alpha as cpp_is_alpha,
+    is_decimal as cpp_is_decimal,
+    is_digit as cpp_is_digit,
+    is_numeric as cpp_is_numeric,
+)
 from cudf._libxx.strings.replace import (
     insert as cpp_string_insert,
     slice_replace as cpp_slice_replace,
@@ -471,6 +478,21 @@ class StringMethods(object):
         return self._return_or_inplace(
             cpp_slice_strings(self._column, start, stop, step), **kwargs
         )
+
+    def isdecimal(self, **kwargs):
+        return self._return_or_inplace(cpp_is_decimal(self._column))
+
+    def isalnum(self, **kwargs):
+        return self._return_or_inplace(cpp_is_alnum(self._column))
+
+    def isalpha(self, **kwargs):
+        return self._return_or_inplace(cpp_is_alpha(self._column))
+
+    def isdigit(self, **kwargs):
+        return self._return_or_inplace(cpp_is_digit(self._column))
+
+    def isnumeric(self, **kwargs):
+        return self._return_or_inplace(cpp_is_numeric(self._column))
 
     def slice_from(self, starts=0, stops=0, **kwargs):
         """

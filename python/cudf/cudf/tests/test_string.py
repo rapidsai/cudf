@@ -1087,3 +1087,40 @@ def test_string_insert():
         gs.str.insert(5, "---"),
         ps.str.slice(stop=5) + "---" + ps.str.slice(start=5),
     )
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["abc", "xyz", "a", "ab", "123", "097"],
+        ["abcdefghij", "0123456789", "9876543210", None, "accénted", ""],
+        ["koala", "fox", "chameleon"],
+        [
+            "1234567890",
+            "de",
+            "1.75",
+            "-34",
+            "+9.8",
+            "7¼",
+            "x³",
+            "2³",
+            "12⅝",
+            "",
+            "\t\r\n ",
+        ],
+        ["one", "one1", "1", ""],
+        ["A B", "1.5", "3,000"],
+        ["23", "³", "⅕", ""],
+        [" ", "\t\r\n ", ""],
+        ["leopard", "Golden Eagle", "SNAKE", ""],
+    ],
+)
+def test_string_types_check(data):
+    gs = Series(data)
+    ps = pd.Series(data)
+
+    assert_eq(gs.str.isdecimal(), ps.str.isdecimal())
+    assert_eq(gs.str.isalnum(), ps.str.isalnum())
+    assert_eq(gs.str.isalpha(), ps.str.isalpha())
+    assert_eq(gs.str.isdigit(), ps.str.isdigit())
+    assert_eq(gs.str.isnumeric(), ps.str.isnumeric())
