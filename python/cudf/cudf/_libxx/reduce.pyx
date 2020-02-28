@@ -8,11 +8,12 @@ from cudf._libxx.aggregation cimport get_aggregation, aggregation
 import numpy as np
 
 cpdef reduce(reduction_op, Column incol, kwargs=None, dtype=None, ddof=1):
+    kwargs = {'ddof': ddof}
     col_dtype = incol.dtype
     if reduction_op in ['sum', 'sum_of_squares', 'product']:
         col_dtype = np.find_common_type([col_dtype], [np.int64])
     col_dtype = col_dtype if dtype is None else dtype
-
+    print(reduction_op)
     cdef column_view c_incol_view = incol.view()
     cdef unique_ptr[scalar] c_result
     cdef unique_ptr[aggregation] c_agg = move(get_aggregation(reduction_op, kwargs))
@@ -22,7 +23,10 @@ cpdef reduce(reduction_op, Column incol, kwargs=None, dtype=None, ddof=1):
     if len(incol) <= incol.null_count:
         if reduction_op == 'sum' or reduction_op == 'sum_of_squares':
             return incol.dtype.type(0)
-    
+        if reduction_op == 'product':
+            return incol.dtype.type(1)
+        return np.nan
+
     with nogil:
         c_result = cpp_reduce(
             c_incol_view,
