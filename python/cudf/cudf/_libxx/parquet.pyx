@@ -6,30 +6,36 @@ from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
 from cudf._lib.utils cimport *
 from cudf._lib.utils import *
-
-from cudf._libxx.table cimport *
-from cudf._libxx.cpp.io.parquet cimport (
-    reader as parquet_reader,
-    reader_options as parquet_reader_options,
-    compression_type,
-    write_parquet_args,
-    sink_info,
-    table_view,
-    table_metadata,
-    statistics_freq,
-    write_parquet as parquet_writer
-)
-
 from libc.stdlib cimport free
 from libcpp.memory cimport unique_ptr, make_unique
 from libcpp.string cimport string
 from libcpp.map cimport map
+from libcpp.vector cimport vector
 
 import errno
 import os
 import json
 import pandas as pd
 import pyarrow as pa
+
+from cudf._lib.cudf cimport (
+    size_type
+)
+from cudf._libxx.table cimport Table
+from cudf._libxx.cpp.table.table_view cimport (
+    table_view
+)
+from cudf._libxx.cpp.io.parquet cimport (
+    reader as parquet_reader,
+    reader_options as parquet_reader_options,
+)
+from cudf._libxx.cpp.io.functions cimport (
+    write_parquet_args,
+    write_parquet as parquet_writer
+)
+
+cimport cudf._lib.utils as lib
+cimport cudf._libxx.cpp.io.types as cudf_io_types
 
 
 cpdef generate_pandas_metadata(Table table, index):
@@ -103,7 +109,8 @@ cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
     options.use_pandas_metadata = use_pandas_metadata
 
     # Create reader from source
-    cdef const unsigned char[::1] buffer = view_of_buffer(filepath_or_buffer)
+    cdef const unsigned char[::1] buffer = lib.view_of_buffer(
+        filepath_or_buffer)
     cdef string filepath
     if buffer is None:
         if not os.path.isfile(filepath_or_buffer):
@@ -166,9 +173,9 @@ cpdef write_parquet(
 
     # Create the write options
     cdef string filepath = <string>str(path).encode()
-    cdef sink_info sink = sink_info(filepath)
-    cdef unique_ptr[table_metadata] tbl_meta = \
-        make_unique[table_metadata]()
+    cdef cudf_io_types.sink_info sink = cudf_io_types.sink_info(filepath)
+    cdef unique_ptr[cudf_io_types.table_metadata] tbl_meta = \
+        make_unique[cudf_io_types.table_metadata]()
 
     cdef vector[string] column_names
     cdef map[string, string] user_data
@@ -196,22 +203,22 @@ cpdef write_parquet(
     tbl_meta.get().column_names = column_names
     tbl_meta.get().user_data = user_data
 
-    cdef compression_type comp_type
+    cdef cudf_io_types.compression_type comp_type
     if compression is None:
-        comp_type = compression_type.NONE
+        comp_type = cudf_io_types.compression_type.NONE
     elif compression == "snappy":
-        comp_type = compression_type.SNAPPY
+        comp_type = cudf_io_types.compression_type.SNAPPY
     else:
         raise ValueError("Unsupported `compression` type")
 
-    cdef statistics_freq stat_freq
+    cdef cudf_io_types.statistics_freq stat_freq
     statistics = statistics.upper()
     if statistics == "NONE":
-        stat_freq = statistics_freq.STATISTICS_NONE
+        stat_freq = cudf_io_types.statistics_freq.STATISTICS_NONE
     elif statistics == "ROWGROUP":
-        stat_freq = statistics_freq.STATISTICS_ROWGROUP
+        stat_freq = cudf_io_types.statistics_freq.STATISTICS_ROWGROUP
     elif statistics == "PAGE":
-        stat_freq = statistics_freq.STATISTICS_PAGE
+        stat_freq = cudf_io_types.statistics_freq.STATISTICS_PAGE
     else:
         raise ValueError("Unsupported `statistics_freq` type")
 

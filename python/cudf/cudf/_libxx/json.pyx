@@ -2,6 +2,8 @@
 
 # cython: boundscheck = False
 
+import cudf
+
 from libcpp.string cimport string
 from libcpp.memory cimport unique_ptr
 import collections.abc as abc
