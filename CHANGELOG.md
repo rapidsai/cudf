@@ -175,6 +175,7 @@
 - PR #4268 Fix java build for hash aggregate
 - PR #4273 Fix losing `StringIndex` name in dask `_meta_nonempty`
 - PR #4283 Temporary dask_cudf set_index fix (divisions="quantile")
+- PR #4279 Fix converting `np.float64` to Scalar
 
 
 # cuDF 0.12.0 (04 Feb 2020)
