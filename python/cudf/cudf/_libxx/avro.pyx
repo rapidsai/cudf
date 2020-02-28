@@ -1,11 +1,12 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from cudf._libxx.lib cimport table, size_type
-from cudf._libxx.table cimport Table
+from cudf._libxx.cpp.types cimport size_type
+from cudf._libxx.cpp.io.types cimport table_with_metadata
+from cudf._libxx.cpp.io.functions cimport read_avro_args
+from cudf._libxx.cpp.io.functions cimport read_avro as read_avro_cpp
+from cudf._libxx.move cimport move
 from cudf._libxx.io.utils cimport make_source_info
-from cudf._libxx.io.types cimport move, table_with_metadata
-from cudf._libxx.io.functions cimport read_avro_args
-from cudf._libxx.io.functions cimport read_avro as read_avro_cpp
+from cudf._libxx.table cimport Table
 
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string

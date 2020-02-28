@@ -1,10 +1,14 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+from libcpp cimport bool
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 
-cimport cudf._libxx.cpp.io.io_types as cudf_io_types
-
+from cudf._libxx.cpp.types cimport size_type
+from cudf._libxx.cpp.io.types cimport compression_type
+from cudf._libxx.cpp.io.types cimport quote_style
+from cudf._libxx.cpp.io.types cimport source_info
+from cudf._libxx.cpp.io.types cimport table_with_metadata
 
 cdef extern from "cudf/io/functions.hpp" \
         namespace "cudf::experimental::io" nogil:
@@ -35,7 +39,7 @@ cdef extern from "cudf/io/functions.hpp" \
         source_info source
 
         # Reader settings
-        cudf_io_types.compression_type compression
+        compression_type compression
         size_t byte_range_offset
         size_t byte_range_size
         vector[string] names
@@ -60,7 +64,7 @@ cdef extern from "cudf/io/functions.hpp" \
         bool delim_whitespace
         bool skipinitialspace
         bool skip_blank_lines
-        cudf_io_types.quote_style quoting
+        quote_style quoting
         char quotechar
         bool doublequote
         vector[string] infer_date_names
@@ -75,7 +79,7 @@ cdef extern from "cudf/io/functions.hpp" \
         bool na_filter
         bool dayfirst
 
-    cdef cudf_io_types.table_with_metadata read_csv(
+    cdef table_with_metadata read_csv(
         read_csv_args &args
     ) except +
 
@@ -90,6 +94,6 @@ cdef extern from "cudf/io/functions.hpp" \
         bool decimals_as_float
         int forced_decimals_scale
 
-    cdef cudf_io_types.table_with_metadata read_orc(
+    cdef table_with_metadata read_orc(
         read_orc_args &args
     ) except +

@@ -1,6 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from cudf._libxx.io.types cimport source_info
+from cudf._libxx.cpp.io.types cimport source_info
 from libcpp.string cimport string
 
 import errno

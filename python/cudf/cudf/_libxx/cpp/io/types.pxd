@@ -1,5 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+from cudf._libxx.cpp.table.table cimport table
 
 from libcpp.memory cimport unique_ptr, shared_ptr
 from libcpp.string cimport string
@@ -62,7 +63,3 @@ cdef extern from "cudf/io/types.hpp" \
     cdef cppclass sink_info:
         io_type type
         string filepath
-
-cdef extern from "<utility>" namespace "std" nogil:
-    cdef source_info move(source_info)
-    cdef table_with_metadata move(table_with_metadata)
