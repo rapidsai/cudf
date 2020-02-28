@@ -1,9 +1,10 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 import warnings
 
+import cupy
 import numpy as np
 import pandas as pd
-from toolz import partition_all
+from toolz import merge, partition_all
 
 import dask
 import dask.dataframe as dd
@@ -177,7 +178,28 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 "Dask-cudf only supports task based shuffling, got %s"
                 % kwargs["shuffle"]
             )
-        return super().set_index(other, shuffle="tasks", **kwargs)
+
+        # Calculate divisions outside dask.dataframe
+        # NOTE: This only supports single numerical columns
+        # TODO: Remove this once upstream version is improved
+        npartitions = kwargs.pop("npartitions", None)
+        divisions = kwargs.pop("divisions", None)
+        if divisions is None and isinstance(other, str):
+            npartitions = npartitions or self.npartitions
+            qn = np.linspace(0.0, 1.0, npartitions + 1).tolist()
+            dtype = self[other].dtype
+            divisions = (
+                quantile(self[other], qn).astype(dtype).compute().values + 1
+            ).tolist()
+            divisions[0] = 0
+
+        return super().set_index(
+            other,
+            shuffle="tasks",
+            npartitions=npartitions,
+            divisions=divisions,
+            **kwargs,
+        )
 
     def sort_values(self, by, ignore_index=False):
         """Sort by the given column
@@ -299,6 +321,93 @@ class DataFrame(_Frame, dd.core.DataFrame):
             if isinstance(self, DataFrame):
                 result.divisions = (min(self.columns), max(self.columns))
             return handle_out(out, result)
+
+
+def _percentile(a, q, interpolation="linear"):
+    n = len(a)
+    if not len(a):
+        return None, n
+    return (
+        cupy.asnumpy(
+            cudf.Series(a).quantile(q, interpolation=interpolation).values
+        ),
+        n,
+    )
+
+
+def quantile(df, q):
+    """Approximate quantiles of Series.
+    Mostly copied from dask.array (for now)
+
+    Parameters
+    ----------
+    q : list/array of floats
+        Iterable of numbers ranging from 0 to 100 for the desired quantiles
+    """
+    # current implementation needs q to be sorted so
+    # sort if array-like, otherwise leave it alone
+    q_ndarray = np.array(q)
+    if q_ndarray.ndim > 0:
+        q_ndarray.sort(kind="mergesort")
+        q = q_ndarray
+
+    assert isinstance(df, Series)
+
+    # currently, only Series has quantile method
+    if isinstance(df, Index):
+        meta = cudf.Series(df._meta_nonempty).quantile(q=q)
+    else:
+        meta = df._meta_nonempty.quantile(q=q)
+
+    # Index.quantile(list-like) must be pd.Series, not pd.Index
+    df_name = df.name
+
+    def finalize_tsk(tsk):
+        return (cudf.Series, tsk, q, None, df_name)
+
+    return_type = Series
+
+    # Note
+    # pandas uses quantile in [0, 1]
+    # numpy / everyone else uses [0, 100]
+    qs = np.asarray(q)
+    token = tokenize(df, qs)
+
+    if len(qs) == 0:
+        name = "quantiles-" + token
+        empty_index = cudf.Index([], dtype=float)
+        return Series(
+            {
+                (name, 0): cudf.Series(
+                    [], name=df.name, index=empty_index, dtype="float"
+                )
+            },
+            name,
+            df._meta,
+            [None, None],
+        )
+    else:
+        new_divisions = [np.min(q), np.max(q)]
+
+    df = df.dropna()
+
+    from dask.array.percentile import merge_percentiles
+
+    name = "quantiles-1-" + token
+    val_dsk = {
+        (name, i): (_percentile, (getattr, key, "values"), qs)
+        for i, key in enumerate(df.__dask_keys__())
+    }
+
+    name2 = "quantiles-2-" + token
+    merge_dsk = {
+        (name2, 0): finalize_tsk(
+            (merge_percentiles, qs, [qs] * df.npartitions, sorted(val_dsk))
+        )
+    }
+    dsk = merge(val_dsk, merge_dsk)
+    graph = HighLevelGraph.from_collections(name2, dsk, dependencies=[df])
+    return return_type(graph, name2, meta, new_divisions)
 
 
 def sum_of_squares(x):
