@@ -105,8 +105,15 @@ size_type sort_groupby_helper::num_keys(cudaStream_t stream) {
 }
 
 column_view sort_groupby_helper::key_sort_order(cudaStream_t stream) {
-  if (_key_sorted_order)
-    return _key_sorted_order->view();
+  auto sliced_key_sorted_order = [stream, this]() {
+      return cudf::experimental::detail::slice(
+        this->_key_sorted_order->view(),
+        0,
+        this->num_keys(stream));};
+
+  if (_key_sorted_order) {
+    return sliced_key_sorted_order();
+  }
 
   // TODO (dm): optimization. When keys are pre sorted but ignore nulls is true,
   //            we still want all rows with nulls in the end. Sort is costly, so
@@ -121,7 +128,7 @@ column_view sort_groupby_helper::key_sort_order(cudaStream_t stream) {
                      d_key_sorted_order,
                      d_key_sorted_order + _key_sorted_order->size(), 0);
 
-    return _key_sorted_order->view();
+    return sliced_key_sorted_order();
   }
 
   if (_include_null_keys == include_nulls::YES || !cudf::has_nulls(_keys)) {  // SQL style
@@ -145,7 +152,7 @@ column_view sort_groupby_helper::key_sort_order(cudaStream_t stream) {
     // All rows with one or more null values are at the end of the resulting sorted order.
   }
 
-  return _key_sorted_order->view();
+  return sliced_key_sorted_order();
 }
 
 sort_groupby_helper::index_vector const& 
@@ -223,8 +230,7 @@ column_view sort_groupby_helper::unsorted_keys_labels(cudaStream_t stream) {
                               group_labels().size(),
                               group_labels().data().get());
   
-  auto scatter_map = cudf::experimental::detail::slice(
-    key_sort_order(), 0, num_keys(stream));
+  auto scatter_map = key_sort_order();
 
   std::unique_ptr<table> t_unsorted_keys_labels = 
     cudf::experimental::detail::scatter(
@@ -280,8 +286,7 @@ sort_groupby_helper::grouped_values(column_view const& values,
   rmm::mr::device_memory_resource* mr,
   cudaStream_t stream)
 {
-  auto gather_map = cudf::experimental::detail::slice(
-    key_sort_order(), 0, num_keys(stream));
+  auto gather_map = key_sort_order();
 
   auto grouped_values_table = cudf::experimental::detail::gather(
     table_view({values}), gather_map, false, false, false, mr, stream);
@@ -303,6 +308,13 @@ std::unique_ptr<table> sort_groupby_helper::unique_keys(
                                             false, mr, stream);
 }
 
+std::unique_ptr<table> sort_groupby_helper::sorted_keys(
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream)
+{
+  return cudf::experimental::detail::gather(
+    _keys, key_sort_order(), false, false, false, mr, stream);
+}
 
 }  // namespace sort
 }  // namespace detail
