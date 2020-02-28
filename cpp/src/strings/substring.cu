@@ -71,22 +71,30 @@ struct substring_fn
         string_view d_str = d_column.template element<string_view>(idx);
         auto const length = d_str.length();
         auto const step = d_step.is_valid() ? *(d_step.data()) : 1;
-        auto const begin = [&] {  // inclusive
-            auto start = d_start.is_valid() ? d_start.value() : 0;
+        auto const begin = [&] {  // always inclusive
+            if( length==0 ) // simplifies the rest of this logic
+                return d_str.begin();
+            // when invalid, default depends on step
+            if( !d_start.is_valid() )
+                return (step > 0) ? d_str.begin() : (d_str.end()-1);
+            // normal positive position logic
+            auto start = d_start.value();
             if( start >=0 )
-            {
-                if( start < length )
-                    return d_str.begin() + start;
-                return (length > 0) ? d_str.end()-1 : d_str.begin();
-            }
-            auto adjust = length + start; // handle negative position
+                return (start < length) ? (d_str.begin() + start) : (d_str.end()-1);
+            // handle negative position here
+            auto adjust = length + start;
             return d_str.begin() + ((adjust > 0) ? adjust : 0);
         } ();
-        auto const end = [&] {  // exclusive
-            auto stop = d_stop.is_valid() ? d_stop.value() : length;
+        auto const end = [&] {  // always exclusive
+            // when invalid, default depends on step
+            if( !d_stop.is_valid() )
+                return step > 0 ? d_str.end() : (d_str.begin()-1);
+            // normal positive position logic
+            auto stop = d_stop.value();
             if( stop >=0 )
-                return stop < length ? (d_str.begin() + stop) : d_str.end();
-            auto adjust = length + stop;  // handle negative position
+                return (stop < length) ? (d_str.begin() + stop) : d_str.end();
+            // handle negative position here
+            auto adjust = length + stop;
             return d_str.begin() + ((adjust >= 0) ? adjust: -1);
         } ();
 

@@ -27,7 +27,6 @@
 #include <string>
 #include <vector>
 #include <thrust/sequence.h>
-#include <gmock/gmock.h>
 
 
 struct StringsSubstringsTest : public cudf::test::BaseFixture {};
@@ -179,6 +178,46 @@ TEST_F(StringsSubstringsTest, NegativePositions)
     {
         auto results = cudf::strings::slice_strings(strings_column, -3, -1 );
         cudf::test::strings_column_wrapper expected{ "", "b", "de", "hi", "mn", "st", "xy" };
+        cudf::test::expect_columns_equal(*results, expected);
+    }
+}
+
+TEST_F(StringsSubstringsTest, NullPositions)
+{
+    cudf::test::strings_column_wrapper strings{ "a", "bc", "def", "ghij", "klmno", "pqrstu", "vwxyz" };
+    auto strings_column = cudf::strings_column_view(strings);
+    {
+        auto results = cudf::strings::slice_strings(strings_column,
+                                                    cudf::numeric_scalar<cudf::size_type>(0,false),
+                                                    cudf::numeric_scalar<cudf::size_type>(0,false), -1 );
+        cudf::test::strings_column_wrapper expected{ "a", "cb", "fed", "jihg", "onmlk", "utsrqp", "zyxwv" };
+        cudf::test::expect_columns_equal(*results, expected);
+    }
+    {
+        auto results = cudf::strings::slice_strings(strings_column,
+                                                    cudf::numeric_scalar<cudf::size_type>(0,false),
+                                                    cudf::numeric_scalar<cudf::size_type>(0,false), 2 );
+        cudf::test::strings_column_wrapper expected{ "a", "b", "df", "gi", "kmo", "prt", "vxz" };
+        cudf::test::expect_columns_equal(*results, expected);
+    }
+    {
+        auto results = cudf::strings::slice_strings(strings_column, 0,
+                                                    cudf::numeric_scalar<cudf::size_type>(0,false), -1 );
+        cudf::test::strings_column_wrapper expected{ "a", "b", "d", "g", "k", "p", "v" };
+        cudf::test::expect_columns_equal(*results, expected);
+    }
+    {
+        auto results = cudf::strings::slice_strings(strings_column,
+                                                    cudf::numeric_scalar<cudf::size_type>(0,false),
+                                                    -2, -1 );
+        cudf::test::strings_column_wrapper expected{ "a", "c", "f", "j", "o", "u", "z" };
+        cudf::test::expect_columns_equal(*results, expected);
+    }
+    {
+        auto results = cudf::strings::slice_strings(strings_column,
+                                                    cudf::numeric_scalar<cudf::size_type>(0,false),
+                                                    -1, 2 );
+        cudf::test::strings_column_wrapper expected{ "", "b", "d", "gi", "km", "prt", "vx" };
         cudf::test::expect_columns_equal(*results, expected);
     }
 }
