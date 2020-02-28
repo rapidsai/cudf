@@ -1,21 +1,26 @@
 from libcpp.pair cimport pair
 from libcpp.memory cimport unique_ptr
 
-from cudf._libxx.table cimport Table
+from cudf._libxx.table cimport Table, make_table_view
 from cudf._libxx.move cimport move
 
 cimport cudf._libxx.cpp.groupby as libcudf_groupby
+cimport cudf._libxx.cpp.aggregation as libcudf_aggregation
 
 
 cdef class GroupBy:
     cdef unique_ptr[libcudf_groupby.groupby] c_obj
     cdef dict __dict__
 
-    def __cinit__(self, Table keys, *args, **kwargs):
+    def __cinit__(self, keys, *args, **kwargs):
         """
-        GroupBy object
+        keys : a GroupByKeys object
         """
-        self.c_obj.reset(new libcudf_groupby.groupby(keys.data_view()))
+        self.c_obj.reset(
+            new libcudf_groupby.groupby(
+                make_table_view(keys.keys)
+            )
+        )
 
     def __init__(self, keys):
         self.keys = keys
@@ -28,13 +33,10 @@ cdef class GroupBy:
 
         grouped_keys = Table.from_unique_ptr(
             move(c_grouped_keys),
-            self.keys._column_names
+            column_names=range(c_grouped_keys.get()[0].num_columns())
         )
-
         grouped_values = Table.from_unique_ptr(
             move(c_grouped_values),
-            values._column_names
+            column_names=values._column_names
         )
-
         return grouped_keys, grouped_values, c_group_offsets
-

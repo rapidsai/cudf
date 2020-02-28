@@ -127,9 +127,11 @@ class MultiIndex(Index):
         self._names = value
 
     @classmethod
-    def _from_table(cls, table):
+    def _from_table(cls, table, names=None):
         df = cudf.DataFrame(table._data)
-        return MultiIndex.from_frame(df, names=df.columns)
+        if names is None:
+            names = df.columns
+        return MultiIndex.from_frame(df, names=names)
 
     @property
     def _source_data(self):

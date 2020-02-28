@@ -2581,6 +2581,10 @@ class DataFrame(Frame):
                 )
             result = Groupby(self, by=by)
             return result
+        elif method == "libxx":
+            from cudf.core.groupbyxx.groupby import DataFrameGroupBy
+
+            result = DataFrameGroupBy(self, by=by)
         else:
             from cudf.core.groupby.groupby import DataFrameGroupBy
 
