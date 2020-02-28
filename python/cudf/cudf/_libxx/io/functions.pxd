@@ -10,7 +10,6 @@ from cudf._libxx.io.types cimport *
 
 from libcpp.string cimport string
 from libcpp.vector cimport vector
-from cudf._libxx.io.types cimport *
 
 
 cdef extern from "cudf/io/functions.hpp" \
@@ -112,4 +111,4 @@ cdef extern from "cudf/io/functions.hpp" \
                            compression_type compression_,
                            statistics_freq stats_lvl_) except +
 
-    cdef void write_parquet(write_parquet_args args)
+    cdef void write_parquet(write_parquet_args args) except +

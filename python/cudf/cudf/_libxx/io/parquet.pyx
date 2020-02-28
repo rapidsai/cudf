@@ -1,20 +1,25 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
-# cython: profile=False
-# distutils: language = c++
-# cython: embedsignature = True
-# cython: language_level = 3
+# cython: boundscheck = False
 
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
 from cudf._lib.utils cimport *
 from cudf._lib.utils import *
-from cudf._lib.includes.parquet cimport (
+
+from cudf._libxx.table cimport *
+from cudf._libxx.io.includes.parquet cimport (
     reader as parquet_reader,
     reader_options as parquet_reader_options,
+    compression_type,
+    write_parquet_args,
+    sink_info,
+    table_view,
+    table_metadata,
+    statistics_freq,
+    write_parquet as parquet_writer
 )
-from cudf._libxx.io.functions cimport *
-from cudf._libxx.io.types cimport *
+
 from libc.stdlib cimport free
 from libcpp.memory cimport unique_ptr, make_unique
 from libcpp.string cimport string
@@ -25,8 +30,6 @@ import os
 import json
 import pandas as pd
 import pyarrow as pa
-
-from cudf._libxx.table cimport *
 
 
 cpdef generate_pandas_metadata(Table table, index):
@@ -43,26 +46,29 @@ cpdef generate_pandas_metadata(Table table, index):
     # Indexes
     if index is not False:
         for name in table._index.names:
-            if isinstance(table._index, cudf.core.multiindex.MultiIndex):
-                idx = table.index.get_level_values(name)
-            else:
-                idx = table.index
+            if name is not None:
+                if isinstance(table._index, cudf.core.multiindex.MultiIndex):
+                    idx = table.index.get_level_values(name)
+                else:
+                    idx = table.index
 
-            if isinstance(idx, cudf.core.index.RangeIndex):
-                descr = {
-                    "kind": "range",
-                    "name": table.index.name,
-                    "start": table.index._start,
-                    "stop": table.index._stop,
-                    "step": 1,
-                }
+                if isinstance(idx, cudf.core.index.RangeIndex):
+                    descr = {
+                        "kind": "range",
+                        "name": table.index.name,
+                        "start": table.index._start,
+                        "stop": table.index._stop,
+                        "step": 1,
+                    }
+                else:
+                    index_arrow = idx.to_arrow()
+                    descr = name
+                    types.append(index_arrow.type)
+                    col_names.append(name)
+                    index_levels.append(idx)
+                index_descriptors.append(descr)
             else:
-                index_arrow = idx.to_arrow()
-                descr = name
-                types.append(index_arrow.type)
                 col_names.append(name)
-                index_levels.append(idx)
-            index_descriptors.append(descr)
 
     metadata = pa.pandas_compat.construct_metadata(
         table,
@@ -144,7 +150,7 @@ cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
 
     return df
 
-cpdef write_parquet_libcudf(
+cpdef write_parquet(
         Table table,
         path,
         index=None,
@@ -174,7 +180,11 @@ cpdef write_parquet_libcudf(
             for idx_name in table._index.names:
                 column_names.push_back(str.encode(idx_name))
         else:
-            column_names.push_back(str.encode(table._index.name))
+            if table._index.name is not None:
+                column_names.push_back(str.encode(table._index.name))
+            else:
+                # No named index exists so just write out columns
+                tv = table.data_view()
 
     for col_name in table._column_names:
         column_names.push_back(str.encode(col_name))
@@ -214,4 +224,4 @@ cpdef write_parquet_libcudf(
                                   tbl_meta.get(),
                                   comp_type,
                                   stat_freq)
-        write_parquet(args)
+        parquet_writer(args)

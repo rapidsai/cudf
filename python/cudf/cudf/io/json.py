@@ -32,7 +32,7 @@ def read_json(
         path_or_buf, compression, (BytesIO, StringIO), **kwargs
     )
     if engine == "cudf":
-        df = libjson.read_json_libcudf(
+        df = libjson.read_json(
             path_or_buf, dtype, lines, compression, byte_range
         )
     else:

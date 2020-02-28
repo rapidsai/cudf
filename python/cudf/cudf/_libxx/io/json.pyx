@@ -9,7 +9,11 @@
 import cudf
 from cudf._libxx.lib cimport *
 from cudf._libxx.table cimport *
-from cudf._libxx.io.functions cimport *
+from cudf._libxx.io.types cimport *
+from cudf._libxx.io.functions cimport (
+    read_json as cpp_read_json,
+    read_json_args
+)
 
 from libcpp.string cimport string
 from libcpp.memory cimport unique_ptr
@@ -21,8 +25,8 @@ import collections.abc as abc
 import os
 
 
-cpdef read_json_libcudf(filepath_or_buffer, dtype,
-                        lines, compression, byte_range):
+cpdef read_json(filepath_or_buffer, dtype,
+                lines, compression, byte_range):
     """
     Cython function to call into libcudf API, see `read_json`.
 
@@ -86,7 +90,7 @@ cpdef read_json_libcudf(filepath_or_buffer, dtype,
     cdef table_with_metadata c_out_table
 
     with nogil:
-        c_out_table = move(read_json(args))
+        c_out_table = move(cpp_read_json(args))
 
     column_names = list(c_out_table.metadata.column_names)
     column_names = [x.decode() for x in column_names]
