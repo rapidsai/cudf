@@ -25,9 +25,17 @@ import java.util.Arrays;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
 
-import static ai.rapids.cudf.QuantileMethod.*;
+import static ai.rapids.cudf.QuantileMethod.HIGHER;
+import static ai.rapids.cudf.QuantileMethod.LINEAR;
+import static ai.rapids.cudf.QuantileMethod.LOWER;
+import static ai.rapids.cudf.QuantileMethod.MIDPOINT;
+import static ai.rapids.cudf.QuantileMethod.NEAREST;
 import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class ColumnVectorTest extends CudfTestBase {
@@ -58,38 +66,16 @@ public class ColumnVectorTest extends CudfTestBase {
     try (ColumnVector cv = ColumnVector.fromBoxedInts(2,3,null,4);
          ColumnVector cv1 = cv.transform(ptx, true);
          ColumnVector expected = ColumnVector.fromBoxedInts(2*2-2, 3*3-3, null, 4*4-4)) {
-      for (int i = 0 ; i < cv1.getRowCount() ; i++) {
-        cv1.ensureOnHost();
-        assertEquals(expected.isNull(i), cv1.isNull(i));
-        if (!expected.isNull(i)) {
-          assertEquals(expected.getInt(i), cv1.getInt(i));
-        }
-      }
+      TableTest.assertColumnsAreEqual(expected, cv1);
     }
   }
 
   @Test
   void testStringCreation() {
     try (ColumnVector cv = ColumnVector.fromStrings("d", "sd", "sde", null, "END");
-         ColumnVector orig = ColumnVector.fromStrings("d", "sd", "sde", null, "END")) {
-      TableTest.assertColumnsAreEqual(orig, cv);
-      cv.dropHostData();
-      cv.ensureOnHost();
-      TableTest.assertColumnsAreEqual(orig, cv);
-    }
-  }
-
-  @Test
-  void testDataMovement() {
-    try (ColumnVector vec = ColumnVector.fromBoxedInts(1, 2, 3, 4, null, 6)) {
-      assert vec.hasDeviceData();
-      assert vec.hasHostData();
-      vec.dropHostData();
-      assert !vec.hasHostData();
-      assert vec.hasDeviceData();
-      vec.dropDeviceData();
-      assert vec.hasHostData();
-      assert !vec.hasDeviceData();
+         HostColumnVector host = cv.copyToHost();
+         ColumnVector backAgain = host.copyToDevice()) {
+      TableTest.assertColumnsAreEqual(cv, backAgain);
     }
   }
 
@@ -121,14 +107,9 @@ public class ColumnVectorTest extends CudfTestBase {
     try (ColumnVector v0 = ColumnVector.fromInts(1, 2, 3, 4);
          ColumnVector v1 = ColumnVector.fromInts(5, 6, 7);
          ColumnVector v2 = ColumnVector.fromInts(8, 9);
-         ColumnVector v = ColumnVector.concatenate(v0, v1, v2)) {
-      v.ensureOnHost();
-      assertEquals(9, v.getRowCount());
-      assertFalse(v.hasNulls());
-      assertFalse(v.hasValidityVector());
-      for (int i = 0; i < 9; ++i) {
-        assertEquals(i + 1, v.getInt(i), "at index " + i);
-      }
+         ColumnVector v = ColumnVector.concatenate(v0, v1, v2);
+         ColumnVector expected = ColumnVector.fromInts(1, 2, 3, 4, 5, 6, 7, 8, 9)) {
+      TableTest.assertColumnsAreEqual(expected, v);
     }
   }
 
@@ -137,18 +118,9 @@ public class ColumnVectorTest extends CudfTestBase {
     try (ColumnVector v0 = ColumnVector.fromDoubles(1, 2, 3, 4);
          ColumnVector v1 = ColumnVector.fromDoubles(5, 6, 7);
          ColumnVector v2 = ColumnVector.fromBoxedDoubles(null, 9.0);
-         ColumnVector v = ColumnVector.concatenate(v0, v1, v2)) {
-      v.ensureOnHost();
-      assertEquals(9, v.getRowCount());
-      assertTrue(v.hasNulls());
-      assertTrue(v.hasValidityVector());
-      for (int i = 0; i < 9; ++i) {
-        if (i != 7) {
-          assertEquals(i + 1, v.getDouble(i), "at index " + i);
-        } else {
-          assertTrue(v.isNull(i), "at index " + i);
-        }
-      }
+         ColumnVector v = ColumnVector.concatenate(v0, v1, v2);
+         ColumnVector expected = ColumnVector.fromBoxedDoubles(1., 2., 3., 4., 5., 6., 7., null, 9.)) {
+      TableTest.assertColumnsAreEqual(expected, v);
     }
   }
 
@@ -446,7 +418,7 @@ public class ColumnVectorTest extends CudfTestBase {
   void testGetNativeView() {
     try (ColumnVector cv = ColumnVector.fromInts(1, 3, 4, 5)) {
       //not a real test whats being returned is a view but this is the best we can do
-      assertNotEquals(0, cv.getNativeView());
+      assertNotEquals(0L, cv.getNativeView());
     }
   }
 
@@ -565,13 +537,13 @@ public class ColumnVectorTest extends CudfTestBase {
         continue;
       }
       try (Scalar s = Scalar.fromNull(type);
-           ColumnVector c = ColumnVector.fromScalar(s, rowCount)) {
+           ColumnVector c = ColumnVector.fromScalar(s, rowCount);
+           HostColumnVector hc = c.copyToHost()) {
         assertEquals(type, c.getType());
         assertEquals(rowCount, c.getRowCount());
         assertEquals(rowCount, c.getNullCount());
-        c.ensureOnHost();
         for (int i = 0; i < rowCount; ++i) {
-          assertTrue(c.isNull(i));
+          assertTrue(hc.isNull(i));
         }
       }
     }
@@ -581,10 +553,10 @@ public class ColumnVectorTest extends CudfTestBase {
   void testFromScalarNullByte() {
     int numNulls = 3000;
     try (Scalar s = Scalar.fromNull(DType.INT8);
-         ColumnVector input = ColumnVector.fromScalar(s, numNulls)) {
+         ColumnVector tmp = ColumnVector.fromScalar(s, numNulls);
+         HostColumnVector input = tmp.copyToHost()) {
       assertEquals(numNulls, input.getRowCount());
       assertEquals(input.getNullCount(), numNulls);
-      input.ensureOnHost();
       for (int i = 0; i < numNulls; i++){
         assertTrue(input.isNull(i));
       }
@@ -732,17 +704,17 @@ public class ColumnVectorTest extends CudfTestBase {
       try {
         for (int i = 0; i < slices.length; i++) {
           final int sliceIndex = i;
-          ColumnVector slice = slices[sliceIndex];
-          slice.ensureOnHost();
-          assertEquals(expectedSlice[sliceIndex].length, slices[sliceIndex].getRowCount());
-          IntStream.range(0, expectedSlice[sliceIndex].length).forEach(rowCount -> {
-            if (expectedSlice[sliceIndex][rowCount] == null) {
-              assertTrue(slices[sliceIndex].isNull(rowCount));
-            } else {
-              assertEquals(expectedSlice[sliceIndex][rowCount],
-                  slices[sliceIndex].getInt(rowCount));
-            }
-          });
+          try (HostColumnVector slice = slices[sliceIndex].copyToHost()) {
+            assertEquals(expectedSlice[sliceIndex].length, slices[sliceIndex].getRowCount());
+            IntStream.range(0, expectedSlice[sliceIndex].length).forEach(rowCount -> {
+              if (expectedSlice[sliceIndex][rowCount] == null) {
+                assertTrue(slice.isNull(rowCount));
+              } else {
+                assertEquals(expectedSlice[sliceIndex][rowCount],
+                    slice.getInt(rowCount));
+              }
+            });
+          }
         }
         assertEquals(4, slices.length);
       } finally {
@@ -768,17 +740,17 @@ public class ColumnVectorTest extends CudfTestBase {
       try {
         for (int i = 0; i < slices.length; i++) {
           final int sliceIndex = i;
-          ColumnVector slice = slices[sliceIndex];
-          slice.ensureOnHost();
-          assertEquals(expectedSlice[sliceIndex].length, slices[sliceIndex].getRowCount());
-          IntStream.range(0, expectedSlice[sliceIndex].length).forEach(rowCount -> {
-            if (expectedSlice[sliceIndex][rowCount] == null) {
-              assertTrue(slices[sliceIndex].isNull(rowCount));
-            } else {
-              assertEquals(expectedSlice[sliceIndex][rowCount],
-                  slices[sliceIndex].getJavaString(rowCount));
-            }
-          });
+          try (HostColumnVector slice = slices[sliceIndex].copyToHost()) {
+            assertEquals(expectedSlice[sliceIndex].length, slices[sliceIndex].getRowCount());
+            IntStream.range(0, expectedSlice[sliceIndex].length).forEach(rowCount -> {
+              if (expectedSlice[sliceIndex][rowCount] == null) {
+                assertTrue(slice.isNull(rowCount));
+              } else {
+                assertEquals(expectedSlice[sliceIndex][rowCount],
+                    slice.getJavaString(rowCount));
+              }
+            });
+          }
         }
         assertEquals(3, slices.length);
       } finally {
@@ -806,15 +778,15 @@ public class ColumnVectorTest extends CudfTestBase {
       try {
         assertEquals(expectedData.length, splits.length);
         for (int splitIndex = 0; splitIndex < splits.length; splitIndex++) {
-          ColumnVector subVec = splits[splitIndex];
-          subVec.ensureOnHost();
-          assertEquals(expectedData[splitIndex].length, subVec.getRowCount());
-          for (int subIndex = 0; subIndex < expectedData[splitIndex].length; subIndex++) {
-            Integer expected = expectedData[splitIndex][subIndex];
-            if (expected == null) {
-              assertTrue(subVec.isNull(subIndex));
-            } else {
-              assertEquals(expected, subVec.getInt(subIndex));
+          try (HostColumnVector subVec = splits[splitIndex].copyToHost()) {
+            assertEquals(expectedData[splitIndex].length, subVec.getRowCount());
+            for (int subIndex = 0; subIndex < expectedData[splitIndex].length; subIndex++) {
+              Integer expected = expectedData[splitIndex][subIndex];
+              if (expected == null) {
+                assertTrue(subVec.isNull(subIndex));
+              } else {
+                assertEquals(expected, subVec.getInt(subIndex));
+              }
             }
           }
         }
@@ -837,7 +809,7 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testAppendStrings() {
-    try (ColumnVector cv = ColumnVector.build(DType.STRING, 10, 0, (b) -> {
+    try (HostColumnVector cv = HostColumnVector.build(10, 0, (b) -> {
       b.append("123456789");
       b.append("1011121314151617181920");
       b.append("");
@@ -854,33 +826,18 @@ public class ColumnVectorTest extends CudfTestBase {
   @Test
   void testStringLengths() {
     try (ColumnVector cv = ColumnVector.fromStrings("1", "12", null, "123", "1234");
-      ColumnVector lengths = cv.getLengths()) {
-      lengths.ensureOnHost();
-      assertEquals(5, lengths.getRowCount());
-      for (int i = 0 ; i < lengths.getRowCount() ; i++) {
-        if (cv.isNull(i)) {
-          assertTrue(lengths.isNull(i));
-        } else {
-          assertEquals(cv.getJavaString(i).length(), lengths.getInt(i));
-        }
-      }
+      ColumnVector lengths = cv.getLengths();
+      ColumnVector expected = ColumnVector.fromBoxedInts(1, 2, null, 3, 4)) {
+      TableTest.assertColumnsAreEqual(expected, lengths);
     }
   }
 
   @Test
   void testGetByteCount() {
     try (ColumnVector cv = ColumnVector.fromStrings("1", "12", "123", null, "1234");
-         ColumnVector byteLengthVector = cv.getByteCount()) {
-      byteLengthVector.ensureOnHost();
-      assertEquals(5, byteLengthVector.getRowCount());
-      for (int i = 0; i < byteLengthVector.getRowCount(); i++) {
-        if (cv.isNull(i)) {
-          assertTrue(byteLengthVector.isNull(i));
-        } else {
-          assertEquals(cv.getJavaString(i).length(), byteLengthVector.getInt(i));
-
-        }
-      }
+         ColumnVector byteLengthVector = cv.getByteCount();
+         ColumnVector expected = ColumnVector.fromBoxedInts(1, 2, 3, null, 4)) {
+      TableTest.assertColumnsAreEqual(expected, byteLengthVector);
     }
   }
 

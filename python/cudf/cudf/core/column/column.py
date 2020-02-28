@@ -1065,7 +1065,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
 
         elif data.dtype.kind == "M":
             null = column_empty_like(data, masked=True, newsize=1)
-            col = libcudf.replace.replace(
+            col = libcudfxx.replace.replace(
                 as_column(Buffer(arbitrary), dtype=arbitrary.dtype),
                 as_column(
                     Buffer(np.array([np.datetime64("NaT")], dtype=data.dtype)),
