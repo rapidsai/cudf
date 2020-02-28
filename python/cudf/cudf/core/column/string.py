@@ -130,7 +130,7 @@ class StringMethods(object):
 
     def __dir__(self):
         keys = dir(type(self))
-        return set(keys + dir(self._parent.nvstrings))
+        return set(keys + dir(self._column.nvstrings))
 
     def len(self, **kwargs):
         """
