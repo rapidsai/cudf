@@ -1,5 +1,7 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+
 import warnings
+from distutils.version import LooseVersion
 
 import numpy as np
 import pandas as pd
@@ -29,6 +31,8 @@ from dask_cudf.accessor import (
     CategoricalAccessor,
     DatetimeAccessor,
 )
+
+DASK_VERSION = LooseVersion(dask.__version__)
 
 
 def optimize(dsk, keys, **kwargs):
@@ -635,12 +639,14 @@ for name in [
     "rpow",
 ]:
     meth = getattr(cudf.DataFrame, name)
-    DataFrame._bind_operator_method(name, meth)
+    kwargs = {"original": cudf.DataFrame} if DASK_VERSION >= "2.11.1" else {}
+    DataFrame._bind_operator_method(name, meth, **kwargs)
 
     meth = getattr(cudf.Series, name)
-    Series._bind_operator_method(name, meth)
+    kwargs = {"original": cudf.Series} if DASK_VERSION >= "2.11.1" else {}
+    Series._bind_operator_method(name, meth, **kwargs)
 
 for name in ["lt", "gt", "le", "ge", "ne", "eq"]:
-
     meth = getattr(cudf.Series, name)
-    Series._bind_comparison_method(name, meth)
+    kwargs = {"original": cudf.Series} if DASK_VERSION >= "2.11.1" else {}
+    Series._bind_comparison_method(name, meth, **kwargs)
