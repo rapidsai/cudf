@@ -55,7 +55,7 @@ std::unique_ptr<column> make_empty_column(data_type type);
  * allocation of the column's `data` and `null_mask`.
  */
 std::unique_ptr<column> make_numeric_column(
-    data_type type, size_type size, mask_state state = UNALLOCATED,
+    data_type type, size_type size, mask_state state = mask_state::UNALLOCATED,
     cudaStream_t stream = 0,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
@@ -109,7 +109,7 @@ std::unique_ptr<column> make_numeric_column(
  * allocation of the column's `data` and `null_mask`.
  */
 std::unique_ptr<column> make_timestamp_column(
-    data_type type, size_type size, mask_state state = UNALLOCATED,
+    data_type type, size_type size, mask_state state = mask_state::UNALLOCATED,
     cudaStream_t stream = 0,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
@@ -163,7 +163,7 @@ std::unique_ptr<column> make_timestamp_column(
  * allocation of the column's `data` and `null_mask`.
  */
 std::unique_ptr<column> make_fixed_width_column(
-    data_type type, size_type size, mask_state state = UNALLOCATED,
+    data_type type, size_type size, mask_state state = mask_state::UNALLOCATED,
     cudaStream_t stream = 0,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 

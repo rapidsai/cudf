@@ -101,5 +101,21 @@ TYPED_TEST(groupby_min_test, null_keys_and_values)
 }
 
 
+struct groupby_min_string_test : public cudf::test::BaseFixture {};
+
+TEST_F(groupby_min_string_test, basic)
+{
+    using K = int32_t;
+
+    fixed_width_column_wrapper<K> keys        {     1,     2,    3,     1,     2,     2,     1,    3,    3,    2 };
+    strings_column_wrapper        vals        { "año", "bit", "₹1", "aaa", "zit", "bat", "aaa", "$1", "₹1", "wut"};
+
+    fixed_width_column_wrapper<K> expect_keys {     1,     2,    3 };
+    strings_column_wrapper        expect_vals({ "aaa", "bat", "$1" });
+
+    auto agg = cudf::experimental::make_min_aggregation();
+    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+}
+
 } // namespace test
 } // namespace cudf

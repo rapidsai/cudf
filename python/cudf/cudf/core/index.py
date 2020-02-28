@@ -96,17 +96,30 @@ class Index(Frame):
         return idx_typ(index, name=name)
 
     @property
+    def names(self):
+        return (self.name,)
+
+    @names.setter
+    def names(self, values):
+        if not pd.api.types.is_list_like(values):
+            raise ValueError("Names must be a list-like")
+
+        num_values = len(values)
+        if num_values > 1:
+            raise ValueError(
+                "Length of new names must be 1, got %d" % num_values
+            )
+
+        self.name = values[0]
+
+    @property
     def name(self):
-        return next(iter(self._data.keys()))
+        return next(iter(self._data.names))
 
     @name.setter
     def name(self, value):
         col = self._data.pop(self.name)
         self._data[value] = col
-
-    @property
-    def names(self):
-        return (self.name,)
 
     def dropna(self):
         """
@@ -473,7 +486,7 @@ class Index(Frame):
             raise ValueError("Cannot construct Index from any empty Table")
         if table._num_columns == 1:
             return as_index(
-                next(iter(table._data.values())),
+                next(iter(table._data.columns)),
                 name=next(iter(table._data.keys())),
             )
         else:
@@ -530,9 +543,9 @@ class RangeIndex(Index):
 
     @property
     def _data(self):
-        from cudf.utils.utils import OrderedColumnDict
+        from cudf.core.column_accessor import ColumnAccessor
 
-        return OrderedColumnDict({self.name: self._values})
+        return ColumnAccessor({self.name: self._values})
 
     def __contains__(self, item):
         if not isinstance(
@@ -772,7 +785,7 @@ class GenericIndex(Index):
 
     @property
     def _values(self):
-        return next(iter(self._data.values()))
+        return next(iter(self._data.columns))
 
     def copy(self, deep=True):
         result = as_index(self._values.copy(deep=deep))
@@ -841,27 +854,6 @@ class GenericIndex(Index):
             end = col.find_last_value(last, closest=True)
             end += 1
         return begin, end
-
-    def searchsorted(self, value, side="left"):
-        """Find indices where elements should be inserted to maintain order
-
-        Parameters
-        ----------
-        value : Column
-            Column of values to search for
-        side : str {‘left’, ‘right’} optional
-            If ‘left’, the index of the first suitable location found is given.
-            If ‘right’, return the last such index
-
-        Returns
-        -------
-        An index series of insertion points with the same shape as value
-        """
-        from cudf.core.series import Series
-
-        idx_series = Series(self, name=self.name)
-        result = idx_series.searchsorted(value, side)
-        return as_index(result)
 
     @property
     def is_unique(self):
@@ -1075,13 +1067,13 @@ def as_index(arbitrary, **kwargs):
     elif isinstance(arbitrary, cudf.Series):
         return as_index(arbitrary._column, **kwargs)
     elif isinstance(arbitrary, pd.RangeIndex):
-        return RangeIndex(
-            start=arbitrary._start, stop=arbitrary._stop, **kwargs
-        )
+        return RangeIndex(start=arbitrary.start, stop=arbitrary.stop, **kwargs)
     elif isinstance(arbitrary, pd.MultiIndex):
         return cudf.MultiIndex.from_pandas(arbitrary)
-    else:
-        return as_index(column.as_column(arbitrary), **kwargs)
+    elif isinstance(arbitrary, range):
+        if arbitrary.step == 1:
+            return RangeIndex(arbitrary.start, arbitrary.stop, **kwargs)
+    return as_index(column.as_column(arbitrary), **kwargs)
 
 
 def _setdefault_name(values, kwargs):
