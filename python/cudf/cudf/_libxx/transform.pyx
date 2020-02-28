@@ -34,10 +34,11 @@ def bools_to_mask(Column col):
 def nans_to_nulls(Column input):
     cdef column_view c_input = input.view()
     cdef pair[unique_ptr[device_buffer], size_type] c_output
+    cdef unique_ptr[device_buffer] c_buffer
 
     with nogil:
-        c_output = move(libcudf_transform.nans_to_nulls(c_input))
-        c_buffer = move(c_output.first)
+        c_buffer = move(libcudf_transform.nans_to_nulls(c_input).first)
+        # c_buffer = move(c_output.first)
 
     buffer = DeviceBuffer.c_from_unique_ptr(move(c_buffer))
     buffer = Buffer(buffer)

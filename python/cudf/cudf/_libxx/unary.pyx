@@ -3,14 +3,22 @@
 from enum import IntEnum
 
 from cudf._libxx.column cimport Column
-from cudf._libxx.lib cimport *
+from cudf._libxx.lib cimport (
+    column_view,
+    column,
+    data_type,
+    move,
+    np,
+    type_id,
+    unique_ptr,
+)
 from cudf._libxx.lib import np_to_cudf_types
 from cudf._libxx.includes.unary cimport (
     underlying_type_t_unary_op,
     unary_op
 )
 
-cimport cudf._libxx.includes.unary as cpp_unary
+cimport cudf._libxx.includes.unary as libcudf_unary
 
 
 class UnaryOp(IntEnum):
@@ -41,10 +49,11 @@ class UnaryOp(IntEnum):
 def unary_operation(Column input, object op):
     cdef column_view c_input = input.view()
     cdef unary_op c_op = <unary_op>(<underlying_type_t_unary_op> op)
+    cdef unique_ptr[column] c_result
 
     with nogil:
         c_result = move(
-            cpp_unary.unary_operation(
+            libcudf_unary.unary_operation(
                 c_input,
                 c_op
             )
@@ -55,46 +64,51 @@ def unary_operation(Column input, object op):
 
 def is_null(Column input):
     cdef column_view c_input = input.view()
+    cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(cpp_unary.is_null(c_input))
+        c_result = move(libcudf_unary.is_null(c_input))
 
     return Column.from_unique_ptr(move(c_result))
 
 
 def is_valid(Column input):
     cdef column_view c_input = input.view()
+    cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(cpp_unary.is_valid(c_input))
+        c_result = move(libcudf_unary.is_valid(c_input))
 
     return Column.from_unique_ptr(move(c_result))
 
 
-# def cast(Column input, object out_type):
-#     cdef column_view c_input = input.view()
-#     cdef type_id tid = np_to_cudf_types[np.dtype(out_type)]
-#     cdef data_type c_dtype = data_type(tid)
+def cast(Column input, object out_type):
+    cdef column_view c_input = input.view()
+    cdef type_id tid = np_to_cudf_types[np.dtype(out_type)]
+    cdef data_type c_dtype = data_type(tid)
+    cdef unique_ptr[column] c_result
 
-#     with nogil:
-#         c_result = move(cpp_unary.cast(c_input, c_dtype))
+    with nogil:
+        c_result = move(libcudf_unary.cast(c_input, c_dtype))
 
-#     return Column.from_unique_ptr(move(c_result))
+    return Column.from_unique_ptr(move(c_result))
 
 
 def is_nan(Column input):
     cdef column_view c_input = input.view()
+    cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(cpp_unary.is_nan(c_input))
+        c_result = move(libcudf_unary.is_nan(c_input))
 
     return Column.from_unique_ptr(move(c_result))
 
 
 def is_non_nan(Column input):
     cdef column_view c_input = input.view()
+    cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(cpp_unary.is_not_nan(c_input))
+        c_result = move(libcudf_unary.is_not_nan(c_input))
 
     return Column.from_unique_ptr(move(c_result))
