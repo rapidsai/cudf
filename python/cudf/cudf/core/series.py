@@ -137,8 +137,12 @@ class Series(Frame):
     @classmethod
     def _from_table(cls, table):
         name = next(iter(table._data.keys()))
-        data = next(iter(table._data.columns))
-        return cls(data=data, index=Index._from_table(table._index), name=name)
+        data = next(iter(table._data.values()))
+        if table._index is None:
+            index = None
+        else:
+            index = Index._from_table(table._index)
+        return cls(data=data, index=index, name=name)
 
     @property
     def _column(self):
@@ -2589,6 +2593,49 @@ class Series(Frame):
         rhs = cudf.DataFrame(index=as_index(index))
         result = lhs.join(rhs, how=how, sort=sort)[0]
         result.index.names = index.names
+        return result
+
+    def merge(self, other):
+        # An inner join shuold return a series containing matching elements
+        # a Left join should return just self
+        # an outer join should return a two column
+        # dataframe containing all elements from both
+        dummy = "name"
+
+        l_name = self.name
+        r_name = other.name
+        lhs = self.copy(deep=False)
+        rhs = other.copy(deep=False)
+
+        if l_name is None and r_name is not None:
+            lhs.name = r_name
+            left_on = right_on = r_name
+        elif r_name is None and l_name is not None:
+            rhs.name = l_name
+            left_on = right_on = l_name
+        elif l_name is None and r_name is None:
+            lhs.name = dummy
+            rhs.name = dummy
+            left_on = right_on = dummy
+        elif l_name is not None and r_name is not None:
+            left_on = l_name
+            right_on = r_name
+
+        result = super(Series, lhs)._merge(
+            rhs,
+            left_on=left_on,
+            right_on=right_on,
+            how="inner",
+            left_index=False,
+            right_index=False,
+            on=None,
+            lsuffix=None,
+            rsuffix=None,
+            method="hash",
+        )
+
+        result.name = other.name
+
         return result
 
 
