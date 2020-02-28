@@ -1,12 +1,13 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
-
 import numpy as np
 
 from . import (
     copying,
     hash,
+    join,
     merge,
     null_mask,
+    quantiles,
     replace,
     rolling,
     search,

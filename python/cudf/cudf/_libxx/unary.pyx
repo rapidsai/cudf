@@ -2,23 +2,30 @@
 
 from enum import IntEnum
 
+from libcpp.memory cimport unique_ptr
+import numpy as np
+
 from cudf._libxx.column cimport Column
-from cudf._libxx.lib cimport (
-    column_view,
-    column,
-    data_type,
-    move,
-    np,
-    type_id,
-    unique_ptr,
+from cudf._libxx.cpp.column.column cimport (
+    column
 )
+from cudf._libxx.cpp.column.column_view cimport (
+    column_view, mutable_column_view
+)
+from cudf._libxx.types import np_to_cudf_types
+from cudf._libxx.cpp.types cimport (
+    type_id,
+    data_type
+)
+from cudf._libxx.move cimport move
+from cudf._libxx.column import np_to_cudf_types, cudf_to_np_types
 from cudf._libxx.lib import np_to_cudf_types
-from cudf._libxx.includes.unary cimport (
+from cudf._libxx.cpp.unary cimport (
     underlying_type_t_unary_op,
     unary_op
 )
 
-cimport cudf._libxx.includes.unary as libcudf_unary
+cimport cudf._libxx.cpp.unary as libcudf_unary
 
 
 class UnaryOp(IntEnum):

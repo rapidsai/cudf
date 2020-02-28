@@ -648,7 +648,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_groupByAggregate(
     }
 
     cudf::table_view n_keys_table(n_keys_cols);
-    cudf::experimental::groupby::groupby grouper(n_keys_table, ignore_null_keys);
+    cudf::experimental::groupby::groupby grouper(n_keys_table,
+            ignore_null_keys ? cudf::include_nulls::NO : cudf::include_nulls::YES);
 
     // Aggregates are passed in already grouped by column, so we just need to fill it in
     // as we go.
