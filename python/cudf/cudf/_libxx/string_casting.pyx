@@ -12,18 +12,28 @@ from cudf.core.column.column import as_column
 from cudf._libxx.cpp.column.column cimport column
 from cudf._libxx.cpp.column.column_view cimport column_view
 from cudf._libxx.cpp.scalar.scalar cimport string_scalar
-from cudf._libxx.cpp.strings.convert cimport (
+from cudf._libxx.cpp.strings.convert.convert_booleans cimport (
     to_booleans as cpp_to_booleans,
-    from_booleans as cpp_from_booleans,
+    from_booleans as cpp_from_booleans
+)
+from cudf._libxx.cpp.strings.convert.convert_datetime cimport (
+    to_timestamps as cpp_to_timestamps,
+    from_timestamps as cpp_from_timestamps
+)
+from cudf._libxx.cpp.strings.convert.convert_floats cimport (
+    to_floats as cpp_to_floats,
+    from_floats as cpp_from_floats
+)
+from cudf._libxx.cpp.strings.convert.convert_integers cimport (
     to_integers as cpp_to_integers,
     from_integers as cpp_from_integers,
-    to_floats as cpp_to_floats,
-    from_floats as cpp_from_floats,
-    to_timestamps as cpp_to_timestamps,
-    from_timestamps as cpp_from_timestamps,
-    hex_to_integers as cpp_hex_to_integers,
+    hex_to_integers as cpp_hex_to_integers
+)
+from cudf._libxx.cpp.strings.convert.convert_ipv4 cimport (
     ipv4_to_integers as cpp_ipv4_to_integers,
-    integers_to_ipv4 as cpp_integers_to_ipv4,
+    integers_to_ipv4 as cpp_integers_to_ipv4
+)
+from cudf._libxx.cpp.strings.convert.convert_urls cimport (
     url_encode as cpp_url_encode,
     url_decode as cpp_url_decode
 )
@@ -67,7 +77,6 @@ def dtos(Column input_col, **kwargs):
 
     Parameters:
     -----------
-
     input_col : input column of type double
 
     Returns
@@ -84,7 +93,6 @@ def stod(Column input_col, **kwargs):
 
     Parameters:
     -----------
-
     input_col : input column of type string
 
     Returns
@@ -101,7 +109,6 @@ def ftos(Column input_col, **kwargs):
 
     Parameters:
     -----------
-
     input_col : input column of type double
 
     Returns
@@ -118,7 +125,6 @@ def stof(Column input_col, **kwargs):
 
     Parameters:
     -----------
-
     input_col : input column of type string
 
     Returns
@@ -160,12 +166,11 @@ def i8tos(Column input_col, **kwargs):
 
     Parameters:
     -----------
-
     input_col : input column of type int8
 
     Returns
     -------
-    A Column with int32 values cast to string
+    A Column with int8 values cast to string
     """
 
     return integer_to_string(input_col)
@@ -177,7 +182,6 @@ def stoi8(Column input_col, **kwargs):
 
     Parameters:
     -----------
-
     input_col : input column of type string
 
     Returns
@@ -194,12 +198,11 @@ def i16tos(Column input_col, **kwargs):
 
     Parameters:
     -----------
-
     input_col : input column of type int16
 
     Returns
     -------
-    A Column with int32 values cast to string
+    A Column with int16 values cast to string
     """
 
     return integer_to_string(input_col)
@@ -211,7 +214,6 @@ def stoi16(Column input_col, **kwargs):
 
     Parameters:
     -----------
-
     input_col : input column of type string
 
     Returns
@@ -228,7 +230,6 @@ def itos(Column input_col, **kwargs):
 
     Parameters:
     -----------
-
     input_col : input column of type int32
 
     Returns
@@ -245,7 +246,6 @@ def stoi(Column input_col, **kwargs):
 
     Parameters:
     -----------
-
     input_col : input column of type string
 
     Returns
@@ -262,7 +262,6 @@ def ltos(Column input_col, **kwargs):
 
     Parameters:
     -----------
-
     input_col : input column of type int64
 
     Returns
@@ -279,7 +278,6 @@ def stol(Column input_col, **kwargs):
 
     Parameters:
     -----------
-
     input_col : input column of type string
 
     Returns
@@ -296,7 +294,6 @@ def _to_booleans(Column input_col, Scalar str_true=Scalar("True")):
 
     Parameters:
     -----------
-
     input_col : input column of type string
     str_true : string that represents True
 
@@ -332,7 +329,6 @@ def _from_booleans(
 
     Parameters:
     -----------
-
     input_col : input column of type boolean
     str_true : string that represents True
     str_false : string that represents False
@@ -372,7 +368,6 @@ def int2timestamp(
 
     Parameters:
     -----------
-
     input_col : input column of type timestamp in integer format
 
     Returns
@@ -403,7 +398,6 @@ def timestamp2int(
 
     Parameters:
     -----------
-
     input_col : input column of type string
 
     Returns
@@ -434,7 +428,6 @@ def int2ip(Column input_col, **kwargs):
 
     Parameters:
     -----------
-
     input_col : input integer column
 
     Returns
@@ -458,7 +451,6 @@ def ip2int(Column input_col, **kwargs):
 
     Parameters:
     -----------
-
     input_col : input string column
 
     Returns
@@ -483,7 +475,6 @@ def htoi(Column input_col, **kwargs):
 
     Parameters:
     -----------
-
     input_col : input column of type string
     out_type : The type of integer column expected
 
@@ -514,7 +505,6 @@ def url_encode(Column input_col, **kwargs):
 
     Parameters:
     -----------
-
     input_col : input column of type string
 
     Returns
@@ -538,7 +528,6 @@ def url_decode(Column input_col, **kwargs):
 
     Parameters:
     -----------
-
     input_col : input column of type string
 
     Returns
