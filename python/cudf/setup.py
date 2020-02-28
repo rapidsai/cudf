@@ -80,7 +80,6 @@ setup(
     ext_modules=cythonize(
         extensions,
         nthreads=nthreads,
-        language="c++",
         compiler_directives=dict(
             profile=False, language_level=3, embedsignature=True
         ),
