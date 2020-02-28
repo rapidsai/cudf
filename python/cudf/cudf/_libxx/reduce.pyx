@@ -1,7 +1,8 @@
-from cudf._libxx.includes.reduce cimport cpp_reduce
+from cudf._libxx.cpp.reduce cimport cpp_reduce
 from cudf._libxx.scalar cimport Scalar
 from cudf._libxx.lib cimport *
 from cudf._libxx.lib import np_to_cudf_types
+from cudf._libxx.move cimport *
 from libcpp.memory cimport unique_ptr
 from cudf._libxx.column cimport Column, column_view
 from cudf._libxx.aggregation cimport get_aggregation, aggregation
