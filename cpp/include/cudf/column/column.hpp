@@ -312,31 +312,4 @@ class column {
                     ///< columns may contain additional data
 };
 
-// Allow strategy switching at runtime for easier benchmarking
-// TODO remove when done
-enum class concatenate_mode {
-  UNOPTIMIZED,
-  PARTITION_MAP,
-  BINARY_SEARCH,
-};
-void temp_set_concatenate_mode(concatenate_mode mode);
-
-/**---------------------------------------------------------------------------*
- * @brief Concatenates multiple columns into a single column.
- *
- * @throws cudf::logic_error
- * If types of the input columns mismatch
- *
- * @param columns_to_concat The column views to be concatenated into a single
- * column
- * @param mr Optional The resource to use for all allocations
- * @param stream Optional The stream on which to execute all allocations and copies
- * @return Unique pointer to a single table having all the rows from the
- * elements of `columns_to_concat` respectively in the same order.
- *---------------------------------------------------------------------------**/
-std::unique_ptr<column>
-concatenate(std::vector<column_view> const& columns_to_concat,
-            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-            cudaStream_t stream = 0);
-
 }  // namespace cudf

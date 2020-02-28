@@ -321,52 +321,6 @@ __global__ void copy_offset_bitmask(bitmask_type *__restrict__ destination,
   }
 }
 
-/**---------------------------------------------------------------------------*
- * @brief Concatenates the null mask bits of all the column device views in the
- * `views` array to the destination bitmask.
- *
- * @param views Array of column_device_view
- * @param output_offsets Prefix sum of sizes of elements of `views`
- * @param number_of_views Size of `views` array
- * @param dest_mask The output buffer to copy null masks into
- * @param number_of_mask_bits The total number of null masks bits that are being
- * copied
- *---------------------------------------------------------------------------**/
-__global__
-void
-concatenate_masks_kernel(
-    column_device_view const* views,
-    size_type const* output_offsets,
-    size_type number_of_views,
-    bitmask_type* dest_mask,
-    size_type number_of_mask_bits) {
-
-  size_type mask_index = threadIdx.x + blockIdx.x * blockDim.x;
-
-  auto active_mask =
-      __ballot_sync(0xFFFF'FFFF, mask_index < number_of_mask_bits);
-
-  while (mask_index < number_of_mask_bits) {
-    size_type source_view_index = thrust::upper_bound(thrust::seq,
-        output_offsets, output_offsets + number_of_views,
-        mask_index) - output_offsets - 1;
-    bool bit_is_set = 1;
-    if (source_view_index < number_of_views) {
-      size_type column_element_index = mask_index - output_offsets[source_view_index];
-      bit_is_set = views[source_view_index].is_valid(column_element_index);
-    }
-    bitmask_type const new_word = __ballot_sync(active_mask, bit_is_set);
-
-    if (threadIdx.x % experimental::detail::warp_size == 0) {
-      dest_mask[word_index(mask_index)] = new_word;
-    }
-
-    mask_index += blockDim.x * gridDim.x;
-    active_mask =
-        __ballot_sync(active_mask, mask_index < number_of_mask_bits);
-  }
-}
-
 /**
  * @brief Computes the bitwise AND of an array of bitmasks
  * 
@@ -621,52 +575,6 @@ segmented_count_unset_bits(bitmask_type const* bitmask,
   return ret;
 }
 
-// Create a bitmask from a vector of column views
-void concatenate_masks(
-    rmm::device_vector<column_device_view> const& d_views,
-    rmm::device_vector<size_type> const& d_offsets,
-    bitmask_type * dest_mask,
-    size_type output_size,
-    cudaStream_t stream) {
-
-  constexpr size_type block_size{256};
-  cudf::experimental::detail::grid_1d config(output_size, block_size);
-  concatenate_masks_kernel<<<config.num_blocks, config.num_threads_per_block,
-                             0, stream>>>(
-    d_views.data().get(),
-    d_offsets.data().get(),
-    static_cast<size_type>(d_views.size()),
-    dest_mask, output_size);
-}
-
-// Create a bitmask from a vector of column views
-void concatenate_masks(std::vector<column_view> const &views,
-    bitmask_type * dest_mask,
-    cudaStream_t stream) {
-
-  using CDViewPtr =
-    decltype(column_device_view::create(std::declval<column_view>(), std::declval<cudaStream_t>()));
-  std::vector<CDViewPtr> cols;
-  thrust::host_vector<column_device_view> device_views;
-
-  thrust::host_vector<size_type> view_offsets(1, 0);
-  for (auto &v : views) {
-    cols.emplace_back(column_device_view::create(v, stream));
-    device_views.push_back(*(cols.back()));
-    view_offsets.push_back(v.size());
-  }
-  thrust::inclusive_scan(thrust::host,
-      view_offsets.begin(), view_offsets.end(),
-      view_offsets.begin());
-
-  rmm::device_vector<column_device_view> d_views{device_views};
-  rmm::device_vector<size_type> d_offsets{view_offsets};
-
-  auto number_of_mask_bits = view_offsets.back();
-
-  concatenate_masks(d_views, d_offsets, dest_mask, number_of_mask_bits, stream);
-}
-
 }  // namespace detail
 
 // Count non-zero bits in the specified range
@@ -730,26 +638,6 @@ rmm::device_buffer copy_bitmask(column_view const &view, cudaStream_t stream,
     null_mask = copy_bitmask(view.null_mask(), view.offset(),
                              view.offset() + view.size(), stream, mr);
   }
-  return null_mask;
-}
-
-// Create a bitmask from a vector of column views
-rmm::device_buffer concatenate_masks(std::vector<column_view> const &views,
-                                     rmm::mr::device_memory_resource *mr,
-                                     cudaStream_t stream) {
-  rmm::device_buffer null_mask{};
-  bool has_nulls = std::any_of(views.begin(), views.end(),
-                     [](const column_view col) { return col.has_nulls(); });
-  if (has_nulls) {
-   size_type total_element_count =
-     std::accumulate(views.begin(), views.end(), 0,
-         [](auto accumulator, auto const& v) { return accumulator + v.size(); });
-    null_mask = create_null_mask(total_element_count, mask_state::UNINITIALIZED, stream, mr);
-
-    detail::concatenate_masks(
-        views, static_cast<bitmask_type *>(null_mask.data()), stream);
-  }
-
   return null_mask;
 }
 

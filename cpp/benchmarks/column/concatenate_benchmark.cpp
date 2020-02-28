@@ -13,8 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-#include <cudf/column/column.hpp>
+#include <cudf/detail/concatenate.hpp>
 
 #include <tests/utilities/column_wrapper.hpp>
 
@@ -27,10 +26,10 @@
 template <typename T>
 using column_wrapper = cudf::test::fixed_width_column_wrapper<T>;
 
-template <typename T>
+template <typename T, cudf::concatenate_mode Mode>
 class Concatenate : public cudf::benchmark {};
 
-template<typename T>
+template<typename T, cudf::concatenate_mode Mode>
 static void BM_concatenate(benchmark::State& state) {
   auto const num_cols = state.range(0);
   auto const num_rows = state.range(1);
@@ -55,18 +54,20 @@ static void BM_concatenate(benchmark::State& state) {
 
   CHECK_CUDA(0);
 
+  cudf::temp_set_concatenate_mode(Mode);
   for (auto _ : state) {
     cuda_event_timer raii(state, true, 0);
     auto result = cudf::concatenate(column_views);
   }
+  cudf::temp_set_concatenate_mode(cudf::concatenate_mode::UNOPTIMIZED);
 
   state.SetBytesProcessed(state.iterations() * num_cols * num_rows * sizeof(T));
 }
 
-#define CONCAT_BENCHMARK_DEFINE(name, type)           \
-BENCHMARK_TEMPLATE_DEFINE_F(Concatenate, name, type)  \
+#define CONCAT_BENCHMARK_DEFINE(name, type, mode)     \
+BENCHMARK_TEMPLATE_DEFINE_F(Concatenate, name, type, mode)  \
 (::benchmark::State& state) {                         \
-  BM_concatenate<type>(state);                        \
+  BM_concatenate<type, mode>(state);                        \
 }                                                     \
 BENCHMARK_REGISTER_F(Concatenate, name)               \
   ->RangeMultiplier(4)                                \
@@ -74,4 +75,6 @@ BENCHMARK_REGISTER_F(Concatenate, name)               \
   ->Unit(benchmark::kMillisecond)                     \
   ->UseManualTime();
 
-CONCAT_BENCHMARK_DEFINE(concat_columns_int64, int64_t)
+CONCAT_BENCHMARK_DEFINE(concat_columns_int64_unoptimized, int64_t, cudf::concatenate_mode::UNOPTIMIZED)
+CONCAT_BENCHMARK_DEFINE(concat_columns_int64_partition_map, int64_t, cudf::concatenate_mode::PARTITION_MAP)
+CONCAT_BENCHMARK_DEFINE(concat_columns_int64_binary_search, int64_t, cudf::concatenate_mode::BINARY_SEARCH)

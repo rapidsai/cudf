@@ -16,6 +16,7 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/concatenate.hpp>
 #include <cudf/utilities/error.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
