@@ -82,7 +82,7 @@ TYPED_TEST(TypedColumnTest, ConcatenateColumnView) {
     this->num_elements()/2, this->num_elements()};
   std::vector<cudf::column_view> views = cudf::experimental::slice(original, indices);
 
-  cudf::temp_set_concatenate_mode(cudf::concatenate_mode::BINARY_SEARCH);
+  cudf::temp_set_concatenate_mode(cudf::concatenate_mode::FUSED_KERNEL);
   auto concatenated_col = cudf::concatenate(views);
   cudf::temp_set_concatenate_mode(cudf::concatenate_mode::UNOPTIMIZED);
 

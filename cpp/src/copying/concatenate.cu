@@ -107,6 +107,7 @@ void concatenate_masks(std::vector<column_view> const &views,
     bitmask_type * dest_mask,
     cudaStream_t stream) {
 
+  // TODO refactor column_view -> [column_device_view, offsets] into utility function
   using CDViewPtr =
     decltype(column_device_view::create(std::declval<column_view>(), std::declval<cudaStream_t>()));
   std::vector<CDViewPtr> cols;
@@ -126,6 +127,7 @@ void concatenate_masks(std::vector<column_view> const &views,
   rmm::device_vector<size_type> d_offsets{view_offsets};
 
   auto number_of_mask_bits = view_offsets.back();
+  // end refactoring TODO
 
   concatenate_masks(d_views, d_offsets, dest_mask, number_of_mask_bits, stream);
 }
@@ -259,6 +261,7 @@ struct optimized_concatenate {
       cudaStream_t stream) {
     using mask_policy = cudf::experimental::mask_allocation_policy;
 
+    // TODO refactor column_view -> [column_device_view, offsets] into utility function
     // Create device views for each input view
     using CDViewPtr = decltype(column_device_view::create(
         std::declval<column_view>(), std::declval<cudaStream_t>()));
@@ -290,6 +293,7 @@ struct optimized_concatenate {
         thrust::plus<size_type>{});
     auto const d_offsets = rmm::device_vector<size_type>{offsets};
     auto const output_size = offsets.back();
+  // end refactoring TODO
 
     // Transform views to array of data pointers
     auto data_ptrs = thrust::host_vector<T const*>(views.size());
@@ -335,6 +339,124 @@ struct optimized_concatenate {
 
   template <typename ColumnType,
       std::enable_if_t<not is_fixed_width<ColumnType>()>* = nullptr>
+  std::unique_ptr<column> operator()(
+      std::vector<column_view> const& views,
+      rmm::mr::device_memory_resource* mr,
+      cudaStream_t stream) {
+    CUDF_FAIL("non-fixed-width types not yet supported");
+  }
+};
+
+template <typename T>
+__global__
+void
+fused_concatenate_kernel(
+    column_device_view const* input_views,
+    size_type const* input_offsets,
+    size_type input_size,
+    mutable_column_device_view output_view) {
+
+  auto const output_size = output_view.size();
+  auto* output_data = output_view.data<T>();
+
+  size_type output_index = threadIdx.x + blockIdx.x * blockDim.x;
+  auto active_mask = __ballot_sync(0xFFFF'FFFF, output_index < output_size);
+  while (output_index < output_size) {
+
+    // Lookup input index by searching for output index in offsets
+    auto const offset_it = thrust::upper_bound(thrust::seq,
+        input_offsets, input_offsets + input_size, output_index) - 1;
+    size_type const input_index = offset_it - input_offsets;
+
+    // Copy input data to output and read bitmask
+    bool bit_is_set = false;
+    if (input_index < input_size) {
+      auto const offset_index = output_index - *offset_it;
+      auto const& input_view = input_views[input_index];
+      auto const* input_data = input_view.data<T>();
+      output_data[output_index] = input_data[offset_index];
+      bit_is_set = input_view.is_valid(offset_index);
+    }
+
+    // TODO count set bits
+
+    // First thread writes bitmask word
+    bitmask_type const new_word = __ballot_sync(active_mask, bit_is_set);
+    if (threadIdx.x % experimental::detail::warp_size == 0) {
+      output_view.null_mask()[word_index(output_index)] = new_word;
+    }
+
+    output_index += blockDim.x * gridDim.x;
+    active_mask = __ballot_sync(active_mask, output_index < output_size);
+  }
+}
+
+struct fused_concatenate {
+  template <typename T,
+      std::enable_if_t<is_fixed_width<T>()>* = nullptr>
+  std::unique_ptr<column> operator()(
+      std::vector<column_view> const& views,
+      rmm::mr::device_memory_resource* mr,
+      cudaStream_t stream) {
+    using mask_policy = cudf::experimental::mask_allocation_policy;
+
+
+    // TODO refactor column_view -> [column_device_view, offsets] into utility function
+    // Create device views for each input view
+    using CDViewPtr = decltype(column_device_view::create(
+        std::declval<column_view>(), std::declval<cudaStream_t>()));
+    auto device_view_owners = std::vector<CDViewPtr>(views.size());
+    std::transform(views.cbegin(), views.cend(),
+        device_view_owners.begin(),
+        [stream](auto const& col) {
+          return column_device_view::create(col, stream);
+        });
+
+    // Assemble contiguous array of device views
+    auto device_views = thrust::host_vector<column_device_view>();
+    device_views.reserve(views.size());
+    std::transform(device_view_owners.cbegin(), device_view_owners.cend(),
+        std::back_inserter(device_views),
+        [](auto const& col) {
+          return *col;
+        });
+    auto d_views = rmm::device_vector<column_device_view>{device_views};
+
+    // Compute the partition offsets
+    auto offsets = thrust::host_vector<size_type>(views.size() + 1);
+    thrust::transform_inclusive_scan(thrust::host,
+        device_views.cbegin(), device_views.cend(),
+        std::next(offsets.begin()), 
+        [](auto const& col) {
+          return col.size();
+        },
+        thrust::plus<size_type>{});
+    auto const d_offsets = rmm::device_vector<size_type>{offsets};
+    auto const output_size = offsets.back();
+    // end refactoring TODO
+
+
+    // Allocate output; always allocate mask for fused kernel
+    auto out_col = experimental::detail::allocate_like(views.front(),
+        output_size, mask_policy::ALWAYS, mr, stream);
+    auto out_view = out_col->mutable_view();
+    auto d_out_view = mutable_column_device_view::create(out_view, stream);
+
+    // Launch kernel
+    constexpr size_type block_size{256};
+    cudf::experimental::detail::grid_1d config(output_size, block_size);
+    fused_concatenate_kernel<T>
+      <<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
+        d_views.data().get(),
+        d_offsets.data().get(),
+        static_cast<size_type>(d_views.size()),
+        *d_out_view);
+
+    return out_col;
+  }
+
+  template <typename T,
+      std::enable_if_t<not is_fixed_width<T>()>* = nullptr>
   std::unique_ptr<column> operator()(
       std::vector<column_view> const& views,
       rmm::mr::device_memory_resource* mr,
@@ -397,8 +519,13 @@ concatenate(std::vector<column_view> const& columns_to_concat,
 
   data_type type = columns_to_concat.front().type();
   CUDF_EXPECTS(std::all_of(columns_to_concat.begin(), columns_to_concat.end(),
-        [type](auto const& c) { return c.type() == type; }),
+      [type](auto const& c) { return c.type() == type; }),
       "Type mismatch in columns to concatenate.");
+
+  // TODO dispatch to fused kernel if true
+  /*bool const has_nulls = std::any_of(
+      columns_to_concat.begin(), columns_to_concat.end(),
+      [](auto const& col) { return col.has_nulls(); });*/
 
   switch (current_mode) {
     case concatenate_mode::UNOPTIMIZED:
@@ -408,6 +535,9 @@ concatenate(std::vector<column_view> const& columns_to_concat,
     case concatenate_mode::BINARY_SEARCH:
       return experimental::type_dispatcher(type,
           detail::optimized_concatenate{}, columns_to_concat, mr, stream);
+    case concatenate_mode::FUSED_KERNEL:
+      return experimental::type_dispatcher(type,
+          detail::fused_concatenate{}, columns_to_concat, mr, stream);
     default:
       CUDF_FAIL("Invalid concatenate mode");
   }

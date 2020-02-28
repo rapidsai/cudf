@@ -29,6 +29,7 @@ enum class concatenate_mode {
   UNOPTIMIZED,
   PARTITION_MAP,
   BINARY_SEARCH,
+  FUSED_KERNEL,
 };
 void temp_set_concatenate_mode(concatenate_mode mode);
 
