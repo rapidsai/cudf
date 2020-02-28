@@ -1,8 +1,9 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from cudf._libxx.lib import *
-from cudf._libxx.lib cimport *
-from cudf._libxx.aggregation cimport *
+from libcpp.memory cimport unique_ptr
+from cudf._libxx.cpp.types cimport size_type
+from cudf._libxx.cpp.column.column_view cimport column_view
+from cudf._libxx.cpp.column.column cimport column
 
 cdef extern from "cudf/strings/substring.hpp" namespace "cudf::strings" nogil:
     cdef unique_ptr[column] slice_strings(

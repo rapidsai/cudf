@@ -1,10 +1,12 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
-from cudf._libxx.lib cimport *
-from cudf._libxx.lib import *
+from libcpp.memory cimport unique_ptr
+from cudf._libxx.move cimport move
+from cudf._libxx.cpp.column.column_view cimport column_view
+from cudf._libxx.cpp.scalar.scalar cimport string_scalar
+from cudf._libxx.cpp.types cimport size_type
 from cudf._libxx.column cimport Column
 from cudf._libxx.scalar cimport Scalar
-from cudf._libxx.scalar import Scalar
 
 from cudf._libxx.strings.replace cimport (
     replace_slice as cpp_replace_slice
