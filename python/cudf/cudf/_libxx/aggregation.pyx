@@ -30,6 +30,14 @@ cdef unique_ptr[aggregation] get_aggregation(op, kwargs) except *:
         agg = move(make_mean_aggregation())
     elif op == "count":
         agg = move(make_count_aggregation())
+    elif op == "any":
+        agg = move(make_any_aggregation())
+    elif op == "all":
+        agg = move(make_all_aggregation())
+    elif op == "product":
+        agg = move(make_product_aggregation())
+    elif op == "sum_of_squares":
+        agg = move(make_sum_of_squares_aggregation())
     elif callable(op):
         # Handling UDF type
         nb_type = numba.numpy_support.from_dtype(kwargs['dtype'])

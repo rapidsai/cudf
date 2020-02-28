@@ -10,6 +10,7 @@ from . import (
     merge,
     null_mask,
     quantiles,
+    reduce,
     replace,
     rolling,
     search,
