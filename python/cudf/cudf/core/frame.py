@@ -331,10 +331,11 @@ class Frame(libcudfxx.table.Table):
         -------
         The interleaved columns as a single column
         """
-
-        return self._constructor_sliced(
+        result =  self._constructor_sliced(
             libcudfxx.reshape.interleave_columns(self)
         )
+        result._copy_categories(self)
+        return result
 
     def tile(self, count):
         """
@@ -366,6 +367,7 @@ class Frame(libcudfxx.table.Table):
         result = self.__class__._from_table(
             libcudfxx.reshape.tile(self, count)
         )
+        result._copy_categories(self)
         return result
 
     def searchsorted(

@@ -1,10 +1,5 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
-# cython: profile=False
-# distutils: language = c++
-# cython: embedsignature = True
-# cython: language_level = 3
-
 from cudf._libxx.lib cimport *
 from cudf._libxx.column cimport Column
 from cudf._libxx.table cimport Table
@@ -39,6 +34,7 @@ def interleave_columns(Table source_table):
     """
 
     cdef table_view c_view = source_table.data_view()
+    cdef unique_ptr[column] c_result
 
     with nogil:
         c_result = move(cpp_interleave_columns(c_view))
@@ -74,6 +70,7 @@ def tile(Table source_table, size_type count):
     """
     cdef size_type c_count = count
     cdef table_view c_view = source_table.view()
+    cdef unique_ptr[table] c_result
 
     with nogil:
         c_result = move(cpp_tile(c_view, c_count))
