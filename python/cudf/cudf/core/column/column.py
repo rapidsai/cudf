@@ -539,21 +539,10 @@ class ColumnBase(Column):
         """
         return libcudfxx.unary.is_null(self)
 
-    def isna(self):
-        """Identify missing values in a Column. Alias for isnull.
-        """
-        return self.isnull()
-
     def notnull(self):
         """Identify non-missing values in a Column.
         """
         return libcudfxx.unary.is_valid(self)
-        return None
-
-    def notna(self):
-        """Identify non-missing values in a Column. Alias for notnull.
-        """
-        return self.notnull()
 
     def find_first_value(self, value):
         """

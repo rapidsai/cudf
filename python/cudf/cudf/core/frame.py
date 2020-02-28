@@ -304,6 +304,44 @@ class Frame(libcudfxx.table.Table):
             result._data[name] = col.unary_operator(op)
         return result
 
+    def isnull(self):
+        """Identify missing values.
+        """
+        return self._is_null()
+
+    def isna(self):
+        """Identify missing values. Alias for `isnull`
+        """
+        return self._is_null()
+
+    def notnull(self):
+        """Identify missing values.
+        """
+        return self._is_valid()
+
+    def notna(self):
+        """Identify non-missing values. Alias for `notnull`.
+        """
+        return self._is_valid()
+
+    def _is_null(self):
+        result = self.copy()
+        for name, col in result._data.items():
+            result._data[name] = col.isnull()
+        return result
+        # return self.__class__._from_table(
+        #     libcudfxx.unary.is_null(self)
+        # )
+
+    def _is_valid(self):
+        result = self.copy()
+        for name, col in result._data.items():
+            result._data[name] = col.notnull()
+        return result
+        # return self.__class__._from_table(
+        #     libcudfxx.unary.is_valid(self)
+        # )
+
     def searchsorted(
         self, values, side="left", ascending=True, na_position="last"
     ):
