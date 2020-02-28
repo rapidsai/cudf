@@ -1,11 +1,11 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.map cimport map
 from libcpp.vector cimport vector
 from libcpp.pair cimport pair
+cimport cudf._libxx.cpp.table.table as cudf_table
 
 
 cdef extern from "cudf/io/types.hpp" \
@@ -45,7 +45,7 @@ cdef extern from "cudf/io/types.hpp" \
         map[string, string] user_data
 
     cdef cppclass table_with_metadata:
-        unique_ptr[table] tbl
+        unique_ptr[cudf_table.table] tbl
         table_metadata metadata
 
     cdef cppclass source_info:

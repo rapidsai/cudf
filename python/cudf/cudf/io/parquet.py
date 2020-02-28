@@ -5,7 +5,7 @@ import warnings
 import pyarrow.parquet as pq
 
 import cudf
-import cudf._libxx.io.parquet as libparquet
+import cudf._libxx.parquet as libparquet
 from cudf.utils import ioutils
 
 

@@ -2,24 +2,20 @@
 
 # cython: boundscheck = False
 
+from libcpp.string cimport string
+from libcpp.memory cimport unique_ptr
+import collections.abc as abc
+import os
 
-import cudf
-from cudf._libxx.lib cimport *
-from cudf._libxx.table cimport *
-from cudf._libxx.io.types cimport *
-from cudf._libxx.io.functions cimport (
+from cudf._libxx.table cimport Table
+from cudf._libxx.move cimport move
+from cudf._libxx.cpp.io.functions cimport (
     read_json as cpp_read_json,
     read_json_args
 )
+cimport cudf._libxx.cpp.io.types as cudf_io_types
 
-from libcpp.string cimport string
-from libcpp.memory cimport unique_ptr
-
-from cudf._lib.utils cimport *
-from cudf._lib.utils import *
-
-import collections.abc as abc
-import os
+cimport cudf._lib.utils as lib
 
 
 cpdef read_json(filepath_or_buffer, dtype,
@@ -34,8 +30,9 @@ cpdef read_json(filepath_or_buffer, dtype,
     """
 
     # Determine read source
-    cdef source_info source
-    cdef const unsigned char[::1] buffer = view_of_buffer(filepath_or_buffer)
+    cdef cudf_io_types.source_info source
+    cdef const unsigned char[::1] buffer \
+        = lib.view_of_buffer(filepath_or_buffer)
     cdef string filepath
     if buffer is None:
         if os.path.isfile(filepath_or_buffer):
@@ -44,10 +41,10 @@ cpdef read_json(filepath_or_buffer, dtype,
             buffer = filepath_or_buffer.encode()
 
     if buffer is None:
-        source.type = io_type.FILEPATH
+        source.type = cudf_io_types.io_type.FILEPATH
         source.filepath = filepath
     else:
-        source.type = io_type.HOST_BUFFER
+        source.type = cudf_io_types.io_type.HOST_BUFFER
         source.buffer.first = <char*>&buffer[0]
         source.buffer.second = buffer.shape[0]
 
@@ -57,13 +54,13 @@ cpdef read_json(filepath_or_buffer, dtype,
     args.lines = lines
     if compression is not None:
         if compression == 'gzip':
-            args.compression = compression_type.GZIP
+            args.compression = cudf_io_types.compression_type.GZIP
         elif compression == 'bz2':
-            args.compression = compression_type.BZIP2
+            args.compression = cudf_io_types.compression_type.BZIP2
         else:
-            args.compression = compression_type.AUTO
+            args.compression = cudf_io_types.compression_type.AUTO
     else:
-        args.compression = compression_type.NONE
+        args.compression = cudf_io_types.compression_type.NONE
 
     if dtype is False:
         raise ValueError("False value is unsupported for `dtype`")
@@ -84,7 +81,7 @@ cpdef read_json(filepath_or_buffer, dtype,
     args.byte_range_size = c_range_size
 
     # Read JSON
-    cdef table_with_metadata c_out_table
+    cdef cudf_io_types.table_with_metadata c_out_table
 
     with nogil:
         c_out_table = move(cpp_read_json(args))

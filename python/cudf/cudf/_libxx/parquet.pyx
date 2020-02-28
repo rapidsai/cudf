@@ -8,7 +8,7 @@ from cudf._lib.utils cimport *
 from cudf._lib.utils import *
 
 from cudf._libxx.table cimport *
-from cudf._libxx.io.includes.parquet cimport (
+from cudf._libxx.cpp.io.parquet cimport (
     reader as parquet_reader,
     reader_options as parquet_reader_options,
     compression_type,

@@ -16,7 +16,6 @@ from . import (
     join,
     nvtx,
     orc,
-    parquet,
     quantile,
     reduce,
     replace,
