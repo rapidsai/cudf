@@ -137,14 +137,24 @@ def test_df_stack(nulls, num_cols, num_rows, dtype):
 def test_interleave_columns(nulls, num_cols, num_rows, dtype):
     if dtype not in ["float32", "float64"] and nulls in ["some"]:
         pytest.skip(msg="nulls not supported in dtype: " + dtype)
-    
-    broken_shapes = [(1,1), (1,2), (1,10), 
-                     (2,1), (2,2), (2,10), 
-                     (10,1), (10,2), (10,10)]
+
+    broken_shapes = [
+        (1, 1),
+        (1, 2),
+        (1, 10),
+        (2, 1),
+        (2, 2),
+        (2, 10),
+        (10, 1),
+        (10, 2),
+        (10, 10),
+    ]
     if dtype == "category" and (num_cols, num_rows) in broken_shapes:
-        pytest.skip(msg="Some dataframe shapes produce truncated results" 
-                    + "when working with dtype 'category'\n"
-                    + str(broken_shapes))
+        pytest.skip(
+            msg="Some dataframe shapes produce truncated results"
+            + "when working with dtype 'category'\n"
+            + str(broken_shapes)
+        )
 
     pdf = pd.DataFrame(dtype=dtype)
     for i in range(num_cols):
@@ -193,7 +203,9 @@ def test_tile(nulls, num_cols, num_rows, dtype, count):
     pdf = pd.DataFrame(dtype=dtype)
     for i in range(num_cols):
         colname = str(i)
-        data = pd.Series(np.random.randint(num_cols, 26, num_rows)).astype(dtype)
+        data = pd.Series(np.random.randint(num_cols, 26, num_rows)).astype(
+            dtype
+        )
 
         if nulls == "some":
             idx = np.random.choice(
