@@ -49,8 +49,7 @@ std::unique_ptr<column> decode( dictionary_column_view const& source,
     auto output_column = std::unique_ptr<column>(std::move(table_column.front()));
 
     // apply any nulls to the output column
-    rmm::device_buffer null_mask = source.null_count() ? copy_bitmask(source.parent(),stream,mr) : rmm::device_buffer{};
-    output_column->set_null_mask( null_mask, source.null_count() );
+    output_column->set_null_mask( copy_bitmask(source.parent(),stream,mr), source.null_count() );
 
     return output_column;
 }
