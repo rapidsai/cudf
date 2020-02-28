@@ -111,6 +111,7 @@
 - PR #4223 Fix a few of the Cython warnings
 - PR #4234 Add BUILD_LEGACY_TESTS cmake option
 - PR #4261 libxx Cython reorganization
+- PR #4282 Porting nvstrings conversion functions from new libcudf++ to Python/Cython
 
 ## Bug Fixes
 
