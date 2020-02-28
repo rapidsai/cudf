@@ -4,11 +4,14 @@ from libcpp cimport bool
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 
+from cudf._libxx.cpp.io.types cimport (
+    compression_type,
+    quote_style,
+    source_info,
+    table_with_metadata
+)
 from cudf._libxx.cpp.types cimport size_type
-from cudf._libxx.cpp.io.types cimport compression_type
-from cudf._libxx.cpp.io.types cimport quote_style
-from cudf._libxx.cpp.io.types cimport source_info
-from cudf._libxx.cpp.io.types cimport table_with_metadata
+
 
 cdef extern from "cudf/io/functions.hpp" \
         namespace "cudf::experimental::io" nogil:
