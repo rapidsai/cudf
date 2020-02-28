@@ -25,6 +25,7 @@
 - PR #4190 Add libcudf++ transpose Cython implementation
 - PR #4217 Add libcudf++ quantiles Cython implementation
 - PR #4216 Add cudf.Scalar Python type
+- PR #4259 Ability to create Java host buffers from memory-mapped files
 - PR #4240 Add groupby::groups()
 
 ## Improvements
