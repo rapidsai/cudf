@@ -118,6 +118,8 @@ struct read_json_args {
    /// Whether to parse dates as DD/MM versus MM/DD
   bool dayfirst = false;
 
+  read_json_args() = default;
+
   explicit read_json_args(const source_info& src) : source(src) {}
 };
 

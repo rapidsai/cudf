@@ -8,10 +8,10 @@ from cudf._libxx.cpp.types cimport (
     size_type,
 )
 from cudf._libxx.cpp.aggregation cimport aggregation
-from cudf._libxx.cpp.io.types cimport source_info, table_with_metadata
 from cudf._libxx.cpp.scalar.scalar cimport scalar
 from cudf._libxx.cpp.column.column cimport column, column_contents
 from cudf._libxx.cpp.table.table cimport table
+cimport cudf._libxx.cpp.io.types as cudf_io_types
 
 
 # Note: declaring `move()` with `except +` doesn't work.
@@ -50,5 +50,6 @@ cdef extern from "<utility>" namespace "std" nogil:
         pair[unique_ptr[device_buffer], size_type]
     )
     cdef column_contents move(column_contents)
-    cdef source_info move(source_info)
-    cdef table_with_metadata move(table_with_metadata)
+    cdef cudf_io_types.source_info move(cudf_io_types.source_info)
+    cdef cudf_io_types.table_with_metadata move(
+        cudf_io_types.table_with_metadata)
