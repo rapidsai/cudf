@@ -51,6 +51,7 @@ cdef read_avro_args make_read_avro_args(p, cols, num_rows, skip_rows) except*:
     cdef read_avro_args args = read_avro_args(make_source_info(p))
     args.num_rows = <size_type> num_rows
     args.skip_rows = <size_type> skip_rows
+    args.columns.reserve(len(cols))
     for col in cols:
         args.columns.push_back(str(col).encode())
     return args
