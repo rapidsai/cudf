@@ -3,21 +3,19 @@ import math
 import warnings
 from operator import getitem
 
+import cupy
 import numpy as np
 import toolz
 
-import dask
 from dask import compute, delayed
 from dask.base import tokenize
-from dask.dataframe.core import DataFrame, _concat
+from dask.dataframe.core import DataFrame, Index, Series, _concat
 from dask.dataframe.shuffle import rearrange_by_column, shuffle_group_get
 from dask.dataframe.utils import group_split_dispatch
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import M, digit, insert
 
 import cudf as gd
-
-from .partitionquantiles import partition_quantiles
 
 try:
     from .explicit_shuffle import explicit_sorted_shuffle
@@ -388,6 +386,90 @@ def rearrange_by_division_list(
     return df3
 
 
+def _percentile(a, q, interpolation="linear"):
+    n = len(a)
+    if not len(a):
+        return None, n
+    return (
+        cupy.asnumpy(
+            gd.Series(a).quantile(q, interpolation=interpolation).values
+        ),
+        n,
+    )
+
+
+def quantile(df, q):
+    """Approximate quantiles of Series.
+    Parameters
+    ----------
+    q : list/array of floats
+        Iterable of numbers ranging from 0 to 100 for the desired quantiles
+    """
+    # current implementation needs q to be sorted so
+    # sort if array-like, otherwise leave it alone
+    q_ndarray = np.array(q)
+    if q_ndarray.ndim > 0:
+        q_ndarray.sort(kind="mergesort")
+        q = q_ndarray
+
+    assert isinstance(df, Series)
+
+    # currently, only Series has quantile method
+    if isinstance(df, Index):
+        meta = gd.Series(df._meta_nonempty).quantile(q=q)
+    else:
+        meta = df._meta_nonempty.quantile(q=q)
+
+    # Index.quantile(list-like) must be pd.Series, not pd.Index
+    df_name = df.name
+
+    def finalize_tsk(tsk):
+        return (gd.Series, tsk, q, None, df_name)
+
+    return_type = Series
+
+    # pandas uses quantile in [0, 1]
+    # numpy / everyone else uses [0, 100]
+    qs = np.asarray(q)  # * 100
+    token = tokenize(df, qs)
+
+    if len(qs) == 0:
+        name = "quantiles-" + token
+        empty_index = gd.Index([], dtype=float)
+        return Series(
+            {
+                (name, 0): gd.Series(
+                    [], name=df.name, index=empty_index, dtype="float"
+                )
+            },
+            name,
+            df._meta,
+            [None, None],
+        )
+    else:
+        new_divisions = [np.min(q), np.max(q)]
+
+    df = df.dropna()
+
+    from dask.array.percentile import merge_percentiles
+
+    name = "quantiles-1-" + token
+    val_dsk = {
+        (name, i): (_percentile, (getattr, key, "values"), qs)
+        for i, key in enumerate(df.__dask_keys__())
+    }
+
+    name2 = "quantiles-2-" + token
+    merge_dsk = {
+        (name2, 0): finalize_tsk(
+            (merge_percentiles, qs, [qs] * df.npartitions, sorted(val_dsk))
+        )
+    }
+    dsk = toolz.merge(val_dsk, merge_dsk)
+    graph = HighLevelGraph.from_collections(name2, dsk, dependencies=[df])
+    return return_type(graph, name2, meta, new_divisions)
+
+
 def sort_values_experimental(
     df,
     by,
@@ -449,18 +531,11 @@ def sort_values_experimental(
         use_explicit and len(divisions) != npartitions + 1
     ):
         # TODO: Use input divisions for use_explicit==True
-
-        index2 = df2[index]
-        (index2,) = dask.base.optimize(index2)
-
-        doubledivs = (
-            partition_quantiles(index2, npartitions * 2, upsample=upsample)
-            .compute()
-            .to_list()
-        )
-        # Heuristic: Start with 2x divisions and coarsening
-        divisions = [doubledivs[i] for i in range(0, len(doubledivs), 2)]
-        divisions[-1] += 1  # Make sure the last division is large enough
+        qn = np.linspace(0.0, 1.0, npartitions + 1).tolist()
+        divisions = (
+            quantile(df2[index], qn).astype("int").compute().values + 1
+        ).tolist()
+        divisions[0] = 0
     else:
         # For now we can accept multi-column divisions as a dataframe
         if isinstance(divisions, gd.DataFrame):
