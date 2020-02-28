@@ -126,7 +126,7 @@ __device__ inline string_view::const_iterator string_view::const_iterator::opera
 __device__ inline string_view::const_iterator string_view::const_iterator::operator+(string_view::const_iterator::difference_type offset)
 {
     const_iterator tmp(*this);
-    size_type adjust = std::abs(offset);
+    size_type adjust = abs(offset);
     while( adjust-- > 0 )
         offset > 0 ? ++tmp : --tmp;
     return tmp;
@@ -134,7 +134,7 @@ __device__ inline string_view::const_iterator string_view::const_iterator::opera
 
 __device__ inline string_view::const_iterator& string_view::const_iterator::operator+=(string_view::const_iterator::difference_type offset)
 {
-    size_type adjust = std::abs(offset);
+    size_type adjust = abs(offset);
     while(adjust-- > 0)
         offset > 0 ? operator++() : operator--();
     return *this;
@@ -157,7 +157,7 @@ __device__ inline string_view::const_iterator string_view::const_iterator::opera
 
 __device__ inline string_view::const_iterator& string_view::const_iterator::operator-=(string_view::const_iterator::difference_type offset)
 {
-    size_type adjust = std::abs(offset);
+    size_type adjust = abs(offset);
     while(adjust-- > 0)
         offset > 0 ? operator--() : operator++();
     return *this;
@@ -166,7 +166,7 @@ __device__ inline string_view::const_iterator& string_view::const_iterator::oper
 __device__ inline string_view::const_iterator string_view::const_iterator::operator-(string_view::const_iterator::difference_type offset)
 {
     const_iterator tmp(*this);
-    size_type adjust = std::abs(offset);
+    size_type adjust = abs(offset);
     while( adjust-- > 0 )
         offset > 0 ? --tmp : ++tmp;
     return tmp;
