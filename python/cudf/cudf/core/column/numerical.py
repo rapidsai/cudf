@@ -508,6 +508,9 @@ def _numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
 
 
 def _numeric_column_unaryop(operand, op):
+    if callable(op):
+        return libcudfxx.transform.transform(operand, op)
+
     op = libcudfxx.unary.UnaryOp[op.upper()]
     out = libcudfxx.unary.unary_operation(operand, op)
     return out
