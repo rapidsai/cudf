@@ -1,9 +1,10 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+
 import warnings
+from distutils.version import LooseVersion
 
 import numpy as np
 import pandas as pd
-from distutils.version import LooseVersion
 from toolz import partition_all
 
 import dask

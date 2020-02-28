@@ -102,6 +102,7 @@
 - PR #4225 Remove stale notebooks
 - PR #4223 Fix a few of the Cython warnings
 - PR #4234 Add BUILD_LEGACY_TESTS cmake option
+- PR #4251 Add class to docs in `dask-cudf` `derived_from`
 
 ## Bug Fixes
 
