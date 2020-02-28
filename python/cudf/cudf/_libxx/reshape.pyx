@@ -15,6 +15,7 @@ from cudf._libxx.cpp.reshape cimport (
     tile as cpp_tile
 )
 
+
 def interleave_columns(Table source_table):
     cdef table_view c_view = source_table.data_view()
     cdef unique_ptr[column] c_result
@@ -34,7 +35,7 @@ def tile(Table source_table, size_type count):
 
     with nogil:
         c_result = move(cpp_tile(c_view, c_count))
-        
+
     return Table.from_unique_ptr(
         move(c_result),
         column_names=source_table._column_names,
