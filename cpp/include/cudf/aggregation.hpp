@@ -64,6 +64,7 @@ class aggregation {
     ARGMAX,    ///< Index of max element
     ARGMIN,    ///< Index of min element
     NUNIQUE,   ///< count number of unique elements
+    NTH_ELEMENT, ///< get the nth element
     PTX,       ///< PTX UDF based reduction
     CUDA       ///< CUDA UDf based reduction
   };
@@ -79,12 +80,6 @@ class aggregation {
 enum class udf_type : bool {
    CUDA,
    PTX
-};
-
-// @brief Enum to describe include nulls or exclude nulls in an aggregation
-enum class include_nulls : bool {
-   YES, 
-   NO
 };
 
 /// Factory to create a SUM aggregation
@@ -168,6 +163,23 @@ std::unique_ptr<aggregation> make_argmin_aggregation();
 */
 std::unique_ptr<aggregation>
 make_nunique_aggregation(include_nulls _include_nulls = include_nulls::NO);
+
+/**
+ * @brief Factory to create a `nth_element` aggregation
+ *
+ * `nth_element` returns the n'th element of the group/series.
+ *
+ * If @p n is not within the range `[-group_size, group_size)`, the result of
+ * the respective group will be null. Negative indices `[-group_size, -1]`
+ * corresponds to `[0, group_size-1]` indices respectively where `group_size` is
+ * the size of each group.
+ *
+ * @param n index of nth element in each group.
+ * @param _include_nulls include nulls during indexing.
+ */
+std::unique_ptr<aggregation>
+make_nth_element_aggregation(size_type n, include_nulls _include_nulls = include_nulls::YES);
+
 /**
  * @brief Factory to create a aggregation base on UDF for PTX or CUDA
  *

@@ -20,10 +20,13 @@
 - PR #4153 Support Dask serialization protocol on cuDF objects
 - PR #4127 Add python API for n-way sorted merge (merge_sorted)
 - PR #4164 Add Buffer "constructor-kwargs" header
+- PR #4172 Add groupby nth aggregation
 - PR #4159 Add COUNT aggregation that includes null values
 - PR #4190 Add libcudf++ transpose Cython implementation
 - PR #4217 Add libcudf++ quantiles Cython implementation
 - PR #4216 Add cudf.Scalar Python type
+- PR #4259 Ability to create Java host buffers from memory-mapped files
+- PR #4240 Add groupby::groups()
 
 ## Improvements
 
@@ -47,6 +50,7 @@
 - PR #3897 Port cuIO JSON reader to cudf::column types
 - PR #4008 Eliminate extra copy in column constructor
 - PR #4013 Add cython definition for io readers cudf/io/io_types.hpp
+- PR #4028 Port json.pyx to use new libcudf APIs
 - PR #4014 ORC/Parquet: add count parameter to stripe/rowgroup-based reader API
 - PR #4042 Port cudf/io/functions.hpp to Cython for use in IO bindings
 - PR #3880 Add aggregation infrastructure support for reduction
@@ -89,6 +93,7 @@
 - PR #4144 Release GIL when calling libcudf++ functions
 - PR #4082 Rework MultiColumns in cuDF
 - PR #4149 Use "type-serialized" for pickled types like Dask
+- PR #4174 Port hash groupby to libcudf++
 - PR #4171 Split java host and device vectors to make a vector truly immutable
 - PR #4167 Port `search` to libcudf++ (support multi-column searchsorted)
 - PR #4163 Assert Dask CUDA serializers have `Buffer` frames
@@ -107,6 +112,7 @@
 - PR #4233 Porting replace.pyx to use new libcudf APIs
 - PR #4223 Fix a few of the Cython warnings
 - PR #4234 Add BUILD_LEGACY_TESTS cmake option
+- PR #4261 libxx Cython reorganization
 
 ## Bug Fixes
 
@@ -167,6 +173,9 @@
 - PR #4242 Fix for rolling tests CI failure
 - PR #4245 Fix race condition in parquet reader
 - PR #4258 Fix dask-cudf losing index name in `reset_index`
+- PR #4268 Fix java build for hash aggregate
+- PR #4273 Fix losing `StringIndex` name in dask `_meta_nonempty`
+- PR #4279 Fix converting `np.float64` to Scalar
 
 
 # cuDF 0.12.0 (04 Feb 2020)
