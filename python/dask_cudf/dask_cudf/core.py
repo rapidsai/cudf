@@ -184,7 +184,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
         # TODO: Remove this once upstream version is improved
         npartitions = kwargs.pop("npartitions", None)
         divisions = kwargs.pop("divisions", None)
-        if divisions is None and isinstance(other, str):
+        if divisions == "quantile" and isinstance(other, str):
             npartitions = npartitions or self.npartitions
             qn = np.linspace(0.0, 1.0, npartitions + 1).tolist()
             dtype = self[other].dtype
