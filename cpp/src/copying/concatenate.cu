@@ -25,7 +25,6 @@
 
 #include <thrust/binary_search.h>
 #include <thrust/transform_scan.h>
-#include <thrust/advance.h>
 
 #include <algorithm>
 #include <numeric>
@@ -236,8 +235,9 @@ struct binary_search_fn {
 
   T __device__ operator()(size_type i) {
     // Look up the current index in the offsets table to find the partition
-    auto const offset_it = thrust::prev(thrust::upper_bound(thrust::seq,
-        offsets_ptr, offsets_ptr + input_size, i));
+    // Select the offset before the upper bound
+    auto const offset_it = thrust::upper_bound(thrust::seq,
+        offsets_ptr, offsets_ptr + input_size, i) - 1;
     auto const partition = offset_it - offsets_ptr;
     auto const offset = *offset_it;
     return data_ptr[partition][i - offset];
