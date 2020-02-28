@@ -189,8 +189,10 @@ class DataFrame(_Frame, dd.core.DataFrame):
             qn = np.linspace(0.0, 1.0, npartitions + 1).tolist()
             dtype = self[other].dtype
             divisions = (
-                quantile(self[other], qn).astype(dtype).compute().values + 1
-            ).tolist()
+                (quantile(self[other], qn).compute().values + 1)
+                .astype(dtype)
+                .tolist()
+            )
             divisions[0] = 0
 
         return super().set_index(
@@ -329,7 +331,7 @@ def _percentile(a, q, interpolation="linear"):
         return None, n
     return (
         cupy.asnumpy(
-            cudf.Series(a).quantile(q, interpolation=interpolation).values
+            np.percentile(a.astype("float64"), q, interpolation=interpolation)
         ),
         n,
     )
@@ -370,7 +372,7 @@ def quantile(df, q):
     # Note
     # pandas uses quantile in [0, 1]
     # numpy / everyone else uses [0, 100]
-    qs = np.asarray(q)
+    qs = np.asarray(q) * 100
     token = tokenize(df, qs)
 
     if len(qs) == 0:
