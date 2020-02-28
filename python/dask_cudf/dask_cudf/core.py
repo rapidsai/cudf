@@ -389,8 +389,6 @@ def quantile(df, q):
     else:
         new_divisions = [np.min(q), np.max(q)]
 
-    df = df.dropna()
-
     from dask.array.percentile import merge_percentiles
 
     name = "quantiles-1-" + token
