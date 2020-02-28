@@ -22,7 +22,6 @@ from cudf._libxx.cpp.types cimport (
     type_id,
 )
 from cudf._libxx.types import np_to_cudf_types
-from cudf._libxx.cpp.transform cimport bools_to_mask as cpp_bools_to_mask
 from cudf._libxx.cpp.column.column_view cimport column_view
 cimport cudf._libxx.cpp.transform as libcudf_transform
 
