@@ -13,8 +13,10 @@ cdef extern from "cudf/io/functions.hpp" \
     cdef cppclass read_avro_args:
         source_info source
         vector[string] columns
-        size_t skip_rows
-        size_t num_rows
+        size_type skip_rows
+        size_type num_rows
+        read_avro_args() except +
+        read_avro_args(source_info &info) except +
 
     cdef table_with_metadata read_avro(read_avro_args &args) except +
 

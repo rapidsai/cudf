@@ -139,6 +139,12 @@ struct source_info {
   std::pair<const char*, size_t> buffer;
   std::shared_ptr<arrow::io::RandomAccessFile> file;
 
+  source_info() = default;
+  source_info(source_info &&) = default;
+  source_info(source_info const &) = default;
+  source_info& operator=(source_info&&) = default;
+  source_info& operator=(const source_info&) = default;
+
   explicit source_info(const std::string& file_path)
       : type(io_type::FILEPATH), filepath(file_path) {}
 

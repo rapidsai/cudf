@@ -48,7 +48,16 @@ cdef extern from "cudf/io/types.hpp" \
     cdef cppclass source_info:
         io_type type
         string filepath
+        pair[const char*, size_t] buffer
+
+        source_info() except +
+        source_info(const string filepath) except +
+        source_info(const char* host_buffer, size_t size) except +
 
     cdef cppclass sink_info:
         io_type type
         string filepath
+
+cdef extern from "<utility>" namespace "std" nogil:
+    cdef source_info move(source_info)
+    cdef table_with_metadata move(table_with_metadata)
