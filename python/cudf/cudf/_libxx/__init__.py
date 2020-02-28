@@ -4,6 +4,7 @@ import numpy as np
 
 from . import (
     copying,
+    filling,
     hash,
     lib,
     merge,
