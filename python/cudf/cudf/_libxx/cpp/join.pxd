@@ -1,23 +1,30 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
+from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 from libcpp.pair cimport pair
-from cudf._libxx.lib cimport *
+from libcpp cimport bool
+
+from cudf._libxx.cpp.table.table cimport table
+from cudf._libxx.cpp.table.table_view cimport table_view
+
 
 cdef extern from "cudf/join.hpp" namespace "cudf::experimental" nogil:
-    cdef unique_ptr[table] cpp_inner_join "cudf::experimental::inner_join" (
+    cdef unique_ptr[table] inner_join(
         const table_view left,
         const table_view right,
         const vector[int] left_on,
         const vector[int] right_on,
         const vector[pair[int, int]] columns_in_common
     ) except +
-    cdef unique_ptr[table] cpp_left_join "cudf::experimental::left_join" (
+    cdef unique_ptr[table] left_join(
         const table_view left,
         const table_view right,
         const vector[int] left_on,
         const vector[int] right_on,
         const vector[pair[int, int]] columns_in_common
     ) except +
-    cdef unique_ptr[table] cpp_full_join "cudf::experimental::full_join" (
+    cdef unique_ptr[table] full_join(
         const table_view left,
         const table_view right,
         const vector[int] left_on,

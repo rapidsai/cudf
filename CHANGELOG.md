@@ -109,6 +109,7 @@
 - PR #4233 Porting replace.pyx to use new libcudf APIs
 - PR #4223 Fix a few of the Cython warnings
 - PR #4234 Add BUILD_LEGACY_TESTS cmake option
+- PR #4261 libxx Cython reorganization
 
 ## Bug Fixes
 
