@@ -288,20 +288,21 @@ def stol(Column input_col, **kwargs):
     return string_to_integer(input_col, np.dtype("int64"))
 
 
-def _to_booleans(Column input_col, Scalar str_true=Scalar("True")):
+def _to_booleans(Column input_col, object string_true="True"):
     """
     Converting/Casting input column of type string to boolean column
 
     Parameters:
     -----------
     input_col : input column of type string
-    str_true : string that represents True
+    string_true : string that represents True
 
     Returns
     -------
     A Column with string values cast to boolean
     """
 
+    cdef Scalar str_true = Scalar(string_true)
     cdef column_view input_column_view = input_col.view()
     cdef string_scalar* string_scalar_true = <string_scalar*>(
         str_true.c_value.get())
@@ -322,22 +323,24 @@ def to_booleans(Column input_col, **kwargs):
 
 def _from_booleans(
         Column input_col,
-        Scalar str_true=Scalar("True"),
-        Scalar str_false=Scalar("False")):
+        object string_true="True",
+        object string_false="False"):
     """
     Converting/Casting input column of type boolean to string column
 
     Parameters:
     -----------
     input_col : input column of type boolean
-    str_true : string that represents True
-    str_false : string that represents False
+    string_true : string that represents True
+    string_false : string that represents False
 
     Returns
     -------
     A Column with boolean values cast to string
     """
 
+    cdef Scalar str_true = Scalar(string_true)
+    cdef Scalar str_false = Scalar(string_false)
     cdef column_view input_column_view = input_col.view()
     cdef string_scalar* string_scalar_true = <string_scalar*>(
         str_true.c_value.get())
