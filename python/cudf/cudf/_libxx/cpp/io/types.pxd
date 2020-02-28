@@ -1,10 +1,11 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.map cimport map
 from libcpp.vector cimport vector
+from libcpp.pair cimport pair
+cimport cudf._libxx.cpp.table.table as cudf_table
 
 
 cdef extern from "cudf/io/types.hpp" \
@@ -38,17 +39,25 @@ cdef extern from "cudf/io/types.hpp" \
         STATISTICS_PAGE = 2,
 
     cdef cppclass table_metadata:
+        table_metadata() except +
+
         vector[string] column_names
         map[string, string] user_data
 
     cdef cppclass table_with_metadata:
-        unique_ptr[table] tbl
+        unique_ptr[cudf_table.table] tbl
         table_metadata metadata
 
     cdef cppclass source_info:
         io_type type
         string filepath
+        pair[const char*, size_t] buffer
+
+        source_info() except +
 
     cdef cppclass sink_info:
         io_type type
         string filepath
+
+        sink_info() except +
+        sink_info(string file_path) except +
