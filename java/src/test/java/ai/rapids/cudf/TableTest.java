@@ -1712,11 +1712,12 @@ public class TableTest extends CudfTestBase {
         .column(true, null, false, true, null, null)
         .column(   1,    1,     2,    2,    3,    3).build();
          Table other = t1.groupBy(1).aggregate(min(0));
+         Table ordered = other.orderBy(Table.asc(0));
          Table expected = new Table.TestBuilder()
              .column(1, 2, 3)
              .column (true, false, null)
              .build()) {
-      assertTablesAreEqual(expected, other);
+      assertTablesAreEqual(expected, ordered);
     }
   }
 
@@ -1726,11 +1727,12 @@ public class TableTest extends CudfTestBase {
         .column(false, null, false, true, null, null)
         .column(   1,    1,     2,    2,    3,    3).build();
          Table other = t1.groupBy(1).aggregate(max(0));
+         Table ordered = other.orderBy(Table.asc(0));
          Table expected = new Table.TestBuilder()
              .column(1, 2, 3)
              .column (false, true, null)
              .build()) {
-      assertTablesAreEqual(expected, other);
+      assertTablesAreEqual(expected, ordered);
     }
   }
 
