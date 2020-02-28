@@ -4,10 +4,9 @@ from libcpp.memory cimport unique_ptr, make_unique
 from libcpp.pair cimport pair
 
 from cudf._libxx.column cimport Column
-cimport cudf._libxx.cpp.transform as libcudf_transform
 from rmm._lib.device_buffer cimport device_buffer, DeviceBuffer
-
 from cudf.core.buffer import Buffer
+
 
 from cudf._libxx.column cimport Column
 from cudf._libxx.move cimport move
@@ -15,6 +14,7 @@ from cudf._libxx.move cimport move
 from cudf._libxx.cpp.types cimport size_type
 from cudf._libxx.cpp.transform cimport bools_to_mask as cpp_bools_to_mask
 from cudf._libxx.cpp.column.column_view cimport column_view
+cimport cudf._libxx.cpp.transform as libcudf_transform
 
 
 def bools_to_mask(Column col):
@@ -35,6 +35,7 @@ def bools_to_mask(Column col):
     rmm_db = DeviceBuffer.c_from_unique_ptr(move(up_db))
     buf = Buffer(rmm_db)
     return buf
+
 
 def nans_to_nulls(Column input):
     cdef column_view c_input = input.view()
