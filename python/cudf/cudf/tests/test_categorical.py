@@ -138,38 +138,6 @@ def test_categorical_compare_ordered():
     np.testing.assert_array_equal(pdsr1 > pdsr2, sr1 > sr2)
 
 
-def test_categorical_binary_add():
-    cat = pd.Categorical(["a", "a", "b", "c", "a"], categories=["a", "b", "c"])
-    pdsr = pd.Series(cat)
-    sr = Series(cat)
-
-    with pytest.raises(TypeError) as raises:
-        pdsr + pdsr
-    raises.match(r"Series cannot perform the operation \+")
-
-    with pytest.raises(TypeError) as raises:
-        sr + sr
-    raises.match(
-        "Series of dtype `category` cannot perform the operation: " "add"
-    )
-
-
-def test_categorical_unary_ceil():
-    cat = pd.Categorical(["a", "a", "b", "c", "a"], categories=["a", "b", "c"])
-    pdsr = pd.Series(cat)
-    sr = Series(cat)
-
-    with pytest.raises(AttributeError) as raises:
-        pdsr.ceil()
-    raises.match(r"""no attribute ['"]ceil['"]""")
-
-    with pytest.raises(TypeError) as raises:
-        sr.ceil()
-    raises.match(
-        "Series of dtype `category` cannot perform the operation: " "ceil"
-    )
-
-
 def test_categorical_element_indexing():
     """
     Element indexing to a cat column must give the underlying object
@@ -229,26 +197,6 @@ def test_df_cat_sort_index():
     expect = df.to_pandas().set_index("a").sort_index()
 
     assert_eq(got, expect)
-
-
-def test_cat_series_binop_error():
-    df = DataFrame()
-    df["a"] = pd.Categorical(list("aababcabbc"), categories=list("abc"))
-    df["b"] = np.arange(len(df))
-
-    dfa = df["a"]
-    dfb = df["b"]
-
-    # lhs is a categorical
-    with pytest.raises(TypeError) as raises:
-        dfa + dfb
-    raises.match(
-        "Series of dtype `category` cannot perform the operation: " "add"
-    )
-    # if lhs is a numerical
-    with pytest.raises(TypeError) as raises:
-        dfb + dfa
-    raises.match("'add' operator not supported")
 
 
 @pytest.mark.parametrize("num_elements", [10, 100, 1000])
