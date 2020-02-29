@@ -112,6 +112,10 @@ cdef class Scalar:
         s.c_value = move(ptr)
         return s
 
+    @staticmethod
+    cdef scalar* get_ptr(Scalar s):
+        return s.c_value.get()
+
 
 cdef _set_string_from_np_string(unique_ptr[scalar]& s, value, bool valid=True):
     value = value.item() if valid else ""

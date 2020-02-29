@@ -41,10 +41,6 @@ def gather(Table source_table, Column gather_map):
     )
 
 
-cdef scalar* _as_scalar_ptr(Scalar s):
-    return s.c_value.get()
-
-
 def shift(Table input, int offset):
     cdef table_view c_input = input.data_view()
     cdef int32_t c_offset = offset
@@ -58,7 +54,7 @@ def shift(Table input, int offset):
     for value in fill_values:
         c_fill_values.push_back(
             reference_wrapper[scalar](
-                _as_scalar_ptr(value)[0]
+                Scalar.get_ptr(value)[0]
             )
         )
 
