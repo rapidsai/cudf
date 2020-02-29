@@ -369,13 +369,6 @@ class CategoricalColumn(column.ColumnBase):
         )
         raise TypeError(msg)
 
-    def unary_operator(self, unaryop):
-        msg = (
-            "Series of dtype `category` cannot perform the operation: "
-            "{}".format(unaryop)
-        )
-        raise TypeError(msg)
-
     def unordered_compare(self, cmpop, rhs):
         if self.dtype != rhs.dtype:
             raise TypeError("Categoricals can only compare with the same type")

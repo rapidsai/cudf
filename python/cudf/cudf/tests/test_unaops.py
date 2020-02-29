@@ -21,8 +21,9 @@ def test_series_abs(dtype):
 def test_series_invert(dtype):
     arr = (np.random.random(1000) * 100).astype(dtype)
     sr = Series(arr)
-    np.testing.assert_equal((~sr).to_array(), np.invert(arr))
+    print(sr)
     np.testing.assert_equal((~sr).to_array(), ~arr)
+    np.testing.assert_equal((~sr).to_array(), np.invert(arr))
 
 
 @pytest.mark.parametrize(

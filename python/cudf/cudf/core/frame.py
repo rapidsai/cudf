@@ -16,6 +16,7 @@ from cudf.utils.dtypes import (
     is_scalar,
     is_string_dtype,
 )
+from cudf.utils.utils import OrderedColumnDict
 
 
 class Frame(libcudfxx.table.Table):
@@ -299,10 +300,15 @@ class Frame(libcudfxx.table.Table):
         return self
 
     def _unaryop(self, op):
-        result = self.copy()
-        for name, col in result._data.items():
-            result._data[name] = col.unary_operator(op)
-        return result
+        if callable(op):
+            fn = libcudfxx.transform.transform
+        else:
+            op = libcudfxx.unary.UnaryOp[op.upper()]
+            fn = libcudfxx.unary.unary_operation
+
+        data_columns = (fn(col, op) for col in self._columns)
+        data = OrderedColumnDict(zip(self._column_names, data_columns))
+        return self.__class__._from_table(Frame(data, self._index))
 
     def isnull(self):
         """Identify missing values.
@@ -325,22 +331,14 @@ class Frame(libcudfxx.table.Table):
         return self._is_valid()
 
     def _is_null(self):
-        result = self.copy()
-        for name, col in result._data.items():
-            result._data[name] = col.isnull()
-        return result
-        # return self.__class__._from_table(
-        #     libcudfxx.unary.is_null(self)
-        # )
+        data_columns = (libcudfxx.unary.is_null(col) for col in self._columns)
+        data = OrderedColumnDict(zip(self._column_names, data_columns))
+        return self.__class__._from_table(Frame(data, self._index))
 
     def _is_valid(self):
-        result = self.copy()
-        for name, col in result._data.items():
-            result._data[name] = col.notnull()
-        return result
-        # return self.__class__._from_table(
-        #     libcudfxx.unary.is_valid(self)
-        # )
+        data_columns = (libcudfxx.unary.is_valid(col) for col in self._columns)
+        data = OrderedColumnDict(zip(self._column_names, data_columns))
+        return self.__class__._from_table(Frame(data, self._index))
 
     def searchsorted(
         self, values, side="left", ascending=True, na_position="last"

@@ -534,16 +534,6 @@ class ColumnBase(Column):
         """
         raise NotImplementedError
 
-    def isnull(self):
-        """Identify missing values in a Column.
-        """
-        return libcudfxx.unary.is_null(self)
-
-    def notnull(self):
-        """Identify non-missing values in a Column.
-        """
-        return libcudfxx.unary.is_valid(self)
-
     def find_first_value(self, value):
         """
         Returns offset of first value that matches
