@@ -31,7 +31,6 @@ from cudf._libxx.strings.substring import (
     slice_from as cpp_slice_from,
     slice_strings as cpp_slice_strings,
 )
-
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.utils import utils
