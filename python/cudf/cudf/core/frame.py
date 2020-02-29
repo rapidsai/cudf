@@ -238,6 +238,13 @@ class Frame(libcudfxx.table.Table):
         result._copy_categories(self)
         return result
 
+    def _shift(self, offset, fill_values):
+        result = self.__class__._from_table(
+            libcudfxx.copying.shift(self, offset, fill_values)
+        )
+
+        return result
+
     def drop_duplicates(self, subset=None, keep="first", nulls_are_equal=True):
         """
         Drops rows in frame as per duplicate rows in `subset` columns from

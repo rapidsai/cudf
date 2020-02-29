@@ -2411,6 +2411,7 @@ class Series(Frame):
         Shift currently only supports float and integer dtype columns with
         no null values.
         """
+
         assert axis in (None, 0) and freq is None and fill_value is None
 
         if self.has_nulls:
@@ -2422,8 +2423,11 @@ class Series(Frame):
             raise NotImplementedError(
                 "Shift currently only supports " "numeric dtypes"
             )
+
         if periods == 0:
             return self
+
+        return self._shift(periods, fill_value or [])
 
         input_dary = self.to_gpu_array()
         output_dary = rmm.device_array_like(input_dary)
