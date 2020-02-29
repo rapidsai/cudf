@@ -550,7 +550,7 @@ class ColumnBase(Column):
         return libcudfxx.unary.is_valid(self)
 
     def notna(self):
-        """Identify non-missing values in a Column.
+        """Identify non-missing values in a Column. Alias for notnull.
         """
         return self.notnull()
 
