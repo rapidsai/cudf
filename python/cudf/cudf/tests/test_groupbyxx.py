@@ -26,9 +26,10 @@ def pdf():
         np.array([0, 1, 1, 2, 3, 2]),
         {0: "a", 1: "a", 2: "b", 3: "a", 4: "b", 5: "c"},
         lambda x: x + 1,
+        ["a", np.array([0, 1, 1, 2, 3, 2])],
     ],
 )
-def test_groupby_groups(pdf, grouper):
+def test_grouping(pdf, grouper):
     gdf = cudf.from_pandas(pdf)
 
     for pdf_group, gdf_group in zip(
