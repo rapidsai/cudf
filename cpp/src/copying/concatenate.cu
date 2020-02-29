@@ -347,7 +347,7 @@ struct optimized_concatenate {
   }
 };
 
-template <typename T>
+template <typename T, bool Nullable>
 __global__
 void
 fused_concatenate_kernel(
@@ -360,7 +360,10 @@ fused_concatenate_kernel(
   auto* output_data = output_view.data<T>();
 
   size_type output_index = threadIdx.x + blockIdx.x * blockDim.x;
-  auto active_mask = __ballot_sync(0xFFFF'FFFF, output_index < output_size);
+  unsigned active_mask;
+  if (Nullable) {
+    active_mask = __ballot_sync(0xFFFF'FFFF, output_index < output_size);
+  }
   while (output_index < output_size) {
 
     // Lookup input index by searching for output index in offsets
@@ -375,19 +378,25 @@ fused_concatenate_kernel(
       auto const& input_view = input_views[input_index];
       auto const* input_data = input_view.data<T>();
       output_data[output_index] = input_data[offset_index];
-      bit_is_set = input_view.is_valid(offset_index);
+      if (Nullable) {
+        bit_is_set = input_view.is_valid(offset_index);
+      }
     }
 
-    // TODO count set bits
+    if (Nullable) {
+      // TODO count set bits
 
-    // First thread writes bitmask word
-    bitmask_type const new_word = __ballot_sync(active_mask, bit_is_set);
-    if (threadIdx.x % experimental::detail::warp_size == 0) {
-      output_view.null_mask()[word_index(output_index)] = new_word;
+      // First thread writes bitmask word
+      bitmask_type const new_word = __ballot_sync(active_mask, bit_is_set);
+      if (threadIdx.x % experimental::detail::warp_size == 0) {
+        output_view.null_mask()[word_index(output_index)] = new_word;
+      }
     }
 
     output_index += blockDim.x * gridDim.x;
-    active_mask = __ballot_sync(active_mask, output_index < output_size);
+    if (Nullable) {
+      active_mask = __ballot_sync(active_mask, output_index < output_size);
+    }
   }
 }
 
@@ -436,17 +445,24 @@ struct fused_concatenate {
     // end refactoring TODO
 
 
-    // Allocate output; always allocate mask for fused kernel
+    bool const has_nulls = std::any_of(
+      views.begin(), views.end(),
+      [](auto const& col) { return col.has_nulls(); });
+
+    // Allocate output
+    auto const policy = has_nulls ? mask_policy::ALWAYS : mask_policy::NEVER;
     auto out_col = experimental::detail::allocate_like(views.front(),
-        output_size, mask_policy::ALWAYS, mr, stream);
+        output_size, policy, mr, stream);
     auto out_view = out_col->mutable_view();
     auto d_out_view = mutable_column_device_view::create(out_view, stream);
 
     // Launch kernel
     constexpr size_type block_size{256};
     cudf::experimental::detail::grid_1d config(output_size, block_size);
-    fused_concatenate_kernel<T>
-      <<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
+    auto const kernel = has_nulls
+        ? fused_concatenate_kernel<T, true>
+        : fused_concatenate_kernel<T, false>;
+    kernel<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
         d_views.data().get(),
         d_offsets.data().get(),
         static_cast<size_type>(d_views.size()),
