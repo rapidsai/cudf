@@ -12,6 +12,11 @@ from cudf._libxx.strings.char_types cimport (
 
 
 def is_decimal(Column source_strings):
+    """
+    Returns a Column of boolean values with True for `source_strings`
+    that contain only decimal characters -- those that can be used
+    to extract base10 numbers.
+    """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
@@ -25,6 +30,12 @@ def is_decimal(Column source_strings):
 
 
 def is_alnum(Column source_strings):
+    """
+    Returns a Column of boolean values with True for `source_strings`
+    that contain only alpha-numeric characters.
+
+    Equivalent to: is_alpha() or is_digit() or is_numeric() or is_decimal()
+    """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
@@ -38,6 +49,10 @@ def is_alnum(Column source_strings):
 
 
 def is_alpha(Column source_strings):
+    """
+    Returns a Column of boolean values with True for `source_strings`
+    that contain only alphabetic characters.
+    """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
@@ -51,6 +66,10 @@ def is_alpha(Column source_strings):
 
 
 def is_digit(Column source_strings):
+    """
+    Returns a Column of boolean values with True for `source_strings`
+    that contain only decimal and digit characters.
+    """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
@@ -64,6 +83,11 @@ def is_digit(Column source_strings):
 
 
 def is_numeric(Column source_strings):
+    """
+    Returns a Column of boolean values with True for `source_strings`
+    that contain only numeric characters. These include digit and
+    numeric characters.
+    """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 

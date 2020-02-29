@@ -480,18 +480,66 @@ class StringMethods(object):
         )
 
     def isdecimal(self, **kwargs):
+        """
+        Returns a Series/Column/Index of boolean values with True for strings
+        that contain only decimal characters -- those that can be used
+        to extract base10 numbers.
+
+        Returns
+        -------
+        Series/Index of bool dtype
+
+        """
         return self._return_or_inplace(cpp_is_decimal(self._column))
 
     def isalnum(self, **kwargs):
+        """
+        Returns a Series/Index of boolean values with True for strings
+        that contain only alpha-numeric characters.
+        Equivalent to: isalpha() or isdigit() or isnumeric() or isdecimal()
+
+        Returns
+        -------
+        Series/Index of bool dtype
+
+        """
         return self._return_or_inplace(cpp_is_alnum(self._column))
 
     def isalpha(self, **kwargs):
+        """
+        Returns a Series/Index of boolean values with True for strings
+        that contain only alphabetic characters.
+
+        Returns
+        -------
+        Series/Index of bool dtype
+
+        """
         return self._return_or_inplace(cpp_is_alpha(self._column))
 
     def isdigit(self, **kwargs):
+        """
+        Returns a Series/Index of boolean values with True for strings
+        that contain only decimal and digit characters.
+
+        Returns
+        -------
+        Series/Index of bool dtype
+
+        """
         return self._return_or_inplace(cpp_is_digit(self._column))
 
     def isnumeric(self, **kwargs):
+        """
+        Returns a Series/Index of boolean values with True for strings
+        that contain only numeric characters. These include digit and
+        numeric characters.
+
+        Returns
+        -------
+        Series/Index of bool dtype
+
+        """
         return self._return_or_inplace(cpp_is_numeric(self._column))
 
     def slice_from(self, starts=0, stops=0, **kwargs):
