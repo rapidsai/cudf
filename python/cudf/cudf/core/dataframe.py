@@ -269,11 +269,10 @@ class DataFrame(Frame):
         self.columns = columns
 
     @classmethod
-    def _from_table(cls, table):
-        if table._index is None:
-            index = None
-        else:
-            index = Index._from_table(table._index)
+    def _from_table(cls, table, index=None):
+        if index is None:
+            if table._index is not None:
+                index = Index._from_table(table._index)
         return cls(data=table._data, index=index)
 
     @staticmethod

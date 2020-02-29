@@ -1,26 +1,49 @@
 import collections
 
 import cudf
+import cudf._libxx.groupby as libgroupby
 
 
-class _GroupByKeys:
-    def __init__(self, obj, by_list):
+class GroupBy(object):
+    def __init__(self, obj, by):
+        self.obj = obj
+        self.keys = _GroupByKeys(obj, by)
+        self._groupby = libgroupby.GroupBy(self.keys)
+
+    def __iter__(self):
+        grouped_keys, grouped_values, offsets = self._groupby.groups(self.obj)
+
+        grouped_keys = cudf.Index._from_table(grouped_keys)
+        grouped_values = self.obj.__class__._from_table(grouped_values)
+        group_names = grouped_keys.unique()
+
+        for i, name in enumerate(group_names):
+            yield name, grouped_values[offsets[i] : offsets[i + 1]]
+
+
+class _GroupByKeys(object):
+    def __init__(self, obj, by):
         """
         Parameters
         ----------
 
         obj : Object on which the GroupBy is performed
-        by_list
-            A list of any of the following:
+        by :
+            Any of the following:
 
             1. A Python function called on each value of the object's index
             2. A dict or Series that maps index labels to group names
             3. A str indicating a column name
-            4. A list or array of the same length as the object
+            4. An array of the same length as the object
+            5. A list of the above
         """
         self.obj = obj
         self.keys = []
         self.names = []
+
+        by_list = by
+        if not isinstance(by_list, list):
+            by_list = [by]
 
         for by in by_list:
             if callable(by):

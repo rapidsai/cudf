@@ -135,13 +135,12 @@ class Series(Frame):
         self._index = RangeIndex(len(data)) if index is None else index
 
     @classmethod
-    def _from_table(cls, table):
+    def _from_table(cls, table, index=None):
         name = next(iter(table._data.keys()))
         data = next(iter(table._data.values()))
-        if table._index is None:
-            index = None
-        else:
-            index = Index._from_table(table._index)
+        if index is None:
+            if table._index is not None:
+                index = Index._from_table(table._index)
         return cls(data=data, index=index, name=name)
 
     @property

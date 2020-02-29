@@ -26,7 +26,7 @@ cdef class GroupBy:
         self.keys = keys
 
     def groups(self, Table values):
-        c_groups = move(self.c_obj.get()[0].get_groups(values.data_view()))
+        c_groups = move(self.c_obj.get()[0].get_groups(values.view()))
         c_grouped_keys = move(c_groups.keys)
         c_grouped_values = move(c_groups.values)
         c_group_offsets = c_groups.offsets
@@ -37,6 +37,7 @@ cdef class GroupBy:
         )
         grouped_values = Table.from_unique_ptr(
             move(c_grouped_values),
+            index_names=values._index_names,
             column_names=values._column_names
         )
         return grouped_keys, grouped_values, c_group_offsets
