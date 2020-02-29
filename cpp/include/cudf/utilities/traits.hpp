@@ -282,4 +282,36 @@ constexpr inline bool is_simple(data_type type) {
   return not is_compound(type);
 }
 
+/**---------------------------------------------------------------------------*
+ * @brief Indicates whether the type `T` is an arithmetic type.
+ *
+ * @tparam T  The type to verify
+ * @return true `T` is arithmetic
+ * @return false `T` is not arithmetic
+ *---------------------------------------------------------------------------**/
+template <typename T>
+constexpr inline bool is_arithmetic() {
+  return std::is_integral<T>::value or
+         std::is_floating_point<T>::value or
+         cudf::is_timestamp<T>();
+}
+
+struct is_arithmetic_impl {
+  template <typename T>
+  bool operator()() {
+    return is_arithmetic<T>();
+  }
+};
+
+/**---------------------------------------------------------------------------*
+ * @brief Indicates whether elements of `type` are arithmetic.
+ *
+ * @param type The `data_type` to verify
+ * @return true `type` is arithmetic
+ * @return false `type` is not arithmetic
+ *---------------------------------------------------------------------------**/
+constexpr inline bool is_arithmetic(data_type type) {
+  return cudf::experimental::type_dispatcher(type, is_arithmetic_impl{});
+}
+
 }  // namespace cudf

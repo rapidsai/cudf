@@ -174,6 +174,71 @@ select_quantile(ValueAccessor get_value,
     }
 }
 
+template<typename Result, typename Iterator>
+CUDA_HOST_DEVICE_CALLABLE
+Result
+select_quantile_data(Iterator begin, size_type size, double q, interpolation interp)
+{
+    quantile_index idx(size, q);
+
+    switch (interp) {
+    case interpolation::LOWER:
+        return static_cast<Result>(*(begin + idx.lower));
+
+    case interpolation::HIGHER:
+        return static_cast<Result>(*(begin + idx.higher));
+
+    case interpolation::NEAREST:
+        return static_cast<Result>(*(begin + idx.nearest));
+
+    case interpolation::LINEAR:
+        return interpolate::linear<Result>(*(begin + idx.lower),
+                                           *(begin + idx.higher),
+                                           idx.fraction);
+
+    case interpolation::MIDPOINT:
+        return interpolate::midpoint<Result>(*(begin + idx.lower),
+                                             *(begin + idx.higher));
+    }
+
+    #if defined(__CUDA_ARCH__)
+        release_assert(false && "Invalid interpolation operation for quantiles");
+        return Result();
+    #else
+        CUDF_FAIL("Invalid interpolation operation for quantiles.");
+    #endif
+}
+
+template<typename Iterator>
+CUDA_HOST_DEVICE_CALLABLE
+bool
+select_quantile_validity(Iterator begin, size_type size, double q, interpolation interp)
+{
+    quantile_index idx(size, q);
+
+    switch (interp) {
+    case interpolation::HIGHER:
+        return *(begin + idx.higher);
+
+    case interpolation::LOWER:
+        return *(begin + idx.lower);
+
+    case interpolation::NEAREST:
+        return *(begin + idx.nearest);
+
+    case interpolation::LINEAR:
+    case interpolation::MIDPOINT:
+        return *(begin + idx.lower) and *(begin + idx.higher);
+    }
+
+    #if defined(__CUDA_ARCH__)
+        release_assert(false && "Invalid interpolation operation for quantiles");
+        return false;
+    #else
+        CUDF_FAIL("Invalid interpolation operation for quantiles.");
+    #endif
+}
+
 } // namespace detail
 } // namespace experimental
 } // namespace cudf

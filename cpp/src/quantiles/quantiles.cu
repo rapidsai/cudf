@@ -33,24 +33,20 @@ namespace detail {
 
 template<typename SortMapIterator>
 std::unique_ptr<table>
-quantiles(table_view const& input,
-          SortMapIterator sortmap,
-          std::vector<double> const& q,
-          interpolation interp,
-          rmm::mr::device_memory_resource* mr)
+quantiles_discrete(table_view const& input,
+                   SortMapIterator sortmap,
+                   std::vector<double> const& q,
+                   interpolation interp,
+                   rmm::mr::device_memory_resource* mr)
 {
-    auto quantile_idx_lookup = [sortmap, interp, size=input.num_rows()]
-        __device__ (double q) {
-            auto selector = [sortmap] __device__ (auto idx) {
-                return sortmap[idx];
-            };
-            return detail::select_quantile<size_type>(selector, size, q, interp);
-        };
-
     rmm::device_vector<double> q_device{q};
 
-    auto quantile_idx_iter = thrust::make_transform_iterator(q_device.begin(),
-                                                             quantile_idx_lookup);
+    auto quantile_idx_iter = thrust::make_transform_iterator(
+        q_device.begin(),
+        [sortmap, interp, size=input.num_rows()]
+        __device__ (double q) {
+            return detail::select_quantile_data<size_type>(sortmap, size, q, interp);
+        });
 
     return detail::gather(input,
                           quantile_idx_iter,
@@ -59,6 +55,178 @@ quantiles(table_view const& input,
                           mr);
 }
 
+template<typename DataIterator, typename Result>
+struct quantiles_data_functor
+{
+    DataIterator data;
+    size_type size;
+    interpolation interp;
+
+    Result __device__ operator()(double q) {
+        return detail::select_quantile_data<Result>(data, size, q, interp);
+    }
+};
+
+template<typename ValidityIterator>
+struct quantiles_mask_functor
+{
+    ValidityIterator validity;
+    size_type size;
+    interpolation interp;
+
+    bool __device__  operator() (double q) {
+        return detail::select_quantile_validity(validity, size, q, interp);
+    }
+};
+
+
+template<typename SortMapIterator>
+struct quantiles_functor
+{
+    template<typename T, typename... Args>
+    std::enable_if_t<not std::is_arithmetic<T>::value, std::unique_ptr<column>>
+    operator()(Args&&... args)
+    {
+        CUDF_FAIL("Only numeric types are supported in quantiles.");
+    }
+
+    template<typename T>
+    std::enable_if_t<std::is_arithmetic<T>::value, std::unique_ptr<column>>
+    operator()(column_view const& input,
+               SortMapIterator sortmap,
+               std::vector<double> const& q,
+               interpolation interp,
+               rmm::mr::device_memory_resource* mr)
+    {
+        auto output = detail::allocate_like(input, input.size(),
+                                            mask_allocation_policy::NEVER,
+                                            mr);
+
+        auto d_input = column_device_view::create(input);
+        auto d_output = mutable_column_device_view::create(output->mutable_view());
+
+        rmm::device_vector<double> q_device{q};
+
+        auto sorted_data = thrust::make_permutation_iterator(input.data<T>(),
+                                                             sortmap);
+
+        thrust::transform(
+            q_device.begin(),
+            q_device.end(),
+            d_output->begin<T>(),
+            [sorted_data, interp, size=input.size()]
+            __device__ (double q){
+                return select_quantile_data<T>(sorted_data, size, q, interp);
+            });
+
+        if (input.nullable())
+        {
+            auto sorted_validity = thrust::make_transform_iterator(
+                sortmap,
+                [input=d_input.get()] __device__ (size_type idx) {
+                    return input->is_valid_nocheck(idx);
+                });
+
+            rmm::device_buffer mask;
+            size_type null_count;
+
+            std::tie(mask, null_count) = valid_if(
+                q_device.begin(),
+                q_device.end(),
+                [sorted_validity, interp, size=input.size()]
+                __device__(double q) {
+                    return select_quantile_validity(sorted_validity,
+                                                    size,
+                                                    q,
+                                                    interp);
+                },
+                0,
+                mr);
+
+            output->set_null_mask(std::move(mask), null_count);
+        }
+
+        return output;
+    }
+};
+
+template<typename SortMapIterator>
+std::unique_ptr<table>
+quantiles(table_view const& input,
+          SortMapIterator sortmap,
+          std::vector<double> const& q,
+          interpolation interp,
+          rmm::mr::device_memory_resource* mr)
+{
+    auto is_discrete_interpolation = interp == interpolation::HIGHER or
+                                     interp == interpolation::LOWER or
+                                     interp == interpolation::NEAREST;
+
+    if (is_discrete_interpolation)
+    {
+        // this is a special case, so we get bit-accurate results.
+        return quantiles_discrete(input, sortmap, q, interp, mr);
+    }
+
+    auto is_input_arithmetic = all_of(input.begin(),
+                                      input.end(),
+                                      [](column_view const& col){
+                                          return is_arithmetic(col.type());
+                                      });
+
+    CUDF_EXPECTS(is_input_arithmetic,
+                 "quantiles using arithmetic interpolation require arithmetic column types.");
+
+    auto output_columns = std::vector<std::unique_ptr<column>>{};
+    output_columns.reserve(input.num_columns());
+
+    auto output_inserter = std::back_inserter(output_columns);
+
+    std::transform(input.begin(),
+                   input.end(),
+                   output_inserter,
+                   [input, sortmap, q, interp, mr]
+                   (column_view const& col) {
+                       return type_dispatcher(col.type(), quantiles_functor<SortMapIterator>{},
+                                              col, sortmap, q, interp, mr);
+                   });
+
+    return std::make_unique<table>(std::move(output_columns));
+}
+
+} // namespace detail
+
+std::unique_ptr<table>
+quantiles(table_view const& input,
+          std::vector<double> const& q,
+          interpolation interp,
+          column_view const& sortmap,
+          rmm::mr::device_memory_resource* mr)
+{
+    if (q.size() == 0) {
+        // this isn't always right. what if the consumer wants doubles back?
+        return empty_like(input);
+    }
+
+    CUDF_EXPECTS(input.num_rows() > 0,
+                 "multi-column quantiles require at least one input row.");
+
+    if (sortmap.size() == 0)
+    {
+        return detail::quantiles(input,
+                                 thrust::make_counting_iterator<size_type>(0),
+                                 q,
+                                 interp,
+                                 mr);
+    }
+    else
+    {
+        return detail::quantiles(input,
+                                 sortmap.data<size_type>(),
+                                 q,
+                                 interp,
+                                 mr);
+    }
 }
 
 std::unique_ptr<table>
@@ -70,36 +238,14 @@ quantiles(table_view const& input,
           std::vector<null_order> const& null_precedence,
           rmm::mr::device_memory_resource* mr)
 {
-    if (q.size() == 0) {
-        return empty_like(input);
-    }
-
-    CUDF_EXPECTS(interp == interpolation::HIGHER ||
-                 interp == interpolation::LOWER ||
-                 interp == interpolation::NEAREST,
-                 "multi-column quantiles require a non-arithmetic interpolation strategy.");
-
-    CUDF_EXPECTS(input.num_rows() > 0,
-                 "multi-column quantiles require at least one input row.");
-
-    if (is_input_sorted == sorted::YES)
-    {
-        return detail::quantiles(input,
-                                 thrust::make_counting_iterator<size_type>(0),
-                                 q,
-                                 interp,
-                                 mr);
-    }
-    else
-    {
-        auto sorted_idx = detail::sorted_order(input, column_order, null_precedence);
-        return detail::quantiles(input,
-                                 sorted_idx->view().data<size_type>(),
-                                 q,
-                                 interp,
-                                 mr);
-    }
+    return quantiles(input,
+                     q,
+                     interp,
+                     is_input_sorted == sorted::YES
+                        ? column_view{}
+                        : detail::sorted_order(input, column_order, null_precedence)->view(),
+                     mr);
 }
 
-}
-}
+} // namespace experimental
+} // namespace cudf
