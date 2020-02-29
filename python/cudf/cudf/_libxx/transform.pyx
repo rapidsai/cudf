@@ -51,7 +51,11 @@ def nans_to_nulls(Column input):
     cdef unique_ptr[device_buffer] c_buffer
 
     with nogil:
-        c_buffer = move(libcudf_transform.nans_to_nulls(c_input).first)
+        c_output = move(libcudf_transform.nans_to_nulls(c_input))
+        c_buffer = move(c_output.first)
+
+    if c_output.second == 0:
+        return None
 
     buffer = DeviceBuffer.c_from_unique_ptr(move(c_buffer))
     buffer = Buffer(buffer)
