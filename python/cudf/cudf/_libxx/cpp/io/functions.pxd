@@ -1,9 +1,11 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+from libcpp cimport bool
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 from libcpp cimport bool
 
+from cudf._libxx.cpp.types cimport size_type
 cimport cudf._libxx.cpp.io.types as cudf_io_types
 cimport cudf._libxx.cpp.table.table_view as cudf_table_view
 
@@ -14,8 +16,10 @@ cdef extern from "cudf/io/functions.hpp" \
     cdef cppclass read_avro_args:
         cudf_io_types.source_info source
         vector[string] columns
-        size_t skip_rows
-        size_t num_rows
+        size_type skip_rows
+        size_type num_rows
+        read_avro_args() except +
+        read_avro_args(cudf_io_types.source_info &info) except +
 
     cdef cudf_io_types.table_with_metadata read_avro(
         read_avro_args &args) except +

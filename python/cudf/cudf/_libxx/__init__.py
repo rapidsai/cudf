@@ -2,6 +2,7 @@
 import numpy as np
 
 from . import (
+    avro,
     copying,
     hash,
     join,
