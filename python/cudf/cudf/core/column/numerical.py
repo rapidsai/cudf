@@ -86,6 +86,9 @@ class NumericalColumn(column.ColumnBase):
             lhs=self, rhs=rhs, op=binop, out_dtype=out_dtype, reflect=reflect
         )
 
+    def unary_operator(self, unaryop):
+        return _numeric_column_unaryop(self, op=unaryop)
+
     def unordered_compare(self, cmpop, rhs):
         return _numeric_column_compare(self, rhs, op=cmpop)
 
@@ -502,6 +505,14 @@ def _numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
 
     libcudf.nvtx.nvtx_range_pop()
     return out
+
+
+def _numeric_column_unaryop(operand, op):
+    if callable(op):
+        return libcudfxx.transform.transform(operand, op)
+
+    op = libcudfxx.unary.UnaryOp[op.upper()]
+    return libcudfxx.unary.unary_operation(operand, op)
 
 
 def _numeric_column_compare(lhs, rhs, op):

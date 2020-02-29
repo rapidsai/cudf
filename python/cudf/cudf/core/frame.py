@@ -300,45 +300,33 @@ class Frame(libcudfxx.table.Table):
         return self
 
     def _unaryop(self, op):
-        if callable(op):
-            fn = libcudfxx.transform.transform
-        else:
-            op = libcudfxx.unary.UnaryOp[op.upper()]
-            fn = libcudfxx.unary.unary_operation
-
-        data_columns = (fn(col, op) for col in self._columns)
+        data_columns = (col.unary_operator(op) for col in self._columns)
         data = OrderedColumnDict(zip(self._column_names, data_columns))
         return self.__class__._from_table(Frame(data, self._index))
 
     def isnull(self):
         """Identify missing values.
         """
-        return self._is_null()
+        data_columns = (col.isnull() for col in self._columns)
+        data = OrderedColumnDict(zip(self._column_names, data_columns))
+        return self.__class__._from_table(Frame(data, self._index))
 
     def isna(self):
         """Identify missing values. Alias for `isnull`
         """
-        return self._is_null()
+        return self.isnull()
 
     def notnull(self):
         """Identify missing values.
         """
-        return self._is_valid()
+        data_columns = (col.notnull() for col in self._columns)
+        data = OrderedColumnDict(zip(self._column_names, data_columns))
+        return self.__class__._from_table(Frame(data, self._index))
 
     def notna(self):
         """Identify non-missing values. Alias for `notnull`.
         """
-        return self._is_valid()
-
-    def _is_null(self):
-        data_columns = (libcudfxx.unary.is_null(col) for col in self._columns)
-        data = OrderedColumnDict(zip(self._column_names, data_columns))
-        return self.__class__._from_table(Frame(data, self._index))
-
-    def _is_valid(self):
-        data_columns = (libcudfxx.unary.is_valid(col) for col in self._columns)
-        data = OrderedColumnDict(zip(self._column_names, data_columns))
-        return self.__class__._from_table(Frame(data, self._index))
+        return self.notnull()
 
     def searchsorted(
         self, values, side="left", ascending=True, na_position="last"
