@@ -50,5 +50,6 @@ cdef extern from "<utility>" namespace "std" nogil:
         pair[unique_ptr[device_buffer], size_type]
     )
     cdef column_contents move(column_contents)
+    cdef cudf_io_types.source_info move(cudf_io_types.source_info)
     cdef cudf_io_types.table_with_metadata move(
         cudf_io_types.table_with_metadata)
