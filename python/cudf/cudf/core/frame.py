@@ -238,9 +238,9 @@ class Frame(libcudfxx.table.Table):
         result._copy_categories(self)
         return result
 
-    def _shift(self, offset, fill_values):
+    def _shift(self, offset):
         result = self.__class__._from_table(
-            libcudfxx.copying.shift(self, offset, fill_values)
+            libcudfxx.copying.shift(self, offset)
         )
 
         return result

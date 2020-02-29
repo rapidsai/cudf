@@ -2522,6 +2522,10 @@ class DataFrame(Frame):
 
         return df
 
+    def shift(self, periods=1, freq=None, axis=0, fill_value=None):
+        assert axis in (None, 0) and freq is None and fill_value is None
+        return self._shift(periods)
+
     def groupby(
         self,
         by=None,

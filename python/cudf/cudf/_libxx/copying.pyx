@@ -45,7 +45,7 @@ cdef scalar* _as_scalar_ptr(Scalar s):
     return s.c_value.get()
 
 
-def shift(Table input, int offset, list fill_values):
+def shift(Table input, int offset):
     cdef table_view c_input = input.data_view()
     cdef int32_t c_offset = offset
     cdef vector[reference_wrapper[scalar]] c_fill_values

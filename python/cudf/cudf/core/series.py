@@ -2411,31 +2411,8 @@ class Series(Frame):
         Shift currently only supports float and integer dtype columns with
         no null values.
         """
-
         assert axis in (None, 0) and freq is None and fill_value is None
-
-        if self.has_nulls:
-            raise AssertionError(
-                "Shift currently requires columns with no " "null values"
-            )
-
-        if not np.issubdtype(self.dtype, np.number):
-            raise NotImplementedError(
-                "Shift currently only supports " "numeric dtypes"
-            )
-
-        if periods == 0:
-            return self
-
-        return self._shift(periods, fill_value or [])
-
-        input_dary = self.to_gpu_array()
-        output_dary = rmm.device_array_like(input_dary)
-        if output_dary.size > 0:
-            cudautils.gpu_shift.forall(output_dary.size)(
-                input_dary, output_dary, periods
-            )
-        return Series(output_dary, name=self.name, index=self.index)
+        return self._shift(periods)
 
     def diff(self, periods=1):
         """Calculate the difference between values at positions i and i - N in
