@@ -111,6 +111,7 @@
 - PR #4234 Add BUILD_LEGACY_TESTS cmake option
 - PR #4244 Port nvstrings Substring Gather/Scatter functions to cuDF Python/Cython
 - PR #4261 libxx Cython reorganization
+- PR #4280 Port nvstrings Numeric Handling functions to cuDF Python/Cython
 
 ## Bug Fixes
 
