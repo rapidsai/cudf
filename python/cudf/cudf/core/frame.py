@@ -317,7 +317,7 @@ class Frame(libcudfxx.table.Table):
         return self.isnull()
 
     def notnull(self):
-        """Identify missing values.
+        """Identify non-missing values.
         """
         data_columns = (col.notnull() for col in self._columns)
         data = OrderedColumnDict(zip(self._column_names, data_columns))
