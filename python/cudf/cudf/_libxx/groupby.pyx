@@ -18,7 +18,7 @@ cdef class GroupBy:
         """
         self.c_obj.reset(
             new libcudf_groupby.groupby(
-                make_table_view(keys.keys)
+                make_table_view(keys)
             )
         )
 
@@ -41,3 +41,9 @@ cdef class GroupBy:
             column_names=values._column_names
         )
         return grouped_keys, grouped_values, c_group_offsets
+
+    def aggregate(self, Table values, aggregations):
+        """
+
+        """
+
