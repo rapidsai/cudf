@@ -2,41 +2,32 @@
 
 # cython: boundscheck = False
 
-from cudf._lib.cudf cimport *
-from cudf._lib.cudf import *
-from cudf._lib.utils cimport *
-from cudf._lib.utils import *
+import cudf
+import errno
+import os
+import pyarrow as pa
+
 from libc.stdlib cimport free
 from libcpp.memory cimport unique_ptr, make_unique
 from libcpp.string cimport string
 from libcpp.map cimport map
 from libcpp.vector cimport vector
 
-import errno
-import os
-import json
-import pandas as pd
-import pyarrow as pa
-
-from cudf._lib.cudf cimport (
-    size_type
-)
+from cudf._libxx.cpp.types cimport size_type
 from cudf._libxx.table cimport Table
 from cudf._libxx.cpp.table.table_view cimport (
     table_view
 )
-from cudf._libxx.cpp.io.parquet cimport (
-    reader as parquet_reader,
-    reader_options as parquet_reader_options,
-)
+from cudf._libxx.move cimport move
 from cudf._libxx.cpp.io.functions cimport (
     write_parquet_args,
-    write_parquet as parquet_writer
+    write_parquet as parquet_writer,
+    read_parquet_args,
+    read_parquet as parquet_reader
 )
 
 cimport cudf._lib.utils as lib
 cimport cudf._libxx.cpp.io.types as cudf_io_types
-
 
 cpdef generate_pandas_metadata(Table table, index):
     col_names = []
@@ -100,62 +91,52 @@ cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
     cudf.io.parquet.read_parquet
     cudf.io.parquet.to_parquet
     """
+    print("before anything")
 
-    # Setup reader options
-    cdef parquet_reader_options options = parquet_reader_options()
-    for col in columns or []:
-        options.columns.push_back(str(col).encode())
-    options.strings_to_categorical = strings_to_categorical
-    options.use_pandas_metadata = use_pandas_metadata
-
-    # Create reader from source
-    cdef const unsigned char[::1] buffer = lib.view_of_buffer(
-        filepath_or_buffer)
+    cdef cudf_io_types.source_info source
+    cdef const unsigned char[::1] buffer \
+        = lib.view_of_buffer(filepath_or_buffer)
     cdef string filepath
     if buffer is None:
-        if not os.path.isfile(filepath_or_buffer):
-            raise FileNotFoundError(
-                errno.ENOENT, os.strerror(errno.ENOENT), filepath_or_buffer
-            )
-        filepath = <string>str(filepath_or_buffer).encode()
-
-    cdef unique_ptr[parquet_reader] reader
-    with nogil:
-        if buffer is None:
-            reader = unique_ptr[parquet_reader](
-                new parquet_reader(filepath, options)
-            )
+        if os.path.isfile(filepath_or_buffer):
+            filepath = <string>str(filepath_or_buffer).encode()
         else:
-            reader = unique_ptr[parquet_reader](
-                new parquet_reader(<char*>&buffer[0], buffer.shape[0], options)
-            )
+            buffer = filepath_or_buffer.encode()
 
-    # Read data into columns
-    cdef cudf_table c_out_table
-    cdef size_type c_skip_rows = skip_rows if skip_rows is not None else 0
-    cdef size_type c_num_rows = num_rows if num_rows is not None else -1
-    cdef size_type c_row_group = row_group if row_group is not None else -1
+    if buffer is None:
+        source.type = cudf_io_types.io_type.FILEPATH
+        source.filepath = filepath
+    else:
+        source.type = cudf_io_types.io_type.HOST_BUFFER
+        source.buffer.first = <char*>&buffer[0]
+        source.buffer.second = buffer.shape[0]
+
+    # Setup parquet reader arguments
+    cdef read_parquet_args args = read_parquet_args(source)
+    print("here")
+
+    for col in columns or []:
+        args.columns.push_back(str(col).encode())
+    args.strings_to_categorical = strings_to_categorical
+    args.use_pandas_metadata = use_pandas_metadata
+
+    args.skip_rows = skip_rows if skip_rows is not None else 0
+    args.num_rows = num_rows if num_rows is not None else -1
+    args.row_group = row_group if row_group is not None else -1
+
+    print("jhere")
+
+    # Read Parquet
+    cdef cudf_io_types.table_with_metadata c_out_table
+
     with nogil:
-        if c_skip_rows != 0 or c_num_rows != -1:
-            c_out_table = reader.get().read_rows(c_skip_rows, c_num_rows)
-        elif c_row_group != -1:
-            c_out_table = reader.get().read_row_group(c_row_group)
-        else:
-            c_out_table = reader.get().read_all()
+        c_out_table = move(parquet_reader(args))
 
-    # Construct dataframe from columns
-    df = table_to_dataframe(&c_out_table)
-
-    # Set column to use as row indexes if available
-    index_col = reader.get().get_index_column().decode("UTF-8")
-    if index_col is not '' and index_col in df.columns:
-        df = df.set_index(index_col)
-        new_index_name = pa.pandas_compat._backwards_compatible_index_name(
-            df.index.name, df.index.name
-        )
-        df.index.name = new_index_name
-
-    return df
+    column_names = list(c_out_table.metadata.column_names)
+    column_names = [x.decode() for x in column_names]
+    tbl = Table.from_unique_ptr(move(c_out_table.tbl),
+                                column_names=column_names)
+    return cudf.DataFrame._from_table(tbl)
 
 cpdef write_parquet(
         Table table,
