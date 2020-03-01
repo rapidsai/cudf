@@ -26,6 +26,7 @@ from cudf._libxx.cpp.io.functions cimport (
     read_parquet as parquet_reader
 )
 
+cimport cudf._libxx.cpp.types as cudf_types
 cimport cudf._lib.utils as lib
 cimport cudf._libxx.cpp.io.types as cudf_io_types
 
@@ -91,7 +92,6 @@ cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
     cudf.io.parquet.read_parquet
     cudf.io.parquet.to_parquet
     """
-    print("before anything")
 
     cdef cudf_io_types.source_info source
     cdef const unsigned char[::1] buffer \
@@ -113,7 +113,6 @@ cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
 
     # Setup parquet reader arguments
     cdef read_parquet_args args = read_parquet_args(source)
-    print("here")
 
     for col in columns or []:
         args.columns.push_back(str(col).encode())
@@ -123,8 +122,7 @@ cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
     args.skip_rows = skip_rows if skip_rows is not None else 0
     args.num_rows = num_rows if num_rows is not None else -1
     args.row_group = row_group if row_group is not None else -1
-
-    print("jhere")
+    args.timestamp_type = cudf_types.data_type(cudf_types.type_id.EMPTY)
 
     # Read Parquet
     cdef cudf_io_types.table_with_metadata c_out_table

@@ -43,7 +43,6 @@ def read_parquet(
     if compression is not None:
         ValueError("URL content-encoding decompression is not supported")
 
-    print("right here")
     if engine == "cudf":
         df = libparquet.read_parquet(
             filepath_or_buffer,

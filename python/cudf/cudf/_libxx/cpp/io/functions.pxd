@@ -10,6 +10,7 @@ from cudf._libxx.cpp.types cimport (
     data_type
 )
 cimport cudf._libxx.cpp.io.types as cudf_io_types
+cimport cudf._libxx.cpp.types as cudf_types
 cimport cudf._libxx.cpp.table.table_view as cudf_table_view
 
 
@@ -115,7 +116,7 @@ cdef extern from "cudf/io/functions.hpp" \
         size_type num_rows
         bool strings_to_categorical
         bool use_pandas_metadata
-        data_type timestamp_type
+        cudf_types.data_type timestamp_type
 
         read_parquet_args() except +
         read_parquet_args(cudf_io_types.source_info src) except +
