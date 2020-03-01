@@ -9,7 +9,8 @@ from libcpp.memory cimport unique_ptr
 
 from cudf._libxx.column cimport Column
 from cudf._libxx.move cimport move
-from cudf._libxx.aggregation cimport get_aggregation
+from cudf._libxx.aggregation import Aggregation
+from cudf._libxx.aggregation cimport Aggregation
 
 from cudf._libxx.cpp.types cimport size_type
 from cudf._libxx.cpp.column.column cimport column
@@ -50,7 +51,8 @@ def rolling(Column source_column, Column pre_column_window,
     cdef column_view pre_column_window_view
     cdef column_view fwd_column_window_view
     cdef unique_ptr[aggregation] agg = move(
-        get_aggregation(op, {'dtype': source_column.dtype}))
+        Aggregation(op, dtype=source_column.dtype).c_obj
+    )
 
     if window is None:
         if center:
