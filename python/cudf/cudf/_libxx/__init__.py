@@ -1,12 +1,11 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
-
 import numpy as np
 
 from . import (
+    avro,
     copying,
     hash,
     join,
-    lib,
     merge,
     null_mask,
     quantiles,
@@ -17,6 +16,7 @@ from . import (
     stream_compaction,
     table,
     transpose,
+    unary,
 )
 
 MAX_COLUMN_SIZE = np.iinfo(np.int32).max
