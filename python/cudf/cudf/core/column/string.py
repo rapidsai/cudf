@@ -12,43 +12,44 @@ import nvstrings
 import rmm
 
 import cudf._lib as libcudf
+import cudf._libxx.string_casting as str_cast
 from cudf._lib.nvtx import nvtx_range_pop, nvtx_range_push
-from cudf._libxx.null_mask import (
-    MaskState,
-    bitmask_allocation_size_bytes,
-    create_null_mask,
-)
+from cudf._libxx.null_mask import bitmask_allocation_size_bytes
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.utils import utils
 from cudf.utils.dtypes import is_list_like
 
 _str_to_numeric_typecast_functions = {
-    np.dtype("int32"): nvstrings.nvstrings.stoi,
-    np.dtype("int64"): nvstrings.nvstrings.stol,
-    np.dtype("float32"): nvstrings.nvstrings.stof,
-    np.dtype("float64"): nvstrings.nvstrings.stod,
-    np.dtype("bool"): nvstrings.nvstrings.to_booleans,
+    np.dtype("int8"): str_cast.stoi8,
+    np.dtype("int16"): str_cast.stoi16,
+    np.dtype("int32"): str_cast.stoi,
+    np.dtype("int64"): str_cast.stol,
+    np.dtype("float32"): str_cast.stof,
+    np.dtype("float64"): str_cast.stod,
+    np.dtype("bool"): str_cast.to_booleans,
     # TODO: support Date32 UNIX days
     # np.dtype("datetime64[D]"): nvstrings.nvstrings.timestamp2int,
-    np.dtype("datetime64[s]"): nvstrings.nvstrings.timestamp2int,
-    np.dtype("datetime64[ms]"): nvstrings.nvstrings.timestamp2int,
-    np.dtype("datetime64[us]"): nvstrings.nvstrings.timestamp2int,
-    np.dtype("datetime64[ns]"): nvstrings.nvstrings.timestamp2int,
+    np.dtype("datetime64[s]"): str_cast.timestamp2int,
+    np.dtype("datetime64[ms]"): str_cast.timestamp2int,
+    np.dtype("datetime64[us]"): str_cast.timestamp2int,
+    np.dtype("datetime64[ns]"): str_cast.timestamp2int,
 }
 
 _numeric_to_str_typecast_functions = {
-    np.dtype("int32"): nvstrings.itos,
-    np.dtype("int64"): nvstrings.ltos,
-    np.dtype("float32"): nvstrings.ftos,
-    np.dtype("float64"): nvstrings.dtos,
-    np.dtype("bool"): nvstrings.from_booleans,
+    np.dtype("int8"): str_cast.i8tos,
+    np.dtype("int16"): str_cast.i16tos,
+    np.dtype("int32"): str_cast.itos,
+    np.dtype("int64"): str_cast.ltos,
+    np.dtype("float32"): str_cast.ftos,
+    np.dtype("float64"): str_cast.dtos,
+    np.dtype("bool"): str_cast.from_booleans,
     # TODO: support Date32 UNIX days
     # np.dtype("datetime64[D]"): nvstrings.int2timestamp,
-    np.dtype("datetime64[s]"): nvstrings.int2timestamp,
-    np.dtype("datetime64[ms]"): nvstrings.int2timestamp,
-    np.dtype("datetime64[us]"): nvstrings.int2timestamp,
-    np.dtype("datetime64[ns]"): nvstrings.int2timestamp,
+    np.dtype("datetime64[s]"): str_cast.int2timestamp,
+    np.dtype("datetime64[ms]"): str_cast.int2timestamp,
+    np.dtype("datetime64[us]"): str_cast.int2timestamp,
+    np.dtype("datetime64[ns]"): str_cast.int2timestamp,
 }
 
 
@@ -647,12 +648,7 @@ class StringColumn(column.ColumnBase):
         str_dtype = mem_dtype
         out_dtype = mem_dtype
 
-        if mem_dtype.type in (np.int8, np.int16):
-            mem_dtype = np.dtype(np.int32)
-            str_dtype = mem_dtype
-        elif mem_dtype.type is np.datetime64:
-            kwargs.update(units=np.datetime_data(mem_dtype)[0])
-            mem_dtype = np.dtype(np.int64)
+        if mem_dtype.type is np.datetime64:
             if "format" not in kwargs:
                 if len(self.nvstrings) > 0:
                     # infer on host from the first not na element
@@ -660,26 +656,9 @@ class StringColumn(column.ColumnBase):
                         self[self.notna()][0]
                     )
                     kwargs.update(format=fmt)
-            else:
-                fmt = None
+        kwargs.update(dtype=out_dtype)
 
-        out_arr = rmm.device_array(shape=len(self), dtype=mem_dtype)
-        out_ptr = libcudf.cudf.get_ctype_ptr(out_arr)
-        kwargs.update({"devptr": out_ptr})
-
-        _str_to_numeric_typecast_functions[str_dtype](self.nvstrings, **kwargs)
-
-        out_col = column.as_column(out_arr)
-
-        if self.has_nulls:
-            out_mask = create_null_mask(
-                len(self), state=MaskState.UNINITIALIZED
-            )
-            out_mask_ptr = out_mask.ptr
-            self.nvstrings.set_null_bitmask(out_mask_ptr, bdevmem=True)
-            out_col = out_col.set_mask(out_mask)
-
-        return out_col.astype(out_dtype)
+        return _str_to_numeric_typecast_functions[str_dtype](self, **kwargs)
 
     def as_datetime_column(self, dtype, **kwargs):
         return self.as_numerical_column(dtype, **kwargs)

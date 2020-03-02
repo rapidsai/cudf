@@ -1,36 +1,47 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+from libcpp cimport bool
 from libcpp.string cimport string
 from libcpp.vector cimport vector
+from libcpp cimport bool
 
-cimport cudf._libxx.cpp.io.io_types as cudf_io_types
+from cudf._libxx.cpp.types cimport size_type
+cimport cudf._libxx.cpp.io.types as cudf_io_types
+cimport cudf._libxx.cpp.table.table_view as cudf_table_view
 
 
 cdef extern from "cudf/io/functions.hpp" \
         namespace "cudf::experimental::io" nogil:
 
     cdef cppclass read_avro_args:
-        source_info source
+        cudf_io_types.source_info source
         vector[string] columns
-        size_t skip_rows
-        size_t num_rows
+        size_type skip_rows
+        size_type num_rows
+        read_avro_args() except +
+        read_avro_args(cudf_io_types.source_info &info) except +
 
-    cdef table_with_metadata read_avro(read_avro_args &args) except +
+    cdef cudf_io_types.table_with_metadata read_avro(
+        read_avro_args &args) except +
 
     cdef cppclass read_json_args:
-        source_info source
+        cudf_io_types.source_info source
         bool lines
-        compression_type compression
+        cudf_io_types.compression_type compression
         vector[string] dtype
         bool dayfirst
-        source_info source
         size_t byte_range_offset
         size_t byte_range_size
 
-    cdef table_with_metadata read_json(read_json_args &args) except +
+        read_json_args() except +
+
+        read_json_args(cudf_io_types.source_info src) except +
+
+    cdef cudf_io_types.table_with_metadata read_json(
+        read_json_args &args) except +
 
     cdef cppclass read_csv_args:
-        source_info source
+        cudf_io_types.source_info source
 
         # Reader settings
         cudf_io_types.compression_type compression
@@ -78,7 +89,7 @@ cdef extern from "cudf/io/functions.hpp" \
     ) except +
 
     cdef cppclass read_orc_args:
-        source_info source
+        cudf_io_types.source_info source
         vector[string] columns
         size_t stripe
         size_t skip_rows
@@ -91,3 +102,19 @@ cdef extern from "cudf/io/functions.hpp" \
     cdef cudf_io_types.table_with_metadata read_orc(
         read_orc_args &args
     ) except +
+
+    cdef cppclass write_parquet_args:
+        cudf_io_types.sink_info sink
+        cudf_io_types.compression_type compression
+        cudf_io_types.statistics_freq stats_level
+        cudf_table_view.table_view table
+        const cudf_io_types.table_metadata *metadata
+
+        write_parquet_args() except +
+        write_parquet_args(cudf_io_types.sink_info sink_,
+                           cudf_table_view.table_view table_,
+                           cudf_io_types.table_metadata *table_metadata_,
+                           cudf_io_types.compression_type compression_,
+                           cudf_io_types.statistics_freq stats_lvl_) except +
+
+    cdef void write_parquet(write_parquet_args args) except +

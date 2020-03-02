@@ -299,10 +299,33 @@ class Frame(libcudfxx.table.Table):
         return self
 
     def _unaryop(self, op):
-        result = self.copy()
-        for name, col in result._data.items():
-            result._data[name] = col.unary_operator(op)
-        return result
+        data_columns = (col.unary_operator(op) for col in self._columns)
+        data = zip(self._column_names, data_columns)
+        return self.__class__._from_table(Frame(data, self._index))
+
+    def isnull(self):
+        """Identify missing values.
+        """
+        data_columns = (col.isnull() for col in self._columns)
+        data = zip(self._column_names, data_columns)
+        return self.__class__._from_table(Frame(data, self._index))
+
+    def isna(self):
+        """Identify missing values. Alias for `isnull`
+        """
+        return self.isnull()
+
+    def notnull(self):
+        """Identify non-missing values.
+        """
+        data_columns = (col.notnull() for col in self._columns)
+        data = zip(self._column_names, data_columns)
+        return self.__class__._from_table(Frame(data, self._index))
+
+    def notna(self):
+        """Identify non-missing values. Alias for `notnull`.
+        """
+        return self.notnull()
 
     def interleave_columns(self):
         """
