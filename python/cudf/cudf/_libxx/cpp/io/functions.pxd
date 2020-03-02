@@ -3,7 +3,6 @@
 from libcpp cimport bool
 from libcpp.string cimport string
 from libcpp.vector cimport vector
-from libcpp cimport bool
 
 from cudf._libxx.cpp.types cimport size_type
 cimport cudf._libxx.cpp.io.types as cudf_io_types
