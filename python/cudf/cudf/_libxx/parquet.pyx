@@ -134,10 +134,8 @@ cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
 
     column_names = list(c_out_table.metadata.column_names)
     column_names = [x.decode() for x in column_names]
-    print("Column Names: " + str(column_names))
     tbl = Table.from_unique_ptr(move(c_out_table.tbl),
                                 column_names=column_names)
-    print("After table thing")
     return cudf.DataFrame._from_table(tbl)
 
 cpdef write_parquet(
