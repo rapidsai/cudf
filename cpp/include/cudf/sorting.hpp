@@ -22,6 +22,14 @@
 #include <vector>
 
 namespace cudf {
+
+enum class rank_method {
+  FIRST,   // stable sort order ranking
+  AVERAGE, // mean of first in the group
+  MIN,     // min  of first in the group
+  MAX,     // max  of first in the group
+  DENSE    // like min/max, but rank always increases by 1 between groups
+};
 namespace experimental {
 
 /**---------------------------------------------------------------------------*
@@ -39,6 +47,17 @@ namespace experimental {
  * containing the permuted row indices of `input` if it were sorted
  *---------------------------------------------------------------------------**/
 std::unique_ptr<column> sorted_order(
+    table_view input, std::vector<order> const& column_order = {},
+    std::vector<null_order> const& null_precedence = {},
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @copybrief sorted_order(table_view, std::vector<order> const&, std::vector<null_order> const&, rmm::mr::device_memory_resource*)
+ * The sort order is stable. 
+ *  
+ * @copydetails sorted_order(table_view, std::vector<order> const&, std::vector<null_order> const&, rmm::mr::device_memory_resource*)
+ */
+std::unique_ptr<column> stable_sorted_order(
     table_view input, std::vector<order> const& column_order = {},
     std::vector<null_order> const& null_precedence = {},
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
@@ -82,6 +101,16 @@ std::unique_ptr<table> sort(
     std::vector<null_order> const& null_precedence = {},
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/**
+ * @copybrief sort(table_view, std::vector<order> const&, std::vector<null_order> const&, rmm::mr::device_memory_resource*)
+ * The sort order is stable. 
+ * 
+ * @copydetails sort(table_view, std::vector<order> const&, std::vector<null_order> const&, rmm::mr::device_memory_resource*)
+ */
+std::unique_ptr<table> stable_sort(
+    table_view input, std::vector<order> const& column_order = {},
+    std::vector<null_order> const& null_precedence = {},
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Performs a key-value sort.
@@ -110,5 +139,25 @@ std::unique_ptr<table> sort_by_key(
     std::vector<null_order> const& null_precedence = {},
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-}  // namespace experimental
-}  // namespace cudf
+/**
+ * @copybrief sort_by_key(table_view const&, table_view const&, std::vector<order> const&, std::vector<null_order> const&, rmm::mr::device_memory_resource*)
+ * The sort order is stable. 
+ * 
+ * @copydetails sort_by_key(table_view const&, table_view const&, std::vector<order> const&, std::vector<null_order> const&, rmm::mr::device_memory_resource*)
+ */
+std::unique_ptr<table> stable_sort_by_key(
+    table_view const& values, table_view const& keys,
+    std::vector<order> const& column_order = {},
+    std::vector<null_order> const& null_precedence = {},
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+std::unique_ptr<table> rank(
+    table_view input,
+    rank_method method,
+    order column_order,
+    include_nulls _include_nulls,
+    null_order null_precedence,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+    
+} // namespace experimental
+} // namespace cudf
