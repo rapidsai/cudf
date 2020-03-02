@@ -874,11 +874,7 @@ def is_file_like(obj):
 
 
 def _is_local_filesystem(fs):
-
-    if isinstance(fs, fsspec.implementations.local.LocalFileSystem):
-        return True
-    else:
-        return False
+    return isinstance(fs, fsspec.implementations.local.LocalFileSystem)
 
 
 def get_filepath_or_buffer(
