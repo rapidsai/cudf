@@ -85,8 +85,6 @@ namespace { // anonym.
           }
         }
         bidx += detail::bytes_in_char_utf8(the_chr);
-        
-        ///d_buffer += detail::from_char_utf8(the_chr, d_buffer);
       }
       return 0;
     }
