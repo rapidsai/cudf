@@ -387,53 +387,23 @@ def rearrange_by_division_list(
     return df3
 
 
-def _percentile(a, q, interpolation="linear"):
+def _quantile(a, q, interpolation="linear"):
     n = len(a)
     if not len(a):
         return None, n
-    return (
-        cupy.asnumpy(gd.DataFrame({"a": a}).quantiles(q.tolist()).values),
-        n,
-    )
+    return (a.quantiles(q.tolist()), n)
 
 
-def merge_percentiles(finalq, qs, vals, interpolation="lower", Ns=None):
-    """ Combine several percentile calculations of different data.
-    [NOTE: Mostly copied from dask.array]
-
-    Parameters
-    ----------
-
-    finalq : numpy.array
-        Percentiles to compute (must use same scale as ``qs``).
-    qs : sequence of :class:`numpy.array`s
-        Percentiles calculated on different sets of data.
-    vals : sequence of :class:`numpy.array`s
-        Resulting values associated with percentiles ``qs``.
-    Ns : sequence of integers
-        The number of data elements associated with each data set.
-    interpolation : {'linear', 'lower', 'higher', 'midpoint', 'nearest'}
-        Specify the type of interpolation to use to calculate final
-        percentiles.  For more information, see :func:`numpy.percentile`.
-
-    Examples
-    --------
-
-    >>> finalq = [10, 20, 30, 40, 50, 60, 70, 80]
-    >>> qs = [[20, 40, 60, 80], [20, 40, 60, 80]]
-    >>> vals = [np.array([1, 2, 3, 4]), np.array([10, 11, 12, 13])]
-    >>> Ns = [100, 100]  # Both original arrays had 100 elements
-
-    >>> merge_percentiles(finalq, qs, vals, Ns=Ns)
-    array([ 1,  2,  3,  4, 10, 11, 12, 13])
+def merge_quantiles(finalq, qs, vals):
+    """ Combine several quantile calculations of different data.
+    [NOTE: Logic copied from dask.array merge_percentiles]
     """
     if isinstance(finalq, Iterator):
         finalq = list(finalq)
     finalq = np.array(finalq)
     qs = list(map(list, qs))
     vals = list(vals)
-    if Ns is None:
-        vals, Ns = zip(*vals)
+    vals, Ns = zip(*vals)
     Ns = list(Ns)
 
     L = list(zip(*[(q, val, N) for q, val, N in zip(qs, vals, Ns) if N]))
@@ -441,24 +411,10 @@ def merge_percentiles(finalq, qs, vals, interpolation="lower", Ns=None):
         raise ValueError("No non-trivial arrays found")
     qs, vals, Ns = L
 
-    # TODO: Perform this check above in percentile once dtype checking is easy
-    #       Here we silently change meaning
-    if vals[0].dtype.name == "category":
-        result = merge_percentiles(
-            finalq, qs, [v.codes for v in vals], interpolation, Ns
-        )
-        import pandas as pd
-
-        return pd.Categorical.from_codes(
-            result, vals[0].categories, vals[0].ordered
-        )
-    if not np.issubdtype(vals[0].dtype, np.number):
-        interpolation = "nearest"
-
     if len(vals) != len(qs) or len(Ns) != len(qs):
         raise ValueError("qs, vals, and Ns parameters must be the same length")
 
-    # transform qs and Ns into number of observations between percentiles
+    # transform qs and Ns into number of observations between quantiles
     counts = []
     for q, N in zip(qs, Ns):
         count = np.empty(len(q))
@@ -467,57 +423,37 @@ def merge_percentiles(finalq, qs, vals, interpolation="lower", Ns=None):
         count *= N
         counts.append(count)
 
-    # Sort by calculated percentile values, then number of observations.
-    # >95% of the time in this function is spent in `merge_sorted` below.
-    # An alternative that uses numpy sort is shown.  It is sometimes
-    # comparable to, but typically slower than, `merge_sorted`.
-    #
-    # >>> A = np.concatenate(map(np.array, map(zip, vals, counts)))
-    # >>> A.sort(0, kind='mergesort')
+    def _append_counts(val, count):
+        val["_counts"] = count
+        return val
 
-    combined_vals_counts = toolz.merge_sorted(*map(zip, vals, counts))
-    combined_vals, combined_counts = zip(*combined_vals_counts)
+    # Sort by calculated quantile values, then number of observations.
+    combined_vals_counts = gd.merge_sorted(
+        [*map(_append_counts, vals, counts)]
+    )
+    combined_counts = cupy.asnumpy(combined_vals_counts["_counts"].values)
+    combined_vals = combined_vals_counts.drop(columns=["_counts"])
 
-    combined_vals = np.array(combined_vals)
-    combined_counts = np.array(combined_counts)
-
-    # percentile-like, but scaled by total number of observations
+    # quantile-like, but scaled by total number of observations
     combined_q = np.cumsum(combined_counts)
 
-    # rescale finalq percentiles to match combined_q
+    # rescale finalq quantiles to match combined_q
     desired_q = finalq * sum(Ns)
 
-    # the behavior of different interpolation methods should be
-    # investigated further.
-    if interpolation == "linear":
-        rv = np.interp(desired_q, combined_q, combined_vals)
-    else:
-        left = np.searchsorted(combined_q, desired_q, side="left")
-        right = np.searchsorted(combined_q, desired_q, side="right") - 1
-        np.minimum(
-            left, len(combined_vals) - 1, left
-        )  # don't exceed max index
-        lower = np.minimum(left, right)
-        upper = np.maximum(left, right)
-        if interpolation == "lower":
-            rv = combined_vals[lower]
-        elif interpolation == "higher":
-            rv = combined_vals[upper]
-        elif interpolation == "midpoint":
-            rv = 0.5 * (combined_vals[lower] + combined_vals[upper])
-        elif interpolation == "nearest":
-            lower_residual = np.abs(combined_q[lower] - desired_q)
-            upper_residual = np.abs(combined_q[upper] - desired_q)
-            mask = lower_residual > upper_residual
-            index = lower  # alias; we no longer need lower
-            index[mask] = upper[mask]
-            rv = combined_vals[index]
-        else:
-            raise ValueError(
-                "interpolation can only be 'linear', 'lower', "
-                "'higher', 'midpoint', or 'nearest'"
-            )
-    return rv
+    # TODO: Support other interpolation methods
+    # For now - Always use "nearest" for interpolation
+    left = np.searchsorted(combined_q, desired_q, side="left")
+    right = np.searchsorted(combined_q, desired_q, side="right") - 1
+    np.minimum(left, len(combined_vals) - 1, left)  # don't exceed max index
+    lower = np.minimum(left, right)
+    upper = np.maximum(left, right)
+    lower_residual = np.abs(combined_q[lower] - desired_q)
+    upper_residual = np.abs(combined_q[upper] - desired_q)
+    mask = lower_residual > upper_residual
+    index = lower  # alias; we no longer need lower
+    index[mask] = upper[mask]
+    rv = combined_vals.iloc[index]
+    return rv.reset_index(drop=True)
 
 
 def quantile(df, q):
@@ -534,25 +470,24 @@ def quantile(df, q):
         q_ndarray.sort(kind="mergesort")
         q = q_ndarray
 
-    assert isinstance(df, Series)
+    # Lets assume we are dealing with a DataFrame throughout
+    if isinstance(df, (Series, Index)):
+        df = df.to_frame()
+    assert isinstance(df, DataFrame)
+    final_type = df._meta._constructor
 
-    # currently, only Series has quantile method
-    if isinstance(df, Index):
-        meta = gd.Series(df._meta_nonempty).quantile(q=q)
-    else:
-        meta = df._meta_nonempty.quantile(q=q)
+    # Create metadata
+    meta = df._meta_nonempty.quantile(q=q)
 
-    # Index.quantile(list-like) must be pd.Series, not pd.Index
-    df_name = df.name
-
+    # Define final action (create df with quantiles as index)
     def finalize_tsk(tsk):
-        return (gd.Series, tsk, q, None, df_name)
+        return (final_type, tsk, q)
 
-    return_type = Series
+    return_type = DataFrame
 
-    # pandas uses quantile in [0, 1]
-    # numpy / everyone else uses [0, 100]
-    qs = np.asarray(q)  # * 100
+    # pandas/cudf uses quantile in [0, 1]
+    # numpy / cupy uses [0, 100]
+    qs = np.asarray(q)
     token = tokenize(df, qs)
 
     if len(qs) == 0:
@@ -560,8 +495,10 @@ def quantile(df, q):
         empty_index = gd.Index([], dtype=float)
         return Series(
             {
-                (name, 0): gd.Series(
-                    [], name=df.name, index=empty_index, dtype="float"
+                (name, 0): final_type(
+                    {col: [] for col in df.columns},
+                    name=df.name,
+                    index=empty_index,
                 )
             },
             name,
@@ -571,18 +508,16 @@ def quantile(df, q):
     else:
         new_divisions = [np.min(q), np.max(q)]
 
-    # from dask.array.percentile import merge_percentiles
-
     name = "quantiles-1-" + token
     val_dsk = {
-        (name, i): (_percentile, (getattr, key, "values"), qs)
+        (name, i): (_quantile, key, qs)
         for i, key in enumerate(df.__dask_keys__())
     }
 
     name2 = "quantiles-2-" + token
     merge_dsk = {
         (name2, 0): finalize_tsk(
-            (merge_percentiles, qs, [qs] * df.npartitions, sorted(val_dsk))
+            (merge_quantiles, qs, [qs] * df.npartitions, sorted(val_dsk))
         )
     }
     dsk = toolz.merge(val_dsk, merge_dsk)
@@ -615,31 +550,11 @@ def sort_values_experimental(
     elif isinstance(by, tuple):
         by = list(by)
 
-    # Make sure first column is numeric
-    # (Cannot handle string column here yet)
-    if divisions is None and isinstance(
-        df[by[0]]._meta._column, gd.core.column.string.StringColumn
-    ):
-        # TODO: Remove when quantile support is added
-        return df.sort_values(
-            by, ignore_index=ignore_index, experimental=False
-        )
-
     # Step 1 - Pre-sort each partition
     if sorted_split:
         df2 = df.map_partitions(M.sort_values, by)
     else:
         df2 = df
-
-    # Only handle single-column partitioning (for now),
-    # UNLESS multi-column divisions are provided by user
-    #     TODO: Add multicolumn quantiles logic...
-    if len(by) > 1:
-        warnings.warn(
-            "Using experimental version of sort_values."
-            " Only `by[0]` will be used for partitioning."
-        )
-    index = by[0]
 
     # Check if we are using explicit comms
     use_explicit = explicit_comms and explicit_client
@@ -652,48 +567,56 @@ def sort_values_experimental(
     ):
         # TODO: Use input divisions for use_explicit==True
         qn = np.linspace(0.0, 1.0, npartitions + 1).tolist()
-        dtype = df2[index].dtype
-        divisions = (
-            (quantile(df2[index], qn).compute().values + 1)
-            .astype(dtype)
-            .tolist()
-        )
-        divisions[0] = 0
-    else:
-        # For now we can accept multi-column divisions as a dataframe
-        if isinstance(divisions, gd.DataFrame):
-            index = by
-
-    # Make sure index is a list
-    if not isinstance(index, list):
-        index = [index]
+        divisions = quantile(df2[by], qn).compute().drop_duplicates()
+        columns = divisions.columns
+        # TODO: Make sure divisions are correctly handled for
+        # non-numerical datatypes..
+        if len(columns) == 1 and df2[columns[0]].dtype != "object":
+            dtype = df2[columns[0]].dtype
+            divisions = divisions[columns[0]].astype(dtype).values
+            if dtype in ("int", "float"):
+                divisions = divisions + 1
+                divisions[0] = 0
+            divisions = sorted(divisions.tolist())
+        else:
+            for col in columns:
+                dtype = df2[col].dtype
+                divisions[col] = divisions[col].astype(dtype)
+                if dtype in ("int", "float"):
+                    divisions[col] += 1
+                    divisions[col].iloc[0] = 0
+                elif dtype == "object":
+                    divisions[col].iloc[-1] = chr(
+                        ord(divisions[col].iloc[-1][0]) + 1
+                    )
+                    divisions[col].iloc[0] = chr(0)
 
     # Step 3 - Perform repartitioning shuffle
     sort_by = None
     if sorted_split:
         sort_by = by
-    if use_explicit and len(index) == 1:
-        # TODO: Handle len(index) > 1
+    if use_explicit and len(by) == 1:
+        # TODO: Handle len(by) > 1
         warnings.warn("Using explicit comms - This is an advanced feature.")
         df3 = explicit_sorted_shuffle(
-            df2, index[0], divisions, sort_by, explicit_client
+            df2, by[0], divisions, sort_by, explicit_client
         )
-    elif sorted_split and len(index) == 1:
+    elif sorted_split and len(by) == 1:
         # Need to pass around divisions
-        # TODO: Handle len(index) > 1
+        # TODO: Handle len(by) > 1
         df3 = rearrange_by_division_list(
-            df2, index[0], divisions, max_branch=max_branch, sort_by=sort_by
+            df2, by[0], divisions, max_branch=max_branch, sort_by=sort_by
         )
     else:
         # Lets assign a new partitions column
         # (That is: Use main-line dask shuffle)
-        # TODO: Handle len(index) > 1
+        # TODO: Handle len(by) > 1
         meta = df2._meta._constructor_sliced([0])
         if not isinstance(divisions, (gd.Series, gd.DataFrame)):
-            dtype = df2[index[0]].dtype
+            dtype = df2[by[0]].dtype
             divisions = df2._meta._constructor_sliced(divisions, dtype=dtype)
 
-        partitions = df2[index].map_partitions(
+        partitions = df2[by].map_partitions(
             set_partitions_pre, divisions=divisions, meta=meta
         )
 
