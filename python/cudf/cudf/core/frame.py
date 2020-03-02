@@ -354,10 +354,13 @@ class Frame(libcudfxx.table.Table):
         -------
         The interleaved columns as a single column
         """
+        if ('category' == self.dtypes)[0]:
+            raise ValueError("interleave_columns does not support 'category' dtype.")
+        
         result = self._constructor_sliced(
             libcudfxx.reshape.interleave_columns(self)
         )
-        result._copy_categories(self)
+        
         return result
 
     def tile(self, count):
@@ -375,9 +378,11 @@ class Frame(libcudfxx.table.Table):
         >>> df  = Dataframe([[8, 4, 7], [5, 2, 3]])
         >>> count = 2
         >>> df.tile(df, count)
-           0  1  2  3  4  5
-        0  8  4  7  8  4  7
-        1  5  2  3  5  2  3
+           0  1  2
+        0  8  4  7
+        1  5  2  3
+        0  8  4  7
+        1  5  2  3
 
         Returns
         -------

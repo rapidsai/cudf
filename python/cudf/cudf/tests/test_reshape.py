@@ -117,7 +117,6 @@ def test_df_stack(nulls, num_cols, num_rows, dtype):
     pass
 
 
-@pytest.mark.debug
 @pytest.mark.parametrize("num_rows", [1, 2, 10, 1000])
 @pytest.mark.parametrize("num_cols", [1, 2, 10])
 @pytest.mark.parametrize(
@@ -135,19 +134,13 @@ def test_df_stack(nulls, num_cols, num_rows, dtype):
 )
 @pytest.mark.parametrize("nulls", ["none", "some"])
 def test_interleave_columns(nulls, num_cols, num_rows, dtype):
-
-    from pandas.api.types import CategoricalDtype
-
+    
     if dtype not in ["float32", "float64"] and nulls in ["some"]:
         pytest.skip(msg="nulls not supported in dtype: " + dtype)
-
-    if dtype == "category":
-        dtype = CategoricalDtype(categories=range(num_cols), ordered=True)
 
     pdf = pd.DataFrame(dtype=dtype)
     for i in range(num_cols):
         colname = str(i)
-
         data = pd.Series(np.random.randint(0, 26, num_rows)).astype(dtype)
 
         if nulls == "some":
@@ -158,10 +151,17 @@ def test_interleave_columns(nulls, num_cols, num_rows, dtype):
         pdf[colname] = data
 
     gdf = DataFrame.from_pandas(pdf)
-    got = gdf.interleave_columns()
-    expect = pd.Series(np.vstack(pdf.to_numpy()).reshape((-1,))).astype(dtype)
+    
+    
+    if dtype == "category":
+        with pytest.raises(ValueError):
+            assert gdf.interleave_columns()
+    else:
+        got = gdf.interleave_columns()
+        
+        expect = pd.Series(np.vstack(pdf.to_numpy()).reshape((-1,))).astype(dtype)
 
-    assert_eq(expect, got)
+        assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("num_cols", [1, 2, 10])
