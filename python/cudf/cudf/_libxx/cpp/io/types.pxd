@@ -1,10 +1,12 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from libcpp.memory cimport unique_ptr
+from libcpp.memory cimport unique_ptr, shared_ptr
 from libcpp.string cimport string
 from libcpp.map cimport map
+from libcpp.pair cimport pair
 from libcpp.vector cimport vector
 from libcpp.pair cimport pair
+from pyarrow.includes.libarrow cimport RandomAccessFile
 cimport cudf._libxx.cpp.table.table as cudf_table
 
 
@@ -52,8 +54,12 @@ cdef extern from "cudf/io/types.hpp" \
         io_type type
         string filepath
         pair[const char*, size_t] buffer
+        shared_ptr[RandomAccessFile] file
 
         source_info() except +
+        source_info(const string filepath) except +
+        source_info(const char* host_buffer, size_t size) except +
+        source_info(const shared_ptr[RandomAccessFile] arrow_file) except +
 
     cdef cppclass sink_info:
         io_type type
