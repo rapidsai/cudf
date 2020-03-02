@@ -663,7 +663,7 @@ inline __device__ void gpuOutputString(volatile page_state_s *s, int src_pos, vo
     {
         // Plain encoding
         uint32_t dict_pos = s->dict_idx[src_pos & (NZ_BFRSZ - 1)];
-        if (dict_pos < (uint32_t)s->dict_size)
+        if (dict_pos <= (uint32_t)s->dict_size)
         {
             ptr = reinterpret_cast<const char *>(s->data_start + dict_pos);
             len = s->str_len[src_pos & (NZ_BFRSZ - 1)];
