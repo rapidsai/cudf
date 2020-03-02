@@ -214,14 +214,14 @@ class Frame(libcudfxx.table.Table):
         column_order=(),
         null_precedence=(),
     ):
-        interpolation = libcudfxx.lib.Interpolation[interpolation]
+        interpolation = libcudfxx.types.Interpolation[interpolation]
 
-        is_sorted = libcudfxx.lib.Sorted["YES" if is_sorted else "NO"]
+        is_sorted = libcudfxx.types.Sorted["YES" if is_sorted else "NO"]
 
-        column_order = [libcudfxx.lib.Order[key] for key in column_order]
+        column_order = [libcudfxx.types.Order[key] for key in column_order]
 
         null_precedence = [
-            libcudfxx.lib.NullOrder[key] for key in null_precedence
+            libcudfxx.types.NullOrder[key] for key in null_precedence
         ]
 
         result = self.__class__._from_table(
@@ -299,10 +299,33 @@ class Frame(libcudfxx.table.Table):
         return self
 
     def _unaryop(self, op):
-        result = self.copy()
-        for name, col in result._data.items():
-            result._data[name] = col.unary_operator(op)
-        return result
+        data_columns = (col.unary_operator(op) for col in self._columns)
+        data = zip(self._column_names, data_columns)
+        return self.__class__._from_table(Frame(data, self._index))
+
+    def isnull(self):
+        """Identify missing values.
+        """
+        data_columns = (col.isnull() for col in self._columns)
+        data = zip(self._column_names, data_columns)
+        return self.__class__._from_table(Frame(data, self._index))
+
+    def isna(self):
+        """Identify missing values. Alias for `isnull`
+        """
+        return self.isnull()
+
+    def notnull(self):
+        """Identify non-missing values.
+        """
+        data_columns = (col.notnull() for col in self._columns)
+        data = zip(self._column_names, data_columns)
+        return self.__class__._from_table(Frame(data, self._index))
+
+    def notna(self):
+        """Identify non-missing values. Alias for `notnull`.
+        """
+        return self.notnull()
 
     def searchsorted(
         self, values, side="left", ascending=True, na_position="last"

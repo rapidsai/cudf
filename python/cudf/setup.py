@@ -80,7 +80,6 @@ setup(
     ext_modules=cythonize(
         extensions,
         nthreads=nthreads,
-        language="c++",
         compiler_directives=dict(
             profile=False, language_level=3, embedsignature=True
         ),
@@ -91,8 +90,7 @@ setup(
         "cudf._lib.includes": ["*.pxd"],
         "cudf._lib.includes.groupby": ["*.pxd"],
         "cudf._lib.arrow": ["*.pxd"],
-        "cudf._libxx": ["*.pxd"],
-        "cudf._libxx.includes": ["*.pxd"],
+        "cudf._libxx.*": ["*.pxd"],
     },
     cmdclass=versioneer.get_cmdclass(),
     install_requires=install_requires,
