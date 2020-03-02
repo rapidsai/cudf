@@ -418,6 +418,9 @@ struct fused_concatenate {
     std::transform(views.cbegin(), views.cend(),
         device_view_owners.begin(),
         [stream](auto const& col) {
+          // TODO this can invoke null count computation unnecessarily; add a
+          // factory method that leaves null count set to unknown, as we will
+          // compute the final null count anyway
           return column_device_view::create(col, stream);
         });
 
@@ -429,6 +432,9 @@ struct fused_concatenate {
         [](auto const& col) {
           return *col;
         });
+    // TODO these device vector copies are invoking stream synchronization
+    // unnecessarily and harming performance; try and fix this with
+    // https://github.com/rapidsai/rmm/120
     auto d_views = rmm::device_vector<column_device_view>{device_views};
 
     // Compute the partition offsets
