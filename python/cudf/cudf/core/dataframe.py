@@ -3106,26 +3106,6 @@ class DataFrame(Frame):
 
         return output_frame
 
-    def isnull(self):
-        """Identify missing values in a DataFrame.
-        """
-        return self._apply_support_method("isnull")
-
-    def isna(self):
-        """Identify missing values in a DataFrame. Alias for isnull.
-        """
-        return self.isnull()
-
-    def notna(self):
-        """Identify non-missing values in a DataFrame.
-        """
-        return self._apply_support_method("notna")
-
-    def notnull(self):
-        """Identify non-missing values in a DataFrame. Alias for notna.
-        """
-        return self.notna()
-
     def to_pandas(self):
         """
         Convert to a Pandas DataFrame.
