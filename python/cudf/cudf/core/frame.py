@@ -16,7 +16,6 @@ from cudf.utils.dtypes import (
     is_scalar,
     is_string_dtype,
 )
-from cudf.utils.utils import OrderedColumnDict
 
 
 class Frame(libcudfxx.table.Table):
@@ -301,14 +300,14 @@ class Frame(libcudfxx.table.Table):
 
     def _unaryop(self, op):
         data_columns = (col.unary_operator(op) for col in self._columns)
-        data = OrderedColumnDict(zip(self._column_names, data_columns))
+        data = zip(self._column_names, data_columns)
         return self.__class__._from_table(Frame(data, self._index))
 
     def isnull(self):
         """Identify missing values.
         """
         data_columns = (col.isnull() for col in self._columns)
-        data = OrderedColumnDict(zip(self._column_names, data_columns))
+        data = zip(self._column_names, data_columns)
         return self.__class__._from_table(Frame(data, self._index))
 
     def isna(self):
@@ -320,7 +319,7 @@ class Frame(libcudfxx.table.Table):
         """Identify non-missing values.
         """
         data_columns = (col.notnull() for col in self._columns)
-        data = OrderedColumnDict(zip(self._column_names, data_columns))
+        data = zip(self._column_names, data_columns)
         return self.__class__._from_table(Frame(data, self._index))
 
     def notna(self):
