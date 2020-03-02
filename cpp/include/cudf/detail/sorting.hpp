@@ -38,7 +38,7 @@ namespace detail {
  * If empty, all columns will be sorted in `null_order::BEFORE`.
  * @param[in] mr Optional, The resource to use for all allocations
  * @param[in] stream Optional CUDA stream on which to execute kernels
- * @return std::unique_ptr<column> A non-nullable column of INT32 elements
+ * @return std::unique_ptr<column> A non-nullable column of `size_type` elements
  * containing the permuted row indices of `input` if it were sorted
  *---------------------------------------------------------------------------**/
 std::unique_ptr<column> sorted_order(
