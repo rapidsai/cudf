@@ -16,13 +16,14 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/sorting.hpp>
+#include <cudf/detail/gather.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sorting.hpp>
+#include <cudf/sorting.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
-#include <cudf/detail/gather.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/sequence.h>
@@ -109,6 +110,7 @@ std::unique_ptr<column> sorted_order(table_view input,
                                      std::vector<order> const& column_order,
                                      std::vector<null_order> const& null_precedence,
                                      rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   return detail::sorted_order(input, column_order, null_precedence, mr);
 }
 
@@ -124,7 +126,6 @@ std::unique_ptr<table> sort_by_key(
     std::vector<order> const& column_order,
     std::vector<null_order> const& null_precedence,
     rmm::mr::device_memory_resource* mr) {
-
     return detail::sort_by_key(values, keys, column_order, null_precedence, mr);
 }
 
