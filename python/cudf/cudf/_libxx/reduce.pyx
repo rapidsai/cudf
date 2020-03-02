@@ -13,16 +13,20 @@ from cudf._libxx.cpp.column.column cimport (
 
 cpdef reduce(reduction_op, Column incol, kwargs=None, dtype=None, ddof=1):
     kwargs = {'ddof': ddof}
+
     col_dtype = incol.dtype
     if reduction_op in ['sum', 'sum_of_squares', 'product']:
         col_dtype = np.find_common_type([col_dtype], [np.int64])
     col_dtype = col_dtype if dtype is None else dtype
-    print(reduction_op)
+
     cdef column_view c_incol_view = incol.view()
     cdef unique_ptr[scalar] c_result
-    cdef unique_ptr[aggregation] c_agg = move(get_aggregation(reduction_op, kwargs))
+    cdef unique_ptr[aggregation] c_agg = move(get_aggregation(
+        reduction_op, kwargs
+    ))
     cdef type_id tid = np_to_cudf_types[np.dtype(col_dtype)]
-    cdef data_type c_out_dtype = data_type(tid)    
+    cdef data_type c_out_dtype = data_type(tid)
+
     # check empty case
     if len(incol) <= incol.null_count:
         if reduction_op == 'sum' or reduction_op == 'sum_of_squares':

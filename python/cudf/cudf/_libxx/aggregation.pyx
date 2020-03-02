@@ -48,7 +48,9 @@ cdef unique_ptr[aggregation] get_aggregation(op, kwargs) except *:
     elif op == "sum_of_squares":
         agg = move(libcudf_aggregation.make_sum_of_squares_aggregation())
     elif op == "var":
-        agg = move(libcudf_aggregation.make_variance_aggregation(kwargs['ddof']))
+        agg = move(libcudf_aggregation.make_variance_aggregation(
+            kwargs['ddof'])
+        )
     elif op == "std":
         agg = move(libcudf_aggregation.make_std_aggregation(kwargs['ddof']))
     elif op == "count":
