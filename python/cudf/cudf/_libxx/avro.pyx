@@ -14,10 +14,6 @@ from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 
-import errno
-from io import BytesIO, StringIO
-import os
-
 
 cpdef read_avro(filepath_or_buffer, columns=None, skip_rows=-1, num_rows=-1):
     """
