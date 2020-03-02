@@ -1297,9 +1297,6 @@ public final class Table implements AutoCloseable {
         for (int i = 0; i < types.size(); i++) {
           columns.add(from(types.get(i), typeErasedData.get(i)));
         }
-        for (ColumnVector cv : columns) {
-          cv.ensureOnDevice();
-        }
         return new Table(columns.toArray(new ColumnVector[columns.size()]));
       } finally {
         for (ColumnVector cv : columns) {

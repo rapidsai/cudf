@@ -209,7 +209,7 @@ struct column_buffer_size_functor {
    size_t operator()(column_view const& c, column_split_info &split_info)
    {      
       split_info.data_buf_size = cudf::util::round_up_safe(c.size() * sizeof(T), split_align);  
-      split_info.validity_buf_size = (c.nullable() ? cudf::bitmask_allocation_size_bytes(c.size(), split_align) : 0);
+      split_info.validity_buf_size = (c.has_nulls() ? cudf::bitmask_allocation_size_bytes(c.size(), split_align) : 0);
       return split_info.data_buf_size + split_info.validity_buf_size;
    }
 };
@@ -243,36 +243,22 @@ struct column_copy_functor {
          return;
       }
 
-      // custom copy kernel (which should probably just be an in-place copy() function in cudf.
+      // custom copy kernel (which could probably just be an in-place copy() function in cudf).
       cudf::size_type num_els = cudf::util::round_up_safe(in.size(), cudf::experimental::detail::warp_size);
       constexpr int block_size = 256;
       cudf::experimental::detail::grid_1d grid{num_els, block_size, 1};
       
-      // so there's a significant performance issue that comes up. our incoming column_view objects
-      // are the result of a slice.  because of this, they have an UNKNOWN_NULL_COUNT.  because of that,
-      // calling column_device_view::create() will cause a recompute of the count, which ends up being
-      // extremely slow because a.) the typical use case here will involve huge numbers of calls and
-      // b.) the count recompute involves tons of device allocs and memcopies.
-      //
-      // so to get around this, I am manually constructing a fake-ish view here where the null
-      // count is arbitrarily bashed to 0.
-      //            
-      // Remove this hack once rapidsai/cudf#3600 is fixed.
-      column_view   in_wrapped{in.type(), in.size(), in.head<T>(), 
-                               in.null_mask(), in.null_mask() == nullptr ? UNKNOWN_NULL_COUNT : 0,
-                               in.offset() };
-      mutable_column_view  mcv{in.type(), in.size(), data, 
-                               validity, validity == nullptr ? UNKNOWN_NULL_COUNT : 0 };
-      if(in.nullable()){
+      // output copied column
+      mutable_column_view  mcv{in.type(), in.size(), data, validity, in.null_count()};
+      if(in.has_nulls()){
          copy_in_place_kernel<block_size, T, true><<<grid.num_blocks, block_size, 0, 0>>>(
-                           *column_device_view::create(in_wrapped),
+                           *column_device_view::create(in),
                            *mutable_column_device_view::create(mcv));
       } else {
          copy_in_place_kernel<block_size, T, false><<<grid.num_blocks, block_size, 0, 0>>>(
-                           *column_device_view::create(in_wrapped),
+                           *column_device_view::create(in),
                            *mutable_column_device_view::create(mcv));
-      }
-      mcv.set_null_count(cudf::UNKNOWN_NULL_COUNT);
+      }      
 
       out_cols.push_back(mcv);
    }
@@ -304,7 +290,7 @@ void column_copy_functor::operator()<string_view>(column_view const& in, column_
    // this exists in the kernel brief.    
    constexpr int block_size = 256;
    cudf::experimental::detail::grid_1d grid{num_threads, block_size, 1};            
-   if(in.nullable()){
+   if(in.has_nulls()){
       copy_in_place_strings_kernel<block_size, true><<<grid.num_blocks, block_size, 0, 0>>>(
                         in.size(),                                            // num_rows
                         in_offsets.head<size_type>() + in.offset(),           // offsets_in
@@ -315,8 +301,8 @@ void column_copy_functor::operator()<string_view>(column_view const& in, column_
                         split_info.chars_offset,                              // offset_shift
                         split_info.num_chars,                                 // num_chars
                         in_chars.head<char>() + split_info.chars_offset,      // chars_in
-                        chars_buf);                                                      
-   } else {                                       
+                        chars_buf);    
+   } else {
       copy_in_place_strings_kernel<block_size, false><<<grid.num_blocks, block_size, 0, 0>>>(
                         in.size(),                                            // num_rows
                         in_offsets.head<size_type>() + in.offset(),           // offsets_in
@@ -328,7 +314,7 @@ void column_copy_functor::operator()<string_view>(column_view const& in, column_
                         split_info.num_chars,                                 // num_chars
                         in_chars.head<char>() + split_info.chars_offset,      // chars_in
                         chars_buf);                                                      
-   }       
+   }
 
    // output child columns      
    column_view out_offsets{in_offsets.type(), num_offsets, offsets_buf};
@@ -336,7 +322,7 @@ void column_copy_functor::operator()<string_view>(column_view const& in, column_
 
    // result
    out_cols.push_back(column_view(in.type(), in.size(), nullptr,
-                                    validity_buf, UNKNOWN_NULL_COUNT, 0,
+                                    validity_buf, in.null_count(), 0,
                                     { out_offsets, out_chars }));
 }
 
@@ -350,7 +336,7 @@ struct column_preprocess_info {
    size_type                  index;
    size_type                  offset;
    size_type                  size;
-   bool                       nullable;      
+   bool                       has_nulls;      
    cudf::column_device_view   offsets;
 };
 
@@ -367,7 +353,7 @@ struct column_preprocess_info {
  * - avoiding reaching into gpu memory on the cpu to retrieve offsets to compute string sizes.
  * - creating column_device_views on the base string_column_view itself as that causes gpu memory allocation.
  */
-thrust::host_vector<column_split_info> preprocess_string_column_info(cudf::table_view const& t, thrust::device_vector<column_split_info>& device_split_info, cudaStream_t stream)
+thrust::host_vector<column_split_info> preprocess_string_column_info(cudf::table_view const& t, rmm::device_vector<column_split_info>& device_split_info, cudaStream_t stream)
 {          
    // build a list of all the offset columns and their indices for all input string columns and put them on the gpu   
    thrust::host_vector<column_preprocess_info> offset_columns;
@@ -378,17 +364,18 @@ thrust::host_vector<column_split_info> preprocess_string_column_info(cudf::table
    std::for_each(t.begin(), t.end(), [&offset_columns, &column_index](cudf::column_view const& c){
       if(c.type().id() == STRING){         
          cudf::column_device_view cdv((strings_column_view(c)).offsets(), 0, 0);
-         offset_columns.push_back(column_preprocess_info{column_index, c.offset(), c.size(), c.nullable(), cdv});
+         offset_columns.push_back(column_preprocess_info{column_index, c.offset(), c.size(), c.has_nulls(), cdv});
       }
       column_index++;
    });   
-   thrust::device_vector<column_preprocess_info> device_offset_columns = offset_columns;
+   rmm::device_vector<column_preprocess_info> device_offset_columns = offset_columns;
     
    // compute column split information
-   thrust::device_vector<thrust::pair<size_type, size_type>> device_offsets(t.num_columns());
-   thrust::transform(rmm::exec_policy(stream)->on(stream), device_offset_columns.begin(), device_offset_columns.end(), device_offsets.begin(), 
-      [] __device__ (column_preprocess_info const& cpi){
-         return thrust::make_pair(cpi.offsets.head<int32_t>()[cpi.offset], cpi.offsets.head<int32_t>()[cpi.offset + cpi.size]);
+   rmm::device_vector<thrust::pair<size_type, size_type>> device_offsets(t.num_columns());
+   auto *offsets_p = device_offsets.data().get();
+   thrust::for_each(rmm::exec_policy(stream)->on(stream), device_offset_columns.begin(), device_offset_columns.end(),
+      [offsets_p] __device__ (column_preprocess_info const& cpi){
+        offsets_p[cpi.index] = thrust::make_pair(cpi.offsets.head<int32_t>()[cpi.offset], cpi.offsets.head<int32_t>()[cpi.offset + cpi.size]);
       }
    );
    thrust::host_vector<thrust::pair<size_type, size_type>> host_offsets(device_offsets);
@@ -399,13 +386,13 @@ thrust::host_vector<column_split_info> preprocess_string_column_info(cudf::table
          int32_t offset_end = host_offsets[cpi.index].second;         
          auto num_chars = offset_end - offset_start;
          split_info[cpi.index].data_buf_size = cudf::util::round_up_safe(static_cast<size_t>(num_chars), split_align);         
-         split_info[cpi.index].validity_buf_size = cpi.nullable ? cudf::bitmask_allocation_size_bytes(cpi.size, split_align) : 0;         
+         split_info[cpi.index].validity_buf_size = cpi.has_nulls ? cudf::bitmask_allocation_size_bytes(cpi.size, split_align) : 0;         
          split_info[cpi.index].offsets_buf_size = cudf::util::round_up_safe((cpi.size+1) * sizeof(size_type), split_align);
          split_info[cpi.index].num_chars = num_chars;
          split_info[cpi.index].chars_offset = offset_start;
       }
    );
-   return split_info;   
+   return split_info;
 }
 
 /**
@@ -416,7 +403,7 @@ thrust::host_vector<column_split_info> preprocess_string_column_info(cudf::table
  * call with the input table.  The memory referenced by the table_view and its internal column_views
  * is entirely contained in single block of memory.
  */
-contiguous_split_result alloc_and_copy(cudf::table_view const& t, thrust::device_vector<column_split_info>& device_split_info, rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+contiguous_split_result alloc_and_copy(cudf::table_view const& t, rmm::device_vector<column_split_info>& device_split_info, rmm::mr::device_memory_resource* mr, cudaStream_t stream)
 {           
    // preprocess column split information for string columns.
    thrust::host_vector<column_split_info> split_info = preprocess_string_column_info(t, device_split_info, stream);
@@ -462,7 +449,7 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
    //                benchmark:        1 GB data, 10 columns, 256 splits.
    //                no optimization:  106 ms (8 GB/s)
    //                optimization:     20 ms (48 GB/s)
-   thrust::device_vector<column_split_info> device_split_info(input.num_columns());
+   rmm::device_vector<column_split_info> device_split_info(input.num_columns());
 
    std::vector<contiguous_split_result> result;
    std::transform(subtables.begin(), subtables.end(), std::back_inserter(result), [mr, stream, &device_split_info](table_view const& t) { 
