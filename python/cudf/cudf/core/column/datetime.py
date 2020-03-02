@@ -6,6 +6,7 @@ import pyarrow as pa
 
 import cudf
 import cudf._lib as libcudf
+import cudf._libxx as libcudfxx
 from cudf.core._sort import get_sorted_inds
 from cudf.core.buffer import Buffer
 from cudf.core.column import as_column, column
@@ -81,7 +82,7 @@ class DatetimeColumn(column.ColumnBase):
             null = cudf.core.column.column_empty_like(
                 array, masked=True, newsize=1
             )
-            col = libcudf.replace.replace(
+            col = libcudfxx.replace.replace(
                 as_column(Buffer(array), dtype=array.dtype),
                 as_column(
                     Buffer(
@@ -170,22 +171,9 @@ class DatetimeColumn(column.ColumnBase):
         from cudf.core.column import string
 
         if len(self) > 0:
-            dev_ptr = self.data_ptr
-            null_ptr = None
-            if self.nullable:
-                null_ptr = self.mask_ptr
-            kwargs.update(
-                {
-                    "count": len(self),
-                    "nulls": null_ptr,
-                    "bdevmem": True,
-                    "units": self.time_unit,
-                }
-            )
-            data = string._numeric_to_str_typecast_functions[
+            return string._numeric_to_str_typecast_functions[
                 np.dtype(self.dtype)
-            ](dev_ptr, **kwargs)
-            return as_column(data)
+            ](self, **kwargs)
         else:
             return column.column_empty(0, dtype="object", masked=False)
 
@@ -232,7 +220,7 @@ class DatetimeColumn(column.ColumnBase):
         else:
             fill_value = column.as_column(fill_value, nan_as_null=False)
 
-        result = libcudf.replace.replace_nulls(self, fill_value)
+        result = libcudfxx.replace.replace_nulls(self, fill_value)
         result = column.build_column(result.data, result.dtype, mask=None)
 
         return result

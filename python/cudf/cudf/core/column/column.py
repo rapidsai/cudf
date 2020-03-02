@@ -537,22 +537,22 @@ class ColumnBase(Column):
     def isnull(self):
         """Identify missing values in a Column.
         """
-        return libcudf.unaryops.is_null(self)
+        return libcudfxx.unary.is_null(self)
 
     def isna(self):
         """Identify missing values in a Column. Alias for isnull.
         """
         return self.isnull()
 
-    def notna(self):
+    def notnull(self):
         """Identify non-missing values in a Column.
         """
-        return libcudf.unaryops.is_not_null(self)
+        return libcudfxx.unary.is_valid(self)
 
-    def notnull(self):
-        """Identify non-missing values in a Column. Alias for notna.
+    def notna(self):
+        """Identify non-missing values in a Column. Alias for notnull.
         """
-        return self.notna()
+        return self.notnull()
 
     def find_first_value(self, value):
         """
@@ -1060,12 +1060,12 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
             and arbitrary.size > 0
         ):
             if nan_as_null:
-                mask = libcudf.unaryops.nans_to_nulls(data)
+                mask = libcudfxx.transform.nans_to_nulls(data)
                 data = data.set_mask(mask)
 
         elif data.dtype.kind == "M":
             null = column_empty_like(data, masked=True, newsize=1)
-            col = libcudf.replace.replace(
+            col = libcudfxx.replace.replace(
                 as_column(Buffer(arbitrary), dtype=arbitrary.dtype),
                 as_column(
                     Buffer(np.array([np.datetime64("NaT")], dtype=data.dtype)),

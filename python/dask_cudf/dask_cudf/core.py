@@ -1,5 +1,7 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+
 import warnings
+from distutils.version import LooseVersion
 
 import numpy as np
 import pandas as pd
@@ -29,6 +31,8 @@ from dask_cudf.accessor import (
     CategoricalAccessor,
     DatetimeAccessor,
 )
+
+DASK_VERSION = LooseVersion(dask.__version__)
 
 
 def optimize(dsk, keys, **kwargs):
@@ -178,29 +182,6 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 % kwargs["shuffle"]
             )
         return super().set_index(other, shuffle="tasks", **kwargs)
-
-    def reset_index(self, force=False, drop=False):
-        """Reset index to range based
-        """
-        if force:
-            dfs = self.to_delayed()
-            sizes = np.asarray(compute(*map(delayed(len), dfs)))
-            prefixes = np.zeros_like(sizes)
-            prefixes[1:] = np.cumsum(sizes[:-1])
-
-            @delayed
-            def fix_index(df, startpos):
-                stoppos = startpos + len(df)
-                return df.set_index(
-                    cudf.core.index.RangeIndex(start=startpos, stop=stoppos)
-                )
-
-            outdfs = [
-                fix_index(df, startpos) for df, startpos in zip(dfs, prefixes)
-            ]
-            return from_delayed(outdfs, meta=self._meta.reset_index(drop=True))
-        else:
-            return self.map_partitions(M.reset_index, drop=drop)
 
     def sort_values(self, by, ignore_index=False):
         """Sort by the given column
@@ -658,12 +639,14 @@ for name in [
     "rpow",
 ]:
     meth = getattr(cudf.DataFrame, name)
-    DataFrame._bind_operator_method(name, meth)
+    kwargs = {"original": cudf.DataFrame} if DASK_VERSION >= "2.11.1" else {}
+    DataFrame._bind_operator_method(name, meth, **kwargs)
 
     meth = getattr(cudf.Series, name)
-    Series._bind_operator_method(name, meth)
+    kwargs = {"original": cudf.Series} if DASK_VERSION >= "2.11.1" else {}
+    Series._bind_operator_method(name, meth, **kwargs)
 
 for name in ["lt", "gt", "le", "ge", "ne", "eq"]:
-
     meth = getattr(cudf.Series, name)
-    Series._bind_comparison_method(name, meth)
+    kwargs = {"original": cudf.Series} if DASK_VERSION >= "2.11.1" else {}
+    Series._bind_comparison_method(name, meth, **kwargs)
