@@ -582,7 +582,7 @@ def sort_values_experimental(
             for col in columns:
                 dtype = df2[col].dtype
                 if dtype != "object":
-                    divisions[col] = divisions[col].astype("int64") + 1
+                    divisions[col] = divisions[col].astype("int64")
                     divisions[col].iloc[-1] += 1
                     divisions[col] = divisions[col].astype(dtype)
                 else:
