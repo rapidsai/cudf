@@ -372,9 +372,30 @@ def test_groupby_reset_index_names():
     g_res = gddf.groupby("a", sort=True).sum()
     p_res = pddf.groupby("a", sort=True).sum()
 
-    print(g_res.index.name)
-
     got = g_res.reset_index().compute().sort_values(["a", "b", "c"])
     expect = p_res.reset_index().compute().sort_values(["a", "b", "c"])
 
     dd.assert_eq(got, expect)
+
+
+def test_groupby_reset_index_string_name():
+    df = cudf.DataFrame({"value": range(5), "key": ["a", "a", "b", "a", "c"]})
+    pdf = df.to_pandas()
+
+    gddf = dask_cudf.from_cudf(df, npartitions=1)
+    pddf = dd.from_pandas(pdf, npartitions=1)
+
+    g_res = (
+        gddf.groupby(["key"]).agg({"value": "mean"}).reset_index(drop=False)
+    )
+    p_res = (
+        pddf.groupby(["key"]).agg({"value": "mean"}).reset_index(drop=False)
+    )
+
+    got = g_res.compute().sort_values(["key", "value"]).reset_index(drop=True)
+    expect = (
+        p_res.compute().sort_values(["key", "value"]).reset_index(drop=True)
+    )
+
+    dd.assert_eq(got, expect)
+    assert len(g_res) == len(p_res)
