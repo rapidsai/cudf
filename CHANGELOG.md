@@ -176,11 +176,10 @@
 - PR #4222 Fix no-return compile error in binop-null-test
 - PR #4242 Fix for rolling tests CI failure
 - PR #4245 Fix race condition in parquet reader
-- PR #4253 Fix dictionary decode with column offset
+- PR #4253 Fix dictionary decode and set_keys with column offset
 - PR #4258 Fix dask-cudf losing index name in `reset_index`
 - PR #4268 Fix java build for hash aggregate
 - PR #4273 Fix losing `StringIndex` name in dask `_meta_nonempty`
-- PR #4253 Fix dictionary functions to handle offset properly
 - PR #4279 Fix converting `np.float64` to Scalar
 - PR #4285 Add init files for cython pkgs and fix `setup.py`
 
