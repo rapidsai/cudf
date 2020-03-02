@@ -141,7 +141,6 @@
 - PR #4089 Fix dask groupby mutliindex test case issues in join
 - PR #4097 Fix strings concatenate logic with column offsets
 - PR #4076 All null string entries should have null data buffer
-- PR #4115 Serialize an empty column table with non zero rows
 - PR #4145 Support empty index case in DataFrame._from_table
 - PR #4109 Use rmm::device_vector instead of thrust::device_vector
 - PR #4113 Use `.nvstrings` in `StringColumn.sum(...)`
@@ -174,6 +173,7 @@
 - PR #4258 Fix dask-cudf losing index name in `reset_index`
 - PR #4268 Fix java build for hash aggregate
 - PR #4273 Fix losing `StringIndex` name in dask `_meta_nonempty`
+- PR #4115 Serialize an empty column table with non zero rows
 
 
 # cuDF 0.12.0 (04 Feb 2020)
