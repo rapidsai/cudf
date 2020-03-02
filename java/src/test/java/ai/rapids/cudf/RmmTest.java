@@ -49,11 +49,11 @@ public class RmmTest {
 
   @ParameterizedTest
   @ValueSource(ints = {RmmAllocationMode.CUDA_DEFAULT, RmmAllocationMode.POOL})
-  public void testRmmEventHandler(int rmmAllocMode) {
+  public void testEventHandler(int rmmAllocMode) {
     AtomicInteger invokedCount = new AtomicInteger();
     AtomicLong amountRequested = new AtomicLong();
 
-    RmmEventHandler handler = new RmmEventHandler() {
+    RmmEventHandler handler = new BaseRmmEventHandler() {
       @Override
       public boolean onAllocFailure(long sizeRequested) {
         int count = invokedCount.incrementAndGet();
@@ -62,7 +62,8 @@ public class RmmTest {
       }
     };
 
-    Rmm.initialize(rmmAllocMode, false, 512 * 1024 * 1024, handler);
+    Rmm.initialize(rmmAllocMode, false, 512 * 1024 * 1024);
+    Rmm.setEventHandler(handler);
     long addr = Rmm.alloc(1024, 0);
     Rmm.free(addr, 0);
     assertTrue(addr != 0);
@@ -75,7 +76,6 @@ public class RmmTest {
       Rmm.free(addr, 0);
       fail("should have failed to allocate");
     } catch (OutOfMemoryError | RmmException ignored) {
-      ignored.printStackTrace(System.err);
     }
 
     assertEquals(3, invokedCount.get());
@@ -88,10 +88,10 @@ public class RmmTest {
   }
 
   @Test
-  public void testRmmSetEventHandler() {
+  public void testSetEventHandlerTwice() {
     Rmm.initialize(RmmAllocationMode.CUDA_DEFAULT, false, 0L);
     // installing an event handler the first time should not be an error
-    Rmm.setEventHandler(new RmmEventHandler() {
+    Rmm.setEventHandler(new BaseRmmEventHandler() {
       @Override
       public boolean onAllocFailure(long sizeRequested) {
         return false;
@@ -99,7 +99,7 @@ public class RmmTest {
     });
 
     // installing a second event handler is an error
-    RmmEventHandler otherHandler = new RmmEventHandler() {
+    RmmEventHandler otherHandler = new BaseRmmEventHandler() {
       @Override
       public boolean onAllocFailure(long sizeRequested) {
         return true;
@@ -109,13 +109,13 @@ public class RmmTest {
   }
 
   @Test
-  public void testRmmClearEventHandler() {
+  public void testClearEventHandler() {
     Rmm.initialize(RmmAllocationMode.CUDA_DEFAULT, false, 0L);
     // clearing the event handler when it isn't set is not an error
     Rmm.clearEventHandler();
 
     // create an event handler that will always retry
-    RmmEventHandler retryHandler = new RmmEventHandler() {
+    RmmEventHandler retryHandler = new BaseRmmEventHandler() {
       @Override
       public boolean onAllocFailure(long sizeRequested) {
         return true;
@@ -131,7 +131,173 @@ public class RmmTest {
       Rmm.free(addr, 0);
       fail("should have failed to allocate");
     } catch (OutOfMemoryError | RmmException ignored) {
-      ignored.printStackTrace(System.err);
+    }
+  }
+
+  @Test
+  public void testAllocOnlyThresholds() {
+    final AtomicInteger allocInvocations = new AtomicInteger(0);
+    final AtomicInteger deallocInvocations = new AtomicInteger(0);
+    final AtomicLong allocated = new AtomicLong(0);
+
+    Rmm.initialize(RmmAllocationMode.POOL, false, 1024 * 1024L);
+
+    RmmEventHandler handler = new RmmEventHandler() {
+      @Override
+      public boolean onAllocFailure(long sizeRequested) {
+        return false;
+      }
+
+      @Override
+      public long[] getAllocThresholds() {
+        return new long[] { 32 * 1024, 8 * 1024 };
+      }
+
+      @Override
+      public long[] getDeallocThresholds() {
+        return null;
+      }
+
+      @Override
+      public void onAllocThreshold(long totalAllocSize) {
+        allocInvocations.getAndIncrement();
+        allocated.set(totalAllocSize);
+      }
+
+      @Override
+      public void onDeallocThreshold(long totalAllocSize) {
+        deallocInvocations.getAndIncrement();
+      }
+    };
+
+    Rmm.setEventHandler(handler);
+    long[] addrs = new long[5];
+    try {
+      addrs[0] = Rmm.alloc(6 * 1024, 0);
+      assertEquals(0, allocInvocations.get());
+      addrs[1] = Rmm.alloc(2 * 1024, 0);
+      assertEquals(1, allocInvocations.get());
+      assertEquals(8 * 1024, allocated.get());
+      addrs[2] = Rmm.alloc(21 * 1024, 0);
+      assertEquals(1, allocInvocations.get());
+      addrs[3] = Rmm.alloc(8 * 1024, 0);
+      assertEquals(2, allocInvocations.get());
+      assertEquals(37 * 1024, allocated.get());
+      addrs[4] = Rmm.alloc(8 * 1024, 0);
+      assertEquals(2, allocInvocations.get());
+    } finally {
+      for (long addr : addrs) {
+        if (addr != 0) {
+          Rmm.free(addr, 0);
+        }
+      }
+    }
+
+    assertEquals(2, allocInvocations.get());
+    assertEquals(0, deallocInvocations.get());
+  }
+
+  @Test
+  public void testThresholds() {
+    final AtomicInteger allocInvocations = new AtomicInteger(0);
+    final AtomicInteger deallocInvocations = new AtomicInteger(0);
+    final AtomicLong allocated = new AtomicLong(0);
+
+    Rmm.initialize(RmmAllocationMode.POOL, false, 1024 * 1024L);
+
+    RmmEventHandler handler = new RmmEventHandler() {
+      @Override
+      public boolean onAllocFailure(long sizeRequested) {
+        return false;
+      }
+
+      @Override
+      public long[] getAllocThresholds() {
+        return new long[] { 8 * 1024 };
+      }
+
+      @Override
+      public long[] getDeallocThresholds() {
+        return new long[] { 6 * 1024 };
+      }
+
+      @Override
+      public void onAllocThreshold(long totalAllocSize) {
+        allocInvocations.getAndIncrement();
+        allocated.set(totalAllocSize);
+      }
+
+      @Override
+      public void onDeallocThreshold(long totalAllocSize) {
+        deallocInvocations.getAndIncrement();
+        allocated.set(totalAllocSize);
+      }
+    };
+
+    Rmm.setEventHandler(handler);
+    long[] addrs = new long[5];
+    try {
+      addrs[0] = Rmm.alloc(6 * 1024, 0);
+      assertEquals(0, allocInvocations.get());
+      assertEquals(0, deallocInvocations.get());
+      Rmm.free(addrs[0], 0);
+      addrs[0] = 0;
+      assertEquals(0, allocInvocations.get());
+      assertEquals(1, deallocInvocations.get());
+      assertEquals(0, allocated.get());
+      addrs[0] = Rmm.alloc(12 * 1024, 0);
+      assertEquals(1, allocInvocations.get());
+      assertEquals(1, deallocInvocations.get());
+      assertEquals(12 * 1024, allocated.get());
+      addrs[1] = Rmm.alloc(6 * 1024, 0);
+      assertEquals(1, allocInvocations.get());
+      assertEquals(1, deallocInvocations.get());
+      Rmm.free(addrs[0], 0);
+      addrs[0] = 0;
+      assertEquals(1, allocInvocations.get());
+      assertEquals(1, deallocInvocations.get());
+      addrs[0] = Rmm.alloc(4 * 1024, 0);
+      assertEquals(2, allocInvocations.get());
+      assertEquals(1, deallocInvocations.get());
+      assertEquals(10 * 1024, allocated.get());
+      Rmm.free(addrs[1], 0);
+      addrs[1] = 0;
+      assertEquals(2, allocInvocations.get());
+      assertEquals(2, deallocInvocations.get());
+      assertEquals(4 * 1024, allocated.get());
+      Rmm.free(addrs[0], 0);
+      addrs[0] = 0;
+      assertEquals(2, allocInvocations.get());
+      assertEquals(2, deallocInvocations.get());
+    } finally {
+      for (long addr : addrs) {
+        if (addr != 0) {
+          Rmm.free(addr, 0);
+        }
+      }
+    }
+
+    assertEquals(2, allocInvocations.get());
+    assertEquals(2, deallocInvocations.get());
+  }
+
+  private static abstract class BaseRmmEventHandler implements RmmEventHandler {
+    @Override
+    public long[] getAllocThresholds() {
+      return null;
+    }
+
+    @Override
+    public long[] getDeallocThresholds() {
+      return null;
+    }
+
+    @Override
+    public void onAllocThreshold(long totalAllocSize) {
+    }
+
+    @Override
+    public void onDeallocThreshold(long totalAllocSize) {
     }
   }
 }
