@@ -29,7 +29,6 @@
 - PR #4276 Port avro.pyx to libcudf++
 - PR #4259 Ability to create Java host buffers from memory-mapped files
 - PR #4240 Add groupby::groups()
-- PR #4299 Allow cudf::shift to use per-column offsets.
 
 ## Improvements
 
@@ -118,6 +117,7 @@
 - PR #4251 Add class to docs in `dask-cudf` `derived_from`
 - PR #4261 libxx Cython reorganization
 - PR #4282 Porting nvstrings conversion functions from new libcudf++ to Python/Cython
+- PR #4299 Convert cudf::shift to column-based api
 
 ## Bug Fixes
 

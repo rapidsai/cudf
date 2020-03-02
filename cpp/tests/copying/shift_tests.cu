@@ -17,14 +17,15 @@
 #include <functional>
 #include <limits>
 #include <memory>
+#include <type_traits>
 #include <tests/utilities/base_fixture.hpp>
+#include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/cudf_gtest.hpp>
-#include <tests/utilities/table_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
+#include <cudf/column/column.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/scalar/scalar.hpp>
-#include <type_traits>
 
 using cudf::test::fixed_width_column_wrapper;
 using TestTypes = cudf::test::Types<int32_t>;
@@ -65,127 +66,79 @@ TYPED_TEST(ShiftTest, OneColumnEmpty)
 {
     using T =  TypeParam;
 
-    fixed_width_column_wrapper<T> a{};
-    cudf::table_view input{ { a } };
+    auto input = fixed_width_column_wrapper<T> {};
+    auto expected = fixed_width_column_wrapper<T> ({}, {});
 
     auto fill = make_scalar<T>();
-    std::vector<std::reference_wrapper<cudf::scalar>> fills{ *fill };
+    auto actual = cudf::experimental::shift(input, 5, *fill);
 
-    cudf::experimental::shift(input, 5, fills);
+    cudf::test::expect_columns_equal(expected, *actual);
 }
 
 TYPED_TEST(ShiftTest, TwoColumnsEmpty)
 {
     using T =  TypeParam;
 
-    fixed_width_column_wrapper<T> input_a({}, {});
-    fixed_width_column_wrapper<T> input_b{};
-    cudf::table_view input{ { input_a, input_b } };
+    auto input = fixed_width_column_wrapper<T> ({}, {});
+    auto expected = fixed_width_column_wrapper<T> ({}, {});
 
-    fixed_width_column_wrapper<T> expected_a({}, {});
-    fixed_width_column_wrapper<T> expected_b{};
-    cudf::table_view expected{ { input_a, input_b } };
+    auto fill = make_scalar<T>();
+    auto actual = cudf::experimental::shift(input, 5, *fill);
 
-    auto fill_a = make_scalar<T>();
-    auto fill_b = make_scalar<T>();
-    std::vector<std::reference_wrapper<cudf::scalar>> fills{ *fill_a, *fill_b };
-
-    auto actual = cudf::experimental::shift(input, 5, fills);
-
-    cudf::test::expect_tables_equal(expected, *actual);
+    cudf::test::expect_columns_equal(expected, *actual);
 }
 
 TYPED_TEST(ShiftTest, OneColumn)
 {
     using T =  TypeParam;
 
-    auto input_a = fixed_width_column_wrapper<T>{ lowest<T>, 1, 2, 3, 4, 5, highest<T> };
-    auto input = cudf::table_view { { input_a } };
-
-    auto expected_a = fixed_width_column_wrapper<T>{ 7, 7, lowest<T>, 1, 2, 3, 4 };
-    auto expected = cudf::table_view{ { expected_a } };
+    auto input = fixed_width_column_wrapper<T>{ lowest<T>, 1, 2, 3, 4, 5, highest<T> };
+    auto expected = fixed_width_column_wrapper<T>{ 7, 7, lowest<T>, 1, 2, 3, 4 };
 
     auto fill = make_scalar<T>(7);
-    std::vector<std::reference_wrapper<cudf::scalar>> fills { *fill };
+    auto actual = cudf::experimental::shift(input, 2, *fill);
 
-    auto actual = cudf::experimental::shift(input, 2, fills);
-
-    cudf::test::expect_tables_equal(expected, *actual);
+    cudf::test::expect_columns_equal(expected, *actual);
 }
 
 TYPED_TEST(ShiftTest, OneColumnNegativeShift)
 {
     using T =  TypeParam;
 
-    auto input_a = fixed_width_column_wrapper<T>{ lowest<T>, 1, 2, 3, 4, 5, highest<T> };
-    auto input = cudf::table_view { { input_a } };
-
-    auto expected_a = fixed_width_column_wrapper<T>{ 4, 5, highest<T>, 7, 7, 7, 7 };
-    auto expected = cudf::table_view{ { expected_a } };
+    auto input = fixed_width_column_wrapper<T>{ lowest<T>, 1, 2, 3, 4, 5, highest<T> };
+    auto expected = fixed_width_column_wrapper<T>{ 4, 5, highest<T>, 7, 7, 7, 7 };
 
     auto fill = make_scalar<T>(7);
-    std::vector<std::reference_wrapper<cudf::scalar>> fills { *fill };
+    auto actual = cudf::experimental::shift(input, -4, *fill);
 
-    auto actual = cudf::experimental::shift(input, -4, fills);
-
-    cudf::test::expect_tables_equal(expected, *actual);
+    cudf::test::expect_columns_equal(expected, *actual);
 }
 
 TYPED_TEST(ShiftTest, OneColumnNullFill)
 {
     using T =  TypeParam;
 
-    auto input_a = fixed_width_column_wrapper<T>{ lowest<T>, 5, 0, 3, 0, 1, highest<T> };
-    auto input = cudf::table_view { { input_a } };
-
-    auto expected_a = fixed_width_column_wrapper<T>({ 0, 0, lowest<T>, 5, 0, 3, 0 }, { 0, 0, 1, 1, 1, 1, 1 });
-    auto expected = cudf::table_view{ { expected_a } };
+    auto input = fixed_width_column_wrapper<T>{ lowest<T>, 5, 0, 3, 0, 1, highest<T> };
+    auto expected = fixed_width_column_wrapper<T>({ 0, 0, lowest<T>, 5, 0, 3, 0 }, { 0, 0, 1, 1, 1, 1, 1 });
 
     auto fill = make_scalar<T>();
 
-    std::vector<std::reference_wrapper<cudf::scalar>> fills { *fill };
+    auto actual = cudf::experimental::shift(input, 2, *fill);
 
-    auto actual = cudf::experimental::shift(input, 2, fills);
-
-    cudf::test::expect_tables_equal(expected, *actual);
+    cudf::test::expect_columns_equal(expected, *actual);
 }
 
 TYPED_TEST(ShiftTest, TwoColumnsNullableInput)
 {
     using T =  TypeParam;
 
-    auto input_a = fixed_width_column_wrapper<T>({ 1, 2, 3, 4, 5 }, { 0, 1, 1, 1, 0});
-    auto input_b = fixed_width_column_wrapper<T>({ 5, 4, 3, 2, 1 }, { 1, 0, 1, 1, 1});
-    auto input = cudf::table_view { { input_a, input_b } };
+    auto input = fixed_width_column_wrapper<T>({ 1, 2, 3, 4, 5 }, { 0, 1, 1, 1, 0});
+    auto expected = fixed_width_column_wrapper<T>({ 7, 7, 1, 2, 3 }, { 1, 1, 0, 1, 1});
 
-    auto expected_a = fixed_width_column_wrapper<T>({ 7, 7, 1, 2, 3 }, { 1, 1, 0, 1, 1});
-    auto expected_b = fixed_width_column_wrapper<T>({ 7, 7, 5, 4, 3 }, { 0, 0, 1, 0, 1});
-    auto expected = cudf::table_view{ { expected_a, expected_b } };
+    auto fill = make_scalar<T>(7);
+    auto actual = cudf::experimental::shift(input, 2, *fill);
 
-    auto fill_a = make_scalar<T>(7);
-    auto fill_b = make_scalar<T>();
-    std::vector<std::reference_wrapper<cudf::scalar>> fills { *fill_a, *fill_b };
-
-    auto actual = cudf::experimental::shift(input, 2, fills);
-
-    cudf::test::expect_tables_equal(expected, *actual);
-}
-
-TYPED_TEST(ShiftTest, MismatchFillValueCount)
-{
-    using T = TypeParam;
-
-    fixed_width_column_wrapper<T> a{};
-    fixed_width_column_wrapper<T> b{};
-    cudf::table_view input{ { a, b } };
-
-    auto fill = make_scalar<T>();
-    std::vector<std::reference_wrapper<cudf::scalar>> fills{ *fill };
-
-    std::unique_ptr<cudf::experimental::table> output;
-
-    EXPECT_THROW(output = cudf::experimental::shift(input, 5, fills),
-                 cudf::logic_error);
+    cudf::test::expect_columns_equal(expected, *actual);
 }
 
 TYPED_TEST(ShiftTest, MismatchFillValueDtypes)
@@ -196,62 +149,12 @@ TYPED_TEST(ShiftTest, MismatchFillValueDtypes)
         return;
     }
 
-    fixed_width_column_wrapper<T> a{};
-    cudf::table_view input{ { a } };
+    auto input = fixed_width_column_wrapper<T> {};
 
     auto fill = make_scalar<int>();
 
-    std::vector<std::reference_wrapper<cudf::scalar>> fills{ *fill };
+    std::unique_ptr<cudf::column> output;
 
-    std::unique_ptr<cudf::experimental::table> output;
-
-    EXPECT_THROW(output = cudf::experimental::shift(input, 5, fills),
-                 cudf::logic_error);
-}
-
-TYPED_TEST(ShiftTest, PerColumnOffsets)
-{
-    using T =  TypeParam;
-
-    auto input_a = fixed_width_column_wrapper<T>({ 1, 2, 3, 4, 5 }, { 0, 1, 1, 1, 0});
-    auto input_b = fixed_width_column_wrapper<T>({ 5, 4, 3, 2, 1 }, { 1, 0, 1, 1, 1 });
-    auto input = cudf::table_view { { input_a, input_b } };
-
-    auto expected_a = fixed_width_column_wrapper<T>({ 7, 7, 7, 1, 2 }, { 1, 1, 1, 0, 1 });
-    auto expected_b = fixed_width_column_wrapper<T>({ 3, 2, 1, 7, 7 }, { 1, 1, 1, 0, 0 });
-    auto expected = cudf::table_view{ { expected_a, expected_b } };
-
-    auto fill_a = make_scalar<T>(7);
-    auto fill_b = make_scalar<T>();
-
-    std::vector<std::reference_wrapper<cudf::scalar>> fills { *fill_a, *fill_b };
-    std::vector<cudf::size_type> offsets{ 3, -2 };
-
-    auto actual = cudf::experimental::shift(input, offsets, fills);
-
-    cudf::test::expect_tables_equal(expected, *actual);
-}
-
-TYPED_TEST(ShiftTest, MisMatchOffsetCount)
-{
-    using T =  TypeParam;
-
-    auto input_a = fixed_width_column_wrapper<T>({ 1, 2, 3, 4, 5 }, { 0, 1, 1, 1, 0});
-    auto input_b = fixed_width_column_wrapper<T>({ 5, 4, 3, 2, 1 }, { 1, 0, 1, 1, 1 });
-    auto input = cudf::table_view { { input_a, input_b } };
-
-    auto expected_a = fixed_width_column_wrapper<T>({ 7, 7, 7, 1, 2 }, { 1, 1, 1, 0, 1 });
-    auto expected_b = fixed_width_column_wrapper<T>({ 3, 2, 1, 7, 7 }, { 1, 1, 1, 0, 0 });
-    auto expected = cudf::table_view{ { expected_a, expected_b } };
-
-    auto fill_a = make_scalar<T>(7);
-    auto fill_b = make_scalar<T>();
-
-    std::vector<std::reference_wrapper<cudf::scalar>> fills { *fill_a, *fill_b };
-    std::vector<cudf::size_type> offsets{ 3, };
-
-    std::unique_ptr<cudf::experimental::table> output;
-
-    EXPECT_THROW(output = cudf::experimental::shift(input, offsets, fills),
+    EXPECT_THROW(output = cudf::experimental::shift(input, 5, *fill),
                  cudf::logic_error);
 }
