@@ -633,7 +633,16 @@ table_with_metadata reader::impl::read(int skip_rows, int num_rows, int stripe,
     orc_col_map[col] = column_types.size() - 1;
   }
 
-  if (num_rows > 0 && selected_stripes.size() != 0) {
+  auto is_empty_table = not (num_rows > 0 && selected_stripes.size() != 0);
+
+  if (is_empty_table) {
+    // Return 0-length columns
+    for (size_t i = 0; i < column_types.size(); ++i) {
+      column_buffer empty_buffer{column_types[i], 0};
+      out_columns.emplace_back(make_column(column_types[i], 0,
+                                           empty_buffer, stream, _mr));
+    }
+  } else {
     const auto num_columns = _selected_columns.size();
     const auto num_chunks = selected_stripes.size() * num_columns;
     hostdevice_vector<gpu::ColumnDesc> chunks(num_chunks, stream);
@@ -780,12 +789,6 @@ table_with_metadata reader::impl::read(int skip_rows, int num_rows, int stripe,
         out_columns.emplace_back(make_column(column_types[i], num_rows,
                                              out_buffers[i], stream, _mr));
       }
-    }
-  } else {
-    for (size_t i = 0; i < column_types.size(); ++i) {
-      column_buffer empty_buffer{column_types[i], 0};
-      out_columns.emplace_back(make_column(column_types[i], 0,
-                                           empty_buffer, stream, _mr));
     }
   }
 
