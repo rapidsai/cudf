@@ -122,8 +122,8 @@ def test_from_dask_dataframe():
 
 
 @pytest.mark.parametrize("nelem", [10, 200, 1333])
-@pytest.mark.parametrize("experimental", [True, False])
-def test_set_index(nelem, experimental):
+@pytest.mark.parametrize("divisions", [None, "quantile"])
+def test_set_index(nelem, divisions):
     with dask.config.set(scheduler="single-threaded"):
         np.random.seed(0)
         # Use unique index range as the sort may not be stable-ordering
@@ -136,7 +136,7 @@ def test_set_index(nelem, experimental):
         dgdf = ddf.map_partitions(cudf.from_pandas)
 
         expect = ddf.set_index("x")
-        got = dgdf.set_index("x", experimental=experimental)
+        got = dgdf.set_index("x", divisions=divisions)
 
         dd.assert_eq(expect, got, check_index=False, check_divisions=False)
 
