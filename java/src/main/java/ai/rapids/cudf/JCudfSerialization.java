@@ -1327,7 +1327,7 @@ public class JCudfSerialization {
     DataWriter writer = writerFrom(out);
     SerializedTableHeader header = calcEmptyHeader((int) numRows);
     header.writeTo(writer);
-    out.flush();
+    writer.flush();
   }
 
   /**

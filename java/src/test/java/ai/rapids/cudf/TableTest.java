@@ -1247,6 +1247,32 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testSerializationZeroCols() throws IOException {
+    try (ByteArrayOutputStream bout = new ByteArrayOutputStream();
+         ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
+         DataInputStream din = new DataInputStream(bin)) {
+      JCudfSerialization.writeRowsToStream(bout, 11);
+      try (JCudfSerialization.TableAndRowCountPair result = JCudfSerialization.readTableFrom(din)) {
+        assertNull(result.getTable());
+        assertEquals(0, result.getNumRows());
+      }
+    }
+  }
+
+  @Test
+  void testSerializationZeroColsZeroRows() throws IOException {
+    try (ByteArrayOutputStream bout = new ByteArrayOutputStream();
+         ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
+         DataInputStream din = new DataInputStream(bin)) {
+      JCudfSerialization.writeRowsToStream(bout, 0);
+      try (JCudfSerialization.TableAndRowCountPair result = JCudfSerialization.readTableFrom(din)) {
+        assertNull(result.getTable());
+        assertEquals(0, result.getNumRows());
+      }
+    }
+  }
+
+  @Test
   void testSerializationRoundTripConcatOnHostEmpty() throws IOException {
     try (ColumnVector emptyInt = ColumnVector.fromInts();
          ColumnVector emptyDouble = ColumnVector.fromDoubles();
