@@ -40,6 +40,8 @@ cdef class Aggregation:
             self.c_obj = move(libcudf_aggregation.make_mean_aggregation())
         elif op == "count":
             self.c_obj = move(libcudf_aggregation.make_count_aggregation())
+        elif op == "nunique":
+            self.c_obj = move(libcudf_aggregation.make_nunique_aggregation())
         elif callable(op):
             # Handling UDF type
             nb_type = numba.numpy_support.from_dtype(kwargs['dtype'])

@@ -6,10 +6,9 @@ import cudf._libxx.groupby as libgroupby
 
 class GroupBy(object):
     def __init__(self, obj, by):
-        self._grouping = _Grouping(obj, by)
+        self.grouping = _Grouping(obj, by)
         self.obj = obj
-        self.keys = self._grouping.keys
-        self._groupby = libgroupby.GroupBy(self._grouping.keys)
+        self._groupby = libgroupby.GroupBy(self.grouping.keys)
 
     def __iter__(self):
         grouped_keys, grouped_values, offsets = self._groupby.groups(self.obj)
@@ -20,6 +19,13 @@ class GroupBy(object):
 
         for i, name in enumerate(group_names):
             yield name, grouped_values[offsets[i] : offsets[i + 1]]
+
+    def agg(self, aggs):
+        result = self._groupby.aggregate(self.obj, aggs)
+        index = cudf.Index._from_table(
+            result._index, names=self.grouping.names
+        )
+        return self.obj.__class__._from_table(result, index=index)
 
 
 class _Grouping(object):

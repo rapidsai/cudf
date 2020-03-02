@@ -15,6 +15,7 @@ cdef extern from "cudf/groupby.hpp" \
         namespace "cudf::experimental::groupby" nogil:
 
     cdef cppclass aggregation_request:
+        aggregation_request()
         column_view values
         vector[unique_ptr[aggregation]] aggregations
 

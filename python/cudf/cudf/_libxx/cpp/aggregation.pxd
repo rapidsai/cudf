@@ -47,6 +47,8 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf::experimental" nogil:
 
     cdef unique_ptr[aggregation] make_argmin_aggregation() except +
 
+    cdef unique_ptr[aggregation] make_nunique_aggregation() except +
+
     cdef unique_ptr[aggregation] make_udf_aggregation(
         udf_type type,
         string user_defined_aggregator,

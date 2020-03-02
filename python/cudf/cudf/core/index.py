@@ -481,16 +481,15 @@ class Index(Frame):
         return ind
 
     @classmethod
-    def _from_table(cls, table):
+    def _from_table(cls, table, names=None):
         if table._num_columns == 0:
             raise ValueError("Cannot construct Index from any empty Table")
+        if names is None:
+            names = table._data.names
         if table._num_columns == 1:
-            return as_index(
-                next(iter(table._data.columns)),
-                name=next(iter(table._data.keys())),
-            )
+            return as_index(table._data.columns[0], name=names[0])
         else:
-            return cudf.MultiIndex._from_table(table)
+            return cudf.MultiIndex._from_table(table, names=names)
 
 
 class RangeIndex(Index):

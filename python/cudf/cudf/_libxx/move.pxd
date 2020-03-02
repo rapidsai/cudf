@@ -11,7 +11,11 @@ from cudf._libxx.cpp.aggregation cimport aggregation
 from cudf._libxx.cpp.scalar.scalar cimport scalar
 from cudf._libxx.cpp.column.column cimport column, column_contents
 from cudf._libxx.cpp.table.table cimport table
-from cudf._libxx.cpp.groupby cimport groups
+from cudf._libxx.cpp.groupby cimport (
+    groups,
+    aggregation_request,
+    aggregation_result
+)
 
 
 # Note: declaring `move()` with `except +` doesn't work.
@@ -51,3 +55,8 @@ cdef extern from "<utility>" namespace "std" nogil:
     )
     cdef column_contents move(column_contents)
     cdef groups move(groups)
+    cdef aggregation_request move(aggregation_request)
+    cdef aggregation_result move(aggregation_result)
+    cdef pair[unique_ptr[table], vector[aggregation_result]] move(
+        pair[unique_ptr[table], vector[aggregation_result]]
+    )
