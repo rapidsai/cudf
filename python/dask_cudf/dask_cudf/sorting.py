@@ -390,9 +390,15 @@ def _percentile(a, q, interpolation="linear"):
     n = len(a)
     if not len(a):
         return None, n
+    # return (
+    #     cupy.asnumpy(
+    #         gd.Series(a).quantile(q, interpolation=interpolation).values
+    #     ),
+    #     n,
+    # )
     return (
         cupy.asnumpy(
-            gd.Series(a).quantile(q, interpolation=interpolation).values
+            np.percentile(a.astype("float64"), q, interpolation=interpolation)
         ),
         n,
     )
@@ -430,7 +436,7 @@ def quantile(df, q):
 
     # pandas uses quantile in [0, 1]
     # numpy / everyone else uses [0, 100]
-    qs = np.asarray(q)  # * 100
+    qs = np.asarray(q) * 100
     token = tokenize(df, qs)
 
     if len(qs) == 0:
@@ -448,8 +454,6 @@ def quantile(df, q):
         )
     else:
         new_divisions = [np.min(q), np.max(q)]
-
-    df = df.dropna()
 
     from dask.array.percentile import merge_percentiles
 
@@ -532,9 +536,12 @@ def sort_values_experimental(
     ):
         # TODO: Use input divisions for use_explicit==True
         qn = np.linspace(0.0, 1.0, npartitions + 1).tolist()
+        dtype = df2[index].dtype
         divisions = (
-            quantile(df2[index], qn).astype("int").compute().values + 1
-        ).tolist()
+            (quantile(df2[index], qn).compute().values + 1)
+            .astype(dtype)
+            .tolist()
+        )
         divisions[0] = 0
     else:
         # For now we can accept multi-column divisions as a dataframe
