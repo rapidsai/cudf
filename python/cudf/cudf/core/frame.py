@@ -238,6 +238,12 @@ class Frame(libcudfxx.table.Table):
         result._copy_categories(self)
         return result
 
+    def shift(self, periods=1, freq=None, axis=0, fill_value=None):
+        """Shift values by `periods` positions.
+        """
+        assert axis in (None, 0) and freq is None
+        return self._shift(periods)
+
     def _shift(self, offset, fill_value=None):
         data_columns = (col.shift(offset, fill_value) for col in self._columns)
         data = zip(self._column_names, data_columns)

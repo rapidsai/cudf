@@ -2379,13 +2379,6 @@ class Series(Frame):
 
         return Series(numerical.digitize(self._column, bins, right))
 
-    def shift(self, periods=1, freq=None, axis=0, fill_value=None):
-        """Shift values of an input array by `periods` positions and store the
-        output in a new array.
-        """
-        assert axis in (None, 0) and freq is None and fill_value is None
-        return self._shift(periods)
-
     def diff(self, periods=1):
         """Calculate the difference between values at positions i and i - N in
         an array and store the output in a new array.
