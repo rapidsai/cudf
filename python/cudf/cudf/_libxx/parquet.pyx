@@ -82,7 +82,7 @@ cpdef generate_pandas_metadata(Table table, index):
     return json_str
 
 cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
-                   skip_rows=None, num_rows=None,
+                   row_group_count=None, skip_rows=None, num_rows=None,
                    strings_to_categorical=False, use_pandas_metadata=False):
     """
     Cython function to call into libcudf API, see `read_parquet`.
@@ -122,6 +122,8 @@ cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
     args.skip_rows = skip_rows if skip_rows is not None else 0
     args.num_rows = num_rows if num_rows is not None else -1
     args.row_group = row_group if row_group is not None else -1
+    args.row_group_count = row_group_count \
+        if row_group_count is not None else -1
     args.timestamp_type = cudf_types.data_type(cudf_types.type_id.EMPTY)
 
     # Read Parquet
@@ -132,8 +134,10 @@ cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
 
     column_names = list(c_out_table.metadata.column_names)
     column_names = [x.decode() for x in column_names]
+    print("Column Names: " + str(column_names))
     tbl = Table.from_unique_ptr(move(c_out_table.tbl),
                                 column_names=column_names)
+    print("After table thing")
     return cudf.DataFrame._from_table(tbl)
 
 cpdef write_parquet(

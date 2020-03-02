@@ -28,6 +28,7 @@ def read_parquet(
     engine="cudf",
     columns=None,
     row_group=None,
+    row_group_count=None,
     skip_rows=None,
     num_rows=None,
     strings_to_categorical=False,
