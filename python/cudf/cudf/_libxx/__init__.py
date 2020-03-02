@@ -4,6 +4,7 @@ import numpy as np
 from . import (
     avro,
     copying,
+    gpuarrow,
     hash,
     join,
     merge,
