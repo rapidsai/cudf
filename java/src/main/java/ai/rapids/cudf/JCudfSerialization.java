@@ -209,7 +209,7 @@ public class JCudfSerialization {
   /**
    * Visible for testing
    */
-  static abstract class ColumnBufferProvider {
+  static abstract class ColumnBufferProvider implements AutoCloseable {
 
     public abstract DType getType();
 
@@ -221,29 +221,30 @@ public class JCudfSerialization {
 
     public abstract long getRowCount();
 
-    public void ensureOnHost() {
-      // Noop by default
-    }
+    public abstract HostMemoryBuffer getHostBufferFor(BufferType buffType);
 
-    public abstract HostMemoryBuffer getHostBufferFor(ColumnVector.BufferType buffType);
+    public abstract long getBufferStartOffset(BufferType buffType);
 
-    public abstract long getBufferStartOffset(ColumnVector.BufferType buffType);
-
-    public void copyBytesToArray(byte[] dest, int destOffset, ColumnVector.BufferType srcType, long srcOffset, int length) {
+    public void copyBytesToArray(byte[] dest, int destOffset, BufferType srcType, long srcOffset, int length) {
       HostMemoryBuffer buff = getHostBufferFor(srcType);
       srcOffset = srcOffset + getBufferStartOffset(srcType);
       buff.getBytes(dest, destOffset, srcOffset, length);
     }
+
+    @Override
+    public abstract void close();
   }
 
   /**
    * Visible for testing
    */
   static class ColumnProvider extends ColumnBufferProvider {
-    private final ColumnVector column;
+    private final HostColumnVector column;
+    private final boolean closeAtEnd;
 
-    ColumnProvider(ColumnVector column) {
+    ColumnProvider(HostColumnVector column, boolean closeAtEnd) {
       this.column = column;
+      this.closeAtEnd = closeAtEnd;
     }
 
     @Override
@@ -272,19 +273,21 @@ public class JCudfSerialization {
     }
 
     @Override
-    public void ensureOnHost() {
-      column.ensureOnHost();
-    }
-
-    @Override
-    public HostMemoryBuffer getHostBufferFor(ColumnVector.BufferType buffType) {
+    public HostMemoryBuffer getHostBufferFor(BufferType buffType) {
       return column.getHostBufferFor(buffType);
     }
 
     @Override
-    public long getBufferStartOffset(ColumnVector.BufferType buffType) {
+    public long getBufferStartOffset(BufferType buffType) {
       // All of the buffers start at 0 for this.
       return 0;
+    }
+
+    @Override
+    public void close() {
+      if (closeAtEnd) {
+        column.close();
+      }
     }
   }
 
@@ -320,12 +323,12 @@ public class JCudfSerialization {
     }
 
     @Override
-    public HostMemoryBuffer getHostBufferFor(ColumnVector.BufferType buffType) {
+    public HostMemoryBuffer getHostBufferFor(BufferType buffType) {
       return buffer;
     }
 
     @Override
-    public long getBufferStartOffset(ColumnVector.BufferType buffType) {
+    public long getBufferStartOffset(BufferType buffType) {
       switch (buffType) {
         case DATA:
           return offsets.data;
@@ -351,6 +354,11 @@ public class JCudfSerialization {
       assert (index >= 0 && index < getRowCount()) : "index is out of range 0 <= " + index + " < " + getRowCount();
       // The offsets has one more entry than there are rows.
       return buffer.getInt(offsets.offsets + ((index + 1) * 4));
+    }
+
+    @Override
+    public void close() {
+      // NOOP
     }
   }
 
@@ -378,7 +386,7 @@ public class JCudfSerialization {
     public abstract void copyDataFrom(HostMemoryBuffer src, long srcOffset, long len)
         throws IOException;
 
-    public void copyDataFrom(ColumnBufferProvider column, ColumnVector.BufferType buffType,
+    public void copyDataFrom(ColumnBufferProvider column, BufferType buffType,
                              long offset, long length) throws IOException {
       HostMemoryBuffer buff = column.getHostBufferFor(buffType);
       long startOffset = column.getBufferStartOffset(buffType);
@@ -598,9 +606,13 @@ public class JCudfSerialization {
    * @param numRows the number of rows to serialize.
    * @return the size in bytes needed to serialize the data including the header.
    */
-  public static long getSerializedSizeInBytes(ColumnVector[] columns, long rowOffset, long numRows) {
-    ColumnBufferProvider[] providers = providersFrom(columns);
-    return getSlicedSerializedDataSizeInBytes(providers, rowOffset, numRows) + (4 * 3) + 2; // The header size
+  public static long getSerializedSizeInBytes(HostColumnVector[] columns, long rowOffset, long numRows) {
+    ColumnBufferProvider[] providers = providersFrom(columns, false);
+    try {
+      return getSlicedSerializedDataSizeInBytes(providers, rowOffset, numRows) + (4 * 3) + 2; // The header size
+    } finally {
+      closeAll(providers);
+    }
   }
 
   /////////////////////////////////////////////
@@ -659,10 +671,46 @@ public class JCudfSerialization {
   // HELPER METHODS FOR PROVIDERS
   /////////////////////////////////////////////
 
+  private static void closeAll(ColumnBufferProvider[] providers) {
+    for (int i = 0; i < providers.length; i++) {
+      providers[i].close();
+    }
+  }
+
+  private static void closeAll(ColumnBufferProvider[][] providers) {
+    for (int i = 0; i < providers.length; i++) {
+      if (providers[i] != null) {
+        closeAll(providers[i]);
+      }
+    }
+  }
+
   private static ColumnBufferProvider[] providersFrom(ColumnVector[] columns) {
+    HostColumnVector[] onHost = new HostColumnVector[columns.length];
+    boolean success = false;
+    try {
+      for (int i = 0; i < columns.length; i++) {
+        onHost[i] = columns[i].copyToHost();
+      }
+      ColumnBufferProvider[] ret = providersFrom(onHost, true);
+      success = true;
+      return ret;
+    } finally {
+      if (!success) {
+        for (int i = 0; i < onHost.length; i++) {
+          if (onHost[i] != null) {
+            onHost[i].close();
+            onHost[i] = null;
+          }
+        }
+      }
+    }
+  }
+
+  private static ColumnBufferProvider[] providersFrom(HostColumnVector[] columns, boolean closeAtEnd) {
     ColumnBufferProvider[] providers = new ColumnBufferProvider[columns.length];
     for (int i = 0; i < columns.length; i++) {
-      providers[i] = new ColumnProvider(columns[i]);
+      providers[i] = new ColumnProvider(columns[i], closeAtEnd);
     }
     return providers;
   }
@@ -806,7 +854,7 @@ public class JCudfSerialization {
 
   private static long copySlicedAndPad(DataWriter out,
                                        ColumnBufferProvider column,
-                                       ColumnVector.BufferType buffer,
+                                       BufferType buffer,
                                        long offset,
                                        long length) throws IOException {
     out.copyDataFrom(column, buffer, offset, length);
@@ -822,8 +870,8 @@ public class JCudfSerialization {
                                          ColumnBufferProvider provider,
                                          int srcBitOffset,
                                          int lengthBits) {
-    HostMemoryBuffer src = provider.getHostBufferFor(ColumnVector.BufferType.VALIDITY);
-    long baseSrcByteOffset = provider.getBufferStartOffset(ColumnVector.BufferType.VALIDITY);
+    HostMemoryBuffer src = provider.getHostBufferFor(BufferType.VALIDITY);
+    long baseSrcByteOffset = provider.getBufferStartOffset(BufferType.VALIDITY);
 
     int destStartBytes = destBitOffset / 8;
     int destStartBitOffset = destBitOffset % 8;
@@ -913,7 +961,7 @@ public class JCudfSerialization {
 
     int lshift = (int) rowOffset % 8;
     if (lshift == 0) {
-      out.copyDataFrom(column, ColumnVector.BufferType.VALIDITY, byteOffset, bytesLeft);
+      out.copyDataFrom(column, BufferType.VALIDITY, byteOffset, bytesLeft);
     } else {
       byte[] arrayBuffer = new byte[128 * 1024];
       int rowsStoredInArray = 0;
@@ -1009,7 +1057,7 @@ public class JCudfSerialization {
       long endByteOffset = column.getEndStringOffset(rowOffset + numRows - 1);
       long bytesToCopy = endByteOffset - startByteOffset;
       long srcOffset = startByteOffset;
-      return copySlicedAndPad(out, column, ColumnVector.BufferType.DATA, srcOffset, bytesToCopy);
+      return copySlicedAndPad(out, column, BufferType.DATA, srcOffset, bytesToCopy);
     }
     return 0;
   }
@@ -1022,8 +1070,8 @@ public class JCudfSerialization {
 
     for (int batchIndex = 0; batchIndex < providers.length; batchIndex++) {
       ColumnBufferProvider provider = providers[batchIndex][columnIndex];
-      HostMemoryBuffer dataBuffer = provider.getHostBufferFor(ColumnVector.BufferType.DATA);
-      long currentOffset = provider.getBufferStartOffset(ColumnVector.BufferType.DATA);
+      HostMemoryBuffer dataBuffer = provider.getHostBufferFor(BufferType.DATA);
+      long currentOffset = provider.getBufferStartOffset(BufferType.DATA);
       int dataLeft = dataLengths[batchIndex];
       out.copyDataFrom(dataBuffer, currentOffset, dataLeft);
       totalCopied += dataLeft;
@@ -1040,10 +1088,10 @@ public class JCudfSerialization {
     long bytesToCopy = (numRows + 1) * 4;
     long srcOffset = rowOffset * 4;
     if (rowOffset == 0) {
-      return copySlicedAndPad(out, column, ColumnVector.BufferType.OFFSET, srcOffset, bytesToCopy);
+      return copySlicedAndPad(out, column, BufferType.OFFSET, srcOffset, bytesToCopy);
     }
-    HostMemoryBuffer buff = column.getHostBufferFor(ColumnVector.BufferType.OFFSET);
-    long startOffset = column.getBufferStartOffset(ColumnVector.BufferType.OFFSET) + srcOffset;
+    HostMemoryBuffer buff = column.getHostBufferFor(BufferType.OFFSET);
+    long startOffset = column.getBufferStartOffset(BufferType.OFFSET) + srcOffset;
     if (bytesToCopy >= Integer.MAX_VALUE) {
       throw new IllegalStateException("Copy is too large, need to do chunked copy");
     }
@@ -1074,8 +1122,8 @@ public class JCudfSerialization {
 
     for (int batchIndex = 0; batchIndex < providers.length; batchIndex++) {
       ColumnBufferProvider provider = providers[batchIndex][columnIndex];
-      HostMemoryBuffer dataBuffer = provider.getHostBufferFor(ColumnVector.BufferType.OFFSET);
-      long currentOffset = provider.getBufferStartOffset(ColumnVector.BufferType.OFFSET);
+      HostMemoryBuffer dataBuffer = provider.getHostBufferFor(BufferType.OFFSET);
+      long currentOffset = provider.getBufferStartOffset(BufferType.OFFSET);
       int numRowsForHeader = (int) provider.getRowCount();
 
       // We already output the first row
@@ -1116,7 +1164,7 @@ public class JCudfSerialization {
     DType type = column.getType();
     long bytesToCopy = numRows * type.sizeInBytes;
     long srcOffset = rowOffset * type.sizeInBytes;
-    return copySlicedAndPad(out, column, ColumnVector.BufferType.DATA, srcOffset, bytesToCopy);
+    return copySlicedAndPad(out, column, BufferType.DATA, srcOffset, bytesToCopy);
   }
 
   private static void concatBasicData(DataWriter out,
@@ -1126,8 +1174,8 @@ public class JCudfSerialization {
     long totalCopied = 0;
     for (int batchIndex = 0; batchIndex < providers.length; batchIndex++) {
       ColumnBufferProvider provider = providers[batchIndex][columnIndex];
-      HostMemoryBuffer dataBuffer = provider.getHostBufferFor(ColumnVector.BufferType.DATA);
-      long currentOffset = provider.getBufferStartOffset(ColumnVector.BufferType.DATA);
+      HostMemoryBuffer dataBuffer = provider.getHostBufferFor(BufferType.DATA);
+      long currentOffset = provider.getBufferStartOffset(BufferType.DATA);
       int numRowsForBatch = (int) provider.getRowCount();
 
       int dataLeft = numRowsForBatch * type.sizeInBytes;
@@ -1166,7 +1214,6 @@ public class JCudfSerialization {
                                   ColumnBufferProvider column,
                                   long rowOffset,
                                   long numRows) throws IOException {
-    column.ensureOnHost();
 
     if (column.getNullCount() > 0) {
       try (NvtxRange range = new NvtxRange("Write Validity", NvtxColor.DARK_GREEN)) {
@@ -1235,8 +1282,31 @@ public class JCudfSerialization {
                                    long numRows) throws IOException {
 
     ColumnBufferProvider[] providers = providersFrom(columns);
-    DataWriter writer = writerFrom(out);
-    writeSliced(providers, writer, rowOffset, numRows);
+    try {
+      DataWriter writer = writerFrom(out);
+      writeSliced(providers, writer, rowOffset, numRows);
+    } finally {
+      closeAll(providers);
+    }
+  }
+
+  /**
+   * Write all or part of a set of columns out in an internal format.
+   * @param columns the columns to be written.
+   * @param out the stream to write the serialized table out to.
+   * @param rowOffset the first row to write out.
+   * @param numRows the number of rows to write out.
+   */
+  public static void writeToStream(HostColumnVector[] columns, OutputStream out, long rowOffset,
+                                   long numRows) throws IOException {
+
+    ColumnBufferProvider[] providers = providersFrom(columns, false);
+    try {
+      DataWriter writer = writerFrom(out);
+      writeSliced(providers, writer, rowOffset, numRows);
+    } finally {
+      closeAll(providers);
+    }
   }
 
   /**
@@ -1251,16 +1321,19 @@ public class JCudfSerialization {
                                          HostMemoryBuffer[] dataBuffers,
                                          OutputStream out) throws IOException {
     ColumnBufferProvider[][] providers = providersFrom(headers, dataBuffers);
-    SerializedTableHeader combined = calcConcatedHeader(providers);
-    DataWriter writer = writerFrom(out);
-    combined.writeTo(writer);
-
-    try (NvtxRange range = new NvtxRange("Concat Host Side", NvtxColor.GREEN)) {
-      for (int columnIndex = 0; columnIndex < combined.numColumns; columnIndex++) {
-        writeConcat(writer, columnIndex, combined, providers);
+    try {
+      SerializedTableHeader combined = calcConcatedHeader(providers);
+      DataWriter writer = writerFrom(out);
+      combined.writeTo(writer);
+      try (NvtxRange range = new NvtxRange("Concat Host Side", NvtxColor.GREEN)) {
+        for (int columnIndex = 0; columnIndex < combined.numColumns; columnIndex++) {
+          writeConcat(writer, columnIndex, combined, providers);
+        }
       }
+      writer.flush();
+    } finally {
+      closeAll(providers);
     }
-    writer.flush();
   }
 
   /////////////////////////////////////////////
@@ -1332,25 +1405,29 @@ public class JCudfSerialization {
                                     HostMemoryBuffer[] dataBuffers) throws IOException {
 
     ColumnBufferProvider[][] providers = providersFrom(headers, dataBuffers);
-    SerializedTableHeader combined = calcConcatedHeader(providers);
+    try {
+      SerializedTableHeader combined = calcConcatedHeader(providers);
 
-    try (DevicePrediction prediction = new DevicePrediction(combined.dataLen, "readAndConcat");
-         HostPrediction hostPrediction = new HostPrediction(combined.dataLen, "readAndConcat");
-         HostMemoryBuffer hostBuffer = HostMemoryBuffer.allocate(combined.dataLen);
-         DeviceMemoryBuffer devBuffer = DeviceMemoryBuffer.allocate(hostBuffer.length)) {
-      try (NvtxRange range = new NvtxRange("Concat Host Side", NvtxColor.GREEN)) {
-        DataWriter writer = writerFrom(hostBuffer);
-        for (int columnIndex = 0; columnIndex < combined.numColumns; columnIndex++) {
-          writeConcat(writer, columnIndex, combined, providers);
+      try (DevicePrediction prediction = new DevicePrediction(combined.dataLen, "readAndConcat");
+           HostPrediction hostPrediction = new HostPrediction(combined.dataLen, "readAndConcat");
+           HostMemoryBuffer hostBuffer = HostMemoryBuffer.allocate(combined.dataLen);
+           DeviceMemoryBuffer devBuffer = DeviceMemoryBuffer.allocate(hostBuffer.length)) {
+        try (NvtxRange range = new NvtxRange("Concat Host Side", NvtxColor.GREEN)) {
+          DataWriter writer = writerFrom(hostBuffer);
+          for (int columnIndex = 0; columnIndex < combined.numColumns; columnIndex++) {
+            writeConcat(writer, columnIndex, combined, providers);
+          }
         }
-      }
 
-      if (hostBuffer.length > 0) {
-        try (NvtxRange range = new NvtxRange("Copy Data To Device", NvtxColor.WHITE)) {
-          devBuffer.copyFromHostBuffer(hostBuffer);
+        if (hostBuffer.length > 0) {
+          try (NvtxRange range = new NvtxRange("Copy Data To Device", NvtxColor.WHITE)) {
+            devBuffer.copyFromHostBuffer(hostBuffer);
+          }
         }
+        return sliceUpColumnVectors(combined, devBuffer, hostBuffer);
       }
-      return sliceUpColumnVectors(combined, devBuffer, hostBuffer);
+    } finally {
+      closeAll(providers);
     }
   }
 
