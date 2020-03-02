@@ -117,6 +117,7 @@
 - PR #4251 Add class to docs in `dask-cudf` `derived_from`
 - PR #4261 libxx Cython reorganization
 - PR #4282 Porting nvstrings conversion functions from new libcudf++ to Python/Cython
+- PR #4305 Move gpuarrow.pyx and related libarrow_cuda files into _libxx
 
 ## Bug Fixes
 
