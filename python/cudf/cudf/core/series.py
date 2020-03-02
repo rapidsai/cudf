@@ -2403,13 +2403,8 @@ class Series(Frame):
         return Series(numerical.digitize(self._column, bins, right))
 
     def shift(self, periods=1, freq=None, axis=0, fill_value=None):
-        """Shift values of an input array by periods positions and store the
+        """Shift values of an input array by `periods` positions and store the
         output in a new array.
-
-        Notes
-        -----
-        Shift currently only supports float and integer dtype columns with
-        no null values.
         """
         assert axis in (None, 0) and freq is None and fill_value is None
         return self._shift(periods)

@@ -5,17 +5,18 @@ import pandas as pd
 from libc.stdint cimport int32_t
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
-from cudf._libxx.cpp.types cimport reference_wrapper
 
 from cudf._libxx.column cimport Column
+from cudf._libxx.move cimport move
 from cudf._libxx.scalar cimport Scalar
 from cudf._libxx.table cimport Table
-from cudf._libxx.move cimport move
 
 from cudf._libxx.cpp.column.column_view cimport column_view
+from cudf._libxx.cpp.libcpp.functional cimport reference_wrapper
 from cudf._libxx.cpp.scalar.scalar cimport scalar
 from cudf._libxx.cpp.table.table cimport table
 from cudf._libxx.cpp.table.table_view cimport table_view
+from cudf._libxx.cpp.types cimport size_type
 cimport cudf._libxx.cpp.copying as cpp_copying
 
 
@@ -42,7 +43,7 @@ def gather(Table source_table, Column gather_map):
 
 
 def shift(Table input, int offset):
-    cdef table_view c_input = input.data_view()
+    cdef table_view c_input = input.view()
     cdef int32_t c_offset = offset
     cdef vector[reference_wrapper[scalar]] c_fill_values
     cdef unique_ptr[table] c_output
@@ -65,7 +66,8 @@ def shift(Table input, int offset):
 
     output = Table.from_unique_ptr(
         move(c_output),
-        column_names=input._column_names
+        column_names=input._column_names,
+        index_names=input._index._column_names
     )
 
     return output
