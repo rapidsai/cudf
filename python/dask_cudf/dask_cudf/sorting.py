@@ -567,29 +567,29 @@ def sort_values_experimental(
     ):
         # TODO: Use input divisions for use_explicit==True
         qn = np.linspace(0.0, 1.0, npartitions + 1).tolist()
-        divisions = quantile(df2[by], qn).compute().drop_duplicates()
+        divisions = quantile(df2[by], qn).compute()
         columns = divisions.columns
-        # TODO: Make sure divisions are correctly handled for
-        # non-numerical datatypes..
+
+        # TODO: Make sure divisions are correct for all dtypes..
         if len(columns) == 1 and df2[columns[0]].dtype != "object":
             dtype = df2[columns[0]].dtype
-            divisions = divisions[columns[0]].astype(dtype).values
-            if dtype in ("int", "float"):
-                divisions = divisions + 1
-                divisions[0] = 0
-            divisions = sorted(divisions.tolist())
+            divisions = divisions[columns[0]].astype("int64")
+            divisions.iloc[-1] += 1
+            divisions = sorted(
+                divisions.drop_duplicates().astype(dtype).values.tolist()
+            )
         else:
             for col in columns:
                 dtype = df2[col].dtype
-                divisions[col] = divisions[col].astype(dtype)
-                if dtype in ("int", "float"):
-                    divisions[col] += 1
-                    divisions[col].iloc[0] = 0
-                elif dtype == "object":
+                if dtype != "object":
+                    divisions[col] = divisions[col].astype("int64") + 1
+                    divisions[col].iloc[-1] += 1
+                    divisions[col] = divisions[col].astype(dtype)
+                else:
                     divisions[col].iloc[-1] = chr(
                         ord(divisions[col].iloc[-1][0]) + 1
                     )
-                    divisions[col].iloc[0] = chr(0)
+            divisions = divisions.drop_duplicates()
 
     # Step 3 - Perform repartitioning shuffle
     sort_by = None
