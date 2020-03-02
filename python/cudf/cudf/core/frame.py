@@ -354,7 +354,7 @@ class Frame(libcudfxx.table.Table):
         -------
         The interleaved columns as a single column
         """
-        if ("category" == self.dtypes)[0]:
+        if ("category" == self.dtypes).any():
             raise ValueError(
                 "interleave_columns does not support 'category' dtype."
             )
