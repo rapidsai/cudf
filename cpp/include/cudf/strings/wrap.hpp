@@ -23,22 +23,35 @@ namespace cudf
 namespace strings
 {
 /**
- * @brief Inserts new-line characters (ASCII 0x0A) into each string in place of spaces.  
+ * @brief Inserts new-line characters (ASCII 0x0A) into each string in place of spaces, depending on `width`.  
  *
  * Returns a column of strings where, for each string row in the input, 
- * words separated by spaces will become separated by newline characters.
+ * words separated by spaces will become separated by newline characters,
+ * as follows: if the string is longer than width, a new-line is inserted 
+ * at space positions so that each line is no more than width characters 
+ * without truncating any non-space character sequences.
  * Attempts to make each line less than or equal to width characters. 
  * If a string or characters is longer than width, 
  * the line is split on the next closest space character. 
  *
  * Any null string entries return corresponding null output column entries.
  *
- * Example:
+ * Example 1:
  * ```
  * width = 5
  * input_string_tbl = ["tesT1 test2", "more longtest short1", " other test "];
  *
+ * wrapped_string_tbl = wrap(input_string_tbl, width)
  * wrapped_string_tbl = ["test1\ntest2", "more\nlongt\nest\nshort1", "other\ntest"]
+ * ```
+ *
+ * Example 2:
+ * ```
+ * width = 12;
+ * input_string_tbl = ["the quick brown fox jumped over the lazy brown dog", "hello, world"]
+ * 
+ * wrapped_string_tbl = wrap(input_string_tbl, width)
+ * wrapped_string_tbl = ["the quick\nbrown fox\njumped over\nthe lazy\nbrown dog", "hello, world"] 
  * ```
  *
  * @param[in] strings String column.
