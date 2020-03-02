@@ -144,7 +144,7 @@ class NumericalColumn(column.ColumnBase):
         )
 
     def as_numerical_column(self, dtype, **kwargs):
-        casted = libcudf.typecast.cast(self, dtype)
+        casted = libcudfxx.unary.cast(self, dtype)
         return column.build_column(
             data=casted.data,
             dtype=casted.dtype,

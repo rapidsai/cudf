@@ -88,9 +88,9 @@ def is_valid(Column input):
     return Column.from_unique_ptr(move(c_result))
 
 
-def cast(Column input, object out_type):
+def cast(Column input, object dtype=np.float64):
     cdef column_view c_input = input.view()
-    cdef type_id tid = np_to_cudf_types[np.dtype(out_type)]
+    cdef type_id tid = np_to_cudf_types[np.dtype(dtype)]
     cdef data_type c_dtype = data_type(tid)
     cdef unique_ptr[column] c_result
 
