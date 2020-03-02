@@ -1,9 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
-
-# cython: profile=False
-# distutils: language = c++
-# cython: embedsignature = True
-# cython: language_level = 3
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
 import cudf
 from cudf.core.buffer import Buffer
@@ -17,7 +12,6 @@ from cudf._lib.utils cimport (
     table_from_columns,
     table_to_dataframe
 )
-import rmm
 from cudf._lib.includes.copying cimport (
     copy as cpp_copy,
     copy_range as cpp_copy_range,
@@ -25,6 +19,7 @@ from cudf._lib.includes.copying cimport (
     scatter as cpp_scatter,
     scatter_to_tables as cpp_scatter_to_tables
 )
+from cudf._libxx.null_mask import create_null_mask, MaskState
 
 import numba
 import numpy as np
@@ -212,14 +207,12 @@ def copy_range(out_col, in_col, int out_begin, int out_end,
         return out_col
 
     if not out_col.has_nulls and in_col.nullable:
-        mask = utils.make_mask(len(out_col))
-        cudautils.fill_value(mask, 0xff)
-        out_col = out_col.set_mask(Buffer(mask))
+        mask = create_null_mask(len(out_col), state=MaskState.ALL_VALID)
+        out_col = out_col.set_mask(mask)
 
     if not in_col.has_nulls and out_col.nullable:
-        mask = utils.make_mask(len(in_col))
-        cudautils.fill_value(mask, 0xff)
-        in_col = in_col.set_mask(Buffer(mask))
+        mask = create_null_mask(len(in_col), state=MaskState.ALL_VALID)
+        in_col = in_col.set_mask(mask)
 
     cdef gdf_column* c_out_col = column_view_from_column(out_col)
     cdef gdf_column* c_in_col = column_view_from_column(in_col)

@@ -95,7 +95,7 @@ struct out_of_place_copy_range_dispatch {
     auto p_ret = std::make_unique<cudf::column>(target, stream, mr);
     if ((!p_ret->nullable()) && source.has_nulls(source_begin, source_end)) {
       p_ret->set_null_mask(
-        cudf::create_null_mask(p_ret->size(), cudf::ALL_VALID, stream, mr), 0);
+        cudf::create_null_mask(p_ret->size(), cudf::mask_state::ALL_VALID, stream, mr), 0);
     }
 
     if (source_end != source_begin) {  // otherwise no-op

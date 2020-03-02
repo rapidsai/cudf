@@ -104,7 +104,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromScalar(JNIEnv *env,
       // create a string column of all empty strings to fill (cheapest string column to create)
       auto offsets = cudf::make_numeric_column(cudf::data_type{cudf::INT32}, row_count + 1, cudf::mask_state::UNALLOCATED);
       auto data = cudf::make_empty_column(cudf::data_type{cudf::INT8});
-      auto mask_buffer = cudf::create_null_mask(row_count, cudf::UNALLOCATED);
+      auto mask_buffer = cudf::create_null_mask(row_count, cudf::mask_state::UNALLOCATED);
       auto str_col = cudf::make_strings_column(row_count, std::move(offsets), std::move(data), 0, std::move(mask_buffer));
 
       col = cudf::experimental::fill(str_col->view(), 0, row_count, *scalar_val);
@@ -538,6 +538,21 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringTimestampToTimest
     cudf::strings_column_view strings_column(*column);
 
     std::unique_ptr<cudf::column> result = cudf::strings::to_timestamps(strings_column, cudf::data_type(static_cast<cudf::type_id>(time_unit)), format.get());
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_timestampToStringTimestamp(
+    JNIEnv *env, jobject j_object, jlong handle, jstring j_format) {
+  JNI_NULL_CHECK(env, handle, "column is null", 0);
+  JNI_NULL_CHECK(env, j_format, "format is null", 0);
+
+  try {
+    cudf::jni::native_jstring format(env, j_format);
+    cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
+
+    std::unique_ptr<cudf::column> result = cudf::strings::from_timestamps(*column, format.get());
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
