@@ -208,3 +208,50 @@ TYPED_TEST(ShiftTest, MismatchFillValueDtypes)
     EXPECT_THROW(output = cudf::experimental::shift(input, 5, fills),
                  cudf::logic_error);
 }
+
+TYPED_TEST(ShiftTest, PerColumnOffsets)
+{
+    using T =  TypeParam;
+
+    auto input_a = fixed_width_column_wrapper<T>({ 1, 2, 3, 4, 5 }, { 0, 1, 1, 1, 0});
+    auto input_b = fixed_width_column_wrapper<T>({ 5, 4, 3, 2, 1 }, { 1, 0, 1, 1, 1 });
+    auto input = cudf::table_view { { input_a, input_b } };
+
+    auto expected_a = fixed_width_column_wrapper<T>({ 7, 7, 7, 1, 2 }, { 1, 1, 1, 0, 1 });
+    auto expected_b = fixed_width_column_wrapper<T>({ 3, 2, 1, 7, 7 }, { 1, 1, 1, 0, 0 });
+    auto expected = cudf::table_view{ { expected_a, expected_b } };
+
+    auto fill_a = make_scalar<T>(7);
+    auto fill_b = make_scalar<T>();
+
+    std::vector<std::reference_wrapper<cudf::scalar>> fills { *fill_a, *fill_b };
+    std::vector<cudf::size_type> offsets{ 3, -2 };
+
+    auto actual = cudf::experimental::shift(input, offsets, fills);
+
+    cudf::test::expect_tables_equal(expected, *actual);
+}
+
+TYPED_TEST(ShiftTest, MisMatchOffsetCount)
+{
+    using T =  TypeParam;
+
+    auto input_a = fixed_width_column_wrapper<T>({ 1, 2, 3, 4, 5 }, { 0, 1, 1, 1, 0});
+    auto input_b = fixed_width_column_wrapper<T>({ 5, 4, 3, 2, 1 }, { 1, 0, 1, 1, 1 });
+    auto input = cudf::table_view { { input_a, input_b } };
+
+    auto expected_a = fixed_width_column_wrapper<T>({ 7, 7, 7, 1, 2 }, { 1, 1, 1, 0, 1 });
+    auto expected_b = fixed_width_column_wrapper<T>({ 3, 2, 1, 7, 7 }, { 1, 1, 1, 0, 0 });
+    auto expected = cudf::table_view{ { expected_a, expected_b } };
+
+    auto fill_a = make_scalar<T>(7);
+    auto fill_b = make_scalar<T>();
+
+    std::vector<std::reference_wrapper<cudf::scalar>> fills { *fill_a, *fill_b };
+    std::vector<cudf::size_type> offsets{ 3, };
+
+    std::unique_ptr<cudf::experimental::table> output;
+
+    EXPECT_THROW(output = cudf::experimental::shift(input, offsets, fills),
+                 cudf::logic_error);
+}

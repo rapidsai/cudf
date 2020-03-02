@@ -117,36 +117,59 @@ struct functor {
 } // anonymous namespace
 
 std::unique_ptr<table> shift(table_view const& input,
+                             std::vector<size_type> offsets,
+                             std::vector<std::reference_wrapper<scalar>> const& fill_values,
+                             rmm::mr::device_memory_resource *mr,
+                             cudaStream_t stream)
+{
+    
+    CUDF_EXPECTS(input.num_columns() == static_cast<size_type>(offsets.size()),
+                 "shift requires one offset for each column.");
+
+    CUDF_EXPECTS(input.num_columns() == static_cast<size_type>(fill_values.size()),
+                 "shift requires one fill value for each column.");
+
+    for (size_type i = 0; i < input.num_columns(); ++i)
+    {
+        CUDF_EXPECTS(input.column(i).type() == fill_values[i].get().type(),
+                    "shift requires each fill value type to match the corrosponding column type.");
+    }
+
+    if (input.num_rows() == 0)
+    {
+        return empty_like(input);
+    }
+
+    auto output_columns = std::vector<std::unique_ptr<column>>{};
+    output_columns.reserve(input.num_columns());
+
+    auto args = thrust::make_zip_iterator(
+        thrust::make_tuple(offsets.begin(), fill_values.begin()));
+
+    std::transform(input.begin(),
+                   input.end(),
+                   args,
+                   std::back_inserter(output_columns),
+                   [mr, stream] (auto const& input_column, decltype(args)::value_type args) {
+                       return type_dispatcher(input_column.type(), functor{},
+                                              input_column, args.get<0>(), args.get<1>(),
+                                              mr, stream);
+                   });
+
+    return std::make_unique<table>(std::move(output_columns));
+}
+
+std::unique_ptr<table> shift(table_view const& input,
                              size_type offset,
                              std::vector<std::reference_wrapper<scalar>> const& fill_values,
                              rmm::mr::device_memory_resource *mr,
                              cudaStream_t stream)
 {
-    CUDF_EXPECTS(input.num_columns() == static_cast<size_type>(fill_values.size()),
-                 "shift requires one fill value for each column.");
-
-    for (size_type i = 0; i < input.num_columns(); ++i) {
-        CUDF_EXPECTS(input.column(i).type() == fill_values[i].get().type(),
-                     "shift requires each fill value type to match the corrosponding column type.");
-    }
-
-    if (input.num_rows() == 0) {
-        return empty_like(input);
-    }
-
-    auto output_columns = std::vector<std::unique_ptr<column>>{};
-
-    std::transform(input.begin(),
-                   input.end(),
-                   fill_values.begin(),
-                   std::back_inserter(output_columns),
-                   [offset, mr, stream] (auto const& input_column, auto const& fill_value) {
-                       return type_dispatcher(input_column.type(), functor{},
-                                              input_column, offset, fill_value,
-                                              mr, stream);
-                   });
-
-    return std::make_unique<table>(std::move(output_columns));
+    return shift(input,
+                 std::vector<size_type>(input.num_columns(), offset),
+                 fill_values,
+                 mr,
+                 stream);
 }
 
 } // namespace experimental
