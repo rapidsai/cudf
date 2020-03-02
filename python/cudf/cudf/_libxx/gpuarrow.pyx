@@ -1,8 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
-# from cudf._lib.cudf import *
-# from cudf._lib.cudf cimport *
 from cudf._libxx.move cimport move
 from cudf._libxx.arrow._cuda cimport (
     CudaBuffer
