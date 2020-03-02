@@ -508,7 +508,8 @@ ConfigureTest(JSON_TEST "${JSON_TEST_SRC}")
 # - sort tests ------------------------------------------------------------------------------------
 
 set(SORT_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/sort/sort_test.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/sort/sort_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/sort/rank_test.cpp")
 
 ConfigureTest(SORT_TEST "${SORT_TEST_SRC}")
 
