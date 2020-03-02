@@ -270,7 +270,7 @@ def prefixsum(vals):
     Given the input of N.  The output size is N + 1.
     The first value is always 0.  The last value is the sum of *vals*.
     """
-    import cudf._lib as libcudf
+    import cudf._libxx as libcudfxx
 
     from cudf.core.column import as_column
 
@@ -281,8 +281,8 @@ def prefixsum(vals):
 
     # Compute prefixsum on the mask
     in_col = as_column(vals)
-    out_col = as_column(slots[1:])
-    libcudf.reduce.scan(in_col, out_col, "sum", inclusive=True)
+    result = libcudfxx.reduce.scan(in_col, "sum", True)
+    slots[1:] = result
     return slots
 
 
