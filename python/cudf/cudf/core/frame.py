@@ -329,7 +329,7 @@ class Frame(libcudfxx.table.Table):
 
     def interleave_columns(self):
         """
-       Interleave Series columns of a table into a single column.
+        Interleave Series columns of a table into a single column.
 
         Converts the column major table `cols` into a row major column.
         Parameters
