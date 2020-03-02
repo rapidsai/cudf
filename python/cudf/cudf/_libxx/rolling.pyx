@@ -5,12 +5,17 @@ import cudf
 import pandas as pd
 import numba
 
-from cudf._libxx.lib cimport *
-from cudf._libxx.column cimport *
+from libcpp.memory cimport unique_ptr
 
-from cudf._libxx.aggregation cimport *
+from cudf._libxx.column cimport Column
+from cudf._libxx.move cimport move
+from cudf._libxx.aggregation cimport get_aggregation
 
-from cudf._libxx.includes.rolling cimport (
+from cudf._libxx.cpp.types cimport size_type
+from cudf._libxx.cpp.column.column cimport column
+from cudf._libxx.cpp.column.column_view cimport column_view
+from cudf._libxx.cpp.aggregation cimport aggregation
+from cudf._libxx.cpp.rolling cimport (
     rolling_window as cpp_rolling_window
 )
 

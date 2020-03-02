@@ -18,6 +18,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/gather.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/groupby.hpp>
 #include <cudf/detail/groupby/sort_helper.hpp>
@@ -26,6 +27,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+
+#include <thrust/copy.h>
 
 #include <memory>
 #include <utility>
@@ -129,6 +132,27 @@ groupby::aggregate(std::vector<aggregation_request> const& requests,
 
   return dispatch_aggregation(requests, 0, mr);
 }
+
+groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_resource*  mr) {
+
+  auto grouped_keys = helper().sorted_keys(mr, 0);
+
+  auto group_offsets = helper().group_offsets(0);
+  std::vector<size_type> group_offsets_vector(group_offsets.size());
+  thrust::copy(group_offsets.begin(),
+      group_offsets.end(),
+      group_offsets_vector.begin());
+
+  std::unique_ptr<table> grouped_values{nullptr};
+  if (values.num_columns()) {
+    grouped_values = cudf::experimental::detail::gather(values, helper().key_sort_order());
+    return groupby::groups{std::move(grouped_keys), std::move(group_offsets_vector), std::move(grouped_values)};
+  }
+  else {
+    return groupby::groups{std::move(grouped_keys), std::move(group_offsets_vector)};
+  }
+}
+
 
 // Get the sort helper object
 detail::sort::sort_groupby_helper& groupby::helper() {
