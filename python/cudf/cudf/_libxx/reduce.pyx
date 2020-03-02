@@ -1,4 +1,4 @@
-from cudf._libxx.cpp.reduce cimport cpp_reduce
+from cudf._libxx.cpp.reduce cimport cpp_reduce, cpp_scan, scan_type
 from cudf._libxx.scalar cimport Scalar
 from cudf._libxx.lib cimport *
 from cudf._libxx.lib import np_to_cudf_types
@@ -7,6 +7,9 @@ from libcpp.memory cimport unique_ptr
 from cudf._libxx.column cimport Column, column_view
 from cudf._libxx.aggregation cimport get_aggregation, aggregation
 import numpy as np
+from cudf._libxx.cpp.column.column cimport (
+    column
+)
 
 cpdef reduce(reduction_op, Column incol, kwargs=None, dtype=None, ddof=1):
     kwargs = {'ddof': ddof}
@@ -40,6 +43,21 @@ cpdef reduce(reduction_op, Column incol, kwargs=None, dtype=None, ddof=1):
 
 cpdef scan(Column incol, scan_op, bool inclusive, kwargs=None):
     cdef column_view c_incol_view = incol.view()
-    cdef unique_ptr[scalar] c_result
+    cdef unique_ptr[column] c_result
     cdef unique_ptr[aggregation] c_agg = move(get_aggregation(scan_op, kwargs))
 
+    cdef scan_type c_inclusive
+    if inclusive is True:
+        c_inclusive = scan_type.INCLUSIVE
+    elif inclusive is False:
+        c_inclusive = scan_type.EXCLUSIVE
+
+    with nogil:
+        c_result = cpp_scan(
+            c_incol_view,
+            c_agg,
+            c_inclusive
+        )
+
+    py_result = Column.from_unique_ptr(move(c_result))
+    return py_result
