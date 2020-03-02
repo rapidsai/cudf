@@ -41,7 +41,7 @@ std::unique_ptr<column> decode( dictionary_column_view const& source,
         return make_empty_column( data_type{EMPTY} );
         
     column_view indices{ cudf::data_type{cudf::INT32}, source.size(), 
-                         source.indices().data<int32_t>(),
+                         source.indices().head<int32_t>(),
                          nullptr, 0, source.offset() }; // no nulls for gather indices
     // use gather to create the output column -- use ignore_out_of_bounds=true
     auto table_column = experimental::detail::gather( table_view{{source.keys()}}, indices,

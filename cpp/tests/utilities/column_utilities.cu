@@ -354,7 +354,7 @@ struct column_view_printer {
     std::vector<std::string> keys = to_strings(dictionary.keys());
     std::vector<std::string> indices = to_strings(
         { cudf::data_type{cudf::INT32}, dictionary.size(), 
-                         dictionary.indices().data<int32_t>(),
+                         dictionary.indices().head<int32_t>(),
                          dictionary.null_mask(), dictionary.null_count(),
                          dictionary.offset() } );
     out.insert(out.end(),keys.begin(),keys.end());
