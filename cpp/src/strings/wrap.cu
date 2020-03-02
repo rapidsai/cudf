@@ -65,7 +65,7 @@ namespace { // anonym.
       for( auto itr = d_str.begin(); itr != d_str.end(); ++itr ) {
         auto the_chr = *itr;
 
-        auto pos = itr.position();//thrust::distance(d_str.begin(), itr);
+        auto pos = itr.position();
 
         //execute conditions:
         //
