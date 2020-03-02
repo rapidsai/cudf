@@ -96,9 +96,7 @@ class NumericalColumn(column.ColumnBase):
         return _numeric_column_compare(self, rhs, op=cmpop)
 
     def _apply_scan_op(self, op):
-        out_col = column.column_empty_like_same_mask(self, dtype=self.dtype)
-        libcudf.reduce.scan(self, out_col, op, inclusive=True)
-        return out_col
+        return libcudfxx.reduce.scan(self, op, True)
 
     def normalize_binop_value(self, other):
         if other is None:
