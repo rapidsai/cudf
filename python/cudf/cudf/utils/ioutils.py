@@ -6,6 +6,7 @@ import warnings
 from io import BytesIO, TextIOWrapper
 
 import fsspec
+import fsspec.implementations.local
 
 from cudf.utils.docutils import docfmt_partial
 
@@ -873,11 +874,9 @@ def is_file_like(obj):
 
 
 def _is_local_filesystem(fs):
-    local_filesystem_protocols = ["file"]
 
-    if hasattr(fs, "protocol"):
-        if fs.protocol in local_filesystem_protocols:
-            return True
+    if isinstance(fs, fsspec.implementations.local.LocalFileSystem):
+        return True
     else:
         return False
 
