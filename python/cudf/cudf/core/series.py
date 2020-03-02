@@ -2468,22 +2468,28 @@ class Series(Frame):
         group_keys=True,
         as_index=None,
         dropna=True,
+        method="hash",
     ):
         if group_keys is not True:
             raise NotImplementedError(
                 "The group_keys keyword is not yet implemented"
             )
 
-        from cudf.core.groupby.groupby import SeriesGroupBy
+        if method == "libxx":
+            from cudf.core.groupbyxx.groupby import GroupBy
 
-        return SeriesGroupBy(
-            self,
-            by=by,
-            level=level,
-            sort=sort,
-            as_index=as_index,
-            dropna=dropna,
-        )
+            return GroupBy(self, by=by)
+        else:
+            from cudf.core.groupby.groupby import SeriesGroupBy
+
+            return SeriesGroupBy(
+                self,
+                by=by,
+                level=level,
+                sort=sort,
+                as_index=as_index,
+                dropna=dropna,
+            )
 
     @copy_docstring(Rolling)
     def rolling(
