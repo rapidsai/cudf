@@ -51,17 +51,7 @@ std::unique_ptr<column> sorted_order(
  * @brief Computes the row indices that would produce `input` in a stable
  * lexicographical sorted order.
  *
- * @param input The table to sort
- * @param column_order The desired sort order for each column. Size must be
- * equal to `input.num_columns()` or empty. If empty, all columns will be sorted
- * in ascending order.
- * @param null_precedence The desired order of null compared to other elements
- * for each column.  Size must be equal to `input.num_columns()` or empty.
- * If empty, all columns will be sorted in `null_order::BEFORE`.
- * @param[in] mr Optional, The resource to use for all allocations
- * @param[in] stream Optional CUDA stream on which to execute kernels
- * @return std::unique_ptr<column> A non-nullable column of INT32 elements
- * containing the permuted row indices of `input` if it were sorted
+ * @copydetails cudf::experimental::detail::sorted_order
  */
 std::unique_ptr<column> stable_sorted_order(
     table_view input, std::vector<order> const& column_order = {},
