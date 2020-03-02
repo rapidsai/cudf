@@ -100,10 +100,10 @@ namespace { // anonym.
 }//anonym.
 
 template<typename device_execute_functor>
-std::unique_ptr<column> wrap_strings( strings_column_view const& strings,
-                                      size_type width,
-                                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                      cudaStream_t stream = 0)
+std::unique_ptr<column> wrap( strings_column_view const& strings,
+                              size_type width,
+                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                              cudaStream_t stream = 0)
 {
   auto strings_count = strings.size();
   if( strings_count == 0 )
@@ -143,7 +143,7 @@ std::unique_ptr<column> wrap( strings_column_view const& strings,
                               size_type width,
                               rmm::mr::device_memory_resource* mr)
 {
-  return detail::wrap_strings<detail::execute_wrap>(strings, width, mr);
+  return detail::wrap<detail::execute_wrap>(strings, width, mr);
 }
 
   
