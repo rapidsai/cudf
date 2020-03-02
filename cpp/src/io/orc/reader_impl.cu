@@ -781,6 +781,12 @@ table_with_metadata reader::impl::read(int skip_rows, int num_rows, int stripe,
                                              out_buffers[i], stream, _mr));
       }
     }
+  } else {
+    for (size_t i = 0; i < column_types.size(); ++i) {
+      column_buffer empty_buffer{column_types[i], 0};
+      out_columns.emplace_back(make_column(column_types[i], 0,
+                                           empty_buffer, stream, _mr));
+    }
   }
 
   // Return column names (must match order of returned columns)
