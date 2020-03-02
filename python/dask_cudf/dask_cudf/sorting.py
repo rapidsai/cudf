@@ -1,6 +1,7 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 import math
 import warnings
+from collections.abc import Iterator
 from operator import getitem
 
 import cupy
@@ -390,18 +391,133 @@ def _percentile(a, q, interpolation="linear"):
     n = len(a)
     if not len(a):
         return None, n
-    # return (
-    #     cupy.asnumpy(
-    #         gd.Series(a).quantile(q, interpolation=interpolation).values
-    #     ),
-    #     n,
-    # )
     return (
-        cupy.asnumpy(
-            np.percentile(a.astype("float64"), q, interpolation=interpolation)
-        ),
+        cupy.asnumpy(gd.DataFrame({"a": a}).quantiles(q.tolist()).values),
         n,
     )
+
+
+def merge_percentiles(finalq, qs, vals, interpolation="lower", Ns=None):
+    """ Combine several percentile calculations of different data.
+    [NOTE: Mostly copied from dask.array]
+
+    Parameters
+    ----------
+
+    finalq : numpy.array
+        Percentiles to compute (must use same scale as ``qs``).
+    qs : sequence of :class:`numpy.array`s
+        Percentiles calculated on different sets of data.
+    vals : sequence of :class:`numpy.array`s
+        Resulting values associated with percentiles ``qs``.
+    Ns : sequence of integers
+        The number of data elements associated with each data set.
+    interpolation : {'linear', 'lower', 'higher', 'midpoint', 'nearest'}
+        Specify the type of interpolation to use to calculate final
+        percentiles.  For more information, see :func:`numpy.percentile`.
+
+    Examples
+    --------
+
+    >>> finalq = [10, 20, 30, 40, 50, 60, 70, 80]
+    >>> qs = [[20, 40, 60, 80], [20, 40, 60, 80]]
+    >>> vals = [np.array([1, 2, 3, 4]), np.array([10, 11, 12, 13])]
+    >>> Ns = [100, 100]  # Both original arrays had 100 elements
+
+    >>> merge_percentiles(finalq, qs, vals, Ns=Ns)
+    array([ 1,  2,  3,  4, 10, 11, 12, 13])
+    """
+    if isinstance(finalq, Iterator):
+        finalq = list(finalq)
+    finalq = np.array(finalq)
+    qs = list(map(list, qs))
+    vals = list(vals)
+    if Ns is None:
+        vals, Ns = zip(*vals)
+    Ns = list(Ns)
+
+    L = list(zip(*[(q, val, N) for q, val, N in zip(qs, vals, Ns) if N]))
+    if not L:
+        raise ValueError("No non-trivial arrays found")
+    qs, vals, Ns = L
+
+    # TODO: Perform this check above in percentile once dtype checking is easy
+    #       Here we silently change meaning
+    if vals[0].dtype.name == "category":
+        result = merge_percentiles(
+            finalq, qs, [v.codes for v in vals], interpolation, Ns
+        )
+        import pandas as pd
+
+        return pd.Categorical.from_codes(
+            result, vals[0].categories, vals[0].ordered
+        )
+    if not np.issubdtype(vals[0].dtype, np.number):
+        interpolation = "nearest"
+
+    if len(vals) != len(qs) or len(Ns) != len(qs):
+        raise ValueError("qs, vals, and Ns parameters must be the same length")
+
+    # transform qs and Ns into number of observations between percentiles
+    counts = []
+    for q, N in zip(qs, Ns):
+        count = np.empty(len(q))
+        count[1:] = np.diff(q)
+        count[0] = q[0]
+        count *= N
+        counts.append(count)
+
+    # Sort by calculated percentile values, then number of observations.
+    # >95% of the time in this function is spent in `merge_sorted` below.
+    # An alternative that uses numpy sort is shown.  It is sometimes
+    # comparable to, but typically slower than, `merge_sorted`.
+    #
+    # >>> A = np.concatenate(map(np.array, map(zip, vals, counts)))
+    # >>> A.sort(0, kind='mergesort')
+
+    combined_vals_counts = toolz.merge_sorted(*map(zip, vals, counts))
+    combined_vals, combined_counts = zip(*combined_vals_counts)
+
+    combined_vals = np.array(combined_vals)
+    combined_counts = np.array(combined_counts)
+
+    # percentile-like, but scaled by total number of observations
+    combined_q = np.cumsum(combined_counts)
+
+    # rescale finalq percentiles to match combined_q
+    desired_q = finalq * sum(Ns)
+
+    # the behavior of different interpolation methods should be
+    # investigated further.
+    if interpolation == "linear":
+        rv = np.interp(desired_q, combined_q, combined_vals)
+    else:
+        left = np.searchsorted(combined_q, desired_q, side="left")
+        right = np.searchsorted(combined_q, desired_q, side="right") - 1
+        np.minimum(
+            left, len(combined_vals) - 1, left
+        )  # don't exceed max index
+        lower = np.minimum(left, right)
+        upper = np.maximum(left, right)
+        if interpolation == "lower":
+            rv = combined_vals[lower]
+        elif interpolation == "higher":
+            rv = combined_vals[upper]
+        elif interpolation == "midpoint":
+            rv = 0.5 * (combined_vals[lower] + combined_vals[upper])
+        elif interpolation == "nearest":
+            lower_residual = np.abs(combined_q[lower] - desired_q)
+            upper_residual = np.abs(combined_q[upper] - desired_q)
+            mask = lower_residual > upper_residual
+            index = lower  # alias; we no longer need lower
+            index[mask] = upper[mask]
+            rv = combined_vals[index]
+        else:
+            raise ValueError(
+                "interpolation can only be 'linear', 'lower', "
+                "'higher', 'midpoint', or 'nearest'"
+            )
+    return rv
 
 
 def quantile(df, q):
@@ -436,7 +552,7 @@ def quantile(df, q):
 
     # pandas uses quantile in [0, 1]
     # numpy / everyone else uses [0, 100]
-    qs = np.asarray(q) * 100
+    qs = np.asarray(q)  # * 100
     token = tokenize(df, qs)
 
     if len(qs) == 0:
@@ -455,7 +571,7 @@ def quantile(df, q):
     else:
         new_divisions = [np.min(q), np.max(q)]
 
-    from dask.array.percentile import merge_percentiles
+    # from dask.array.percentile import merge_percentiles
 
     name = "quantiles-1-" + token
     val_dsk = {
