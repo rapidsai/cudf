@@ -183,6 +183,7 @@
 - PR #4279 Fix converting `np.float64` to Scalar
 - PR #4285 Add init files for cython pkgs and fix `setup.py`
 - PR #4287 Parquet reader: fix empty string potentially read as null
+- PR #4297 Fix specification of package_data in setup.py
 
 
 # cuDF 0.12.0 (04 Feb 2020)
