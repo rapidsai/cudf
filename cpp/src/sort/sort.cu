@@ -118,7 +118,8 @@ std::unique_ptr<table> sort(table_view input,
                              std::vector<order> const& column_order,
                              std::vector<null_order> const& null_precedence,
                              rmm::mr::device_memory_resource* mr) {
-    return detail::sort_by_key(input, input, column_order, null_precedence, mr);
+  CUDF_FUNC_RANGE();
+  return detail::sort_by_key(input, input, column_order, null_precedence, mr);
 }
 
 std::unique_ptr<table> sort_by_key(
@@ -126,7 +127,8 @@ std::unique_ptr<table> sort_by_key(
     std::vector<order> const& column_order,
     std::vector<null_order> const& null_precedence,
     rmm::mr::device_memory_resource* mr) {
-    return detail::sort_by_key(values, keys, column_order, null_precedence, mr);
+  CUDF_FUNC_RANGE();
+  return detail::sort_by_key(values, keys, column_order, null_precedence, mr);
 }
 
 }  // namespace experimental
