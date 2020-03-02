@@ -1247,28 +1247,24 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
-  void testSerializationZeroCols() throws IOException {
-    try (ByteArrayOutputStream bout = new ByteArrayOutputStream();
-         ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
-         DataInputStream din = new DataInputStream(bin)) {
-      JCudfSerialization.writeRowsToStream(bout, 11);
-      try (JCudfSerialization.TableAndRowCountPair result = JCudfSerialization.readTableFrom(din)) {
-        assertNull(result.getTable());
-        assertEquals(0, result.getNumRows());
-      }
+  void testSerializationZeroColumns() throws IOException {
+    ByteArrayOutputStream bout = new ByteArrayOutputStream();
+    JCudfSerialization.writeRowsToStream(bout, 10);
+    ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
+    try (JCudfSerialization.TableAndRowCountPair result = JCudfSerialization.readTableFrom(bin)) {
+      assertNull(result.getTable());
+      assertEquals(10, result.getNumRows());
     }
   }
 
   @Test
   void testSerializationZeroColsZeroRows() throws IOException {
-    try (ByteArrayOutputStream bout = new ByteArrayOutputStream();
-         ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
-         DataInputStream din = new DataInputStream(bin)) {
-      JCudfSerialization.writeRowsToStream(bout, 0);
-      try (JCudfSerialization.TableAndRowCountPair result = JCudfSerialization.readTableFrom(din)) {
-        assertNull(result.getTable());
-        assertEquals(0, result.getNumRows());
-      }
+    ByteArrayOutputStream bout = new ByteArrayOutputStream();
+    JCudfSerialization.writeRowsToStream(bout, 0);
+    ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
+    try (JCudfSerialization.TableAndRowCountPair result = JCudfSerialization.readTableFrom(bin)) {
+      assertNull(result.getTable());
+      assertEquals(0, result.getNumRows());
     }
   }
 
