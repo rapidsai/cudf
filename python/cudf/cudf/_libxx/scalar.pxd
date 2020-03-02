@@ -9,6 +9,3 @@ cdef class Scalar:
 
     @staticmethod
     cdef Scalar from_unique_ptr(unique_ptr[scalar] ptr)
-
-    @staticmethod
-    cdef scalar* get_ptr(Scalar s)

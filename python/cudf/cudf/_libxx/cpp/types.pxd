@@ -59,8 +59,3 @@ cdef extern from "cudf/types.hpp" namespace "cudf::experimental" nogil:
         HIGHER "cudf::experimental::interpolation::HIGHER"
         MIDPOINT "cudf::experimental::interpolation::MIDPOINT"
         NEAREST "cudf::experimental::interpolation::NEAREST"
-
-cdef extern from "<functional>" namespace "std" nogil:
-    cdef cppclass reference_wrapper[T]:
-        reference_wrapper()
-        reference_wrapper(T)

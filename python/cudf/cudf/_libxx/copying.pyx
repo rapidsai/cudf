@@ -11,6 +11,7 @@ from cudf._libxx.move cimport move
 from cudf._libxx.scalar cimport Scalar
 from cudf._libxx.table cimport Table
 
+from cudf._libxx.cpp.column.column cimport column
 from cudf._libxx.cpp.column.column_view cimport column_view
 from cudf._libxx.cpp.libcpp.functional cimport reference_wrapper
 from cudf._libxx.cpp.scalar.scalar cimport scalar
@@ -42,32 +43,23 @@ def gather(Table source_table, Column gather_map):
     )
 
 
-def shift(Table input, int offset):
-    cdef table_view c_input = input.view()
+def shift(Column input, int offset, Scalar fill_value=None):
+
+    if not isinstance(fill_value, Scalar):
+        fill_value = Scalar(fill_value, input.dtype)
+
+    cdef column_view c_input = input.view()
     cdef int32_t c_offset = offset
-    cdef vector[reference_wrapper[scalar]] c_fill_values
-    cdef unique_ptr[table] c_output
-
-    fill_values = [Scalar(None, col.dtype) for col in input._columns]
-
-    c_fill_values.reserve(len(fill_values))
-
-    for value in fill_values:
-        c_fill_values.push_back(
-            reference_wrapper[scalar](
-                Scalar.get_ptr(value)[0]
-            )
-        )
+    cdef scalar* c_fill_value = fill_value.c_value.get()
+    cdef unique_ptr[column] c_output
 
     with nogil:
         c_output = move(
-            cpp_copying.shift(c_input, c_offset, c_fill_values)
+            cpp_copying.shift(
+                c_input,
+                c_offset,
+                c_fill_value[0]
+            )
         )
 
-    output = Table.from_unique_ptr(
-        move(c_output),
-        column_names=input._column_names,
-        index_names=input._index._column_names
-    )
-
-    return output
+    return Column.from_unique_ptr(move(c_output))

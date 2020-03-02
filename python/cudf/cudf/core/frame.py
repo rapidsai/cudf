@@ -238,12 +238,10 @@ class Frame(libcudfxx.table.Table):
         result._copy_categories(self)
         return result
 
-    def _shift(self, offset):
-        result = self.__class__._from_table(
-            libcudfxx.copying.shift(self, offset)
-        )
-
-        return result
+    def _shift(self, offset, fill_value=None):
+        data_columns = (col.shift(offset, fill_value) for col in self._columns)
+        data = zip(self._column_names, data_columns)
+        return self.__class__._from_table(Frame(data, self._index))
 
     def drop_duplicates(self, subset=None, keep="first", nulls_are_equal=True):
         """
