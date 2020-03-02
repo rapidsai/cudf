@@ -116,6 +116,7 @@
 - PR #4234 Add BUILD_LEGACY_TESTS cmake option
 - PR #4251 Add class to docs in `dask-cudf` `derived_from`
 - PR #4261 libxx Cython reorganization
+- PR #4274 Support negative position values in slice_strings
 - PR #4282 Porting nvstrings conversion functions from new libcudf++ to Python/Cython
 
 ## Bug Fixes
