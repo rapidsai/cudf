@@ -37,3 +37,12 @@ def test_grouping(pdf, grouper):
     ):
         assert pdf_group[0] == gdf_group[0]
         assert_eq(pdf_group[1], gdf_group[1])
+
+
+def test_groupby_agg_basic(pdf):
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(
+        pdf.groupby("a").agg({"b": ["sum", "max"]}),
+        gdf.groupby("a").agg({"b": ["sum", "max"]}),
+    )

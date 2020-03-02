@@ -137,9 +137,7 @@ class ColumnAccessor(MutableMapping):
                 ),
             )
         else:
-            result = pd.Index(
-                self.names, name=self.level_names[0], tupleize_cols=False
-            )
+            result = pd.Index(self.names, name=self.name, tupleize_cols=False)
         return result
 
     def insert(self, name, value, loc=-1):
