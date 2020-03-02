@@ -354,13 +354,15 @@ class Frame(libcudfxx.table.Table):
         -------
         The interleaved columns as a single column
         """
-        if ('category' == self.dtypes)[0]:
-            raise ValueError("interleave_columns does not support 'category' dtype.")
-        
+        if ("category" == self.dtypes)[0]:
+            raise ValueError(
+                "interleave_columns does not support 'category' dtype."
+            )
+
         result = self._constructor_sliced(
             libcudfxx.reshape.interleave_columns(self)
         )
-        
+
         return result
 
     def tile(self, count):
