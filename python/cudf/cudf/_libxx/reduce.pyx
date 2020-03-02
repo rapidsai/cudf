@@ -1,6 +1,6 @@
 from cudf._libxx.cpp.reduce cimport cpp_reduce, cpp_scan, scan_type
 from cudf._libxx.scalar cimport Scalar
-from cudf._libxx.lib cimport *
+from cudf._libxx.lib cimport data_type, type_id
 from cudf._libxx.lib import np_to_cudf_types
 from cudf._libxx.move cimport *
 from libcpp.memory cimport unique_ptr
@@ -41,7 +41,7 @@ cpdef reduce(reduction_op, Column incol, kwargs=None, dtype=None, ddof=1):
     py_result = Scalar.from_unique_ptr(move(c_result))
     return py_result.value
 
-cpdef scan(Column incol, scan_op, bool inclusive, kwargs=None):
+cpdef scan(Column incol, scan_op, inclusive, kwargs=None):
     cdef column_view c_incol_view = incol.view()
     cdef unique_ptr[column] c_result
     cdef unique_ptr[aggregation] c_agg = move(get_aggregation(scan_op, kwargs))

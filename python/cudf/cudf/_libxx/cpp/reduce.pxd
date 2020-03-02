@@ -1,6 +1,6 @@
 from cudf._libxx.scalar cimport Scalar
-from cudf._libxx.lib cimport *
-from cudf._libxx.aggregation cimport *
+from cudf._libxx.lib cimport column_view, data_type, scalar
+from cudf._libxx.aggregation cimport aggregation
 from libcpp.memory cimport unique_ptr
 from cudf._libxx.cpp.column.column cimport (
     column
