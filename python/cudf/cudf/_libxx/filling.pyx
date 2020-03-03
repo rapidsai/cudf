@@ -1,11 +1,24 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from cudf._libxx.lib cimport *
+from libcpp cimport bool
+from libcpp.memory cimport unique_ptr
+
 from cudf._libxx.column cimport Column
+from cudf._libxx.column cimport Column
+from cudf._libxx.cpp.column.column cimport column
+from cudf._libxx.cpp.column.column_view cimport (
+    column_view,
+    mutable_column_view
+)
+from cudf._libxx.cpp.scalar.scalar cimport scalar
+from cudf._libxx.cpp.table.table cimport table
+from cudf._libxx.cpp.table.table_view cimport table_view
+from cudf._libxx.cpp.types cimport size_type
+from cudf._libxx.move cimport move
 from cudf._libxx.scalar cimport Scalar
 from cudf._libxx.table cimport Table
-from cudf.utils.dtypes import is_scalar
-cimport cudf._libxx.includes.filling as cpp_filling
+
+cimport cudf._libxx.cpp.filling as cpp_filling
 
 
 def fill_in_place(Column destination, begin, end, Scalar value):
@@ -28,7 +41,7 @@ def fill(Column destination, begin, end, Scalar value):
     cdef size_type c_end = <size_type> end
     cdef scalar* c_value = value.c_value.get()
     cdef unique_ptr[column] c_result
-    
+
     with nogil:
         c_result = move(cpp_filling.fill(
             c_destination,
@@ -40,23 +53,17 @@ def fill(Column destination, begin, end, Scalar value):
     return Column.from_unique_ptr(move(c_result))
 
 
-def repeat(Table input, object count, bool check_count = False):
-
-    if is_scalar(count):
-        return _repeat_via_scalar(input, Scalar(count))
-    else:
+def repeat(Table input, object count, bool check_count=False):
+    if isinstance(count, Column):
         return _repeat_via_column(input, count, check_count)
 
-    # if isinstance(count, Column):
-    #     return _repeat_via_column(input, count, check_count)
-    
-    # if isinstance(count, Scalar):
-    #     return _repeat_via_scalar(input, count)
+    if isinstance(count, Scalar):
+        return _repeat_via_scalar(input, count)
 
-    # raise TypeError(
-    #         "Expected `count` to be Column or Scalar but got {}"
-    #         .format(type(count))
-    #     )
+    raise TypeError(
+        "Expected `count` to be Column or Scalar but got {}"
+        .format(type(count))
+    )
 
 
 def _repeat_via_column(Table input, Column count, bool check_count):

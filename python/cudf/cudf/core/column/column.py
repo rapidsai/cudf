@@ -527,12 +527,10 @@ class ColumnBase(Column):
 
         self._mimic_inplace(out, inplace=True)
 
-    def fillna(self, value):
+    def fillna(self, value, begin=0, end=-1):
         """Fill null values with ``value``.
-
-        Returns a copy with null filled.
         """
-        raise NotImplementedError
+        return libcudfxx.filling.fill(self, begin, end, value)
 
     def isnull(self):
         """Identify missing values in a Column.

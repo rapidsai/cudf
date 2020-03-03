@@ -8,6 +8,7 @@ import pandas as pd
 
 import cudf
 import cudf._libxx as libcudfxx
+from cudf._libxx.scalar import Scalar
 from cudf.core import column
 from cudf.core.column import as_column, build_categorical_column
 from cudf.utils.dtypes import (
@@ -239,12 +240,30 @@ class Frame(libcudfxx.table.Table):
         return result
 
     def _repeat(self, count):
+        if is_scalar(count):
+            count = Scalar(count)
+        else:
+            count = as_column(count)
+
         result = self.__class__._from_table(
             libcudfxx.filling.repeat(self, count)
         )
 
         result._copy_categories(self)
         return result
+
+    def _fill(self, fill_values, begin=0, end=-1, inplace=False):
+        """Identify non-missing values.
+        """
+        col_and_fill = zip(self._columns, fill_values)
+
+        if not inplace:
+            data_columns = (c.fill(v, begin, end) for (c, v) in col_and_fill)
+            data = zip(self._column_names, data_columns)
+            return self.__class__._from_table(Frame(data, self._index))
+
+        for (c, v) in col_and_fill:
+            c.fill(v, begin, end, inplace=True)
 
     def drop_duplicates(self, subset=None, keep="first", nulls_are_equal=True):
         """
