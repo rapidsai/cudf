@@ -2580,27 +2580,10 @@ class DataFrame(Frame):
                 )
             result = Groupby(self, by=by)
             return result
-        elif method == "libxx":
+        else:
             from cudf.core.groupbyxx.groupby import GroupBy
 
             return GroupBy(self, by=by)
-        else:
-            from cudf.core.groupby.groupby import DataFrameGroupBy
-
-            # The corresponding pop() is in
-            # DataFrameGroupBy._apply_aggregation()
-            libcudf.nvtx.nvtx_range_push("CUDF_GROUPBY", "purple")
-
-            result = DataFrameGroupBy(
-                self,
-                by=by,
-                method=method,
-                as_index=as_index,
-                sort=sort,
-                level=level,
-                dropna=dropna,
-            )
-            return result
 
     @copy_docstring(Rolling)
     def rolling(
