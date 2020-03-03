@@ -17,7 +17,7 @@ from cudf._libxx.cpp.types cimport size_type
 
 cdef extern from "cudf/filling.hpp" namespace "cudf::experimental" nogil:
     cdef unique_ptr[column] fill(
-        const column_view input,
+        const column_view & input,
         size_type begin,
         size_type end,
         const scalar & value
