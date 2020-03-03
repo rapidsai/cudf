@@ -27,6 +27,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 #include <thrust/copy.h>
 
@@ -118,6 +119,7 @@ void verify_valid_requests(std::vector<aggregation_request> const& requests) {
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>>
 groupby::aggregate(std::vector<aggregation_request> const& requests,
                    rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   CUDF_EXPECTS(std::all_of(requests.begin(), requests.end(),
                            [this](auto const& request) {
                              return request.values.size() == _keys.num_rows();
@@ -134,7 +136,7 @@ groupby::aggregate(std::vector<aggregation_request> const& requests,
 }
 
 groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_resource*  mr) {
-
+  CUDF_FUNC_RANGE();
   auto grouped_keys = helper().sorted_keys(mr, 0);
 
   auto group_offsets = helper().group_offsets(0);
