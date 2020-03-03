@@ -586,8 +586,7 @@ table_with_metadata reader::impl::read(int skip_rows, int num_rows, int row_grou
       column_types.emplace_back(col_type);
     }
   }
-
-  std::vector<column_buffer> out_buffers;
+  out_columns.reserve(column_types.size());
 
   if (selected_row_groups.size() != 0 && column_types.size() != 0) {
     // Descriptors for all the chunks that make up the selected columns
@@ -681,6 +680,7 @@ table_with_metadata reader::impl::read(int skip_rows, int num_rows, int row_grou
         }
       }
 
+      std::vector<column_buffer> out_buffers;
       out_buffers.reserve(column_types.size());
       for (size_t i = 0; i < column_types.size(); ++i) {
         auto col = _selected_columns[i];
@@ -694,18 +694,17 @@ table_with_metadata reader::impl::read(int skip_rows, int num_rows, int row_grou
 
       decode_page_data(chunks, pages, skip_rows, num_rows, chunk_map,
                        out_buffers, stream);
+
+      for (size_t i = 0; i < column_types.size(); ++i) {
+        out_columns.emplace_back(make_column(column_types[i], num_rows,
+                                             out_buffers[i], stream, _mr));
+      }
     }
   }
 
-  out_columns.reserve(column_types.size());
-  for (size_t i = 0; i < column_types.size(); ++i) {
-    if (i < out_buffers.size()) {
-      out_columns.emplace_back(make_column(column_types[i], num_rows,
-                                           out_buffers[i], stream, _mr));
-    }
-    else {
-      out_columns.emplace_back(make_empty_column(column_types[i]));
-    }
+  // Create empty columns as needed
+  for (size_t i = out_columns.size(); i < column_types.size(); ++i) {
+    out_columns.emplace_back(make_empty_column(column_types[i]));
   }
 
   // Return column names (must match order of returned columns)
