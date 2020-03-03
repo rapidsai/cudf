@@ -631,6 +631,22 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringEndWith(JNIEnv *e
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringContains(JNIEnv *env, jobject j_object,
+                                                                    jlong j_view_handle, jlong comp_string) {
+    JNI_NULL_CHECK(env, j_view_handle, "column is null", false);
+    JNI_NULL_CHECK(env, comp_string, "comparison string scalar is null", false);
+
+  try {
+    cudf::column_view* column_view = reinterpret_cast<cudf::column_view*>(j_view_handle);
+    cudf::strings_column_view strings_column(*column_view);
+    cudf::string_scalar* comp_scalar = reinterpret_cast<cudf::string_scalar*>(comp_string);
+
+    std::unique_ptr<cudf::column> result = cudf::strings::contains(strings_column, *comp_scalar);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringConcatenation(JNIEnv *env, jobject j_object,
                                                                   jlongArray column_handles, jlong separator,
                                                                   jlong narep) {

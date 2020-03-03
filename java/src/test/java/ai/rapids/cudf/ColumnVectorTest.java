@@ -1400,7 +1400,7 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testStartAndEndsWith() {
+  void testStringFindOperations() {
     try (ColumnVector testStrings = ColumnVector.fromStrings("", null, "abCD", "1a\"\u0100B1", "a\"\u0100B1", "1a\"\u0100B",
                                       "1a\"\u0100B1\n\t\'", "1a\"\u0100B1\u0453\u1322\u5112", "1a\"\u0100B1Fg26",
                                       "1a\"\u0100B1\\\"\r1a\"\u0100B1", "1a\"\u0100B1\u0498\u1321\u51091a\"\u0100B1",
@@ -1410,24 +1410,31 @@ public class ColumnVectorTest extends CudfTestBase {
          Scalar patternString = Scalar.fromString("1a\"\u0100B1");
          ColumnVector startsResult = testStrings.startsWith(patternString);
          ColumnVector endsResult = testStrings.endsWith(patternString);
+         ColumnVector containsResult = testStrings.stringContains(patternString);
          ColumnVector expectedStarts = ColumnVector.fromBoxedBooleans(false, null, false, true, false,
                                                                       false, true, true, true, true, true,
                                                                       true, true, false, false, false);
          ColumnVector expectedEnds = ColumnVector.fromBoxedBooleans(false, null, false, true, false,
                                                                     false, false, false, false, true, true,
                                                                     true, true, true, true, true);
+         ColumnVector expectedContains = ColumnVector.fromBoxedBooleans(false, null, false, true, false, false,
+                                                                        true, true, true, true, true,
+                                                                        true, true, true, true, true);
          ColumnVector startsEmpty = emptyStrings.startsWith(patternString);
          ColumnVector endsEmpty = emptyStrings.endsWith(patternString);
+         ColumnVector containsEmpty = emptyStrings.stringContains(patternString);
          ColumnVector expectedEmpty = ColumnVector.fromBoxedBooleans()) {
       assertColumnsAreEqual(startsResult, expectedStarts);
       assertColumnsAreEqual(endsResult, expectedEnds);
+      assertColumnsAreEqual(expectedContains, containsResult);
       assertColumnsAreEqual(startsEmpty, expectedEmpty);
       assertColumnsAreEqual(endsEmpty, expectedEmpty);
+      assertColumnsAreEqual(expectedEmpty, containsEmpty);
     }
   }
 
   @Test
-  void testStartAndEndsWithThrowsException() {
+  void testStringFindOperationsThrowsException() {
     assertThrows(AssertionError.class, () -> {
       try (ColumnVector sv = ColumnVector.fromStrings("a", "B", "cd");
            Scalar emptyString = Scalar.fromString("");
@@ -1440,6 +1447,11 @@ public class ColumnVectorTest extends CudfTestBase {
     });
     assertThrows(AssertionError.class, () -> {
       try (ColumnVector sv = ColumnVector.fromStrings("a", "B", "cd");
+           Scalar emptyString = Scalar.fromString("");
+           ColumnVector concat = sv.stringContains(emptyString)) {}
+    });
+    assertThrows(AssertionError.class, () -> {
+      try (ColumnVector sv = ColumnVector.fromStrings("a", "B", "cd");
            Scalar emptyString = Scalar.fromString(null);
            ColumnVector concat = sv.startsWith(emptyString)) {}
     });
@@ -1447,6 +1459,11 @@ public class ColumnVectorTest extends CudfTestBase {
       try (ColumnVector sv = ColumnVector.fromStrings("a", "B", "cd");
            Scalar emptyString = Scalar.fromString(null);
            ColumnVector concat = sv.endsWith(emptyString)) {}
+    });
+    assertThrows(AssertionError.class, () -> {
+      try (ColumnVector sv = ColumnVector.fromStrings("a", "B", "cd");
+           Scalar emptyString = Scalar.fromString(null);
+           ColumnVector concat = sv.stringContains(emptyString)) {}
     });
     assertThrows(AssertionError.class, () -> {
       try (ColumnVector sv = ColumnVector.fromStrings("a", "B", "cd");
@@ -1467,6 +1484,11 @@ public class ColumnVectorTest extends CudfTestBase {
            ColumnVector concat = sv.endsWith(intScalar)) {}
     });
     assertThrows(AssertionError.class, () -> {
+      try (ColumnVector sv = ColumnVector.fromStrings("a", "B", "cd");
+           Scalar intScalar = Scalar.fromInt(1);
+           ColumnVector concat = sv.stringContains(intScalar)) {}
+    });
+    assertThrows(AssertionError.class, () -> {
       try (ColumnVector v = ColumnVector.fromInts(1, 43, 42, 11, 2);
            Scalar patternString = Scalar.fromString("a");
            ColumnVector concat = v.startsWith(patternString)) {}
@@ -1475,6 +1497,11 @@ public class ColumnVectorTest extends CudfTestBase {
       try (ColumnVector v = ColumnVector.fromInts(1, 43, 42, 11, 2);
            Scalar patternString = Scalar.fromString("a");
            ColumnVector concat = v.endsWith(patternString)) {}
+    });
+    assertThrows(AssertionError.class, () -> {
+      try (ColumnVector v = ColumnVector.fromInts(1, 43, 42, 11, 2);
+           Scalar patternString = Scalar.fromString("a");
+           ColumnVector concat = v.stringContains(patternString)) {}
     });
   }
 
