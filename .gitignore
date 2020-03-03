@@ -151,3 +151,6 @@ ENV/
 
 ## VSCode IDE
 .vscode
+
+# Dask
+dask-worker-space/
