@@ -304,6 +304,16 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 result.divisions = (min(self.columns), max(self.columns))
             return handle_out(out, result)
 
+    def repartition_by_hash(
+        self, columns=None, npartitions=None, max_branch=None
+    ):
+        # TODO: Handle hashing by index
+        npartitions = npartitions or self.npartitions
+        columns = columns or [col for col in self.columns]
+        return batcher_sortnet.rearrange_by_hash(
+            self, columns, npartitions, max_branch=max_branch
+        )
+
 
 def sum_of_squares(x):
     x = x.astype("f8")._column
