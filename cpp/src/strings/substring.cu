@@ -76,11 +76,15 @@ struct substring_fn
                 return d_str.begin();
             // when invalid, default depends on step
             if( !d_start.is_valid() )
-                return (step > 0) ? d_str.begin() : (d_str.end()-1);
+                return (step > 0) ? d_str.begin() : d_str.end()-1;
             // normal positive position logic
             auto start = d_start.value();
             if( start >=0 )
-                return (start < length) ? (d_str.begin() + start) : (d_str.end()-1);
+            {
+                if( start < length )
+                    return d_str.begin() + start;
+                return d_str.end() + ((step < 0) ? -1:0);
+            }
             // handle negative position here
             auto adjust = length + start;
             return d_str.begin() + ((adjust > 0) ? adjust : 0);
@@ -95,7 +99,7 @@ struct substring_fn
                 return (stop < length) ? (d_str.begin() + stop) : d_str.end();
             // handle negative position here
             auto adjust = length + stop;
-            return d_str.begin() + ((adjust >= 0) ? adjust: -1);
+            return d_str.begin() + ((adjust >= 0) ? adjust : -1);
         } ();
 
         size_type bytes = 0;
