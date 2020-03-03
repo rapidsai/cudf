@@ -1711,6 +1711,31 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Returns a new strings column that contains substrings of the strings in the provided column.
+   * Overloading subString to support default value for end index(-1). It signifies end of string.
+   * @param start first character index to begin the substring(inclusive).
+   */
+  public ColumnVector subString(int start) {
+    return subString(start, -1);
+  }
+
+  /**
+   * Returns a new strings column that contains substrings of the strings in the provided column.
+   * 0 indexing, If the stop position is past end of a string's length, then end of string is
+   * used as stop position for that string.
+   * @param start first character index to begin the substring(inclusive).
+   * @param end   last character index to stop the substring(exclusive)
+   * @return A new java column vector containing the substrings.
+   */
+  public ColumnVector subString(int start, int end) {
+    assert type == DType.STRING : "column type must be a String";
+    assert start >= 0 : "start must be a positive value, negative value currently not supported";
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT32), "subString")) {
+      return new ColumnVector(subString(getNativeView(), start, end));
+    }
+  }
+
+  /**
    * Checks if each string in a column starts with a specified comparison string, resulting in a
    * parallel column of the boolean results.
    * @param pattern scalar containing the string being searched for at the beginning of the column's strings.
@@ -1824,6 +1849,14 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @param end character index to end the search on (exclusive).
    */
   private static native long substringLocate(long columnView, long substringScalar, int start, int end);
+
+  /**
+   * Native method to calculate substring from a given string column. 0 indexing.
+   * @param columnView native handle of the cudf::column_view being operated on.
+   * @param start      first character index to begin the substring(inclusive).
+   * @param end        last character index to stop the substring(exclusive).
+   */
+  private static native long subString(long columnView, int start, int end);
 
   /**
    * Native method for checking if strings in a column starts with a specified comparison string.

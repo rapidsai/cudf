@@ -29,6 +29,7 @@
 #include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/strings/combine.hpp>
 #include <cudf/strings/find.hpp>
+#include <cudf/strings/substring.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/bit.hpp>
@@ -680,6 +681,19 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_binaryOpVS(JNIEnv *env,
 
     cudf::experimental::binary_operator op = static_cast<cudf::experimental::binary_operator>(int_op);
     std::unique_ptr<cudf::column> result = cudf::experimental::binary_operation(*lhs, *rhs, op, cudf::data_type(static_cast<cudf::type_id>(out_dtype)));
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_subString(JNIEnv *env, jclass, jlong column_view,
+                                                                jint start, jint end) {
+  JNI_NULL_CHECK(env, column_view, "column is null", 0);
+  try {
+    cudf::column_view* cv = reinterpret_cast<cudf::column_view*>(column_view);
+    cudf::strings_column_view scv(*cv);
+
+    std::unique_ptr<cudf::column> result = cudf::strings::slice_strings(scv, start, end);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);

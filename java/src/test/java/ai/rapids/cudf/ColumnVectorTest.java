@@ -1515,6 +1515,26 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testSubString() {
+    try (ColumnVector v = ColumnVector.fromStrings("Héllo", "thésé", null,"", "ARé", "strings");
+         ColumnVector e_allParameters = ColumnVector.fromStrings("llo", "ésé", null, "", "é", "rin");
+         ColumnVector e_withoutStop = ColumnVector.fromStrings("llo", "ésé", null, "", "é", "rings");
+         ColumnVector result = v.subString(2, 5);
+         ColumnVector result1 = v.subString(2)) {
+      assertColumnsAreEqual(e_allParameters, result);
+      assertColumnsAreEqual(e_withoutStop,result1);
+    }
+  }
+
+  @Test
+  void testSubStringThrowsException() {
+    assertThrows(AssertionError.class, () -> {
+      try (ColumnVector cv = ColumnVector.fromStrings("Héllo", "thésé", null, "ARé", "tést strings");
+           ColumnVector locate = cv.subString(-2, 6)) {}
+    });
+  }
+
+  @Test
   void testStringLocateThrowsException() {
     assertThrows(AssertionError.class, () -> {
       try (ColumnVector cv = ColumnVector.fromStrings("Héllo", "thésé", null, "ARé", "tést strings");
