@@ -12,7 +12,8 @@ cdef extern from "cudf/reduction.hpp" namespace "cudf::experimental" nogil:
         column_view col,
         const unique_ptr[aggregation] agg,
         data_type type
-    )
+    ) except +
+
     ctypedef enum scan_type:
         INCLUSIVE "cudf::experimental::scan_type::INCLUSIVE",
         EXCLUSIVE "cudf::experimental::scan_type::EXCLUSIVE",
@@ -21,4 +22,4 @@ cdef extern from "cudf/reduction.hpp" namespace "cudf::experimental" nogil:
         column_view col,
         const unique_ptr[aggregation] agg,
         scan_type inclusive
-    )
+    ) except +

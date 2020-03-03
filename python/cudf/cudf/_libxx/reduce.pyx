@@ -36,11 +36,11 @@ cpdef reduce(reduction_op, Column incol, kwargs=None, dtype=None, ddof=1):
         return np.nan
 
     with nogil:
-        c_result = cpp_reduce(
+        c_result = move(cpp_reduce(
             c_incol_view,
             c_agg,
             c_out_dtype
-        )
+        ))
 
     py_result = Scalar.from_unique_ptr(move(c_result))
     return py_result.value
@@ -57,11 +57,11 @@ cpdef scan(Column incol, scan_op, inclusive, kwargs=None):
         c_inclusive = scan_type.EXCLUSIVE
 
     with nogil:
-        c_result = cpp_scan(
+        c_result = move(cpp_scan(
             c_incol_view,
             c_agg,
             c_inclusive
-        )
+        ))
 
     py_result = Column.from_unique_ptr(move(c_result))
     return py_result
