@@ -25,7 +25,7 @@ class GroupBy(object):
         index = cudf.Index._from_table(
             result._index, names=self.grouping.names
         )
-        return self.obj.__class__._from_table(result, index=index)
+        return self.obj.__class__._from_table(result, index=index).sort_index()
 
 
 class _Grouping(object):
