@@ -117,6 +117,99 @@ def test_df_stack(nulls, num_cols, num_rows, dtype):
     pass
 
 
+@pytest.mark.parametrize("num_rows", [1, 2, 10, 1000])
+@pytest.mark.parametrize("num_cols", [1, 2, 10])
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "float32",
+        "float64",
+        "datetime64[ms]",
+        "category",
+    ],
+)
+@pytest.mark.parametrize("nulls", ["none", "some"])
+def test_interleave_columns(nulls, num_cols, num_rows, dtype):
+
+    if dtype not in ["float32", "float64"] and nulls in ["some"]:
+        pytest.skip(msg="nulls not supported in dtype: " + dtype)
+
+    pdf = pd.DataFrame(dtype=dtype)
+    for i in range(num_cols):
+        colname = str(i)
+        data = pd.Series(np.random.randint(0, 26, num_rows)).astype(dtype)
+
+        if nulls == "some":
+            idx = np.random.choice(
+                num_rows, size=int(num_rows / 2), replace=False
+            )
+            data[idx] = np.nan
+        pdf[colname] = data
+
+    gdf = DataFrame.from_pandas(pdf)
+
+    if dtype == "category":
+        with pytest.raises(ValueError):
+            assert gdf.interleave_columns()
+    else:
+        got = gdf.interleave_columns()
+
+        expect = pd.Series(np.vstack(pdf.to_numpy()).reshape((-1,))).astype(
+            dtype
+        )
+
+        assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("num_cols", [1, 2, 10])
+@pytest.mark.parametrize("num_rows", [1, 2, 1000])
+@pytest.mark.parametrize("count", [1, 2, 10])
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "float32",
+        "float64",
+        "datetime64[ms]",
+        "str",
+        "category",
+    ],
+)
+@pytest.mark.parametrize("nulls", ["none", "some"])
+def test_tile(nulls, num_cols, num_rows, dtype, count):
+
+    if dtype not in ["float32", "float64"] and nulls in ["some"]:
+        pytest.skip(msg="nulls not supported in dtype: " + dtype)
+
+    pdf = pd.DataFrame(dtype=dtype)
+    for i in range(num_cols):
+        colname = str(i)
+        data = pd.Series(np.random.randint(num_cols, 26, num_rows)).astype(
+            dtype
+        )
+
+        if nulls == "some":
+            idx = np.random.choice(
+                num_rows, size=int(num_rows / 2), replace=False
+            )
+            data[idx] = np.nan
+        pdf[colname] = data
+
+    gdf = DataFrame.from_pandas(pdf)
+
+    got = gdf.tile(count)
+    expect = pd.DataFrame(pd.concat([pdf] * count))
+
+    assert_eq(expect, got)
+
+
 def _prepare_merge_sorted_test(
     size,
     nparts,

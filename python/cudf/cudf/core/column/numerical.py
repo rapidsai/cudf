@@ -144,14 +144,10 @@ class NumericalColumn(column.ColumnBase):
         )
 
     def as_numerical_column(self, dtype, **kwargs):
-        casted = libcudf.typecast.cast(self, dtype)
-        return column.build_column(
-            data=casted.data,
-            dtype=casted.dtype,
-            mask=casted.mask,
-            size=casted.size,
-            offset=casted.offset,
-        )
+        dtype = np.dtype(dtype)
+        if dtype == self.dtype:
+            return self
+        return libcudfxx.unary.cast(self, dtype)
 
     def sort_by_values(self, ascending=True, na_position="last"):
         sort_inds = get_sorted_inds(self, ascending, na_position)
@@ -496,8 +492,11 @@ def _numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
 
 
 def _numeric_column_unaryop(operand, op):
-    out = libcudf.unaryops.apply_unary_op(operand, op)
-    return out
+    if callable(op):
+        return libcudfxx.transform.transform(operand, op)
+
+    op = libcudfxx.unary.UnaryOp[op.upper()]
+    return libcudfxx.unary.unary_operation(operand, op)
 
 
 def _numeric_column_compare(lhs, rhs, op):
