@@ -184,12 +184,12 @@
 - PR #4258 Fix dask-cudf losing index name in `reset_index`
 - PR #4268 Fix java build for hash aggregate
 - PR #4273 Fix losing `StringIndex` name in dask `_meta_nonempty`
-- PR #4115 Serialize an empty column table with non zero rows
 - PR #4279 Fix converting `np.float64` to Scalar
 - PR #4285 Add init files for cython pkgs and fix `setup.py`
 - PR #4287 Parquet reader: fix empty string potentially read as null
 - PR #4297 Fix specification of package_data in setup.py
 - PR #4302 Fix `_is_local_filesystem` check
+- PR #4115 Serialize an empty column table with non zero rows
 
 
 # cuDF 0.12.0 (04 Feb 2020)
