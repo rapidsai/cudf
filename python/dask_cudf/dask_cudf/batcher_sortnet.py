@@ -188,25 +188,7 @@ def _shuffle_group_get(g_head, i):
         return head
 
 
-def _shuffle_group(df, columns, stage, k, npartitions, hash_partition):
-    if hash_partition and k == npartitions:
-        # TODO: Use partition_by_hash for multiple stages...
-        #       OR Remove this.
-        #       (Not sure of the "correct" way to do this)
-        # return dict(zip(range(k), df.partition_by_hash(columns, k)))
-        idx = 0 if df._index is None else df._index._num_columns
-        key_indices = [df._data.names.index(c) + idx for c in columns]
-        outdf, offsets = df._hash_partition(key_indices, k)
-        return dict(
-            zip(
-                range(k),
-                [
-                    outdf[s:e].copy(deep=False)
-                    for s, e in zip(offsets, offsets[1:] + [None])
-                ],
-            )
-        )
-
+def _shuffle_group(df, columns, stage, k, npartitions):
     c = hash_object_dispatch(df[columns], index=False)
     typ = np.min_scalar_type(npartitions * 2)
     c = np.mod(c, npartitions).astype(typ, copy=False)
@@ -225,10 +207,8 @@ def _shuffle_group(df, columns, stage, k, npartitions, hash_partition):
 def rearrange_by_hash(df, columns, npartitions, max_branch=None):
     n = df.npartitions
     if max_branch is False:
-        hash_partition = True
         stages = 1
     else:
-        hash_partition = False
         max_branch = max_branch or 32
         stages = int(math.ceil(math.log(n) / math.log(max_branch)))
 
@@ -269,7 +249,6 @@ def rearrange_by_hash(df, columns, npartitions, max_branch=None):
                 stage - 1,
                 k,
                 n,
-                hash_partition,
             )
             for inp in inputs
         }

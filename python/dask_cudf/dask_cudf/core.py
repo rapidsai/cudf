@@ -323,7 +323,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
             are chosen to match self.npartitions.
         max_branch : int or False, default None
             Passed to `rearrange_by_hash` - If False, single-stage shuffling
-            will be performed with cudf's `partition_by_hash` logic.
+            will be used (no matter the number of partitions).
         disk_path : str, default None
             If set to a string value, the repartitioning will be performed
             "on disk," using a partitioned parquet dataset.
