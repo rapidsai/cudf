@@ -10,7 +10,7 @@ import toolz
 
 from dask import compute, delayed
 from dask.base import tokenize
-from dask.dataframe.core import DataFrame, _concat
+from dask.dataframe.core import DataFrame
 from dask.dataframe.utils import hash_object_dispatch
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import digit, insert
@@ -148,6 +148,17 @@ def sort_delayed_frame(parts, by):
     return validparts
 
 
+def _concat(args):
+    if not args:
+        return args
+    args2 = [i for i in args if len(i)]
+    return (
+        args[0]
+        if not args2
+        else gd.concat(args2, axis=0, ignore_index=True, sort=None)
+    )
+
+
 def set_partitions_hash(df, columns, npartitions):
     c = hash_object_dispatch(df[columns], index=False)
     return np.mod(c, npartitions)
@@ -159,7 +170,12 @@ def _shuffle_group_2(df, columns):
     ind = hash_object_dispatch(df[columns], index=False)
     n = ind.max() + 1
     result2 = dict(
-        zip(range(n), df.scatter_by_map(ind.values.view(np.int64), map_size=n))
+        zip(
+            range(n),
+            df.scatter_by_map(
+                ind.values.view(np.int64), map_size=n, keep_index=False
+            ),
+        )
     )
     return result2, df.iloc[:0]
 
@@ -172,9 +188,10 @@ def _shuffle_group_get(g_head, i):
         return head
 
 
-def _shuffle_group(df, columns, stage, k, npartitions):
-    if k == npartitions:
+def _shuffle_group(df, columns, stage, k, npartitions, hash_partition):
+    if hash_partition and k == npartitions:
         # TODO: Use partition_by_hash for multiple stages...
+        #       OR Remove this.
         #       (Not sure of the "correct" way to do this)
         # return dict(zip(range(k), df.partition_by_hash(columns, k)))
         idx = 0 if df._index is None else df._index._num_columns
@@ -196,15 +213,22 @@ def _shuffle_group(df, columns, stage, k, npartitions):
     np.floor_divide(c, k ** stage, out=c)
     np.mod(c, k, out=c)
     return dict(
-        zip(range(k), df.scatter_by_map(c.astype(np.int64), map_size=k))
+        zip(
+            range(k),
+            df.scatter_by_map(
+                c.astype(np.int64), map_size=k, keep_index=False
+            ),
+        )
     )
 
 
 def rearrange_by_hash(df, columns, npartitions, max_branch=None):
     n = df.npartitions
     if max_branch is False:
+        hash_partition = True
         stages = 1
     else:
+        hash_partition = False
         max_branch = max_branch or 32
         stages = int(math.ceil(math.log(n) / math.log(max_branch)))
 
@@ -245,6 +269,7 @@ def rearrange_by_hash(df, columns, npartitions, max_branch=None):
                 stage - 1,
                 k,
                 n,
+                hash_partition,
             )
             for inp in inputs
         }

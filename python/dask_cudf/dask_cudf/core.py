@@ -307,12 +307,38 @@ class DataFrame(_Frame, dd.core.DataFrame):
     def repartition_by_hash(
         self, columns=None, npartitions=None, max_branch=None, disk_path=None
     ):
-        # TODO: Handle hashing by index
+        """Repartition a dask_cudf DataFrame by hashing.
+
+        Warning: Index will be ignored/dropped during this operation.
+        Be sure to call reset_index beforehand to preserve the
+        index as a column.
+
+        Parameter
+        ---------
+        columns : list, default None
+            List of columns (by name) to be used for hashing. If None,
+            all columns will be used.
+        npartitions : int, default None
+            Number of output partitions. If None, the output partitions
+            are chosen to match self.npartitions.
+        max_branch : int or False, default None
+            Passed to `rearrange_by_hash` - If False, single-stage shuffling
+            will be performed with cudf's `partition_by_hash` logic.
+        disk_path : str, default None
+            If set to a string value, the repartitioning will be performed
+            "on disk," using a partitioned parquet dataset.
+        """
         npartitions = npartitions or self.npartitions
         columns = columns or [col for col in self.columns]
 
         # Use parquet-based shuffle on disk if path is provided
         if isinstance(disk_path, str):
+            # WARNING: The `to_parquet` operation will use
+            # pyarrow until cudf#4236 (or similar) is merged
+            warnings.warn(
+                "Performing repartition_by_hash by writing a parquet"
+                " dataset - Expect poor performance!"
+            )
             meta = self._meta._constructor_sliced([0])
             partitions = self[columns].map_partitions(
                 batcher_sortnet.set_partitions_hash,
