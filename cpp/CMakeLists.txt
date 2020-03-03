@@ -556,6 +556,7 @@ add_library(cudf
             src/copying/copy_range.cu
             src/filling/legacy/fill.cu
             src/filling/fill.cu
+            src/filling/legacy/repeat.cu
             src/filling/repeat.cu
             src/filling/legacy/tile.cu
             src/reshape/tile.cu
