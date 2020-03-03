@@ -162,7 +162,7 @@ class DatetimeColumn(column.ColumnBase):
         dtype = np.dtype(dtype)
         if dtype == self.dtype:
             return self
-        return libcudf.typecast.cast(self, dtype=dtype)
+        return libcudfxx.unary.cast(self, dtype=dtype)
 
     def as_numerical_column(self, dtype, **kwargs):
         return self.as_numerical.astype(dtype)
