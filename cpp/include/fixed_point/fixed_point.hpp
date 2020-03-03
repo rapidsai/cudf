@@ -121,7 +121,7 @@ namespace detail {
 
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Helper struct for constructing `fixed_point` when value is already
  * shifted
  *
@@ -129,7 +129,7 @@ namespace detail {
  *          auto n = decimal32{scaled_integer{1001, 3}}; // n = 1.001
  *
  * @tparam Rep The representation type (either `int32_t` or `int64_t`)
- *---------------------------------------------------------------------------**/
+ */
 template <typename Rep,
           typename std::enable_if_t<is_supported_representation_type<Rep>()>* = nullptr>
 struct scaled_integer{
@@ -138,9 +138,7 @@ struct scaled_integer{
     explicit scaled_integer(Rep v, scale_type s) : value(v), scale(s) {}
 };
 
-// Rep = representation type
-
-/**---------------------------------------------------------------------------*
+/**
  * @brief A type for representing a number with a fixed amount of precision
  *
  * Currently, only binary and decimal `fixed_point` numbers are supported.
@@ -148,7 +146,7 @@ struct scaled_integer{
  *
  * @tparam Rep The representation type (either `int32_t` or `int64_t`)
  * @tparam Rad The radix/base (either `Radix::BASE_2` or `Radix::BASE_10`)
- *---------------------------------------------------------------------------**/
+ */
 template <typename Rep, Radix Rad>
 class fixed_point {
 
@@ -157,13 +155,13 @@ class fixed_point {
 
 public:
 
-    /**---------------------------------------------------------------------------*
+    /**
     * @brief Constructor that will perform shifting to store value appropriately
     *
     * @tparam T The type that you are constructing from (integral or floating)
     * @param value The value that will be constructed from
     * @param scale The exponent that is applied to Rad to perform shifting
-    *---------------------------------------------------------------------------**/
+    */
     template <typename T,
               typename std::enable_if_t<is_supported_construction_value_type<T>()
                                      && is_supported_representation_type<Rep>()>* = nullptr>
@@ -173,34 +171,34 @@ public:
     {
     }
 
-    /**---------------------------------------------------------------------------*
+    /**
     * @brief Constructor that will not perform shifting (assumes value already
     * shifted)
     *
     * @param s scaled_integer that contains scale and already shifted value
-    *---------------------------------------------------------------------------**/
+    */
     explicit fixed_point(scaled_integer<Rep> s) :
         _value{s.value},
         _scale{s.scale}
     {
     }
 
-   /**---------------------------------------------------------------------------*
-    * @brief Default onstructor that constructs `fixed_point` number with a
+   /**
+    * @brief Default constructor that constructs `fixed_point` number with a
     * value and scale of zero
-    *---------------------------------------------------------------------------**/
+    */
     fixed_point() :
         _value{0},
         _scale{scale_type{0}}
     {
     }
 
-   /**---------------------------------------------------------------------------*
+   /**
     * @brief Explicit conversion operator
     *
     * @tparam U The type that is being explicitly converted to (integral or floating)
-    * return The `fixed_point` number in base 10 (aka human readable format)
-    *---------------------------------------------------------------------------**/
+    * @return The `fixed_point` number in base 10 (aka human readable format)
+    */
     template <typename U,
               typename std::enable_if_t<is_supported_construction_value_type<U>()>* = nullptr>
     CUDA_HOST_DEVICE_CALLABLE
@@ -208,13 +206,13 @@ public:
         return detail::shift<Rep, Rad>(static_cast<U>(_value), detail::negate(_scale));
     }
 
-    /**---------------------------------------------------------------------------*
+    /**
     * @brief operator +=
     *
     * @tparam Rep1 Representation type of number being added to `this`
     * @tparam Rad1 Radix (base) type of number being added to `this`
-    * @return Modified `this`
-    *---------------------------------------------------------------------------**/
+    * @return The sum
+    */
     template <typename Rep1, Radix Rad1>
     CUDA_HOST_DEVICE_CALLABLE
     fixed_point<Rep1, Rad1>& operator+=(fixed_point<Rep1, Rad1> const& rhs) {
@@ -222,13 +220,13 @@ public:
         return *this;
     }
 
-    /**---------------------------------------------------------------------------*
+    /**
     * @brief operator *=
     *
     * @tparam Rep1 Representation type of number being added to `this`
     * @tparam Rad1 Radix (base) type of number being added to `this`
-    * @return Modified `this`
-    *---------------------------------------------------------------------------**/
+    * @return The product
+    */
     template <typename Rep1, Radix Rad1>
     CUDA_HOST_DEVICE_CALLABLE
     fixed_point<Rep1, Rad1>& operator*=(fixed_point<Rep1, Rad1> const& rhs) {
@@ -236,13 +234,13 @@ public:
         return *this;
     }
 
-    /**---------------------------------------------------------------------------*
+    /**
     * @brief operator -=
     *
     * @tparam Rep1 Representation type of number being added to `this`
     * @tparam Rad1 Radix (base) type of number being added to `this`
-    * @return Modified `this`
-    *---------------------------------------------------------------------------**/
+    * @return The difference
+    */
     template <typename Rep1, Radix Rad1>
     CUDA_HOST_DEVICE_CALLABLE
     fixed_point<Rep1, Rad1>& operator-=(fixed_point<Rep1, Rad1> const& rhs) {
@@ -250,13 +248,13 @@ public:
         return *this;
     }
 
-    /**---------------------------------------------------------------------------*
+    /**
     * @brief operator /=
     *
     * @tparam Rep1 Representation type of number being added to `this`
     * @tparam Rad1 Radix (base) type of number being added to `this`
-    * @return Modified `this`
-    *---------------------------------------------------------------------------**/
+    * @return The quotient
+    */
     template <typename Rep1, Radix Rad1>
     CUDA_HOST_DEVICE_CALLABLE
     fixed_point<Rep1, Rad1>& operator/=(fixed_point<Rep1, Rad1> const& rhs) {
@@ -264,18 +262,18 @@ public:
         return *this;
     }
 
-    /**---------------------------------------------------------------------------*
+    /**
     * @brief operator ++ (post-increment)
     *
-    * @return Modified `this` (having added 1 to the `this`)
-    *---------------------------------------------------------------------------**/
+    * @return The incremented result
+    */
     CUDA_HOST_DEVICE_CALLABLE
     fixed_point<Rep, Rad>& operator++() {
         *this = *this + fixed_point<Rep, Rad>{1, scale_type{_scale}};
         return *this;
     }
 
-    /**---------------------------------------------------------------------------*
+    /**
     * @brief operator + (for adding two `fixed_point` numbers)
     *
     * If `_scale`s are equal, `_value`s are added
@@ -284,14 +282,14 @@ public:
     *
     * @tparam Rep1 Representation type of number being added to `this`
     * @tparam Rad1 Radix (base) type of number being added to `this`
-    * @return resuling `fixed_point` number
-    *---------------------------------------------------------------------------**/
+    * @return The resulting `fixed_point` sum
+    */
     template <typename Rep1, Radix Rad1>
     CUDA_HOST_DEVICE_CALLABLE
     friend fixed_point<Rep1, Rad1> operator+(fixed_point<Rep1, Rad1> const& lhs,
                                              fixed_point<Rep1, Rad1> const& rhs);
 
-    /**---------------------------------------------------------------------------*
+    /**
     * @brief operator - (for subtracting two `fixed_point` numbers)
     *
     * If `_scale`s are equal, `_value`s are substracted
@@ -300,43 +298,43 @@ public:
     *
     * @tparam Rep1 Representation type of number being added to `this`
     * @tparam Rad1 Radix (base) type of number being added to `this`
-    * @return resuling `fixed_point` number
-    *---------------------------------------------------------------------------**/
+    * @return The resulting `fixed_point` difference
+    */
     template <typename Rep1, Radix Rad1>
     CUDA_HOST_DEVICE_CALLABLE
     friend fixed_point<Rep1, Rad1> operator-(fixed_point<Rep1, Rad1> const& lhs,
                                              fixed_point<Rep1, Rad1> const& rhs);
 
-    /**---------------------------------------------------------------------------*
-    * @brief operator - (for subtracting two `fixed_point` numbers)
+    /**
+    * @brief operator * (for multiplying two `fixed_point` numbers)
     *
     * `_scale`s are added and `_value`s are multiplied
     *
     * @tparam Rep1 Representation type of number being added to `this`
     * @tparam Rad1 Radix (base) type of number being added to `this`
-    * @return resuling `fixed_point` number
-    *---------------------------------------------------------------------------**/
+    * @return The resulting `fixed_point` product
+    */
     template <typename Rep1, Radix Rad1>
     CUDA_HOST_DEVICE_CALLABLE
     friend fixed_point<Rep1, Rad1> operator*(fixed_point<Rep1, Rad1> const& lhs,
                                              fixed_point<Rep1, Rad1> const& rhs);
 
-    /**---------------------------------------------------------------------------*
-    * @brief operator - (for subtracting two `fixed_point` numbers)
+    /**
+    * @brief operator / (for dividing two `fixed_point` numbers)
     *
     * `_scale`s are substracted and `_value`s are divided
     *
     * @tparam Rep1 Representation type of number being added to `this`
     * @tparam Rad1 Radix (base) type of number being added to `this`
-    * @return resuling `fixed_point` number
-    *---------------------------------------------------------------------------**/
+    * @return The resulting `fixed_point` quotient
+    */
     template <typename Rep1, Radix Rad1>
     CUDA_HOST_DEVICE_CALLABLE
     friend fixed_point<Rep1, Rad1> operator/(fixed_point<Rep1, Rad1> const& lhs,
                                              fixed_point<Rep1, Rad1> const& rhs);
 
-    /**---------------------------------------------------------------------------*
-    * @brief operator - (for subtracting two `fixed_point` numbers)
+    /**
+    * @brief operator == (for comparing two `fixed_point` numbers)
     *
     * If `_scale`s are equal, `_value`s are compared
     * If `_scale`s are not equal, number with smaller `_scale` is shifted to the
@@ -344,8 +342,8 @@ public:
     *
     * @tparam Rep1 Representation type of number being added to `this`
     * @tparam Rad1 Radix (base) type of number being added to `this`
-    * @return resuling `fixed_point` number
-    *---------------------------------------------------------------------------**/
+    * @return true if `lhs` and `rhs` are equal, false if not
+    */
     template<typename Rep1, Radix Rad1>
     CUDA_HOST_DEVICE_CALLABLE
     friend bool operator==(fixed_point<Rep1, Rad1> const& lhs,
@@ -473,14 +471,14 @@ bool operator==(fixed_point<Rep1, Rad1> const& lhs,
     return rhsv == lhsv;
 }
 
-/**---------------------------------------------------------------------------*
+/**
 * @brief ostream operator for outputting `fixed_point` number
 *
 * @tparam Rep Representation type of number being output
 * @tparam Rad Radix (base) type of number being output
 * @param os target ostream
-* @param fp `fixed_point` number being output
-*---------------------------------------------------------------------------**/
+* @return fp `fixed_point` number being output
+*/
 template <typename Rep, Radix Radix>
 std::ostream& operator<<(std::ostream& os, fixed_point<Rep, Radix> const& fp) {
     return os << static_cast<double>(fp);
