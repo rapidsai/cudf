@@ -98,6 +98,14 @@ enum class order : bool {
   DESCENDING  ///< Elements ordered from large to small
 };
 
+/**
+ * @brief Enum to specify whether to include nulls or exclude nulls
+ */
+enum class include_nulls : bool {
+  NO,
+  YES 
+};
+
 /**---------------------------------------------------------------------------*
  * @brief Indicates how null values compare against all other values.
  *---------------------------------------------------------------------------**/
@@ -126,27 +134,30 @@ struct order_info {
 /**---------------------------------------------------------------------------*
  * @brief Controls the allocation/initialization of a null mask.
  *---------------------------------------------------------------------------**/
-enum mask_state {
+enum class mask_state : int32_t {
   UNALLOCATED,    ///< Null mask not allocated, (all elements are valid)
   UNINITIALIZED,  ///< Null mask allocated, but not initialized
   ALL_VALID,      ///< Null mask allocated, initialized to all elements valid
   ALL_NULL        ///< Null mask allocated, initialized to all elements NULL
 };
 
-namespace experimental{
+namespace experimental {
+
 /**
  * @brief Interpolation method to use when the desired quantile lies between
  * two data points i and j
  *
  */
-enum class interpolation {
+enum class interpolation : int32_t {
     LINEAR,  ///< Linear interpolation between i and j
     LOWER,       ///< Lower data point (i)
     HIGHER,      ///< Higher data point (j)
     MIDPOINT,    ///< (i + j)/2
     NEAREST      ///< i or j, whichever is nearest
 };
-}
+
+} // namespace experimental
+
 /**---------------------------------------------------------------------------*
  * @brief Identifies a column's logical element type
  *---------------------------------------------------------------------------**/

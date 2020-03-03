@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "result_cache.hpp"
 #include "group_reductions.hpp"
+#include <groupby/common/utils.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
@@ -27,6 +27,7 @@
 #include <cudf/types.hpp>
 #include <cudf/aggregation.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/aggregation/result_cache.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/binaryop.hpp>
 #include <cudf/detail/unary.hpp>
@@ -55,7 +56,7 @@ struct store_result_functor {
     size_type col_idx,
     column_view const& values,
     sort::sort_groupby_helper & helper,
-    result_cache & cache,
+    experimental::detail::result_cache & cache,
     cudaStream_t stream,
     rmm::mr::device_memory_resource* mr)
   : col_idx(col_idx),
@@ -106,7 +107,7 @@ struct store_result_functor {
  private:
   size_type col_idx; ///< Index of column in requests being operated on
   sort::sort_groupby_helper & helper; ///< Sort helper
-  result_cache & cache; ///< cache of results to store into
+  experimental::detail::result_cache & cache; ///< cache of results to store into
   column_view const& values; ///< Column of values to group and aggregate
 
   cudaStream_t stream; ///< CUDA stream on which to execute kernels 
@@ -117,15 +118,31 @@ struct store_result_functor {
 };
 
 template <>
-void store_result_functor::operator()<aggregation::COUNT>(
+void store_result_functor::operator()<aggregation::COUNT_VALID>(
+  std::unique_ptr<aggregation> const& agg)
+{
+  if (cache.has_result(col_idx, agg))
+    return;
+
+  cache.add_result(
+      col_idx, agg,
+      get_grouped_values().nullable()
+          ? detail::group_count_valid(get_grouped_values(),
+                                      helper.group_labels(),
+                                      helper.num_groups(), mr, stream)
+          : detail::group_count_all(helper.group_offsets(), 
+                                    helper.num_groups(), mr, stream));
+}
+
+template <>
+void store_result_functor::operator()<aggregation::COUNT_ALL>(
   std::unique_ptr<aggregation> const& agg)
 {
   if (cache.has_result(col_idx, agg))
     return;
 
   cache.add_result(col_idx, agg, 
-                  detail::group_count(get_grouped_values(), 
-                            helper.group_labels(),
+                  detail::group_count_all(helper.group_offsets(),
                             helper.num_groups(), mr, stream));
 }
 
@@ -137,7 +154,7 @@ void store_result_functor::operator()<aggregation::SUM>(
     return;
 
   auto count_agg = make_count_aggregation();
-  operator()<aggregation::COUNT>(count_agg);
+  operator()<aggregation::COUNT_VALID>(count_agg);
   column_view count_result = cache.get_result(col_idx, count_agg);
 
   cache.add_result(col_idx, agg, 
@@ -154,7 +171,7 @@ void store_result_functor::operator()<aggregation::MIN>(
     return;
 
   auto count_agg = make_count_aggregation();
-  operator()<aggregation::COUNT>(count_agg);
+  operator()<aggregation::COUNT_VALID>(count_agg);
   column_view count_result = cache.get_result(col_idx, count_agg);
 
   cache.add_result(col_idx, agg, 
@@ -171,7 +188,7 @@ void store_result_functor::operator()<aggregation::MAX>(
     return;
 
   auto count_agg = make_count_aggregation();
-  operator()<aggregation::COUNT>(count_agg);
+  operator()<aggregation::COUNT_VALID>(count_agg);
   column_view count_result = cache.get_result(col_idx, count_agg);
 
   cache.add_result(col_idx, agg, 
@@ -190,7 +207,7 @@ void store_result_functor::operator()<aggregation::MEAN>(
   auto sum_agg = make_sum_aggregation();
   auto count_agg = make_count_aggregation();
   operator()<aggregation::SUM>(sum_agg);
-  operator()<aggregation::COUNT>(count_agg);
+  operator()<aggregation::COUNT_VALID>(count_agg);
   column_view sum_result = cache.get_result(col_idx, sum_agg);
   column_view count_result = cache.get_result(col_idx, count_agg);
 
@@ -216,7 +233,7 @@ void store_result_functor::operator()<aggregation::VARIANCE>(
   auto mean_agg = make_mean_aggregation();
   auto count_agg = make_count_aggregation();
   operator()<aggregation::MEAN>(mean_agg);
-  operator()<aggregation::COUNT>(count_agg);
+  operator()<aggregation::COUNT_VALID>(count_agg);
   column_view mean_result = cache.get_result(col_idx, mean_agg);
   column_view group_sizes = cache.get_result(col_idx, count_agg);
 
@@ -252,13 +269,13 @@ void store_result_functor::operator()<aggregation::QUANTILE>(
     return;
 
   auto count_agg = make_count_aggregation();
-  operator()<aggregation::COUNT>(count_agg);
+  operator()<aggregation::COUNT_VALID>(count_agg);
   column_view group_sizes = cache.get_result(col_idx, count_agg);
   auto quantile_agg =
     static_cast<experimental::detail::quantile_aggregation const*>(agg.get());
 
   auto result = detail::group_quantiles(
-    get_sorted_values(), group_sizes, helper.group_offsets(),
+    get_sorted_values(), group_sizes, helper.group_offsets(), helper.num_groups(),
     quantile_agg->_quantiles, quantile_agg->_interpolation, mr, stream);
   cache.add_result(col_idx, agg, std::move(result));
 };
@@ -271,11 +288,11 @@ void store_result_functor::operator()<aggregation::MEDIAN>(
     return;
 
   auto count_agg = make_count_aggregation();
-  operator()<aggregation::COUNT>(count_agg);
+  operator()<aggregation::COUNT_VALID>(count_agg);
   column_view group_sizes = cache.get_result(col_idx, count_agg);
 
   auto result = detail::group_quantiles(
-    get_sorted_values(), group_sizes, helper.group_offsets(),
+    get_sorted_values(), group_sizes, helper.group_offsets(), helper.num_groups(),
     {0.5}, interpolation::LINEAR, mr, stream);
   cache.add_result(col_idx, agg, std::move(result));
 };
@@ -299,20 +316,35 @@ void store_result_functor::operator()<aggregation::NUNIQUE>(
   cache.add_result(col_idx, agg, std::move(result));
 };
 
-std::vector<aggregation_result> extract_results(
-    std::vector<aggregation_request> const& requests,
-    result_cache& cache)
+template <>
+void store_result_functor::operator()<aggregation::NTH_ELEMENT>(
+  std::unique_ptr<aggregation> const& agg)
 {
-  std::vector<aggregation_result> results(requests.size());
+  if (cache.has_result(col_idx, agg))
+    return;
+    
+  auto nth_element_agg =
+    static_cast<experimental::detail::nth_element_aggregation const*>(agg.get());
 
-  for (size_t i = 0; i < requests.size(); i++) {
-    for (auto &&agg : requests[i].aggregations) {
-      results[i].results.emplace_back( cache.release_result(i, agg) );      
-    }
-  }
-  return results;
+  auto count_agg = make_count_aggregation(nth_element_agg->_include_nulls);
+  if(count_agg->kind==aggregation::COUNT_VALID)
+    operator()<aggregation::COUNT_VALID>(count_agg);
+  else if (count_agg->kind==aggregation::COUNT_ALL)
+    operator()<aggregation::COUNT_ALL>(count_agg);
+  else
+    CUDF_FAIL("Wrong count aggregation kind");
+  column_view group_sizes = cache.get_result(col_idx, count_agg);
+
+  cache.add_result(col_idx, agg, 
+                  detail::group_nth_element(get_grouped_values(),
+                            group_sizes,
+                            helper.group_labels(),
+                            helper.group_offsets(),
+                            helper.num_groups(), 
+                            nth_element_agg->n,
+                            nth_element_agg->_include_nulls,
+                            mr, stream));
 }
-
 }  // namespace detail
 
 // Sort-based groupby
@@ -324,7 +356,7 @@ groupby::sort_aggregate(
   // We're going to start by creating a cache of results so that aggs that
   // depend on other aggs will not have to be recalculated. e.g. mean depends on
   // sum and count. std depends on mean and count
-  detail::result_cache cache(requests.size());
+  experimental::detail::result_cache cache(requests.size());
   
   for (size_t i = 0; i < requests.size(); i++) {
     auto store_functor = detail::store_result_functor(i, requests[i].values,
@@ -338,7 +370,7 @@ groupby::sort_aggregate(
     }
   }  
   
-  auto results = extract_results(requests, cache);
+  auto results = detail::extract_results(requests, cache);
   
   return std::make_pair(helper().unique_keys(mr, stream),
                         std::move(results));

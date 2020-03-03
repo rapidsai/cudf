@@ -1,16 +1,17 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-# cython: profile=False
-# distutils: language = c++
-# cython: embedsignature = True
-# cython: language_level = 3
-
 import pandas as pd
 
-from cudf._libxx.lib cimport *
+from libcpp.memory cimport unique_ptr
+
 from cudf._libxx.column cimport Column
 from cudf._libxx.table cimport Table
-cimport cudf._libxx.includes.copying as cpp_copying
+from cudf._libxx.move cimport move
+
+from cudf._libxx.cpp.table.table cimport table
+from cudf._libxx.cpp.table.table_view cimport table_view
+from cudf._libxx.cpp.column.column_view cimport column_view
+cimport cudf._libxx.cpp.copying as cpp_copying
 
 
 def gather(Table source_table, Column gather_map):
@@ -21,7 +22,7 @@ def gather(Table source_table, Column gather_map):
     cdef column_view gather_map_view = gather_map.view()
 
     with nogil:
-        c_result = (
+        c_result = move(
             cpp_copying.gather(
                 source_table_view,
                 gather_map_view

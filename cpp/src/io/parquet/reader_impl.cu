@@ -680,13 +680,21 @@ table_with_metadata reader::impl::read(int skip_rows, int num_rows, int row_grou
       }
 
       std::vector<column_buffer> out_buffers;
+      out_buffers.reserve(column_types.size());
       for (size_t i = 0; i < column_types.size(); ++i) {
-        out_buffers.emplace_back(column_types[i], num_rows, stream, _mr);
+        auto col = _selected_columns[i];
+        auto &col_schema =
+          _metadata->schema[_metadata->row_groups[selected_row_groups[0].first]
+                                .columns[col.first]
+                                .schema_idx];
+        bool is_nullable = (col_schema.max_definition_level != 0);
+        out_buffers.emplace_back(column_types[i], num_rows, is_nullable, stream, _mr);
       }
 
       decode_page_data(chunks, pages, skip_rows, num_rows, chunk_map,
                        out_buffers, stream);
 
+      out_columns.reserve(column_types.size());
       for (size_t i = 0; i < column_types.size(); ++i) {
         out_columns.emplace_back(make_column(column_types[i], num_rows,
                                              out_buffers[i], stream, _mr));

@@ -130,7 +130,7 @@ std::unique_ptr<cudf::experimental::table> left_semi_anti_join(cudf::table_view 
                                         });
 
   return cudf::experimental::detail::gather(left.select(return_columns), gather_map.begin(), gather_map_end,
-                                            false, false, true, mr);
+                                            false, mr);
 }
 } // detail
 

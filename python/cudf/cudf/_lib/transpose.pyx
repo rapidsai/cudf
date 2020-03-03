@@ -1,9 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
-
-# cython: profile=False
-# distutils: language = c++
-# cython: embedsignature = True
-# cython: language_level = 3
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
@@ -40,7 +35,7 @@ def transpose(df):
 
     if any(t != dtype for t in df.dtypes):
         raise ValueError('all columns must have the same dtype')
-    has_null = any(c.null_count for c in df._data.values())
+    has_null = any(c.null_count for c in df._data.columns)
 
     out_df = cudf.DataFrame()
 
