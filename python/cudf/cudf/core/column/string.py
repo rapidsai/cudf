@@ -23,9 +23,22 @@ from cudf._libxx.strings.char_types import (
     is_digit as cpp_is_digit,
     is_numeric as cpp_is_numeric,
 )
+from cudf._libxx.strings.padding import (
+    center as cpp_center,
+    ljust as cpp_ljust,
+    pad as cpp_pad,
+    rjust as cpp_rjust,
+    zfill as cpp_zfill,
+)
 from cudf._libxx.strings.replace import (
     insert as cpp_string_insert,
     slice_replace as cpp_slice_replace,
+)
+from cudf._libxx.strings.split.split import split as cpp_split
+from cudf._libxx.strings.strip import (
+    lstrip as cpp_lstrip,
+    rstrip as cpp_rstrip,
+    strip as cpp_strip,
 )
 from cudf._libxx.strings.substring import slice_from as cpp_slice_from
 from cudf.core.buffer import Buffer
@@ -684,9 +697,73 @@ class StringMethods(object):
             n = -1
 
         kwargs.setdefault("expand", expand)
+        if pat is None:
+            pat = " "
+
+        from cudf._libxx.scalar import Scalar
 
         return self._return_or_inplace(
-            self._column.nvstrings.split(delimiter=pat, n=n), **kwargs
+            # self._column.nvstrings.split(delimiter=pat, n=n),
+            cpp_split(self._column, Scalar(pat), n),
+            **kwargs,
+        )
+
+    def pad(self, width, side="left", fillchar=" ", **kwargs):
+        if len(fillchar) != 1:
+            raise TypeError("fillchar must be a character, not str")
+
+        return self._return_or_inplace(
+            cpp_pad(self._column, width, side, fillchar), **kwargs
+        )
+
+    def zfill(self, width, **kwargs):
+        return self._return_or_inplace(
+            cpp_zfill(self._column, width), **kwargs
+        )
+
+    def center(self, width, fillchar=" ", **kwargs):
+        return self._return_or_inplace(
+            cpp_center(self._column, width, fillchar), **kwargs
+        )
+
+    def ljust(self, width, fillchar=" ", **kwargs):
+        return self._return_or_inplace(
+            cpp_ljust(self._column, width, fillchar), **kwargs
+        )
+
+    def rjust(self, width, fillchar=" ", **kwargs):
+        return self._return_or_inplace(
+            cpp_rjust(self._column, width, fillchar), **kwargs
+        )
+
+    def strip(self, to_strip=None, **kwargs):
+        if to_strip is None:
+            to_strip = ""
+
+        from cudf._libxx.scalar import Scalar
+
+        return self._return_or_inplace(
+            cpp_strip(self._column, Scalar(to_strip)), **kwargs
+        )
+
+    def lstrip(self, to_strip=None, **kwargs):
+        if to_strip is None:
+            to_strip = ""
+
+        from cudf._libxx.scalar import Scalar
+
+        return self._return_or_inplace(
+            cpp_lstrip(self._column, Scalar(to_strip)), **kwargs
+        )
+
+    def rstrip(self, to_strip=None, **kwargs):
+        if to_strip is None:
+            to_strip = ""
+
+        from cudf._libxx.scalar import Scalar
+
+        return self._return_or_inplace(
+            cpp_rstrip(self._column, Scalar(to_strip)), **kwargs
         )
 
 
