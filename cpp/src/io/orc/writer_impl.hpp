@@ -84,6 +84,28 @@ class writer::impl {
    **/
   void write(table_view const& table, const table_metadata *metadata, cudaStream_t stream);
 
+  /**
+   * @brief Begins the chunked/streamed write process.
+   *
+   * @param[in] orc_chunked_state State information that crosses _begin() / write_chunked() / _end() boundaries.
+   */
+  void write_chunked_begin(orc_chunked_state& state);
+
+  /**
+   * @brief Writes a single subtable as part of a larger parquet file/table write.
+   *
+   * @param[in] table The table information to be written
+   * @param[in] orc_chunked_state State information that crosses _begin() / write_chunked() / _end() boundaries.
+   */
+  void write_chunked(table_view const& table, orc_chunked_state& state);
+
+  /**
+   * @brief Finishes the chunked/streamed write process.
+   *
+   * @param[in] orc_chunked_state State information that crosses _begin() / write_chunked() / _end() boundaries.
+   */
+  void write_chunked_end(orc_chunked_state& state);
+
  private:
   /**
    * @brief Builds up column dictionaries indices

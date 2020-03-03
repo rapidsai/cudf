@@ -154,6 +154,7 @@ struct orc_chunked_state {
   cudaStream_t                        stream;
   /// Overall file metadata.  Filled in during the process and written during write_chunked_end()
   cudf::io::orc::FileFooter           ff;
+  cudf::io::orc::Metadata             md;
   /// current write position for rowgroups/chunks
   size_t                              current_chunk_offset;
   /// optional user metadata
