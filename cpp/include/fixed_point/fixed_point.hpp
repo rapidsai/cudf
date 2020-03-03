@@ -135,7 +135,7 @@ template <typename Rep,
 struct scaled_integer{
     Rep value;
     scale_type scale;
-    explicit scaled_integer(Rep v, scale_type s) : value(v), scale(s) {}
+    CUDA_HOST_DEVICE_CALLABLE explicit scaled_integer(Rep v, scale_type s) : value(v), scale(s) {}
 };
 
 /**
@@ -165,6 +165,7 @@ public:
     template <typename T,
               typename std::enable_if_t<is_supported_construction_value_type<T>()
                                      && is_supported_representation_type<Rep>()>* = nullptr>
+    CUDA_HOST_DEVICE_CALLABLE
     explicit fixed_point(T const& value, scale_type const& scale) :
         _value{static_cast<Rep>(detail::shift_with_precise_round<Rep, Rad>(value, scale))},
         _scale{scale}
@@ -177,6 +178,7 @@ public:
     *
     * @param s scaled_integer that contains scale and already shifted value
     */
+    CUDA_HOST_DEVICE_CALLABLE
     explicit fixed_point(scaled_integer<Rep> s) :
         _value{s.value},
         _scale{s.scale}
@@ -187,6 +189,7 @@ public:
     * @brief Default constructor that constructs `fixed_point` number with a
     * value and scale of zero
     */
+    CUDA_HOST_DEVICE_CALLABLE
     fixed_point() :
         _value{0},
         _scale{scale_type{0}}
