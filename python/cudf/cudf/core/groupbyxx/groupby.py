@@ -1,5 +1,7 @@
 import collections
 
+import pandas as pd
+
 import cudf
 import cudf._libxx.groupby as libgroupby
 
@@ -21,8 +23,42 @@ class GroupBy(object):
             yield name, grouped_values[offsets[i] : offsets[i + 1]]
 
     def agg(self, aggs):
-        result = self._groupby.aggregate(self.obj, aggs)
-        return self.obj.__class__._from_table(result).sort_index()
+        normalized_aggs = self._normalize_aggs(aggs)
+        result = self._groupby.aggregate(self.obj, normalized_aggs)
+        result = self.obj.__class__._from_table(result).sort_index()
+
+        if not any(pd.api.types.is_list_like(agg) for agg in aggs.values()):
+            # drop the last level
+            columns = result.columns.droplevel(-1)
+            result.columns = columns
+
+        # set index names to be group key names
+        result.index.names = self.grouping.names
+
+        return result
+
+    def _normalize_aggs(self, aggs):
+        """
+        Normalize agg to a dict mapping column names
+        to a list of aggregations.
+        """
+        out = aggs.copy()
+
+        if not isinstance(aggs, collections.abc.Mapping):
+            # Make col_name->aggs mapping from aggs.
+            # Do not include named key columns
+            columns = tuple(
+                dict.fromkeys(self.obj._column_names, []).keys()
+                - dict.fromkeys(self.grouping._named_columns, []).keys()
+            )
+            out = dict.fromkeys(columns, aggs)
+
+        # Convert all values to list-like:
+        for col, agg in out.items():
+            if not pd.api.types.is_list_like(agg):
+                out[col] = [agg]
+
+        return out
 
 
 class _Grouping(object):
@@ -43,7 +79,8 @@ class _Grouping(object):
         """
         self.obj = obj
         self._key_columns = []
-        self._names = []
+        self.names = []
+        self._named_columns = []
 
         by_list = by
         if not isinstance(by_list, list):
@@ -71,11 +108,11 @@ class _Grouping(object):
                 source_data=cudf.DataFrame(
                     dict(zip(range(nkeys), self._key_columns))
                 ),
-                names=self._names,
+                names=self.names,
             )
         else:
             return cudf.core.index.as_index(
-                self._key_columns[0], name=self._names[0]
+                self._key_columns[0], name=self.names[0]
             )
 
     def _handle_callable(self, by):
@@ -85,11 +122,11 @@ class _Grouping(object):
     def _handle_series(self, by):
         by = by._align_to_index(self.obj.index, how="right")
         self._key_columns.append(by._column)
-        self._names.append(by.name)
+        self.names.append(by.name)
 
     def _handle_index(self, by):
         self._key_columns.extend(by._data.columns)
-        self._names.extend(by._data.names)
+        self.names.extend(by._data.names)
 
     def _handle_mapping(self, by):
         by = cudf.Series(by.values(), index=by.keys())
@@ -97,11 +134,12 @@ class _Grouping(object):
 
     def _handle_label(self, by):
         self._key_columns.append(self.obj._data[by])
-        self._names.append(by)
+        self.names.append(by)
+        self._named_columns.append(by)
 
     def _handle_misc(self, by):
         by = cudf.core.column.as_column(by)
         if len(by) != len(self.obj):
             raise ValueError("Grouper and object must have same length")
         self._key_columns.append(by)
-        self._names.append(None)
+        self.names.append(None)
