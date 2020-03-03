@@ -58,9 +58,10 @@ cdef class GroupBy:
             Each aggregation may be specified as:
             - a string (e.g., "max")
             - a lambda/function
+
         Returns
         -------
-
+        Table of aggregated values
         """
         from cudf.core.column_accessor import ColumnAccessor
 
