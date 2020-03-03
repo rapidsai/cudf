@@ -1,16 +1,19 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
+
 import numpy as np
 
 from . import (
     avro,
     copying,
     dlpack,
+    gpuarrow,
     hash,
     join,
     merge,
     null_mask,
     quantiles,
     replace,
+    reshape,
     rolling,
     search,
     sort,

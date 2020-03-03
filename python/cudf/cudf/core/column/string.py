@@ -12,6 +12,7 @@ import nvstrings
 import rmm
 
 import cudf._lib as libcudf
+import cudf._libxx as libcudfxx
 import cudf._libxx.string_casting as str_cast
 from cudf._lib.nvtx import nvtx_range_pop, nvtx_range_push
 from cudf._libxx.null_mask import (
@@ -1019,7 +1020,7 @@ class StringColumn(column.ColumnBase):
 
     def _find_first_and_last(self, value):
         found_indices = self.str().contains(f"^{value}$")
-        found_indices = libcudf.typecast.cast(found_indices, dtype=np.int32)
+        found_indices = libcudfxx.unary.cast(found_indices, dtype=np.int32)
         first = column.as_column(found_indices).find_first_value(1)
         last = column.as_column(found_indices).find_last_value(1)
         return first, last
