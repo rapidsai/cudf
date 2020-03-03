@@ -35,6 +35,12 @@ struct strong_typedef {
 
 using scale_type = strong_typedef<int32_t>;
 
+/**
+ * @brief Scoped enumerator to use when constructing `fixed_point`
+ *
+ * example: using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
+ * example: using binary64  = fixed_point<int64_t, Radix::BASE_2>;
+ */
 enum class Radix : int32_t {
     BASE_2  = 2,
     BASE_10 = 10
@@ -53,17 +59,23 @@ constexpr inline auto is_supported_construction_value_type() {
 }
 
 namespace detail {
-
-    // `exponent` comes from using scale_type = strong_typedef<int32_t>
-    //  we still need Rep to know what type we want for accumulator of ipow
+    /**
+    * @brief A function for integer exponentiation by squaring
+    *
+    * https://simple.wikipedia.org/wiki/Exponentiation_by_squaring
+    * Note: this is the iterative equivalent of the recursive definition (faster)
+    * Quick-bench: http://quick-bench.com/Wg7o7HYQC9FW5M0CO0wQAjSwP_Y
+    * `exponent` comes from using scale_type = strong_typedef<int32_t>
+    *
+    * @tparam Rep Representation type for return type
+    * @tparam Base The base to be exponentiated
+    * @param exponent The exponent to be used for exponentiation
+    * @return Result of `Base` to the power of `exponent` of type `Rep`
+    */
     template <typename Rep, Radix Base, typename T,
               typename std::enable_if_t<(std::is_same<int32_t, T>::value
                                       && is_supported_representation_type<Rep>())>* = nullptr>
     Rep ipow(T exponent) {
-        // Integer Exponentiation by Squaring:
-        // https://simple.wikipedia.org/wiki/Exponentiation_by_squaring
-        // Note: this is the iterative equivalent of the recursive definition (faster)
-        // Quick-bench: http://quick-bench.com/Wg7o7HYQC9FW5M0CO0wQAjSwP_Y
         if (exponent == 0) return static_cast<Rep>(Base);
         auto extra  = static_cast<Rep>(1);
         auto square = static_cast<Rep>(Base);
@@ -78,29 +90,63 @@ namespace detail {
         return square * extra;
     }
 
-    // helper function to negate strongly typed scale_type
+    /** @brief Helper function to negate strongly typed scale_type
+    *
+    * @param scale The scale to be negated
+    * @return The negated scale
+    */
     CUDA_HOST_DEVICE_CALLABLE
     auto negate(scale_type const& scale) {
         return scale_type{-scale};
     }
 
-    // perform this operation when constructing with positive scale
+    /** @brief Function that performs a `right shift` scale "times" on the `val`
+    *
+    * Note: perform this operation when constructing with positive scale
+    *
+    * @tparam Rep Representation type needed for integer exponentiation
+    * @tparam Rad The radix which will act as the base in the exponentiation
+    * @tparam T Type for value `val` being shifted and the return type
+    * @param val The value being shifted
+    * @param scale The amount to shift the value by
+    * @return Shifted value of type T
+    */
     template <typename Rep, Radix Rad, typename T>
     CUDA_HOST_DEVICE_CALLABLE
     constexpr T right_shift(T const& val, scale_type const& scale) {
-        assert(scale > 0);
         return val / ipow<Rep, Rad>(scale._t);
     }
 
-    // perform this operation when constructing with negative scale
+    /** @brief Function that performs a `left shift` scale "times" on the `val`
+    *
+    * Note: perform this operation when constructing with negative scale
+    *
+    * @tparam Rep Representation type needed for integer exponentiation
+    * @tparam Rad The radix which will act as the base in the exponentiation
+    * @tparam T Type for value `val` being shifted and the return type
+    * @param val The value being shifted
+    * @param scale The amount to shift the value by
+    * @return Shifted value of type T
+    */
     template <typename Rep, Radix Rad, typename T>
     CUDA_HOST_DEVICE_CALLABLE
     constexpr T left_shift(T const& val, scale_type const& scale) {
-        assert(scale < 0);
         return val * ipow<Rep, Rad>(-scale._t);
     }
 
-    // convenience generic shift function
+    /** @brief Function that performs a `right` or `left shift`
+     * scale "times" on the `val`
+    *
+    * Note: Function will call the correct right or left shift based
+    * on the sign of `val`
+    *
+    * @tparam Rep Representation type needed for integer exponentiation
+    * @tparam Rad The radix which will act as the base in the exponentiation
+    * @tparam T Type for value `val` being shifted and the return type
+    * @param val The value being shifted
+    * @param scale The amount to shift the value by
+    * @return Shifted value of type T
+    */
     template <typename Rep, Radix Rad, typename T>
     CUDA_HOST_DEVICE_CALLABLE
     constexpr T shift(T const& val, scale_type const& scale) {
@@ -109,6 +155,19 @@ namespace detail {
         else                 return left_shift <Rep, Rad>(val, scale);
     }
 
+    /** @brief Function that performs precise shift to avoid "lossiness"
+     * inherent in floating point values
+    *
+    * Example: auto n = fixed_point<int32_t, Radix::BASE_10>{1.001, scale_type{-3}}
+    *    will construct n to have a value of 1 without the precise shift
+    *
+    * @tparam Rep Representation type needed for integer exponentiation
+    * @tparam Rad The radix which will act as the base in the exponentiation
+    * @tparam T Type for value `val` being shifted and the return type
+    * @param value The value being shifted
+    * @param scale The amount to shift the value by
+    * @return Shifted value of type T
+    */
     template <typename Rep, Radix Rad, typename T,
               typename std::enable_if_t<is_supported_construction_value_type<T>()>* = nullptr>
     auto shift_with_precise_round(T const& value, scale_type const& scale) -> int64_t {
@@ -122,8 +181,7 @@ namespace detail {
 }
 
 /**
- * @brief Helper struct for constructing `fixed_point` when value is already
- * shifted
+ * @brief Helper struct for constructing `fixed_point` when value is already shifted
  *
  * example: using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
  *          auto n = decimal32{scaled_integer{1001, 3}}; // n = 1.001
@@ -353,11 +411,15 @@ public:
                            fixed_point<Rep1, Rad1> const& rhs);
 };
 
+
+/** @brief Function that converts Rep to `std::string`
+*
+* @tparam Rep Representation type
+* @return String-ified Rep
+*/
 template <typename Rep>
 std::string print_rep() {
-    if      (std::is_same<Rep, int8_t >::value) return "int8_t";
-    else if (std::is_same<Rep, int16_t>::value) return "int16_t";
-    else if (std::is_same<Rep, int32_t>::value) return "int32_t";
+    if      (std::is_same<Rep, int32_t>::value) return "int32_t";
     else if (std::is_same<Rep, int64_t>::value) return "int64_t";
     else                                        return "unknown type";
 }
