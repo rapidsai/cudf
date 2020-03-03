@@ -30,8 +30,8 @@ from cudf._libxx.io.utils cimport (
     make_source_info
 )
 
-cimport cudf._libxx.cpp.types as cudf_types
 cimport cudf._lib.utils as lib
+cimport cudf._libxx.cpp.types as cudf_types
 cimport cudf._libxx.cpp.io.types as cudf_io_types
 
 cpdef generate_pandas_metadata(Table table, index):
