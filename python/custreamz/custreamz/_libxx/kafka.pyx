@@ -5,16 +5,20 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
-# from cudf._libxx.lib cimport *
 from custreamz._libxx.includes.kafka cimport (
     kafka_datasource as kafka_external,
 )
+from cudf._libxx.table cimport Table
+from cudf._libxx.cpp.table.table cimport table
+from cudf._libxx.move cimport move
 
 from libcpp.string cimport string
 from libcpp.memory cimport unique_ptr
 from libcpp.map cimport map
 from cython.operator cimport dereference, postincrement
 from libc.stdint cimport uint32_t, int64_t
+cimport cudf._libxx.cpp.io.functions as libcudf
+cimport cudf._libxx.cpp.io.types as cudf_io_types
 
 # Global Kafka configurations
 cdef kafka_external *kds
@@ -28,18 +32,41 @@ cpdef create_kafka_handle(kafka_conf, topics=[], partitions=[]):
     kds = new kafka_external(kafka_confs, topics, partitions)
     ds_id = kds.libcudf_datasource_identifier()
 
-cpdef read_gdf(lines=True,
-               start=0,
-               end=1000,
-               timeout=10000,
-               delimiter="\n"):
+cpdef read_json(lines=True,
+                dtype=True,
+                compression="infer",
+                dayfirst=True,
+                byte_range=None,
+                start=0,
+                end=1000,
+                timeout=10000,
+                delimiter="\n"):
 
     json_str = kds.consume_range(start,
                                  end,
                                  timeout,
                                  str.encode(delimiter))
-    # return read_json_libcudf(json_str, True, True)
-    return json_str
+
+    cdef cudf_io_types.table_with_metadata c_out_table
+    cdef libcudf.read_json_args json_args = libcudf.read_json_args()
+
+    # Set the JSON reader arguments.
+    json_args.lines = lines
+    json_args.source = cudf_io_types.source_info(
+        json_str.encode(), len(json_str))
+    json_args.compression = cudf_io_types.compression_type.NONE
+    json_args.dayfirst = dayfirst
+
+    #    vector[string] dtype
+    #    size_t byte_range_offset
+    #    size_t byte_range_size
+
+    with nogil:
+        c_out_table = move(libcudf.read_json(json_args))
+
+    column_names = [x.decode() for x in c_out_table.metadata.column_names]
+    return Table.from_unique_ptr(move(c_out_table.tbl),
+                                 column_names=column_names)
 
 cpdef get_committed_offset(topic=None, partitions=[]):
     return kds.get_committed_offset(str.encode(topic), partitions)
