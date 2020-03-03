@@ -118,6 +118,7 @@
 - PR #4261 libxx Cython reorganization
 - PR #4274 Support negative position values in slice_strings
 - PR #4282 Porting nvstrings conversion functions from new libcudf++ to Python/Cython
+- PR #4305 Move gpuarrow.pyx and related libarrow_cuda files into _libxx
 
 ## Bug Fixes
 
