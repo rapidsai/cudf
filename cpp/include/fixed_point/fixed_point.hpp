@@ -424,6 +424,14 @@ std::string print_rep() {
     else                                        return "unknown type";
 }
 
+/** @brief Function for identifying integer overflow when adding
+*
+* @tparam Rep Type of integer to check for overflow on
+* @tparam T Types of lhs and rhs (ensures they are the same type)
+* @param lhs Left hand side of addition
+* @param rhs Right hand side of addition
+* @return true if addition causes overflow, false otherwise
+*/
 template <typename Rep, typename T>
 CUDA_HOST_DEVICE_CALLABLE
 auto addition_overflow(T lhs, T rhs) {
@@ -431,6 +439,14 @@ auto addition_overflow(T lhs, T rhs) {
                    : lhs < std::numeric_limits<Rep>::min() - rhs;
 }
 
+/** @brief Function for identifying integer overflow when subtracting
+*
+* @tparam Rep Type of integer to check for overflow on
+* @tparam T Types of lhs and rhs (ensures they are the same type)
+* @param lhs Left hand side of subtraction
+* @param rhs Right hand side of subtraction
+* @return true if subtraction causes overflow, false otherwise
+*/
 template <typename Rep, typename T>
 CUDA_HOST_DEVICE_CALLABLE
 auto subtraction_overflow(T lhs, T rhs) {
@@ -438,12 +454,28 @@ auto subtraction_overflow(T lhs, T rhs) {
                    : lhs > std::numeric_limits<Rep>::max() + rhs;
 }
 
+/** @brief Function for identifying integer overflow when dividing
+*
+* @tparam Rep Type of integer to check for overflow on
+* @tparam T Types of lhs and rhs (ensures they are the same type)
+* @param lhs Left hand side of division
+* @param rhs Right hand side of division
+* @return true if division causes overflow, false otherwise
+*/
 template <typename Rep, typename T>
 CUDA_HOST_DEVICE_CALLABLE
 auto division_overflow(T lhs, T rhs) {
     return lhs == std::numeric_limits<Rep>::min() && rhs == -1;
 }
 
+/** @brief Function for identifying integer overflow when multiplying
+*
+* @tparam Rep Type of integer to check for overflow on
+* @tparam T Types of lhs and rhs (ensures they are the same type)
+* @param lhs Left hand side of multiplication
+* @param rhs Right hand side of multiplication
+* @return true if multiplication causes overflow, false otherwise
+*/
 template <typename Rep, typename T>
 CUDA_HOST_DEVICE_CALLABLE
 auto multiplication_overflow(T lhs, T rhs) {
