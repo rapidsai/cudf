@@ -1,9 +1,11 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
+
 import numpy as np
 
 from . import (
     avro,
     copying,
+    gpuarrow,
     hash,
     join,
     merge,
@@ -11,6 +13,7 @@ from . import (
     quantiles,
     reduce,
     replace,
+    reshape,
     rolling,
     search,
     sort,
