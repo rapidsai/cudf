@@ -27,7 +27,7 @@ namespace strings
  * @brief Character type values.
  * These types can be or'd to check for any combination of types.
  */
-enum string_character_types {
+enum string_character_types : int32_t {
     DECIMAL  = 1 << 0,                            // binary 00000001
     NUMERIC  = 1 << 1,                            // binary 00000010
     DIGIT    = 1 << 2,                            // binary 00000100
