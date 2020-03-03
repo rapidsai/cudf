@@ -152,7 +152,7 @@ cpdef join(Table lhs,
     elif how == 'leftsemi':
         print('semi joining')
         with nogil:
-            c_result = move(cpp_left_semi_join(
+            c_result = move(cpp_join.left_semi_join(
                 lhs_view,
                 rhs_view,
                 left_on_ind,
@@ -162,7 +162,7 @@ cpdef join(Table lhs,
     elif how == 'leftanti':
         print('ant joining')
         with nogil:
-            c_result = move(cpp_left_anti_join(
+            c_result = move(cpp_join.left_anti_join(
                 lhs_view,
                 rhs_view,
                 left_on_ind,

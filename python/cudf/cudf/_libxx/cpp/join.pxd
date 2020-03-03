@@ -31,14 +31,14 @@ cdef extern from "cudf/join.hpp" namespace "cudf::experimental" nogil:
         const vector[int] right_on,
         const vector[pair[int, int]] columns_in_common
     ) except +
-    cdef unique_ptr[table] cpp_left_semi_join "cudf::experimental::left_semi_join" (
+    cdef unique_ptr[table] left_semi_join(
         const table_view left,
         const table_view right,
         const vector[int] left_on,
         const vector[int] right_on,
         const vector[int] return_columns
     ) except +
-    cdef unique_ptr[table] cpp_left_anti_join "cudf::experimental::left_anti_join" (
+    cdef unique_ptr[table] left_anti_join(
         const table_view left,
         const table_view right,
         const vector[int] left_on,
