@@ -1,3 +1,5 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 from cudf._libxx.cpp.types cimport data_type
 from cudf._libxx.cpp.scalar.scalar cimport scalar
 from cudf._libxx.cpp.column.column_view cimport column_view

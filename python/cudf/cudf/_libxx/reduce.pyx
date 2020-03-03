@@ -1,3 +1,5 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 from cudf._libxx.cpp.reduce cimport cpp_reduce, cpp_scan, scan_type
 from cudf._libxx.cpp.scalar.scalar cimport scalar
 from cudf._libxx.cpp.types cimport data_type, type_id
@@ -11,8 +13,20 @@ from cudf._libxx.aggregation cimport get_aggregation, aggregation
 from libcpp.memory cimport unique_ptr
 import numpy as np
 
-cpdef reduce(reduction_op, Column incol, kwargs=None, dtype=None, ddof=1):
-    kwargs = {'ddof': ddof}
+def reduce(reduction_op, Column incol, dtype=None, **kwargs):
+    """
+    Top level Cython reduce function wrapping libcudf++ reductions.
+
+    Parameters
+    ----------
+    reduction_op : string
+        A string specifying the operation, e.g. sum, prod
+    incol : Column
+        A cuDF Column object
+    dtype: numpy.dtype, optional
+        A numpy data type to use for the output, defaults
+        to the same type as the input column
+    """
 
     col_dtype = incol.dtype
     if reduction_op in ['sum', 'sum_of_squares', 'product']:
@@ -45,7 +59,19 @@ cpdef reduce(reduction_op, Column incol, kwargs=None, dtype=None, ddof=1):
     py_result = Scalar.from_unique_ptr(move(c_result))
     return py_result.value
 
-cpdef scan(Column incol, scan_op, inclusive, kwargs=None):
+def scan(Column incol, scan_op, inclusive, **kwargs):
+    """
+    Top level Cython scan function wrapping libcudf++ scans.
+
+    Parameters
+    ----------
+    incol : Column
+        A cuDF Column object
+    reduction_op : string
+        A string specifying the operation, e.g. cumprod
+    inclusive: bool
+        Flag for including nulls in relevant scan
+    """
     cdef column_view c_incol_view = incol.view()
     cdef unique_ptr[column] c_result
     cdef unique_ptr[aggregation] c_agg = move(get_aggregation(scan_op, kwargs))
