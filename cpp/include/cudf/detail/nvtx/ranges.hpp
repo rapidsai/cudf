@@ -32,7 +32,7 @@ struct libcudf_domain {
  * @brief Alias for an NVTX range in the libcudf domain.
  *
  */
-using thread_range = nvtx::domain_thread_range<libcudf_domain>;
+using thread_range = ::nvtx::domain_thread_range<libcudf_domain>;
 
 }  // namespace cudf
 
@@ -52,4 +52,4 @@ using thread_range = nvtx::domain_thread_range<libcudf_domain>;
  * ```
  *
  */
-#define CUDF_FUNC_RANGE() NVTX_FUNC_RANGE_IN(libcudf_domain)
+#define CUDF_FUNC_RANGE() NVTX_FUNC_RANGE_IN(cudf::libcudf_domain)
