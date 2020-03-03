@@ -67,7 +67,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
  * - instead of the center flag it uses a two-part window to allow for more flexible windows.
  *   The total window size = `preceding_window + following_window + 1`. Element `i` uses elements
  *   `[i-preceding_window, i+following_window]` to do the window computation, provided that they
- *   fall within the confines of their corresponding groups, as indicated by `group_offsets`.
+ *   fall within the confines of their corresponding groups, as per `grouping_keys`.
  * - instead of storing NA/NaN for output rows that do not meet the minimum number of observations
  *   this function updates the valid bitmask of the column to indicate which elements are valid.
  * 
@@ -76,12 +76,12 @@ std::unique_ptr<column> rolling_window(column_view const& input,
  * (especially low-precision integers) to `FLOAT32` or `FLOAT64` before doing a rolling `MEAN`.
  *
  * @param[in] grouping_keys The (pre-sorted) grouping columns
- * @param[in] input_col The input column (to be aggregated)
+ * @param[in] input The input column (to be aggregated)
  * @param[in] preceding_window The static rolling window size in the backward direction.
  * @param[in] following_window The static rolling window size in the forward direction.
  * @param[in] min_periods Minimum number of observations in window required to have a value,
  *                        otherwise element `i` is null.
- * @param[in] op The rolling window aggregation type (SUM, MAX, MIN, etc.)
+ * @param[in] aggr The rolling window aggregation type (SUM, MAX, MIN, etc.)
  *
  * @returns   A nullable output column containing the rolling window results
  **/
@@ -93,6 +93,47 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& grouping_keys,
                                                std::unique_ptr<aggregation> const& aggr,
                                                rmm::mr::device_memory_resource* mr = 
                                                  rmm::mr::get_default_resource());
+
+/**
+ * @brief  Applies a timestamp-based rolling window function to the values in a column.
+ *
+ * This function aggregates values in a window around each element i of the input column, and
+ * invalidates the bit mask for element i if there are not enough observations. The window size is
+ * static (the same for each element). This matches Pandas' API for DataFrame.rolling with a few
+ * notable differences:
+ * - The preceding and following window range is specified as a `time` offset (for the moment,
+ *   in days). The window bounds are determined per row, based on the corresponding timestamp
+ *   column value.
+ *   The total window size = `preceding_window + following_window`. Element `i` uses elements
+ *   `[i-preceding_window, i+following_window]` to do the window computation, provided that they
+ *   fall within the confines of their corresponding groups, as per `grouping_keys`.
+ * - instead of storing NA/NaN for output rows that do not meet the minimum number of observations
+ *   this function updates the valid bitmask of the column to indicate which elements are valid.
+ * 
+ * The returned column for `op == COUNT` always has `INT32` type. All other operators return a 
+ * column of the same type as the input. Therefore it is suggested to convert integer column types
+ * (especially low-precision integers) to `FLOAT32` or `FLOAT64` before doing a rolling `MEAN`.
+ *
+ * @param[in] grouping_keys The (pre-sorted) grouping columns
+ * @param[in] timestamp_column The (pre-sorted) timestamps for each row
+ * @param[in] input The input column (to be aggregated)
+ * @param[in] preceding_window_in_days The rolling window time-interval in the backward direction.
+ * @param[in] following_window_in_days The rolling window time-interval in the forward direction.
+ * @param[in] min_periods Minimum number of observations in window required to have a value,
+ *                        otherwise element `i` is null.
+ * @param[in] aggr The rolling window aggregation type (SUM, MAX, MIN, etc.)
+ *
+ * @returns   A nullable output column containing the rolling window results
+ **/
+std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grouping_keys,
+                                                          column_view const& timestamp_column,
+                                                          column_view const& input,
+                                                          size_type preceding_window_in_days,
+                                                          size_type following_window_in_days,
+                                                          size_type min_periods,
+                                                          std::unique_ptr<aggregation> const& aggr,
+                                                          rmm::mr::device_memory_resource* mr = 
+                                                            rmm::mr::get_default_resource());
 
 /**
  * @brief  Applies a variable-size rolling window function to the values in a column.

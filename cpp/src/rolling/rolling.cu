@@ -701,5 +701,140 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& grouping_keys,
   );
 }
 
+namespace
+{
+  bool is_supported_range_frame_unit(cudf::data_type const& data_type) {
+    auto id = data_type.id();
+    return id == cudf::TIMESTAMP_DAYS
+        || id == cudf::TIMESTAMP_SECONDS
+        || id == cudf::TIMESTAMP_MILLISECONDS
+        || id == cudf::TIMESTAMP_MICROSECONDS
+        || id == cudf::TIMESTAMP_NANOSECONDS;
+  }
+
+  size_t multiplication_factor(cudf::data_type const& data_type) {
+    // Assume timestamps.
+    switch(data_type.id()) {
+      case cudf::TIMESTAMP_DAYS         : return 1L;
+      case cudf::TIMESTAMP_SECONDS      : return 24L*60*60;
+      case cudf::TIMESTAMP_MILLISECONDS : return 24L*60*60*1000;
+      case cudf::TIMESTAMP_MICROSECONDS : return 24L*60*60*1000*1000;
+      default  : 
+        CUDF_EXPECTS(data_type.id() == cudf::TIMESTAMP_NANOSECONDS, 
+                    "Unexpected data-type for timestamp-based rolling window operation!");
+        return 24L*60*60*1000*1000*1000;
+    }
+  }
+
+  template <typename TimestampImpl_t>
+  std::unique_ptr<column> grouped_time_range_rolling_window_impl( column_view const& input,
+                                                      column_view const& timestamp_column,
+                                                      rmm::device_vector<cudf::size_type> const& group_offsets,
+                                                      rmm::device_vector<cudf::size_type> const& group_labels,
+                                                      size_type preceding_window_in_days, // TODO: Consider taking offset-type as type_id. Assumes days for now.
+                                                      size_type following_window_in_days,
+                                                      size_type min_periods,
+                                                      std::unique_ptr<aggregation> const& aggr,
+                                                      rmm::mr::device_memory_resource* mr) {
+
+    TimestampImpl_t mult_factor {static_cast<TimestampImpl_t>(multiplication_factor(timestamp_column.type()))};
+  
+    auto preceding_calculator = 
+      [
+        d_group_offsets = group_offsets.data().get(),
+        d_group_labels  = group_labels.data().get(),
+        d_timestamps    = timestamp_column.data<TimestampImpl_t>(),
+        preceding_window_in_days,
+        mult_factor
+      ] __device__ (size_type idx) {
+        auto group_label = d_group_labels[idx];
+        auto group_start = d_group_offsets[group_label];
+        auto lower_bound = d_timestamps[idx] - preceding_window_in_days*mult_factor;
+
+        auto preceding_i{idx}; // Start at current row.
+        // If preceding value is part of current group, and also exceeds lower_bound, extend window backwards.
+        while ((preceding_i-1) >= group_start && d_timestamps[preceding_i-1] >= lower_bound) {
+          --preceding_i;
+        }
+
+        return idx - preceding_i + 1; // Preceding must account for current row.
+      };
+  
+    auto following_calculator = 
+      [
+        d_group_offsets = group_offsets.data().get(),
+        d_group_labels  = group_labels.data().get(),
+        d_timestamps    = timestamp_column.data<TimestampImpl_t>(),
+        following_window_in_days,
+        mult_factor
+      ] __device__ (size_type idx) {
+        auto group_label = d_group_labels[idx];
+        auto group_end = d_group_offsets[group_label+1]; // Cannot fall off the end, since offsets is capped with `input.size()`.
+        auto upper_bound = d_timestamps[idx] + following_window_in_days*mult_factor;
+
+        auto following_i{idx}; // Start at current row.
+        // If following value is part of current group, and does not exceed upper_bound, extend window forwards.
+        while ((following_i+1) < group_end && d_timestamps[following_i+1] <= upper_bound) {
+          ++following_i;
+        }
+
+        return following_i - idx;
+      };
+
+    return cudf::experimental::detail::rolling_window(
+      input,
+      thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), preceding_calculator),
+      thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), following_calculator),
+      min_periods, aggr, mr
+    );
+  }
+
+} // namespace detail;
+
+std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grouping_keys,
+                                                          column_view const& timestamp_column,
+                                                          column_view const& input,
+                                                          size_type preceding_window_in_days,
+                                                          size_type following_window_in_days,
+                                                          size_type min_periods,
+                                                          std::unique_ptr<aggregation> const& aggr,
+                                                          rmm::mr::device_memory_resource* mr ) {
+
+  if (input.size() == 0) return empty_like(input);
+
+  CUDF_EXPECTS((grouping_keys.num_columns() > 0), "Expected at least one grouping key.");
+
+  CUDF_EXPECTS((grouping_keys.num_rows() == input.size()), 
+               "Size mismatch between grouping_keys and input vector.");
+
+  CUDF_EXPECTS((min_periods > 0), "min_periods must be positive");
+
+  using sort_groupby_helper = cudf::experimental::groupby::detail::sort::sort_groupby_helper;
+  sort_groupby_helper helper{grouping_keys, cudf::include_nulls::NO, cudf::sorted::YES};
+
+  auto group_offsets{helper.group_offsets()};
+  group_offsets.push_back(input.size()); // Cap the end with the number of inputs.
+  auto const& group_labels{helper.group_labels()};
+
+  // Assumes that `group_offsets` starts with `0`, ends with `input.size`
+#ifndef NDEBUG
+  CUDF_EXPECTS(group_offsets.size() >= 2 && group_offsets[0] == 0 
+               && group_offsets[group_offsets.size()-1] == input.size(),
+               "Must have at least one group.");
+#endif // NDEBUG
+
+  // Assumes that `timestamp_column` is sorted in ascending, per group.
+  CUDF_EXPECTS(is_supported_range_frame_unit(timestamp_column.type()),
+               "Unsupported data-type for `timestamp`-based rolling window operation!");
+
+  return timestamp_column.type().id() == cudf::TIMESTAMP_DAYS?
+          grouped_time_range_rolling_window_impl<int32_t>(input, timestamp_column, group_offsets, 
+            group_labels, preceding_window_in_days, following_window_in_days, min_periods, aggr, mr)
+        : 
+          grouped_time_range_rolling_window_impl<int64_t>(input, timestamp_column, group_offsets, 
+            group_labels, preceding_window_in_days, following_window_in_days, min_periods, aggr, mr);
+
+}
+
 } // namespace experimental 
 } // namespace cudf
