@@ -356,7 +356,8 @@ void writer::impl::build_dictionaries(
 
 std::vector<Stream> writer::impl::gather_streams(
     orc_column_view *columns, size_t num_columns, size_t num_rows,
-    std::vector<uint32_t> const &stripe_list, std::vector<int32_t> &strm_ids) {
+    std::vector<uint32_t> const &stripe_list, std::vector<int32_t> &strm_ids,
+    const orc_chunked_state& state) {
   // First n + 1 streams are row index streams, including 'column 0'
   std::vector<Stream> streams;
   streams.resize(num_columns + 1);
@@ -374,7 +375,15 @@ std::vector<Stream> writer::impl::gather_streams(
     int64_t data_stream_size = 0;
     int64_t data2_stream_size = 0;
     int64_t dict_stream_size = 0;
-    if (columns[i].nullable() || columns[i].data_count() != num_rows) {
+    bool is_nullable;
+
+    if (state.single_write_mode){
+      is_nullable = (columns[i].nullable() || columns[i].data_count() < num_rows);
+    } else {
+      is_nullable = (i < state.user_metadata_with_nullability.column_nullable.size()) ?
+                              state.user_metadata_with_nullability.column_nullable[i] : true;
+    }
+    if (is_nullable) {
       present_stream_size = ((row_index_stride_ + 7) >> 3);
       present_stream_size += (present_stream_size + 0x7f) >> 7;
     }
@@ -919,6 +928,11 @@ void writer::impl::write_chunked(table_view const& table, orc_chunked_state& sta
   // Mapping of string columns for quick look-up
   std::vector<int> str_col_ids;
 
+  if(state.user_metadata_with_nullability.column_nullable.size() > 0){
+    CUDF_EXPECTS(state.user_metadata_with_nullability.column_nullable.size() == static_cast<size_t>(num_columns),
+                 "When passing values in user_metadata_with_nullability, data for all columns must be specified");
+  }
+
   // Wrapper around cudf columns to attach ORC-specific type info
   std::vector<orc_column_view> orc_columns;
   orc_columns.reserve(num_columns); // Avoids unnecessary re-allocation
@@ -988,7 +1002,7 @@ void writer::impl::write_chunked(table_view const& table, orc_chunked_state& sta
   // Initialize streams
   std::vector<int32_t> strm_ids(num_columns * gpu::CI_NUM_STREAMS, -1);
   auto streams = gather_streams(orc_columns.data(), orc_columns.size(),
-                                num_rows, stripe_list, strm_ids);
+                                num_rows, stripe_list, strm_ids, state);
 
   // Encode column data chunks
   const auto num_chunks = num_rowgroups * num_columns;

@@ -158,7 +158,8 @@ class writer::impl {
   std::vector<Stream> gather_streams(orc_column_view* columns,
                                      size_t num_columns, size_t num_rows,
                                      std::vector<uint32_t> const& stripe_list,
-                                     std::vector<int32_t>& strm_ids);
+                                     std::vector<int32_t>& strm_ids,
+                                     const orc_chunked_state& state);
 
   /**
    * @brief Encodes the streams as a series of column data chunks
