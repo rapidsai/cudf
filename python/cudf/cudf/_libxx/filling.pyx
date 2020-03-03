@@ -21,7 +21,7 @@ from cudf._libxx.table cimport Table
 cimport cudf._libxx.cpp.filling as cpp_filling
 
 
-def fill_in_place(Column destination, begin, end, Scalar value):
+def fill_in_place(Column destination, int begin, int end, Scalar value):
     cdef mutable_column_view c_destination = destination.mutable_view()
     cdef size_type c_begin = <size_type> begin
     cdef size_type c_end = <size_type> end
@@ -35,7 +35,7 @@ def fill_in_place(Column destination, begin, end, Scalar value):
     )
 
 
-def fill(Column destination, begin, end, Scalar value):
+def fill(Column destination, int begin, int end, Scalar value):
     cdef column_view c_destination = destination.view()
     cdef size_type c_begin = <size_type> begin
     cdef size_type c_end = <size_type> end
