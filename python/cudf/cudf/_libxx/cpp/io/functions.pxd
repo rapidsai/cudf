@@ -110,10 +110,10 @@ cdef extern from "cudf/io/functions.hpp" \
     cdef cppclass read_parquet_args:
         cudf_io_types.source_info source
         vector[string] columns
-        size_type row_group
-        size_type row_group_count
-        size_type skip_rows
-        size_type num_rows
+        size_t row_group
+        size_t row_group_count
+        size_t skip_rows
+        size_t num_rows
         bool strings_to_categorical
         bool use_pandas_metadata
         cudf_types.data_type timestamp_type

@@ -15,6 +15,7 @@ from libcpp.vector cimport vector
 
 from cudf._libxx.cpp.types cimport size_type
 from cudf._libxx.table cimport Table
+from cudf._libxx.cpp.table.table cimport table
 from cudf._libxx.cpp.table.table_view cimport (
     table_view
 )
@@ -24,6 +25,9 @@ from cudf._libxx.cpp.io.functions cimport (
     write_parquet as parquet_writer,
     read_parquet_args,
     read_parquet as parquet_reader
+)
+from cudf._libxx.io.utils cimport (
+    make_source_info
 )
 
 cimport cudf._libxx.cpp.types as cudf_types
@@ -93,23 +97,8 @@ cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
     cudf.io.parquet.to_parquet
     """
 
-    cdef cudf_io_types.source_info source
-    cdef const unsigned char[::1] buffer \
-        = lib.view_of_buffer(filepath_or_buffer)
-    cdef string filepath
-    if buffer is None:
-        if os.path.isfile(filepath_or_buffer):
-            filepath = <string>str(filepath_or_buffer).encode()
-        else:
-            buffer = filepath_or_buffer.encode()
-
-    if buffer is None:
-        source.type = cudf_io_types.io_type.FILEPATH
-        source.filepath = filepath
-    else:
-        source.type = cudf_io_types.io_type.HOST_BUFFER
-        source.buffer.first = <char*>&buffer[0]
-        source.buffer.second = buffer.shape[0]
+    cdef cudf_io_types.source_info source = make_source_info(
+        filepath_or_buffer)
 
     # Setup parquet reader arguments
     cdef read_parquet_args args = read_parquet_args(source)
@@ -134,9 +123,9 @@ cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
 
     column_names = list(c_out_table.metadata.column_names)
     column_names = [x.decode() for x in column_names]
-    tbl = Table.from_unique_ptr(move(c_out_table.tbl),
-                                column_names=column_names)
-    return cudf.DataFrame._from_table(tbl)
+    cdef unique_ptr[table] ctbl = move(c_out_table.tbl)
+    return Table.from_unique_ptr(move(c_out_table.tbl),
+                                 column_names=column_names)
 
 cpdef write_parquet(
         Table table,

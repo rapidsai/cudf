@@ -45,23 +45,23 @@ def read_parquet(
         ValueError("URL content-encoding decompression is not supported")
 
     if engine == "cudf":
-        df = libparquet.read_parquet(
-            filepath_or_buffer,
-            columns,
-            row_group,
-            skip_rows,
-            num_rows,
-            strings_to_categorical,
-            use_pandas_metadata,
+        return cudf.DataFrame._from_table(
+            libparquet.read_parquet(
+                filepath_or_buffer,
+                columns,
+                row_group,
+                skip_rows,
+                num_rows,
+                strings_to_categorical,
+                use_pandas_metadata,
+            )
         )
     else:
         warnings.warn("Using CPU via PyArrow to read Parquet dataset.")
         pa_table = pq.read_pandas(
             filepath_or_buffer, columns=columns, *args, **kwargs
         )
-        df = cudf.DataFrame.from_arrow(pa_table)
-
-    return df
+        return cudf.DataFrame.from_arrow(pa_table)
 
 
 @ioutils.doc_to_parquet()

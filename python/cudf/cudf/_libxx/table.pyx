@@ -86,11 +86,16 @@ cdef class Table:
         index_names : iterable
         column_names : iterable
         """
+        print("in here")
         cdef vector[unique_ptr[column]] columns
+        print(c_tbl.get().num_columns())
+        print("after")
         columns = move(c_tbl.get()[0].release())
+        print("after2")
 
         cdef vector[unique_ptr[column]].iterator it = columns.begin()
 
+        print("here")
         # First construct the index, if any
         index = None
         if index_names is not None:
