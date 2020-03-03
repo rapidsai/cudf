@@ -43,6 +43,15 @@ def test_groupby_agg_basic(pdf):
     gdf = cudf.from_pandas(pdf)
 
     assert_eq(
-        pdf.groupby("a").agg({"b": ["sum", "max"]}),
-        gdf.groupby("a").agg({"b": ["sum", "max"]}),
+        pdf.groupby("a").agg({"b": ["sum"]}),
+        gdf.groupby("a", method="libxx").agg({"b": ["sum"]}),
+    )
+
+
+def test_groupby_agg_basic_lambda(pdf):
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(
+        pdf.groupby("a").agg({"b": [lambda x: x.sum()]}),
+        gdf.groupby("a", method="libxx").agg({"b": [lambda x: x.sum()]}),
     )
