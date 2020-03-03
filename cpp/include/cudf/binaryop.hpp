@@ -54,7 +54,10 @@ enum class binary_operator {
                           ///< ptx code
   SHIFT_LEFT,             ///< operator <<
   SHIFT_RIGHT,            ///< operator >>
-  SHIFT_RIGHT_UNSIGNED,   ///< operator >>> (from Java)
+
+  // Logical right shift. Casts to an unsigned value before shifing.
+  // approximates >>> from Java.
+  SHIFT_RIGHT_UNSIGNED,   ///< operator >>> 
   
   INVALID_BINARY          ///< invalid operation
 };
