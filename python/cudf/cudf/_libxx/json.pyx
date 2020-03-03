@@ -20,8 +20,6 @@ from cudf._libxx.io.utils cimport (
 )
 cimport cudf._libxx.cpp.io.types as cudf_io_types
 
-cimport cudf._lib.utils as lib
-
 
 cpdef read_json(filepath_or_buffer, dtype,
                 lines, compression, byte_range):
