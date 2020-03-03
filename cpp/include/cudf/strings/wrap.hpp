@@ -31,8 +31,6 @@ namespace strings
  * at space positions so that each line is no more than width characters 
  * without truncating any non-space character sequences.
  * Attempts to make each line less than or equal to width characters. 
- * If a string or characters is longer than width, 
- * the line is split on the next closest space character. 
  *
  * Any null string entries return corresponding null output column entries.
  *
