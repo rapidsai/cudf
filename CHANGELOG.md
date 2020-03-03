@@ -117,6 +117,7 @@
 - PR #4251 Add class to docs in `dask-cudf` `derived_from`
 - PR #4261 libxx Cython reorganization
 - PR #4282 Porting nvstrings conversion functions from new libcudf++ to Python/Cython
+- PR #4301 Add support for writing large ORC files in a chunked manner
 
 ## Bug Fixes
 
