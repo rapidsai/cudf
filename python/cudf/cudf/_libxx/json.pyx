@@ -15,6 +15,9 @@ from cudf._libxx.cpp.io.functions cimport (
     read_json as cpp_read_json,
     read_json_args
 )
+from cudf._libxx.io.utils cimport (
+    make_source_info
+)
 cimport cudf._libxx.cpp.io.types as cudf_io_types
 
 cimport cudf._lib.utils as lib
@@ -31,24 +34,8 @@ cpdef read_json(filepath_or_buffer, dtype,
     cudf.io.json.to_json
     """
 
-    # Determine read source
-    cdef cudf_io_types.source_info source
-    cdef const unsigned char[::1] buffer \
-        = lib.view_of_buffer(filepath_or_buffer)
-    cdef string filepath
-    if buffer is None:
-        if os.path.isfile(filepath_or_buffer):
-            filepath = <string>str(filepath_or_buffer).encode()
-        else:
-            buffer = filepath_or_buffer.encode()
-
-    if buffer is None:
-        source.type = cudf_io_types.io_type.FILEPATH
-        source.filepath = filepath
-    else:
-        source.type = cudf_io_types.io_type.HOST_BUFFER
-        source.buffer.first = <char*>&buffer[0]
-        source.buffer.second = buffer.shape[0]
+    cdef cudf_io_types.source_info source = make_source_info(
+        filepath_or_buffer)
 
     # Setup arguments
     cdef read_json_args args = read_json_args(source)
