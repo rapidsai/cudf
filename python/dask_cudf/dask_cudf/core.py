@@ -305,11 +305,38 @@ class DataFrame(_Frame, dd.core.DataFrame):
             return handle_out(out, result)
 
     def repartition_by_hash(
-        self, columns=None, npartitions=None, max_branch=None
+        self, columns=None, npartitions=None, max_branch=None, disk_path=None
     ):
         # TODO: Handle hashing by index
         npartitions = npartitions or self.npartitions
         columns = columns or [col for col in self.columns]
+
+        # Use parquet-based shuffle on disk if path is provided
+        if isinstance(disk_path, str):
+            meta = self._meta._constructor_sliced([0])
+            partitions = self[columns].map_partitions(
+                batcher_sortnet.set_partitions_hash,
+                columns,
+                npartitions,
+                meta=meta,
+            )
+            df2 = self.assign(_partitions=partitions)
+            df2.to_parquet(
+                disk_path,
+                write_index=False,
+                partition_on=["_partitions"],
+                append=False,
+                compression="snappy",
+                write_metadata_file=False,
+                compute=True,
+            )
+            from dask_cudf import read_parquet
+
+            return read_parquet(disk_path, index=False).drop(
+                columns=["_partitions"]
+            )
+
+        # Use task-based shuffle to move data
         return batcher_sortnet.rearrange_by_hash(
             self, columns, npartitions, max_branch=max_branch
         )
