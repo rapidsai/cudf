@@ -87,18 +87,11 @@ cdef class GroupBy:
             column_names=range(c_result.first.get()[0].num_columns())
         )
 
-        multiindex = any(len(aggs) > 1 for aggs in aggregations.values())
-        result_data = ColumnAccessor(multiindex=multiindex)
+        result_data = ColumnAccessor(multiindex=True)
         for i, col_name in enumerate(aggregations):
             for j, agg_name in enumerate(aggregations[col_name]):
-                if multiindex:
-                    result_data[(col_name, agg_name)] = (
-                        Column.from_unique_ptr(move(c_result.second[i].results[j]))
-                    )
-                else:
-                    result_data[col_name] = (
-                        Column.from_unique_ptr(move(c_result.second[i].results[j]))
-                    )
+                result_data[(col_name, agg_name)] = (
+                    Column.from_unique_ptr(move(c_result.second[i].results[j]))
+                )
         result = Table(data=result_data, index=grouped_keys)
-        
         return result
