@@ -116,6 +116,7 @@
 - PR #4234 Add BUILD_LEGACY_TESTS cmake option
 - PR #4251 Add class to docs in `dask-cudf` `derived_from`
 - PR #4261 libxx Cython reorganization
+- PR #4274 Support negative position values in slice_strings
 - PR #4282 Porting nvstrings conversion functions from new libcudf++ to Python/Cython
 
 ## Bug Fixes
@@ -183,6 +184,7 @@
 - PR #4285 Add init files for cython pkgs and fix `setup.py`
 - PR #4287 Parquet reader: fix empty string potentially read as null
 - PR #4310 Fix empty values case in groupby 
+- PR #4297 Fix specification of package_data in setup.py
 
 
 # cuDF 0.12.0 (04 Feb 2020)
