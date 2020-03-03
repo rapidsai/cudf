@@ -7,8 +7,8 @@ import cudf._libxx.groupby as libgroupby
 
 
 class GroupBy(object):
-    def __init__(self, obj, by):
-        self.grouping = _Grouping(obj, by)
+    def __init__(self, obj, by=None, level=None):
+        self.grouping = _Grouping(obj, by, level)
         self.obj = obj
         self._groupby = libgroupby.GroupBy(self.grouping.keys)
 
@@ -24,10 +24,11 @@ class GroupBy(object):
 
     def agg(self, aggs):
         normalized_aggs = self._normalize_aggs(aggs)
+
         result = self._groupby.aggregate(self.obj, normalized_aggs)
         result = self.obj.__class__._from_table(result).sort_index()
 
-        if not any(pd.api.types.is_list_like(agg) for agg in aggs.values()):
+        if not _is_multi_agg(aggs):
             # drop the last level
             columns = result.columns.droplevel(-1)
             result.columns = columns
@@ -42,8 +43,6 @@ class GroupBy(object):
         Normalize agg to a dict mapping column names
         to a list of aggregations.
         """
-        out = aggs.copy()
-
         if not isinstance(aggs, collections.abc.Mapping):
             # Make col_name->aggs mapping from aggs.
             # Do not include named key columns
@@ -52,6 +51,8 @@ class GroupBy(object):
                 - dict.fromkeys(self.grouping._named_columns, []).keys()
             )
             out = dict.fromkeys(columns, aggs)
+        else:
+            out = aggs.copy()
 
         # Convert all values to list-like:
         for col, agg in out.items():
@@ -61,8 +62,18 @@ class GroupBy(object):
         return out
 
 
+class Grouper(object):
+    def __init__(self, key=None, level=None):
+        if key is not None and level is not None:
+            raise ValueError("Grouper cannot specify both key and level")
+        if key is None and level is None:
+            raise ValueError("Grouper must specify either key or level")
+        self.key = key
+        self.level = level
+
+
 class _Grouping(object):
-    def __init__(self, obj, by):
+    def __init__(self, obj, by=None, level=None):
         """
         Parameters
         ----------
@@ -75,6 +86,7 @@ class _Grouping(object):
             - A cudf.Index object
             - A str indicating a column name
             - An array of the same length as the object
+            - A Grouper object
             - A list of the above
         """
         self.obj = obj
@@ -82,23 +94,30 @@ class _Grouping(object):
         self.names = []
         self._named_columns = []
 
-        by_list = by
-        if not isinstance(by_list, list):
-            by_list = [by]
+        if level is not None:
+            if by is not None:
+                raise ValueError("Cannot specify both by and level")
+            level_list = level if isinstance(level, list) else [level]
+            for level in level_list:
+                self._handle_level(level)
+        else:
+            by_list = by if isinstance(by, list) else [by]
 
-        for by in by_list:
-            if callable(by):
-                self._handle_callable(by)
-            elif isinstance(by, cudf.Series):
-                self._handle_series(by)
-            elif isinstance(by, cudf.Index):
-                self._handle_index(by)
-            elif isinstance(by, collections.abc.Mapping):
-                self._handle_mapping(by)
-            elif by in self.obj:
-                self._handle_label(by)
-            else:
-                self._handle_misc(by)
+            for by in by_list:
+                if callable(by):
+                    self._handle_callable(by)
+                elif isinstance(by, cudf.Series):
+                    self._handle_series(by)
+                elif isinstance(by, cudf.Index):
+                    self._handle_index(by)
+                elif isinstance(by, collections.abc.Mapping):
+                    self._handle_mapping(by)
+                elif isinstance(by, Grouper):
+                    self._handle_grouper(by)
+                elif by in self.obj:
+                    self._handle_label(by)
+                else:
+                    self._handle_misc(by)
 
     @property
     def keys(self):
@@ -137,9 +156,28 @@ class _Grouping(object):
         self.names.append(by)
         self._named_columns.append(by)
 
+    def _handle_grouper(self, by):
+        if by.key:
+            self._handle_label(by.key)
+        else:
+            self._handle_level(by.level)
+
+    def _handle_level(self, by):
+        level_values = self.obj.index.get_level_values(by)
+        self._key_columns.append(level_values._column)
+        self.names.append(level_values.name)
+
     def _handle_misc(self, by):
         by = cudf.core.column.as_column(by)
         if len(by) != len(self.obj):
             raise ValueError("Grouper and object must have same length")
         self._key_columns.append(by)
         self.names.append(None)
+
+
+def _is_multi_agg(aggs):
+    if isinstance(aggs, collections.abc.Mapping):
+        return any(pd.api.types.is_list_like(agg) for agg in aggs.values())
+    if pd.api.types.is_list_like(aggs):
+        return True
+    return False
