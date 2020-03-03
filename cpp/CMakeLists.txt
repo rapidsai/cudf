@@ -577,6 +577,7 @@ add_library(cudf
             src/column/legacy/interop.cpp
             src/strings/attributes.cu
             src/strings/case.cu
+            src/strings/capitalize.cu
             src/strings/char_types/char_types.cu
             src/strings/combine.cu
             src/strings/contains.cu

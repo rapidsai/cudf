@@ -299,9 +299,101 @@ class Frame(libcudfxx.table.Table):
         return self
 
     def _unaryop(self, op):
-        result = self.copy()
-        for name, col in result._data.items():
-            result._data[name] = col.unary_operator(op)
+        data_columns = (col.unary_operator(op) for col in self._columns)
+        data = zip(self._column_names, data_columns)
+        return self.__class__._from_table(Frame(data, self._index))
+
+    def isnull(self):
+        """Identify missing values.
+        """
+        data_columns = (col.isnull() for col in self._columns)
+        data = zip(self._column_names, data_columns)
+        return self.__class__._from_table(Frame(data, self._index))
+
+    def isna(self):
+        """Identify missing values. Alias for `isnull`
+        """
+        return self.isnull()
+
+    def notnull(self):
+        """Identify non-missing values.
+        """
+        data_columns = (col.notnull() for col in self._columns)
+        data = zip(self._column_names, data_columns)
+        return self.__class__._from_table(Frame(data, self._index))
+
+    def notna(self):
+        """Identify non-missing values. Alias for `notnull`.
+        """
+        return self.notnull()
+
+    def interleave_columns(self):
+        """
+        Interleave Series columns of a table into a single column.
+
+        Converts the column major table `cols` into a row major column.
+        Parameters
+        ----------
+        cols : input Table containing columns to interleave.
+
+        Example
+        -------
+        >>> df = DataFrame([['A1', 'A2', 'A3'], ['B1', 'B2', 'B3']])
+        >>> df
+        0    [A1, A2, A3]
+        1    [B1, B2, B3]
+        >>> df.interleave_columns()
+        0    A1
+        1    B1
+        2    A2
+        3    B2
+        4    A3
+        5    B3
+
+        Returns
+        -------
+        The interleaved columns as a single column
+        """
+        if ("category" == self.dtypes).any():
+            raise ValueError(
+                "interleave_columns does not support 'category' dtype."
+            )
+
+        result = self._constructor_sliced(
+            libcudfxx.reshape.interleave_columns(self)
+        )
+
+        return result
+
+    def tile(self, count):
+        """
+        Repeats the rows from `self` DataFrame `count` times to form a
+        new DataFrame.
+
+        Parameters
+        ----------
+        self : input Table containing columns to interleave.
+        count : Number of times to tile "rows". Must be non-negative.
+
+        Example
+        -------
+        >>> df  = Dataframe([[8, 4, 7], [5, 2, 3]])
+        >>> count = 2
+        >>> df.tile(df, count)
+           0  1  2
+        0  8  4  7
+        1  5  2  3
+        0  8  4  7
+        1  5  2  3
+
+        Returns
+        -------
+        The table containing the tiled "rows".
+        """
+        result = self.__class__._from_table(
+            libcudfxx.reshape.tile(self, count)
+        )
+        result._copy_categories(self)
         return result
 
     def searchsorted(
