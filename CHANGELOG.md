@@ -183,6 +183,7 @@
 - PR #4245 Fix race condition in parquet reader
 - PR #4258 Fix dask-cudf losing index name in `reset_index`
 - PR #4268 Fix java build for hash aggregate
+- PR #4275 Fix bug in searching nullable values in non-nullable search space in `upper_bound`
 - PR #4273 Fix losing `StringIndex` name in dask `_meta_nonempty`
 - PR #4279 Fix converting `np.float64` to Scalar
 - PR #4285 Add init files for cython pkgs and fix `setup.py`
