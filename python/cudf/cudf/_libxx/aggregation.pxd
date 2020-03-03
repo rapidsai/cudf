@@ -4,5 +4,7 @@ from libcpp.memory cimport unique_ptr
 from cudf._libxx.cpp.aggregation cimport aggregation
 
 
-cdef class Aggregation:
+cdef unique_ptr[aggregation] make_aggregation(op, kwargs=*)
+
+cdef class _Aggregation:
     cdef unique_ptr[aggregation] c_obj
