@@ -846,4 +846,72 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rollingWindowAggregate(
   CATCH_STD(env, NULL);
 }
 
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_timeRangeRollingWindowAggregate(
+    JNIEnv *env, jclass clazz, jlong j_input_table, 
+    jintArray j_keys,
+    jintArray j_timestamp_column_indices,
+    jintArray j_aggregate_column_indices, 
+    jintArray j_agg_types, 
+    jintArray j_min_periods,
+    jintArray j_preceding,
+    jintArray j_following,
+    jboolean ignore_null_keys) {
+
+  JNI_NULL_CHECK(env, j_input_table, "input table is null", NULL);
+  JNI_NULL_CHECK(env, j_keys, "input keys are null", NULL);
+  JNI_NULL_CHECK(env, j_timestamp_column_indices, "input timestamp_column_indices are null", NULL);
+  JNI_NULL_CHECK(env, j_aggregate_column_indices, "input aggregate_column_indices are null", NULL);
+  JNI_NULL_CHECK(env, j_agg_types, "agg_types are null", NULL);
+
+  try {
+
+    using cudf::jni::valid_window_parameters;
+
+    // Convert from j-types to native.
+    cudf::table_view *input_table {reinterpret_cast<cudf::table_view *>(j_input_table)};
+    cudf::jni::native_jintArray keys{env, j_keys};
+    cudf::jni::native_jintArray timestamps{env, j_timestamp_column_indices};
+    cudf::jni::native_jintArray values{env, j_aggregate_column_indices};
+    cudf::jni::native_jintArray ops{env, j_agg_types};
+    cudf::jni::native_jintArray min_periods{env, j_min_periods};
+    cudf::jni::native_jintArray preceding{env, j_preceding};
+    cudf::jni::native_jintArray following{env, j_following};
+
+    if (not valid_window_parameters(values, ops, min_periods, preceding, following)) {
+      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
+                  "Number of aggregation columns must match number of agg ops, and window-specs", nullptr);
+    }
+
+    // Extract table-view.
+    cudf::table_view groupby_keys{
+      input_table->select(
+        std::vector<cudf::size_type>(
+          keys.data(), 
+          keys.data()+keys.size()
+        )
+      )
+    };
+
+    std::vector<std::unique_ptr<cudf::column>> result_columns;
+    for (int i(0); i<values.size(); ++i) {
+      int agg_column_index = values[i];
+      result_columns.emplace_back(std::move(
+        cudf::experimental::grouped_time_range_rolling_window(
+          groupby_keys,
+          input_table->column(timestamps[i]),
+          input_table->column(agg_column_index),
+          preceding[i],
+          following[i],
+          min_periods[i], 
+          cudf::jni::map_jni_aggregation(ops[i])
+        )
+      ));
+    }
+
+    auto result_table = std::make_unique<cudf::experimental::table>(std::move(result_columns));
+    return cudf::jni::convert_table_for_return(env, result_table);
+  }
+  CATCH_STD(env, NULL);
+}
+
 } // extern "C"

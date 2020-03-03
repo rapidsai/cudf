@@ -258,6 +258,10 @@ public final class Table implements AutoCloseable {
                                                       int[] aggTypes, int[] minPeriods, int[] preceding, int[] following,
                                                       boolean ignoreNullKeys) throws CudfException;
 
+  private static native long[] timeRangeRollingWindowAggregate(long inputTable, int[] keyIndices, int[] timestampIndices,
+                                                               int[] aggColumnsIndices, int[] aggTypes, int[] minPeriods,
+                                                               int[] preceding, int[] following, boolean ignoreNullKeys) throws CudfException;
+
   private static native long[] orderBy(long inputTable, long[] sortKeys, boolean[] isDescending,
                                        boolean[] areNullsSmallest) throws CudfException;
 
@@ -1140,7 +1144,74 @@ public final class Table implements AutoCloseable {
       }
     }
 
+    public Table aggregateWindowsOverTimeRanges(WindowAggregate... windowAggregates) {
+      // To improve performance and memory we want to remove duplicate operations
+      // and also group the operations by column so hopefully cudf can do multiple aggregations
+      // in a single pass.
+
+      // Use a tree map to make debugging simpler (columns are all in the same order)
+      TreeMap<Integer, ColumnWindowOps> groupedOps = new TreeMap<>(); // Map agg-col-id -> Agg ColOp.
+      // Total number of operations that will need to be done.
+      int totalOps = 0;
+      for (int outputIndex = 0; outputIndex < windowAggregates.length; outputIndex++) {
+        WindowAggregate agg = windowAggregates[outputIndex];
+        ColumnWindowOps ops = groupedOps.computeIfAbsent(agg.getColumnIndex(), (idx) -> new ColumnWindowOps());
+        totalOps += ops.add(agg.getOp(), outputIndex);
+      }
+
+      int[] aggColumnIndexes = new int[totalOps];
+      int[] timestampColumnIndexes = new int[totalOps];
+      int[] aggOperationIds = new int[totalOps];
+      int[] aggPrecedingWindows = new int[totalOps];
+      int[] aggFollowingWindows = new int[totalOps];
+      int[] aggMinPeriods = new int[totalOps];
+      int opIndex = 0;
+      for (Map.Entry<Integer, ColumnWindowOps> entry : groupedOps.entrySet()) {
+        int columnIndex = entry.getKey();
+        for (WindowAggregateOp operation : entry.getValue().operations()) {
+          aggColumnIndexes[opIndex] = columnIndex;
+          aggOperationIds[opIndex] = operation.getAggregateOp().nativeId;
+          aggPrecedingWindows[opIndex] = operation.getWindowOptions().getPreceding();
+          aggFollowingWindows[opIndex] = operation.getWindowOptions().getFollowing();
+          aggMinPeriods[opIndex] = operation.getWindowOptions().getMinPeriods();
+          assert(operation.getWindowOptions().getFrameType() == WindowOptions.FrameType.RANGE);
+          timestampColumnIndexes[opIndex] = operation.getWindowOptions().getTimestampColumnIndex();
+          opIndex++;
+        }
+      }
+      assert opIndex == totalOps : opIndex + " == " + totalOps;
+
+      Table aggregate;
+      try (DevicePrediction prediction = new DevicePrediction(operation.table.getDeviceMemorySize(), "time-range window-aggregate")) {
+        aggregate = new Table(timeRangeRollingWindowAggregate(
+            operation.table.nativeHandle,
+            operation.indices,
+            timestampColumnIndexes,
+            aggColumnIndexes,
+            aggOperationIds, aggMinPeriods, aggPrecedingWindows, aggFollowingWindows,
+            groupByOptions.getIgnoreNullKeys()));
+      }
+      try {
+        // prepare the final table
+        ColumnVector[] finalCols = new ColumnVector[windowAggregates.length];
+
+        int inputColumn = 0;
+        // Now get the aggregation columns
+        for (ColumnWindowOps ops : groupedOps.values()) {
+          for (List<Integer> indices : ops.outputIndices()) {
+            for (int outIndex : indices) {
+              finalCols[outIndex] = aggregate.getColumn(inputColumn);
+            }
+            inputColumn++;
+          }
+        }
+        return new Table(finalCols);
+      } finally {
+        aggregate.close();
+      }
+    }
   }
+
   public static final class TableOperation {
 
     private final Operation operation;
