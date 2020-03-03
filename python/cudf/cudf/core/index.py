@@ -99,6 +99,19 @@ class Index(Frame):
     def names(self):
         return (self.name,)
 
+    @names.setter
+    def names(self, values):
+        if not pd.api.types.is_list_like(values):
+            raise ValueError("Names must be a list-like")
+
+        num_values = len(values)
+        if num_values > 1:
+            raise ValueError(
+                "Length of new names must be 1, got %d" % num_values
+            )
+
+        self.name = values[0]
+
     @property
     def name(self):
         return next(iter(self._data.names))
@@ -369,26 +382,6 @@ class Index(Frame):
         from cudf.core.series import Series
 
         return Series(self._values)
-
-    def isnull(self):
-        """Identify missing values in an Index.
-        """
-        return as_index(self._values.isnull(), name=self.name)
-
-    def isna(self):
-        """Identify missing values in an Index. Alias for isnull.
-        """
-        return self.isnull()
-
-    def notna(self):
-        """Identify non-missing values in an Index.
-        """
-        return as_index(self._values.notna(), name=self.name)
-
-    def notnull(self):
-        """Identify non-missing values in an Index. Alias for notna.
-        """
-        return self.notna()
 
     @property
     @property

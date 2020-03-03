@@ -52,6 +52,8 @@ struct read_avro_args {
   /// Rows to read; -1 is all
   size_type num_rows = -1;
 
+  read_avro_args() = default;
+
   explicit read_avro_args(source_info const& src) : source(src) {}
 };
 
@@ -115,6 +117,8 @@ struct read_json_args {
 
    /// Whether to parse dates as DD/MM versus MM/DD
   bool dayfirst = false;
+
+  read_json_args() = default;
 
   explicit read_json_args(const source_info& src) : source(src) {}
 };
