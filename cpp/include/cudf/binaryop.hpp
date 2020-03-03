@@ -28,31 +28,35 @@ namespace experimental {
  * @brief Types of binary operations that can be performed on data.
  */
 enum class binary_operator {
-  ADD,             ///< operator +
-  SUB,             ///< operator -
-  MUL,             ///< operator *
-  DIV,             ///< operator / using common type of lhs and rhs
-  TRUE_DIV,        ///< operator / after promoting type to floating point
-  FLOOR_DIV,       ///< operator / after promoting to 64 bit floating point and then
-                   ///< flooring the result
-  MOD,             ///< operator %
-  PYMOD,           ///< operator % but following python's sign rules for negatives
-  POW,             ///< lhs ^ rhs
-  EQUAL,           ///< operator ==
-  NOT_EQUAL,       ///< operator !=
-  LESS,            ///< operator <
-  GREATER,         ///< operator >
-  LESS_EQUAL,      ///< operator <=
-  GREATER_EQUAL,   ///< operator >=
-  BITWISE_AND,     ///< operator &
-  BITWISE_OR,      ///< operator |
-  BITWISE_XOR,     ///< operator ^
-  LOGICAL_AND,     ///< operator &&
-  LOGICAL_OR,      ///< operator ||
-  COALESCE,        ///< operator x,y  x is null ? y : x
-  GENERIC_BINARY,  ///< generic binary operator to be generated with input
-                   ///< ptx code
-  INVALID_BINARY   ///< invalid operation
+  ADD,                    ///< operator +
+  SUB,                    ///< operator -
+  MUL,                    ///< operator *
+  DIV,                    ///< operator / using common type of lhs and rhs
+  TRUE_DIV,               ///< operator / after promoting type to floating point
+  FLOOR_DIV,              ///< operator / after promoting to 64 bit floating point and then
+                          ///< flooring the result
+  MOD,                    ///< operator %
+  PYMOD,                  ///< operator % but following python's sign rules for negatives
+  POW,                    ///< lhs ^ rhs
+  EQUAL,                  ///< operator ==
+  NOT_EQUAL,              ///< operator !=
+  LESS,                   ///< operator <
+  GREATER,                ///< operator >
+  LESS_EQUAL,             ///< operator <=
+  GREATER_EQUAL,          ///< operator >=
+  BITWISE_AND,            ///< operator &
+  BITWISE_OR,             ///< operator |
+  BITWISE_XOR,            ///< operator ^
+  LOGICAL_AND,            ///< operator &&
+  LOGICAL_OR,             ///< operator ||
+  COALESCE,               ///< operator x,y  x is null ? y : x
+  GENERIC_BINARY,         ///< generic binary operator to be generated with input
+                          ///< ptx code
+  SHIFT_LEFT,             ///< operator <<
+  SHIFT_RIGHT,            ///< operator >>
+  SHIFT_RIGHT_UNSIGNED,   ///< operator >>> (from Java)
+  
+  INVALID_BINARY          ///< invalid operation
 };
 
 /**
