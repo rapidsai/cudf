@@ -183,13 +183,16 @@
 - PR #4245 Fix race condition in parquet reader
 - PR #4258 Fix dask-cudf losing index name in `reset_index`
 - PR #4268 Fix java build for hash aggregate
+- PR #4275 Fix bug in searching nullable values in non-nullable search space in `upper_bound`
 - PR #4273 Fix losing `StringIndex` name in dask `_meta_nonempty`
 - PR #4279 Fix converting `np.float64` to Scalar
 - PR #4285 Add init files for cython pkgs and fix `setup.py`
 - PR #4287 Parquet reader: fix empty string potentially read as null
+- PR #4310 Fix empty values case in groupby 
 - PR #4297 Fix specification of package_data in setup.py
 - PR #4302 Fix `_is_local_filesystem` check
 - PR #4115 Serialize an empty column table with non zero rows
+- PR #4303 Parquet reader: fix empty columns missing from table
 
 
 # cuDF 0.12.0 (04 Feb 2020)
