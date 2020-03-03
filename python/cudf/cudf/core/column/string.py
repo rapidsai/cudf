@@ -16,6 +16,11 @@ import cudf._libxx as libcudfxx
 import cudf._libxx.string_casting as str_cast
 from cudf._lib.nvtx import nvtx_range_pop, nvtx_range_push
 from cudf._libxx.null_mask import bitmask_allocation_size_bytes
+from cudf._libxx.strings.replace import (
+    insert as cpp_string_insert,
+    slice_replace as cpp_slice_replace,
+)
+from cudf._libxx.strings.substring import slice_from as cpp_slice_from
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.utils import utils
@@ -59,16 +64,15 @@ class StringMethods(object):
     This mimicks pandas `df.str` interface.
     """
 
-    def __init__(self, parent, index=None, name=None):
+    def __init__(self, column, parent=None):
+        self._column = column
         self._parent = parent
-        self._index = index
-        self._name = name
 
     def __getattr__(self, attr, *args, **kwargs):
         from cudf.core.series import Series
 
-        if hasattr(self._parent.nvstrings, attr):
-            passed_attr = getattr(self._parent.nvstrings, attr)
+        if hasattr(self._column.nvstrings, attr):
+            passed_attr = getattr(self._column.nvstrings, attr)
             if callable(passed_attr):
 
                 @functools.wraps(passed_attr)
@@ -77,8 +81,8 @@ class StringMethods(object):
                     if isinstance(ret, nvstrings.nvstrings):
                         ret = Series(
                             column.as_column(ret),
-                            index=self._index,
-                            name=self._name,
+                            index=self._parent.index,
+                            name=self._parent.name,
                         )
                     return ret
 
@@ -88,11 +92,45 @@ class StringMethods(object):
         else:
             raise AttributeError(attr)
 
+    def _return_or_inplace(self, new_col, **kwargs):
+        """
+        Returns an object of the type of the column owner or updates the column
+        of the owner (Series or Index) to mimic an inplace operation
+        """
+        from cudf import Series, DataFrame, MultiIndex
+        from cudf.core.index import Index, as_index
+
+        inplace = kwargs.get("inplace", False)
+
+        if inplace:
+            self._parent._mimic_inplace(new_col, inplace=True)
+        else:
+            expand = kwargs.get("expand", False)
+            if expand or isinstance(self._parent, (DataFrame, MultiIndex)):
+                # This branch indicates the passed as new_col
+                # is actually a table-like data
+                table = new_col
+                return self._parent._constructor_expanddim(
+                    {index: value for index, value in enumerate(table)},
+                    index=self._parent.index,
+                )
+            elif isinstance(self._parent, Series):
+                return Series(
+                    new_col, index=self._parent.index, name=self._parent.name
+                )
+            elif isinstance(self._parent, Index):
+                return as_index(new_col, name=self._parent.index)
+            else:
+                if self._parent is None:
+                    return new_col
+                else:
+                    return self._parent._mimic_inplace(new_col, inplace=False)
+
     def __dir__(self):
         keys = dir(type(self))
-        return set(keys + dir(self._parent.nvstrings))
+        return set(keys + dir(self._column.nvstrings))
 
-    def len(self):
+    def len(self, **kwargs):
         """
         Computes the length of each element in the Series/Index.
 
@@ -101,22 +139,23 @@ class StringMethods(object):
           Series or Index of int: A Series or Index of integer values
             indicating the length of each element in the Series or Index.
         """
-        from cudf.core.series import Series
 
-        out_dev_arr = rmm.device_array(len(self._parent), dtype="int32")
+        out_dev_arr = rmm.device_array(len(self._column), dtype="int32")
         ptr = libcudf.cudf.get_ctype_ptr(out_dev_arr)
-        self._parent.nvstrings.len(ptr)
+        self._column.nvstrings.len(ptr)
 
         mask = None
-        if self._parent.has_nulls:
-            mask = self._parent.mask
+        if self._column.has_nulls:
+            mask = self._column.mask
 
-        col = column.build_column(
-            Buffer(out_dev_arr), np.dtype("int32"), mask=mask
+        return self._return_or_inplace(
+            column.build_column(
+                Buffer(out_dev_arr), np.dtype("int32"), mask=mask
+            ),
+            **kwargs,
         )
-        return Series(col, index=self._index, name=self._name)
 
-    def cat(self, others=None, sep=None, na_rep=None):
+    def cat(self, others=None, sep=None, na_rep=None, **kwargs):
         """
         Concatenate strings in the Series/Index with given separator.
 
@@ -229,10 +268,11 @@ class StringMethods(object):
             others = Series(others)
             others = others._column.nvstrings
 
-        data = self._parent.nvstrings.cat(
+        data = self._column.nvstrings.cat(
             others=others, sep=sep, na_rep=na_rep
         )
-        out = Series(data, index=self._index, name=self._name)
+
+        out = self._return_or_inplace(data, **kwargs)
         if len(out) == 1 and others is None:
             out = out[0]
         return out
@@ -246,7 +286,7 @@ class StringMethods(object):
             "Columns of arrays / lists are not yet " "supported"
         )
 
-    def extract(self, pat, flags=0, expand=True):
+    def extract(self, pat, flags=0, expand=True, **kwargs):
         """
         Extract capture groups in the regex `pat` as columns in a DataFrame.
 
@@ -277,18 +317,16 @@ class StringMethods(object):
         if flags != 0:
             raise NotImplementedError("`flags` parameter is not yet supported")
 
-        from cudf.core import DataFrame, Series
-
-        out = self._parent.nvstrings.extract(pat)
+        out = self._column.nvstrings.extract(pat)
         if len(out) == 1 and expand is False:
-            return Series(out[0], index=self._index, name=self._name)
+            return self._return_or_inplace(out[0], **kwargs,)
         else:
-            out_df = DataFrame(index=self._index)
-            for idx, val in enumerate(out):
-                out_df[idx] = val
-            return out_df
+            kwargs.setdefault("expand", expand)
+            return self._return_or_inplace(out, **kwargs)
 
-    def contains(self, pat, case=True, flags=0, na=np.nan, regex=True):
+    def contains(
+        self, pat, case=True, flags=0, na=np.nan, regex=True, **kwargs
+    ):
         """
         Test if pattern or regex is contained within a string of a Series or
         Index.
@@ -324,23 +362,24 @@ class StringMethods(object):
         elif na is not np.nan:
             raise NotImplementedError("`na` parameter is not yet supported")
 
-        from cudf.core import Series
-
-        out_dev_arr = rmm.device_array(len(self._parent), dtype="bool")
+        out_dev_arr = rmm.device_array(len(self._column), dtype="bool")
         ptr = libcudf.cudf.get_ctype_ptr(out_dev_arr)
-        self._parent.nvstrings.contains(pat, regex=regex, devptr=ptr)
+        self._column.nvstrings.contains(pat, regex=regex, devptr=ptr)
 
         mask = None
-        if self._parent.has_nulls:
-            mask = self._parent.mask
+        if self._column.has_nulls:
+            mask = self._column.mask
 
-        col = column.build_column(
-            Buffer(out_dev_arr), dtype=np.dtype("bool"), mask=mask
+        return self._return_or_inplace(
+            column.build_column(
+                Buffer(out_dev_arr), dtype=np.dtype("bool"), mask=mask
+            ),
+            **kwargs,
         )
 
-        return Series(col, index=self._index, name=self._name)
-
-    def replace(self, pat, repl, n=-1, case=None, flags=0, regex=True):
+    def replace(
+        self, pat, repl, n=-1, case=None, flags=0, regex=True, **kwargs
+    ):
         """
         Replace occurences of pattern/regex in the Series/Index with some other
         string.
@@ -378,15 +417,12 @@ class StringMethods(object):
         if n == 0:
             n = -1
 
-        from cudf.core import Series
-
-        return Series(
-            self._parent.nvstrings.replace(pat, repl, n=n, regex=regex),
-            index=self._index,
-            name=self._name,
+        return self._return_or_inplace(
+            self._column.nvstrings.replace(pat, repl, n=n, regex=regex),
+            **kwargs,
         )
 
-    def lower(self):
+    def lower(self, **kwargs):
         """
         Convert strings in the Series/Index to lowercase.
 
@@ -395,13 +431,157 @@ class StringMethods(object):
         Series/Index of str dtype
             A copy of the object with all strings converted to lowercase.
         """
-        from cudf.core import Series
 
-        return Series(
-            self._parent.nvstrings.lower(), index=self._index, name=self._name
+        return self._return_or_inplace(
+            self._column.nvstrings.lower(), **kwargs
         )
 
-    def split(self, pat=None, n=-1, expand=True):
+    # def slice(self, start=None, stop=None, step=None, **kwargs):
+    #     """
+    #     Returns a substring of each string.
+
+    #     Parameters
+    #     ----------
+    #     start : int
+    #         Beginning position of the string to extract.
+    #         Default is beginning of the each string.
+    #     stop : int
+    #         Ending position of the string to extract.
+    #         Default is end of each string.
+    #     step : int
+    #         Characters that are to be captured within the specified section.
+    #         Default is every character.
+
+    #     Returns
+    #     -------
+    #     Series/Index of str dtype
+    #         A substring of each string.
+
+    #     """
+
+    #     return self._return_or_inplace(
+    #         cpp_slice_strings(self._column, start, stop, step), **kwargs,
+    #     )
+
+    def slice_from(self, starts=0, stops=0, **kwargs):
+        """
+        Return substring of each string using positions for each string.
+
+        The starts and stops parameters are of Column type.
+
+        Parameters
+        ----------
+        starts : Column
+            Beginning position of each the string to extract.
+            Default is beginning of the each string.
+        stops : Column
+            Ending position of the each string to extract.
+            Default is end of each string.
+            Use -1 to specify to the end of that string.
+
+        Returns
+        -------
+        Series/Index of str dtype
+            A substring of each string using positions for each string.
+
+        """
+
+        return self._return_or_inplace(
+            cpp_slice_from(self._column, starts, stops), **kwargs
+        )
+
+    def slice_replace(self, start=None, stop=None, repl=None, **kwargs):
+        """
+        Replace the specified section of each string with a new string.
+
+        Parameters
+        ----------
+        start : int
+            Beginning position of the string to replace.
+            Default is beginning of the each string.
+        stop : int
+            Ending position of the string to replace.
+            Default is end of each string.
+        repl : str
+            String to insert into the specified position values.
+
+        Returns
+        -------
+        Series/Index of str dtype
+            A new string with the specified section of the string
+            replaced with `repl` string.
+
+        """
+        if start is None:
+            start = 0
+
+        if stop is None:
+            stop = -1
+
+        if repl is None:
+            repl = ""
+
+        from cudf._libxx.scalar import Scalar
+
+        return self._return_or_inplace(
+            cpp_slice_replace(self._column, start, stop, Scalar(repl)),
+            **kwargs,
+        )
+
+    def insert(self, start=0, repl=None, **kwargs):
+        """
+        Insert the specified string into each string in the specified
+        position.
+
+        Parameters
+        ----------
+        start : int
+            Beginning position of the string to replace.
+            Default is beginning of the each string.
+            Specify -1 to insert at the end of each string.
+        repl : str
+            String to insert into the specified position valus.
+
+        Returns
+        -------
+        Series/Index of str dtype
+            A new string series with the specified string
+            inserted at the specified position.
+
+        """
+        if repl is None:
+            repl = ""
+
+        from cudf._libxx.scalar import Scalar
+
+        return self._return_or_inplace(
+            cpp_string_insert(self._column, start, Scalar(repl)), **kwargs
+        )
+
+    # def get(self, i=0, **kwargs):
+    #     """
+    #     Returns the character specified in each string as a new string.
+    #     The nvstrings returned contains a list of single character strings.
+
+    #     Parameters
+    #     ----------
+    #     i : int
+    #         The character position identifying the character
+    #         in each string to return.
+
+    #     Returns
+    #     -------
+    #     Series/Index of str dtype
+    #         A new string series with character at the position
+    #         `i` of each `i` inserted at the specified position.
+
+    #     """
+
+    #     return self._return_or_inplace(
+    #         cpp_string_get(self._column, i), **kwargs
+    #     )
+
+    def split(self, pat=None, n=-1, expand=True, **kwargs):
         """
         Split strings around given separator/delimiter.
 
@@ -433,14 +613,11 @@ class StringMethods(object):
         if n == 0:
             n = -1
 
-        from cudf.core import DataFrame
+        kwargs.setdefault("expand", expand)
 
-        out_df = DataFrame(index=self._index)
-        out = self._parent.nvstrings.split(delimiter=pat, n=n)
-
-        for idx, val in enumerate(out):
-            out_df[idx] = val
-        return out_df
+        return self._return_or_inplace(
+            self._column.nvstrings.split(delimiter=pat, n=n), **kwargs
+        )
 
 
 class StringColumn(column.ColumnBase):
@@ -558,14 +735,14 @@ class StringColumn(column.ColumnBase):
         return self._children
 
     def __contains__(self, item):
-        return True in self.str().contains(f"^{item}$")._column
+        return True in self.str().contains(f"^{item}$")
 
     def __reduce__(self):
         cpumem = self.to_arrow()
         return column.as_column, (cpumem, False, np.dtype("object"))
 
-    def str(self, index=None, name=None):
-        return StringMethods(self, index=index, name=name)
+    def str(self, parent=None):
+        return StringMethods(self, parent=parent)
 
     def __sizeof__(self):
         n = 0
@@ -827,7 +1004,7 @@ class StringColumn(column.ColumnBase):
         return result
 
     def _find_first_and_last(self, value):
-        found_indices = self.str().contains(f"^{value}$")._column
+        found_indices = self.str().contains(f"^{value}$")
         found_indices = libcudfxx.unary.cast(found_indices, dtype=np.int32)
         first = column.as_column(found_indices).find_first_value(1)
         last = column.as_column(found_indices).find_last_value(1)
