@@ -585,7 +585,7 @@ class CategoricalColumn(column.ColumnBase):
 
     def copy(self, deep=True):
         if deep:
-            copied_col = libcudf.copying.copy_column(self)
+            copied_col = libcudfxx.copying.copy_column(self)
             return column.build_categorical_column(
                 categories=self.dtype.categories,
                 codes=copied_col,

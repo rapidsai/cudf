@@ -3991,12 +3991,8 @@ class DataFrame(Frame):
             index = None
             index_names = []
 
-        tables = libcudf.copying.scatter_to_frames(
-            self._columns,
-            map_index._column,
-            index,
-            names=self.columns.to_list(),
-            index_names=index_names,
+        tables = self._scatter_to_tables(
+            map_index._column
         )
 
         if map_size:

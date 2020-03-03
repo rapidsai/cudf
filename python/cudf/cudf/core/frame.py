@@ -97,6 +97,21 @@ class Frame(libcudfxx.table.Table):
 
         return self._data[None].copy(deep=False)
 
+    def _scatter(self, key, value):
+       result = self._from_table(
+           libcudfxx.copying.scatter(value, key, self)
+       )
+
+       result._copy_categories(self)
+       return result
+
+    def _scatter_to_tables(self, scatter_map):
+       result = libcudfxx.copying.scatter_to_tables(self, scatter_map)
+       result = [self._from_table(tbl) for tbl in result]
+       [frame._copy_categories(self) for frame in result]
+
+       return result
+
     def dropna(self, axis=0, how="any", subset=None, thresh=None):
         """
         Drops rows (or columns) containing nulls from a Column.

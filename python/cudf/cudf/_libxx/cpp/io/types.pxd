@@ -6,6 +6,8 @@ from libcpp.string cimport string
 from libcpp.map cimport map
 from libcpp.vector cimport vector
 
+from cudf._libxx.cpp.table.table cimport table
+
 
 cdef extern from "cudf/io/types.hpp" \
         namespace "cudf::experimental::io" nogil:

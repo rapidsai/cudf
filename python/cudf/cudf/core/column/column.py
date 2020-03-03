@@ -337,7 +337,7 @@ class ColumnBase(Column):
         copies the references of the data and mask.
         """
         if deep:
-            return libcudf.copying.copy_column(self)
+            return libcudfxx.copying.copy_column(self)
         else:
             return build_column(
                 self.base_data,
@@ -512,12 +512,21 @@ class ColumnBase(Column):
             assert self.dtype == value.dtype
 
         if isinstance(key, slice):
-            out = libcudf.copying.copy_range(
-                self, value, key_start, key_stop, 0
+            out = libcudfxx.copying.copy_range(
+                value, self, 0, nelem, key_start, key_stop, False 
             )
+            if is_categorical_dtype(value.dtype):
+                out = build_categorical_column(
+                    categories=value.categories,
+                    codes=out,
+                    mask=out.mask,
+                    ordered=value.ordered
+                )
         else:
             try:
-                out = libcudf.copying.scatter(value, key, self)
+                if not isinstance(value, Column):
+                    value = as_column(value)
+                out = self.as_frame()._scatter(key, value.as_frame())._as_column()
             except RuntimeError as e:
                 if "out of bounds" in str(e):
                     raise IndexError(
