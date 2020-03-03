@@ -40,6 +40,72 @@ void temp_set_concatenate_mode(concatenate_mode mode) {
 
 namespace detail {
 
+auto create_device_views(std::vector<column_view> const& views, cudaStream_t stream) {
+    // Create device views for each input view
+    using CDViewPtr = decltype(column_device_view::create(
+        std::declval<column_view>(), std::declval<cudaStream_t>()));
+    auto device_view_owners = std::vector<CDViewPtr>(views.size());
+  std::transform(views.cbegin(), views.cend(),
+      device_view_owners.begin(),
+      [stream](auto const& col) {
+        // TODO this can invoke null count computation unnecessarily; add a
+        // factory method that leaves null count set to unknown, as we will
+        // compute the final null count anyway
+        return column_device_view::create(col, stream);
+      });
+
+  // Assemble contiguous array of device views
+  auto device_views = thrust::host_vector<column_device_view>();
+  device_views.reserve(views.size());
+  std::transform(device_view_owners.cbegin(), device_view_owners.cend(),
+      std::back_inserter(device_views),
+      [](auto const& col) {
+        return *col;
+      });
+  // TODO these device vector copies are invoking stream synchronization
+  // unnecessarily and harming performance; try and fix this with
+  // https://github.com/rapidsai/rmm/120
+  auto d_views = rmm::device_vector<column_device_view>{device_views};
+
+  // Compute the partition offsets
+  auto offsets = thrust::host_vector<size_type>(views.size() + 1);
+  thrust::transform_inclusive_scan(thrust::host,
+      device_views.cbegin(), device_views.cend(),
+      std::next(offsets.begin()),
+      [](auto const& col) {
+        return col.size();
+      },
+      thrust::plus<size_type>{});
+  auto const d_offsets = rmm::device_vector<size_type>{offsets};
+  auto const output_size = offsets.back();
+
+  return std::make_tuple(
+      std::move(device_view_owners),
+      std::move(d_views),
+      std::move(d_offsets),
+      output_size);
+}
+
+// TODO remove this if we don't keep the partition mode
+auto compute_partition_map(rmm::device_vector<size_type> const& d_offsets,
+    size_t output_size, cudaStream_t stream) {
+
+  auto d_partition_map = rmm::device_vector<size_type>(output_size);
+
+  // Scatter 1s at the start of each partition, then scan to fill the map
+  auto const const_it = thrust::make_constant_iterator(size_type{1});
+  thrust::scatter(rmm::exec_policy(stream)->on(stream),
+      const_it, const_it + (d_offsets.size() - 2), // skip first and last offset
+      std::next(d_offsets.cbegin()), // skip first offset, leaving it set to 0
+      d_partition_map.begin());
+
+  thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream),
+      d_partition_map.cbegin(), d_partition_map.cend(),
+      d_partition_map.begin());
+
+  return d_partition_map;
+}
+
 /**---------------------------------------------------------------------------*
  * @brief Concatenates the null mask bits of all the column device views in the
  * `views` array to the destination bitmask.
@@ -107,29 +173,13 @@ void concatenate_masks(std::vector<column_view> const &views,
     bitmask_type * dest_mask,
     cudaStream_t stream) {
 
-  // TODO refactor column_view -> [column_device_view, offsets] into utility function
-  using CDViewPtr =
-    decltype(column_device_view::create(std::declval<column_view>(), std::declval<cudaStream_t>()));
-  std::vector<CDViewPtr> cols;
-  thrust::host_vector<column_device_view> device_views;
+  // Preprocess and upload inputs to device memory
+  auto device_views = create_device_views(views, stream);
+  auto const& d_views = std::get<1>(device_views);
+  auto const& d_offsets = std::get<2>(device_views);
+  auto output_size = std::get<3>(device_views);
 
-  thrust::host_vector<size_type> view_offsets(1, 0);
-  for (auto &v : views) {
-    cols.emplace_back(column_device_view::create(v, stream));
-    device_views.push_back(*(cols.back()));
-    view_offsets.push_back(v.size());
-  }
-  thrust::inclusive_scan(thrust::host,
-      view_offsets.begin(), view_offsets.end(),
-      view_offsets.begin());
-
-  rmm::device_vector<column_device_view> d_views{device_views};
-  rmm::device_vector<size_type> d_offsets{view_offsets};
-
-  auto number_of_mask_bits = view_offsets.back();
-  // end refactoring TODO
-
-  concatenate_masks(d_views, d_offsets, dest_mask, number_of_mask_bits, stream);
+  concatenate_masks(d_views, d_offsets, dest_mask, output_size, stream);
 }
 
 
@@ -203,25 +253,6 @@ struct for_each_concatenate {
 
 };
 
-auto compute_partition_map(rmm::device_vector<size_type> const& d_offsets,
-    size_t output_size, cudaStream_t stream) {
-
-  auto d_partition_map = rmm::device_vector<size_type>(output_size);
-
-  // Scatter 1s at the start of each partition, then scan to fill the map
-  auto const const_it = thrust::make_constant_iterator(size_type{1});
-  thrust::scatter(rmm::exec_policy(stream)->on(stream),
-      const_it, const_it + (d_offsets.size() - 2), // skip first and last offset
-      std::next(d_offsets.cbegin()), // skip first offset, leaving it set to 0
-      d_partition_map.begin());
-
-  thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream),
-      d_partition_map.cbegin(), d_partition_map.cend(),
-      d_partition_map.begin());
-
-  return d_partition_map;
-}
-
 template <typename T>
 struct partition_map_fn {
   size_type const* offsets_ptr;
@@ -261,39 +292,11 @@ struct optimized_concatenate {
       cudaStream_t stream) {
     using mask_policy = cudf::experimental::mask_allocation_policy;
 
-    // TODO refactor column_view -> [column_device_view, offsets] into utility function
-    // Create device views for each input view
-    using CDViewPtr = decltype(column_device_view::create(
-        std::declval<column_view>(), std::declval<cudaStream_t>()));
-    auto device_view_owners = std::vector<CDViewPtr>(views.size());
-    std::transform(views.cbegin(), views.cend(),
-        device_view_owners.begin(),
-        [stream](auto const& col) {
-          return column_device_view::create(col, stream);
-        });
-
-    // Assemble contiguous array of device views
-    auto device_views = thrust::host_vector<column_device_view>();
-    device_views.reserve(views.size());
-    std::transform(device_view_owners.cbegin(), device_view_owners.cend(),
-        std::back_inserter(device_views),
-        [](auto const& col) {
-          return *col;
-        });
-    auto d_views = rmm::device_vector<column_device_view>{device_views};
-
-    // Compute the partition offsets
-    auto offsets = thrust::host_vector<size_type>(views.size() + 1);
-    thrust::transform_inclusive_scan(thrust::host,
-        device_views.cbegin(), device_views.cend(),
-        std::next(offsets.begin()), 
-        [](auto const& col) {
-          return col.size();
-        },
-        thrust::plus<size_type>{});
-    auto const d_offsets = rmm::device_vector<size_type>{offsets};
-    auto const output_size = offsets.back();
-  // end refactoring TODO
+    // Preprocess and upload inputs to device memory
+    auto device_views = create_device_views(views, stream);
+    auto const& d_views = std::get<1>(device_views);
+    auto const& d_offsets = std::get<2>(device_views);
+    auto output_size = std::get<3>(device_views);
 
     // Transform views to array of data pointers
     auto data_ptrs = thrust::host_vector<T const*>(views.size());
@@ -409,47 +412,11 @@ struct fused_concatenate {
       cudaStream_t stream) {
     using mask_policy = cudf::experimental::mask_allocation_policy;
 
-
-    // TODO refactor column_view -> [column_device_view, offsets] into utility function
-    // Create device views for each input view
-    using CDViewPtr = decltype(column_device_view::create(
-        std::declval<column_view>(), std::declval<cudaStream_t>()));
-    auto device_view_owners = std::vector<CDViewPtr>(views.size());
-    std::transform(views.cbegin(), views.cend(),
-        device_view_owners.begin(),
-        [stream](auto const& col) {
-          // TODO this can invoke null count computation unnecessarily; add a
-          // factory method that leaves null count set to unknown, as we will
-          // compute the final null count anyway
-          return column_device_view::create(col, stream);
-        });
-
-    // Assemble contiguous array of device views
-    auto device_views = thrust::host_vector<column_device_view>();
-    device_views.reserve(views.size());
-    std::transform(device_view_owners.cbegin(), device_view_owners.cend(),
-        std::back_inserter(device_views),
-        [](auto const& col) {
-          return *col;
-        });
-    // TODO these device vector copies are invoking stream synchronization
-    // unnecessarily and harming performance; try and fix this with
-    // https://github.com/rapidsai/rmm/120
-    auto d_views = rmm::device_vector<column_device_view>{device_views};
-
-    // Compute the partition offsets
-    auto offsets = thrust::host_vector<size_type>(views.size() + 1);
-    thrust::transform_inclusive_scan(thrust::host,
-        device_views.cbegin(), device_views.cend(),
-        std::next(offsets.begin()), 
-        [](auto const& col) {
-          return col.size();
-        },
-        thrust::plus<size_type>{});
-    auto const d_offsets = rmm::device_vector<size_type>{offsets};
-    auto const output_size = offsets.back();
-    // end refactoring TODO
-
+    // Preprocess and upload inputs to device memory
+    auto device_views = create_device_views(views, stream);
+    auto const& d_views = std::get<1>(device_views);
+    auto const& d_offsets = std::get<2>(device_views);
+    auto output_size = std::get<3>(device_views);
 
     bool const has_nulls = std::any_of(
       views.begin(), views.end(),
