@@ -59,6 +59,22 @@ TYPED_TEST(groupby_nth_element_test, basic)
     test_single_agg(keys, vals, expect_keys, expect_vals2, std::move(agg));
 }
 
+TYPED_TEST(groupby_nth_element_test, empty_cols)
+{
+    using K = int32_t;
+    using V = TypeParam;
+    using R = experimental::detail::target_type_t<V, experimental::aggregation::NTH_ELEMENT>;
+
+    fixed_width_column_wrapper<K> keys        { };
+    fixed_width_column_wrapper<V> vals        { };
+
+    fixed_width_column_wrapper<K> expect_keys { };
+    fixed_width_column_wrapper<R> expect_vals { };
+
+    auto agg = cudf::experimental::make_nth_element_aggregation(0);
+    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+}
+
 TYPED_TEST(groupby_nth_element_test, basic_out_of_bounds)
 {
     using K = int32_t;
