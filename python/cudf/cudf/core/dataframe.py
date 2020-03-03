@@ -3992,18 +3992,6 @@ class DataFrame(Frame):
                 tables.append(self.take([]))
         return tables
 
-    def repeat(self, repeats, axis=None):
-
-        # assert axis in (None, 0)
-        # new_index = self.index.repeat(repeats)
-        # cols = libcudfxx.filling.repeat(self._columns, repeats)
-        # # to preserve col names, need to get it from old _cols dict
-        # column_names = self._data.names
-        # result = DataFrame(data=dict(zip(column_names, cols)))
-        # return result.set_index(new_index)
-
-        return self._repeat(repeats)
-
     def stack(self, level=-1, dropna=True):
         """Stack the prescribed level(s) from columns to index
 

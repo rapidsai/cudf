@@ -527,10 +527,10 @@ class ColumnBase(Column):
 
         self._mimic_inplace(out, inplace=True)
 
-    def fillna(self, value, begin=0, end=-1):
+    def fillna(self, value):
         """Fill null values with ``value``.
         """
-        return libcudfxx.filling.fill(self, begin, end, value)
+        raise NotImplementedError
 
     def isnull(self):
         """Identify missing values in a Column.
@@ -688,10 +688,6 @@ class ColumnBase(Column):
             msg = "non sort based unique_count() not implemented yet"
             raise NotImplementedError(msg)
         return cpp_unique_count(self, ignore_nulls=dropna)
-
-    def repeat(self, repeats, axis=None):
-        assert axis in (None, 0)
-        return libcudf.filling.repeat([self], repeats)[0]
 
     def astype(self, dtype, **kwargs):
         if is_categorical_dtype(dtype):

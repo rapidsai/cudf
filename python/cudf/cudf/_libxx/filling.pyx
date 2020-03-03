@@ -82,7 +82,7 @@ def _repeat_via_column(Table input, Column count, bool check_count):
     return Table.from_unique_ptr(
         move(c_result),
         column_names=input._column_names,
-        index_names=input._index._column_names
+        index_names=input._index_names
     )
 
 
@@ -100,5 +100,5 @@ def _repeat_via_scalar(Table input, Scalar count):
     return Table.from_unique_ptr(
         move(c_result),
         column_names=input._column_names,
-        index_names=input._index._column_names
+        index_names=input._index_names
     )

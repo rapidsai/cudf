@@ -680,11 +680,11 @@ class MultiIndex(Index):
     def unique(self):
         return MultiIndex.from_frame(self._source_data.drop_duplicates())
 
-    def repeat(self, repeats, axis=None):
-        assert axis in (None, 0)
-        return MultiIndex.from_frame(
-            self._source_data.repeat(repeats), names=self.names
-        )
+    # def repeat(self, repeats, axis=None):
+    #     assert axis in (None, 0)
+    #     return MultiIndex.from_frame(
+    #         self._source_data.repeat(repeats), names=self.names
+    #     )
 
     def memory_usage(self, deep=False):
         n = 0

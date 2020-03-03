@@ -444,9 +444,9 @@ class Index(Frame):
     def __cuda_array_interface__(self):
         raise (NotImplementedError)
 
-    def repeat(self, repeats, axis=None):
-        assert axis in (None, 0)
-        return as_index(self._values.repeat(repeats))
+    # def repeat(self, repeats, axis=None):
+    #     assert axis in (None, 0)
+    #     return as_index(self._values.repeat(repeats))
 
     def memory_usage(self, deep=False):
         return self._values._memory_usage(deep=deep)

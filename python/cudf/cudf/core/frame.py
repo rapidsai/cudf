@@ -239,6 +239,18 @@ class Frame(libcudfxx.table.Table):
         result._copy_categories(self)
         return result
 
+    def repeat(self, repeats, axis=None):
+
+        assert axis in (None, 0)
+        # new_index = self.index.repeat(repeats)
+        # cols = libcudfxx.filling.repeat(self._columns, repeats)
+        # # to preserve col names, need to get it from old _cols dict
+        # column_names = self._data.names
+        # result = DataFrame(data=dict(zip(column_names, cols)))
+        # return result.set_index(new_index)
+
+        return self._repeat(repeats)
+
     def _repeat(self, count):
         if is_scalar(count):
             count = Scalar(count)
