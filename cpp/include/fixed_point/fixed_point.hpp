@@ -27,13 +27,13 @@ namespace numeric {
 // conversions will be allowed and you will need to use the
 // name of the type alias (i.e. scale_type{0})
 template <typename T>
-struct weak_typedef {
+struct strong_typedef {
     T _t;
-    explicit weak_typedef(T t) : _t(t) {}
+    explicit strong_typedef(T t) : _t(t) {}
     operator T() const { return _t; }
 };
 
-using scale_type = weak_typedef<int32_t>;
+using scale_type = strong_typedef<int32_t>;
 
 enum class Radix : int32_t {
     BASE_2  = 2,
@@ -54,7 +54,7 @@ constexpr inline auto is_supported_construction_value_type() {
 
 namespace detail {
 
-    // `exponent` comes from using scale_type = weak_typedef<int32_t>
+    // `exponent` comes from using scale_type = strong_typedef<int32_t>
     //  we still need Rep to know what type we want for accumulator of ipow
     template <typename Rep, Radix Base, typename T,
               typename std::enable_if_t<(std::is_same<int32_t, T>::value
