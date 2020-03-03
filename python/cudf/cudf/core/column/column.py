@@ -529,6 +529,8 @@ class ColumnBase(Column):
 
     def fillna(self, value):
         """Fill null values with ``value``.
+
+        Returns a copy with null filled.
         """
         raise NotImplementedError
 

@@ -2545,12 +2545,6 @@ class Series(Frame):
     def __cuda_array_interface__(self):
         return self._column.__cuda_array_interface__
 
-    # def repeat(self, repeats, axis=None):
-    #     assert axis in (None, 0)
-    #     data = self.repeat(repeats)
-    #     new_index = self.index.repeat(repeats)
-    #     return Series(data, index=new_index, name=self.name)
-
     def _align_to_index(
         self, index, how="outer", sort=True, allow_non_unique=False
     ):
