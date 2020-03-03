@@ -13,6 +13,7 @@ from cudf._libxx.aggregation cimport get_aggregation, aggregation
 from libcpp.memory cimport unique_ptr
 import numpy as np
 
+
 def reduce(reduction_op, Column incol, dtype=None, **kwargs):
     """
     Top level Cython reduce function wrapping libcudf++ reductions.
@@ -58,6 +59,7 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
 
     py_result = Scalar.from_unique_ptr(move(c_result))
     return py_result.value
+
 
 def scan(scan_op, Column incol, inclusive, **kwargs):
     """
