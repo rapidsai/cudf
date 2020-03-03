@@ -679,6 +679,9 @@ class MultiIndex(Index):
             )
         return self._is_monotonic_decreasing
 
+    def argsort(self, ascending=True):
+        return self._source_data.argsort(ascending=ascending)
+
     def unique(self):
         return MultiIndex.from_frame(self._source_data.drop_duplicates())
 
