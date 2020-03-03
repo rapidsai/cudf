@@ -26,6 +26,7 @@
 - PR #4063 Define and implement string capitalize and title API
 - PR #4217 Add libcudf++ quantiles Cython implementation
 - PR #4216 Add cudf.Scalar Python type
+- PR #4129 Add libcudf++ interleave_columns and tile Cython implementation
 - PR #4262 Port unaryops.pyx to use libcudf++ APIs
 - PR #4276 Port avro.pyx to libcudf++
 - PR #4259 Ability to create Java host buffers from memory-mapped files
