@@ -59,7 +59,7 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
     py_result = Scalar.from_unique_ptr(move(c_result))
     return py_result.value
 
-def scan(Column incol, scan_op, inclusive, **kwargs):
+def scan(scan_op, Column incol, inclusive, **kwargs):
     """
     Top level Cython scan function wrapping libcudf++ scans.
 
@@ -67,7 +67,7 @@ def scan(Column incol, scan_op, inclusive, **kwargs):
     ----------
     incol : Column
         A cuDF Column object
-    reduction_op : string
+    scan_op : string
         A string specifying the operation, e.g. cumprod
     inclusive: bool
         Flag for including nulls in relevant scan
