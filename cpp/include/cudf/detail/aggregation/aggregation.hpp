@@ -25,6 +25,7 @@
 namespace cudf {
 namespace experimental {
 namespace detail {
+
 /**
  * @brief Derived class for specifying a quantile aggregation
  */
@@ -68,6 +69,22 @@ include_nulls _include_nulls;    ///< include or exclude nulls
   bool operator==(nunique_aggregation const& other) const {
     return aggregation::operator==(other)
        and _include_nulls == other._include_nulls;
+  }
+};
+
+/**
+ * @brief Derived class for specifying a nth element aggregation
+ */
+struct nth_element_aggregation : aggregation {
+  nth_element_aggregation(aggregation::Kind k, size_type n,
+                          include_nulls _include_nulls)
+      : aggregation{k}, n{n}, _include_nulls{_include_nulls} {}
+  size_type n;                  ///< nth index to return
+  include_nulls _include_nulls; ///< include or exclude nulls
+
+  bool operator==(nth_element_aggregation const &other) const {
+    return aggregation::operator==(other) and n == other.n and
+           _include_nulls == other._include_nulls;
   }
 };
 
@@ -237,6 +254,12 @@ struct target_type_impl<Source, aggregation::NUNIQUE> {
   using type = cudf::size_type;
 };
 
+// Always use Source for NTH_ELEMENT
+template <typename Source>
+struct target_type_impl<Source, aggregation::NTH_ELEMENT> {
+  using type = Source;
+};
+
 /**
  * @brief Helper alias to get the accumulator type for performing aggregation
  * `k` on elements of type `Source`
@@ -325,6 +348,9 @@ CUDA_HOST_DEVICE_CALLABLE decltype(auto) aggregation_dispatcher(
           std::forward<Ts>(args)...);
     case aggregation::NUNIQUE:
       return f.template operator()<aggregation::NUNIQUE>(
+          std::forward<Ts>(args)...);
+    case aggregation::NTH_ELEMENT:
+      return f.template operator()<aggregation::NTH_ELEMENT>(
           std::forward<Ts>(args)...);
     default: {
 #ifndef __CUDA_ARCH__
