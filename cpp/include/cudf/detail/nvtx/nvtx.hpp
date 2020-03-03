@@ -29,6 +29,46 @@
 /**
  * \mainpage
  * \tableofcontents
+ *
+ * \section QUICK_START Quick Start
+ *
+ * To add NVTX ranges to your code, use the `nvtx::thread_range` RAII object. A
+ * range begins when the object is created, and ends when the object is
+ * destroyed.
+ *
+ * \code{.cpp}
+ * void some_function(){
+ *    // Begins a NVTX range with the messsage "some_function"
+ *    // The range ends when some_function() returns and `r` is destroyed
+ *    nvtx::thread_range r{"some_function"};
+ *
+ *    for(int i = 0; i < 6; ++i){
+ *       nvtx::thread_range loop{"loop range"};
+ *       std::this_thread::sleep_for(std::chrono::seconds{1});
+ *    }
+ * } // Range ends when `r` is destroyed
+ * \endcode
+ *
+ * The example code above generates the following timeline view in Nsight
+ * Systems:
+ *
+ * \image html example_range.png
+ *
+ * Alternatively, use the \ref MACROS like `NVTX_FUNC_RANGE()` to add
+ * ranges to your code that automatically use the name of the enclosing function
+ * as the range's message.
+ *
+ * \code{.cpp}
+ * void some_function(){
+ *    // Creates a range with a message "some_function" that ends when the
+ * enclosing
+ *    // function returns
+ *    NVTX_FUNC_RANGE();
+ *    ...
+ * }
+ * \endcode
+ *
+ *
  * \section Overview
  *
  * The NVTX library provides a set of functions for users to annotate their code
@@ -387,8 +427,8 @@
  * nvtx::EventAttributes attr1{"message", nvtx::Category{2}};
  * my_thread_range r1{attr1};
  *
- * // Alternatively, pass arguments of `EventAttributes` ctor directly to `my_thread_range`
- * my_thread_range r2{"message", nvtx::Category{2}};
+ * // Alternatively, pass arguments of `EventAttributes` ctor directly to
+ * `my_thread_range` my_thread_range r2{"message", nvtx::Category{2}};
  *
  * // construct on first use a registered message
  * auto msg = my_registered_message::get<my_message>();
