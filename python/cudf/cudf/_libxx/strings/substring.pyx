@@ -5,16 +5,20 @@ from cudf._libxx.cpp.column.column_view cimport column_view
 from libcpp.memory cimport unique_ptr
 from cudf._libxx.column cimport Column
 from cudf._libxx.cpp.types cimport size_type
+import numpy as np
 
 from cudf._libxx.strings.substring cimport (
     slice_strings as cpp_slice_strings
 )
 
+from cudf._libxx.scalar cimport Scalar
+from cudf._libxx.cpp.scalar.scalar cimport numeric_scalar
+
 
 def slice_strings(Column source_strings,
-                  size_type start,
-                  size_type end,
-                  size_type step):
+                  object start,
+                  object end,
+                  object step):
     """
     Returns a Column by extracting a substring of each string
     at given start and end positions. Slicing can also be
@@ -24,12 +28,23 @@ def slice_strings(Column source_strings,
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
+    cdef Scalar start_scalar = Scalar(start, np.int32)
+    cdef Scalar end_scalar = Scalar(end, np.int32)
+    cdef Scalar step_scalar = Scalar(step, np.int32)
+
+    cdef numeric_scalar[size_type]* start_numeric_scalar = \
+        <numeric_scalar[size_type]*>(start_scalar.c_value.get())
+    cdef numeric_scalar[size_type]* end_numeric_scalar = \
+        <numeric_scalar[size_type]*>(end_scalar.c_value.get())
+    cdef numeric_scalar[size_type]* step_numeric_scalar = \
+        <numeric_scalar[size_type]*>(step_scalar.c_value.get())
+
     with nogil:
         c_result = move(cpp_slice_strings(
             source_view,
-            start,
-            end,
-            step
+            start_numeric_scalar[0],
+            end_numeric_scalar[0],
+            step_numeric_scalar[0]
         ))
 
     return Column.from_unique_ptr(move(c_result))
@@ -59,7 +74,7 @@ def slice_from(Column source_strings,
 
 
 def get(Column source_strings,
-        size_type index):
+        object index):
     """
     Returns a Column which contains only single
     charater from each input string. The index of
@@ -68,12 +83,23 @@ def get(Column source_strings,
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
+    cdef Scalar start_scalar = Scalar(index, np.int32)
+    cdef Scalar end_scalar = Scalar(index + 1, np.int32)
+    cdef Scalar step_scalar = Scalar(1, np.int32)
+
+    cdef numeric_scalar[size_type]* start_numeric_scalar = \
+        <numeric_scalar[size_type]*>(start_scalar.c_value.get())
+    cdef numeric_scalar[size_type]* end_numeric_scalar = \
+        <numeric_scalar[size_type]*>(end_scalar.c_value.get())
+    cdef numeric_scalar[size_type]* step_numeric_scalar = \
+        <numeric_scalar[size_type]*>(step_scalar.c_value.get())
+
     with nogil:
         c_result = move(cpp_slice_strings(
             source_view,
-            index,
-            index + 1,
-            1
+            start_numeric_scalar[0],
+            end_numeric_scalar[0],
+            step_numeric_scalar[0]
         ))
 
     return Column.from_unique_ptr(move(c_result))

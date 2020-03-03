@@ -27,11 +27,7 @@ from cudf._libxx.strings.replace import (
     insert as cpp_string_insert,
     slice_replace as cpp_slice_replace,
 )
-from cudf._libxx.strings.substring import (
-    get as cpp_string_get,
-    slice_from as cpp_slice_from,
-    slice_strings as cpp_slice_strings,
-)
+from cudf._libxx.strings.substring import slice_from as cpp_slice_from
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.utils import utils
@@ -447,39 +443,32 @@ class StringMethods(object):
             self._column.nvstrings.lower(), **kwargs
         )
 
-    def slice(self, start=None, stop=None, step=None, **kwargs):
-        """
-        Returns a substring of each string.
+    # def slice(self, start=None, stop=None, step=None, **kwargs):
+    #     """
+    #     Returns a substring of each string.
 
-        Parameters
-        ----------
-        start : int
-            Beginning position of the string to extract.
-            Default is beginning of the each string.
-        stop : int
-            Ending position of the string to extract.
-            Default is end of each string.
-        step : int
-            Characters that are to be captured within the specified section.
-            Default is every character.
+    #     Parameters
+    #     ----------
+    #     start : int
+    #         Beginning position of the string to extract.
+    #         Default is beginning of the each string.
+    #     stop : int
+    #         Ending position of the string to extract.
+    #         Default is end of each string.
+    #     step : int
+    #         Characters that are to be captured within the specified section.
+    #         Default is every character.
 
-        Returns
-        -------
-        Series/Index of str dtype
-            A substring of each string.
+    #     Returns
+    #     -------
+    #     Series/Index of str dtype
+    #         A substring of each string.
 
-        """
+    #     """
 
-        if start is None:
-            start = 0
-        if stop is None:
-            stop = -1
-        if step is None:
-            step = 1
-
-        return self._return_or_inplace(
-            cpp_slice_strings(self._column, start, stop, step), **kwargs
-        )
+    #     return self._return_or_inplace(
+    #         cpp_slice_strings(self._column, start, stop, step), **kwargs,
+    #     )
 
     def isdecimal(self, **kwargs):
         """
@@ -639,28 +628,28 @@ class StringMethods(object):
             cpp_string_insert(self._column, start, Scalar(repl)), **kwargs
         )
 
-    def get(self, i=0, **kwargs):
-        """
-        Returns the character specified in each string as a new string.
-        The nvstrings returned contains a list of single character strings.
+    # def get(self, i=0, **kwargs):
+    #     """
+    #     Returns the character specified in each string as a new string.
+    #     The nvstrings returned contains a list of single character strings.
 
-        Parameters
-        ----------
-        i : int
-            The character position identifying the character
-            in each string to return.
+    #     Parameters
+    #     ----------
+    #     i : int
+    #         The character position identifying the character
+    #         in each string to return.
 
-        Returns
-        -------
-        Series/Index of str dtype
-            A new string series with character at the position
-            `i` of each `i` inserted at the specified position.
+    #     Returns
+    #     -------
+    #     Series/Index of str dtype
+    #         A new string series with character at the position
+    #         `i` of each `i` inserted at the specified position.
 
-        """
+    #     """
 
-        return self._return_or_inplace(
-            cpp_string_get(self._column, i), **kwargs
-        )
+    #     return self._return_or_inplace(
+    #         cpp_string_get(self._column, i), **kwargs
+    #     )
 
     def split(self, pat=None, n=-1, expand=True, **kwargs):
         """
