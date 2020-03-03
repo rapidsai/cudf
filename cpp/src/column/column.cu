@@ -166,6 +166,7 @@ void column::set_null_count(size_type new_null_count) {
   }
   _null_count = new_null_count;
 }
+namespace{
 
 struct create_column_from_view {
   cudf::column_view view;
@@ -274,6 +275,7 @@ struct create_column_from_view_vector {
  }
 
 };
+} // anonymous namespace
 
 // Copy from a view
 column::column(column_view view, cudaStream_t stream,
