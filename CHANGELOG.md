@@ -188,6 +188,7 @@
 - PR #4279 Fix converting `np.float64` to Scalar
 - PR #4285 Add init files for cython pkgs and fix `setup.py`
 - PR #4287 Parquet reader: fix empty string potentially read as null
+- PR #4310 Fix empty values case in groupby 
 - PR #4297 Fix specification of package_data in setup.py
 - PR #4302 Fix `_is_local_filesystem` check
 - PR #4303 Parquet reader: fix empty columns missing from table
