@@ -254,6 +254,10 @@ public final class Table implements AutoCloseable {
   private static native long[] groupByAggregate(long inputTable, int[] keyIndices, int[] aggColumnsIndices,
                                                 int[] aggTypes, boolean ignoreNullKeys) throws CudfException;
 
+  private static native long[] rollingWindowAggregate(long inputTable, int[] keyIndices, int[] aggColumnsIndices,
+                                                      int[] aggTypes, int[] minPeriods, int[] preceding, int[] following,
+                                                      boolean ignoreNullKeys) throws CudfException;
+
   private static native long[] orderBy(long inputTable, long[] sortKeys, boolean[] isDescending,
                                        boolean[] areNullsSmallest) throws CudfException;
 
@@ -951,6 +955,34 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Internal class used to keep track of operations on a given column.
+   */
+  private static final class ColumnWindowOps {
+    // Use a tree map to make debugging simpler (operations are all in the same order)
+    private final TreeMap<WindowAggregateOp, List<Integer>> ops = new TreeMap<>(); // Map AggOp -> Output column index.
+
+    public int add(WindowAggregateOp op, int index) {
+      int ret = 0;
+      List<Integer> indexes = ops.get(op);
+      if (indexes == null) {
+        ret++;
+        indexes = new ArrayList<>();
+        ops.put(op, indexes);
+      }
+      indexes.add(index);
+      return ret;
+    }
+
+    public Set<WindowAggregateOp> operations() {
+      return ops.keySet();
+    }
+
+    public Collection<List<Integer>> outputIndices() {
+      return ops.values();
+    }
+  }
+
+  /**
    * Class representing aggregate operations
    */
   public static final class AggregateOperation {
@@ -1044,8 +1076,71 @@ public final class Table implements AutoCloseable {
         aggregate.close();
       }
     }
-  }
 
+    public Table aggregateWindows(WindowAggregate... windowAggregates) {
+      // To improve performance and memory we want to remove duplicate operations
+      // and also group the operations by column so hopefully cudf can do multiple aggregations
+      // in a single pass.
+
+      // Use a tree map to make debugging simpler (columns are all in the same order)
+      TreeMap<Integer, ColumnWindowOps> groupedOps = new TreeMap<>(); // Map agg-col-id -> Agg ColOp.
+      // Total number of operations that will need to be done.
+      int totalOps = 0;
+      for (int outputIndex = 0; outputIndex < windowAggregates.length; outputIndex++) {
+        WindowAggregate agg = windowAggregates[outputIndex];
+        ColumnWindowOps ops = groupedOps.computeIfAbsent(agg.getColumnIndex(), (idx) -> new ColumnWindowOps());
+        totalOps += ops.add(agg.getOp(), outputIndex);
+      }
+
+      int[] aggColumnIndexes = new int[totalOps];
+      int[] aggOperationIds = new int[totalOps];
+      int[] aggPrecedingWindows = new int[totalOps];
+      int[] aggFollowingWindows = new int[totalOps];
+      int[] aggMinPeriods = new int[totalOps];
+      int opIndex = 0;
+      for (Map.Entry<Integer, ColumnWindowOps> entry : groupedOps.entrySet()) {
+        int columnIndex = entry.getKey();
+        for (WindowAggregateOp operation : entry.getValue().operations()) {
+          aggColumnIndexes[opIndex] = columnIndex;
+          aggOperationIds[opIndex] = operation.getAggregateOp().nativeId;
+          aggPrecedingWindows[opIndex] = operation.getWindowOptions().getPreceding();
+          aggFollowingWindows[opIndex] = operation.getWindowOptions().getFollowing();
+          aggMinPeriods[opIndex] = operation.getWindowOptions().getMinPeriods();
+          opIndex++;
+        }
+      }
+      assert opIndex == totalOps : opIndex + " == " + totalOps;
+
+      Table aggregate;
+      try (DevicePrediction prediction = new DevicePrediction(operation.table.getDeviceMemorySize(), "window-aggregate")) {
+        aggregate = new Table(rollingWindowAggregate(
+            operation.table.nativeHandle,
+            operation.indices,
+            aggColumnIndexes,
+            aggOperationIds, aggMinPeriods, aggPrecedingWindows, aggFollowingWindows,
+            groupByOptions.getIgnoreNullKeys()));
+      }
+      try {
+        // prepare the final table
+        ColumnVector[] finalCols = new ColumnVector[windowAggregates.length];
+
+        int inputColumn = 0;
+        // Now get the aggregation columns
+        for (ColumnWindowOps ops : groupedOps.values()) {
+          for (List<Integer> indices : ops.outputIndices()) {
+            for (int outIndex : indices) {
+              finalCols[outIndex] = aggregate.getColumn(inputColumn);
+            }
+            inputColumn++;
+          }
+        }
+        return new Table(finalCols);
+      } finally {
+        aggregate.close();
+      }
+    }
+
+  }
   public static final class TableOperation {
 
     private final Operation operation;
