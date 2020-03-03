@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include <cudf/concatenate.hpp>
+#include <cudf/table/table.hpp>
 
 #include <tests/utilities/column_wrapper.hpp>
 
@@ -31,8 +32,8 @@ class Concatenate : public cudf::benchmark {};
 
 template<typename T, cudf::concatenate_mode Mode, bool Nullable>
 static void BM_concatenate(benchmark::State& state) {
-  auto const num_cols = state.range(0);
-  auto const num_rows = state.range(1);
+  auto const num_rows = state.range(0);
+  auto const num_cols = state.range(1);
 
   // Create owning columns
   std::vector<column_wrapper<T>> columns;
@@ -53,7 +54,7 @@ static void BM_concatenate(benchmark::State& state) {
 
   // Generate column views
   std::vector<cudf::column_view> column_views;
-  column_views.reserve(num_cols);
+  column_views.reserve(columns.size());
   std::transform(columns.begin(), columns.end(),
     std::back_inserter(column_views),
     [](auto const& col) {
@@ -79,7 +80,7 @@ BENCHMARK_TEMPLATE_DEFINE_F(Concatenate, name, type, mode, nullable)  \
 }                                                                     \
 BENCHMARK_REGISTER_F(Concatenate, name)                               \
   ->RangeMultiplier(4)                                                \
-  ->Ranges({{2, 1024}, {1<<6, 1<<18}})                                \
+  ->Ranges({{1<<6, 1<<18}, {2, 1024}})                                \
   ->Unit(benchmark::kMillisecond)                                     \
   ->UseManualTime();
 
@@ -91,4 +92,82 @@ CONCAT_BENCHMARK_DEFINE(concat_columns_int64_fused_kernel_non_null,
 CONCAT_BENCHMARK_DEFINE(concat_columns_int64_unoptimized_nullable,
   int64_t, cudf::concatenate_mode::UNOPTIMIZED, true)
 CONCAT_BENCHMARK_DEFINE(concat_columns_int64_fused_kernel_nullable,
+  int64_t, cudf::concatenate_mode::FUSED_KERNEL, true)
+
+
+template<typename T, cudf::concatenate_mode Mode, bool Nullable>
+static void BM_concatenate_tables(benchmark::State& state) {
+  auto const num_rows = state.range(0);
+  auto const num_cols = state.range(1);
+  auto const num_tables = state.range(2);
+
+  // Create owning columns
+  std::vector<column_wrapper<T>> columns;
+  columns.reserve(num_cols);
+  std::generate_n(std::back_inserter(columns), num_cols * num_tables,
+    [num_rows]() {
+      auto iter = thrust::make_counting_iterator(0);
+      if (Nullable) {
+        auto valid_iter = thrust::make_transform_iterator(iter,
+          [](auto i) {
+            return i % 3 == 0;
+          });
+        return column_wrapper<T>(iter, iter + num_rows, valid_iter);
+      } else {
+        return column_wrapper<T>(iter, iter + num_rows);
+      }
+    });
+
+  // Generate column views
+  std::vector<std::vector<cudf::column_view>> column_views(num_tables);
+  for (int i = 0; i < num_tables; ++i) {
+    column_views[i].reserve(num_cols);
+    auto it = columns.begin() + (i * num_cols);
+    std::transform(it, it + num_cols,
+      std::back_inserter(column_views[i]),
+      [](auto const& col) {
+        return static_cast<cudf::column_view>(col);
+      });
+  }
+
+  // Generate table views
+  std::vector<cudf::table_view> table_views;
+  table_views.reserve(num_tables);
+  std::transform(column_views.begin(), column_views.end(),
+    std::back_inserter(table_views),
+    [](auto const& col_vec) {
+      return cudf::table_view(col_vec);
+    });
+
+  CHECK_CUDA(0);
+
+  cudf::temp_set_concatenate_mode(Mode);
+  for (auto _ : state) {
+    cuda_event_timer raii(state, true, 0);
+    auto result = cudf::experimental::concatenate(table_views);
+  }
+  cudf::temp_set_concatenate_mode(cudf::concatenate_mode::UNOPTIMIZED);
+
+  state.SetBytesProcessed(state.iterations() * num_cols * num_rows * num_tables * sizeof(T));
+}
+
+#define CONCAT_TABLES_BENCHMARK_DEFINE(name, type, mode, nullable)    \
+BENCHMARK_TEMPLATE_DEFINE_F(Concatenate, name, type, mode, nullable)  \
+(::benchmark::State& state) {                                         \
+  BM_concatenate_tables<type, mode, nullable>(state);                 \
+}                                                                     \
+BENCHMARK_REGISTER_F(Concatenate, name)                               \
+  ->RangeMultiplier(4)                                                \
+  ->Ranges({{1<<6, 1<<18}, {2, 128}, {2, 1024}})                                \
+  ->Unit(benchmark::kMillisecond)                                     \
+  ->UseManualTime();
+
+CONCAT_TABLES_BENCHMARK_DEFINE(concat_tables_int64_unoptimized_non_null,
+  int64_t, cudf::concatenate_mode::UNOPTIMIZED, false)
+CONCAT_TABLES_BENCHMARK_DEFINE(concat_tables_int64_fused_kernel_non_null,
+  int64_t, cudf::concatenate_mode::FUSED_KERNEL, false)
+
+CONCAT_TABLES_BENCHMARK_DEFINE(concat_tables_int64_unoptimized_nullable,
+  int64_t, cudf::concatenate_mode::UNOPTIMIZED, true)
+CONCAT_TABLES_BENCHMARK_DEFINE(concat_tables_int64_fused_kernel_nullable,
   int64_t, cudf::concatenate_mode::FUSED_KERNEL, true)
