@@ -86,26 +86,6 @@ auto create_device_views(std::vector<column_view> const& views, cudaStream_t str
       output_size);
 }
 
-// TODO remove this if we don't keep the partition mode
-auto compute_partition_map(rmm::device_vector<size_type> const& d_offsets,
-    size_t output_size, cudaStream_t stream) {
-
-  auto d_partition_map = rmm::device_vector<size_type>(output_size);
-
-  // Scatter 1s at the start of each partition, then scan to fill the map
-  auto const const_it = thrust::make_constant_iterator(size_type{1});
-  thrust::scatter(rmm::exec_policy(stream)->on(stream),
-      const_it, const_it + (d_offsets.size() - 2), // skip first and last offset
-      std::next(d_offsets.cbegin()), // skip first offset, leaving it set to 0
-      d_partition_map.begin());
-
-  thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream),
-      d_partition_map.cbegin(), d_partition_map.cend(),
-      d_partition_map.begin());
-
-  return d_partition_map;
-}
-
 /**---------------------------------------------------------------------------*
  * @brief Concatenates the null mask bits of all the column device views in the
  * `views` array to the destination bitmask.
@@ -251,103 +231,6 @@ struct for_each_concatenate {
    return col;
  }
 
-};
-
-template <typename T>
-struct partition_map_fn {
-  size_type const* offsets_ptr;
-  size_type const* partition_ptr;
-  T const* const* data_ptr;
-
-  T __device__ operator()(size_type i) {
-    auto const partition = partition_ptr[i];
-    auto const offset = offsets_ptr[partition];
-    return data_ptr[partition][i - offset];
-  }
-};
-
-template <typename T>
-struct binary_search_fn {
-  size_type const* offsets_ptr;
-  size_t const input_size;
-  T const* const* data_ptr;
-
-  T __device__ operator()(size_type i) {
-    // Look up the current index in the offsets table to find the partition
-    // Select the offset before the upper bound
-    auto const offset_it = thrust::upper_bound(thrust::seq,
-        offsets_ptr, offsets_ptr + input_size, i) - 1;
-    auto const partition = offset_it - offsets_ptr;
-    auto const offset = *offset_it;
-    return data_ptr[partition][i - offset];
-  }
-};
-
-struct optimized_concatenate {
-  template <typename T,
-      std::enable_if_t<is_fixed_width<T>()>* = nullptr>
-  std::unique_ptr<column> operator()(
-      std::vector<column_view> const& views,
-      rmm::mr::device_memory_resource* mr,
-      cudaStream_t stream) {
-    using mask_policy = cudf::experimental::mask_allocation_policy;
-
-    // Preprocess and upload inputs to device memory
-    auto device_views = create_device_views(views, stream);
-    auto const& d_views = std::get<1>(device_views);
-    auto const& d_offsets = std::get<2>(device_views);
-    auto output_size = std::get<3>(device_views);
-
-    // Transform views to array of data pointers
-    auto data_ptrs = thrust::host_vector<T const*>(views.size());
-    std::transform(views.begin(), views.end(), data_ptrs.begin(),
-        [](column_view const& col) {
-          return col.data<T>();
-        });
-    auto const d_data_ptrs = rmm::device_vector<T const*>{data_ptrs};
-
-    // Allocate output column, with null mask if any columns have nulls
-    bool const has_nulls = std::any_of(views.begin(), views.end(),
-        [](auto const& col) { return col.has_nulls(); });
-    auto const policy = has_nulls ? mask_policy::ALWAYS : mask_policy::NEVER;
-    auto out_col = experimental::detail::allocate_like(views.front(),
-        output_size, policy, mr, stream);
-    auto out_view = out_col->mutable_view();
-
-    // Initialize each output row from its corresponding input view
-    // NOTE device lambdas were giving weird errors, so use functor instead
-    auto const* offsets_ptr = d_offsets.data().get();
-    T const* const* data_ptr = d_data_ptrs.data().get();
-    if (current_mode == concatenate_mode::PARTITION_MAP) {
-      auto const d_partition_map = compute_partition_map(d_offsets, output_size, stream);
-      auto const* partition_ptr = d_partition_map.data().get();
-      thrust::tabulate(rmm::exec_policy(stream)->on(stream),
-          out_view.begin<T>(), out_view.end<T>(),
-          partition_map_fn<T>{offsets_ptr, partition_ptr, data_ptr});
-    } else {
-      thrust::tabulate(rmm::exec_policy(stream)->on(stream),
-          out_view.begin<T>(), out_view.end<T>(),
-          binary_search_fn<T>{offsets_ptr, views.size(), data_ptr});
-    }
-
-    // If concatenated column is nullable, proceed to calculate it
-    // TODO try to fuse this with the data kernel so they share binary search
-    if (has_nulls) {
-      detail::concatenate_masks(d_views, d_offsets, out_view.null_mask(),
-          output_size, stream);
-    }
-
-    return out_col;
-  }
-
-  template <typename ColumnType,
-      std::enable_if_t<not is_fixed_width<ColumnType>()>* = nullptr>
-  std::unique_ptr<column> operator()(
-      std::vector<column_view> const& views,
-      rmm::mr::device_memory_resource* mr,
-      cudaStream_t stream) {
-    CUDF_FAIL("non-fixed-width types not yet supported");
-  }
 };
 
 template <typename T, bool Nullable>
@@ -511,19 +394,12 @@ concatenate(std::vector<column_view> const& columns_to_concat,
       [type](auto const& c) { return c.type() == type; }),
       "Type mismatch in columns to concatenate.");
 
-  // TODO dispatch to fused kernel if true
-  /*bool const has_nulls = std::any_of(
-      columns_to_concat.begin(), columns_to_concat.end(),
-      [](auto const& col) { return col.has_nulls(); });*/
+  // TODO dispatch to fused kernel if num inputs <= 4?
 
   switch (current_mode) {
     case concatenate_mode::UNOPTIMIZED:
       return experimental::type_dispatcher(type,
           detail::for_each_concatenate{columns_to_concat, stream, mr});
-    case concatenate_mode::PARTITION_MAP:
-    case concatenate_mode::BINARY_SEARCH:
-      return experimental::type_dispatcher(type,
-          detail::optimized_concatenate{}, columns_to_concat, mr, stream);
     case concatenate_mode::FUSED_KERNEL:
       return experimental::type_dispatcher(type,
           detail::fused_concatenate{}, columns_to_concat, mr, stream);

@@ -85,18 +85,10 @@ BENCHMARK_REGISTER_F(Concatenate, name)                               \
 
 CONCAT_BENCHMARK_DEFINE(concat_columns_int64_unoptimized_non_null,
   int64_t, cudf::concatenate_mode::UNOPTIMIZED, false)
-CONCAT_BENCHMARK_DEFINE(concat_columns_int64_partition_map_non_null,
-  int64_t, cudf::concatenate_mode::PARTITION_MAP, false)
-CONCAT_BENCHMARK_DEFINE(concat_columns_int64_binary_search_non_null,
-  int64_t, cudf::concatenate_mode::BINARY_SEARCH, false)
 CONCAT_BENCHMARK_DEFINE(concat_columns_int64_fused_kernel_non_null,
   int64_t, cudf::concatenate_mode::FUSED_KERNEL, false)
 
 CONCAT_BENCHMARK_DEFINE(concat_columns_int64_unoptimized_nullable,
   int64_t, cudf::concatenate_mode::UNOPTIMIZED, true)
-CONCAT_BENCHMARK_DEFINE(concat_columns_int64_partition_map_nullable,
-  int64_t, cudf::concatenate_mode::PARTITION_MAP, true)
-CONCAT_BENCHMARK_DEFINE(concat_columns_int64_binary_search_nullable,
-  int64_t, cudf::concatenate_mode::BINARY_SEARCH, true)
 CONCAT_BENCHMARK_DEFINE(concat_columns_int64_fused_kernel_nullable,
   int64_t, cudf::concatenate_mode::FUSED_KERNEL, true)
