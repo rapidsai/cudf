@@ -17,6 +17,70 @@ from cudf._libxx.cpp.sort cimport (
 )
 cimport cudf._libxx.cpp.types as libcudf_types
 
+from cudf._libxx.sort cimport (
+    is_sorted as cpp_is_sorted,
+)
+
+
+def is_sorted(Table source_table, list col_order=[], list null_prec=[]):
+    """
+    Checks whether the rows of a `table` are sorted in lexicographical order.
+
+    Parameters
+    ----------
+    source_table : table whose columns are to be checked for sort order
+    col_order : boolean list of boolean values indicating expected
+                sort order of each column size must be len(columns) or empty
+                if empty, all columns expected sort order is set to ascending
+                False (0) - ascending
+                True (1)  - descending
+    null_prec : list of boolean values indicating desired order of null compared
+                to other elements for each column size must be len(columns) or
+                empty if empty, null order is set to before
+                False (0) - before
+                True (1)  - after
+
+    Returns
+    -------
+    returns : boolean
+              true, if sorted as expected in col_order and null_prec
+              false, otherwise
+    """
+    
+    cdef vector[order] column_order
+    cdef vector[null_order] null_precedence
+
+    if (0 < len(col_order)) and (source_table._num_columns != len(col_order)):
+        # TODO: raise an exception.
+        pass
+    elif (0 == len(col_order)):
+        column_order = vector[order](len(col_order), order.ASCENDING)
+    elif (source_table._num_columns == len(col_order)):
+        column_order = vector[order](len(col_order), order.ASCENDING)
+        for i in range(len(col_order)):
+            if (col_order[i]):
+                column_order[i] = order.DESCENDING
+
+    if (0 < len(null_prec)) and (source_table._num_columns != len(col_order)):
+        # TODO: raise an exception
+        pass
+    elif (0 == len(null_prec)):
+        null_precedence = vector[null_order](len(null_prec), null_order.BEFORE)
+    elif (source_table._num_columns == len(null_prec)):
+        null_precedence = vector[null_order](len(null_prec), null_order.BEFORE)
+        for i in range(len(null_prec)):
+            if(null_prec[i]):
+                null_precedence[i] = null_order.AFTER
+
+    cdef bool c_result
+    cdef table_view source_table_view = source_table.view()
+    with nogil:
+        c_result = cpp_is_sorted(source_table_view,
+                                 column_order,
+                                 null_precedence)
+
+    return c_result
+
 
 def order_by(Table source_table, object ascending, bool na_position):
     """

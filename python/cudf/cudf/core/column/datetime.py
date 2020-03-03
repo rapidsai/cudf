@@ -273,8 +273,8 @@ class DatetimeColumn(column.ColumnBase):
             if self.nullable and self.has_nulls:
                 self._is_monotonic_increasing = False
             else:
-                self._is_monotonic_increasing = libcudf.issorted.issorted(
-                    [self]
+                self._is_monotonic_increasing = libcudfxx.sort.is_sorted(
+                    self.as_frame(), col_order=[], null_prec=[]
                 )
         return self._is_monotonic_increasing
 
@@ -284,8 +284,8 @@ class DatetimeColumn(column.ColumnBase):
             if self.nullable and self.has_nulls:
                 self._is_monotonic_decreasing = False
             else:
-                self._is_monotonic_decreasing = libcudf.issorted.issorted(
-                    [self], [1]
+                self._is_monotonic_decreasing = libcudfxx.sort.is_sorted(
+                    self.as_frame(), col_order=[True], null_prec=[]
                 )
         return self._is_monotonic_decreasing
 

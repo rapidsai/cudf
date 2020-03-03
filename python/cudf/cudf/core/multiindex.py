@@ -10,6 +10,7 @@ import pandas as pd
 
 import cudf
 import cudf._lib as libcudf
+import cudf._libxx as libcudfxx
 from cudf.core.column import column
 from cudf.core.index import Index, as_index
 from cudf.utils import cudautils
@@ -664,16 +665,16 @@ class MultiIndex(Index):
     @property
     def is_monotonic_increasing(self):
         if not hasattr(self, "_is_monotonic_increasing"):
-            self._is_monotonic_increasing = libcudf.issorted.issorted(
-                self._source_data._columns
+            self._is_monotonic_increasing = libcudfxx.sort.is_sorted(
+               self, col_order=[], null_prec=[]
             )
         return self._is_monotonic_increasing
 
     @property
     def is_monotonic_decreasing(self):
         if not hasattr(self, "_is_monotonic_decreasing"):
-            self._is_monotonic_decreasing = libcudf.issorted.issorted(
-                self._source_data._columns, [1] * len(self.levels)
+            self._is_monotonic_decreasing = libcudfxx.sort.is_sorted(
+                self, col_order=[True]*len(self.levels), null_prec=[]
             )
         return self._is_monotonic_decreasing
 
