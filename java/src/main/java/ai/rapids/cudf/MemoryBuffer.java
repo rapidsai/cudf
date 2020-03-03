@@ -142,7 +142,7 @@ abstract class MemoryBuffer implements AutoCloseable {
    * Returns the location of the data pointed to by this buffer
    * @return - data address
    */
-  final long getAddress() {
+  public final long getAddress() {
     return address;
   }
 
