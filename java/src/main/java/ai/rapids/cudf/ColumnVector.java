@@ -1757,7 +1757,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     assert pattern.getType() == DType.STRING : "pattern scalar must be a string scalar";
     assert pattern.isValid() == true : "pattern string scalar may not contain a null value";
     assert pattern.getJavaString().isEmpty() == false : "pattern string scalar may not be empty";
-    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.BOOL8), "endsWith")) {
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.BOOL8), "stringContains")) {
       return new ColumnVector(stringContains(getNativeView(), pattern.getScalarHandle()));
     }
   }
