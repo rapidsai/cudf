@@ -1530,7 +1530,7 @@ public class ColumnVectorTest extends CudfTestBase {
   void testSubStringThrowsException() {
     assertThrows(AssertionError.class, () -> {
       try (ColumnVector cv = ColumnVector.fromStrings("Héllo", "thésé", null, "ARé", "tést strings");
-           ColumnVector locate = cv.subString(-2, 6)) {}
+           ColumnVector substring = cv.subString(-2, 6)) {}
     });
   }
 
