@@ -22,6 +22,7 @@
 #include <string>
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 
 namespace cudf {
 namespace io {
@@ -113,7 +114,9 @@ class data_sink {
    *
    * @return void
    **/
-  virtual void device_write(void const* gpu_data, size_t size, cudaStream_t stream) = 0;
+  virtual void device_write(void const* gpu_data, size_t size, cudaStream_t stream) { 
+    CUDF_FAIL("data_sink classes that support device_write must override this function.");
+  }
 
   /**
    * @brief Flush the data written into the sink

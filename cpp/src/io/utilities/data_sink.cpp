@@ -42,11 +42,7 @@ class file_sink : public data_sink {
 
   void host_write(void const* data, size_t size) override {
     outfile_.write(reinterpret_cast<char const*>(data), size);
-  }
-
-  void device_write(void const* gpu_data, size_t size, cudaStream_t stream){
-    CUDF_FAIL("file_sink does not support gpu writes");
-  }
+  }  
 
   void flush() override {
     outfile_.flush();
@@ -77,10 +73,6 @@ class host_buffer_sink : public data_sink {
   void host_write(void const* data, size_t size) override {
     char const* char_array = reinterpret_cast<char const*>(data);
     buffer_->insert(buffer_->end(), char_array, char_array + size);
-  }
-
-  void device_write(void const* gpu_data, size_t size, cudaStream_t stream) override {
-    CUDF_FAIL("host_buffer_sink does not support gpu writes");
   }
 
   void flush() override {}
