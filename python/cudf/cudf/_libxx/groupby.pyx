@@ -5,7 +5,7 @@ from libcpp.vector cimport vector
 from cudf._libxx.table cimport Table, make_table_view
 from cudf._libxx.column cimport Column
 from cudf._libxx.move cimport move
-from cudf._libxx.aggregation cimport Aggregation
+from cudf._libxx.aggregation cimport make_aggregation
 
 from cudf._libxx.cpp.table.table cimport table
 cimport cudf._libxx.cpp.groupby as libcudf_groupby
@@ -67,7 +67,7 @@ cdef class GroupBy:
             c_agg_requests[i].values = col.view()
             for agg in aggs:
                 c_agg_requests[i].aggregations.push_back(
-                    move(Aggregation(agg).c_obj)
+                    move(make_aggregation(agg))
                 )
 
         cdef pair[
@@ -90,6 +90,8 @@ cdef class GroupBy:
         result_data = ColumnAccessor(multiindex=True)
         for i, col_name in enumerate(aggregations):
             for j, agg_name in enumerate(aggregations[col_name]):
+                if callable(agg_name):
+                    agg_name = agg_name.__name__
                 result_data[(col_name, agg_name)] = (
                     Column.from_unique_ptr(move(c_result.second[i].results[j]))
                 )
