@@ -281,7 +281,7 @@ def prefixsum(vals):
 
     # Compute prefixsum on the mask
     in_col = as_column(vals)
-    result = libcudfxx.reduce.scan(in_col, "sum", True)
+    result = libcudfxx.reduce.scan("sum", in_col, True)
     slots[1:] = result
     return slots
 
