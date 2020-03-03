@@ -122,7 +122,7 @@ TEST_F(StringsPadTest, ZFill)
     cudf::test::expect_columns_equal(*results,expected);
 }
 
-TEST_F(StringsPadTest, Wrap)
+TEST_F(StringsPadTest, Wrap1)
 {
     std::vector<const char*> h_strings{ "12345", "thesé", nullptr, "ARE THE", "tést strings", "" };
     cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
@@ -134,6 +134,23 @@ TEST_F(StringsPadTest, Wrap)
     auto results = cudf::strings::wrap(strings_view, width);
 
     std::vector<const char*> h_expected{ "12345", "thesé", nullptr, "ARE\nTHE", "tést\nstrings", ""  };
+    cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
+        thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
+    cudf::test::expect_columns_equal(*results,expected);
+}
+
+TEST_F(StringsPadTest, Wrap2)
+{
+    std::vector<const char*> h_strings{ "the quick brown fox jumped over the lazy brown dog", "hello, world" };
+    cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
+        thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
+    cudf::size_type width = 12;
+    
+    auto strings_view = cudf::strings_column_view(strings);
+
+    auto results = cudf::strings::wrap(strings_view, width);
+
+    std::vector<const char*> h_expected{ "the quick\nbrown fox\njumped over\nthe lazy\nbrown dog", "hello, world" };
     cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
         thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
     cudf::test::expect_columns_equal(*results,expected);
