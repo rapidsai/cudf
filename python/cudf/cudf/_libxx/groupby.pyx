@@ -48,17 +48,26 @@ cdef class GroupBy:
 
     def aggregate(self, Table values, aggregations):
         """
-        aggregations:
-            A dict mapping column names in `Table`
-            to a list of aggregations to perform
-            on that column.
+        Parameters
+        ----------
+        values : Table
+        aggregations
+            A dict mapping column names in `Table` to a list of aggregations
+            to perform on that column
+
+            Each aggregation may be specified as:
+            - a string (e.g., "max")
+            - a lambda/function
+        Returns
+        -------
+
         """
         from cudf.core.column_accessor import ColumnAccessor
-        
+
 
         cdef vector[libcudf_groupby.aggregation_request] c_agg_requests
         cdef Column col
-        
+
         for i, (col_name, aggs) in enumerate(aggregations.items()):
             col = values._data[col_name]
             c_agg_requests.push_back(
