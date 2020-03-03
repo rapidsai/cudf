@@ -22,10 +22,7 @@ class GroupBy(object):
 
     def agg(self, aggs):
         result = self._groupby.aggregate(self.obj, aggs)
-        index = cudf.Index._from_table(
-            result._index, names=self.grouping.names
-        )
-        return self.obj.__class__._from_table(result, index=index).sort_index()
+        return self.obj.__class__._from_table(result).sort_index()
 
 
 class _Grouping(object):
@@ -45,8 +42,8 @@ class _Grouping(object):
             - A list of the above
         """
         self.obj = obj
-        self.keys = []
-        self.names = []
+        self._key_columns = []
+        self._names = []
 
         by_list = by
         if not isinstance(by_list, list):
@@ -66,30 +63,45 @@ class _Grouping(object):
             else:
                 self._handle_misc(by)
 
+    @property
+    def keys(self):
+        nkeys = len(self._key_columns)
+        if nkeys > 1:
+            return cudf.MultiIndex(
+                source_data=cudf.DataFrame(
+                    dict(zip(range(nkeys), self._key_columns))
+                ),
+                names=self._names,
+            )
+        else:
+            return cudf.core.index.as_index(
+                self._key_columns[0], name=self._names[0]
+            )
+
     def _handle_callable(self, by):
         by = by(self.obj.index)
         self.__init__(self.obj, by)
 
     def _handle_series(self, by):
         by = by._align_to_index(self.obj.index, how="right")
-        self.keys.append(by._column)
-        self.names.append(by.name)
+        self._key_columns.append(by._column)
+        self._names.append(by.name)
 
     def _handle_index(self, by):
-        self.keys.extend(by._data.columns)
-        self.names.extend(by._data.names)
+        self._key_columns.extend(by._data.columns)
+        self._names.extend(by._data.names)
 
     def _handle_mapping(self, by):
         by = cudf.Series(by.values(), index=by.keys())
         self._handle_series(by)
 
     def _handle_label(self, by):
-        self.keys.append(self.obj._data[by])
-        self.names.append(by)
+        self._key_columns.append(self.obj._data[by])
+        self._names.append(by)
 
     def _handle_misc(self, by):
         by = cudf.core.column.as_column(by)
         if len(by) != len(self.obj):
             raise ValueError("Grouper and object must have same length")
-        self.keys.append(by)
-        self.names.append(None)
+        self._key_columns.append(by)
+        self._names.append(None)
