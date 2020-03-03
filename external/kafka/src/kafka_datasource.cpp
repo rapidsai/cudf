@@ -25,46 +25,45 @@ namespace external {
     DATASOURCE_ID.append(RdKafka::version_str());
 
     // Create an empty RdKafka::Conf instance. The configurations will be constructed later
-    //kafka_conf_ = std::unique_ptr<RdKafka::Conf>(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL));
-    kafka_conf_ = RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL);
+    kafka_conf_ = std::unique_ptr<RdKafka::Conf>(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL));
   }
 
-  kafka_datasource::kafka_datasource(std::map<std::string, std::string> configs) {
+  kafka_datasource::kafka_datasource(std::map<std::string, std::string> configs, std::vector<std::string> topics, std::vector<int> partitions) {
     DATASOURCE_ID = "librdkafka-";
     DATASOURCE_ID.append(RdKafka::version_str());
 
     // Construct the RdKafka::Conf object
-    //kafka_conf_ = std::unique_ptr<RdKafka::Conf>(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL));
-    kafka_conf_ = RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL);
-    configure_datasource(configs);
+    kafka_conf_ = std::unique_ptr<RdKafka::Conf>(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL));
+    configure_datasource(configs, topics, partitions);
   }
 
   std::string kafka_datasource::libcudf_datasource_identifier() {
     return DATASOURCE_ID;
   }
 
-  bool kafka_datasource::configure_datasource(std::map<std::string, std::string> configs) {
-    std::map<std::string, std::string>::iterator it = configs.begin();
-    while (it != configs.end())
-    {
-      std::string name = it->first;
-      std::string value = it->second;
+  bool kafka_datasource::configure_datasource(std::map<std::string, std::string> configs,
+                                              std::vector<std::string> topics,
+                                              std::vector<int> partitions) {
 
-      if (!name.rfind("ex_ds", 0) == 0) {
-        //printf("Configuring '%s' - '%s' -> '%s'\n", DATASOURCE_ID.c_str(), name.c_str(), value.c_str());
-        conf_res_ = kafka_conf_->set(name, value, errstr_);
+    //Set Kafka global configurations
+    for (auto const& x : configs) {
+      conf_res_ = kafka_conf_->set(x.first, x.second, errstr_);
+      if (conf_res_ != RdKafka::Conf::ConfResult::CONF_OK) {
+        if (conf_res_ == RdKafka::Conf::ConfResult::CONF_INVALID) {
+          //TODO
+          printf("Invalid configuration supplied ... what to do here?\n");
+        } else if (conf_res_ == RdKafka::Conf::ConfResult::CONF_UNKNOWN) {
+          //TODO
+          printf("Invalid configuration property supplied ... what to do here? Likely just ignore???\n");
+        }
       }
-    
-      it++;
     }
 
-    std::map<std::string, std::string>::iterator conf_it;
-    conf_it = configs.find("ex_ds.kafka.topic");
-    if (conf_it != configs.end()) {
-      //printf("Setting topic name to '%s'\n", conf_it->second.c_str());
-      topics_.push_back(conf_it->second);
-    } else {
-      printf("Unable to find topic configuration value\n");
+    // Create Toppar instances
+    for (const auto& x : topics) {
+      for (const auto& y : partitions) {
+        partitions_.push_back(RdKafka::TopicPartition::create(x, y));
+      }
     }
 
     // Kafka 0.9 > requires at least a group.id in the configuration so lets
@@ -75,24 +74,10 @@ namespace external {
     ExampleRebalanceCb ex_rebalance_cb;
     kafka_conf_->set("rebalance_cb", &ex_rebalance_cb, errstr_);
 
-    ExampleEventCb ex_event_cb;
-    kafka_conf_->set("event_cb", &ex_event_cb, errstr_);
+    consumer_ = std::unique_ptr<RdKafka::KafkaConsumer>(RdKafka::KafkaConsumer::create(kafka_conf_.get(), errstr_));
+    consumer_.get()->assign(partitions_);
 
-    ExampleOffsetCommitCb ex_offset_commit_cb;
-    kafka_conf_->set("offset_commit_cb", &ex_offset_commit_cb, errstr_);
-
-    consumer_ = RdKafka::KafkaConsumer::create(kafka_conf_, errstr_);
-    if (!consumer_) {
-      printf("Failed to create kafka consumer!\n");
-    }
-
-    for (int i = 0; i < topics_.size(); i++) {
-      partitions_.push_back(RdKafka::TopicPartition::create(topics_[i], 0, 0));
-    }
-    consumer_->assign(partitions_);
-
-    // Create the Kafka producer instance
-    producer_ = RdKafka::Producer::create(kafka_conf_, errstr_);
+    producer_ = std::unique_ptr<RdKafka::Producer>(RdKafka::Producer::create(kafka_conf_.get(), errstr_));
 
     return true;
   }
@@ -102,7 +87,6 @@ namespace external {
     printf("\n====== START - LIBRDKAFKA CONSUMER METADATA ======\n");
 
     RdKafka::Topic *topic = NULL;
-    std::string topic_str = topics_[0];
     class RdKafka::Metadata *metadata;
 
     /* Fetch metadata */

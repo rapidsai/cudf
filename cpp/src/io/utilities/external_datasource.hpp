@@ -48,7 +48,7 @@ class external_datasource : public datasource {
    * Takes user provided configurations and applies them to the external datasource.
    * This allows for the first instance being created or an existing instance being updated.
    */
-  virtual bool configure_datasource(std::map<std::string, std::string> datasource_configs) = 0;
+  virtual bool configure_datasource(std::map<std::string, std::string> datasource_configs, std::vector<std::string> topics, std::vector<int> partitions) = 0;
 
   /**
    * @brief Base class destructor

@@ -4,9 +4,9 @@ import custreamz._libxx.kafka as libkafka
 
 
 class KafkaHandle(object):
-    def __init__(self, kafka_configs):
+    def __init__(self, kafka_configs, topics=[], partitions=[]):
         self.kafka_configs = kafka_configs
-        libkafka.create_kafka_handle(kafka_configs)
+        libkafka.create_kafka_handle(kafka_configs, topics, partitions)
 
     def metadata(self):
         libkafka.print_consumer_metadata()

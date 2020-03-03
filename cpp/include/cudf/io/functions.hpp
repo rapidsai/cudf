@@ -52,6 +52,8 @@ struct read_avro_args {
   /// Rows to read; -1 is all
   size_type num_rows = -1;
 
+  read_avro_args() = default;
+
   explicit read_avro_args(source_info const& src) : source(src) {}
 };
 

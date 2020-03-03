@@ -1,14 +1,11 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-# cython: profile=False
-# distutils: language = c++
-# cython: embedsignature = True
-# cython: language_level = 3
-
 from libcpp.memory cimport unique_ptr
 
-from cudf._libxx.lib cimport *
-from cudf._libxx.column cimport *
+from cudf._libxx.cpp.table.table cimport table
+from cudf._libxx.cpp.table.table_view cimport (
+    table_view, mutable_table_view
+)
 
 
 cdef class Table:
@@ -35,3 +32,5 @@ cdef class Table:
         column_names,
         index_names=*
     )
+
+cdef columns_from_ptr(unique_ptr[table] c_tbl)

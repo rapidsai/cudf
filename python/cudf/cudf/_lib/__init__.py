@@ -1,3 +1,5 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 from . import (
     avro,
     binops,
@@ -14,7 +16,6 @@ from . import (
     join,
     nvtx,
     orc,
-    parquet,
     quantile,
     reduce,
     replace,

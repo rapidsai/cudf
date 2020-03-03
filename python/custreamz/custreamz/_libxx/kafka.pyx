@@ -20,12 +20,12 @@ from libc.stdint cimport uint32_t, int64_t
 cdef kafka_external *kds
 cdef string ds_id
 
-cpdef create_kafka_handle(kafka_conf):
+cpdef create_kafka_handle(kafka_conf, topics=[], partitions=[]):
     global kds, ds_id
     cdef map[string, string] kafka_confs
     for key, value in kafka_conf.items():
         kafka_confs[str.encode(key)] = str.encode(value)
-    kds = new kafka_external(kafka_confs)
+    kds = new kafka_external(kafka_confs, topics, partitions)
     ds_id = kds.libcudf_datasource_identifier()
 
 cpdef read_gdf(lines=True,
@@ -41,8 +41,8 @@ cpdef read_gdf(lines=True,
     # return read_json_libcudf(json_str, True, True)
     return json_str
 
-cpdef get_committed_offset(topic=None, partition=[]):
-    return kds.get_committed_offset(str.encode(topic), partition)
+cpdef get_committed_offset(topic=None, partitions=[]):
+    return kds.get_committed_offset(str.encode(topic), partitions)
 
 cpdef dump_configs():
     kds.dump_configs()
@@ -51,13 +51,13 @@ cpdef print_consumer_metadata():
     kds.print_consumer_metadata()
 
 cpdef get_watermark_offsets(topic=None,
-                            partition=1):
+                            partition=0):
 
     cdef map[string, int64_t] offsets = \
         kds.get_watermark_offset(str.encode(topic), partition)
     return offsets
 
-cpdef commit_topic_offset(topic=None, partition=0, offset=-1001):
+cpdef commit_topic_offset(topic=None, partition=0, offset=0):
     kds.commit_offset(str.encode(topic), partition, offset)
 
 cpdef produce_message(topic=None, message_val=None, message_key=None):

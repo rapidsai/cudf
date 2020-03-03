@@ -1,21 +1,30 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-# cython: profile=False
-# distutils: language = c++
-# cython: embedsignature = True
-# cython: language_level = 3
-
 import itertools
 
 import numpy as np
 
+from cudf.core.column_accessor import ColumnAccessor
+
 from cython.operator cimport dereference
 from libc.stdint cimport uintptr_t
+from libcpp.vector cimport vector
+from libcpp.memory cimport unique_ptr
 
-from cudf._libxx.lib cimport *
-
-from cudf.core.column_accessor import ColumnAccessor
+from cudf._libxx.move cimport move
 from cudf._libxx.column cimport Column
+
+from cudf._libxx.cpp.types cimport size_type
+from cudf._libxx.cpp.column.column cimport column
+from cudf._libxx.cpp.column.column_view cimport (
+    column_view,
+    mutable_column_view
+)
+from cudf._libxx.cpp.table.table cimport table
+from cudf._libxx.cpp.table.table_view cimport (
+    table_view,
+    mutable_table_view
+)
 
 
 cdef class Table:
@@ -78,7 +87,7 @@ cdef class Table:
         column_names : iterable
         """
         cdef vector[unique_ptr[column]] columns
-        columns = c_tbl.get()[0].release()
+        columns = move(c_tbl.get()[0].release())
 
         cdef vector[unique_ptr[column]].iterator it = columns.begin()
 
@@ -183,7 +192,6 @@ cdef class Table:
                 self._data.columns,
             )
         )
-        return _make_mutable_table_view(self._data.columns)
 
     cdef table_view data_view(self) except *:
         """
@@ -253,3 +261,22 @@ cdef mutable_table_view _make_mutable_table_view(columns) except*:
         mutable_column_views.push_back(col.mutable_view())
 
     return mutable_table_view(mutable_column_views)
+
+cdef columns_from_ptr(unique_ptr[table] c_tbl):
+    """
+    Return a list of table columns from a unique pointer
+
+    Parameters
+    ----------
+    c_tbl : unique_ptr[cudf::table]
+    """
+    num_columns = c_tbl.get().num_columns()
+    cdef vector[unique_ptr[column]] columns
+    columns = move(c_tbl.get()[0].release())
+    cdef vector[unique_ptr[column]].iterator it = columns.begin()
+
+    result = [None] * num_columns
+    for i in range(num_columns):
+        result[i] = Column.from_unique_ptr(move(dereference(it)))
+        it += 1
+    return result

@@ -40,14 +40,16 @@ namespace external {
 class kafka_datasource : public external_datasource {
 
  private:
-    RdKafka::Conf* kafka_conf_;
-    RdKafka::KafkaConsumer* consumer_ = NULL;
-    RdKafka::Producer* producer_ = NULL;
+    std::unique_ptr<RdKafka::Conf> kafka_conf_;
+    std::unique_ptr<RdKafka::KafkaConsumer> consumer_ = NULL;
+    std::unique_ptr<RdKafka::Producer> producer_ = NULL;
+
+
+    
     std::vector<RdKafka::TopicPartition*> partitions_;
     RdKafka::Conf::ConfResult conf_res_;
     RdKafka::ErrorCode err_;
 
-    std::vector<std::string> topics_;
     std::string errstr_;
     
     std::string conf_val;
@@ -62,7 +64,7 @@ class kafka_datasource : public external_datasource {
 
   kafka_datasource();
 
-  kafka_datasource(std::map<std::string, std::string> configs);
+  kafka_datasource(std::map<std::string, std::string> configs, std::vector<std::string> topics, std::vector<int> partitions);
 
   std::string libcudf_datasource_identifier();
 
@@ -70,7 +72,7 @@ class kafka_datasource : public external_datasource {
 
   std::map<std::string, int64_t> get_watermark_offset(std::string topic, int partition);
 
-  bool configure_datasource(std::map<std::string, std::string> configs);
+  bool configure_datasource(std::map<std::string, std::string> configs, std::vector<std::string> topics, std::vector<int> partitions);
 
   void print_consumer_metadata();
 
@@ -111,44 +113,6 @@ class kafka_datasource : public external_datasource {
       return ((int64_t)tv.tv_sec * 1000) + (tv.tv_usec / 1000);
     }
 
-    class ExampleOffsetCommitCb : public RdKafka::OffsetCommitCb {
-      public:
-        void offset_commit_cb (RdKafka::ErrorCode err, std::vector<RdKafka::TopicPartition*> &offsets) {
-          printf("Offsets have been committed!!!!!\n");
-        }
-    };
-
-    class ExampleEventCb : public RdKafka::EventCb {
-      public:
-        void event_cb (RdKafka::Event &event) {
-          switch (event.type())
-          {
-            case RdKafka::Event::EVENT_ERROR:
-              if (event.fatal()) {
-                printf("FATAL");
-              }
-              std::cerr << "ERROR (" << RdKafka::err2str(event.err()) << "): " <<
-                  event.str() << std::endl;
-              break;
-
-            case RdKafka::Event::EVENT_STATS:
-              std::cerr << "\"STATS\": " << event.str() << std::endl;
-              break;
-
-            case RdKafka::Event::EVENT_LOG:
-              fprintf(stderr, "LOG-%i-%s: %s\n",
-                      event.severity(), event.fac().c_str(), event.str().c_str());
-              break;
-
-            default:
-              std::cerr << "EVENT " << event.type() <<
-                  " (" << RdKafka::err2str(event.err()) << "): " <<
-                  event.str() << std::endl;
-              break;
-          }
-        }
-    };
-
     class ExampleRebalanceCb : public RdKafka::RebalanceCb {
       private:
         static void part_list_print (const std::vector<RdKafka::TopicPartition*>&partitions){
@@ -180,15 +144,6 @@ class kafka_datasource : public external_datasource {
       std::string error_msg;
 
       if (msg_count_ == 0 &&
-          err_ == RdKafka::ErrorCode::ERR__PARTITION_EOF) {
-        // The topic was empty and had no data in it. Most likely best to error
-        // here since the most likely cause of this would be a user entering the
-        // wrong topic name.
-        error_msg.append("Kafka Topic '");
-        error_msg.append(topics_.at(0).c_str());
-        error_msg.append("' is empty or does not exist on broker(s)");
-        //CUDF_FAIL(error_msg);
-      } else if (msg_count_ == 0 &&
                 err_ == RdKafka::ErrorCode::ERR__TIMED_OUT) {
         // unable to connect to the specified Kafka Broker(s)
         std::string brokers_val;
@@ -222,8 +177,8 @@ extern "C" external_datasource* libcudf_external_datasource_load() {
   return new kafka_datasource;
 }
 
-extern "C" external_datasource* libcudf_external_datasource_load_from_conf(std::map<std::string, std::string>& configs) {
-  return new kafka_datasource(configs);
+extern "C" external_datasource* libcudf_external_datasource_load_from_conf(std::map<std::string, std::string>& configs, std::vector<std::string>& topics, std::vector<int>& partitions) {
+  return new kafka_datasource(configs, topics, partitions);
 }
 
 extern "C" void libcudf_external_datasource_destroy(external_datasource* eds) {

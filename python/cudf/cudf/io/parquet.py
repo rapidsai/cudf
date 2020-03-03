@@ -5,7 +5,7 @@ import warnings
 import pyarrow.parquet as pq
 
 import cudf
-import cudf._lib as libcudf
+import cudf._libxx.parquet as libparquet
 from cudf.utils import ioutils
 
 
@@ -44,7 +44,7 @@ def read_parquet(
         ValueError("URL content-encoding decompression is not supported")
 
     if engine == "cudf":
-        df = libcudf.parquet.read_parquet(
+        df = libparquet.read_parquet(
             filepath_or_buffer,
             columns,
             row_group,
@@ -79,7 +79,7 @@ def to_parquet(
 
     if engine == "cudf":
         if partition_cols is not None:
-            ValueError(
+            raise ValueError(
                 "'partition_cols' is currently not supported by the "
                 + "gpu accelerated parquet writer"
             )
@@ -87,12 +87,12 @@ def to_parquet(
         # Ensure that no columns dtype is 'category'
         for col in df.columns:
             if df[col].dtype.name == "category":
-                ValueError(
+                raise ValueError(
                     "'category' column dtypes are currently not "
                     + "supported by the gpu accelerated parquet writer"
                 )
 
-        return libcudf.parquet.write_parquet_libcudf(
+        return libparquet.write_parquet(
             df, path, index, compression=compression, statistics=statistics
         )
     else:

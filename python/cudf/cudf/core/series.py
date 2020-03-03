@@ -13,6 +13,7 @@ import rmm
 
 import cudf
 import cudf._lib as libcudf
+import cudf._libxx as libcudfxx
 from cudf.core.column import ColumnBase, DatetimeColumn, column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
@@ -137,8 +138,12 @@ class Series(Frame):
     @classmethod
     def _from_table(cls, table):
         name = next(iter(table._data.keys()))
-        data = next(iter(table._data.columns))
-        return cls(data=data, index=Index._from_table(table._index), name=name)
+        data = next(iter(table._data.values()))
+        if table._index is None:
+            index = None
+        else:
+            index = Index._from_table(table._index)
+        return cls(data=data, index=index, name=name)
 
     @property
     def _column(self):
@@ -1324,37 +1329,13 @@ class Series(Frame):
         """
         return self._column.to_array(fillna=fillna)
 
-    def isnull(self):
-        """Identify missing values in a Series.
-        """
-        result = Series(
-            self._column.isnull(), name=self.name, index=self.index
-        )
-        return result
-
-    def isna(self):
-        """Identify missing values in a Series. Alias for isnull.
-        """
-        return self.isnull()
-
-    def notna(self):
-        """Identify non-missing values in a Series.
-        """
-        result = Series(self._column.notna(), name=self.name, index=self.index)
-        return result
-
-    def notnull(self):
-        """Identify non-missing values in a Series. Alias for notna.
-        """
-        return self.notna()
-
     def nans_to_nulls(self):
         """
         Convert nans (if any) to nulls
         """
         if self.dtype.kind == "f":
             sr = self.fillna(np.nan)
-            newmask = libcudf.unaryops.nans_to_nulls(sr._column)
+            newmask = libcudfxx.transform.nans_to_nulls(sr._column)
             return self.set_mask(newmask)
         else:
             return self
@@ -2185,9 +2166,7 @@ class Series(Frame):
     def hash_values(self):
         """Compute the hash of values in this column.
         """
-        from cudf.core.column import numerical
-
-        return Series(numerical.column_hash_values(self._column)).values
+        return Series(self._hash()).values
 
     def hash_encode(self, stop, use_name=False):
         """Encode column values as ints in [0, stop) using hash function.
@@ -2208,12 +2187,8 @@ class Series(Frame):
         """
         assert stop > 0
 
-        from cudf.core.column import numerical
-
-        initial_hash = np.asarray(hash(self.name)) if use_name else None
-        hashed_values = numerical.column_hash_values(
-            self._column, initial_hash_values=initial_hash
-        )
+        initial_hash = [hash(self.name) & 0xFFFFFFFF] if use_name else None
+        hashed_values = self._hash(initial_hash)
 
         if hashed_values.has_nulls:
             raise ValueError("Column must have no nulls.")
@@ -2594,6 +2569,50 @@ class Series(Frame):
         lhs = self.to_frame(0)
         rhs = cudf.DataFrame(index=as_index(index))
         result = lhs.join(rhs, how=how, sort=sort)[0]
+        result.index.names = index.names
+        return result
+
+    def merge(self, other):
+        # An inner join shuold return a series containing matching elements
+        # a Left join should return just self
+        # an outer join should return a two column
+        # dataframe containing all elements from both
+        dummy = "name"
+
+        l_name = self.name
+        r_name = other.name
+        lhs = self.copy(deep=False)
+        rhs = other.copy(deep=False)
+
+        if l_name is None and r_name is not None:
+            lhs.name = r_name
+            left_on = right_on = r_name
+        elif r_name is None and l_name is not None:
+            rhs.name = l_name
+            left_on = right_on = l_name
+        elif l_name is None and r_name is None:
+            lhs.name = dummy
+            rhs.name = dummy
+            left_on = right_on = dummy
+        elif l_name is not None and r_name is not None:
+            left_on = l_name
+            right_on = r_name
+
+        result = super(Series, lhs)._merge(
+            rhs,
+            left_on=left_on,
+            right_on=right_on,
+            how="inner",
+            left_index=False,
+            right_index=False,
+            on=None,
+            lsuffix=None,
+            rsuffix=None,
+            method="hash",
+        )
+
+        result.name = other.name
+
         return result
 
 
@@ -2672,6 +2691,15 @@ def _align_indices(series_list, how="outer", allow_non_unique=False):
             all_index_equal = False
             break
 
+    # check if all names are the same
+    all_names_equal = True
+    for sr in series_list[1:]:
+        if not sr.index.names == head.names:
+            all_names_equal = False
+    new_index_names = [None]
+    if all_names_equal:
+        new_index_names = head.names
+
     if all_index_equal:
         return series_list
 
@@ -2679,6 +2707,7 @@ def _align_indices(series_list, how="outer", allow_non_unique=False):
         combined_index = cudf.core.reshape.concat(
             [sr.index for sr in series_list]
         ).unique()
+        combined_index.names = new_index_names
     else:
         combined_index = series_list[0].index
         for sr in series_list[1:]:
@@ -2689,6 +2718,7 @@ def _align_indices(series_list, how="outer", allow_non_unique=False):
                     how="inner",
                 )
             ).index
+        combined_index.names = new_index_names
 
     # align all Series to the combined index
     result = [

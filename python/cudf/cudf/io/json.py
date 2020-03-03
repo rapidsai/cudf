@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
 import warnings
 from io import BytesIO, StringIO
@@ -6,7 +6,7 @@ from io import BytesIO, StringIO
 import pandas as pd
 
 import cudf
-import cudf._libxx.io.json as libjson
+import cudf._libxx.json as libjson
 from cudf.utils import ioutils
 
 
@@ -32,7 +32,7 @@ def read_json(
         path_or_buf, compression, (BytesIO, StringIO), **kwargs
     )
     if engine == "cudf":
-        df = libjson.read_json_libcudf(
+        df = libjson.read_json(
             path_or_buf, dtype, lines, compression, byte_range
         )
     else:

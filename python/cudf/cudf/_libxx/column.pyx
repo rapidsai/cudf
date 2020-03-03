@@ -1,58 +1,30 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-# cython: profile=False
-# distutils: language = c++
-# cython: embedsignature = True
-# cython: language_level = 3
-
 import numpy as np
 import pandas as pd
 import cython
 import rmm
+
+from cudf.core.buffer import Buffer
+from cudf.utils.dtypes import is_categorical_dtype
+import cudf._libxx as libcudfxx
 
 from cpython.buffer cimport PyObject_CheckBuffer
 from libc.stdint cimport uintptr_t
 from libcpp.pair cimport pair
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr, make_unique
+from libcpp.vector cimport vector
 
-import cudf._libxx as libcudfxx
-from cudf._libxx.lib cimport *
+from rmm._lib.device_buffer cimport DeviceBuffer
+
+from cudf._libxx.types import np_to_cudf_types, cudf_to_np_types
 from cudf._libxx.null_mask import bitmask_allocation_size_bytes
+from cudf._libxx.move cimport move
 
-from cudf.core.buffer import Buffer
-from cudf.utils.dtypes import is_categorical_dtype
-
-
-np_to_cudf_types = {
-    np.dtype('int8'): INT8,
-    np.dtype('int16'): INT16,
-    np.dtype('int32'): INT32,
-    np.dtype('int64'): INT64,
-    np.dtype('float32'): FLOAT32,
-    np.dtype('float64'): FLOAT64,
-    np.dtype("datetime64[s]"): TIMESTAMP_SECONDS,
-    np.dtype("datetime64[ms]"): TIMESTAMP_MILLISECONDS,
-    np.dtype("datetime64[us]"): TIMESTAMP_MICROSECONDS,
-    np.dtype("datetime64[ns]"): TIMESTAMP_NANOSECONDS,
-    np.dtype("object"): STRING,
-    np.dtype("bool"): BOOL8
-}
-
-cudf_to_np_types = {
-    INT8: np.dtype('int8'),
-    INT16: np.dtype('int16'),
-    INT32: np.dtype('int32'),
-    INT64: np.dtype('int64'),
-    FLOAT32: np.dtype('float32'),
-    FLOAT64: np.dtype('float64'),
-    TIMESTAMP_SECONDS: np.dtype("datetime64[s]"),
-    TIMESTAMP_MILLISECONDS: np.dtype("datetime64[ms]"),
-    TIMESTAMP_MICROSECONDS: np.dtype("datetime64[us]"),
-    TIMESTAMP_NANOSECONDS: np.dtype("datetime64[ns]"),
-    STRING: np.dtype("object"),
-    BOOL8: np.dtype("bool")
-}
+from cudf._libxx.cpp.column.column cimport column, column_contents
+from cudf._libxx.cpp.column.column_view cimport column_view
+cimport cudf._libxx.cpp.types as libcudf_types
 
 
 @cython.auto_pickle(True)
@@ -317,8 +289,8 @@ cdef class Column:
         else:
             return other_col
 
-    cdef size_type compute_null_count(self) except? 0:
-        return self._view(UNKNOWN_NULL_COUNT).null_count()
+    cdef libcudf_types.size_type compute_null_count(self) except? 0:
+        return self._view(libcudf_types.UNKNOWN_NULL_COUNT).null_count()
 
     cdef mutable_column_view mutable_view(self) except *:
         if is_categorical_dtype(self.dtype):
@@ -327,9 +299,9 @@ cdef class Column:
             col = self
         data_dtype = col.dtype
 
-        cdef type_id tid = np_to_cudf_types[np.dtype(data_dtype)]
-        cdef data_type dtype = data_type(tid)
-        cdef size_type offset = self.offset
+        cdef libcudf_types.type_id tid = np_to_cudf_types[np.dtype(data_dtype)]
+        cdef libcudf_types.data_type dtype = libcudf_types.data_type(tid)
+        cdef libcudf_types.size_type offset = self.offset
         cdef vector[mutable_column_view] children
         cdef void* data
 
@@ -340,16 +312,16 @@ cdef class Column:
             for child_column in self.base_children:
                 children.push_back(child_column.mutable_view())
 
-        cdef bitmask_type* mask
+        cdef libcudf_types.bitmask_type* mask
         if self.nullable:
-            mask = <bitmask_type*><uintptr_t>(self.base_mask_ptr)
+            mask = <libcudf_types.bitmask_type*><uintptr_t>(self.base_mask_ptr)
         else:
             mask = NULL
 
         null_count = self.null_count
         if null_count is None:
-            null_count = UNKNOWN_NULL_COUNT
-        cdef size_type c_null_count = null_count
+            null_count = libcudf_types.UNKNOWN_NULL_COUNT
+        cdef libcudf_types.size_type c_null_count = null_count
 
         return mutable_column_view(
             dtype,
@@ -363,19 +335,19 @@ cdef class Column:
     cdef column_view view(self) except *:
         null_count = self.null_count
         if null_count is None:
-            null_count = UNKNOWN_NULL_COUNT
-        cdef size_type c_null_count = null_count
+            null_count = libcudf_types.UNKNOWN_NULL_COUNT
+        cdef libcudf_types.size_type c_null_count = null_count
         return self._view(c_null_count)
 
-    cdef column_view _view(self, size_type null_count) except *:
+    cdef column_view _view(self, libcudf_types.size_type null_count) except *:
         if is_categorical_dtype(self.dtype):
             col = self.codes
         else:
             col = self
         data_dtype = col.dtype
-        cdef type_id tid = np_to_cudf_types[np.dtype(data_dtype)]
-        cdef data_type dtype = data_type(tid)
-        cdef size_type offset = self.offset
+        cdef libcudf_types.type_id tid = np_to_cudf_types[np.dtype(data_dtype)]
+        cdef libcudf_types.data_type dtype = libcudf_types.data_type(tid)
+        cdef libcudf_types.size_type offset = self.offset
         cdef vector[column_view] children
         cdef void* data
 
@@ -386,13 +358,13 @@ cdef class Column:
             for child_column in self.base_children:
                 children.push_back(child_column.view())
 
-        cdef bitmask_type* mask
+        cdef libcudf_types.bitmask_type* mask
         if self.nullable:
-            mask = <bitmask_type*><uintptr_t>(self.base_mask_ptr)
+            mask = <libcudf_types.bitmask_type*><uintptr_t>(self.base_mask_ptr)
         else:
             mask = NULL
 
-        cdef size_type c_null_count = null_count
+        cdef libcudf_types.size_type c_null_count = null_count
 
         return column_view(
             dtype,
@@ -412,7 +384,7 @@ cdef class Column:
         has_nulls = c_col.get()[0].has_nulls()
 
         # After call to release(), c_col is unusable
-        cdef column_contents contents = c_col.get()[0].release()
+        cdef column_contents contents = move(c_col.get()[0].release())
 
         data = DeviceBuffer.c_from_unique_ptr(move(contents.data))
         data = Buffer(data)

@@ -45,6 +45,11 @@ TEST(ExternalDatasource, WaterMark)
     int partition = 0;
 
     std::map<std::string, std::string> datasource_confs;
+    std::vector<std::string> topics;
+    topics.push_back("libcudf-test");
+
+    std::vector<int> partitions;
+    partitions.push_back(0);
 
     //Topic
     datasource_confs.insert({"ex_ds.kafka.topic", topic});
@@ -55,7 +60,7 @@ TEST(ExternalDatasource, WaterMark)
     datasource_confs.insert({"auto.offset.reset", "beginning"});
     datasource_confs.insert({"enable.partition.eof", "true"});
 
-    cudf::io::external::kafka_datasource ex_datasource = cudf::io::external::kafka_datasource(datasource_confs);
+    cudf::io::external::kafka_datasource ex_datasource = cudf::io::external::kafka_datasource(datasource_confs, topics, partitions);
     ex_datasource.print_consumer_metadata();
     ex_datasource.dump_configs();
     ex_datasource.consume_range(0, 1, 6000, "\n");
