@@ -63,7 +63,7 @@ std::unique_ptr<column> all_characters_of_type( strings_column_view const& strin
                 auto code_point = detail::utf8_to_codepoint(*itr);
                 // lookup flags in table by code-point
                 auto flag = code_point <= 0x00FFFF ? d_flags[code_point] : 0;
-                check = (types & flag) > 0;
+                check = (static_cast<int>(types) & flag) > 0;
             }
             return check;
         });
