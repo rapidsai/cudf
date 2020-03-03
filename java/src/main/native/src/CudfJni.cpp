@@ -18,7 +18,7 @@
 
 namespace {
 
-// handles det
+// handles detaching a thread from the JVM when the thread terminates
 class jvm_detach_on_destruct {
 public:
   explicit jvm_detach_on_destruct(JavaVM* jvm)
