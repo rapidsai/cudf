@@ -43,14 +43,18 @@ def gather(Table source_table, Column gather_map):
     )
 
 
-def shift(Column input, int offset, Scalar fill_value=None):
+def shift(Column input, int offset, object fill_value=None):
 
-    if not isinstance(fill_value, Scalar):
-        fill_value = Scalar(fill_value, input.dtype)
+    cdef Scalar fill
+
+    if isinstance(fill_value, Scalar):
+        fill = fill_value
+    else:
+        fill = Scalar(fill_value, input.dtype)
 
     cdef column_view c_input = input.view()
     cdef int32_t c_offset = offset
-    cdef scalar* c_fill_value = fill_value.c_value.get()
+    cdef scalar* c_fill_value = fill.c_value.get()
     cdef unique_ptr[column] c_output
 
     with nogil:
