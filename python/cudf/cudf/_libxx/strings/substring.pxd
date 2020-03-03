@@ -4,13 +4,14 @@ from libcpp.memory cimport unique_ptr
 from cudf._libxx.cpp.types cimport size_type
 from cudf._libxx.cpp.column.column_view cimport column_view
 from cudf._libxx.cpp.column.column cimport column
+from cudf._libxx.cpp.scalar.scalar cimport numeric_scalar
 
 cdef extern from "cudf/strings/substring.hpp" namespace "cudf::strings" nogil:
     cdef unique_ptr[column] slice_strings(
         column_view source_strings,
-        size_type start,
-        size_type end,
-        size_type step) except +
+        numeric_scalar[size_type] start,
+        numeric_scalar[size_type] end,
+        numeric_scalar[size_type] step) except +
 
     cdef unique_ptr[column] slice_strings(
         column_view source_strings,

@@ -15,11 +15,7 @@ import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
 import cudf._libxx.string_casting as str_cast
 from cudf._lib.nvtx import nvtx_range_pop, nvtx_range_push
-from cudf._libxx.null_mask import (
-    MaskState,
-    bitmask_allocation_size_bytes,
-    create_null_mask,
-)
+from cudf._libxx.null_mask import bitmask_allocation_size_bytes
 from cudf._libxx.strings.replace import (
     insert as cpp_string_insert,
     slice_replace as cpp_slice_replace,
@@ -467,15 +463,8 @@ class StringMethods(object):
 
         """
 
-        if start is None:
-            start = 0
-        if stop is None:
-            stop = -1
-        if step is None:
-            step = 1
-
         return self._return_or_inplace(
-            cpp_slice_strings(self._column, start, stop, step), **kwargs
+            cpp_slice_strings(self._column, start, stop, step), **kwargs,
         )
 
     def slice_from(self, starts=0, stops=0, **kwargs):
