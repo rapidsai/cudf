@@ -65,6 +65,7 @@ struct aggregation_result {
   std::vector<std::unique_ptr<column>> results{};
 };
 
+
 /**
  * @brief Groups values by keys and computes aggregations on those groups.
  */
@@ -163,7 +164,38 @@ class groupby {
       std::vector<aggregation_request> const& requests,
       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
- private:
+  /**
+   * @brief The grouped data corresponding to a groupby operation on a set of values.
+   *
+   * A `groups` object holds two tables of identical number of rows:
+   * a table of grouped keys and a table of grouped values. In addition, it holds
+   * a vector of integer offsets into the rows of the tables, such that
+   * `offsets[i+1] - offsets[i]` gives the size of group `i`.
+   */
+  struct groups {
+    std::unique_ptr<table> keys;
+    std::vector<size_type> offsets;
+    std::unique_ptr<table> values;
+  };
+
+  /**
+   * @brief Get the grouped keys and values corresponding to a groupby operation on a set of values
+   *
+   * Returns a `groups` object representing the grouped keys and values.
+   * If values is not provided, only a grouping of the keys is performed,
+   * and the `values` of the `groups` object will be `nullptr`.
+   *
+   * @param values Table representing values on which a groupby operation is to be performed
+   * @param mr Memory resource used to allocate the returned tables
+   * @return A `groups` object representing grouped keys and values
+   */
+  groups get_groups(
+      cudf::table_view values={},
+      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()
+  );
+
+
+private:
   table_view _keys;                    ///< Keys that determine grouping
   include_nulls _include_null_keys{include_nulls::NO}; ///< Include rows in keys 
                                                        ///< with NULLs

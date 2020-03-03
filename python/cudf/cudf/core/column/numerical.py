@@ -130,21 +130,9 @@ class NumericalColumn(column.ColumnBase):
         from cudf.core.column import string, as_column
 
         if len(self) > 0:
-            if self.dtype in (np.dtype("int8"), np.dtype("int16")):
-                self_as_int32 = self.astype("int32", **kwargs)
-                dev_array = self_as_int32.data_array_view
-                dev_ptr = self_as_int32.data_ptr
-            else:
-                dev_array = self.data_array_view
-                dev_ptr = self.data_ptr
-            null_ptr = None
-            if self.nullable:
-                null_ptr = self.mask_ptr
-            kwargs = {"count": len(self), "nulls": null_ptr, "bdevmem": True}
-            data = string._numeric_to_str_typecast_functions[
-                np.dtype(dev_array.dtype)
-            ](dev_ptr, **kwargs)
-            return as_column(data)
+            return string._numeric_to_str_typecast_functions[
+                np.dtype(self.dtype)
+            ](self, **kwargs)
         else:
             return as_column([], dtype="object")
 
@@ -156,14 +144,10 @@ class NumericalColumn(column.ColumnBase):
         )
 
     def as_numerical_column(self, dtype, **kwargs):
-        casted = libcudf.typecast.cast(self, dtype)
-        return column.build_column(
-            data=casted.data,
-            dtype=casted.dtype,
-            mask=casted.mask,
-            size=casted.size,
-            offset=casted.offset,
-        )
+        dtype = np.dtype(dtype)
+        if dtype == self.dtype:
+            return self
+        return libcudfxx.unary.cast(self, dtype)
 
     def sort_by_values(self, ascending=True, na_position="last"):
         sort_inds = get_sorted_inds(self, ascending, na_position)
@@ -508,8 +492,11 @@ def _numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
 
 
 def _numeric_column_unaryop(operand, op):
-    out = libcudf.unaryops.apply_unary_op(operand, op)
-    return out
+    if callable(op):
+        return libcudfxx.transform.transform(operand, op)
+
+    op = libcudfxx.unary.UnaryOp[op.upper()]
+    return libcudfxx.unary.unary_operation(operand, op)
 
 
 def _numeric_column_compare(lhs, rhs, op):

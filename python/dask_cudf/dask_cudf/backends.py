@@ -23,7 +23,7 @@ def _nonempty_index(idx):
         values = cudf.core.column.DatetimeColumn.from_numpy(data)
         return cudf.core.index.DatetimeIndex(values, name=idx.name)
     elif isinstance(idx, cudf.core.index.StringIndex):
-        return cudf.core.index.StringIndex(["cat", "dog"])
+        return cudf.core.index.StringIndex(["cat", "dog"], name=idx.name)
     elif isinstance(idx, cudf.core.index.CategoricalIndex):
         key = tuple(idx._data.keys())
         assert len(key) == 1

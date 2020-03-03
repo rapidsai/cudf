@@ -77,9 +77,9 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    *                    vector takes ownership of the buffer. Do not use the buffer after calling
    *                    this.
    */
-  ColumnVector(DType type, long rows,
-               Optional<Long> nullCount, DeviceMemoryBuffer dataBuffer, DeviceMemoryBuffer validityBuffer,
-               DeviceMemoryBuffer offsetBuffer) {
+  public ColumnVector(DType type, long rows, Optional<Long> nullCount,
+      DeviceMemoryBuffer dataBuffer, DeviceMemoryBuffer validityBuffer,
+      DeviceMemoryBuffer offsetBuffer) {
     if (type != DType.STRING) {
       assert offsetBuffer == null : "offsets are only supported for STRING";
     }
