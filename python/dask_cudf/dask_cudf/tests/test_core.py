@@ -367,6 +367,39 @@ def test_repartition_simple_divisions(start, stop):
     dd.utils.assert_eq(a, b)
 
 
+@pytest.mark.parametrize("by", [["b"], ["c"], ["d"], ["b", "c"]])
+def test_repartition_hash(by):
+    npartitions = 4
+    datarange = 8
+    size = 100
+    gdf = cudf.DataFrame(
+        {
+            "a": np.arange(0, stop=size, dtype="int64"),
+            "b": np.random.randint(datarange, size=size),
+            "c": np.random.choice(list("abcdefgh"), size=size),
+            "d": np.random.choice(np.arange(8), size=size),
+        }
+    )
+    gdf.d = gdf.d.astype("datetime64[ms]")
+    ddf = dgd.from_cudf(gdf, npartitions=npartitions)
+    ddf_new = ddf.repartition(columns=by)
+
+    # Check that the length was preserved
+    assert len(ddf_new) == len(ddf)
+
+    # Check that the partitions have unique keys,
+    # and that the key values are preserved
+    expect_unique = gdf[by].drop_duplicates().sort_values(by)
+    got_unique = cudf.concat(
+        [
+            part[by].compute().drop_duplicates()
+            for part in ddf_new[by].partitions
+        ],
+        ignore_index=True,
+    ).sort_values(by)
+    dd.assert_eq(got_unique, expect_unique, check_index=False)
+
+
 @pytest.fixture
 def pdf():
     return pd.DataFrame(

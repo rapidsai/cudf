@@ -52,8 +52,8 @@ public final class Table implements AutoCloseable {
    * @param columns - Array of ColumnVectors
    */
   public Table(ColumnVector... columns) {
-    assert columns != null : "ColumnVectors can't be null";
-    rows = columns.length > 0 ? columns[0].getRowCount() : 0;
+    assert columns != null && columns.length > 0 : "ColumnVectors can't be null or empty";
+    rows = columns[0].getRowCount();
 
     for (ColumnVector columnVector : columns) {
       assert (null != columnVector) : "ColumnVectors can't be null";
@@ -74,7 +74,7 @@ public final class Table implements AutoCloseable {
   }
 
   private Table(long[] cudfColumns) {
-    assert cudfColumns != null : "CudfColumns can't be null";
+    assert cudfColumns != null && cudfColumns.length > 0 : "CudfColumns can't be null or empty";
     this.columns = new ColumnVector[cudfColumns.length];
     try {
       for (int i = 0; i < cudfColumns.length; i++) {

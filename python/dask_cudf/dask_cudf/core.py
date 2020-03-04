@@ -305,6 +305,90 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 result.divisions = (min(self.columns), max(self.columns))
             return handle_out(out, result)
 
+    def repartition_by_hash(
+        self,
+        columns=None,
+        npartitions=None,
+        max_branch=None,
+        disk_path=None,
+        **kwargs,
+    ):
+        """Repartition a dask_cudf DataFrame by hashing.
+
+        Warning: Index will be ignored/dropped during this operation.
+        Be sure to call reset_index beforehand to preserve the
+        index as a column.
+
+        Parameter
+        ---------
+        columns : list, default None
+            List of columns (by name) to be used for hashing. If None,
+            all columns will be used.
+        npartitions : int, default None
+            Number of output partitions. If None, the output partitions
+            are chosen to match self.npartitions.
+        max_branch : int or False, default None
+            Passed to `rearrange_by_hash` - If False, single-stage shuffling
+            will be used (no matter the number of partitions).
+        disk_path : str, default None
+            If set to a string value, the repartitioning will be performed
+            "on disk," using a partitioned parquet dataset.
+        kwargs : dict
+            Other `repartition` arguments.  Ignored.
+        """
+        npartitions = npartitions or self.npartitions
+        columns = columns or [col for col in self.columns]
+
+        # Use parquet-based shuffle on disk if path is provided
+        if isinstance(disk_path, str):
+            # WARNING: The `to_parquet` operation will use
+            # pyarrow until cudf#4236 (or similar) is merged
+            warnings.warn(
+                "Performing repartition_by_hash by writing a parquet"
+                " dataset - Expect poor performance!"
+            )
+            meta = self._meta._constructor_sliced([0])
+            partitions = self[columns].map_partitions(
+                sorting.set_partitions_hash, columns, npartitions, meta=meta
+            )
+            df2 = self.assign(_partitions=partitions)
+            df2.to_parquet(
+                disk_path,
+                write_index=False,
+                partition_on=["_partitions"],
+                append=False,
+                compression="snappy",
+                write_metadata_file=False,
+                compute=True,
+            )
+            from dask_cudf import read_parquet
+
+            return read_parquet(disk_path, index=False).drop(
+                columns=["_partitions"]
+            )
+
+        # Use task-based shuffle to move data
+        return sorting.rearrange_by_hash(
+            self,
+            columns,
+            npartitions,
+            max_branch=max_branch,
+            ignore_index=True,
+        )
+
+    def repartition(self, *args, **kwargs):
+        """ Wraps dask.dataframe DataFrame.repartition method.
+        Uses repartition_by_hash if `columns=` is specified.
+        """
+        columns = kwargs.pop("columns", None)
+        if columns:
+            warnings.warn(
+                "Repartitioning by column hash. Index will be ignored,"
+                "and divisions will lost."
+            )
+            return self.repartition_by_hash(columns=columns, **kwargs)
+        return super().repartition(*args, **kwargs)
+
 
 def sum_of_squares(x):
     x = x.astype("f8")._column
