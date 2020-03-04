@@ -123,12 +123,11 @@
 - PR #4274 Support negative position values in slice_strings
 - PR #4282 Porting nvstrings conversion functions from new libcudf++ to Python/Cython
 - PR #4306 Use libcudf++ `unary.pyx` cast instead of legacy cast
-- PR #4305 Move gpuarrow.pyx and related libarrow_cuda files into _libxx
-- PR #3987 nvstrings case/capitalization cython bindings
 - PR #4295 Port reduce.pyx to libcudf++ API
 - PR #4305 Move gpuarrow.pyx and related libarrow_cuda files into `_libxx`
 - PR #4244 Port nvstrings Substring Gather/Scatter functions to cuDF Python/Cython
 - PR #4280 Port nvstrings Numeric Handling functions to cuDF Python/Cython
+- PR #4278 nvstrings case/capitalization cython bindings
 
 ## Bug Fixes
 
