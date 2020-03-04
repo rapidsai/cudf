@@ -2563,6 +2563,7 @@ class Series(Frame):
         lhs = self.to_frame(0)
         rhs = cudf.DataFrame(index=as_index(index))
         result = lhs.join(rhs, how=how, sort=sort)[0]
+        result.name = self.name
         result.index.names = index.names
         return result
 
