@@ -197,6 +197,7 @@
 - PR #4297 Fix specification of package_data in setup.py
 - PR #4302 Fix `_is_local_filesystem` check
 - PR #4303 Parquet reader: fix empty columns missing from table
+- PR #4115 Serialize an empty column table with non zero rows
 
 
 # cuDF 0.12.0 (04 Feb 2020)
