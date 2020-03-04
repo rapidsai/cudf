@@ -175,10 +175,11 @@ class _Grouping(object):
                     self._handle_mapping(by)
                 elif isinstance(by, Grouper):
                     self._handle_grouper(by)
-                elif by in self.obj:
-                    self._handle_label(by)
                 else:
-                    self._handle_misc(by)
+                    try:
+                        self._handle_label(by)
+                    except (KeyError, TypeError):
+                        self._handle_misc(by)
 
     @property
     def keys(self):
