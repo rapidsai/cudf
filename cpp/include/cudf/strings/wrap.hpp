@@ -25,12 +25,9 @@ namespace strings
 /**
  * @brief Wraps strings onto multiple lines shorter than `width` by replacing appropriate white space with new-line characters (ASCII 0x0A).
  *
- * Returns a column of strings where, for each string row in the input, 
- * words separated by spaces will become separated by newline characters,
- * as follows: if the string is longer than width, a new-line is inserted 
- * at space positions so that each line is no more than width characters 
- * without truncating any non-space character sequences.
- * Attempts to make each line less than or equal to width characters. 
+ * For each string row in the input column longer than `width`, the corresponding output string row 
+ * will have newline characters inserted so that each line is no more than `width characters`. Attempts to 
+ * use existing white space locations to split the strings, but may split non-white-space sequences if necessary.  
  *
  * Any null string entries return corresponding null output column entries.
  *
