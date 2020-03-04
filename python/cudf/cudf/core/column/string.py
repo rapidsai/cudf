@@ -16,6 +16,13 @@ import cudf._libxx as libcudfxx
 import cudf._libxx.string_casting as str_cast
 from cudf._lib.nvtx import nvtx_range_pop, nvtx_range_push
 from cudf._libxx.null_mask import bitmask_allocation_size_bytes
+from cudf._libxx.strings.char_types import (
+    is_alnum as cpp_is_alnum,
+    is_alpha as cpp_is_alpha,
+    is_decimal as cpp_is_decimal,
+    is_digit as cpp_is_digit,
+    is_numeric as cpp_is_numeric,
+)
 from cudf._libxx.strings.replace import (
     insert as cpp_string_insert,
     slice_replace as cpp_slice_replace,
@@ -462,6 +469,69 @@ class StringMethods(object):
     #     return self._return_or_inplace(
     #         cpp_slice_strings(self._column, start, stop, step), **kwargs,
     #     )
+
+    def isdecimal(self, **kwargs):
+        """
+        Returns a Series/Column/Index of boolean values with True for strings
+        that contain only decimal characters -- those that can be used
+        to extract base10 numbers.
+
+        Returns
+        -------
+        Series/Index of bool dtype
+
+        """
+        return self._return_or_inplace(cpp_is_decimal(self._column))
+
+    def isalnum(self, **kwargs):
+        """
+        Returns a Series/Index of boolean values with True for strings
+        that contain only alpha-numeric characters.
+        Equivalent to: isalpha() or isdigit() or isnumeric() or isdecimal()
+
+        Returns
+        -------
+        Series/Index of bool dtype
+
+        """
+        return self._return_or_inplace(cpp_is_alnum(self._column))
+
+    def isalpha(self, **kwargs):
+        """
+        Returns a Series/Index of boolean values with True for strings
+        that contain only alphabetic characters.
+
+        Returns
+        -------
+        Series/Index of bool dtype
+
+        """
+        return self._return_or_inplace(cpp_is_alpha(self._column))
+
+    def isdigit(self, **kwargs):
+        """
+        Returns a Series/Index of boolean values with True for strings
+        that contain only decimal and digit characters.
+
+        Returns
+        -------
+        Series/Index of bool dtype
+
+        """
+        return self._return_or_inplace(cpp_is_digit(self._column))
+
+    def isnumeric(self, **kwargs):
+        """
+        Returns a Series/Index of boolean values with True for strings
+        that contain only numeric characters. These include digit and
+        numeric characters.
+
+        Returns
+        -------
+        Series/Index of bool dtype
+
+        """
+        return self._return_or_inplace(cpp_is_numeric(self._column))
 
     def slice_from(self, starts=0, stops=0, **kwargs):
         """
