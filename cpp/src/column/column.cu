@@ -182,7 +182,12 @@ struct create_column_from_view {
  template <typename ColumnType,
            std::enable_if_t<std::is_same<ColumnType, cudf::dictionary32>::value>* = nullptr>
  std::unique_ptr<column> operator()() {
-   CUDF_FAIL("dictionary not supported yet");
+   std::vector<std::unique_ptr<column>> children;
+   for (size_type i = 0; i < view.num_children(); ++i)
+     children.emplace_back(std::make_unique<column>(view.child(i), stream, mr));
+   return std::make_unique<column>(view.type(), view.size(), rmm::device_buffer{},
+                                   cudf::copy_bitmask(view, stream, mr),
+                                   view.null_count(), std::move(children));
  }
  
  template <typename ColumnType,
