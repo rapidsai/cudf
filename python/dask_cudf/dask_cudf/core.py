@@ -305,7 +305,12 @@ class DataFrame(_Frame, dd.core.DataFrame):
             return handle_out(out, result)
 
     def repartition_by_hash(
-        self, columns=None, npartitions=None, max_branch=None, disk_path=None
+        self,
+        columns=None,
+        npartitions=None,
+        max_branch=None,
+        disk_path=None,
+        **kwargs,
     ):
         """Repartition a dask_cudf DataFrame by hashing.
 
@@ -327,6 +332,8 @@ class DataFrame(_Frame, dd.core.DataFrame):
         disk_path : str, default None
             If set to a string value, the repartitioning will be performed
             "on disk," using a partitioned parquet dataset.
+        kwargs : dict
+            Other `repartition` arguments.  Ignored.
         """
         npartitions = npartitions or self.npartitions
         columns = columns or [col for col in self.columns]
@@ -366,6 +373,18 @@ class DataFrame(_Frame, dd.core.DataFrame):
         return batcher_sortnet.rearrange_by_hash(
             self, columns, npartitions, max_branch=max_branch
         )
+
+    def repartition(self, columns=None, **kwargs):
+        """ Wraps dask.dataframe DataFrame.repartition method.
+        Uses repartition_by_hash if `columns=` is specified.
+        """
+        if columns:
+            warnings.warn(
+                "Repartitioning by column hash. Index will be ignored,"
+                "and divisions will lost."
+            )
+            return self.repartition_by_hash(columns=columns, **kwargs)
+        return super().repartition(**kwargs)
 
 
 def sum_of_squares(x):
