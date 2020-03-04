@@ -14,14 +14,14 @@ from cudf.tests.utils import assert_eq
 def make_params():
     np.random.seed(0)
 
-    hows = "left,inner,outer,right,leftanti".split(",")
+    hows = "left,inner,outer,right,leftanti,leftsemi".split(",")
     methods = "hash,sort".split(",")
 
     # Test specific cases (1)
     aa = [0, 0, 4, 5, 5]
     bb = [0, 0, 2, 3, 5]
     for how in hows:
-        if how in ["left", "inner", "right", "leftanti"]:
+        if how in ["left", "inner", "right", "leftanti", "leftsemi"]:
             for method in methods:
                 yield (aa, bb, how, method)
         else:
@@ -31,7 +31,7 @@ def make_params():
     aa = [0, 0, 1, 2, 3]
     bb = [0, 1, 2, 2, 3]
     for how in hows:
-        if how in ["left", "inner", "right", "leftanti"]:
+        if how in ["left", "inner", "right", "leftanti", "leftsemi"]:
             for method in methods:
                 yield (aa, bb, how, method)
         else:
@@ -41,7 +41,7 @@ def make_params():
     aa = np.random.randint(0, 50, 100)
     bb = np.random.randint(0, 50, 100)
     for how in hows:
-        if how in ["left", "inner", "right", "leftanti"]:
+        if how in ["left", "inner", "right", "leftanti", "leftsemi"]:
             for method in methods:
                 yield (aa, bb, how, method)
         else:
@@ -51,17 +51,19 @@ def make_params():
     aa = np.random.random(50)
     bb = np.random.random(50)
     for how in hows:
-        if how in ["left", "inner", "right", "leftanti"]:
+        if how in ["left", "inner", "right", "leftanti", "leftsemi"]:
             for method in methods:
                 yield (aa, bb, how, method)
         else:
             yield (aa, bb, how, "sort")
 
-def pd_anti_join(left, right, **kwargs):
-    kwargs.pop('how')
-    kwargs.pop('method')
-    result = left.merge(right, how='left', left_index=True, right_index=True, indicator=True, **kwargs)
-    return result.loc[result._merge == 'left_only', :][left.columns]
+def pd_anti_join(left, right, join_type):
+    if join_type == 'leftanti':
+        result = left.merge(right, how='left', left_index=True, right_index=True, indicator=True)
+        return result.loc[result._merge == 'left_only', :][left.columns]
+    elif join_type == 'leftsemi':
+        result = left.merge(right, how='left', left_index=True, right_index=True)
+    return result[left.columns]
 
 
 @pytest.mark.parametrize("aa,bb,how,method", make_params())
@@ -75,7 +77,9 @@ def test_dataframe_join_how(aa, bb, how, method):
         df1 = df.set_index("a")
         df2 = df.set_index("b")
         if how == 'leftanti':
-            joined = pd_anti_join(df1, df2, how=how, method=method)
+            joined = pd_anti_join(df1, df2, 'leftanti')
+        elif how == 'leftsemi':
+            joined = pd_anti_join(df1, df2, 'leftsemi')
         else:
             joined = df1.join(df2, how=how, sort=True)
         te = timer()
@@ -90,7 +94,8 @@ def test_dataframe_join_how(aa, bb, how, method):
         te = timer()
         print("timing", type(df), te - ts)
         return joined
-
+    import pdb
+    pdb.set_trace()
     expect = work_pandas(df.to_pandas(), how)
     got = work_gdf(df)
     expecto = expect.copy()
@@ -124,7 +129,7 @@ def test_dataframe_join_how(aa, bb, how, method):
         #                          got['a'])
         else:
             for c in expecto.columns:
-                _check_series(expecto[c].fillna(-1), goto[c].fillna(-1)])
+                _check_series(expecto[c].fillna(-1), goto[c].fillna(-1))
 
 
 def _check_series(expect, got):
