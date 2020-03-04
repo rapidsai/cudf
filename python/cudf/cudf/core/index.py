@@ -83,6 +83,18 @@ class Index(Frame):
     def __contains__(self, item):
         return item in self._values
 
+    def get_level_values(self, level):
+        if level == self.name:
+            return cudf.Series(self)
+        elif pd.api.types.is_integer(level):
+            if level != 0:
+                raise IndexError(
+                    f"Cannot get level: {level} " f"for index with 1 level"
+                )
+            return cudf.Series(self)
+        else:
+            raise KeyError(f"Requested level with name {level} " "not found")
+
     @classmethod
     def deserialize(cls, header, frames):
         """

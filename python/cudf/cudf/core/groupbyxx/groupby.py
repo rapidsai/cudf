@@ -7,10 +7,11 @@ import cudf._libxx.groupby as libgroupby
 
 
 class GroupBy(object):
-    def __init__(self, obj, by=None, level=None):
+    def __init__(self, obj, by=None, level=None, as_index=True):
         self.grouping = _Grouping(obj, by, level)
         self.obj = obj
         self._groupby = libgroupby.GroupBy(self.grouping.keys)
+        self.as_index = as_index
 
     def __iter__(self):
         grouped_keys, grouped_values, offsets = self._groupby.groups(self.obj)
@@ -35,6 +36,15 @@ class GroupBy(object):
 
         # set index names to be group key names
         result.index.names = self.grouping.names
+
+        if not self.as_index:
+            for col_name in reversed(self.grouping._named_columns):
+                result.insert(
+                    0,
+                    col_name,
+                    result.index.get_level_values(col_name)._column,
+                )
+            result.index = cudf.core.index.RangeIndex(len(result))
 
         return result
 

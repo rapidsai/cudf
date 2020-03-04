@@ -140,6 +140,7 @@ class MultiIndex(Index):
     @_source_data.setter
     def _source_data(self, value):
         self._data = value._data
+        self._compute_levels_and_codes()
 
     @property
     def name(self):
@@ -533,6 +534,9 @@ class MultiIndex(Index):
                 if level < 0 or level >= len(colnames):
                     raise IndexError(f"Invalid level number: '{level}'")
                 level_idx = level
+                level = colnames[level_idx]
+            elif level in self.names:
+                level_idx = list(self.names).index(level)
                 level = colnames[level_idx]
             else:
                 raise KeyError(f"Level not found: '{level}'")
