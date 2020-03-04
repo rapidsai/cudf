@@ -586,12 +586,6 @@ hash_partition_table(table_view const& input,
   }
 }
 
-// Add a wrapper around nvtx to automatically pop the range when the function scope ends
-struct nvtx_raii {
-  nvtx_raii(char const* name, nvtx::color color) { nvtx::range_push(name, color); }
-  ~nvtx_raii() { nvtx::range_pop(); }
-};
-
 }  // namespace
 
 namespace detail {
@@ -604,7 +598,7 @@ hash_partition(table_view const& input,
                cudaStream_t stream)
 {
   // Push/pop nvtx range around the scope of this function
-  nvtx_raii("CUDF_HASH_PARTITION", nvtx::PARTITION_COLOR);
+  nvtx::raii_range range("CUDF_HASH_PARTITION", nvtx::PARTITION_COLOR);
 
   auto table_to_hash = input.select(columns_to_hash);
 
