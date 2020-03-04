@@ -11,6 +11,7 @@ from . import (
     join,
     merge,
     null_mask,
+    orc,
     quantiles,
     reduce,
     replace,
