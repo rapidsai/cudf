@@ -39,6 +39,22 @@ cdef unique_ptr[aggregation] get_aggregation(op, kwargs) except *:
         agg = move(libcudf_aggregation.make_mean_aggregation())
     elif op == "count":
         agg = move(libcudf_aggregation.make_count_aggregation())
+    elif op == "any":
+        agg = move(libcudf_aggregation.make_any_aggregation())
+    elif op == "all":
+        agg = move(libcudf_aggregation.make_all_aggregation())
+    elif op == "product":
+        agg = move(libcudf_aggregation.make_product_aggregation())
+    elif op == "sum_of_squares":
+        agg = move(libcudf_aggregation.make_sum_of_squares_aggregation())
+    elif op == "var":
+        agg = move(libcudf_aggregation.make_variance_aggregation(
+            kwargs['ddof'])
+        )
+    elif op == "std":
+        agg = move(libcudf_aggregation.make_std_aggregation(kwargs['ddof']))
+    elif op == "count":
+        agg = move(libcudf_aggregation.make_count_aggregation())
     elif callable(op):
         # Handling UDF type
         nb_type = numba.numpy_support.from_dtype(kwargs['dtype'])

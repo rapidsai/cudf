@@ -32,6 +32,7 @@
 - PR #4259 Ability to create Java host buffers from memory-mapped files
 - PR #4240 Add groupby::groups()
 - PR #4319 Add repartition_by_hash API to dask_cudf
+- PR #4298 Port orc.pyx to libcudf++
 
 ## Improvements
 
@@ -122,7 +123,10 @@
 - PR #4274 Support negative position values in slice_strings
 - PR #4282 Porting nvstrings conversion functions from new libcudf++ to Python/Cython
 - PR #4306 Use libcudf++ `unary.pyx` cast instead of legacy cast
-- PR #4305 Move gpuarrow.pyx and related libarrow_cuda files into _libxx
+- PR #4295 Port reduce.pyx to libcudf++ API
+- PR #4305 Move gpuarrow.pyx and related libarrow_cuda files into `_libxx`
+- PR #4244 Port nvstrings Substring Gather/Scatter functions to cuDF Python/Cython
+- PR #4280 Port nvstrings Numeric Handling functions to cuDF Python/Cython
 
 ## Bug Fixes
 
@@ -184,12 +188,16 @@
 - PR #4245 Fix race condition in parquet reader
 - PR #4258 Fix dask-cudf losing index name in `reset_index`
 - PR #4268 Fix java build for hash aggregate
+- PR #4275 Fix bug in searching nullable values in non-nullable search space in `upper_bound`
 - PR #4273 Fix losing `StringIndex` name in dask `_meta_nonempty`
 - PR #4279 Fix converting `np.float64` to Scalar
 - PR #4285 Add init files for cython pkgs and fix `setup.py`
 - PR #4287 Parquet reader: fix empty string potentially read as null
+- PR #4310 Fix empty values case in groupby 
 - PR #4297 Fix specification of package_data in setup.py
 - PR #4302 Fix `_is_local_filesystem` check
+- PR #4303 Parquet reader: fix empty columns missing from table
+- PR #4115 Serialize an empty column table with non zero rows
 
 
 # cuDF 0.12.0 (04 Feb 2020)
