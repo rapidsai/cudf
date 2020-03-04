@@ -2,17 +2,13 @@
 
 from cudf._libxx.cpp.io.functions cimport (
     read_avro_args,
-    read_avro as read_avro_cpp
+    read_avro as libcudf_read_avro
 )
 from cudf._libxx.cpp.io.types cimport table_with_metadata
 from cudf._libxx.cpp.types cimport size_type
 from cudf._libxx.io.utils cimport make_source_info
 from cudf._libxx.move cimport move
 from cudf._libxx.table cimport Table
-
-from libcpp.memory cimport unique_ptr
-from libcpp.string cimport string
-from libcpp.vector cimport vector
 
 
 cpdef read_avro(filepath_or_buffer, columns=None, skip_rows=-1, num_rows=-1):
@@ -38,18 +34,22 @@ cpdef read_avro(filepath_or_buffer, columns=None, skip_rows=-1, num_rows=-1):
     )
 
     with nogil:
-        c_result = move(read_avro_cpp(c_read_avro_args))
+        c_result = move(libcudf_read_avro(c_read_avro_args))
 
     names = [name.decode() for name in c_result.metadata.column_names]
 
     return Table.from_unique_ptr(move(c_result.tbl), column_names=names)
 
 
-cdef read_avro_args make_read_avro_args(p, cols, num_rows, skip_rows) except*:
-    cdef read_avro_args args = read_avro_args(make_source_info(p))
+cdef read_avro_args make_read_avro_args(filepath_or_buffer,
+                                        column_names,
+                                        num_rows, skip_rows) except*:
+    cdef read_avro_args args = read_avro_args(
+        make_source_info(filepath_or_buffer)
+    )
     args.num_rows = <size_type> num_rows
     args.skip_rows = <size_type> skip_rows
-    args.columns.reserve(len(cols))
-    for col in cols:
+    args.columns.reserve(len(column_names))
+    for col in column_names:
         args.columns.push_back(str(col).encode())
     return args

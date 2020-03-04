@@ -1,16 +1,14 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 from libcpp cimport bool, int
-from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
-from libcpp.vector cimport vector
 from cudf._libxx.cpp.column.column cimport column
 
 from cudf._libxx.cpp.io.functions cimport (
     read_orc_args,
     write_orc_args,
-    read_orc as read_orc_cpp,
-    write_orc as write_orc_cpp
+    read_orc as libcudf_read_orc,
+    write_orc as libcudf_write_orc
 )
 from cudf._libxx.cpp.io.types cimport (
     compression_type,
@@ -44,10 +42,10 @@ cpdef read_orc(filepath_or_buffer, columns=None,
     cdef read_orc_args c_read_orc_args = make_read_orc_args(
         filepath_or_buffer,
         columns or [],
-        size_t_arg(stripe, "stripe"),
-        size_t_arg(stripe_count, "stripe_count"),
-        size_t_arg(skip_rows, "skip_rows"),
-        size_t_arg(num_rows, "num_rows"),
+        get_size_t_arg(stripe, "stripe"),
+        get_size_t_arg(stripe_count, "stripe_count"),
+        get_size_t_arg(skip_rows, "skip_rows"),
+        get_size_t_arg(num_rows, "num_rows"),
         (
             type_id.EMPTY
             if timestamp_type is None else
@@ -55,13 +53,13 @@ cpdef read_orc(filepath_or_buffer, columns=None,
         ),
         use_index,
         decimals_as_float,
-        size_t_arg(force_decimal_scale, "force_decimal_scale")
+        get_size_t_arg(force_decimal_scale, "force_decimal_scale")
     )
 
     cdef table_with_metadata c_result
 
     with nogil:
-        c_result = move(read_orc_cpp(c_read_orc_args))
+        c_result = move(libcudf_read_orc(c_read_orc_args))
 
     names = [name.decode() for name in c_result.metadata.column_names]
 
@@ -102,17 +100,18 @@ cpdef write_orc(Table table,
     )
 
     with nogil:
-        write_orc_cpp(c_write_orc_args)
+        libcudf_write_orc(c_write_orc_args)
 
 
-cdef size_type size_t_arg(arg, name) except*:
+cdef size_type get_size_t_arg(arg, name) except*:
     arg = -1 if arg is None else arg
     if not isinstance(arg, int) or arg < -1:
         raise TypeError("{} must be an int >= -1".format(name))
     return <size_type> arg
 
 
-cdef read_orc_args make_read_orc_args(p, column_names,
+cdef read_orc_args make_read_orc_args(filepath_or_buffer,
+                                      column_names,
                                       size_type stripe,
                                       size_type stripe_count,
                                       size_type skip_rows,
@@ -121,11 +120,13 @@ cdef read_orc_args make_read_orc_args(p, column_names,
                                       bool use_index,
                                       bool decimals_as_float,
                                       size_type force_decimal_scale) except*:
-    cdef read_orc_args args = read_orc_args(make_source_info(p))
-    args.stripe = <size_type> stripe
-    args.stripe_count = <size_type> stripe_count
-    args.skip_rows = <size_type> skip_rows
-    args.num_rows = <size_type> num_rows
+    cdef read_orc_args args = read_orc_args(
+        make_source_info(filepath_or_buffer)
+    )
+    args.stripe = stripe
+    args.stripe_count = stripe_count
+    args.skip_rows = skip_rows
+    args.num_rows = num_rows
     args.timestamp_type = data_type(timestamp_type)
     args.use_index = <bool> use_index
     args.decimals_as_float = <bool> decimals_as_float
