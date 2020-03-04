@@ -197,6 +197,7 @@
 - PR #4302 Fix `_is_local_filesystem` check
 - PR #4303 Parquet reader: fix empty columns missing from table
 - PR #4115 Serialize an empty column table with non zero rows
+- PR #4327 Preemptive dispatch fix for changes in dask#5973
 
 
 # cuDF 0.12.0 (04 Feb 2020)
