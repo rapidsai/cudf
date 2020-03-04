@@ -540,7 +540,10 @@ class MultiIndex(Index):
                 level = colnames[level_idx]
             else:
                 raise KeyError(f"Level not found: '{level}'")
+        else:
+            level_idx = colnames.index(level)
         level_values = self._source_data[level]
+        level_values.name = self.names[level_idx]
         return level_values
 
     def _to_frame(self):
