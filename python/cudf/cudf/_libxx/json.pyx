@@ -1,23 +1,18 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
-# cython: boundscheck = False
-
 import cudf
-
-from libcpp.string cimport string
-from libcpp.memory cimport unique_ptr
 import collections.abc as abc
+import io
 import os
 
-from cudf._libxx.table cimport Table
-from cudf._libxx.move cimport move
 from cudf._libxx.cpp.io.functions cimport (
-    read_json as cpp_read_json,
+    read_json as libcudf_read_json,
     read_json_args
 )
+from cudf._libxx.io.utils cimport make_source_info
+from cudf._libxx.move cimport move
+from cudf._libxx.table cimport Table
 cimport cudf._libxx.cpp.io.types as cudf_io_types
-
-cimport cudf._lib.utils as lib
 
 
 cpdef read_json(filepath_or_buffer, dtype,
@@ -32,26 +27,18 @@ cpdef read_json(filepath_or_buffer, dtype,
     """
 
     # Determine read source
-    cdef cudf_io_types.source_info source
-    cdef const unsigned char[::1] buffer \
-        = lib.view_of_buffer(filepath_or_buffer)
-    cdef string filepath
-    if buffer is None:
-        if os.path.isfile(filepath_or_buffer):
-            filepath = <string>str(filepath_or_buffer).encode()
-        else:
-            buffer = filepath_or_buffer.encode()
+    path_or_data = filepath_or_buffer
 
-    if buffer is None:
-        source.type = cudf_io_types.io_type.FILEPATH
-        source.filepath = filepath
-    else:
-        source.type = cudf_io_types.io_type.HOST_BUFFER
-        source.buffer.first = <char*>&buffer[0]
-        source.buffer.second = buffer.shape[0]
+    # If input data is a JSON string (or StringIO), hold a reference to
+    # the encoded memoryview externally to ensure the encoded buffer
+    # isn't destroyed before calling libcudf++ `read_json()`
+    if isinstance(path_or_data, io.StringIO):
+        path_or_data = path_or_data.read().encode()
+    elif isinstance(path_or_data, str) and not os.path.isfile(path_or_data):
+        path_or_data = path_or_data.encode()
 
     # Setup arguments
-    cdef read_json_args args = read_json_args(source)
+    cdef read_json_args args = read_json_args(make_source_info(path_or_data))
 
     args.lines = lines
     if compression is not None:
@@ -86,7 +73,7 @@ cpdef read_json(filepath_or_buffer, dtype,
     cdef cudf_io_types.table_with_metadata c_out_table
 
     with nogil:
-        c_out_table = move(cpp_read_json(args))
+        c_out_table = move(libcudf_read_json(args))
 
     column_names = list(c_out_table.metadata.column_names)
     column_names = [x.decode() for x in column_names]
