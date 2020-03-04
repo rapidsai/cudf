@@ -29,67 +29,20 @@
 
 namespace cudf {
 namespace experimental {
-
 namespace detail {
-  /*
-// Create permuted row indices that would materialize sorted order
-rmm::device_vector<size_type> sorted_order1(table_view input,
-                                     std::vector<order> const& column_order,
-                                     std::vector<null_order> const& null_precedence,
-                                     bool stable,
-                                     cudaStream_t stream) {
-  if (input.num_rows() == 0 or input.num_columns() == 0) {
-    return rmm::device_vector<size_type>(0);
-  }
 
-  if (not column_order.empty()) {
-    CUDF_EXPECTS(
-        static_cast<std::size_t>(input.num_columns()) == column_order.size(),
-        "Mismatch between number of columns and column order.");
-  }
-
-  if (not null_precedence.empty()) {
-    CUDF_EXPECTS(
-        static_cast<std::size_t>(input.num_columns()) == null_precedence.size(),
-        "Mismatch between number of columns and null_precedence size.");
-  }
-
-  rmm::device_vector<size_type> sorted_indices(input.num_rows());
-  thrust::sequence(rmm::exec_policy(stream)->on(stream),
-                   sorted_indices.begin(),
-                   sorted_indices.end(), 0);
-
-  auto device_table = table_device_view::create(input, stream);
-  rmm::device_vector<order> d_column_order(column_order);
-
-  if (has_nulls(input)) {
-    rmm::device_vector<null_order> d_null_precedence(null_precedence);
-    auto comparator = row_lexicographic_comparator<true>(
-        *device_table, *device_table, d_column_order.data().get(),
-        d_null_precedence.data().get());
-    if (stable)
-      thrust::stable_sort(rmm::exec_policy(stream)->on(stream),
-                          sorted_indices.begin(), sorted_indices.end(),
-                          comparator);
-    else
-      thrust::sort(rmm::exec_policy(stream)->on(stream), 
-                   sorted_indices.begin(), sorted_indices.end(), comparator);
-
-  } else {
-    auto comparator = row_lexicographic_comparator<false>(
-        *device_table, *device_table, d_column_order.data().get());
-    if (stable)
-      thrust::stable_sort(rmm::exec_policy(stream)->on(stream),
-                          sorted_indices.begin(), sorted_indices.end(),
-                          comparator);
-    else
-      thrust::sort(rmm::exec_policy(stream)->on(stream),
-                   sorted_indices.begin(), sorted_indices.end(), comparator);
-  }
-
-  return sorted_indices;
-}
-*/
+template<bool has_nulls, typename ReturnType = bool>
+struct unique_comparator {
+  unique_comparator(table_device_view device_table,
+                    size_type const *sorted_order)
+      : comp(device_table, device_table, true), perm(sorted_order) {}
+  __device__ ReturnType operator()(size_type index) const noexcept{
+    return index == 0 || not comp(perm[index], perm[index - 1]);
+  };
+  private:
+  row_equality_comparator<has_nulls> comp;
+  size_type const* perm;
+};
 
 std::unique_ptr<table> rank(
     table_view const& input,
@@ -125,13 +78,41 @@ std::unique_ptr<table> rank(
 
     auto rank_mutable_view = rank_columns.back()->mutable_view();
     auto rank_data = rank_mutable_view.data<double>();
+    auto device_table = table_device_view::create(table_view{{input_col}}, stream);
 
-    //FIRST
-    thrust::scatter(
-        rmm::exec_policy(stream)->on(stream),
-        thrust::make_counting_iterator<double>(1),
-        thrust::make_counting_iterator<double>(input_col.size() + 1),
-        sorted_order_view.begin<size_type>(), rank_data);
+    switch (method) {
+    case rank_method::FIRST:
+      thrust::scatter(
+          rmm::exec_policy(stream)->on(stream),
+          thrust::make_counting_iterator<double>(1),
+          thrust::make_counting_iterator<double>(input_col.size() + 1),
+          sorted_order_view.begin<size_type>(), rank_data);
+      break;
+    case rank_method::DENSE: {
+      rmm::device_vector<double> rank_sorted(input_col.size());
+      if (input_col.has_nulls()) {
+        auto conv = unique_comparator<true, double>(
+            *device_table, sorted_order_view.data<size_type>());
+        auto it = thrust::make_transform_iterator(
+            thrust::make_counting_iterator<size_type>(0), conv);
+        thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream), it,
+                               it + input_col.size(), rank_sorted.data().get());
+      } else {
+        auto conv = unique_comparator<false, double>(
+            *device_table, sorted_order_view.data<size_type>());
+        auto it = thrust::make_transform_iterator(
+            thrust::make_counting_iterator<size_type>(0), conv);
+        thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream), it,
+                               it + input_col.size(), rank_sorted.data().get());
+      }
+      thrust::scatter(rmm::exec_policy(stream)->on(stream), rank_sorted.begin(),
+                      rank_sorted.end(), sorted_order_view.begin<size_type>(),
+                      rank_data);
+      break;
+    }
+    default:
+      CUDF_FAIL("Unexpected rank_method for rank()");
+    }
   }
   return std::make_unique<table>(std::move(rank_columns));
 }

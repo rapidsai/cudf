@@ -34,7 +34,8 @@ void run_rank_test (cudf::table_view input,
                     cudf::rank_method method,
                     cudf::order column_order,
                     cudf::include_nulls _include_nulls,
-                    cudf::null_order null_precedence
+                    cudf::null_order null_precedence,
+                    bool print=false
                     ) {
     // Rank
     auto got_rank_table = cudf::experimental::rank( input,
@@ -42,6 +43,9 @@ void run_rank_test (cudf::table_view input,
                                                     column_order, 
                                                     _include_nulls, 
                                                     null_precedence);
+    if(print) {
+        cudf::test::print(got_rank_table->view().column(0)); std::cout<<"\n";
+    }
     cudf::test::expect_tables_equal(expected, got_rank_table->view());
 }
 
@@ -147,4 +151,40 @@ TYPED_TEST(Rank, First)
     run_rank_test(  cudf::table_view{{col1, col2, col3}}, cudf::table_view{{col1_desc_keep, col2_desc_top, col3_desc_keep2}}, first,
                     cudf::order::DESCENDING, 
                     cudf::include_nulls::YES, cudf::null_order::AFTER); //TOP
+}
+
+TYPED_TEST(Rank, Dense)
+{
+    using T = TypeParam;
+
+    cudf::test::fixed_width_column_wrapper<T>   col1{{  5,   4,   3,   5,   8,   5}};
+    cudf::test::fixed_width_column_wrapper<T>   col2{{  5,   4,   3,   5,   8,   5}, {1, 1, 0, 1, 1, 1}};
+    cudf::test::strings_column_wrapper          col3({"d", "e", "a", "d", "k", "d"}, {1, 1, 1, 1, 1, 1});
+    //                                                  3    2    1   3    4     3
+
+    //FIRST
+    //ASCENDING
+    cudf::test::fixed_width_column_wrapper<double> col1_asce_keep   {{3, 2, 1, 3, 4, 3}};
+    cudf::test::fixed_width_column_wrapper<double> col2_asce_keep   {{2, 1, 6, 3, 5, 4}, {1, 1, 0, 1, 1, 1}}; //KEEP
+    cudf::test::fixed_width_column_wrapper<double> col2_asce_top    {{3, 2, 1, 4, 6, 5}}; //BEFORE = TOP
+    cudf::test::fixed_width_column_wrapper<double> col2_asce_bottom {{2, 1, 6, 3, 5, 4}}; //AFTER  = BOTTOM
+    cudf::test::fixed_width_column_wrapper<double> col3_asce_keep   {{2, 5, 1, 3, 6, 4}, {1, 1, 1, 1, 1, 1}};
+    cudf::test::fixed_width_column_wrapper<double> col3_asce_keep2  {{2, 5, 1, 3, 6, 4}};
+    //DESCENDING
+    cudf::test::fixed_width_column_wrapper<double> col1_desc_keep   {{2, 5, 6, 3, 1, 4}};
+    cudf::test::fixed_width_column_wrapper<double> col2_desc_keep   {{3, 6, 1, 4, 2, 5}, {1, 1, 0, 1, 1, 1}}; //KEEP
+    cudf::test::fixed_width_column_wrapper<double> col2_desc_bottom {{2, 5, 6, 3, 1, 4}}; //BEFORE = BOTTOM
+    cudf::test::fixed_width_column_wrapper<double> col2_desc_top    {{3, 6, 1, 4, 2, 5}}; //AFTER  = TOP
+    cudf::test::fixed_width_column_wrapper<double> col3_desc_keep   {{3, 2, 6, 4, 1, 5}, {1, 1, 1, 1, 1, 1}};
+    cudf::test::fixed_width_column_wrapper<double> col3_desc_keep2  {{3, 2, 6, 4, 1, 5}};
+    auto first{cudf::rank_method::DENSE};
+
+    // Rank
+    if (std::is_same<T, cudf::experimental::bool8>::value) return;
+    // Single column, Ascending
+    //Non-null column
+    run_rank_test(  cudf::table_view{{col1}}, cudf::table_view{{col1_asce_keep}}, first,
+                    cudf::order::ASCENDING, 
+                    cudf::include_nulls::NO,  cudf::null_order::AFTER, true);
+    //Null column
 }
