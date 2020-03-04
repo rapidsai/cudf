@@ -1,25 +1,30 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from cudf._libxx.cpp.io.types cimport source_info
+from libcpp.pair cimport pair
 from libcpp.string cimport string
+from cudf._libxx.cpp.io.types cimport source_info
 
 import errno
-from io import BytesIO, StringIO
+import io
 import os
 
-
-cdef source_info make_source_info(filepath_or_buffer) except*:
+# Converts the Python source input to libcudf++ IO source_info
+# with the appropriate type and source values
+cdef source_info make_source_info(src) except*:
     cdef const unsigned char[::1] buf
-    if isinstance(filepath_or_buffer, bytes):
-        buf = filepath_or_buffer
-    elif isinstance(filepath_or_buffer, BytesIO):
-        buf = filepath_or_buffer.getbuffer()
-    elif isinstance(filepath_or_buffer, StringIO):
-        buf = filepath_or_buffer.read().encode()
+    if isinstance(src, bytes):
+        buf = src
+    elif isinstance(src, io.BytesIO):
+        buf = src.getbuffer()
+    # Otherwise src is expected to be a numeric fd, string path, or PathLike.
+    # TODO (ptaylor): Might need to update this check if accepted input types
+    #                 change when UCX and/or cuStreamz support is added.
+    elif isinstance(src, (int, float, complex, basestring, os.PathLike)):
+        # If source is a file, return source_info where type=FILEPATH
+        if os.path.isfile(src):
+            return source_info(<string> str(src).encode())
+        # If source expected to be a file, raise FileNotFoundError
+        raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), src)
     else:
-        if os.path.isfile(filepath_or_buffer):
-            return source_info(<string> str(filepath_or_buffer).encode())
-        raise FileNotFoundError(
-            errno.ENOENT, os.strerror(errno.ENOENT), filepath_or_buffer
-        )
-    return source_info(<char *>&buf[0], buf.shape[0])
+        raise TypeError("Unrecognized input type: {}".format(type(src)))
+    return source_info(<char*>&buf[0], buf.shape[0])
