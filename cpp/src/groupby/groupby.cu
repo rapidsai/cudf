@@ -129,7 +129,7 @@ groupby::aggregate(std::vector<aggregation_request> const& requests,
   verify_valid_requests(requests);
 
   if (_keys.num_rows() == 0) {
-    std::make_pair(empty_like(_keys), empty_results(requests));
+    return std::make_pair(empty_like(_keys), empty_results(requests));
   }
 
   return dispatch_aggregation(requests, 0, mr);

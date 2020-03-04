@@ -37,7 +37,9 @@ table::table(std::vector<std::unique_ptr<column>>&& columns)
   if(num_columns() > 0) {
     for (auto const& c : _columns) {
       CUDF_EXPECTS(c, "Unexpected null column");
-      CUDF_EXPECTS(c->size() == _columns.front()->size(), "Column size mismatch.");
+      CUDF_EXPECTS(c->size() == _columns.front()->size(), "Column size mismatch: " +
+                                                          std::to_string(c->size()) + " != " +
+                                                          std::to_string(_columns.front()->size()));
     }
     _num_rows = _columns.front()->size();
   } else {
