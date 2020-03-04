@@ -62,8 +62,7 @@ def pd_anti_join(left, right, join_type):
         result = left.merge(right, how='left', left_index=True, right_index=True, indicator=True)
         return result.loc[result._merge == 'left_only', :][left.columns]
     elif join_type == 'leftsemi':
-        result = left.merge(right, how='left', left_index=True, right_index=True)
-    return result[left.columns]
+        return left[left.index.isin(right.index)][left.columns]
 
 
 @pytest.mark.parametrize("aa,bb,how,method", make_params())
@@ -94,8 +93,7 @@ def test_dataframe_join_how(aa, bb, how, method):
         te = timer()
         print("timing", type(df), te - ts)
         return joined
-    import pdb
-    pdb.set_trace()
+
     expect = work_pandas(df.to_pandas(), how)
     got = work_gdf(df)
     expecto = expect.copy()
