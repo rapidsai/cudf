@@ -746,7 +746,7 @@ class domain {
  *
  */
 template <>
-domain const& domain::get<domain::global>() {
+inline domain const& domain::get<domain::global>() {
   static domain const d{};
   return d;
 }
@@ -1860,7 +1860,7 @@ using process_range = domain_process_range<>;
  * of the mark.
  */
 template <typename D = nvtx3::domain::global>
-void mark(event_attributes const& attr) {
+inline void mark(event_attributes const& attr) noexcept {
   nvtxDomainMarkEx(domain::get<D>(), attr.get());
 }
 
