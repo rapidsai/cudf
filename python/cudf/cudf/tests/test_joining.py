@@ -57,11 +57,18 @@ def make_params():
         else:
             yield (aa, bb, how, "sort")
 
+
 def pd_odd_joins(left, right, join_type):
-    if join_type == 'leftanti':
-        result = left.merge(right, how='left', left_index=True, right_index=True, indicator=True)
-        return result.loc[result._merge == 'left_only', :][left.columns]
-    elif join_type == 'leftsemi':
+    if join_type == "leftanti":
+        result = left.merge(
+            right,
+            how="left",
+            left_index=True,
+            right_index=True,
+            indicator=True,
+        )
+        return result.loc[result._merge == "left_only", :][left.columns]
+    elif join_type == "leftsemi":
         return left[left.index.isin(right.index)][left.columns]
 
 
@@ -75,10 +82,10 @@ def test_dataframe_join_how(aa, bb, how, method):
         ts = timer()
         df1 = df.set_index("a")
         df2 = df.set_index("b")
-        if how == 'leftanti':
-            joined = pd_odd_joins(df1, df2, 'leftanti')
-        elif how == 'leftsemi':
-            joined = pd_odd_joins(df1, df2, 'leftsemi')
+        if how == "leftanti":
+            joined = pd_odd_joins(df1, df2, "leftanti")
+        elif how == "leftsemi":
+            joined = pd_odd_joins(df1, df2, "leftsemi")
         else:
             joined = df1.join(df2, how=how, sort=True)
         te = timer()
@@ -116,8 +123,12 @@ def test_dataframe_join_how(aa, bb, how, method):
             expect.index.name = "bob"
             got.index.name = "mary"
             pd.util.testing.assert_frame_equal(
-                got.to_pandas().sort_values(got.columns.to_list()).reset_index(drop=True),
-                expect.sort_values(expect.columns.to_list()).reset_index(drop=True),
+                got.to_pandas()
+                .sort_values(got.columns.to_list())
+                .reset_index(drop=True),
+                expect.sort_values(expect.columns.to_list()).reset_index(
+                    drop=True
+                ),
             )
         # if(how=='right'):
         #     _sorted_check_series(expect['a'], expect['b'],
