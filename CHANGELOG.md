@@ -127,7 +127,7 @@
 - PR #4305 Move gpuarrow.pyx and related libarrow_cuda files into `_libxx`
 - PR #4244 Port nvstrings Substring Gather/Scatter functions to cuDF Python/Cython
 - PR #4280 Port nvstrings Numeric Handling functions to cuDF Python/Cython
-- PR #4295 Port filling.pyx to libcudf++ API
+- PR #4278 Port filling.pyx to libcudf++ API
 
 ## Bug Fixes
 
