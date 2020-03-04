@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,24 @@
  */
 
 #include "jni_utils.hpp"
+
+namespace {
+
+// handles detaching a thread from the JVM when the thread terminates
+class jvm_detach_on_destruct {
+public:
+  explicit jvm_detach_on_destruct(JavaVM* jvm)
+      : jvm{jvm} {}
+
+  ~jvm_detach_on_destruct() {
+    jvm->DetachCurrentThread();
+  }
+
+private:
+  JavaVM* jvm;
+};
+
+} // anonymous namespace
 
 namespace cudf {
 namespace jni {
@@ -87,6 +105,33 @@ jobject contiguous_table_from(JNIEnv* env, cudf::experimental::contiguous_split_
 
 native_jobjectArray<jobject> contiguous_table_array(JNIEnv* env, jsize length) {
   return native_jobjectArray<jobject>(env, env->NewObjectArray(length, contiguous_table_jclass, nullptr));
+}
+
+// Get the JNI environment, attaching the current thread to the JVM if necessary. If the thread
+// needs to be attached, the thread will automatically detach when the thread terminates.
+JNIEnv* get_jni_env(JavaVM* jvm) {
+  JNIEnv* env = nullptr;
+  jint rc = jvm->GetEnv(reinterpret_cast<void**>(&env), MINIMUM_JNI_VERSION);
+  if (rc == JNI_OK) {
+    return env;
+  }
+  if (rc == JNI_EDETACHED) {
+    JavaVMAttachArgs attach_args;
+    attach_args.version = MINIMUM_JNI_VERSION;
+    attach_args.name = const_cast<char*>("cudf thread");
+    attach_args.group = NULL;
+
+    if (jvm->AttachCurrentThreadAsDaemon(reinterpret_cast<void**>(env), &attach_args) == JNI_OK) {
+      // use thread_local object to detach the thread from the JVM when thread terminates.
+      thread_local jvm_detach_on_destruct detacher(jvm);
+    } else {
+      throw std::runtime_error("unable to attach to JVM");
+    }
+
+    return env;
+  }
+
+  throw std::runtime_error("error detecting thread attach state with JVM");
 }
 
 } // namespace jni

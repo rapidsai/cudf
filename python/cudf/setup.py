@@ -85,14 +85,9 @@ setup(
         ),
     ),
     packages=find_packages(include=["cudf", "cudf.*"]),
-    package_data={
-        "cudf._lib": ["*.pxd"],
-        "cudf._lib.includes": ["*.pxd"],
-        "cudf._lib.includes.groupby": ["*.pxd"],
-        "cudf._lib.arrow": ["*.pxd"],
-        "cudf._libxx": ["*.pxd"],
-        "cudf._libxx.cpp": ["*.pxd"],
-    },
+    package_data=dict.fromkeys(
+        find_packages(include=["cudf._lib*"]), ["*.pxd"],
+    ),
     cmdclass=versioneer.get_cmdclass(),
     install_requires=install_requires,
     zip_safe=False,
