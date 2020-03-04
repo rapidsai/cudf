@@ -16,6 +16,8 @@ from cudf._libxx.cpp.groupby cimport (
     aggregation_request,
     aggregation_result
 )
+from pyarrow.includes.libarrow cimport CMessageReader
+cimport cudf._libxx.cpp.io.types as cudf_io_types
 
 
 # Note: declaring `move()` with `except +` doesn't work.
@@ -44,6 +46,7 @@ cdef extern from "<utility>" namespace "std" nogil:
     cdef unique_ptr[column] move(unique_ptr[column])
     cdef unique_ptr[table] move(unique_ptr[table])
     cdef unique_ptr[aggregation] move(unique_ptr[aggregation])
+    cdef unique_ptr[CMessageReader] move(unique_ptr[CMessageReader])
     cdef vector[unique_ptr[column]] move(vector[unique_ptr[column]])
     cdef pair[unique_ptr[table], vector[size_type]] move(
         pair[unique_ptr[table], vector[size_type]])
@@ -60,3 +63,6 @@ cdef extern from "<utility>" namespace "std" nogil:
     cdef pair[unique_ptr[table], vector[aggregation_result]] move(
         pair[unique_ptr[table], vector[aggregation_result]]
     )
+    cdef cudf_io_types.source_info move(cudf_io_types.source_info)
+    cdef cudf_io_types.table_with_metadata move(
+        cudf_io_types.table_with_metadata)

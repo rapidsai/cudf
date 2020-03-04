@@ -9,10 +9,10 @@ from libcpp cimport bool
 
 from cudf._libxx.table cimport Table, columns_from_ptr
 from cudf._libxx.move cimport move
-cimport cudf._libxx.cpp.join as cpp_join
 
 from cudf._libxx.cpp.table.table cimport table
 from cudf._libxx.cpp.table.table_view cimport table_view
+cimport cudf._libxx.cpp.join as cpp_join
 
 
 cpdef join(Table lhs,

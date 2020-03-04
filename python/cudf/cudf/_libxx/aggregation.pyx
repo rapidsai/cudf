@@ -20,10 +20,10 @@ from cudf._libxx.cpp.types cimport (
 cimport cudf._libxx.cpp.aggregation as libcudf_aggregation
 
 
-cdef unique_ptr[aggregation] make_aggregation(op, kwargs={}):
+cdef unique_ptr[aggregation] make_aggregation(op, kwargs={}) except *:
     cdef _Aggregation agg
     if isinstance(op, str):
-        agg = getattr(_Aggregation, op)()
+        agg = getattr(_Aggregation, op)(**kwargs)
     elif callable(op):
         if "dtype" in kwargs:
             agg = _Aggregation.from_udf(op, **kwargs)
@@ -32,44 +32,85 @@ cdef unique_ptr[aggregation] make_aggregation(op, kwargs={}):
     return move(agg.c_obj)
 
 
+# need to update as and when we add new aggregations with additional options
 cdef class _Aggregation:
 
     @classmethod
-    def sum(cls):
+    def sum(cls, *args, **kwargs):
         cdef _Aggregation agg = _Aggregation.__new__(_Aggregation)
         agg.c_obj = move(libcudf_aggregation.make_sum_aggregation())
         return agg
 
     @classmethod
-    def min(cls):
+    def min(cls, *args, **kwargs):
         cdef _Aggregation agg = _Aggregation.__new__(_Aggregation)
         agg.c_obj = move(libcudf_aggregation.make_min_aggregation())
         return agg
 
     @classmethod
-    def max(cls):
+    def max(cls, *args, **kwargs):
         cdef _Aggregation agg = _Aggregation.__new__(_Aggregation)
         agg.c_obj = move(libcudf_aggregation.make_max_aggregation())
         return agg
 
     @classmethod
-    def mean(cls):
+    def mean(cls, *args, **kwargs):
         cdef _Aggregation agg = _Aggregation.__new__(_Aggregation)
         agg.c_obj = move(libcudf_aggregation.make_mean_aggregation())
         return agg
 
     @classmethod
-    def count(cls):
+    def count(cls, *args, **kwargs):
         cdef _Aggregation agg = _Aggregation.__new__(_Aggregation)
         agg.c_obj = move(libcudf_aggregation.make_count_aggregation())
         return agg
 
     @classmethod
-    def nunique(cls):
+    def nunique(cls, *args, **kwargs):
         cdef _Aggregation agg = _Aggregation.__new__(_Aggregation)
         agg.c_obj = move(libcudf_aggregation.make_nunique_aggregation())
         return agg
 
+    @classmethod
+    def any(cls, *args, **kwargs):
+        cdef _Aggregation agg = _Aggregation.__new__(_Aggregation)
+        agg.c_obj = move(libcudf_aggregation.make_any_aggregation())
+        return agg
+
+    @classmethod
+    def all(cls, *args, **kwargs):
+        cdef _Aggregation agg = _Aggregation.__new__(_Aggregation)
+        agg.c_obj = move(libcudf_aggregation.make_all_aggregation())
+        return agg
+    
+    @classmethod
+    def product(cls, *args, **kwargs):
+        cdef _Aggregation agg = _Aggregation.__new__(_Aggregation)
+        agg.c_obj = move(libcudf_aggregation.make_product_aggregation())
+        return agg
+    
+    @classmethod
+    def sum_of_squares(cls, *args, **kwargs):
+        cdef _Aggregation agg = _Aggregation.__new__(_Aggregation)
+        agg.c_obj = move(libcudf_aggregation.make_sum_of_squares_aggregation())
+        return agg
+    
+    @classmethod
+    def var(cls, ddof, *args, **kwargs):
+        cdef _Aggregation agg = _Aggregation.__new__(_Aggregation)
+        agg.c_obj = move(
+            libcudf_aggregation.make_variance_aggregation(ddof)
+        )
+        return agg
+    
+    @classmethod
+    def std(cls, ddof, *args, **kwargs):
+        cdef _Aggregation agg = _Aggregation.__new__(_Aggregation)
+        agg.c_obj = move(
+            libcudf_aggregation.make_std_aggregation(ddof)
+        )
+        return agg
+    
     @classmethod
     def from_udf(cls, op, *args, **kwargs):
         cdef _Aggregation agg = _Aggregation.__new__(_Aggregation)

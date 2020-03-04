@@ -162,7 +162,7 @@ class DatetimeColumn(column.ColumnBase):
         dtype = np.dtype(dtype)
         if dtype == self.dtype:
             return self
-        return libcudf.typecast.cast(self, dtype=dtype)
+        return libcudfxx.unary.cast(self, dtype=dtype)
 
     def as_numerical_column(self, dtype, **kwargs):
         return self.as_numerical.astype(dtype)
@@ -171,22 +171,9 @@ class DatetimeColumn(column.ColumnBase):
         from cudf.core.column import string
 
         if len(self) > 0:
-            dev_ptr = self.data_ptr
-            null_ptr = None
-            if self.nullable:
-                null_ptr = self.mask_ptr
-            kwargs.update(
-                {
-                    "count": len(self),
-                    "nulls": null_ptr,
-                    "bdevmem": True,
-                    "units": self.time_unit,
-                }
-            )
-            data = string._numeric_to_str_typecast_functions[
+            return string._numeric_to_str_typecast_functions[
                 np.dtype(self.dtype)
-            ](dev_ptr, **kwargs)
-            return as_column(data)
+            ](self, **kwargs)
         else:
             return column.column_empty(0, dtype="object", masked=False)
 

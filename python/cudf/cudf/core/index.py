@@ -383,26 +383,6 @@ class Index(Frame):
 
         return Series(self._values)
 
-    def isnull(self):
-        """Identify missing values in an Index.
-        """
-        return as_index(self._values.isnull(), name=self.name)
-
-    def isna(self):
-        """Identify missing values in an Index. Alias for isnull.
-        """
-        return self.isnull()
-
-    def notna(self):
-        """Identify non-missing values in an Index.
-        """
-        return as_index(self._values.notna(), name=self.name)
-
-    def notnull(self):
-        """Identify non-missing values in an Index. Alias for notna.
-        """
-        return self.notna()
-
     @property
     @property
     def is_unique(self):

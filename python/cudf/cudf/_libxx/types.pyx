@@ -43,12 +43,23 @@ cudf_to_np_types = {
     libcudf_types.BOOL8: np.dtype("bool"),
 }
 
+
 class Interpolation(IntEnum):
-    LINEAR = <underlying_type_t_interpolation> libcudf_types.interpolation.LINEAR
-    LOWER = <underlying_type_t_interpolation> libcudf_types.interpolation.LOWER
-    HIGHER = <underlying_type_t_interpolation> libcudf_types.interpolation.HIGHER
-    MIDPOINT = <underlying_type_t_interpolation> libcudf_types.interpolation.MIDPOINT
-    NEAREST = <underlying_type_t_interpolation> libcudf_types.interpolation.NEAREST
+    LINEAR = (
+        <underlying_type_t_interpolation> libcudf_types.interpolation.LINEAR
+    )
+    LOWER = (
+        <underlying_type_t_interpolation> libcudf_types.interpolation.LOWER
+    )
+    HIGHER = (
+        <underlying_type_t_interpolation> libcudf_types.interpolation.HIGHER
+    )
+    MIDPOINT = (
+        <underlying_type_t_interpolation> libcudf_types.interpolation.MIDPOINT
+    )
+    NEAREST = (
+        <underlying_type_t_interpolation> libcudf_types.interpolation.NEAREST
+    )
 
 
 class Order(IntEnum):

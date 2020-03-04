@@ -77,9 +77,11 @@ def digitize(Table source_values_table, Table bins, bool right=False):
 
     cdef table_view bins_view = bins.view()
     cdef table_view source_values_table_view = source_values_table.view()
-    cdef vector[libcudf_types.order] column_order = vector[libcudf_types.order](
-        bins_view.num_columns(),
-        libcudf_types.order.ASCENDING
+    cdef vector[libcudf_types.order] column_order = (
+        vector[libcudf_types.order](
+            bins_view.num_columns(),
+            libcudf_types.order.ASCENDING
+        )
     )
     cdef vector[libcudf_types.null_order] null_precedence = (
         vector[libcudf_types.null_order](
