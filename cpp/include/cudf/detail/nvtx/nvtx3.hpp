@@ -283,13 +283,13 @@
  * via arguments to a `nvtx3::event_attributes` object.
  *
  * NVTX events can be customized via four "attributes":
- * - \ref COLOR : Color used to visualize the event in tools.
+ * - \ref COLOR : color used to visualize the event in tools.
  * - \ref MESSAGES :  Custom message string.
  * - \ref PAYLOAD :  User-defined numerical value.
  * - \ref CATEGORY : Intra-domain grouping.
  *
  * It is possible to construct a `nvtx3::event_attributes` from any number of
- * attribute objects (nvtx3::Color, nvtx3::message, nvtx3::payload,
+ * attribute objects (nvtx3::color, nvtx3::message, nvtx3::payload,
  * nvtx3::category) in any order. If an attribute is not specified, a tool
  * specific default value is used. See `nvtx3::event_attributes` for more
  * information.
@@ -363,15 +363,15 @@
  * nvtx3::registered_message<my_domain> const& msg =
  * nvtx3::registered_message<my_domain>::get<my_message>(); \endcode
  *
- * \subsection COLOR Color
+ * \subsection COLOR color
  *
- * Associating a `nvtx3::Color` with an event allows controlling how the event
+ * Associating a `nvtx3::color` with an event allows controlling how the event
  * is visualized in a tool such as Nsight Systems. This is a convenient way to
  * visually differentiate among different events.
  *
  * \code{.cpp}
  * // Define a color via rgb color values
- * nvtx3::Color c{nvtx3::rgb{127, 255, 0}};
+ * nvtx3::color c{nvtx3::rgb{127, 255, 0}};
  * nvtx3::event_attributes attr{c};
  *
  * // rgb color values can be passed directly to an `event_attributes`
@@ -813,13 +813,13 @@ struct argb final : rgb {
  * Systems.
  *
  */
-class Color {
+class color {
  public:
   /// Type used for the color's value
   using value_type = uint32_t;
 
   /**
-   * @brief Constructs a `Color` using the value provided by `hex_code`.
+   * @brief Constructs a `color` using the value provided by `hex_code`.
    *
    * `hex_code` is expected to be a 4 byte argb hex code.
    *
@@ -833,49 +833,49 @@ class Color {
    * The least significant byte indicates the value of the blue channel
    * (0-255)
    *
-   * @param hex_code The hex code used to construct the `Color`
+   * @param hex_code The hex code used to construct the `color`
    */
-  constexpr explicit Color(value_type hex_code) noexcept : _value{hex_code} {}
+  constexpr explicit color(value_type hex_code) noexcept : _value{hex_code} {}
 
   /**
-   * @brief Construct a `Color` using the alpha, red, green, blue components
+   * @brief Construct a `color` using the alpha, red, green, blue components
    * in `argb`.
    *
-   * @param argb The alpha, red, green, blue components of the desired `Color`
+   * @param argb The alpha, red, green, blue components of the desired `color`
    */
-  constexpr Color(argb argb) noexcept
-      : Color{from_bytes_msb_to_lsb(argb.alpha, argb.red, argb.green,
+  constexpr color(argb argb) noexcept
+      : color{from_bytes_msb_to_lsb(argb.alpha, argb.red, argb.green,
                                     argb.blue)} {}
 
   /**
-   * @brief Construct a `Color` using the red, green, blue components in
+   * @brief Construct a `color` using the red, green, blue components in
    * `rgb`.
    *
-   * Uses maximum value for the alpha channel (opacity) of the `Color`.
+   * Uses maximum value for the alpha channel (opacity) of the `color`.
    *
-   * @param rgb The red, green, blue components of the desired `Color`
+   * @param rgb The red, green, blue components of the desired `color`
    */
-  constexpr Color(rgb rgb) noexcept
-      : Color{from_bytes_msb_to_lsb(0xFF, rgb.red, rgb.green, rgb.blue)} {}
+  constexpr color(rgb rgb) noexcept
+      : color{from_bytes_msb_to_lsb(0xFF, rgb.red, rgb.green, rgb.blue)} {}
 
   /**
-   * @brief Returns the `Color`s argb hex code
+   * @brief Returns the `color`s argb hex code
    *
    */
   constexpr value_type get_value() const noexcept { return _value; }
 
   /**
-   * @brief Return the NVTX color type of the Color.
+   * @brief Return the NVTX color type of the color.
    *
    */
   constexpr nvtxColorType_t get_type() const noexcept { return _type; }
 
-  Color() = delete;
-  ~Color() = default;
-  Color(Color const&) = default;
-  Color& operator=(Color const&) = default;
-  Color(Color&&) = default;
-  Color& operator=(Color&&) = default;
+  color() = delete;
+  ~color() = default;
+  color(color const&) = default;
+  color& operator=(color const&) = default;
+  color(color&&) = default;
+  color& operator=(color&&) = default;
 
  private:
   /**
@@ -891,7 +891,7 @@ class Color {
            uint32_t{byte1} << 8 | uint32_t{byte0};
   }
 
-  value_type const _value{};                     ///< Color's argb color code
+  value_type const _value{};                     ///< color's argb color code
   nvtxColorType_t const _type{NVTX_COLOR_ARGB};  ///< NVTX color type code
 };
 
@@ -1472,14 +1472,14 @@ class payload {
  *
  * NVTX events can be customized via four "attributes":
  *
- * - color:    Color used to visualize the event in tools such as Nsight
- *             Systems. See `Color`.
+ * - color:    color used to visualize the event in tools such as Nsight
+ *             Systems. See `color`.
  * - message:  Custom message string. See `message`.
  * - payload:  User-defined numerical value. See `payload`.
  * - category: Intra-domain grouping. See `category`.
  *
  * These component attributes are specified via an `event_attributes` object.
- * See `nvtx3::Color`, `nvtx3::message`, `nvtx3::payload`, and
+ * See `nvtx3::color`, `nvtx3::message`, `nvtx3::payload`, and
  * `nvtx3::category` for how these individual attributes are constructed.
  *
  * While it is possible to specify all four attributes, it is common to want
@@ -1564,7 +1564,7 @@ class event_attributes {
   }
 
   /**
-   * @brief Variadic constructor where the first argument is a `Color`.
+   * @brief Variadic constructor where the first argument is a `color`.
    *
    * Sets the value of the `EventAttribute`s color based on `c` and forwards
    * the remaining variadic parameter pack to the next constructor.
@@ -1572,7 +1572,7 @@ class event_attributes {
    */
   template <typename... Args>
   NVTX3_RELAXED_CONSTEXPR explicit event_attributes(
-      Color const& c, Args const&... args) noexcept
+      color const& c, Args const&... args) noexcept
       : event_attributes(args...) {
     attributes_.color = c.get_value();
     attributes_.colorType = c.get_type();
