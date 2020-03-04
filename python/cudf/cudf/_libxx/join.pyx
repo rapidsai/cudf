@@ -150,7 +150,6 @@ cpdef join(Table lhs,
                 c_columns_in_common
             ))
     elif how == 'leftsemi':
-        print('semi joining')
         with nogil:
             c_result = move(cpp_join.left_semi_join(
                 lhs_view,
@@ -160,7 +159,6 @@ cpdef join(Table lhs,
                 all_left_inds
             ))
     elif how == 'leftanti':
-        print('ant joining')
         with nogil:
             c_result = move(cpp_join.left_anti_join(
                 lhs_view,
@@ -179,5 +177,4 @@ cpdef join(Table lhs,
         index_col = None
 
     data_ordered_dict = OrderedDict(zip(result_col_names, all_cols_py))
-    print('before table inst')
     return Table(data=data_ordered_dict, index=index_col)
