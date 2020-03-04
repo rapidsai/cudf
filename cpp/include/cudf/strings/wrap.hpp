@@ -33,11 +33,11 @@ namespace strings
  *
  * Example 1:
  * ```
- * width = 5
- * input_string_tbl = ["tesT1 test2", "more longtest short1", " other test "];
+ * width = 3
+ * input_string_tbl = [ "12345", "thesé", nullptr, "ARE THE", "tést strings", "" ];
  *
  * wrapped_string_tbl = wrap(input_string_tbl, width)
- * wrapped_string_tbl = ["test1\ntest2", "more\nlongt\nest\nshort1", "other\ntest"]
+ * wrapped_string_tbl = [ "12345", "thesé", nullptr, "ARE\nTHE", "tést\nstrings", "" ]
  * ```
  *
  * Example 2:
