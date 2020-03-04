@@ -633,15 +633,11 @@ table_with_metadata reader::impl::read(int skip_rows, int num_rows, int stripe,
     orc_col_map[col] = column_types.size() - 1;
   }
 
-  auto is_empty_table = not (num_rows > 0 && selected_stripes.size() != 0);
-
-  if (is_empty_table) {
-    // Return 0-length columns
-    for (size_t i = 0; i < column_types.size(); ++i) {
-      column_buffer empty_buffer{column_types[i], 0};
-      out_columns.emplace_back(make_column(column_types[i], 0,
-                                           empty_buffer, stream, _mr));
-    }
+  // If no rows or stripes to read, return empty columns
+  if (num_rows <= 0 || selected_stripes.size() == 0) {
+    std::transform(column_types.cbegin(), column_types.cend(),
+                   std::back_inserter(out_columns),
+                   [](auto const& dtype) { return make_empty_column(dtype); });
   } else {
     const auto num_columns = _selected_columns.size();
     const auto num_chunks = selected_stripes.size() * num_columns;
