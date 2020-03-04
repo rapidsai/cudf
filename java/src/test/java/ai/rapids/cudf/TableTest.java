@@ -38,10 +38,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-import java.util.stream.LongStream;
 
 import static ai.rapids.cudf.Aggregate.max;
 import static ai.rapids.cudf.Table.TestBuilder;
@@ -139,11 +136,11 @@ public class TableTest extends CudfTestBase {
                 "Column " + colName + " Row " + tableRow);
             break;
           case FLOAT32:
-            assertEquals(expected.getFloat(expectedRow), cv.getFloat(tableRow), 0.0001,
+            assertEqualsWithEpsilon(expected.getFloat(expectedRow), cv.getFloat(tableRow), 0.0001,
                 "Column " + colName + " Row " + tableRow);
             break;
           case FLOAT64:
-            assertEquals(expected.getDouble(expectedRow), cv.getDouble(tableRow), 0.0001,
+            assertEqualsWithEpsilon(expected.getDouble(expectedRow), cv.getDouble(tableRow), 0.0001,
                 "Column " + colName + " Row " + tableRow);
             break;
           case STRING:
@@ -1919,8 +1916,8 @@ public class TableTest extends CudfTestBase {
             .sorted(Comparator.naturalOrder())
             .collect(Collectors.toList());
 
-        assertEquals(3.5666f, sortedMean.get(0), 0.0001);
-        assertEquals(5.2666f, sortedMean.get(1), 0.0001);
+        assertEqualsWithEpsilon(3.5666f, sortedMean.get(0), 0.0001);
+        assertEqualsWithEpsilon(5.2666f, sortedMean.get(1), 0.0001);
 
         // verify sum
         List<Double> sortedSum = new ArrayList<>();
@@ -1930,8 +1927,8 @@ public class TableTest extends CudfTestBase {
             .sorted(Comparator.naturalOrder())
             .collect(Collectors.toList());
 
-        assertEquals(10.7f, sortedSum.get(0), 0.0001);
-        assertEquals(15.8f, sortedSum.get(1), 0.0001);
+        assertEqualsWithEpsilon(10.7f, sortedSum.get(0), 0.0001);
+        assertEqualsWithEpsilon(15.8f, sortedSum.get(1), 0.0001);
 
         // verify min
         List<Double> sortedMin = new ArrayList<>();
@@ -1941,8 +1938,8 @@ public class TableTest extends CudfTestBase {
             .sorted(Comparator.naturalOrder())
             .collect(Collectors.toList());
 
-        assertEquals(1.3f, sortedMin.get(0), 0.0001);
-        assertEquals(2.3f, sortedMin.get(1), 0.0001);
+        assertEqualsWithEpsilon(1.3f, sortedMin.get(0), 0.0001);
+        assertEqualsWithEpsilon(2.3f, sortedMin.get(1), 0.0001);
 
         // verify max
         List<Integer> sortedMax = new ArrayList<>();

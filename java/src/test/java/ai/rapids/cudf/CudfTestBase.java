@@ -27,6 +27,7 @@ import org.slf4j.LoggerFactory;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 class CudfTestBase {
@@ -107,5 +108,28 @@ class CudfTestBase {
       Rmm.shutdown();
     }
     LISTENER.checkOutstanding();
+  }
+
+  private static boolean doublesAreEqualWithEpsilon(double expected, double actual, double epsilon) {
+    if (Double.doubleToLongBits(expected) != Double.doubleToLongBits(actual)) {
+      if (expected != 0) {
+        return Math.abs((expected - actual) / expected) <= epsilon;
+      } else {
+        return Math.abs(expected - actual) <= epsilon;
+      }
+    } else {
+      return true;
+    }
+  }
+
+  static void assertEqualsWithEpsilon(double expected, double actual, double epsilon) {
+     assertEqualsWithEpsilon(expected, actual, epsilon, "");
+  }
+
+  static void assertEqualsWithEpsilon(double expected, double actual, double epsilon, String message) {
+    if (!doublesAreEqualWithEpsilon(expected, actual, epsilon)) {
+      fail(message + " Math.abs(expected - actual) / Math.abs(expected) = "
+          + Math.abs(expected - actual) / Math.abs(expected) + " is not <= " + epsilon);
+    }
   }
 }

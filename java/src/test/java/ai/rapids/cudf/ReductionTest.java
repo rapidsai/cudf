@@ -232,7 +232,7 @@ class ReductionTest extends CudfTestBase {
   private static void assertEqualsDelta(AggregateOp op, Scalar expected, Scalar result,
       Double delta) {
     if (FLOAT_REDUCTIONS.contains(op)) {
-      assertEquals(expected.getDouble(), result.getDouble(), delta);
+      assertEqualsWithEpsilon(expected.getDouble(), result.getDouble(), delta);
     } else {
       assertEquals(expected, result);
     }
@@ -241,7 +241,7 @@ class ReductionTest extends CudfTestBase {
   private static void assertEqualsDelta(AggregateOp op, Scalar expected, Scalar result,
       Float delta) {
     if (FLOAT_REDUCTIONS.contains(op)) {
-      assertEquals(expected.getFloat(), result.getFloat(), delta);
+      assertEqualsWithEpsilon(expected.getFloat(), result.getFloat(), delta);
     } else {
       assertEquals(expected, result);
     }

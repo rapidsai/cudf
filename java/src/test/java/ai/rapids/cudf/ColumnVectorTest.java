@@ -647,7 +647,7 @@ public class ColumnVectorTest extends CudfTestBase {
       for (int j = 0 ; j < quantiles.length ; j++) {
         for (int i = 0 ; i < methods.length ; i++) {
           try(Scalar result = cv.quantile(methods[i], quantiles[j])) {
-            assertEquals(exactExpected[i][j], result.getDouble(), DELTA);
+            assertEqualsWithEpsilon(exactExpected[i][j], result.getDouble(), DELTA);
           }
         }
       }
@@ -668,7 +668,7 @@ public class ColumnVectorTest extends CudfTestBase {
       for (int j = 0; j < quantiles.length ; j++) {
         for (int i = 0 ; i < methods.length ; i++) {
           try (Scalar result = cv.quantile(methods[i], quantiles[j])) {
-            assertEquals(exactExpected[i][j], result.getDouble(), DELTA);
+            assertEqualsWithEpsilon(exactExpected[i][j], result.getDouble(), DELTA);
           }
         }
       }
