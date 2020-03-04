@@ -179,8 +179,6 @@ TYPED_TEST(FixedPointTestBothReps, DecimalXXTrickyDivision) {
     decimalXX TEN_1  {10, scale_type{1}};
     decimalXX SIXTY_1{60, scale_type{1}};
 
-    decimalXX ZERO = ONE_1;
-
     EXPECT_EQ(static_cast<int32_t>(ONE_1),    0); // round(1 / 10) = 0
     EXPECT_EQ(static_cast<int32_t>(SIX_1),   10); // round(6 / 10) = 10
     EXPECT_EQ(static_cast<int32_t>(TEN_0),   10);

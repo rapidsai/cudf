@@ -29,8 +29,8 @@ namespace numeric {
 template <typename T>
 struct strong_typedef {
     T _t;
-    explicit strong_typedef(T t) : _t(t) {}
-    operator T() const { return _t; }
+    CUDA_HOST_DEVICE_CALLABLE explicit strong_typedef(T t) : _t(t) {}
+    CUDA_HOST_DEVICE_CALLABLE operator T() const { return _t; }
 };
 
 using scale_type = strong_typedef<int32_t>;
@@ -75,6 +75,7 @@ namespace detail {
     template <typename Rep, Radix Base, typename T,
               typename std::enable_if_t<(std::is_same<int32_t, T>::value
                                       && is_supported_representation_type<Rep>())>* = nullptr>
+    CUDA_HOST_DEVICE_CALLABLE
     Rep ipow(T exponent) {
         if (exponent == 0) return static_cast<Rep>(Base);
         auto extra  = static_cast<Rep>(1);
@@ -170,6 +171,7 @@ namespace detail {
     */
     template <typename Rep, Radix Rad, typename T,
               typename std::enable_if_t<is_supported_construction_value_type<T>()>* = nullptr>
+    CUDA_HOST_DEVICE_CALLABLE
     auto shift_with_precise_round(T const& value, scale_type const& scale) -> int64_t {
         if (scale == 0) return value;
         int64_t const base   = static_cast<int64_t>(Rad);
