@@ -121,9 +121,7 @@ cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
     with nogil:
         c_out_table = move(parquet_reader(args))
 
-    column_names = list(c_out_table.metadata.column_names)
-    column_names = [x.decode() for x in column_names]
-    cdef unique_ptr[table] ctbl = move(c_out_table.tbl)
+    column_names = [x.decode() for x in c_out_table.metadata.column_names]
     return Table.from_unique_ptr(move(c_out_table.tbl),
                                  column_names=column_names)
 
