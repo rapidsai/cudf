@@ -152,7 +152,7 @@ try:
         return cudf.Series(col).hash_values()
 
     @group_split_dispatch.register(cudf.DataFrame)
-    def group_split_cudf(df, c, k, ignore_index=True):
+    def group_split_cudf(df, c, k, ignore_index=False):
         return dict(
             zip(
                 range(k),
