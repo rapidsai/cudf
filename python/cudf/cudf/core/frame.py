@@ -797,7 +797,7 @@ class Frame(libcudfxx.table.Table):
 
         return lhs, rhs, to_categorical
 
-    def _is_sorted(self, col_order=None, null_prec=None):
+    def _is_sorted(self, ascending=None, null_position=None):
         """
         Returns a boolean indicating whether the data of the Frame are sorted
         based on the parameters given. Does not account for the index.
@@ -806,12 +806,12 @@ class Frame(libcudfxx.table.Table):
         ----------
         self : Frame
             Frame whose columns are to be checked for sort order
-        col_order : None or list-like of booleans
+        ascending : None or list-like of booleans
             None or list-like of boolean values indicating expected sort order
             of each column. If list-like, size of list-like must be
             len(columns). If None, all columns expected sort order is set to
             ascending. False (0) - ascending, True (1) - descending.
-        null_prec : None or list-like of booleans
+        null_position : None or list-like of booleans
             None or list-like of boolean values indicating desired order of
             nulls compared to other elements. If list-like, size of list-like
             must be len(columns). If None, null order is set to before. False
@@ -820,9 +820,9 @@ class Frame(libcudfxx.table.Table):
         Returns
         -------
         returns : boolean
-            Returns True, if sorted as expected by ``col_order`` and
-            ``null_prec``, False otherwise.
+            Returns True, if sorted as expected by ``ascending`` and
+            ``null_position``, False otherwise.
         """
         return libcudfxx.sort.is_sorted(
-            self, col_order=col_order, null_prec=null_prec
+            self, ascending=ascending, null_position=null_position
         )

@@ -645,7 +645,7 @@ class ColumnBase(Column):
                 self._is_monotonic_increasing = False
             else:
                 self._is_monotonic_increasing = self.as_frame()._is_sorted(
-                    col_order=None, null_prec=None
+                    ascending=None, null_position=None
                 )
         return self._is_monotonic_increasing
 
@@ -656,7 +656,7 @@ class ColumnBase(Column):
                 self._is_monotonic_decreasing = False
             else:
                 self._is_monotonic_decreasing = self.as_frame()._is_sorted(
-                    col_order=[True], null_prec=None
+                    ascending=[False], null_position=None
                 )
         return self._is_monotonic_decreasing
 

@@ -664,7 +664,7 @@ class MultiIndex(Index):
     def is_monotonic_increasing(self):
         if not hasattr(self, "_is_monotonic_increasing"):
             self._is_monotonic_increasing = self._is_sorted(
-                col_order=None, null_prec=None
+                ascending=None, null_position=None
             )
         return self._is_monotonic_increasing
 
@@ -672,7 +672,7 @@ class MultiIndex(Index):
     def is_monotonic_decreasing(self):
         if not hasattr(self, "_is_monotonic_decreasing"):
             self._is_monotonic_decreasing = self._is_sorted(
-                col_order=[True] * len(self.levels), null_prec=None
+                ascending=[False] * len(self.levels), null_position=None
             )
         return self._is_monotonic_decreasing
 

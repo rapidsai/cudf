@@ -18,7 +18,7 @@ from cudf._libxx.cpp.types cimport order, null_order
 
 
 def is_sorted(
-    Table source_table, object col_order=None, object null_prec=None
+    Table source_table, object ascending=None, object null_position=None
 ):
     """
     Checks whether the rows of a `table` are sorted in lexicographical order.
@@ -27,69 +27,69 @@ def is_sorted(
     ----------
     source_table : Table
         Table whose columns are to be checked for sort order
-    col_order : None or list-like of booleans
+    ascending : None or list-like of booleans
         None or list-like of boolean values indicating expected sort order of
         each column. If list-like, size of list-like must be len(columns). If
         None, all columns expected sort order is set to ascending. False (0) -
-        ascending, True (1) - descending.
-    null_prec : None or list-like of booleans
+        descending, True (1) - ascending.
+    null_position : None or list-like of booleans
         None or list-like of boolean values indicating desired order of nulls
         compared to other elements. If list-like, size of list-like must be
-        len(columns). If None, null order is set to before. False (0) - before,
-        True (1) - after.
+        len(columns). If None, null order is set to before. False (0) - after,
+        True (1) - before.
 
     Returns
     -------
     returns : boolean
-        Returns True, if sorted as expected by ``col_order`` and ``null_prec``,
-        False otherwise.
+        Returns True, if sorted as expected by ``ascending`` and
+        ``null_position``, False otherwise.
     """
 
     cdef vector[order] column_order
     cdef vector[null_order] null_precedence
 
-    if col_order is None:
+    if ascending is None:
         column_order = vector[order](
             source_table._num_columns, order.ASCENDING
         )
-    elif pd.api.types.is_list_like(col_order):
-        if len(col_order) != source_table._num_columns:
+    elif pd.api.types.is_list_like(ascending):
+        if len(ascending) != source_table._num_columns:
             raise ValueError(
                 f"Expected a list-like of length {source_table._num_columns}, "
-                f"got length {len(col_order)} for `col_order`"
+                f"got length {len(ascending)} for `ascending`"
             )
         column_order = vector[order](
-            source_table._num_columns, order.ASCENDING
+            source_table._num_columns, order.DESCENDING
         )
-        for idx, val in enumerate(col_order):
+        for idx, val in enumerate(ascending):
             if val:
-                column_order[idx] = order.DESCENDING
+                column_order[idx] = order.ASCENDING
     else:
         raise TypeError(
-            f"Expected a list-like or None for `col_order`, got "
-            f"{type(col_order)}"
+            f"Expected a list-like or None for `ascending`, got "
+            f"{type(ascending)}"
         )
 
-    if null_prec is None:
+    if null_position is None:
         null_precedence = vector[null_order](
-            source_table._num_columns, null_order.BEFORE
+            source_table._num_columns, null_order.AFTER
         )
-    elif pd.api.types.is_list_like(null_prec):
-        if len(null_prec) != source_table._num_columns:
+    elif pd.api.types.is_list_like(null_position):
+        if len(null_position) != source_table._num_columns:
             raise ValueError(
                 f"Expected a list-like of length {source_table._num_columns}, "
-                f"got length {len(null_prec)} for `null_prec`"
+                f"got length {len(null_position)} for `null_position`"
             )
         null_precedence = vector[null_order](
-            source_table._num_columns, null_order.BEFORE
+            source_table._num_columns, null_order.AFTER
         )
-        for idx, val in enumerate(null_prec):
+        for idx, val in enumerate(null_position):
             if val:
-                null_precedence[idx] = null_order.AFTER
+                null_precedence[idx] = null_order.BEFORE
     else:
         raise TypeError(
-            f"Expected a list-like or None for `null_prec`, got "
-            f"{type(col_order)}"
+            f"Expected a list-like or None for `null_position`, got "
+            f"{type(null_position)}"
         )
 
     cdef bool c_result
