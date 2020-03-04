@@ -85,10 +85,14 @@ class GroupBy(object):
         if not isinstance(aggs, collections.abc.Mapping):
             # Make col_name->aggs mapping from aggs.
             # Do not include named key columns
-            columns = tuple(
-                dict.fromkeys(self.obj._column_names, []).keys()
-                - dict.fromkeys(self.grouping._named_columns, []).keys()
-            )
+
+            # Can't do set arithmetic here as sets are
+            # not ordered
+            columns = [
+                col
+                for col in self.obj._column_names
+                if col not in self.grouping._named_columns
+            ]
             out = dict.fromkeys(columns, aggs)
         else:
             out = aggs.copy()
