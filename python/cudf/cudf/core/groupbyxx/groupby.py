@@ -1,4 +1,5 @@
 import collections
+import functools
 
 import pandas as pd
 
@@ -49,6 +50,23 @@ class GroupBy(object):
             result.index = cudf.core.index.RangeIndex(len(result))
 
         return result
+
+    def __getattr__(self, key):
+        if key != "_agg_func_with_args":
+            return functools.partial(self._agg_func_name_with_args, key)
+        raise AttributeError()
+
+    def _agg_func_name_with_args(self, func_name, *args, **kwargs):
+        """
+        Aggregate given an aggregate function name
+        and arguments to the function.
+        """
+
+        def func(x):
+            return getattr(x, func_name)(*args, **kwargs)
+
+        func.__name__ = func_name
+        return self.agg(func)
 
     def _normalize_aggs(self, aggs):
         """
