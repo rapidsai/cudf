@@ -470,4 +470,196 @@ TEST_F(OrcChunkedWriterTest, SimpleTable)
   expect_tables_equal(*result.tbl, *full_table);    
 }
 
+TEST_F(OrcChunkedWriterTest, LargeTables)
+{
+  srand(31337);
+  auto table1 = create_random_fixed_table<int>(512, 4096, true);
+  auto table2 = create_random_fixed_table<int>(512, 8192, true);
+  
+  auto full_table = cudf::experimental::concatenate({*table1, *table2});          
 
+  auto filepath = temp_env->get_temp_filepath("ChunkedLarge.orc");
+  cudf_io::write_orc_chunked_args args{cudf_io::sink_info{filepath}};
+  auto state = cudf_io::write_orc_chunked_begin(args);  
+  cudf_io::write_orc_chunked(*table1, state);
+  cudf_io::write_orc_chunked(*table2, state);  
+  cudf_io::write_orc_chunked_end(state);    
+
+  cudf_io::read_orc_args read_args{cudf_io::source_info{filepath}};
+  auto result = cudf_io::read_orc(read_args);
+  
+  expect_tables_equal(*result.tbl, *full_table);    
+}
+
+TEST_F(OrcChunkedWriterTest, ManyTables)
+{
+  srand(31337);
+  std::vector<std::unique_ptr<table>> tables;
+  std::vector<table_view> table_views;
+  constexpr int num_tables = 96;
+  for(int idx=0; idx<num_tables; idx++){
+    auto tbl = create_random_fixed_table<int>(16, 64, true);
+    table_views.push_back(*tbl);
+    tables.push_back(std::move(tbl));
+  }    
+  
+  auto expected = cudf::experimental::concatenate(table_views);
+
+  auto filepath = temp_env->get_temp_filepath("ChunkedManyTables.orc");
+  cudf_io::write_orc_chunked_args args{cudf_io::sink_info{filepath}};
+  auto state = cudf_io::write_orc_chunked_begin(args); 
+  std::for_each(table_views.begin(), table_views.end(), [&state](table_view const& tbl){
+    cudf_io::write_orc_chunked(tbl, state);
+  });  
+  cudf_io::write_orc_chunked_end(state);    
+
+  cudf_io::read_orc_args read_args{cudf_io::source_info{filepath}};
+  auto result = cudf_io::read_orc(read_args);
+  
+  expect_tables_equal(*result.tbl, *expected);    
+}
+
+TEST_F(OrcChunkedWriterTest, Strings)
+{       
+  std::vector<std::unique_ptr<cudf::column>> cols;
+
+  bool mask1[]    = { 1, 1, 0, 1, 1, 1, 1 };
+  std::vector<const char*> h_strings1 { "four", "score", "and", "seven", "years", "ago", "abcdefgh" };
+  cudf::test::strings_column_wrapper strings1( h_strings1.begin(), h_strings1.end(), mask1 );
+  cols.push_back(strings1.release());  
+  cudf::experimental::table tbl1(std::move(cols));
+
+  bool mask2[]    = { 0, 1, 1, 1, 1, 1, 1 };
+  std::vector<const char*> h_strings2 { "ooooo", "ppppppp", "fff", "j", "cccc", "bbb", "zzzzzzzzzzz" };
+  cudf::test::strings_column_wrapper strings2( h_strings2.begin(), h_strings2.end(), mask2 );
+  cols.push_back(strings2.release());  
+  cudf::experimental::table tbl2(std::move(cols));    
+
+  auto expected = cudf::experimental::concatenate({tbl1, tbl2});  
+
+  auto filepath = temp_env->get_temp_filepath("ChunkedStrings.orc");
+  cudf_io::write_orc_chunked_args args{cudf_io::sink_info{filepath}};
+  auto state = cudf_io::write_orc_chunked_begin(args);   
+  cudf_io::write_orc_chunked(tbl1, state);
+  cudf_io::write_orc_chunked(tbl2, state);
+  cudf_io::write_orc_chunked_end(state);    
+
+  cudf_io::read_orc_args read_args{cudf_io::source_info{filepath}};
+  auto result = cudf_io::read_orc(read_args);      
+
+  expect_tables_equal(*result.tbl, *expected);      
+}
+
+TEST_F(OrcChunkedWriterTest, MismatchedTypes)
+{         
+  srand(31337);
+  auto table1 = create_random_fixed_table<int>(4, 4, true);
+  auto table2 = create_random_fixed_table<float>(4, 4, true);  
+
+  auto filepath = temp_env->get_temp_filepath("ChunkedMismatchedTypes.orc");
+  cudf_io::write_orc_chunked_args args{cudf_io::sink_info{filepath}};
+  auto state = cudf_io::write_orc_chunked_begin(args);  
+  cudf_io::write_orc_chunked(*table1, state);
+  EXPECT_THROW(cudf_io::write_orc_chunked(*table2, state), cudf::logic_error);  
+  cudf_io::write_orc_chunked_end(state);    
+}
+
+TEST_F(OrcChunkedWriterTest, MismatchedStructure)
+{         
+  srand(31337);
+  auto table1 = create_random_fixed_table<int>(4, 4, true);
+  auto table2 = create_random_fixed_table<int>(3, 4, true);  
+
+  auto filepath = temp_env->get_temp_filepath("ChunkedMismatchedStructure.orc");
+  cudf_io::write_orc_chunked_args args{cudf_io::sink_info{filepath}};
+  auto state = cudf_io::write_orc_chunked_begin(args);  
+  cudf_io::write_orc_chunked(*table1, state);
+  EXPECT_THROW(cudf_io::write_orc_chunked(*table2, state), cudf::logic_error);  
+  cudf_io::write_orc_chunked_end(state);    
+}
+
+TYPED_TEST(OrcChunkedWriterNumericTypeTest, UnalignedSize)
+{
+  // write out two 31 row tables and make sure they get
+  // read back with all their validity bits in the right place
+
+  using T = TypeParam;
+
+  int num_els = 31;
+  std::vector<std::unique_ptr<cudf::column>> cols;
+
+  bool mask[]    = { 0, 1, 1, 1, 1, 1, 1, 1,  1, 1, 1, 1, 1, 1, 1, 1,  1, 1, 1, 1, 1, 1, 1, 1,  1, 1, 1, 1, 1, 1, 1 };
+
+  T c1a[]        = { 5, 5, 5, 5, 5, 5, 5, 5,  5, 5, 5, 5, 5, 5, 5, 5,  5, 5, 5, 5, 5, 5, 5, 5,  5, 5, 5, 5, 5, 5, 5 };
+  T c1b[]        = { 6, 6, 6, 6, 6, 6, 6, 6,  6, 6, 6, 6, 6, 6, 6, 6,  6, 6, 6, 6, 6, 6, 6, 6,  6, 6, 6, 6, 6, 6, 6 };
+  column_wrapper<T> c1a_w(c1a, c1a + num_els, mask);
+  column_wrapper<T> c1b_w(c1b, c1b + num_els, mask);
+  cols.push_back(c1a_w.release());
+  cols.push_back(c1b_w.release());
+  cudf::experimental::table tbl1(std::move(cols));
+
+  T c2a[]        = { 8, 8, 8, 8, 8, 8, 8, 8,  8, 8, 8, 8, 8, 8, 8, 8,  8, 8, 8, 8, 8, 8, 8, 8,  8, 8, 8, 8, 8, 8, 8 };
+  T c2b[]        = { 9, 9, 9, 9, 9, 9, 9, 9,  9, 9, 9, 9, 9, 9, 9, 9,  9, 9, 9, 9, 9, 9, 9, 9,  9, 9, 9, 9, 9, 9, 9 };
+  column_wrapper<T> c2a_w(c2a, c2a + num_els, mask);
+  column_wrapper<T> c2b_w(c2b, c2b + num_els, mask);
+  cols.push_back(c2a_w.release());
+  cols.push_back(c2b_w.release());
+  cudf::experimental::table tbl2(std::move(cols));
+
+  auto expected = cudf::experimental::concatenate({tbl1, tbl2});  
+
+  auto filepath = temp_env->get_temp_filepath("ChunkedUnalignedSize.orc");
+  cudf_io::write_orc_chunked_args args{cudf_io::sink_info{filepath}};
+  auto state = cudf_io::write_orc_chunked_begin(args);   
+  cudf_io::write_orc_chunked(tbl1, state);
+  cudf_io::write_orc_chunked(tbl2, state);
+  cudf_io::write_orc_chunked_end(state);    
+
+  cudf_io::read_orc_args read_args{cudf_io::source_info{filepath}};
+  auto result = cudf_io::read_orc(read_args);      
+
+  expect_tables_equal(*result.tbl, *expected);      
+}
+
+TYPED_TEST(OrcChunkedWriterNumericTypeTest, UnalignedSize2)
+{
+  // write out two 33 row tables and make sure they get
+  // read back with all their validity bits in the right place
+
+  using T = TypeParam;
+
+  int num_els = 33;
+  std::vector<std::unique_ptr<cudf::column>> cols;
+
+  bool mask[]    = { 0, 1, 1, 1, 1, 1, 1, 1,  1, 1, 1, 1, 1, 1, 1, 1,  1, 1, 1, 1, 1, 1, 1, 1,  1, 1, 1, 1, 1, 1, 1, 1, 1 };
+
+  T c1a[]        = { 5, 5, 5, 5, 5, 5, 5, 5,  5, 5, 5, 5, 5, 5, 5, 5,  5, 5, 5, 5, 5, 5, 5, 5,  5, 5, 5, 5, 5, 5, 5, 5, 5 };
+  T c1b[]        = { 6, 6, 6, 6, 6, 6, 6, 6,  6, 6, 6, 6, 6, 6, 6, 6,  6, 6, 6, 6, 6, 6, 6, 6,  6, 6, 6, 6, 6, 6, 6, 6, 6 };
+  column_wrapper<T> c1a_w(c1a, c1a + num_els, mask);
+  column_wrapper<T> c1b_w(c1b, c1b + num_els, mask);
+  cols.push_back(c1a_w.release());
+  cols.push_back(c1b_w.release());
+  cudf::experimental::table tbl1(std::move(cols));
+
+  T c2a[]        = { 8, 8, 8, 8, 8, 8, 8, 8,  8, 8, 8, 8, 8, 8, 8, 8,  8, 8, 8, 8, 8, 8, 8, 8,  8, 8, 8, 8, 8, 8, 8, 8, 8 };
+  T c2b[]        = { 9, 9, 9, 9, 9, 9, 9, 9,  9, 9, 9, 9, 9, 9, 9, 9,  9, 9, 9, 9, 9, 9, 9, 9,  9, 9, 9, 9, 9, 9, 9, 9, 9 };
+  column_wrapper<T> c2a_w(c2a, c2a + num_els, mask);
+  column_wrapper<T> c2b_w(c2b, c2b + num_els, mask);
+  cols.push_back(c2a_w.release());
+  cols.push_back(c2b_w.release());
+  cudf::experimental::table tbl2(std::move(cols));
+
+  auto expected = cudf::experimental::concatenate({tbl1, tbl2});  
+
+  auto filepath = temp_env->get_temp_filepath("ChunkedUnalignedSize2.orc");
+  cudf_io::write_orc_chunked_args args{cudf_io::sink_info{filepath}};
+  auto state = cudf_io::write_orc_chunked_begin(args);   
+  cudf_io::write_orc_chunked(tbl1, state);
+  cudf_io::write_orc_chunked(tbl2, state);
+  cudf_io::write_orc_chunked_end(state);    
+
+  cudf_io::read_orc_args read_args{cudf_io::source_info{filepath}};
+  auto result = cudf_io::read_orc(read_args);      
+
+  expect_tables_equal(*result.tbl, *expected);      
+}

@@ -1189,6 +1189,15 @@ void writer::impl::write_chunked(table_view const& table, orc_chunked_state& sta
       state.ff.types[0].fieldNames[i] = orc_columns[i].orc_name();
     }
   }
+  else {
+    // verify the user isn't passing mismatched tables
+    CUDF_EXPECTS(state.ff.types.size() == 1 + orc_columns.size(),
+                 "Mismatch in table structure between multiple calls to write_chunked");    
+    for (auto i = 0; i < num_columns; i++) {
+      CUDF_EXPECTS(state.ff.types[1 + i].kind == orc_columns[i].orc_kind(),
+                   "Mismatch in column types between multiple calls to write_chunked");
+    }
+  }
   state.ff.stripes.insert(state.ff.stripes.end(),
                           std::make_move_iterator(stripes.begin()),
                           std::make_move_iterator(stripes.end()));
