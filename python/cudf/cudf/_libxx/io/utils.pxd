@@ -2,4 +2,4 @@
 
 from cudf._libxx.cpp.io.types cimport source_info
 
-cdef source_info make_source_info(filepath_or_buffer) except*
+cdef source_info make_source_info(src) except*
