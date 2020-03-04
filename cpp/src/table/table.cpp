@@ -17,12 +17,14 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 namespace cudf {
 namespace experimental {
 
 // Copy the columns from another table
 table::table(table const& other) : _num_rows{other.num_rows()} {
+  CUDF_FUNC_RANGE();
   _columns.reserve(other._columns.size());
   for (auto const& c : other._columns) {
     _columns.emplace_back(std::make_unique<column>(*c));
@@ -46,6 +48,7 @@ table::table(std::vector<std::unique_ptr<column>>&& columns)
 // Copy the contents of a `table_view`
 table::table(table_view view, cudaStream_t stream,
              rmm::mr::device_memory_resource* mr) : _num_rows{view.num_rows()} {
+  CUDF_FUNC_RANGE();
   _columns.reserve(view.num_columns());
   for (auto const& c : view) {
     _columns.emplace_back(std::make_unique<column>(c, stream, mr));
@@ -90,6 +93,7 @@ table_view table::select(std::vector<cudf::size_type> const& column_indices) con
 std::unique_ptr<table>
 concatenate(std::vector<table_view> const& tables_to_concat,
             rmm::mr::device_memory_resource *mr, cudaStream_t stream) {
+  CUDF_FUNC_RANGE();
   if (tables_to_concat.size() == 0) { return std::make_unique<table>(); }
 
   size_type number_of_cols = tables_to_concat.front().num_columns();
