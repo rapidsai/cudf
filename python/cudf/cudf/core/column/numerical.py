@@ -96,9 +96,7 @@ class NumericalColumn(column.ColumnBase):
         return _numeric_column_compare(self, rhs, op=cmpop)
 
     def _apply_scan_op(self, op):
-        out_col = column.column_empty_like_same_mask(self, dtype=self.dtype)
-        libcudf.reduce.scan(self, out_col, op, inclusive=True)
-        return out_col
+        return libcudfxx.reduce.scan(op, self, True)
 
     def normalize_binop_value(self, other):
         if other is None:
@@ -144,14 +142,10 @@ class NumericalColumn(column.ColumnBase):
         )
 
     def as_numerical_column(self, dtype, **kwargs):
-        casted = libcudf.typecast.cast(self, dtype)
-        return column.build_column(
-            data=casted.data,
-            dtype=casted.dtype,
-            mask=casted.mask,
-            size=casted.size,
-            offset=casted.offset,
-        )
+        dtype = np.dtype(dtype)
+        if dtype == self.dtype:
+            return self
+        return libcudfxx.unary.cast(self, dtype)
 
     def sort_by_values(self, ascending=True, na_position="last"):
         sort_inds = get_sorted_inds(self, ascending, na_position)
@@ -203,36 +197,36 @@ class NumericalColumn(column.ColumnBase):
         return out_col
 
     def all(self):
-        return bool(libcudf.reduce.reduce("all", self, dtype=np.bool_))
+        return bool(libcudfxx.reduce.reduce("all", self, dtype=np.bool_))
 
     def any(self):
         if self.valid_count == 0:
             return False
-        return bool(libcudf.reduce.reduce("any", self, dtype=np.bool_))
+        return bool(libcudfxx.reduce.reduce("any", self, dtype=np.bool_))
 
     def min(self, dtype=None):
-        return libcudf.reduce.reduce("min", self, dtype=dtype)
+        return libcudfxx.reduce.reduce("min", self, dtype=dtype)
 
     def max(self, dtype=None):
-        return libcudf.reduce.reduce("max", self, dtype=dtype)
+        return libcudfxx.reduce.reduce("max", self, dtype=dtype)
 
     def sum(self, dtype=None):
-        return libcudf.reduce.reduce("sum", self, dtype=dtype)
+        return libcudfxx.reduce.reduce("sum", self, dtype=dtype)
 
     def product(self, dtype=None):
-        return libcudf.reduce.reduce("product", self, dtype=dtype)
+        return libcudfxx.reduce.reduce("product", self, dtype=dtype)
 
     def mean(self, dtype=np.float64):
-        return libcudf.reduce.reduce("mean", self, dtype=dtype)
+        return libcudfxx.reduce.reduce("mean", self, dtype=dtype)
 
     def var(self, ddof=1, dtype=np.float64):
-        return libcudf.reduce.reduce("var", self, dtype=dtype, ddof=ddof)
+        return libcudfxx.reduce.reduce("var", self, dtype=dtype, ddof=ddof)
 
     def std(self, ddof=1, dtype=np.float64):
-        return libcudf.reduce.reduce("std", self, dtype=dtype, ddof=ddof)
+        return libcudfxx.reduce.reduce("std", self, dtype=dtype, ddof=ddof)
 
     def sum_of_squares(self, dtype=None):
-        return libcudf.reduce.reduce("sum_of_squares", self, dtype=dtype)
+        return libcudfxx.reduce.reduce("sum_of_squares", self, dtype=dtype)
 
     def round(self, decimals=0):
         if decimals < 0:
