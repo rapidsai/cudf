@@ -87,7 +87,9 @@ struct substring_fn
             }
             // handle negative position here
             auto adjust = length + start;
-            return d_str.begin() + ((adjust > 0) ? adjust : 0);
+            if( adjust >= 0 )
+                return d_str.begin() + adjust;
+            return d_str.begin() + ((step <0) ? -1:0);
         } ();
         auto const end = [&] {  // always exclusive
             // when invalid, default depends on step

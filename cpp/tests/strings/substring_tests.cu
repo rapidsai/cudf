@@ -250,6 +250,9 @@ TEST_F(StringsSubstringsTest, MaxPositions)
 
     results = cudf::strings::slice_strings(strings_column, -10, -19);
     cudf::test::expect_columns_equal(*results, expected);
+
+    results = cudf::strings::slice_strings(strings_column, -10, -19, -1);
+    cudf::test::expect_columns_equal(*results, expected);
 }
 
 TEST_F(StringsSubstringsTest, Error)
