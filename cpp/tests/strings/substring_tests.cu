@@ -232,22 +232,24 @@ TEST_F(StringsSubstringsTest, MaxPositions)
     cudf::test::strings_column_wrapper strings{ "a", "bc", "def", "ghij", "klmno", "pqrstu", "vwxyz" };
     auto strings_column = cudf::strings_column_view(strings);
     cudf::test::strings_column_wrapper expected{ "", "", "", "", "", "", "" };
-    {
-        auto results = cudf::strings::slice_strings(strings_column, 10);
-        cudf::test::expect_columns_equal(*results, expected);
-    }
-    {
-        auto results = cudf::strings::slice_strings(strings_column, 0, -10);
-        cudf::test::expect_columns_equal(*results, expected);
-    }
-    {
-        auto results = cudf::strings::slice_strings(strings_column, cudf::numeric_scalar<cudf::size_type>(0,false), -10);
-        cudf::test::expect_columns_equal(*results, expected);
-    }
-    {
-        auto results = cudf::strings::slice_strings(strings_column, 17, 1, -1);
-        cudf::test::print(results->view()); std::cout << std::endl;
-    }
+
+    auto results = cudf::strings::slice_strings(strings_column, 10);
+    cudf::test::expect_columns_equal(*results, expected);
+
+    results = cudf::strings::slice_strings(strings_column, 0, -10);
+    cudf::test::expect_columns_equal(*results, expected);
+ 
+    results = cudf::strings::slice_strings(strings_column, cudf::numeric_scalar<cudf::size_type>(0,false), -10);
+    cudf::test::expect_columns_equal(*results, expected);
+
+    results = cudf::strings::slice_strings(strings_column, 10, 19);
+    cudf::test::expect_columns_equal(*results, expected);
+
+    results = cudf::strings::slice_strings(strings_column, 10, 19, 9);
+    cudf::test::expect_columns_equal(*results, expected);
+
+    results = cudf::strings::slice_strings(strings_column, -10, -19);
+    cudf::test::expect_columns_equal(*results, expected);
 }
 
 TEST_F(StringsSubstringsTest, Error)
