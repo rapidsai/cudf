@@ -111,6 +111,9 @@ class DataFrameGroupBy(GroupBy):
             return self.obj[key].groupby(self.grouping)
         return super().__getattr__(key)
 
+    def __getitem__(self, key):
+        return self.obj[key].groupby(self.grouping)
+
 
 class SeriesGroupBy(GroupBy):
     def agg(self, aggs):
