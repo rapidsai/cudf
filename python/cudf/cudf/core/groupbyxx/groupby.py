@@ -9,10 +9,13 @@ import cudf._libxx.groupby as libgroupby
 
 class GroupBy(object):
     def __init__(self, obj, by=None, level=None, as_index=True):
-        self.grouping = _Grouping(obj, by, level)
         self.obj = obj
-        self._groupby = libgroupby.GroupBy(self.grouping.keys)
         self.as_index = as_index
+        if isinstance(by, _Grouping):
+            self.grouping = by
+        else:
+            self.grouping = _Grouping(obj, by, level)
+        self._groupby = libgroupby.GroupBy(self.grouping.keys)
 
     def __iter__(self):
         grouped_keys, grouped_values, offsets = self._groupby.groups(self.obj)
@@ -28,14 +31,20 @@ class GroupBy(object):
         normalized_aggs = self._normalize_aggs(aggs)
 
         result = self._groupby.aggregate(self.obj, normalized_aggs)
-        result = self.obj.__class__._from_table(result).sort_index()
+        result = cudf.DataFrame._from_table(result).sort_index()
 
         if not _is_multi_agg(aggs):
-            # drop the last level
-            columns = result.columns.droplevel(-1)
-            result.columns = columns
-
-        result = result.sort_index()
+            try:
+                # drop the last level
+                columns = result.columns.droplevel(-1)
+                result.columns = columns
+            except IndexError:
+                # Pandas raises an index error if we are left
+                # with an all-nan MultiIndex
+                if result.shape[1] == 1:
+                    result.columns = [None]
+                else:
+                    raise
 
         # set index names to be group key names
         result.index.names = self.grouping.names
@@ -90,6 +99,21 @@ class GroupBy(object):
                 out[col] = [agg]
 
         return out
+
+
+class DataFrameGroupBy(GroupBy):
+    def __getattr__(self, key):
+        if key in self.obj:
+            return self.obj[key].groupby(self.grouping)
+        return super().__getattr__(key)
+
+
+class SeriesGroupBy(GroupBy):
+    def agg(self, aggs):
+        result = super().agg(aggs)
+        if result.shape[1] == 1 and not pd.api.types.is_list_like(aggs):
+            return result.iloc[:, 0]
+        return result
 
 
 class Grouper(object):

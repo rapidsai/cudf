@@ -2581,9 +2581,11 @@ class DataFrame(Frame):
             result = Groupby(self, by=by)
             return result
         else:
-            from cudf.core.groupbyxx.groupby import GroupBy
+            from cudf.core.groupbyxx.groupby import DataFrameGroupBy
 
-            return GroupBy(self, by=by, level=level, as_index=as_index)
+            return DataFrameGroupBy(
+                self, by=by, level=level, as_index=as_index
+            )
 
     @copy_docstring(Rolling)
     def rolling(

@@ -2452,21 +2452,10 @@ class Series(Frame):
                 "The group_keys keyword is not yet implemented"
             )
 
-        if method == "libxx":
-            from cudf.core.groupbyxx.groupby import GroupBy
-
-            return GroupBy(self, by=by)
         else:
-            from cudf.core.groupby.groupby import SeriesGroupBy
+            from cudf.core.groupbyxx.groupby import SeriesGroupBy
 
-            return SeriesGroupBy(
-                self,
-                by=by,
-                level=level,
-                sort=sort,
-                as_index=as_index,
-                dropna=dropna,
-            )
+            return SeriesGroupBy(self, by=by)
 
     @copy_docstring(Rolling)
     def rolling(
