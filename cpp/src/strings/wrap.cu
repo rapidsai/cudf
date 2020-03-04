@@ -130,7 +130,6 @@ std::unique_ptr<column> wrap( strings_column_view const& strings,
   thrust::for_each_n(execpol->on(stream),
                      thrust::make_counting_iterator<size_type>(0), strings_count, d_execute_fctr);
   
-  //
   return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
                              d_column.null_count(), std::move(null_mask), stream, mr);
 }
