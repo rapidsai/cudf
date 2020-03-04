@@ -785,8 +785,7 @@ Create a test hex csv file
 Read the file with ``cudf.read_csv`` and use `hex64` as dtype.
 dtype: `hex64`, `hex32` or `hex` (alias for hex64) for hexadecimal parsing.
 
->>> gdf = cudf.read_csv(fname, converters={'hex_col': partial(int, base=16)},
-...                     dtype = {"hex_col" : "hex64"})
+>>> gdf = cudf.read_csv(fname, dtype = {"hex_col" : "hex64"})
 >>> gdf
     hex_col
 0   2501034507
@@ -794,9 +793,6 @@ dtype: `hex64`, `hex32` or `hex` (alias for hex64) for hexadecimal parsing.
 2   2501034507
 3   2501034507
 4   2501034507
-
-Note: ASCII strings like "0x..." are automatically parsed into their int values
-if dtype inference is enabled.
 
 See Also
 --------
