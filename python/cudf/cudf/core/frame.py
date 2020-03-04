@@ -239,7 +239,7 @@ class Frame(libcudfxx.table.Table):
         result._copy_categories(self)
         return result
 
-    def repeat(self, repeats, axis=None):
+    def repeat(self, repeats, axis=1):
         """Repeats elements consecutively
 
         Parameters
@@ -272,7 +272,9 @@ class Frame(libcudfxx.table.Table):
         dtype: int64
         >>>
         """
-        assert axis in (0, None)
+        if axis != 1:
+            raise NotImplementedError("Only axis=1 supported at this time.")
+
         return self._repeat(repeats)
 
     def _repeat(self, count):
