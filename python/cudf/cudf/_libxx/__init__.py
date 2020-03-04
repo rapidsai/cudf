@@ -5,6 +5,7 @@ import numpy as np
 from . import (
     avro,
     copying,
+    dlpack,
     gpuarrow,
     hash,
     join,
@@ -18,6 +19,7 @@ from . import (
     search,
     sort,
     stream_compaction,
+    strings,
     table,
     transpose,
     unary,
