@@ -46,7 +46,7 @@ auto is_sorted(
     auto ineq_op = row_lexicographic_comparator<has_nulls>(
         *in_d, *in_d,
         d_column_order.data().get(),
-        has_nulls ? d_null_precedence.data().get() : nullptr);
+        d_null_precedence.data().get());
 
     auto sorted = thrust::is_sorted(rmm::exec_policy(stream)->on(stream),
                                     thrust::make_counting_iterator(0),
