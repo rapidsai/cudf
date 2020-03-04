@@ -168,17 +168,10 @@ private:
   }
 
   void* do_allocate(std::size_t num_bytes, cudaStream_t stream) override {
-    std::size_t total_before;
-    std::size_t total_after;
     void* result;
     while (true) {
       try {
-        std::lock_guard<std::mutex> lock(size_map_mutex);
-        total_before = total_allocated;
         result = resource->allocate(num_bytes, stream);
-        total_allocated += num_bytes;
-        total_after = total_allocated;
-        size_map[result] = num_bytes;
         break;
       } catch (std::bad_alloc const& e) {
         if (!on_alloc_fail(num_bytes)) {
@@ -187,6 +180,15 @@ private:
       }
     }
 
+    std::size_t total_before;
+    std::size_t total_after;
+    {
+      std::lock_guard<std::mutex> lock(size_map_mutex);
+      total_before = total_allocated;
+      total_allocated += num_bytes;
+      total_after = total_allocated;
+      size_map[result] = num_bytes;
+    }
     try {
       check_for_threshold_callback(total_before, total_after, alloc_thresholds,
           on_alloc_threshold_method, "onAllocThreshold", total_after);
@@ -200,12 +202,13 @@ private:
   }
 
   void do_deallocate(void* p, std::size_t size, cudaStream_t stream) override {
+    resource->deallocate(p, size, stream);
+
     std::size_t total_before;
     std::size_t total_after;
     {
       std::lock_guard<std::mutex> lock(size_map_mutex);
       total_before = total_allocated;
-      resource->deallocate(p, size, stream);
       // TODO: size can't be trusted until rmm::alloc and rmm::free are removed,
       //       see https://github.com/rapidsai/rmm/issues/302
       auto it = size_map.find(p);
