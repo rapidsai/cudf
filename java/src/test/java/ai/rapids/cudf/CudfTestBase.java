@@ -122,10 +122,18 @@ class CudfTestBase {
     }
   }
 
+  /**
+   * Fails if the absolute difference between expected and actual values as a percentage of the expected
+   * value is greater than the threshold i.e. Math.abs((expected - actual) / expected) > epsilon
+   */
   static void assertEqualsWithEpsilon(double expected, double actual, double epsilon) {
      assertEqualsWithEpsilon(expected, actual, epsilon, "");
   }
 
+  /**
+   * Fails if the absolute difference between expected and actual values as a percentage of the expected
+   * value is greater than the threshold i.e. Math.abs((expected - actual) / expected) > epsilon
+   */
   static void assertEqualsWithEpsilon(double expected, double actual, double epsilon, String message) {
     if (!doublesAreEqualWithEpsilon(expected, actual, epsilon)) {
       fail(message + " Math.abs(expected - actual) / Math.abs(expected) = "
