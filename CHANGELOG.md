@@ -36,6 +36,7 @@
 
 ## Improvements
 
+- PR #4331 Improved test for double that considers an epsilon
 - PR #4187 exposed getNativeView method in Java bindings
 - PR #3525 build.sh option to disable nvtx
 - PR #3748 Optimize hash_partition using shared memory
