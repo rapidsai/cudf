@@ -1337,7 +1337,7 @@ class message {
    * @param msg The message that has already been registered with NVTX.
    */
   template <typename D>
-  NVTX3_RELAXED_CONSTEXPR message(registered_message<D> const& msg) noexcept
+  message(registered_message<D> const& msg) noexcept
       : type_{NVTX_MESSAGE_TYPE_REGISTERED} {
     value_.registered = msg.get_handle();
   }
