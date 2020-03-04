@@ -31,6 +31,7 @@
 - PR #4276 Port avro.pyx to libcudf++
 - PR #4259 Ability to create Java host buffers from memory-mapped files
 - PR #4240 Add groupby::groups()
+- PR #4321 Expose Python Semi and Anti Joins
 
 ## Improvements
 
