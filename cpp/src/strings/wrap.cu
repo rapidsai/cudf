@@ -103,6 +103,8 @@ std::unique_ptr<column> wrap( strings_column_view const& strings,
                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                               cudaStream_t stream = 0)
 {
+  CUDF_EXPECTS(width > 0, "Positive wrap width required");
+  
   auto strings_count = strings.size();
   if( strings_count == 0 )
     return detail::make_empty_strings_column(mr,stream);
