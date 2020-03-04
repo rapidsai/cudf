@@ -374,17 +374,18 @@ class DataFrame(_Frame, dd.core.DataFrame):
             self, columns, npartitions, max_branch=max_branch
         )
 
-    def repartition(self, columns=None, **kwargs):
+    def repartition(self, *args, **kwargs):
         """ Wraps dask.dataframe DataFrame.repartition method.
         Uses repartition_by_hash if `columns=` is specified.
         """
+        columns = kwargs.pop("columns", None)
         if columns:
             warnings.warn(
                 "Repartitioning by column hash. Index will be ignored,"
                 "and divisions will lost."
             )
             return self.repartition_by_hash(columns=columns, **kwargs)
-        return super().repartition(**kwargs)
+        return super().repartition(*args, **kwargs)
 
 
 def sum_of_squares(x):
