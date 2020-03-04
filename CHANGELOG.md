@@ -32,6 +32,7 @@
 - PR #4259 Ability to create Java host buffers from memory-mapped files
 - PR #4240 Add groupby::groups()
 - PR #4319 Add repartition_by_hash API to dask_cudf
+- PR #4291 Add Java callback support for RMM events
 - PR #4298 Port orc.pyx to libcudf++
 
 ## Improvements
