@@ -16,7 +16,6 @@ import cudf._libxx as libcudfxx
 import cudf._libxx.string_casting as str_cast
 from cudf._lib.nvtx import nvtx_range_pop, nvtx_range_push
 from cudf._libxx.null_mask import bitmask_allocation_size_bytes
-from cudf._libxx.sort import is_sorted
 from cudf._libxx.strings.char_types import (
     is_alnum as cpp_is_alnum,
     is_alpha as cpp_is_alpha,
@@ -1127,28 +1126,6 @@ class StringColumn(column.ColumnBase):
     @property
     def is_unique(self):
         return len(self.unique()) == len(self)
-
-    @property
-    def is_monotonic_increasing(self):
-        if not hasattr(self, "_is_monotonic_increasing"):
-            if self.nullable and self.has_nulls:
-                self._is_monotonic_increasing = False
-            else:
-                self._is_monotonic_increasing = is_sorted(
-                    self.as_frame(), col_order=None, null_prec=None
-                )
-        return self._is_monotonic_increasing
-
-    @property
-    def is_monotonic_decreasing(self):
-        if not hasattr(self, "_is_monotonic_decreasing"):
-            if self.nullable and self.has_nulls:
-                self._is_monotonic_decreasing = False
-            else:
-                self._is_monotonic_decreasing = is_sorted(
-                    self.as_frame(), col_order=[True], null_prec=None
-                )
-        return self._is_monotonic_decreasing
 
     @property
     def __cuda_array_interface__(self):

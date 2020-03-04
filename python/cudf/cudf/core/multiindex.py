@@ -664,8 +664,8 @@ class MultiIndex(Index):
     @property
     def is_monotonic_increasing(self):
         if not hasattr(self, "_is_monotonic_increasing"):
-            self._is_monotonic_increasing = libcudfxx.sort.is_sorted(
-                self, col_order=None, null_prec=None
+            self._is_monotonic_increasing = self._is_sorted(
+                col_order=None, null_prec=None
             )
         return self._is_monotonic_increasing
 
