@@ -156,3 +156,15 @@ TEST_F(StringsPadTest, Wrap2)
     cudf::test::expect_columns_equal(*results,expected);
 }
 
+TEST_F(StringsPadTest, WrapExpectFailure)
+{
+    std::vector<const char*> h_strings{ "12345", "thesé", nullptr, "ARE THE", "tést strings", "" };
+    cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
+        thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
+    
+    cudf::size_type width = 0;// this should trigger failure
+    
+    auto strings_view = cudf::strings_column_view(strings);
+
+    EXPECT_THROW(cudf::strings::wrap(strings_view, width), cudf::logic_error);
+}
