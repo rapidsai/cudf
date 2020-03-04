@@ -99,11 +99,12 @@ struct column_scatterer_impl<dictionary32, MapIterator>
       MapIterator scatter_map_begin, MapIterator scatter_map_end, column_view const& target_in,
       rmm::mr::device_memory_resource* mr, cudaStream_t stream)
   {
-    if( target_in.size() == 0 )
-        return make_empty_column(data_type{DICTIONARY32});
-    auto output_count = std::distance(scatter_map_begin, scatter_map_end);
-    if( source_in.size() == 0 || output_count == 0 )
-        return std::make_unique<column>( source_in, stream, mr );
+    if( target_in.size() == 0 ) // empty begets empty
+      return make_empty_column(data_type{DICTIONARY32});
+    if( source_in.size() == 0 ) // no input, just make a copy
+      return std::make_unique<column>( target_in, stream, mr );
+
+    // check the keys match
     dictionary_column_view source(source_in);
     dictionary_column_view target(target_in);
     CUDF_EXPECTS( source.keys().type()==target.keys().type(), "scatter dictionary keys must be the same type");
@@ -114,24 +115,20 @@ struct column_scatterer_impl<dictionary32, MapIterator>
     auto source_matched = dictionary::detail::set_keys(source,target_view.keys(),mr,stream);
     auto source_view = dictionary_column_view(source_matched->view());
 
-    // now we can the build new indices by doing a scatter on them
-    column_view source_indices( data_type{INT32}, source_view.size(),
-                                source_view.indices().data<int32_t>(),
-                                source_view.null_mask(), source_view.null_count(),
-                                source_view.offset() );
-    column_view target_indices( data_type{INT32}, target_view.size(),
-                                target_view.indices().data<int32_t>(),
-                                target_view.null_mask(), target_view.null_count(),
-                                target_view.offset() );
+    // now build the new indices by doing a scatter on just the matched indices
+    column_view source_indices = dictionary_column_view(source_matched->view()).get_indices_annotated();
+    column_view target_indices = dictionary_column_view(target_matched->view()).get_indices_annotated();
     column_scatterer_impl<int32_t,MapIterator> index_scatterer;
     auto new_indices = index_scatterer( source_indices, scatter_map_begin, scatter_map_end, target_indices, mr, stream);
-    auto null_count = new_indices->null_count();
+    auto output_size = new_indices->size();       // record these
+    auto null_count = new_indices->null_count();  // before the release
     auto contents = new_indices->release();
     auto indices_column = std::make_unique<column>( data_type{INT32},
-          static_cast<size_type>(output_count), std::move(*(contents.data.release())),
-          rmm::device_buffer{}, 0 ); // set null count to 0
+          static_cast<size_type>(output_size), std::move(*(contents.data.release())),
+          rmm::device_buffer{}, 0 );
 
-    auto keys_column = std::make_unique<column>( target_view.keys(), stream, mr );
+    // take the keys from either matched column
+    std::unique_ptr<column> keys_column(std::move(target_matched->release().children.back()));
 
     // create column with keys_column and indices_column
     return make_dictionary_column( std::move(keys_column), std::move(indices_column),
