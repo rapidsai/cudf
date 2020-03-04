@@ -34,6 +34,8 @@ class GroupBy(object):
             columns = result.columns.droplevel(-1)
             result.columns = columns
 
+        result = result.sort_index()
+
         # set index names to be group key names
         result.index.names = self.grouping.names
 
