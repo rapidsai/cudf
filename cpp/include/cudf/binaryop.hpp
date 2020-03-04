@@ -27,7 +27,7 @@ namespace experimental {
 /**
  * @brief Types of binary operations that can be performed on data.
  */
-enum class binary_operator {
+enum class binary_operator : int32_t {
   ADD,             ///< operator +
   SUB,             ///< operator -
   MUL,             ///< operator *
