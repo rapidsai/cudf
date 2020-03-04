@@ -23,7 +23,7 @@ namespace cudf
 namespace strings
 {
 /**
- * @brief Inserts new-line characters (ASCII 0x0A) into each string in place of spaces, depending on `width`.  
+ * @brief Wraps strings onto multiple lines shorter than `width` by replacing appropriate white space with new-line characters (ASCII 0x0A).
  *
  * Returns a column of strings where, for each string row in the input, 
  * words separated by spaces will become separated by newline characters,
