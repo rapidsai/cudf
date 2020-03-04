@@ -1,6 +1,5 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from libcpp.pair cimport pair
 from libcpp.string cimport string
 from cudf._libxx.cpp.io.types cimport source_info
 
