@@ -157,31 +157,26 @@ TEST_F(StringsSubstringsTest, NegativePositions)
     auto strings_column = cudf::strings_column_view(strings);
     {
         auto results = cudf::strings::slice_strings(strings_column, -1);
-        std::cout << "(-1):\n "; cudf::test::print(results->view()); std::cout << std::endl;
         cudf::test::strings_column_wrapper expected{ "a", "c", "f", "j", "o", "u", "z" };
         cudf::test::expect_columns_equal(*results, expected);
     }
     {
         auto results = cudf::strings::slice_strings(strings_column, 0, -1);
-        std::cout << "(0,-1):\n "; cudf::test::print(results->view()); std::cout << std::endl;
         cudf::test::strings_column_wrapper expected{ "", "b", "de", "ghi", "klmn", "pqrst", "vwxy" };
         cudf::test::expect_columns_equal(*results, expected);
     }
     {
         auto results = cudf::strings::slice_strings(strings_column, 7, -2, -1);
-        std::cout << "(7,-2,-1):\n "; cudf::test::print(results->view()); std::cout << std::endl;
         cudf::test::strings_column_wrapper expected{ "a", "c", "f", "j", "o", "u", "z" };
         cudf::test::expect_columns_equal(*results, expected);
     }
     {
         auto results = cudf::strings::slice_strings(strings_column, 7, -7, -1 );
-        std::cout << "(7,-7,-1):\n "; cudf::test::print(results->view()); std::cout << std::endl;
         cudf::test::strings_column_wrapper expected{ "a", "cb", "fed", "jihg", "onmlk", "utsrqp", "zyxwv" };
         cudf::test::expect_columns_equal(*results, expected);
     }
     {
         auto results = cudf::strings::slice_strings(strings_column, -3, -1 );
-        std::cout << "(-3,-1):\n "; cudf::test::print(results->view()); std::cout << std::endl;
         cudf::test::strings_column_wrapper expected{ "", "b", "de", "hi", "mn", "st", "xy" };
         cudf::test::expect_columns_equal(*results, expected);
     }

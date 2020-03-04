@@ -76,7 +76,7 @@ struct substring_fn
                 return d_str.begin();
             // when invalid, default depends on step
             if( !d_start.is_valid() )
-                return (step > 0) ? d_str.begin() : d_str.end()-1;
+                return (step > 0) ? d_str.begin() : (d_str.end()-1);
             // normal positive position logic
             auto start = d_start.value();
             if( start >=0 )
