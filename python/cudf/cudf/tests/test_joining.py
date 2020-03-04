@@ -60,14 +60,7 @@ def make_params():
 
 def pd_odd_joins(left, right, join_type):
     if join_type == "leftanti":
-        result = left.merge(
-            right,
-            how="left",
-            left_index=True,
-            right_index=True,
-            indicator=True,
-        )
-        return result.loc[result._merge == "left_only", :][left.columns]
+        return left[~left.index.isin(right.index)][left.columns]
     elif join_type == "leftsemi":
         return left[left.index.isin(right.index)][left.columns]
 
