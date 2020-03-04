@@ -1747,18 +1747,18 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   /**
    * Checks if each string in a column contains a specified comparison string, resulting in a
    * parallel column of the boolean results.
-   * @param pattern scalar containing the string being searched for.
+   * @param compString scalar containing the string being searched for.
    * @return A new java column vector containing the boolean results.
    */
 
-  public ColumnVector stringContains(Scalar pattern) {
+  public ColumnVector stringContains(Scalar compString) {
     assert type == DType.STRING : "column type must be a String";
-    assert pattern != null : "pattern scalar may not be null";
-    assert pattern.getType() == DType.STRING : "pattern scalar must be a string scalar";
-    assert pattern.isValid() == true : "pattern string scalar may not contain a null value";
-    assert pattern.getJavaString().isEmpty() == false : "pattern string scalar may not be empty";
+    assert compString != null : "compString scalar may not be null";
+    assert compString.getType() == DType.STRING : "compString scalar must be a string scalar";
+    assert compString.isValid() : "compString string scalar may not contain a null value";
+    assert !compString.getJavaString().isEmpty() : "compString string scalar may not be empty";
     try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.BOOL8), "stringContains")) {
-      return new ColumnVector(stringContains(getNativeView(), pattern.getScalarHandle()));
+      return new ColumnVector(stringContains(getNativeView(), compString.getScalarHandle()));
     }
   }
 
