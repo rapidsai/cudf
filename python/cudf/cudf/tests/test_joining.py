@@ -57,7 +57,7 @@ def make_params():
         else:
             yield (aa, bb, how, "sort")
 
-def pd_anti_join(left, right, join_type):
+def pd_odd_joins(left, right, join_type):
     if join_type == 'leftanti':
         result = left.merge(right, how='left', left_index=True, right_index=True, indicator=True)
         return result.loc[result._merge == 'left_only', :][left.columns]
@@ -76,9 +76,9 @@ def test_dataframe_join_how(aa, bb, how, method):
         df1 = df.set_index("a")
         df2 = df.set_index("b")
         if how == 'leftanti':
-            joined = pd_anti_join(df1, df2, 'leftanti')
+            joined = pd_odd_joins(df1, df2, 'leftanti')
         elif how == 'leftsemi':
-            joined = pd_anti_join(df1, df2, 'leftsemi')
+            joined = pd_odd_joins(df1, df2, 'leftsemi')
         else:
             joined = df1.join(df2, how=how, sort=True)
         te = timer()
