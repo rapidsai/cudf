@@ -2451,11 +2451,10 @@ class Series(Frame):
             raise NotImplementedError(
                 "The group_keys keyword is not yet implemented"
             )
-
         else:
             from cudf.core.groupbyxx.groupby import SeriesGroupBy
 
-            return SeriesGroupBy(self, by=by)
+            return SeriesGroupBy(self, by=by, level=level)
 
     @copy_docstring(Rolling)
     def rolling(
