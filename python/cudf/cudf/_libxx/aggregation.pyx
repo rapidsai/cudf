@@ -11,13 +11,12 @@ from cudf.utils import cudautils
 from cudf._libxx.types import np_to_cudf_types, cudf_to_np_types
 from cudf._libxx.move cimport move
 
-from cudf._libxx.cpp.types cimport (
-    type_id,
-    size_type,
-    data_type,
-    interpolation
-)
+cimport cudf._libxx.cpp.types as libcudf_types
 cimport cudf._libxx.cpp.aggregation as libcudf_aggregation
+from cudf._libxx.types cimport (
+    underlying_type_t_interpolation
+)
+from cudf._libxx.types import Interpolation
 
 
 cdef unique_ptr[aggregation] make_aggregation(op, kwargs={}) except *:
@@ -82,19 +81,19 @@ cdef class _Aggregation:
         cdef _Aggregation agg = _Aggregation.__new__(_Aggregation)
         agg.c_obj = move(libcudf_aggregation.make_all_aggregation())
         return agg
-    
+
     @classmethod
     def product(cls, *args, **kwargs):
         cdef _Aggregation agg = _Aggregation.__new__(_Aggregation)
         agg.c_obj = move(libcudf_aggregation.make_product_aggregation())
         return agg
-    
+
     @classmethod
     def sum_of_squares(cls, *args, **kwargs):
         cdef _Aggregation agg = _Aggregation.__new__(_Aggregation)
         agg.c_obj = move(libcudf_aggregation.make_sum_of_squares_aggregation())
         return agg
-    
+
     @classmethod
     def var(cls, ddof, *args, **kwargs):
         cdef _Aggregation agg = _Aggregation.__new__(_Aggregation)
@@ -102,7 +101,7 @@ cdef class _Aggregation:
             libcudf_aggregation.make_variance_aggregation(ddof)
         )
         return agg
-    
+
     @classmethod
     def std(cls, ddof, *args, **kwargs):
         cdef _Aggregation agg = _Aggregation.__new__(_Aggregation)
@@ -110,13 +109,36 @@ cdef class _Aggregation:
             libcudf_aggregation.make_std_aggregation(ddof)
         )
         return agg
-    
+
+    @classmethod
+    def quantile(cls, q=0.5, interpolation="linear"):
+        cdef _Aggregation agg = _Aggregation.__new__(_Aggregation)
+
+        if not pd.api.types.is_list_like(q):
+            q = [q]
+
+        cdef vector[double] c_q = q
+        cdef libcudf_types.interpolation c_interp = (
+            <libcudf_types.interpolation> (
+                <underlying_type_t_interpolation> (
+                    Interpolation[interpolation.upper()]
+                )
+            )
+        )
+        agg.c_obj = move(
+            libcudf_aggregation.make_quantile_aggregation(
+                c_q,
+                c_interp
+            )
+        )
+        return agg
+
     @classmethod
     def from_udf(cls, op, *args, **kwargs):
         cdef _Aggregation agg = _Aggregation.__new__(_Aggregation)
 
-        cdef type_id tid
-        cdef data_type out_dtype
+        cdef libcudf_types.type_id tid
+        cdef libcudf_types.data_type out_dtype
         cdef string cpp_str
 
         # Handling UDF type
@@ -132,7 +154,7 @@ cdef class _Aggregation:
             )
         tid = np_to_cudf_types[output_np_dtype]
 
-        out_dtype = data_type(tid)
+        out_dtype = libcudf_types.data_type(tid)
 
         agg.c_obj = move(libcudf_aggregation.make_udf_aggregation(
             libcudf_aggregation.udf_type.PTX, cpp_str, out_dtype
