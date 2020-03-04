@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,6 @@ public class Rmm {
   }
 
   /**
-   * ---------------------------------------------------------------------------*
    * Initialize memory manager state and storage.
    * @param allocationMode Allocation strategy to use. Bit set using
    *                       {@link RmmAllocationMode#CUDA_DEFAULT},
@@ -37,6 +36,22 @@ public class Rmm {
    */
   public static void initialize(int allocationMode, boolean enableLogging, long poolSize)
       throws RmmException {
+    initialize(allocationMode, enableLogging, poolSize, null);
+  }
+
+  /**
+   * Initialize memory manager state and storage.
+   * @param allocationMode Allocation strategy to use. Bit set using
+   *                       {@link RmmAllocationMode#CUDA_DEFAULT},
+   *                       {@link RmmAllocationMode#POOL} and
+   *                       {@link RmmAllocationMode#CUDA_MANAGED_MEMORY}
+   * @param enableLogging  Enable logging memory manager events
+   * @param poolSize       The initial pool size in bytes
+   * @param eventHandler   The object to invoke on RMM events (e.g.: allocation failure) or null
+   * @throws IllegalStateException if RMM has already been initialized
+   */
+  public static void initialize(int allocationMode, boolean enableLogging, long poolSize,
+      RmmEventHandler eventHandler) throws RmmException {
     if (defaultInitialized) {
       synchronized(Rmm.class) {
         if (defaultInitialized) {
@@ -45,7 +60,21 @@ public class Rmm {
         }
       }
     }
-    initializeInternal(allocationMode, enableLogging, poolSize);
+    initializeInternal(allocationMode, enableLogging, poolSize, eventHandler);
+  }
+
+  /**
+   * Sets the event handler to be called on RMM events (e.g.: allocation failure).
+   * @param handler event handler to invoke on RMM events
+   * @throws RmmException if an active handler is already set
+   */
+  public static void setEventHandler(RmmEventHandler handler) throws RmmException {
+    setEventHandlerInternal(handler);
+  }
+
+  /** Clears the active RMM event handler if one is set. */
+  public static void clearEventHandler() {
+    setEventHandlerInternal(null);
   }
 
   /**
@@ -53,13 +82,13 @@ public class Rmm {
    */
   static synchronized void defaultInitialize() {
     if (!defaultInitialized && !isInitializedInternal()) {
-      initializeInternal(RmmAllocationMode.CUDA_DEFAULT, false, 0);
+      initializeInternal(RmmAllocationMode.CUDA_DEFAULT, false, 0, null);
       defaultInitialized = true;
     }
   }
 
-  private static native void initializeInternal(int allocationMode, boolean enableLogging, long poolSize)
-      throws RmmException;
+  private static native void initializeInternal(int allocationMode, boolean enableLogging,
+      long poolSize, RmmEventHandler eventHandler) throws RmmException;
 
   /**
    * Check if RMM has been initialized already or not.
@@ -102,6 +131,8 @@ public class Rmm {
    * Delete an rmm::device_buffer.
    */
   static native void freeDeviceBuffer(long rmmBufferAddress) throws RmmException;
+
+  static native void setEventHandlerInternal(RmmEventHandler handler) throws RmmException;
 
   /**
    * If logging is enabled get the log as a String.

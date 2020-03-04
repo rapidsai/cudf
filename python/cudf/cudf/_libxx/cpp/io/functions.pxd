@@ -3,12 +3,8 @@
 from libcpp cimport bool
 from libcpp.string cimport string
 from libcpp.vector cimport vector
-from libcpp cimport bool
 
-from cudf._libxx.cpp.types cimport (
-    size_type,
-    data_type
-)
+from cudf._libxx.cpp.types cimport data_type, size_type
 cimport cudf._libxx.cpp.io.types as cudf_io_types
 cimport cudf._libxx.cpp.table.table_view as cudf_table_view
 
@@ -94,13 +90,18 @@ cdef extern from "cudf/io/functions.hpp" \
     cdef cppclass read_orc_args:
         cudf_io_types.source_info source
         vector[string] columns
-        size_t stripe
-        size_t skip_rows
-        size_t num_rows
+        size_type stripe
+        size_type stripe_count
+        size_type skip_rows
+        size_type num_rows
         bool use_index
         bool use_np_dtypes
+        data_type timestamp_type
         bool decimals_as_float
         int forced_decimals_scale
+
+        read_orc_args() except +
+        read_orc_args(cudf_io_types.source_info &src) except +
 
     cdef cudf_io_types.table_with_metadata read_orc(
         read_orc_args &args
@@ -122,6 +123,24 @@ cdef extern from "cudf/io/functions.hpp" \
 
     cdef cudf_io_types.table_with_metadata read_parquet(
         read_parquet_args args) except +
+
+    cdef cppclass write_orc_args:
+        cudf_io_types.sink_info sink
+        cudf_io_types.compression_type compression
+        bool enable_statistics
+        cudf_table_view.table_view table
+        const cudf_io_types.table_metadata *metadata
+
+        write_orc_args() except +
+        write_orc_args(cudf_io_types.sink_info sink_,
+                       cudf_table_view.table_view table_,
+                       cudf_io_types.table_metadata *metadata_,
+                       cudf_io_types.compression_type compression_,
+                       bool enable_statistics_) except +
+
+    cdef void write_orc(write_orc_args args) except +
+
+    cdef void write_parquet(write_parquet_args args) except +
 
     cdef cppclass write_parquet_args:
         cudf_io_types.sink_info sink
