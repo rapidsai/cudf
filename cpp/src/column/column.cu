@@ -24,6 +24,8 @@
 #include <cudf/strings/copying.hpp>
 #include <cudf/strings/detail/concatenate.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
+
 
 #include <rmm/device_buffer.hpp>
 
