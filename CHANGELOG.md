@@ -32,6 +32,8 @@
 - PR #4259 Ability to create Java host buffers from memory-mapped files
 - PR #4240 Add groupby::groups()
 - PR #4321 Expose Python Semi and Anti Joins
+- PR #4291 Add Java callback support for RMM events
+- PR #4298 Port orc.pyx to libcudf++
 
 ## Improvements
 
@@ -122,6 +124,7 @@
 - PR #4274 Support negative position values in slice_strings
 - PR #4282 Porting nvstrings conversion functions from new libcudf++ to Python/Cython
 - PR #4306 Use libcudf++ `unary.pyx` cast instead of legacy cast
+- PR #4295 Port reduce.pyx to libcudf++ API
 - PR #4305 Move gpuarrow.pyx and related libarrow_cuda files into `_libxx`
 - PR #4244 Port nvstrings Substring Gather/Scatter functions to cuDF Python/Cython
 - PR #4280 Port nvstrings Numeric Handling functions to cuDF Python/Cython
@@ -195,6 +198,7 @@
 - PR #4297 Fix specification of package_data in setup.py
 - PR #4302 Fix `_is_local_filesystem` check
 - PR #4303 Parquet reader: fix empty columns missing from table
+- PR #4115 Serialize an empty column table with non zero rows
 
 
 # cuDF 0.12.0 (04 Feb 2020)
