@@ -153,8 +153,7 @@
 - PR #4066 Fixed mismatch with dtype enums
 - PR #4078 Fix joins for when column_in_common input parameter is empty
 - PR #4080 Fix multi-index dask test with sort issue
-- PR #4084 Update Java for removal of CATEGORY type partitioning
-- Run cross validation benchmark based o
+- PR #4084 Update Java for removal of CATEGORY type
 - PR #4086 ORC reader: fix potentially incorrect timestamp decoding in the last rowgroup
 - PR #4089 Fix dask groupby mutliindex test case issues in join
 - PR #4097 Fix strings concatenate logic with column offsets

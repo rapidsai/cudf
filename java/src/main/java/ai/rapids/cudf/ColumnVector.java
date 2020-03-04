@@ -1721,7 +1721,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   /**
    * Returns a new strings column that contains substrings of the strings in the provided column.
-   * 0 indexing, If the stop position is past end of a string's length, then end of string is
+   * 0-based indexing, If the stop position is past end of a string's length, then end of string is
    * used as stop position for that string.
    * @param start first character index to begin the substring(inclusive).
    * @param end   last character index to stop the substring(exclusive)
