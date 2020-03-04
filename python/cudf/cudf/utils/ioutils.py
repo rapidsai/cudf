@@ -795,6 +795,9 @@ dtype: `hex64`, `hex32` or `hex` (alias for hex64) for hexadecimal parsing.
 3   2501034507
 4   2501034507
 
+Note: ASCII strings like "0x..." are automatically parsed into their int values
+if dtype inference is enabled.
+
 See Also
 --------
 cudf.io.csv.to_csv
