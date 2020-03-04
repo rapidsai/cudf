@@ -98,10 +98,16 @@ def make_meta_cudf_index(x, index=None):
 
 @concat_dispatch.register((cudf.DataFrame, cudf.Series, cudf.Index))
 def concat_cudf(
-    dfs, axis=0, join="outer", uniform=False, filter_warning=True, sort=None
+    dfs,
+    axis=0,
+    join="outer",
+    uniform=False,
+    filter_warning=True,
+    sort=None,
+    ignore_index=False,
 ):
     assert join == "outer"
-    return cudf.concat(dfs, axis=axis)
+    return cudf.concat(dfs, axis=axis, ignore_index=ignore_index)
 
 
 try:
@@ -146,8 +152,13 @@ try:
         return cudf.Series(col).hash_values()
 
     @group_split_dispatch.register(cudf.DataFrame)
-    def group_split_cudf(df, c, k):
-        return dict(zip(range(k), df.scatter_by_map(c, map_size=k)))
+    def group_split_cudf(df, c, k, ignore_index=True):
+        return dict(
+            zip(
+                range(k),
+                df.scatter_by_map(c, map_size=k, keep_index=not ignore_index),
+            )
+        )
 
 
 except ImportError:
