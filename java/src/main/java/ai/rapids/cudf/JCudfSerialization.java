@@ -19,6 +19,7 @@
 package ai.rapids.cudf;
 
 import java.io.BufferedOutputStream;
+import java.io.Closeable;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.EOFException;
@@ -778,6 +779,13 @@ public class JCudfSerialization {
   }
 
   /**
+   * Write an empty columns header with a valid row count
+   */
+  private static SerializedTableHeader calcEmptyHeader(int numRows) {
+    return new SerializedTableHeader(numRows, null, null, 0);
+  }
+
+  /**
    * Calculate the new header for a concatenated set of columns.
    * @param columnsForEachBatch first index is the batch, second index is the column.
    * @return the new header.
@@ -1310,6 +1318,19 @@ public class JCudfSerialization {
   }
 
   /**
+   * Write a rowcount only header to the output stream in a case
+   * where a columnar batch with no columns but a non zero row count is received
+   * @param out the stream to write the serialized table out to.
+   * @param numRows the number of rows to write out.
+   */
+  public static void writeRowsToStream(OutputStream out, long numRows) throws IOException {
+    DataWriter writer = writerFrom(out);
+    SerializedTableHeader header = calcEmptyHeader((int) numRows);
+    header.writeTo(writer);
+    writer.flush();
+  }
+
+  /**
    * Take the data from multiple batches stored in the parsed headers and the dataBuffer and write
    * it out to out as if it were a single buffer.
    * @param headers the headers parsed from multiple streams.
@@ -1452,8 +1473,8 @@ public class JCudfSerialization {
     }
   }
 
-  public static Table readTableFrom(SerializedTableHeader header,
-                                    HostMemoryBuffer hostBuffer) {
+  public static TableAndRowCountPair readTableFrom(SerializedTableHeader header,
+                                                   HostMemoryBuffer hostBuffer) {
     try (DevicePrediction prediction = new DevicePrediction(hostBuffer.length, "readTableFrom");
          DeviceMemoryBuffer devBuffer = DeviceMemoryBuffer.allocate(hostBuffer.length)) {
       if (hostBuffer.length > 0) {
@@ -1461,7 +1482,11 @@ public class JCudfSerialization {
           devBuffer.copyFromHostBuffer(hostBuffer);
         }
       }
-      return sliceUpColumnVectors(header, devBuffer, hostBuffer);
+      if (header.getNumColumns() > 0) {
+        return new TableAndRowCountPair(header.numRows, sliceUpColumnVectors(header, devBuffer, hostBuffer));
+      } else {
+        return new TableAndRowCountPair(header.numRows, null);
+      }
     }
   }
 
@@ -1473,7 +1498,7 @@ public class JCudfSerialization {
    * @throws IOException on any error.
    * @throws EOFException if the data stream ended unexpectedly in the middle of processing.
    */
-  public static Table readTableFrom(InputStream in) throws IOException {
+  public static TableAndRowCountPair readTableFrom(InputStream in) throws IOException {
     DataInputStream din;
     if (in instanceof DataInputStream) {
       din = (DataInputStream) in;
@@ -1483,7 +1508,7 @@ public class JCudfSerialization {
 
     SerializedTableHeader header = new SerializedTableHeader(din);
     if (!header.initialized) {
-      return null;
+      return new TableAndRowCountPair(0, null);
     }
 
     try (HostPrediction prediction = new HostPrediction(header.dataLen, "readTableFrom");
@@ -1493,5 +1518,37 @@ public class JCudfSerialization {
       }
       return readTableFrom(header, hostBuffer);
     }
+  }
+
+  public static final class TableAndRowCountPair implements Closeable {
+      private int numRows;
+      private Table table;
+
+      public TableAndRowCountPair(int numRows, Table table) {
+          this.numRows = numRows;
+          this.table = table;
+      }
+
+      @Override
+      public void close() {
+          if (table != null) {
+              table.close();
+          }
+      }
+      public int getNumRows() {
+          return numRows;
+      }
+
+      public void setNumRows(int numRows) {
+          this.numRows = numRows;
+      }
+
+      public Table getTable() {
+          return table;
+      }
+
+      public void setTable(Table table) {
+          this.table = table;
+      }
   }
 }
