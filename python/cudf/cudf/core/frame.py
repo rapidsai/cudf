@@ -240,15 +240,39 @@ class Frame(libcudfxx.table.Table):
         return result
 
     def repeat(self, repeats, axis=None):
+        assert axis in (0, None)
+        """Repeats elements consecutively
 
-        assert axis in (None, 0)
-        # new_index = self.index.repeat(repeats)
-        # cols = libcudfxx.filling.repeat(self._columns, repeats)
-        # # to preserve col names, need to get it from old _cols dict
-        # column_names = self._data.names
-        # result = DataFrame(data=dict(zip(column_names, cols)))
-        # return result.set_index(new_index)
+        Parameters
+        ----------
+        repeats : int, array, numpy array, or Column
+            the number of times to repeat each element
 
+        Example
+        -------
+        >>> import cudf as cudf
+        >>> s = cudf.Series([0, 2]) # or DataFrame
+        >>> s
+        0    0
+        1    2
+        dtype: int64
+        >>> s.repeat([3, 4])
+        0    0
+        0    0
+        0    0
+        1    2
+        1    2
+        1    2
+        1    2
+        dtype: int64
+        >>> s.repeat(2)
+        0    0
+        0    0
+        1    2
+        1    2
+        dtype: int64
+        >>>
+        """
         return self._repeat(repeats)
 
     def _repeat(self, count):
@@ -265,8 +289,6 @@ class Frame(libcudfxx.table.Table):
         return result
 
     def _fill(self, fill_values, begin=0, end=-1, inplace=False):
-        """Identify non-missing values.
-        """
         col_and_fill = zip(self._columns, fill_values)
 
         if not inplace:
