@@ -14,6 +14,7 @@ from cudf._libxx.move cimport move
 
 from libcpp.string cimport string
 from libcpp.memory cimport unique_ptr
+from libcpp.vector cimport vector
 from libcpp.map cimport map
 from cython.operator cimport dereference, postincrement
 from libc.stdint cimport uint32_t, int64_t
@@ -29,23 +30,33 @@ cpdef create_kafka_handle(kafka_conf, topics=[], partitions=[]):
     cdef map[string, string] kafka_confs
     for key, value in kafka_conf.items():
         kafka_confs[str.encode(key)] = str.encode(value)
-    kds = new kafka_external(kafka_confs, topics, partitions)
+    cdef vector[string] v_topics
+    for top in topics:
+        v_topics.push_back(top.encode())
+    cdef vector[int] v_partitions
+    for part in partitions:
+        v_partitions.push_back(part)
+    kds = new kafka_external(kafka_confs, v_topics, v_partitions)
     ds_id = kds.libcudf_datasource_identifier()
 
-cpdef read_json(lines=True,
-                dtype=True,
-                compression="infer",
-                dayfirst=True,
-                byte_range=None,
-                start=0,
-                end=1000,
-                timeout=10000,
-                delimiter="\n"):
+cpdef read_gdf(lines=True,
+               dtype=True,
+               compression="infer",
+               dayfirst=True,
+               byte_range=None,
+               topic=None,
+               partition=0,
+               start=-1,
+               end=-1,
+               timeout=10000,
+               delimiter="\n"):
 
-    json_str = kds.consume_range(start,
-                                 end,
-                                 timeout,
-                                 str.encode(delimiter))
+    cdef json_str = kds.consume_range(str.encode(topic),
+                                      partition,
+                                      start,
+                                      end,
+                                      timeout,
+                                      str.encode(delimiter))
 
     cdef cudf_io_types.table_with_metadata c_out_table
     cdef libcudf.read_json_args json_args = libcudf.read_json_args()
@@ -53,7 +64,7 @@ cpdef read_json(lines=True,
     # Set the JSON reader arguments.
     json_args.lines = lines
     json_args.source = cudf_io_types.source_info(
-        json_str.encode(), len(json_str))
+        json_str, len(json_str))
     json_args.compression = cudf_io_types.compression_type.NONE
     json_args.dayfirst = dayfirst
 
@@ -69,7 +80,10 @@ cpdef read_json(lines=True,
                                  column_names=column_names)
 
 cpdef get_committed_offset(topic=None, partitions=[]):
-    return kds.get_committed_offset(str.encode(topic), partitions)
+    cdef vector[int] v_partitions
+    for part in partitions:
+        v_partitions.push_back(part)
+    return kds.get_committed_offset(str.encode(topic), v_partitions)
 
 cpdef dump_configs():
     kds.dump_configs()

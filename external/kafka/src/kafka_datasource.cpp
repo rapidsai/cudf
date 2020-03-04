@@ -184,7 +184,9 @@ namespace external {
     return offsets;
   }
 
-  std::string kafka_datasource::consume_range(int64_t start_offset,
+  std::string kafka_datasource::consume_range(std::string topic,
+                                              int partition,
+                                              int64_t start_offset,
                                               int64_t end_offset,
                                               int batch_timeout,
                                               std::string delimiter) {
@@ -196,13 +198,14 @@ namespace external {
     RdKafka::Message *msg;
 
     printf("Start Offset: '%lu' End Offset: '%lu' Batch Size: '%lu'\n", start_offset, end_offset, batch_size);
+    update_consumer_toppar_assignment(topic, partition);
 
     while (messages_read < batch_size) {
       msg = consumer_->consume(remaining_timeout);
 
       if (msg->err() == RdKafka::ErrorCode::ERR_NO_ERROR) {
         json_str.append(static_cast<char *>(msg->payload()));
-        json_str.append("\n");
+        json_str.append(delimiter);
         messages_read++;
       } else {
         handle_error(msg);

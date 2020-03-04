@@ -1,11 +1,23 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+import cudf
+
 import custreamz._libxx.kafka as libkafka
 
 
 class KafkaHandle(object):
     def __init__(self, kafka_configs, topics=[], partitions=[]):
         self.kafka_configs = kafka_configs
+        if len(topics) == 0:
+            print(
+                "ERROR: You must specify the topic(s) this "
+                + "consumer will consume from!"
+            )
+        if len(partitions) == 0:
+            print(
+                "ERROR: You must specify the topic partitions "
+                + "that this consumer will consume from!"
+            )
         libkafka.create_kafka_handle(kafka_configs, topics, partitions)
 
     def metadata(self):
@@ -17,6 +29,12 @@ class KafkaHandle(object):
     def read_gdf(
         self,
         lines=True,
+        dtype=True,
+        compression="infer",
+        dayfirst=True,
+        byte_range=None,
+        topic=None,
+        partition=0,
         start=-1,
         end=-1,
         timeout=10000,
@@ -24,7 +42,27 @@ class KafkaHandle(object):
         *args,
         **kwargs,
     ):
-        return libkafka.read_gdf(lines, start, end, timeout, delimiter)
+        if topic is None:
+            print(
+                "ERROR: You MUST specifiy the topic "
+                + "that you want to consume from!"
+            )
+        else:
+            return cudf.DataFrame._from_table(
+                libkafka.read_gdf(
+                    lines=lines,
+                    dtype=dtype,
+                    compression=compression,
+                    dayfirst=dayfirst,
+                    byte_range=byte_range,
+                    topic=topic,
+                    partition=partition,
+                    start=start,
+                    end=end,
+                    timeout=timeout,
+                    delimiter=delimiter,
+                )
+            )
 
     def committed(self, topic=None, partitions=[]):
         if topic is None:

@@ -34,7 +34,9 @@ cdef extern from "kafka_datasource.hpp" namespace "cudf::io::external" nogil:
         map[string, int64_t] get_watermark_offset(string topic,
                                                   int32_t partition) except +
 
-        string consume_range(int64_t start_offset,
+        string consume_range(string topic,
+                             int partition,
+                             int64_t start_offset,
                              int64_t end_offset,
                              int batch_timeout,
                              string delimiter) except +

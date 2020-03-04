@@ -80,7 +80,7 @@ class kafka_datasource : public external_datasource {
 
   std::map<int, int64_t> get_committed_offset(std::string topic, std::vector<int> partitions);
 
-  std::string consume_range(int64_t start_offset, int64_t end_offset, int batch_timeout, std::string delimiter);
+  std::string consume_range(std::string topic, int partition, int64_t start_offset, int64_t end_offset, int batch_timeout, std::string delimiter);
 
   bool produce_message(std::string topic, std::string message_val, std::string message_key);
 
@@ -98,12 +98,19 @@ class kafka_datasource : public external_datasource {
 
   private:
 
+    RdKafka::ErrorCode update_consumer_toppar_assignment(std::string topic, int partition) {
+      std::vector<RdKafka::TopicPartition*> _toppars;
+      _toppars.push_back(RdKafka::TopicPartition::create(topic, partition));
+      consumer_.get()->assign(_toppars);
+    }
+
     RdKafka::TopicPartition* find_toppar(std::string topic, int partition) {
       for (int i = 0; i < partitions_.size(); i++) {
         if ((partitions_[i]->topic().compare(topic) == 0) && partitions_[i]->partition() == partition) {
           return partitions_[i];
         }
       }
+      printf("ERROR: No matching toppar found for Topic: '%s' Partition: '%d'\n", topic.c_str(), partition);
       return NULL;
     }
 
