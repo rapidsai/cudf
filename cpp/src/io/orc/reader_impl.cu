@@ -633,7 +633,12 @@ table_with_metadata reader::impl::read(int skip_rows, int num_rows, int stripe,
     orc_col_map[col] = column_types.size() - 1;
   }
 
-  if (num_rows > 0 && selected_stripes.size() != 0) {
+  // If no rows or stripes to read, return empty columns
+  if (num_rows <= 0 || selected_stripes.size() == 0) {
+    std::transform(column_types.cbegin(), column_types.cend(),
+                   std::back_inserter(out_columns),
+                   [](auto const& dtype) { return make_empty_column(dtype); });
+  } else {
     const auto num_columns = _selected_columns.size();
     const auto num_chunks = selected_stripes.size() * num_columns;
     hostdevice_vector<gpu::ColumnDesc> chunks(num_chunks, stream);
