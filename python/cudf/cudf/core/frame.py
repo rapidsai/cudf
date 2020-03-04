@@ -240,7 +240,6 @@ class Frame(libcudfxx.table.Table):
         return result
 
     def repeat(self, repeats, axis=None):
-        assert axis in (0, None)
         """Repeats elements consecutively
 
         Parameters
@@ -273,6 +272,7 @@ class Frame(libcudfxx.table.Table):
         dtype: int64
         >>>
         """
+        assert axis in (0, None)
         return self._repeat(repeats)
 
     def _repeat(self, count):
