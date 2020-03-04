@@ -385,7 +385,7 @@ class NumericalColumn(column.ColumnBase):
                 self._is_monotonic_increasing = False
             else:
                 self._is_monotonic_increasing = libcudfxx.sort.is_sorted(
-                    self.as_frame(), col_order=[], null_prec=[]
+                    self.as_frame(), col_order=None, null_prec=None
                 )
         return self._is_monotonic_increasing
 
@@ -396,7 +396,7 @@ class NumericalColumn(column.ColumnBase):
                 self._is_monotonic_decreasing = False
             else:
                 self._is_monotonic_decreasing = libcudfxx.sort.is_sorted(
-                    self.as_frame(), col_order=[True], null_prec=[]
+                    self.as_frame(), col_order=[True], null_prec=None
                 )
         return self._is_monotonic_decreasing
 

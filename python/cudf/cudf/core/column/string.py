@@ -16,11 +16,7 @@ import cudf._libxx as libcudfxx
 import cudf._libxx.string_casting as str_cast
 from cudf._lib.nvtx import nvtx_range_pop, nvtx_range_push
 from cudf._libxx.null_mask import bitmask_allocation_size_bytes
-from cudf._libxx.sort import (
-    is_sorted,
-    order_by,
-    digitize,
-)
+from cudf._libxx.sort import is_sorted
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.utils import utils
@@ -892,7 +888,7 @@ class StringColumn(column.ColumnBase):
                 self._is_monotonic_increasing = False
             else:
                 self._is_monotonic_increasing = is_sorted(
-                    self.as_frame(), col_order=[], null_prec=[]
+                    self.as_frame(), col_order=None, null_prec=None
                 )
         return self._is_monotonic_increasing
 
@@ -903,7 +899,7 @@ class StringColumn(column.ColumnBase):
                 self._is_monotonic_decreasing = False
             else:
                 self._is_monotonic_decreasing = is_sorted(
-                    self.as_frame(), col_order=[True], null_prec=[]
+                    self.as_frame(), col_order=[True], null_prec=None
                 )
         return self._is_monotonic_decreasing
 
