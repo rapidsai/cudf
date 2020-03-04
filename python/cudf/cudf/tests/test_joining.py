@@ -79,7 +79,6 @@ def test_dataframe_join_how(aa, bb, how, method):
     df["b"] = bb
 
     def work_pandas(df, how):
-        ts = timer()
         df1 = df.set_index("a")
         df2 = df.set_index("b")
         if how == "leftanti":
@@ -88,17 +87,12 @@ def test_dataframe_join_how(aa, bb, how, method):
             joined = pd_odd_joins(df1, df2, "leftsemi")
         else:
             joined = df1.join(df2, how=how, sort=True)
-        te = timer()
-        print("timing", type(df), te - ts)
         return joined
 
     def work_gdf(df):
-        ts = timer()
         df1 = df.set_index("a")
         df2 = df.set_index("b")
         joined = df1.join(df2, how=how, sort=True, method=method)
-        te = timer()
-        print("timing", type(df), te - ts)
         return joined
 
     expect = work_pandas(df.to_pandas(), how)
