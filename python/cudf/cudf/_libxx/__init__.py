@@ -12,6 +12,7 @@ from . import (
     merge,
     null_mask,
     quantiles,
+    reduce,
     replace,
     reshape,
     rolling,
