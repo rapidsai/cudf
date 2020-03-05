@@ -17,6 +17,11 @@ class GroupBy(object):
             self.grouping = _Grouping(obj, by, level)
         self._groupby = libgroupby.GroupBy(self.grouping.keys)
 
+    def __getattr__(self, key):
+        if key != "_agg_func_with_args":
+            return functools.partial(self._agg_func_name_with_args, key)
+        raise AttributeError()
+
     def __iter__(self):
         grouped_keys, grouped_values, offsets = self._groupby.groups(self.obj)
 
@@ -60,10 +65,7 @@ class GroupBy(object):
 
         return result
 
-    def __getattr__(self, key):
-        if key != "_agg_func_with_args":
-            return functools.partial(self._agg_func_name_with_args, key)
-        raise AttributeError()
+    aggregate = agg
 
     def _agg_func_name_with_args(self, func_name, *args, **kwargs):
         """
