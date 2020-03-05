@@ -59,7 +59,6 @@ def range_push(object name, object color='green'):
                 cpp_range_push(_name, nvtx_color.ORANGE)
 
 
-
 def range_pop():
     """
     Demarcate the end of a user-defined NVTX range.
