@@ -940,6 +940,29 @@ TEST_F(SearchTest, nullable_column__find_last__nulls_as_largest_string)
   expect_columns_equal(*result, expect);
 }
 
+TEST_F(SearchTest, non_null_column__nullable_values__find_last__nulls_as_largest_string)
+{
+  cudf::test::strings_column_wrapper column({"N", "N", "N", "N", "Y", "Y", "Y", "Y"},
+                                            { 1,   1,   1,   1,   1,   1,   1,   1 });
+
+  cudf::test::strings_column_wrapper values({"Y", "Z", "N"},
+                                            { 1,   0,   1 });
+
+  fixed_width_column_wrapper<size_type>      expect {  8, 8, 4};
+    
+  std::unique_ptr<cudf::column> result{};
+
+  EXPECT_NO_THROW(
+                  result = cudf::experimental::upper_bound(
+                                                           {cudf::table_view{{column}}},
+                                                           {cudf::table_view{{values}}},
+                                                           {cudf::order::ASCENDING},
+                                                           {cudf::null_order::AFTER})
+                  );
+
+  expect_columns_equal(*result, expect);
+}
+
 TEST_F(SearchTest, nullable_column__find_first__nulls_as_largest_string)
 {
   std::vector<const char*> h_col_strings { "10", "20", "30", "40", "50", nullptr, nullptr };
