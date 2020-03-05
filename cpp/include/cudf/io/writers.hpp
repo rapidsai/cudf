@@ -26,7 +26,6 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <io/parquet/parquet.h>
-#include <io/orc/orc.h>
 
 #include <memory>
 #include <utility>
@@ -141,32 +140,6 @@ class writer {
    */
   void write_chunked_end(struct orc_chunked_state& state);
 };
-
-
-/**
- * @brief Chunked writer state struct. Contains various pieces of information
- *        needed that span the begin() / write() / end() call process.
- */
-struct orc_chunked_state {
-  /// The writer to be used
-  std::unique_ptr<writer>             wp;
-  /// Cuda stream to be used
-  cudaStream_t                        stream;
-  /// Overall file metadata.  Filled in during the process and written during write_chunked_end()
-  cudf::io::orc::FileFooter           ff;
-  cudf::io::orc::Metadata             md;
-  /// current write position for rowgroups/chunks
-  size_t                              current_chunk_offset;
-  /// optional user metadata
-  table_metadata const*               user_metadata = nullptr;
-  /// only used in the write_chunked() case. copied from the (optionally) user supplied
-  /// argument to write_chunked_begin()
-  table_metadata_with_nullability     user_metadata_with_nullability;
-  /// special parameter only used by detail::write() to indicate that we are guaranteeing
-  /// a single table write.  this enables some internal optimizations.
-  bool                                single_write_mode = false;
-};
-
 
 }  // namespace orc
 

@@ -19,7 +19,7 @@
 #include <cudf/io/writers.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
-
+#include "orc/writer_impl.hpp" // For orc_chunked_state definition
 
 namespace cudf {
 namespace experimental {
