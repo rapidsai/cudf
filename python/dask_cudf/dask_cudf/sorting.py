@@ -178,6 +178,12 @@ def rearrange_by_hash(
     return df3
 
 
+def set_index_post(df, index_name, drop, column_dtype):
+    df2 = df.set_index(index_name, drop=drop)
+    df2.columns = df2.columns.astype(column_dtype)
+    return df2
+
+
 def _set_partitions_pre(s, divisions):
     partitions = divisions.searchsorted(s, side="right") - 1
 
@@ -352,7 +358,14 @@ def quantile_divisions(df, by, npartitions):
     return divisions
 
 
-def sort_values(df, by, max_branch=None, divisions=None, set_divisions=False):
+def sort_values(
+    df,
+    by,
+    max_branch=None,
+    divisions=None,
+    set_divisions=False,
+    ignore_index=False,
+):
     """ Sort by the given list/tuple of column names.
     """
     npartitions = df.npartitions
@@ -382,7 +395,7 @@ def sort_values(df, by, max_branch=None, divisions=None, set_divisions=False):
         max_branch=max_branch,
         npartitions=len(divisions) - 1,
         shuffle="tasks",
-        ignore_index=True,
+        ignore_index=ignore_index,
     ).drop(columns=["_partitions"])
     df3.divisions = (None,) * (df3.npartitions + 1)
 

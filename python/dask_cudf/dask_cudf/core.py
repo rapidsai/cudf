@@ -206,6 +206,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 max_branch=kwargs.get("max_branch", None),
                 divisions=divisions,
                 set_divisions=True,
+                ignore_index=True,
             )
 
             # Ignore divisions if its a dataframe
@@ -213,9 +214,14 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 divisions = None
 
             # Set index and repartition
+            df2 = df.map_partitions(
+                sorting.set_index_post,
+                index_name=other,
+                drop=kwargs.get("drop", True),
+                column_dtype=df.columns.dtype,
+            )
             npartitions = kwargs.get("npartitions", self.npartitions)
             partition_size = kwargs.get("partition_size", None)
-            df2 = df.map_partitions(M.set_index, other)
             if partition_size:
                 return df2.repartition(partition_size=partition_size)
             if not divisions and df2.npartitions != npartitions:
@@ -250,6 +256,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 max_branch=max_branch,
                 divisions=divisions,
                 set_divisions=set_divisions,
+                ignore_index=ignore_index,
             )
 
         if ignore_index:
