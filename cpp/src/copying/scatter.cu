@@ -27,10 +27,11 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/detail/scatter.cuh>
 #include <cudf/strings/string_view.cuh>
-#include "thrust/iterator/counting_iterator.h"
-#include <numeric>
+#include <cudf/detail/fill.hpp>
 
-#include <thrust/iterator/discard_iterator.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/sequence.h>
+#include <numeric>
 
 namespace cudf {
 namespace experimental {
@@ -161,12 +162,13 @@ struct column_scalar_scatterer_impl<dictionary32, MapIterator>
       MapIterator scatter_iter, size_type scatter_rows, column_view const& target,
       rmm::mr::device_memory_resource* mr, cudaStream_t stream)
   {
-    //auto const scalar_impl = static_cast<string_scalar*>(source.get());
-    //auto const source_view = string_view(scalar_impl->data(), scalar_impl->size());
-    //auto const begin = thrust::make_constant_iterator(source_view);
-    //auto const end = begin + scatter_rows;
-    CUDF_FAIL("not implemented yet");
-    return nullptr;
+    //// create a column from the scalar
+    //column_view scalar_column{ source->type(), 1,
+    //  is_compound(type) ? nullptr : rmm::device_buffer{},
+    //  create_null_mask{1,ALL_NULL,stream,mr}, 1 };
+    //auto source_keys = fill( scalar_column, 0, 1, scalar, mr, stream );
+    CUDF_FAIL("scatter scalar to dictionary not implemented");
+    return nullptr; 
   }
 };
 
