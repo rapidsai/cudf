@@ -66,6 +66,9 @@ class GroupBy(object):
         # set index names to be group key names
         result.index.names = self.grouping.names
 
+        # copy categorical information from keys to the result index:
+        result.index._copy_categories(self.grouping.keys)
+
         if not self.as_index:
             for col_name in reversed(self.grouping._named_columns):
                 result.insert(
