@@ -745,9 +745,11 @@ class StringMethods(object):
             cpp_rsplit(self._column, Scalar(pat), n), **kwargs,
         )
 
-    def partition(self, sep="", expand=True, **kwargs):
+    def partition(self, sep=" ", expand=True, **kwargs):
         if expand is not True:
-            raise NotImplementedError("`expand` parameter is not supported")
+            raise NotImplementedError(
+                "`expand=False` is currently not supported"
+            )
 
         kwargs.setdefault("expand", expand)
         if sep is None:
@@ -759,9 +761,11 @@ class StringMethods(object):
             cpp_partition(self._column, Scalar(sep)), **kwargs,
         )
 
-    def rpartition(self, sep="", expand=True, **kwargs):
+    def rpartition(self, sep=" ", expand=True, **kwargs):
         if expand is not True:
-            raise NotImplementedError("`expand` parameter is not supported")
+            raise NotImplementedError(
+                "`expand=False` is currently not supported"
+            )
 
         kwargs.setdefault("expand", expand)
         if sep is None:
@@ -787,16 +791,28 @@ class StringMethods(object):
         )
 
     def center(self, width, fillchar=" ", **kwargs):
+        if not isinstance(fillchar, str):
+            msg = "fillchar must be a character, not {0}"
+            raise TypeError(msg.format(type(fillchar).__name__))
+
         return self._return_or_inplace(
             cpp_center(self._column, width, fillchar), **kwargs
         )
 
     def ljust(self, width, fillchar=" ", **kwargs):
+        if not isinstance(fillchar, str):
+            msg = "fillchar must be a character, not {0}"
+            raise TypeError(msg.format(type(fillchar).__name__))
+
         return self._return_or_inplace(
             cpp_ljust(self._column, width, fillchar), **kwargs
         )
 
     def rjust(self, width, fillchar=" ", **kwargs):
+        if not isinstance(fillchar, str):
+            msg = "fillchar must be a character, not {0}"
+            raise TypeError(msg.format(type(fillchar).__name__))
+
         return self._return_or_inplace(
             cpp_rjust(self._column, width, fillchar), **kwargs
         )

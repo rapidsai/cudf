@@ -1124,3 +1124,220 @@ def test_string_types_check(data):
     assert_eq(gs.str.isalpha(), ps.str.isalpha())
     assert_eq(gs.str.isdigit(), ps.str.isdigit())
     assert_eq(gs.str.isnumeric(), ps.str.isnumeric())
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["koala", "fox", "chameleon"],
+        ["A,,B", "1,,5", "3,00,0"],
+        ["Linda van der Berg", "George Pitt-Rivers"],
+        ["23", "³", "⅕", ""],
+        [" ", "\t\r\n ", ""],
+    ],
+)
+def test_strings_rpartition(data):
+    gs = Series(data)
+    ps = pd.Series(data)
+
+    assert_eq(ps.str.rpartition(), gs.str.rpartition())
+    assert_eq(ps.str.rpartition("-"), gs.str.rpartition("-"))
+    assert_eq(ps.str.rpartition(","), gs.str.rpartition(","))
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["koala", "fox", "chameleon"],
+        ["A,,B", "1,,5", "3,00,0"],
+        ["Linda van der Berg", "George Pitt-Rivers"],
+        ["23", "³", "⅕", ""],
+        [" ", "\t\r\n ", ""],
+    ],
+)
+def test_strings_partition(data):
+    gs = Series(data)
+    ps = pd.Series(data)
+
+    assert_eq(ps.str.partition(), gs.str.partition())
+    assert_eq(ps.str.partition(","), gs.str.partition(","))
+    assert_eq(ps.str.partition("-"), gs.str.partition("-"))
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["koala", "fox", "chameleon"],
+        ["A,,B", "1,,5", "3,00,0"],
+        ["Linda van der Berg", "George Pitt-Rivers"],
+        ["23", "³", "⅕", ""],
+        [" ", "\t\r\n ", ""],
+        [
+            "this is a regular sentence",
+            "https://docs.python.org/3/tutorial/index.html",
+            None,
+        ],
+    ],
+)
+@pytest.mark.parametrize("n", [-1, 2, 1, 9])
+@pytest.mark.parametrize("expand", [True])
+def test_strings_rsplit(data, n, expand):
+    gs = Series(data)
+    ps = pd.Series(data)
+
+    assert_eq(
+        ps.str.rsplit(n=n, expand=expand), gs.str.rsplit(n=n, expand=expand)
+    )
+    assert_eq(
+        ps.str.rsplit(",", n=n, expand=expand),
+        gs.str.rsplit(",", n=n, expand=expand),
+    )
+    assert_eq(
+        ps.str.rsplit("-", n=n, expand=expand),
+        gs.str.rsplit("-", n=n, expand=expand),
+    )
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["koala", "fox", "chameleon"],
+        ["A,,B", "1,,5", "3,00,0"],
+        ["Linda van der Berg", "George Pitt-Rivers"],
+        ["23", "³", "⅕", ""],
+        [" ", "\t\r\n ", ""],
+        [
+            "this is a regular sentence",
+            "https://docs.python.org/3/tutorial/index.html",
+            None,
+        ],
+    ],
+)
+@pytest.mark.parametrize("n", [-1, 2, 1, 9])
+@pytest.mark.parametrize("expand", [True])
+def test_strings_split(data, n, expand):
+    gs = Series(data)
+    ps = pd.Series(data)
+
+    assert_eq(
+        ps.str.split(n=n, expand=expand), gs.str.split(n=n, expand=expand)
+    )
+    assert_eq(
+        ps.str.split(",", n=n, expand=expand),
+        gs.str.split(",", n=n, expand=expand),
+    )
+    assert_eq(
+        ps.str.split("-", n=n, expand=expand),
+        gs.str.split("-", n=n, expand=expand),
+    )
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["koala", "fox", "chameleon"],
+        ["A,,B", "1,,5", "3,00,0"],
+        ["Linda van der Berg", "George Pitt-Rivers"],
+        ["23", "³", "⅕", ""],
+        [" ", "\t\r\n ", ""],
+        [
+            "this is a regular sentence",
+            "https://docs.python.org/3/tutorial/index.html",
+            None,
+        ],
+        ["1. Ant.  ", "2. Bee!\n", "3. Cat?\t", None],
+    ],
+)
+@pytest.mark.parametrize(
+    "to_strip", ["⅕", None, "123.", ".!? \n\t", "123.!? \n\t", " ", ".", ","]
+)
+def test_strings_strip_tests(data, to_strip):
+    gs = Series(data)
+    ps = pd.Series(data)
+
+    assert_eq(ps.str.strip(to_strip=to_strip), gs.str.strip(to_strip=to_strip))
+    assert_eq(
+        ps.str.rstrip(to_strip=to_strip), gs.str.rstrip(to_strip=to_strip)
+    )
+    assert_eq(
+        ps.str.lstrip(to_strip=to_strip), gs.str.lstrip(to_strip=to_strip)
+    )
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["koala", "fox", "chameleon"],
+        ["A,,B", "1,,5", "3,00,0"],
+        ["Linda van der Berg", "George Pitt-Rivers"],
+        ["23", "³", "⅕", ""],
+        [" ", "\t\r\n ", ""],
+        [
+            "this is a regular sentence",
+            "https://docs.python.org/3/tutorial/index.html",
+            None,
+        ],
+        ["1. Ant.  ", "2. Bee!\n", "3. Cat?\t", None],
+    ],
+)
+@pytest.mark.parametrize("width", [0, 1, 4, 9, 100])
+@pytest.mark.parametrize("fillchar", ["⅕", "1", ".", "t", " ", ","])
+def test_strings_filling_tests(data, width, fillchar):
+    gs = Series(data)
+    ps = pd.Series(data)
+
+    assert_eq(
+        ps.str.center(width=width, fillchar=fillchar),
+        gs.str.center(width=width, fillchar=fillchar),
+    )
+    assert_eq(
+        ps.str.ljust(width=width, fillchar=fillchar),
+        gs.str.ljust(width=width, fillchar=fillchar),
+    )
+    assert_eq(
+        ps.str.rjust(width=width, fillchar=fillchar),
+        gs.str.rjust(width=width, fillchar=fillchar),
+    )
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["A,,B", "1,,5", "3,00,0"],
+        ["Linda van der Berg", "George Pitt-Rivers"],
+        ["+23", "³", "⅕", ""],
+        [" ", "\t\r\n ", ""],
+        ["hello", "there", "world", "+1234", "-1234", None, "accént", ""],
+        ["1. Ant.  ", "2. Bee!\n", "3. Cat?\t", None],
+    ],
+)
+@pytest.mark.parametrize("width", [0, 1, 4, 6, 9, 100])
+def test_strings_zfill_tests(data, width):
+    gs = Series(data)
+    ps = pd.Series(data)
+
+    assert_eq(ps.str.zfill(width=width), gs.str.zfill(width=width))
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["A,,B", "1,,5", "3,00,0"],
+        ["Linda van der Berg", "George Pitt-Rivers"],
+        ["+23", "³", "⅕", ""],
+        [" ", "\t\r\n ", ""],
+        ["hello", "there", "world", "+1234", "-1234", None, "accént", ""],
+        ["1. Ant.  ", "2. Bee!\n", "3. Cat?\t", None],
+    ],
+)
+@pytest.mark.parametrize("width", [0, 1, 4, 9, 100])
+@pytest.mark.parametrize("side", ["left", "right", "both"])
+@pytest.mark.parametrize("fillchar", [" ", ".", "\n", "+", "\t"])
+def test_strings_pad_tests(data, width, side, fillchar):
+    gs = Series(data)
+    ps = pd.Series(data)
+
+    assert_eq(
+        ps.str.pad(width=width, side=side, fillchar=fillchar),
+        gs.str.pad(width=width, side=side, fillchar=fillchar),
+    )
