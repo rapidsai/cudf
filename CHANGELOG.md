@@ -131,6 +131,7 @@
 - PR #4244 Port nvstrings Substring Gather/Scatter functions to cuDF Python/Cython
 - PR #4280 Port nvstrings Numeric Handling functions to cuDF Python/Cython
 - PR #4166 Port `is_sorted.pyx` to use libcudf++ APIs
+- PR #4339 Port libcudf strings `wrap` api to cython/python
 
 ## Bug Fixes
 
