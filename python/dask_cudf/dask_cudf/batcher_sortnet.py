@@ -10,8 +10,8 @@ import toolz
 
 from dask import compute, delayed
 from dask.base import tokenize
-from dask.dataframe.core import DataFrame
-from dask.dataframe.utils import hash_object_dispatch
+from dask.dataframe.core import DataFrame, _concat
+from dask.dataframe.utils import group_split_dispatch, hash_object_dispatch
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import digit, insert
 
@@ -148,32 +148,18 @@ def sort_delayed_frame(parts, by):
     return validparts
 
 
-def _concat(args):
-    if not args:
-        return args
-    args2 = [i for i in args if len(i)]
-    return (
-        args[0]
-        if not args2
-        else gd.concat(args2, axis=0, ignore_index=True, sort=None)
-    )
-
-
 def set_partitions_hash(df, columns, npartitions):
     c = hash_object_dispatch(df[columns], index=False)
     return np.mod(c, npartitions)
 
 
-def _shuffle_group_2(df, columns):
+def _shuffle_group_2(df, columns, ignore_index):
     if not len(df):
         return {}, df
     ind = hash_object_dispatch(df[columns], index=False)
     n = ind.max() + 1
-    result2 = dict(
-        zip(
-            range(n),
-            df.scatter_by_map(ind.values.view(), map_size=n, keep_index=False),
-        )
+    result2 = group_split_dispatch(
+        df, ind.values.view(), n, ignore_index=ignore_index
     )
     return result2, df.iloc[:0]
 
@@ -186,23 +172,20 @@ def _shuffle_group_get(g_head, i):
         return head
 
 
-def _shuffle_group(df, columns, stage, k, npartitions):
+def _shuffle_group(df, columns, stage, k, npartitions, ignore_index):
     c = hash_object_dispatch(df[columns], index=False)
     typ = np.min_scalar_type(npartitions * 2)
     c = np.mod(c, npartitions).astype(typ, copy=False)
     np.floor_divide(c, k ** stage, out=c)
     np.mod(c, k, out=c)
-    return dict(
-        zip(
-            range(k),
-            df.scatter_by_map(
-                c.astype(np.int32), map_size=k, keep_index=False
-            ),
-        )
+    return group_split_dispatch(
+        df, c.astype(np.int32), k, ignore_index=ignore_index
     )
 
 
-def rearrange_by_hash(df, columns, npartitions, max_branch=None):
+def rearrange_by_hash(
+    df, columns, npartitions, max_branch=None, ignore_index=True
+):
     n = df.npartitions
     if max_branch is False:
         stages = 1
@@ -247,6 +230,7 @@ def rearrange_by_hash(df, columns, npartitions, max_branch=None):
                 stage - 1,
                 k,
                 n,
+                ignore_index,
             )
             for inp in inputs
         }
@@ -273,6 +257,7 @@ def rearrange_by_hash(df, columns, npartitions, max_branch=None):
                     )
                     for j in range(k)
                 ],
+                ignore_index,
             )
             for inp in inputs
         }
@@ -296,7 +281,12 @@ def rearrange_by_hash(df, columns, npartitions, max_branch=None):
         token = tokenize(df2, npartitions)
 
         dsk = {
-            ("repartition-group-" + token, i): (_shuffle_group_2, k, columns)
+            ("repartition-group-" + token, i): (
+                _shuffle_group_2,
+                k,
+                columns,
+                ignore_index,
+            )
             for i, k in enumerate(df2.__dask_keys__())
         }
         for p in range(npartitions):

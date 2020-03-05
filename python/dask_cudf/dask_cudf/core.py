@@ -310,13 +310,12 @@ class DataFrame(_Frame, dd.core.DataFrame):
         npartitions=None,
         max_branch=None,
         disk_path=None,
+        ignore_index=True,
         **kwargs,
     ):
         """Repartition a dask_cudf DataFrame by hashing.
 
-        Warning: Index will be ignored/dropped during this operation.
-        Be sure to call reset_index beforehand to preserve the
-        index as a column.
+        Warning: By default, index will be ignored/dropped.
 
         Parameter
         ---------
@@ -332,6 +331,9 @@ class DataFrame(_Frame, dd.core.DataFrame):
         disk_path : str, default None
             If set to a string value, the repartitioning will be performed
             "on disk," using a partitioned parquet dataset.
+        ignore_index : bool, default True
+            Ignore the index values while shuffling data into new
+            partitions. This can boost performance significantly.
         kwargs : dict
             Other `repartition` arguments.  Ignored.
         """
@@ -354,9 +356,12 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 meta=meta,
             )
             df2 = self.assign(_partitions=partitions)
+            index = False
+            if not ignore_index:
+                index = df2.index.name or "index"
             df2.to_parquet(
                 disk_path,
-                write_index=False,
+                write_index=not ignore_index,
                 partition_on=["_partitions"],
                 append=False,
                 compression="snappy",
@@ -365,13 +370,17 @@ class DataFrame(_Frame, dd.core.DataFrame):
             )
             from dask_cudf import read_parquet
 
-            return read_parquet(disk_path, index=False).drop(
+            return read_parquet(disk_path, index=index).drop(
                 columns=["_partitions"]
             )
 
         # Use task-based shuffle to move data
         return batcher_sortnet.rearrange_by_hash(
-            self, columns, npartitions, max_branch=max_branch
+            self,
+            columns,
+            npartitions,
+            max_branch=max_branch,
+            ignore_index=ignore_index,
         )
 
     def repartition(self, *args, **kwargs):
@@ -381,8 +390,8 @@ class DataFrame(_Frame, dd.core.DataFrame):
         columns = kwargs.pop("columns", None)
         if columns:
             warnings.warn(
-                "Repartitioning by column hash. Index will be ignored,"
-                "and divisions will lost."
+                "Repartitioning by column hash. Divisions will lost. "
+                "Set ignore_index=False to preserve Index values."
             )
             return self.repartition_by_hash(columns=columns, **kwargs)
         return super().repartition(*args, **kwargs)
