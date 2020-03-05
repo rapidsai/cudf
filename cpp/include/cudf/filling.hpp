@@ -140,5 +140,30 @@ std::unique_ptr<table> repeat(
     table_view const& input_table, scalar const& count,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/**
+ * @brief Fills a column with a sequence of value specified by an initial value and a step.
+ * 
+ * Creates a new column and fills with @p size values starting at @p init and 
+ * incrementing by @p step.
+ *
+ * ```
+ * size = 3
+ * init = 0
+ * step = 2 
+ * return = [0, 2, 4]
+ * ``` 
+ * @throws `cudf::logic_error` if @p init and @p @step are not the same type.
+ * @throws `cudf::logic_error` if @p size is invalid or @p size is negative.
+ * @throws `cudf::logic_error` if @p size overflows size_type.
+ * 
+ * @param size Size of the output column
+ * @param init First value in the sequence
+ * @param step Increment value
+ * @param mr Memory resource to allocate the result output column
+ * @return std::unique_ptr<column> The result table containing the sequence
+ **/
+std::unique_ptr<column> sequence(size_type size, scalar const& init, scalar const& step,
+                                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
 }  // namespace experimental
 }  // namespace cudf
