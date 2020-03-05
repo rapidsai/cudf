@@ -17,7 +17,11 @@ from cudf._libxx.strings.strip cimport (
 
 def strip(Column source_strings,
           Scalar repl):
-
+    """
+    Returns a Column by removing leading and trailing characters.
+    The set of characters need be stripped from left and right side
+    can be specified by `repl`.
+    """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
@@ -35,7 +39,11 @@ def strip(Column source_strings,
 
 def lstrip(Column source_strings,
            Scalar repl):
-
+    """
+    Returns a Column by removing leading and trailing characters.
+    The set of characters need be stripped from left side can
+    be specified by `repl`.
+    """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
@@ -53,7 +61,11 @@ def lstrip(Column source_strings,
 
 def rstrip(Column source_strings,
            Scalar repl):
-
+    """
+    Returns a Column by removing leading and trailing characters.
+    The set of characters need be stripped from right side can
+    be specified by `repl`.
+    """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 

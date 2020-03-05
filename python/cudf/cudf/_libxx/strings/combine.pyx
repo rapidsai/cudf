@@ -19,7 +19,11 @@ from cudf._libxx.strings.combine cimport (
 def concatenate(Table source_strings,
                 Scalar separator,
                 Scalar narep):
-
+    """
+    Returns a Column by concatenating strings column-wise in `source_strings`
+    with the specified `separator` between each column and
+    `na`/`None` values are replaced by `narep`
+    """
     cdef unique_ptr[column] c_result
     cdef table_view source_view = source_strings.data_view()
 
@@ -40,7 +44,11 @@ def concatenate(Table source_strings,
 def join(Column source_strings,
          Scalar separator,
          Scalar narep):
-
+    """
+    Returns a Column by concatenating strings row-wise in `source_strings`
+    with the specified `separator` between each column and
+    `na`/`None` values are replaced by `narep`
+    """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 

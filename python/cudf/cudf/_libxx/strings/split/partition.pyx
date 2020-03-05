@@ -21,6 +21,10 @@ from cudf._libxx.strings.split.partition cimport (
 
 def partition(Column source_strings,
               Scalar delimiter):
+    """
+    Returns a Table by splitting the `source_strings`
+    column at the first occurrence of the specified `delimiter`.
+    """
     cdef unique_ptr[table] c_result
     cdef column_view source_view = source_strings.view()
     cdef string_scalar* scalar_str = <string_scalar*>(delimiter.c_value.get())
@@ -39,6 +43,10 @@ def partition(Column source_strings,
 
 def rpartition(Column source_strings,
                Scalar delimiter):
+    """
+    Returns a Column by splitting the `source_strings`
+    column at the last occurrence of the specified `delimiter`.
+    """
     cdef unique_ptr[table] c_result
     cdef column_view source_view = source_strings.view()
     cdef string_scalar* scalar_str = <string_scalar*>(delimiter.c_value.get())

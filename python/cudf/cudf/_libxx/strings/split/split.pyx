@@ -22,6 +22,11 @@ from cudf._libxx.strings.split.split cimport (
 def split(Column source_strings,
           Scalar delimiter,
           size_type maxsplit):
+    """
+    Returns a Table by splitting the `source_strings`
+    column around the specified `delimiter`.
+    The split happens from beginning.
+    """
     cdef unique_ptr[table] c_result
     cdef column_view source_view = source_strings.view()
     cdef string_scalar* scalar_str = <string_scalar*>(delimiter.c_value.get())
@@ -42,6 +47,11 @@ def split(Column source_strings,
 def rsplit(Column source_strings,
            Scalar delimiter,
            size_type maxsplit):
+    """
+    Returns a Table by splitting the `source_strings`
+    column around the specified `delimiter`.
+    The split happens from the end.
+    """
     cdef unique_ptr[table] c_result
     cdef column_view source_view = source_strings.view()
     cdef string_scalar* scalar_str = <string_scalar*>(delimiter.c_value.get())
