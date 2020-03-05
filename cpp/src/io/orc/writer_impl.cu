@@ -898,6 +898,27 @@ void writer::impl::write_data_stream(gpu::StripeStream const &strm_desc,
   stripe.dataLength += length;
 }
 
+void writer::impl::add_uncompressed_block_headers(std::vector<uint8_t>& v) {
+  if (compression_kind_ != NONE) {
+    size_t uncomp_len = v.size() - 3, pos = 0, block_len;
+    if (uncomp_len > compression_blocksize_) {
+      block_len = compression_blocksize_ * 2 + 1;
+      while (uncomp_len > compression_blocksize_) {
+        v[pos + 0] = static_cast<uint8_t>(block_len >> 0);
+        v[pos + 1] = static_cast<uint8_t>(block_len >> 8);
+        v[pos + 2] = static_cast<uint8_t>(block_len >> 16);
+        pos += 3 + compression_blocksize_;
+        v.insert(v.begin() + pos, 3, 0);
+        uncomp_len -= compression_blocksize_;
+      }
+    }
+    block_len = uncomp_len * 2 + 1;
+    v[pos + 0] = static_cast<uint8_t>(block_len >> 0);
+    v[pos + 1] = static_cast<uint8_t>(block_len >> 8);
+    v[pos + 2] = static_cast<uint8_t>(block_len >> 16);
+  }
+}
+
 writer::impl::impl(std::unique_ptr<data_sink> sink, writer_options const &options,
   rmm::mr::device_memory_resource *mr):
   compression_kind_(to_orc_compression(options.compression)), 
@@ -1218,13 +1239,8 @@ void writer::impl::write_chunked_end(orc_chunked_state& state) {
   if (state.md.stripeStats.size() != 0) {
     buffer_.resize((compression_kind_ != NONE) ? 3 : 0);
     pbw_.write(&state.md);
+    add_uncompressed_block_headers(buffer_);
     ps.metadataLength = buffer_.size();
-    if (compression_kind_ != NONE) {
-      uint32_t uncomp_md_len = (uint32_t)(ps.metadataLength - 3) * 2 + 1;
-      buffer_[0] = static_cast<uint8_t>(uncomp_md_len >> 0);
-      buffer_[1] = static_cast<uint8_t>(uncomp_md_len >> 8);
-      buffer_[2] = static_cast<uint8_t>(uncomp_md_len >> 16);
-    }
     out_sink_->write(buffer_.data(), buffer_.size());
   }
   else {
@@ -1232,6 +1248,7 @@ void writer::impl::write_chunked_end(orc_chunked_state& state) {
   }
   buffer_.resize((compression_kind_ != NONE) ? 3 : 0);
   pbw_.write(&state.ff);
+  add_uncompressed_block_headers(buffer_);
 
   // Write postscript metadata
   ps.footerLength = buffer_.size();
@@ -1239,14 +1256,6 @@ void writer::impl::write_chunked_end(orc_chunked_state& state) {
   ps.compressionBlockSize = compression_blocksize_;
   ps.version = {0, 12};
   ps.magic = MAGIC;
-  if (compression_kind_ != NONE) {
-    // TODO: If the file footer ends up larger than the compression block
-    // size, we'll need to insert additional 3-byte block headers
-    uint32_t uncomp_ff_len = (uint32_t)(ps.footerLength - 3) * 2 + 1;
-    buffer_[0] = static_cast<uint8_t>(uncomp_ff_len >> 0);
-    buffer_[1] = static_cast<uint8_t>(uncomp_ff_len >> 8);
-    buffer_[2] = static_cast<uint8_t>(uncomp_ff_len >> 16);
-  }
   const auto ps_length = static_cast<uint8_t>(pbw_.write(&ps));
   buffer_.push_back(ps_length);
   out_sink_->write(buffer_.data(), buffer_.size());

@@ -271,6 +271,13 @@ class writer::impl {
                          std::vector<Stream>& streams, cudaStream_t stream);
 
   /**
+   * @brief Insert 3-byte uncompressed block headers in a byte vector
+   *
+   * @param byte_vector Raw data (must include initial 3-byte header)
+   */
+  void add_uncompressed_block_headers(std::vector<uint8_t>& byte_vector);
+
+  /**
    * @brief Returns the number of row groups for holding the specified rows
    *
    * @tparam T Optional type
