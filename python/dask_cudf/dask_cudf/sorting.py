@@ -15,6 +15,7 @@ from dask.highlevelgraph import HighLevelGraph
 from dask.utils import M, digit, insert
 
 import cudf as gd
+from cudf.utils.dtypes import is_categorical_dtype
 
 
 def set_partitions_hash(df, columns, npartitions):
@@ -336,7 +337,11 @@ def quantile_divisions(df, by, npartitions):
     columns = divisions.columns
 
     # TODO: Make sure divisions are correct for all dtypes..
-    if len(columns) == 1 and df[columns[0]].dtype != "object":
+    if (
+        len(columns) == 1
+        and df[columns[0]].dtype != "object"
+        and not is_categorical_dtype(df[columns[0]].dtype)
+    ):
         dtype = df[columns[0]].dtype
         divisions = divisions[columns[0]].astype("int64")
         divisions.iloc[-1] += 1
