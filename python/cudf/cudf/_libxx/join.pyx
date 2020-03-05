@@ -29,6 +29,9 @@ cpdef join(Table lhs,
     Returns a list of tuples [(column, valid, name), ...]
     """
 
+    cdef vector[int] all_left_inds = range(len(lhs.columns))
+    cdef vector[int] all_right_inds = range(len(rhs.columns))
+
     cdef Table c_lhs = lhs
     cdef Table c_rhs = rhs
 
@@ -146,6 +149,24 @@ cpdef join(Table lhs,
                 right_on_ind,
                 c_columns_in_common
             ))
+    elif how == 'leftsemi':
+        with nogil:
+            c_result = move(cpp_join.left_semi_join(
+                lhs_view,
+                rhs_view,
+                left_on_ind,
+                right_on_ind,
+                all_left_inds
+            ))
+    elif how == 'leftanti':
+        with nogil:
+            c_result = move(cpp_join.left_anti_join(
+                lhs_view,
+                rhs_view,
+                left_on_ind,
+                right_on_ind,
+                all_left_inds
+            ))
 
     all_cols_py = columns_from_ptr(move(c_result))
     if left_index or right_index:
@@ -156,5 +177,4 @@ cpdef join(Table lhs,
         index_col = None
 
     data_ordered_dict = OrderedDict(zip(result_col_names, all_cols_py))
-
     return Table(data=data_ordered_dict, index=index_col)
