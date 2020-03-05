@@ -131,6 +131,7 @@ class StringMethods(object):
         from cudf import Series, DataFrame, MultiIndex
         from cudf.core.index import Index, as_index
 
+        print("came here", new_col)
         inplace = kwargs.get("inplace", False)
 
         if inplace:
@@ -231,14 +232,12 @@ class StringMethods(object):
             (same type as caller) of str dtype is returned.
         """
         from cudf.core import Series, Index, DataFrame
+        from cudf.core.column import as_column
 
-        if isinstance(others, Series):
-            assert others.dtype == np.dtype("object")
-            others = others._column
-        elif isinstance(others, Index):
-            assert others.dtype == np.dtype("object")
-            others = others._values
-        elif isinstance(others, StringMethods):
+        if sep is None:
+            sep = ""
+
+        if isinstance(others, StringMethods):
             """
             If others is a StringMethods then
             raise an exception
@@ -271,9 +270,7 @@ class StringMethods(object):
                 first = None
                 cols_list = []
                 for frame in others:
-                    if not isinstance(frame, Series):
-                        frame = Series(frame, dtype="str")
-                    cols_list.append(frame._column)
+                    cols_list.append(as_column(frame, dtype="str"))
 
                 others = cols_list
             elif not is_list_like(first):
@@ -286,13 +283,9 @@ class StringMethods(object):
                 large size. Thus only doing a sanity check on just the
                 first element of list.
                 """
-                others = Series(others)
-                others = others._column
-        elif isinstance(others, (pd.Series, pd.Index)):
-            others = Series(others)
-            others = others._column
-        if sep is None:
-            sep = ""
+                others = as_column(others, dtype="str")
+        elif others is not None:
+            others = as_column(others, dtype="str")
 
         from cudf._libxx.scalar import Scalar
 
