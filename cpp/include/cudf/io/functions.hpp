@@ -52,6 +52,8 @@ struct read_avro_args {
   /// Rows to read; -1 is all
   size_type num_rows = -1;
 
+  read_avro_args() = default;
+
   explicit read_avro_args(source_info const& src) : source(src) {}
 };
 
@@ -115,6 +117,8 @@ struct read_json_args {
 
    /// Whether to parse dates as DD/MM versus MM/DD
   bool dayfirst = false;
+
+  read_json_args() = default;
 
   explicit read_json_args(const source_info& src) : source(src) {}
 };
@@ -266,6 +270,8 @@ struct read_orc_args {
   /// -1 is auto (column scale), >=0: number of fractional digits
   int forced_decimals_scale = -1;
 
+  read_orc_args() = default;
+
   explicit read_orc_args(source_info const& src) : source(src) {}
 };
 
@@ -305,6 +311,8 @@ struct write_orc_args {
   table_view table;
   /// Optional associated metadata
   const table_metadata *metadata;
+
+  write_orc_args() = default;
 
   explicit write_orc_args(sink_info const& snk, table_view const& table_,
                           const table_metadata *metadata_ = nullptr,

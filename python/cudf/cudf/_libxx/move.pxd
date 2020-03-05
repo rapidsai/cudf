@@ -11,6 +11,7 @@ from cudf._libxx.cpp.aggregation cimport aggregation
 from cudf._libxx.cpp.scalar.scalar cimport scalar
 from cudf._libxx.cpp.column.column cimport column, column_contents
 from cudf._libxx.cpp.table.table cimport table
+from pyarrow.includes.libarrow cimport CMessageReader
 cimport cudf._libxx.cpp.io.types as cudf_io_types
 
 
@@ -40,6 +41,7 @@ cdef extern from "<utility>" namespace "std" nogil:
     cdef unique_ptr[column] move(unique_ptr[column])
     cdef unique_ptr[table] move(unique_ptr[table])
     cdef unique_ptr[aggregation] move(unique_ptr[aggregation])
+    cdef unique_ptr[CMessageReader] move(unique_ptr[CMessageReader])
     cdef vector[unique_ptr[column]] move(vector[unique_ptr[column]])
     cdef vector[unique_ptr[table]] move(vector[unique_ptr[table]])
     cdef pair[unique_ptr[table], vector[size_type]] move(
@@ -51,5 +53,6 @@ cdef extern from "<utility>" namespace "std" nogil:
         pair[unique_ptr[device_buffer], size_type]
     )
     cdef column_contents move(column_contents)
+    cdef cudf_io_types.source_info move(cudf_io_types.source_info)
     cdef cudf_io_types.table_with_metadata move(
         cudf_io_types.table_with_metadata)

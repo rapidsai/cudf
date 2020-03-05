@@ -553,22 +553,22 @@ class ColumnBase(Column):
     def isnull(self):
         """Identify missing values in a Column.
         """
-        return libcudf.unaryops.is_null(self)
+        return libcudfxx.unary.is_null(self)
 
     def isna(self):
         """Identify missing values in a Column. Alias for isnull.
         """
         return self.isnull()
 
-    def notna(self):
+    def notnull(self):
         """Identify non-missing values in a Column.
         """
-        return libcudf.unaryops.is_not_null(self)
+        return libcudfxx.unary.is_valid(self)
 
-    def notnull(self):
-        """Identify non-missing values in a Column. Alias for notna.
+    def notna(self):
+        """Identify non-missing values in a Column. Alias for notnull.
         """
-        return self.notna()
+        return self.notnull()
 
     def find_first_value(self, value):
         """
@@ -656,11 +656,25 @@ class ColumnBase(Column):
 
     @property
     def is_monotonic_increasing(self):
-        raise (NotImplementedError)
+        if not hasattr(self, "_is_monotonic_increasing"):
+            if self.has_nulls:
+                self._is_monotonic_increasing = False
+            else:
+                self._is_monotonic_increasing = self.as_frame()._is_sorted(
+                    ascending=None, null_position=None
+                )
+        return self._is_monotonic_increasing
 
     @property
     def is_monotonic_decreasing(self):
-        raise (NotImplementedError)
+        if not hasattr(self, "_is_monotonic_decreasing"):
+            if self.has_nulls:
+                self._is_monotonic_decreasing = False
+            else:
+                self._is_monotonic_decreasing = self.as_frame()._is_sorted(
+                    ascending=[False], null_position=None
+                )
+        return self._is_monotonic_decreasing
 
     def get_slice_bound(self, label, side, kind):
         """
@@ -1076,7 +1090,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
             and arbitrary.size > 0
         ):
             if nan_as_null:
-                mask = libcudf.unaryops.nans_to_nulls(data)
+                mask = libcudfxx.transform.nans_to_nulls(data)
                 data = data.set_mask(mask)
 
         elif data.dtype.kind == "M":
