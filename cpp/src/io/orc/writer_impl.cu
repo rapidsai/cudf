@@ -901,16 +901,14 @@ void writer::impl::write_data_stream(gpu::StripeStream const &strm_desc,
 void writer::impl::add_uncompressed_block_headers(std::vector<uint8_t>& v) {
   if (compression_kind_ != NONE) {
     size_t uncomp_len = v.size() - 3, pos = 0, block_len;
-    if (uncomp_len > compression_blocksize_) {
+    while (uncomp_len > compression_blocksize_) {
       block_len = compression_blocksize_ * 2 + 1;
-      while (uncomp_len > compression_blocksize_) {
-        v[pos + 0] = static_cast<uint8_t>(block_len >> 0);
-        v[pos + 1] = static_cast<uint8_t>(block_len >> 8);
-        v[pos + 2] = static_cast<uint8_t>(block_len >> 16);
-        pos += 3 + compression_blocksize_;
-        v.insert(v.begin() + pos, 3, 0);
-        uncomp_len -= compression_blocksize_;
-      }
+      v[pos + 0] = static_cast<uint8_t>(block_len >> 0);
+      v[pos + 1] = static_cast<uint8_t>(block_len >> 8);
+      v[pos + 2] = static_cast<uint8_t>(block_len >> 16);
+      pos += 3 + compression_blocksize_;
+      v.insert(v.begin() + pos, 3, 0);
+      uncomp_len -= compression_blocksize_;
     }
     block_len = uncomp_len * 2 + 1;
     v[pos + 0] = static_cast<uint8_t>(block_len >> 0);
