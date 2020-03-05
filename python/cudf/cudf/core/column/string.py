@@ -315,10 +315,27 @@ class StringMethods(object):
             out = out[0]
         return out
 
-    def join(self, sep="", na_rep="", **kwargs):
+    def join(self, sep, na_rep="", **kwargs):
         """
         Join lists contained as elements in the Series/Index with passed
         delimiter.
+
+        Parameters
+        ----------
+
+            sep : str
+                Delimiter to use between list entries.
+
+            na_rep : str
+                This character will take the place of any null strings
+                (not empty strings) in either list.
+
+        Returns
+        -------
+        Series/Index of str dtype
+            The list entries concatenated by intervening
+            occurrences of the delimiter.
+
         """
         from cudf._libxx.scalar import Scalar
         from cudf.core.series import Series
@@ -728,6 +745,30 @@ class StringMethods(object):
         )
 
     def rsplit(self, pat=None, n=-1, expand=True, **kwargs):
+        """
+        Split strings around given separator/delimiter.
+
+        Splits the string in the Series/Index from the end, at the
+        specified delimiter string.
+
+        Parameters
+        ----------
+        pat : str, default ' ' (space)
+            String to split on, does not yet support regular expressions.
+        n : int, default -1 (all)
+            Limit number of splits in output. `None`, 0, and -1 will all be
+            interpreted as "all splits".
+
+        Returns
+        -------
+        DataFrame
+            Returns a DataFrame with each split as a column.
+
+        Notes
+        -----
+        The parameter `expand` is not yet supported and will raise a
+        NotImplementedError if anything other than the default value is set.
+        """
         if expand is not True:
             raise NotImplementedError("`expand` parameter is not supported")
 
@@ -746,6 +787,31 @@ class StringMethods(object):
         )
 
     def partition(self, sep=" ", expand=True, **kwargs):
+        """
+        Split the string at the first occurrence of sep.
+
+        This method splits the string at the first occurrence
+        of sep, and returns 3 elements containing the part
+        before the separator, the separator itself, and the
+        part after the separator. If the separator is not found,
+        return 3 elements containing the string itself, followed
+        by two empty strings.
+
+        Parameters
+        ----------
+        sep : str, default ' ' (whitespace)
+            String to split on.
+
+        Returns
+        -------
+        DataFrame
+            Returns a DataFrame
+
+        Notes
+        -----
+        The parameter `expand` is not yet supported and will raise a
+        NotImplementedError if anything other than the default value is set.
+        """
         if expand is not True:
             raise NotImplementedError(
                 "`expand=False` is currently not supported"
@@ -762,6 +828,31 @@ class StringMethods(object):
         )
 
     def rpartition(self, sep=" ", expand=True, **kwargs):
+        """
+        Split the string at the last occurrence of sep.
+
+        This method splits the string at the last occurrence
+        of sep, and returns 3 elements containing the part
+        before the separator, the separator itself, and the
+        part after the separator. If the separator is not
+        found, return 3 elements containing two empty strings,
+        followed by the string itself.
+
+        Parameters
+        ----------
+        sep : str, default ' ' (whitespace)
+            String to split on.
+
+        Returns
+        -------
+        DataFrame
+            Returns a DataFrame
+
+        Notes
+        -----
+        The parameter `expand` is not yet supported and will raise a
+        NotImplementedError if anything other than the default value is set.
+        """
         if expand is not True:
             raise NotImplementedError(
                 "`expand=False` is currently not supported"
@@ -778,28 +869,143 @@ class StringMethods(object):
         )
 
     def pad(self, width, side="left", fillchar=" ", **kwargs):
+        """
+        Pad strings in the Series/Index up to width.
+
+        Parameters
+        ----------
+        width : int
+            Minimum width of resulting string;
+            additional characters will be filled with
+            character defined in fillchar.
+
+        side : {‘left’, ‘right’, ‘both’}, default ‘left’
+            Side from which to fill resulting string.
+
+        fillchar : str,  default ' ' (whitespace)
+            Additional character for filling, default is whitespace.
+
+        Returns
+        -------
+        Series/Index of str dtype
+            Returns Series or Index with minimum number
+            of char in object.
+
+        """
+        if not isinstance(fillchar, str):
+            msg = (
+                f"fillchar must be a character, not {type(fillchar).__name__}"
+            )
+            raise TypeError(msg)
+
         if len(fillchar) != 1:
             raise TypeError("fillchar must be a character, not str")
+
+        if not pd.api.types.is_integer(width):
+            msg = f"width must be of integer type, not {type(width).__name__}"
+            raise TypeError(msg)
 
         return self._return_or_inplace(
             cpp_pad(self._column, width, side, fillchar), **kwargs
         )
 
     def zfill(self, width, **kwargs):
+        """
+        Pad strings in the Series/Index by prepending ‘0’ characters.
+
+        Parameters
+        ----------
+        width : int
+            Minimum length of resulting string;
+            strings with length less than width
+            be prepended with ‘0’ characters.
+
+        Returns
+        -------
+        Series/Index of str dtype
+            Returns Series or Index with prepended ‘0’ characters.
+
+        """
+        if not pd.api.types.is_integer(width):
+            msg = f"width must be of integer type, not {type(width).__name__}"
+            raise TypeError(msg)
+
         return self._return_or_inplace(
             cpp_zfill(self._column, width), **kwargs
         )
 
     def center(self, width, fillchar=" ", **kwargs):
+        """
+        Filling left and right side of strings in the Series/Index with an
+        additional character.
+
+        Parameters
+        ----------
+        width : int
+            Minimum width of resulting string;
+            additional characters will be filled
+            with fillchar.
+
+        fillchar : str, default ' ' (whitespace)
+            Additional character for filling, default is whitespace.
+
+        Returns
+        -------
+        Series/Index of str dtype
+            Returns Series or Index.
+
+        """
         if not isinstance(fillchar, str):
-            msg = "fillchar must be a character, not {0}"
-            raise TypeError(msg.format(type(fillchar).__name__))
+            msg = (
+                f"fillchar must be a character, not {type(fillchar).__name__}"
+            )
+            raise TypeError(msg)
+
+        if len(fillchar) != 1:
+            raise TypeError("fillchar must be a character, not str")
+
+        if not pd.api.types.is_integer(width):
+            msg = f"width must be of integer type, not {type(width).__name__}"
+            raise TypeError(msg)
 
         return self._return_or_inplace(
             cpp_center(self._column, width, fillchar), **kwargs
         )
 
     def ljust(self, width, fillchar=" ", **kwargs):
+        """
+        Filling right side of strings in the Series/Index with an additional
+        character.
+
+        Parameters
+        ----------
+        width : int
+            Minimum width of resulting string;
+            additional characters will be filled
+            with fillchar.
+
+        fillchar : str, default ' ' (whitespace)
+            Additional character for filling, default is whitespace.
+
+        Returns
+        -------
+        Series/Index of str dtype
+            Returns Series or Index.
+
+        """
+        if not isinstance(fillchar, str):
+            msg = (
+                f"fillchar must be a character, not {type(fillchar).__name__}"
+            )
+            raise TypeError(msg)
+
+        if len(fillchar) != 1:
+            raise TypeError("fillchar must be a character, not str")
+
+        if not pd.api.types.is_integer(width):
+            msg = f"width must be of integer type, not {type(width).__name__}"
+            raise TypeError(msg)
+
         if not isinstance(fillchar, str):
             msg = "fillchar must be a character, not {0}"
             raise TypeError(msg.format(type(fillchar).__name__))
@@ -809,6 +1015,39 @@ class StringMethods(object):
         )
 
     def rjust(self, width, fillchar=" ", **kwargs):
+        """
+        Filling left side of strings in the Series/Index with an additional
+        character.
+
+        Parameters
+        ----------
+        width : int
+            Minimum width of resulting string;
+            additional characters will be filled
+            with fillchar.
+
+        fillchar : str, default ' ' (whitespace)
+            Additional character for filling, default is whitespace.
+
+        Returns
+        -------
+        Series/Index of str dtype
+            Returns Series or Index.
+
+        """
+        if not isinstance(fillchar, str):
+            msg = (
+                f"fillchar must be a character, not {type(fillchar).__name__}"
+            )
+            raise TypeError(msg)
+
+        if len(fillchar) != 1:
+            raise TypeError("fillchar must be a character, not str")
+
+        if not pd.api.types.is_integer(width):
+            msg = f"width must be of integer type, not {type(width).__name__}"
+            raise TypeError(msg)
+
         if not isinstance(fillchar, str):
             msg = "fillchar must be a character, not {0}"
             raise TypeError(msg.format(type(fillchar).__name__))
@@ -818,6 +1057,26 @@ class StringMethods(object):
         )
 
     def strip(self, to_strip=None, **kwargs):
+        """
+        Remove leading and trailing characters.
+
+        Strip whitespaces (including newlines) or a set of
+        specified characters from each string in the Series/Index
+        from left and right sides.
+
+        Parameters
+        ----------
+        to_strip : str or None, default None
+            Specifying the set of characters to be removed.
+            All combinations of this set of characters
+            will be stripped. If None then whitespaces are removed.
+
+        Returns
+        -------
+        Series/Index of str dtype
+            Returns Series or Index.
+
+        """
         if to_strip is None:
             to_strip = ""
 
@@ -828,6 +1087,26 @@ class StringMethods(object):
         )
 
     def lstrip(self, to_strip=None, **kwargs):
+        """
+        Remove leading and trailing characters.
+
+        Strip whitespaces (including newlines)
+        or a set of specified characters from
+        each string in the Series/Index from left side.
+
+        Parameters
+        ----------
+        to_strip : str or None, default None
+            Specifying the set of characters to be removed.
+            All combinations of this set of characters will
+            be stripped. If None then whitespaces are removed.
+
+        Returns
+        -------
+        Series/Index of str dtype
+            Returns Series or Index.
+
+        """
         if to_strip is None:
             to_strip = ""
 
@@ -838,6 +1117,27 @@ class StringMethods(object):
         )
 
     def rstrip(self, to_strip=None, **kwargs):
+        """
+        Remove leading and trailing characters.
+
+        Strip whitespaces (including newlines)
+        or a set of specified characters from each
+        string in the Series/Index from right side.
+
+        Parameters
+        ----------
+        to_strip : str or None, default None
+            Specifying the set of characters to
+            be removed. All combinations of this
+            set of characters will be stripped.
+            If None then whitespaces are removed.
+
+        Returns
+        -------
+        Series/Index of str dtype
+            Returns Series or Index.
+
+        """
         if to_strip is None:
             to_strip = ""
 
