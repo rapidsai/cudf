@@ -11,9 +11,10 @@ from cudf._libxx.table cimport Table
 from cudf._libxx.move cimport move
 
 from cudf._libxx.cpp.column.column cimport column
+from cudf._libxx.cpp.table.table cimport table
 from cudf._libxx.cpp.table.table_view cimport table_view
 from cudf._libxx.cpp.sort cimport (
-    sorted_order, lower_bound, upper_bound
+    sorted_order, lower_bound, upper_bound, rank, rank_method
 )
 cimport cudf._libxx.cpp.types as libcudf_types
 
@@ -109,3 +110,71 @@ def digitize(Table source_values_table, Table bins, bool right=False):
             )
 
     return Column.from_unique_ptr(move(c_result))
+
+def rank_columns(Table source_table, str method, str na_option, bool ascending, bool pct=False):
+    """
+    Compute numerical data ranks (1 through n) of each column in the dataframe
+    """
+    cdef table_view source_table_view = source_table.view()
+    
+    cdef rank_method c_rank_method
+    if  method == 'min':
+        c_rank_method = rank_method.MIN
+    elif  method == 'max':
+        c_rank_method = rank_method.MAX
+    elif  method == 'first':
+        c_rank_method = rank_method.FIRST
+    elif  method == 'dense':
+        c_rank_method = rank_method.DENSE
+    else:
+        c_rank_method = rank_method.AVERAGE
+    
+    cdef libcudf_types.order column_order = (
+        libcudf_types.order.ASCENDING
+        if ascending
+        else libcudf_types.order.DESCENDING
+    )
+    #ascending 
+    #    #top    = na_is_smallest
+    #    #bottom = na_is_largest
+    #    #keep   = na_is_largest
+    #descending
+    #    #top    = na_is_largest
+    #    #bottom = na_is_smallest
+    #    #keep   = na_is_smallest
+    cdef libcudf_types.null_order null_precedence
+    if ascending:
+        if na_option == 'top':
+            null_precedence = libcudf_types.null_order.BEFORE
+        else:
+            null_precedence = libcudf_types.null_order.AFTER
+    else:
+        if na_option == 'top':
+            null_precedence = libcudf_types.null_order.AFTER
+        else:
+            null_precedence = libcudf_types.null_order.BEFORE
+    cdef libcudf_types.include_nulls _include_nulls = (
+        libcudf_types.include_nulls.EXCLUDE_NULLS 
+        if na_option == 'keep'
+        else libcudf_types.include_nulls.INCLUDE_NULLS
+    )
+    cdef unique_ptr[table] c_result
+ 
+    with nogil:
+        c_result = move(
+            rank(
+                source_table_view,
+                c_rank_method,
+                column_order,
+                _include_nulls,
+                null_precedence
+            )
+        )
+
+    return Table.from_unique_ptr(
+        move(c_result), 
+        column_names=source_table._column_names,
+        index_names=(
+            None if source_table._index is None 
+            else source_table._index_names)
+    )

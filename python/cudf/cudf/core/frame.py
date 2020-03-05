@@ -10,6 +10,7 @@ import cudf
 import cudf._libxx as libcudfxx
 from cudf.core import column
 from cudf.core.column import as_column, build_categorical_column
+from cudf.core._sort import rank
 from cudf.utils.dtypes import (
     is_categorical_dtype,
     is_datetime_dtype,
@@ -236,6 +237,13 @@ class Frame(libcudfxx.table.Table):
         )
 
         result._copy_categories(self)
+        return result
+
+    def rank(self, axis=0, method="average", numeric_only=None, na_option="keep", ascending=True, pct=False):
+        result = self._from_table(rank(
+                self, method, na_option, ascending, pct
+            )
+        )
         return result
 
     def drop_duplicates(self, subset=None, keep="first", nulls_are_equal=True):

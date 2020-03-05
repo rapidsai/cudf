@@ -66,3 +66,22 @@ def get_sorted_inds(by, ascending=True, na_position="last"):
     out_inds_column = libcudf.sort.order_by(by, ascending, na_position)
 
     return as_column(out_inds_column)
+
+def rank(source, method="average", na_option="keep", ascending=True, pct=False):
+    """ rank column/dataframe
+    """
+    if method not in {'average', 'min', 'max', 'first', 'dense'}:
+        raise
+    if na_option not in {'keep', 'top', 'bottom'}:
+        raise
+    is_column = False
+    if isinstance(source, (ColumnBase)):
+        source = source.as_frame()
+        is_column = True
+
+    out_rank_table = libcudf.sort.rank_columns(source, method, na_option, ascending, pct)
+
+    if is_column:
+        return as_column(out_rank_table[out_rank_table.columns[0]])
+    else:
+        return out_rank_table
