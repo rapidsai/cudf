@@ -8,8 +8,30 @@ from cudf._libxx.cpp.types cimport size_type, data_type, interpolation
 
 
 cdef extern from "cudf/aggregation.hpp" namespace "cudf::experimental" nogil:
+
     cdef cppclass aggregation:
-        pass
+        ctypedef enum Kind:
+            SUM 'cudf::experimental::aggregation::SUM'
+            PRODUCT 'cudf::experimental::aggregation::PRODUCT'
+            MIN 'cudf::experimental::aggregation::MIN'
+            MAX 'cudf::experimental::aggregation::MAX'
+            COUNT_VALID 'cudf::experimental::aggregation::COUNT_VALID'
+            COUNT_ALL 'cudf::experimental::aggregation::COUNT_ALL'
+            ANY 'cudf::experimental::aggregation::ANY'
+            ALL 'cudf::experimental::aggregation::ALL'
+            SUM_OF_SQUARES 'cudf::experimental::aggregation::SUM_OF_SQUARES'
+            MEAN 'cudf::experimental::aggregation::MEAN'
+            VARIANCE 'cudf::experimental::aggregation::VARIANCE'
+            STD 'cudf::experimental::aggregation::STD'
+            MEDIAN 'cudf::experimental::aggregation::MEDIAN'
+            QUANTILE 'cudf::experimental::aggregation::QUANTILE'
+            ARGMAX 'cudf::experimental::aggregation::ARGMAX'
+            ARGMIN 'cudf::experimental::aggregation::ARGMIN'
+            NUNIQUE 'cudf::experimental::aggregation::NUNIQUE'
+            NTH_ELEMENT 'cudf::experimental::aggregation::NTH_ELEMENT'
+            PTX 'cudf::experimental::aggregation::PTX'
+            CUDA 'cudf::experimental::aggregation::CUDA'
+        Kind kind
 
     ctypedef enum udf_type:
         CUDA 'cudf::experimental::udf_type::CUDA'
