@@ -132,6 +132,7 @@
 - PR #4244 Port nvstrings Substring Gather/Scatter functions to cuDF Python/Cython
 - PR #4280 Port nvstrings Numeric Handling functions to cuDF Python/Cython
 - PR #4166 Port `is_sorted.pyx` to use libcudf++ APIs
+- PR #4345 Removed an undesirable backwards include from /include to /src in cuIO writers.hpp
 
 ## Bug Fixes
 
