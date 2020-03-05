@@ -144,17 +144,18 @@ std::unique_ptr<table> repeat(
  * @brief Fills a column with a sequence of value specified by an initial value and a step.
  * 
  * Creates a new column and fills with @p size values starting at @p init and 
- * incrementing by @p step.
+ * incrementing by @p step, generating the sequence
+ * [ init, init+step, init+2*step, ... init + (size - 1)*step]
  *
  * ```
  * size = 3
  * init = 0
  * step = 2 
  * return = [0, 2, 4]
- * ``` 
+ * ```  
  * @throws `cudf::logic_error` if @p init and @p @step are not the same type.
- * @throws `cudf::logic_error` if @p size is invalid or @p size is negative.
- * @throws `cudf::logic_error` if @p size overflows size_type.
+ * @throws `cudf::logic_error` if scalar types are not numeric.
+ * @throws `cudf::logic_error` if @p size is < 0. 
  * 
  * @param size Size of the output column
  * @param init First value in the sequence

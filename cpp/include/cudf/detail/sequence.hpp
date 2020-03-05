@@ -20,8 +20,6 @@
 #include <cudf/detail/sequence.hpp>
 #include <cudf/types.hpp>
 
-// #include <memory>
-
 namespace cudf {
 namespace experimental {
 namespace detail {

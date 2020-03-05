@@ -31,15 +31,22 @@ namespace detail {
 
 namespace {
 
+// This functor only exists here because using a lambda directly in the tabulate() call generates the cryptic
+// __T289 link error.  This seems to be related to lambda usage within functions using SFINAE.
 template<typename T>
 struct tabulator {
-  cudf::numeric_scalar_device_view<T> n_init;
-  cudf::numeric_scalar_device_view<T> n_step;
-  T __device__ operator()(cudf::size_type i){
-      return n_init.value() + (n_step.value() * i);
-  }
+   cudf::numeric_scalar_device_view<T> n_init;
+   cudf::numeric_scalar_device_view<T> n_step;
+
+   T __device__ operator()(cudf::size_type i){
+      return n_init.value() + (i * n_step.value());
+   }
 };
 
+/**
+ * @brief Functor called by the `type_dispatcher` to generate the sequence specified 
+ * by init and step.
+ */
 struct sequence_functor {   
    template <typename T, typename std::enable_if_t<cudf::is_numeric<T>() and not cudf::is_boolean<T>()>* = nullptr>
    std::unique_ptr<column> operator()(size_type size, scalar const& init, scalar const& step,
@@ -51,17 +58,17 @@ struct sequence_functor {
                   
       auto n_init = get_scalar_device_view( static_cast<cudf::experimental::scalar_type_t<T>&>(const_cast<scalar&>(init)) );
       auto n_step = get_scalar_device_view( static_cast<cudf::experimental::scalar_type_t<T>&>(const_cast<scalar&>(step)) );
-
+      
       // not using thrust::sequence because it requires init and step to be passed as 
       // constants, not iterators. to do that we would have to retrieve the scalar values off the gpu,
-      // which is undesirable from a performane perspective.
+      // which is undesirable from a performance perspective.
       thrust::tabulate(rmm::exec_policy(stream)->on(stream),
-         result_device_view->begin<T>(), result_device_view->end<T>(), tabulator<T>{n_init, n_step});
+         result_device_view->begin<T>(), result_device_view->end<T>(), tabulator<T>{n_init, n_step});      
 
       return result;
    }
 
-   template <typename T, typename std::enable_if_t<not cudf::is_numeric<T>() || cudf::is_boolean<T>()>* = nullptr>
+   template <typename T, typename std::enable_if_t<not cudf::is_numeric<T>() or cudf::is_boolean<T>()>* = nullptr>
    std::unique_ptr<column> operator()(size_type size, scalar const& init, scalar const& step,
                                       rmm::mr::device_memory_resource* mr,
                                       cudaStream_t stream)
@@ -77,6 +84,8 @@ std::unique_ptr<column> sequence(size_type size, scalar const& init, scalar cons
                                  cudaStream_t stream)
 {
    CUDF_EXPECTS(init.type() == step.type(), "init and step must be of the same type.");
+   CUDF_EXPECTS(size >= 0, "size must be >= 0");
+   CUDF_EXPECTS(is_numeric(init.type()), "Input scalar types must be numeric");
 
    return cudf::experimental::type_dispatcher(init.type(), sequence_functor{}, size, init, step, mr, stream);
 }
