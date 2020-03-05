@@ -232,18 +232,6 @@ class ColumnBase(Column):
                 "size > {}".format(libcudfxx.MAX_COLUMN_SIZE_STR)
             )
 
-        # Handle strings separately
-        if all(isinstance(o, StringColumn) for o in objs):
-            result_nbytes = sum(o._nbytes for o in objs)
-            if result_nbytes > libcudfxx.MAX_STRING_COLUMN_BYTES:
-                raise MemoryError(
-                    "Result of concat cannot have > {}  bytes".format(
-                        libcudfxx.MAX_STRING_COLUMN_BYTES_STR
-                    )
-                )
-            objs = [o.nvstrings for o in objs]
-            return as_column(nvstrings.from_strings(*objs))
-
         # Filter out inputs that have 0 length
         objs = [o for o in objs if len(o) > 0]
 
