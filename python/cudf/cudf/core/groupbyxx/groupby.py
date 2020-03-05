@@ -53,7 +53,8 @@ class GroupBy(object):
         if not _is_multi_agg(func):
             try:
                 # drop the last level
-                result.columns = result.columns.droplevel(-1)
+                if result.columns.nlevels > 1:
+                    result.columns = result.columns.droplevel(-1)
             except IndexError:
                 # Pandas raises an IndexError if we are left
                 # with an all-nan MultiIndex when dropping
