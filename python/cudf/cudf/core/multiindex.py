@@ -118,7 +118,7 @@ class MultiIndex(Index):
 
     @property
     def names(self):
-        return self._names
+        return pd.core.indexes.frozen.FrozenList(self._names)
 
     @names.setter
     def names(self, value):
