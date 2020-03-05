@@ -31,6 +31,7 @@
 - PR #4276 Port avro.pyx to libcudf++
 - PR #4259 Ability to create Java host buffers from memory-mapped files
 - PR #4240 Add groupby::groups()
+- PR #4321 Expose Python Semi and Anti Joins
 - PR #4291 Add Java callback support for RMM events
 - PR #4298 Port orc.pyx to libcudf++
 
@@ -122,12 +123,14 @@
 - PR #4261 libxx Cython reorganization
 - PR #4274 Support negative position values in slice_strings
 - PR #4282 Porting nvstrings conversion functions from new libcudf++ to Python/Cython
+- PR #4299 Convert cudf::shift to column-based api
 - PR #4301 Add support for writing large ORC files in a chunked manner
 - PR #4306 Use libcudf++ `unary.pyx` cast instead of legacy cast
 - PR #4295 Port reduce.pyx to libcudf++ API
 - PR #4305 Move gpuarrow.pyx and related libarrow_cuda files into `_libxx`
 - PR #4244 Port nvstrings Substring Gather/Scatter functions to cuDF Python/Cython
 - PR #4280 Port nvstrings Numeric Handling functions to cuDF Python/Cython
+- PR #4166 Port `is_sorted.pyx` to use libcudf++ APIs
 
 ## Bug Fixes
 
@@ -187,6 +190,7 @@
 - PR #4222 Fix no-return compile error in binop-null-test
 - PR #4242 Fix for rolling tests CI failure
 - PR #4245 Fix race condition in parquet reader
+- PR #4253 Fix dictionary decode and set_keys with column offset
 - PR #4258 Fix dask-cudf losing index name in `reset_index`
 - PR #4268 Fix java build for hash aggregate
 - PR #4275 Fix bug in searching nullable values in non-nullable search space in `upper_bound`
@@ -199,6 +203,7 @@
 - PR #4302 Fix `_is_local_filesystem` check
 - PR #4303 Parquet reader: fix empty columns missing from table
 - PR #4115 Serialize an empty column table with non zero rows
+- PR #4327 Preemptive dispatch fix for changes in dask#5973
 
 
 # cuDF 0.12.0 (04 Feb 2020)
