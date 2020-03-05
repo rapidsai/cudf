@@ -477,7 +477,7 @@ class Frame(libcudfxx.table.Table):
         len_right_on = len(right_on) if right_on is not None else 0
 
         # must actually support the requested merge type
-        if how not in ["left", "inner", "outer"]:
+        if how not in ["left", "inner", "outer", "leftanti", "leftsemi"]:
             raise NotImplementedError(
                 "{!r} merge not supported yet".format(how)
             )

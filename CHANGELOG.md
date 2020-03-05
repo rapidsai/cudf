@@ -32,6 +32,7 @@
 - PR #4259 Ability to create Java host buffers from memory-mapped files
 - PR #4240 Add groupby::groups()
 - PR #4319 Add repartition_by_hash API to dask_cudf
+- PR #4321 Expose Python Semi and Anti Joins
 - PR #4291 Add Java callback support for RMM events
 - PR #4298 Port orc.pyx to libcudf++
 
@@ -187,6 +188,7 @@
 - PR #4222 Fix no-return compile error in binop-null-test
 - PR #4242 Fix for rolling tests CI failure
 - PR #4245 Fix race condition in parquet reader
+- PR #4253 Fix dictionary decode and set_keys with column offset
 - PR #4258 Fix dask-cudf losing index name in `reset_index`
 - PR #4268 Fix java build for hash aggregate
 - PR #4275 Fix bug in searching nullable values in non-nullable search space in `upper_bound`
@@ -199,6 +201,7 @@
 - PR #4302 Fix `_is_local_filesystem` check
 - PR #4303 Parquet reader: fix empty columns missing from table
 - PR #4115 Serialize an empty column table with non zero rows
+- PR #4327 Preemptive dispatch fix for changes in dask#5973
 
 
 # cuDF 0.12.0 (04 Feb 2020)
