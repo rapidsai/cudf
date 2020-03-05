@@ -146,6 +146,33 @@ std::unique_ptr<table> rank(
                       sorted_max_rank, sorted_max_rank+input_col.size(),
                       sorted_order_view.begin<size_type>(), rank_data);
     } break;
+    case rank_method::AVERAGE: {
+      using MinCount = thrust::tuple<size_type, size_type>;
+      rmm::device_vector<MinCount> min_count(input_col.size());
+      thrust::reduce_by_key(
+          rmm::exec_policy(stream)->on(stream), dense_rank_sorted.begin(),
+          dense_rank_sorted.end(),
+          thrust::make_zip_iterator(
+              thrust::make_tuple(thrust::make_counting_iterator<size_type>(1),
+                                 thrust::make_constant_iterator<size_type>(1))),
+          thrust::make_discard_iterator(), min_count.begin(),
+          thrust::equal_to<double>{}, [] __device__(auto i, auto j) {
+            return MinCount{std::min(thrust::get<0>(i), thrust::get<0>(j)),
+                            thrust::get<1>(i) + thrust::get<1>(j)};
+          });
+      auto avgit = thrust::make_transform_iterator(
+          min_count.begin(),
+          [] __device__(auto i) { // min+(count-1)/2
+            return static_cast<double>(thrust::get<0>(i)) +
+                   (static_cast<double>(thrust::get<1>(i)) - 1) / 2.0;
+          });
+      auto sorted_mean_rank = thrust::make_transform_iterator(
+          dense_rank_sorted.begin(),
+          [avgit] __device__(auto i) { return avgit[i - 1]; });
+      thrust::scatter(rmm::exec_policy(stream)->on(stream), sorted_mean_rank,
+                      sorted_mean_rank + input_col.size(),
+                      sorted_order_view.begin<size_type>(), rank_data);
+    } break;
     default:
       CUDF_FAIL("Unexpected rank_method for rank()");
     }
