@@ -356,28 +356,6 @@ class NumericalColumn(column.ColumnBase):
             raise ValueError("value not found")
         return found
 
-    @property
-    def is_monotonic_increasing(self):
-        if not hasattr(self, "_is_monotonic_increasing"):
-            if self.nullable and self.has_nulls:
-                self._is_monotonic_increasing = False
-            else:
-                self._is_monotonic_increasing = libcudf.issorted.issorted(
-                    [self]
-                )
-        return self._is_monotonic_increasing
-
-    @property
-    def is_monotonic_decreasing(self):
-        if not hasattr(self, "_is_monotonic_decreasing"):
-            if self.nullable and self.has_nulls:
-                self._is_monotonic_decreasing = False
-            else:
-                self._is_monotonic_decreasing = libcudf.issorted.issorted(
-                    [self], [1]
-                )
-        return self._is_monotonic_decreasing
-
     def can_cast_safely(self, to_dtype):
         """
         Returns true if all the values in self can be
