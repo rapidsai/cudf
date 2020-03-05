@@ -3,14 +3,17 @@
 from libcpp.memory cimport unique_ptr
 from cudf._libxx.move cimport move
 from cudf._libxx.cpp.column.column_view cimport column_view
+from cudf._libxx.cpp.table.table_view cimport table_view
 from cudf._libxx.cpp.scalar.scalar cimport string_scalar
 from cudf._libxx.cpp.types cimport size_type
 from cudf._libxx.column cimport Column
+from libcpp.memory cimport unique_ptr
+from cudf._libxx.cpp.column.column cimport column
 from cudf._libxx.scalar cimport Scalar
 from libcpp.string cimport string
 from cudf._libxx.table cimport Table
 
-from cudf._libxx.strings.combine cimport (
+from cudf._libxx.cpp.strings.combine cimport (
     concatenate as cpp_concatenate,
     join_strings as cpp_join_strings
 )

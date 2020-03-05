@@ -9,11 +9,12 @@ from cudf._libxx.column cimport Column
 from cudf._libxx.table cimport Table
 
 from cudf._libxx.cpp.table.table cimport table
+from cudf._libxx.cpp.column.column cimport column
 from cudf._libxx.cpp.table.table_view cimport table_view
 from cudf._libxx.scalar cimport Scalar
 from libcpp.string cimport string
 
-from cudf._libxx.strings.split.split cimport (
+from cudf._libxx.cpp.strings.split.split cimport (
     split as cpp_split,
     rsplit as cpp_rsplit,
 )

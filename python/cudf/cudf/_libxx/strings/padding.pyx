@@ -8,8 +8,9 @@ from cudf._libxx.cpp.types cimport size_type
 from cudf._libxx.column cimport Column
 from cudf._libxx.scalar cimport Scalar
 from libcpp.string cimport string
+from cudf._libxx.cpp.column.column cimport column
 
-from cudf._libxx.strings.padding cimport (
+from cudf._libxx.cpp.strings.padding cimport (
     pad as cpp_pad,
     zfill as cpp_zfill,
     pad_side as pad_side

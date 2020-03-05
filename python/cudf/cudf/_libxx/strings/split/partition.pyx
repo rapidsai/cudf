@@ -8,12 +8,13 @@ from cudf._libxx.cpp.types cimport size_type
 from cudf._libxx.column cimport Column
 from cudf._libxx.table cimport Table
 
+from cudf._libxx.cpp.column.column cimport column
 from cudf._libxx.cpp.table.table cimport table
 from cudf._libxx.cpp.table.table_view cimport table_view
 from cudf._libxx.scalar cimport Scalar
 from libcpp.string cimport string
 
-from cudf._libxx.strings.split.partition cimport (
+from cudf._libxx.cpp.strings.split.partition cimport (
     partition as cpp_partition,
     rpartition as cpp_rpartition,
 )
