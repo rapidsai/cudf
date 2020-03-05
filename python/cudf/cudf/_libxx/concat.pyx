@@ -52,12 +52,14 @@ cpdef concat_tables(tables):
 cdef vector[column_view] make_column_views(columns):
     cdef vector[column_view] views
     views.reserve(len(columns))
-    [views.push_back((<Column> col).view()) for col in columns]
+    for col in columns:
+        views.push_back((<Column> col).view())
     return views
 
 
 cdef vector[table_view] make_table_views(tables):
     cdef vector[table_view] views
     views.reserve(len(tables))
-    [views.push_back((<Table> tbl).data_view()) for tbl in tables]
+    for tbl in tables:
+        views.push_back((<Table> tbl).data_view())
     return views
