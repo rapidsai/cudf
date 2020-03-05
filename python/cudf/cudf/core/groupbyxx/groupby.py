@@ -135,11 +135,11 @@ class DataFrameGroupBy(GroupBy):
 
 
 class SeriesGroupBy(GroupBy):
-    def agg(self, aggs):
-        result = super().agg(aggs)
+    def agg(self, func):
+        result = super().agg(func)
 
         # downcast the result to a Series:
-        if result.shape[1] == 1 and not pd.api.types.is_list_like(aggs):
+        if result.shape[1] == 1 and not pd.api.types.is_list_like(func):
             return result.iloc[:, 0]
         return result
 
