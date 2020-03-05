@@ -141,6 +141,21 @@ def test_set_index(nelem, divisions):
         dd.assert_eq(expect, got, check_index=False, check_divisions=False)
 
 
+@pytest.mark.parametrize("by", ["a", "b"])
+@pytest.mark.parametrize("nelem", [10, 500])
+@pytest.mark.parametrize("nparts", [1, 10])
+def test_set_index_quantile(nelem, nparts, by):
+    df = cudf.DataFrame()
+    df["a"] = np.ascontiguousarray(np.arange(nelem)[::-1])
+    df["b"] = np.random.choice(cudf.datasets.names, size=nelem)
+    ddf = dd.from_pandas(df, npartitions=nparts)
+
+    with dask.config.set(scheduler="single-threaded"):
+        got = ddf.set_index(by, divisions="quantile")
+    expect = df.sort_values(by=by).set_index(by)
+    dd.assert_eq(got, expect)
+
+
 def assert_frame_equal_by_index_group(expect, got):
     assert sorted(expect.columns) == sorted(got.columns)
     assert sorted(set(got.index)) == sorted(set(expect.index))
