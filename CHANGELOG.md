@@ -33,6 +33,7 @@
 - PR #4240 Add groupby::groups()
 - PR #4291 Add Java callback support for RMM events
 - PR #4298 Port orc.pyx to libcudf++
+- PR #4344 Port concat.pyx to libcudf++
 
 ## Improvements
 
