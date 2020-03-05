@@ -124,11 +124,13 @@
 - PR #4261 libxx Cython reorganization
 - PR #4274 Support negative position values in slice_strings
 - PR #4282 Porting nvstrings conversion functions from new libcudf++ to Python/Cython
+- PR #4299 Convert cudf::shift to column-based api
 - PR #4306 Use libcudf++ `unary.pyx` cast instead of legacy cast
 - PR #4295 Port reduce.pyx to libcudf++ API
 - PR #4305 Move gpuarrow.pyx and related libarrow_cuda files into `_libxx`
 - PR #4244 Port nvstrings Substring Gather/Scatter functions to cuDF Python/Cython
 - PR #4280 Port nvstrings Numeric Handling functions to cuDF Python/Cython
+- PR #4166 Port `is_sorted.pyx` to use libcudf++ APIs
 
 ## Bug Fixes
 
