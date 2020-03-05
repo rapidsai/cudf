@@ -28,6 +28,7 @@ from cudf._libxx.strings.replace import (
     slice_replace as cpp_slice_replace,
 )
 from cudf._libxx.strings.substring import slice_from as cpp_slice_from
+from cudf._libxx.strings.wrap import wrap as cpp_wrap
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.utils import utils
@@ -688,6 +689,63 @@ class StringMethods(object):
         return self._return_or_inplace(
             self._column.nvstrings.split(delimiter=pat, n=n), **kwargs
         )
+
+    def wrap(self, width, **kwargs):
+        """
+        Wrap long strings in the Series/Index to be formatted in
+        paragraphs with length less than a given width.
+
+        Parameters
+        ----------
+        width : int
+            Maximum line width.
+
+        Returns
+        -------
+        Series or Index
+
+        Notes
+        -----
+        The parameters `expand_tabsbool`, `replace_whitespace`,
+        `drop_whitespace`, `break_long_words`, `break_on_hyphens`,
+        `expand_tabsbool` are not yet supported and will raise a
+        NotImplementedError if they are set to any value.
+        """
+        if not pd.api.types.is_integer(width):
+            msg = f"width must be of integer type, not {type(width).__name__}"
+            raise TypeError(msg)
+
+        if "expand_tabsbool" in kwargs:
+            raise NotImplementedError(
+                "`expand_tabsbool` parameter is not supported"
+            )
+
+        if "replace_whitespace" in kwargs:
+            raise NotImplementedError(
+                "`replace_whitespace` parameter is not supported"
+            )
+
+        if "drop_whitespace" in kwargs:
+            raise NotImplementedError(
+                "`drop_whitespace` parameter is not supported"
+            )
+
+        if "break_long_words" in kwargs:
+            raise NotImplementedError(
+                "`break_long_words` parameter is not supported"
+            )
+
+        if "break_on_hyphens" in kwargs:
+            raise NotImplementedError(
+                "`break_on_hyphens` parameter is not supported"
+            )
+
+        if "expand_tabsbool" in kwargs:
+            raise NotImplementedError(
+                "`expand_tabsbool` parameter is not supported"
+            )
+
+        return self._return_or_inplace(cpp_wrap(self._column, width), **kwargs)
 
 
 class StringColumn(column.ColumnBase):
