@@ -1,5 +1,7 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+from libc.stdint cimport uint32_t
+
 from cudf._libxx.cpp.nvtx cimport (
     range_push as cpp_range_push,
     range_push_hex as cpp_range_push_hex,
@@ -9,7 +11,7 @@ from cudf._libxx.cpp.nvtx cimport (
 )
 
 
-def range_push(name, color='green'):
+def range_push(object name, object color='green'):
     """
     Demarcate the beginning of a user-defined NVTX range.
 
@@ -21,35 +23,46 @@ def range_push(name, color='green'):
         The color to use for the range.
         Can be named color or hex RGB string.
     """
-    name = name.encode('ascii')
+    cdef const char* _name = name
+    cdef uint32_t _color = color
     try:
-        color = int(color, 16)
-        result = cpp_range_push_hex(name, color)
+        _color = int(_color, 16)
+        with nogil:
+            cpp_range_push_hex(_name, _color)
     except ValueError:
         if color == 'green':
-            result = cpp_range_push(name, nvtx_color.GREEN)
+            with nogil:
+                cpp_range_push(_name, nvtx_color.GREEN)
         elif color == 'blue':
-            result = cpp_range_push(name, nvtx_color.BLUE)
+            with nogil:
+                cpp_range_push(_name, nvtx_color.BLUE)
         elif color == 'yellow':
-            result = cpp_range_push(name, nvtx_color.YELLOW)
+            with nogil:
+                cpp_range_push(_name, nvtx_color.YELLOW)
         elif color == 'purple':
-            result = cpp_range_push(name, nvtx_color.PURPLE)
+            with nogil:
+                cpp_range_push(_name, nvtx_color.PURPLE)
         elif color == 'cyan':
-            result = cpp_range_push(name, nvtx_color.CYAN)
+            with nogil:
+                cpp_range_push(_name, nvtx_color.CYAN)
         elif color == 'red':
-            result = cpp_range_push(name, nvtx_color.RED)
+            with nogil:
+                cpp_range_push(_name, nvtx_color.RED)
         elif color == 'white':
-            result = cpp_range_push(name, nvtx_color.WHITE)
+            with nogil:
+                cpp_range_push(_name, nvtx_color.WHITE)
         elif color == 'darkgreen':
-            result = cpp_range_push(name, nvtx_color.DARK_GREEN)
+            with nogil:
+                cpp_range_push(_name, nvtx_color.DARK_GREEN)
         elif color == 'orange':
-            result = cpp_range_push(name, nvtx_color.ORANGE)
-    print(result)
+            with nogil:
+                cpp_range_push(_name, nvtx_color.ORANGE)
+
 
 
 def range_pop():
     """
     Demarcate the end of a user-defined NVTX range.
     """
-    result = cpp_range_pop()
-    print(result)
+    with nogil:
+        cpp_range_pop()
