@@ -32,20 +32,32 @@ class GroupBy(object):
         for i, name in enumerate(group_names):
             yield name, grouped_values[offsets[i] : offsets[i + 1]]
 
-    def agg(self, aggs):
-        normalized_aggs = self._normalize_aggs(aggs)
+    def agg(self, func):
+        """
+        Apply aggregation(s) to the groups.
+
+        Parameters
+        ----------
+        func : str, callable, list or dict
+
+        Returns
+        -------
+        A Series or DataFrame containing the combined results of the
+        aggregation.
+        """
+        normalized_aggs = self._normalize_aggs(func)
 
         result = self._groupby.aggregate(self.obj, normalized_aggs)
         result = cudf.DataFrame._from_table(result).sort_index()
 
-        if not _is_multi_agg(aggs):
+        if not _is_multi_agg(func):
             try:
                 # drop the last level
-                columns = result.columns.droplevel(-1)
-                result.columns = columns
+                result.columns = result.columns.droplevel(-1)
             except IndexError:
-                # Pandas raises an index error if we are left
-                # with an all-nan MultiIndex
+                # Pandas raises an IndexError if we are left
+                # with an all-nan MultiIndex when dropping
+                # the last level
                 if result.shape[1] == 1:
                     result.columns = [None]
                 else:
@@ -70,7 +82,8 @@ class GroupBy(object):
     def _agg_func_name_with_args(self, func_name, *args, **kwargs):
         """
         Aggregate given an aggregate function name
-        and arguments to the function.
+        and arguments to the function, e.g.,
+        `_agg_func_name_with_args("quantile", 0.5)`
         """
 
         def func(x):
@@ -81,7 +94,7 @@ class GroupBy(object):
 
     def _normalize_aggs(self, aggs):
         """
-        Normalize agg to a dict mapping column names
+        Normalize aggs to a dict mapping column names
         to a list of aggregations.
         """
         if not isinstance(aggs, collections.abc.Mapping):
@@ -120,6 +133,8 @@ class DataFrameGroupBy(GroupBy):
 class SeriesGroupBy(GroupBy):
     def agg(self, aggs):
         result = super().agg(aggs)
+
+        # downcast the result to a Series:
         if result.shape[1] == 1 and not pd.api.types.is_list_like(aggs):
             return result.iloc[:, 0]
         return result
@@ -138,6 +153,11 @@ class Grouper(object):
 class _Grouping(object):
     def __init__(self, obj, by=None, level=None):
         """
+        An object representing a grouping.
+
+        * _Grouping.keys is a list of grouping (key) columns
+        * _Grouping.names is a list of names corresponding to each column
+
         Parameters
         ----------
         obj : Object on which the GroupBy is performed
@@ -155,6 +175,9 @@ class _Grouping(object):
         self.obj = obj
         self._key_columns = []
         self.names = []
+
+        # Need to keep track of named key columns
+        # to support `as_index=False` correctly
         self._named_columns = []
 
         if level is not None:
@@ -240,6 +263,10 @@ class _Grouping(object):
 
 
 def _is_multi_agg(aggs):
+    """
+    Returns True if more than one aggregation is performed
+    on any of the columns as specified in `aggs`.
+    """
     if isinstance(aggs, collections.abc.Mapping):
         return any(pd.api.types.is_list_like(agg) for agg in aggs.values())
     if pd.api.types.is_list_like(aggs):
