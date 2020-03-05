@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2020, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from cudf._libxx.move cimport move

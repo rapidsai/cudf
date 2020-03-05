@@ -28,7 +28,7 @@ namespace strings
  * @brief Pad types for the pad method specify where the pad
  * character should be placed.
  */
-enum pad_side {
+enum class pad_side {
     LEFT,   ///< Add padding to the left.
     RIGHT,  ///< Add padding to the right.
     BOTH    ///< Add padding equally to the right and left.

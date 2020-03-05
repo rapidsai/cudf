@@ -9,9 +9,9 @@ from cudf._libxx.cpp.column.column cimport column
 
 cdef extern from "cudf/strings/padding.hpp" namespace "cudf::strings" nogil:
     ctypedef enum pad_side:
-        LEFT
-        RIGHT
-        BOTH
+        LEFT 'cudf::strings::pad_side::LEFT'
+        RIGHT 'cudf::strings::pad_side::RIGHT'
+        BOTH 'cudf::strings::pad_side::BOTH'
 
     cdef unique_ptr[column] pad(
         column_view source_strings,
