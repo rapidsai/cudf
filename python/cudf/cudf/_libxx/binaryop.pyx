@@ -4,6 +4,7 @@ import numpy as np
 from enum import IntEnum
 
 from libcpp.memory cimport unique_ptr
+from libcpp.string cimport string
 
 from cudf._libxx.binaryop cimport underlying_type_t_binary_operator
 from cudf._libxx.column cimport Column
@@ -181,3 +182,32 @@ def binaryop(lhs, rhs, op, dtype):
                 c_op,
                 c_dtype
             )
+
+def binaryop_udf(Column lhs, Column rhs, udf_ptx, dtype):
+    """
+    Apply a user-defined binary operator (a UDF) defined in `udf_ptx` on
+    the two input columns `lhs` and `rhs`. The output type of the UDF
+    has to be specified in `dtype`, a numpy data type.
+    Currently ONLY int32, int64, float32 and float64 are supported.
+    """
+    cdef column_view c_lhs = lhs.view()
+    cdef column_view c_rhs = rhs.view()
+
+    cdef type_id tid = np_to_cudf_types[np.dtype(dtype)]
+    cdef data_type c_dtype = data_type(tid)
+
+    cdef string cpp_str = udf_ptx.encode("UTF-8")
+
+    cdef unique_ptr[column] c_result
+
+    with nogil:
+        c_result = move(
+            cpp_binaryop.binary_operation(
+                c_lhs,
+                c_rhs,
+                cpp_str,
+                c_dtype
+            )
+        )
+
+    return Column.from_unique_ptr(move(c_result))

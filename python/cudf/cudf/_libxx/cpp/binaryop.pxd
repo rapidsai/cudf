@@ -1,6 +1,7 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
+from libcpp.string cimport string
 
 from cudf._libxx.cpp.column.column cimport column
 from cudf._libxx.cpp.scalar.scalar cimport scalar
@@ -40,18 +41,25 @@ cdef extern from "cudf/binaryop.hpp" namespace "cudf::experimental" nogil:
         binary_operator op,
         data_type output_type
     ) except +
-    
+
     cdef unique_ptr[column] binary_operation (
         const column_view& lhs,
         const scalar& rhs,
         binary_operator op,
         data_type output_type
     ) except +
-    
+
     cdef unique_ptr[column] binary_operation (
         const column_view& lhs,
         const column_view& rhs,
         binary_operator op,
+        data_type output_type
+    ) except +
+
+    cdef unique_ptr[column] binary_operation (
+        const column_view& lhs,
+        const column_view& rhs,
+        const string& op,
         data_type output_type
     ) except +
     
