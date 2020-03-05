@@ -1,13 +1,12 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-# cython: profile=False
-# distutils: language = c++
-# cython: embedsignature = True
-# cython: language_level = 3
+from cudf._libxx.cpp.nvtx cimport (
+    range_push as cpp_range_push,
+    range_push_hex as cpp_range_push_hex,
+    range_pop as cpp_range_pop,
 
-from cudf._libxx.lib cimport *
-from cudf._libxx.lib import *
-
+    _color as nvtx_color,
+)
 
 def range_push(name, color='green'):
     """
@@ -22,17 +21,35 @@ def range_push(name, color='green'):
         Can be named color or hex RGB string.
     """
     name = name.encode('ascii')
+    
+
     try:
         color = int(color, 16)
-        result = range_push_hex(name, color)
+        result = cpp_range_push_hex(name, color)
     except ValueError:
-        result = range_push(name, color)
-    check_gdf_error(result)
-
+        if color == 'green':
+            result = cpp_range_push(name, nvtx_color.GREEN)
+        elif color == 'blue':
+            result = cpp_range_push(name, nvtx_color.BLUE)
+        elif color == 'yellow':
+            result = cpp_range_push(name, nvtx_color.YELLOW)
+        elif color == 'purple':
+            result = cpp_range_push(name, nvtx_color.PURPLE)
+        elif color == 'cyan':
+            result = cpp_range_push(name, nvtx_color.CYAN)
+        elif color == 'red':
+            result = cpp_range_push(name, nvtx_color.RED)
+        elif color == 'white':
+            result = cpp_range_push(name, nvtx_color.WHITE)
+        elif color == 'darkgreen':
+            result = cpp_range_push(name, nvtx_color.DARK_GREEN)
+        elif color == 'orange':
+            result = cpp_range_push(name, nvtx_color.ORANGE)
+    print(result)
 
 def range_pop():
     """
     Demarcate the end of a user-defined NVTX range.
     """
-    result = range_pop()
-    check_gdf_error(result)
+    result = cpp_range_pop()
+    print(result)

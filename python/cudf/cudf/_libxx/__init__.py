@@ -24,6 +24,7 @@ from . import (
     table,
     transpose,
     unary,
+    nvtx,
 )
 
 MAX_COLUMN_SIZE = np.iinfo(np.int32).max
