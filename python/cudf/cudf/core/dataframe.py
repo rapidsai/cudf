@@ -2581,7 +2581,7 @@ class DataFrame(Frame):
             from cudf.core.groupbyxx.groupby import DataFrameGroupBy
 
             return DataFrameGroupBy(
-                self, by=by, level=level, as_index=as_index
+                self, by=by, level=level, as_index=as_index, dropna=dropna
             )
 
     @copy_docstring(Rolling)

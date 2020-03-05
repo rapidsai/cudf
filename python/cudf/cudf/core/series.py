@@ -2454,7 +2454,7 @@ class Series(Frame):
         else:
             from cudf.core.groupbyxx.groupby import SeriesGroupBy
 
-            return SeriesGroupBy(self, by=by, level=level)
+            return SeriesGroupBy(self, by=by, level=level, dropna=dropna)
 
     @copy_docstring(Rolling)
     def rolling(

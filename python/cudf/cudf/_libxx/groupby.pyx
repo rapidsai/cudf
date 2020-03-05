@@ -12,6 +12,7 @@ from cudf._libxx.move cimport move
 from cudf._libxx.aggregation cimport make_aggregation, Aggregation
 
 from cudf._libxx.cpp.table.table cimport table
+cimport cudf._libxx.cpp.types as libcudf_types
 cimport cudf._libxx.cpp.groupby as libcudf_groupby
 cimport cudf._libxx.cpp.aggregation as libcudf_aggregation
 
@@ -20,18 +21,27 @@ cdef class GroupBy:
     cdef unique_ptr[libcudf_groupby.groupby] c_obj
     cdef dict __dict__
 
-    def __cinit__(self, Table keys, *args, **kwargs):
+    def __cinit__(self, Table keys, dropna=True, *args, **kwargs):
         """
         keys : a GroupByKeys object
         """
+        cdef libcudf_types.include_nulls c_include_nulls
+
+        if dropna:
+            c_include_nulls = libcudf_types.include_nulls.NO
+        else:
+            c_include_nulls = libcudf_types.include_nulls.YES
+
         self.c_obj.reset(
             new libcudf_groupby.groupby(
-                keys.view()
+                keys.view(),
+                c_include_nulls
             )
         )
 
-    def __init__(self, keys):
+    def __init__(self, keys, dropna=True):
         self.keys = keys
+        self.dropna = True
 
     def groups(self, Table values):
         c_groups = move(self.c_obj.get()[0].get_groups(values.view()))
@@ -114,8 +124,7 @@ cdef class GroupBy:
         return result
 
 _STRING_AGGS = [
-    "count_valid",
-    "count_all",
+    "count",
     "max",
     "min",
     "nth_element",

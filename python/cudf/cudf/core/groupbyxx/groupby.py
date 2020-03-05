@@ -8,14 +8,17 @@ import cudf._libxx.groupby as libgroupby
 
 
 class GroupBy(object):
-    def __init__(self, obj, by=None, level=None, as_index=True):
+    def __init__(self, obj, by=None, level=None, as_index=True, dropna=True):
         self.obj = obj
         self.as_index = as_index
+        self._dropna = dropna
+
         if isinstance(by, _Grouping):
             self.grouping = by
         else:
             self.grouping = _Grouping(obj, by, level)
-        self._groupby = libgroupby.GroupBy(self.grouping.keys)
+
+        self._groupby = libgroupby.GroupBy(self.grouping.keys, dropna=dropna)
 
     def __getattr__(self, key):
         if key != "_agg_func_with_args":
@@ -31,6 +34,17 @@ class GroupBy(object):
 
         for i, name in enumerate(group_names):
             yield name, grouped_values[offsets[i] : offsets[i + 1]]
+
+    def size(self):
+        return (
+            cudf.Series(
+                cudf.core.column.column_empty(
+                    len(self.obj), "int8", masked=False
+                )
+            )
+            .groupby(self.grouping)
+            .agg("size")
+        )
 
     def agg(self, func):
         """
@@ -127,7 +141,7 @@ class GroupBy(object):
 class DataFrameGroupBy(GroupBy):
     def __getattr__(self, key):
         if key in self.obj:
-            return self.obj[key].groupby(self.grouping)
+            return self.obj[key].groupby(self.grouping, dropna=self._dropna)
         return super().__getattr__(key)
 
     def __getitem__(self, key):
@@ -143,7 +157,10 @@ class SeriesGroupBy(GroupBy):
             return result.iloc[:, 0]
 
         # drop the first level if we have a multiindex
-        if isinstance(result.columns, pd.MultiIndex) and result.columns.nlevels > 1:
+        if (
+            isinstance(result.columns, pd.MultiIndex)
+            and result.columns.nlevels > 1
+        ):
             result.columns = result.columns.droplevel(0)
 
         return result

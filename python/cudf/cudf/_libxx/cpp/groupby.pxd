@@ -8,7 +8,7 @@ from cudf._libxx.cpp.table.table_view cimport table_view
 from cudf._libxx.cpp.column.column_view cimport column_view
 from cudf._libxx.cpp.column.column cimport column
 from cudf._libxx.cpp.aggregation cimport aggregation
-from cudf._libxx.cpp.types cimport size_type, order, null_order
+from cudf._libxx.cpp.types cimport size_type, order, null_order, include_nulls
 
 
 cdef extern from "cudf/groupby.hpp" \
@@ -30,24 +30,24 @@ cdef extern from "cudf/groupby.hpp" \
 
     cdef cppclass groupby:
         groupby(table_view keys) except +
-        groupby(table_view keys, bool ignore_null_keys) except +
+        groupby(table_view keys, include_nulls include_null_keys) except +
 
         groupby(
             table_view keys,
-            bool ignore_null_keys,
+            include_nulls include_null_keys,
             bool keys_are_sorted,
         ) except +
 
         groupby(
             table_view keys,
-            bool ignore_null_keys,
+            include_nulls include_null_keys,
             bool keys_are_sorted,
             vector[order] column_order,
         ) except +
 
         groupby(
             table_view keys,
-            bool ignore_null_keys,
+            include_nulls include_null_keys,
             bool keys_are_sorted,
             vector[order] column_order,
             vector[null_order] null_precedence

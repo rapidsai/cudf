@@ -4,7 +4,7 @@ from libcpp.string cimport string
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 
-from cudf._libxx.cpp.types cimport size_type, data_type, interpolation
+from cudf._libxx.cpp.types cimport size_type, data_type, interpolation, include_nulls
 
 
 cdef extern from "cudf/aggregation.hpp" namespace "cudf::experimental" nogil:
@@ -46,6 +46,8 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf::experimental" nogil:
     cdef unique_ptr[aggregation] make_max_aggregation() except +
 
     cdef unique_ptr[aggregation] make_count_aggregation() except +
+
+    cdef unique_ptr[aggregation] make_count_aggregation(include_nulls) except +
 
     cdef unique_ptr[aggregation] make_any_aggregation() except +
 

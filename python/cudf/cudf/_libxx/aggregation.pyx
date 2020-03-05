@@ -10,13 +10,14 @@ from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 from cudf.utils import cudautils
 
-from cudf._libxx.types import np_to_cudf_types, cudf_to_np_types
+from cudf._libxx.types import np_to_cudf_types, cudf_to_np_types, IncludeNulls
 from cudf._libxx.move cimport move
 
 cimport cudf._libxx.cpp.types as libcudf_types
 cimport cudf._libxx.cpp.aggregation as libcudf_aggregation
 from cudf._libxx.types cimport (
-    underlying_type_t_interpolation
+    underlying_type_t_interpolation,
+    underlying_type_t_include_nulls
 )
 from cudf._libxx.types import Interpolation
 
@@ -27,6 +28,7 @@ class AggregationKind(Enum):
     MIN = libcudf_aggregation.aggregation.Kind.MIN
     MAX = libcudf_aggregation.aggregation.Kind.MAX
     COUNT = libcudf_aggregation.aggregation.Kind.COUNT_VALID
+    SIZE = libcudf_aggregation.aggregation.Kind.COUNT_ALL
     ANY = libcudf_aggregation.aggregation.Kind.ANY
     ALL = libcudf_aggregation.aggregation.Kind.ALL
     SUM_OF_SQUARES = libcudf_aggregation.aggregation.Kind.SUM_OF_SQUARES
@@ -98,6 +100,14 @@ cdef class _AggregationFactory:
         return agg
 
     @classmethod
+    def size(cls, *args, **kwargs):
+        cdef Aggregation agg = Aggregation.__new__(Aggregation)
+        agg.c_obj = move(libcudf_aggregation.make_count_aggregation(
+            <libcudf_types.include_nulls><underlying_type_t_include_nulls>(IncludeNulls.YES)
+        ))
+        return agg
+
+    @classmethod
     def nunique(cls, *args, **kwargs):
         cdef Aggregation agg = Aggregation.__new__(Aggregation)
         agg.c_obj = move(libcudf_aggregation.make_nunique_aggregation())
@@ -128,13 +138,13 @@ cdef class _AggregationFactory:
         return agg
 
     @classmethod
-    def var(cls, ddof, *args, **kwargs):
+    def var(cls, ddof=1, *args, **kwargs):
         cdef Aggregation agg = Aggregation.__new__(Aggregation)
         agg.c_obj = move(libcudf_aggregation.make_variance_aggregation(ddof))
         return agg
 
     @classmethod
-    def std(cls, ddof, *args, **kwargs):
+    def std(cls, ddof=1, *args, **kwargs):
         cdef Aggregation agg = Aggregation.__new__(Aggregation)
         agg.c_obj = move(libcudf_aggregation.make_std_aggregation(ddof))
         return agg
