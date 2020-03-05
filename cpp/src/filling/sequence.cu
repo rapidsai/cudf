@@ -35,8 +35,8 @@ namespace {
 // __T289 link error.  This seems to be related to lambda usage within functions using SFINAE.
 template<typename T>
 struct tabulator {
-   cudf::numeric_scalar_device_view<T> n_init;
-   cudf::numeric_scalar_device_view<T> n_step;
+   cudf::numeric_scalar_device_view<T> const n_init;
+   cudf::numeric_scalar_device_view<T> const n_step;
 
    T __device__ operator()(cudf::size_type i){
       return n_init.value() + (i * n_step.value());
