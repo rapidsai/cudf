@@ -1,3 +1,7 @@
+from collections import defaultdict
+
+import numpy as np
+
 from libcpp.pair cimport pair
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
@@ -5,7 +9,7 @@ from libcpp.vector cimport vector
 from cudf._libxx.column cimport Column
 from cudf._libxx.table cimport Table
 from cudf._libxx.move cimport move
-from cudf._libxx.aggregation cimport make_aggregation
+from cudf._libxx.aggregation cimport make_aggregation, Aggregation
 
 from cudf._libxx.cpp.table.table cimport table
 cimport cudf._libxx.cpp.groupby as libcudf_groupby
@@ -64,10 +68,10 @@ cdef class GroupBy:
         Table of aggregated values
         """
         from cudf.core.column_accessor import ColumnAccessor
-
-
         cdef vector[libcudf_groupby.aggregation_request] c_agg_requests
         cdef Column col
+
+        aggregations = _drop_unsupported_aggs(values, aggregations)
 
         for i, (col_name, aggs) in enumerate(aggregations.items()):
             col = values._data[col_name]
@@ -108,3 +112,36 @@ cdef class GroupBy:
 
         result = Table(data=result_data, index=grouped_keys)
         return result
+
+_STRING_AGGS = [
+    "count_valid",
+    "count_all",
+    "max",
+    "min",
+    "nth_element",
+    "nunique"
+]
+
+def _drop_unsupported_aggs(Table values, aggs):
+    """
+    Normalize aggs to a dictionary mapping
+    column names to a list of _Aggregation objects.
+
+    Drop any aggregations that are not supported.
+    """
+    from cudf.utils.dtypes import (
+        is_categorical_dtype,
+        is_string_dtype
+    )
+    result = aggs.copy()
+
+    for col_name in aggs:
+        for i, agg_name in enumerate(aggs[col_name]):
+            if (
+                    is_string_dtype(values._data[col_name].dtype)
+                    or is_categorical_dtype(values._data[col_name].dtype)
+            ):
+                if Aggregation(agg_name).kind not in _STRING_AGGS:
+                    del result[col_name][i]
+
+    return result
