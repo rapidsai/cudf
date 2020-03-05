@@ -21,7 +21,9 @@ from cudf._libxx.strings.char_types import (
     is_alpha as cpp_is_alpha,
     is_decimal as cpp_is_decimal,
     is_digit as cpp_is_digit,
+    is_lower as cpp_is_lower,
     is_numeric as cpp_is_numeric,
+    is_upper as cpp_is_upper,
 )
 from cudf._libxx.strings.replace import (
     insert as cpp_string_insert,
@@ -532,6 +534,46 @@ class StringMethods(object):
 
         """
         return self._return_or_inplace(cpp_is_numeric(self._column))
+
+    def isupper(self, **kwargs):
+        """
+        Returns a Series/Index of boolean values with True for strings
+        that contain only upper-case characters.
+
+        Returns
+        -------
+        Series/Index of bool dtype
+
+        Notes
+        -----
+        Results are incompatible with standard python string logic. Use caution
+        when operating on data which contains non-alphabetical characters.
+        """
+        warnings.warn(
+            "isupper does not conform to standard python string logic"
+        )
+
+        return self._return_or_inplace(cpp_is_upper(self._column))
+
+    def islower(self, **kwargs):
+        """
+        Returns a Series/Index of boolean values with True for strings
+        that contain only lower-case characters.
+
+        Returns
+        -------
+        Series/Index of bool dtype
+
+        Notes
+        -----
+        Results are incompatible with standard python string logic. Use caution
+        when operating on data which contains non-alphabetical characters.
+        """
+        warnings.warn(
+            "islower does not conform to standard python string logic"
+        )
+
+        return self._return_or_inplace(cpp_is_lower(self._column))
 
     def slice_from(self, starts=0, stops=0, **kwargs):
         """
@@ -1122,6 +1164,22 @@ class StringColumn(column.ColumnBase):
         # dtype is irrelevant it is needed to be in sync with
         # the sum method for Numeric Series
         return self.nvstrings.join().to_host()[0]
+
+    def upper(self):
+        return self._return_or_inplace(libcudfxx.case.to_upper(self._column))
+
+    def lower(self):
+        return self._return_or_inplace(libcudfxx.case.to_lower(self._column))
+
+    def capitalize(self):
+        return self._return_or_inplace(
+            libcudfxx.capitalize.capitalize(self._column)
+        )
+
+    def title(self):
+        return self._return_or_inplace(
+            libcudfxx.capitalize.title(self._column)
+        )
 
     @property
     def is_unique(self):

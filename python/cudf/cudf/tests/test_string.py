@@ -13,9 +13,9 @@ from numba import cuda
 import nvstrings
 import rmm
 
-import cudf
 from cudf import concat
 from cudf.core import DataFrame, Series
+from cudf.core.column.string import StringColumn
 from cudf.core.index import StringIndex
 from cudf.tests.utils import assert_eq
 
@@ -962,7 +962,7 @@ def test_string_misc_name(ps_gs, name):
 
 
 def test_string_no_children_properties():
-    empty_col = cudf.core.column.string.StringColumn(children=())
+    empty_col = StringColumn(children=())
     assert empty_col.base_children == ()
     assert empty_col.base_size == 0
 
@@ -1089,38 +1089,86 @@ def test_string_insert():
     )
 
 
-@pytest.mark.parametrize(
-    "data",
+_string_char_types_data = [
+    ["abc", "xyz", "a", "ab", "123", "097"],
+    ["abcdefghij", "0123456789", "9876543210", None, "accénted", ""],
+    ["koala", "fox", "chameleon"],
     [
-        ["abc", "xyz", "a", "ab", "123", "097"],
-        ["abcdefghij", "0123456789", "9876543210", None, "accénted", ""],
-        ["koala", "fox", "chameleon"],
-        [
-            "1234567890",
-            "de",
-            "1.75",
-            "-34",
-            "+9.8",
-            "7¼",
-            "x³",
-            "2³",
-            "12⅝",
-            "",
-            "\t\r\n ",
-        ],
-        ["one", "one1", "1", ""],
-        ["A B", "1.5", "3,000"],
-        ["23", "³", "⅕", ""],
-        [" ", "\t\r\n ", ""],
-        ["leopard", "Golden Eagle", "SNAKE", ""],
+        "1234567890",
+        "de",
+        "1.75",
+        "-34",
+        "+9.8",
+        "7¼",
+        "x³",
+        "2³",
+        "12⅝",
+        "",
+        "\t\r\n ",
     ],
-)
-def test_string_types_check(data):
+    ["one", "one1", "1", ""],
+    ["A B", "1.5", "3,000"],
+    ["23", "³", "⅕", ""],
+    [" ", "\t\r\n ", ""],
+    ["leopard", "Golden Eagle", "SNAKE", ""],
+]
+
+
+@pytest.mark.parametrize("data", _string_char_types_data)
+def test_string_char_types_isdecimal(data):
     gs = Series(data)
     ps = pd.Series(data)
 
     assert_eq(gs.str.isdecimal(), ps.str.isdecimal())
+
+
+@pytest.mark.parametrize("data", _string_char_types_data)
+def test_string_char_types_isalnum(data):
+    gs = Series(data)
+    ps = pd.Series(data)
+
     assert_eq(gs.str.isalnum(), ps.str.isalnum())
+
+
+@pytest.mark.parametrize("data", _string_char_types_data)
+def test_string_char_types_isalpha(data):
+    gs = Series(data)
+    ps = pd.Series(data)
+
     assert_eq(gs.str.isalpha(), ps.str.isalpha())
+
+
+@pytest.mark.parametrize("data", _string_char_types_data)
+def test_string_char_types_isdigit(data):
+    gs = Series(data)
+    ps = pd.Series(data)
+
     assert_eq(gs.str.isdigit(), ps.str.isdigit())
+
+
+@pytest.mark.parametrize("data", _string_char_types_data)
+def test_string_char_types_isnumeric(data):
+    gs = Series(data)
+    ps = pd.Series(data)
+
     assert_eq(gs.str.isnumeric(), ps.str.isnumeric())
+
+
+@pytest.mark.xfail(reason="unresolved libcudf/pandas incompatibility")
+@pytest.mark.parametrize("data", _string_char_types_data)
+def test_string_char_types_isupper(data):
+    gs = Series(data)
+    ps = pd.Series(data)
+
+    # some tests may pass, but for the wrong reasons.
+    assert_eq(gs.str.isupper(), ps.str.isupper())
+
+
+@pytest.mark.xfail(reason="unresolved libcudf/pandas incompatibility")
+@pytest.mark.parametrize("data", _string_char_types_data)
+def test_string_char_types_islower(data):
+    gs = Series(data)
+    ps = pd.Series(data)
+
+    # some tests may pass, but for the wrong reasons.
+    assert_eq(gs.str.islower(), ps.str.islower())
