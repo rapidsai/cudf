@@ -187,6 +187,7 @@ class ColumnBase(Column):
 
         # Find the first non-null column:
         head = objs[0]
+        head_dtype = head.dtype
         for i, obj in enumerate(objs):
             if len(obj) != obj.null_count:
                 head = obj
@@ -213,10 +214,15 @@ class ColumnBase(Column):
             objs = [
                 o.cat()._set_categories(cats, is_unique=True) for o in objs
             ]
+            # Map `objs` into a list of the codes until we port Categorical to
+            # use the libcudf++ Category data type.
+            objs = [o.cat().codes._column for o in objs]
 
-        head = objs[0]
+        # data_dtype will == head_dtype in most cases, except when `objs` is a
+        # list of CategoricalColumns. In that case, it'll be the codes' dtype.
+        data_dtype = objs[0].dtype
         for obj in objs:
-            if not (obj.dtype == head.dtype):
+            if not (obj.dtype == data_dtype):
                 raise ValueError("All series must be of same type")
 
         newsize = sum(map(len, objs))
@@ -240,29 +246,20 @@ class ColumnBase(Column):
 
         # Filter out inputs that have 0 length
         objs = [o for o in objs if len(o) > 0]
-        nulls = any(col.nullable for col in objs)
-
-        if is_categorical_dtype(head):
-            data_dtype = head.codes.dtype
-            data = None
-            children = (column_empty(newsize, dtype=head.codes.dtype),)
-        else:
-            data_dtype = head.dtype
-            data = Buffer.empty(size=newsize * data_dtype.itemsize)
-            children = ()
-
-        # Allocate output mask only if there's nulls in the input objects
-        mask = None
-        if nulls:
-            mask = create_null_mask(newsize, state=MaskState.UNINITIALIZED)
-
-        col = build_column(
-            data=data, dtype=head.dtype, mask=mask, children=children
-        )
 
         # Performance the actual concatenation
         if newsize > 0:
-            col = libcudf.concat._column_concat(objs, col)
+            col = libcudfxx.concat.concat_columns(objs)
+        else:
+            # Use `data_dtype` here, which will either be head_dtype, or
+            # the Categorical codes' dtype. If head_dtype is categorical,
+            # the CategoricalColumn is reconstructed in the next block.
+            col = column_empty(0, data_dtype, masked=True)
+
+        if is_categorical_dtype(head_dtype):
+            col = build_categorical_column(
+                categories=cats, codes=col, mask=col.mask
+            )
 
         return col
 
