@@ -28,7 +28,7 @@ def _shuffle_group_2(df, columns, ignore_index):
     ind = hash_object_dispatch(df[columns], index=False)
     n = ind.max() + 1
     result2 = group_split_dispatch(
-        df, ind.values.view(np.int64), n, ignore_index=ignore_index
+        df, ind.values.view(), n, ignore_index=ignore_index
     )
     return result2, df.iloc[:0]
 
@@ -48,7 +48,7 @@ def _shuffle_group(df, columns, stage, k, npartitions, ignore_index):
     np.floor_divide(c, k ** stage, out=c)
     np.mod(c, k, out=c)
     return group_split_dispatch(
-        df, c.astype(np.int64), k, ignore_index=ignore_index
+        df, c.astype(np.int32), k, ignore_index=ignore_index
     )
 
 
