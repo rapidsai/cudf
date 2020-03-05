@@ -26,7 +26,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <io/parquet/parquet.h>
-#include <io/utilities/data_sink.hpp>
+#include <cudf/io/data_sink.hpp>
 
 #include <memory>
 #include <utility>

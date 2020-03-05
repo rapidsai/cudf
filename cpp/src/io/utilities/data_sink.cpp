@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#include "data_sink.hpp"
 
 #include <fstream>
 
 #include <cudf/cudf.h>
+#include <cudf/io/data_sink.hpp>
 #include <cudf/utilities/error.hpp>
 
 namespace cudf {

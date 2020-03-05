@@ -25,7 +25,7 @@
 #include "parquet_gpu.h"
 
 #include <io/utilities/hostdevice_vector.hpp>
-#include <io/utilities/data_sink.hpp>
+#include <cudf/io/data_sink.hpp>
 
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/io/writers.hpp>
