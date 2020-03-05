@@ -51,7 +51,7 @@ class Frame(libcudfxx.table.Table):
                     new_data, name=labels, index=self.index
                 )
         return self._constructor(
-            new_data, columns=new_data.to_pandas_index(), index=self.index,
+            new_data, columns=new_data.to_pandas_index(), index=self.index
         )
 
     def _get_columns_by_index(self, indices):
@@ -61,7 +61,7 @@ class Frame(libcudfxx.table.Table):
         """
         data = self._data.get_by_index(indices)
         return self._constructor(
-            data, columns=data.to_pandas_index(), index=self.index,
+            data, columns=data.to_pandas_index(), index=self.index
         )
 
     def _gather(self, gather_map):
@@ -327,6 +327,75 @@ class Frame(libcudfxx.table.Table):
         """
         return self.notnull()
 
+    def interleave_columns(self):
+        """
+        Interleave Series columns of a table into a single column.
+
+        Converts the column major table `cols` into a row major column.
+        Parameters
+        ----------
+        cols : input Table containing columns to interleave.
+
+        Example
+        -------
+        >>> df = DataFrame([['A1', 'A2', 'A3'], ['B1', 'B2', 'B3']])
+        >>> df
+        0    [A1, A2, A3]
+        1    [B1, B2, B3]
+        >>> df.interleave_columns()
+        0    A1
+        1    B1
+        2    A2
+        3    B2
+        4    A3
+        5    B3
+
+        Returns
+        -------
+        The interleaved columns as a single column
+        """
+        if ("category" == self.dtypes).any():
+            raise ValueError(
+                "interleave_columns does not support 'category' dtype."
+            )
+
+        result = self._constructor_sliced(
+            libcudfxx.reshape.interleave_columns(self)
+        )
+
+        return result
+
+    def tile(self, count):
+        """
+        Repeats the rows from `self` DataFrame `count` times to form a
+        new DataFrame.
+
+        Parameters
+        ----------
+        self : input Table containing columns to interleave.
+        count : Number of times to tile "rows". Must be non-negative.
+
+        Example
+        -------
+        >>> df  = Dataframe([[8, 4, 7], [5, 2, 3]])
+        >>> count = 2
+        >>> df.tile(df, count)
+           0  1  2
+        0  8  4  7
+        1  5  2  3
+        0  8  4  7
+        1  5  2  3
+
+        Returns
+        -------
+        The table containing the tiled "rows".
+        """
+        result = self.__class__._from_table(
+            libcudfxx.reshape.tile(self, count)
+        )
+        result._copy_categories(self)
+        return result
+
     def searchsorted(
         self, values, side="left", ascending=True, na_position="last"
     ):
@@ -408,7 +477,7 @@ class Frame(libcudfxx.table.Table):
         len_right_on = len(right_on) if right_on is not None else 0
 
         # must actually support the requested merge type
-        if how not in ["left", "inner", "outer"]:
+        if how not in ["left", "inner", "outer", "leftanti", "leftsemi"]:
             raise NotImplementedError(
                 "{!r} merge not supported yet".format(how)
             )
@@ -526,7 +595,7 @@ class Frame(libcudfxx.table.Table):
                 if name in left_on:
                     left_on[left_on.index(name)] = "%s%s" % (name, lsuffix)
                 if name in right_on:
-                    right_on[right_on.index(name)] = "%s%s" % (name, rsuffix,)
+                    right_on[right_on.index(name)] = "%s%s" % (name, rsuffix)
 
         categorical_dtypes = {}
         for name, col in itertools.chain(lhs._data.items(), rhs._data.items()):
@@ -727,3 +796,33 @@ class Frame(libcudfxx.table.Table):
                 rhs[rcol] = rhs[rcol].astype(to_dtype)
 
         return lhs, rhs, to_categorical
+
+    def _is_sorted(self, ascending=None, null_position=None):
+        """
+        Returns a boolean indicating whether the data of the Frame are sorted
+        based on the parameters given. Does not account for the index.
+
+        Parameters
+        ----------
+        self : Frame
+            Frame whose columns are to be checked for sort order
+        ascending : None or list-like of booleans
+            None or list-like of boolean values indicating expected sort order
+            of each column. If list-like, size of list-like must be
+            len(columns). If None, all columns expected sort order is set to
+            ascending. False (0) - ascending, True (1) - descending.
+        null_position : None or list-like of booleans
+            None or list-like of boolean values indicating desired order of
+            nulls compared to other elements. If list-like, size of list-like
+            must be len(columns). If None, null order is set to before. False
+            (0) - before, True (1) - after.
+
+        Returns
+        -------
+        returns : boolean
+            Returns True, if sorted as expected by ``ascending`` and
+            ``null_position``, False otherwise.
+        """
+        return libcudfxx.sort.is_sorted(
+            self, ascending=ascending, null_position=null_position
+        )

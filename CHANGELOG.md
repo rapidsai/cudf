@@ -23,12 +23,17 @@
 - PR #4172 Add groupby nth aggregation
 - PR #4159 Add COUNT aggregation that includes null values
 - PR #4190 Add libcudf++ transpose Cython implementation
+- PR #4063 Define and implement string capitalize and title API
 - PR #4217 Add libcudf++ quantiles Cython implementation
 - PR #4216 Add cudf.Scalar Python type
+- PR #4129 Add libcudf++ interleave_columns and tile Cython implementation
 - PR #4262 Port unaryops.pyx to use libcudf++ APIs
 - PR #4276 Port avro.pyx to libcudf++
 - PR #4259 Ability to create Java host buffers from memory-mapped files
 - PR #4240 Add groupby::groups()
+- PR #4321 Expose Python Semi and Anti Joins
+- PR #4291 Add Java callback support for RMM events
+- PR #4298 Port orc.pyx to libcudf++
 
 ## Improvements
 
@@ -117,7 +122,15 @@
 - PR #4231 Support for custom cuIO data_sink classes.
 - PR #4251 Add class to docs in `dask-cudf` `derived_from`
 - PR #4261 libxx Cython reorganization
+- PR #4274 Support negative position values in slice_strings
 - PR #4282 Porting nvstrings conversion functions from new libcudf++ to Python/Cython
+- PR #4299 Convert cudf::shift to column-based api
+- PR #4306 Use libcudf++ `unary.pyx` cast instead of legacy cast
+- PR #4295 Port reduce.pyx to libcudf++ API
+- PR #4305 Move gpuarrow.pyx and related libarrow_cuda files into `_libxx`
+- PR #4244 Port nvstrings Substring Gather/Scatter functions to cuDF Python/Cython
+- PR #4280 Port nvstrings Numeric Handling functions to cuDF Python/Cython
+- PR #4166 Port `is_sorted.pyx` to use libcudf++ APIs
 
 ## Bug Fixes
 
@@ -177,11 +190,20 @@
 - PR #4222 Fix no-return compile error in binop-null-test
 - PR #4242 Fix for rolling tests CI failure
 - PR #4245 Fix race condition in parquet reader
+- PR #4253 Fix dictionary decode and set_keys with column offset
 - PR #4258 Fix dask-cudf losing index name in `reset_index`
 - PR #4268 Fix java build for hash aggregate
+- PR #4275 Fix bug in searching nullable values in non-nullable search space in `upper_bound`
 - PR #4273 Fix losing `StringIndex` name in dask `_meta_nonempty`
 - PR #4279 Fix converting `np.float64` to Scalar
 - PR #4285 Add init files for cython pkgs and fix `setup.py`
+- PR #4287 Parquet reader: fix empty string potentially read as null
+- PR #4310 Fix empty values case in groupby 
+- PR #4297 Fix specification of package_data in setup.py
+- PR #4302 Fix `_is_local_filesystem` check
+- PR #4303 Parquet reader: fix empty columns missing from table
+- PR #4115 Serialize an empty column table with non zero rows
+- PR #4327 Preemptive dispatch fix for changes in dask#5973
 
 
 # cuDF 0.12.0 (04 Feb 2020)

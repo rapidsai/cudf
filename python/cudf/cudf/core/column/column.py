@@ -640,11 +640,25 @@ class ColumnBase(Column):
 
     @property
     def is_monotonic_increasing(self):
-        raise (NotImplementedError)
+        if not hasattr(self, "_is_monotonic_increasing"):
+            if self.has_nulls:
+                self._is_monotonic_increasing = False
+            else:
+                self._is_monotonic_increasing = self.as_frame()._is_sorted(
+                    ascending=None, null_position=None
+                )
+        return self._is_monotonic_increasing
 
     @property
     def is_monotonic_decreasing(self):
-        raise (NotImplementedError)
+        if not hasattr(self, "_is_monotonic_decreasing"):
+            if self.has_nulls:
+                self._is_monotonic_decreasing = False
+            else:
+                self._is_monotonic_decreasing = self.as_frame()._is_sorted(
+                    ascending=[False], null_position=None
+                )
+        return self._is_monotonic_decreasing
 
     def get_slice_bound(self, label, side, kind):
         """
