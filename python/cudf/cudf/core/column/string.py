@@ -1238,21 +1238,31 @@ class StringColumn(column.ColumnBase):
         # the sum method for Numeric Series
         return self.nvstrings.join().to_host()[0]
 
-    def capitalize(self):
-        return None
-        # return self._return_or_inplace(
-        #     libcudfxx.capitalize.capitalize(self._column)
-        # )
-
-    def title(self):
-        return None
-        # return self._return_or_inplace(
-        #     libcudfxx.capitalize.title(self._column)
-        # )
-
     @property
     def is_unique(self):
         return len(self.unique()) == len(self)
+
+    @property
+    def is_monotonic_increasing(self):
+        if not hasattr(self, "_is_monotonic_increasing"):
+            if self.nullable and self.has_nulls:
+                self._is_monotonic_increasing = False
+            else:
+                self._is_monotonic_increasing = libcudf.issorted.issorted(
+                    columns=[self]
+                )
+        return self._is_monotonic_increasing
+
+    @property
+    def is_monotonic_decreasing(self):
+        if not hasattr(self, "_is_monotonic_decreasing"):
+            if self.nullable and self.has_nulls:
+                self._is_monotonic_decreasing = False
+            else:
+                self._is_monotonic_decreasing = libcudf.issorted.issorted(
+                    columns=[self], descending=[1]
+                )
+        return self._is_monotonic_decreasing
 
     @property
     def __cuda_array_interface__(self):
