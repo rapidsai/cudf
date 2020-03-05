@@ -408,9 +408,16 @@ class ColumnBase(Column):
                 )
 
             start, stop, stride = arg.indices(len(self))
+
             if start == stop:
                 return column_empty(0, self.dtype, masked=True)
             # compute mask slice
+            if stride == 1 or stride is None:
+                if (start > stop):
+                    return column_empty(0, dtype=self.dtype, masked=True)
+
+                return libcudfxx.copying.column_slice(self, [start, stop])[0]
+
             if self.has_nulls:
                 if arg.step is not None and arg.step != 1:
                     raise NotImplementedError(arg)

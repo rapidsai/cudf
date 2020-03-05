@@ -457,11 +457,7 @@ class DataFrame(Frame):
             return self._get_columns_by_label(arg, downcast=True)
 
         elif isinstance(arg, slice):
-            df = DataFrame(index=self.index[arg])
-            for k, col in self._data.items():
-                df[k] = col[arg]
-            df.columns = self.columns
-            return df
+            return self._slice(arg)
 
         elif isinstance(
             arg,

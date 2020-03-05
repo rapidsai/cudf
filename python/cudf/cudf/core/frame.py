@@ -105,6 +105,33 @@ class Frame(libcudfxx.table.Table):
        result._copy_categories(self)
        return result
 
+    def _slice(self, arg):
+       num_rows = len(self)
+       if num_rows == 0:
+           return self
+       start, stop, stride = arg.indices(num_rows)
+       if start < 0:
+           start = start + num_rows
+       if stop < 0:
+           stop = stop + num_rows
+
+       result = None
+       if start > stop:
+            result = self._from_table(
+               libcudfxx.copying.table_empty_like(self)
+           )
+
+       else :
+           start = len(self) if start > num_rows else start
+           stop = len(self) if stop > num_rows else stop
+
+           result = self._from_table(
+               libcudfxx.copying.table_slice(self, [start, stop])[0]
+           )
+
+       result._copy_categories(self)
+       return result
+
     def _scatter_to_tables(self, scatter_map):
        result = libcudfxx.copying.scatter_to_tables(self, scatter_map)
        result = [self._from_table(tbl) for tbl in result]
@@ -616,9 +643,10 @@ class Frame(libcudfxx.table.Table):
             else:
 
                 to_frame_data[name] = column.build_column(
-                    col.data,
+                    col.base_data,
                     dtype=categorical_dtypes.get(name, col.dtype),
-                    mask=col.mask,
+                    mask=col.base_mask,
+                    offset = col.offset
                 )
         gdf_result._data = to_frame_data
 

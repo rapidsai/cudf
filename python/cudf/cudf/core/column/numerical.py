@@ -140,24 +140,17 @@ class NumericalColumn(column.ColumnBase):
         from cudf.core.column import build_column
 
         return build_column(
-            data=self.astype("int64").data, dtype=dtype, mask=self.mask
+            data=self.astype("int64").base_data, dtype=dtype, mask=self.mask
         )
 
     def as_numerical_column(self, dtype, **kwargs):
-        casted = libcudf.typecast.cast(self, dtype)
-        return column.build_column(
-            data=casted.data,
-            dtype=casted.dtype,
-            mask=casted.mask,
-            size=casted.size,
-            offset=casted.offset,
-        )
+        return libcudf.typecast.cast(self, dtype)
 
     def sort_by_values(self, ascending=True, na_position="last"):
         sort_inds = get_sorted_inds(self, ascending, na_position)
         col_keys = self[sort_inds]
         col_inds = column.build_column(
-            sort_inds.data, dtype=sort_inds.dtype, mask=sort_inds.mask
+            sort_inds.base_data, dtype=sort_inds.dtype, mask=sort_inds.base_mask, offset=sort_inds.offset
         )
         return col_keys, col_inds
 
@@ -330,7 +323,7 @@ class NumericalColumn(column.ColumnBase):
             else:
                 fill_value = fill_value.astype(self.dtype)
         result = libcudfxx.replace.replace_nulls(self, fill_value)
-        result = column.build_column(result.data, result.dtype, mask=None)
+        result = column.build_column(result.base_data, result.dtype, mask=None, offset=result.offset)
 
         return result
 
