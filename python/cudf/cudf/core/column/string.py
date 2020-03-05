@@ -131,7 +131,6 @@ class StringMethods(object):
         from cudf import Series, DataFrame, MultiIndex
         from cudf.core.index import Index, as_index
 
-        print("came here", new_col)
         inplace = kwargs.get("inplace", False)
 
         if inplace:
@@ -315,7 +314,6 @@ class StringMethods(object):
 
         Parameters
         ----------
-
             sep : str
                 Delimiter to use between list entries.
 
@@ -999,10 +997,6 @@ class StringMethods(object):
             msg = f"width must be of integer type, not {type(width).__name__}"
             raise TypeError(msg)
 
-        if not isinstance(fillchar, str):
-            msg = "fillchar must be a character, not {0}"
-            raise TypeError(msg.format(type(fillchar).__name__))
-
         return self._return_or_inplace(
             cpp_ljust(self._column, width, fillchar), **kwargs
         )
@@ -1040,10 +1034,6 @@ class StringMethods(object):
         if not pd.api.types.is_integer(width):
             msg = f"width must be of integer type, not {type(width).__name__}"
             raise TypeError(msg)
-
-        if not isinstance(fillchar, str):
-            msg = "fillchar must be a character, not {0}"
-            raise TypeError(msg.format(type(fillchar).__name__))
 
         return self._return_or_inplace(
             cpp_rjust(self._column, width, fillchar), **kwargs
