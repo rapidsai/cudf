@@ -726,7 +726,7 @@ class ColumnBase(Column):
         sr = cudf.Series(self)
         labels, cats = sr.factorize()
 
-        # string columns include null index in factorization; remove:
+        # columns include null index in factorization; remove:
         if self.has_nulls:
             cats = cats.dropna()
             labels = labels - 1
@@ -798,8 +798,6 @@ class ColumnBase(Column):
         """
         Get unique values in the data
         """
-        if self.null_count == len(self):
-            return column_empty_like(self, newsize=0)
         return self.as_frame().drop_duplicates(keep="first")._as_column()
 
     def serialize(self):
