@@ -13,24 +13,22 @@ from cudf._libxx.cpp.table.table_view cimport table_view
 from cudf._libxx.scalar cimport Scalar
 from libcpp.string cimport string
 
-from cudf._libxx.strings.split.split cimport (
-    split as cpp_split,
-    rsplit as cpp_rsplit,
+from cudf._libxx.strings.split.partition cimport (
+    partition as cpp_partition,
+    rpartition as cpp_rpartition,
 )
 
 
-def split(Column source_strings,
-          Scalar delimiter,
-          size_type maxsplit):
+def partition(Column source_strings,
+              Scalar delimiter):
     cdef unique_ptr[table] c_result
     cdef column_view source_view = source_strings.view()
     cdef string_scalar* scalar_str = <string_scalar*>(delimiter.c_value.get())
 
     with nogil:
-        c_result = move(cpp_split(
+        c_result = move(cpp_partition(
             source_view,
-            scalar_str[0],
-            maxsplit
+            scalar_str[0]
         ))
 
     return Table.from_unique_ptr(
@@ -39,18 +37,16 @@ def split(Column source_strings,
     )
 
 
-def rsplit(Column source_strings,
-           Scalar delimiter,
-           size_type maxsplit):
+def rpartition(Column source_strings,
+               Scalar delimiter):
     cdef unique_ptr[table] c_result
     cdef column_view source_view = source_strings.view()
     cdef string_scalar* scalar_str = <string_scalar*>(delimiter.c_value.get())
 
     with nogil:
-        c_result = move(cpp_rsplit(
+        c_result = move(cpp_rpartition(
             source_view,
-            scalar_str[0],
-            maxsplit
+            scalar_str[0]
         ))
 
     return Table.from_unique_ptr(

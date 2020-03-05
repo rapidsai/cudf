@@ -23,6 +23,10 @@ from cudf._libxx.strings.char_types import (
     is_digit as cpp_is_digit,
     is_numeric as cpp_is_numeric,
 )
+from cudf._libxx.strings.combine import (
+    concatenate as cpp_concatenate,
+    join as cpp_join,
+)
 from cudf._libxx.strings.padding import (
     center as cpp_center,
     ljust as cpp_ljust,
@@ -34,7 +38,14 @@ from cudf._libxx.strings.replace import (
     insert as cpp_string_insert,
     slice_replace as cpp_slice_replace,
 )
-from cudf._libxx.strings.split.split import split as cpp_split
+from cudf._libxx.strings.split.partition import (
+    partition as cpp_partition,
+    rpartition as cpp_rpartition,
+)
+from cudf._libxx.strings.split.split import (
+    rsplit as cpp_rsplit,
+    split as cpp_split,
+)
 from cudf._libxx.strings.strip import (
     lstrip as cpp_lstrip,
     rstrip as cpp_rstrip,
@@ -130,10 +141,17 @@ class StringMethods(object):
                 # This branch indicates the passed as new_col
                 # is actually a table-like data
                 table = new_col
-                return self._parent._constructor_expanddim(
-                    {index: value for index, value in enumerate(table)},
-                    index=self._parent.index,
-                )
+                from cudf._libxx.table import Table
+
+                if isinstance(table, Table):
+                    return self._parent._constructor_expanddim(
+                        data=table._data
+                    )
+                else:
+                    return self._parent._constructor_expanddim(
+                        {index: value for index, value in enumerate(table)},
+                        index=self._parent.index,
+                    )
             elif isinstance(self._parent, Series):
                 return Series(
                     new_col, index=self._parent.index, name=self._parent.name
@@ -212,14 +230,14 @@ class StringMethods(object):
             If `others` is None, `str` is returned, otherwise a `Series/Index`
             (same type as caller) of str dtype is returned.
         """
-        from cudf.core import Series, Index
+        from cudf.core import Series, Index, DataFrame
 
         if isinstance(others, Series):
             assert others.dtype == np.dtype("object")
-            others = others._column.nvstrings
+            others = others._column
         elif isinstance(others, Index):
             assert others.dtype == np.dtype("object")
-            others = others._values.nvstrings
+            others = others._values
         elif isinstance(others, StringMethods):
             """
             If others is a StringMethods then
@@ -251,27 +269,13 @@ class StringMethods(object):
                 list-like and not a regular string/byte
                 """
                 first = None
+                cols_list = []
                 for frame in others:
                     if not isinstance(frame, Series):
-                        """
-                        Make sure all inputs to .cat function call
-                        are of type nvstrings so creating a Series object.
-                        """
                         frame = Series(frame, dtype="str")
+                    cols_list.append(frame._column)
 
-                    if first is None:
-                        """
-                        extracting nvstrings pointer since
-                        `frame` is of type Series/Index and
-                        first isn't yet initialized.
-                        """
-                        first = frame._column.nvstrings
-                    else:
-                        assert frame.dtype == np.dtype("object")
-                        frame = frame._column.nvstrings
-                        first = first.cat(frame, sep=sep, na_rep=na_rep)
-
-                others = first
+                others = cols_list
             elif not is_list_like(first):
                 """
                 Picking first element and checking if it really adheres to
@@ -283,27 +287,44 @@ class StringMethods(object):
                 first element of list.
                 """
                 others = Series(others)
-                others = others._column.nvstrings
+                others = others._column
         elif isinstance(others, (pd.Series, pd.Index)):
             others = Series(others)
-            others = others._column.nvstrings
+            others = others._column
+        if sep is None:
+            sep = ""
 
-        data = self._column.nvstrings.cat(
-            others=others, sep=sep, na_rep=na_rep
-        )
+        from cudf._libxx.scalar import Scalar
+
+        if others is None:
+            data = cpp_join(self._column, Scalar(sep), Scalar(na_rep, "str"))
+        else:
+            if isinstance(others, list):
+                cols = [self._column]
+                cols.extend(others)
+            else:
+                cols = [self._column, others]
+            data = cpp_concatenate(
+                DataFrame({index: value for index, value in enumerate(cols)}),
+                Scalar(sep),
+                Scalar(na_rep, "str"),
+            )
 
         out = self._return_or_inplace(data, **kwargs)
         if len(out) == 1 and others is None:
             out = out[0]
         return out
 
-    def join(self, sep):
+    def join(self, sep="", na_rep="", **kwargs):
         """
         Join lists contained as elements in the Series/Index with passed
         delimiter.
         """
-        raise NotImplementedError(
-            "Columns of arrays / lists are not yet " "supported"
+        from cudf._libxx.scalar import Scalar
+        from cudf.core.series import Series
+
+        return Series(
+            cpp_join(self._column, Scalar(sep), Scalar(na_rep)), **kwargs,
         )
 
     def extract(self, pat, flags=0, expand=True, **kwargs):
@@ -703,9 +724,53 @@ class StringMethods(object):
         from cudf._libxx.scalar import Scalar
 
         return self._return_or_inplace(
-            # self._column.nvstrings.split(delimiter=pat, n=n),
-            cpp_split(self._column, Scalar(pat), n),
-            **kwargs,
+            cpp_split(self._column, Scalar(pat), n), **kwargs,
+        )
+
+    def rsplit(self, pat=None, n=-1, expand=True, **kwargs):
+        if expand is not True:
+            raise NotImplementedError("`expand` parameter is not supported")
+
+        # Pandas treats 0 as all
+        if n == 0:
+            n = -1
+
+        kwargs.setdefault("expand", expand)
+        if pat is None:
+            pat = " "
+
+        from cudf._libxx.scalar import Scalar
+
+        return self._return_or_inplace(
+            cpp_rsplit(self._column, Scalar(pat), n), **kwargs,
+        )
+
+    def partition(self, sep="", expand=True, **kwargs):
+        if expand is not True:
+            raise NotImplementedError("`expand` parameter is not supported")
+
+        kwargs.setdefault("expand", expand)
+        if sep is None:
+            sep = " "
+
+        from cudf._libxx.scalar import Scalar
+
+        return self._return_or_inplace(
+            cpp_partition(self._column, Scalar(sep)), **kwargs,
+        )
+
+    def rpartition(self, sep="", expand=True, **kwargs):
+        if expand is not True:
+            raise NotImplementedError("`expand` parameter is not supported")
+
+        kwargs.setdefault("expand", expand)
+        if sep is None:
+            sep = " "
+
+        from cudf._libxx.scalar import Scalar
+
+        return self._return_or_inplace(
+            cpp_rpartition(self._column, Scalar(sep)), **kwargs,
         )
 
     def pad(self, width, side="left", fillchar=" ", **kwargs):
