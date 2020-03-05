@@ -1114,61 +1114,47 @@ _string_char_types_data = [
 ]
 
 
+@pytest.mark.parametrize(
+    "type_op", ["isdecimal", "isalnum", "isalpha", "isdigit", "isnumeric"]
+)
 @pytest.mark.parametrize("data", _string_char_types_data)
-def test_string_char_types_isdecimal(data):
+def test_string_char_types(type_op, data):
     gs = Series(data)
     ps = pd.Series(data)
 
-    assert_eq(gs.str.isdecimal(), ps.str.isdecimal())
-
-
-@pytest.mark.parametrize("data", _string_char_types_data)
-def test_string_char_types_isalnum(data):
-    gs = Series(data)
-    ps = pd.Series(data)
-
-    assert_eq(gs.str.isalnum(), ps.str.isalnum())
-
-
-@pytest.mark.parametrize("data", _string_char_types_data)
-def test_string_char_types_isalpha(data):
-    gs = Series(data)
-    ps = pd.Series(data)
-
-    assert_eq(gs.str.isalpha(), ps.str.isalpha())
-
-
-@pytest.mark.parametrize("data", _string_char_types_data)
-def test_string_char_types_isdigit(data):
-    gs = Series(data)
-    ps = pd.Series(data)
-
-    assert_eq(gs.str.isdigit(), ps.str.isdigit())
-
-
-@pytest.mark.parametrize("data", _string_char_types_data)
-def test_string_char_types_isnumeric(data):
-    gs = Series(data)
-    ps = pd.Series(data)
-
-    assert_eq(gs.str.isnumeric(), ps.str.isnumeric())
+    assert_eq(getattr(gs.str, type_op)(), getattr(ps.str, type_op)())
 
 
 @pytest.mark.xfail(reason="unresolved libcudf/pandas incompatibility")
 @pytest.mark.parametrize("data", _string_char_types_data)
-def test_string_char_types_isupper(data):
+@pytest.mark.parametrize("case_check_op", ["isupper", "islower"])
+def test_string_char_case_check(data, case_check_op):
     gs = Series(data)
     ps = pd.Series(data)
 
     # some tests may pass, but for the wrong reasons.
-    assert_eq(gs.str.isupper(), ps.str.isupper())
+    assert_eq(
+        getattr(gs.str, case_check_op)(), getattr(ps.str, case_check_op)()
+    )
 
 
-@pytest.mark.xfail(reason="unresolved libcudf/pandas incompatibility")
-@pytest.mark.parametrize("data", _string_char_types_data)
-def test_string_char_types_islower(data):
+@pytest.mark.parametrize(
+    "case_op", ["title", "capitalize", "lower", "upper", "swapcase"]
+)
+@pytest.mark.parametrize(
+    "data",
+    [
+        *_string_char_types_data,
+        [
+            None,
+            "The quick bRoWn fox juMps over the laze DOG",
+            '123nr98nv9rev!$#INF4390v03n1243<>?}{:-"',
+            "accénted",
+        ],
+    ],
+)
+def test_string_char_case(case_op, data):
     gs = Series(data)
     ps = pd.Series(data)
 
-    # some tests may pass, but for the wrong reasons.
-    assert_eq(gs.str.islower(), ps.str.islower())
+    assert_eq(getattr(gs.str, case_op)(), getattr(ps.str, case_op)())

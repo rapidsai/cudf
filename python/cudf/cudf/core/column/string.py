@@ -550,7 +550,8 @@ class StringMethods(object):
         when operating on data which contains non-alphabetical characters.
         """
         warnings.warn(
-            "isupper does not conform to standard python string logic"
+            "StringColumn method `isupper` does not conform to standard"
+            + "python string logic"
         )
 
         return self._return_or_inplace(cpp_is_upper(self._column))
@@ -570,7 +571,8 @@ class StringMethods(object):
         when operating on data which contains non-alphabetical characters.
         """
         warnings.warn(
-            "islower does not conform to standard python string logic"
+            "StringColumn method `islower` does not conform to standard "
+            + "python string logic"
         )
 
         return self._return_or_inplace(cpp_is_lower(self._column))
