@@ -733,6 +733,10 @@ native_jobjectArray<jobject> contiguous_table_array(JNIEnv* env, jsize length);
 
 std::unique_ptr<cudf::experimental::aggregation> map_jni_aggregation(jint op);
 
+// Get the JNI environment, attaching the current thread to the JVM if necessary. If the thread
+// needs to be attached, the thread will automatically detach when the thread terminates.
+JNIEnv* get_jni_env(JavaVM* jvm);
+
 } // namespace jni
 } // namespace cudf
 
