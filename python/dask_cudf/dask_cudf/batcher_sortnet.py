@@ -172,9 +172,7 @@ def _shuffle_group_2(df, columns):
     result2 = dict(
         zip(
             range(n),
-            df.scatter_by_map(
-                ind.values.view(np.int64), map_size=n, keep_index=False
-            ),
+            df.scatter_by_map(ind.values.view(), map_size=n, keep_index=False),
         )
     )
     return result2, df.iloc[:0]
@@ -198,7 +196,7 @@ def _shuffle_group(df, columns, stage, k, npartitions):
         zip(
             range(k),
             df.scatter_by_map(
-                c.astype(np.int64), map_size=k, keep_index=False
+                c.astype(np.int32), map_size=k, keep_index=False
             ),
         )
     )
