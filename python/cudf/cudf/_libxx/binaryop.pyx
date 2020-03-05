@@ -33,52 +33,49 @@ class BinaryOperation(IntEnum):
     DIV = (
         <underlying_type_t_binary_operator> cpp_binaryop.binary_operator.DIV
     )
-    TRUE_DIV = (
+    TRUEDIV = (
         <underlying_type_t_binary_operator> cpp_binaryop.binary_operator.TRUE_DIV
     )
-    FLOOR_DIV = (
+    FLOORDIV = (
         <underlying_type_t_binary_operator> cpp_binaryop.binary_operator.FLOOR_DIV
     )
     MOD = (
-        <underlying_type_t_binary_operator> cpp_binaryop.binary_operator.MOD
-    )
-    PYMOD = (
         <underlying_type_t_binary_operator> cpp_binaryop.binary_operator.PYMOD
     )
     POW = (
         <underlying_type_t_binary_operator> cpp_binaryop.binary_operator.POW
     )
-    EQUAL = (
+    EQ = (
         <underlying_type_t_binary_operator> cpp_binaryop.binary_operator.EQUAL
     )
-    NOT_EQUAL = (
+    NE = (
         <underlying_type_t_binary_operator> cpp_binaryop.binary_operator.NOT_EQUAL
     )
-    LESS = (
+    LT = (
         <underlying_type_t_binary_operator> cpp_binaryop.binary_operator.LESS
     )
-    GREATER = (
+    GT = (
         <underlying_type_t_binary_operator> cpp_binaryop.binary_operator.GREATER
     )
-    LESS_EQUAL = (
+    LE = (
         <underlying_type_t_binary_operator> cpp_binaryop.binary_operator.LESS_EQUAL
     )
-    GREATER_EQUAL = (
+    GE = (
         <underlying_type_t_binary_operator> cpp_binaryop.binary_operator.GREATER_EQUAL
     )
-    BITWISE_AND = (
+    AND = (
         <underlying_type_t_binary_operator> cpp_binaryop.binary_operator.BITWISE_AND
     )
-    BITWISE_OR = (
+    OR = (
         <underlying_type_t_binary_operator> cpp_binaryop.binary_operator.BITWISE_OR
     )
-    BITWISE_XOR = (
+    XOR = (
         <underlying_type_t_binary_operator> cpp_binaryop.binary_operator.BITWISE_XOR
     )
-    LOGICAL_AND = (
+    L_AND = (
         <underlying_type_t_binary_operator> cpp_binaryop.binary_operator.LOGICAL_AND
     )
-    LOGICAL_OR = (
+    L_OR = (
         <underlying_type_t_binary_operator> cpp_binaryop.binary_operator.LOGICAL_OR
     )
     COALESCE = (

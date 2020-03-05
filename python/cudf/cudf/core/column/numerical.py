@@ -458,29 +458,11 @@ def _numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
     if reflect:
         lhs, rhs = rhs, lhs
     libcudf.nvtx.nvtx_range_push("CUDF_BINARY_OP", "orange")
-    # Allocate output
-    masked = False
-    if np.isscalar(lhs):
-        masked = rhs.nullable
-        row_count = len(rhs)
-    elif np.isscalar(rhs):
-        masked = lhs.nullable
-        row_count = len(lhs)
-    elif rhs is None:
-        masked = True
-        row_count = len(lhs)
-    elif lhs is None:
-        masked = True
-        row_count = len(rhs)
-    else:
-        masked = lhs.nullable or rhs.nullable
-        row_count = len(lhs)
 
     is_op_comparison = op in ["lt", "gt", "le", "ge", "eq", "ne"]
 
-    out = column.column_empty(row_count, dtype=out_dtype, masked=masked)
-
-    _ = libcudf.binops.apply_op(lhs, rhs, out, op)
+    operator = libcudfxx.binaryop.BinaryOperation[op.upper()]
+    out = libcudfxx.binaryop.binaryop(lhs, rhs, operator, out_dtype)
 
     if is_op_comparison:
         out = out.fillna(op == "ne")
