@@ -337,7 +337,7 @@ class StringMethods(object):
 
         out = self._column.nvstrings.extract(pat)
         if len(out) == 1 and expand is False:
-            return self._return_or_inplace(out[0], **kwargs,)
+            return self._return_or_inplace(out[0], **kwargs)
         else:
             kwargs.setdefault("expand", expand)
             return self._return_or_inplace(out, **kwargs)
@@ -1253,28 +1253,6 @@ class StringColumn(column.ColumnBase):
     @property
     def is_unique(self):
         return len(self.unique()) == len(self)
-
-    @property
-    def is_monotonic_increasing(self):
-        if not hasattr(self, "_is_monotonic_increasing"):
-            if self.nullable and self.has_nulls:
-                self._is_monotonic_increasing = False
-            else:
-                self._is_monotonic_increasing = libcudf.issorted.issorted(
-                    columns=[self]
-                )
-        return self._is_monotonic_increasing
-
-    @property
-    def is_monotonic_decreasing(self):
-        if not hasattr(self, "_is_monotonic_decreasing"):
-            if self.nullable and self.has_nulls:
-                self._is_monotonic_decreasing = False
-            else:
-                self._is_monotonic_decreasing = libcudf.issorted.issorted(
-                    columns=[self], descending=[1]
-                )
-        return self._is_monotonic_decreasing
 
     @property
     def __cuda_array_interface__(self):
