@@ -8,6 +8,7 @@ from cudf._libxx.cpp.nvtx cimport (
     _color as nvtx_color,
 )
 
+
 def range_push(name, color='green'):
     """
     Demarcate the beginning of a user-defined NVTX range.
@@ -21,8 +22,6 @@ def range_push(name, color='green'):
         Can be named color or hex RGB string.
     """
     name = name.encode('ascii')
-    
-
     try:
         color = int(color, 16)
         result = cpp_range_push_hex(name, color)
@@ -46,6 +45,7 @@ def range_push(name, color='green'):
         elif color == 'orange':
             result = cpp_range_push(name, nvtx_color.ORANGE)
     print(result)
+
 
 def range_pop():
     """

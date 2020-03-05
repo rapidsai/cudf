@@ -15,10 +15,10 @@ cdef extern from "cudf/utilities/nvtx_utils.hpp" namespace "cudf::nvtx" nogil:
         ORANGE 'cudf::nvtx::color::ORANGE'
 
     # color JOIN_COLOR 'cudf::nvtx::JOIN_COLOR'
-    # color GROUP_COLOR 'cudf::nvtx::GROUP_COLOR'  
-    # color BINARY_OP_COLOR 'cudf::nvtx::BINARY_OP_COLOR' 
-    # color PARTITION_COLOR 'cudf::nvtx::PARTITION_COLOR' 
-    # color READ_CSV_COLOR 'cudf::nvtx::READ_CSV_COLOR' 
+    # color GROUP_COLOR 'cudf::nvtx::GROUP_COLOR'
+    # color BINARY_OP_COLOR 'cudf::nvtx::BINARY_OP_COLOR'
+    # color PARTITION_COLOR 'cudf::nvtx::PARTITION_COLOR'
+    # color READ_CSV_COLOR 'cudf::nvtx::READ_CSV_COLOR'
 
     cdef void range_push(
         const char* const name, _color color
@@ -30,6 +30,3 @@ cdef extern from "cudf/utilities/nvtx_utils.hpp" namespace "cudf::nvtx" nogil:
     ) except +
 
     cdef void range_pop() except +
-
-
-
