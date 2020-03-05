@@ -3,6 +3,7 @@
 from libcpp.memory cimport unique_ptr
 
 from cudf._libxx.cpp.column.column cimport column
+from cudf._libxx.cpp.scalar.scalar cimport scalar
 from cudf._libxx.cpp.column.column_view cimport column_view
 from cudf._libxx.cpp.types cimport (
     data_type
@@ -33,6 +34,20 @@ cdef extern from "cudf/binaryop.hpp" namespace "cudf::experimental" nogil:
         COALESCE "cudf::experimental::binary_operator::COALESCE"
         GENERIC_BINARY "cudf::experimental::binary_operator::GENERIC_BINARY"
 
+    cdef unique_ptr[column] binary_operation (
+        const scalar& lhs,
+        const column_view& rhs,
+        binary_operator op,
+        data_type output_type
+    ) except +
+    
+    cdef unique_ptr[column] binary_operation (
+        const column_view& lhs,
+        const scalar& rhs,
+        binary_operator op,
+        data_type output_type
+    ) except +
+    
     cdef unique_ptr[column] binary_operation (
         const column_view& lhs,
         const column_view& rhs,
