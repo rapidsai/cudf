@@ -31,6 +31,7 @@
 - PR #4276 Port avro.pyx to libcudf++
 - PR #4259 Ability to create Java host buffers from memory-mapped files
 - PR #4240 Add groupby::groups()
+- PR #4321 Expose Python Semi and Anti Joins
 - PR #4291 Add Java callback support for RMM events
 - PR #4298 Port orc.pyx to libcudf++
 
@@ -128,6 +129,7 @@
 - PR #4244 Port nvstrings Substring Gather/Scatter functions to cuDF Python/Cython
 - PR #4280 Port nvstrings Numeric Handling functions to cuDF Python/Cython
 - PR #4278 Port filling.pyx to libcudf++ API
+- PR #4166 Port `is_sorted.pyx` to use libcudf++ APIs
 
 ## Bug Fixes
 
@@ -200,6 +202,7 @@
 - PR #4302 Fix `_is_local_filesystem` check
 - PR #4303 Parquet reader: fix empty columns missing from table
 - PR #4115 Serialize an empty column table with non zero rows
+- PR #4327 Preemptive dispatch fix for changes in dask#5973
 
 
 # cuDF 0.12.0 (04 Feb 2020)
