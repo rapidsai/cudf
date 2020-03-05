@@ -740,11 +740,6 @@ class StringMethods(object):
                 "`break_on_hyphens` parameter is not supported"
             )
 
-        if "expand_tabsbool" in kwargs:
-            raise NotImplementedError(
-                "`expand_tabsbool` parameter is not supported"
-            )
-
         return self._return_or_inplace(cpp_wrap(self._column, width), **kwargs)
 
 
