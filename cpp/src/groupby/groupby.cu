@@ -18,6 +18,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/gather.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/groupby.hpp>
 #include <cudf/detail/groupby/sort_helper.hpp>
@@ -27,6 +28,8 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <thrust/copy.h>
+
 #include <memory>
 #include <utility>
 
@@ -35,11 +38,12 @@ namespace experimental {
 namespace groupby {
 
 // Constructor
-groupby::groupby(table_view const& keys, bool ignore_null_keys,
-                 bool keys_are_sorted, std::vector<order> const& column_order,
+groupby::groupby(table_view const& keys,
+                 include_nulls include_null_keys,
+                 sorted keys_are_sorted, std::vector<order> const& column_order,
                  std::vector<null_order> const& null_precedence)
     : _keys{keys},
-      _ignore_null_keys{ignore_null_keys},
+      _include_null_keys{include_null_keys},
       _keys_are_sorted{keys_are_sorted},
       _column_order{column_order},
       _null_precedence{null_precedence} {}
@@ -55,10 +59,10 @@ groupby::dispatch_aggregation(std::vector<aggregation_request> const& requests,
   // sort groupby as well.
   // Only use hash groupby if the keys aren't sorted and all requests can be
   // satisfied with a hash implementation
-  if (not _keys_are_sorted and
+  if (_keys_are_sorted == sorted::NO and
       not _helper and
       detail::hash::can_use_hash_groupby(_keys, requests)) {
-    return detail::hash::groupby(_keys, requests, _ignore_null_keys, stream,
+    return detail::hash::groupby(_keys, requests, _include_null_keys, stream,
                                  mr);
   } else {
     return sort_aggregate(requests, stream, mr);
@@ -123,18 +127,39 @@ groupby::aggregate(std::vector<aggregation_request> const& requests,
   verify_valid_requests(requests);
 
   if (_keys.num_rows() == 0) {
-    std::make_pair(empty_like(_keys), empty_results(requests));
+    return std::make_pair(empty_like(_keys), empty_results(requests));
   }
 
   return dispatch_aggregation(requests, 0, mr);
 }
+
+groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_resource*  mr) {
+
+  auto grouped_keys = helper().sorted_keys(mr, 0);
+
+  auto group_offsets = helper().group_offsets(0);
+  std::vector<size_type> group_offsets_vector(group_offsets.size());
+  thrust::copy(group_offsets.begin(),
+      group_offsets.end(),
+      group_offsets_vector.begin());
+
+  std::unique_ptr<table> grouped_values{nullptr};
+  if (values.num_columns()) {
+    grouped_values = cudf::experimental::detail::gather(values, helper().key_sort_order());
+    return groupby::groups{std::move(grouped_keys), std::move(group_offsets_vector), std::move(grouped_values)};
+  }
+  else {
+    return groupby::groups{std::move(grouped_keys), std::move(group_offsets_vector)};
+  }
+}
+
 
 // Get the sort helper object
 detail::sort::sort_groupby_helper& groupby::helper() {
   if (_helper)
     return *_helper;
   _helper = std::make_unique<detail::sort::sort_groupby_helper>(
-    _keys, _ignore_null_keys, _keys_are_sorted);
+    _keys, _include_null_keys, _keys_are_sorted);
   return *_helper;
 };
 

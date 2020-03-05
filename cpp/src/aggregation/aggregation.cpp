@@ -92,6 +92,10 @@ std::unique_ptr<aggregation> make_argmin_aggregation() {
 std::unique_ptr<aggregation> make_nunique_aggregation(include_nulls _include_nulls) {
   return std::make_unique<detail::nunique_aggregation>(aggregation::NUNIQUE, _include_nulls);
 }
+/// Factory to create a NTH_ELEMENT aggregation
+std::unique_ptr<aggregation> make_nth_element_aggregation(size_type n, include_nulls _include_nulls) {
+  return std::make_unique<detail::nth_element_aggregation>(aggregation::NTH_ELEMENT, n, _include_nulls);
+}
 /// Factory to create a UDF aggregation
 std::unique_ptr<aggregation> make_udf_aggregation(udf_type type,
                                                   std::string const& user_defined_aggregator,

@@ -1,10 +1,11 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from cudf._libxx.lib cimport *
 from libcpp.memory cimport unique_ptr
 
-cdef class Scalar:
+from cudf._libxx.cpp.scalar.scalar cimport scalar
 
+
+cdef class Scalar:
     cdef unique_ptr[scalar] c_value
 
     @staticmethod

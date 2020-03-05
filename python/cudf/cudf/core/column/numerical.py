@@ -96,9 +96,7 @@ class NumericalColumn(column.ColumnBase):
         return _numeric_column_compare(self, rhs, op=cmpop)
 
     def _apply_scan_op(self, op):
-        out_col = column.column_empty_like_same_mask(self, dtype=self.dtype)
-        libcudf.reduce.scan(self, out_col, op, inclusive=True)
-        return out_col
+        return libcudfxx.reduce.scan(op, self, True)
 
     def normalize_binop_value(self, other):
         if other is None:
@@ -130,21 +128,9 @@ class NumericalColumn(column.ColumnBase):
         from cudf.core.column import string, as_column
 
         if len(self) > 0:
-            if self.dtype in (np.dtype("int8"), np.dtype("int16")):
-                self_as_int32 = self.astype("int32", **kwargs)
-                dev_array = self_as_int32.data_array_view
-                dev_ptr = self_as_int32.data_ptr
-            else:
-                dev_array = self.data_array_view
-                dev_ptr = self.data_ptr
-            null_ptr = None
-            if self.nullable:
-                null_ptr = self.mask_ptr
-            kwargs = {"count": len(self), "nulls": null_ptr, "bdevmem": True}
-            data = string._numeric_to_str_typecast_functions[
-                np.dtype(dev_array.dtype)
-            ](dev_ptr, **kwargs)
-            return as_column(data)
+            return string._numeric_to_str_typecast_functions[
+                np.dtype(self.dtype)
+            ](self, **kwargs)
         else:
             return as_column([], dtype="object")
 
@@ -156,14 +142,10 @@ class NumericalColumn(column.ColumnBase):
         )
 
     def as_numerical_column(self, dtype, **kwargs):
-        casted = libcudf.typecast.cast(self, dtype)
-        return column.build_column(
-            data=casted.data,
-            dtype=casted.dtype,
-            mask=casted.mask,
-            size=casted.size,
-            offset=casted.offset,
-        )
+        dtype = np.dtype(dtype)
+        if dtype == self.dtype:
+            return self
+        return libcudfxx.unary.cast(self, dtype)
 
     def sort_by_values(self, ascending=True, na_position="last"):
         sort_inds = get_sorted_inds(self, ascending, na_position)
@@ -215,36 +197,36 @@ class NumericalColumn(column.ColumnBase):
         return out_col
 
     def all(self):
-        return bool(libcudf.reduce.reduce("all", self, dtype=np.bool_))
+        return bool(libcudfxx.reduce.reduce("all", self, dtype=np.bool_))
 
     def any(self):
         if self.valid_count == 0:
             return False
-        return bool(libcudf.reduce.reduce("any", self, dtype=np.bool_))
+        return bool(libcudfxx.reduce.reduce("any", self, dtype=np.bool_))
 
     def min(self, dtype=None):
-        return libcudf.reduce.reduce("min", self, dtype=dtype)
+        return libcudfxx.reduce.reduce("min", self, dtype=dtype)
 
     def max(self, dtype=None):
-        return libcudf.reduce.reduce("max", self, dtype=dtype)
+        return libcudfxx.reduce.reduce("max", self, dtype=dtype)
 
     def sum(self, dtype=None):
-        return libcudf.reduce.reduce("sum", self, dtype=dtype)
+        return libcudfxx.reduce.reduce("sum", self, dtype=dtype)
 
     def product(self, dtype=None):
-        return libcudf.reduce.reduce("product", self, dtype=dtype)
+        return libcudfxx.reduce.reduce("product", self, dtype=dtype)
 
     def mean(self, dtype=np.float64):
-        return libcudf.reduce.reduce("mean", self, dtype=dtype)
+        return libcudfxx.reduce.reduce("mean", self, dtype=dtype)
 
     def var(self, ddof=1, dtype=np.float64):
-        return libcudf.reduce.reduce("var", self, dtype=dtype, ddof=ddof)
+        return libcudfxx.reduce.reduce("var", self, dtype=dtype, ddof=ddof)
 
     def std(self, ddof=1, dtype=np.float64):
-        return libcudf.reduce.reduce("std", self, dtype=dtype, ddof=ddof)
+        return libcudfxx.reduce.reduce("std", self, dtype=dtype, ddof=ddof)
 
     def sum_of_squares(self, dtype=None):
-        return libcudf.reduce.reduce("sum_of_squares", self, dtype=dtype)
+        return libcudfxx.reduce.reduce("sum_of_squares", self, dtype=dtype)
 
     def round(self, decimals=0):
         if decimals < 0:
@@ -394,28 +376,6 @@ class NumericalColumn(column.ColumnBase):
             raise ValueError("value not found")
         return found
 
-    @property
-    def is_monotonic_increasing(self):
-        if not hasattr(self, "_is_monotonic_increasing"):
-            if self.nullable and self.has_nulls:
-                self._is_monotonic_increasing = False
-            else:
-                self._is_monotonic_increasing = libcudf.issorted.issorted(
-                    [self]
-                )
-        return self._is_monotonic_increasing
-
-    @property
-    def is_monotonic_decreasing(self):
-        if not hasattr(self, "_is_monotonic_decreasing"):
-            if self.nullable and self.has_nulls:
-                self._is_monotonic_decreasing = False
-            else:
-                self._is_monotonic_decreasing = libcudf.issorted.issorted(
-                    [self], [1]
-                )
-        return self._is_monotonic_decreasing
-
     def can_cast_safely(self, to_dtype):
         """
         Returns true if all the values in self can be
@@ -508,8 +468,11 @@ def _numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
 
 
 def _numeric_column_unaryop(operand, op):
-    out = libcudf.unaryops.apply_unary_op(operand, op)
-    return out
+    if callable(op):
+        return libcudfxx.transform.transform(operand, op)
+
+    op = libcudfxx.unary.UnaryOp[op.upper()]
+    return libcudfxx.unary.unary_operation(operand, op)
 
 
 def _numeric_column_compare(lhs, rhs, op):

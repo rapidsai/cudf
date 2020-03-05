@@ -102,7 +102,7 @@ TYPED_TEST(groupby_keys_test, include_null_keys)
 
     auto agg = cudf::experimental::make_sum_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg),
-        false); //< Don't ignore nulls in keys
+        include_nulls::YES);
 }
 
 TYPED_TEST(groupby_keys_test, pre_sorted_keys)
@@ -118,8 +118,8 @@ TYPED_TEST(groupby_keys_test, pre_sorted_keys)
     fixed_width_column_wrapper<R> expect_vals { 3,       18,         24,      4};
 
     auto agg = cudf::experimental::make_sum_aggregation();
-    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg), true,
-        true); //< keys_are_sorted
+    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg), 
+        include_nulls::NO, true, sorted::YES);
 }
 
 TYPED_TEST(groupby_keys_test, pre_sorted_keys_descending)
@@ -135,9 +135,8 @@ TYPED_TEST(groupby_keys_test, pre_sorted_keys_descending)
     fixed_width_column_wrapper<R> expect_vals { 0, 6,       22,        21      };
 
     auto agg = cudf::experimental::make_sum_aggregation();
-    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg), true,
-        true,
-        {order::DESCENDING}); //< keys_are_sorted
+    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg),
+        include_nulls::NO, true, sorted::YES, {order::DESCENDING});
 }
 
 TYPED_TEST(groupby_keys_test, pre_sorted_keys_nullable)
@@ -154,8 +153,8 @@ TYPED_TEST(groupby_keys_test, pre_sorted_keys_nullable)
     fixed_width_column_wrapper<R> expect_vals { 3,       15,         17,      4};
 
     auto agg = cudf::experimental::make_sum_aggregation();
-    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg), true,
-        true /* keys_are_sorted */); 
+    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg),
+        include_nulls::NO, true, sorted::YES); 
 }
 
 TYPED_TEST(groupby_keys_test, pre_sorted_keys_nulls_before_include_nulls)
@@ -175,8 +174,7 @@ TYPED_TEST(groupby_keys_test, pre_sorted_keys_nulls_before_include_nulls)
 
     auto agg = cudf::experimental::make_sum_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg),
-        false /* don't ignore null keys */, 
-        true /* keys_are_sorted */); 
+        include_nulls::YES, true, sorted::YES); 
 }
 
 struct groupby_string_keys_test : public cudf::test::BaseFixture {};

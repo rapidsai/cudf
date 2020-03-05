@@ -1,10 +1,19 @@
-from cudf._libxx.lib cimport *
-from cudf._libxx.table cimport Table, columns_from_ptr
-from cudf._libxx.includes.join cimport *
-from libcpp.vector cimport vector
-from libcpp.pair cimport pair
+# Copyright (c) 2020, NVIDIA CORPORATION.
 
 from collections import OrderedDict
+
+from libcpp.memory cimport unique_ptr
+from libcpp.vector cimport vector
+from libcpp.pair cimport pair
+from libcpp cimport bool
+
+from cudf._libxx.table cimport Table, columns_from_ptr
+from cudf._libxx.move cimport move
+
+from cudf._libxx.cpp.table.table cimport table
+from cudf._libxx.cpp.table.table_view cimport table_view
+cimport cudf._libxx.cpp.join as cpp_join
+
 
 cpdef join(Table lhs,
            Table rhs,
@@ -19,6 +28,9 @@ cpdef join(Table lhs,
     Call libcudf++ join for full outer, inner and left joins.
     Returns a list of tuples [(column, valid, name), ...]
     """
+
+    cdef vector[int] all_left_inds = range(len(lhs.columns))
+    cdef vector[int] all_right_inds = range(len(rhs.columns))
 
     cdef Table c_lhs = lhs
     cdef Table c_rhs = rhs
@@ -112,7 +124,7 @@ cpdef join(Table lhs,
     cdef unique_ptr[table] c_result
     if how == 'inner':
         with nogil:
-            c_result = move(cpp_inner_join(
+            c_result = move(cpp_join.inner_join(
                 lhs_view,
                 rhs_view,
                 left_on_ind,
@@ -121,7 +133,7 @@ cpdef join(Table lhs,
             ))
     elif how == 'left':
         with nogil:
-            c_result = move(cpp_left_join(
+            c_result = move(cpp_join.left_join(
                 lhs_view,
                 rhs_view,
                 left_on_ind,
@@ -130,12 +142,30 @@ cpdef join(Table lhs,
             ))
     elif how == 'outer':
         with nogil:
-            c_result = move(cpp_full_join(
+            c_result = move(cpp_join.full_join(
                 lhs_view,
                 rhs_view,
                 left_on_ind,
                 right_on_ind,
                 c_columns_in_common
+            ))
+    elif how == 'leftsemi':
+        with nogil:
+            c_result = move(cpp_join.left_semi_join(
+                lhs_view,
+                rhs_view,
+                left_on_ind,
+                right_on_ind,
+                all_left_inds
+            ))
+    elif how == 'leftanti':
+        with nogil:
+            c_result = move(cpp_join.left_anti_join(
+                lhs_view,
+                rhs_view,
+                left_on_ind,
+                right_on_ind,
+                all_left_inds
             ))
 
     all_cols_py = columns_from_ptr(move(c_result))
@@ -147,5 +177,4 @@ cpdef join(Table lhs,
         index_col = None
 
     data_ordered_dict = OrderedDict(zip(result_col_names, all_cols_py))
-
     return Table(data=data_ordered_dict, index=index_col)
