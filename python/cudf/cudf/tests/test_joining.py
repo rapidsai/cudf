@@ -670,7 +670,7 @@ def test_merge_left_right_index_left_right_on_kwargs2(kwargs):
 def test_merge_sort(kwargs, hows):
     kwargs.update(hows)
     kwargs["sort"] = True
-    d = range(3)
+    d = [1,3,2,5,4,6]
     left = pd.DataFrame({"k2": d, "k1": d, "k4": d, "k3": d, "k5": d})
     right = pd.DataFrame({"k1": d, "k4": d, "k2": d, "k3": d, "k5": d})
     gleft = DataFrame.from_pandas(left)
@@ -679,6 +679,7 @@ def test_merge_sort(kwargs, hows):
     pd_merge = left.merge(right, **kwargs)
     if pd_merge.empty:
         assert gd_merge.empty
+    assert_eq(pd_merge, gd_merge)
 
 
 @pytest.mark.parametrize(
