@@ -1158,4 +1158,9 @@ def test_string_char_case(case_op, data):
     gs = Series(data)
     ps = pd.Series(data)
 
-    assert_eq(getattr(gs.str, case_op)(), getattr(ps.str, case_op)())
+    s = gs.str
+    a = getattr(s, case_op)
+
+    assert_eq(a(), getattr(ps.str, case_op)())
+
+    # assert_eq(gs.str.capitalize(), ps.str.capitalize())
