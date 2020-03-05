@@ -1,4 +1,5 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
+from libc.stdint cimport int32_t
 
 from cudf._libxx.cpp.column.column_view cimport column_view
 from cudf._libxx.cpp.types cimport size_type
@@ -22,3 +23,5 @@ cdef extern from "cudf/strings/padding.hpp" namespace "cudf::strings" nogil:
     cdef unique_ptr[column] zfill(
         column_view source_strings,
         size_type width) except +
+
+ctypedef int32_t underlying_type_t_pad_side

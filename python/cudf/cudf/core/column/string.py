@@ -28,6 +28,7 @@ from cudf._libxx.strings.combine import (
     join as cpp_join,
 )
 from cudf._libxx.strings.padding import (
+    PadSide as PadSide,
     center as cpp_center,
     ljust as cpp_ljust,
     pad as cpp_pad,
@@ -896,8 +897,19 @@ class StringMethods(object):
             msg = f"width must be of integer type, not {type(width).__name__}"
             raise TypeError(msg)
 
+        if side == "left":
+            side = PadSide.LEFT
+        elif side == "right":
+            side = PadSide.RIGHT
+        elif side == "both":
+            side = PadSide.BOTH
+        else:
+            raise ValueError(
+                "side has to be either one of {‘left’, ‘right’, ‘both’}"
+            )
+
         return self._return_or_inplace(
-            cpp_pad(self._column, width, side, fillchar), **kwargs
+            cpp_pad(self._column, width, fillchar, side), **kwargs
         )
 
     def zfill(self, width, **kwargs):

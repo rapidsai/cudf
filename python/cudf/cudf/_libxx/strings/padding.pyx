@@ -7,20 +7,28 @@ from cudf._libxx.cpp.scalar.scalar cimport string_scalar
 from cudf._libxx.cpp.types cimport size_type
 from cudf._libxx.column cimport Column
 from cudf._libxx.scalar cimport Scalar
+from enum import IntEnum
 from libcpp.string cimport string
 from cudf._libxx.cpp.column.column cimport column
 
 from cudf._libxx.cpp.strings.padding cimport (
     pad as cpp_pad,
     zfill as cpp_zfill,
-    pad_side as pad_side
+    pad_side as pad_side,
+    underlying_type_t_pad_side as underlying_type_t_pad_side
 )
+
+
+class PadSide(IntEnum):
+    LEFT = <underlying_type_t_pad_side> pad_side.LEFT
+    RIGHT = <underlying_type_t_pad_side> pad_side.RIGHT
+    BOTH = <underlying_type_t_pad_side> pad_side.BOTH
 
 
 def pad(Column source_strings,
         size_type width,
-        side,
-        fill_char):
+        fill_char,
+        side=PadSide.LEFT):
     """
     Returns a Column by padding strings in `source_strings`
     upto the given `width`. Direction of padding is to be specified by `side`.
@@ -30,15 +38,11 @@ def pad(Column source_strings,
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    cdef pad_side pad_direction
     cdef string f_char = <string>str(fill_char).encode()
 
-    if side == "left":
-        pad_direction = pad_side.LEFT
-    elif side == "right":
-        pad_direction = pad_side.RIGHT
-    elif side == "both":
-        pad_direction = pad_side.BOTH
+    cdef pad_side pad_direction = <pad_side>(
+        <underlying_type_t_pad_side> side
+    )
 
     with nogil:
         c_result = move(cpp_pad(
