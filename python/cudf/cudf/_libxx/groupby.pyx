@@ -17,6 +17,32 @@ cimport cudf._libxx.cpp.groupby as libcudf_groupby
 cimport cudf._libxx.cpp.aggregation as libcudf_aggregation
 
 
+_GROUPBY_AGGS = {
+    "count",
+    "size",
+    "sum",
+    "argmin",
+    "argmax",
+    "min",
+    "max",
+    "mean",
+    "variance",
+    "std",
+    "quantile",
+    "median",
+    "nunique",
+    "nth",
+}
+
+_STRING_AGGS = {
+    "count",
+    "max",
+    "min",
+    "nunique",
+    "nth",
+}
+
+
 cdef class GroupBy:
     cdef unique_ptr[libcudf_groupby.groupby] c_obj
     cdef dict __dict__
@@ -122,14 +148,6 @@ cdef class GroupBy:
 
         result = Table(data=result_data, index=grouped_keys)
         return result
-
-_STRING_AGGS = [
-    "count",
-    "max",
-    "min",
-    "nth_element",
-    "nunique"
-]
 
 def _drop_unsupported_aggs(Table values, aggs):
     """

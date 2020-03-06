@@ -23,8 +23,11 @@ class GroupBy(object):
 
     def __getattr__(self, key):
         if key != "_agg_func_name_with_args":
-            return functools.partial(self._agg_func_name_with_args, key)
-        raise AttributeError()
+            if key in libgroupby._GROUPBY_AGGS:
+                return functools.partial(self._agg_func_name_with_args, key)
+        raise AttributeError(
+            f"'{self.__class__.__name__}' has no attribute '{key}'"
+        )
 
     def __iter__(self):
         grouped_keys, grouped_values, offsets = self._groupby.groups(self.obj)
