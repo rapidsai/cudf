@@ -2,6 +2,7 @@
 
 ## New Features
 
+- PR #4360 Added Java bindings for bitwise shift operators
 - PR #3577 Add initial dictionary support to column classes
 - PR #3917 Add dictionary add_keys function
 - PR #3777 Add support for dictionary column in gather
