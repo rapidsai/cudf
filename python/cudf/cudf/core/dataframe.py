@@ -1313,6 +1313,11 @@ class DataFrame(Frame):
                 f"Length mismatch: expected {len(self.columns)} elements ,"
                 f"got {len(columns)} elements"
             )
+
+        data = dict(zip(columns, self._data.columns))
+        if len(columns) != len(data):
+            raise ValueError("Duplicate column names are not allowed")
+
         self._data = ColumnAccessor(
             dict(zip(columns, self._data.columns)),
             multiindex=is_multiindex,
