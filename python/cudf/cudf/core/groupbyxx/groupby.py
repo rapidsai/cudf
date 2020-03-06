@@ -1,5 +1,6 @@
 import collections
 import functools
+import pickle
 
 import pandas as pd
 
@@ -10,7 +11,7 @@ import cudf._libxx.groupby as libgroupby
 class GroupBy(object):
     def __init__(self, obj, by=None, level=None, as_index=True, dropna=True):
         self.obj = obj
-        self.as_index = as_index
+        self._as_index = as_index
         self._dropna = dropna
 
         if isinstance(by, _Grouping):
@@ -21,7 +22,7 @@ class GroupBy(object):
         self._groupby = libgroupby.GroupBy(self.grouping.keys, dropna=dropna)
 
     def __getattr__(self, key):
-        if key != "_agg_func_with_args":
+        if key != "_agg_func_name_with_args":
             return functools.partial(self._agg_func_name_with_args, key)
         raise AttributeError()
 
@@ -84,7 +85,7 @@ class GroupBy(object):
         # copy categorical information from keys to the result index:
         result.index._copy_categories(self.grouping.keys)
 
-        if not self.as_index:
+        if not self._as_index:
             for col_name in reversed(self.grouping._named_columns):
                 result.insert(
                     0,
@@ -96,6 +97,39 @@ class GroupBy(object):
         return result
 
     aggregate = agg
+
+    def serialize(self):
+        header = {}
+        frames = []
+
+        header["kwargs"] = {"dropna": self._dropna, "as_index": self._as_index}
+
+        obj_header, obj_frames = self.obj.serialize()
+        header["obj"] = obj_header
+        header["obj_type"] = pickle.dumps(type(self.obj))
+        header["num_obj_frames"] = len(obj_frames)
+        frames.extend(obj_frames)
+
+        grouping_header, grouping_frames = self.grouping.serialize()
+        header["grouping"] = grouping_header
+        header["num_grouping_frames"] = len(grouping_frames)
+        frames.extend(grouping_frames)
+
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, header, frames):
+
+        kwargs = header["kwargs"]
+
+        obj_type = pickle.loads(header["obj_type"])
+        obj = obj_type.deserialize(
+            header["obj"], frames[: header["num_obj_frames"]]
+        )
+        grouping = _Grouping.deserialize(
+            header["grouping"], frames[header["num_obj_frames"] :]
+        )
+        return cls(obj, grouping, **kwargs)
 
     def _agg_func_name_with_args(self, func_name, *args, **kwargs):
         """
@@ -198,7 +232,7 @@ class _Grouping(object):
             - A Grouper object
             - A list of the above
         """
-        self.obj = obj
+        self._obj = obj
         self._key_columns = []
         self.names = []
 
@@ -248,11 +282,11 @@ class _Grouping(object):
             )
 
     def _handle_callable(self, by):
-        by = by(self.obj.index)
-        self.__init__(self.obj, by)
+        by = by(self._obj.index)
+        self.__init__(self._obj, by)
 
     def _handle_series(self, by):
-        by = by._align_to_index(self.obj.index, how="right")
+        by = by._align_to_index(self._obj.index, how="right")
         self._key_columns.append(by._column)
         self.names.append(by.name)
 
@@ -265,7 +299,7 @@ class _Grouping(object):
         self._handle_series(by)
 
     def _handle_label(self, by):
-        self._key_columns.append(self.obj._data[by])
+        self._key_columns.append(self._obj._data[by])
         self.names.append(by)
         self._named_columns.append(by)
 
@@ -276,16 +310,41 @@ class _Grouping(object):
             self._handle_level(by.level)
 
     def _handle_level(self, by):
-        level_values = self.obj.index.get_level_values(by)
+        level_values = self._obj.index.get_level_values(by)
         self._key_columns.append(level_values._column)
         self.names.append(level_values.name)
 
     def _handle_misc(self, by):
         by = cudf.core.column.as_column(by)
-        if len(by) != len(self.obj):
+        if len(by) != len(self._obj):
             raise ValueError("Grouper and object must have same length")
         self._key_columns.append(by)
         self.names.append(None)
+
+    def serialize(self):
+        header = {}
+        frames = []
+        header["names"] = pickle.dumps(self.names)
+        header["_named_columns"] = pickle.dumps(self._named_columns)
+        column_header, column_frames = cudf.core.column.serialize_columns(
+            self._key_columns
+        )
+        header["columns"] = column_header
+        frames.extend(column_frames)
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, header, frames):
+        names = pickle.loads(header["names"])
+        _named_columns = pickle.loads(header["_named_columns"])
+        key_columns = cudf.core.column.deserialize_columns(
+            header["columns"], frames
+        )
+        out = _Grouping.__new__(_Grouping)
+        out.names = names
+        out._named_columns = _named_columns
+        out._key_columns = key_columns
+        return out
 
 
 def _is_multi_agg(aggs):

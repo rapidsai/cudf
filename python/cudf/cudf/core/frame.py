@@ -199,7 +199,7 @@ class Frame(libcudfxx.table.Table):
         Applies boolean mask to each row of `self`,
         rows corresponding to `False` is dropped
         """
-        result = self._from_table(
+        result = self.__class__._from_table(
             libcudfxx.stream_compaction.apply_boolean_mask(
                 self, as_column(boolean_mask)
             )
