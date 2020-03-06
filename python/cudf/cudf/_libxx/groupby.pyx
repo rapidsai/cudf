@@ -11,7 +11,7 @@ from cudf._libxx.table cimport Table
 from cudf._libxx.move cimport move
 from cudf._libxx.aggregation cimport make_aggregation, Aggregation
 
-from cudf._libxx.cpp.table.table cimport table
+from cudf._libxx.cpp.table.table cimport table, table_view
 cimport cudf._libxx.cpp.types as libcudf_types
 cimport cudf._libxx.cpp.groupby as libcudf_groupby
 cimport cudf._libxx.cpp.aggregation as libcudf_aggregation
@@ -70,7 +70,12 @@ cdef class GroupBy:
         self.dropna = True
 
     def groups(self, Table values):
-        c_groups = move(self.c_obj.get()[0].get_groups(values.view()))
+
+        cdef table_view values_view = values.view()
+
+        with nogil:
+            c_groups = move(self.c_obj.get()[0].get_groups(values_view))
+
         c_grouped_keys = move(c_groups.keys)
         c_grouped_values = move(c_groups.values)
         c_group_offsets = c_groups.offsets
