@@ -58,12 +58,15 @@ cdef class GroupBy:
         else:
             c_include_nulls = libcudf_types.include_nulls.YES
 
-        self.c_obj.reset(
-            new libcudf_groupby.groupby(
-                keys.view(),
-                c_include_nulls
+        cdef table_view keys_view = keys.view()
+
+        with nogil:
+            self.c_obj.reset(
+                new libcudf_groupby.groupby(
+                    keys_view,
+                    c_include_nulls
+                )
             )
-        )
 
     def __init__(self, keys, dropna=True):
         self.keys = keys
