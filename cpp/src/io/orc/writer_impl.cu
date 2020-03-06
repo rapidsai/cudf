@@ -164,7 +164,7 @@ class orc_column_view {
         _type_width(_string_type ? 0 : cudf::size_of(col.type())),
         _data_count(col.size()),
         _null_count(col.null_count()),
-        _data(col.data<uint8_t>()),
+        _data(col.head<uint8_t>() + col.offset() * _type_width),
         _nulls(col.nullable() ? col.null_mask() : nullptr),
         _clockscale(to_clockscale<uint8_t>(col.type().id())),
         _type_kind(to_orc_type(col.type().id())) {
