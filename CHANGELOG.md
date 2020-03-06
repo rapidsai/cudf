@@ -131,6 +131,7 @@
 - PR #4305 Move gpuarrow.pyx and related libarrow_cuda files into `_libxx`
 - PR #4244 Port nvstrings Substring Gather/Scatter functions to cuDF Python/Cython
 - PR #4280 Port nvstrings Numeric Handling functions to cuDF Python/Cython
+- PR #4336 Move a bunch of internal nvstrings code to use native StringColumns
 - PR #4166 Port `is_sorted.pyx` to use libcudf++ APIs
 
 ## Bug Fixes
