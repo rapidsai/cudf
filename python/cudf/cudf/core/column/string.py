@@ -3,6 +3,7 @@
 import functools
 import pickle
 import warnings
+from codecs import decode
 
 import numpy as np
 import pandas as pd
@@ -15,7 +16,6 @@ import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
 import cudf._libxx.string_casting as str_cast
 from cudf._lib.nvtx import nvtx_range_pop, nvtx_range_push
-from cudf._libxx.null_mask import bitmask_allocation_size_bytes
 from cudf._libxx.strings.char_types import (
     is_alnum as cpp_is_alnum,
     is_alpha as cpp_is_alpha,
@@ -32,7 +32,7 @@ from cudf._libxx.strings.wrap import wrap as cpp_wrap
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.utils import utils
-from cudf.utils.dtypes import is_list_like
+from cudf.utils.dtypes import is_list_like, is_scalar
 
 _str_to_numeric_typecast_functions = {
     np.dtype("int8"): str_cast.stoi8,
@@ -43,7 +43,7 @@ _str_to_numeric_typecast_functions = {
     np.dtype("float64"): str_cast.stod,
     np.dtype("bool"): str_cast.to_booleans,
     # TODO: support Date32 UNIX days
-    # np.dtype("datetime64[D]"): nvstrings.nvstrings.timestamp2int,
+    # np.dtype("datetime64[D]"): str_cast.timestamp2int,
     np.dtype("datetime64[s]"): str_cast.timestamp2int,
     np.dtype("datetime64[ms]"): str_cast.timestamp2int,
     np.dtype("datetime64[us]"): str_cast.timestamp2int,
@@ -59,7 +59,7 @@ _numeric_to_str_typecast_functions = {
     np.dtype("float64"): str_cast.dtos,
     np.dtype("bool"): str_cast.from_booleans,
     # TODO: support Date32 UNIX days
-    # np.dtype("datetime64[D]"): nvstrings.int2timestamp,
+    # np.dtype("datetime64[D]"): str_cast.int2timestamp,
     np.dtype("datetime64[s]"): str_cast.int2timestamp,
     np.dtype("datetime64[ms]"): str_cast.int2timestamp,
     np.dtype("datetime64[us]"): str_cast.int2timestamp,
@@ -79,6 +79,7 @@ class StringMethods(object):
     def __getattr__(self, attr, *args, **kwargs):
         from cudf.core.series import Series
 
+        # TODO: Remove when all needed string compute APIs are ported
         if hasattr(self._column.nvstrings, attr):
             passed_attr = getattr(self._column.nvstrings, attr)
             if callable(passed_attr):
@@ -136,6 +137,7 @@ class StringMethods(object):
 
     def __dir__(self):
         keys = dir(type(self))
+        # TODO: Remove along with `__getattr__` above when all is ported
         return set(keys + dir(self._column.nvstrings))
 
     def len(self, **kwargs):
@@ -202,7 +204,9 @@ class StringMethods(object):
         """
         from cudf.core import Series, Index
 
-        if isinstance(others, Series):
+        if isinstance(others, StringColumn):
+            others = others.nvstrings
+        elif isinstance(others, Series):
             assert others.dtype == np.dtype("object")
             others = others._column.nvstrings
         elif isinstance(others, Index):
@@ -808,6 +812,7 @@ class StringColumn(column.ColumnBase):
             None, size, dtype, mask=mask, offset=offset, children=children
         )
 
+        # TODO: Remove these once NVStrings is fully deprecated / removed
         self._nvstrings = None
         self._nvcategory = None
         self._indices = None
@@ -833,6 +838,8 @@ class StringColumn(column.ColumnBase):
 
     def set_base_mask(self, value):
         super().set_base_mask(value)
+
+        # TODO: Remove these once NVStrings is fully deprecated / removed
         self._indices = None
         self._nvcategory = None
         self._nvstrings = None
@@ -840,6 +847,8 @@ class StringColumn(column.ColumnBase):
     def set_base_children(self, value):
         # TODO: Implement dtype validation of the children here somehow
         super().set_base_children(value)
+
+        # TODO: Remove these once NVStrings is fully deprecated / removed
         self._indices = None
         self._nvcategory = None
         self._nvstrings = None
@@ -919,6 +928,7 @@ class StringColumn(column.ColumnBase):
     def __len__(self):
         return self.size
 
+    # TODO: Remove this once NVStrings is fully deprecated / removed
     @property
     def nvstrings(self):
         if self._nvstrings is None:
@@ -939,6 +949,7 @@ class StringColumn(column.ColumnBase):
                 )
         return self._nvstrings
 
+    # TODO: Remove these once NVStrings is fully deprecated / removed
     @property
     def nvcategory(self):
         if self._nvcategory is None:
@@ -952,9 +963,11 @@ class StringColumn(column.ColumnBase):
         self._nvcategory = nvc
 
     def _set_mask(self, value):
+        # TODO: Remove these once NVStrings is fully deprecated / removed
         self._nvstrings = None
         self._nvcategory = None
         self._indices = None
+
         super()._set_mask(value)
 
     @property
@@ -983,7 +996,7 @@ class StringColumn(column.ColumnBase):
 
         if mem_dtype.type is np.datetime64:
             if "format" not in kwargs:
-                if len(self.nvstrings) > 0:
+                if len(self) > 0:
                     # infer on host from the first not na element
                     fmt = pd.core.tools.datetimes._guess_datetime_format(
                         self[self.notna()][0]
@@ -1000,27 +1013,28 @@ class StringColumn(column.ColumnBase):
         return self
 
     def to_arrow(self):
-        sbuf = np.empty(self.nvstrings.byte_count(), dtype="int8")
-        obuf = np.empty(len(self.nvstrings) + 1, dtype="int32")
+        if len(self) == 0:
+            sbuf = np.empty(0, dtype="int8")
+            obuf = np.empty(0, dtype="int32")
+            nbuf = None
+        else:
+            sbuf = self.children[1].data.to_host_array().view("int8")
+            obuf = self.children[0].data.to_host_array().view("int32")
+            nbuf = None
+            if self.null_count > 0:
+                nbuf = self.mask.to_host_array().view("int8")
+                nbuf = pa.py_buffer(nbuf)
 
-        mask_size = bitmask_allocation_size_bytes(len(self.nvstrings))
-        nbuf = np.empty(mask_size, dtype="i1")
-
-        self.str().to_offsets(sbuf, obuf, nbuf=nbuf)
         sbuf = pa.py_buffer(sbuf)
         obuf = pa.py_buffer(obuf)
-        nbuf = pa.py_buffer(nbuf)
+
         if self.null_count == len(self):
             return pa.NullArray.from_buffers(
                 pa.null(), len(self), [pa.py_buffer((b""))], self.null_count
             )
         else:
             return pa.StringArray.from_buffers(
-                len(self.nvstrings),
-                obuf,
-                sbuf,
-                nbuf,
-                self.nvstrings.null_count(),
+                len(self), obuf, sbuf, nbuf, self.null_count
             )
 
     def to_pandas(self, index=None):
@@ -1085,29 +1099,6 @@ class StringColumn(column.ColumnBase):
         )
         return col
 
-    def sort_by_values(self, ascending=True, na_position="last"):
-        if na_position == "last":
-            nullfirst = False
-        elif na_position == "first":
-            nullfirst = True
-
-        idx_dev_arr = rmm.device_array(len(self), dtype="int32")
-        dev_ptr = libcudf.cudf.get_ctype_ptr(idx_dev_arr)
-        self.nvstrings.order(
-            2, asc=ascending, nullfirst=nullfirst, devptr=dev_ptr
-        )
-
-        col_inds = column.build_column(
-            Buffer(idx_dev_arr), idx_dev_arr.dtype, mask=None
-        )
-
-        col_keys = self[col_inds.data_array_view]
-
-        return col_keys, col_inds
-
-    def copy(self, deep=True):
-        return column.as_column(self.nvstrings.copy())
-
     def unordered_compare(self, cmpop, rhs):
         return _string_column_binop(self, rhs, op=cmpop)
 
@@ -1115,48 +1106,14 @@ class StringColumn(column.ColumnBase):
         """
         Return col with *to_replace* replaced with *value*
         """
-        to_replace = column.as_column(to_replace)
-        replacement = column.as_column(replacement)
-        if len(to_replace) == 1 and len(replacement) == 1:
-            to_replace = to_replace.nvstrings.to_host()[0]
-            replacement = replacement.nvstrings.to_host()[0]
-            result = self.nvstrings.replace(to_replace, replacement)
-            return column.as_column(result)
-        else:
-            raise NotImplementedError(
-                "StringColumn currently only supports replacing"
-                " single values"
-            )
+        to_replace = column.as_column(to_replace, dtype=self.dtype)
+        replacement = column.as_column(replacement, dtype=self.dtype)
+        return libcudfxx.replace.replace(self, to_replace, replacement)
 
     def fillna(self, fill_value):
-        """
-        Fill null values with * fill_value *
-        """
-        from cudf.core.series import Series
-
-        if not isinstance(fill_value, str) and not (
-            isinstance(fill_value, Series)
-            and isinstance(fill_value._column, StringColumn)
-        ):
-            raise TypeError("fill_value must be a string or a string series")
-
-        # replace fill_value with nvstrings
-        # if it is a column
-
-        if isinstance(fill_value, Series):
-            if len(fill_value) < len(self):
-                raise ValueError(
-                    "fill value series must be of same or "
-                    "greater length than the series to be filled"
-                )
-
-            fill_value = fill_value[: len(self)]._column.nvstrings
-
-        filled_data = self.nvstrings.fillna(fill_value)
-        result = column.as_column(filled_data)
-        result = result.set_mask(None)
-
-        return result
+        if not is_scalar(fill_value):
+            fill_value = column.as_column(fill_value, dtype=self.dtype)
+        return libcudfxx.replace.replace_nulls(self, fill_value)
 
     def _find_first_and_last(self, value):
         found_indices = self.str().contains(f"^{value}$")
@@ -1170,14 +1127,6 @@ class StringColumn(column.ColumnBase):
 
     def find_last_value(self, value, closest=False):
         return self._find_first_and_last(value)[1]
-
-    def unique(self, method="sort"):
-        """
-        Get unique strings in the data
-        """
-        import nvcategory as nvc
-
-        return column.as_column(nvc.from_strings(self.nvstrings).keys())
 
     def normalize_binop_value(self, other):
         if isinstance(other, column.Column):
@@ -1198,15 +1147,22 @@ class StringColumn(column.ColumnBase):
         if reflect:
             lhs, rhs = rhs, lhs
         if isinstance(rhs, StringColumn) and binop == "add":
-            return lhs.nvstrings.cat(others=rhs.nvstrings)
+            return lhs.str().cat(others=rhs)
         else:
             msg = "{!r} operator not supported between {} and {}"
             raise TypeError(msg.format(binop, type(self), type(rhs)))
 
     def sum(self, dtype=None):
-        # dtype is irrelevant it is needed to be in sync with
-        # the sum method for Numeric Series
-        return self.nvstrings.join().to_host()[0]
+        # Should we be raising here? Pandas can't handle the mix of strings and
+        # None and throws, but we already have a test that looks to ignore
+        # nulls and returns anyway.
+
+        # if self.null_count > 0:
+        #     raise ValueError("Cannot get sum of string column with nulls")
+
+        if len(self) == 0:
+            return ""
+        return decode(self.children[1].data.to_host_array(), encoding="utf-8")
 
     @property
     def is_unique(self):
@@ -1221,6 +1177,7 @@ class StringColumn(column.ColumnBase):
     def _mimic_inplace(self, other_col, inplace=False):
         out = super()._mimic_inplace(other_col, inplace=inplace)
         if inplace:
+            # TODO: Remove these once NVStrings is fully deprecated / removed
             self._nvstrings = other_col._nvstrings
             self._nvcategory = other_col._nvcategory
             self._indices = other_col._indices
