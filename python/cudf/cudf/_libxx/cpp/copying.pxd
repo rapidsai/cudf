@@ -55,7 +55,7 @@ cdef extern from "cudf/copying.hpp" namespace "cudf::experimental" nogil:
         column_view input_column,
         mask_allocation_policy policy
     ) except +
-    
+
     cdef unique_ptr[column] allocate_like (
         column_view input_column,
         size_type size,
@@ -128,7 +128,7 @@ cdef extern from "cudf/copying.hpp" namespace "cudf::experimental" nogil:
         scalar rhs,
         column_view boolean_mask
     ) except +
-    
+
     cdef unique_ptr[column] copy_if_else (
         scalar lhs,
         scalar rhs,
@@ -140,7 +140,7 @@ cdef extern from "cudf/copying.hpp" namespace "cudf::experimental" nogil:
         table_view target,
         column_view boolean_mask
     ) except +
-    
+
     cdef unique_ptr[table] boolean_mask_scatter (
         vector[reference_wrapper[scalar]] input,
         table_view target,

@@ -98,73 +98,131 @@ class Frame(libcudfxx.table.Table):
         return self._data[None].copy(deep=False)
 
     def _scatter(self, key, value):
-       result = self._from_table(
-           libcudfxx.copying.scatter(value, key, self)
-       )
+        result = self._from_table(libcudfxx.copying.scatter(value, key, self))
 
-       result._copy_categories(self)
-       return result
+        result._copy_categories(self)
+        return result
+
+    def _empty_like(self):
+        result = self._from_table(libcudfxx.copying.table_empty_like(self))
+
+        result._copy_categories(self)
+        return result
 
     def _slice(self, arg):
-       num_rows = len(self)
-       if num_rows == 0:
-           return self
-       start, stop, stride = arg.indices(num_rows)
-       if start < 0:
-           start = start + num_rows
-       if stop < 0:
-           stop = stop + num_rows
+        """
+       _slice : slice the frame as per the arg
 
-       result = None
-       if start > stop:
+       Parameters
+       ----------
+       arg : should always be of type slice and doesn't handle step
+
+       """
+        num_rows = len(self)
+        if num_rows == 0:
+            return self
+        start, stop, stride = arg.indices(num_rows)
+        if start < 0:
+            start = start + num_rows
+        if stop < 0:
+            stop = stop + num_rows
+
+        if start > stop:
+            return self._empty_like()
+        else:
+            start = len(self) if start > num_rows else start
+            stop = len(self) if stop > num_rows else stop
+
             result = self._from_table(
-               libcudfxx.copying.table_empty_like(self)
-           )
+                libcudfxx.copying.table_slice(self, [start, stop])[0]
+            )
 
-       else :
-           start = len(self) if start > num_rows else start
-           stop = len(self) if stop > num_rows else stop
+            result._copy_categories(self)
+            return result
 
-           result = self._from_table(
-               libcudfxx.copying.table_slice(self, [start, stop])[0]
-           )
+    def _normalize_columns_and_scalars_type(self, other):
+        if isinstance(other, cudf.DataFrame):
+            return [
+                other[other_col].astype(self[self_col].dtype)._column
+                for self_col, other_col in zip(self.columns, other.columns)
+            ]
 
-       result._copy_categories(self)
-       return result
+        elif isinstance(other, (cudf.Series, cudf.Index)):
+            return other.astype(self.dtype)._column
+
+        else:
+            if is_scalar(other):
+                if (other is not None and not np.isnan(other)) and (
+                    self.dtype.type(other) != other
+                ):
+                    raise TypeError(
+                        "Cannot safely cast non-equivalent {} to {}".format(
+                            type(other).__name__, self.dtype.name
+                        )
+                    )
+
+                return (
+                    self.dtype.type(other)
+                    if (other is not None and not np.isnan(other))
+                    else other
+                )
+            else:
+                out = []
+                for in_col_name, sclr in zip(self.columns, other):
+                    common_dtype = self[in_col_name].dtype
+                    if (
+                        sclr is not None
+                        and not np.isnan(sclr)
+                        and (common_dtype.type(sclr) != sclr)
+                    ):
+                        raise TypeError(
+                            """Cannot safely cast non-equivalent {} to
+                            {}""".format(
+                                type(sclr).__name__, common_dtype.dtype.name
+                            )
+                        )
+
+                    out.append(
+                        common_dtype.type(sclr)
+                        if (sclr is not None and not np.isnan(sclr))
+                        else sclr
+                    )
+
+                return out
 
     def _copy_if_else(self, boolean_mask, other):
+        """
+       Create a new type of column from self and other according to
+       boolean_mask. if boolean_mask is true at row i, then value at
+       row i in self is used else value from other ay row i.
+       """
+
         if isinstance(self, cudf.DataFrame):
-            assert False, "DataFrame is not supported"
+            raise TypeError("DataFrame is not supported")
         else:
-            tmp_other = np.array([other]) if is_scalar(other) else other
-            result = None
-
-            if is_scalar(other) and not np.isnan(other) and (
-                self.dtype.type(other) != other):
-                raise TypeError(
-                    "Cannot safely cast non-equivalent {} to {}".format(
-                        type(other).__name__, self.dtype.name
-                    )
+            if isinstance(other, (cudf.Series, cudf.Index)):
+                other = other._column
+            result = self.__class__(
+                libcudfxx.copying.copy_if_else(
+                    self._column, other, boolean_mask._column
                 )
-
-            if is_scalar(other):
-                other = self.dtype.type(other) if not np.isnan(other) else other
-                result = self.__class__(libcudfxx.copying.copy_if_else(
-                    self._column, other, boolean_mask._column))
-            else:
-                result = self.__class__(libcudfxx.copying.copy_if_else(
-                    self._column, other.astype(self.dtype)._column,
-                    boolean_mask._column))
+            )
 
             result._copy_categories(self)
             return result
 
     def _scatter_to_tables(self, scatter_map):
-       result = libcudfxx.copying.scatter_to_tables(self, scatter_map)
-       result = [self._from_table(tbl) for tbl in result]
-       [frame._copy_categories(self) for frame in result]
+        """
+       scatter the dataframe/table to a list of dataframes/tables
+       as per scatter_map
 
-       return result
+       """
+
+        result = libcudfxx.copying.scatter_to_tables(self, scatter_map)
+        result = [self._from_table(tbl) for tbl in result]
+        [frame._copy_categories(self) for frame in result]
+
+        return result
 
     def dropna(self, axis=0, how="any", subset=None, thresh=None):
         """
@@ -765,7 +823,7 @@ class Frame(libcudfxx.table.Table):
                     col.base_data,
                     dtype=categorical_dtypes.get(name, col.dtype),
                     mask=col.base_mask,
-                    offset = col.offset
+                    offset=col.offset,
                 )
         gdf_result._data = to_frame_data
 

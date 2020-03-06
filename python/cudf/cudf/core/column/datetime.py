@@ -156,7 +156,12 @@ class DatetimeColumn(column.ColumnBase):
     def as_numerical(self):
         from cudf.core.column import build_column
 
-        return build_column(data=self.base_data, dtype=np.int64, mask=self.base_mask, offset=self.offset)
+        return build_column(
+            data=self.base_data,
+            dtype=np.int64,
+            mask=self.base_mask,
+            offset=self.offset,
+        )
 
     def as_datetime_column(self, dtype, **kwargs):
         dtype = np.dtype(dtype)
@@ -221,7 +226,9 @@ class DatetimeColumn(column.ColumnBase):
             fill_value = column.as_column(fill_value, nan_as_null=False)
 
         result = libcudfxx.replace.replace_nulls(self, fill_value)
-        result = column.build_column(result.base_data, result.dtype, mask=None, offset=result.offset)
+        result = column.build_column(
+            result.base_data, result.dtype, mask=None, offset=result.offset
+        )
 
         return result
 

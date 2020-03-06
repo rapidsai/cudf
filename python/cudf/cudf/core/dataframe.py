@@ -485,14 +485,47 @@ class DataFrame(Frame):
             raise TypeError(msg.format(type(arg)))
 
     def where(self, cond, other):
-        out_df = cudf.DataFrame(index=self.index)
-        if isinstance(other, cudf.DataFrame):
-            for in_col, cond_col, otr_col in zip(self.columns, cond.columns, other.columns):
-                out_df[in_col] = self[in_col]._copy_if_else(cond[cond_col], other[otr_col])
+        """
+        Replace values with other where the condition is False.
 
-        else:
-            for in_col, cond_scalar, otr_col in zip(self.columns, cond, other.columns):
-                out_df[in_col] = self[in_col]._copy_if_else(cond_scalar, other[otr_col])
+        Parameters
+        ----------
+        cond : boolean
+            Where cond is True, keep the original value. Where False,
+            replace with corresponding value from other.
+        other: list of scalars or a dataframe,
+            Entries where cond is False are replaced with
+            corresponding value from other.
+
+        Returns
+        -------
+        result : DataFrame
+
+        Examples:
+        ---------
+        >>> import cudf
+        >>> df = cudf.DataFrame({"A":[1, 4, 5], "B":[3, 5, 8]})
+        >>> print (df.where(df % 2 == 0, [-1, -1]))
+           A  B
+        0 -1 -1
+        1  4 -1
+        2 -1  8
+
+        """
+        out_df = cudf.DataFrame(index=self.index)
+        other = self._normalize_columns_and_scalars_type(other)
+        if len(self._columns) != len(other):
+            raise ValueError(
+                """Replacement list length or number of dataframe columns
+                should be equal to Number of columns of dataframe"""
+            )
+
+        for in_col_name, cond_col_name, otr_col in zip(
+            self.columns, cond.columns, other
+        ):
+            out_df[in_col_name] = self[in_col_name]._copy_if_else(
+                cond[cond_col_name], otr_col
+            )
 
         return out_df
 
@@ -3965,20 +3998,7 @@ class DataFrame(Frame):
                 "Use an integer array/column for better performance."
             )
 
-        if keep_index:
-            if isinstance(self.index, cudf.MultiIndex):
-                index = self.index.to_frame()._columns
-                index_names = self.index.to_frame().columns.to_list()
-            else:
-                index = [self.index._values]
-                index_names = [self.index.name]
-        else:
-            index = None
-            index_names = []
-
-        tables = self._scatter_to_tables(
-            map_index._column
-        )
+        tables = self._scatter_to_tables(map_index._column)
 
         if map_size:
             # Make sure map_size is >= the number of uniques in map_index
@@ -3989,6 +4009,7 @@ class DataFrame(Frame):
                 )
 
             # Append empty dataframes if map_size > len(tables)
+
             for i in range(map_size - len(tables)):
                 tables.append(self.take([]))
         return tables

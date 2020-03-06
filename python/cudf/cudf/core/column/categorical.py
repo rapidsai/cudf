@@ -9,12 +9,11 @@ import pyarrow as pa
 import cudf
 import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
-from cudf._libxx.transform import bools_to_mask
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.core.dtypes import CategoricalDtype
-from cudf.utils import cudautils, utils
 
+from cudf._libxx.transform import bools_to_mask
 
 class CategoricalAccessor(object):
     """
@@ -152,6 +151,7 @@ class CategoricalAccessor(object):
         """
 
         from cudf import DataFrame, Series
+        from cudf.utils import cudautils
 
         cur_cats = self._column.categories
         new_cats = column.as_column(new_categories)
@@ -324,7 +324,7 @@ class CategoricalColumn(column.ColumnBase):
                 dtype=codes_column.dtype,
                 mask=codes_column.base_mask,
                 size=self.size,
-                offset=self.offset+codes_column.offset,
+                offset=self.offset + codes_column.offset,
             )
             self._children = (codes_column,)
         return self._children
@@ -390,6 +390,8 @@ class CategoricalColumn(column.ColumnBase):
         return self.as_numerical.ordered_compare(cmpop, rhs.as_numerical)
 
     def normalize_binop_value(self, other):
+        from cudf.utils import utils
+
         ary = utils.scalar_broadcast_to(
             self._encode(other), size=len(self), dtype=self.codes.dtype
         )

@@ -917,7 +917,10 @@ class DatetimeIndex(GenericIndex):
         # but we need a NumericalColumn for GenericIndex..
         # how should this be handled?
         out_column = column.build_column(
-            data=out_column.base_data, dtype=out_column.dtype, mask=out_column.mask, offset=out_column.offset
+            data=out_column.base_data,
+            dtype=out_column.dtype,
+            mask=out_column.mask,
+            offset=out_column.offset,
         )
         return as_index(out_column, name=self.name)
 

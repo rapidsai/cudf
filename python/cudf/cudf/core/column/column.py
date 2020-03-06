@@ -413,7 +413,7 @@ class ColumnBase(Column):
                 return column_empty(0, self.dtype, masked=True)
             # compute mask slice
             if stride == 1 or stride is None:
-                if (start > stop):
+                if start > stop:
                     return column_empty(0, dtype=self.dtype, masked=True)
 
                 return libcudfxx.copying.column_slice(self, [start, stop])[0]
@@ -520,20 +520,24 @@ class ColumnBase(Column):
 
         if isinstance(key, slice):
             out = libcudfxx.copying.copy_range(
-                value, self, 0, nelem, key_start, key_stop, False 
+                value, self, 0, nelem, key_start, key_stop, False
             )
             if is_categorical_dtype(value.dtype):
                 out = build_categorical_column(
                     categories=value.categories,
                     codes=out,
                     mask=out.mask,
-                    ordered=value.ordered
+                    ordered=value.ordered,
                 )
         else:
             try:
                 if not isinstance(value, Column):
                     value = as_column(value)
-                out = self.as_frame()._scatter(key, value.as_frame())._as_column()
+                out = (
+                    self.as_frame()
+                    ._scatter(key, value.as_frame())
+                    ._as_column()
+                )
             except RuntimeError as e:
                 if "out of bounds" in str(e):
                     raise IndexError(

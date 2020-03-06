@@ -151,7 +151,10 @@ class NumericalColumn(column.ColumnBase):
         sort_inds = get_sorted_inds(self, ascending, na_position)
         col_keys = self[sort_inds]
         col_inds = column.build_column(
-            sort_inds.base_data, dtype=sort_inds.dtype, mask=sort_inds.base_mask, offset=sort_inds.offset
+            sort_inds.base_data,
+            dtype=sort_inds.dtype,
+            mask=sort_inds.base_mask,
+            offset=sort_inds.offset,
         )
         return col_keys, col_inds
 
@@ -324,7 +327,9 @@ class NumericalColumn(column.ColumnBase):
             else:
                 fill_value = fill_value.astype(self.dtype)
         result = libcudfxx.replace.replace_nulls(self, fill_value)
-        result = column.build_column(result.base_data, result.dtype, mask=None, offset=result.offset)
+        result = column.build_column(
+            result.base_data, result.dtype, mask=None, offset=result.offset
+        )
 
         return result
 

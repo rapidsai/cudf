@@ -1,6 +1,5 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from __future__ import print_function
 import pandas as pd
 
 from libcpp cimport bool
@@ -90,7 +89,7 @@ def _copy_range(Column input_column,
             c_target_begin)
         )
 
-    return Column.from_unique_ptr(move(c_result)) 
+    return Column.from_unique_ptr(move(c_result))
 
 
 def copy_range(Column input_column,
@@ -100,6 +99,10 @@ def copy_range(Column input_column,
                size_type target_begin,
                size_type target_end,
                bool inplace):
+    """
+    Copy input_column from input_begin to input_end to
+    target_column from target_begin to target_end
+    """
 
     if abs(target_end - target_begin) <= 1:
         return target_column
@@ -113,7 +116,7 @@ def copy_range(Column input_column,
     if target_begin > target_end:
         return target_column
 
-    if inplace == True:
+    if inplace is True:
         _copy_range_in_place(input_column, target_column,
                              input_begin, input_end, target_begin)
     else:
@@ -143,7 +146,8 @@ def gather(Table source_table, Column gather_map):
     )
 
 
-def _scatter_table(Table source_table, Column scatter_map, Table target_table, bounds_check=True):
+def _scatter_table(Table source_table, Column scatter_map,
+                   Table target_table, bounds_check=True):
 
     cdef table_view source_table_view = source_table.data_view()
     cdef column_view scatter_map_view = scatter_map.view()
@@ -168,12 +172,16 @@ def _scatter_table(Table source_table, Column scatter_map, Table target_table, b
         index_names=None
     )
 
-    out_table._index = None if target_table._index is None else target_table._index.copy(deep=True)
+    out_table._index = (
+        None if target_table._index is None else target_table._index.copy(
+            deep=True)
+    )
 
     return out_table
 
 
-def _scatter_scalar(scalars, Column scatter_map, Table target_table, bounds_check=True):
+def _scatter_scalar(scalars, Column scatter_map,
+                    Table target_table, bounds_check=True):
 
     cdef vector[unique_ptr[scalar]] source_scalars
     cdef bool c_bounds_check = bounds_check
@@ -183,9 +191,9 @@ def _scatter_scalar(scalars, Column scatter_map, Table target_table, bounds_chec
         source_scalars.push_back(move(slr.c_value))
     cdef column_view scatter_map_view = scatter_map.view()
     cdef table_view target_table_view = target_table.data_view()
-    
+
     cdef unique_ptr[table] c_result
-    
+
     with nogil:
         c_result = move(
             cpp_copying.scatter(
@@ -202,12 +210,19 @@ def _scatter_scalar(scalars, Column scatter_map, Table target_table, bounds_chec
         index_names=None
     )
 
-    out_table._index = None if target_table._index is None else target_table._index.copy(deep=True)
+    out_table._index = (
+        None if target_table._index is None else target_table._index.copy(
+            deep=True)
+    )
 
     return out_table
 
 
 def scatter(input, scatter_map, target, bounds_check=True):
+    """
+    Scattering input into taregt as per the scatter map,
+    input can be a list of scalars or can be a table
+    """
 
     if not isinstance(scatter_map, Column):
         scatter_map = as_column(scatter_map)
@@ -219,6 +234,9 @@ def scatter(input, scatter_map, target, bounds_check=True):
 
 
 def scatter_to_tables(Table source_table, Column partition_map):
+    """
+    Scatter the source_table to a set of tables as per the partition_map
+    """
 
     cdef table_view source_table_view = source_table.view()
     cdef column_view partition_map_view = partition_map.view()
@@ -230,7 +248,6 @@ def scatter_to_tables(Table source_table, Column partition_map):
             source_table_view,
             partition_map_view
         ))
-
 
     result = []
     for i in range(c_result.size()):
@@ -256,9 +273,9 @@ def column_empty_like(Column input_column):
     return Column.from_unique_ptr(move(c_result))
 
 
-def column_allocate_like(Column input_column, size = None):
+def column_allocate_like(Column input_column, size=None):
 
-    cdef size_type c_size = 0;
+    cdef size_type c_size = 0
     cdef column_view input_column_view = input_column.view()
     cdef unique_ptr[column] c_result
 
@@ -304,7 +321,7 @@ def column_slice(Column input_column, indices):
     cdef vector[column_view] c_result
 
     cdef int index
-    
+
     for index in indices:
         c_indices.push_back(index)
 
@@ -425,25 +442,6 @@ def table_split(Table input_table, splits):
     return result
 
 
-#def contiguous_table_split(Table input_table, splits):
-#
-#    cdef table_view input_table_view = input_table.view()
-#    cdef vector[size_type] c_splits
-#    c_splits.reserve(len(splits))
-#
-#    cdef vector[cpp_copying.contiguous_split] c_result
-#
-#    cdef int split
-#    for split in splits:
-#        c_splits.push_back(split)
-#
-#    with nogil:
-#        c_result = move(cpp_copying.contiguous_split(
-#            input_table_view,
-#            c_splits
-#        ))
-
-
 def _copy_if_else_column_column(Column lhs, Column rhs, Column boolean_mask):
 
     cdef column_view lhs_view = lhs.view()
@@ -466,7 +464,7 @@ def _copy_if_else_column_column(Column lhs, Column rhs, Column boolean_mask):
 
 def _copy_if_else_scalar_column(Scalar lhs, Column rhs, Column boolean_mask):
 
-    cdef scalar* lhs_scalar  = lhs.c_value.get()
+    cdef scalar* lhs_scalar = lhs.c_value.get()
     cdef column_view rhs_view = rhs.view()
     cdef column_view boolean_mask_view = boolean_mask.view()
 
@@ -487,7 +485,7 @@ def _copy_if_else_scalar_column(Scalar lhs, Column rhs, Column boolean_mask):
 def _copy_if_else_column_scalar(Column lhs, Scalar rhs, Column boolean_mask):
 
     cdef column_view lhs_view = lhs.view()
-    cdef scalar* rhs_scalar  = rhs.c_value.get()
+    cdef scalar* rhs_scalar = rhs.c_value.get()
     cdef column_view boolean_mask_view = boolean_mask.view()
 
     cdef unique_ptr[column] c_result
@@ -506,8 +504,8 @@ def _copy_if_else_column_scalar(Column lhs, Scalar rhs, Column boolean_mask):
 
 def _copy_if_else_scalar_scalar(Scalar lhs, Scalar rhs, Column boolean_mask):
 
-    cdef scalar* lhs_scalar  = lhs.c_value.get()
-    cdef scalar* rhs_scalar  = rhs.c_value.get()
+    cdef scalar* lhs_scalar = lhs.c_value.get()
+    cdef scalar* rhs_scalar = rhs.c_value.get()
     cdef column_view boolean_mask_view = boolean_mask.view()
 
     cdef unique_ptr[column] c_result
@@ -530,16 +528,23 @@ def copy_if_else(lhs, rhs, boolean_mask):
         if isinstance(rhs, Column):
             return _copy_if_else_column_column(lhs, rhs, boolean_mask)
         else:
-            return _copy_if_else_column_scalar(lhs, Scalar(rhs), boolean_mask)
+            return _copy_if_else_column_scalar(
+                lhs, Scalar(rhs, lhs.dtype), boolean_mask)
     else:
         if isinstance(rhs, Column):
-            return _copy_if_else_scalar_column(Scalar(lhs), rhs, boolean_mask)
+            return _copy_if_else_scalar_column(
+                Scalar(lhs, rhs.dtype), rhs, boolean_mask)
         else:
-            return _copy_if_else_scalar_scalar(Scalar(lhs), Scalar(rhs), boolean_mask)
+            common_dtype = None
+            if lhs is None and rhs is None:
+                return lhs
+
+            return _copy_if_else_scalar_scalar(
+                Scalar(lhs), Scalar(rhs), boolean_mask)
 
 
 def _boolean_mask_scatter_table(Table input_table, Table target_table,
-                          Column boolean_mask):
+                                Column boolean_mask):
 
     cdef table_view input_table_view = input_table.view()
     cdef table_view target_table_view = target_table.view()
@@ -564,7 +569,7 @@ def _boolean_mask_scatter_table(Table input_table, Table target_table,
 
 
 def _boolean_mask_scatter_scalar(list input_scalars, Table target_table,
-                          Column boolean_mask):
+                                 Column boolean_mask):
 
     cdef vector[reference_wrapper[scalar]] input_scalar_vector
     input_scalar_vector.reserve(len(input_scalars))

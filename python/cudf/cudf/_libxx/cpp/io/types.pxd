@@ -9,8 +9,6 @@ from libcpp.pair cimport pair
 from pyarrow.includes.libarrow cimport RandomAccessFile
 cimport cudf._libxx.cpp.table.table as cudf_table
 
-from cudf._libxx.cpp.table.table cimport table
-
 
 cdef extern from "cudf/io/types.hpp" \
         namespace "cudf::experimental::io" nogil:

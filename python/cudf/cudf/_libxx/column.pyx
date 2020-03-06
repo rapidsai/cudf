@@ -430,7 +430,8 @@ cdef class Column:
                 data_owner = owner.base_data
             if data_owner is None:
                 data = Buffer(
-                    rmm.DeviceBuffer(ptr=data_ptr, size=(size+offset) * dtype.itemsize)
+                    rmm.DeviceBuffer(ptr=data_ptr,
+                                     size=(size+offset) * dtype.itemsize)
                 )
             else:
                 data = Buffer(
@@ -440,8 +441,8 @@ cdef class Column:
                 )
         else:
             data = Buffer(
-                    rmm.DeviceBuffer(ptr=data_ptr, size=0)
-                )
+                rmm.DeviceBuffer(ptr=data_ptr, size=0)
+            )
 
         mask_ptr = <uintptr_t>(cv.null_mask())
         mask = None

@@ -364,6 +364,37 @@ def test_series_with_nulls_where(fill_value):
     assert_eq(expect, got)
 
 
+@pytest.mark.parametrize("fill_value", [[888, 999]])
+def test_dataframe_with_nulls_where_with_scalars(fill_value):
+    pdf = pd.DataFrame(
+        {
+            "A": [-1, 2, -3, None, 5, 6, -7, 0],
+            "B": [4, -2, 3, None, 7, 6, 8, 0],
+        }
+    )
+    gdf = DataFrame.from_pandas(pdf)
+
+    expect = pdf.where(pdf % 3 == 0, fill_value)
+    got = gdf.where(gdf % 3 == 0, fill_value)
+
+    assert_eq(expect, got)
+
+
+def test_dataframe_with_nulls_where_with_df():
+    pdf = pd.DataFrame(
+        {
+            "A": [-1, 2, -3, None, 5, 6, -7, 0],
+            "B": [4, -2, 3, None, 7, 6, 8, 0],
+        }
+    )
+    gdf = DataFrame.from_pandas(pdf)
+
+    expect = pdf.where(pdf % 3 == 0, -pdf)
+    got = gdf.where(gdf % 3 == 0, -gdf)
+
+    assert_eq(expect, got)
+
+
 def test_series_multiple_times_with_nulls():
     sr = Series([1, 2, 3, None])
     expected = Series([None, None, None, None], dtype=np.int64)
