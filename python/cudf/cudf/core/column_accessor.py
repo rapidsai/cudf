@@ -127,7 +127,7 @@ class ColumnAccessor(MutableMapping):
         """"
         Convert the keys of the ColumnAccessor to a Pandas Index object.
         """
-        if self.multiindex:
+        if self.multiindex and len(self.level_names) > 0:
             # Using `from_frame()` instead of `from_tuples`
             # prevents coercion of values to a different type
             # (e.g., ''->NaT)

@@ -47,7 +47,11 @@ class MultiIndex(Index):
         # early termination enables lazy evaluation of codes
         if "source_data" in kwargs:
             source_data = kwargs["source_data"].reset_index(drop=True)
-            self._names = names
+            self._names = names or source_data._data.names
+            # if names are unique
+            # try using those as the source_data column names:
+            if len(dict.fromkeys(self.names)) == len(self.names):
+                source_data.columns = names
             self._data = source_data._data
             self._codes = codes
             self._levels = levels
@@ -528,10 +532,6 @@ class MultiIndex(Index):
                     "number of levels on index."
                 )
             df.columns = name
-        else:
-            # if names are unique, try using those
-            if len(dict.fromkeys(self.names)) == len(self.names):
-                df.columns = self.names
         return df
 
     def get_level_values(self, level):
