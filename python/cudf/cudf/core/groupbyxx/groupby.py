@@ -1,5 +1,6 @@
 import collections
 import functools
+import itertools
 import pickle
 
 import pandas as pd
@@ -30,12 +31,7 @@ class GroupBy(object):
         )
 
     def __iter__(self):
-        grouped_keys, grouped_values, offsets = self._groupby.groups(self.obj)
-
-        grouped_keys = cudf.Index._from_table(grouped_keys)
-        grouped_values = self.obj.__class__._from_table(grouped_values)
-        group_names = grouped_keys.unique()
-
+        group_names, offsets, grouped_values = self._grouped()
         for i, name in enumerate(group_names):
             yield name, grouped_values[offsets[i] : offsets[i + 1]]
 
@@ -134,6 +130,18 @@ class GroupBy(object):
         )
         return cls(obj, grouping, **kwargs)
 
+    def _grouped(self):
+        grouped_keys, grouped_values, offsets = self._groupby.groups(self.obj)
+
+        grouped_keys = cudf.Index._from_table(grouped_keys)
+        grouped_values = self.obj.__class__._from_table(grouped_values)
+        group_names = grouped_keys.unique()
+        return (
+            group_names,
+            offsets,
+            grouped_values,
+        )
+
     def _agg_func_name_with_args(self, func_name, *args, **kwargs):
         """
         Aggregate given an aggregate function name
@@ -173,6 +181,192 @@ class GroupBy(object):
                 out[col] = [agg]
 
         return out
+
+    def apply(self, function):
+        """Apply a python transformation function over the grouped chunk.
+
+        Parameters
+        ----------
+        func : function
+          The python transformation function that will be applied
+          on the grouped chunk.
+
+        Examples
+        --------
+        .. code-block:: python
+
+          from cudf import DataFrame
+          df = DataFrame()
+          df['key'] = [0, 0, 1, 1, 2, 2, 2]
+          df['val'] = [0, 1, 2, 3, 4, 5, 6]
+          groups = df.groupby(['key'], method='cudf')
+
+          # Define a function to apply to each row in a group
+          def mult(df):
+            df['out'] = df['key'] * df['val']
+            return df
+
+          result = groups.apply(mult)
+          print(result)
+
+        Output:
+
+        .. code-block:: python
+
+             key  val  out
+          0    0    0    0
+          1    0    1    0
+          2    1    2    2
+          3    1    3    3
+          4    2    4    8
+          5    2    5   10
+          6    2    6   12
+        """
+        if not callable(function):
+            raise TypeError("type {!r} is not callable", type(function))
+
+        _, offsets, grouped_values = self._grouped()
+        ends = itertools.chain(offsets[1:], [None])
+        chunks = [grouped_values[s:e] for s, e in zip(offsets, ends)]
+        return cudf.concat([function(chk) for chk in chunks]).sort_index()
+
+    def apply_grouped(self, function, **kwargs):
+        """Apply a transformation function over the grouped chunk.
+
+        This uses numba's CUDA JIT compiler to convert the Python
+        transformation function into a CUDA kernel, thus will have a
+        compilation overhead during the first run.
+
+        Parameters
+        ----------
+        func : function
+          The transformation function that will be executed on the CUDA GPU.
+        incols: list
+          A list of names of input columns.
+        outcols: list
+          A dictionary of output column names and their dtype.
+        kwargs : dict
+          name-value of extra arguments. These values are passed directly into
+          the function.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            from cudf import DataFrame
+            from numba import cuda
+            import numpy as np
+
+            df = DataFrame()
+            df['key'] = [0, 0, 1, 1, 2, 2, 2]
+            df['val'] = [0, 1, 2, 3, 4, 5, 6]
+            groups = df.groupby(['key'], method='cudf')
+
+            # Define a function to apply to each group
+            def mult_add(key, val, out1, out2):
+                for i in range(cuda.threadIdx.x, len(key), cuda.blockDim.x):
+                    out1[i] = key[i] * val[i]
+                    out2[i] = key[i] + val[i]
+
+            result = groups.apply_grouped(mult_add,
+                                          incols=['key', 'val'],
+                                          outcols={'out1': np.int32,
+                                                   'out2': np.int32},
+                                          # threads per block
+                                          tpb=8)
+
+            print(result)
+
+        Output:
+
+        .. code-block:: python
+
+               key  val out1 out2
+            0    0    0    0    0
+            1    0    1    0    1
+            2    1    2    2    3
+            3    1    3    3    4
+            4    2    4    8    6
+            5    2    5   10    7
+            6    2    6   12    8
+
+
+
+        .. code-block:: python
+
+            import cudf
+            import numpy as np
+            from numba import cuda
+            import pandas as pd
+            from random import randint
+
+
+            # Create a random 15 row dataframe with one categorical
+            # feature and one random integer valued feature
+            df = cudf.DataFrame(
+                    {
+                        "cat": [1] * 5 + [2] * 5 + [3] * 5,
+                        "val": [randint(0, 100) for _ in range(15)],
+                    }
+                 )
+
+            # Group the dataframe by its categorical feature
+            groups = df.groupby("cat", method="cudf")
+
+            # Define a kernel which takes the moving average of a
+            # sliding window
+            def rolling_avg(val, avg):
+                win_size = 3
+                for i in range(cuda.threadIdx.x, len(val), cuda.blockDim.x):
+                    if i < win_size - 1:
+                        # If there is not enough data to fill the window,
+                        # take the average to be NaN
+                        avg[i] = np.nan
+                    else:
+                        total = 0
+                        for j in range(i - win_size + 1, i + 1):
+                            total += val[j]
+                        avg[i] = total / win_size
+
+            # Compute moving avgs on all groups
+            results = groups.apply_grouped(rolling_avg,
+                                           incols=['val'],
+                                           outcols=dict(avg=np.float64))
+            print("Results:", results)
+
+            # Note this gives the same result as its pandas equivalent
+            pdf = df.to_pandas()
+            pd_results = pdf.groupby('cat')['val'].rolling(3).mean()
+
+
+        Output:
+
+        .. code-block:: python
+
+            Results:
+                 cat  val                 avg
+            0    1   16
+            1    1   45
+            2    1   62                41.0
+            3    1   45  50.666666666666664
+            4    1   26  44.333333333333336
+            5    2    5
+            6    2   51
+            7    2   77  44.333333333333336
+            8    2    1                43.0
+            9    2   46  41.333333333333336
+            [5 more rows]
+
+        This is functionally equivalent to `pandas.DataFrame.Rolling
+        <https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.rolling.html>`_
+
+        """
+        if not callable(function):
+            raise TypeError("type {!r} is not callable", type(function))
+
+        _, offsets, grouped_values = self._grouped()
+        kwargs.update({"chunks": offsets})
+        return grouped_values.apply_chunks(function, **kwargs)
 
 
 class DataFrameGroupBy(GroupBy):

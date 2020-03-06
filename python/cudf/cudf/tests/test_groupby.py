@@ -172,16 +172,7 @@ def test_groupby_agg_mean_min(nelem, method):
         .agg(["mean", "min"])
     )
 
-    if method == "cudf":
-        got_mean = np.sort(got_df["val_mean"].to_array())
-        got_min = np.sort(got_df["val_min"].to_array())
-        expect_mean = np.sort(expect_df["val", "mean"].values)
-        expect_min = np.sort(expect_df["val", "min"].values)
-        # verify
-        np.testing.assert_array_almost_equal(expect_mean, got_mean)
-        np.testing.assert_array_almost_equal(expect_min, got_min)
-    else:
-        assert_eq(expect_df, got_df)
+    assert_eq(expect_df, got_df)
 
 
 @pytest.mark.parametrize("nelem", get_nelem())
@@ -243,27 +234,7 @@ def test_groupby_iterate_groups():
     def assert_values_equal(arr):
         np.testing.assert_array_equal(arr[0], arr)
 
-    for grp in df.groupby(["key1", "key2"], method="cudf"):
-        pddf = grp.to_pandas()
-        for k in "key1,key2".split(","):
-            assert_values_equal(pddf[k].values)
-
-
-def test_groupby_as_df():
-    np.random.seed(0)
-    df = DataFrame()
-    nelem = 20
-    df["key1"] = np.random.randint(0, 3, nelem)
-    df["key2"] = np.random.randint(0, 2, nelem)
-    df["val1"] = np.random.random(nelem)
-    df["val2"] = np.random.random(nelem)
-
-    def assert_values_equal(arr):
-        np.testing.assert_array_equal(arr[0], arr)
-
-    df, segs = df.groupby(["key1", "key2"], method="cudf").as_df()
-    for s, e in zip(segs, list(segs[1:]) + [None]):
-        grp = df[s:e]
+    for name, grp in df.groupby(["key1", "key2"], method="cudf"):
         pddf = grp.to_pandas()
         for k in "key1,key2".split(","):
             assert_values_equal(pddf[k].values)
@@ -286,10 +257,8 @@ def test_groupby_apply():
         return df
 
     expect = expect_grpby.apply(foo)
-    expect = expect.sort_values(["key1", "key2"]).reset_index(drop=True)
-
-    got = got_grpby.apply(foo).to_pandas()
-    pd.util.testing.assert_frame_equal(expect, got)
+    got = got_grpby.apply(foo)
+    assert_eq(expect, got)
 
 
 def test_groupby_apply_grouped():
@@ -327,7 +296,7 @@ def test_groupby_apply_grouped():
         return df
 
     expect = expect_grpby.apply(emulate)
-    expect = expect.sort_values(["key1", "key2"]).reset_index(drop=True)
+    expect = expect.sort_values(["key1", "key2"])
 
     pd.util.testing.assert_frame_equal(expect, got)
 

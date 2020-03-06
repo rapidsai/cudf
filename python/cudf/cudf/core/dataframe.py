@@ -2527,7 +2527,7 @@ class DataFrame(Frame):
         by=None,
         sort=True,
         as_index=True,
-        method="hash",
+        method=None,
         level=None,
         group_keys=True,
         dropna=True,
@@ -2569,23 +2569,11 @@ class DataFrame(Frame):
             raise TypeError(
                 "groupby() requires either by or level to be" "specified."
             )
-        if method == "cudf":
-            from cudf.core.groupby.legacy_groupby import Groupby
+        from cudf.core.groupbyxx.groupby import DataFrameGroupBy
 
-            if as_index:
-                warnings.warn(
-                    "as_index==True not supported due to the lack of "
-                    "multi-index with legacy groupby function. Use hash "
-                    "method for multi-index"
-                )
-            result = Groupby(self, by=by)
-            return result
-        else:
-            from cudf.core.groupbyxx.groupby import DataFrameGroupBy
-
-            return DataFrameGroupBy(
-                self, by=by, level=level, as_index=as_index, dropna=dropna
-            )
+        return DataFrameGroupBy(
+            self, by=by, level=level, as_index=as_index, dropna=dropna
+        )
 
     @copy_docstring(Rolling)
     def rolling(
