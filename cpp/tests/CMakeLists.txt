@@ -749,7 +749,7 @@ ConfigureTest(ROLLING_TEST "${ROLLING_TEST_SRC}")
 set(FILLING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/filling/fill_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/filling/repeat_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/filling/sequence_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/filling/sequence_tests.cpp")
 
 ConfigureTest(FILLING_TEST "${FILLING_TEST_SRC}")
 

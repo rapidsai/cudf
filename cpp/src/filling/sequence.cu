@@ -87,7 +87,7 @@ std::unique_ptr<column> sequence(size_type size, scalar const& init, scalar cons
    CUDF_EXPECTS(size >= 0, "size must be >= 0");
    CUDF_EXPECTS(is_numeric(init.type()), "Input scalar types must be numeric");
 
-   return cudf::experimental::type_dispatcher(init.type(), sequence_functor{}, size, init, step, mr, stream);
+   return type_dispatcher(init.type(), sequence_functor{}, size, init, step, mr, stream);
 }
 
 }  // namespace detail
@@ -95,7 +95,7 @@ std::unique_ptr<column> sequence(size_type size, scalar const& init, scalar cons
 std::unique_ptr<column> sequence(size_type size, scalar const& init, scalar const& step,
                                  rmm::mr::device_memory_resource* mr)
 {
-   return cudf::experimental::detail::sequence(size, init, step, mr, 0);
+   return detail::sequence(size, init, step, mr, 0);
 }
 
 }  // namespace experimental
