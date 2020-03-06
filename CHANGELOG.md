@@ -207,6 +207,7 @@
 - PR #4303 Parquet reader: fix empty columns missing from table
 - PR #4115 Serialize an empty column table with non zero rows
 - PR #4327 Preemptive dispatch fix for changes in dask#5973
+- PR #4358 Fix strings::concat where narep is an empty string
 
 
 # cuDF 0.12.0 (04 Feb 2020)
