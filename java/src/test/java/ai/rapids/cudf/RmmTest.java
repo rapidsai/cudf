@@ -281,6 +281,48 @@ public class RmmTest {
     assertEquals(2, deallocInvocations.get());
   }
 
+  @Test
+  public void testExceptionHandling() {
+    Rmm.initialize(RmmAllocationMode.POOL, false, 1024 * 1024L);
+
+    RmmEventHandler handler = new RmmEventHandler() {
+      @Override
+      public boolean onAllocFailure(long sizeRequested) {
+        throw new AllocFailException();
+      }
+
+      @Override
+      public long[] getAllocThresholds() {
+        return new long[] { 8 * 1024 };
+      }
+
+      @Override
+      public long[] getDeallocThresholds() {
+        return new long[] { 6 * 1024 };
+      }
+
+      @Override
+      public void onAllocThreshold(long totalAllocSize) {
+        throw new AllocThresholdException();
+      }
+
+      @Override
+      public void onDeallocThreshold(long totalAllocSize) {
+        throw new DeallocThresholdException();
+      }
+    };
+
+    Rmm.setEventHandler(handler);
+    long addr = Rmm.alloc(6 * 1024, 0);
+    assertThrows(DeallocThresholdException.class, () -> Rmm.free(addr, 0));
+    assertThrows(AllocThresholdException.class, () -> Rmm.alloc(12 * 1024, 0));
+    assertThrows(AllocFailException.class, () -> Rmm.alloc(TOO_MUCH_MEMORY, 0));
+  }
+
+  private static class AllocFailException extends RuntimeException {}
+  private static class AllocThresholdException extends RuntimeException {}
+  private static class DeallocThresholdException extends RuntimeException {}
+
   private static abstract class BaseRmmEventHandler implements RmmEventHandler {
     @Override
     public long[] getAllocThresholds() {

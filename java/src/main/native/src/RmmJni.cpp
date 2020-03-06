@@ -73,7 +73,7 @@ public:
   virtual ~java_event_handler_memory_resource() {
     // This should normally be called by a JVM thread. If the JVM environment is missing then this
     // is likely being triggered by the C++ runtime during shutdown. In that case the JVM may
-    // already be destroyed and should not be called.
+    // already be destroyed and this thread should not try to attach to get an environment.
     JNIEnv* env = nullptr;
     if (jvm->GetEnv(reinterpret_cast<void**>(&env), cudf::jni::MINIMUM_JNI_VERSION) == JNI_OK) {
       env->DeleteGlobalRef(handler_obj);

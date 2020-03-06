@@ -790,9 +790,11 @@ JNIEnv* get_jni_env(JavaVM* jvm);
       if (RMM_ERROR_CUDA_ERROR == internal_rmmStatus) {                                            \
         cuda_e = cudf::jni::cuda_exception(env, cudaGetLastError());                               \
       }                                                                                            \
-      jthrowable jt = cudf::jni::rmmException(env, internal_rmmStatus, cuda_e);                    \
-      if (jt != NULL) {                                                                            \
-        env->Throw(jt);                                                                            \
+      if (!env->ExceptionCheck()) {                                                                \
+        jthrowable jt = cudf::jni::rmmException(env, internal_rmmStatus, cuda_e);                  \
+        if (jt != NULL) {                                                                          \
+          env->Throw(jt);                                                                          \
+        }                                                                                          \
       }                                                                                            \
       return ret_val;                                                                              \
     }                                                                                              \
