@@ -16,8 +16,12 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/null_mask.hpp>
+#include <cudf/strings/detail/fill.hpp>
+#include <cudf/detail/fill.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+
+#include <thrust/iterator/constant_iterator.h>
 
 namespace cudf {
 namespace {
@@ -79,6 +83,52 @@ std::unique_ptr<column> make_fixed_width_column(
     return make_timestamp_column(type, size, state, stream, mr);
   }
   return make_numeric_column(type, size, state, stream, mr);  
+}
+
+struct column_from_scalar_dispatch 
+{
+  template <typename T>
+  std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>>
+  operator()( scalar const& value, size_type size,
+              rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+  {
+    auto output_column = make_fixed_width_column(value.type(),size,mask_state::UNALLOCATED,stream,mr);
+    auto view = output_column->mutable_view();
+    experimental::detail::fill_in_place(view,0,size,value,stream);
+    return output_column;
+  }
+
+  template <typename T>
+  std::enable_if_t<std::is_same<cudf::string_view, T>::value, std::unique_ptr<cudf::column>>
+  operator()( scalar const& value, size_type size,
+              rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+  {
+    auto p_scalar = static_cast<experimental::scalar_type_t<T> const*>(&value);
+    auto null_mask = create_null_mask(size, mask_state::ALL_NULL, stream, mr);
+    column_view sc{ data_type{STRING}, size, nullptr, 
+                    static_cast<bitmask_type*>(null_mask.data()), size };
+    auto output = cudf::strings::detail::fill(cudf::strings_column_view(sc),
+                                              0, size, *p_scalar, mr, stream);
+    output->set_null_mask(rmm::device_buffer{},0);
+    return output;
+  }
+  
+  template <typename T>
+  std::enable_if_t<std::is_same<cudf::dictionary32, T>::value, std::unique_ptr<cudf::column>>
+  operator()( scalar const& value, size_type size,
+              rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+  {
+    CUDF_FAIL("dictionary not supported when creating from scalar");
+  }
+};
+
+std::unique_ptr<column> make_column_from_scalar(scalar const& s, size_type size,
+    rmm::mr::device_memory_resource* mr, cudaStream_t stream )
+{
+  CUDF_EXPECTS( s.is_valid(), "scalar parameter must be valid");
+  CUDF_EXPECTS( size > 0, "size parameter must be greater than zero");
+  return experimental::type_dispatcher(s.type(), column_from_scalar_dispatch{}, 
+                                       s, size, mr, stream );
 }
 
 }  // namespace cudf

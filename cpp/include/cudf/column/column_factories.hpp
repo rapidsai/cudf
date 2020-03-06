@@ -19,7 +19,8 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
-#include "column.hpp"
+#include <cudf/column/column.hpp>
+#include <cudf/scalar/scalar.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 
@@ -367,5 +368,25 @@ std::unique_ptr<column> make_strings_column(
     std::unique_ptr<column> chars_column, size_type null_count,
     rmm::device_buffer&& null_mask, cudaStream_t stream = 0,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+
+/**
+ * @brief Return a column with size elements that are all equal to the
+ * given scalar.
+ *
+ * The output column will have the same type as the provided scalar.
+ * The output column will not contain any null rows.
+ *
+ * @throw cudf::logic_error if size is 0 or less.
+ *
+ * @param s The scalar to use for values in the column.
+ * @param size The number of rows for the output column.
+ * @param stream Optional stream for use with all memory allocation
+ *               and device kernels
+ * @param mr Optional resource to use for device memory.
+ */
+std::unique_ptr<column> make_column_from_scalar(scalar const& s, size_type size,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+    cudaStream_t stream = 0 );
 
 }  // namespace cudf
