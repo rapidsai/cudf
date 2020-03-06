@@ -71,6 +71,14 @@ TEST_F(StringsCombineTest, Concatenate)
         auto results = cudf::strings::concatenate(table,cudf::string_scalar(":"),cudf::string_scalar("_"));
         cudf::test::expect_columns_equal(*results,expected);
     }
+    {
+        std::vector<const char*> h_expected{ "eeexyz", "bbabc", "d", "éa", "aa", "bbb", "éééf" };
+        cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
+            thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
+
+        auto results = cudf::strings::concatenate(table,cudf::string_scalar(""),cudf::string_scalar(""));
+        cudf::test::expect_columns_equal(*results,expected);
+    }
 }
 
 TEST_F(StringsCombineTest, ConcatZeroSizeStringsColumns)
