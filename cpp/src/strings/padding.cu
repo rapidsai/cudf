@@ -71,24 +71,25 @@ std::unique_ptr<column> pad( strings_column_view const& strings,
     auto strings_column = column_device_view::create(strings.parent(), stream);
     auto d_strings = *strings_column;
 
+    // create null_mask
     rmm::device_buffer null_mask = copy_bitmask( strings.parent(), stream, mr );
+
+    // build offsets column
     auto offsets_transformer_itr = thrust::make_transform_iterator( thrust::make_counting_iterator<int32_t>(0),
-        compute_pad_output_length_fn{d_strings,width,fill_char_size} );
+            compute_pad_output_length_fn{d_strings,width,fill_char_size} );
     auto offsets_column = make_offsets_child_column(offsets_transformer_itr,
                                        offsets_transformer_itr+strings_count,
                                        mr, stream);
-    auto offsets_view = offsets_column->view();
-    auto d_offsets = offsets_view.data<int32_t>();
+    auto d_offsets = offsets_column->view().data<int32_t>();
 
     // build chars column
     size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
     auto chars_column = strings::detail::create_chars_child_column( strings_count, strings.null_count(), bytes, mr, stream );
-    auto chars_view = chars_column->mutable_view();
-    auto d_chars = chars_view.data<char>();
+    auto d_chars = chars_column->mutable_view().data<char>();
 
     if( side==pad_side::left )
     {
-        thrust::for_each_n(rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator<cudf::size_type>(0), strings_count,
+        thrust::for_each_n(execpol->on(stream), thrust::make_counting_iterator<cudf::size_type>(0), strings_count,
             [d_strings, width, d_fill_char, d_offsets, d_chars] __device__ (size_type idx) {
                 if( d_strings.is_null(idx) )
                     return;
@@ -102,7 +103,7 @@ std::unique_ptr<column> pad( strings_column_view const& strings,
     }
     else if( side==pad_side::right )
     {
-        thrust::for_each_n(rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator<cudf::size_type>(0), strings_count,
+        thrust::for_each_n(execpol->on(stream), thrust::make_counting_iterator<cudf::size_type>(0), strings_count,
             [d_strings, width, d_fill_char, d_offsets, d_chars] __device__ (size_type idx) {
                 if( d_strings.is_null(idx) )
                     return;
@@ -116,15 +117,15 @@ std::unique_ptr<column> pad( strings_column_view const& strings,
     }
     else if( side==pad_side::both )
     {
-        thrust::for_each_n(rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator<cudf::size_type>(0), strings_count,
+        thrust::for_each_n(execpol->on(stream), thrust::make_counting_iterator<cudf::size_type>(0), strings_count,
             [d_strings, width, d_fill_char, d_offsets, d_chars] __device__ (size_type idx) {
                 if( d_strings.is_null(idx) )
                     return;
                 string_view d_str = d_strings.element<string_view>(idx);
                 char* ptr = d_chars + d_offsets[idx];
                 int32_t pad = static_cast<int32_t>(width - d_str.length());
-                auto left_pad = pad/2;
-                auto right_pad = pad - left_pad;
+                auto right_pad = pad/2;
+                auto left_pad = pad - right_pad;
                 while( left_pad-- > 0 )
                     ptr += from_char_utf8(d_fill_char,ptr);
                 ptr = copy_string(ptr, d_str);
