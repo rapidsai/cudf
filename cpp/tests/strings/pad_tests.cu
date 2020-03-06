@@ -59,7 +59,7 @@ TEST_F(StringsPadTest, Padding)
     {
         auto results = cudf::strings::pad(strings_view, width, cudf::strings::pad_side::both, phil);
 
-        std::vector<const char*> h_expected{ "eee ddd", "bb cc+", nullptr, "++++++", "++aa++", "+bbb++", "+ééé++", "++o+++" };
+        std::vector<const char*> h_expected{ "eee ddd", "+bb cc", nullptr, "++++++", "++aa++", "++bbb+", "++ééé+", "+++o++" };
         cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
              thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
         cudf::test::expect_columns_equal(*results,expected);
