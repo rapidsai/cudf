@@ -238,7 +238,15 @@ class Frame(libcudfxx.table.Table):
         result._copy_categories(self)
         return result
 
-    def rank(self, axis=0, method="average", numeric_only=None, na_option="keep", ascending=True, pct=False):
+    def rank(
+        self,
+        axis=0,
+        method="average",
+        numeric_only=None,
+        na_option="keep",
+        ascending=True,
+        pct=False,
+    ):
         """
         Compute numerical data ranks (1 through n) along axis.
         By default, equal values are assigned a rank that is the average of the
@@ -271,23 +279,28 @@ class Frame(libcudfxx.table.Table):
         same type as caller
             Return a Series or DataFrame with data ranks as values.
         """
-        if method not in {'average', 'min', 'max', 'first', 'dense'}:
-            raise KeyError
-        if na_option not in {'keep', 'top', 'bottom'}:
-            raise KeyError
+        if method not in {"average", "min", "max", "first", "dense"}:
+            raise KeyError(method)
+        if na_option not in {"keep", "top", "bottom"}:
+            raise KeyError(na_option)
         is_column = False
-        source = self #TODO code for selecting numeric columns without copy
+
+        # TODO code for selecting numeric columns without copy
+        source = self
         if isinstance(source, (column.ColumnBase)):
             source = source.as_frame()
             is_column = True
 
-        out_rank_table = libcudfxx.sort.rank_columns(source, method, na_option, ascending, pct)
+        out_rank_table = libcudfxx.sort.rank_columns(
+            source, method, na_option, ascending, pct
+        )
 
         if is_column:
-            return self._from_table(as_column(out_rank_table[out_rank_table.columns[0]]))
+            return self._from_table(
+                as_column(out_rank_table[out_rank_table.columns[0]])
+            )
         else:
             return self._from_table(out_rank_table)
-        
 
     def drop_duplicates(self, subset=None, keep="first", nulls_are_equal=True):
         """

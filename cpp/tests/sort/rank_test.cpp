@@ -42,7 +42,8 @@ void run_rank_test (cudf::table_view input,
                                                     method,
                                                     column_order, 
                                                     _include_nulls, 
-                                                    null_precedence);
+                                                    null_precedence,
+                                                    false);
     if(print) {
         cudf::test::print(got_rank_table->view().column(0)); std::cout<<"\n";
     }

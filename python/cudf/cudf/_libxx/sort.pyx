@@ -246,6 +246,7 @@ def rank_columns(Table source_table, str method, str na_option, bool ascending, 
         else include_nulls.INCLUDE_NULLS
     )
     cdef unique_ptr[table] c_result
+    cdef bool percentage = True if pct else False
  
     with nogil:
         c_result = move(
@@ -254,7 +255,8 @@ def rank_columns(Table source_table, str method, str na_option, bool ascending, 
                 c_rank_method,
                 column_order,
                 _include_nulls,
-                null_precedence
+                null_precedence,
+                percentage
             )
         )
 

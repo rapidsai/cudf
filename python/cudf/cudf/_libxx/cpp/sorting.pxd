@@ -30,7 +30,8 @@ cdef extern from "cudf/sorting.hpp" namespace "cudf::experimental" nogil:
         rank_method method,
         libcudf_types.order column_order,
         libcudf_types.include_nulls _include_nulls,
-        libcudf_types.null_order null_precedence) except +
+        libcudf_types.null_order null_precedence,
+        bool percentage) except +
 
     cdef bool is_sorted(
         const table_view& table,

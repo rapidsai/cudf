@@ -161,6 +161,7 @@ std::unique_ptr<table> stable_sort_by_key(
  * @param _include_nulls  flag to include nulls during ranking
  * @param null_precedence The desired order of null compared to other elements
  * for all columns
+ * @param percentage flag to convert ranks to percentage in range (0,1]
  * @param mr The device memory resource used to allocate the returned table
  * @return std::unique_ptr<column> A non-nullable column of INT32 elements
  * containing the permuted row indices of `input` if it were sorted
@@ -171,6 +172,7 @@ std::unique_ptr<table> rank(
     order column_order,
     include_nulls _include_nulls,
     null_order null_precedence,
+    bool percentage,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
     
 } // namespace experimental
