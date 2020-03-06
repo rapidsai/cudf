@@ -90,7 +90,7 @@ struct column_from_scalar_dispatch
   template <typename T>
   std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>>
   operator()( scalar const& value, size_type size,
-              rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+              rmm::mr::device_memory_resource* mr, cudaStream_t stream) const
   {
     if( !value.is_valid() )
       return make_fixed_width_column(value.type(), size, mask_state::ALL_NULL, stream);
@@ -103,7 +103,7 @@ struct column_from_scalar_dispatch
   template <typename T>
   std::enable_if_t<std::is_same<cudf::string_view, T>::value, std::unique_ptr<cudf::column>>
   operator()( scalar const& value, size_type size,
-              rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+              rmm::mr::device_memory_resource* mr, cudaStream_t stream) const
   {
     auto null_mask = create_null_mask(size, mask_state::ALL_NULL, stream, mr);
     if( !value.is_valid() )
@@ -124,7 +124,7 @@ struct column_from_scalar_dispatch
   template <typename T>
   std::enable_if_t<std::is_same<cudf::dictionary32, T>::value, std::unique_ptr<cudf::column>>
   operator()( scalar const& value, size_type size,
-              rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+              rmm::mr::device_memory_resource* mr, cudaStream_t stream) const
   {
     CUDF_FAIL("dictionary not supported when creating from scalar");
   }
