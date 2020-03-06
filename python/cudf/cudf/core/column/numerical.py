@@ -9,7 +9,6 @@ import rmm
 
 import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
-from cudf.core._sort import get_sorted_inds
 from cudf.core.buffer import Buffer
 from cudf.core.column import as_column, column
 from cudf.utils import cudautils, utils
@@ -96,9 +95,7 @@ class NumericalColumn(column.ColumnBase):
         return _numeric_column_compare(self, rhs, op=cmpop)
 
     def _apply_scan_op(self, op):
-        out_col = column.column_empty_like_same_mask(self, dtype=self.dtype)
-        libcudf.reduce.scan(self, out_col, op, inclusive=True)
-        return out_col
+        return libcudfxx.reduce.scan(op, self, True)
 
     def normalize_binop_value(self, other):
         if other is None:
@@ -149,14 +146,6 @@ class NumericalColumn(column.ColumnBase):
             return self
         return libcudfxx.unary.cast(self, dtype)
 
-    def sort_by_values(self, ascending=True, na_position="last"):
-        sort_inds = get_sorted_inds(self, ascending, na_position)
-        col_keys = self[sort_inds]
-        col_inds = column.build_column(
-            sort_inds.data, dtype=sort_inds.dtype, mask=sort_inds.mask
-        )
-        return col_keys, col_inds
-
     def to_pandas(self, index=None):
         if self.has_nulls and self.dtype == np.bool:
             # Boolean series in Pandas that contains None/NaN is of dtype
@@ -187,48 +176,37 @@ class NumericalColumn(column.ColumnBase):
         else:
             return out
 
-    def unique(self, method="sort"):
-        # method variable will indicate what algorithm to use to
-        # calculate unique, not used right now
-        if method != "sort":
-            msg = "non sort based unique() not implemented yet"
-            raise NotImplementedError(msg)
-        segs, sortedvals = self._unique_segments()
-        # gather result
-        out_col = column.as_column(sortedvals)[segs]
-        return out_col
-
     def all(self):
-        return bool(libcudf.reduce.reduce("all", self, dtype=np.bool_))
+        return bool(libcudfxx.reduce.reduce("all", self, dtype=np.bool_))
 
     def any(self):
         if self.valid_count == 0:
             return False
-        return bool(libcudf.reduce.reduce("any", self, dtype=np.bool_))
+        return bool(libcudfxx.reduce.reduce("any", self, dtype=np.bool_))
 
     def min(self, dtype=None):
-        return libcudf.reduce.reduce("min", self, dtype=dtype)
+        return libcudfxx.reduce.reduce("min", self, dtype=dtype)
 
     def max(self, dtype=None):
-        return libcudf.reduce.reduce("max", self, dtype=dtype)
+        return libcudfxx.reduce.reduce("max", self, dtype=dtype)
 
     def sum(self, dtype=None):
-        return libcudf.reduce.reduce("sum", self, dtype=dtype)
+        return libcudfxx.reduce.reduce("sum", self, dtype=dtype)
 
     def product(self, dtype=None):
-        return libcudf.reduce.reduce("product", self, dtype=dtype)
+        return libcudfxx.reduce.reduce("product", self, dtype=dtype)
 
     def mean(self, dtype=np.float64):
-        return libcudf.reduce.reduce("mean", self, dtype=dtype)
+        return libcudfxx.reduce.reduce("mean", self, dtype=dtype)
 
     def var(self, ddof=1, dtype=np.float64):
-        return libcudf.reduce.reduce("var", self, dtype=dtype, ddof=ddof)
+        return libcudfxx.reduce.reduce("var", self, dtype=dtype, ddof=ddof)
 
     def std(self, ddof=1, dtype=np.float64):
-        return libcudf.reduce.reduce("std", self, dtype=dtype, ddof=ddof)
+        return libcudfxx.reduce.reduce("std", self, dtype=dtype, ddof=ddof)
 
     def sum_of_squares(self, dtype=None):
-        return libcudf.reduce.reduce("sum_of_squares", self, dtype=dtype)
+        return libcudfxx.reduce.reduce("sum_of_squares", self, dtype=dtype)
 
     def round(self, decimals=0):
         if decimals < 0:
@@ -377,28 +355,6 @@ class NumericalColumn(column.ColumnBase):
         elif found == -1:
             raise ValueError("value not found")
         return found
-
-    @property
-    def is_monotonic_increasing(self):
-        if not hasattr(self, "_is_monotonic_increasing"):
-            if self.nullable and self.has_nulls:
-                self._is_monotonic_increasing = False
-            else:
-                self._is_monotonic_increasing = libcudf.issorted.issorted(
-                    [self]
-                )
-        return self._is_monotonic_increasing
-
-    @property
-    def is_monotonic_decreasing(self):
-        if not hasattr(self, "_is_monotonic_decreasing"):
-            if self.nullable and self.has_nulls:
-                self._is_monotonic_decreasing = False
-            else:
-                self._is_monotonic_decreasing = libcudf.issorted.issorted(
-                    [self], [1]
-                )
-        return self._is_monotonic_decreasing
 
     def can_cast_safely(self, to_dtype):
         """

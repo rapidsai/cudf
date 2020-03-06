@@ -1151,7 +1151,7 @@ class Series(Frame):
 
     @property
     def str(self):
-        return self._column.str(self.index, self.name)
+        return self._column.str(parent=self)
 
     @property
     def dtype(self):
@@ -2081,20 +2081,11 @@ class Series(Frame):
         warnings.warn("Use .unique() instead", DeprecationWarning)
         return self.unique()
 
-    def unique(self, method="sort", sort=True):
-        """Returns unique values of this Series.
-        default='sort' will be changed to 'hash' when implemented.
+    def unique(self):
         """
-        if method != "sort":
-            msg = "non sort based unique() not implemented yet"
-            raise NotImplementedError(msg)
-        if not sort:
-            msg = "not sorted unique not implemented yet."
-            raise NotImplementedError(msg)
-        if self.null_count == len(self):
-            res = column.column_empty_like(self._column, newsize=0)
-            return self._copy_construct(data=res)
-        res = self._column.unique(method=method)
+        Returns unique values of this Series.
+        """
+        res = self._column.unique()
         return Series(res, name=self.name)
 
     def nunique(self, method="sort", dropna=True):

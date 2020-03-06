@@ -38,7 +38,7 @@ inline bool __device__ out_of_bounds(size_type size, size_type idx) {
     return idx < 0 || idx >= size;
 }
 
-struct functor {
+struct shift_functor {
 
     template<typename T, typename... Args>
     std::enable_if_t<not cudf::is_fixed_width<T>(), std::unique_ptr<column>>
@@ -129,7 +129,7 @@ std::unique_ptr<column> shift(column_view const& input,
         return empty_like(input);
     }
 
-    return type_dispatcher(input.type(), functor{},
+    return type_dispatcher(input.type(), shift_functor{},
                            input, offset, fill_value,
                            mr, stream);
 }

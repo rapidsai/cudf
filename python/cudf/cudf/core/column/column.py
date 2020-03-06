@@ -23,6 +23,7 @@ from cudf._libxx.null_mask import (
 )
 from cudf._libxx.stream_compaction import unique_count as cpp_unique_count
 from cudf._libxx.transform import bools_to_mask
+from cudf.core._sort import get_sorted_inds
 from cudf.core.buffer import Buffer
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils import cudautils, ioutils, utils
@@ -74,10 +75,12 @@ class ColumnBase(Column):
     @property
     def data_array_view(self):
         """
-        View the data as a device array or nvstrings object
+        View the data as a device array object
         """
         if self.dtype == "object":
+            # TODO: Change this to raise exception once copying.pyx is ported
             return self.nvstrings
+            # raise ValueError("Cannot get an array view of a StringColumn")
 
         if is_categorical_dtype(self.dtype):
             return self.codes.data_array_view
@@ -235,6 +238,7 @@ class ColumnBase(Column):
                         libcudfxx.MAX_STRING_COLUMN_BYTES_STR
                     )
                 )
+            # TODO: remove nvstrings when concat.pyx is ported
             objs = [o.nvstrings for o in objs]
             return as_column(nvstrings.from_strings(*objs))
 
@@ -383,6 +387,7 @@ class ColumnBase(Column):
             index = len(self) + index
         if index > len(self) - 1:
             raise IndexError
+        # TODO: Remove this when copying.pyx is ported
         val = self.data_array_view[index]  # this can raise IndexError
         if isinstance(val, nvstrings.nvstrings):
             val = val.to_host()[0]
@@ -643,11 +648,25 @@ class ColumnBase(Column):
 
     @property
     def is_monotonic_increasing(self):
-        raise (NotImplementedError)
+        if not hasattr(self, "_is_monotonic_increasing"):
+            if self.has_nulls:
+                self._is_monotonic_increasing = False
+            else:
+                self._is_monotonic_increasing = self.as_frame()._is_sorted(
+                    ascending=None, null_position=None
+                )
+        return self._is_monotonic_increasing
 
     @property
     def is_monotonic_decreasing(self):
-        raise (NotImplementedError)
+        if not hasattr(self, "_is_monotonic_decreasing"):
+            if self.has_nulls:
+                self._is_monotonic_decreasing = False
+            else:
+                self._is_monotonic_decreasing = self.as_frame()._is_sorted(
+                    ascending=[False], null_position=None
+                )
+        return self._is_monotonic_decreasing
 
     def get_slice_bound(self, label, side, kind):
         """
@@ -674,19 +693,10 @@ class ColumnBase(Column):
         if side == "right":
             return self.find_last_value(label, closest=True) + 1
 
-    def sort_by_values(self):
-        raise NotImplementedError
-
-    def _unique_segments(self):
-        """ Common code for unique, unique_count and value_counts"""
-        # make dense column
-        densecol = self.dropna()
-        # sort the column
-        sortcol, _ = densecol.sort_by_values()
-        # find segments
-        sortedvals = sortcol.data_array_view
-        segs, begins = cudautils.find_segments(sortedvals)
-        return segs, sortedvals
+    def sort_by_values(self, ascending=True, na_position="last"):
+        col_inds = get_sorted_inds(self, ascending, na_position)
+        col_keys = self[col_inds]
+        return col_keys, col_inds
 
     def unique_count(self, method="sort", dropna=True):
         if method != "sort":
@@ -719,15 +729,13 @@ class ColumnBase(Column):
         sr = cudf.Series(self)
         labels, cats = sr.factorize()
 
-        # string columns include null index in factorization; remove:
-        if (
-            pd.api.types.pandas_dtype(self.dtype).type in (np.str_, np.object_)
-        ) and self.has_nulls:
+        # columns include null index in factorization; remove:
+        if self.has_nulls:
             cats = cats.dropna()
             labels = labels - 1
 
         return build_categorical_column(
-            categories=cats,
+            categories=cats._column,
             codes=labels._column,
             mask=self.mask,
             ordered=ordered,
@@ -788,6 +796,12 @@ class ColumnBase(Column):
         return self.as_frame().searchsorted(
             values, side, ascending=ascending, na_position=na_position
         )
+
+    def unique(self):
+        """
+        Get unique values in the data
+        """
+        return self.as_frame().drop_duplicates(keep="first")._as_column()
 
     def serialize(self):
         header = {}
@@ -1021,6 +1035,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
         data = arbitrary._values
         if dtype is not None:
             data = data.astype(dtype)
+    # TODO: Remove nvstrings here when nvstrings is fully removed
     elif isinstance(arbitrary, nvstrings.nvstrings):
         byte_count = arbitrary.byte_count()
         if byte_count > libcudfxx.MAX_STRING_COLUMN_BYTES:
