@@ -186,5 +186,4 @@ TYPED_TEST(Rank, Dense)
     run_rank_test(  cudf::table_view{{col1}}, cudf::table_view{{col1_asce_keep}}, first,
                     cudf::order::ASCENDING, 
                     cudf::include_nulls::NO,  cudf::null_order::AFTER, true);
-    //Null column
 }

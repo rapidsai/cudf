@@ -24,7 +24,7 @@
 namespace cudf {
 
 enum class rank_method {
-  FIRST,   // stable sort order ranking
+  FIRST,   // stable sort order ranking (no ties)
   AVERAGE, // mean of first in the group
   MIN,     // min  of first in the group
   MAX,     // max  of first in the group
@@ -151,6 +151,20 @@ std::unique_ptr<table> stable_sort_by_key(
     std::vector<null_order> const& null_precedence = {},
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+
+/**---------------------------------------------------------------------------*
+ * @brief Computes the ranks of each column in a lexicographical sorted order.
+ *
+ * @param input The table to rank
+ * @param method The ranking method used for tie breaking (same values).
+ * @param column_order The desired sort order for all columns
+ * @param _include_nulls  flag to include nulls during ranking
+ * @param null_precedence The desired order of null compared to other elements
+ * for all columns
+ * @param mr The device memory resource used to allocate the returned table
+ * @return std::unique_ptr<column> A non-nullable column of INT32 elements
+ * containing the permuted row indices of `input` if it were sorted
+ *---------------------------------------------------------------------------**/
 std::unique_ptr<table> rank(
     table_view input,
     rank_method method,

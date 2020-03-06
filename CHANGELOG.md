@@ -26,6 +26,7 @@
 - PR #4217 Add libcudf++ quantiles Cython implementation
 - PR #4216 Add cudf.Scalar Python type
 - PR #4240 Add groupby::groups()
+- PR #4294 Add Series rank and Dataframe rank
 
 ## Improvements
 

@@ -16,53 +16,52 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/sorting.hpp>
 #include <cudf/detail/sorting.hpp>
+#include <cudf/sorting.hpp>
 #include <cudf/table/row_operators.cuh>
+#include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
-#include <cudf/detail/gather.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
-#include <thrust/sequence.h>
 #include <thrust/iterator/discard_iterator.h>
+#include <thrust/sequence.h>
 
 namespace cudf {
 namespace experimental {
 namespace detail {
 
-template<bool has_nulls, typename ReturnType = bool>
+template <bool has_nulls, typename ReturnType = bool>
 struct unique_comparator {
   unique_comparator(table_device_view device_table,
                     size_type const *sorted_order)
       : comp(device_table, device_table, true), perm(sorted_order) {}
-  __device__ ReturnType operator()(size_type index) const noexcept{
+  __device__ ReturnType operator()(size_type index) const noexcept {
     return index == 0 || not comp(perm[index], perm[index - 1]);
   };
-  private:
+
+private:
   row_equality_comparator<has_nulls> comp;
-  size_type const* perm;
+  size_type const *perm;
 };
 
-std::unique_ptr<table> rank(
-    table_view const& input,
-    rank_method method,
-    order column_order,
-    include_nulls _include_nulls,
-    null_order null_precedence,
-    rmm::mr::device_memory_resource* mr,
-    cudaStream_t stream=0) {
+std::unique_ptr<table> rank(table_view const &input, rank_method method,
+                            order column_order, include_nulls _include_nulls,
+                            null_order null_precedence,
+                            rmm::mr::device_memory_resource *mr,
+                            cudaStream_t stream = 0) {
   auto const size = input.num_rows();
-  
+
   std::vector<std::unique_ptr<column>> rank_columns;
-  for (auto const& input_col : input) {
+  for (auto const &input_col : input) {
     std::unique_ptr<column> sorted_order =
         (method == rank_method::FIRST)
             ? detail::stable_sorted_order(table_view{{input_col}},
-                {column_order}, {null_precedence}, mr, stream)
-            : detail::sorted_order(table_view{{input_col}}, 
-                {column_order}, {null_precedence}, mr, stream);
+                                          {column_order}, {null_precedence}, mr,
+                                          stream)
+            : detail::sorted_order(table_view{{input_col}}, {column_order},
+                                   {null_precedence}, mr, stream);
     column_view sorted_order_view = sorted_order->view();
 
     // na_option=keep assign NA to NA values
@@ -76,10 +75,12 @@ std::unique_ptr<table> rank(
 
     auto rank_mutable_view = rank_columns.back()->mutable_view();
     auto rank_data = rank_mutable_view.data<double>();
-    auto device_table = table_device_view::create(table_view{{input_col}}, stream);
-    rmm::device_vector<double> dense_rank_sorted; //as key for min, max, average
+    auto device_table =
+        table_device_view::create(table_view{{input_col}}, stream);
+    rmm::device_vector<double> dense_rank_sorted; // as key for min, max,
+                                                  // average
     // TODO: double? or size_type?
-    if(method != rank_method::FIRST) {
+    if (method != rank_method::FIRST) {
       dense_rank_sorted = rmm::device_vector<double>(input_col.size());
       if (input_col.has_nulls()) {
         auto conv = unique_comparator<true, double>(
@@ -87,14 +88,16 @@ std::unique_ptr<table> rank(
         auto it = thrust::make_transform_iterator(
             thrust::make_counting_iterator<size_type>(0), conv);
         thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream), it,
-                               it + input_col.size(), dense_rank_sorted.data().get());
+                               it + input_col.size(),
+                               dense_rank_sorted.data().get());
       } else {
         auto conv = unique_comparator<false, double>(
             *device_table, sorted_order_view.data<size_type>());
         auto it = thrust::make_transform_iterator(
             thrust::make_counting_iterator<size_type>(0), conv);
         thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream), it,
-                               it + input_col.size(), dense_rank_sorted.data().get());
+                               it + input_col.size(),
+                               dense_rank_sorted.data().get());
       }
     }
 
@@ -113,34 +116,30 @@ std::unique_ptr<table> rank(
       break;
     case rank_method::MIN: {
       rmm::device_vector<double> min_sorted(input_col.size(), 0);
-      thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream),
-                            dense_rank_sorted.begin(), dense_rank_sorted.end(),
-                            thrust::make_counting_iterator<double>(1),
-                            thrust::make_discard_iterator(),
-                            min_sorted.begin(), 
-                            thrust::equal_to<double>{},
-                            thrust::minimum<double>{});
+      thrust::reduce_by_key(
+          rmm::exec_policy(stream)->on(stream), dense_rank_sorted.begin(),
+          dense_rank_sorted.end(), thrust::make_counting_iterator<double>(1),
+          thrust::make_discard_iterator(), min_sorted.begin(),
+          thrust::equal_to<double>{}, thrust::minimum<double>{});
       auto sorted_min_rank = thrust::make_transform_iterator(
-          dense_rank_sorted.begin(), [min_rank = min_sorted.begin()] __device__
-                                        (auto i) { return min_rank[i-1]; });
-      thrust::scatter(rmm::exec_policy(stream)->on(stream),
-                      sorted_min_rank, sorted_min_rank+input_col.size(),
+          dense_rank_sorted.begin(), [min_rank = min_sorted.begin()] 
+          __device__( auto i) { return min_rank[i - 1]; });
+      thrust::scatter(rmm::exec_policy(stream)->on(stream), sorted_min_rank,
+                      sorted_min_rank + input_col.size(),
                       sorted_order_view.begin<size_type>(), rank_data);
     } break;
     case rank_method::MAX: {
       rmm::device_vector<double> max_sorted(input_col.size(), 0);
-      thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream),
-                            dense_rank_sorted.begin(), dense_rank_sorted.end(),
-                            thrust::make_counting_iterator<double>(1),
-                            thrust::make_discard_iterator(),
-                            max_sorted.begin(),
-                            thrust::equal_to<double>{},
-                            thrust::maximum<double>{});
+      thrust::reduce_by_key(
+          rmm::exec_policy(stream)->on(stream), dense_rank_sorted.begin(),
+          dense_rank_sorted.end(), thrust::make_counting_iterator<double>(1),
+          thrust::make_discard_iterator(), max_sorted.begin(),
+          thrust::equal_to<double>{}, thrust::maximum<double>{});
       auto sorted_max_rank = thrust::make_transform_iterator(
-          dense_rank_sorted.begin(), [max_rank = max_sorted.begin()] __device__
-                                        (auto i) { return max_rank[i-1]; });
-      thrust::scatter(rmm::exec_policy(stream)->on(stream),
-                      sorted_max_rank, sorted_max_rank+input_col.size(),
+          dense_rank_sorted.begin(), [max_rank = max_sorted.begin()] __device__(
+                                         auto i) { return max_rank[i - 1]; });
+      thrust::scatter(rmm::exec_policy(stream)->on(stream), sorted_max_rank,
+                      sorted_max_rank + input_col.size(),
                       sorted_order_view.begin<size_type>(), rank_data);
     } break;
     case rank_method::AVERAGE: {
@@ -173,19 +172,18 @@ std::unique_ptr<table> rank(
     default:
       CUDF_FAIL("Unexpected rank_method for rank()");
     }
-    //TODO pct inplace transform
+    // TODO pct inplace transform
   }
   return std::make_unique<table>(std::move(rank_columns));
 }
-}  // namespace detail
+} // namespace detail
 
-std::unique_ptr<table> rank(table_view input,
-                             rank_method method,
-                             order column_order,
-                             include_nulls _include_nulls,
-                             null_order null_precedence,
-                             rmm::mr::device_memory_resource* mr) {
-    return detail::rank(input, method, column_order, _include_nulls, null_precedence, mr);
+std::unique_ptr<table> rank(table_view input, rank_method method,
+                            order column_order, include_nulls _include_nulls,
+                            null_order null_precedence,
+                            rmm::mr::device_memory_resource *mr) {
+  return detail::rank(input, method, column_order, _include_nulls,
+                      null_precedence, mr);
 }
-}  // namespace experimental
-}  // namespace cudf
+} // namespace experimental
+} // namespace cudf
