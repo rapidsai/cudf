@@ -17,6 +17,7 @@ import cudf._libxx as libcudfxx
 from cudf.core.column import ColumnBase, DatetimeColumn, column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
+from cudf.core.groupby.groupby import SeriesGroupBy
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
 from cudf.core.window import Rolling
@@ -2427,6 +2428,7 @@ class Series(Frame):
             )
         return Series(output_dary, name=self.name, index=self.index)
 
+    @copy_docstring(SeriesGroupBy)
     def groupby(
         self,
         by=None,
@@ -2443,7 +2445,6 @@ class Series(Frame):
                 "The group_keys keyword is not yet implemented"
             )
         else:
-            from cudf.core.groupby.groupby import SeriesGroupBy
 
             return SeriesGroupBy(self, by=by, level=level, dropna=dropna)
 

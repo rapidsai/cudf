@@ -10,6 +10,32 @@ import cudf._libxx.groupby as libgroupby
 
 
 class GroupBy(object):
+    """
+    Group a DataFrame or Series by a set of columns.
+
+    Parameters
+    ----------
+    by : optional
+        Specifies the grouping columns. Can be any of the following:
+        - A Python function called on each value of the object's index
+        - A dict or Series that maps index labels to group names
+        - A cudf.Index object
+        - A str indicating a column name
+        - An array of the same length as the object
+        - A Grouper object
+        - A list of the above
+    level : int, level_name or list, optional
+        For objects with a MultiIndex, `level` can be used to specify
+        grouping by one or more levels of the MultiIndex.
+    as_index : bool, optional
+        If as_index=True (default), the group names appear
+        as the keys of the resulting DataFrame.
+        If as_index=False, the groups are returned as ordinary
+        columns of the resulting DataFrame, *if they are named columns*.
+    dropna : bool, optional
+        If True (default), do not include the "null" group.
+    """
+
     def __init__(self, obj, by=None, level=None, as_index=True, dropna=True):
         self.obj = obj
         self._as_index = as_index
@@ -36,6 +62,9 @@ class GroupBy(object):
             yield name, grouped_values[offsets[i] : offsets[i + 1]]
 
     def size(self):
+        """
+        Return the size of each group.
+        """
         return (
             cudf.Series(
                 cudf.core.column.column_empty(
@@ -58,6 +87,45 @@ class GroupBy(object):
         -------
         A Series or DataFrame containing the combined results of the
         aggregation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> a = cudf.DataFrame({'a': [1, 1, 2], 'b': [1, 2, 3]})
+        >>> a.groupby('a').agg('sum')
+           b
+        a
+        1  3
+        2  3
+
+        Specifying a list of aggregations to perform on each column.
+
+        >>> a.groupby('a').agg(['sum', 'min'])
+            b       c
+          sum min sum min
+        a
+        1   3   1   4   2
+        2   3   3   1   1
+
+        Using a dict to specify aggregations to perform per column.
+
+        >>> a.groupby('a').agg({'a': 'max', 'b': ['min', 'mean']})
+            a   b
+          max min mean
+        a
+        1   1   1  1.5
+        2   2   3  3.0
+
+        Using lambdas/callables to specify aggregations taking parameters.
+
+        >>> f1 = lambda x: x.quantile(0.5); f1.__name__ = "q0.5"
+        >>> f2 = lambda x: x.quantile(0.75); f2.__name__ = "q0.75"
+        >>> a.groupby('a').agg([f1, f2])
+             b          c
+          q0.5 q0.75 q0.5 q0.75
+        a
+        1  1.5  1.75  2.0   2.0
+        2  3.0  3.00  1.0   1.0
         """
         normalized_aggs = self._normalize_aggs(func)
 
@@ -199,7 +267,7 @@ class GroupBy(object):
           df = DataFrame()
           df['key'] = [0, 0, 1, 1, 2, 2, 2]
           df['val'] = [0, 1, 2, 3, 4, 5, 6]
-          groups = df.groupby(['key'], method='cudf')
+          groups = df.groupby(['key'])
 
           # Define a function to apply to each row in a group
           def mult(df):
@@ -260,7 +328,7 @@ class GroupBy(object):
             df = DataFrame()
             df['key'] = [0, 0, 1, 1, 2, 2, 2]
             df['val'] = [0, 1, 2, 3, 4, 5, 6]
-            groups = df.groupby(['key'], method='cudf')
+            groups = df.groupby(['key'])
 
             # Define a function to apply to each group
             def mult_add(key, val, out1, out2):
@@ -311,7 +379,7 @@ class GroupBy(object):
                  )
 
             # Group the dataframe by its categorical feature
-            groups = df.groupby("cat", method="cudf")
+            groups = df.groupby("cat")
 
             # Define a kernel which takes the moving average of a
             # sliding window
@@ -409,26 +477,6 @@ class Grouper(object):
 
 class _Grouping(object):
     def __init__(self, obj, by=None, level=None):
-        """
-        An object representing a grouping.
-
-        * _Grouping.keys is a list of grouping (key) columns
-        * _Grouping.names is a list of names corresponding to each column
-
-        Parameters
-        ----------
-        obj : Object on which the GroupBy is performed
-        by :
-            Any of the following:
-
-            - A Python function called on each value of the object's index
-            - A dict or Series that maps index labels to group names
-            - A cudf.Index object
-            - A str indicating a column name
-            - An array of the same length as the object
-            - A Grouper object
-            - A list of the above
-        """
         self._obj = obj
         self._key_columns = []
         self.names = []

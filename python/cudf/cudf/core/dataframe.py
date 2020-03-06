@@ -37,6 +37,7 @@ from cudf.core.column import (
 )
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
+from cudf.core.groupby.groupby import DataFrameGroupBy
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
 from cudf.core.series import Series
@@ -2522,6 +2523,7 @@ class DataFrame(Frame):
 
         return df
 
+    @copy_docstring(DataFrameGroupBy)
     def groupby(
         self,
         by=None,
@@ -2532,30 +2534,6 @@ class DataFrame(Frame):
         method=None,
         group_keys=True,
     ):
-        """Groupby
-
-        Parameters
-        ----------
-        by : list-of-str or str
-            Column name(s) to form that groups by.
-        sort : bool, default True
-            Force sorting group keys.
-        as_index : bool, default True
-            Indicates whether the grouped by columns become the index
-            of the returned DataFrame
-        dropna : bool, optional
-            If True (default), drop null keys.
-            If False, perform grouping by keys containing null(s).
-
-        Returns
-        -------
-        The groupby object
-
-        Notes
-        -----
-        No empty rows are returned.  (For categorical keys, pandas returns
-        rows for all categories even if they are no corresponding values.)
-        """
         if group_keys is not True:
             raise NotImplementedError(
                 "The group_keys keyword is not yet implemented"
@@ -2569,9 +2547,6 @@ class DataFrame(Frame):
             warnings.warn(
                 "The 'method' argument is deprecated and will be unused"
             )
-
-        from cudf.core.groupby.groupby import DataFrameGroupBy
-
         return DataFrameGroupBy(
             self, by=by, level=level, as_index=as_index, dropna=dropna
         )
