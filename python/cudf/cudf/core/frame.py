@@ -132,6 +132,33 @@ class Frame(libcudfxx.table.Table):
        result._copy_categories(self)
        return result
 
+    def _copy_if_else(self, boolean_mask, other):
+        if isinstance(self, cudf.DataFrame):
+            assert False, "DataFrame is not supported"
+        else:
+            tmp_other = np.array([other]) if is_scalar(other) else other
+            result = None
+
+            if is_scalar(other) and not np.isnan(other) and (
+                self.dtype.type(other) != other):
+                raise TypeError(
+                    "Cannot safely cast non-equivalent {} to {}".format(
+                        type(other).__name__, self.dtype.name
+                    )
+                )
+
+            if is_scalar(other):
+                other = self.dtype.type(other) if not np.isnan(other) else other
+                result = self.__class__(libcudfxx.copying.copy_if_else(
+                    self._column, other, boolean_mask._column))
+            else:
+                result = self.__class__(libcudfxx.copying.copy_if_else(
+                    self._column, other.astype(self.dtype)._column,
+                    boolean_mask._column))
+
+            result._copy_categories(self)
+            return result
+
     def _scatter_to_tables(self, scatter_map):
        result = libcudfxx.copying.scatter_to_tables(self, scatter_map)
        result = [self._from_table(tbl) for tbl in result]

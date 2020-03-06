@@ -1282,34 +1282,7 @@ class Series(Frame):
         3
         4
         """
-        if not pd.api.types.is_numeric_dtype(self.dtype):
-            raise TypeError(
-                "`Series.where` is only supported for numeric column types."
-            )
-        to_replace = self._column.apply_boolean_mask(~cond & self.notna())
-        if is_scalar(other):
-            all_nan = other is None
-            if all_nan:
-                new_value = [other] * len(to_replace)
-            else:
-                new_value = [other]
-        else:
-            raise NotImplementedError(
-                "Replacement arg of {} is not supported.".format(type(other))
-            )
-
-        result = self._column.find_and_replace(
-            to_replace, new_value, all_nan=all_nan
-        )
-
-        # To replace nulls:: If there are nulls in `cond` series, then we will
-        # fill them with `False`, which means, by default, elements containing
-        # nulls, are failing the given condition.
-        # But, if condition is deliberately setting the `True` for nulls (i.e.
-        # `s.isnulls()`), then there are no nulls in `cond`
-        if not all_nan and (~cond.fillna(False) & self.isnull()).any():
-            result = result.fillna(other)
-        return self._copy_construct(data=result)
+        return self._copy_if_else(cond, other)
 
     def to_array(self, fillna=None):
         """Get a dense numpy array for the data.

@@ -484,6 +484,18 @@ class DataFrame(Frame):
             msg = "__getitem__ on type {!r} is not supported"
             raise TypeError(msg.format(type(arg)))
 
+    def where(self, cond, other):
+        out_df = cudf.DataFrame(index=self.index)
+        if isinstance(other, cudf.DataFrame):
+            for in_col, cond_col, otr_col in zip(self.columns, cond.columns, other.columns):
+                out_df[in_col] = self[in_col]._copy_if_else(cond[cond_col], other[otr_col])
+
+        else:
+            for in_col, cond_scalar, otr_col in zip(self.columns, cond, other.columns):
+                out_df[in_col] = self[in_col]._copy_if_else(cond_scalar, other[otr_col])
+
+        return out_df
+
     def mask(self, other):
         df = self.copy()
         for col in self.columns:

@@ -444,7 +444,7 @@ def table_split(Table input_table, splits):
 #        ))
 
 
-def _copy_if_else(Column lhs, Column rhs, Column boolean_mask):
+def _copy_if_else_column_column(Column lhs, Column rhs, Column boolean_mask):
 
     cdef column_view lhs_view = lhs.view()
     cdef column_view rhs_view = rhs.view()
@@ -464,7 +464,7 @@ def _copy_if_else(Column lhs, Column rhs, Column boolean_mask):
     return Column.from_unique_ptr(move(c_result))
 
 
-def _copy_if_else(Scalar lhs, Column rhs, Column boolean_mask):
+def _copy_if_else_scalar_column(Scalar lhs, Column rhs, Column boolean_mask):
 
     cdef scalar* lhs_scalar  = lhs.c_value.get()
     cdef column_view rhs_view = rhs.view()
@@ -484,7 +484,7 @@ def _copy_if_else(Scalar lhs, Column rhs, Column boolean_mask):
     return Column.from_unique_ptr(move(c_result))
 
 
-def _copy_if_else(Column lhs, Scalar rhs, Column boolean_mask):
+def _copy_if_else_column_scalar(Column lhs, Scalar rhs, Column boolean_mask):
 
     cdef column_view lhs_view = lhs.view()
     cdef scalar* rhs_scalar  = rhs.c_value.get()
@@ -504,7 +504,7 @@ def _copy_if_else(Column lhs, Scalar rhs, Column boolean_mask):
     return Column.from_unique_ptr(move(c_result))
 
 
-def _copy_if_else(Scalar lhs, Scalar rhs, Column boolean_mask):
+def _copy_if_else_scalar_scalar(Scalar lhs, Scalar rhs, Column boolean_mask):
 
     cdef scalar* lhs_scalar  = lhs.c_value.get()
     cdef scalar* rhs_scalar  = rhs.c_value.get()
@@ -528,14 +528,14 @@ def copy_if_else(lhs, rhs, boolean_mask):
 
     if isinstance(lhs, Column):
         if isinstance(rhs, Column):
-            return _copy_if_else(lhs, rhs, boolean_mask)
+            return _copy_if_else_column_column(lhs, rhs, boolean_mask)
         else:
-            return _copy_if_else(lhs, Scalar(rhs), boolean_mask)
+            return _copy_if_else_column_scalar(lhs, Scalar(rhs), boolean_mask)
     else:
         if isinstance(rhs, Column):
-            return _copy_if_else(Scalar(lhs), rhs, boolean_mask)
+            return _copy_if_else_scalar_column(Scalar(lhs), rhs, boolean_mask)
         else:
-            return _copy_if_else(Scalar(lhs), Scalar(rhs), boolean_mask)
+            return _copy_if_else_scalar_scalar(Scalar(lhs), Scalar(rhs), boolean_mask)
 
 
 def _boolean_mask_scatter_table(Table input_table, Table target_table,
