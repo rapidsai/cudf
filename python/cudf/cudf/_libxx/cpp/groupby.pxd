@@ -15,7 +15,7 @@ cdef extern from "cudf/groupby.hpp" \
         namespace "cudf::experimental::groupby" nogil:
 
     cdef cppclass aggregation_request:
-        aggregation_request()
+        aggregation_request() except +
         column_view values
         vector[unique_ptr[aggregation]] aggregations
 
@@ -29,35 +29,35 @@ cdef extern from "cudf/groupby.hpp" \
         unique_ptr[table] values
 
     cdef cppclass groupby:
-        groupby(table_view keys) except +
-        groupby(table_view keys, include_nulls include_null_keys) except +
+        groupby(const table_view& keys) except +
+        groupby(const table_view& keys, include_nulls include_null_keys) except +
 
         groupby(
-            table_view keys,
+            const table_view& keys,
             include_nulls include_null_keys,
             bool keys_are_sorted,
         ) except +
 
         groupby(
-            table_view keys,
+            const table_view& keys,
             include_nulls include_null_keys,
             bool keys_are_sorted,
-            vector[order] column_order,
+            const vector[order]& column_order,
         ) except +
 
         groupby(
-            table_view keys,
+            const table_view& keys,
             include_nulls include_null_keys,
             bool keys_are_sorted,
-            vector[order] column_order,
-            vector[null_order] null_precedence
+            const vector[order]& column_order,
+            const vector[null_order]& null_precedence
         ) except +
 
         pair[
             unique_ptr[table],
             vector[aggregation_result]
         ] aggregate(
-            vector[aggregation_request] requests,
+            const vector[aggregation_request]& requests,
         ) except +
 
         groups get_groups() except +

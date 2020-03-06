@@ -117,7 +117,7 @@ cdef class GroupBy:
         for i, (col_name, aggs) in enumerate(aggregations.items()):
             col = values._data[col_name]
             c_agg_requests.push_back(
-                libcudf_groupby.aggregation_request()
+                move(libcudf_groupby.aggregation_request())
             )
             c_agg_requests[i].values = col.view()
             for agg in aggs:
