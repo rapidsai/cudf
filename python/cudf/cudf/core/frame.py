@@ -256,7 +256,8 @@ class Frame(libcudfxx.table.Table):
         axis : {0 or 'index', 1 or 'columns'}, default 0
             Index to direct ranking.
         method : {'average', 'min', 'max', 'first', 'dense'}, default 'average'
-            How to rank the group of records that have the same value (i.e. ties):
+            How to rank the group of records that have the same value
+            (i.e. ties):
             * average: average rank of the group
             * min: lowest rank in the group
             * max: highest rank in the group
@@ -283,24 +284,17 @@ class Frame(libcudfxx.table.Table):
             raise KeyError(method)
         if na_option not in {"keep", "top", "bottom"}:
             raise KeyError(na_option)
-        is_column = False
 
-        # TODO code for selecting numeric columns without copy
+        # TODO code for selecting numeric columns
         source = self
-        if isinstance(source, (column.ColumnBase)):
-            source = source.as_frame()
-            is_column = True
+        if numeric_only:
+            warnings.warn("numeric_only=True is not implemented yet")
 
         out_rank_table = libcudfxx.sort.rank_columns(
             source, method, na_option, ascending, pct
         )
 
-        if is_column:
-            return self._from_table(
-                as_column(out_rank_table[out_rank_table.columns[0]])
-            )
-        else:
-            return self._from_table(out_rank_table)
+        return self._from_table(out_rank_table)
 
     def drop_duplicates(self, subset=None, keep="first", nulls_are_equal=True):
         """

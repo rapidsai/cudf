@@ -14,7 +14,7 @@ from cudf._libxx.cpp.column.column cimport column
 from cudf._libxx.cpp.table.table cimport table
 from cudf._libxx.cpp.table.table_view cimport table_view
 from cudf._libxx.cpp.search cimport lower_bound, upper_bound
-from cudf._libxx.cpp.sorting cimport (
+from cudf._libxx.cpp.sorting cimport(
     rank, rank_method, sorted_order, is_sorted as cpp_is_sorted
 )
 from cudf._libxx.cpp.types cimport order, null_order, include_nulls
@@ -105,6 +105,7 @@ def is_sorted(
         )
 
     return c_result
+
 
 def order_by(Table source_table, object ascending, bool na_position):
     """
@@ -198,34 +199,37 @@ def digitize(Table source_values_table, Table bins, bool right=False):
 
     return Column.from_unique_ptr(move(c_result))
 
-def rank_columns(Table source_table, str method, str na_option, bool ascending, bool pct):
+
+def rank_columns(Table source_table, str method, str na_option, bool ascending,
+                 bool pct
+                 ):
     """
     Compute numerical data ranks (1 through n) of each column in the dataframe
     """
     cdef table_view source_table_view = source_table.data_view()
-    
+
     cdef rank_method c_rank_method
-    if  method == 'min':
+    if method == 'min':
         c_rank_method = rank_method.MIN
-    elif  method == 'max':
+    elif method == 'max':
         c_rank_method = rank_method.MAX
-    elif  method == 'first':
+    elif method == 'first':
         c_rank_method = rank_method.FIRST
-    elif  method == 'dense':
+    elif method == 'dense':
         c_rank_method = rank_method.DENSE
     else:
         c_rank_method = rank_method.AVERAGE
-    
+
     cdef order column_order = (
         order.ASCENDING
         if ascending
         else order.DESCENDING
     )
-    #ascending 
+    # ascending
     #    #top    = na_is_smallest
     #    #bottom = na_is_largest
     #    #keep   = na_is_largest
-    #descending
+    # descending
     #    #top    = na_is_largest
     #    #bottom = na_is_smallest
     #    #keep   = na_is_smallest
@@ -241,13 +245,13 @@ def rank_columns(Table source_table, str method, str na_option, bool ascending, 
         else:
             null_precedence = null_order.BEFORE
     cdef include_nulls _include_nulls = (
-        include_nulls.EXCLUDE_NULLS 
+        include_nulls.EXCLUDE_NULLS
         if na_option == 'keep'
         else include_nulls.INCLUDE_NULLS
     )
     cdef unique_ptr[table] c_result
     cdef bool percentage = True if pct else False
- 
+
     with nogil:
         c_result = move(
             rank(
@@ -261,7 +265,6 @@ def rank_columns(Table source_table, str method, str na_option, bool ascending, 
         )
 
     return Table.from_unique_ptr(
-        move(c_result), 
+        move(c_result),
         column_names=source_table._column_names
     )
-
