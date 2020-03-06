@@ -26,6 +26,8 @@
 namespace cudf {
 namespace jni {
 
+constexpr jint MINIMUM_JNI_VERSION = JNI_VERSION_1_6;
+
 /**
  * @brief indicates that a JNI error of some kind was thrown and the main
  * function should return.

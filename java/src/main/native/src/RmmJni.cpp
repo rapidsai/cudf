@@ -30,7 +30,7 @@ constexpr char const* RMM_EXCEPTION_CLASS = "ai/rapids/cudf/RmmException";
 
 /**
  * @brief An RMM device memory resource adaptor that delegates to the wrapped resource
- * for most operations but will call Java to handle certain situations (e.g.: allocation faillure).
+ * for most operations but will call Java to handle certain situations (e.g.: allocation failure).
  **/
 class java_event_handler_memory_resource final : public device_memory_resource {
 public:
@@ -71,8 +71,13 @@ public:
   }
 
   virtual ~java_event_handler_memory_resource() {
-    JNIEnv* env = cudf::jni::get_jni_env(jvm);
-    env->DeleteGlobalRef(handler_obj);
+    // This should normally be called by a JVM thread. If the JVM environment is missing then this
+    // is likely being triggered by the C++ runtime during shutdown. In that case the JVM may
+    // already be destroyed and should not be called.
+    JNIEnv* env = nullptr;
+    if (jvm->GetEnv(reinterpret_cast<void**>(&env), cudf::jni::MINIMUM_JNI_VERSION) == JNI_OK) {
+      env->DeleteGlobalRef(handler_obj);
+    }
     handler_obj = nullptr;
   }
 
@@ -94,7 +99,7 @@ private:
 
   std::size_t total_allocated{0};
 
-  // map nd associated lock to track memory sizes by address
+  // map and associated lock to track memory sizes by address
   // TODO: This should be removed when rmm::alloc and rmm::free are removed and the size parameter
   //       for do_deallocate can be trusted. If map and mutex are removed then total_allocated
   //       should be updated to be atomic.
