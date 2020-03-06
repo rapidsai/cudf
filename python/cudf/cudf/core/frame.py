@@ -71,7 +71,6 @@ class Frame(libcudfxx.table.Table):
             libcudfxx.copying.gather(self, as_column(gather_map))
         )
         result._copy_categories(self)
-        result.index.names = self.index.names
         return result
 
     def _hash(self, initial_hash_values=None):
