@@ -46,11 +46,11 @@ cdef extern from "cudf/groupby.hpp" \
         ) except +
 
         groupby(
-            table_view keys,
+            const table_view& keys,
             include_nulls include_null_keys,
             bool keys_are_sorted,
-            vector[order] column_order,
-            vector[null_order] null_precedence
+            const vector[order]& column_order,
+            const vector[null_order]& null_precedence
         ) except +
 
         pair[
