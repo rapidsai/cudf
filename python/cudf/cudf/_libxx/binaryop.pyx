@@ -109,6 +109,7 @@ cdef binaryop_v_v(Column lhs, Column rhs,
 
     return Column.from_unique_ptr(move(c_result))
 
+
 cdef binaryop_v_s(Column lhs, Scalar rhs,
                   binary_operator c_op, data_type c_dtype):
     cdef column_view c_lhs = lhs.view()
@@ -127,6 +128,7 @@ cdef binaryop_v_s(Column lhs, Scalar rhs,
         )
 
     return Column.from_unique_ptr(move(c_result))
+
 
 cdef binaryop_s_v(Scalar lhs, Column rhs,
                   binary_operator c_op, data_type c_dtype):
@@ -147,6 +149,7 @@ cdef binaryop_s_v(Scalar lhs, Column rhs,
 
     return Column.from_unique_ptr(move(c_result))
 
+
 def binaryop(lhs, rhs, op, dtype):
     """
     Dispatches a binary op call to the appropriate libcudf function:
@@ -160,28 +163,29 @@ def binaryop(lhs, rhs, op, dtype):
     if np.isscalar(lhs) or lhs is None:
         s_lhs = Scalar(lhs, dtype=rhs.dtype if lhs is None else None)
         return binaryop_s_v(
-                s_lhs,
-                rhs,
-                c_op,
-                c_dtype
-            )
-        
+            s_lhs,
+            rhs,
+            c_op,
+            c_dtype
+        )
+
     elif np.isscalar(rhs) or rhs is None:
         s_rhs = Scalar(rhs, dtype=lhs.dtype if rhs is None else None)
         return binaryop_v_s(
-                lhs,
-                s_rhs,
-                c_op,
-                c_dtype
-            )
-        
+            lhs,
+            s_rhs,
+            c_op,
+            c_dtype
+        )
+
     else:
         return binaryop_v_v(
-                lhs,
-                rhs,
-                c_op,
-                c_dtype
-            )
+            lhs,
+            rhs,
+            c_op,
+            c_dtype
+        )
+
 
 def binaryop_udf(Column lhs, Column rhs, udf_ptx, dtype):
     """
