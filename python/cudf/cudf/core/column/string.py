@@ -738,26 +738,16 @@ class StringMethods(object):
                 "wrap current implementation defaults to `expand_tabs`=False"
             )
 
-        replace_whitespace = kwargs.get("replace_whitespace", None)
-        if replace_whitespace is False:
+        replace_whitespace = kwargs.get("replace_whitespace", True)
+        if not replace_whitespace:
             raise NotImplementedError(
                 "`replace_whitespace=False` is not supported"
             )
-        elif replace_whitespace is None:
-            warnings.warn(
-                "wrap current implementation defaults to \
-                    `replace_whitespace`=True"
-            )
 
-        drop_whitespace = kwargs.get("drop_whitespace", None)
-        if drop_whitespace is False:
+        drop_whitespace = kwargs.get("drop_whitespace", True)
+        if not drop_whitespace:
             raise NotImplementedError(
                 "`drop_whitespace=False` is not supported"
-            )
-        elif drop_whitespace is None:
-            warnings.warn(
-                "wrap current implementation defaults to \
-                    `drop_whitespace`=True"
             )
 
         break_long_words = kwargs.get("break_long_words", None)
