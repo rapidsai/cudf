@@ -1512,9 +1512,7 @@ def _get_cols_list(others):
     from cudf.core import Series, Index
     from cudf.core.column import as_column
 
-    if isinstance(others, (Series, Index)):
-        return as_column(others, dtype="str")
-    elif (
+    if (
         is_list_like(others)
         and others
         and (
