@@ -14,7 +14,9 @@ from cudf._libxx.cpp.column.column cimport column
 from cudf._libxx.cpp.table.table cimport table
 from cudf._libxx.cpp.table.table_view cimport table_view
 from cudf._libxx.cpp.search cimport lower_bound, upper_bound
-from cudf._libxx.cpp.sorting cimport rank, rank_method, sorted_order, is_sorted as cpp_is_sorted
+from cudf._libxx.cpp.sorting cimport (
+    rank, rank_method, sorted_order, is_sorted as cpp_is_sorted
+)
 from cudf._libxx.cpp.types cimport order, null_order, include_nulls
 
 
@@ -196,7 +198,7 @@ def digitize(Table source_values_table, Table bins, bool right=False):
 
     return Column.from_unique_ptr(move(c_result))
 
-def rank_columns(Table source_table, str method, str na_option, bool ascending, bool pct=False):
+def rank_columns(Table source_table, str method, str na_option, bool ascending, bool pct):
     """
     Compute numerical data ranks (1 through n) of each column in the dataframe
     """
