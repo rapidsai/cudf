@@ -44,8 +44,7 @@ cpdef concat_tables(tables):
         c_result = move(libcudf_concatenate_tables(c_views))
     return Table.from_unique_ptr(
         move(c_result),
-        column_names=tables[0]._column_names,
-        index_names=tables[0]._index._column_names
+        column_names=tables[0]._column_names
     )
 
 
