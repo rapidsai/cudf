@@ -233,75 +233,17 @@ class StringMethods(object):
             If `others` is None, `str` is returned, otherwise a `Series/Index`
             (same type as caller) of str dtype is returned.
         """
-        from cudf.core import Series, Index, DataFrame
-        from cudf.core.column import as_column
+        from cudf.core import DataFrame
 
         if sep is None:
             sep = ""
-
-        if isinstance(others, StringColumn):
-            others = others.nvstrings
-        elif isinstance(others, Series):
-            assert others.dtype == np.dtype("object")
-            others = others._column.nvstrings
-        elif isinstance(others, Index):
-            assert others.dtype == np.dtype("object")
-            others = others._values.nvstrings
-        elif isinstance(others, StringMethods):
-            """
-            If others is a StringMethods then
-            raise an exception
-            """
-            msg = "series.str is an accessor, not an array-like of strings."
-            raise ValueError(msg)
-        elif is_list_like(others) and others:
-            """
-            If others is a list-like object (in our case lists & tuples)
-            just another Series/Index, great go ahead with concatenation.
-            """
-
-            """
-            Picking first element and checking if it really adheres to
-            list like conditions, if not we switch to next case
-
-            Note: We have made a call not to iterate over the entire list as
-            it could be more expensive if it was of very large size.
-            Thus only doing a sanity check on just the first element of list.
-            """
-            first = others[0]
-
-            if is_list_like(first) or isinstance(
-                first, (Series, Index, pd.Series, pd.Index)
-            ):
-                """
-                Internal elements in others list should also be
-                list-like and not a regular string/byte
-                """
-                first = None
-                cols_list = []
-                for frame in others:
-                    cols_list.append(as_column(frame, dtype="str"))
-
-                others = cols_list
-            elif not is_list_like(first):
-                """
-                Picking first element and checking if it really adheres to
-                non-list like conditions.
-
-                Note: We have made a call not to iterate over the entire
-                list as it could be more expensive if it was of very
-                large size. Thus only doing a sanity check on just the
-                first element of list.
-                """
-                others = as_column(others, dtype="str")
-        elif others is not None:
-            others = as_column(others, dtype="str")
 
         from cudf._libxx.scalar import Scalar
 
         if others is None:
             data = cpp_join(self._column, Scalar(sep), Scalar(na_rep, "str"))
         else:
+            others = _get_cols_list(others)
             if isinstance(others, list):
                 cols = [self._column]
                 cols.extend(others)
@@ -1564,3 +1506,34 @@ def _string_column_binop(lhs, rhs, op):
     _ = libcudf.binops.apply_op(lhs=lhs, rhs=rhs, out=out, op=op)
     nvtx_range_pop()
     return out
+
+
+def _get_cols_list(others):
+    from cudf.core import Series, Index
+    from cudf.core.column import as_column
+
+    if isinstance(others, (Series, Index)):
+        return as_column(others, dtype="str")
+    elif (
+        is_list_like(others)
+        and others
+        and (
+            is_list_like(others[0])
+            or isinstance(others[0], (Series, Index, pd.Series, pd.Index))
+        )
+    ):
+        """
+            If others is a list-like object (in our case lists & tuples)
+            just another Series/Index, great go ahead with concatenation.
+            """
+        cols_list = [as_column(frame, dtype="str") for frame in others]
+        return cols_list
+    elif others is not None:
+        return as_column(others, dtype="str")
+    else:
+        raise TypeError(
+            "others must be Series, Index, DataFrame, np.ndarrary "
+            "or list-like (either containing only strings or "
+            "containing only objects of type Series/Index/"
+            "np.ndarray[1-dim])"
+        )
