@@ -29,7 +29,7 @@ cdef extern from "cudf/groupby.hpp" \
         unique_ptr[table] values
 
     cdef cppclass groupby:
-        groupby(table_view keys) except +
+        groupby(const table_view& keys) except +
         groupby(table_view keys, include_nulls include_null_keys) except +
 
         groupby(
