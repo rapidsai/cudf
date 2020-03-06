@@ -245,8 +245,7 @@ class StringMethods(object):
         else:
             others = _get_cols_list(others)
             if isinstance(others, list):
-                cols = [self._column]
-                cols.extend(others)
+                cols = [self._column] + others
             else:
                 cols = [self._column, others]
             data = cpp_concatenate(
@@ -1514,16 +1513,16 @@ def _get_cols_list(others):
 
     if (
         is_list_like(others)
-        and others
+        and len(others) > 0
         and (
             is_list_like(others[0])
             or isinstance(others[0], (Series, Index, pd.Series, pd.Index))
         )
     ):
         """
-            If others is a list-like object (in our case lists & tuples)
-            just another Series/Index, great go ahead with concatenation.
-            """
+        If others is a list-like object (in our case lists & tuples)
+        just another Series/Index, great go ahead with concatenation.
+        """
         cols_list = [as_column(frame, dtype="str") for frame in others]
         return cols_list
     elif others is not None:
