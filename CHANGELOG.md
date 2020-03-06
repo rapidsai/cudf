@@ -133,6 +133,7 @@
 - PR #4280 Port nvstrings Numeric Handling functions to cuDF Python/Cython
 - PR #4166 Port `is_sorted.pyx` to use libcudf++ APIs
 - PR #4345 Removed an undesirable backwards include from /include to /src in cuIO writers.hpp
+- PR #4362 Move pq_chunked_state struct into it's own header to match how orc writer is doing it.
 
 ## Bug Fixes
 
