@@ -115,7 +115,7 @@ def ljust(Column source_strings,
         c_result = move(cpp_pad(
             source_view,
             width,
-            pad_side.LEFT,
+            pad_side.RIGHT,
             f_char
         ))
 
@@ -139,7 +139,7 @@ def rjust(Column source_strings,
         c_result = move(cpp_pad(
             source_view,
             width,
-            pad_side.RIGHT,
+            pad_side.LEFT,
             f_char
         ))
 
