@@ -14,9 +14,9 @@ from cudf._libxx.cpp.column.column cimport column
 from cudf._libxx.cpp.strings.padding cimport (
     pad as cpp_pad,
     zfill as cpp_zfill,
-    pad_side as pad_side,
-    underlying_type_t_pad_side as underlying_type_t_pad_side
+    pad_side as pad_side
 )
+from cudf._libxx.strings.padding cimport underlying_type_t_pad_side
 
 
 class PadSide(IntEnum):
