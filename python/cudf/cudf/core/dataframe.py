@@ -2527,10 +2527,10 @@ class DataFrame(Frame):
         by=None,
         sort=True,
         as_index=True,
-        method=None,
         level=None,
-        group_keys=True,
         dropna=True,
+        method=None,
+        group_keys=True,
     ):
         """Groupby
 
@@ -2543,11 +2543,6 @@ class DataFrame(Frame):
         as_index : bool, default True
             Indicates whether the grouped by columns become the index
             of the returned DataFrame
-        method : str, optional
-            A string indicating the method to use to perform the group by.
-            Valid values are "hash" or "cudf".
-            "cudf" method may be deprecated in the future, but is currently
-            the only method supporting group UDFs via the `apply` function.
         dropna : bool, optional
             If True (default), drop null keys.
             If False, perform grouping by keys containing null(s).
@@ -2569,7 +2564,13 @@ class DataFrame(Frame):
             raise TypeError(
                 "groupby() requires either by or level to be" "specified."
             )
-        from cudf.core.groupbyxx.groupby import DataFrameGroupBy
+
+        if method is not None:
+            warnings.warn(
+                "The 'method' argument is deprecated and will be unused"
+            )
+
+        from cudf.core.groupby.groupby import DataFrameGroupBy
 
         return DataFrameGroupBy(
             self, by=by, level=level, as_index=as_index, dropna=dropna

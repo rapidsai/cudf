@@ -2443,7 +2443,7 @@ class Series(Frame):
                 "The group_keys keyword is not yet implemented"
             )
         else:
-            from cudf.core.groupbyxx.groupby import SeriesGroupBy
+            from cudf.core.groupby.groupby import SeriesGroupBy
 
             return SeriesGroupBy(self, by=by, level=level, dropna=dropna)
 
