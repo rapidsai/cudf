@@ -731,7 +731,7 @@ class StringMethods(object):
             raise TypeError(msg)
 
         expand_tabs = kwargs.get("expand_tabs", None)
-        if expand_tabs:
+        if expand_tabs is True:
             raise NotImplementedError("`expand_tabs=True` is not supported")
         elif expand_tabs is None:
             warnings.warn(
@@ -739,7 +739,7 @@ class StringMethods(object):
             )
 
         replace_whitespace = kwargs.get("replace_whitespace", None)
-        if not replace_whitespace:
+        if replace_whitespace is False:
             raise NotImplementedError(
                 "`replace_whitespace=False` is not supported"
             )
@@ -750,7 +750,7 @@ class StringMethods(object):
             )
 
         drop_whitespace = kwargs.get("drop_whitespace", None)
-        if not drop_whitespace:
+        if drop_whitespace is False:
             raise NotImplementedError(
                 "`drop_whitespace=False` is not supported"
             )
@@ -761,7 +761,7 @@ class StringMethods(object):
             )
 
         break_long_words = kwargs.get("break_long_words", None)
-        if break_long_words:
+        if break_long_words is True:
             raise NotImplementedError(
                 "`break_long_words=True` is not supported"
             )
@@ -772,7 +772,7 @@ class StringMethods(object):
             )
 
         break_on_hyphens = kwargs.get("break_on_hyphens", None)
-        if break_long_words:
+        if break_long_words is True:
             raise NotImplementedError(
                 "`break_on_hyphens=True` is not supported"
             )
