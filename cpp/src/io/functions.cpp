@@ -19,7 +19,9 @@
 #include <cudf/io/writers.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
+
 #include "orc/chunked_state.hpp" // orc_chunked_state definition
+#include <io/parquet/parquet.h>
 
 namespace cudf {
 namespace experimental {

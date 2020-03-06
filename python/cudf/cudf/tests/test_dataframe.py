@@ -4275,16 +4275,14 @@ def test_memory_usage_string():
     )
 
     # Check string column
-    assert (
-        gdf.B.memory_usage(deep=True, index=False)
-        == gdf.B._column.nvstrings.device_memory()
+    assert gdf.B.memory_usage(deep=True, index=False) == df.B.memory_usage(
+        deep=True, index=False
     )
 
     # Check string index
-    assert (
-        gdf.set_index("B").index.memory_usage(deep=True)
-        == gdf.B._column.nvstrings.device_memory()
-    )
+    assert gdf.set_index("B").index.memory_usage(
+        deep=True
+    ) == df.B.memory_usage(deep=True, index=False)
 
 
 @pytest.mark.xfail
