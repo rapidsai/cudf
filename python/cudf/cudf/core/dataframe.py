@@ -1319,9 +1319,7 @@ class DataFrame(Frame):
             raise ValueError("Duplicate column names are not allowed")
 
         self._data = ColumnAccessor(
-            dict(zip(columns, self._data.columns)),
-            multiindex=is_multiindex,
-            level_names=columns.names,
+            data, multiindex=is_multiindex, level_names=columns.names,
         )
 
     def _rename_columns(self, new_names):
