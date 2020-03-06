@@ -57,7 +57,7 @@ cdef extern from "cudf/groupby.hpp" \
             unique_ptr[table],
             vector[aggregation_result]
         ] aggregate(
-            vector[aggregation_request] requests,
+            const vector[aggregation_request]& requests,
         ) except +
 
         groups get_groups() except +
