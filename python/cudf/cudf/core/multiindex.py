@@ -417,7 +417,13 @@ class MultiIndex(Index):
             return False
         # Lazy comparison
         if isinstance(other, MultiIndex) or hasattr(other, "_source_data"):
-            return self._source_data.equals(other._source_data)
+            for self_col, other_col in zip(
+                self._source_data._data.values(),
+                other._source_data._data.values(),
+            ):
+                if not self_col.equals(other_col):
+                    return False
+            return self.names == other.names
         else:
             # Lazy comparison isn't possible - MI was created manually.
             # Actually compare the MI, not its source data (it doesn't have
@@ -522,6 +528,10 @@ class MultiIndex(Index):
                     "number of levels on index."
                 )
             df.columns = name
+        else:
+            # if names are unique, try using those
+            if len(dict.fromkeys(self.names)) == len(self.names):
+                df.columns = self.names
         return df
 
     def get_level_values(self, level):
