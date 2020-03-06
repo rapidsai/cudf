@@ -710,6 +710,21 @@ class StringMethods(object):
         `drop_whitespace`, `break_long_words`, `break_on_hyphens`,
         `expand_tabsbool` are not yet supported and will raise a
         NotImplementedError if they are set to any value.
+
+        This method currently achieves behavior matching R’s
+        stringr library str_wrap function, the equivalent
+        pandas implementation can be obtained using the
+        following parameter setting:
+
+            expand_tabs = False
+
+            replace_whitespace = True
+
+            drop_whitespace = True
+
+            break_long_words = False
+
+            break_on_hyphens = False
         """
         if not pd.api.types.is_integer(width):
             msg = f"width must be of integer type, not {type(width).__name__}"

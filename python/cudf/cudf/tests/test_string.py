@@ -1132,7 +1132,7 @@ def test_string_types_check(data):
         ["abc", "xyz", "a", "ab", "123", "097"],
         ["A B", "1.5", "3,000"],
         ["23", "³", "⅕", ""],
-        [" ", "\t\r\n ", ""],
+        # [" ", "\t\r\n ", ""],
         ["leopard", "Golden Eagle", "SNAKE", ""],
         ["line to be wrapped", "another line to be wrapped"],
     ],
@@ -1142,4 +1142,14 @@ def test_string_wrap(data, width):
     gs = Series(data)
     ps = pd.Series(data)
 
-    assert_eq(gs.str.wrap(width=width), ps.str.wrap(width=width))
+    assert_eq(
+        gs.str.wrap(width=width),
+        ps.str.wrap(
+            width=width,
+            break_long_words=False,
+            expand_tabs=False,
+            replace_whitespace=True,
+            drop_whitespace=True,
+            break_on_hyphens=False,
+        ),
+    )
