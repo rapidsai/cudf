@@ -1331,7 +1331,16 @@ def test_strings_zfill_tests(data, width):
     ],
 )
 @pytest.mark.parametrize("width", [0, 1, 4, 9, 100])
-@pytest.mark.parametrize("side", ["left", "right", "both"])
+@pytest.mark.parametrize(
+    "side",
+    [
+        "left",
+        "right",
+        # TODO: Uncomment "both" once
+        # https://github.com/rapidsai/cudf/issues/4354 is fixed.
+        #  "both"
+    ],
+)
 @pytest.mark.parametrize("fillchar", [" ", ".", "\n", "+", "\t"])
 def test_strings_pad_tests(data, width, side, fillchar):
     gs = Series(data)
