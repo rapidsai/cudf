@@ -29,7 +29,7 @@ from cudf._libxx.strings.replace import (
 )
 from cudf._libxx.strings.substring import slice_from as cpp_slice_from
 from cudf.core.buffer import Buffer
-from cudf.core.column import column
+from cudf.core.column import column, column_empty
 from cudf.utils import utils
 from cudf.utils.dtypes import is_list_like, is_scalar
 
@@ -149,8 +149,8 @@ class StringMethods(object):
             indicating the length of each element in the Series or Index.
         """
 
-        out_dev_arr = rmm.device_array(len(self._column), dtype="int32")
-        ptr = libcudf.cudf.get_ctype_ptr(out_dev_arr)
+        out_col = column_empty(len(self._column), dtype="int32")
+        ptr = out_col.data_ptr
         self._column.nvstrings.len(ptr)
 
         mask = None
@@ -158,9 +158,7 @@ class StringMethods(object):
             mask = self._column.mask
 
         return self._return_or_inplace(
-            column.build_column(
-                Buffer(out_dev_arr), np.dtype("int32"), mask=mask
-            ),
+            column.build_column(out_col.data, np.dtype("int32"), mask=mask),
             **kwargs,
         )
 
@@ -373,8 +371,8 @@ class StringMethods(object):
         elif na is not np.nan:
             raise NotImplementedError("`na` parameter is not yet supported")
 
-        out_dev_arr = rmm.device_array(len(self._column), dtype="bool")
-        ptr = libcudf.cudf.get_ctype_ptr(out_dev_arr)
+        out_col = column_empty(len(self._column), dtype="bool")
+        ptr = out_col.data_ptr
         self._column.nvstrings.contains(pat, regex=regex, devptr=ptr)
 
         mask = None
@@ -383,7 +381,7 @@ class StringMethods(object):
 
         return self._return_or_inplace(
             column.build_column(
-                Buffer(out_dev_arr), dtype=np.dtype("bool"), mask=mask
+                out_col.data, dtype=np.dtype("bool"), mask=mask
             ),
             **kwargs,
         )
@@ -873,6 +871,7 @@ class StringColumn(column.ColumnBase):
             self._nvcategory = nvc.from_strings(self.nvstrings)
         return self._nvcategory
 
+    # TODO: Remove these once NVStrings is fully deprecated / removed
     @nvcategory.setter
     def nvcategory(self, nvc):
         self._nvcategory = nvc
@@ -885,6 +884,7 @@ class StringColumn(column.ColumnBase):
 
         super()._set_mask(value)
 
+    # TODO: Remove these once NVStrings is fully deprecated / removed
     @property
     def indices(self):
         if self._indices is None:

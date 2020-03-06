@@ -4,6 +4,7 @@ import pickle
 import warnings
 from numbers import Number
 
+import cupy.binary.elementwise
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -275,7 +276,7 @@ class ColumnBase(Column):
         return dropped_col
 
     def _get_mask_as_column(self):
-        data = Buffer(cudautils.ones(len(self), dtype=np.bool_))
+        data = Buffer(cupy.ones(len(self), dtype=np.bool_))
         mask = as_column(data=data)
         if self.nullable:
             mask = mask.set_mask(self._mask).fillna(False)
@@ -482,14 +483,14 @@ class ColumnBase(Column):
                     raise ValueError(
                         "Boolean mask must be of same length as column"
                     )
-                key = column.as_column(cudautils.arange(len(self)))[key]
+                key = column.as_column(cupy.arange(len(self)))[key]
             nelem = len(key)
 
         if is_scalar(value):
             if is_categorical_dtype(self.dtype):
                 from cudf.utils.cudautils import fill_value
 
-                data = rmm.device_array(nelem, dtype=self.codes.dtype)
+                data = column_empty(nelem, dtype=self.codes.dtype)
                 fill_value(data, self._encode(value))
                 value = build_categorical_column(
                     categories=self.dtype.categories,
@@ -1331,10 +1332,10 @@ def column_applymap(udf, column, out_dtype):
 
     Returns
     -------
-    result : rmm.device_array
+    result : Column
     """
     core = njit(udf)
-    results = rmm.device_array(shape=len(column), dtype=out_dtype)
+    results = column_empty(len(column), dtype=out_dtype)
     values = column.data_array_view
     if column.nullable:
         # For masked columns

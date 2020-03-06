@@ -17,9 +17,8 @@ import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from numba import cuda
 from pandas.api.types import is_dict_like
-
-import rmm
 
 import cudf
 import cudf._lib as libcudf
@@ -41,7 +40,7 @@ from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
 from cudf.core.series import Series
 from cudf.core.window import Rolling
-from cudf.utils import applyutils, cudautils, ioutils, queryutils, utils
+from cudf.utils import applyutils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     cudf_dtype_from_pydata_dtype,
@@ -935,7 +934,7 @@ class DataFrame(Frame):
             def fallback(col, fn):
                 if fill_value is None:
                     return Series.from_masked_array(
-                        data=rmm.device_array(max_num_rows, dtype="float64"),
+                        data=column_empty(max_num_rows, dtype="float64"),
                         mask=create_null_mask(
                             max_num_rows, state=MaskState.ALL_NULL
                         ),
@@ -1914,7 +1913,7 @@ class DataFrame(Frame):
 
         Returns
         -------
-        A (nrow x ncol) numpy ndarray in "F" order.
+        A (nrow x ncol) numba device ndarray
         """
         if columns is None:
             columns = self.columns
@@ -1939,23 +1938,22 @@ class DataFrame(Frame):
                     "hint: use .fillna() to replace null values"
                 )
                 raise ValueError(errmsg.format(k))
+        cupy_dtype = dtype
+        if np.issubdtype(dtype, np.datetime64):
+            cupy_dtype = np.dtype("int64")
 
-        if order == "F":
-            matrix = rmm.device_array(
-                shape=(nrow, ncol), dtype=dtype, order=order
-            )
-            for colidx, inpcol in enumerate(cols):
-                dense = inpcol.astype(dtype).to_gpu_array(fillna="pandas")
-                matrix[:, colidx].copy_to_device(dense)
-        elif order == "C":
-            matrix = cudautils.row_matrix(cols, nrow, ncol, dtype)
-        else:
+        if order not in ("F", "C"):
             errmsg = (
                 "order parameter should be 'C' for row major or 'F' for"
                 "column major GPU matrix"
             )
             raise ValueError(errmsg.format(k))
-        return matrix
+
+        matrix = cupy.empty(shape=(nrow, ncol), dtype=cupy_dtype, order=order)
+        for colidx, inpcol in enumerate(cols):
+            dense = inpcol.astype(cupy_dtype)
+            matrix[:, colidx] = dense
+        return cuda.as_cuda_array(matrix).view(dtype)
 
     def as_matrix(self, columns=None):
         """Convert to a matrix in host memory.
@@ -3533,9 +3531,7 @@ class DataFrame(Frame):
             result.index = q
             return result
 
-    def quantiles(
-        self, q=0.5, interpolation="nearest",
-    ):
+    def quantiles(self, q=0.5, interpolation="nearest"):
         """
         Return values at the given quantile.
 

@@ -2,6 +2,7 @@ import functools
 from collections import OrderedDict
 from math import floor, isinf, isnan
 
+import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -81,9 +82,8 @@ def scalar_broadcast_to(scalar, size, dtype=None):
 
     if np.dtype(dtype) == np.dtype("object"):
         from cudf.core.column import as_column
-        from cudf.utils.cudautils import zeros
 
-        gather_map = zeros(size, dtype="int32")
+        gather_map = cupy.zeros(size, dtype="int32")
         scalar_str_col = as_column([scalar], dtype="str")
         return scalar_str_col[gather_map]
     else:

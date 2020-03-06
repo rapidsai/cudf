@@ -3,7 +3,6 @@
 from __future__ import print_function
 import cudf
 import pandas as pd
-import numba
 
 from libcpp.memory cimport unique_ptr
 

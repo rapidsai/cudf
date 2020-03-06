@@ -13,7 +13,6 @@ import pyarrow as pa
 import rmm
 
 import cudf
-from cudf.core.buffer import Buffer
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
@@ -23,7 +22,7 @@ from cudf.core.column import (
     column,
 )
 from cudf.core.frame import Frame
-from cudf.utils import cudautils, ioutils, utils
+from cudf.utils import ioutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import is_categorical_dtype, is_scalar, min_signed_type
 from cudf.utils.utils import cached_property
@@ -178,23 +177,6 @@ class Index(Frame):
 
     def sum(self):
         return self._values.sum()
-
-    def find_segments(self):
-        """Return the beginning index for segments
-
-        Returns
-        -------
-        result : NumericalColumn
-        """
-        segments, _ = self._find_segments()
-        return segments
-
-    def _find_segments(self):
-        seg, markers = cudautils.find_segments(self.gpu_values)
-        return (
-            column.build_column(data=Buffer(seg), dtype=seg.dtype),
-            markers,
-        )
 
     @classmethod
     def _concat(cls, objs):
@@ -515,7 +497,7 @@ class RangeIndex(Index):
     @cached_property
     def _values(self):
         if len(self) > 0:
-            vals = cudautils.arange(self._start, self._stop, dtype=self.dtype)
+            vals = cupy.arange(self._start, self._stop, dtype=self.dtype)
             return column.as_column(vals)
         else:
             return column.column_empty(0, masked=False, dtype=self.dtype)
@@ -717,7 +699,7 @@ class RangeIndex(Index):
 
 
 def index_from_range(start, stop=None, step=None):
-    vals = cudautils.arange(start, stop, step, dtype=np.int64)
+    vals = cupy.arange(start, stop, step, dtype=np.int64)
     return as_index(vals)
 
 
