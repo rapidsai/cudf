@@ -39,7 +39,16 @@ struct tabulator {
    cudf::numeric_scalar_device_view<T> const n_step;
 
    T __device__ operator()(cudf::size_type i){
-      return n_init.value() + (i * n_step.value());
+      return n_init.value() + (static_cast<T>(i) * n_step.value());
+   }
+};
+
+template<typename T>
+struct const_tabulator {
+   cudf::numeric_scalar_device_view<T> const n_init;   
+
+   T __device__ operator()(cudf::size_type i){
+      return n_init.value() + static_cast<T>(i);
    }
 };
 
@@ -63,13 +72,40 @@ struct sequence_functor {
       // constants, not iterators. to do that we would have to retrieve the scalar values off the gpu,
       // which is undesirable from a performance perspective.
       thrust::tabulate(rmm::exec_policy(stream)->on(stream),
-         result_device_view->begin<T>(), result_device_view->end<T>(), tabulator<T>{n_init, n_step});      
+         result_device_view->begin<T>(), result_device_view->end<T>(), tabulator<T>{n_init, n_step});
 
       return result;
    }
 
    template <typename T, typename std::enable_if_t<not cudf::is_numeric<T>() or cudf::is_boolean<T>()>* = nullptr>
    std::unique_ptr<column> operator()(size_type size, scalar const& init, scalar const& step,
+                                      rmm::mr::device_memory_resource* mr,
+                                      cudaStream_t stream)
+   {
+      CUDF_FAIL("Unsupported sequence scalar type");
+   }
+
+   template <typename T, typename std::enable_if_t<cudf::is_numeric<T>() and not cudf::is_boolean<T>()>* = nullptr>
+   std::unique_ptr<column> operator()(size_type size, scalar const& init,
+                                      rmm::mr::device_memory_resource* mr,
+                                      cudaStream_t stream)
+   {
+      auto result = make_fixed_width_column(init.type(), size, mask_state::UNALLOCATED, stream, mr);
+      auto result_device_view = mutable_column_device_view::create(*result, stream);      
+                  
+      auto n_init = get_scalar_device_view( static_cast<cudf::experimental::scalar_type_t<T>&>(const_cast<scalar&>(init)) );      
+      
+      // not using thrust::sequence because it requires init and step to be passed as 
+      // constants, not iterators. to do that we would have to retrieve the scalar values off the gpu,
+      // which is undesirable from a performance perspective.
+      thrust::tabulate(rmm::exec_policy(stream)->on(stream),
+         result_device_view->begin<T>(), result_device_view->end<T>(), const_tabulator<T>{n_init});
+
+      return result;
+   }
+
+   template <typename T, typename std::enable_if_t<not cudf::is_numeric<T>() or cudf::is_boolean<T>()>* = nullptr>
+   std::unique_ptr<column> operator()(size_type size, scalar const& init,
                                       rmm::mr::device_memory_resource* mr,
                                       cudaStream_t stream)
    {
@@ -90,12 +126,28 @@ std::unique_ptr<column> sequence(size_type size, scalar const& init, scalar cons
    return type_dispatcher(init.type(), sequence_functor{}, size, init, step, mr, stream);
 }
 
+std::unique_ptr<column> sequence(size_type size, scalar const& init,
+                                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                 cudaStream_t stream = 0)
+{   
+   CUDF_EXPECTS(size >= 0, "size must be >= 0");
+   CUDF_EXPECTS(is_numeric(init.type()), "init scalar type must be numeric");
+
+   return type_dispatcher(init.type(), sequence_functor{}, size, init, mr, stream);
+}
+
 }  // namespace detail
 
 std::unique_ptr<column> sequence(size_type size, scalar const& init, scalar const& step,
                                  rmm::mr::device_memory_resource* mr)
 {
    return detail::sequence(size, init, step, mr, 0);
+}
+
+std::unique_ptr<column> sequence(size_type size, scalar const& init,
+                                 rmm::mr::device_memory_resource* mr)
+{
+   return detail::sequence(size, init, mr, 0);
 }
 
 }  // namespace experimental

@@ -166,5 +166,28 @@ std::unique_ptr<table> repeat(
 std::unique_ptr<column> sequence(size_type size, scalar const& init, scalar const& step,
                                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/**
+ * @brief Fills a column with a sequence of value specified by an initial value and a step of 1.
+ * 
+ * Creates a new column and fills with @p size values starting at @p init and 
+ * incrementing by 1, generating the sequence
+ * [ init, init+1, init+2, ... init + (size - 1)]
+ *
+ * ```
+ * size = 3
+ * init = 0 
+ * return = [0, 1, 2]
+ * ```   
+ * @throws `cudf::logic_error` if @p init is not numeric.
+ * @throws `cudf::logic_error` if @p size is < 0. 
+ * 
+ * @param size Size of the output column
+ * @param init First value in the sequence 
+ * @param mr Memory resource to allocate the result output column
+ * @return std::unique_ptr<column> The result table containing the sequence
+ **/
+std::unique_ptr<column> sequence(size_type size, scalar const& init,
+                                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
 }  // namespace experimental
 }  // namespace cudf

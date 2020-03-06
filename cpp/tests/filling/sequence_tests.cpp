@@ -118,3 +118,19 @@ TEST_F(SequenceTestFixture, MismatchedInputs)
    numeric_scalar<double> step3(-5);
    EXPECT_THROW(cudf::experimental::sequence(10, init3, step3), cudf::logic_error);
 }
+
+TYPED_TEST(SequenceTypedTestFixture, DefaultStep)
+{
+   using T = TypeParam;
+
+   numeric_scalar<T> init(0);   
+   
+   size_type num_els = 10;
+   
+   T expected[]   = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };   
+   fixed_width_column_wrapper<T> expected_w(expected, expected + num_els);
+
+   auto result = cudf::experimental::sequence(num_els, init);
+        
+   expect_columns_equal(*result, expected_w);
+}
