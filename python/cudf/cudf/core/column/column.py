@@ -190,29 +190,30 @@ class ColumnBase(Column):
 
         # Find the first non-null column:
         head = objs[0]
-        head_dtype = head.dtype
         for i, obj in enumerate(objs):
-            if len(obj) != obj.null_count:
+            if obj.valid_count > 0:
                 head = obj
                 break
 
         for i, obj in enumerate(objs):
             # Check that all columns are the same type:
-            if not pd.api.types.is_dtype_equal(objs[i].dtype, head.dtype):
+            if not pd.api.types.is_dtype_equal(obj.dtype, head.dtype):
                 # if all null, cast to appropriate dtype
-                if len(obj) == obj.null_count:
-                    from cudf.core.column import column_empty_like
-
+                if obj.valid_count == 0:
                     objs[i] = column_empty_like(
                         head, dtype=head.dtype, masked=True, newsize=len(obj)
                     )
+                else:
+                    raise ValueError("All series must be of same type")
 
-        # Handle categories for categoricals
-        if all(isinstance(o, CategoricalColumn) for o in objs):
+        cats = None
+        is_categorical = all(is_categorical_dtype(o.dtype) for o in objs)
+
+        # Combine CategoricalColumn categories
+        if is_categorical:
             cats = (
-                Series(ColumnBase._concat([o.categories for o in objs]))
-                .drop_duplicates()
-                ._column
+                cudf.concat([o.cat().categories for o in objs])
+                    .to_series().drop_duplicates()._column
             )
             objs = [
                 o.cat()._set_categories(cats, is_unique=True) for o in objs
@@ -220,13 +221,7 @@ class ColumnBase(Column):
             # Map `objs` into a list of the codes until we port Categorical to
             # use the libcudf++ Category data type.
             objs = [o.cat().codes._column for o in objs]
-
-        # data_dtype will == head_dtype in most cases, except when `objs` is a
-        # list of CategoricalColumns. In that case, it'll be the codes' dtype.
-        data_dtype = objs[0].dtype
-        for obj in objs:
-            if not (obj.dtype == data_dtype):
-                raise ValueError("All series must be of same type")
+            head = head.cat().codes._column
 
         newsize = sum(map(len, objs))
         if newsize > libcudfxx.MAX_COLUMN_SIZE:
@@ -238,16 +233,13 @@ class ColumnBase(Column):
         # Filter out inputs that have 0 length
         objs = [o for o in objs if len(o) > 0]
 
-        # Performance the actual concatenation
+        # Perform the actual concatenation
         if newsize > 0:
             col = libcudfxx.concat.concat_columns(objs)
         else:
-            # Use `data_dtype` here, which will either be head_dtype, or
-            # the Categorical codes' dtype. If head_dtype is categorical,
-            # the CategoricalColumn is reconstructed in the next block.
-            col = column_empty(0, data_dtype, masked=True)
+            col = column_empty(0, head.dtype, masked=True)
 
-        if is_categorical_dtype(head_dtype):
+        if is_categorical:
             col = build_categorical_column(
                 categories=cats, codes=col, mask=col.mask
             )
@@ -582,8 +574,6 @@ class ColumnBase(Column):
     def take(self, indices):
         """Return Column by taking values from the corresponding *indices*.
         """
-        from cudf.core.column import column_empty_like
-
         # Handle zero size
         if indices.size == 0:
             return column_empty_like(self, newsize=0)
