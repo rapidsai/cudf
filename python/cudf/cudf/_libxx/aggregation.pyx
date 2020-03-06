@@ -64,6 +64,8 @@ cdef unique_ptr[aggregation] make_aggregation(op, kwargs={}) except *:
             agg = _AggregationFactory.from_udf(op, **kwargs)
         else:
             agg = op(_AggregationFactory)
+    else:
+        raise TypeError("Unknown aggregation {}".format(op))
     return move(agg.c_obj)
 
 
