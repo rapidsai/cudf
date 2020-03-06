@@ -1780,14 +1780,6 @@ class DataFrame(Frame):
         else:
             return result
 
-    def rank(self, axis=0, method="average", numeric_only=None, na_option="keep", ascending=True, pct=False):
-        """
-        Compute numerical data ranks (1 through n) along axis.
-
-        By default, equal values are assigned a rank that is the average of the ranks of those values.
-        """
-        return super().rank(axis, method, numeric_only, na_option, ascending, pct)
-
     def pop(self, item):
         """Return a column and drop it from the DataFrame.
         """

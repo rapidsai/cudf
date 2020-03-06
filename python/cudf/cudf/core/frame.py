@@ -10,7 +10,6 @@ import cudf
 import cudf._libxx as libcudfxx
 from cudf.core import column
 from cudf.core.column import as_column, build_categorical_column
-from cudf.core._sort import rank
 from cudf.utils.dtypes import (
     is_categorical_dtype,
     is_datetime_dtype,
@@ -271,12 +270,24 @@ class Frame(libcudfxx.table.Table):
         -------
         same type as caller
             Return a Series or DataFrame with data ranks as values.
-        """"
-        result = self._from_table(rank(
-                self, method, na_option, ascending, pct
-            )
-        )
-        return result
+        """
+        if method not in {'average', 'min', 'max', 'first', 'dense'}:
+            raise KeyError
+        if na_option not in {'keep', 'top', 'bottom'}:
+            raise KeyError
+        is_column = False
+        source = self #TODO code for selecting numeric columns without copy
+        if isinstance(source, (column.ColumnBase)):
+            source = source.as_frame()
+            is_column = True
+
+        out_rank_table = libcudfxx.sort.rank_columns(source, method, na_option, ascending, pct)
+
+        if is_column:
+            return self._from_table(as_column(out_rank_table[out_rank_table.columns[0]]))
+        else:
+            return self._from_table(out_rank_table)
+        
 
     def drop_duplicates(self, subset=None, keep="first", nulls_are_equal=True):
         """
