@@ -243,13 +243,12 @@ class StringMethods(object):
         if others is None:
             data = cpp_join(self._column, Scalar(sep), Scalar(na_rep, "str"))
         else:
-            others = _get_cols_list(others)
-            if isinstance(others, list):
-                cols = [self._column] + others
-            else:
-                cols = [self._column, others]
+            other_cols = _get_cols_list(others)
+            all_cols = [self._column] + other_cols
             data = cpp_concatenate(
-                DataFrame({index: value for index, value in enumerate(cols)}),
+                DataFrame(
+                    {index: value for index, value in enumerate(all_cols)}
+                ),
                 Scalar(sep),
                 Scalar(na_rep, "str"),
             )
@@ -1526,7 +1525,7 @@ def _get_cols_list(others):
         cols_list = [as_column(frame, dtype="str") for frame in others]
         return cols_list
     elif others is not None:
-        return as_column(others, dtype="str")
+        return [as_column(others, dtype="str")]
     else:
         raise TypeError(
             "others must be Series, Index, DataFrame, np.ndarrary "
