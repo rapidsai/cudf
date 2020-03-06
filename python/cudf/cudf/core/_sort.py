@@ -6,8 +6,7 @@ import logging
 import numpy as np
 
 import cudf
-import cudf._libxx as libcudf
-from cudf.core.column import ColumnBase, as_column
+import cudf._libxx as libcudfxx
 
 logging.basicConfig(format="%(levelname)s:%(message)s")
 
@@ -34,6 +33,8 @@ def get_sorted_inds(by, ascending=True, na_position="last"):
           * Not supporting: inplace, kind
           * Ascending can be a list of bools to control per column
     """
+    from cudf.core.column import ColumnBase
+
     number_of_columns = 1
     if isinstance(by, (ColumnBase)):
         by = by.as_frame()
@@ -63,9 +64,7 @@ def get_sorted_inds(by, ascending=True, na_position="last"):
     if np.isscalar(ascending):
         ascending = [ascending] * number_of_columns
 
-    out_inds_column = libcudf.sort.order_by(by, ascending, na_position)
-
-    return as_column(out_inds_column)
+    return libcudfxx.sort.order_by(by, ascending, na_position)
 
 def rank(source, method="average", na_option="keep", ascending=True, pct=False):
     """ rank column/dataframe
@@ -85,3 +84,4 @@ def rank(source, method="average", na_option="keep", ascending=True, pct=False):
         return as_column(out_rank_table[out_rank_table.columns[0]])
     else:
         return out_rank_table
+

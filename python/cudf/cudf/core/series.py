@@ -13,6 +13,7 @@ import rmm
 
 import cudf
 import cudf._lib as libcudf
+import cudf._libxx as libcudfxx
 from cudf.core.column import ColumnBase, DatetimeColumn, column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
@@ -1150,7 +1151,7 @@ class Series(Frame):
 
     @property
     def str(self):
-        return self._column.str(self.index, self.name)
+        return self._column.str(parent=self)
 
     @property
     def dtype(self):
@@ -1336,37 +1337,13 @@ class Series(Frame):
         """
         return self._column.to_array(fillna=fillna)
 
-    def isnull(self):
-        """Identify missing values in a Series.
-        """
-        result = Series(
-            self._column.isnull(), name=self.name, index=self.index
-        )
-        return result
-
-    def isna(self):
-        """Identify missing values in a Series. Alias for isnull.
-        """
-        return self.isnull()
-
-    def notna(self):
-        """Identify non-missing values in a Series.
-        """
-        result = Series(self._column.notna(), name=self.name, index=self.index)
-        return result
-
-    def notnull(self):
-        """Identify non-missing values in a Series. Alias for notna.
-        """
-        return self.notna()
-
     def nans_to_nulls(self):
         """
         Convert nans (if any) to nulls
         """
         if self.dtype.kind == "f":
             sr = self.fillna(np.nan)
-            newmask = libcudf.unaryops.nans_to_nulls(sr._column)
+            newmask = libcudfxx.transform.nans_to_nulls(sr._column)
             return self.set_mask(newmask)
         else:
             return self
@@ -2112,20 +2089,11 @@ class Series(Frame):
         warnings.warn("Use .unique() instead", DeprecationWarning)
         return self.unique()
 
-    def unique(self, method="sort", sort=True):
-        """Returns unique values of this Series.
-        default='sort' will be changed to 'hash' when implemented.
+    def unique(self):
         """
-        if method != "sort":
-            msg = "non sort based unique() not implemented yet"
-            raise NotImplementedError(msg)
-        if not sort:
-            msg = "not sorted unique not implemented yet."
-            raise NotImplementedError(msg)
-        if self.null_count == len(self):
-            res = column.column_empty_like(self._column, newsize=0)
-            return self._copy_construct(data=res)
-        res = self._column.unique(method=method)
+        Returns unique values of this Series.
+        """
+        res = self._column.unique()
         return Series(res, name=self.name)
 
     def nunique(self, method="sort", dropna=True):

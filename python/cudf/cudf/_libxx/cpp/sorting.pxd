@@ -1,5 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 
@@ -31,15 +32,7 @@ cdef extern from "cudf/sorting.hpp" namespace "cudf::experimental" nogil:
         libcudf_types.include_nulls _include_nulls,
         libcudf_types.null_order null_precedence) except +
 
-cdef extern from "cudf/search.hpp" namespace "cudf::experimental" nogil:
-    cdef unique_ptr[column] lower_bound(
-        table_view source_table,
-        table_view bins,
-        vector[libcudf_types.order] column_order,
-        vector[libcudf_types.null_order] null_precedence) except +
-
-    cdef unique_ptr[column] upper_bound(
-        table_view source_table,
-        table_view bins,
+    cdef bool is_sorted(
+        const table_view& table,
         vector[libcudf_types.order] column_order,
         vector[libcudf_types.null_order] null_precedence) except +

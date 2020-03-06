@@ -13,11 +13,96 @@ from cudf._libxx.move cimport move
 from cudf._libxx.cpp.column.column cimport column
 from cudf._libxx.cpp.table.table cimport table
 from cudf._libxx.cpp.table.table_view cimport table_view
-from cudf._libxx.cpp.sort cimport (
-    sorted_order, lower_bound, upper_bound, rank, rank_method
-)
-cimport cudf._libxx.cpp.types as libcudf_types
+from cudf._libxx.cpp.search cimport lower_bound, upper_bound
+from cudf._libxx.cpp.sorting cimport rank, rank_method, sorted_order, is_sorted as cpp_is_sorted
+from cudf._libxx.cpp.types cimport order, null_order, include_nulls
 
+
+def is_sorted(
+    Table source_table, object ascending=None, object null_position=None
+):
+    """
+    Checks whether the rows of a `table` are sorted in lexicographical order.
+
+    Parameters
+    ----------
+    source_table : Table
+        Table whose columns are to be checked for sort order
+    ascending : None or list-like of booleans
+        None or list-like of boolean values indicating expected sort order of
+        each column. If list-like, size of list-like must be len(columns). If
+        None, all columns expected sort order is set to ascending. False (0) -
+        descending, True (1) - ascending.
+    null_position : None or list-like of booleans
+        None or list-like of boolean values indicating desired order of nulls
+        compared to other elements. If list-like, size of list-like must be
+        len(columns). If None, null order is set to before. False (0) - after,
+        True (1) - before.
+
+    Returns
+    -------
+    returns : boolean
+        Returns True, if sorted as expected by ``ascending`` and
+        ``null_position``, False otherwise.
+    """
+
+    cdef vector[order] column_order
+    cdef vector[null_order] null_precedence
+
+    if ascending is None:
+        column_order = vector[order](
+            source_table._num_columns, order.ASCENDING
+        )
+    elif pd.api.types.is_list_like(ascending):
+        if len(ascending) != source_table._num_columns:
+            raise ValueError(
+                f"Expected a list-like of length {source_table._num_columns}, "
+                f"got length {len(ascending)} for `ascending`"
+            )
+        column_order = vector[order](
+            source_table._num_columns, order.DESCENDING
+        )
+        for idx, val in enumerate(ascending):
+            if val:
+                column_order[idx] = order.ASCENDING
+    else:
+        raise TypeError(
+            f"Expected a list-like or None for `ascending`, got "
+            f"{type(ascending)}"
+        )
+
+    if null_position is None:
+        null_precedence = vector[null_order](
+            source_table._num_columns, null_order.AFTER
+        )
+    elif pd.api.types.is_list_like(null_position):
+        if len(null_position) != source_table._num_columns:
+            raise ValueError(
+                f"Expected a list-like of length {source_table._num_columns}, "
+                f"got length {len(null_position)} for `null_position`"
+            )
+        null_precedence = vector[null_order](
+            source_table._num_columns, null_order.AFTER
+        )
+        for idx, val in enumerate(null_position):
+            if val:
+                null_precedence[idx] = null_order.BEFORE
+    else:
+        raise TypeError(
+            f"Expected a list-like or None for `null_position`, got "
+            f"{type(null_position)}"
+        )
+
+    cdef bool c_result
+    cdef table_view source_table_view = source_table.data_view()
+    with nogil:
+        c_result = cpp_is_sorted(
+            source_table_view,
+            column_order,
+            null_precedence
+        )
+
+    return c_result
 
 def order_by(Table source_table, object ascending, bool na_position):
     """
@@ -35,15 +120,15 @@ def order_by(Table source_table, object ascending, bool na_position):
     """
 
     cdef table_view source_table_view = source_table.data_view()
-    cdef vector[libcudf_types.order] column_order
+    cdef vector[order] column_order
     column_order.reserve(len(ascending))
-    cdef libcudf_types.null_order pred = (
-        libcudf_types.null_order.BEFORE
+    cdef null_order pred = (
+        null_order.BEFORE
         if na_position == 1
-        else libcudf_types.null_order.AFTER
+        else null_order.AFTER
     )
-    cdef vector[libcudf_types.null_order] null_precedence = (
-        vector[libcudf_types.null_order](
+    cdef vector[null_order] null_precedence = (
+        vector[null_order](
             source_table._num_columns,
             pred
         )
@@ -51,9 +136,9 @@ def order_by(Table source_table, object ascending, bool na_position):
 
     for i in ascending:
         if i is True:
-            column_order.push_back(libcudf_types.order.ASCENDING)
+            column_order.push_back(order.ASCENDING)
         else:
-            column_order.push_back(libcudf_types.order.DESCENDING)
+            column_order.push_back(order.DESCENDING)
 
     cdef unique_ptr[column] c_result
     with nogil:
@@ -78,16 +163,16 @@ def digitize(Table source_values_table, Table bins, bool right=False):
 
     cdef table_view bins_view = bins.view()
     cdef table_view source_values_table_view = source_values_table.view()
-    cdef vector[libcudf_types.order] column_order = (
-        vector[libcudf_types.order](
+    cdef vector[order] column_order = (
+        vector[order](
             bins_view.num_columns(),
-            libcudf_types.order.ASCENDING
+            order.ASCENDING
         )
     )
-    cdef vector[libcudf_types.null_order] null_precedence = (
-        vector[libcudf_types.null_order](
+    cdef vector[null_order] null_precedence = (
+        vector[null_order](
             bins_view.num_columns(),
-            libcudf_types.null_order.BEFORE
+            null_order.BEFORE
         )
     )
 
@@ -129,10 +214,10 @@ def rank_columns(Table source_table, str method, str na_option, bool ascending, 
     else:
         c_rank_method = rank_method.AVERAGE
     
-    cdef libcudf_types.order column_order = (
-        libcudf_types.order.ASCENDING
+    cdef order column_order = (
+        order.ASCENDING
         if ascending
-        else libcudf_types.order.DESCENDING
+        else order.DESCENDING
     )
     #ascending 
     #    #top    = na_is_smallest
@@ -142,21 +227,21 @@ def rank_columns(Table source_table, str method, str na_option, bool ascending, 
     #    #top    = na_is_largest
     #    #bottom = na_is_smallest
     #    #keep   = na_is_smallest
-    cdef libcudf_types.null_order null_precedence
+    cdef null_order null_precedence
     if ascending:
         if na_option == 'top':
-            null_precedence = libcudf_types.null_order.BEFORE
+            null_precedence = null_order.BEFORE
         else:
-            null_precedence = libcudf_types.null_order.AFTER
+            null_precedence = null_order.AFTER
     else:
         if na_option == 'top':
-            null_precedence = libcudf_types.null_order.AFTER
+            null_precedence = null_order.AFTER
         else:
-            null_precedence = libcudf_types.null_order.BEFORE
-    cdef libcudf_types.include_nulls _include_nulls = (
-        libcudf_types.include_nulls.EXCLUDE_NULLS 
+            null_precedence = null_order.BEFORE
+    cdef include_nulls _include_nulls = (
+        include_nulls.EXCLUDE_NULLS 
         if na_option == 'keep'
-        else libcudf_types.include_nulls.INCLUDE_NULLS
+        else include_nulls.INCLUDE_NULLS
     )
     cdef unique_ptr[table] c_result
  
@@ -175,3 +260,4 @@ def rank_columns(Table source_table, str method, str na_option, bool ascending, 
         move(c_result), 
         column_names=source_table._column_names
     )
+
