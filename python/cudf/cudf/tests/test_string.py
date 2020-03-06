@@ -56,6 +56,7 @@ def ps_gs(data, index):
     return (ps, gs)
 
 
+# TODO: Remove this once NVStrings is fully removed / deprecated
 @pytest.mark.parametrize("nbytes", [0, 2 ** 10, 2 ** 31 - 1, 2 ** 31, 2 ** 32])
 @patch.object(nvstrings.nvstrings, "byte_count")
 def test_from_nvstrings_nbytes(mock_byte_count, nbytes):
@@ -981,9 +982,7 @@ def test_string_no_children_properties():
         ["abcdefghij", "0123456789", "9876543210", None, "accénted", ""],
     ],
 )
-@pytest.mark.parametrize(
-    "index", [0, 1, 2, 3, 9, 10],
-)
+@pytest.mark.parametrize("index", [0, 1, 2, 3, 9, 10])
 def test_string_get(string, index):
     pds = pd.Series(string)
     gds = Series(string)
@@ -1028,7 +1027,7 @@ def test_string_slice_from():
     gs = Series(["hello world", "holy accéntéd", "batman", None, ""])
     d_starts = Series([2, 3, 0, -1, -1], dtype=np.int32)
     d_stops = Series([-1, -1, 0, -1, -1], dtype=np.int32)
-    got = gs.str.slice_from(starts=d_starts._column, stops=d_stops._column,)
+    got = gs.str.slice_from(starts=d_starts._column, stops=d_stops._column)
     expected = Series(["llo world", "y accéntéd", "", None, ""])
     assert_eq(got, expected)
 
@@ -1041,15 +1040,9 @@ def test_string_slice_from():
         ["koala", "fox", "chameleon"],
     ],
 )
-@pytest.mark.parametrize(
-    "number", [0, 1, 10],
-)
-@pytest.mark.parametrize(
-    "diff", [0, 2, 9],
-)
-@pytest.mark.parametrize(
-    "repr", ["2", "!!"],
-)
+@pytest.mark.parametrize("number", [0, 1, 10])
+@pytest.mark.parametrize("diff", [0, 2, 9])
+@pytest.mark.parametrize("repr", ["2", "!!"])
 def test_string_slice_replace(string, number, diff, repr):
     pds = pd.Series(string)
     gds = Series(string)
