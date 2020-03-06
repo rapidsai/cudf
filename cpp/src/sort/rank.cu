@@ -53,26 +53,23 @@ std::unique_ptr<table> rank(
     null_order null_precedence,
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream=0) {
-  //na_option=keep assign NA to NA values
-  if(_include_nulls == include_nulls::NO)
-    null_precedence = null_order::AFTER;
   auto const size = input.num_rows();
   
   std::vector<std::unique_ptr<column>> rank_columns;
   for (auto const& input_col : input) {
     std::unique_ptr<column> sorted_order =
         (method == rank_method::FIRST)
-            ? detail::stable_sorted_order(
-                table_view{{input_col}}, {column_order}, {null_precedence}, mr, stream)
-            : detail::sorted_order(
-                table_view{{input_col}}, {column_order}, {null_precedence}, mr, stream);
+            ? detail::stable_sorted_order(table_view{{input_col}},
+                {column_order}, {null_precedence}, mr, stream)
+            : detail::sorted_order(table_view{{input_col}}, 
+                {column_order}, {null_precedence}, mr, stream);
     column_view sorted_order_view = sorted_order->view();
 
-    if(_include_nulls == include_nulls::NO)
-      rank_columns.push_back(
-          make_numeric_column(data_type(FLOAT64), size,
-                              copy_bitmask(input_col, stream, mr),
-                              input_col.null_count(), stream, mr));
+    // na_option=keep assign NA to NA values
+    if (_include_nulls == include_nulls::NO)
+      rank_columns.push_back(make_numeric_column(
+          data_type(FLOAT64), size, copy_bitmask(input_col, stream, mr),
+          input_col.null_count(), stream, mr));
     else
       rank_columns.push_back(make_numeric_column(
           data_type(FLOAT64), size, mask_state::UNALLOCATED, stream, mr));

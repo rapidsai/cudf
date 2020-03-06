@@ -115,7 +115,7 @@ def rank_columns(Table source_table, str method, str na_option, bool ascending, 
     """
     Compute numerical data ranks (1 through n) of each column in the dataframe
     """
-    cdef table_view source_table_view = source_table.view()
+    cdef table_view source_table_view = source_table.data_view()
     
     cdef rank_method c_rank_method
     if  method == 'min':
@@ -173,8 +173,5 @@ def rank_columns(Table source_table, str method, str na_option, bool ascending, 
 
     return Table.from_unique_ptr(
         move(c_result), 
-        column_names=source_table._column_names,
-        index_names=(
-            None if source_table._index is None 
-            else source_table._index_names)
+        column_names=source_table._column_names
     )
