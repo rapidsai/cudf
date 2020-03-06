@@ -730,42 +730,57 @@ class StringMethods(object):
             msg = f"width must be of integer type, not {type(width).__name__}"
             raise TypeError(msg)
 
-        expand_tabs = kwargs.get("expand_tabs", False)
+        expand_tabs = kwargs.get("expand_tabs", None)
         if expand_tabs:
             raise NotImplementedError("`expand_tabs=True` is not supported")
-        warnings.warn(
-            "wrap current implementation defaults to `expand_tabs`=False"
-        )
+        elif expand_tabs is None:
+            warnings.warn(
+                "wrap current implementation defaults to `expand_tabs`=False"
+            )
 
-        replace_whitespace = kwargs.get("replace_whitespace", True)
+        replace_whitespace = kwargs.get("replace_whitespace", None)
         if not replace_whitespace:
             raise NotImplementedError(
                 "`replace_whitespace=False` is not supported"
             )
+        elif replace_whitespace is None:
+            warnings.warn(
+                "wrap current implementation defaults to \
+                    `replace_whitespace`=True"
+            )
 
-        drop_whitespace = kwargs.get("drop_whitespace", True)
+        drop_whitespace = kwargs.get("drop_whitespace", None)
         if not drop_whitespace:
             raise NotImplementedError(
                 "`drop_whitespace=False` is not supported"
             )
+        elif drop_whitespace is None:
+            warnings.warn(
+                "wrap current implementation defaults to \
+                    `drop_whitespace`=True"
+            )
 
-        break_long_words = kwargs.get("break_long_words", False)
+        break_long_words = kwargs.get("break_long_words", None)
         if break_long_words:
             raise NotImplementedError(
                 "`break_long_words=True` is not supported"
             )
-        warnings.warn(
-            "wrap current implementation defaults to `break_long_words`=False"
-        )
+        elif break_long_words is None:
+            warnings.warn(
+                "wrap current implementation defaults to \
+                    `break_long_words`=False"
+            )
 
-        break_on_hyphens = kwargs.get("break_on_hyphens", False)
-        if break_on_hyphens:
+        break_on_hyphens = kwargs.get("break_on_hyphens", None)
+        if break_long_words:
             raise NotImplementedError(
                 "`break_on_hyphens=True` is not supported"
             )
-        warnings.warn(
-            "wrap current implementation defaults to `break_on_hyphens`=False"
-        )
+        elif break_on_hyphens is None:
+            warnings.warn(
+                "wrap current implementation defaults to \
+                    `break_on_hyphens`=False"
+            )
 
         return self._return_or_inplace(cpp_wrap(self._column, width), **kwargs)
 
