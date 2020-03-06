@@ -118,13 +118,6 @@ private:
     }
   }
 
-  static void log_callback_exception(JNIEnv* env, char const* callback_name, jthrowable throwable) {
-    std::cerr << callback_name << "  threw a Java exception: ";
-    env->ExceptionDescribe();
-    // describe clears the exception so re-throw it
-    env->Throw(throwable);
-  }
-
   bool on_alloc_fail(std::size_t num_bytes) {
     cudaError_t err = cudaPeekAtLastError();
     if (err != cudaSuccess) {
@@ -141,9 +134,7 @@ private:
     jboolean result = env->CallBooleanMethod(handler_obj,
                                              on_alloc_fail_method,
                                              static_cast<jlong>(num_bytes));
-    auto throwable = env->ExceptionOccurred();
-    if (throwable != NULL) {
-      log_callback_exception(env, "onAllocFailure", throwable);
+    if (env->ExceptionCheck()) {
       throw std::runtime_error("onAllocFailure handler threw an exception");
     }
     return result;
@@ -163,9 +154,7 @@ private:
       if (it != thresholds.end()) {
         JNIEnv* env = cudf::jni::get_jni_env(jvm);
         env->CallVoidMethod(handler_obj, callback_method, current_total);
-        auto throwable = env->ExceptionOccurred();
-        if (throwable != nullptr) {
-          log_callback_exception(env, callback_name, throwable);
+        if (env->ExceptionCheck()) {
           throw std::runtime_error("onAllocThreshold handler threw an exception");
         }
       }
