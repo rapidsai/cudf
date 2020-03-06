@@ -28,7 +28,7 @@ from cudf._libxx.strings.combine import (
     join as cpp_join,
 )
 from cudf._libxx.strings.padding import (
-    PadSide as PadSide,
+    PadSide,
     center as cpp_center,
     ljust as cpp_ljust,
     pad as cpp_pad,
