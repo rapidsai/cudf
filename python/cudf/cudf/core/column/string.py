@@ -730,30 +730,42 @@ class StringMethods(object):
             msg = f"width must be of integer type, not {type(width).__name__}"
             raise TypeError(msg)
 
-        if "expand_tabsbool" in kwargs:
+        expand_tabs = kwargs.get("expand_tabs", False)
+        if expand_tabs:
+            raise NotImplementedError("`expand_tabs=True` is not supported")
+        warnings.warn(
+            "wrap current implementation defaults to `expand_tabs`=False"
+        )
+
+        replace_whitespace = kwargs.get("replace_whitespace", True)
+        if not replace_whitespace:
             raise NotImplementedError(
-                "`expand_tabsbool` parameter is not supported"
+                "`replace_whitespace=False` is not supported"
             )
 
-        if "replace_whitespace" in kwargs:
+        drop_whitespace = kwargs.get("drop_whitespace", True)
+        if not drop_whitespace:
             raise NotImplementedError(
-                "`replace_whitespace` parameter is not supported"
+                "`drop_whitespace=False` is not supported"
             )
 
-        if "drop_whitespace" in kwargs:
+        break_long_words = kwargs.get("break_long_words", False)
+        if break_long_words:
             raise NotImplementedError(
-                "`drop_whitespace` parameter is not supported"
+                "`break_long_words=True` is not supported"
             )
+        warnings.warn(
+            "wrap current implementation defaults to `break_long_words`=False"
+        )
 
-        if "break_long_words" in kwargs:
+        break_on_hyphens = kwargs.get("break_on_hyphens", False)
+        if break_on_hyphens:
             raise NotImplementedError(
-                "`break_long_words` parameter is not supported"
+                "`break_on_hyphens=True` is not supported"
             )
-
-        if "break_on_hyphens" in kwargs:
-            raise NotImplementedError(
-                "`break_on_hyphens` parameter is not supported"
-            )
+        warnings.warn(
+            "wrap current implementation defaults to `break_on_hyphens`=False"
+        )
 
         return self._return_or_inplace(cpp_wrap(self._column, width), **kwargs)
 
