@@ -70,7 +70,7 @@ struct substring_fn
             return 0; // null string
         string_view d_str = d_column.template element<string_view>(idx);
         auto const length = d_str.length();
-        auto const step = d_step.is_valid() ? *(d_step.data()) : 1;
+        size_type const step = d_step.is_valid() ? d_step.value() : 1;
         auto const begin = [&] {  // always inclusive
             if( length==0 ) // simplifies the rest of this logic
                 return d_str.begin();
@@ -83,13 +83,13 @@ struct substring_fn
             {
                 if( start < length )
                     return d_str.begin() + start;
-                return d_str.end() + ((step < 0) ? -1:0);
+                return d_str.end() + (step < 0 ? -1 : 0);
             }
             // handle negative position here
             auto adjust = length + start;
             if( adjust >= 0 )
                 return d_str.begin() + adjust;
-            return d_str.begin() + ((step <0) ? -1:0);
+            return d_str.begin() + (step <0 ? -1 : 0);
         } ();
         auto const end = [&] {  // always exclusive
             // when invalid, default depends on step
@@ -101,7 +101,7 @@ struct substring_fn
                 return (stop < length) ? (d_str.begin() + stop) : d_str.end();
             // handle negative position here
             auto adjust = length + stop;
-            return d_str.begin() + ((adjust >= 0) ? adjust : -1);
+            return d_str.begin() + (adjust >= 0 ? adjust : -1);
         } ();
 
         size_type bytes = 0;
