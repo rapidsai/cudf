@@ -897,13 +897,9 @@ class StringMethods(object):
             msg = f"width must be of integer type, not {type(width).__name__}"
             raise TypeError(msg)
 
-        if side == "left":
-            side = PadSide.LEFT
-        elif side == "right":
-            side = PadSide.RIGHT
-        elif side == "both":
-            side = PadSide.BOTH
-        else:
+        try:
+            side = PadSide[side.upper()]
+        except KeyError:
             raise ValueError(
                 "side has to be either one of {‘left’, ‘right’, ‘both’}"
             )
