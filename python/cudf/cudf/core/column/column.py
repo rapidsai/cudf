@@ -854,9 +854,7 @@ def column_empty(row_count, dtype="object", masked=False):
         data = None
         children = (
             build_column(
-                data=Buffer.empty(
-                    (row_count + 1) * np.dtype("int32").itemsize
-                ),
+                data=Buffer(cupy.zeros(row_count + 1, dtype="int32")),
                 dtype="int32",
             ),
             build_column(
