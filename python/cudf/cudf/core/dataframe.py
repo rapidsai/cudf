@@ -1939,7 +1939,7 @@ class DataFrame(Frame):
                 )
                 raise ValueError(errmsg.format(k))
         cupy_dtype = dtype
-        if np.issubdtype(dtype, np.datetime64):
+        if np.issubdtype(cupy_dtype, np.datetime64):
             cupy_dtype = np.dtype("int64")
 
         if order not in ("F", "C"):

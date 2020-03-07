@@ -10,7 +10,6 @@ import pandas as pd
 import pyarrow as pa
 
 import nvstrings
-import rmm
 
 import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
@@ -888,12 +887,10 @@ class StringColumn(column.ColumnBase):
     @property
     def indices(self):
         if self._indices is None:
-            out_dev_arr = rmm.device_array(
-                self.nvcategory.size(), dtype="int32"
-            )
-            ptr = libcudf.cudf.get_ctype_ptr(out_dev_arr)
+            out_col = column_empty(self.nvcategory.size(), dtype="int32")
+            ptr = out_col.data_ptr
             self.nvcategory.values(devptr=ptr)
-            self._indices = out_dev_arr
+            self._indices = out_col.data_array_view
         return self._indices
 
     @property

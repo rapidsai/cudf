@@ -32,24 +32,13 @@ def as_contiguous(arr):
 # Mask utils
 
 
-@cuda.jit
-def gpu_fill_value(data, value):
-    tid = cuda.grid(1)
-    if tid < data.size:
-        data[tid] = value
-
-
-def fill_value(arr, value):
-    """Fill *arr* with value
-    """
-    if arr.size > 0:
-        gpu_fill_value.forall(arr.size)(arr, value)
-
-
 def full(size, value, dtype):
-    out = rmm.device_array(size, dtype=dtype)
-    fill_value(out, value)
-    return out
+    cupy_dtype = dtype
+    if np.issubdtype(cupy_dtype, np.datetime64):
+        cupy_dtype = np.int64
+
+    out = cupy.full(size, value, cupy_dtype)
+    return cuda.as_cuda_array(out).view(dtype)
 
 
 @cuda.jit
@@ -71,28 +60,6 @@ def expand_mask_bits(size, bits):
     if numtasks > 0:
         gpu_expand_mask_bits.forall(numtasks)(bits, expanded_mask)
     return expanded_mask
-
-
-def prefixsum(vals):
-    """Compute the full prefixsum.
-
-    Given the input of N.  The output size is N + 1.
-    The first value is always 0.  The last value is the sum of *vals*.
-    """
-    import cudf._libxx as libcudfxx
-
-    from cudf.core.column import as_column
-
-    # Allocate output
-    slots = rmm.device_array(shape=vals.size + 1, dtype=vals.dtype)
-    # Fill 0 to slot[0]
-    slots[0] = 0
-
-    # Compute prefixsum on the mask
-    in_col = as_column(vals)
-    result = libcudfxx.reduce.scan("sum", in_col, True)
-    slots[1:] = result
-    return slots
 
 
 #

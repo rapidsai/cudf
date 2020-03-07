@@ -10,8 +10,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-import rmm
-
 import cudf
 from cudf.core.column import (
     CategoricalColumn,
@@ -559,10 +557,6 @@ class RangeIndex(Index):
             index = utils.normalize_index(index, len(self))
             index += self._start
             return index
-        elif isinstance(index, (list, np.ndarray)):
-            index = np.asarray(index)
-            index = rmm.to_device(index)
-
         else:
             if is_scalar(index):
                 index = min_signed_type(index)(index)

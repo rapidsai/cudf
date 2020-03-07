@@ -9,8 +9,6 @@ import pandas as pd
 import pyarrow as pa
 import pytest
 
-import rmm
-
 import cudf as gd
 from cudf.core.dataframe import DataFrame, Series
 from cudf.tests import utils
@@ -214,7 +212,7 @@ def test_dataframe_basic():
     df = DataFrame()
 
     # Populate with cuda memory
-    df["keys"] = rmm.to_device(np.arange(10, dtype=np.float64))
+    df["keys"] = np.arange(10, dtype=np.float64)
     np.testing.assert_equal(df["keys"].to_array(), np.arange(10))
     assert len(df) == 10
 
@@ -700,7 +698,7 @@ def test_dataframe_setitem_from_masked_object():
     )
     assert test2_nan["a"].null_count == 0
 
-    gpu_ary = rmm.to_device(ary)
+    gpu_ary = cupy.asarray(ary)
     test3_null = Series(gpu_ary, nan_as_null=True)
     assert test3_null.nullable
     assert test3_null.null_count == 20
@@ -1053,7 +1051,7 @@ def test_from_records(dtypes):
 
 def test_from_gpu_matrix():
     h_ary = np.array([[1, 2, 3], [4, 5, 6]], np.int32)
-    d_ary = rmm.to_device(h_ary)
+    d_ary = cupy.asarray(h_ary)
 
     gdf = gd.DataFrame.from_gpu_matrix(d_ary, columns=["a", "b", "c"])
     df = pd.DataFrame(h_ary, columns=["a", "b", "c"])
@@ -1070,7 +1068,7 @@ def test_from_gpu_matrix():
 
 @pytest.mark.xfail(reason="matrix dimension is not 2")
 def test_from_gpu_matrix_wrong_dimensions():
-    d_ary = rmm.device_array((2, 3, 4), dtype=np.int32)
+    d_ary = cupy.empty((2, 3, 4), dtype=np.int32)
     gdf = gd.DataFrame.from_gpu_matrix(d_ary)
     assert gdf is not None
 
@@ -4021,10 +4019,12 @@ def test_series_astype_error_handling(errors):
 def test_df_constructor_dtype(dtype):
     if "datetime" in dtype:
         data = ["1991-11-20", "2004-12-04", "2016-09-13", None]
-    elif dtype == "str" or "float" in dtype:
-        data = [1, 2, 3, None]
-    else:
+    elif dtype == "str":
+        data = ["a", "b", "c", None]
+    elif "float" in dtype:
         data = [1.0, 0.5, -1.1, np.nan, None]
+    else:
+        data = [1, 2, 3, None]
 
     sr = Series(data, dtype=dtype)
 

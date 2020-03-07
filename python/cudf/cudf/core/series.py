@@ -1347,24 +1347,12 @@ class Series(Frame):
         """
         """
         assert axis in (None, 0) and skipna is True and level in (None,)
-        if self.dtype.kind not in "biuf":
-            raise NotImplementedError(
-                "All does not currently support columns of {} dtype.".format(
-                    self.dtype
-                )
-            )
         return self._column.all()
 
     def any(self, axis=0, skipna=True, level=None):
         """
         """
         assert axis in (None, 0) and skipna is True and level in (None,)
-        if self.dtype.kind not in "biuf":
-            raise NotImplementedError(
-                "Any does not currently support columns of {} dtype.".format(
-                    self.dtype
-                )
-            )
         return self._column.any()
 
     def to_gpu_array(self, fillna=None):
