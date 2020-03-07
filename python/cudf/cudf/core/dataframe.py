@@ -30,7 +30,6 @@ from cudf.core import column
 from cudf.core._sort import get_sorted_inds
 from cudf.core.column import (
     CategoricalColumn,
-    ColumnBase,
     StringColumn,
     as_column,
     column_empty,

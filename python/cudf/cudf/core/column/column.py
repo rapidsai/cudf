@@ -29,8 +29,10 @@ from cudf.core.buffer import Buffer
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.dtypes import (
-    is_categorical_dtype, is_scalar, np_to_pa_dtype,
-    is_numerical_dtype
+    is_categorical_dtype,
+    is_numerical_dtype,
+    is_scalar,
+    np_to_pa_dtype,
 )
 from cudf.utils.utils import buffers_from_pyarrow, mask_dtype
 
@@ -157,9 +159,6 @@ class ColumnBase(Column):
 
     @classmethod
     def _concat(cls, objs, dtype=None):
-        from cudf.core.column import (
-            NumericalColumn,
-        )
 
         if len(objs) == 0:
             dtype = pd.api.types.pandas_dtype(dtype)
@@ -213,9 +212,12 @@ class ColumnBase(Column):
         # Combine CategoricalColumn categories
         if is_categorical:
             # Combine and de-dupe the categories
-            cats = cudf \
-                .concat([o.cat().categories for o in objs]) \
-                .to_series().drop_duplicates()._column
+            cats = (
+                cudf.concat([o.cat().categories for o in objs])
+                .to_series()
+                .drop_duplicates()
+                ._column
+            )
             objs = [
                 o.cat()._set_categories(cats, is_unique=True) for o in objs
             ]

@@ -105,9 +105,12 @@ class Frame(libcudfxx.table.Table):
             # If all categorical dtypes, combine the categories
             elif all(is_categorical_dtype(col.dtype) for col in cols):
                 # Combine and de-dupe the categories
-                categories[name] = cudf \
-                    .concat([col.cat.categories for col in cols]) \
-                    .to_series().drop_duplicates()._column
+                categories[name] = (
+                    cudf.concat([col.cat.categories for col in cols])
+                    .to_series()
+                    .drop_duplicates()
+                    ._column
+                )
                 # Set the column dtype to the codes' dtype. The categories
                 # will be re-assigned at the end
                 dtypes[name] = min_scalar_type(len(categories[name]))
@@ -128,9 +131,13 @@ class Frame(libcudfxx.table.Table):
                     # combined categories, and cast the new codes to the
                     # min-scalar-sized dtype
                     if name in categories:
-                        df[name] = df[name].cat._set_categories(
-                            categories[name], is_unique=True
-                        ).codes
+                        df[name] = (
+                            df[name]
+                            .cat._set_categories(
+                                categories[name], is_unique=True
+                            )
+                            .codes
+                        )
                     df[name] = df[name].astype(dtype)
 
         # Arrange the columns from each DF in the same order
@@ -149,7 +156,7 @@ class Frame(libcudfxx.table.Table):
             out[name] = build_categorical_column(
                 categories=cats,
                 codes=out[name]._column,
-                mask=out[name]._column.mask
+                mask=out[name]._column.mask,
             )
 
         # TODO (ptaylor):
