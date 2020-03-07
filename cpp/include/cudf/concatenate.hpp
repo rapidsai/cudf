@@ -27,8 +27,7 @@ namespace cudf {
 // TODO remove when done
 enum class concatenate_mode {
   UNOPTIMIZED,
-  FUSED_KERNEL,
-  TABLES_KERNEL
+  FUSED_KERNEL
 };
 void temp_set_concatenate_mode(concatenate_mode mode);
 
