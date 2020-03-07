@@ -42,7 +42,10 @@ from cudf._libxx.strings.padding import (
     rjust as cpp_rjust,
     zfill as cpp_zfill,
 )
-from cudf._libxx.strings.contains import contains_re as cpp_contains_re
+from cudf._libxx.strings.contains import (
+    contains_re as cpp_contains_re,
+    count_re as cpp_count_re,
+)
 from cudf._libxx.strings.find import contains as cpp_contains
 from cudf._libxx.strings.replace import (
     insert as cpp_string_insert,
@@ -1418,6 +1421,13 @@ class StringMethods(object):
             )
 
         return self._return_or_inplace(cpp_wrap(self._column, width), **kwargs)
+
+    def count(self, pat, flags=0, **kwargs):
+
+        if flags != 0:
+            raise NotImplementedError("`flags` parameter is not yet supported")
+
+        return self._return_or_inplace(cpp_count_re(self._column, pat))
 
 
 class StringColumn(column.ColumnBase):
