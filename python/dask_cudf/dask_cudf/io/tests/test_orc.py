@@ -60,14 +60,12 @@ def test_to_orc(tmpdir, dtypes, compression, compute):
     # Create cudf and dask_cudf dataframes
     df = cudf.datasets.randomdata(nrows=10, dtypes=dtypes, seed=1)
     df = df.set_index("index").sort_index()
-    df1 = df[4:8]
     ddf = dask_cudf.from_cudf(df, npartitions=3)
 
     # Write cudf dataframe as single file
     # (preserve index by setting to column)
     fname = tmpdir.join("test.orc")
-    breakpoint()
-    df1.reset_index().to_orc(fname, compression=compression)
+    df.reset_index().to_orc(fname, compression=compression)
 
     # Write dask_cudf dataframe as multiple files
     # (preserve index by `write_index=True`)
