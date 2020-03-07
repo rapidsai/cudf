@@ -4,6 +4,7 @@ import pickle
 import warnings
 from numbers import Number
 
+import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -27,7 +28,10 @@ from cudf.core._sort import get_sorted_inds
 from cudf.core.buffer import Buffer
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils import cudautils, ioutils, utils
-from cudf.utils.dtypes import is_categorical_dtype, is_scalar, np_to_pa_dtype
+from cudf.utils.dtypes import (
+    is_categorical_dtype, is_scalar, np_to_pa_dtype,
+    is_numerical_dtype
+)
 from cudf.utils.utils import buffers_from_pyarrow, mask_dtype
 
 
@@ -153,10 +157,7 @@ class ColumnBase(Column):
 
     @classmethod
     def _concat(cls, objs, dtype=None):
-        from cudf.core.series import Series
         from cudf.core.column import (
-            StringColumn,
-            CategoricalColumn,
             NumericalColumn,
         )
 
@@ -169,13 +170,13 @@ class ColumnBase(Column):
         # If all columns are `NumericalColumn` with different dtypes,
         # we cast them to a common dtype.
         # Notice, we can always cast pure null columns
-        not_null_cols = list(filter(lambda o: len(o) != o.null_count, objs))
+        not_null_cols = list(filter(lambda o: o.valid_count > 0, objs))
         if len(not_null_cols) > 0 and (
             len(
                 [
                     o
                     for o in not_null_cols
-                    if not isinstance(o, NumericalColumn)
+                    if not is_numerical_dtype(o.dtype)
                     or np.issubdtype(o.dtype, np.datetime64)
                 ]
             )
@@ -204,17 +205,17 @@ class ColumnBase(Column):
                         head, dtype=head.dtype, masked=True, newsize=len(obj)
                     )
                 else:
-                    raise ValueError("All series must be of same type")
+                    raise ValueError("All columns must be the same type")
 
         cats = None
         is_categorical = all(is_categorical_dtype(o.dtype) for o in objs)
 
         # Combine CategoricalColumn categories
         if is_categorical:
-            cats = (
-                cudf.concat([o.cat().categories for o in objs])
-                    .to_series().drop_duplicates()._column
-            )
+            # Combine and de-dupe the categories
+            cats = cudf \
+                .concat([o.cat().categories for o in objs]) \
+                .to_series().drop_duplicates()._column
             objs = [
                 o.cat()._set_categories(cats, is_unique=True) for o in objs
             ]
