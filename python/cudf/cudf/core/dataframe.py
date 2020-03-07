@@ -1856,50 +1856,6 @@ class DataFrame(Frame):
             df[col] = df[col].nans_to_nulls()
         return df
 
-    @classmethod
-    def _concat(cls, objs, axis=0, ignore_index=False):
-
-        libcudf.nvtx.nvtx_range_push("CUDF_CONCAT", "orange")
-
-        if ignore_index:
-            index = RangeIndex(sum(map(len, objs)))
-        elif isinstance(objs[0].index, cudf.core.multiindex.MultiIndex):
-            index = cudf.core.multiindex.MultiIndex._concat(
-                [o.index for o in objs]
-            )
-        else:
-            index = Index._concat([o.index for o in objs])
-
-        # Currently we only support sort = False
-        # Change below when we want to support sort = True
-        # below functions as an ordered set
-        all_columns_ls = [col for o in objs for col in o.columns]
-        unique_columns_ordered_ls = OrderedDict.fromkeys(all_columns_ls).keys()
-
-        # Concatenate cudf.series for all columns
-
-        data = {
-            i: ColumnBase._concat(
-                [
-                    o[c]._column
-                    if c in o.columns
-                    else column_empty(len(o), dtype=np.bool, masked=True)
-                    for o in objs
-                ]
-            )
-            for i, c in enumerate(unique_columns_ordered_ls)
-        }
-
-        out = cls(data, index=index)
-
-        if isinstance(objs[0].columns, pd.MultiIndex):
-            out.columns = objs[0].columns
-        else:
-            out.columns = unique_columns_ordered_ls
-
-        libcudf.nvtx.nvtx_range_pop()
-        return out
-
     def as_gpu_matrix(self, columns=None, order="F"):
         """Convert to a matrix in device memory.
 
