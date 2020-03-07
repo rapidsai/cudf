@@ -58,7 +58,9 @@ def numeric_normalize_types(*args):
 
 def is_numerical_dtype(obj):
     return not is_categorical_dtype(obj) and (
-        np.issubdtype(obj, np.floating) or np.issubdtype(obj, np.signedinteger)
+        np.issubdtype(obj, np.bool_)
+        or np.issubdtype(obj, np.floating)
+        or np.issubdtype(obj, np.signedinteger)
     )
 
 
