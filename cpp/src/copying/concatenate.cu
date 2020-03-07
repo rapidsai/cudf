@@ -218,67 +218,68 @@ struct for_each_concatenate {
   cudaStream_t stream;
   rmm::mr::device_memory_resource *mr;
 
- template <typename ColumnType,
-           std::enable_if_t<std::is_same<ColumnType, cudf::string_view>::value>* = nullptr>
- std::unique_ptr<column> operator()() {
-   std::vector<cudf::strings_column_view> sviews;
-   sviews.reserve(views.size());
-   for (auto &v : views) { sviews.emplace_back(v); }
+  template <typename ColumnType,
+      std::enable_if_t<std::is_same<ColumnType, cudf::string_view>::value>* = nullptr>
+  std::unique_ptr<column> operator()() {
+    std::vector<cudf::strings_column_view> sviews;
+    sviews.reserve(views.size());
+    for (auto &v : views) { sviews.emplace_back(v); }
 
-   auto col = cudf::strings::detail::concatenate(sviews, mr, stream);
+    auto col = cudf::strings::detail::concatenate(sviews, mr, stream);
 
-   //If concatenated string column is nullable, proceed to calculate it
-   if (col->nullable()) {
-     cudf::detail::concatenate_masks(views,
-         (col->mutable_view()).null_mask(), stream);
-   }
+    //If concatenated string column is nullable, proceed to calculate it
+    if (col->nullable()) {
+      cudf::detail::concatenate_masks(views,
+          (col->mutable_view()).null_mask(), stream);
+    }
 
-   return col;
- }
+    return col;
+  }
 
- template <typename ColumnType,
-           std::enable_if_t<std::is_same<ColumnType, cudf::dictionary32>::value>* = nullptr>
- std::unique_ptr<column> operator()() {
-   CUDF_FAIL("dictionary not supported yet");
- }
+  template <typename ColumnType,
+      std::enable_if_t<std::is_same<ColumnType, cudf::dictionary32>::value>* = nullptr>
+  std::unique_ptr<column> operator()() {
+    CUDF_FAIL("dictionary not supported yet");
+  }
 
- template <typename ColumnType,
-           std::enable_if_t<cudf::is_fixed_width<ColumnType>()>* = nullptr>
- std::unique_ptr<column> operator()() {
+  template <typename ColumnType,
+      std::enable_if_t<cudf::is_fixed_width<ColumnType>()>* = nullptr>
+  std::unique_ptr<column> operator()() {
 
-   size_type const total_element_count =
-     std::accumulate(views.begin(), views.end(), 0,
-         [](auto accumulator, auto const& v) { return accumulator + v.size(); });
+    size_type const total_element_count =
+      std::accumulate(views.begin(), views.end(), 0,
+          [](auto accumulator, auto const& v) { return accumulator + v.size(); });
 
-   bool const has_nulls = std::any_of(views.begin(), views.end(),
-                      [](const column_view col) { return col.has_nulls(); });
-   using mask_policy = cudf::experimental::mask_allocation_policy;
+    bool const has_nulls = std::any_of(views.begin(), views.end(),
+                        [](const column_view col) { return col.has_nulls(); });
+    using mask_policy = cudf::experimental::mask_allocation_policy;
 
-   mask_policy policy{mask_policy::NEVER};
-   if (has_nulls) { policy = mask_policy::ALWAYS; }
+    mask_policy policy{mask_policy::NEVER};
+    if (has_nulls) { policy = mask_policy::ALWAYS; }
 
-   auto col = cudf::experimental::allocate_like(views.front(),
-       total_element_count, policy, mr);
+    auto col = cudf::experimental::allocate_like(views.front(),
+        total_element_count, policy, mr);
+    col->set_null_count(0); // prevent null count from being materialized
 
-   auto m_view = col->mutable_view();
-   auto count = 0;
-   // NOTE fused_concatenate is more efficient for multiple views
-   for (auto &v : views) {
-     thrust::copy(rmm::exec_policy()->on(stream),
-         v.begin<ColumnType>(),
-         v.end<ColumnType>(),
-         m_view.begin<ColumnType>() + count);
-     count += v.size();
-   }
+    auto m_view = col->mutable_view();
+    auto count = 0;
+    // NOTE fused_concatenate is more efficient for multiple views
+    for (auto &v : views) {
+      thrust::copy(rmm::exec_policy()->on(stream),
+          v.begin<ColumnType>(),
+          v.end<ColumnType>(),
+          m_view.begin<ColumnType>() + count);
+      count += v.size();
+    }
 
-   //If concatenated column is nullable, proceed to calculate it
-   if (col->nullable()) {
-     cudf::detail::concatenate_masks(views,
-         (col->mutable_view()).null_mask(), stream);
-   }
+    //If concatenated column is nullable, proceed to calculate it
+    if (col->nullable()) {
+      cudf::detail::concatenate_masks(views,
+          (col->mutable_view()).null_mask(), stream);
+    }
 
-   return col;
- }
+    return col;
+  }
 
 };
 
@@ -358,6 +359,7 @@ struct fused_concatenate {
     auto const policy = has_nulls ? mask_policy::ALWAYS : mask_policy::NEVER;
     auto out_col = experimental::detail::allocate_like(views.front(),
         output_size, policy, mr, stream);
+    out_col->set_null_count(0); // prevent null count from being materialized
     auto out_view = out_col->mutable_view();
     auto d_out_view = mutable_column_device_view::create(out_view, stream);
 
@@ -372,6 +374,8 @@ struct fused_concatenate {
         d_offsets.data().get(),
         static_cast<size_type>(d_views.size()),
         *d_out_view);
+
+    // TODO compute null count inside the kernel and set it here
 
     return out_col;
   }
