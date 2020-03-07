@@ -134,6 +134,7 @@
 - PR #4336 Move a bunch of internal nvstrings code to use native StringColumns
 - PR #4166 Port `is_sorted.pyx` to use libcudf++ APIs
 - PR #4345 Removed an undesirable backwards include from /include to /src in cuIO writers.hpp
+- PR #4367 Port copying.pyx to use new libcudf
 
 ## Bug Fixes
 
