@@ -1242,7 +1242,7 @@ inflate_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int p
             break;
         __syncthreads();
     }
-
+    __syncthreads();
     if (!t)
     {
         if (state->err == 0 && state->cur + ((state->bitpos + 7) >> 3) > state->end)
