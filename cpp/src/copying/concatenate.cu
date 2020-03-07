@@ -381,12 +381,21 @@ struct fused_concatenate {
   }
 
   template <typename T,
-      std::enable_if_t<not is_fixed_width<T>()>* = nullptr>
+      std::enable_if_t<std::is_same<T, cudf::dictionary32>::value>* = nullptr>
   std::unique_ptr<column> operator()(
       std::vector<column_view> const& views,
       rmm::mr::device_memory_resource* mr,
       cudaStream_t stream) {
-    CUDF_FAIL("non-fixed-width types not yet supported");
+    CUDF_FAIL("dictionary concatenate not yet supported");
+  }
+
+  template <typename T,
+      std::enable_if_t<std::is_same<T, cudf::string_view>::value>* = nullptr>
+  std::unique_ptr<column> operator()(
+      std::vector<column_view> const& views,
+      rmm::mr::device_memory_resource* mr,
+      cudaStream_t stream) {
+    CUDF_FAIL("strings concatenate not yet supported");
   }
 };
 
