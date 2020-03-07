@@ -826,5 +826,6 @@ JNIEnv* get_jni_env(JavaVM* jvm);
     JNI_CHECK_THROW_NEW(env, cudf::jni::OOM_CLASS, "Could not allocate native memory", ret_val);   \
   }                                                                                                \
   catch (const std::exception &e) {                                                                \
+    /* If jni_exception caught then a Java exception is pending and this will not overwrite it. */ \
     JNI_CHECK_THROW_NEW(env, cudf::jni::CUDF_ERROR_CLASS, e.what(), ret_val);                      \
   }
