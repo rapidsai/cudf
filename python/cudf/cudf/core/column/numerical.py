@@ -9,7 +9,6 @@ import rmm
 
 import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
-from cudf.core._sort import get_sorted_inds
 from cudf.core.buffer import Buffer
 from cudf.core.column import as_column, column
 from cudf.utils import cudautils, utils
@@ -147,17 +146,6 @@ class NumericalColumn(column.ColumnBase):
             return self
         return libcudfxx.unary.cast(self, dtype)
 
-    def sort_by_values(self, ascending=True, na_position="last"):
-        sort_inds = get_sorted_inds(self, ascending, na_position)
-        col_keys = self[sort_inds]
-        col_inds = column.build_column(
-            sort_inds.base_data,
-            dtype=sort_inds.dtype,
-            mask=sort_inds.base_mask,
-            offset=sort_inds.offset,
-        )
-        return col_keys, col_inds
-
     def to_pandas(self, index=None):
         if self.has_nulls and self.dtype == np.bool:
             # Boolean series in Pandas that contains None/NaN is of dtype
@@ -187,17 +175,6 @@ class NumericalColumn(column.ColumnBase):
             return out.cast(pa.bool_())
         else:
             return out
-
-    def unique(self, method="sort"):
-        # method variable will indicate what algorithm to use to
-        # calculate unique, not used right now
-        if method != "sort":
-            msg = "non sort based unique() not implemented yet"
-            raise NotImplementedError(msg)
-        segs, sortedvals = self._unique_segments()
-        # gather result
-        out_col = column.as_column(sortedvals)[segs]
-        return out_col
 
     def all(self):
         return bool(libcudfxx.reduce.reduce("all", self, dtype=np.bool_))

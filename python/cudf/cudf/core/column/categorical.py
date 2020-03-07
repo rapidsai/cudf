@@ -440,8 +440,8 @@ class CategoricalColumn(column.ColumnBase):
             dictionary=self.categories.to_arrow(),
         )
 
-    def unique(self, method="sort"):
-        codes = self.as_numerical.unique(method=method)
+    def unique(self):
+        codes = self.as_numerical.unique()
         return column.build_categorical_column(
             categories=self.categories,
             codes=codes,
