@@ -51,9 +51,9 @@ auto create_device_views(
   std::transform(views.cbegin(), views.cend(),
       device_view_owners.begin(),
       [stream](auto const& col) {
-        // TODO this can invoke null count computation unnecessarily; add a
-        // factory method that leaves null count set to unknown, as we will
-        // compute the final null count anyway
+        // TODO creating this device view can invoke null count computation
+        // even though it isn't used. See this issue:
+        // https://github.com/rapidsai/cudf/issues/4368
         return column_device_view::create(col, stream);
       });
 
@@ -65,9 +65,9 @@ auto create_device_views(
       [](auto const& col) {
         return *col;
       });
-  // TODO these device vector copies are invoking stream synchronization
-  // unnecessarily and harming performance; try and fix this with
-  // https://github.com/rapidsai/rmm/120
+  // TODO each of these device vector copies invoke stream synchronization
+  // which appears to add unnecessary overhead. See this issue:
+  // https://github.com/rapidsai/rmm/issues/120
   auto d_views = rmm::device_vector<column_device_view>{device_views};
 
   // Compute the partition offsets
