@@ -1238,8 +1238,9 @@ inflate_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int p
         {
             copy_stored(state, t);
         }
+        bool last_block = (state->blast != 0);
         __syncthreads();
-        if (state->blast)
+        if (last_block)
             break;
     }
 
