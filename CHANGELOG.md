@@ -32,6 +32,7 @@
 - PR #4259 Ability to create Java host buffers from memory-mapped files
 - PR #4240 Add groupby::groups()
 - PR #4319 Add repartition_by_hash API to dask_cudf
+- PR #4315 ShiftLeft, ShiftRight, ShiftRightUnsigned binops
 - PR #4321 Expose Python Semi and Anti Joins
 - PR #4291 Add Java callback support for RMM events
 - PR #4298 Port orc.pyx to libcudf++
@@ -115,6 +116,7 @@
 - PR #4191 Porting sort.pyx to use new libcudf APIs
 - PR #4196 reduce CHANGELOG.md merge conflicts
 - PR #4197 Added notebook testing to gpuCI gpu build
+- PR #4220 Port strings wrap functionality.
 - PR #4204 Port nvtext create-ngrams function
 - PR #4219 Port dlpack.pyx to use new libcudf APIs
 - PR #4225 Remove stale notebooks
@@ -131,7 +133,9 @@
 - PR #4305 Move gpuarrow.pyx and related libarrow_cuda files into `_libxx`
 - PR #4244 Port nvstrings Substring Gather/Scatter functions to cuDF Python/Cython
 - PR #4280 Port nvstrings Numeric Handling functions to cuDF Python/Cython
+- PR #4336 Move a bunch of internal nvstrings code to use native StringColumns
 - PR #4166 Port `is_sorted.pyx` to use libcudf++ APIs
+- PR #4345 Removed an undesirable backwards include from /include to /src in cuIO writers.hpp
 
 ## Bug Fixes
 

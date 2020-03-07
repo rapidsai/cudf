@@ -20,6 +20,8 @@
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <io/parquet/parquet.h>
+
 
 namespace cudf {
 namespace experimental {
