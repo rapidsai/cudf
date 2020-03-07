@@ -20,7 +20,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <io/parquet/parquet.h>
+#include "parquet/chunked_state.hpp"
 
 
 namespace cudf {
