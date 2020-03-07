@@ -466,7 +466,15 @@ def test_string_extract(ps_gs, pat, expand, flags, flags_raise):
 
 @pytest.mark.parametrize(
     "pat,regex",
-    [("a", False), ("f", False), (r"[a-z]", True), (r"[A-Z]", True)],
+    [
+        ("a", False),
+        ("a", True),
+        ("f", False),
+        (r"[a-z]", True),
+        (r"[A-Z]", True),
+        ("hello", False),
+        ("FGHI", False),
+    ],
 )
 @pytest.mark.parametrize("case,case_raise", [(True, 0), (False, 1)])
 @pytest.mark.parametrize("flags,flags_raise", [(0, 0), (1, 1)])
@@ -485,11 +493,7 @@ def test_string_contains(
             pat, case=case, flags=flags, na=na, regex=regex
         )
         got = gs.str.contains(pat, case=case, flags=flags, na=na, regex=regex)
-
-        expect = pa.array(expect, from_pandas=True).cast(pa.bool_())
-        got = got.to_arrow()
-
-        assert pa.Array.equals(expect, got)
+        assert_eq(expect, got)
 
 
 # Pandas isn't respect the `n` parameter so ignoring it in test parameters

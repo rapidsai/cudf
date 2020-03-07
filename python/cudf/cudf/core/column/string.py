@@ -42,6 +42,8 @@ from cudf._libxx.strings.padding import (
     rjust as cpp_rjust,
     zfill as cpp_zfill,
 )
+from cudf._libxx.strings.contains import contains_re as cpp_contains_re
+from cudf._libxx.strings.find import contains as cpp_contains
 from cudf._libxx.strings.replace import (
     insert as cpp_string_insert,
     slice_replace as cpp_slice_replace,
@@ -509,18 +511,12 @@ class StringMethods(object):
         elif na is not np.nan:
             raise NotImplementedError("`na` parameter is not yet supported")
 
-        out_dev_arr = rmm.device_array(len(self._column), dtype="bool")
-        ptr = libcudf.cudf.get_ctype_ptr(out_dev_arr)
-        self._column.nvstrings.contains(pat, regex=regex, devptr=ptr)
-
-        mask = None
-        if self._column.has_nulls:
-            mask = self._column.mask
+        from cudf._libxx.scalar import Scalar
 
         return self._return_or_inplace(
-            column.build_column(
-                Buffer(out_dev_arr), dtype=np.dtype("bool"), mask=mask
-            ),
+            cpp_contains_re(self._column, pat)
+            if regex is True
+            else cpp_contains(self._column, Scalar(pat, "str")),
             **kwargs,
         )
 
