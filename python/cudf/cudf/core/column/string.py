@@ -48,10 +48,13 @@ from cudf._libxx.strings.contains import (
 )
 from cudf._libxx.strings.extract import extract as cpp_extract
 from cudf._libxx.strings.find import contains as cpp_contains
+from cudf._libxx.strings.findall import findall as cpp_findall
 from cudf._libxx.strings.replace import (
     insert as cpp_string_insert,
+    replace as cpp_replace,
     slice_replace as cpp_slice_replace,
 )
+
 from cudf._libxx.strings.split.partition import (
     partition as cpp_partition,
     rpartition as cpp_rpartition,
@@ -65,6 +68,7 @@ from cudf._libxx.strings.strip import (
     rstrip as cpp_rstrip,
     strip as cpp_strip,
 )
+from cudf._libxx.strings.replace_re import replace_re as cpp_replace_re
 from cudf._libxx.strings.substring import slice_from as cpp_slice_from
 from cudf._libxx.strings.wrap import wrap as cpp_wrap
 from cudf.core.buffer import Buffer
@@ -563,9 +567,14 @@ class StringMethods(object):
         # Pandas treats 0 as all
         if n == 0:
             n = -1
+        from cudf._libxx.scalar import Scalar
 
         return self._return_or_inplace(
-            self._column.nvstrings.replace(pat, repl, n=n, regex=regex),
+            cpp_replace_re(self._column, pat, Scalar(repl, "str"), n)
+            if regex is True
+            else cpp_replace(
+                self._column, Scalar(pat, "str"), Scalar(repl, "str"), n
+            ),
             **kwargs,
         )
 
@@ -1429,6 +1438,12 @@ class StringMethods(object):
             raise NotImplementedError("`flags` parameter is not yet supported")
 
         return self._return_or_inplace(cpp_count_re(self._column, pat))
+
+    def findall(self, pat, flags=0, **kwargs):
+        if flags != 0:
+            raise NotImplementedError("`flags` parameter is not yet supported")
+
+        return self._return_or_inplace(cpp_findall(self._column, pat))
 
 
 class StringColumn(column.ColumnBase):

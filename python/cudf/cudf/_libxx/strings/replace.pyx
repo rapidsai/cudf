@@ -9,8 +9,11 @@ from cudf._libxx.column cimport Column
 from cudf._libxx.scalar cimport Scalar
 from cudf._libxx.cpp.column.column cimport column
 
+from libc.stdint cimport int32_t
+
 from cudf._libxx.cpp.strings.replace cimport (
-    replace_slice as cpp_replace_slice
+    replace_slice as cpp_replace_slice,
+    replace as cpp_replace
 )
 
 from cudf._libxx.cpp.strings.substring cimport (
@@ -62,6 +65,34 @@ def insert(Column source_strings,
             scalar_str[0],
             start,
             start
+        ))
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def replace(Column source_strings,
+            Scalar target,
+            Scalar repl,
+            int32_t maxrepl):
+    """
+
+    Returns a Column by replacing specified section
+    of each string with `repl`. Positions can be
+    specified with `start` and `stop` params.
+    """
+
+    cdef unique_ptr[column] c_result
+    cdef column_view source_view = source_strings.view()
+
+    cdef string_scalar* scalar_target = <string_scalar*>(target.c_value.get())
+    cdef string_scalar* scalar_repl = <string_scalar*>(repl.c_value.get())
+
+    with nogil:
+        c_result = move(cpp_replace(
+            source_view,
+            scalar_target[0],
+            scalar_repl[0],
+            maxrepl
         ))
 
     return Column.from_unique_ptr(move(c_result))
