@@ -46,6 +46,7 @@ from cudf._libxx.strings.contains import (
     contains_re as cpp_contains_re,
     count_re as cpp_count_re,
 )
+from cudf._libxx.strings.extract import extract as cpp_extract
 from cudf._libxx.strings.find import contains as cpp_contains
 from cudf._libxx.strings.replace import (
     insert as cpp_string_insert,
@@ -469,9 +470,9 @@ class StringMethods(object):
         if flags != 0:
             raise NotImplementedError("`flags` parameter is not yet supported")
 
-        out = self._column.nvstrings.extract(pat)
-        if len(out) == 1 and expand is False:
-            return self._return_or_inplace(out[0], **kwargs)
+        out = cpp_extract(self._column, pat)
+        if out._num_columns == 1 and expand is False:
+            return self._return_or_inplace(out._columns[0], **kwargs)
         else:
             kwargs.setdefault("expand", expand)
             return self._return_or_inplace(out, **kwargs)
