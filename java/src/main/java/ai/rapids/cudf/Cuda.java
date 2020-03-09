@@ -135,7 +135,9 @@ public class Cuda {
   static native void destroyStream(long stream) throws CudaException;
 
   /**
-   * Synchronously copies bytes between the host and device using the specified CUDA stream.
+   * Copies bytes between the host and device using the specified CUDA stream.
+   * The copy has completed when this returns, but the memory copy could overlap with
+   * operations occurring on other streams.
    * Specifying pointers that do not match the copy direction results in undefined behavior.
    * @param dst destination memory address
    * @param src source memory address

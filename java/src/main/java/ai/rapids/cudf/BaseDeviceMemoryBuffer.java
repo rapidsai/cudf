@@ -45,6 +45,8 @@ public class BaseDeviceMemoryBuffer extends MemoryBuffer {
 
   /**
    * Copy a subset of src to this buffer starting at destOffset using the specified CUDA stream.
+   * The copy has completed when this returns, but the memory copy could overlap with
+   * operations occurring on other streams.
    * @param destOffset the offset in this to start copying from.
    * @param src what to copy from
    * @param srcOffset offset into src to start out
@@ -79,6 +81,8 @@ public class BaseDeviceMemoryBuffer extends MemoryBuffer {
 
   /**
    * Copy entire host buffer starting at the beginning of this buffer using a CUDA stream.
+   * The copy has completed when this returns, but the memory copy could overlap with
+   * operations occurring on other streams.
    * @param src host buffer to copy from
    * @param stream CUDA stream to use
    */

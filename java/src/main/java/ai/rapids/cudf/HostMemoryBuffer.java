@@ -529,7 +529,9 @@ public class HostMemoryBuffer extends MemoryBuffer {
   }
 
   /**
-   * Synchronously copy from a DeviceMemoryBuffer to a HostMemoryBuffer using the specified stream.
+   * Copy from a DeviceMemoryBuffer to a HostMemoryBuffer using the specified stream.
+   * The copy has completed when this returns, but the memory copy could overlap with
+   * operations occurring on other streams.
    * @param deviceMemoryBuffer buffer to copy data from
    * @param stream CUDA stream to use
    */
