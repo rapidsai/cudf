@@ -1117,3 +1117,32 @@ def test_string_types_check(data):
     assert_eq(gs.str.isalpha(), ps.str.isalpha())
     assert_eq(gs.str.isdigit(), ps.str.isdigit())
     assert_eq(gs.str.isnumeric(), ps.str.isnumeric())
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["abc", "xyz", "a", "ab", "123", "097"],
+        ["A B", "1.5", "3,000"],
+        ["23", "³", "⅕", ""],
+        # [" ", "\t\r\n ", ""],
+        ["leopard", "Golden Eagle", "SNAKE", ""],
+        ["line to be wrapped", "another line to be wrapped"],
+    ],
+)
+@pytest.mark.parametrize("width", [1, 4, 8, 12, 100])
+def test_string_wrap(data, width):
+    gs = Series(data)
+    ps = pd.Series(data)
+
+    assert_eq(
+        gs.str.wrap(width=width),
+        ps.str.wrap(
+            width=width,
+            break_long_words=False,
+            expand_tabs=False,
+            replace_whitespace=True,
+            drop_whitespace=True,
+            break_on_hyphens=False,
+        ),
+    )
