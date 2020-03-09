@@ -24,6 +24,10 @@ namespace gpu {
 #define NWARPS                  16
 #define MAX_SHARED_SCHEMA_LEN   1000
 
+/*
+ * Avro varint encoding - see
+ * https://avro.apache.org/docs/1.2.0/spec.html#binary_encoding
+ */
 static inline int64_t __device__ avro_decode_varint(const uint8_t *&cur, const uint8_t *end) {
   uint64_t u = 0;
   if (cur < end) {
@@ -44,8 +48,23 @@ static inline int64_t __device__ avro_decode_varint(const uint8_t *&cur, const u
 }
 
 
+/**
+ * @brief Decode a row of values given an avro schema
+ *
+ * @param[in] schema Schema description
+ * @param[in] schema_g Global schema in device mem
+ * @param[in] schema_len Number of schema entries
+ * @param[in] row Current row
+ * @param[in] max_rows Total number of rows
+ * @param[in] cur Current input data pointer
+ * @param[in] end End of input data
+ * @param[in] global_Dictionary Global dictionary entries
+ *
+ * @return data pointer at the end of the row (start of next row)
+ *
+ **/
 static const uint8_t * __device__ avro_decode_row(
-    block_desc_s *blk, const schemadesc_s *schema, schemadesc_s *schema_g, uint32_t schema_len,
+    const schemadesc_s *schema, schemadesc_s *schema_g, uint32_t schema_len,
     size_t row, size_t max_rows,
     const uint8_t *cur, const uint8_t *end,
     const nvstrdesc_s *global_dictionary, uint32_t num_dictionary_entries)
@@ -253,7 +272,7 @@ gpuDecodeAvroColumnData(block_desc_s *blocks, schemadesc_s *schema_g, nvstrdesc_
         }
         if (threadIdx.x < nrows)
         {
-            cur = avro_decode_row(blk, schema, schema_g, schema_len,
+            cur = avro_decode_row(schema, schema_g, schema_len,
                                   cur_row - first_row + threadIdx.x,
                                   max_rows, cur, end,
                                   global_dictionary, num_dictionary_entries);

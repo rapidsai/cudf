@@ -82,7 +82,7 @@ inline __device__ uint64_t unaligned_load64(const uint8_t *p) {
     v0 = __funnelshift_r(v0, v1, ofs * 8);
     v1 = __funnelshift_r(v1, p32[2], ofs * 8);
   }
-  return (((uint64_t)v0) << 32) | v1;
+  return (((uint64_t)v1) << 32) | v0;
 }
 
 
