@@ -655,6 +655,7 @@ class Series(Frame):
                         dtype=result.dtype,
                         mask=mask,
                         offset=result._column.offset,
+                        size=result._column.size,
                     )
                     return lhs._copy_construct(data=data)
                 elif lhs.nullable:

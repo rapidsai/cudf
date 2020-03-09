@@ -160,6 +160,7 @@ class DatetimeColumn(column.ColumnBase):
             dtype=np.int64,
             mask=self.base_mask,
             offset=self.offset,
+            size=self.size,
         )
 
     def as_datetime_column(self, dtype, **kwargs):
@@ -226,7 +227,11 @@ class DatetimeColumn(column.ColumnBase):
 
         result = libcudfxx.replace.replace_nulls(self, fill_value)
         result = column.build_column(
-            result.base_data, result.dtype, mask=None, offset=result.offset
+            result.base_data,
+            result.dtype,
+            mask=None,
+            offset=result.offset,
+            size=result.size,
         )
 
         return result

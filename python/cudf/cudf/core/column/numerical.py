@@ -137,7 +137,11 @@ class NumericalColumn(column.ColumnBase):
         from cudf.core.column import build_column
 
         return build_column(
-            data=self.astype("int64").base_data, dtype=dtype, mask=self.mask
+            data=self.astype("int64").base_data,
+            dtype=dtype,
+            mask=self.mask,
+            offset=self.offset,
+            size=self.size,
         )
 
     def as_numerical_column(self, dtype, **kwargs):
@@ -305,7 +309,11 @@ class NumericalColumn(column.ColumnBase):
                 fill_value = fill_value.astype(self.dtype)
         result = libcudfxx.replace.replace_nulls(self, fill_value)
         result = column.build_column(
-            result.base_data, result.dtype, mask=None, offset=result.offset
+            result.base_data,
+            result.dtype,
+            mask=None,
+            offset=result.offset,
+            size=result.size,
         )
 
         return result

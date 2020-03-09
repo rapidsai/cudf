@@ -147,7 +147,7 @@ def gather(Table source_table, Column gather_map):
 
 
 def _scatter_table(Table source_table, Column scatter_map,
-                   Table target_table, bounds_check=True):
+                   Table target_table, bool bounds_check=True):
 
     cdef table_view source_table_view = source_table.data_view()
     cdef column_view scatter_map_view = scatter_map.view()
@@ -173,17 +173,17 @@ def _scatter_table(Table source_table, Column scatter_map,
     )
 
     out_table._index = (
-        None if target_table._index is None else target_table._index.copy(
-            deep=True)
+        None if target_table._index is None else target_table._index.copy()
     )
 
     return out_table
 
 
 def _scatter_scalar(scalars, Column scatter_map,
-                    Table target_table, bounds_check=True):
+                    Table target_table, bool bounds_check=True):
 
     cdef vector[unique_ptr[scalar]] source_scalars
+    source_scalars.reserve(len(scalars))
     cdef bool c_bounds_check = bounds_check
     cdef Scalar slr
     for val, col in zip(scalars, target_table._columns):
@@ -211,14 +211,14 @@ def _scatter_scalar(scalars, Column scatter_map,
     )
 
     out_table._index = (
-        None if target_table._index is None else target_table._index.copy(
-            deep=True)
+        None if target_table._index is None else target_table._index.copy()
     )
 
     return out_table
 
 
-def scatter(input, scatter_map, target, bounds_check=True):
+def scatter(object input, object scatter_map, Table target,
+            bool bounds_check=True):
     """
     Scattering input into taregt as per the scatter map,
     input can be a list of scalars or can be a table
@@ -249,15 +249,12 @@ def scatter_to_tables(Table source_table, Column partition_map):
             partition_map_view
         ))
 
-    result = []
-    for i in range(c_result.size()):
-        result.append(
-            Table.from_unique_ptr(
-                move(c_result[i]),
-                column_names=source_table._column_names,
-                index_names=source_table._index._column_names
-            )
-        )
+    result = [
+        Table.from_unique_ptr(
+            move(c_result[i]),
+            column_names=source_table._column_names,
+            index_names=source_table._index._column_names
+        ) for i in range(c_result.size())]
 
     return result
 
@@ -312,7 +309,7 @@ def table_empty_like(Table input_table):
     )
 
 
-def column_slice(Column input_column, indices):
+def column_slice(Column input_column, object indices):
 
     cdef column_view input_column_view = input_column.view()
     cdef vector[size_type] c_indices
@@ -326,25 +323,22 @@ def column_slice(Column input_column, indices):
         c_indices.push_back(index)
 
     with nogil:
-        c_result = cpp_copying.slice(
-            input_column_view,
-            c_indices
+        c_result = move(
+            cpp_copying.slice(
+                input_column_view,
+                c_indices)
         )
 
     num_of_result_cols = c_result.size()
-    result = []
-    for i in range(num_of_result_cols):
-        result.append(
-            Column.from_column_view(
-                c_result[i],
-                input_column
-            )
-        )
+    result = [
+        Column.from_column_view(
+            c_result[i],
+            input_column) for i in range(num_of_result_cols)]
 
     return result
 
 
-def table_slice(Table input_table, indices):
+def table_slice(Table input_table, object indices):
 
     cdef table_view input_table_view = input_table.view()
     cdef vector[size_type] c_indices
@@ -357,27 +351,25 @@ def table_slice(Table input_table, indices):
         c_indices.push_back(index)
 
     with nogil:
-        c_result = cpp_copying.slice(
-            input_table_view,
-            c_indices
+        c_result = move(
+            cpp_copying.slice(
+                input_table_view,
+                c_indices)
         )
 
     num_of_result_cols = c_result.size()
-    result = []
-    for i in range(num_of_result_cols):
-        result.append(
-            Table.from_table_view(
-                c_result[i],
-                input_table,
-                column_names=input_table._column_names,
-                index_names=input_table._index._column_names
-            )
-        )
+    result =[
+        Table.from_table_view(
+            c_result[i],
+            input_table,
+            column_names=input_table._column_names,
+            index_names=input_table._index._column_names
+        ) for i in range(num_of_result_cols)]
 
     return result
 
 
-def column_split(Column input_column, splits):
+def column_split(Column input_column, object splits):
 
     cdef column_view input_column_view = input_column.view()
     cdef vector[size_type] c_splits
@@ -391,25 +383,24 @@ def column_split(Column input_column, splits):
         c_splits.push_back(split)
 
     with nogil:
-        c_result = cpp_copying.split(
-            input_column_view,
-            c_splits
+        c_result = move(
+            cpp_copying.split(
+                input_column_view,
+                c_splits)
         )
 
     num_of_result_cols = c_result.size()
-    result = []
-    for i in range(num_of_result_cols):
-        result.append(
-            Column.from_column_view(
-                c_result[i],
-                input_column
-            )
-        )
+    result = [
+        Column.from_column_view(
+            c_result[i],
+            input_column
+        ) for i in range(num_of_result_cols)
+    ]
 
     return result
 
 
-def table_split(Table input_table, splits):
+def table_split(Table input_table, object splits):
 
     cdef table_view input_table_view = input_table.view()
     cdef vector[size_type] c_splits
@@ -422,22 +413,20 @@ def table_split(Table input_table, splits):
         c_splits.push_back(split)
 
     with nogil:
-        c_result = cpp_copying.split(
-            input_table_view,
-            c_splits
+        c_result = move(
+            cpp_copying.split(
+                input_table_view,
+                c_splits)
         )
 
     num_of_result_cols = c_result.size()
-    result = []
-    for i in range(num_of_result_cols):
-        result.append(
-            Table.from_table_view(
-                c_result[i],
-                input_table,
-                column_names=input_table._column_names,
-                index_names=input_table._index._column_names
-            )
-        )
+    result = [
+        Table.from_table_view(
+            c_result[i],
+            input_table,
+            column_names=input_table._column_names,
+            index_names=input_table._index._column_names
+        ) for i in range(num_of_result_cols)]
 
     return result
 
@@ -522,7 +511,7 @@ def _copy_if_else_scalar_scalar(Scalar lhs, Scalar rhs, Column boolean_mask):
     return Column.from_unique_ptr(move(c_result))
 
 
-def copy_if_else(lhs, rhs, boolean_mask):
+def copy_if_else(object lhs, object rhs, Column boolean_mask):
 
     if isinstance(lhs, Column):
         if isinstance(rhs, Column):
@@ -535,7 +524,6 @@ def copy_if_else(lhs, rhs, boolean_mask):
             return _copy_if_else_scalar_column(
                 Scalar(lhs, rhs.dtype), rhs, boolean_mask)
         else:
-            common_dtype = None
             if lhs is None and rhs is None:
                 return lhs
 
@@ -598,7 +586,8 @@ def _boolean_mask_scatter_scalar(list input_scalars, Table target_table,
     )
 
 
-def boolean_mask_scatter(input, Column target_table, Column boolean_mask):
+def boolean_mask_scatter(object input, Table target_table,
+                         Column boolean_mask):
 
     if isinstance(input, Table):
         _boolean_mask_scatter_table(input, target_table, boolean_mask)

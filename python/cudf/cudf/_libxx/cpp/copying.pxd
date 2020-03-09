@@ -88,7 +88,7 @@ cdef extern from "cudf/copying.hpp" namespace "cudf::experimental" nogil:
     ) except +
 
     cdef vector[table_view] slice (
-        table_view input_column,
+        table_view input_table,
         vector[size_type] indices
     ) except +
 
@@ -98,7 +98,7 @@ cdef extern from "cudf/copying.hpp" namespace "cudf::experimental" nogil:
     ) except +
 
     cdef vector[table_view] split (
-        table_view input_column,
+        table_view input_table,
         vector[size_type] splits
     ) except +
 

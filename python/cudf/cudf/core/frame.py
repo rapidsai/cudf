@@ -824,6 +824,7 @@ class Frame(libcudfxx.table.Table):
                     dtype=categorical_dtypes.get(name, col.dtype),
                     mask=col.base_mask,
                     offset=col.offset,
+                    size=col.size,
                 )
         gdf_result._data = to_frame_data
 
