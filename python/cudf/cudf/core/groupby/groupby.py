@@ -188,6 +188,13 @@ class GroupBy(object):
         sizes = self.size()
         return result[n < sizes]
 
+    def nunique(self):
+        """
+        Return the number of unique values per group.
+        """
+        # Pandas includes key columns for nunique:
+        return self.agg(dict.fromkeys(self.obj._data.keys(), "nunique"))
+
     def serialize(self):
         header = {}
         frames = []
@@ -262,9 +269,9 @@ class GroupBy(object):
             # Can't do set arithmetic here as sets are
             # not ordered
             columns = [
-                col
-                for col in self.obj._column_names
-                if col not in self.grouping._named_columns
+                col_name
+                for col_name in self.obj._data
+                if col_name not in self.grouping._named_columns
             ]
             out = dict.fromkeys(columns, aggs)
         else:

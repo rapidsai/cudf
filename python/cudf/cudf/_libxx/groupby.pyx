@@ -170,6 +170,11 @@ def _drop_unsupported_aggs(Table values, aggs):
 
     Drop any aggregations that are not supported.
     """
+    from pandas.core.groupby.groupby import DataError
+
+    if all(len(v) == 0 for k, v in aggs.items()):
+        return aggs
+
     from cudf.utils.dtypes import (
         is_categorical_dtype,
         is_string_dtype
@@ -183,11 +188,15 @@ def _drop_unsupported_aggs(Table values, aggs):
             for i, agg_name in enumerate(aggs[col_name]):
                 if Aggregation(agg_name).kind not in _STRING_AGGS:
                     del result[col_name][i]
+
         elif (
                 is_categorical_dtype(values._data[col_name].dtype)
         ):
             for i, agg_name in enumerate(aggs[col_name]):
                 if Aggregation(agg_name).kind not in _CATEGORICAL_AGGS:
                     del result[col_name][i]
+
+    if not len(result):
+        raise DataError("No numeric types to aggregate")
 
     return result

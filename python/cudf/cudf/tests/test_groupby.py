@@ -1049,13 +1049,32 @@ def test_groupby_median(agg, by):
     assert_eq(expect, got, check_dtype=False)
 
 
+@pytest.mark.parametrize("agg", [lambda x: x.nunique(), "nunique"])
+@pytest.mark.parametrize("by", ["a", ["a", "b"], ["a", "c"]])
+def test_groupby_nunique(agg, by):
+    pdf = pd.DataFrame(
+        {"a": [1, 1, 1, 2, 3], "b": [1, 2, 2, 2, 1], "c": [1, 2, None, 4, 5]}
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    expect = pdf.groupby(by).nunique()
+    got = gdf.groupby(by).nunique()
+
+    assert_eq(expect, got, check_dtype=False)
+
+
 @pytest.mark.parametrize(
     "n", [0, 1, 2, 10],
 )
 @pytest.mark.parametrize("by", ["a", ["a", "b"], ["a", "c"]])
 def test_groupby_nth(n, by):
     pdf = pd.DataFrame(
-        {"a": [1, 1, 1, 2, 3], "b": [1, 2, 2, 2, 1], "c": [1, 2, None, 4, 5]}
+        {
+            "a": [1, 1, 1, 2, 3],
+            "b": [1, 2, 2, 2, 1],
+            "c": [1, 2, None, 4, 5],
+            "d": ["a", "b", "c", "d", "e"],
+        }
     )
     gdf = cudf.from_pandas(pdf)
 
@@ -1063,3 +1082,19 @@ def test_groupby_nth(n, by):
     got = gdf.groupby(by).nth(n)
 
     assert_eq(expect, got, check_dtype=False)
+
+
+def test_raise_data_error():
+
+    pdf = pd.DataFrame({"a": [1, 2, 3, 4], "b": ["a", "b", "c", "d"]})
+    gdf = cudf.from_pandas(pdf)
+
+    # we have to test that Pandas does this too:
+    try:
+        pdf.groupby("a").mean()
+    except Exception as e:
+        typ = type(e)
+        msg = str(e)
+
+    with pytest.raises(typ, match=msg):
+        gdf.groupby("a").mean()
