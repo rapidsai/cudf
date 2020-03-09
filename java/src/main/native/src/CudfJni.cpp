@@ -37,8 +37,6 @@ private:
 namespace cudf {
 namespace jni {
 
-static const jint MINIMUM_JNI_VERSION = JNI_VERSION_1_6;
-
 static jclass contiguous_table_jclass;
 static jmethodID from_contiguous_column_views;
 
@@ -121,7 +119,7 @@ JNIEnv* get_jni_env(JavaVM* jvm) {
     attach_args.name = const_cast<char*>("cudf thread");
     attach_args.group = NULL;
 
-    if (jvm->AttachCurrentThreadAsDaemon(reinterpret_cast<void**>(env), &attach_args) == JNI_OK) {
+    if (jvm->AttachCurrentThreadAsDaemon(reinterpret_cast<void**>(&env), &attach_args) == JNI_OK) {
       // use thread_local object to detach the thread from the JVM when thread terminates.
       thread_local jvm_detach_on_destruct detacher(jvm);
     } else {
