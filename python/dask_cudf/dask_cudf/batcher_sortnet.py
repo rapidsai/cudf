@@ -10,6 +10,7 @@ import numpy as np
 from dask import compute, delayed
 from dask.base import tokenize
 from dask.dataframe.core import DataFrame, _concat
+from dask.dataframe.shuffle import rearrange_by_column_tasks
 from dask.dataframe.utils import group_split_dispatch, hash_object_dispatch
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import digit, insert
@@ -168,7 +169,25 @@ def _shuffle_group(df, columns, stage, k, npartitions, ignore_index):
     )
 
 
-def rearrange_by_hash(df, columns, max_branch=None, ignore_index=True):
+def rearrange_by_hash(
+    df, columns, npartitions, max_branch=None, ignore_index=True
+):
+    if npartitions and npartitions != df.npartitions:
+        # Use main-line dask for new npartitions
+        meta = df._meta._constructor_sliced([0])
+        partitions = df[columns].map_partitions(
+            set_partitions_hash, columns, npartitions, meta=meta
+        )
+        # Note: Dask will use a shallow copy for assign
+        df2 = df.assign(_partitions=partitions)
+        return rearrange_by_column_tasks(
+            df2,
+            "_partitions",
+            max_branch=max_branch,
+            npartitions=npartitions,
+            ignore_index=ignore_index,
+        )
+
     n = df.npartitions
     if max_branch is False:
         stages = 1
