@@ -134,10 +134,10 @@
 - PR #4328 Add memory threshold callbacks for Java RMM event handler
 - PR #4336 Move a bunch of internal nvstrings code to use native StringColumns
 - PR #4166 Port `is_sorted.pyx` to use libcudf++ APIs
-- PR #4314 Add Java and JNI bindings for string contains
 - PR #4345 Removed an undesirable backwards include from /include to /src in cuIO writers.hpp
 - PR #4362 Move pq_chunked_state struct into it's own header to match how orc writer is doing it.
 - PR #4339 Port libcudf strings `wrap` api to cython/python
+- PR #4314 Add Java and JNI bindings for string contains
 
 ## Bug Fixes
 
