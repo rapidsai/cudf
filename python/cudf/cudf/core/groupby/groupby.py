@@ -29,6 +29,9 @@ class GroupBy(object):
     level : int, level_name or list, optional
         For objects with a MultiIndex, `level` can be used to specify
         grouping by one or more levels of the MultiIndex.
+    sort : True, optional
+        If True (default), sort results by group9s). Note that
+        unlike Pandas, this also sorts values within each group.
     as_index : bool, optional
         If as_index=True (default), the group names appear
         as the keys of the resulting DataFrame.
@@ -38,9 +41,12 @@ class GroupBy(object):
         If True (default), do not include the "null" group.
     """
 
-    def __init__(self, obj, by=None, level=None, as_index=True, dropna=True):
+    def __init__(
+        self, obj, by=None, level=None, sort=True, as_index=True, dropna=True
+    ):
         self.obj = obj
         self._as_index = as_index
+        self._sort = sort
         self._dropna = dropna
 
         if isinstance(by, _Grouping):
@@ -132,7 +138,11 @@ class GroupBy(object):
         normalized_aggs = self._normalize_aggs(func)
 
         result = self._groupby.aggregate(self.obj, normalized_aggs)
-        result = cudf.DataFrame._from_table(result).sort_index()
+
+        result = cudf.DataFrame._from_table(result)
+
+        if self._sort:
+            result = result.sort_index()
 
         if not _is_multi_agg(func):
             try:
@@ -171,7 +181,11 @@ class GroupBy(object):
         header = {}
         frames = []
 
-        header["kwargs"] = {"dropna": self._dropna, "as_index": self._as_index}
+        header["kwargs"] = {
+            "sort": self._sort,
+            "dropna": self._dropna,
+            "as_index": self._as_index,
+        }
 
         obj_header, obj_frames = self.obj.serialize()
         header["obj"] = obj_header
@@ -298,7 +312,10 @@ class GroupBy(object):
         _, offsets, grouped_values = self._grouped()
         ends = itertools.chain(offsets[1:], [None])
         chunks = [grouped_values[s:e] for s, e in zip(offsets, ends)]
-        return cudf.concat([function(chk) for chk in chunks]).sort_index()
+        result = cudf.concat([function(chk) for chk in chunks])
+        if self._sort:
+            result = result.sort_index()
+        return result
 
     def apply_grouped(self, function, **kwargs):
         """Apply a transformation function over the grouped chunk.
