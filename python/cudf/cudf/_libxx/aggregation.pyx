@@ -152,6 +152,12 @@ cdef class _AggregationFactory:
         return agg
 
     @classmethod
+    def median(cls, *args, **kwargs):
+        cdef Aggregation agg = Aggregation.__new__(Aggregation)
+        agg.c_obj = move(libcudf_aggregation.make_median_aggregation())
+        return agg
+
+    @classmethod
     def quantile(cls, q=0.5, interpolation="linear"):
         cdef Aggregation agg = Aggregation.__new__(Aggregation)
 

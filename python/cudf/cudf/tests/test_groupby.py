@@ -1021,23 +1021,29 @@ def test_grouping(grouper):
 
 
 @pytest.mark.parametrize("agg", [lambda x: x.count(), "count"])
-def test_groupby_count(agg):
-    pdf = pd.DataFrame({"a": [1, 1, 1, 2, 2, 3], "b": [1, 2, 3, 4, 5, 6]})
+@pytest.mark.parametrize("by", ["a", ["a", "b"], ["a", "c"]])
+def test_groupby_count(agg, by):
+
+    pdf = pd.DataFrame(
+        {"a": [1, 1, 1, 2, 3], "b": [1, 2, 2, 2, 1], "c": [1, 2, None, 4, 5]}
+    )
     gdf = cudf.from_pandas(pdf)
 
-    expect = pdf.groupby("a").agg(agg)
-    got = gdf.groupby("a").agg(agg)
+    expect = pdf.groupby(by).agg(agg)
+    got = gdf.groupby(by).agg(agg)
 
     assert_eq(expect, got, check_dtype=False)
 
 
-def test_groupby_count_multi():
+@pytest.mark.parametrize("agg", [lambda x: x.median(), "median"])
+@pytest.mark.parametrize("by", ["a", ["a", "b"], ["a", "c"]])
+def test_groupby_median(agg, by):
     pdf = pd.DataFrame(
-        {"a": [1, 1, 2, 3], "b": [1, 2, 2, 4], "c": [1, 2, 3, 4]}
+        {"a": [1, 1, 1, 2, 3], "b": [1, 2, 2, 2, 1], "c": [1, 2, None, 4, 5]}
     )
     gdf = cudf.from_pandas(pdf)
 
-    expect = pdf.groupby(["a", "b"]).count()
-    got = gdf.groupby(["a", "b"]).count()
+    expect = pdf.groupby(by).agg(agg)
+    got = gdf.groupby(by).agg(agg)
 
     assert_eq(expect, got, check_dtype=False)
