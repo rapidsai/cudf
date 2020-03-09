@@ -613,6 +613,11 @@ class MultiIndex(Index):
         return result
 
     def to_pandas(self):
+        if hasattr(self, "_source_data"):
+            result = self._source_data.to_pandas()
+            result.columns = self.names
+            return pd.MultiIndex.from_frame(result)
+
         pandas_codes = []
         for code in self.codes.columns:
             pandas_codes.append(self.codes[code].to_array())
