@@ -208,6 +208,7 @@
 - PR #4297 Fix specification of package_data in setup.py
 - PR #4302 Fix `_is_local_filesystem` check
 - PR #4303 Parquet reader: fix empty columns missing from table
+- PR #4324 Fix slice_strings for out-of-range start position value
 - PR #4115 Serialize an empty column table with non zero rows
 - PR #4327 Preemptive dispatch fix for changes in dask#5973
 
