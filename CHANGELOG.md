@@ -213,6 +213,7 @@
 - PR #4115 Serialize an empty column table with non zero rows
 - PR #4327 Preemptive dispatch fix for changes in dask#5973
 - PR #4358 Fix strings::concat where narep is an empty string
+- PR #4369 Fix race condition in gpuinflate
 
 
 # cuDF 0.12.0 (04 Feb 2020)
