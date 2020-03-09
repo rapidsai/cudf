@@ -40,7 +40,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class ColumnVectorTest extends CudfTestBase {
 
-  public static final double DELTA = 0.0001;
+  public static final double PERCENTAGE = 0.0001;
 
   // c = a * a - a
   static String ptx = "***(" +
@@ -647,7 +647,7 @@ public class ColumnVectorTest extends CudfTestBase {
       for (int j = 0 ; j < quantiles.length ; j++) {
         for (int i = 0 ; i < methods.length ; i++) {
           try(Scalar result = cv.quantile(methods[i], quantiles[j])) {
-            assertEqualsWithEpsilon(exactExpected[i][j], result.getDouble(), DELTA);
+            assertEqualsWithinPercentage(exactExpected[i][j], result.getDouble(), PERCENTAGE);
           }
         }
       }
@@ -668,7 +668,7 @@ public class ColumnVectorTest extends CudfTestBase {
       for (int j = 0; j < quantiles.length ; j++) {
         for (int i = 0 ; i < methods.length ; i++) {
           try (Scalar result = cv.quantile(methods[i], quantiles[j])) {
-            assertEqualsWithEpsilon(exactExpected[i][j], result.getDouble(), DELTA);
+            assertEqualsWithinPercentage(exactExpected[i][j], result.getDouble(), PERCENTAGE);
           }
         }
       }
