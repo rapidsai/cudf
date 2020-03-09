@@ -26,7 +26,6 @@ import cudf
 import cudf._lib as libcudf
 
 from dask_cudf import batcher_sortnet
-from dask_cudf.io import read_parquet
 from dask_cudf.accessor import (
     CachedAccessor,
     CategoricalAccessor,
