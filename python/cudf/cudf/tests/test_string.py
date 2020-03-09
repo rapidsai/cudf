@@ -56,6 +56,7 @@ def ps_gs(data, index):
     return (ps, gs)
 
 
+# TODO: Remove this once NVStrings is fully removed / deprecated
 @pytest.mark.parametrize("nbytes", [0, 2 ** 10, 2 ** 31 - 1, 2 ** 31, 2 ** 32])
 @patch.object(nvstrings.nvstrings, "byte_count")
 def test_from_nvstrings_nbytes(mock_byte_count, nbytes):
@@ -981,9 +982,7 @@ def test_string_no_children_properties():
         ["abcdefghij", "0123456789", "9876543210", None, "accénted", ""],
     ],
 )
-@pytest.mark.parametrize(
-    "index", [0, 1, 2, 3, 9, 10],
-)
+@pytest.mark.parametrize("index", [0, 1, 2, 3, 9, 10])
 def test_string_get(string, index):
     pds = pd.Series(string)
     gds = Series(string)
@@ -1028,7 +1027,7 @@ def test_string_slice_from():
     gs = Series(["hello world", "holy accéntéd", "batman", None, ""])
     d_starts = Series([2, 3, 0, -1, -1], dtype=np.int32)
     d_stops = Series([-1, -1, 0, -1, -1], dtype=np.int32)
-    got = gs.str.slice_from(starts=d_starts._column, stops=d_stops._column,)
+    got = gs.str.slice_from(starts=d_starts._column, stops=d_stops._column)
     expected = Series(["llo world", "y accéntéd", "", None, ""])
     assert_eq(got, expected)
 
@@ -1041,15 +1040,9 @@ def test_string_slice_from():
         ["koala", "fox", "chameleon"],
     ],
 )
-@pytest.mark.parametrize(
-    "number", [0, 1, 10],
-)
-@pytest.mark.parametrize(
-    "diff", [0, 2, 9],
-)
-@pytest.mark.parametrize(
-    "repr", ["2", "!!"],
-)
+@pytest.mark.parametrize("number", [0, 1, 10])
+@pytest.mark.parametrize("diff", [0, 2, 9])
+@pytest.mark.parametrize("repr", ["2", "!!"])
 def test_string_slice_replace(string, number, diff, repr):
     pds = pd.Series(string)
     gds = Series(string)
@@ -1163,4 +1156,38 @@ def test_string_char_case(case_op, data):
 
     assert_eq(a(), getattr(ps.str, case_op)())
 
-    # assert_eq(gs.str.capitalize(), ps.str.capitalize())
+    assert_eq(gs.str.capitalize(), ps.str.capitalize())
+    assert_eq(gs.str.isdecimal(), ps.str.isdecimal())
+    assert_eq(gs.str.isalnum(), ps.str.isalnum())
+    assert_eq(gs.str.isalpha(), ps.str.isalpha())
+    assert_eq(gs.str.isdigit(), ps.str.isdigit())
+    assert_eq(gs.str.isnumeric(), ps.str.isnumeric())
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["abc", "xyz", "a", "ab", "123", "097"],
+        ["A B", "1.5", "3,000"],
+        ["23", "³", "⅕", ""],
+        # [" ", "\t\r\n ", ""],
+        ["leopard", "Golden Eagle", "SNAKE", ""],
+        ["line to be wrapped", "another line to be wrapped"],
+    ],
+)
+@pytest.mark.parametrize("width", [1, 4, 8, 12, 100])
+def test_string_wrap(data, width):
+    gs = Series(data)
+    ps = pd.Series(data)
+
+    assert_eq(
+        gs.str.wrap(width=width),
+        ps.str.wrap(
+            width=width,
+            break_long_words=False,
+            expand_tabs=False,
+            replace_whitespace=True,
+            drop_whitespace=True,
+            break_on_hyphens=False,
+        ),
+    )
