@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/detail/fill.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/detail/fill.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -107,7 +108,8 @@ struct column_from_scalar_dispatch
   {
     auto null_mask = create_null_mask(size, mask_state::ALL_NULL, stream, mr);
     if( !value.is_valid() )
-      return std::make_unique<column>( value.type(), size, rmm::device_buffer{}, null_mask, size );
+      return std::make_unique<column>( value.type(), size, rmm::device_buffer{}, 
+                                       std::move(null_mask), size );
 
     // Create a strings column_view with all nulls and no children.
     // Since we are setting every row to the scalar, the fill() never needs to access
