@@ -1029,3 +1029,15 @@ def test_groupby_count(agg):
     got = gdf.groupby("a").agg(agg)
 
     assert_eq(expect, got, check_dtype=False)
+
+
+def test_groupby_count_multi():
+    pdf = pd.DataFrame(
+        {"a": [1, 1, 2, 3], "b": [1, 2, 2, 4], "c": [1, 2, 3, 4]}
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    expect = pdf.groupby(["a", "b"]).count()
+    got = gdf.groupby(["a", "b"]).count()
+
+    assert_eq(expect, got, check_dtype=False)
