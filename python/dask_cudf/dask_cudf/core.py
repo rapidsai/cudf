@@ -305,12 +305,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
             return handle_out(out, result)
 
     def repartition_by_hash(
-        self,
-        columns=None,
-        npartitions=None,
-        max_branch=None,
-        ignore_index=True,
-        **kwargs,
+        self, columns=None, max_branch=None, ignore_index=True, **kwargs
     ):
         """Repartition a dask_cudf DataFrame by hashing.
 
@@ -321,9 +316,6 @@ class DataFrame(_Frame, dd.core.DataFrame):
         columns : list, default None
             List of columns (by name) to be used for hashing. If None,
             all columns will be used.
-        npartitions : int, default None
-            Number of output partitions. If None, the output partitions
-            are chosen to match self.npartitions.
         max_branch : int or False, default None
             Passed to `rearrange_by_hash` - If False, single-stage shuffling
             will be used (no matter the number of partitions).
@@ -333,15 +325,10 @@ class DataFrame(_Frame, dd.core.DataFrame):
         kwargs : dict
             Other `repartition` arguments.  Ignored.
         """
-        npartitions = npartitions or self.npartitions
         columns = columns or [col for col in self.columns]
 
         return batcher_sortnet.rearrange_by_hash(
-            self,
-            columns,
-            npartitions,
-            max_branch=max_branch,
-            ignore_index=ignore_index,
+            self, columns, max_branch=max_branch, ignore_index=ignore_index
         )
 
     def repartition(self, *args, **kwargs):

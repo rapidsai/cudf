@@ -6,10 +6,6 @@ import math
 from operator import getitem
 
 import numpy as np
-try:
-    import cytoolz as toolz
-except ImportError:
-    import toolz
 
 from dask import compute, delayed
 from dask.base import tokenize
@@ -19,6 +15,11 @@ from dask.highlevelgraph import HighLevelGraph
 from dask.utils import digit, insert
 
 import cudf as gd
+
+try:
+    import cytoolz as toolz
+except ImportError:
+    import toolz
 
 
 def get_oversized(length):
@@ -156,25 +157,6 @@ def set_partitions_hash(df, columns, npartitions):
     return np.mod(c, npartitions)
 
 
-def _shuffle_group_2(df, columns, ignore_index, n):
-    if not len(df):
-        return {}, df
-    ind = hash_object_dispatch(df[columns], index=False).values
-    np.mod(ind, n, out=ind)
-    result2 = group_split_dispatch(
-        df, ind, n, ignore_index=ignore_index
-    )
-    return result2, df.iloc[:0]
-
-
-def _shuffle_group_get(g_head, i):
-    g, head = g_head
-    if i in g:
-        return g[i]
-    else:
-        return head
-
-
 def _shuffle_group(df, columns, stage, k, npartitions, ignore_index):
     c = hash_object_dispatch(df[columns], index=False)
     typ = np.min_scalar_type(npartitions * 2)
@@ -186,9 +168,7 @@ def _shuffle_group(df, columns, stage, k, npartitions, ignore_index):
     )
 
 
-def rearrange_by_hash(
-    df, columns, npartitions, max_branch=None, ignore_index=True
-):
+def rearrange_by_hash(df, columns, max_branch=None, ignore_index=True):
     n = df.npartitions
     if max_branch is False:
         stages = 1
@@ -278,36 +258,6 @@ def rearrange_by_hash(
         "shuffle-" + token, dsk, dependencies=[df]
     )
     df2 = DataFrame(graph, "shuffle-" + token, df, df.divisions)
+    df2.divisions = (None,) * (df.npartitions + 1)
 
-    if npartitions is not None and npartitions != df.npartitions:
-        parts = [i % df.npartitions for i in range(npartitions)]
-        token = tokenize(df2, npartitions)
-
-        dsk = {
-            ("repartition-group-" + token, i): (
-                _shuffle_group_2,
-                k,
-                columns,
-                ignore_index,
-                napartitions,
-            )
-            for i, k in enumerate(df2.__dask_keys__())
-        }
-        for p in range(npartitions):
-            dsk[("repartition-get-" + token, p)] = (
-                _shuffle_group_get,
-                ("repartition-group-" + token, parts[p]),
-                p,
-            )
-
-        graph2 = HighLevelGraph.from_collections(
-            "repartition-get-" + token, dsk, dependencies=[df2]
-        )
-        df3 = DataFrame(
-            graph2, "repartition-get-" + token, df2, [None] * (npartitions + 1)
-        )
-    else:
-        df3 = df2
-        df3.divisions = (None,) * (df.npartitions + 1)
-
-    return df3
+    return df2
