@@ -34,11 +34,16 @@ class GroupBy(object):
         as the keys of the resulting DataFrame.
         If as_index=False, the groups are returned as ordinary
         columns of the resulting DataFrame, *if they are named columns*.
+    sort : True, optional
+        If True (default), sort results by group9s). Note that
+        unlike Pandas, this also sorts values within each group.
     dropna : bool, optional
         If True (default), do not include the "null" group.
     """
 
-    def __init__(self, obj, by=None, level=None, as_index=True, dropna=True):
+    def __init__(
+        self, obj, by=None, level=None, sort=True, as_index=True, dropna=True
+    ):
         self.obj = obj
         self._as_index = as_index
         self._dropna = dropna
