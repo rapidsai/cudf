@@ -83,8 +83,12 @@ std::unique_ptr<column> concatenate( table_view const& strings_columns,
     // build offsets column by computing sizes of each string in the output
     auto offsets_transformer = [d_table, num_columns, d_separator, d_narep] __device__ (size_type row_idx) {
             // for this row (idx), iterate over each column and add up the bytes
+            bool null_element = thrust::any_of( thrust::seq, d_table.begin(), d_table.end(),
+                [row_idx] (auto const& d_column) { return d_column.is_null(row_idx);});
+            if( null_element && d_narep.is_null() )
+                return 0;
             size_type bytes = thrust::transform_reduce( thrust::seq, d_table.begin(), d_table.end(),
-                [row_idx, d_separator, d_narep] __device__ (column_device_view d_column) {
+                [row_idx, d_separator, d_narep] __device__ (column_device_view const& d_column) {
                     return d_separator.size_bytes() +
                            (d_column.is_null(row_idx) ? d_narep.size_bytes()
                                                       : d_column.element<string_view>(row_idx).size_bytes());
@@ -98,19 +102,17 @@ std::unique_ptr<column> concatenate( table_view const& strings_columns,
     auto offsets_column = detail::make_offsets_child_column(offsets_transformer_itr,
                                                             offsets_transformer_itr+strings_count,
                                                             mr, stream);
-    auto offsets_view = offsets_column->view();
-    auto d_results_offsets = offsets_view.data<int32_t>();
+    auto d_results_offsets = offsets_column->view().data<int32_t>();
 
     // create the chars column
     size_type bytes = thrust::device_pointer_cast(d_results_offsets)[strings_count];
     auto chars_column = strings::detail::create_chars_child_column( strings_count, null_count, bytes, mr, stream );
     // fill the chars column
-    auto chars_view = chars_column->mutable_view();
-    auto d_results_chars = chars_view.data<char>();
+    auto d_results_chars = chars_column->mutable_view().data<char>();
     thrust::for_each_n(rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count,
         [d_table, num_columns, d_separator, d_narep, d_results_offsets, d_results_chars] __device__(size_type idx){
             bool null_element = thrust::any_of( thrust::seq, d_table.begin(), d_table.end(),
-                                                [idx] (column_device_view col) { return col.is_null(idx);});
+                                                [idx] (column_device_view const& col) { return col.is_null(idx);});
             if( null_element && d_narep.is_null() )
                 return; // do not write to buffer at all if any column element for this row is null
             size_type offset = d_results_offsets[idx];
