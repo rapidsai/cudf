@@ -153,7 +153,8 @@ bool container::parse(file_metadata *md, size_t max_num_rows, size_t first_row)
                             } while (skip != 0);
                         }
                     }
-                    if (parent_idx != 0 || col.name.length() == 0) // Ignore the root entry
+                    // Ignore the root or array entries
+                    if ((parent_idx != 0 && md->schema[parent_idx].kind != type_array) || col.name.length() == 0)
                     {
                         if (col.name.length() > 0)
                         {
@@ -164,7 +165,7 @@ bool container::parse(file_metadata *md, size_t max_num_rows, size_t first_row)
                     parent_idx = md->schema[parent_idx].parent_idx;
                 }
             }
-            md->columns.push_back(col);
+            md->columns.emplace_back(std::move(col));
         }
     }
 
@@ -192,6 +193,7 @@ enum {
     attrtype_name,
     attrtype_fields,
     attrtype_symbols,
+    attrtype_items,
 };
 
 /**
@@ -208,12 +210,13 @@ bool schema_parser::parse(std::vector<schema_entry> &schema, const std::string &
     int depth = 0, parent_idx = -1, entry_idx = -1;
     json_state_e state = state_attrname;
     std::string str;
-    std::unordered_map<std::string, type_kind_e> typenames = {
+    const std::unordered_map<std::string, type_kind_e> typenames = {
                                             {"null", type_null},    {"boolean", type_boolean},  {"int", type_int},      {"long", type_long},
                                             {"float", type_float},  {"double", type_double},    {"bytes", type_bytes},  {"string", type_string},
-                                            {"record", type_record},{"enum", type_enum}};
-    std::unordered_map<std::string, int> attrnames = {
-                                            {"type", attrtype_type}, {"name", attrtype_name}, {"fields", attrtype_fields}, {"symbols", attrtype_symbols}};
+                                            {"record", type_record},{"enum", type_enum},        {"array", type_array}};
+    const std::unordered_map<std::string, int> attrnames = {
+                                            {"type", attrtype_type}, {"name", attrtype_name}, {"fields", attrtype_fields},
+                                            {"symbols", attrtype_symbols}, {"items", attrtype_items}};
     int cur_attr = attrtype_none;
     m_base = json_str.c_str();
     m_cur = m_base;
@@ -300,6 +303,14 @@ bool schema_parser::parse(std::vector<schema_entry> &schema, const std::string &
                         schema[parent_idx].num_children++;
                     }
                 }
+                cur_attr = attrtype_none;
+                state = state_attrname;
+            }
+            else if (state == state_attrvalue && cur_attr == attrtype_items && entry_idx >= 0)
+            {
+                // Treat array as a one-field record
+                parent_idx = entry_idx;
+                entry_idx = -1;
                 cur_attr = attrtype_none;
                 state = state_attrname;
             }
