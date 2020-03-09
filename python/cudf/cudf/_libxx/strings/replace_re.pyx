@@ -18,7 +18,7 @@ from cudf._libxx.cpp.strings.replace_re cimport (
 from libcpp.string cimport string
 
 
-def replace_re(Column source_strings, pattern, Scalar repl, size_type n):
+def replace_re(Column source_strings, object pattern, Scalar repl, size_type n):
     """
     Returns a Column after replacing occurrences regular
     expressions `pattern` with `repl` in `source_strings`.
@@ -46,8 +46,8 @@ def replace_re(Column source_strings, pattern, Scalar repl, size_type n):
 
 def replace_with_backrefs(
         Column source_strings,
-        pattern,
-        repl):
+        object pattern,
+        object repl):
     """
     Returns a Column after using the `repl` back-ref template to create
     new string with the extracted elements found using
@@ -70,7 +70,7 @@ def replace_with_backrefs(
 
 
 def replace_multi_re(Column source_strings,
-                     patterns,
+                     object patterns,
                      Column repl_strings):
     """
     Returns a Column after replacing occurrences of multiple

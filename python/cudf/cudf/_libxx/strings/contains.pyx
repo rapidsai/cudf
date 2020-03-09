@@ -14,7 +14,7 @@ from cudf._libxx.cpp.strings.contains cimport (
 from libcpp.string cimport string
 
 
-def contains_re(Column source_strings, reg_ex):
+def contains_re(Column source_strings, object reg_ex):
     """
     Returns a Column of boolean values with True for `source_strings`
     that contain regular expression `reg_ex`.
@@ -33,7 +33,7 @@ def contains_re(Column source_strings, reg_ex):
     return Column.from_unique_ptr(move(c_result))
 
 
-def count_re(Column source_strings, reg_ex):
+def count_re(Column source_strings, object reg_ex):
     """
     Returns a Column with count of occurrences of `reg_ex` in
     each string of `source_strings`

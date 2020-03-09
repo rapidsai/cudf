@@ -16,7 +16,7 @@ from cudf._libxx.cpp.strings.extract cimport (
 from libcpp.string cimport string
 
 
-def extract(Column source_strings, pattern):
+def extract(Column source_strings, object pattern):
     """
     Returns a Table which contains extracted capture groups provided in
     `pattern` for all `source_strings`.
