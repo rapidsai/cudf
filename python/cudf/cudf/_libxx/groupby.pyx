@@ -7,6 +7,7 @@ import numpy as np
 from libcpp.pair cimport pair
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
+from libcpp cimport bool
 
 from cudf._libxx.column cimport Column
 from cudf._libxx.table cimport Table
@@ -34,6 +35,12 @@ _GROUPBY_AGGS = {
     "median",
     "nunique",
     "nth",
+}
+
+_CATEGORICAL_AGGS = {
+    "count",
+    "size",
+    "nunique",
 }
 
 _STRING_AGGS = {
@@ -171,10 +178,16 @@ def _drop_unsupported_aggs(Table values, aggs):
 
     for col_name in aggs:
         if (
-                is_string_dtype(values._data[col_name].dtype)
-                or is_categorical_dtype(values._data[col_name].dtype)
+            is_string_dtype(values._data[col_name].dtype)
         ):
             for i, agg_name in enumerate(aggs[col_name]):
                 if Aggregation(agg_name).kind not in _STRING_AGGS:
                     del result[col_name][i]
+        elif (
+                is_categorical_dtype(values._data[col_name].dtype)
+        ):
+            for i, agg_name in enumerate(aggs[col_name]):
+                if Aggregation(agg_name).kind not in _CATEGORICAL_AGGS:
+                    del result[col_name][i]
+
     return result
