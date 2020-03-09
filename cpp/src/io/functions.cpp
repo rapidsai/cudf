@@ -20,8 +20,8 @@
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <io/parquet/parquet.h>
-
+#include "orc/chunked_state.hpp"
+#include "parquet/chunked_state.hpp"
 
 namespace cudf {
 namespace experimental {
@@ -145,11 +145,11 @@ table_with_metadata read_csv(read_csv_args const& args,
   }
 }
 
+namespace orc = cudf::experimental::io::detail::orc;
+
 // Freeform API wraps the detail reader class API
 table_with_metadata read_orc(read_orc_args const& args,
                                 rmm::mr::device_memory_resource* mr) {
-  namespace orc = cudf::experimental::io::detail::orc;
-
   orc::reader_options options{args.columns, args.use_index, args.use_np_dtypes,
                               args.timestamp_type, args.decimals_as_float,
                               args.forced_decimals_scale};
@@ -167,13 +167,50 @@ table_with_metadata read_orc(read_orc_args const& args,
 // Freeform API wraps the detail writer class API
 void write_orc(write_orc_args const& args,
                rmm::mr::device_memory_resource* mr) {
-  namespace orc = cudf::experimental::io::detail::orc;
-
   orc::writer_options options{args.compression, args.enable_statistics};
   auto writer = make_writer<orc::writer>(args.sink, options, mr);
 
   writer->write_all(args.table, args.metadata);
 }
+
+/**
+ * @copydoc cudf::experimental::io::write_orc_chunked_begin
+ *
+ **/
+std::shared_ptr<orc::orc_chunked_state> write_orc_chunked_begin(write_orc_chunked_args const& args, rmm::mr::device_memory_resource* mr){
+  orc::writer_options options{args.compression, args.enable_statistics};
+
+  auto state = std::make_shared<orc::orc_chunked_state>();
+  state->wp = make_writer<orc::writer>(args.sink, options, mr);
+
+  // have to make a copy of the metadata here since we can't really
+  // guarantee the lifetime of the incoming pointer
+  if(args.metadata != nullptr){
+    state->user_metadata_with_nullability = *args.metadata;
+    state->user_metadata = &state->user_metadata_with_nullability;
+  }
+  state->stream = 0;
+  state->wp->write_chunked_begin(*state);
+  return state;
+}
+
+/**
+ * @copydoc cudf::experimental::io::write_orc_chunked
+ *
+ **/
+void write_orc_chunked(table_view const& table, std::shared_ptr<orc::orc_chunked_state> state){
+  state->wp->write_chunked(table, *state);
+}
+
+/**
+ * @copydoc cudf::experimental::io::write_orc_chunked_end
+ *
+ **/
+void write_orc_chunked_end(std::shared_ptr<orc::orc_chunked_state>& state){
+  state->wp->write_chunked_end(*state);
+  state.reset();
+}
+
 
 // Freeform API wraps the detail reader class API
 table_with_metadata read_parquet(read_parquet_args const& args,
