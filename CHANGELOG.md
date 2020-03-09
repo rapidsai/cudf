@@ -31,6 +31,8 @@
 - PR #4276 Port avro.pyx to libcudf++
 - PR #4259 Ability to create Java host buffers from memory-mapped files
 - PR #4240 Add groupby::groups()
+- PR #4315 ShiftLeft, ShiftRight, ShiftRightUnsigned binops
+- PR #4321 Expose Python Semi and Anti Joins
 - PR #4291 Add Java callback support for RMM events
 - PR #4298 Port orc.pyx to libcudf++
 
@@ -112,6 +114,7 @@
 - PR #4191 Porting sort.pyx to use new libcudf APIs
 - PR #4196 reduce CHANGELOG.md merge conflicts
 - PR #4197 Added notebook testing to gpuCI gpu build
+- PR #4220 Port strings wrap functionality.
 - PR #4204 Port nvtext create-ngrams function
 - PR #4219 Port dlpack.pyx to use new libcudf APIs
 - PR #4225 Remove stale notebooks
@@ -123,11 +126,18 @@
 - PR #4274 Support negative position values in slice_strings
 - PR #4282 Porting nvstrings conversion functions from new libcudf++ to Python/Cython
 - PR #4290 Port Parquet to use new libcudf APIs
+- PR #4299 Convert cudf::shift to column-based api
 - PR #4306 Use libcudf++ `unary.pyx` cast instead of legacy cast
 - PR #4295 Port reduce.pyx to libcudf++ API
 - PR #4305 Move gpuarrow.pyx and related libarrow_cuda files into `_libxx`
 - PR #4244 Port nvstrings Substring Gather/Scatter functions to cuDF Python/Cython
 - PR #4280 Port nvstrings Numeric Handling functions to cuDF Python/Cython
+- PR #4328 Add memory threshold callbacks for Java RMM event handler
+- PR #4336 Move a bunch of internal nvstrings code to use native StringColumns
+- PR #4166 Port `is_sorted.pyx` to use libcudf++ APIs
+- PR #4345 Removed an undesirable backwards include from /include to /src in cuIO writers.hpp
+- PR #4362 Move pq_chunked_state struct into it's own header to match how orc writer is doing it.
+- PR #4339 Port libcudf strings `wrap` api to cython/python
 
 ## Bug Fixes
 
@@ -187,6 +197,7 @@
 - PR #4222 Fix no-return compile error in binop-null-test
 - PR #4242 Fix for rolling tests CI failure
 - PR #4245 Fix race condition in parquet reader
+- PR #4253 Fix dictionary decode and set_keys with column offset
 - PR #4258 Fix dask-cudf losing index name in `reset_index`
 - PR #4268 Fix java build for hash aggregate
 - PR #4275 Fix bug in searching nullable values in non-nullable search space in `upper_bound`
@@ -198,7 +209,9 @@
 - PR #4297 Fix specification of package_data in setup.py
 - PR #4302 Fix `_is_local_filesystem` check
 - PR #4303 Parquet reader: fix empty columns missing from table
+- PR #4324 Fix slice_strings for out-of-range start position value
 - PR #4115 Serialize an empty column table with non zero rows
+- PR #4327 Preemptive dispatch fix for changes in dask#5973
 
 
 # cuDF 0.12.0 (04 Feb 2020)
