@@ -700,7 +700,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_substring(JNIEnv *env, 
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_substringColumn(JNIEnv *env, jclass, jlong column_view,
-                                                                jlong start_column, jlong end_column) {
+                                                                      jlong start_column, jlong end_column) {
   JNI_NULL_CHECK(env, column_view, "column is null", 0);
   JNI_NULL_CHECK(env, start_column, "column is null", 0);
   JNI_NULL_CHECK(env, end_column, "column is null", 0);
