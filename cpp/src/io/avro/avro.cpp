@@ -168,8 +168,6 @@ bool container::parse(file_metadata *md, size_t max_num_rows, size_t first_row)
             md->columns.emplace_back(std::move(col));
         }
     }
-
-
     return true;
 }
 

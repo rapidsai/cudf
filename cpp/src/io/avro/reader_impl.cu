@@ -121,9 +121,19 @@ class metadata : public file_metadata {
       }
     } else {
       for (int i = 0; i < num_avro_columns; ++i) {
-        auto col_type = to_type_id(&schema[columns[i].schema_data_idx]);
-        CUDF_EXPECTS(col_type != type_id::EMPTY, "Unsupported data type");
-        selection.emplace_back(i, columns[i].name);
+        // Exclude array columns (unsupported)
+        bool column_in_array = false;
+        for (int parent_idx = schema[columns[i].schema_data_idx].parent_idx; parent_idx >= 0; parent_idx = schema[parent_idx].parent_idx) {
+          if (schema[parent_idx].kind == avro::type_array) {
+            column_in_array = true;
+            break;
+          }
+        }
+        if (!column_in_array) {
+          auto col_type = to_type_id(&schema[columns[i].schema_data_idx]);
+          CUDF_EXPECTS(col_type != type_id::EMPTY, "Unsupported data type");
+          selection.emplace_back(i, columns[i].name);
+        }
       }
     }
     CUDF_EXPECTS(selection.size() > 0, "Filtered out all columns");
@@ -273,6 +283,7 @@ void reader::impl::decode_data(
         case type_bytes:
         case type_string:
         case type_enum:
+        case type_array:
           min_row_data_size += 1;
           break;
         case type_float:
