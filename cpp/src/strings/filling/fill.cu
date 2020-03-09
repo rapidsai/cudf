@@ -64,7 +64,7 @@ std::unique_ptr<column> fill( strings_column_view const& strings,
             return ((begin <= idx) && (idx < end)) ? !d_value.is_null() : !d_strings.is_null(idx);
         }, stream, mr );
     auto null_count = valid_mask.second;
-    rmm::device_buffer null_mask(std::move(valid_mask.first));
+    rmm::device_buffer& null_mask = valid_mask.first;
 
     // build offsets column
     auto offsets_transformer = [d_strings, begin, end, d_value] __device__ (size_type idx) {
