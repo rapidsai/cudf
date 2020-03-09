@@ -18,7 +18,10 @@ from cudf._libxx.cpp.strings.replace_re cimport (
 from libcpp.string cimport string
 
 
-def replace_re(Column source_strings, object pattern, Scalar repl, size_type n):
+def replace_re(Column source_strings,
+               object pattern,
+               Scalar repl,
+               size_type n):
     """
     Returns a Column after replacing occurrences regular
     expressions `pattern` with `repl` in `source_strings`.
@@ -81,7 +84,7 @@ def replace_multi_re(Column source_strings,
     cdef column_view source_view = source_strings.view()
     cdef column_view repl_view = repl_strings.view()
 
-    cdef vector[string] patterns_vector
+    cdef vector[string] patterns_vector = vector[string](len(patterns))
     for pattern in patterns:
         patterns_vector.push_back(str.encode(pattern))
 
