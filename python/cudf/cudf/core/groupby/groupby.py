@@ -180,6 +180,14 @@ class GroupBy(object):
 
     aggregate = agg
 
+    def nth(self, n):
+        """
+        Return the nth row from each group.
+        """
+        result = self.agg(lambda x: x.nth(n))
+        sizes = self.size()
+        return result[n < sizes]
+
     def serialize(self):
         header = {}
         frames = []

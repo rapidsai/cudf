@@ -116,6 +116,14 @@ cdef class _AggregationFactory:
         return agg
 
     @classmethod
+    def nth(cls, libcudf_types.size_type size, *args, **kwargs):
+        cdef Aggregation agg = Aggregation.__new__(Aggregation)
+        agg.c_obj = move(
+            libcudf_aggregation.make_nth_element_aggregation(size)
+        )
+        return agg
+
+    @classmethod
     def any(cls, *args, **kwargs):
         cdef Aggregation agg = Aggregation.__new__(Aggregation)
         agg.c_obj = move(libcudf_aggregation.make_any_aggregation())
