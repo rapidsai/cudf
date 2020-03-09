@@ -105,7 +105,7 @@ cpdef produce_message(topic=None, message_val=None, message_key=None):
                                str.encode(message_val),
                                str.encode(message_key))
 
-cpdef flush_topic(timeout=10000):
+cpdef flush(timeout=10000):
     return kds.flush(timeout)
 
 cpdef unsubscribe():

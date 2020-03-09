@@ -198,7 +198,7 @@ namespace external {
     int remaining_timeout = batch_timeout;
     RdKafka::Message *msg;
 
-    update_consumer_toppar_assignment(topic, partition);
+    update_consumer_toppar_assignment(topic, partition, start_offset);
 
     while (messages_read < batch_size) {
       msg = consumer_->consume(remaining_timeout);

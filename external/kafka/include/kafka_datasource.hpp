@@ -104,9 +104,9 @@ class kafka_datasource : public external_datasource {
 
   private:
 
-    RdKafka::ErrorCode update_consumer_toppar_assignment(std::string topic, int partition) {
+    RdKafka::ErrorCode update_consumer_toppar_assignment(std::string topic, int partition, int64_t offset) {
       std::vector<RdKafka::TopicPartition*> _toppars;
-      _toppars.push_back(RdKafka::TopicPartition::create(topic, partition));
+      _toppars.push_back(RdKafka::TopicPartition::create(topic, partition, offset));
       consumer_.get()->assign(_toppars);
     }
 
