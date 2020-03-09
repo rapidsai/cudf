@@ -2438,14 +2438,18 @@ class Series(Frame):
         group_keys=True,
         as_index=None,
         dropna=True,
-        method="hash",
+        method=None,
     ):
         if group_keys is not True:
             raise NotImplementedError(
                 "The group_keys keyword is not yet implemented"
             )
         else:
-
+            if method is not None:
+                warnings.warn(
+                    "The 'method' argument is deprecated and will be unused",
+                    DeprecationWarning,
+                )
             return SeriesGroupBy(self, by=by, level=level, dropna=dropna)
 
     @copy_docstring(Rolling)

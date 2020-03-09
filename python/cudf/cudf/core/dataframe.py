@@ -2545,7 +2545,8 @@ class DataFrame(Frame):
 
         if method is not None:
             warnings.warn(
-                "The 'method' argument is deprecated and will be unused"
+                "The 'method' argument is deprecated and will be unused",
+                DeprecationWarning,
             )
         return DataFrameGroupBy(
             self, by=by, level=level, as_index=as_index, dropna=dropna
