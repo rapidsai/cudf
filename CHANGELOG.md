@@ -126,6 +126,7 @@
 - PR #4274 Support negative position values in slice_strings
 - PR #4282 Porting nvstrings conversion functions from new libcudf++ to Python/Cython
 - PR #4299 Convert cudf::shift to column-based api
+- PR #4301 Add support for writing large ORC files in a chunked manner
 - PR #4306 Use libcudf++ `unary.pyx` cast instead of legacy cast
 - PR #4295 Port reduce.pyx to libcudf++ API
 - PR #4305 Move gpuarrow.pyx and related libarrow_cuda files into `_libxx`
@@ -211,6 +212,7 @@
 - PR #4324 Fix slice_strings for out-of-range start position value
 - PR #4115 Serialize an empty column table with non zero rows
 - PR #4327 Preemptive dispatch fix for changes in dask#5973
+- PR #4369 Fix race condition in gpuinflate
 
 
 # cuDF 0.12.0 (04 Feb 2020)
