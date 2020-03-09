@@ -58,7 +58,7 @@ std::unique_ptr<column> concatenate( table_view const& strings_columns,
 
     CUDF_EXPECTS( separator.is_valid(), "Parameter separator must be a valid string_scalar");
     string_view d_separator(separator.data(),separator.size());
-    string_view const d_narep = [&] {
+    string_view const d_narep = [&narep] {
         if( !narep.is_valid() )
             return string_view(nullptr,0);
         return narep.size()==0 ? string_view("",0) : string_view(narep.data(),narep.size());
@@ -146,9 +146,11 @@ std::unique_ptr<column> join_strings( strings_column_view const& strings,
 
     auto execpol = rmm::exec_policy(stream);
     string_view d_separator(separator.data(),separator.size());
-    string_view d_narep(nullptr,0);
-    if( narep.is_valid() ) // narep is allowed to be invalid
-        d_narep = string_view(narep.data(),narep.size());
+    string_view const d_narep = [&narep] {
+        if( !narep.is_valid() )
+            return string_view(nullptr,0);
+        return narep.size()==0 ? string_view("",0) : string_view(narep.data(),narep.size());
+    } ();
 
     auto strings_column = column_device_view::create(strings.parent(),stream);
     auto d_strings = *strings_column;
