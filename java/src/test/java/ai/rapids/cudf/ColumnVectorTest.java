@@ -1553,7 +1553,7 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testSubString() {
+  void testsubstring() {
     try (ColumnVector v = ColumnVector.fromStrings("Héllo", "thésé", null,"", "ARé", "strings");
          ColumnVector e_allParameters = ColumnVector.fromStrings("llo", "ésé", null, "", "é", "rin");
          ColumnVector e_withoutStop = ColumnVector.fromStrings("llo", "ésé", null, "", "é", "rings");
@@ -1565,7 +1565,7 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testSubStringColumn() {
+  void testsubstringColumn() {
     try (ColumnVector v = ColumnVector.fromStrings("Héllo", "thésé", null, "", "ARé", "strings");
          ColumnVector start = ColumnVector.fromInts(2, 1, 1, 1, 0, 1);
          ColumnVector end = ColumnVector.fromInts(5, 3, 1, 1, -1, -1);
@@ -1576,7 +1576,7 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testSubStringThrowsException() {
+  void testsubstringThrowsException() {
     assertThrows(AssertionError.class, () -> {
       try (ColumnVector cv = ColumnVector.fromStrings("Héllo", "thésé", null, "ARé", "tést " +
               "strings");
