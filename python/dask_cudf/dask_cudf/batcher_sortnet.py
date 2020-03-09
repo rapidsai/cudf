@@ -6,7 +6,10 @@ import math
 from operator import getitem
 
 import numpy as np
-import toolz
+try:
+    import cytoolz as toolz
+except ImportError:
+    import toolz
 
 from dask import compute, delayed
 from dask.base import tokenize
@@ -153,13 +156,13 @@ def set_partitions_hash(df, columns, npartitions):
     return np.mod(c, npartitions)
 
 
-def _shuffle_group_2(df, columns, ignore_index):
+def _shuffle_group_2(df, columns, ignore_index, n):
     if not len(df):
         return {}, df
-    ind = hash_object_dispatch(df[columns], index=False)
-    n = ind.max() + 1
+    ind = hash_object_dispatch(df[columns], index=False).values
+    np.mod(ind, n, out=ind)
     result2 = group_split_dispatch(
-        df, ind.values.view(), n, ignore_index=ignore_index
+        df, ind, n, ignore_index=ignore_index
     )
     return result2, df.iloc[:0]
 
@@ -205,7 +208,7 @@ def rearrange_by_hash(
 
     groups = []
     splits = []
-    joins = []
+    combines = []
 
     inputs = [
         tuple(digit(i, j, k) for j in range(stages))
@@ -215,7 +218,7 @@ def rearrange_by_hash(
     token = tokenize(df, columns, max_branch)
 
     start = {
-        ("shuffle-join-" + token, 0, inp): (df._name, i)
+        ("shuffle-combine-" + token, 0, inp): (df._name, i)
         if i < df.npartitions
         else df._meta
         for i, inp in enumerate(inputs)
@@ -225,7 +228,7 @@ def rearrange_by_hash(
         group = {  # Convert partition into dict of dataframe pieces
             ("shuffle-group-" + token, stage, inp): (
                 _shuffle_group,
-                ("shuffle-join-" + token, stage - 1, inp),
+                ("shuffle-combine-" + token, stage - 1, inp),
                 columns,
                 stage - 1,
                 k,
@@ -245,8 +248,8 @@ def rearrange_by_hash(
             for inp in inputs
         }
 
-        join = {  # concatenate those pieces together, with their friends
-            ("shuffle-join-" + token, stage, inp): (
+        combine = {  # concatenate those pieces together, with their friends
+            ("shuffle-combine-" + token, stage, inp): (
                 _concat,
                 [
                     (
@@ -263,14 +266,14 @@ def rearrange_by_hash(
         }
         groups.append(group)
         splits.append(split)
-        joins.append(join)
+        combines.append(combine)
 
     end = {
-        ("shuffle-" + token, i): ("shuffle-join-" + token, stages, inp)
+        ("shuffle-" + token, i): ("shuffle-combine-" + token, stages, inp)
         for i, inp in enumerate(inputs)
     }
 
-    dsk = toolz.merge(start, end, *(groups + splits + joins))
+    dsk = toolz.merge(start, end, *(groups + splits + combines))
     graph = HighLevelGraph.from_collections(
         "shuffle-" + token, dsk, dependencies=[df]
     )
@@ -286,6 +289,7 @@ def rearrange_by_hash(
                 k,
                 columns,
                 ignore_index,
+                napartitions,
             )
             for i, k in enumerate(df2.__dask_keys__())
         }

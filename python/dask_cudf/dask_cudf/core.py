@@ -26,6 +26,7 @@ import cudf
 import cudf._lib as libcudf
 
 from dask_cudf import batcher_sortnet
+from dask_cudf.io import read_parquet
 from dask_cudf.accessor import (
     CachedAccessor,
     CategoricalAccessor,
@@ -309,7 +310,6 @@ class DataFrame(_Frame, dd.core.DataFrame):
         columns=None,
         npartitions=None,
         max_branch=None,
-        disk_path=None,
         ignore_index=True,
         **kwargs,
     ):
@@ -328,9 +328,6 @@ class DataFrame(_Frame, dd.core.DataFrame):
         max_branch : int or False, default None
             Passed to `rearrange_by_hash` - If False, single-stage shuffling
             will be used (no matter the number of partitions).
-        disk_path : str, default None
-            If set to a string value, the repartitioning will be performed
-            "on disk," using a partitioned parquet dataset.
         ignore_index : bool, default True
             Ignore the index values while shuffling data into new
             partitions. This can boost performance significantly.
@@ -340,41 +337,6 @@ class DataFrame(_Frame, dd.core.DataFrame):
         npartitions = npartitions or self.npartitions
         columns = columns or [col for col in self.columns]
 
-        # Use parquet-based shuffle on disk if path is provided
-        if isinstance(disk_path, str):
-            # WARNING: The `to_parquet` operation will use
-            # pyarrow until cudf#4236 (or similar) is merged
-            warnings.warn(
-                "Performing repartition_by_hash by writing a parquet"
-                " dataset - Expect poor performance!"
-            )
-            meta = self._meta._constructor_sliced([0])
-            partitions = self[columns].map_partitions(
-                batcher_sortnet.set_partitions_hash,
-                columns,
-                npartitions,
-                meta=meta,
-            )
-            df2 = self.assign(_partitions=partitions)
-            index = False
-            if not ignore_index:
-                index = df2.index.name or "index"
-            df2.to_parquet(
-                disk_path,
-                write_index=not ignore_index,
-                partition_on=["_partitions"],
-                append=False,
-                compression="snappy",
-                write_metadata_file=False,
-                compute=True,
-            )
-            from dask_cudf import read_parquet
-
-            return read_parquet(disk_path, index=index).drop(
-                columns=["_partitions"]
-            )
-
-        # Use task-based shuffle to move data
         return batcher_sortnet.rearrange_by_hash(
             self,
             columns,
