@@ -7,7 +7,6 @@ import pyarrow as pa
 import cudf
 import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
-from cudf.core._sort import get_sorted_inds
 from cudf.core.buffer import Buffer
 from cudf.core.column import as_column, column
 from cudf.utils import utils
@@ -225,11 +224,6 @@ class DatetimeColumn(column.ColumnBase):
 
         return result
 
-    def sort_by_values(self, ascending=True, na_position="last"):
-        col_inds = get_sorted_inds(self, ascending, na_position)
-        col_keys = self[col_inds]
-        return col_keys, col_inds
-
     def min(self, dtype=None):
         return libcudf.reduce.reduce("min", self, dtype=dtype)
 
@@ -252,42 +246,9 @@ class DatetimeColumn(column.ColumnBase):
         value = column.as_column(value).as_numerical[0]
         return self.as_numerical.find_last_value(value, closest=closest)
 
-    def unique(self, method="sort"):
-        # method variable will indicate what algorithm to use to
-        # calculate unique, not used right now
-        if method != "sort":
-            msg = "non sort based unique() not implemented yet"
-            raise NotImplementedError(msg)
-        segs, sortedvals = self._unique_segments()
-        # gather result
-        out_col = column.as_column(sortedvals)[segs]
-        return out_col
-
     @property
     def is_unique(self):
         return self.as_numerical.is_unique
-
-    @property
-    def is_monotonic_increasing(self):
-        if not hasattr(self, "_is_monotonic_increasing"):
-            if self.nullable and self.has_nulls:
-                self._is_monotonic_increasing = False
-            else:
-                self._is_monotonic_increasing = libcudf.issorted.issorted(
-                    [self]
-                )
-        return self._is_monotonic_increasing
-
-    @property
-    def is_monotonic_decreasing(self):
-        if not hasattr(self, "_is_monotonic_decreasing"):
-            if self.nullable and self.has_nulls:
-                self._is_monotonic_decreasing = False
-            else:
-                self._is_monotonic_decreasing = libcudf.issorted.issorted(
-                    [self], [1]
-                )
-        return self._is_monotonic_decreasing
 
 
 def binop(lhs, rhs, op, out_dtype):
