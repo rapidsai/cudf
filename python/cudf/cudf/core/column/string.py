@@ -27,6 +27,7 @@ from cudf._libxx.strings.replace import (
     slice_replace as cpp_slice_replace,
 )
 from cudf._libxx.strings.substring import slice_from as cpp_slice_from
+from cudf._libxx.strings.wrap import wrap as cpp_wrap
 from cudf.core.buffer import Buffer
 from cudf.core.column import column, column_empty
 from cudf.utils import utils
@@ -689,6 +690,90 @@ class StringMethods(object):
         return self._return_or_inplace(
             self._column.nvstrings.split(delimiter=pat, n=n), **kwargs
         )
+
+    def wrap(self, width, **kwargs):
+        """
+        Wrap long strings in the Series/Index to be formatted in
+        paragraphs with length less than a given width.
+
+        Parameters
+        ----------
+        width : int
+            Maximum line width.
+
+        Returns
+        -------
+        Series or Index
+
+        Notes
+        -----
+        The parameters `expand_tabsbool`, `replace_whitespace`,
+        `drop_whitespace`, `break_long_words`, `break_on_hyphens`,
+        `expand_tabsbool` are not yet supported and will raise a
+        NotImplementedError if they are set to any value.
+
+        This method currently achieves behavior matching R’s
+        stringr library str_wrap function, the equivalent
+        pandas implementation can be obtained using the
+        following parameter setting:
+
+            expand_tabs = False
+
+            replace_whitespace = True
+
+            drop_whitespace = True
+
+            break_long_words = False
+
+            break_on_hyphens = False
+        """
+        if not pd.api.types.is_integer(width):
+            msg = f"width must be of integer type, not {type(width).__name__}"
+            raise TypeError(msg)
+
+        expand_tabs = kwargs.get("expand_tabs", None)
+        if expand_tabs is True:
+            raise NotImplementedError("`expand_tabs=True` is not supported")
+        elif expand_tabs is None:
+            warnings.warn(
+                "wrap current implementation defaults to `expand_tabs`=False"
+            )
+
+        replace_whitespace = kwargs.get("replace_whitespace", True)
+        if not replace_whitespace:
+            raise NotImplementedError(
+                "`replace_whitespace=False` is not supported"
+            )
+
+        drop_whitespace = kwargs.get("drop_whitespace", True)
+        if not drop_whitespace:
+            raise NotImplementedError(
+                "`drop_whitespace=False` is not supported"
+            )
+
+        break_long_words = kwargs.get("break_long_words", None)
+        if break_long_words is True:
+            raise NotImplementedError(
+                "`break_long_words=True` is not supported"
+            )
+        elif break_long_words is None:
+            warnings.warn(
+                "wrap current implementation defaults to \
+                    `break_long_words`=False"
+            )
+
+        break_on_hyphens = kwargs.get("break_on_hyphens", None)
+        if break_long_words is True:
+            raise NotImplementedError(
+                "`break_on_hyphens=True` is not supported"
+            )
+        elif break_on_hyphens is None:
+            warnings.warn(
+                "wrap current implementation defaults to \
+                    `break_on_hyphens`=False"
+            )
+
+        return self._return_or_inplace(cpp_wrap(self._column, width), **kwargs)
 
 
 class StringColumn(column.ColumnBase):

@@ -126,14 +126,19 @@
 - PR #4274 Support negative position values in slice_strings
 - PR #4282 Porting nvstrings conversion functions from new libcudf++ to Python/Cython
 - PR #4299 Convert cudf::shift to column-based api
+- PR #4301 Add support for writing large ORC files in a chunked manner
 - PR #4306 Use libcudf++ `unary.pyx` cast instead of legacy cast
 - PR #4295 Port reduce.pyx to libcudf++ API
 - PR #4305 Move gpuarrow.pyx and related libarrow_cuda files into `_libxx`
 - PR #4244 Port nvstrings Substring Gather/Scatter functions to cuDF Python/Cython
 - PR #4280 Port nvstrings Numeric Handling functions to cuDF Python/Cython
+- PR #4328 Add memory threshold callbacks for Java RMM event handler
 - PR #4336 Move a bunch of internal nvstrings code to use native StringColumns
 - PR #4166 Port `is_sorted.pyx` to use libcudf++ APIs
 - PR #4351 Remove a bunch of internal usage of Numba; set rmm as cupy allocator
+- PR #4345 Removed an undesirable backwards include from /include to /src in cuIO writers.hpp
+- PR #4362 Move pq_chunked_state struct into it's own header to match how orc writer is doing it.
+- PR #4339 Port libcudf strings `wrap` api to cython/python
 
 ## Bug Fixes
 
@@ -205,6 +210,7 @@
 - PR #4297 Fix specification of package_data in setup.py
 - PR #4302 Fix `_is_local_filesystem` check
 - PR #4303 Parquet reader: fix empty columns missing from table
+- PR #4324 Fix slice_strings for out-of-range start position value
 - PR #4115 Serialize an empty column table with non zero rows
 - PR #4327 Preemptive dispatch fix for changes in dask#5973
 

@@ -150,6 +150,7 @@ public:
     DECL_ORC_STRUCT(ColumnEncoding);
     DECL_ORC_STRUCT(StripeStatistics);
     DECL_ORC_STRUCT(Metadata);
+#undef DECL_ORC_STRUCT
 protected:
     bool InitSchema(FileFooter *);
 
@@ -185,6 +186,7 @@ public:
     DECL_PBW_STRUCT(ColumnEncoding);
     DECL_PBW_STRUCT(StripeStatistics);
     DECL_PBW_STRUCT(Metadata);
+#undef DECL_PBW_STRUCT
 protected:
     std::vector<uint8_t> *m_buf;
 };
