@@ -211,7 +211,7 @@
 - PR #4324 Fix slice_strings for out-of-range start position value
 - PR #4115 Serialize an empty column table with non zero rows
 - PR #4327 Preemptive dispatch fix for changes in dask#5973
-- PR #4364 Fix libcudf zfill strings for 'both' to bias odd pad on the left
+- PR #4364 Fix libcudf zfill strings to ignore '+/-' chars
 
 
 # cuDF 0.12.0 (04 Feb 2020)
