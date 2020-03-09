@@ -211,6 +211,7 @@
 - PR #4324 Fix slice_strings for out-of-range start position value
 - PR #4115 Serialize an empty column table with non zero rows
 - PR #4327 Preemptive dispatch fix for changes in dask#5973
+- PR #4379 Correct regex reclass count variable to number of pairs instead of the number of literals
 
 
 # cuDF 0.12.0 (04 Feb 2020)
