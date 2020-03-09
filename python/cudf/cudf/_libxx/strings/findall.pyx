@@ -19,9 +19,8 @@ from libcpp.string cimport string
 
 def findall(Column source_strings, pattern):
     """
-    Returns a Column of boolean values with True for `source_strings`
-    that contain only decimal characters -- those that can be used
-    to extract base10 numbers.
+    Returns a Table with all non-overlapping matches of `pattern`
+    in each string of `source_strings`.
     """
     cdef unique_ptr[table] c_result
     cdef column_view source_view = source_strings.view()

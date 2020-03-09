@@ -1431,3 +1431,91 @@ def test_string_wrap(data, width):
             break_on_hyphens=False,
         ),
     )
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["abc", "xyz", "a", "ab", "123", "097"],
+        ["A B", "1.5", "3,000"],
+        ["23", "³", "⅕", ""],
+        [" ", "\t\r\n ", ""],
+        ["$", "B", "Aab$", "$$ca", "C$B$", "cat"],
+        ["line to be wrapped", "another line to be wrapped"],
+    ],
+)
+@pytest.mark.parametrize("pat", ["a", " ", "\t", "another", "0", r"\$"])
+def test_string_count(data, pat):
+    gs = Series(data)
+    ps = pd.Series(data)
+
+    assert_eq(gs.str.count(pat=pat), ps.str.count(pat=pat), check_dtype=False)
+
+
+def test_string_findall():
+    ps = pd.Series(["Lion", "Monkey", "Rabbit"])
+    gs = Series(["Lion", "Monkey", "Rabbit"])
+
+    assert_eq(ps.str.findall("Monkey")[1][0], gs.str.findall("Monkey")[0][1])
+    assert_eq(ps.str.findall("on")[0][0], gs.str.findall("on")[0][0])
+    assert_eq(ps.str.findall("on")[1][0], gs.str.findall("on")[0][1])
+    assert_eq(ps.str.findall("on$")[0][0], gs.str.findall("on$")[0][0])
+    assert_eq(ps.str.findall("b")[2][1], gs.str.findall("b")[1][2])
+
+
+def test_string_replace_multi():
+    ps = pd.Series(["hello", "goodbye"])
+    gs = Series(["hello", "goodbye"])
+    expect = ps.str.replace("e", "E").str.replace("o", "O")
+    got = gs.str.replace(["e", "o"], ["E", "O"])
+
+    assert_eq(expect, got)
+
+    ps = pd.Series(["foo", "fuz", np.nan])
+    gs = Series.from_pandas(ps)
+
+    expect = ps.str.replace("f.", "ba", regex=True)
+    got = gs.str.replace(["f."], ["ba"], regex=True)
+    assert_eq(expect, got)
+
+    ps = pd.Series(["f.o", "fuz", np.nan])
+    gs = Series.from_pandas(ps)
+
+    expect = ps.str.replace("f.", "ba", regex=False)
+    got = gs.str.replace(["f."], ["ba"], regex=False)
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "find",
+    [
+        "(\\d)(\\d)",
+        "(\\d)(\\d)",
+        "(\\d)(\\d)",
+        "(\\d)(\\d)",
+        "([a-z])-([a-z])",
+        "([a-z])-([a-zé])",
+        "([a-z])-([a-z])",
+        "([a-z])-([a-zé])",
+    ],
+)
+@pytest.mark.parametrize(
+    "replace",
+    ["\\1-\\2", "V\\2-\\1", "\\1 \\2", "\\2 \\1", "X\\1+\\2Z", "X\\1+\\2Z"],
+)
+def test_string_replace_with_backrefs(find, replace):
+    s = [
+        "A543",
+        "Z756",
+        "",
+        None,
+        "tést-string",
+        "two-thréé four-fivé",
+        "abcd-éfgh",
+        "tést-string-again",
+    ]
+    ps = pd.Series(s)
+    gs = Series(s)
+    got = gs.str.replace_with_backrefs(find, replace)
+    expected = ps.str.replace(find, replace, regex=True)
+    assert_eq(got, expected)

@@ -8,7 +8,7 @@ from cudf._libxx.cpp.column.column cimport column
 from cudf._libxx.cpp.scalar.scalar cimport string_scalar
 from cudf._libxx.cpp.table.table cimport table
 from libcpp.string cimport string
-
+from libcpp.vector cimport vector
 
 cdef extern from "cudf/strings/replace_re.hpp" namespace "cudf::strings" nogil:
 
@@ -22,3 +22,8 @@ cdef extern from "cudf/strings/replace_re.hpp" namespace "cudf::strings" nogil:
         column_view source_strings,
         string pattern,
         string repl) except +
+
+    cdef unique_ptr[column] replace_re(
+        column_view source_strings,
+        vector[string] patterns,
+        column_view repls) except +

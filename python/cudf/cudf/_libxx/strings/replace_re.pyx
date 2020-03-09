@@ -5,10 +5,8 @@ from cudf._libxx.cpp.column.column_view cimport column_view
 from libcpp.memory cimport unique_ptr
 from cudf._libxx.column cimport Column
 from cudf._libxx.scalar cimport Scalar
-from cudf._libxx.cpp.table.table cimport table
 from cudf._libxx.cpp.types cimport size_type
-
-from cudf._libxx.table cimport Table
+from libcpp.vector cimport vector
 
 from cudf._libxx.cpp.column.column cimport column
 from cudf._libxx.cpp.scalar.scalar cimport string_scalar
@@ -22,10 +20,12 @@ from libcpp.string cimport string
 
 def replace_re(Column source_strings, pattern, Scalar repl, size_type n):
     """
-    Returns a Column of boolean values with True for `source_strings`
-    that contain only decimal characters -- those that can be used
-    to extract base10 numbers.
+    Returns a Column after replacing occurrences regular
+    expressions `pattern` with `repl` in `source_strings`.
+    `n` indicates the number of resplacements to be made from
+    start. (-1 indicates all)
     """
+
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
@@ -48,7 +48,11 @@ def replace_with_backrefs(
         Column source_strings,
         pattern,
         repl):
-
+    """
+    Returns a Column after using the `repl` back-ref template to create
+    new string with the extracted elements found using
+    `pattern` regular expression in `source_strings`.
+    """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
@@ -60,6 +64,32 @@ def replace_with_backrefs(
             source_view,
             pattern_string,
             repl_string
+        ))
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def replace_multi_re(Column source_strings,
+                     patterns,
+                     Column repl_strings):
+    """
+    Returns a Column after replacing occurrences of multiple
+    regular expressions `patterns` with their corresponding
+    strings in `repl_strings` in `source_strings`.
+    """
+    cdef unique_ptr[column] c_result
+    cdef column_view source_view = source_strings.view()
+    cdef column_view repl_view = repl_strings.view()
+
+    cdef vector[string] patterns_vector
+    for pattern in patterns:
+        patterns_vector.push_back(str.encode(pattern))
+
+    with nogil:
+        c_result = move(cpp_replace_re(
+            source_view,
+            patterns_vector,
+            repl_view
         ))
 
     return Column.from_unique_ptr(move(c_result))

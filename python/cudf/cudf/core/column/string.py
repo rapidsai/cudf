@@ -70,6 +70,7 @@ from cudf._libxx.strings.strip import (
     strip as cpp_strip,
 )
 from cudf._libxx.strings.replace_re import (
+    replace_multi_re as cpp_replace_multi_re,
     replace_re as cpp_replace_re,
     replace_with_backrefs as cpp_replace_with_backrefs,
 )
@@ -169,7 +170,7 @@ class StringMethods(object):
 
                 if isinstance(table, Table):
                     return self._parent._constructor_expanddim(
-                        data=table._data
+                        data=table._data, index=self._parent.index,
                     )
                 else:
                     return self._parent._constructor_expanddim(
@@ -541,11 +542,11 @@ class StringMethods(object):
 
         Parameters
         ----------
-        pat : str
-            String to be replaced as a character sequence or regular
+        pat : str or list-like
+            String(s) to be replaced as a character sequence or regular
             expression.
-        repl : str
-            String to be used as replacement.
+        repl : str or list-like
+            String(s) to be used as replacement.
         n : int, default -1 (all)
             Number of replacements to make from the start.
         regex : bool, default True
@@ -576,8 +577,17 @@ class StringMethods(object):
             is_list_like(repl)
             or isinstance(repl, (Series, Index, pd.Series, pd.Index))
         ):
+            warnings.warn(
+                "`n` parameter is not supported when \
+                `pat` and `repl` are list-like inputs"
+            )
+
             return self._return_or_inplace(
-                cpp_replace_multi(
+                cpp_replace_multi_re(
+                    self._column, pat, column.as_column(repl, dtype="str")
+                )
+                if regex
+                else cpp_replace_multi(
                     self._column,
                     column.as_column(pat, dtype="str"),
                     column.as_column(repl, dtype="str"),
@@ -599,6 +609,22 @@ class StringMethods(object):
         )
 
     def replace_with_backrefs(self, pat, repl, **kwargs):
+        """
+        Use the `repl` back-ref template to create a new string
+        with the extracted elements found using the `pat` expression.
+
+        Parameters
+        ----------
+        pat : str
+            Regex with groupings to identify extract sections.
+            This should not be a compiled regex.
+        repl : str
+            String template containing back-reference indicators.
+
+        Returns
+        -------
+        Series/Index of str dtype
+        """
         return self._return_or_inplace(
             cpp_replace_with_backrefs(self._column, pat, repl,), **kwargs
         )
@@ -1472,13 +1498,46 @@ class StringMethods(object):
         return self._return_or_inplace(cpp_wrap(self._column, width), **kwargs)
 
     def count(self, pat, flags=0, **kwargs):
+        """
+        Count occurrences of pattern in each string of the Series/Index.
 
+        This function is used to count the number of times a particular
+        regex pattern is repeated in each of the string elements of the Series.
+
+        Parameters
+        ----------
+        pat : str
+            Valid regular expression.
+
+        Returns
+        -------
+        Series or Index
+
+        """
         if flags != 0:
             raise NotImplementedError("`flags` parameter is not yet supported")
 
-        return self._return_or_inplace(cpp_count_re(self._column, pat))
+        return self._return_or_inplace(
+            cpp_count_re(self._column, pat), **kwargs
+        )
 
     def findall(self, pat, flags=0, **kwargs):
+        """
+        Find all occurrences of pattern or regular expression in the
+        Series/Index.
+
+        Parameters
+        ----------
+        pat : str
+            Pattern or regular expression.
+
+        Returns
+        -------
+        DataFrame
+            All non-overlapping matches of pattern or
+            regular expression in each string of this Series/Index.
+
+        """
         if flags != 0:
             raise NotImplementedError("`flags` parameter is not yet supported")
 

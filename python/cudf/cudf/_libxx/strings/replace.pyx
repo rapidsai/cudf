@@ -75,10 +75,9 @@ def replace(Column source_strings,
             Scalar repl,
             int32_t maxrepl):
     """
-
-    Returns a Column by replacing specified section
-    of each string with `repl`. Positions can be
-    specified with `start` and `stop` params.
+    Returns a Column after replacing occurrences of
+    patterns `target` with `repl` in `source_strings`.
+    `maxrepl` indicates number of replacements to make from start.
     """
 
     cdef unique_ptr[column] c_result
@@ -101,7 +100,10 @@ def replace(Column source_strings,
 def replace_multi(Column source_strings,
                   Column target_strings,
                   Column repl_strings):
-
+    """
+    Returns a Column after replacing occurrences of
+    patterns `target_strings` with `repl_strings` in `source_strings`.
+    """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
     cdef column_view target_view = target_strings.view()

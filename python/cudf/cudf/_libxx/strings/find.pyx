@@ -11,14 +11,12 @@ from cudf._libxx.cpp.scalar.scalar cimport string_scalar
 from cudf._libxx.cpp.strings.find cimport (
     contains as cpp_contains
 )
-from libcpp.string cimport string
 
 
 def contains(Column source_strings, Scalar target):
     """
     Returns a Column of boolean values with True for `source_strings`
-    that contain only decimal characters -- those that can be used
-    to extract base10 numbers.
+    that contain the pattern given in `target`.
     """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
