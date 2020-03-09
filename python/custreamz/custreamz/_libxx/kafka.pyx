@@ -1,10 +1,11 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
 # cython: profile=False
 # distutils: language = c++
 # cython: embedsignature = True
 # cython: language_level = 3
 
+import cudf
 from custreamz._libxx.includes.kafka cimport (
     kafka_datasource as kafka_external,
 )
@@ -61,23 +62,21 @@ cpdef read_gdf(lines=True,
     cdef cudf_io_types.table_with_metadata c_out_table
     cdef libcudf.read_json_args json_args = libcudf.read_json_args()
 
-    # Set the JSON reader arguments.
-    json_args.lines = lines
-    json_args.source = cudf_io_types.source_info(
-        json_str, len(json_str))
-    json_args.compression = cudf_io_types.compression_type.NONE
-    json_args.dayfirst = dayfirst
+    if len(json_str) > 0:
+        json_args.lines = lines
+        json_args.source = cudf_io_types.source_info(
+            json_str, len(json_str))
+        json_args.compression = cudf_io_types.compression_type.NONE
+        json_args.dayfirst = dayfirst
 
-    #    vector[string] dtype
-    #    size_t byte_range_offset
-    #    size_t byte_range_size
+        with nogil:
+            c_out_table = move(libcudf.read_json(json_args))
 
-    with nogil:
-        c_out_table = move(libcudf.read_json(json_args))
-
-    column_names = [x.decode() for x in c_out_table.metadata.column_names]
-    return Table.from_unique_ptr(move(c_out_table.tbl),
-                                 column_names=column_names)
+        column_names = [x.decode() for x in c_out_table.metadata.column_names]
+        return Table.from_unique_ptr(move(c_out_table.tbl),
+                                     column_names=column_names)
+    else:
+        return None
 
 cpdef get_committed_offset(topic=None, partitions=[]):
     cdef vector[int] v_partitions
@@ -85,8 +84,8 @@ cpdef get_committed_offset(topic=None, partitions=[]):
         v_partitions.push_back(part)
     return kds.get_committed_offset(str.encode(topic), v_partitions)
 
-cpdef dump_configs():
-    kds.dump_configs()
+cpdef current_configs():
+    kds.current_configs()
 
 cpdef print_consumer_metadata():
     kds.print_consumer_metadata()
@@ -105,3 +104,12 @@ cpdef produce_message(topic=None, message_val=None, message_key=None):
     return kds.produce_message(str.encode(topic),
                                str.encode(message_val),
                                str.encode(message_key))
+
+cpdef flush_topic(timeout=10000):
+    return kds.flush(timeout)
+
+cpdef unsubscribe():
+    return kds.unsubscribe()
+
+cpdef close():
+    return kds.close()

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -148,18 +148,19 @@ namespace external {
      printf("\n====== END - LIBRDKAFKA CONSUMER METADATA ======\n");
   }
 
-  void kafka_datasource::dump_configs() {
-    printf("\n====== START - LIBRDKAFKA GLOBAL CONFIGS ======\n");
-
+  std::map<std::string, std::string> kafka_datasource::current_configs() {
+    std::map<std::string, std::string> configs;
     std::list<std::string> *dump = kafka_conf_->dump();
+    std::string key;
+    std::string val;
     for (std::list<std::string>::iterator it = dump->begin(); it != dump->end(); ) {
-      printf("'%s' = ", (*it).c_str());
+      key = (*it);
       it++;
-      printf("'%s'\n", (*it).c_str());
+      val = (*it);
       it++;
+      configs.insert(std::pair<std::string, std::string>{key, val});
     }
-  
-    printf("\n====== END - LIBRDKAFKA GLOBAL CONFIGS ======\n");
+    return configs;
   }
 
   std::map<int, int64_t> kafka_datasource::get_committed_offset(std::string topic, std::vector<int> partitions) {
@@ -197,7 +198,6 @@ namespace external {
     int remaining_timeout = batch_timeout;
     RdKafka::Message *msg;
 
-    printf("Start Offset: '%lu' End Offset: '%lu' Batch Size: '%lu'\n", start_offset, end_offset, batch_size);
     update_consumer_toppar_assignment(topic, partition);
 
     while (messages_read < batch_size) {
@@ -218,6 +218,7 @@ namespace external {
       }
     }
 
+    // librdkafka requires Message be explicity deleted using
     delete msg;
 
     return json_str;
@@ -242,17 +243,22 @@ namespace external {
     }
   }
 
+  bool kafka_datasource::flush(int timeout) {
+    err_ = producer_.get()->flush(timeout);
+    if (err_ != RdKafka::ERR_NO_ERROR) {
+      printf("Timeout occurred while flushing Kafka producer\n");
+      return false;
+    } else {
+      return true;
+    }
+  }
+
   std::map<std::string, int64_t> kafka_datasource::get_watermark_offset(std::string topic, int32_t partition) {
     int64_t low;
     int64_t high;
-    std::vector<RdKafka::TopicPartition *> topic_parts;
     std::map<std::string, int64_t> results;
 
-    err_ = consumer_->assignment(topic_parts);
-    if (err_ != RdKafka::ErrorCode::ERR_NO_ERROR) {
-      printf("Error: '%s'\n", err2str(err_).c_str());
-    }
-    err_ = consumer_->get_watermark_offsets(topic_parts[0]->topic().c_str(), topic_parts[0]->partition(), &low, &high);
+    err_ = consumer_->query_watermark_offsets(topic, partition, &low, &high, default_timeout_);
 
     if (err_ != RdKafka::ErrorCode::ERR_NO_ERROR) {
       printf("Error: '%s'\n", err2str(err_).c_str());
@@ -272,6 +278,26 @@ namespace external {
       return true;
     } else {
       return false;
+    }
+  }
+
+  bool kafka_datasource::unsubscribe() {
+    err_ = consumer_.get()->unassign();
+    if (err_ != RdKafka::ERR_NO_ERROR) {
+      printf("Timeout occurred while unsubscribing from Kafka Consumer assignments.\n");
+      return false;
+    } else {
+      return true;
+    }
+  }
+
+  bool kafka_datasource::close() {
+    err_ = consumer_.get()->close();
+    if (err_ != RdKafka::ERR_NO_ERROR) {
+      printf("Timeout occurred while closing Kafka Consumer\n");
+      return false;
+    } else {
+      return true;
     }
   }
 

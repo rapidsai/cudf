@@ -24,7 +24,7 @@ cdef extern from "kafka_datasource.hpp" namespace "cudf::io::external" nogil:
 
         void print_consumer_metadata() except +
 
-        void dump_configs() except +
+        map[string, string] current_configs() except +
 
         bool commit_offset(string topic, int partition, int offset) except +
 
@@ -44,3 +44,9 @@ cdef extern from "kafka_datasource.hpp" namespace "cudf::io::external" nogil:
         bool produce_message(string topic,
                              string message_val,
                              string message_key) except +
+
+        bool flush(int timeout) except +
+
+        bool unsubscribe() except +
+
+        bool close() except +

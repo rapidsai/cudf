@@ -76,13 +76,19 @@ class kafka_datasource : public external_datasource {
 
   void print_consumer_metadata();
 
-  void dump_configs();
+  std::map<std::string, std::string> current_configs();
 
   std::map<int, int64_t> get_committed_offset(std::string topic, std::vector<int> partitions);
 
   std::string consume_range(std::string topic, int partition, int64_t start_offset, int64_t end_offset, int batch_timeout, std::string delimiter);
 
   bool produce_message(std::string topic, std::string message_val, std::string message_key);
+
+  bool flush(int timeout);
+
+  bool unsubscribe();
+
+  bool close();
 
   const std::shared_ptr<arrow::Buffer> get_buffer(size_t offset,
                                                   size_t size) override {
