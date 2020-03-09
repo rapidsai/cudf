@@ -634,46 +634,16 @@ class Frame(libcudfxx.table.Table):
 
         result = []
         cat_codes = []
-        if sort:
-            # Pandas lexicographically sort is NOT a sort of all columns.
-            # Instead, it sorts columns in lhs, then in "on", and then rhs.
-            left_of_on = []
-            for name in lhs._data.keys():
-                if name not in left_on:
-                    for i in range(len(gdf_data)):
-                        if gdf_data[i][0] == name:
-                            left_of_on.append(gdf_data.pop(i))
-                            break
-            in_on = []
-            for name in itertools.chain(lhs._data.keys(), rhs._data.keys()):
-                if name in left_on or name in right_on:
-                    for i in range(len(gdf_data)):
-                        if gdf_data[i][0] == name:
-                            in_on.append(gdf_data.pop(i))
-                            break
-            right_of_on = []
-            for name in rhs._data.keys():
-                if name not in right_on:
-                    for i in range(len(gdf_data)):
-                        if gdf_data[i][0] == name:
-                            right_of_on.append(gdf_data.pop(i))
-                            break
-            result = (
-                sorted(left_of_on, key=lambda x: str(x[0]))
-                + sorted(in_on, key=lambda x: str(x[0]))
-                + sorted(right_of_on, key=lambda x: str(x[0]))
-            )
-        else:
-            for org_name in org_names:
-                for i in range(len(gdf_data)):
-                    if gdf_data[i][0] == org_name:
-                        result.append(gdf_data.pop(i))
-                        break
-            for cat_name in to_categorical:
-                for i in range(len(gdf_data)):
-                    if gdf_data[i][0] == cat_name + "_codes":
-                        cat_codes.append(gdf_data.pop(i))
-            assert len(gdf_data) == 0
+        for org_name in org_names:
+            for i in range(len(gdf_data)):
+                if gdf_data[i][0] == org_name:
+                    result.append(gdf_data.pop(i))
+                    break
+        for cat_name in to_categorical:
+            for i in range(len(gdf_data)):
+                if gdf_data[i][0] == cat_name + "_codes":
+                    cat_codes.append(gdf_data.pop(i))
+        assert len(gdf_data) == 0
         cat_codes = dict(cat_codes)
 
         # Build a new data frame based on the merged columns from GDF
@@ -699,7 +669,18 @@ class Frame(libcudfxx.table.Table):
                 )
         gdf_result._data = to_frame_data
 
-        return self.__class__._from_table(gdf_result)
+        to_return = self.__class__._from_table(gdf_result)
+        if sort:
+            if left_index:
+                by = right_on
+            elif right_index:
+                by = left_on
+            else:
+                assert left_on == right_on
+                return to_return.sort_values(left_on).reset_index(drop=True)
+            return to_return.sort_values(by)
+        else:
+            return to_return
 
     def _typecast_before_merge(
         self, lhs, rhs, left_on, right_on, left_index, right_index, how
