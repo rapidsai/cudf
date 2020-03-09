@@ -49,10 +49,7 @@ cdef class GroupBy:
     cdef unique_ptr[libcudf_groupby.groupby] c_obj
     cdef dict __dict__
 
-    def __cinit__(self, Table keys, dropna=True, *args, **kwargs):
-        """
-        keys : a GroupByKeys object
-        """
+    def __cinit__(self, Table keys, bool dropna=True, *args, **kwargs):
         cdef libcudf_types.include_nulls c_include_nulls
 
         if dropna:
@@ -70,9 +67,9 @@ cdef class GroupBy:
                 )
             )
 
-    def __init__(self, keys, dropna=True):
+    def __init__(self, Table keys, bool dropna=True):
         self.keys = keys
-        self.dropna = True
+        self.dropna = dropna
 
     def groups(self, Table values):
 
