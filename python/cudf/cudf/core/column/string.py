@@ -23,10 +23,6 @@ from cudf._libxx.strings.char_types import (
     is_digit as cpp_is_digit,
     is_numeric as cpp_is_numeric,
 )
-from cudf._libxx.strings.combine import (
-    concatenate as cpp_concatenate,
-    join as cpp_join,
-)
 from cudf._libxx.strings.padding import (
     PadSide,
     center as cpp_center,
@@ -196,15 +192,79 @@ class StringMethods(object):
             **kwargs,
         )
 
+    # TODO, PREM: Uncomment in future PR
+    # def cat(self, others=None, sep=None, na_rep=None, **kwargs):
+    #     """
+    #     Concatenate strings in the Series/Index with given separator.
+
+    #     If *others* is specified, this function concatenates the Series/Index
+    #     and elements of others element-wise. If others is not passed, then
+    # all
+    #     values in the Series/Index are concatenated into a single string with
+    #     a given sep.
+
+    #     Parameters
+    #     ----------
+    #         others : Series or List of str
+    #             Strings to be appended.
+    #             The number of strings must match size() of this instance.
+    #             This must be either a Series of string dtype or a Python
+    #             list of strings.
+
+    #         sep : str
+    #             If specified, this separator will be appended to each string
+    #             before appending the others.
+
+    #         na_rep : str
+    #             This character will take the place of any null strings
+    #             (not empty strings) in either list.
+
+    #             - If `na_rep` is None, and `others` is None, missing values
+    # in
+    #             the Series/Index are omitted from the result.
+    #             - If `na_rep` is None, and `others` is not None, a row
+    #             containing a missing value in any of the columns (before
+    #             concatenation) will have a missing value in the result.
+
+    #     Returns
+    #     -------
+    #     concat : str or Series/Index of str dtype
+    #         If `others` is None, `str` is returned,
+    # otherwise a `Series/Index`
+    #         (same type as caller) of str dtype is returned.
+    #     """
+    #     from cudf.core import DataFrame
+
+    #     if sep is None:
+    #         sep = ""
+
+    #     from cudf._libxx.scalar import Scalar
+
+    #     if others is None:
+    #         data = cpp_join(self._column, Scalar(sep), Scalar(na_rep, "str"))
+    #     else:
+    #         other_cols = _get_cols_list(others)
+    #         all_cols = [self._column] + other_cols
+    #         data = cpp_concatenate(
+    #             DataFrame(
+    #                 {index: value for index, value in enumerate(all_cols)}
+    #             ),
+    #             Scalar(sep),
+    #             Scalar(na_rep, "str"),
+    #         )
+
+    #     out = self._return_or_inplace(data, **kwargs)
+    #     if len(out) == 1 and others is None:
+    #         out = out[0]
+    #     return out
+
     def cat(self, others=None, sep=None, na_rep=None, **kwargs):
         """
         Concatenate strings in the Series/Index with given separator.
-
         If *others* is specified, this function concatenates the Series/Index
         and elements of others element-wise. If others is not passed, then all
         values in the Series/Index are concatenated into a single string with
         a given sep.
-
         Parameters
         ----------
             others : Series or List of str
@@ -212,78 +272,153 @@ class StringMethods(object):
                 The number of strings must match size() of this instance.
                 This must be either a Series of string dtype or a Python
                 list of strings.
-
             sep : str
                 If specified, this separator will be appended to each string
                 before appending the others.
-
             na_rep : str
                 This character will take the place of any null strings
                 (not empty strings) in either list.
-
                 - If `na_rep` is None, and `others` is None, missing values in
                 the Series/Index are omitted from the result.
                 - If `na_rep` is None, and `others` is not None, a row
                 containing a missing value in any of the columns (before
                 concatenation) will have a missing value in the result.
-
         Returns
         -------
         concat : str or Series/Index of str dtype
             If `others` is None, `str` is returned, otherwise a `Series/Index`
             (same type as caller) of str dtype is returned.
         """
-        from cudf.core import DataFrame
+        from cudf.core import Series, Index
 
-        if sep is None:
-            sep = ""
+        if isinstance(others, StringColumn):
+            others = others.nvstrings
+        elif isinstance(others, Series):
+            assert others.dtype == np.dtype("object")
+            others = others._column.nvstrings
+        elif isinstance(others, Index):
+            assert others.dtype == np.dtype("object")
+            others = others._values.nvstrings
+        elif isinstance(others, StringMethods):
+            """
+            If others is a StringMethods then
+            raise an exception
+            """
+            msg = "series.str is an accessor, not an array-like of strings."
+            raise ValueError(msg)
+        elif is_list_like(others) and others:
+            """
+            If others is a list-like object (in our case lists & tuples)
+            just another Series/Index, great go ahead with concatenation.
+            """
 
-        from cudf._libxx.scalar import Scalar
+            """
+            Picking first element and checking if it really adheres to
+            list like conditions, if not we switch to next case
+            Note: We have made a call not to iterate over the entire list as
+            it could be more expensive if it was of very large size.
+            Thus only doing a sanity check on just the first element of list.
+            """
+            first = others[0]
 
-        if others is None:
-            data = cpp_join(self._column, Scalar(sep), Scalar(na_rep, "str"))
-        else:
-            other_cols = _get_cols_list(others)
-            all_cols = [self._column] + other_cols
-            data = cpp_concatenate(
-                DataFrame(
-                    {index: value for index, value in enumerate(all_cols)}
-                ),
-                Scalar(sep),
-                Scalar(na_rep, "str"),
-            )
+            if is_list_like(first) or isinstance(
+                first, (Series, Index, pd.Series, pd.Index)
+            ):
+                """
+                Internal elements in others list should also be
+                list-like and not a regular string/byte
+                """
+                first = None
+                for frame in others:
+                    if not isinstance(frame, Series):
+                        """
+                        Make sure all inputs to .cat function call
+                        are of type nvstrings so creating a Series object.
+                        """
+                        frame = Series(frame, dtype="str")
+
+                    if first is None:
+                        """
+                        extracting nvstrings pointer since
+                        `frame` is of type Series/Index and
+                        first isn't yet initialized.
+                        """
+                        first = frame._column.nvstrings
+                    else:
+                        assert frame.dtype == np.dtype("object")
+                        frame = frame._column.nvstrings
+                        first = first.cat(frame, sep=sep, na_rep=na_rep)
+
+                others = first
+            elif not is_list_like(first):
+                """
+                Picking first element and checking if it really adheres to
+                non-list like conditions.
+                Note: We have made a call not to iterate over the entire
+                list as it could be more expensive if it was of very
+                large size. Thus only doing a sanity check on just the
+                first element of list.
+                """
+                others = Series(others)
+                others = others._column.nvstrings
+        elif isinstance(others, (pd.Series, pd.Index)):
+            others = Series(others)
+            others = others._column.nvstrings
+
+        data = self._column.nvstrings.cat(
+            others=others, sep=sep, na_rep=na_rep
+        )
 
         out = self._return_or_inplace(data, **kwargs)
         if len(out) == 1 and others is None:
             out = out[0]
         return out
 
-    def join(self, sep, na_rep="", **kwargs):
+    # TODO, PREM: Uncomment in future PR
+    # def join(self, sep, na_rep="", **kwargs):
+    #     """
+    #     Join lists contained as elements in the Series/Index with passed
+    #     delimiter.
+
+    #     Parameters
+    #     ----------
+    #         sep : str
+    #             Delimiter to use between list entries.
+
+    #         na_rep : str
+    #             This character will take the place of any null strings
+    #             (not empty strings) in either list.
+
+    #     Returns
+    #     -------
+    #     Series/Index of str dtype
+    #         The list entries concatenated by intervening
+    #         occurrences of the delimiter.
+
+    #     """
+    #     from cudf._libxx.scalar import Scalar
+    #     from cudf.core.series import Series
+    #     # import pdb; pdb.set_trace()
+
+    #     data = cpp_join(self._column, Scalar(sep), Scalar(na_rep))
+    #     if len(data) != len(self._parent):
+    #         data = column.as_column(
+    #             utils.scalar_broadcast_to(data[0],
+    # len(self._parent), dtype='str')
+    #         )
+    #     return Series(
+    #         data=data,
+    #         index=self._parent.index,
+    #         dtype='str'
+    #     )
+
+    def join(self, sep):
         """
         Join lists contained as elements in the Series/Index with passed
         delimiter.
-
-        Parameters
-        ----------
-            sep : str
-                Delimiter to use between list entries.
-
-            na_rep : str
-                This character will take the place of any null strings
-                (not empty strings) in either list.
-
-        Returns
-        -------
-        Series/Index of str dtype
-            The list entries concatenated by intervening
-            occurrences of the delimiter.
-
         """
-        from cudf._libxx.scalar import Scalar
-        from cudf.core.series import Series
-
-        return Series(
-            cpp_join(self._column, Scalar(sep), Scalar(na_rep)), **kwargs,
+        raise NotImplementedError(
+            "Columns of arrays / lists are not yet " "supported"
         )
 
     def extract(self, pat, flags=0, expand=True, **kwargs):
