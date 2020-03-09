@@ -1018,3 +1018,14 @@ def test_grouping(grouper):
     ):
         assert pdf_group[0] == gdf_group[0]
         assert_eq(pdf_group[1], gdf_group[1])
+
+
+@pytest.mark.parametrize("agg", [lambda x: x.count(), "count"])
+def test_groupby_count(agg):
+    pdf = pd.DataFrame({"a": [1, 1, 1, 2, 2, 3], "b": [1, 2, 3, 4, 5, 6]})
+    gdf = cudf.from_pandas(pdf)
+
+    expect = pdf.groupby("a").agg(agg)
+    got = gdf.groupby("a").agg(agg)
+
+    assert_eq(expect, got, check_dtype=False)
