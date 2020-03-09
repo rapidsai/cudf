@@ -17,3 +17,8 @@ cdef extern from "cudf/strings/replace_re.hpp" namespace "cudf::strings" nogil:
         string pattern,
         string_scalar repl,
         size_type maxrepl) except +
+
+    cdef unique_ptr[column] replace_with_backrefs(
+        column_view source_strings,
+        string pattern,
+        string repl) except +

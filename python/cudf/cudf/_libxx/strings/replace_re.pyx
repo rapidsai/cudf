@@ -14,7 +14,8 @@ from cudf._libxx.cpp.column.column cimport column
 from cudf._libxx.cpp.scalar.scalar cimport string_scalar
 
 from cudf._libxx.cpp.strings.replace_re cimport (
-    replace_re as cpp_replace_re
+    replace_re as cpp_replace_re,
+    replace_with_backrefs as cpp_replace_with_backrefs
 )
 from libcpp.string cimport string
 
@@ -38,6 +39,27 @@ def replace_re(Column source_strings, pattern, Scalar repl, size_type n):
             pattern_string,
             scalar_repl[0],
             n
+        ))
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def replace_with_backrefs(
+        Column source_strings,
+        pattern,
+        repl):
+
+    cdef unique_ptr[column] c_result
+    cdef column_view source_view = source_strings.view()
+
+    cdef string pattern_string = <string>str(pattern).encode()
+    cdef string repl_string = <string>str(repl).encode()
+
+    with nogil:
+        c_result = move(cpp_replace_with_backrefs(
+            source_view,
+            pattern_string,
+            repl_string
         ))
 
     return Column.from_unique_ptr(move(c_result))

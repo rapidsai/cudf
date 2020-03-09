@@ -52,6 +52,7 @@ from cudf._libxx.strings.findall import findall as cpp_findall
 from cudf._libxx.strings.replace import (
     insert as cpp_string_insert,
     replace as cpp_replace,
+    replace_multi as cpp_replace_multi,
     slice_replace as cpp_slice_replace,
 )
 
@@ -68,7 +69,10 @@ from cudf._libxx.strings.strip import (
     rstrip as cpp_rstrip,
     strip as cpp_strip,
 )
-from cudf._libxx.strings.replace_re import replace_re as cpp_replace_re
+from cudf._libxx.strings.replace_re import (
+    replace_re as cpp_replace_re,
+    replace_with_backrefs as cpp_replace_with_backrefs,
+)
 from cudf._libxx.strings.substring import slice_from as cpp_slice_from
 from cudf._libxx.strings.wrap import wrap as cpp_wrap
 from cudf.core.buffer import Buffer
@@ -563,7 +567,23 @@ class StringMethods(object):
             raise NotImplementedError("`case` parameter is not yet supported")
         elif flags != 0:
             raise NotImplementedError("`flags` parameter is not yet supported")
+        from cudf.core import Series, Index
 
+        if (
+            is_list_like(pat)
+            or isinstance(pat, (Series, Index, pd.Series, pd.Index))
+        ) and (
+            is_list_like(repl)
+            or isinstance(repl, (Series, Index, pd.Series, pd.Index))
+        ):
+            return self._return_or_inplace(
+                cpp_replace_multi(
+                    self._column,
+                    column.as_column(pat, dtype="str"),
+                    column.as_column(repl, dtype="str"),
+                ),
+                **kwargs,
+            )
         # Pandas treats 0 as all
         if n == 0:
             n = -1
@@ -576,6 +596,25 @@ class StringMethods(object):
                 self._column, Scalar(pat, "str"), Scalar(repl, "str"), n
             ),
             **kwargs,
+        )
+
+    def replace_with_backrefs(self, pat, repl, **kwargs):
+        return self._return_or_inplace(
+            cpp_replace_with_backrefs(self._column, pat, repl,), **kwargs
+        )
+
+    def lower(self, **kwargs):
+        """
+        Convert strings in the Series/Index to lowercase.
+
+        Returns
+        -------
+        Series/Index of str dtype
+            A copy of the object with all strings converted to lowercase.
+        """
+
+        return self._return_or_inplace(
+            self._column.nvstrings.lower(), **kwargs
         )
 
     # def slice(self, start=None, stop=None, step=None, **kwargs):
@@ -1443,7 +1482,10 @@ class StringMethods(object):
         if flags != 0:
             raise NotImplementedError("`flags` parameter is not yet supported")
 
-        return self._return_or_inplace(cpp_findall(self._column, pat))
+        kwargs.setdefault("expand", True)
+        return self._return_or_inplace(
+            cpp_findall(self._column, pat), **kwargs
+        )
 
 
 class StringColumn(column.ColumnBase):

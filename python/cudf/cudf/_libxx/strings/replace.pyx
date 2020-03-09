@@ -96,3 +96,22 @@ def replace(Column source_strings,
         ))
 
     return Column.from_unique_ptr(move(c_result))
+
+
+def replace_multi(Column source_strings,
+                  Column target_strings,
+                  Column repl_strings):
+
+    cdef unique_ptr[column] c_result
+    cdef column_view source_view = source_strings.view()
+    cdef column_view target_view = target_strings.view()
+    cdef column_view repl_view = repl_strings.view()
+
+    with nogil:
+        c_result = move(cpp_replace(
+            source_view,
+            target_view,
+            repl_view
+        ))
+
+    return Column.from_unique_ptr(move(c_result))
