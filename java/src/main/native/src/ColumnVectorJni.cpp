@@ -686,14 +686,31 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_binaryOpVS(JNIEnv *env,
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_subString(JNIEnv *env, jclass, jlong column_view,
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_substring(JNIEnv *env, jclass, jlong column_view,
                                                                 jint start, jint end) {
   JNI_NULL_CHECK(env, column_view, "column is null", 0);
   try {
     cudf::column_view* cv = reinterpret_cast<cudf::column_view*>(column_view);
     cudf::strings_column_view scv(*cv);
 
-    std::unique_ptr<cudf::column> result = cudf::strings::slice_strings(scv, start, end);
+    std::unique_ptr<cudf::column> result = (end == -1 ? cudf::strings::slice_strings(scv, start): cudf::strings::slice_strings(scv, start, end));
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_substringColumn(JNIEnv *env, jclass, jlong column_view,
+                                                                jlong start_column, jlong end_column) {
+  JNI_NULL_CHECK(env, column_view, "column is null", 0);
+  JNI_NULL_CHECK(env, start_column, "column is null", 0);
+  JNI_NULL_CHECK(env, end_column, "column is null", 0);
+  try {
+    cudf::column_view* cv = reinterpret_cast<cudf::column_view*>(column_view);
+    cudf::strings_column_view scv(*cv);
+    cudf::column_view *sc = reinterpret_cast<cudf::column_view *>(start_column);
+    cudf::column_view *ec = reinterpret_cast<cudf::column_view *>(end_column);
+
+    std::unique_ptr<cudf::column> result = cudf::strings::slice_strings(scv, *sc, *ec);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
