@@ -51,6 +51,22 @@ TYPED_TEST(groupby_nunique_test, basic)
         test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
+TYPED_TEST(groupby_nunique_test, empty_cols)
+{
+    using K = int32_t;
+    using V = TypeParam;
+    using R = experimental::detail::target_type_t<V, experimental::aggregation::NUNIQUE>;
+
+    fixed_width_column_wrapper<K> keys        { };
+    fixed_width_column_wrapper<V> vals        { };
+
+    fixed_width_column_wrapper<K> expect_keys { };
+    fixed_width_column_wrapper<R> expect_vals { };
+
+    auto agg = cudf::experimental::make_nunique_aggregation();
+    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+}
+
 TYPED_TEST(groupby_nunique_test, basic_duplicates)
 {
     using K = int32_t;
@@ -174,7 +190,7 @@ TYPED_TEST(groupby_nunique_test, include_nulls)
     fixed_width_column_wrapper<R> expect_bool_vals { 2, 2, 1, 1};
 
 
-    auto agg = cudf::experimental::make_nunique_aggregation(cudf::experimental::include_nulls::YES);
+    auto agg = cudf::experimental::make_nunique_aggregation(include_nulls::YES);
     if(std::is_same<V, cudf::experimental::bool8>())
         test_single_agg(keys, vals, expect_keys, expect_bool_vals, std::move(agg));
     else 

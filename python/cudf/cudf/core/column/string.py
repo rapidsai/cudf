@@ -3,6 +3,7 @@
 import functools
 import pickle
 import warnings
+from codecs import decode
 
 import numpy as np
 import pandas as pd
@@ -12,43 +13,57 @@ import nvstrings
 import rmm
 
 import cudf._lib as libcudf
+import cudf._libxx as libcudfxx
+import cudf._libxx.string_casting as str_cast
 from cudf._lib.nvtx import nvtx_range_pop, nvtx_range_push
-from cudf._libxx.null_mask import (
-    MaskState,
-    bitmask_allocation_size_bytes,
-    create_null_mask,
+from cudf._libxx.strings.char_types import (
+    is_alnum as cpp_is_alnum,
+    is_alpha as cpp_is_alpha,
+    is_decimal as cpp_is_decimal,
+    is_digit as cpp_is_digit,
+    is_numeric as cpp_is_numeric,
 )
+from cudf._libxx.strings.replace import (
+    insert as cpp_string_insert,
+    slice_replace as cpp_slice_replace,
+)
+from cudf._libxx.strings.substring import slice_from as cpp_slice_from
+from cudf._libxx.strings.wrap import wrap as cpp_wrap
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.utils import utils
-from cudf.utils.dtypes import is_list_like
+from cudf.utils.dtypes import is_list_like, is_scalar
 
 _str_to_numeric_typecast_functions = {
-    np.dtype("int32"): nvstrings.nvstrings.stoi,
-    np.dtype("int64"): nvstrings.nvstrings.stol,
-    np.dtype("float32"): nvstrings.nvstrings.stof,
-    np.dtype("float64"): nvstrings.nvstrings.stod,
-    np.dtype("bool"): nvstrings.nvstrings.to_booleans,
+    np.dtype("int8"): str_cast.stoi8,
+    np.dtype("int16"): str_cast.stoi16,
+    np.dtype("int32"): str_cast.stoi,
+    np.dtype("int64"): str_cast.stol,
+    np.dtype("float32"): str_cast.stof,
+    np.dtype("float64"): str_cast.stod,
+    np.dtype("bool"): str_cast.to_booleans,
     # TODO: support Date32 UNIX days
-    # np.dtype("datetime64[D]"): nvstrings.nvstrings.timestamp2int,
-    np.dtype("datetime64[s]"): nvstrings.nvstrings.timestamp2int,
-    np.dtype("datetime64[ms]"): nvstrings.nvstrings.timestamp2int,
-    np.dtype("datetime64[us]"): nvstrings.nvstrings.timestamp2int,
-    np.dtype("datetime64[ns]"): nvstrings.nvstrings.timestamp2int,
+    # np.dtype("datetime64[D]"): str_cast.timestamp2int,
+    np.dtype("datetime64[s]"): str_cast.timestamp2int,
+    np.dtype("datetime64[ms]"): str_cast.timestamp2int,
+    np.dtype("datetime64[us]"): str_cast.timestamp2int,
+    np.dtype("datetime64[ns]"): str_cast.timestamp2int,
 }
 
 _numeric_to_str_typecast_functions = {
-    np.dtype("int32"): nvstrings.itos,
-    np.dtype("int64"): nvstrings.ltos,
-    np.dtype("float32"): nvstrings.ftos,
-    np.dtype("float64"): nvstrings.dtos,
-    np.dtype("bool"): nvstrings.from_booleans,
+    np.dtype("int8"): str_cast.i8tos,
+    np.dtype("int16"): str_cast.i16tos,
+    np.dtype("int32"): str_cast.itos,
+    np.dtype("int64"): str_cast.ltos,
+    np.dtype("float32"): str_cast.ftos,
+    np.dtype("float64"): str_cast.dtos,
+    np.dtype("bool"): str_cast.from_booleans,
     # TODO: support Date32 UNIX days
-    # np.dtype("datetime64[D]"): nvstrings.int2timestamp,
-    np.dtype("datetime64[s]"): nvstrings.int2timestamp,
-    np.dtype("datetime64[ms]"): nvstrings.int2timestamp,
-    np.dtype("datetime64[us]"): nvstrings.int2timestamp,
-    np.dtype("datetime64[ns]"): nvstrings.int2timestamp,
+    # np.dtype("datetime64[D]"): str_cast.int2timestamp,
+    np.dtype("datetime64[s]"): str_cast.int2timestamp,
+    np.dtype("datetime64[ms]"): str_cast.int2timestamp,
+    np.dtype("datetime64[us]"): str_cast.int2timestamp,
+    np.dtype("datetime64[ns]"): str_cast.int2timestamp,
 }
 
 
@@ -57,16 +72,16 @@ class StringMethods(object):
     This mimicks pandas `df.str` interface.
     """
 
-    def __init__(self, parent, index=None, name=None):
+    def __init__(self, column, parent=None):
+        self._column = column
         self._parent = parent
-        self._index = index
-        self._name = name
 
     def __getattr__(self, attr, *args, **kwargs):
         from cudf.core.series import Series
 
-        if hasattr(self._parent.nvstrings, attr):
-            passed_attr = getattr(self._parent.nvstrings, attr)
+        # TODO: Remove when all needed string compute APIs are ported
+        if hasattr(self._column.nvstrings, attr):
+            passed_attr = getattr(self._column.nvstrings, attr)
             if callable(passed_attr):
 
                 @functools.wraps(passed_attr)
@@ -75,8 +90,8 @@ class StringMethods(object):
                     if isinstance(ret, nvstrings.nvstrings):
                         ret = Series(
                             column.as_column(ret),
-                            index=self._index,
-                            name=self._name,
+                            index=self._parent.index,
+                            name=self._parent.name,
                         )
                     return ret
 
@@ -86,11 +101,46 @@ class StringMethods(object):
         else:
             raise AttributeError(attr)
 
+    def _return_or_inplace(self, new_col, **kwargs):
+        """
+        Returns an object of the type of the column owner or updates the column
+        of the owner (Series or Index) to mimic an inplace operation
+        """
+        from cudf import Series, DataFrame, MultiIndex
+        from cudf.core.index import Index, as_index
+
+        inplace = kwargs.get("inplace", False)
+
+        if inplace:
+            self._parent._mimic_inplace(new_col, inplace=True)
+        else:
+            expand = kwargs.get("expand", False)
+            if expand or isinstance(self._parent, (DataFrame, MultiIndex)):
+                # This branch indicates the passed as new_col
+                # is actually a table-like data
+                table = new_col
+                return self._parent._constructor_expanddim(
+                    {index: value for index, value in enumerate(table)},
+                    index=self._parent.index,
+                )
+            elif isinstance(self._parent, Series):
+                return Series(
+                    new_col, index=self._parent.index, name=self._parent.name
+                )
+            elif isinstance(self._parent, Index):
+                return as_index(new_col, name=self._parent.index)
+            else:
+                if self._parent is None:
+                    return new_col
+                else:
+                    return self._parent._mimic_inplace(new_col, inplace=False)
+
     def __dir__(self):
         keys = dir(type(self))
-        return set(keys + dir(self._parent.nvstrings))
+        # TODO: Remove along with `__getattr__` above when all is ported
+        return set(keys + dir(self._column.nvstrings))
 
-    def len(self):
+    def len(self, **kwargs):
         """
         Computes the length of each element in the Series/Index.
 
@@ -99,22 +149,23 @@ class StringMethods(object):
           Series or Index of int: A Series or Index of integer values
             indicating the length of each element in the Series or Index.
         """
-        from cudf.core.series import Series
 
-        out_dev_arr = rmm.device_array(len(self._parent), dtype="int32")
+        out_dev_arr = rmm.device_array(len(self._column), dtype="int32")
         ptr = libcudf.cudf.get_ctype_ptr(out_dev_arr)
-        self._parent.nvstrings.len(ptr)
+        self._column.nvstrings.len(ptr)
 
         mask = None
-        if self._parent.has_nulls:
-            mask = self._parent.mask
+        if self._column.has_nulls:
+            mask = self._column.mask
 
-        col = column.build_column(
-            Buffer(out_dev_arr), np.dtype("int32"), mask=mask
+        return self._return_or_inplace(
+            column.build_column(
+                Buffer(out_dev_arr), np.dtype("int32"), mask=mask
+            ),
+            **kwargs,
         )
-        return Series(col, index=self._index, name=self._name)
 
-    def cat(self, others=None, sep=None, na_rep=None):
+    def cat(self, others=None, sep=None, na_rep=None, **kwargs):
         """
         Concatenate strings in the Series/Index with given separator.
 
@@ -153,7 +204,9 @@ class StringMethods(object):
         """
         from cudf.core import Series, Index
 
-        if isinstance(others, Series):
+        if isinstance(others, StringColumn):
+            others = others.nvstrings
+        elif isinstance(others, Series):
             assert others.dtype == np.dtype("object")
             others = others._column.nvstrings
         elif isinstance(others, Index):
@@ -227,10 +280,11 @@ class StringMethods(object):
             others = Series(others)
             others = others._column.nvstrings
 
-        data = self._parent.nvstrings.cat(
+        data = self._column.nvstrings.cat(
             others=others, sep=sep, na_rep=na_rep
         )
-        out = Series(data, index=self._index, name=self._name)
+
+        out = self._return_or_inplace(data, **kwargs)
         if len(out) == 1 and others is None:
             out = out[0]
         return out
@@ -244,7 +298,7 @@ class StringMethods(object):
             "Columns of arrays / lists are not yet " "supported"
         )
 
-    def extract(self, pat, flags=0, expand=True):
+    def extract(self, pat, flags=0, expand=True, **kwargs):
         """
         Extract capture groups in the regex `pat` as columns in a DataFrame.
 
@@ -275,18 +329,16 @@ class StringMethods(object):
         if flags != 0:
             raise NotImplementedError("`flags` parameter is not yet supported")
 
-        from cudf.core import DataFrame, Series
-
-        out = self._parent.nvstrings.extract(pat)
+        out = self._column.nvstrings.extract(pat)
         if len(out) == 1 and expand is False:
-            return Series(out[0], index=self._index, name=self._name)
+            return self._return_or_inplace(out[0], **kwargs)
         else:
-            out_df = DataFrame(index=self._index)
-            for idx, val in enumerate(out):
-                out_df[idx] = val
-            return out_df
+            kwargs.setdefault("expand", expand)
+            return self._return_or_inplace(out, **kwargs)
 
-    def contains(self, pat, case=True, flags=0, na=np.nan, regex=True):
+    def contains(
+        self, pat, case=True, flags=0, na=np.nan, regex=True, **kwargs
+    ):
         """
         Test if pattern or regex is contained within a string of a Series or
         Index.
@@ -322,23 +374,24 @@ class StringMethods(object):
         elif na is not np.nan:
             raise NotImplementedError("`na` parameter is not yet supported")
 
-        from cudf.core import Series
-
-        out_dev_arr = rmm.device_array(len(self._parent), dtype="bool")
+        out_dev_arr = rmm.device_array(len(self._column), dtype="bool")
         ptr = libcudf.cudf.get_ctype_ptr(out_dev_arr)
-        self._parent.nvstrings.contains(pat, regex=regex, devptr=ptr)
+        self._column.nvstrings.contains(pat, regex=regex, devptr=ptr)
 
         mask = None
-        if self._parent.has_nulls:
-            mask = self._parent.mask
+        if self._column.has_nulls:
+            mask = self._column.mask
 
-        col = column.build_column(
-            Buffer(out_dev_arr), dtype=np.dtype("bool"), mask=mask
+        return self._return_or_inplace(
+            column.build_column(
+                Buffer(out_dev_arr), dtype=np.dtype("bool"), mask=mask
+            ),
+            **kwargs,
         )
 
-        return Series(col, index=self._index, name=self._name)
-
-    def replace(self, pat, repl, n=-1, case=None, flags=0, regex=True):
+    def replace(
+        self, pat, repl, n=-1, case=None, flags=0, regex=True, **kwargs
+    ):
         """
         Replace occurences of pattern/regex in the Series/Index with some other
         string.
@@ -376,15 +429,12 @@ class StringMethods(object):
         if n == 0:
             n = -1
 
-        from cudf.core import Series
-
-        return Series(
-            self._parent.nvstrings.replace(pat, repl, n=n, regex=regex),
-            index=self._index,
-            name=self._name,
+        return self._return_or_inplace(
+            self._column.nvstrings.replace(pat, repl, n=n, regex=regex),
+            **kwargs,
         )
 
-    def lower(self):
+    def lower(self, **kwargs):
         """
         Convert strings in the Series/Index to lowercase.
 
@@ -393,13 +443,220 @@ class StringMethods(object):
         Series/Index of str dtype
             A copy of the object with all strings converted to lowercase.
         """
-        from cudf.core import Series
 
-        return Series(
-            self._parent.nvstrings.lower(), index=self._index, name=self._name
+        return self._return_or_inplace(
+            self._column.nvstrings.lower(), **kwargs
         )
 
-    def split(self, pat=None, n=-1, expand=True):
+    # def slice(self, start=None, stop=None, step=None, **kwargs):
+    #     """
+    #     Returns a substring of each string.
+
+    #     Parameters
+    #     ----------
+    #     start : int
+    #         Beginning position of the string to extract.
+    #         Default is beginning of the each string.
+    #     stop : int
+    #         Ending position of the string to extract.
+    #         Default is end of each string.
+    #     step : int
+    #         Characters that are to be captured within the specified section.
+    #         Default is every character.
+
+    #     Returns
+    #     -------
+    #     Series/Index of str dtype
+    #         A substring of each string.
+
+    #     """
+
+    #     return self._return_or_inplace(
+    #         cpp_slice_strings(self._column, start, stop, step), **kwargs,
+    #     )
+
+    def isdecimal(self, **kwargs):
+        """
+        Returns a Series/Column/Index of boolean values with True for strings
+        that contain only decimal characters -- those that can be used
+        to extract base10 numbers.
+
+        Returns
+        -------
+        Series/Index of bool dtype
+
+        """
+        return self._return_or_inplace(cpp_is_decimal(self._column))
+
+    def isalnum(self, **kwargs):
+        """
+        Returns a Series/Index of boolean values with True for strings
+        that contain only alpha-numeric characters.
+        Equivalent to: isalpha() or isdigit() or isnumeric() or isdecimal()
+
+        Returns
+        -------
+        Series/Index of bool dtype
+
+        """
+        return self._return_or_inplace(cpp_is_alnum(self._column))
+
+    def isalpha(self, **kwargs):
+        """
+        Returns a Series/Index of boolean values with True for strings
+        that contain only alphabetic characters.
+
+        Returns
+        -------
+        Series/Index of bool dtype
+
+        """
+        return self._return_or_inplace(cpp_is_alpha(self._column))
+
+    def isdigit(self, **kwargs):
+        """
+        Returns a Series/Index of boolean values with True for strings
+        that contain only decimal and digit characters.
+
+        Returns
+        -------
+        Series/Index of bool dtype
+
+        """
+        return self._return_or_inplace(cpp_is_digit(self._column))
+
+    def isnumeric(self, **kwargs):
+        """
+        Returns a Series/Index of boolean values with True for strings
+        that contain only numeric characters. These include digit and
+        numeric characters.
+
+        Returns
+        -------
+        Series/Index of bool dtype
+
+        """
+        return self._return_or_inplace(cpp_is_numeric(self._column))
+
+    def slice_from(self, starts=0, stops=0, **kwargs):
+        """
+        Return substring of each string using positions for each string.
+
+        The starts and stops parameters are of Column type.
+
+        Parameters
+        ----------
+        starts : Column
+            Beginning position of each the string to extract.
+            Default is beginning of the each string.
+        stops : Column
+            Ending position of the each string to extract.
+            Default is end of each string.
+            Use -1 to specify to the end of that string.
+
+        Returns
+        -------
+        Series/Index of str dtype
+            A substring of each string using positions for each string.
+
+        """
+
+        return self._return_or_inplace(
+            cpp_slice_from(self._column, starts, stops), **kwargs
+        )
+
+    def slice_replace(self, start=None, stop=None, repl=None, **kwargs):
+        """
+        Replace the specified section of each string with a new string.
+
+        Parameters
+        ----------
+        start : int
+            Beginning position of the string to replace.
+            Default is beginning of the each string.
+        stop : int
+            Ending position of the string to replace.
+            Default is end of each string.
+        repl : str
+            String to insert into the specified position values.
+
+        Returns
+        -------
+        Series/Index of str dtype
+            A new string with the specified section of the string
+            replaced with `repl` string.
+
+        """
+        if start is None:
+            start = 0
+
+        if stop is None:
+            stop = -1
+
+        if repl is None:
+            repl = ""
+
+        from cudf._libxx.scalar import Scalar
+
+        return self._return_or_inplace(
+            cpp_slice_replace(self._column, start, stop, Scalar(repl)),
+            **kwargs,
+        )
+
+    def insert(self, start=0, repl=None, **kwargs):
+        """
+        Insert the specified string into each string in the specified
+        position.
+
+        Parameters
+        ----------
+        start : int
+            Beginning position of the string to replace.
+            Default is beginning of the each string.
+            Specify -1 to insert at the end of each string.
+        repl : str
+            String to insert into the specified position valus.
+
+        Returns
+        -------
+        Series/Index of str dtype
+            A new string series with the specified string
+            inserted at the specified position.
+
+        """
+        if repl is None:
+            repl = ""
+
+        from cudf._libxx.scalar import Scalar
+
+        return self._return_or_inplace(
+            cpp_string_insert(self._column, start, Scalar(repl)), **kwargs
+        )
+
+    # def get(self, i=0, **kwargs):
+    #     """
+    #     Returns the character specified in each string as a new string.
+    #     The nvstrings returned contains a list of single character strings.
+
+    #     Parameters
+    #     ----------
+    #     i : int
+    #         The character position identifying the character
+    #         in each string to return.
+
+    #     Returns
+    #     -------
+    #     Series/Index of str dtype
+    #         A new string series with character at the position
+    #         `i` of each `i` inserted at the specified position.
+
+    #     """
+
+    #     return self._return_or_inplace(
+    #         cpp_string_get(self._column, i), **kwargs
+    #     )
+
+    def split(self, pat=None, n=-1, expand=True, **kwargs):
         """
         Split strings around given separator/delimiter.
 
@@ -431,14 +688,95 @@ class StringMethods(object):
         if n == 0:
             n = -1
 
-        from cudf.core import DataFrame
+        kwargs.setdefault("expand", expand)
 
-        out_df = DataFrame(index=self._index)
-        out = self._parent.nvstrings.split(delimiter=pat, n=n)
+        return self._return_or_inplace(
+            self._column.nvstrings.split(delimiter=pat, n=n), **kwargs
+        )
 
-        for idx, val in enumerate(out):
-            out_df[idx] = val
-        return out_df
+    def wrap(self, width, **kwargs):
+        """
+        Wrap long strings in the Series/Index to be formatted in
+        paragraphs with length less than a given width.
+
+        Parameters
+        ----------
+        width : int
+            Maximum line width.
+
+        Returns
+        -------
+        Series or Index
+
+        Notes
+        -----
+        The parameters `expand_tabsbool`, `replace_whitespace`,
+        `drop_whitespace`, `break_long_words`, `break_on_hyphens`,
+        `expand_tabsbool` are not yet supported and will raise a
+        NotImplementedError if they are set to any value.
+
+        This method currently achieves behavior matching R’s
+        stringr library str_wrap function, the equivalent
+        pandas implementation can be obtained using the
+        following parameter setting:
+
+            expand_tabs = False
+
+            replace_whitespace = True
+
+            drop_whitespace = True
+
+            break_long_words = False
+
+            break_on_hyphens = False
+        """
+        if not pd.api.types.is_integer(width):
+            msg = f"width must be of integer type, not {type(width).__name__}"
+            raise TypeError(msg)
+
+        expand_tabs = kwargs.get("expand_tabs", None)
+        if expand_tabs is True:
+            raise NotImplementedError("`expand_tabs=True` is not supported")
+        elif expand_tabs is None:
+            warnings.warn(
+                "wrap current implementation defaults to `expand_tabs`=False"
+            )
+
+        replace_whitespace = kwargs.get("replace_whitespace", True)
+        if not replace_whitespace:
+            raise NotImplementedError(
+                "`replace_whitespace=False` is not supported"
+            )
+
+        drop_whitespace = kwargs.get("drop_whitespace", True)
+        if not drop_whitespace:
+            raise NotImplementedError(
+                "`drop_whitespace=False` is not supported"
+            )
+
+        break_long_words = kwargs.get("break_long_words", None)
+        if break_long_words is True:
+            raise NotImplementedError(
+                "`break_long_words=True` is not supported"
+            )
+        elif break_long_words is None:
+            warnings.warn(
+                "wrap current implementation defaults to \
+                    `break_long_words`=False"
+            )
+
+        break_on_hyphens = kwargs.get("break_on_hyphens", None)
+        if break_long_words is True:
+            raise NotImplementedError(
+                "`break_on_hyphens=True` is not supported"
+            )
+        elif break_on_hyphens is None:
+            warnings.warn(
+                "wrap current implementation defaults to \
+                    `break_on_hyphens`=False"
+            )
+
+        return self._return_or_inplace(cpp_wrap(self._column, width), **kwargs)
 
 
 class StringColumn(column.ColumnBase):
@@ -474,16 +812,20 @@ class StringColumn(column.ColumnBase):
             None, size, dtype, mask=mask, offset=offset, children=children
         )
 
+        # TODO: Remove these once NVStrings is fully deprecated / removed
         self._nvstrings = None
         self._nvcategory = None
         self._indices = None
 
     @property
     def base_size(self):
-        return int(
-            (self.base_children[0].size - 1)
-            / self.base_children[0].dtype.itemsize
-        )
+        if len(self.base_children) == 0:
+            return 0
+        else:
+            return int(
+                (self.base_children[0].size - 1)
+                / self.base_children[0].dtype.itemsize
+            )
 
     def set_base_data(self, value):
         if value is not None:
@@ -496,6 +838,8 @@ class StringColumn(column.ColumnBase):
 
     def set_base_mask(self, value):
         super().set_base_mask(value)
+
+        # TODO: Remove these once NVStrings is fully deprecated / removed
         self._indices = None
         self._nvcategory = None
         self._nvstrings = None
@@ -503,6 +847,8 @@ class StringColumn(column.ColumnBase):
     def set_base_children(self, value):
         # TODO: Implement dtype validation of the children here somehow
         super().set_base_children(value)
+
+        # TODO: Remove these once NVStrings is fully deprecated / removed
         self._indices = None
         self._nvcategory = None
         self._nvstrings = None
@@ -510,9 +856,10 @@ class StringColumn(column.ColumnBase):
     @property
     def children(self):
         if self._children is None:
-            if self.base_children is None or (
-                self.offset == 0
-                and self.base_children[0].size == (self.size + 1)
+            if len(self.base_children) == 0:
+                self._children = ()
+            elif self.offset == 0 and self.base_children[0].size == (
+                self.size + 1
             ):
                 self._children = self.base_children
             else:
@@ -552,23 +899,23 @@ class StringColumn(column.ColumnBase):
         return self._children
 
     def __contains__(self, item):
-        return True in self.str().contains(f"^{item}$")._column
+        return True in self.str().contains(f"^{item}$")
 
     def __reduce__(self):
         cpumem = self.to_arrow()
         return column.as_column, (cpumem, False, np.dtype("object"))
 
-    def str(self, index=None, name=None):
-        return StringMethods(self, index=index, name=name)
+    def str(self, parent=None):
+        return StringMethods(self, parent=parent)
 
     def __sizeof__(self):
         n = 0
-        if self.base_children is not None and len(self.base_children) == 2:
+        if len(self.base_children) == 2:
             n += (
                 self.base_children[0].__sizeof__()
                 + self.base_children[1].__sizeof__()
             )
-        if self.base_mask:
+        if self.base_mask is not None:
             n += self.base_mask.size
         return n
 
@@ -581,6 +928,7 @@ class StringColumn(column.ColumnBase):
     def __len__(self):
         return self.size
 
+    # TODO: Remove this once NVStrings is fully deprecated / removed
     @property
     def nvstrings(self):
         if self._nvstrings is None:
@@ -601,6 +949,7 @@ class StringColumn(column.ColumnBase):
                 )
         return self._nvstrings
 
+    # TODO: Remove these once NVStrings is fully deprecated / removed
     @property
     def nvcategory(self):
         if self._nvcategory is None:
@@ -614,9 +963,11 @@ class StringColumn(column.ColumnBase):
         self._nvcategory = nvc
 
     def _set_mask(self, value):
+        # TODO: Remove these once NVStrings is fully deprecated / removed
         self._nvstrings = None
         self._nvcategory = None
         self._indices = None
+
         super()._set_mask(value)
 
     @property
@@ -632,7 +983,10 @@ class StringColumn(column.ColumnBase):
 
     @property
     def _nbytes(self):
-        return self.children[1].size
+        if self.size == 0:
+            return 0
+        else:
+            return self.children[1].size
 
     def as_numerical_column(self, dtype, **kwargs):
 
@@ -640,39 +994,17 @@ class StringColumn(column.ColumnBase):
         str_dtype = mem_dtype
         out_dtype = mem_dtype
 
-        if mem_dtype.type in (np.int8, np.int16):
-            mem_dtype = np.dtype(np.int32)
-            str_dtype = mem_dtype
-        elif mem_dtype.type is np.datetime64:
-            kwargs.update(units=np.datetime_data(mem_dtype)[0])
-            mem_dtype = np.dtype(np.int64)
+        if mem_dtype.type is np.datetime64:
             if "format" not in kwargs:
-                if len(self.nvstrings) > 0:
+                if len(self) > 0:
                     # infer on host from the first not na element
                     fmt = pd.core.tools.datetimes._guess_datetime_format(
                         self[self.notna()][0]
                     )
                     kwargs.update(format=fmt)
-            else:
-                fmt = None
+        kwargs.update(dtype=out_dtype)
 
-        out_arr = rmm.device_array(shape=len(self), dtype=mem_dtype)
-        out_ptr = libcudf.cudf.get_ctype_ptr(out_arr)
-        kwargs.update({"devptr": out_ptr})
-
-        _str_to_numeric_typecast_functions[str_dtype](self.nvstrings, **kwargs)
-
-        out_col = column.as_column(out_arr)
-
-        if self.has_nulls:
-            out_mask = create_null_mask(
-                len(self), state=MaskState.UNINITIALIZED
-            )
-            out_mask_ptr = out_mask.ptr
-            self.nvstrings.set_null_bitmask(out_mask_ptr, bdevmem=True)
-            out_col = out_col.set_mask(out_mask)
-
-        return out_col.astype(out_dtype)
+        return _str_to_numeric_typecast_functions[str_dtype](self, **kwargs)
 
     def as_datetime_column(self, dtype, **kwargs):
         return self.as_numerical_column(dtype, **kwargs)
@@ -681,27 +1013,28 @@ class StringColumn(column.ColumnBase):
         return self
 
     def to_arrow(self):
-        sbuf = np.empty(self.nvstrings.byte_count(), dtype="int8")
-        obuf = np.empty(len(self.nvstrings) + 1, dtype="int32")
+        if len(self) == 0:
+            sbuf = np.empty(0, dtype="int8")
+            obuf = np.empty(0, dtype="int32")
+            nbuf = None
+        else:
+            sbuf = self.children[1].data.to_host_array().view("int8")
+            obuf = self.children[0].data.to_host_array().view("int32")
+            nbuf = None
+            if self.null_count > 0:
+                nbuf = self.mask.to_host_array().view("int8")
+                nbuf = pa.py_buffer(nbuf)
 
-        mask_size = bitmask_allocation_size_bytes(len(self.nvstrings))
-        nbuf = np.empty(mask_size, dtype="i1")
-
-        self.str().to_offsets(sbuf, obuf, nbuf=nbuf)
         sbuf = pa.py_buffer(sbuf)
         obuf = pa.py_buffer(obuf)
-        nbuf = pa.py_buffer(nbuf)
+
         if self.null_count == len(self):
             return pa.NullArray.from_buffers(
                 pa.null(), len(self), [pa.py_buffer((b""))], self.null_count
             )
         else:
             return pa.StringArray.from_buffers(
-                len(self.nvstrings),
-                obuf,
-                sbuf,
-                nbuf,
-                self.nvstrings.null_count(),
+                len(self), obuf, sbuf, nbuf, self.null_count
             )
 
     def to_pandas(self, index=None):
@@ -766,29 +1099,6 @@ class StringColumn(column.ColumnBase):
         )
         return col
 
-    def sort_by_values(self, ascending=True, na_position="last"):
-        if na_position == "last":
-            nullfirst = False
-        elif na_position == "first":
-            nullfirst = True
-
-        idx_dev_arr = rmm.device_array(len(self), dtype="int32")
-        dev_ptr = libcudf.cudf.get_ctype_ptr(idx_dev_arr)
-        self.nvstrings.order(
-            2, asc=ascending, nullfirst=nullfirst, devptr=dev_ptr
-        )
-
-        col_inds = column.build_column(
-            Buffer(idx_dev_arr), idx_dev_arr.dtype, mask=None
-        )
-
-        col_keys = self[col_inds.data_array_view]
-
-        return col_keys, col_inds
-
-    def copy(self, deep=True):
-        return column.as_column(self.nvstrings.copy())
-
     def unordered_compare(self, cmpop, rhs):
         return _string_column_binop(self, rhs, op=cmpop)
 
@@ -796,52 +1106,18 @@ class StringColumn(column.ColumnBase):
         """
         Return col with *to_replace* replaced with *value*
         """
-        to_replace = column.as_column(to_replace)
-        replacement = column.as_column(replacement)
-        if len(to_replace) == 1 and len(replacement) == 1:
-            to_replace = to_replace.nvstrings.to_host()[0]
-            replacement = replacement.nvstrings.to_host()[0]
-            result = self.nvstrings.replace(to_replace, replacement)
-            return column.as_column(result)
-        else:
-            raise NotImplementedError(
-                "StringColumn currently only supports replacing"
-                " single values"
-            )
+        to_replace = column.as_column(to_replace, dtype=self.dtype)
+        replacement = column.as_column(replacement, dtype=self.dtype)
+        return libcudfxx.replace.replace(self, to_replace, replacement)
 
     def fillna(self, fill_value):
-        """
-        Fill null values with * fill_value *
-        """
-        from cudf.core.series import Series
-
-        if not isinstance(fill_value, str) and not (
-            isinstance(fill_value, Series)
-            and isinstance(fill_value._column, StringColumn)
-        ):
-            raise TypeError("fill_value must be a string or a string series")
-
-        # replace fill_value with nvstrings
-        # if it is a column
-
-        if isinstance(fill_value, Series):
-            if len(fill_value) < len(self):
-                raise ValueError(
-                    "fill value series must be of same or "
-                    "greater length than the series to be filled"
-                )
-
-            fill_value = fill_value[: len(self)]._column.nvstrings
-
-        filled_data = self.nvstrings.fillna(fill_value)
-        result = column.as_column(filled_data)
-        result = result.set_mask(None)
-
-        return result
+        if not is_scalar(fill_value):
+            fill_value = column.as_column(fill_value, dtype=self.dtype)
+        return libcudfxx.replace.replace_nulls(self, fill_value)
 
     def _find_first_and_last(self, value):
-        found_indices = self.str().contains(f"^{value}$")._column
-        found_indices = libcudf.typecast.cast(found_indices, dtype=np.int32)
+        found_indices = self.str().contains(f"^{value}$")
+        found_indices = libcudfxx.unary.cast(found_indices, dtype=np.int32)
         first = column.as_column(found_indices).find_first_value(1)
         last = column.as_column(found_indices).find_last_value(1)
         return first, last
@@ -851,14 +1127,6 @@ class StringColumn(column.ColumnBase):
 
     def find_last_value(self, value, closest=False):
         return self._find_first_and_last(value)[1]
-
-    def unique(self, method="sort"):
-        """
-        Get unique strings in the data
-        """
-        import nvcategory as nvc
-
-        return column.as_column(nvc.from_strings(self.nvstrings).keys())
 
     def normalize_binop_value(self, other):
         if isinstance(other, column.Column):
@@ -879,41 +1147,26 @@ class StringColumn(column.ColumnBase):
         if reflect:
             lhs, rhs = rhs, lhs
         if isinstance(rhs, StringColumn) and binop == "add":
-            return lhs.nvstrings.cat(others=rhs.nvstrings)
+            return lhs.str().cat(others=rhs)
         else:
             msg = "{!r} operator not supported between {} and {}"
             raise TypeError(msg.format(binop, type(self), type(rhs)))
 
     def sum(self, dtype=None):
-        # dtype is irrelevant it is needed to be in sync with
-        # the sum method for Numeric Series
-        return self.nvstrings.join().to_host()[0]
+        # Should we be raising here? Pandas can't handle the mix of strings and
+        # None and throws, but we already have a test that looks to ignore
+        # nulls and returns anyway.
+
+        # if self.null_count > 0:
+        #     raise ValueError("Cannot get sum of string column with nulls")
+
+        if len(self) == 0:
+            return ""
+        return decode(self.children[1].data.to_host_array(), encoding="utf-8")
 
     @property
     def is_unique(self):
         return len(self.unique()) == len(self)
-
-    @property
-    def is_monotonic_increasing(self):
-        if not hasattr(self, "_is_monotonic_increasing"):
-            if self.nullable and self.has_nulls:
-                self._is_monotonic_increasing = False
-            else:
-                self._is_monotonic_increasing = libcudf.issorted.issorted(
-                    columns=[self]
-                )
-        return self._is_monotonic_increasing
-
-    @property
-    def is_monotonic_decreasing(self):
-        if not hasattr(self, "_is_monotonic_decreasing"):
-            if self.nullable and self.has_nulls:
-                self._is_monotonic_decreasing = False
-            else:
-                self._is_monotonic_decreasing = libcudf.issorted.issorted(
-                    columns=[self], descending=[1]
-                )
-        return self._is_monotonic_decreasing
 
     @property
     def __cuda_array_interface__(self):
@@ -924,6 +1177,7 @@ class StringColumn(column.ColumnBase):
     def _mimic_inplace(self, other_col, inplace=False):
         out = super()._mimic_inplace(other_col, inplace=inplace)
         if inplace:
+            # TODO: Remove these once NVStrings is fully deprecated / removed
             self._nvstrings = other_col._nvstrings
             self._nvcategory = other_col._nvcategory
             self._indices = other_col._indices

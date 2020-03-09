@@ -10,7 +10,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-import nvstrings
 import rmm
 
 import cudf
@@ -220,7 +219,7 @@ class Index(Frame):
             return as_index(op())
 
     def unique(self):
-        return as_index(self._values.unique())
+        return as_index(self._values.unique(), name=self.name)
 
     def __add__(self, other):
         return self._apply_op("__add__", other)
@@ -382,26 +381,6 @@ class Index(Frame):
         from cudf.core.series import Series
 
         return Series(self._values)
-
-    def isnull(self):
-        """Identify missing values in an Index.
-        """
-        return as_index(self._values.isnull(), name=self.name)
-
-    def isna(self):
-        """Identify missing values in an Index. Alias for isnull.
-        """
-        return self.isnull()
-
-    def notna(self):
-        """Identify non-missing values in an Index.
-        """
-        return as_index(self._values.notna(), name=self.name)
-
-    def notnull(self):
-        """Identify non-missing values in an Index. Alias for notna.
-        """
-        return self.notna()
 
     @property
     @property
@@ -1003,7 +982,11 @@ class StringIndex(GenericIndex):
         elif isinstance(values, StringIndex):
             values = values._values.copy()
         else:
-            values = column.as_column(nvstrings.to_device(values))
+            values = column.as_column(values, dtype="str")
+            if not pd.api.types.is_string_dtype(values.dtype):
+                raise ValueError(
+                    "Couldn't create StringIndex from passed in object"
+                )
         super(StringIndex, self).__init__(values, **kwargs)
 
     def to_pandas(self):
