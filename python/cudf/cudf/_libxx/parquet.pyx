@@ -6,6 +6,7 @@ import cudf
 import errno
 import os
 import pyarrow as pa
+import json
 
 from libc.stdlib cimport free
 from libcpp.memory cimport unique_ptr, make_unique
@@ -122,8 +123,29 @@ cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
         c_out_table = move(parquet_reader(args))
 
     column_names = [x.decode() for x in c_out_table.metadata.column_names]
-    return Table.from_unique_ptr(move(c_out_table.tbl),
-                                 column_names=column_names)
+
+    # Access the Parquet user_data json to find the index
+    index_col = None
+    cdef map[string, string] user_data = c_out_table.metadata.user_data
+    json_str = user_data[b'pandas'].decode('utf-8')
+    if json_str != "":
+        meta = json.loads(json_str)
+        if 'index_columns' in meta and len(meta['index_columns']) > 0:
+            index_col = meta['index_columns'][0]
+
+    df = cudf.DataFrame._from_table(
+        Table.from_unique_ptr(move(c_out_table.tbl),
+                              column_names=column_names)
+    )
+
+    if index_col is not None and index_col in column_names:
+        df = df.set_index(index_col)
+        new_index_name = pa.pandas_compat._backwards_compatible_index_name(
+            df.index.name, df.index.name
+        )
+        df.index.name = new_index_name
+
+    return df
 
 cpdef write_parquet(
         Table table,

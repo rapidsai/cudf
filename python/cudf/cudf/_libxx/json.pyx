@@ -2,14 +2,11 @@
 
 # cython: boundscheck = False
 
-from libcpp.string cimport string
-from libcpp.memory cimport unique_ptr
 
 import cudf
 import collections.abc as abc
 import io
 import os
-
 from cudf._libxx.cpp.io.functions cimport (
     read_json as libcudf_read_json,
     read_json_args
@@ -80,7 +77,6 @@ cpdef read_json(filepath_or_buffer, dtype,
     with nogil:
         c_out_table = move(libcudf_read_json(args))
 
-    column_names = list(c_out_table.metadata.column_names)
-    column_names = [x.decode() for x in column_names]
+    column_names = [x.decode() for x in c_out_table.metadata.column_names]
     return Table.from_unique_ptr(move(c_out_table.tbl),
                                  column_names=column_names)
