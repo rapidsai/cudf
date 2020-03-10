@@ -5,6 +5,8 @@
 ## Improvements
 
 ## Bug Fixes
+- PR #4386 Update Java package to 0.14
+
 
 # cuDF 0.13.0 (Date TBD)
 
