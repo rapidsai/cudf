@@ -146,6 +146,7 @@
 - PR #4339 Port libcudf strings `wrap` api to cython/python
 - PR #4311 Port nvstrings String Manipulations functions to cuDF Python/Cython
 - PR #4373 Port nvstrings Regular Expressions functions to cuDF Python/Cython
+- PR #4377 Support loading avro files that contain nested arrays
 
 ## Bug Fixes
 
