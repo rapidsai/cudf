@@ -23,6 +23,14 @@ def _get_partition_groups(df, partition_cols, preserve_index=False):
     ]
 
 
+def _mkdir_if_not_exists(fs, path):
+    if fs._isfilestore() and not fs.exists(path):
+        try:
+            fs.mkdir(path)
+        except OSError:
+            assert fs.exists(path)
+
+
 # Logic chosen to match: https://arrow.apache.org/
 # docs/_modules/pyarrow/parquet.html#write_to_dataset
 def write_to_dataset(
@@ -57,7 +65,7 @@ def write_to_dataset(
     """
 
     fs, root_path = pq._get_filesystem_and_path(fs, root_path)
-    fs.mkdirs(root_path, exist_ok=True)
+    _mkdir_if_not_exists(fs, root_path)
 
     if partition_cols is not None and len(partition_cols) > 0:
 
@@ -71,7 +79,7 @@ def write_to_dataset(
                 df, partition_cols, preserve_index=preserve_index
             )
         ):
-            if sub_df is None or len(sub_df) < 1:
+            if sub_df is None or len(sub_df) == 0:
                 continue
             keys = tuple([sub_df[col].iloc[0] for col in partition_cols])
             if not isinstance(keys, tuple):
@@ -83,7 +91,7 @@ def write_to_dataset(
                 ]
             )
             prefix = "/".join([root_path, subdir])
-            fs.mkdirs(prefix, exist_ok=True)
+            _mkdir_if_not_exists(fs, prefix)
             outfile = guid() + ".parquet"
             full_path = "/".join([prefix, outfile])
             sub_df.drop(columns=partition_cols).to_parquet(
