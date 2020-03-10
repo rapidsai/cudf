@@ -78,6 +78,9 @@ std::unique_ptr<table> rank(table_view const &input, rank_method method,
     auto rank_data = rank_mutable_view.data<double>();
     auto device_table =
         table_device_view::create(table_view{{input_col}}, stream);
+
+    // All equal values have same rank and rank always increases by 1 between
+    // groups
     rmm::device_vector<size_type> dense_rank_sorted; // as key for min, max,
                                                      // average
     if (method != rank_method::FIRST) {
@@ -103,6 +106,7 @@ std::unique_ptr<table> rank(table_view const &input, rank_method method,
 
     switch (method) {
     case rank_method::FIRST:
+      // stable sort order ranking (no ties)
       thrust::scatter(
           rmm::exec_policy(stream)->on(stream),
           thrust::make_counting_iterator<double>(1),
@@ -110,12 +114,17 @@ std::unique_ptr<table> rank(table_view const &input, rank_method method,
           sorted_order_view.begin<size_type>(), rank_data);
       break;
     case rank_method::DENSE:
+      // All equal values have same rank and rank always increases by 1 between
+      // groups
       thrust::scatter(rmm::exec_policy(stream)->on(stream),
                       dense_rank_sorted.begin(), dense_rank_sorted.end(),
                       sorted_order_view.begin<size_type>(), rank_data);
       break;
     case rank_method::MIN: {
+      // min  of first in the group
+      // All equal values have min of ranks among them.
       rmm::device_vector<double> min_sorted(size, 0);
+      // algorithm: reduce_by_key(dense_rank, 1, n, min)
       thrust::reduce_by_key(
           rmm::exec_policy(stream)->on(stream), dense_rank_sorted.begin(),
           dense_rank_sorted.end(), thrust::make_counting_iterator<double>(1),
@@ -129,7 +138,10 @@ std::unique_ptr<table> rank(table_view const &input, rank_method method,
                       sorted_order_view.begin<size_type>(), rank_data);
     } break;
     case rank_method::MAX: {
+      // max  of first in the group
+      // All equal values have max of ranks among them.
       rmm::device_vector<double> max_sorted(size, 0);
+      // algorithm: reduce_by_key(dense_rank, 1, n, max)
       thrust::reduce_by_key(
           rmm::exec_policy(stream)->on(stream), dense_rank_sorted.begin(),
           dense_rank_sorted.end(), thrust::make_counting_iterator<double>(1),
@@ -144,6 +156,10 @@ std::unique_ptr<table> rank(table_view const &input, rank_method method,
     } break;
     case rank_method::AVERAGE: {
       using MinCount = thrust::tuple<size_type, size_type>;
+      // k, k+1, .. k+n-1
+      // average = (n*k+ n*(n-1)/2)/n
+      // average = k + (n-1)/2 = min + (count-1)/2
+      // Calculate Min of ranks and Count of equal values
       rmm::device_vector<MinCount> min_count(size);
       thrust::reduce_by_key(
           rmm::exec_policy(stream)->on(stream), dense_rank_sorted.begin(),
@@ -156,6 +172,7 @@ std::unique_ptr<table> rank(table_view const &input, rank_method method,
             return MinCount{std::min(thrust::get<0>(i), thrust::get<0>(j)),
                             thrust::get<1>(i) + thrust::get<1>(j)};
           });
+      // Transform (MinRank, Count) to Average Rank.
       auto avgit = thrust::make_transform_iterator(
           min_count.begin(),
           [] __device__(auto i) { // min+(count-1)/2
