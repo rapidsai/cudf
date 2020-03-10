@@ -476,7 +476,7 @@ def test_string_extract(ps_gs, pat, expand, flags, flags_raise):
         ("FGHI", False),
     ],
 )
-@pytest.mark.parametrize("case,case_raise", [(True, 0), (False, 1)])
+@pytest.mark.parametrize("case,case_raise", [(False, 1)])
 @pytest.mark.parametrize("flags,flags_raise", [(0, 0), (1, 1)])
 @pytest.mark.parametrize("na,na_raise", [(np.nan, 0), (None, 1), ("", 1)])
 def test_string_contains(
