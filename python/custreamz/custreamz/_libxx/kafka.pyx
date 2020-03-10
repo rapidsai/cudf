@@ -78,11 +78,8 @@ cpdef read_gdf(lines=True,
     else:
         return None
 
-cpdef get_committed_offset(topic=None, partitions=[]):
-    cdef vector[int] v_partitions
-    for part in partitions:
-        v_partitions.push_back(part)
-    return kds.get_committed_offset(str.encode(topic), v_partitions)
+cpdef get_committed_offset(topic=None, partition=None):
+    return kds.get_committed_offset(str.encode(topic), partition)
 
 cpdef current_configs():
     kds.current_configs()
@@ -91,14 +88,19 @@ cpdef print_consumer_metadata():
     kds.print_consumer_metadata()
 
 cpdef get_watermark_offsets(topic=None,
-                            partition=0):
+                            partition=0,
+                            timeout=10000,
+                            cached=False):
 
     cdef map[string, int64_t] offsets = \
-        kds.get_watermark_offset(str.encode(topic), partition)
+        kds.get_watermark_offset(str.encode(topic), partition, timeout, cached)
     return offsets
 
-cpdef commit_topic_offset(topic=None, partition=0, offset=0):
-    kds.commit_offset(str.encode(topic), partition, offset)
+cpdef commit_topic_offset(topic=None,
+                          partition=0,
+                          offset=0,
+                          asynchronous=True):
+    return kds.commit_offset(str.encode(topic), partition, offset)
 
 cpdef produce_message(topic=None, message_val=None, message_key=None):
     return kds.produce_message(str.encode(topic),

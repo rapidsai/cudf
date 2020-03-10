@@ -163,26 +163,20 @@ namespace external {
     return configs;
   }
 
-  std::map<int, int64_t> kafka_datasource::get_committed_offset(std::string topic, std::vector<int> partitions) {
+ int64_t kafka_datasource::get_committed_offset(std::string topic, int partition) {
     std::vector<RdKafka::TopicPartition*> toppar_list;
-    std::map<int, int64_t> offsets;
-
-    std::vector<int>::iterator it = partitions.begin();
-    while (it != partitions.end()) {
-      toppar_list.push_back(find_toppar(topic, *it));
-      it++;
-    }
+    toppar_list.push_back(find_toppar(topic, partition));
 
     // Query Kafka to populate the TopicPartitions with the desired offsets
     err_ = consumer_->committed(toppar_list, default_timeout_);
 
-    std::vector<RdKafka::TopicPartition*>::iterator top_it = toppar_list.begin();
-    while (top_it != toppar_list.end()) {
-      offsets.insert({(*top_it)->partition(), (*top_it)->offset()});
-      top_it++;
-    }
+    // std::vector<RdKafka::TopicPartition*>::iterator top_it = toppar_list.begin();
+    // while (top_it != toppar_list.end()) {
+    //   offsets.insert({(*top_it)->partition(), (*top_it)->offset()});
+    //   top_it++;
+    // }
 
-    return offsets;
+    return toppar_list[0]->offset();
   }
 
   std::string kafka_datasource::consume_range(std::string topic,
@@ -253,12 +247,16 @@ namespace external {
     }
   }
 
-  std::map<std::string, int64_t> kafka_datasource::get_watermark_offset(std::string topic, int32_t partition) {
+  std::map<std::string, int64_t> kafka_datasource::get_watermark_offset(std::string topic, int partition, int timeout, bool cached) {
     int64_t low;
     int64_t high;
     std::map<std::string, int64_t> results;
 
-    err_ = consumer_->query_watermark_offsets(topic, partition, &low, &high, default_timeout_);
+    if (cached == true) {
+      err_ = consumer_->get_watermark_offsets(topic, partition, &low, &high);
+    } else {
+      err_ = consumer_->query_watermark_offsets(topic, partition, &low, &high, timeout);
+    }
 
     if (err_ != RdKafka::ErrorCode::ERR_NO_ERROR) {
       printf("Error: '%s'\n", err2str(err_).c_str());

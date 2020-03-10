@@ -15,33 +15,33 @@
             "../../cpp/include/cudf/types.hpp",
             "../../cpp/include/cudf/wrappers/bool.hpp",
             "../../external/kafka/include/kafka_datasource.hpp",
-            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/api.h",
-            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/array/concatenate.h",
-            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/builder.h",
-            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/compute/api.h",
-            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/csv/api.h",
-            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/extension_type.h",
-            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/io/api.h",
-            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/ipc/api.h",
-            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/json/options.h",
-            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/json/reader.h",
-            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/python/api.h",
-            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/python/benchmark.h",
-            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/python/common.h",
-            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/python/config.h",
-            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/python/extension_type.h",
-            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/python/inference.h",
-            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/python/init.h",
-            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/python/platform.h",
-            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/python/pyarrow.h",
-            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/result.h",
-            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/util/compression.h",
-            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/util/key_value_metadata.h",
-            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/util/thread_pool.h",
-            "/home/jdyer/anaconda3/envs/cudf_dev/include/rmm/device_buffer.hpp",
-            "/home/jdyer/anaconda3/envs/cudf_dev/include/rmm/rmm.h",
-            "/home/jdyer/anaconda3/envs/cudf_dev/include/rmm/rmm.hpp",
-            "/home/jdyer/anaconda3/envs/cudf_dev/lib/python3.7/site-packages/numpy/core/include/numpy/halffloat.h"
+            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/api.h",
+            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/array/concatenate.h",
+            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/builder.h",
+            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/compute/api.h",
+            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/csv/api.h",
+            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/extension_type.h",
+            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/io/api.h",
+            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/ipc/api.h",
+            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/json/options.h",
+            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/json/reader.h",
+            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/python/api.h",
+            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/python/benchmark.h",
+            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/python/common.h",
+            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/python/config.h",
+            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/python/extension_type.h",
+            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/python/inference.h",
+            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/python/init.h",
+            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/python/platform.h",
+            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/python/pyarrow.h",
+            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/result.h",
+            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/util/compression.h",
+            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/util/key_value_metadata.h",
+            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/util/thread_pool.h",
+            "/home/jdyer/anaconda3/envs/custreamz_dev/include/rmm/device_buffer.hpp",
+            "/home/jdyer/anaconda3/envs/custreamz_dev/include/rmm/rmm.h",
+            "/home/jdyer/anaconda3/envs/custreamz_dev/include/rmm/rmm.hpp",
+            "/home/jdyer/anaconda3/envs/custreamz_dev/lib/python3.7/site-packages/numpy/core/include/numpy/halffloat.h"
         ],
         "extra_compile_args": [
             "-std=c++14"
@@ -54,8 +54,8 @@
             "../../thirdparty/cub",
             "../../thirdparty/libcudacxx/include",
             "../../external/kafka/include",
-            "/home/jdyer/anaconda3/envs/cudf_dev/include",
-            "/home/jdyer/anaconda3/envs/cudf_dev/lib/python3.7/site-packages/numpy/core/include",
+            "/home/jdyer/anaconda3/envs/custreamz_dev/include",
+            "/home/jdyer/anaconda3/envs/custreamz_dev/lib/python3.7/site-packages/numpy/core/include",
             "/usr/local/cuda-10.1/include"
         ],
         "language": "c++",
@@ -64,9 +64,9 @@
             "cudf_kafka"
         ],
         "library_dirs": [
-            "/home/jdyer/anaconda3/envs/cudf_dev/lib/python3.7/site-packages",
-            "/home/jdyer/anaconda3/envs/cudf_dev/lib",
-            "/home/jdyer/anaconda3/envs/cudf_dev/lib/external"
+            "/home/jdyer/anaconda3/envs/custreamz_dev/lib/python3.7/site-packages",
+            "/home/jdyer/anaconda3/envs/custreamz_dev/lib",
+            "/home/jdyer/anaconda3/envs/custreamz_dev/lib/external"
         ],
         "name": "custreamz._libxx.kafka",
         "sources": [
@@ -1295,34 +1295,36 @@ struct __pyx_opt_args_9custreamz_6_libxx_5kafka_read_gdf {
 /* "custreamz/_libxx/kafka.pyx":81
  *         return None
  * 
- * cpdef get_committed_offset(topic=None, partitions=[]):             # <<<<<<<<<<<<<<
- *     cdef vector[int] v_partitions
- *     for part in partitions:
+ * cpdef get_committed_offset(topic=None, partition=None):             # <<<<<<<<<<<<<<
+ *     return kds.get_committed_offset(str.encode(topic), partition)
+ * 
  */
 struct __pyx_opt_args_9custreamz_6_libxx_5kafka_get_committed_offset {
-  int __pyx_n;
-  PyObject *topic;
-  PyObject *partitions;
-};
-
-/* "custreamz/_libxx/kafka.pyx":93
- *     kds.print_consumer_metadata()
- * 
- * cpdef get_watermark_offsets(topic=None,             # <<<<<<<<<<<<<<
- *                             partition=0):
- * 
- */
-struct __pyx_opt_args_9custreamz_6_libxx_5kafka_get_watermark_offsets {
   int __pyx_n;
   PyObject *topic;
   PyObject *partition;
 };
 
-/* "custreamz/_libxx/kafka.pyx":100
+/* "custreamz/_libxx/kafka.pyx":90
+ *     kds.print_consumer_metadata()
+ * 
+ * cpdef get_watermark_offsets(topic=None,             # <<<<<<<<<<<<<<
+ *                             partition=0,
+ *                             timeout=10000,
+ */
+struct __pyx_opt_args_9custreamz_6_libxx_5kafka_get_watermark_offsets {
+  int __pyx_n;
+  PyObject *topic;
+  PyObject *partition;
+  PyObject *timeout;
+  PyObject *cached;
+};
+
+/* "custreamz/_libxx/kafka.pyx":99
  *     return offsets
  * 
- * cpdef commit_topic_offset(topic=None, partition=0, offset=0):             # <<<<<<<<<<<<<<
- *     kds.commit_offset(str.encode(topic), partition, offset)
+ * cpdef commit_topic_offset(topic=None, partition=0, offset=0, asynchronous=True):             # <<<<<<<<<<<<<<
+ *     return kds.commit_offset(str.encode(topic), partition, offset)
  * 
  */
 struct __pyx_opt_args_9custreamz_6_libxx_5kafka_commit_topic_offset {
@@ -1330,10 +1332,11 @@ struct __pyx_opt_args_9custreamz_6_libxx_5kafka_commit_topic_offset {
   PyObject *topic;
   PyObject *partition;
   PyObject *offset;
+  PyObject *asynchronous;
 };
 
-/* "custreamz/_libxx/kafka.pyx":103
- *     kds.commit_offset(str.encode(topic), partition, offset)
+/* "custreamz/_libxx/kafka.pyx":102
+ *     return kds.commit_offset(str.encode(topic), partition, offset)
  * 
  * cpdef produce_message(topic=None, message_val=None, message_key=None):             # <<<<<<<<<<<<<<
  *     return kds.produce_message(str.encode(topic),
@@ -1346,7 +1349,7 @@ struct __pyx_opt_args_9custreamz_6_libxx_5kafka_produce_message {
   PyObject *message_key;
 };
 
-/* "custreamz/_libxx/kafka.pyx":108
+/* "custreamz/_libxx/kafka.pyx":107
  *                                str.encode(message_key))
  * 
  * cpdef flush(timeout=10000):             # <<<<<<<<<<<<<<
@@ -2158,9 +2161,6 @@ static void __Pyx_CppExn2PyErr() {
 #endif
 
 /* CIntToPy.proto */
-static CYTHON_INLINE PyObject* __Pyx_PyInt_From_int(int value);
-
-/* CIntToPy.proto */
 static CYTHON_INLINE PyObject* __Pyx_PyInt_From_int64_t(int64_t value);
 
 /* None.proto */
@@ -2206,9 +2206,6 @@ static CYTHON_INLINE int __Pyx_PyInt_As_int(PyObject *);
 /* CIntFromPy.proto */
 static CYTHON_INLINE int64_t __Pyx_PyInt_As_int64_t(PyObject *);
 
-/* CIntFromPy.proto */
-static CYTHON_INLINE int32_t __Pyx_PyInt_As_int32_t(PyObject *);
-
 /* MemviewSliceCopyTemplate.proto */
 static __Pyx_memviewslice
 __pyx_memoryview_copy_new_contig(const __Pyx_memviewslice *from_mvs,
@@ -2244,6 +2241,9 @@ static CYTHON_INLINE void __Pyx_XDEC_MEMVIEW(__Pyx_memviewslice *, int, int);
 
 /* CIntFromPy.proto */
 static CYTHON_INLINE long __Pyx_PyInt_As_long(PyObject *);
+
+/* CIntToPy.proto */
+static CYTHON_INLINE PyObject* __Pyx_PyInt_From_int(int value);
 
 /* CIntToPy.proto */
 static CYTHON_INLINE PyObject* __Pyx_PyInt_From_long(long value);
@@ -2438,7 +2438,6 @@ static CYTHON_INLINE PyObject *__pyx_convert_PyUnicode_string_to_py_std__in_stri
 static CYTHON_INLINE PyObject *__pyx_convert_PyStr_string_to_py_std__in_string(std::string const &); /*proto*/
 static CYTHON_INLINE PyObject *__pyx_convert_PyBytes_string_to_py_std__in_string(std::string const &); /*proto*/
 static CYTHON_INLINE PyObject *__pyx_convert_PyByteArray_string_to_py_std__in_string(std::string const &); /*proto*/
-static PyObject *__pyx_convert_map_to_py_int____int64_t(std::map<int,int64_t>  const &); /*proto*/
 static PyObject *__pyx_convert_map_to_py_std_3a__3a_string____int64_t(std::map<std::string,int64_t>  const &); /*proto*/
 static struct __pyx_array_obj *__pyx_array_new(PyObject *, Py_ssize_t, char *, char *, char *); /*proto*/
 static void *__pyx_align_pointer(void *, size_t); /*proto*/
@@ -2517,6 +2516,7 @@ static const char __pyx_k_range[] = "range";
 static const char __pyx_k_shape[] = "shape";
 static const char __pyx_k_start[] = "start";
 static const char __pyx_k_topic[] = "topic";
+static const char __pyx_k_cached[] = "cached";
 static const char __pyx_k_encode[] = "encode";
 static const char __pyx_k_format[] = "format";
 static const char __pyx_k_import[] = "__import__";
@@ -2555,6 +2555,7 @@ static const char __pyx_k_PickleError[] = "PickleError";
 static const char __pyx_k_compression[] = "compression";
 static const char __pyx_k_message_key[] = "message_key";
 static const char __pyx_k_message_val[] = "message_val";
+static const char __pyx_k_asynchronous[] = "asynchronous";
 static const char __pyx_k_pyx_checksum[] = "__pyx_checksum";
 static const char __pyx_k_stringsource[] = "stringsource";
 static const char __pyx_k_pyx_getbuffer[] = "__pyx_getbuffer";
@@ -2615,10 +2616,12 @@ static PyObject *__pyx_n_s_ValueError;
 static PyObject *__pyx_n_s_View_MemoryView;
 static PyObject *__pyx_kp_u__3;
 static PyObject *__pyx_n_s_allocate_buffer;
+static PyObject *__pyx_n_s_asynchronous;
 static PyObject *__pyx_n_s_base;
 static PyObject *__pyx_n_s_byte_range;
 static PyObject *__pyx_n_s_c;
 static PyObject *__pyx_n_u_c;
+static PyObject *__pyx_n_s_cached;
 static PyObject *__pyx_n_s_class;
 static PyObject *__pyx_n_s_cline_in_traceback;
 static PyObject *__pyx_n_s_compression;
@@ -2698,11 +2701,11 @@ static PyObject *__pyx_n_s_unpack;
 static PyObject *__pyx_n_s_update;
 static PyObject *__pyx_pf_9custreamz_6_libxx_5kafka_create_kafka_handle(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_kafka_conf, PyObject *__pyx_v_topics, PyObject *__pyx_v_partitions); /* proto */
 static PyObject *__pyx_pf_9custreamz_6_libxx_5kafka_2read_gdf(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_lines, PyObject *__pyx_v_dtype, PyObject *__pyx_v_compression, PyObject *__pyx_v_dayfirst, PyObject *__pyx_v_byte_range, PyObject *__pyx_v_topic, PyObject *__pyx_v_partition, PyObject *__pyx_v_start, PyObject *__pyx_v_end, PyObject *__pyx_v_timeout, PyObject *__pyx_v_delimiter); /* proto */
-static PyObject *__pyx_pf_9custreamz_6_libxx_5kafka_4get_committed_offset(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_topic, PyObject *__pyx_v_partitions); /* proto */
+static PyObject *__pyx_pf_9custreamz_6_libxx_5kafka_4get_committed_offset(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_topic, PyObject *__pyx_v_partition); /* proto */
 static PyObject *__pyx_pf_9custreamz_6_libxx_5kafka_6current_configs(CYTHON_UNUSED PyObject *__pyx_self); /* proto */
 static PyObject *__pyx_pf_9custreamz_6_libxx_5kafka_8print_consumer_metadata(CYTHON_UNUSED PyObject *__pyx_self); /* proto */
-static PyObject *__pyx_pf_9custreamz_6_libxx_5kafka_10get_watermark_offsets(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_topic, PyObject *__pyx_v_partition); /* proto */
-static PyObject *__pyx_pf_9custreamz_6_libxx_5kafka_12commit_topic_offset(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_topic, PyObject *__pyx_v_partition, PyObject *__pyx_v_offset); /* proto */
+static PyObject *__pyx_pf_9custreamz_6_libxx_5kafka_10get_watermark_offsets(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_topic, PyObject *__pyx_v_partition, PyObject *__pyx_v_timeout, PyObject *__pyx_v_cached); /* proto */
+static PyObject *__pyx_pf_9custreamz_6_libxx_5kafka_12commit_topic_offset(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_topic, PyObject *__pyx_v_partition, PyObject *__pyx_v_offset, PyObject *__pyx_v_asynchronous); /* proto */
 static PyObject *__pyx_pf_9custreamz_6_libxx_5kafka_14produce_message(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_topic, PyObject *__pyx_v_message_val, PyObject *__pyx_v_message_key); /* proto */
 static PyObject *__pyx_pf_9custreamz_6_libxx_5kafka_16flush(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_timeout); /* proto */
 static PyObject *__pyx_pf_9custreamz_6_libxx_5kafka_18unsubscribe(CYTHON_UNUSED PyObject *__pyx_self); /* proto */
@@ -2760,13 +2763,13 @@ static PyObject *__pyx_int_184977713;
 static PyObject *__pyx_int_neg_1;
 static PyObject *__pyx_k_;
 static PyObject *__pyx_k__2;
-static PyObject *__pyx_k__4;
+static PyObject *__pyx_tuple__4;
 static PyObject *__pyx_tuple__5;
 static PyObject *__pyx_tuple__6;
 static PyObject *__pyx_tuple__7;
 static PyObject *__pyx_tuple__8;
 static PyObject *__pyx_tuple__9;
-static PyObject *__pyx_slice__19;
+static PyObject *__pyx_slice__18;
 static PyObject *__pyx_tuple__10;
 static PyObject *__pyx_tuple__11;
 static PyObject *__pyx_tuple__12;
@@ -2775,7 +2778,7 @@ static PyObject *__pyx_tuple__14;
 static PyObject *__pyx_tuple__15;
 static PyObject *__pyx_tuple__16;
 static PyObject *__pyx_tuple__17;
-static PyObject *__pyx_tuple__18;
+static PyObject *__pyx_tuple__19;
 static PyObject *__pyx_tuple__20;
 static PyObject *__pyx_tuple__21;
 static PyObject *__pyx_tuple__22;
@@ -2784,8 +2787,7 @@ static PyObject *__pyx_tuple__24;
 static PyObject *__pyx_tuple__25;
 static PyObject *__pyx_tuple__26;
 static PyObject *__pyx_tuple__27;
-static PyObject *__pyx_tuple__28;
-static PyObject *__pyx_codeobj__29;
+static PyObject *__pyx_codeobj__28;
 /* Late includes */
 
 /* "custreamz/_libxx/kafka.pyx":29
@@ -3639,7 +3641,7 @@ static PyObject *__pyx_f_9custreamz_6_libxx_5kafka_read_gdf(CYTHON_UNUSED int __
  *     else:
  *         return None             # <<<<<<<<<<<<<<
  * 
- * cpdef get_committed_offset(topic=None, partitions=[]):
+ * cpdef get_committed_offset(topic=None, partition=None):
  */
   /*else*/ {
     __Pyx_XDECREF(__pyx_r);
@@ -3936,145 +3938,68 @@ static PyObject *__pyx_pf_9custreamz_6_libxx_5kafka_2read_gdf(CYTHON_UNUSED PyOb
 /* "custreamz/_libxx/kafka.pyx":81
  *         return None
  * 
- * cpdef get_committed_offset(topic=None, partitions=[]):             # <<<<<<<<<<<<<<
- *     cdef vector[int] v_partitions
- *     for part in partitions:
+ * cpdef get_committed_offset(topic=None, partition=None):             # <<<<<<<<<<<<<<
+ *     return kds.get_committed_offset(str.encode(topic), partition)
+ * 
  */
 
 static PyObject *__pyx_pw_9custreamz_6_libxx_5kafka_5get_committed_offset(PyObject *__pyx_self, PyObject *__pyx_args, PyObject *__pyx_kwds); /*proto*/
 static PyObject *__pyx_f_9custreamz_6_libxx_5kafka_get_committed_offset(CYTHON_UNUSED int __pyx_skip_dispatch, struct __pyx_opt_args_9custreamz_6_libxx_5kafka_get_committed_offset *__pyx_optional_args) {
   PyObject *__pyx_v_topic = ((PyObject *)Py_None);
-  PyObject *__pyx_v_partitions = __pyx_k__4;
-  std::vector<int>  __pyx_v_v_partitions;
-  PyObject *__pyx_v_part = NULL;
+  PyObject *__pyx_v_partition = ((PyObject *)Py_None);
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   PyObject *__pyx_t_1 = NULL;
-  Py_ssize_t __pyx_t_2;
-  PyObject *(*__pyx_t_3)(PyObject *);
-  PyObject *__pyx_t_4 = NULL;
+  PyObject *__pyx_t_2 = NULL;
+  PyObject *__pyx_t_3 = NULL;
+  std::string __pyx_t_4;
   int __pyx_t_5;
-  PyObject *__pyx_t_6 = NULL;
-  std::string __pyx_t_7;
-  std::map<int,int64_t>  __pyx_t_8;
+  int64_t __pyx_t_6;
   __Pyx_RefNannySetupContext("get_committed_offset", 0);
   if (__pyx_optional_args) {
     if (__pyx_optional_args->__pyx_n > 0) {
       __pyx_v_topic = __pyx_optional_args->topic;
       if (__pyx_optional_args->__pyx_n > 1) {
-        __pyx_v_partitions = __pyx_optional_args->partitions;
+        __pyx_v_partition = __pyx_optional_args->partition;
       }
     }
   }
 
-  /* "custreamz/_libxx/kafka.pyx":83
- * cpdef get_committed_offset(topic=None, partitions=[]):
- *     cdef vector[int] v_partitions
- *     for part in partitions:             # <<<<<<<<<<<<<<
- *         v_partitions.push_back(part)
- *     return kds.get_committed_offset(str.encode(topic), v_partitions)
- */
-  if (likely(PyList_CheckExact(__pyx_v_partitions)) || PyTuple_CheckExact(__pyx_v_partitions)) {
-    __pyx_t_1 = __pyx_v_partitions; __Pyx_INCREF(__pyx_t_1); __pyx_t_2 = 0;
-    __pyx_t_3 = NULL;
-  } else {
-    __pyx_t_2 = -1; __pyx_t_1 = PyObject_GetIter(__pyx_v_partitions); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 83, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_1);
-    __pyx_t_3 = Py_TYPE(__pyx_t_1)->tp_iternext; if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 83, __pyx_L1_error)
-  }
-  for (;;) {
-    if (likely(!__pyx_t_3)) {
-      if (likely(PyList_CheckExact(__pyx_t_1))) {
-        if (__pyx_t_2 >= PyList_GET_SIZE(__pyx_t_1)) break;
-        #if CYTHON_ASSUME_SAFE_MACROS && !CYTHON_AVOID_BORROWED_REFS
-        __pyx_t_4 = PyList_GET_ITEM(__pyx_t_1, __pyx_t_2); __Pyx_INCREF(__pyx_t_4); __pyx_t_2++; if (unlikely(0 < 0)) __PYX_ERR(0, 83, __pyx_L1_error)
-        #else
-        __pyx_t_4 = PySequence_ITEM(__pyx_t_1, __pyx_t_2); __pyx_t_2++; if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 83, __pyx_L1_error)
-        __Pyx_GOTREF(__pyx_t_4);
-        #endif
-      } else {
-        if (__pyx_t_2 >= PyTuple_GET_SIZE(__pyx_t_1)) break;
-        #if CYTHON_ASSUME_SAFE_MACROS && !CYTHON_AVOID_BORROWED_REFS
-        __pyx_t_4 = PyTuple_GET_ITEM(__pyx_t_1, __pyx_t_2); __Pyx_INCREF(__pyx_t_4); __pyx_t_2++; if (unlikely(0 < 0)) __PYX_ERR(0, 83, __pyx_L1_error)
-        #else
-        __pyx_t_4 = PySequence_ITEM(__pyx_t_1, __pyx_t_2); __pyx_t_2++; if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 83, __pyx_L1_error)
-        __Pyx_GOTREF(__pyx_t_4);
-        #endif
-      }
-    } else {
-      __pyx_t_4 = __pyx_t_3(__pyx_t_1);
-      if (unlikely(!__pyx_t_4)) {
-        PyObject* exc_type = PyErr_Occurred();
-        if (exc_type) {
-          if (likely(__Pyx_PyErr_GivenExceptionMatches(exc_type, PyExc_StopIteration))) PyErr_Clear();
-          else __PYX_ERR(0, 83, __pyx_L1_error)
-        }
-        break;
-      }
-      __Pyx_GOTREF(__pyx_t_4);
-    }
-    __Pyx_XDECREF_SET(__pyx_v_part, __pyx_t_4);
-    __pyx_t_4 = 0;
-
-    /* "custreamz/_libxx/kafka.pyx":84
- *     cdef vector[int] v_partitions
- *     for part in partitions:
- *         v_partitions.push_back(part)             # <<<<<<<<<<<<<<
- *     return kds.get_committed_offset(str.encode(topic), v_partitions)
+  /* "custreamz/_libxx/kafka.pyx":82
  * 
- */
-    __pyx_t_5 = __Pyx_PyInt_As_int(__pyx_v_part); if (unlikely((__pyx_t_5 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 84, __pyx_L1_error)
-    try {
-      __pyx_v_v_partitions.push_back(__pyx_t_5);
-    } catch(...) {
-      __Pyx_CppExn2PyErr();
-      __PYX_ERR(0, 84, __pyx_L1_error)
-    }
-
-    /* "custreamz/_libxx/kafka.pyx":83
- * cpdef get_committed_offset(topic=None, partitions=[]):
- *     cdef vector[int] v_partitions
- *     for part in partitions:             # <<<<<<<<<<<<<<
- *         v_partitions.push_back(part)
- *     return kds.get_committed_offset(str.encode(topic), v_partitions)
- */
-  }
-  __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
-
-  /* "custreamz/_libxx/kafka.pyx":85
- *     for part in partitions:
- *         v_partitions.push_back(part)
- *     return kds.get_committed_offset(str.encode(topic), v_partitions)             # <<<<<<<<<<<<<<
+ * cpdef get_committed_offset(topic=None, partition=None):
+ *     return kds.get_committed_offset(str.encode(topic), partition)             # <<<<<<<<<<<<<<
  * 
  * cpdef current_configs():
  */
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_4 = __Pyx_PyObject_GetAttrStr(((PyObject *)(&PyUnicode_Type)), __pyx_n_s_encode); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 85, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_4);
-  __pyx_t_6 = NULL;
-  if (CYTHON_UNPACK_METHODS && likely(PyMethod_Check(__pyx_t_4))) {
-    __pyx_t_6 = PyMethod_GET_SELF(__pyx_t_4);
-    if (likely(__pyx_t_6)) {
-      PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_4);
-      __Pyx_INCREF(__pyx_t_6);
+  __pyx_t_2 = __Pyx_PyObject_GetAttrStr(((PyObject *)(&PyUnicode_Type)), __pyx_n_s_encode); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 82, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_2);
+  __pyx_t_3 = NULL;
+  if (CYTHON_UNPACK_METHODS && likely(PyMethod_Check(__pyx_t_2))) {
+    __pyx_t_3 = PyMethod_GET_SELF(__pyx_t_2);
+    if (likely(__pyx_t_3)) {
+      PyObject* function = PyMethod_GET_FUNCTION(__pyx_t_2);
+      __Pyx_INCREF(__pyx_t_3);
       __Pyx_INCREF(function);
-      __Pyx_DECREF_SET(__pyx_t_4, function);
+      __Pyx_DECREF_SET(__pyx_t_2, function);
     }
   }
-  __pyx_t_1 = (__pyx_t_6) ? __Pyx_PyObject_Call2Args(__pyx_t_4, __pyx_t_6, __pyx_v_topic) : __Pyx_PyObject_CallOneArg(__pyx_t_4, __pyx_v_topic);
-  __Pyx_XDECREF(__pyx_t_6); __pyx_t_6 = 0;
-  if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 85, __pyx_L1_error)
+  __pyx_t_1 = (__pyx_t_3) ? __Pyx_PyObject_Call2Args(__pyx_t_2, __pyx_t_3, __pyx_v_topic) : __Pyx_PyObject_CallOneArg(__pyx_t_2, __pyx_v_topic);
+  __Pyx_XDECREF(__pyx_t_3); __pyx_t_3 = 0;
+  if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 82, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
-  __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-  __pyx_t_7 = __pyx_convert_string_from_py_std__in_string(__pyx_t_1); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 85, __pyx_L1_error)
+  __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
+  __pyx_t_4 = __pyx_convert_string_from_py_std__in_string(__pyx_t_1); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 82, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
+  __pyx_t_5 = __Pyx_PyInt_As_int(__pyx_v_partition); if (unlikely((__pyx_t_5 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 82, __pyx_L1_error)
   try {
-    __pyx_t_8 = __pyx_v_9custreamz_6_libxx_5kafka_kds->get_committed_offset(__pyx_t_7, __pyx_v_v_partitions);
+    __pyx_t_6 = __pyx_v_9custreamz_6_libxx_5kafka_kds->get_committed_offset(__pyx_t_4, __pyx_t_5);
   } catch(...) {
     __Pyx_CppExn2PyErr();
-    __PYX_ERR(0, 85, __pyx_L1_error)
+    __PYX_ERR(0, 82, __pyx_L1_error)
   }
-  __pyx_t_1 = __pyx_convert_map_to_py_int____int64_t(__pyx_t_8); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 85, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyInt_From_int64_t(__pyx_t_6); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 82, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_r = __pyx_t_1;
   __pyx_t_1 = 0;
@@ -4083,20 +4008,19 @@ static PyObject *__pyx_f_9custreamz_6_libxx_5kafka_get_committed_offset(CYTHON_U
   /* "custreamz/_libxx/kafka.pyx":81
  *         return None
  * 
- * cpdef get_committed_offset(topic=None, partitions=[]):             # <<<<<<<<<<<<<<
- *     cdef vector[int] v_partitions
- *     for part in partitions:
+ * cpdef get_committed_offset(topic=None, partition=None):             # <<<<<<<<<<<<<<
+ *     return kds.get_committed_offset(str.encode(topic), partition)
+ * 
  */
 
   /* function exit code */
   __pyx_L1_error:;
   __Pyx_XDECREF(__pyx_t_1);
-  __Pyx_XDECREF(__pyx_t_4);
-  __Pyx_XDECREF(__pyx_t_6);
+  __Pyx_XDECREF(__pyx_t_2);
+  __Pyx_XDECREF(__pyx_t_3);
   __Pyx_AddTraceback("custreamz._libxx.kafka.get_committed_offset", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __pyx_r = 0;
   __pyx_L0:;
-  __Pyx_XDECREF(__pyx_v_part);
   __Pyx_XGIVEREF(__pyx_r);
   __Pyx_RefNannyFinishContext();
   return __pyx_r;
@@ -4104,18 +4028,18 @@ static PyObject *__pyx_f_9custreamz_6_libxx_5kafka_get_committed_offset(CYTHON_U
 
 /* Python wrapper */
 static PyObject *__pyx_pw_9custreamz_6_libxx_5kafka_5get_committed_offset(PyObject *__pyx_self, PyObject *__pyx_args, PyObject *__pyx_kwds); /*proto*/
-static char __pyx_doc_9custreamz_6_libxx_5kafka_4get_committed_offset[] = "get_committed_offset(topic=None, partitions=[])";
+static char __pyx_doc_9custreamz_6_libxx_5kafka_4get_committed_offset[] = "get_committed_offset(topic=None, partition=None)";
 static PyObject *__pyx_pw_9custreamz_6_libxx_5kafka_5get_committed_offset(PyObject *__pyx_self, PyObject *__pyx_args, PyObject *__pyx_kwds) {
   PyObject *__pyx_v_topic = 0;
-  PyObject *__pyx_v_partitions = 0;
+  PyObject *__pyx_v_partition = 0;
   PyObject *__pyx_r = 0;
   __Pyx_RefNannyDeclarations
   __Pyx_RefNannySetupContext("get_committed_offset (wrapper)", 0);
   {
-    static PyObject **__pyx_pyargnames[] = {&__pyx_n_s_topic,&__pyx_n_s_partitions,0};
+    static PyObject **__pyx_pyargnames[] = {&__pyx_n_s_topic,&__pyx_n_s_partition,0};
     PyObject* values[2] = {0,0};
     values[0] = ((PyObject *)Py_None);
-    values[1] = __pyx_k__4;
+    values[1] = ((PyObject *)Py_None);
     if (unlikely(__pyx_kwds)) {
       Py_ssize_t kw_args;
       const Py_ssize_t pos_args = PyTuple_GET_SIZE(__pyx_args);
@@ -4137,7 +4061,7 @@ static PyObject *__pyx_pw_9custreamz_6_libxx_5kafka_5get_committed_offset(PyObje
         CYTHON_FALLTHROUGH;
         case  1:
         if (kw_args > 0) {
-          PyObject* value = __Pyx_PyDict_GetItemStr(__pyx_kwds, __pyx_n_s_partitions);
+          PyObject* value = __Pyx_PyDict_GetItemStr(__pyx_kwds, __pyx_n_s_partition);
           if (value) { values[1] = value; kw_args--; }
         }
       }
@@ -4155,7 +4079,7 @@ static PyObject *__pyx_pw_9custreamz_6_libxx_5kafka_5get_committed_offset(PyObje
       }
     }
     __pyx_v_topic = values[0];
-    __pyx_v_partitions = values[1];
+    __pyx_v_partition = values[1];
   }
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L5_argtuple_error:;
@@ -4165,14 +4089,14 @@ static PyObject *__pyx_pw_9custreamz_6_libxx_5kafka_5get_committed_offset(PyObje
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  __pyx_r = __pyx_pf_9custreamz_6_libxx_5kafka_4get_committed_offset(__pyx_self, __pyx_v_topic, __pyx_v_partitions);
+  __pyx_r = __pyx_pf_9custreamz_6_libxx_5kafka_4get_committed_offset(__pyx_self, __pyx_v_topic, __pyx_v_partition);
 
   /* function exit code */
   __Pyx_RefNannyFinishContext();
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_9custreamz_6_libxx_5kafka_4get_committed_offset(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_topic, PyObject *__pyx_v_partitions) {
+static PyObject *__pyx_pf_9custreamz_6_libxx_5kafka_4get_committed_offset(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_topic, PyObject *__pyx_v_partition) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   PyObject *__pyx_t_1 = NULL;
@@ -4181,7 +4105,7 @@ static PyObject *__pyx_pf_9custreamz_6_libxx_5kafka_4get_committed_offset(CYTHON
   __Pyx_XDECREF(__pyx_r);
   __pyx_t_2.__pyx_n = 2;
   __pyx_t_2.topic = __pyx_v_topic;
-  __pyx_t_2.partitions = __pyx_v_partitions;
+  __pyx_t_2.partition = __pyx_v_partition;
   __pyx_t_1 = __pyx_f_9custreamz_6_libxx_5kafka_get_committed_offset(0, &__pyx_t_2); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 81, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_r = __pyx_t_1;
@@ -4199,8 +4123,8 @@ static PyObject *__pyx_pf_9custreamz_6_libxx_5kafka_4get_committed_offset(CYTHON
   return __pyx_r;
 }
 
-/* "custreamz/_libxx/kafka.pyx":87
- *     return kds.get_committed_offset(str.encode(topic), v_partitions)
+/* "custreamz/_libxx/kafka.pyx":84
+ *     return kds.get_committed_offset(str.encode(topic), partition)
  * 
  * cpdef current_configs():             # <<<<<<<<<<<<<<
  *     kds.current_configs()
@@ -4213,7 +4137,7 @@ static PyObject *__pyx_f_9custreamz_6_libxx_5kafka_current_configs(CYTHON_UNUSED
   __Pyx_RefNannyDeclarations
   __Pyx_RefNannySetupContext("current_configs", 0);
 
-  /* "custreamz/_libxx/kafka.pyx":88
+  /* "custreamz/_libxx/kafka.pyx":85
  * 
  * cpdef current_configs():
  *     kds.current_configs()             # <<<<<<<<<<<<<<
@@ -4224,11 +4148,11 @@ static PyObject *__pyx_f_9custreamz_6_libxx_5kafka_current_configs(CYTHON_UNUSED
     __pyx_v_9custreamz_6_libxx_5kafka_kds->current_configs();
   } catch(...) {
     __Pyx_CppExn2PyErr();
-    __PYX_ERR(0, 88, __pyx_L1_error)
+    __PYX_ERR(0, 85, __pyx_L1_error)
   }
 
-  /* "custreamz/_libxx/kafka.pyx":87
- *     return kds.get_committed_offset(str.encode(topic), v_partitions)
+  /* "custreamz/_libxx/kafka.pyx":84
+ *     return kds.get_committed_offset(str.encode(topic), partition)
  * 
  * cpdef current_configs():             # <<<<<<<<<<<<<<
  *     kds.current_configs()
@@ -4267,7 +4191,7 @@ static PyObject *__pyx_pf_9custreamz_6_libxx_5kafka_6current_configs(CYTHON_UNUS
   PyObject *__pyx_t_1 = NULL;
   __Pyx_RefNannySetupContext("current_configs", 0);
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_1 = __pyx_f_9custreamz_6_libxx_5kafka_current_configs(0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 87, __pyx_L1_error)
+  __pyx_t_1 = __pyx_f_9custreamz_6_libxx_5kafka_current_configs(0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 84, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_r = __pyx_t_1;
   __pyx_t_1 = 0;
@@ -4284,7 +4208,7 @@ static PyObject *__pyx_pf_9custreamz_6_libxx_5kafka_6current_configs(CYTHON_UNUS
   return __pyx_r;
 }
 
-/* "custreamz/_libxx/kafka.pyx":90
+/* "custreamz/_libxx/kafka.pyx":87
  *     kds.current_configs()
  * 
  * cpdef print_consumer_metadata():             # <<<<<<<<<<<<<<
@@ -4298,7 +4222,7 @@ static PyObject *__pyx_f_9custreamz_6_libxx_5kafka_print_consumer_metadata(CYTHO
   __Pyx_RefNannyDeclarations
   __Pyx_RefNannySetupContext("print_consumer_metadata", 0);
 
-  /* "custreamz/_libxx/kafka.pyx":91
+  /* "custreamz/_libxx/kafka.pyx":88
  * 
  * cpdef print_consumer_metadata():
  *     kds.print_consumer_metadata()             # <<<<<<<<<<<<<<
@@ -4309,10 +4233,10 @@ static PyObject *__pyx_f_9custreamz_6_libxx_5kafka_print_consumer_metadata(CYTHO
     __pyx_v_9custreamz_6_libxx_5kafka_kds->print_consumer_metadata();
   } catch(...) {
     __Pyx_CppExn2PyErr();
-    __PYX_ERR(0, 91, __pyx_L1_error)
+    __PYX_ERR(0, 88, __pyx_L1_error)
   }
 
-  /* "custreamz/_libxx/kafka.pyx":90
+  /* "custreamz/_libxx/kafka.pyx":87
  *     kds.current_configs()
  * 
  * cpdef print_consumer_metadata():             # <<<<<<<<<<<<<<
@@ -4352,7 +4276,7 @@ static PyObject *__pyx_pf_9custreamz_6_libxx_5kafka_8print_consumer_metadata(CYT
   PyObject *__pyx_t_1 = NULL;
   __Pyx_RefNannySetupContext("print_consumer_metadata", 0);
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_1 = __pyx_f_9custreamz_6_libxx_5kafka_print_consumer_metadata(0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 90, __pyx_L1_error)
+  __pyx_t_1 = __pyx_f_9custreamz_6_libxx_5kafka_print_consumer_metadata(0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 87, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_r = __pyx_t_1;
   __pyx_t_1 = 0;
@@ -4369,18 +4293,28 @@ static PyObject *__pyx_pf_9custreamz_6_libxx_5kafka_8print_consumer_metadata(CYT
   return __pyx_r;
 }
 
-/* "custreamz/_libxx/kafka.pyx":93
+/* "custreamz/_libxx/kafka.pyx":90
  *     kds.print_consumer_metadata()
  * 
  * cpdef get_watermark_offsets(topic=None,             # <<<<<<<<<<<<<<
- *                             partition=0):
- * 
+ *                             partition=0,
+ *                             timeout=10000,
  */
 
 static PyObject *__pyx_pw_9custreamz_6_libxx_5kafka_11get_watermark_offsets(PyObject *__pyx_self, PyObject *__pyx_args, PyObject *__pyx_kwds); /*proto*/
 static PyObject *__pyx_f_9custreamz_6_libxx_5kafka_get_watermark_offsets(CYTHON_UNUSED int __pyx_skip_dispatch, struct __pyx_opt_args_9custreamz_6_libxx_5kafka_get_watermark_offsets *__pyx_optional_args) {
   PyObject *__pyx_v_topic = ((PyObject *)Py_None);
   PyObject *__pyx_v_partition = ((PyObject *)__pyx_int_0);
+  PyObject *__pyx_v_timeout = ((PyObject *)__pyx_int_10000);
+
+  /* "custreamz/_libxx/kafka.pyx":93
+ *                             partition=0,
+ *                             timeout=10000,
+ *                             cached=False):             # <<<<<<<<<<<<<<
+ * 
+ *     cdef map[string, int64_t] offsets = \
+ */
+  PyObject *__pyx_v_cached = ((PyObject *)Py_False);
   std::map<std::string,int64_t>  __pyx_v_offsets;
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
@@ -4388,26 +4322,34 @@ static PyObject *__pyx_f_9custreamz_6_libxx_5kafka_get_watermark_offsets(CYTHON_
   PyObject *__pyx_t_2 = NULL;
   PyObject *__pyx_t_3 = NULL;
   std::string __pyx_t_4;
-  int32_t __pyx_t_5;
-  std::map<std::string,int64_t>  __pyx_t_6;
+  int __pyx_t_5;
+  int __pyx_t_6;
+  bool __pyx_t_7;
+  std::map<std::string,int64_t>  __pyx_t_8;
   __Pyx_RefNannySetupContext("get_watermark_offsets", 0);
   if (__pyx_optional_args) {
     if (__pyx_optional_args->__pyx_n > 0) {
       __pyx_v_topic = __pyx_optional_args->topic;
       if (__pyx_optional_args->__pyx_n > 1) {
         __pyx_v_partition = __pyx_optional_args->partition;
+        if (__pyx_optional_args->__pyx_n > 2) {
+          __pyx_v_timeout = __pyx_optional_args->timeout;
+          if (__pyx_optional_args->__pyx_n > 3) {
+            __pyx_v_cached = __pyx_optional_args->cached;
+          }
+        }
       }
     }
   }
 
-  /* "custreamz/_libxx/kafka.pyx":97
+  /* "custreamz/_libxx/kafka.pyx":96
  * 
  *     cdef map[string, int64_t] offsets = \
- *         kds.get_watermark_offset(str.encode(topic), partition)             # <<<<<<<<<<<<<<
+ *         kds.get_watermark_offset(str.encode(topic), partition, timeout, cached)             # <<<<<<<<<<<<<<
  *     return offsets
  * 
  */
-  __pyx_t_2 = __Pyx_PyObject_GetAttrStr(((PyObject *)(&PyUnicode_Type)), __pyx_n_s_encode); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 97, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_PyObject_GetAttrStr(((PyObject *)(&PyUnicode_Type)), __pyx_n_s_encode); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 96, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   __pyx_t_3 = NULL;
   if (CYTHON_UNPACK_METHODS && likely(PyMethod_Check(__pyx_t_2))) {
@@ -4421,40 +4363,42 @@ static PyObject *__pyx_f_9custreamz_6_libxx_5kafka_get_watermark_offsets(CYTHON_
   }
   __pyx_t_1 = (__pyx_t_3) ? __Pyx_PyObject_Call2Args(__pyx_t_2, __pyx_t_3, __pyx_v_topic) : __Pyx_PyObject_CallOneArg(__pyx_t_2, __pyx_v_topic);
   __Pyx_XDECREF(__pyx_t_3); __pyx_t_3 = 0;
-  if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 97, __pyx_L1_error)
+  if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 96, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-  __pyx_t_4 = __pyx_convert_string_from_py_std__in_string(__pyx_t_1); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 97, __pyx_L1_error)
+  __pyx_t_4 = __pyx_convert_string_from_py_std__in_string(__pyx_t_1); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 96, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
-  __pyx_t_5 = __Pyx_PyInt_As_int32_t(__pyx_v_partition); if (unlikely((__pyx_t_5 == ((int32_t)-1)) && PyErr_Occurred())) __PYX_ERR(0, 97, __pyx_L1_error)
+  __pyx_t_5 = __Pyx_PyInt_As_int(__pyx_v_partition); if (unlikely((__pyx_t_5 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 96, __pyx_L1_error)
+  __pyx_t_6 = __Pyx_PyInt_As_int(__pyx_v_timeout); if (unlikely((__pyx_t_6 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 96, __pyx_L1_error)
+  __pyx_t_7 = __Pyx_PyObject_IsTrue(__pyx_v_cached); if (unlikely((__pyx_t_7 == ((bool)-1)) && PyErr_Occurred())) __PYX_ERR(0, 96, __pyx_L1_error)
   try {
-    __pyx_t_6 = __pyx_v_9custreamz_6_libxx_5kafka_kds->get_watermark_offset(__pyx_t_4, __pyx_t_5);
+    __pyx_t_8 = __pyx_v_9custreamz_6_libxx_5kafka_kds->get_watermark_offset(__pyx_t_4, __pyx_t_5, __pyx_t_6, __pyx_t_7);
   } catch(...) {
     __Pyx_CppExn2PyErr();
-    __PYX_ERR(0, 97, __pyx_L1_error)
+    __PYX_ERR(0, 96, __pyx_L1_error)
   }
-  __pyx_v_offsets = __pyx_t_6;
+  __pyx_v_offsets = __pyx_t_8;
 
-  /* "custreamz/_libxx/kafka.pyx":98
+  /* "custreamz/_libxx/kafka.pyx":97
  *     cdef map[string, int64_t] offsets = \
- *         kds.get_watermark_offset(str.encode(topic), partition)
+ *         kds.get_watermark_offset(str.encode(topic), partition, timeout, cached)
  *     return offsets             # <<<<<<<<<<<<<<
  * 
- * cpdef commit_topic_offset(topic=None, partition=0, offset=0):
+ * cpdef commit_topic_offset(topic=None, partition=0, offset=0, asynchronous=True):
  */
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_1 = __pyx_convert_map_to_py_std_3a__3a_string____int64_t(__pyx_v_offsets); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 98, __pyx_L1_error)
+  __pyx_t_1 = __pyx_convert_map_to_py_std_3a__3a_string____int64_t(__pyx_v_offsets); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 97, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_r = __pyx_t_1;
   __pyx_t_1 = 0;
   goto __pyx_L0;
 
-  /* "custreamz/_libxx/kafka.pyx":93
+  /* "custreamz/_libxx/kafka.pyx":90
  *     kds.print_consumer_metadata()
  * 
  * cpdef get_watermark_offsets(topic=None,             # <<<<<<<<<<<<<<
- *                             partition=0):
- * 
+ *                             partition=0,
+ *                             timeout=10000,
  */
 
   /* function exit code */
@@ -4472,22 +4416,38 @@ static PyObject *__pyx_f_9custreamz_6_libxx_5kafka_get_watermark_offsets(CYTHON_
 
 /* Python wrapper */
 static PyObject *__pyx_pw_9custreamz_6_libxx_5kafka_11get_watermark_offsets(PyObject *__pyx_self, PyObject *__pyx_args, PyObject *__pyx_kwds); /*proto*/
-static char __pyx_doc_9custreamz_6_libxx_5kafka_10get_watermark_offsets[] = "get_watermark_offsets(topic=None, partition=0)";
+static char __pyx_doc_9custreamz_6_libxx_5kafka_10get_watermark_offsets[] = "get_watermark_offsets(topic=None, partition=0, timeout=10000, cached=False)";
 static PyObject *__pyx_pw_9custreamz_6_libxx_5kafka_11get_watermark_offsets(PyObject *__pyx_self, PyObject *__pyx_args, PyObject *__pyx_kwds) {
   PyObject *__pyx_v_topic = 0;
   PyObject *__pyx_v_partition = 0;
+  PyObject *__pyx_v_timeout = 0;
+  PyObject *__pyx_v_cached = 0;
   PyObject *__pyx_r = 0;
   __Pyx_RefNannyDeclarations
   __Pyx_RefNannySetupContext("get_watermark_offsets (wrapper)", 0);
   {
-    static PyObject **__pyx_pyargnames[] = {&__pyx_n_s_topic,&__pyx_n_s_partition,0};
-    PyObject* values[2] = {0,0};
+    static PyObject **__pyx_pyargnames[] = {&__pyx_n_s_topic,&__pyx_n_s_partition,&__pyx_n_s_timeout,&__pyx_n_s_cached,0};
+    PyObject* values[4] = {0,0,0,0};
     values[0] = ((PyObject *)Py_None);
     values[1] = ((PyObject *)__pyx_int_0);
+    values[2] = ((PyObject *)__pyx_int_10000);
+
+    /* "custreamz/_libxx/kafka.pyx":93
+ *                             partition=0,
+ *                             timeout=10000,
+ *                             cached=False):             # <<<<<<<<<<<<<<
+ * 
+ *     cdef map[string, int64_t] offsets = \
+ */
+    values[3] = ((PyObject *)Py_False);
     if (unlikely(__pyx_kwds)) {
       Py_ssize_t kw_args;
       const Py_ssize_t pos_args = PyTuple_GET_SIZE(__pyx_args);
       switch (pos_args) {
+        case  4: values[3] = PyTuple_GET_ITEM(__pyx_args, 3);
+        CYTHON_FALLTHROUGH;
+        case  3: values[2] = PyTuple_GET_ITEM(__pyx_args, 2);
+        CYTHON_FALLTHROUGH;
         case  2: values[1] = PyTuple_GET_ITEM(__pyx_args, 1);
         CYTHON_FALLTHROUGH;
         case  1: values[0] = PyTuple_GET_ITEM(__pyx_args, 0);
@@ -4508,12 +4468,28 @@ static PyObject *__pyx_pw_9custreamz_6_libxx_5kafka_11get_watermark_offsets(PyOb
           PyObject* value = __Pyx_PyDict_GetItemStr(__pyx_kwds, __pyx_n_s_partition);
           if (value) { values[1] = value; kw_args--; }
         }
+        CYTHON_FALLTHROUGH;
+        case  2:
+        if (kw_args > 0) {
+          PyObject* value = __Pyx_PyDict_GetItemStr(__pyx_kwds, __pyx_n_s_timeout);
+          if (value) { values[2] = value; kw_args--; }
+        }
+        CYTHON_FALLTHROUGH;
+        case  3:
+        if (kw_args > 0) {
+          PyObject* value = __Pyx_PyDict_GetItemStr(__pyx_kwds, __pyx_n_s_cached);
+          if (value) { values[3] = value; kw_args--; }
+        }
       }
       if (unlikely(kw_args > 0)) {
-        if (unlikely(__Pyx_ParseOptionalKeywords(__pyx_kwds, __pyx_pyargnames, 0, values, pos_args, "get_watermark_offsets") < 0)) __PYX_ERR(0, 93, __pyx_L3_error)
+        if (unlikely(__Pyx_ParseOptionalKeywords(__pyx_kwds, __pyx_pyargnames, 0, values, pos_args, "get_watermark_offsets") < 0)) __PYX_ERR(0, 90, __pyx_L3_error)
       }
     } else {
       switch (PyTuple_GET_SIZE(__pyx_args)) {
+        case  4: values[3] = PyTuple_GET_ITEM(__pyx_args, 3);
+        CYTHON_FALLTHROUGH;
+        case  3: values[2] = PyTuple_GET_ITEM(__pyx_args, 2);
+        CYTHON_FALLTHROUGH;
         case  2: values[1] = PyTuple_GET_ITEM(__pyx_args, 1);
         CYTHON_FALLTHROUGH;
         case  1: values[0] = PyTuple_GET_ITEM(__pyx_args, 0);
@@ -4524,33 +4500,45 @@ static PyObject *__pyx_pw_9custreamz_6_libxx_5kafka_11get_watermark_offsets(PyOb
     }
     __pyx_v_topic = values[0];
     __pyx_v_partition = values[1];
+    __pyx_v_timeout = values[2];
+    __pyx_v_cached = values[3];
   }
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("get_watermark_offsets", 0, 0, 2, PyTuple_GET_SIZE(__pyx_args)); __PYX_ERR(0, 93, __pyx_L3_error)
+  __Pyx_RaiseArgtupleInvalid("get_watermark_offsets", 0, 0, 4, PyTuple_GET_SIZE(__pyx_args)); __PYX_ERR(0, 90, __pyx_L3_error)
   __pyx_L3_error:;
   __Pyx_AddTraceback("custreamz._libxx.kafka.get_watermark_offsets", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  __pyx_r = __pyx_pf_9custreamz_6_libxx_5kafka_10get_watermark_offsets(__pyx_self, __pyx_v_topic, __pyx_v_partition);
+  __pyx_r = __pyx_pf_9custreamz_6_libxx_5kafka_10get_watermark_offsets(__pyx_self, __pyx_v_topic, __pyx_v_partition, __pyx_v_timeout, __pyx_v_cached);
+
+  /* "custreamz/_libxx/kafka.pyx":90
+ *     kds.print_consumer_metadata()
+ * 
+ * cpdef get_watermark_offsets(topic=None,             # <<<<<<<<<<<<<<
+ *                             partition=0,
+ *                             timeout=10000,
+ */
 
   /* function exit code */
   __Pyx_RefNannyFinishContext();
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_9custreamz_6_libxx_5kafka_10get_watermark_offsets(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_topic, PyObject *__pyx_v_partition) {
+static PyObject *__pyx_pf_9custreamz_6_libxx_5kafka_10get_watermark_offsets(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_topic, PyObject *__pyx_v_partition, PyObject *__pyx_v_timeout, PyObject *__pyx_v_cached) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   PyObject *__pyx_t_1 = NULL;
   struct __pyx_opt_args_9custreamz_6_libxx_5kafka_get_watermark_offsets __pyx_t_2;
   __Pyx_RefNannySetupContext("get_watermark_offsets", 0);
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_2.__pyx_n = 2;
+  __pyx_t_2.__pyx_n = 4;
   __pyx_t_2.topic = __pyx_v_topic;
   __pyx_t_2.partition = __pyx_v_partition;
-  __pyx_t_1 = __pyx_f_9custreamz_6_libxx_5kafka_get_watermark_offsets(0, &__pyx_t_2); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 93, __pyx_L1_error)
+  __pyx_t_2.timeout = __pyx_v_timeout;
+  __pyx_t_2.cached = __pyx_v_cached;
+  __pyx_t_1 = __pyx_f_9custreamz_6_libxx_5kafka_get_watermark_offsets(0, &__pyx_t_2); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 90, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_r = __pyx_t_1;
   __pyx_t_1 = 0;
@@ -4567,11 +4555,11 @@ static PyObject *__pyx_pf_9custreamz_6_libxx_5kafka_10get_watermark_offsets(CYTH
   return __pyx_r;
 }
 
-/* "custreamz/_libxx/kafka.pyx":100
+/* "custreamz/_libxx/kafka.pyx":99
  *     return offsets
  * 
- * cpdef commit_topic_offset(topic=None, partition=0, offset=0):             # <<<<<<<<<<<<<<
- *     kds.commit_offset(str.encode(topic), partition, offset)
+ * cpdef commit_topic_offset(topic=None, partition=0, offset=0, asynchronous=True):             # <<<<<<<<<<<<<<
+ *     return kds.commit_offset(str.encode(topic), partition, offset)
  * 
  */
 
@@ -4588,6 +4576,7 @@ static PyObject *__pyx_f_9custreamz_6_libxx_5kafka_commit_topic_offset(CYTHON_UN
   std::string __pyx_t_4;
   int __pyx_t_5;
   int __pyx_t_6;
+  bool __pyx_t_7;
   __Pyx_RefNannySetupContext("commit_topic_offset", 0);
   if (__pyx_optional_args) {
     if (__pyx_optional_args->__pyx_n > 0) {
@@ -4601,14 +4590,15 @@ static PyObject *__pyx_f_9custreamz_6_libxx_5kafka_commit_topic_offset(CYTHON_UN
     }
   }
 
-  /* "custreamz/_libxx/kafka.pyx":101
+  /* "custreamz/_libxx/kafka.pyx":100
  * 
- * cpdef commit_topic_offset(topic=None, partition=0, offset=0):
- *     kds.commit_offset(str.encode(topic), partition, offset)             # <<<<<<<<<<<<<<
+ * cpdef commit_topic_offset(topic=None, partition=0, offset=0, asynchronous=True):
+ *     return kds.commit_offset(str.encode(topic), partition, offset)             # <<<<<<<<<<<<<<
  * 
  * cpdef produce_message(topic=None, message_val=None, message_key=None):
  */
-  __pyx_t_2 = __Pyx_PyObject_GetAttrStr(((PyObject *)(&PyUnicode_Type)), __pyx_n_s_encode); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 101, __pyx_L1_error)
+  __Pyx_XDECREF(__pyx_r);
+  __pyx_t_2 = __Pyx_PyObject_GetAttrStr(((PyObject *)(&PyUnicode_Type)), __pyx_n_s_encode); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 100, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   __pyx_t_3 = NULL;
   if (CYTHON_UNPACK_METHODS && likely(PyMethod_Check(__pyx_t_2))) {
@@ -4622,31 +4612,34 @@ static PyObject *__pyx_f_9custreamz_6_libxx_5kafka_commit_topic_offset(CYTHON_UN
   }
   __pyx_t_1 = (__pyx_t_3) ? __Pyx_PyObject_Call2Args(__pyx_t_2, __pyx_t_3, __pyx_v_topic) : __Pyx_PyObject_CallOneArg(__pyx_t_2, __pyx_v_topic);
   __Pyx_XDECREF(__pyx_t_3); __pyx_t_3 = 0;
-  if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 101, __pyx_L1_error)
+  if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 100, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-  __pyx_t_4 = __pyx_convert_string_from_py_std__in_string(__pyx_t_1); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 101, __pyx_L1_error)
+  __pyx_t_4 = __pyx_convert_string_from_py_std__in_string(__pyx_t_1); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 100, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
-  __pyx_t_5 = __Pyx_PyInt_As_int(__pyx_v_partition); if (unlikely((__pyx_t_5 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 101, __pyx_L1_error)
-  __pyx_t_6 = __Pyx_PyInt_As_int(__pyx_v_offset); if (unlikely((__pyx_t_6 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 101, __pyx_L1_error)
+  __pyx_t_5 = __Pyx_PyInt_As_int(__pyx_v_partition); if (unlikely((__pyx_t_5 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 100, __pyx_L1_error)
+  __pyx_t_6 = __Pyx_PyInt_As_int(__pyx_v_offset); if (unlikely((__pyx_t_6 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 100, __pyx_L1_error)
   try {
-    __pyx_v_9custreamz_6_libxx_5kafka_kds->commit_offset(__pyx_t_4, __pyx_t_5, __pyx_t_6);
+    __pyx_t_7 = __pyx_v_9custreamz_6_libxx_5kafka_kds->commit_offset(__pyx_t_4, __pyx_t_5, __pyx_t_6);
   } catch(...) {
     __Pyx_CppExn2PyErr();
-    __PYX_ERR(0, 101, __pyx_L1_error)
+    __PYX_ERR(0, 100, __pyx_L1_error)
   }
+  __pyx_t_1 = __Pyx_PyBool_FromLong(__pyx_t_7); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 100, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_t_1);
+  __pyx_r = __pyx_t_1;
+  __pyx_t_1 = 0;
+  goto __pyx_L0;
 
-  /* "custreamz/_libxx/kafka.pyx":100
+  /* "custreamz/_libxx/kafka.pyx":99
  *     return offsets
  * 
- * cpdef commit_topic_offset(topic=None, partition=0, offset=0):             # <<<<<<<<<<<<<<
- *     kds.commit_offset(str.encode(topic), partition, offset)
+ * cpdef commit_topic_offset(topic=None, partition=0, offset=0, asynchronous=True):             # <<<<<<<<<<<<<<
+ *     return kds.commit_offset(str.encode(topic), partition, offset)
  * 
  */
 
   /* function exit code */
-  __pyx_r = Py_None; __Pyx_INCREF(Py_None);
-  goto __pyx_L0;
   __pyx_L1_error:;
   __Pyx_XDECREF(__pyx_t_1);
   __Pyx_XDECREF(__pyx_t_2);
@@ -4661,24 +4654,28 @@ static PyObject *__pyx_f_9custreamz_6_libxx_5kafka_commit_topic_offset(CYTHON_UN
 
 /* Python wrapper */
 static PyObject *__pyx_pw_9custreamz_6_libxx_5kafka_13commit_topic_offset(PyObject *__pyx_self, PyObject *__pyx_args, PyObject *__pyx_kwds); /*proto*/
-static char __pyx_doc_9custreamz_6_libxx_5kafka_12commit_topic_offset[] = "commit_topic_offset(topic=None, partition=0, offset=0)";
+static char __pyx_doc_9custreamz_6_libxx_5kafka_12commit_topic_offset[] = "commit_topic_offset(topic=None, partition=0, offset=0, asynchronous=True)";
 static PyObject *__pyx_pw_9custreamz_6_libxx_5kafka_13commit_topic_offset(PyObject *__pyx_self, PyObject *__pyx_args, PyObject *__pyx_kwds) {
   PyObject *__pyx_v_topic = 0;
   PyObject *__pyx_v_partition = 0;
   PyObject *__pyx_v_offset = 0;
+  PyObject *__pyx_v_asynchronous = 0;
   PyObject *__pyx_r = 0;
   __Pyx_RefNannyDeclarations
   __Pyx_RefNannySetupContext("commit_topic_offset (wrapper)", 0);
   {
-    static PyObject **__pyx_pyargnames[] = {&__pyx_n_s_topic,&__pyx_n_s_partition,&__pyx_n_s_offset,0};
-    PyObject* values[3] = {0,0,0};
+    static PyObject **__pyx_pyargnames[] = {&__pyx_n_s_topic,&__pyx_n_s_partition,&__pyx_n_s_offset,&__pyx_n_s_asynchronous,0};
+    PyObject* values[4] = {0,0,0,0};
     values[0] = ((PyObject *)Py_None);
     values[1] = ((PyObject *)__pyx_int_0);
     values[2] = ((PyObject *)__pyx_int_0);
+    values[3] = ((PyObject *)Py_True);
     if (unlikely(__pyx_kwds)) {
       Py_ssize_t kw_args;
       const Py_ssize_t pos_args = PyTuple_GET_SIZE(__pyx_args);
       switch (pos_args) {
+        case  4: values[3] = PyTuple_GET_ITEM(__pyx_args, 3);
+        CYTHON_FALLTHROUGH;
         case  3: values[2] = PyTuple_GET_ITEM(__pyx_args, 2);
         CYTHON_FALLTHROUGH;
         case  2: values[1] = PyTuple_GET_ITEM(__pyx_args, 1);
@@ -4707,12 +4704,20 @@ static PyObject *__pyx_pw_9custreamz_6_libxx_5kafka_13commit_topic_offset(PyObje
           PyObject* value = __Pyx_PyDict_GetItemStr(__pyx_kwds, __pyx_n_s_offset);
           if (value) { values[2] = value; kw_args--; }
         }
+        CYTHON_FALLTHROUGH;
+        case  3:
+        if (kw_args > 0) {
+          PyObject* value = __Pyx_PyDict_GetItemStr(__pyx_kwds, __pyx_n_s_asynchronous);
+          if (value) { values[3] = value; kw_args--; }
+        }
       }
       if (unlikely(kw_args > 0)) {
-        if (unlikely(__Pyx_ParseOptionalKeywords(__pyx_kwds, __pyx_pyargnames, 0, values, pos_args, "commit_topic_offset") < 0)) __PYX_ERR(0, 100, __pyx_L3_error)
+        if (unlikely(__Pyx_ParseOptionalKeywords(__pyx_kwds, __pyx_pyargnames, 0, values, pos_args, "commit_topic_offset") < 0)) __PYX_ERR(0, 99, __pyx_L3_error)
       }
     } else {
       switch (PyTuple_GET_SIZE(__pyx_args)) {
+        case  4: values[3] = PyTuple_GET_ITEM(__pyx_args, 3);
+        CYTHON_FALLTHROUGH;
         case  3: values[2] = PyTuple_GET_ITEM(__pyx_args, 2);
         CYTHON_FALLTHROUGH;
         case  2: values[1] = PyTuple_GET_ITEM(__pyx_args, 1);
@@ -4726,34 +4731,36 @@ static PyObject *__pyx_pw_9custreamz_6_libxx_5kafka_13commit_topic_offset(PyObje
     __pyx_v_topic = values[0];
     __pyx_v_partition = values[1];
     __pyx_v_offset = values[2];
+    __pyx_v_asynchronous = values[3];
   }
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("commit_topic_offset", 0, 0, 3, PyTuple_GET_SIZE(__pyx_args)); __PYX_ERR(0, 100, __pyx_L3_error)
+  __Pyx_RaiseArgtupleInvalid("commit_topic_offset", 0, 0, 4, PyTuple_GET_SIZE(__pyx_args)); __PYX_ERR(0, 99, __pyx_L3_error)
   __pyx_L3_error:;
   __Pyx_AddTraceback("custreamz._libxx.kafka.commit_topic_offset", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  __pyx_r = __pyx_pf_9custreamz_6_libxx_5kafka_12commit_topic_offset(__pyx_self, __pyx_v_topic, __pyx_v_partition, __pyx_v_offset);
+  __pyx_r = __pyx_pf_9custreamz_6_libxx_5kafka_12commit_topic_offset(__pyx_self, __pyx_v_topic, __pyx_v_partition, __pyx_v_offset, __pyx_v_asynchronous);
 
   /* function exit code */
   __Pyx_RefNannyFinishContext();
   return __pyx_r;
 }
 
-static PyObject *__pyx_pf_9custreamz_6_libxx_5kafka_12commit_topic_offset(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_topic, PyObject *__pyx_v_partition, PyObject *__pyx_v_offset) {
+static PyObject *__pyx_pf_9custreamz_6_libxx_5kafka_12commit_topic_offset(CYTHON_UNUSED PyObject *__pyx_self, PyObject *__pyx_v_topic, PyObject *__pyx_v_partition, PyObject *__pyx_v_offset, PyObject *__pyx_v_asynchronous) {
   PyObject *__pyx_r = NULL;
   __Pyx_RefNannyDeclarations
   PyObject *__pyx_t_1 = NULL;
   struct __pyx_opt_args_9custreamz_6_libxx_5kafka_commit_topic_offset __pyx_t_2;
   __Pyx_RefNannySetupContext("commit_topic_offset", 0);
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_2.__pyx_n = 3;
+  __pyx_t_2.__pyx_n = 4;
   __pyx_t_2.topic = __pyx_v_topic;
   __pyx_t_2.partition = __pyx_v_partition;
   __pyx_t_2.offset = __pyx_v_offset;
-  __pyx_t_1 = __pyx_f_9custreamz_6_libxx_5kafka_commit_topic_offset(0, &__pyx_t_2); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 100, __pyx_L1_error)
+  __pyx_t_2.asynchronous = __pyx_v_asynchronous;
+  __pyx_t_1 = __pyx_f_9custreamz_6_libxx_5kafka_commit_topic_offset(0, &__pyx_t_2); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 99, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_r = __pyx_t_1;
   __pyx_t_1 = 0;
@@ -4770,8 +4777,8 @@ static PyObject *__pyx_pf_9custreamz_6_libxx_5kafka_12commit_topic_offset(CYTHON
   return __pyx_r;
 }
 
-/* "custreamz/_libxx/kafka.pyx":103
- *     kds.commit_offset(str.encode(topic), partition, offset)
+/* "custreamz/_libxx/kafka.pyx":102
+ *     return kds.commit_offset(str.encode(topic), partition, offset)
  * 
  * cpdef produce_message(topic=None, message_val=None, message_key=None):             # <<<<<<<<<<<<<<
  *     return kds.produce_message(str.encode(topic),
@@ -4805,7 +4812,7 @@ static PyObject *__pyx_f_9custreamz_6_libxx_5kafka_produce_message(CYTHON_UNUSED
     }
   }
 
-  /* "custreamz/_libxx/kafka.pyx":104
+  /* "custreamz/_libxx/kafka.pyx":103
  * 
  * cpdef produce_message(topic=None, message_val=None, message_key=None):
  *     return kds.produce_message(str.encode(topic),             # <<<<<<<<<<<<<<
@@ -4813,7 +4820,7 @@ static PyObject *__pyx_f_9custreamz_6_libxx_5kafka_produce_message(CYTHON_UNUSED
  *                                str.encode(message_key))
  */
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_2 = __Pyx_PyObject_GetAttrStr(((PyObject *)(&PyUnicode_Type)), __pyx_n_s_encode); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 104, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_PyObject_GetAttrStr(((PyObject *)(&PyUnicode_Type)), __pyx_n_s_encode); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 103, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   __pyx_t_3 = NULL;
   if (CYTHON_UNPACK_METHODS && likely(PyMethod_Check(__pyx_t_2))) {
@@ -4827,20 +4834,20 @@ static PyObject *__pyx_f_9custreamz_6_libxx_5kafka_produce_message(CYTHON_UNUSED
   }
   __pyx_t_1 = (__pyx_t_3) ? __Pyx_PyObject_Call2Args(__pyx_t_2, __pyx_t_3, __pyx_v_topic) : __Pyx_PyObject_CallOneArg(__pyx_t_2, __pyx_v_topic);
   __Pyx_XDECREF(__pyx_t_3); __pyx_t_3 = 0;
-  if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 104, __pyx_L1_error)
+  if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 103, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-  __pyx_t_4 = __pyx_convert_string_from_py_std__in_string(__pyx_t_1); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 104, __pyx_L1_error)
+  __pyx_t_4 = __pyx_convert_string_from_py_std__in_string(__pyx_t_1); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 103, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
-  /* "custreamz/_libxx/kafka.pyx":105
+  /* "custreamz/_libxx/kafka.pyx":104
  * cpdef produce_message(topic=None, message_val=None, message_key=None):
  *     return kds.produce_message(str.encode(topic),
  *                                str.encode(message_val),             # <<<<<<<<<<<<<<
  *                                str.encode(message_key))
  * 
  */
-  __pyx_t_2 = __Pyx_PyObject_GetAttrStr(((PyObject *)(&PyUnicode_Type)), __pyx_n_s_encode); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 105, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_PyObject_GetAttrStr(((PyObject *)(&PyUnicode_Type)), __pyx_n_s_encode); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 104, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   __pyx_t_3 = NULL;
   if (CYTHON_UNPACK_METHODS && likely(PyMethod_Check(__pyx_t_2))) {
@@ -4854,20 +4861,20 @@ static PyObject *__pyx_f_9custreamz_6_libxx_5kafka_produce_message(CYTHON_UNUSED
   }
   __pyx_t_1 = (__pyx_t_3) ? __Pyx_PyObject_Call2Args(__pyx_t_2, __pyx_t_3, __pyx_v_message_val) : __Pyx_PyObject_CallOneArg(__pyx_t_2, __pyx_v_message_val);
   __Pyx_XDECREF(__pyx_t_3); __pyx_t_3 = 0;
-  if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 105, __pyx_L1_error)
+  if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 104, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-  __pyx_t_5 = __pyx_convert_string_from_py_std__in_string(__pyx_t_1); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 105, __pyx_L1_error)
+  __pyx_t_5 = __pyx_convert_string_from_py_std__in_string(__pyx_t_1); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 104, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
-  /* "custreamz/_libxx/kafka.pyx":106
+  /* "custreamz/_libxx/kafka.pyx":105
  *     return kds.produce_message(str.encode(topic),
  *                                str.encode(message_val),
  *                                str.encode(message_key))             # <<<<<<<<<<<<<<
  * 
  * cpdef flush(timeout=10000):
  */
-  __pyx_t_2 = __Pyx_PyObject_GetAttrStr(((PyObject *)(&PyUnicode_Type)), __pyx_n_s_encode); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 106, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_PyObject_GetAttrStr(((PyObject *)(&PyUnicode_Type)), __pyx_n_s_encode); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 105, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   __pyx_t_3 = NULL;
   if (CYTHON_UNPACK_METHODS && likely(PyMethod_Check(__pyx_t_2))) {
@@ -4881,13 +4888,13 @@ static PyObject *__pyx_f_9custreamz_6_libxx_5kafka_produce_message(CYTHON_UNUSED
   }
   __pyx_t_1 = (__pyx_t_3) ? __Pyx_PyObject_Call2Args(__pyx_t_2, __pyx_t_3, __pyx_v_message_key) : __Pyx_PyObject_CallOneArg(__pyx_t_2, __pyx_v_message_key);
   __Pyx_XDECREF(__pyx_t_3); __pyx_t_3 = 0;
-  if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 106, __pyx_L1_error)
+  if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 105, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-  __pyx_t_6 = __pyx_convert_string_from_py_std__in_string(__pyx_t_1); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 106, __pyx_L1_error)
+  __pyx_t_6 = __pyx_convert_string_from_py_std__in_string(__pyx_t_1); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 105, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
 
-  /* "custreamz/_libxx/kafka.pyx":104
+  /* "custreamz/_libxx/kafka.pyx":103
  * 
  * cpdef produce_message(topic=None, message_val=None, message_key=None):
  *     return kds.produce_message(str.encode(topic),             # <<<<<<<<<<<<<<
@@ -4898,16 +4905,16 @@ static PyObject *__pyx_f_9custreamz_6_libxx_5kafka_produce_message(CYTHON_UNUSED
     __pyx_t_7 = __pyx_v_9custreamz_6_libxx_5kafka_kds->produce_message(__pyx_t_4, __pyx_t_5, __pyx_t_6);
   } catch(...) {
     __Pyx_CppExn2PyErr();
-    __PYX_ERR(0, 104, __pyx_L1_error)
+    __PYX_ERR(0, 103, __pyx_L1_error)
   }
-  __pyx_t_1 = __Pyx_PyBool_FromLong(__pyx_t_7); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 104, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyBool_FromLong(__pyx_t_7); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 103, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_r = __pyx_t_1;
   __pyx_t_1 = 0;
   goto __pyx_L0;
 
-  /* "custreamz/_libxx/kafka.pyx":103
- *     kds.commit_offset(str.encode(topic), partition, offset)
+  /* "custreamz/_libxx/kafka.pyx":102
+ *     return kds.commit_offset(str.encode(topic), partition, offset)
  * 
  * cpdef produce_message(topic=None, message_val=None, message_key=None):             # <<<<<<<<<<<<<<
  *     return kds.produce_message(str.encode(topic),
@@ -4977,7 +4984,7 @@ static PyObject *__pyx_pw_9custreamz_6_libxx_5kafka_15produce_message(PyObject *
         }
       }
       if (unlikely(kw_args > 0)) {
-        if (unlikely(__Pyx_ParseOptionalKeywords(__pyx_kwds, __pyx_pyargnames, 0, values, pos_args, "produce_message") < 0)) __PYX_ERR(0, 103, __pyx_L3_error)
+        if (unlikely(__Pyx_ParseOptionalKeywords(__pyx_kwds, __pyx_pyargnames, 0, values, pos_args, "produce_message") < 0)) __PYX_ERR(0, 102, __pyx_L3_error)
       }
     } else {
       switch (PyTuple_GET_SIZE(__pyx_args)) {
@@ -4997,7 +5004,7 @@ static PyObject *__pyx_pw_9custreamz_6_libxx_5kafka_15produce_message(PyObject *
   }
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("produce_message", 0, 0, 3, PyTuple_GET_SIZE(__pyx_args)); __PYX_ERR(0, 103, __pyx_L3_error)
+  __Pyx_RaiseArgtupleInvalid("produce_message", 0, 0, 3, PyTuple_GET_SIZE(__pyx_args)); __PYX_ERR(0, 102, __pyx_L3_error)
   __pyx_L3_error:;
   __Pyx_AddTraceback("custreamz._libxx.kafka.produce_message", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
@@ -5021,7 +5028,7 @@ static PyObject *__pyx_pf_9custreamz_6_libxx_5kafka_14produce_message(CYTHON_UNU
   __pyx_t_2.topic = __pyx_v_topic;
   __pyx_t_2.message_val = __pyx_v_message_val;
   __pyx_t_2.message_key = __pyx_v_message_key;
-  __pyx_t_1 = __pyx_f_9custreamz_6_libxx_5kafka_produce_message(0, &__pyx_t_2); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 103, __pyx_L1_error)
+  __pyx_t_1 = __pyx_f_9custreamz_6_libxx_5kafka_produce_message(0, &__pyx_t_2); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 102, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_r = __pyx_t_1;
   __pyx_t_1 = 0;
@@ -5038,7 +5045,7 @@ static PyObject *__pyx_pf_9custreamz_6_libxx_5kafka_14produce_message(CYTHON_UNU
   return __pyx_r;
 }
 
-/* "custreamz/_libxx/kafka.pyx":108
+/* "custreamz/_libxx/kafka.pyx":107
  *                                str.encode(message_key))
  * 
  * cpdef flush(timeout=10000):             # <<<<<<<<<<<<<<
@@ -5061,7 +5068,7 @@ static PyObject *__pyx_f_9custreamz_6_libxx_5kafka_flush(CYTHON_UNUSED int __pyx
     }
   }
 
-  /* "custreamz/_libxx/kafka.pyx":109
+  /* "custreamz/_libxx/kafka.pyx":108
  * 
  * cpdef flush(timeout=10000):
  *     return kds.flush(timeout)             # <<<<<<<<<<<<<<
@@ -5069,20 +5076,20 @@ static PyObject *__pyx_f_9custreamz_6_libxx_5kafka_flush(CYTHON_UNUSED int __pyx
  * cpdef unsubscribe():
  */
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_1 = __Pyx_PyInt_As_int(__pyx_v_timeout); if (unlikely((__pyx_t_1 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 109, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyInt_As_int(__pyx_v_timeout); if (unlikely((__pyx_t_1 == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 108, __pyx_L1_error)
   try {
     __pyx_t_2 = __pyx_v_9custreamz_6_libxx_5kafka_kds->flush(__pyx_t_1);
   } catch(...) {
     __Pyx_CppExn2PyErr();
-    __PYX_ERR(0, 109, __pyx_L1_error)
+    __PYX_ERR(0, 108, __pyx_L1_error)
   }
-  __pyx_t_3 = __Pyx_PyBool_FromLong(__pyx_t_2); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 109, __pyx_L1_error)
+  __pyx_t_3 = __Pyx_PyBool_FromLong(__pyx_t_2); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 108, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
   __pyx_r = __pyx_t_3;
   __pyx_t_3 = 0;
   goto __pyx_L0;
 
-  /* "custreamz/_libxx/kafka.pyx":108
+  /* "custreamz/_libxx/kafka.pyx":107
  *                                str.encode(message_key))
  * 
  * cpdef flush(timeout=10000):             # <<<<<<<<<<<<<<
@@ -5131,7 +5138,7 @@ static PyObject *__pyx_pw_9custreamz_6_libxx_5kafka_17flush(PyObject *__pyx_self
         }
       }
       if (unlikely(kw_args > 0)) {
-        if (unlikely(__Pyx_ParseOptionalKeywords(__pyx_kwds, __pyx_pyargnames, 0, values, pos_args, "flush") < 0)) __PYX_ERR(0, 108, __pyx_L3_error)
+        if (unlikely(__Pyx_ParseOptionalKeywords(__pyx_kwds, __pyx_pyargnames, 0, values, pos_args, "flush") < 0)) __PYX_ERR(0, 107, __pyx_L3_error)
       }
     } else {
       switch (PyTuple_GET_SIZE(__pyx_args)) {
@@ -5145,7 +5152,7 @@ static PyObject *__pyx_pw_9custreamz_6_libxx_5kafka_17flush(PyObject *__pyx_self
   }
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("flush", 0, 0, 1, PyTuple_GET_SIZE(__pyx_args)); __PYX_ERR(0, 108, __pyx_L3_error)
+  __Pyx_RaiseArgtupleInvalid("flush", 0, 0, 1, PyTuple_GET_SIZE(__pyx_args)); __PYX_ERR(0, 107, __pyx_L3_error)
   __pyx_L3_error:;
   __Pyx_AddTraceback("custreamz._libxx.kafka.flush", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
@@ -5167,7 +5174,7 @@ static PyObject *__pyx_pf_9custreamz_6_libxx_5kafka_16flush(CYTHON_UNUSED PyObje
   __Pyx_XDECREF(__pyx_r);
   __pyx_t_2.__pyx_n = 1;
   __pyx_t_2.timeout = __pyx_v_timeout;
-  __pyx_t_1 = __pyx_f_9custreamz_6_libxx_5kafka_flush(0, &__pyx_t_2); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 108, __pyx_L1_error)
+  __pyx_t_1 = __pyx_f_9custreamz_6_libxx_5kafka_flush(0, &__pyx_t_2); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 107, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_r = __pyx_t_1;
   __pyx_t_1 = 0;
@@ -5184,7 +5191,7 @@ static PyObject *__pyx_pf_9custreamz_6_libxx_5kafka_16flush(CYTHON_UNUSED PyObje
   return __pyx_r;
 }
 
-/* "custreamz/_libxx/kafka.pyx":111
+/* "custreamz/_libxx/kafka.pyx":110
  *     return kds.flush(timeout)
  * 
  * cpdef unsubscribe():             # <<<<<<<<<<<<<<
@@ -5200,7 +5207,7 @@ static PyObject *__pyx_f_9custreamz_6_libxx_5kafka_unsubscribe(CYTHON_UNUSED int
   PyObject *__pyx_t_2 = NULL;
   __Pyx_RefNannySetupContext("unsubscribe", 0);
 
-  /* "custreamz/_libxx/kafka.pyx":112
+  /* "custreamz/_libxx/kafka.pyx":111
  * 
  * cpdef unsubscribe():
  *     return kds.unsubscribe()             # <<<<<<<<<<<<<<
@@ -5212,15 +5219,15 @@ static PyObject *__pyx_f_9custreamz_6_libxx_5kafka_unsubscribe(CYTHON_UNUSED int
     __pyx_t_1 = __pyx_v_9custreamz_6_libxx_5kafka_kds->unsubscribe();
   } catch(...) {
     __Pyx_CppExn2PyErr();
-    __PYX_ERR(0, 112, __pyx_L1_error)
+    __PYX_ERR(0, 111, __pyx_L1_error)
   }
-  __pyx_t_2 = __Pyx_PyBool_FromLong(__pyx_t_1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 112, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_PyBool_FromLong(__pyx_t_1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 111, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   __pyx_r = __pyx_t_2;
   __pyx_t_2 = 0;
   goto __pyx_L0;
 
-  /* "custreamz/_libxx/kafka.pyx":111
+  /* "custreamz/_libxx/kafka.pyx":110
  *     return kds.flush(timeout)
  * 
  * cpdef unsubscribe():             # <<<<<<<<<<<<<<
@@ -5259,7 +5266,7 @@ static PyObject *__pyx_pf_9custreamz_6_libxx_5kafka_18unsubscribe(CYTHON_UNUSED 
   PyObject *__pyx_t_1 = NULL;
   __Pyx_RefNannySetupContext("unsubscribe", 0);
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_1 = __pyx_f_9custreamz_6_libxx_5kafka_unsubscribe(0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 111, __pyx_L1_error)
+  __pyx_t_1 = __pyx_f_9custreamz_6_libxx_5kafka_unsubscribe(0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 110, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_r = __pyx_t_1;
   __pyx_t_1 = 0;
@@ -5276,7 +5283,7 @@ static PyObject *__pyx_pf_9custreamz_6_libxx_5kafka_18unsubscribe(CYTHON_UNUSED 
   return __pyx_r;
 }
 
-/* "custreamz/_libxx/kafka.pyx":114
+/* "custreamz/_libxx/kafka.pyx":113
  *     return kds.unsubscribe()
  * 
  * cpdef close():             # <<<<<<<<<<<<<<
@@ -5291,7 +5298,7 @@ static PyObject *__pyx_f_9custreamz_6_libxx_5kafka_close(CYTHON_UNUSED int __pyx
   PyObject *__pyx_t_2 = NULL;
   __Pyx_RefNannySetupContext("close", 0);
 
-  /* "custreamz/_libxx/kafka.pyx":115
+  /* "custreamz/_libxx/kafka.pyx":114
  * 
  * cpdef close():
  *     return kds.close()             # <<<<<<<<<<<<<<
@@ -5301,15 +5308,15 @@ static PyObject *__pyx_f_9custreamz_6_libxx_5kafka_close(CYTHON_UNUSED int __pyx
     __pyx_t_1 = __pyx_v_9custreamz_6_libxx_5kafka_kds->close();
   } catch(...) {
     __Pyx_CppExn2PyErr();
-    __PYX_ERR(0, 115, __pyx_L1_error)
+    __PYX_ERR(0, 114, __pyx_L1_error)
   }
-  __pyx_t_2 = __Pyx_PyBool_FromLong(__pyx_t_1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 115, __pyx_L1_error)
+  __pyx_t_2 = __Pyx_PyBool_FromLong(__pyx_t_1); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 114, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
   __pyx_r = __pyx_t_2;
   __pyx_t_2 = 0;
   goto __pyx_L0;
 
-  /* "custreamz/_libxx/kafka.pyx":114
+  /* "custreamz/_libxx/kafka.pyx":113
  *     return kds.unsubscribe()
  * 
  * cpdef close():             # <<<<<<<<<<<<<<
@@ -5347,7 +5354,7 @@ static PyObject *__pyx_pf_9custreamz_6_libxx_5kafka_20close(CYTHON_UNUSED PyObje
   PyObject *__pyx_t_1 = NULL;
   __Pyx_RefNannySetupContext("close", 0);
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_1 = __pyx_f_9custreamz_6_libxx_5kafka_close(0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 114, __pyx_L1_error)
+  __pyx_t_1 = __pyx_f_9custreamz_6_libxx_5kafka_close(0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 113, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_r = __pyx_t_1;
   __pyx_t_1 = 0;
@@ -5723,121 +5730,11 @@ static CYTHON_INLINE PyObject *__pyx_convert_PyByteArray_string_to_py_std__in_st
 
 /* "map.to_py":201
  * 
- * @cname("__pyx_convert_map_to_py_int____int64_t")
- * cdef object __pyx_convert_map_to_py_int____int64_t(const map[X,Y]& s):             # <<<<<<<<<<<<<<
+ * @cname("__pyx_convert_map_to_py_std_3a__3a_string____int64_t")
+ * cdef object __pyx_convert_map_to_py_std_3a__3a_string____int64_t(const map[X,Y]& s):             # <<<<<<<<<<<<<<
  *     o = {}
  *     cdef const map[X,Y].value_type *key_value
  */
-
-static PyObject *__pyx_convert_map_to_py_int____int64_t(std::map<int,int64_t>  const &__pyx_v_s) {
-  PyObject *__pyx_v_o = NULL;
-  std::map<int,int64_t> ::value_type const *__pyx_v_key_value;
-  std::map<int,int64_t> ::const_iterator __pyx_v_iter;
-  PyObject *__pyx_r = NULL;
-  __Pyx_RefNannyDeclarations
-  PyObject *__pyx_t_1 = NULL;
-  int __pyx_t_2;
-  PyObject *__pyx_t_3 = NULL;
-  __Pyx_RefNannySetupContext("__pyx_convert_map_to_py_int____int64_t", 0);
-
-  /* "map.to_py":202
- * @cname("__pyx_convert_map_to_py_int____int64_t")
- * cdef object __pyx_convert_map_to_py_int____int64_t(const map[X,Y]& s):
- *     o = {}             # <<<<<<<<<<<<<<
- *     cdef const map[X,Y].value_type *key_value
- *     cdef map[X,Y].const_iterator iter = s.begin()
- */
-  __pyx_t_1 = __Pyx_PyDict_NewPresized(0); if (unlikely(!__pyx_t_1)) __PYX_ERR(1, 202, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_1);
-  __pyx_v_o = ((PyObject*)__pyx_t_1);
-  __pyx_t_1 = 0;
-
-  /* "map.to_py":204
- *     o = {}
- *     cdef const map[X,Y].value_type *key_value
- *     cdef map[X,Y].const_iterator iter = s.begin()             # <<<<<<<<<<<<<<
- *     while iter != s.end():
- *         key_value = &cython.operator.dereference(iter)
- */
-  __pyx_v_iter = __pyx_v_s.begin();
-
-  /* "map.to_py":205
- *     cdef const map[X,Y].value_type *key_value
- *     cdef map[X,Y].const_iterator iter = s.begin()
- *     while iter != s.end():             # <<<<<<<<<<<<<<
- *         key_value = &cython.operator.dereference(iter)
- *         o[key_value.first] = key_value.second
- */
-  while (1) {
-    __pyx_t_2 = ((__pyx_v_iter != __pyx_v_s.end()) != 0);
-    if (!__pyx_t_2) break;
-
-    /* "map.to_py":206
- *     cdef map[X,Y].const_iterator iter = s.begin()
- *     while iter != s.end():
- *         key_value = &cython.operator.dereference(iter)             # <<<<<<<<<<<<<<
- *         o[key_value.first] = key_value.second
- *         cython.operator.preincrement(iter)
- */
-    __pyx_v_key_value = (&(*__pyx_v_iter));
-
-    /* "map.to_py":207
- *     while iter != s.end():
- *         key_value = &cython.operator.dereference(iter)
- *         o[key_value.first] = key_value.second             # <<<<<<<<<<<<<<
- *         cython.operator.preincrement(iter)
- *     return o
- */
-    __pyx_t_1 = __Pyx_PyInt_From_int64_t(__pyx_v_key_value->second); if (unlikely(!__pyx_t_1)) __PYX_ERR(1, 207, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_1);
-    __pyx_t_3 = __Pyx_PyInt_From_int(__pyx_v_key_value->first); if (unlikely(!__pyx_t_3)) __PYX_ERR(1, 207, __pyx_L1_error)
-    __Pyx_GOTREF(__pyx_t_3);
-    if (unlikely(PyDict_SetItem(__pyx_v_o, __pyx_t_3, __pyx_t_1) < 0)) __PYX_ERR(1, 207, __pyx_L1_error)
-    __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-    __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
-
-    /* "map.to_py":208
- *         key_value = &cython.operator.dereference(iter)
- *         o[key_value.first] = key_value.second
- *         cython.operator.preincrement(iter)             # <<<<<<<<<<<<<<
- *     return o
- * 
- */
-    (void)((++__pyx_v_iter));
-  }
-
-  /* "map.to_py":209
- *         o[key_value.first] = key_value.second
- *         cython.operator.preincrement(iter)
- *     return o             # <<<<<<<<<<<<<<
- * 
- * 
- */
-  __Pyx_XDECREF(__pyx_r);
-  __Pyx_INCREF(__pyx_v_o);
-  __pyx_r = __pyx_v_o;
-  goto __pyx_L0;
-
-  /* "map.to_py":201
- * 
- * @cname("__pyx_convert_map_to_py_int____int64_t")
- * cdef object __pyx_convert_map_to_py_int____int64_t(const map[X,Y]& s):             # <<<<<<<<<<<<<<
- *     o = {}
- *     cdef const map[X,Y].value_type *key_value
- */
-
-  /* function exit code */
-  __pyx_L1_error:;
-  __Pyx_XDECREF(__pyx_t_1);
-  __Pyx_XDECREF(__pyx_t_3);
-  __Pyx_AddTraceback("map.to_py.__pyx_convert_map_to_py_int____int64_t", __pyx_clineno, __pyx_lineno, __pyx_filename);
-  __pyx_r = 0;
-  __pyx_L0:;
-  __Pyx_XDECREF(__pyx_v_o);
-  __Pyx_XGIVEREF(__pyx_r);
-  __Pyx_RefNannyFinishContext();
-  return __pyx_r;
-}
 
 static PyObject *__pyx_convert_map_to_py_std_3a__3a_string____int64_t(std::map<std::string,int64_t>  const &__pyx_v_s) {
   PyObject *__pyx_v_o = NULL;
@@ -6146,7 +6043,7 @@ static int __pyx_array___pyx_pf_15View_dot_MemoryView_5array___cinit__(struct __
  * 
  *         if itemsize <= 0:
  */
-    __pyx_t_3 = __Pyx_PyObject_Call(__pyx_builtin_ValueError, __pyx_tuple__5, NULL); if (unlikely(!__pyx_t_3)) __PYX_ERR(1, 133, __pyx_L1_error)
+    __pyx_t_3 = __Pyx_PyObject_Call(__pyx_builtin_ValueError, __pyx_tuple__4, NULL); if (unlikely(!__pyx_t_3)) __PYX_ERR(1, 133, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_3);
     __Pyx_Raise(__pyx_t_3, 0, 0, 0);
     __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
@@ -6178,7 +6075,7 @@ static int __pyx_array___pyx_pf_15View_dot_MemoryView_5array___cinit__(struct __
  * 
  *         if not isinstance(format, bytes):
  */
-    __pyx_t_3 = __Pyx_PyObject_Call(__pyx_builtin_ValueError, __pyx_tuple__6, NULL); if (unlikely(!__pyx_t_3)) __PYX_ERR(1, 136, __pyx_L1_error)
+    __pyx_t_3 = __Pyx_PyObject_Call(__pyx_builtin_ValueError, __pyx_tuple__5, NULL); if (unlikely(!__pyx_t_3)) __PYX_ERR(1, 136, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_3);
     __Pyx_Raise(__pyx_t_3, 0, 0, 0);
     __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
@@ -6305,7 +6202,7 @@ static int __pyx_array___pyx_pf_15View_dot_MemoryView_5array___cinit__(struct __
  * 
  * 
  */
-    __pyx_t_3 = __Pyx_PyObject_Call(__pyx_builtin_MemoryError, __pyx_tuple__7, NULL); if (unlikely(!__pyx_t_3)) __PYX_ERR(1, 148, __pyx_L1_error)
+    __pyx_t_3 = __Pyx_PyObject_Call(__pyx_builtin_MemoryError, __pyx_tuple__6, NULL); if (unlikely(!__pyx_t_3)) __PYX_ERR(1, 148, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_3);
     __Pyx_Raise(__pyx_t_3, 0, 0, 0);
     __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
@@ -6579,7 +6476,7 @@ static int __pyx_array___pyx_pf_15View_dot_MemoryView_5array___cinit__(struct __
  * 
  *             if self.dtype_is_object:
  */
-      __pyx_t_10 = __Pyx_PyObject_Call(__pyx_builtin_MemoryError, __pyx_tuple__8, NULL); if (unlikely(!__pyx_t_10)) __PYX_ERR(1, 176, __pyx_L1_error)
+      __pyx_t_10 = __Pyx_PyObject_Call(__pyx_builtin_MemoryError, __pyx_tuple__7, NULL); if (unlikely(!__pyx_t_10)) __PYX_ERR(1, 176, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_10);
       __Pyx_Raise(__pyx_t_10, 0, 0, 0);
       __Pyx_DECREF(__pyx_t_10); __pyx_t_10 = 0;
@@ -6820,7 +6717,7 @@ static int __pyx_array___pyx_pf_15View_dot_MemoryView_5array_2__getbuffer__(stru
  *         info.buf = self.data
  *         info.len = self.len
  */
-    __pyx_t_3 = __Pyx_PyObject_Call(__pyx_builtin_ValueError, __pyx_tuple__9, NULL); if (unlikely(!__pyx_t_3)) __PYX_ERR(1, 192, __pyx_L1_error)
+    __pyx_t_3 = __Pyx_PyObject_Call(__pyx_builtin_ValueError, __pyx_tuple__8, NULL); if (unlikely(!__pyx_t_3)) __PYX_ERR(1, 192, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_3);
     __Pyx_Raise(__pyx_t_3, 0, 0, 0);
     __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
@@ -7536,7 +7433,7 @@ static PyObject *__pyx_pf___pyx_array___reduce_cython__(CYTHON_UNUSED struct __p
  * def __setstate_cython__(self, __pyx_state):
  *     raise TypeError("no default __reduce__ due to non-trivial __cinit__")
  */
-  __pyx_t_1 = __Pyx_PyObject_Call(__pyx_builtin_TypeError, __pyx_tuple__10, NULL); if (unlikely(!__pyx_t_1)) __PYX_ERR(1, 2, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyObject_Call(__pyx_builtin_TypeError, __pyx_tuple__9, NULL); if (unlikely(!__pyx_t_1)) __PYX_ERR(1, 2, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __Pyx_Raise(__pyx_t_1, 0, 0, 0);
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
@@ -7589,7 +7486,7 @@ static PyObject *__pyx_pf___pyx_array_2__setstate_cython__(CYTHON_UNUSED struct 
  * def __setstate_cython__(self, __pyx_state):
  *     raise TypeError("no default __reduce__ due to non-trivial __cinit__")             # <<<<<<<<<<<<<<
  */
-  __pyx_t_1 = __Pyx_PyObject_Call(__pyx_builtin_TypeError, __pyx_tuple__11, NULL); if (unlikely(!__pyx_t_1)) __PYX_ERR(1, 4, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyObject_Call(__pyx_builtin_TypeError, __pyx_tuple__10, NULL); if (unlikely(!__pyx_t_1)) __PYX_ERR(1, 4, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __Pyx_Raise(__pyx_t_1, 0, 0, 0);
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
@@ -9272,7 +9169,7 @@ static int __pyx_memoryview___pyx_pf_15View_dot_MemoryView_10memoryview_6__setit
  * 
  *         have_slices, index = _unellipsify(index, self.view.ndim)
  */
-    __pyx_t_2 = __Pyx_PyObject_Call(__pyx_builtin_TypeError, __pyx_tuple__12, NULL); if (unlikely(!__pyx_t_2)) __PYX_ERR(1, 418, __pyx_L1_error)
+    __pyx_t_2 = __Pyx_PyObject_Call(__pyx_builtin_TypeError, __pyx_tuple__11, NULL); if (unlikely(!__pyx_t_2)) __PYX_ERR(1, 418, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_2);
     __Pyx_Raise(__pyx_t_2, 0, 0, 0);
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
@@ -10305,7 +10202,7 @@ static PyObject *__pyx_memoryview_convert_item_to_object(struct __pyx_memoryview
  *         else:
  *             if len(self.view.format) == 1:
  */
-      __pyx_t_6 = __Pyx_PyObject_Call(__pyx_builtin_ValueError, __pyx_tuple__13, NULL); if (unlikely(!__pyx_t_6)) __PYX_ERR(1, 495, __pyx_L5_except_error)
+      __pyx_t_6 = __Pyx_PyObject_Call(__pyx_builtin_ValueError, __pyx_tuple__12, NULL); if (unlikely(!__pyx_t_6)) __PYX_ERR(1, 495, __pyx_L5_except_error)
       __Pyx_GOTREF(__pyx_t_6);
       __Pyx_Raise(__pyx_t_6, 0, 0, 0);
       __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
@@ -10661,7 +10558,7 @@ static int __pyx_memoryview___pyx_pf_15View_dot_MemoryView_10memoryview_8__getbu
  * 
  *         if flags & PyBUF_ND:
  */
-    __pyx_t_3 = __Pyx_PyObject_Call(__pyx_builtin_ValueError, __pyx_tuple__14, NULL); if (unlikely(!__pyx_t_3)) __PYX_ERR(1, 520, __pyx_L1_error)
+    __pyx_t_3 = __Pyx_PyObject_Call(__pyx_builtin_ValueError, __pyx_tuple__13, NULL); if (unlikely(!__pyx_t_3)) __PYX_ERR(1, 520, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_3);
     __Pyx_Raise(__pyx_t_3, 0, 0, 0);
     __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
@@ -11201,7 +11098,7 @@ static PyObject *__pyx_pf_15View_dot_MemoryView_10memoryview_7strides___get__(st
  * 
  *         return tuple([stride for stride in self.view.strides[:self.view.ndim]])
  */
-    __pyx_t_2 = __Pyx_PyObject_Call(__pyx_builtin_ValueError, __pyx_tuple__15, NULL); if (unlikely(!__pyx_t_2)) __PYX_ERR(1, 570, __pyx_L1_error)
+    __pyx_t_2 = __Pyx_PyObject_Call(__pyx_builtin_ValueError, __pyx_tuple__14, NULL); if (unlikely(!__pyx_t_2)) __PYX_ERR(1, 570, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_2);
     __Pyx_Raise(__pyx_t_2, 0, 0, 0);
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
@@ -11315,7 +11212,7 @@ static PyObject *__pyx_pf_15View_dot_MemoryView_10memoryview_10suboffsets___get_
     __Pyx_XDECREF(__pyx_r);
     __pyx_t_2 = __Pyx_PyInt_From_int(__pyx_v_self->view.ndim); if (unlikely(!__pyx_t_2)) __PYX_ERR(1, 577, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_2);
-    __pyx_t_3 = PyNumber_Multiply(__pyx_tuple__16, __pyx_t_2); if (unlikely(!__pyx_t_3)) __PYX_ERR(1, 577, __pyx_L1_error)
+    __pyx_t_3 = PyNumber_Multiply(__pyx_tuple__15, __pyx_t_2); if (unlikely(!__pyx_t_3)) __PYX_ERR(1, 577, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_3);
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
     __pyx_r = __pyx_t_3;
@@ -12320,7 +12217,7 @@ static PyObject *__pyx_pf___pyx_memoryview___reduce_cython__(CYTHON_UNUSED struc
  * def __setstate_cython__(self, __pyx_state):
  *     raise TypeError("no default __reduce__ due to non-trivial __cinit__")
  */
-  __pyx_t_1 = __Pyx_PyObject_Call(__pyx_builtin_TypeError, __pyx_tuple__17, NULL); if (unlikely(!__pyx_t_1)) __PYX_ERR(1, 2, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyObject_Call(__pyx_builtin_TypeError, __pyx_tuple__16, NULL); if (unlikely(!__pyx_t_1)) __PYX_ERR(1, 2, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __Pyx_Raise(__pyx_t_1, 0, 0, 0);
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
@@ -12373,7 +12270,7 @@ static PyObject *__pyx_pf___pyx_memoryview_2__setstate_cython__(CYTHON_UNUSED st
  * def __setstate_cython__(self, __pyx_state):
  *     raise TypeError("no default __reduce__ due to non-trivial __cinit__")             # <<<<<<<<<<<<<<
  */
-  __pyx_t_1 = __Pyx_PyObject_Call(__pyx_builtin_TypeError, __pyx_tuple__18, NULL); if (unlikely(!__pyx_t_1)) __PYX_ERR(1, 4, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyObject_Call(__pyx_builtin_TypeError, __pyx_tuple__17, NULL); if (unlikely(!__pyx_t_1)) __PYX_ERR(1, 4, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __Pyx_Raise(__pyx_t_1, 0, 0, 0);
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
@@ -12724,9 +12621,9 @@ static PyObject *_unellipsify(PyObject *__pyx_v_index, int __pyx_v_ndim) {
         __Pyx_GOTREF(__pyx_t_7);
         { Py_ssize_t __pyx_temp;
           for (__pyx_temp=0; __pyx_temp < ((__pyx_v_ndim - __pyx_t_8) + 1); __pyx_temp++) {
-            __Pyx_INCREF(__pyx_slice__19);
-            __Pyx_GIVEREF(__pyx_slice__19);
-            PyList_SET_ITEM(__pyx_t_7, __pyx_temp, __pyx_slice__19);
+            __Pyx_INCREF(__pyx_slice__18);
+            __Pyx_GIVEREF(__pyx_slice__18);
+            PyList_SET_ITEM(__pyx_t_7, __pyx_temp, __pyx_slice__18);
           }
         }
         __pyx_t_9 = __Pyx_PyList_Extend(__pyx_v_result, __pyx_t_7); if (unlikely(__pyx_t_9 == ((int)-1))) __PYX_ERR(1, 682, __pyx_L1_error)
@@ -12759,7 +12656,7 @@ static PyObject *_unellipsify(PyObject *__pyx_v_index, int __pyx_v_ndim) {
  *         else:
  */
       /*else*/ {
-        __pyx_t_9 = __Pyx_PyList_Append(__pyx_v_result, __pyx_slice__19); if (unlikely(__pyx_t_9 == ((int)-1))) __PYX_ERR(1, 685, __pyx_L1_error)
+        __pyx_t_9 = __Pyx_PyList_Append(__pyx_v_result, __pyx_slice__18); if (unlikely(__pyx_t_9 == ((int)-1))) __PYX_ERR(1, 685, __pyx_L1_error)
       }
       __pyx_L7:;
 
@@ -12899,9 +12796,9 @@ static PyObject *_unellipsify(PyObject *__pyx_v_index, int __pyx_v_ndim) {
     __Pyx_GOTREF(__pyx_t_3);
     { Py_ssize_t __pyx_temp;
       for (__pyx_temp=0; __pyx_temp < __pyx_v_nslices; __pyx_temp++) {
-        __Pyx_INCREF(__pyx_slice__19);
-        __Pyx_GIVEREF(__pyx_slice__19);
-        PyList_SET_ITEM(__pyx_t_3, __pyx_temp, __pyx_slice__19);
+        __Pyx_INCREF(__pyx_slice__18);
+        __Pyx_GIVEREF(__pyx_slice__18);
+        PyList_SET_ITEM(__pyx_t_3, __pyx_temp, __pyx_slice__18);
       }
     }
     __pyx_t_9 = __Pyx_PyList_Extend(__pyx_v_result, __pyx_t_3); if (unlikely(__pyx_t_9 == ((int)-1))) __PYX_ERR(1, 696, __pyx_L1_error)
@@ -13025,7 +12922,7 @@ static PyObject *assert_direct_dimensions(Py_ssize_t *__pyx_v_suboffsets, int __
  * 
  * 
  */
-      __pyx_t_5 = __Pyx_PyObject_Call(__pyx_builtin_ValueError, __pyx_tuple__20, NULL); if (unlikely(!__pyx_t_5)) __PYX_ERR(1, 703, __pyx_L1_error)
+      __pyx_t_5 = __Pyx_PyObject_Call(__pyx_builtin_ValueError, __pyx_tuple__19, NULL); if (unlikely(!__pyx_t_5)) __PYX_ERR(1, 703, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_5);
       __Pyx_Raise(__pyx_t_5, 0, 0, 0);
       __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
@@ -15188,7 +15085,7 @@ static PyObject *__pyx_pf___pyx_memoryviewslice___reduce_cython__(CYTHON_UNUSED 
  * def __setstate_cython__(self, __pyx_state):
  *     raise TypeError("no default __reduce__ due to non-trivial __cinit__")
  */
-  __pyx_t_1 = __Pyx_PyObject_Call(__pyx_builtin_TypeError, __pyx_tuple__21, NULL); if (unlikely(!__pyx_t_1)) __PYX_ERR(1, 2, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyObject_Call(__pyx_builtin_TypeError, __pyx_tuple__20, NULL); if (unlikely(!__pyx_t_1)) __PYX_ERR(1, 2, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __Pyx_Raise(__pyx_t_1, 0, 0, 0);
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
@@ -15241,7 +15138,7 @@ static PyObject *__pyx_pf___pyx_memoryviewslice_2__setstate_cython__(CYTHON_UNUS
  * def __setstate_cython__(self, __pyx_state):
  *     raise TypeError("no default __reduce__ due to non-trivial __cinit__")             # <<<<<<<<<<<<<<
  */
-  __pyx_t_1 = __Pyx_PyObject_Call(__pyx_builtin_TypeError, __pyx_tuple__22, NULL); if (unlikely(!__pyx_t_1)) __PYX_ERR(1, 4, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyObject_Call(__pyx_builtin_TypeError, __pyx_tuple__21, NULL); if (unlikely(!__pyx_t_1)) __PYX_ERR(1, 4, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __Pyx_Raise(__pyx_t_1, 0, 0, 0);
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
@@ -19569,10 +19466,12 @@ static __Pyx_StringTabEntry __pyx_string_tab[] = {
   {&__pyx_n_s_View_MemoryView, __pyx_k_View_MemoryView, sizeof(__pyx_k_View_MemoryView), 0, 0, 1, 1},
   {&__pyx_kp_u__3, __pyx_k__3, sizeof(__pyx_k__3), 0, 1, 0, 0},
   {&__pyx_n_s_allocate_buffer, __pyx_k_allocate_buffer, sizeof(__pyx_k_allocate_buffer), 0, 0, 1, 1},
+  {&__pyx_n_s_asynchronous, __pyx_k_asynchronous, sizeof(__pyx_k_asynchronous), 0, 0, 1, 1},
   {&__pyx_n_s_base, __pyx_k_base, sizeof(__pyx_k_base), 0, 0, 1, 1},
   {&__pyx_n_s_byte_range, __pyx_k_byte_range, sizeof(__pyx_k_byte_range), 0, 0, 1, 1},
   {&__pyx_n_s_c, __pyx_k_c, sizeof(__pyx_k_c), 0, 0, 1, 1},
   {&__pyx_n_u_c, __pyx_k_c, sizeof(__pyx_k_c), 0, 1, 0, 1},
+  {&__pyx_n_s_cached, __pyx_k_cached, sizeof(__pyx_k_cached), 0, 0, 1, 1},
   {&__pyx_n_s_class, __pyx_k_class, sizeof(__pyx_k_class), 0, 0, 1, 1},
   {&__pyx_n_s_cline_in_traceback, __pyx_k_cline_in_traceback, sizeof(__pyx_k_cline_in_traceback), 0, 0, 1, 1},
   {&__pyx_n_s_compression, __pyx_k_compression, sizeof(__pyx_k_compression), 0, 0, 1, 1},
@@ -19677,9 +19576,9 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
  * 
  *         if itemsize <= 0:
  */
-  __pyx_tuple__5 = PyTuple_Pack(1, __pyx_kp_s_Empty_shape_tuple_for_cython_arr); if (unlikely(!__pyx_tuple__5)) __PYX_ERR(1, 133, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_tuple__5);
-  __Pyx_GIVEREF(__pyx_tuple__5);
+  __pyx_tuple__4 = PyTuple_Pack(1, __pyx_kp_s_Empty_shape_tuple_for_cython_arr); if (unlikely(!__pyx_tuple__4)) __PYX_ERR(1, 133, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_tuple__4);
+  __Pyx_GIVEREF(__pyx_tuple__4);
 
   /* "View.MemoryView":136
  * 
@@ -19688,9 +19587,9 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
  * 
  *         if not isinstance(format, bytes):
  */
-  __pyx_tuple__6 = PyTuple_Pack(1, __pyx_kp_s_itemsize_0_for_cython_array); if (unlikely(!__pyx_tuple__6)) __PYX_ERR(1, 136, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_tuple__6);
-  __Pyx_GIVEREF(__pyx_tuple__6);
+  __pyx_tuple__5 = PyTuple_Pack(1, __pyx_kp_s_itemsize_0_for_cython_array); if (unlikely(!__pyx_tuple__5)) __PYX_ERR(1, 136, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_tuple__5);
+  __Pyx_GIVEREF(__pyx_tuple__5);
 
   /* "View.MemoryView":148
  * 
@@ -19699,9 +19598,9 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
  * 
  * 
  */
-  __pyx_tuple__7 = PyTuple_Pack(1, __pyx_kp_s_unable_to_allocate_shape_and_str); if (unlikely(!__pyx_tuple__7)) __PYX_ERR(1, 148, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_tuple__7);
-  __Pyx_GIVEREF(__pyx_tuple__7);
+  __pyx_tuple__6 = PyTuple_Pack(1, __pyx_kp_s_unable_to_allocate_shape_and_str); if (unlikely(!__pyx_tuple__6)) __PYX_ERR(1, 148, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_tuple__6);
+  __Pyx_GIVEREF(__pyx_tuple__6);
 
   /* "View.MemoryView":176
  *             self.data = <char *>malloc(self.len)
@@ -19710,9 +19609,9 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
  * 
  *             if self.dtype_is_object:
  */
-  __pyx_tuple__8 = PyTuple_Pack(1, __pyx_kp_s_unable_to_allocate_array_data); if (unlikely(!__pyx_tuple__8)) __PYX_ERR(1, 176, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_tuple__8);
-  __Pyx_GIVEREF(__pyx_tuple__8);
+  __pyx_tuple__7 = PyTuple_Pack(1, __pyx_kp_s_unable_to_allocate_array_data); if (unlikely(!__pyx_tuple__7)) __PYX_ERR(1, 176, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_tuple__7);
+  __Pyx_GIVEREF(__pyx_tuple__7);
 
   /* "View.MemoryView":192
  *             bufmode = PyBUF_F_CONTIGUOUS | PyBUF_ANY_CONTIGUOUS
@@ -19721,9 +19620,9 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
  *         info.buf = self.data
  *         info.len = self.len
  */
-  __pyx_tuple__9 = PyTuple_Pack(1, __pyx_kp_s_Can_only_create_a_buffer_that_is); if (unlikely(!__pyx_tuple__9)) __PYX_ERR(1, 192, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_tuple__9);
-  __Pyx_GIVEREF(__pyx_tuple__9);
+  __pyx_tuple__8 = PyTuple_Pack(1, __pyx_kp_s_Can_only_create_a_buffer_that_is); if (unlikely(!__pyx_tuple__8)) __PYX_ERR(1, 192, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_tuple__8);
+  __Pyx_GIVEREF(__pyx_tuple__8);
 
   /* "(tree fragment)":2
  * def __reduce_cython__(self):
@@ -19731,18 +19630,18 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
  * def __setstate_cython__(self, __pyx_state):
  *     raise TypeError("no default __reduce__ due to non-trivial __cinit__")
  */
-  __pyx_tuple__10 = PyTuple_Pack(1, __pyx_kp_s_no_default___reduce___due_to_non); if (unlikely(!__pyx_tuple__10)) __PYX_ERR(1, 2, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_tuple__10);
-  __Pyx_GIVEREF(__pyx_tuple__10);
+  __pyx_tuple__9 = PyTuple_Pack(1, __pyx_kp_s_no_default___reduce___due_to_non); if (unlikely(!__pyx_tuple__9)) __PYX_ERR(1, 2, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_tuple__9);
+  __Pyx_GIVEREF(__pyx_tuple__9);
 
   /* "(tree fragment)":4
  *     raise TypeError("no default __reduce__ due to non-trivial __cinit__")
  * def __setstate_cython__(self, __pyx_state):
  *     raise TypeError("no default __reduce__ due to non-trivial __cinit__")             # <<<<<<<<<<<<<<
  */
-  __pyx_tuple__11 = PyTuple_Pack(1, __pyx_kp_s_no_default___reduce___due_to_non); if (unlikely(!__pyx_tuple__11)) __PYX_ERR(1, 4, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_tuple__11);
-  __Pyx_GIVEREF(__pyx_tuple__11);
+  __pyx_tuple__10 = PyTuple_Pack(1, __pyx_kp_s_no_default___reduce___due_to_non); if (unlikely(!__pyx_tuple__10)) __PYX_ERR(1, 4, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_tuple__10);
+  __Pyx_GIVEREF(__pyx_tuple__10);
 
   /* "View.MemoryView":418
  *     def __setitem__(memoryview self, object index, object value):
@@ -19751,9 +19650,9 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
  * 
  *         have_slices, index = _unellipsify(index, self.view.ndim)
  */
-  __pyx_tuple__12 = PyTuple_Pack(1, __pyx_kp_s_Cannot_assign_to_read_only_memor); if (unlikely(!__pyx_tuple__12)) __PYX_ERR(1, 418, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_tuple__12);
-  __Pyx_GIVEREF(__pyx_tuple__12);
+  __pyx_tuple__11 = PyTuple_Pack(1, __pyx_kp_s_Cannot_assign_to_read_only_memor); if (unlikely(!__pyx_tuple__11)) __PYX_ERR(1, 418, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_tuple__11);
+  __Pyx_GIVEREF(__pyx_tuple__11);
 
   /* "View.MemoryView":495
  *             result = struct.unpack(self.view.format, bytesitem)
@@ -19762,9 +19661,9 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
  *         else:
  *             if len(self.view.format) == 1:
  */
-  __pyx_tuple__13 = PyTuple_Pack(1, __pyx_kp_s_Unable_to_convert_item_to_object); if (unlikely(!__pyx_tuple__13)) __PYX_ERR(1, 495, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_tuple__13);
-  __Pyx_GIVEREF(__pyx_tuple__13);
+  __pyx_tuple__12 = PyTuple_Pack(1, __pyx_kp_s_Unable_to_convert_item_to_object); if (unlikely(!__pyx_tuple__12)) __PYX_ERR(1, 495, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_tuple__12);
+  __Pyx_GIVEREF(__pyx_tuple__12);
 
   /* "View.MemoryView":520
  *     def __getbuffer__(self, Py_buffer *info, int flags):
@@ -19773,9 +19672,9 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
  * 
  *         if flags & PyBUF_ND:
  */
-  __pyx_tuple__14 = PyTuple_Pack(1, __pyx_kp_s_Cannot_create_writable_memory_vi); if (unlikely(!__pyx_tuple__14)) __PYX_ERR(1, 520, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_tuple__14);
-  __Pyx_GIVEREF(__pyx_tuple__14);
+  __pyx_tuple__13 = PyTuple_Pack(1, __pyx_kp_s_Cannot_create_writable_memory_vi); if (unlikely(!__pyx_tuple__13)) __PYX_ERR(1, 520, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_tuple__13);
+  __Pyx_GIVEREF(__pyx_tuple__13);
 
   /* "View.MemoryView":570
  *         if self.view.strides == NULL:
@@ -19784,9 +19683,9 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
  * 
  *         return tuple([stride for stride in self.view.strides[:self.view.ndim]])
  */
-  __pyx_tuple__15 = PyTuple_Pack(1, __pyx_kp_s_Buffer_view_does_not_expose_stri); if (unlikely(!__pyx_tuple__15)) __PYX_ERR(1, 570, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_tuple__15);
-  __Pyx_GIVEREF(__pyx_tuple__15);
+  __pyx_tuple__14 = PyTuple_Pack(1, __pyx_kp_s_Buffer_view_does_not_expose_stri); if (unlikely(!__pyx_tuple__14)) __PYX_ERR(1, 570, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_tuple__14);
+  __Pyx_GIVEREF(__pyx_tuple__14);
 
   /* "View.MemoryView":577
  *     def suboffsets(self):
@@ -19795,12 +19694,12 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
  * 
  *         return tuple([suboffset for suboffset in self.view.suboffsets[:self.view.ndim]])
  */
-  __pyx_tuple__16 = PyTuple_New(1); if (unlikely(!__pyx_tuple__16)) __PYX_ERR(1, 577, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_tuple__16);
+  __pyx_tuple__15 = PyTuple_New(1); if (unlikely(!__pyx_tuple__15)) __PYX_ERR(1, 577, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_tuple__15);
   __Pyx_INCREF(__pyx_int_neg_1);
   __Pyx_GIVEREF(__pyx_int_neg_1);
-  PyTuple_SET_ITEM(__pyx_tuple__16, 0, __pyx_int_neg_1);
-  __Pyx_GIVEREF(__pyx_tuple__16);
+  PyTuple_SET_ITEM(__pyx_tuple__15, 0, __pyx_int_neg_1);
+  __Pyx_GIVEREF(__pyx_tuple__15);
 
   /* "(tree fragment)":2
  * def __reduce_cython__(self):
@@ -19808,18 +19707,18 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
  * def __setstate_cython__(self, __pyx_state):
  *     raise TypeError("no default __reduce__ due to non-trivial __cinit__")
  */
-  __pyx_tuple__17 = PyTuple_Pack(1, __pyx_kp_s_no_default___reduce___due_to_non); if (unlikely(!__pyx_tuple__17)) __PYX_ERR(1, 2, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_tuple__17);
-  __Pyx_GIVEREF(__pyx_tuple__17);
+  __pyx_tuple__16 = PyTuple_Pack(1, __pyx_kp_s_no_default___reduce___due_to_non); if (unlikely(!__pyx_tuple__16)) __PYX_ERR(1, 2, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_tuple__16);
+  __Pyx_GIVEREF(__pyx_tuple__16);
 
   /* "(tree fragment)":4
  *     raise TypeError("no default __reduce__ due to non-trivial __cinit__")
  * def __setstate_cython__(self, __pyx_state):
  *     raise TypeError("no default __reduce__ due to non-trivial __cinit__")             # <<<<<<<<<<<<<<
  */
-  __pyx_tuple__18 = PyTuple_Pack(1, __pyx_kp_s_no_default___reduce___due_to_non); if (unlikely(!__pyx_tuple__18)) __PYX_ERR(1, 4, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_tuple__18);
-  __Pyx_GIVEREF(__pyx_tuple__18);
+  __pyx_tuple__17 = PyTuple_Pack(1, __pyx_kp_s_no_default___reduce___due_to_non); if (unlikely(!__pyx_tuple__17)) __PYX_ERR(1, 4, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_tuple__17);
+  __Pyx_GIVEREF(__pyx_tuple__17);
 
   /* "View.MemoryView":682
  *         if item is Ellipsis:
@@ -19828,9 +19727,9 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
  *                 seen_ellipsis = True
  *             else:
  */
-  __pyx_slice__19 = PySlice_New(Py_None, Py_None, Py_None); if (unlikely(!__pyx_slice__19)) __PYX_ERR(1, 682, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_slice__19);
-  __Pyx_GIVEREF(__pyx_slice__19);
+  __pyx_slice__18 = PySlice_New(Py_None, Py_None, Py_None); if (unlikely(!__pyx_slice__18)) __PYX_ERR(1, 682, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_slice__18);
+  __Pyx_GIVEREF(__pyx_slice__18);
 
   /* "View.MemoryView":703
  *     for suboffset in suboffsets[:ndim]:
@@ -19839,9 +19738,9 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
  * 
  * 
  */
-  __pyx_tuple__20 = PyTuple_Pack(1, __pyx_kp_s_Indirect_dimensions_not_supporte); if (unlikely(!__pyx_tuple__20)) __PYX_ERR(1, 703, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_tuple__20);
-  __Pyx_GIVEREF(__pyx_tuple__20);
+  __pyx_tuple__19 = PyTuple_Pack(1, __pyx_kp_s_Indirect_dimensions_not_supporte); if (unlikely(!__pyx_tuple__19)) __PYX_ERR(1, 703, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_tuple__19);
+  __Pyx_GIVEREF(__pyx_tuple__19);
 
   /* "(tree fragment)":2
  * def __reduce_cython__(self):
@@ -19849,18 +19748,18 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
  * def __setstate_cython__(self, __pyx_state):
  *     raise TypeError("no default __reduce__ due to non-trivial __cinit__")
  */
-  __pyx_tuple__21 = PyTuple_Pack(1, __pyx_kp_s_no_default___reduce___due_to_non); if (unlikely(!__pyx_tuple__21)) __PYX_ERR(1, 2, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_tuple__21);
-  __Pyx_GIVEREF(__pyx_tuple__21);
+  __pyx_tuple__20 = PyTuple_Pack(1, __pyx_kp_s_no_default___reduce___due_to_non); if (unlikely(!__pyx_tuple__20)) __PYX_ERR(1, 2, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_tuple__20);
+  __Pyx_GIVEREF(__pyx_tuple__20);
 
   /* "(tree fragment)":4
  *     raise TypeError("no default __reduce__ due to non-trivial __cinit__")
  * def __setstate_cython__(self, __pyx_state):
  *     raise TypeError("no default __reduce__ due to non-trivial __cinit__")             # <<<<<<<<<<<<<<
  */
-  __pyx_tuple__22 = PyTuple_Pack(1, __pyx_kp_s_no_default___reduce___due_to_non); if (unlikely(!__pyx_tuple__22)) __PYX_ERR(1, 4, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_tuple__22);
-  __Pyx_GIVEREF(__pyx_tuple__22);
+  __pyx_tuple__21 = PyTuple_Pack(1, __pyx_kp_s_no_default___reduce___due_to_non); if (unlikely(!__pyx_tuple__21)) __PYX_ERR(1, 4, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_tuple__21);
+  __Pyx_GIVEREF(__pyx_tuple__21);
 
   /* "View.MemoryView":286
  *         return self.name
@@ -19869,9 +19768,9 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
  * cdef strided = Enum("<strided and direct>") # default
  * cdef indirect = Enum("<strided and indirect>")
  */
-  __pyx_tuple__23 = PyTuple_Pack(1, __pyx_kp_s_strided_and_direct_or_indirect); if (unlikely(!__pyx_tuple__23)) __PYX_ERR(1, 286, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_tuple__23);
-  __Pyx_GIVEREF(__pyx_tuple__23);
+  __pyx_tuple__22 = PyTuple_Pack(1, __pyx_kp_s_strided_and_direct_or_indirect); if (unlikely(!__pyx_tuple__22)) __PYX_ERR(1, 286, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_tuple__22);
+  __Pyx_GIVEREF(__pyx_tuple__22);
 
   /* "View.MemoryView":287
  * 
@@ -19880,9 +19779,9 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
  * cdef indirect = Enum("<strided and indirect>")
  * 
  */
-  __pyx_tuple__24 = PyTuple_Pack(1, __pyx_kp_s_strided_and_direct); if (unlikely(!__pyx_tuple__24)) __PYX_ERR(1, 287, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_tuple__24);
-  __Pyx_GIVEREF(__pyx_tuple__24);
+  __pyx_tuple__23 = PyTuple_Pack(1, __pyx_kp_s_strided_and_direct); if (unlikely(!__pyx_tuple__23)) __PYX_ERR(1, 287, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_tuple__23);
+  __Pyx_GIVEREF(__pyx_tuple__23);
 
   /* "View.MemoryView":288
  * cdef generic = Enum("<strided and direct or indirect>")
@@ -19891,9 +19790,9 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
  * 
  * 
  */
-  __pyx_tuple__25 = PyTuple_Pack(1, __pyx_kp_s_strided_and_indirect); if (unlikely(!__pyx_tuple__25)) __PYX_ERR(1, 288, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_tuple__25);
-  __Pyx_GIVEREF(__pyx_tuple__25);
+  __pyx_tuple__24 = PyTuple_Pack(1, __pyx_kp_s_strided_and_indirect); if (unlikely(!__pyx_tuple__24)) __PYX_ERR(1, 288, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_tuple__24);
+  __Pyx_GIVEREF(__pyx_tuple__24);
 
   /* "View.MemoryView":291
  * 
@@ -19902,9 +19801,9 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
  * cdef indirect_contiguous = Enum("<contiguous and indirect>")
  * 
  */
-  __pyx_tuple__26 = PyTuple_Pack(1, __pyx_kp_s_contiguous_and_direct); if (unlikely(!__pyx_tuple__26)) __PYX_ERR(1, 291, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_tuple__26);
-  __Pyx_GIVEREF(__pyx_tuple__26);
+  __pyx_tuple__25 = PyTuple_Pack(1, __pyx_kp_s_contiguous_and_direct); if (unlikely(!__pyx_tuple__25)) __PYX_ERR(1, 291, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_tuple__25);
+  __Pyx_GIVEREF(__pyx_tuple__25);
 
   /* "View.MemoryView":292
  * 
@@ -19913,19 +19812,19 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
  * 
  * 
  */
-  __pyx_tuple__27 = PyTuple_Pack(1, __pyx_kp_s_contiguous_and_indirect); if (unlikely(!__pyx_tuple__27)) __PYX_ERR(1, 292, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_tuple__27);
-  __Pyx_GIVEREF(__pyx_tuple__27);
+  __pyx_tuple__26 = PyTuple_Pack(1, __pyx_kp_s_contiguous_and_indirect); if (unlikely(!__pyx_tuple__26)) __PYX_ERR(1, 292, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_tuple__26);
+  __Pyx_GIVEREF(__pyx_tuple__26);
 
   /* "(tree fragment)":1
  * def __pyx_unpickle_Enum(__pyx_type, long __pyx_checksum, __pyx_state):             # <<<<<<<<<<<<<<
  *     cdef object __pyx_PickleError
  *     cdef object __pyx_result
  */
-  __pyx_tuple__28 = PyTuple_Pack(5, __pyx_n_s_pyx_type, __pyx_n_s_pyx_checksum, __pyx_n_s_pyx_state, __pyx_n_s_pyx_PickleError, __pyx_n_s_pyx_result); if (unlikely(!__pyx_tuple__28)) __PYX_ERR(1, 1, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_tuple__28);
-  __Pyx_GIVEREF(__pyx_tuple__28);
-  __pyx_codeobj__29 = (PyObject*)__Pyx_PyCode_New(3, 0, 5, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__28, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_stringsource, __pyx_n_s_pyx_unpickle_Enum, 1, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__29)) __PYX_ERR(1, 1, __pyx_L1_error)
+  __pyx_tuple__27 = PyTuple_Pack(5, __pyx_n_s_pyx_type, __pyx_n_s_pyx_checksum, __pyx_n_s_pyx_state, __pyx_n_s_pyx_PickleError, __pyx_n_s_pyx_result); if (unlikely(!__pyx_tuple__27)) __PYX_ERR(1, 1, __pyx_L1_error)
+  __Pyx_GOTREF(__pyx_tuple__27);
+  __Pyx_GIVEREF(__pyx_tuple__27);
+  __pyx_codeobj__28 = (PyObject*)__Pyx_PyCode_New(3, 0, 5, 0, CO_OPTIMIZED|CO_NEWLOCALS, __pyx_empty_bytes, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_tuple__27, __pyx_empty_tuple, __pyx_empty_tuple, __pyx_kp_s_stringsource, __pyx_n_s_pyx_unpickle_Enum, 1, __pyx_empty_bytes); if (unlikely(!__pyx_codeobj__28)) __PYX_ERR(1, 1, __pyx_L1_error)
   __Pyx_RefNannyFinishContext();
   return 0;
   __pyx_L1_error:;
@@ -20344,24 +20243,6 @@ if (!__Pyx_RefNanny) {
   __Pyx_GIVEREF(__pyx_t_1);
   __pyx_t_1 = 0;
 
-  /* "custreamz/_libxx/kafka.pyx":81
- *         return None
- * 
- * cpdef get_committed_offset(topic=None, partitions=[]):             # <<<<<<<<<<<<<<
- *     cdef vector[int] v_partitions
- *     for part in partitions:
- */
-  __pyx_t_1 = PyList_New(0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 81, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_1);
-  __pyx_k__4 = __pyx_t_1;
-  __Pyx_GIVEREF(__pyx_t_1);
-  __pyx_t_1 = 0;
-  __pyx_t_1 = PyList_New(0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 81, __pyx_L1_error)
-  __Pyx_GOTREF(__pyx_t_1);
-  __pyx_k__4 = __pyx_t_1;
-  __Pyx_GIVEREF(__pyx_t_1);
-  __pyx_t_1 = 0;
-
   /* "custreamz/_libxx/kafka.pyx":1
  * # Copyright (c) 2019-2020, NVIDIA CORPORATION.             # <<<<<<<<<<<<<<
  * 
@@ -20392,7 +20273,7 @@ if (!__Pyx_RefNanny) {
  * cdef strided = Enum("<strided and direct>") # default
  * cdef indirect = Enum("<strided and indirect>")
  */
-  __pyx_t_1 = __Pyx_PyObject_Call(((PyObject *)__pyx_MemviewEnum_type), __pyx_tuple__23, NULL); if (unlikely(!__pyx_t_1)) __PYX_ERR(1, 286, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyObject_Call(((PyObject *)__pyx_MemviewEnum_type), __pyx_tuple__22, NULL); if (unlikely(!__pyx_t_1)) __PYX_ERR(1, 286, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __Pyx_XGOTREF(generic);
   __Pyx_DECREF_SET(generic, __pyx_t_1);
@@ -20406,7 +20287,7 @@ if (!__Pyx_RefNanny) {
  * cdef indirect = Enum("<strided and indirect>")
  * 
  */
-  __pyx_t_1 = __Pyx_PyObject_Call(((PyObject *)__pyx_MemviewEnum_type), __pyx_tuple__24, NULL); if (unlikely(!__pyx_t_1)) __PYX_ERR(1, 287, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyObject_Call(((PyObject *)__pyx_MemviewEnum_type), __pyx_tuple__23, NULL); if (unlikely(!__pyx_t_1)) __PYX_ERR(1, 287, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __Pyx_XGOTREF(strided);
   __Pyx_DECREF_SET(strided, __pyx_t_1);
@@ -20420,7 +20301,7 @@ if (!__Pyx_RefNanny) {
  * 
  * 
  */
-  __pyx_t_1 = __Pyx_PyObject_Call(((PyObject *)__pyx_MemviewEnum_type), __pyx_tuple__25, NULL); if (unlikely(!__pyx_t_1)) __PYX_ERR(1, 288, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyObject_Call(((PyObject *)__pyx_MemviewEnum_type), __pyx_tuple__24, NULL); if (unlikely(!__pyx_t_1)) __PYX_ERR(1, 288, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __Pyx_XGOTREF(indirect);
   __Pyx_DECREF_SET(indirect, __pyx_t_1);
@@ -20434,7 +20315,7 @@ if (!__Pyx_RefNanny) {
  * cdef indirect_contiguous = Enum("<contiguous and indirect>")
  * 
  */
-  __pyx_t_1 = __Pyx_PyObject_Call(((PyObject *)__pyx_MemviewEnum_type), __pyx_tuple__26, NULL); if (unlikely(!__pyx_t_1)) __PYX_ERR(1, 291, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyObject_Call(((PyObject *)__pyx_MemviewEnum_type), __pyx_tuple__25, NULL); if (unlikely(!__pyx_t_1)) __PYX_ERR(1, 291, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __Pyx_XGOTREF(contiguous);
   __Pyx_DECREF_SET(contiguous, __pyx_t_1);
@@ -20448,7 +20329,7 @@ if (!__Pyx_RefNanny) {
  * 
  * 
  */
-  __pyx_t_1 = __Pyx_PyObject_Call(((PyObject *)__pyx_MemviewEnum_type), __pyx_tuple__27, NULL); if (unlikely(!__pyx_t_1)) __PYX_ERR(1, 292, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyObject_Call(((PyObject *)__pyx_MemviewEnum_type), __pyx_tuple__26, NULL); if (unlikely(!__pyx_t_1)) __PYX_ERR(1, 292, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __Pyx_XGOTREF(indirect_contiguous);
   __Pyx_DECREF_SET(indirect_contiguous, __pyx_t_1);
@@ -22981,37 +22862,6 @@ bad:
     }
 
 /* CIntToPy */
-static CYTHON_INLINE PyObject* __Pyx_PyInt_From_int(int value) {
-    const int neg_one = (int) ((int) 0 - (int) 1), const_zero = (int) 0;
-    const int is_unsigned = neg_one > const_zero;
-    if (is_unsigned) {
-        if (sizeof(int) < sizeof(long)) {
-            return PyInt_FromLong((long) value);
-        } else if (sizeof(int) <= sizeof(unsigned long)) {
-            return PyLong_FromUnsignedLong((unsigned long) value);
-#ifdef HAVE_LONG_LONG
-        } else if (sizeof(int) <= sizeof(unsigned PY_LONG_LONG)) {
-            return PyLong_FromUnsignedLongLong((unsigned PY_LONG_LONG) value);
-#endif
-        }
-    } else {
-        if (sizeof(int) <= sizeof(long)) {
-            return PyInt_FromLong((long) value);
-#ifdef HAVE_LONG_LONG
-        } else if (sizeof(int) <= sizeof(PY_LONG_LONG)) {
-            return PyLong_FromLongLong((PY_LONG_LONG) value);
-#endif
-        }
-    }
-    {
-        int one = 1; int little = (int)*(unsigned char *)&one;
-        unsigned char *bytes = (unsigned char *)&value;
-        return _PyLong_FromByteArray(bytes, sizeof(int),
-                                     little, !is_unsigned);
-    }
-}
-
-/* CIntToPy */
 static CYTHON_INLINE PyObject* __Pyx_PyInt_From_int64_t(int64_t value) {
     const int64_t neg_one = (int64_t) ((int64_t) 0 - (int64_t) 1), const_zero = (int64_t) 0;
     const int is_unsigned = neg_one > const_zero;
@@ -23513,195 +23363,6 @@ raise_neg_overflow:
     return (int64_t) -1;
 }
 
-/* CIntFromPy */
-static CYTHON_INLINE int32_t __Pyx_PyInt_As_int32_t(PyObject *x) {
-    const int32_t neg_one = (int32_t) ((int32_t) 0 - (int32_t) 1), const_zero = (int32_t) 0;
-    const int is_unsigned = neg_one > const_zero;
-#if PY_MAJOR_VERSION < 3
-    if (likely(PyInt_Check(x))) {
-        if (sizeof(int32_t) < sizeof(long)) {
-            __PYX_VERIFY_RETURN_INT(int32_t, long, PyInt_AS_LONG(x))
-        } else {
-            long val = PyInt_AS_LONG(x);
-            if (is_unsigned && unlikely(val < 0)) {
-                goto raise_neg_overflow;
-            }
-            return (int32_t) val;
-        }
-    } else
-#endif
-    if (likely(PyLong_Check(x))) {
-        if (is_unsigned) {
-#if CYTHON_USE_PYLONG_INTERNALS
-            const digit* digits = ((PyLongObject*)x)->ob_digit;
-            switch (Py_SIZE(x)) {
-                case  0: return (int32_t) 0;
-                case  1: __PYX_VERIFY_RETURN_INT(int32_t, digit, digits[0])
-                case 2:
-                    if (8 * sizeof(int32_t) > 1 * PyLong_SHIFT) {
-                        if (8 * sizeof(unsigned long) > 2 * PyLong_SHIFT) {
-                            __PYX_VERIFY_RETURN_INT(int32_t, unsigned long, (((((unsigned long)digits[1]) << PyLong_SHIFT) | (unsigned long)digits[0])))
-                        } else if (8 * sizeof(int32_t) >= 2 * PyLong_SHIFT) {
-                            return (int32_t) (((((int32_t)digits[1]) << PyLong_SHIFT) | (int32_t)digits[0]));
-                        }
-                    }
-                    break;
-                case 3:
-                    if (8 * sizeof(int32_t) > 2 * PyLong_SHIFT) {
-                        if (8 * sizeof(unsigned long) > 3 * PyLong_SHIFT) {
-                            __PYX_VERIFY_RETURN_INT(int32_t, unsigned long, (((((((unsigned long)digits[2]) << PyLong_SHIFT) | (unsigned long)digits[1]) << PyLong_SHIFT) | (unsigned long)digits[0])))
-                        } else if (8 * sizeof(int32_t) >= 3 * PyLong_SHIFT) {
-                            return (int32_t) (((((((int32_t)digits[2]) << PyLong_SHIFT) | (int32_t)digits[1]) << PyLong_SHIFT) | (int32_t)digits[0]));
-                        }
-                    }
-                    break;
-                case 4:
-                    if (8 * sizeof(int32_t) > 3 * PyLong_SHIFT) {
-                        if (8 * sizeof(unsigned long) > 4 * PyLong_SHIFT) {
-                            __PYX_VERIFY_RETURN_INT(int32_t, unsigned long, (((((((((unsigned long)digits[3]) << PyLong_SHIFT) | (unsigned long)digits[2]) << PyLong_SHIFT) | (unsigned long)digits[1]) << PyLong_SHIFT) | (unsigned long)digits[0])))
-                        } else if (8 * sizeof(int32_t) >= 4 * PyLong_SHIFT) {
-                            return (int32_t) (((((((((int32_t)digits[3]) << PyLong_SHIFT) | (int32_t)digits[2]) << PyLong_SHIFT) | (int32_t)digits[1]) << PyLong_SHIFT) | (int32_t)digits[0]));
-                        }
-                    }
-                    break;
-            }
-#endif
-#if CYTHON_COMPILING_IN_CPYTHON
-            if (unlikely(Py_SIZE(x) < 0)) {
-                goto raise_neg_overflow;
-            }
-#else
-            {
-                int result = PyObject_RichCompareBool(x, Py_False, Py_LT);
-                if (unlikely(result < 0))
-                    return (int32_t) -1;
-                if (unlikely(result == 1))
-                    goto raise_neg_overflow;
-            }
-#endif
-            if (sizeof(int32_t) <= sizeof(unsigned long)) {
-                __PYX_VERIFY_RETURN_INT_EXC(int32_t, unsigned long, PyLong_AsUnsignedLong(x))
-#ifdef HAVE_LONG_LONG
-            } else if (sizeof(int32_t) <= sizeof(unsigned PY_LONG_LONG)) {
-                __PYX_VERIFY_RETURN_INT_EXC(int32_t, unsigned PY_LONG_LONG, PyLong_AsUnsignedLongLong(x))
-#endif
-            }
-        } else {
-#if CYTHON_USE_PYLONG_INTERNALS
-            const digit* digits = ((PyLongObject*)x)->ob_digit;
-            switch (Py_SIZE(x)) {
-                case  0: return (int32_t) 0;
-                case -1: __PYX_VERIFY_RETURN_INT(int32_t, sdigit, (sdigit) (-(sdigit)digits[0]))
-                case  1: __PYX_VERIFY_RETURN_INT(int32_t,  digit, +digits[0])
-                case -2:
-                    if (8 * sizeof(int32_t) - 1 > 1 * PyLong_SHIFT) {
-                        if (8 * sizeof(unsigned long) > 2 * PyLong_SHIFT) {
-                            __PYX_VERIFY_RETURN_INT(int32_t, long, -(long) (((((unsigned long)digits[1]) << PyLong_SHIFT) | (unsigned long)digits[0])))
-                        } else if (8 * sizeof(int32_t) - 1 > 2 * PyLong_SHIFT) {
-                            return (int32_t) (((int32_t)-1)*(((((int32_t)digits[1]) << PyLong_SHIFT) | (int32_t)digits[0])));
-                        }
-                    }
-                    break;
-                case 2:
-                    if (8 * sizeof(int32_t) > 1 * PyLong_SHIFT) {
-                        if (8 * sizeof(unsigned long) > 2 * PyLong_SHIFT) {
-                            __PYX_VERIFY_RETURN_INT(int32_t, unsigned long, (((((unsigned long)digits[1]) << PyLong_SHIFT) | (unsigned long)digits[0])))
-                        } else if (8 * sizeof(int32_t) - 1 > 2 * PyLong_SHIFT) {
-                            return (int32_t) ((((((int32_t)digits[1]) << PyLong_SHIFT) | (int32_t)digits[0])));
-                        }
-                    }
-                    break;
-                case -3:
-                    if (8 * sizeof(int32_t) - 1 > 2 * PyLong_SHIFT) {
-                        if (8 * sizeof(unsigned long) > 3 * PyLong_SHIFT) {
-                            __PYX_VERIFY_RETURN_INT(int32_t, long, -(long) (((((((unsigned long)digits[2]) << PyLong_SHIFT) | (unsigned long)digits[1]) << PyLong_SHIFT) | (unsigned long)digits[0])))
-                        } else if (8 * sizeof(int32_t) - 1 > 3 * PyLong_SHIFT) {
-                            return (int32_t) (((int32_t)-1)*(((((((int32_t)digits[2]) << PyLong_SHIFT) | (int32_t)digits[1]) << PyLong_SHIFT) | (int32_t)digits[0])));
-                        }
-                    }
-                    break;
-                case 3:
-                    if (8 * sizeof(int32_t) > 2 * PyLong_SHIFT) {
-                        if (8 * sizeof(unsigned long) > 3 * PyLong_SHIFT) {
-                            __PYX_VERIFY_RETURN_INT(int32_t, unsigned long, (((((((unsigned long)digits[2]) << PyLong_SHIFT) | (unsigned long)digits[1]) << PyLong_SHIFT) | (unsigned long)digits[0])))
-                        } else if (8 * sizeof(int32_t) - 1 > 3 * PyLong_SHIFT) {
-                            return (int32_t) ((((((((int32_t)digits[2]) << PyLong_SHIFT) | (int32_t)digits[1]) << PyLong_SHIFT) | (int32_t)digits[0])));
-                        }
-                    }
-                    break;
-                case -4:
-                    if (8 * sizeof(int32_t) - 1 > 3 * PyLong_SHIFT) {
-                        if (8 * sizeof(unsigned long) > 4 * PyLong_SHIFT) {
-                            __PYX_VERIFY_RETURN_INT(int32_t, long, -(long) (((((((((unsigned long)digits[3]) << PyLong_SHIFT) | (unsigned long)digits[2]) << PyLong_SHIFT) | (unsigned long)digits[1]) << PyLong_SHIFT) | (unsigned long)digits[0])))
-                        } else if (8 * sizeof(int32_t) - 1 > 4 * PyLong_SHIFT) {
-                            return (int32_t) (((int32_t)-1)*(((((((((int32_t)digits[3]) << PyLong_SHIFT) | (int32_t)digits[2]) << PyLong_SHIFT) | (int32_t)digits[1]) << PyLong_SHIFT) | (int32_t)digits[0])));
-                        }
-                    }
-                    break;
-                case 4:
-                    if (8 * sizeof(int32_t) > 3 * PyLong_SHIFT) {
-                        if (8 * sizeof(unsigned long) > 4 * PyLong_SHIFT) {
-                            __PYX_VERIFY_RETURN_INT(int32_t, unsigned long, (((((((((unsigned long)digits[3]) << PyLong_SHIFT) | (unsigned long)digits[2]) << PyLong_SHIFT) | (unsigned long)digits[1]) << PyLong_SHIFT) | (unsigned long)digits[0])))
-                        } else if (8 * sizeof(int32_t) - 1 > 4 * PyLong_SHIFT) {
-                            return (int32_t) ((((((((((int32_t)digits[3]) << PyLong_SHIFT) | (int32_t)digits[2]) << PyLong_SHIFT) | (int32_t)digits[1]) << PyLong_SHIFT) | (int32_t)digits[0])));
-                        }
-                    }
-                    break;
-            }
-#endif
-            if (sizeof(int32_t) <= sizeof(long)) {
-                __PYX_VERIFY_RETURN_INT_EXC(int32_t, long, PyLong_AsLong(x))
-#ifdef HAVE_LONG_LONG
-            } else if (sizeof(int32_t) <= sizeof(PY_LONG_LONG)) {
-                __PYX_VERIFY_RETURN_INT_EXC(int32_t, PY_LONG_LONG, PyLong_AsLongLong(x))
-#endif
-            }
-        }
-        {
-#if CYTHON_COMPILING_IN_PYPY && !defined(_PyLong_AsByteArray)
-            PyErr_SetString(PyExc_RuntimeError,
-                            "_PyLong_AsByteArray() not available in PyPy, cannot convert large numbers");
-#else
-            int32_t val;
-            PyObject *v = __Pyx_PyNumber_IntOrLong(x);
- #if PY_MAJOR_VERSION < 3
-            if (likely(v) && !PyLong_Check(v)) {
-                PyObject *tmp = v;
-                v = PyNumber_Long(tmp);
-                Py_DECREF(tmp);
-            }
- #endif
-            if (likely(v)) {
-                int one = 1; int is_little = (int)*(unsigned char *)&one;
-                unsigned char *bytes = (unsigned char *)&val;
-                int ret = _PyLong_AsByteArray((PyLongObject *)v,
-                                              bytes, sizeof(val),
-                                              is_little, !is_unsigned);
-                Py_DECREF(v);
-                if (likely(!ret))
-                    return val;
-            }
-#endif
-            return (int32_t) -1;
-        }
-    } else {
-        int32_t val;
-        PyObject *tmp = __Pyx_PyNumber_IntOrLong(x);
-        if (!tmp) return (int32_t) -1;
-        val = __Pyx_PyInt_As_int32_t(tmp);
-        Py_DECREF(tmp);
-        return val;
-    }
-raise_overflow:
-    PyErr_SetString(PyExc_OverflowError,
-        "value too large to convert to int32_t");
-    return (int32_t) -1;
-raise_neg_overflow:
-    PyErr_SetString(PyExc_OverflowError,
-        "can't convert negative value to int32_t");
-    return (int32_t) -1;
-}
-
 /* MemviewSliceCopyTemplate */
 static __Pyx_memviewslice
 __pyx_memoryview_copy_new_contig(const __Pyx_memviewslice *from_mvs,
@@ -24090,6 +23751,37 @@ raise_neg_overflow:
     PyErr_SetString(PyExc_OverflowError,
         "can't convert negative value to long");
     return (long) -1;
+}
+
+/* CIntToPy */
+static CYTHON_INLINE PyObject* __Pyx_PyInt_From_int(int value) {
+    const int neg_one = (int) ((int) 0 - (int) 1), const_zero = (int) 0;
+    const int is_unsigned = neg_one > const_zero;
+    if (is_unsigned) {
+        if (sizeof(int) < sizeof(long)) {
+            return PyInt_FromLong((long) value);
+        } else if (sizeof(int) <= sizeof(unsigned long)) {
+            return PyLong_FromUnsignedLong((unsigned long) value);
+#ifdef HAVE_LONG_LONG
+        } else if (sizeof(int) <= sizeof(unsigned PY_LONG_LONG)) {
+            return PyLong_FromUnsignedLongLong((unsigned PY_LONG_LONG) value);
+#endif
+        }
+    } else {
+        if (sizeof(int) <= sizeof(long)) {
+            return PyInt_FromLong((long) value);
+#ifdef HAVE_LONG_LONG
+        } else if (sizeof(int) <= sizeof(PY_LONG_LONG)) {
+            return PyLong_FromLongLong((PY_LONG_LONG) value);
+#endif
+        }
+    }
+    {
+        int one = 1; int little = (int)*(unsigned char *)&one;
+        unsigned char *bytes = (unsigned char *)&value;
+        return _PyLong_FromByteArray(bytes, sizeof(int),
+                                     little, !is_unsigned);
+    }
 }
 
 /* CIntToPy */

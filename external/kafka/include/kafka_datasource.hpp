@@ -70,7 +70,7 @@ class kafka_datasource : public external_datasource {
 
   bool commit_offset(std::string topic, int partition, int64_t offset);
 
-  std::map<std::string, int64_t> get_watermark_offset(std::string topic, int partition);
+  std::map<std::string, int64_t> get_watermark_offset(std::string topic, int partition, int timeout, bool cached);
 
   bool configure_datasource(std::map<std::string, std::string> configs, std::vector<std::string> topics, std::vector<int> partitions);
 
@@ -78,7 +78,7 @@ class kafka_datasource : public external_datasource {
 
   std::map<std::string, std::string> current_configs();
 
-  std::map<int, int64_t> get_committed_offset(std::string topic, std::vector<int> partitions);
+  int64_t get_committed_offset(std::string topic, int partition);
 
   std::string consume_range(std::string topic, int partition, int64_t start_offset, int64_t end_offset, int batch_timeout, std::string delimiter);
 

@@ -1,5 +1,7 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
+import confluent_kafka as ck
+
 import cudf
 
 import custreamz._libxx.kafka as libkafka
@@ -76,30 +78,25 @@ class KafkaHandle(object):
             else:
                 return cudf.DataFrame()
 
-    def committed(self, topic=None, partitions=[]):
-        if topic is None:
-            raise ValueError(
-                "You must specify a topic to retrieve the offsets from"
-            )
-        if len(partitions) == 0:
-            raise ValueError(
-                "You must specify a list of partitions to get the offsets from"
-            )
-
-        offsets = libkafka.get_committed_offset(topic, partitions)
-        for key, value in offsets.items():
-            if value < 0:
-                offsets[key] = 0
-        return offsets
+    def committed(self, partitions, timeout=10000):
+        toppars = []
+        for part in partitions:
+            offsets = libkafka.get_committed_offset(part.topic, part.partition)
+            for key, value in offsets.items():
+                if value < 0:
+                    value = 0
+                toppars.append(ck.TopicPartition(part.topic, key, value))
+        return toppars
 
     @docutils.doc_get_watermark_offsets()
-    def get_watermark_offsets(
-        self, topic=None, partition=0, *args, **kwargs,
-    ):
+    def get_watermark_offsets(self, partition, timeout=10000, cached=False):
         """{docstring}"""
 
         offsets = libkafka.get_watermark_offsets(
-            topic=topic, partition=partition
+            topic=partition.topic,
+            partition=partition.partition,
+            timeout=timeout,
+            cached=cached,
         )
 
         if len(offsets) != 2:
@@ -114,10 +111,11 @@ class KafkaHandle(object):
 
         return offsets[b"low"], offsets[b"high"]
 
-    def commit(
-        self, topic=None, partition=0, offset=0, *args, **kwargs,
-    ):
-        libkafka.commit_topic_offset(topic, partition, offset)
+    def commit(self, offsets=None, asynchronous=True):
+        for offs in offsets:
+            libkafka.commit_topic_offset(
+                offs.topic, offs.partition, offs.offset, asynchronous
+            )
 
     def produce(self, topic=None, message_val=None, message_key=None):
         return libkafka.produce_message(topic, message_val, message_key)
