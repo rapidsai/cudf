@@ -45,7 +45,7 @@ def merge_sorted(
                     if ascending
                     else libcudf_types.order.DESCENDING)
 
-    if ascending == False:
+    if ascending is False:
         if na_position == "last":
             na_position = "first"
         else:
