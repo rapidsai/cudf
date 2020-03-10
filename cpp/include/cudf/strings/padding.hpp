@@ -29,9 +29,9 @@ namespace strings
  * character should be placed.
  */
 enum class pad_side {
-    left,   ///< Add padding to the left.
-    right,  ///< Add padding to the right.
-    both    ///< Add padding equally to the right and left.
+    LEFT,   ///< Add padding to the left.
+    RIGHT,  ///< Add padding to the right.
+    BOTH    ///< Add padding equally to the right and left.
 };
 
 /**
@@ -57,7 +57,7 @@ enum class pad_side {
  * @return New column with padded strings.
  */
 std::unique_ptr<column> pad( strings_column_view const& strings,
-                             size_type width, pad_side side = pad_side::right,
+                             size_type width, pad_side side = cudf::strings::pad_side::RIGHT,
                              std::string const& fill_char = " ",
                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
 

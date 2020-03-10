@@ -36,6 +36,8 @@
 #include <string>
 #include <vector>
 
+#include "chunked_state.hpp"
+
 namespace cudf {
 namespace experimental {
 namespace io {
@@ -83,6 +85,28 @@ class writer::impl {
    * @param stream Stream to use for memory allocation and kernels
    **/
   void write(table_view const& table, const table_metadata *metadata, cudaStream_t stream);
+
+  /**
+   * @brief Begins the chunked/streamed write process.
+   *
+   * @param[in] orc_chunked_state State information that crosses _begin() / write_chunked() / _end() boundaries.
+   */
+  void write_chunked_begin(orc_chunked_state& state);
+
+  /**
+   * @brief Writes a single subtable as part of a larger ORC file/table write.
+   *
+   * @param[in] table The table information to be written
+   * @param[in] orc_chunked_state State information that crosses _begin() / write_chunked() / _end() boundaries.
+   */
+  void write_chunked(table_view const& table, orc_chunked_state& state);
+
+  /**
+   * @brief Finishes the chunked/streamed write process.
+   *
+   * @param[in] orc_chunked_state State information that crosses _begin() / write_chunked() / _end() boundaries.
+   */
+  void write_chunked_end(orc_chunked_state& state);
 
  private:
   /**
@@ -136,7 +160,8 @@ class writer::impl {
   std::vector<Stream> gather_streams(orc_column_view* columns,
                                      size_t num_columns, size_t num_rows,
                                      std::vector<uint32_t> const& stripe_list,
-                                     std::vector<int32_t>& strm_ids);
+                                     std::vector<int32_t>& strm_ids,
+                                     const orc_chunked_state& state);
 
   /**
    * @brief Encodes the streams as a series of column data chunks
@@ -246,6 +271,13 @@ class writer::impl {
                          uint8_t const* compressed_data, uint8_t* stream_out,
                          StripeInformation& stripe,
                          std::vector<Stream>& streams, cudaStream_t stream);
+
+  /**
+   * @brief Insert 3-byte uncompressed block headers in a byte vector
+   *
+   * @param byte_vector Raw data (must include initial 3-byte header)
+   */
+  void add_uncompressed_block_headers(std::vector<uint8_t>& byte_vector);
 
   /**
    * @brief Returns the number of row groups for holding the specified rows
