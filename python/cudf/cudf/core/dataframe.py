@@ -2392,9 +2392,6 @@ class DataFrame(Frame):
             )
             method = type
 
-        if how not in ["left", "right", "inner", "outer"]:
-            raise NotImplementedError("unsupported {!r} join".format(how))
-
         if how == "right":
             # libgdf doesn't support right join directly, we will swap the
             # dfs and use left join

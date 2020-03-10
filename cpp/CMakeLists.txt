@@ -574,9 +574,11 @@ add_library(cudf
             src/rolling/jit/code/kernel.cpp
             src/rolling/jit/code/operation.cpp
             src/sort/sort.cu
+            src/sort/stable_sort.cu
             src/column/legacy/interop.cpp
             src/strings/attributes.cu
             src/strings/case.cu
+            src/strings/wrap.cu
             src/strings/capitalize.cu
             src/strings/char_types/char_types.cu
             src/strings/combine.cu
