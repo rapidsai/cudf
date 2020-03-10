@@ -756,7 +756,8 @@ ConfigureTest(ROLLING_TEST "${ROLLING_TEST_SRC}")
 
 set(FILLING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/filling/fill_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/filling/repeat_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/filling/repeat_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/filling/sequence_tests.cpp")
 
 ConfigureTest(FILLING_TEST "${FILLING_TEST_SRC}")
 
@@ -891,7 +892,8 @@ set(DICTIONARY_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/factories_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/gather_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/remove_keys_test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/set_keys_test.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/set_keys_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/slice_test.cpp")
 
 ConfigureTest(DICTIONARY_TEST "${DICTIONARY_TEST_SRC}")
 

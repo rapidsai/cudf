@@ -2081,20 +2081,11 @@ class Series(Frame):
         warnings.warn("Use .unique() instead", DeprecationWarning)
         return self.unique()
 
-    def unique(self, method="sort", sort=True):
-        """Returns unique values of this Series.
-        default='sort' will be changed to 'hash' when implemented.
+    def unique(self):
         """
-        if method != "sort":
-            msg = "non sort based unique() not implemented yet"
-            raise NotImplementedError(msg)
-        if not sort:
-            msg = "not sorted unique not implemented yet."
-            raise NotImplementedError(msg)
-        if self.null_count == len(self):
-            res = column.column_empty_like(self._column, newsize=0)
-            return self._copy_construct(data=res)
-        res = self._column.unique(method=method)
+        Returns unique values of this Series.
+        """
+        res = self._column.unique()
         return Series(res, name=self.name)
 
     def nunique(self, method="sort", dropna=True):
@@ -2378,37 +2369,6 @@ class Series(Frame):
         from cudf.core.column import numerical
 
         return Series(numerical.digitize(self._column, bins, right))
-
-    def shift(self, periods=1, freq=None, axis=0, fill_value=None):
-        """Shift values of an input array by periods positions and store the
-        output in a new array.
-
-        Notes
-        -----
-        Shift currently only supports float and integer dtype columns with
-        no null values.
-        """
-        assert axis in (None, 0) and freq is None and fill_value is None
-
-        if self.has_nulls:
-            raise AssertionError(
-                "Shift currently requires columns with no " "null values"
-            )
-
-        if not np.issubdtype(self.dtype, np.number):
-            raise NotImplementedError(
-                "Shift currently only supports " "numeric dtypes"
-            )
-        if periods == 0:
-            return self
-
-        input_dary = self.to_gpu_array()
-        output_dary = rmm.device_array_like(input_dary)
-        if output_dary.size > 0:
-            cudautils.gpu_shift.forall(output_dary.size)(
-                input_dary, output_dary, periods
-            )
-        return Series(output_dary, name=self.name, index=self.index)
 
     def diff(self, periods=1):
         """Calculate the difference between values at positions i and i - N in
