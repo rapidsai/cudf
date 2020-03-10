@@ -481,7 +481,7 @@ class DataFrameGroupBy(GroupBy):
         return super().__getattr__(key)
 
     def __getitem__(self, key):
-        return self.obj[key].groupby(self.grouping)
+        return self.obj[key].groupby(self.grouping, dropna=self._dropna)
 
 
 class SeriesGroupBy(GroupBy):
