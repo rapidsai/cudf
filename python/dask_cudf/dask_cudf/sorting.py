@@ -5,6 +5,7 @@ from operator import getitem
 
 import cupy
 import numpy as np
+import tlz as toolz
 
 from dask.base import tokenize
 from dask.dataframe.core import DataFrame, Index, Series, _concat
@@ -15,11 +16,6 @@ from dask.utils import M, digit, insert
 
 import cudf as gd
 from cudf.utils.dtypes import is_categorical_dtype
-
-try:
-    import cytoolz as toolz
-except ImportError:
-    import toolz
 
 
 def set_partitions_hash(df, columns, npartitions):

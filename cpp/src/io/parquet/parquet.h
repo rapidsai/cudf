@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,9 +18,6 @@
 #define __IO_PARQUET_H__
 
 #include "parquet_common.h"
-
-#include <cudf/io/types.hpp>
-#include <cudf/io/writers.hpp>
 
 #include <stdint.h>
 #include <stddef.h>
@@ -302,39 +299,6 @@ protected:
 
 } // namespace parquet
 } // namespace io
-
-namespace experimental {
-namespace io {
-namespace detail {
-namespace parquet {
-   /**
-    * @brief Chunked writer state struct. Contains various pieces of information
-    *        needed that span the begin() / write() / end() call process.
-    */
-   struct pq_chunked_state {
-      /// The writer to be used
-      std::unique_ptr<writer>             wp;  
-      /// Cuda stream to be used
-      cudaStream_t                        stream;  
-      /// Overall file metadata.  Filled in during the process and written during write_chunked_end()
-      cudf::io::parquet::FileMetaData     md;  
-      /// current write position for rowgroups/chunks
-      size_t                              current_chunk_offset;
-      /// optional user metadata
-      table_metadata const*               user_metadata = nullptr;
-      /// only used in the write_chunked() case. copied from the (optionally) user supplied
-      /// argument to write_parquet_chunked_begin()
-      table_metadata_with_nullability     user_metadata_with_nullability;  
-      /// special parameter only used by detail::write() to indicate that we are guaranteeing 
-      /// a single table write.  this enables some internal optimizations.
-      bool                                single_write_mode = false;
-   };
-
-}  // parquet
-}  // detail
-}  // experimental
-}  // io
-
 } // namespace cudf
 
 #endif // __IO_PARQUET_H__
