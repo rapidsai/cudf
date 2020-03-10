@@ -586,7 +586,7 @@ class StringMethods(object):
         --------
         >>> import cudf
         >>> s = cudf.Series(["Hello, Friend","Goodbye, Friend"])
-        >>> print(s.lower())
+        >>> print(s.str.lower())
         ['hello, friend', 'goodbye, friend']
 
         """
@@ -601,7 +601,7 @@ class StringMethods(object):
         --------
         >>> import cudf
         >>> s = cudf.Series(["Hello, friend","Goodbye, friend"])
-        >>> print(s.upper())
+        >>> print(s.str.upper())
         ['HELLO, FRIEND', 'GOODBYE, FRIEND']
 
         """
@@ -616,7 +616,7 @@ class StringMethods(object):
         --------
         >>> import cudf
         >>> s = cudf.Series(["hello, friend","goodbye, friend"])
-        >>> print(s.capitalize())
+        >>> print(s.str.capitalize())
         ['Hello, friend", "Goodbye, friend"]
 
         """
@@ -631,7 +631,7 @@ class StringMethods(object):
         --------
         >>> import cudf
         >>> s = cudf.Series(["Hello, Friend","Goodbye, Friend"])
-        >>> print(s.swapcase())
+        >>> print(s.str.swapcase())
         ['hELLO, fRIEND', 'gOODBYE, fRIEND']
 
         """
@@ -647,7 +647,7 @@ class StringMethods(object):
         --------
         >>> import cudf
         >>> s = cudf.Series(["Hello friend","goodnight moon"])
-        >>> print(s.title())
+        >>> print(s.str.title())
         ['Hello Friend', 'Goodnight Moon']
 
         """
