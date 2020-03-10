@@ -366,7 +366,7 @@ class Index(Frame):
         values to the given dtype.
         If the dtype is not changed, ``self`` is returned.
         """
-        if dtype == self.dtype:
+        if pd.api.types.is_dtype_equal(dtype, self.dtype):
             return self
 
         return as_index(self._values.astype(dtype), name=self.name)
