@@ -2635,7 +2635,7 @@ def test_shift(dtype, period, data_empty):
     gdf = DataFrame({"a": Series(data, dtype=dtype)})
     pdf = pd.DataFrame({"a": pd.Series(data, dtype=dtype)})
 
-    shifted_outcome = gdf.a.shift(period)
+    shifted_outcome = gdf.a.shift(period).fillna(-1)
     expected_outcome = pdf.a.shift(period).fillna(-1).astype(dtype)
 
     if data_empty:
