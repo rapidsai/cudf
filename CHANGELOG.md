@@ -146,7 +146,6 @@
 - PR #4373 Port nvstrings Regular Expressions functions to cuDF Python/Cython
 - PR #4407 Enable `.str.slice` & `.str.get` and `.str.zfill` unit-tests
 
-
 ## Bug Fixes
 
 - PR #3888 Drop `ptr=None` from `DeviceBuffer` call
