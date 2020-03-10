@@ -17,10 +17,7 @@ from dask.utils import digit, insert
 
 import cudf as gd
 
-try:
-    import cytoolz as toolz
-except ImportError:
-    import toolz
+import tlz as toolz
 
 
 def get_oversized(length):
