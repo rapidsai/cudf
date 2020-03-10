@@ -137,6 +137,16 @@ std::unique_ptr<table> sort_by_key(
 
 /**---------------------------------------------------------------------------*
  * @brief Computes the ranks of each column in a lexicographical sorted order.
+ * Rank indicate the position of each element in the sorted column and rank
+ * value starts from 1. Each column in the table is ranked separately.
+ *
+ * @example input = { 3, 4, 5, 4, 1, 2}
+ * Result for different rank_method are
+ * FIRST    = {3, 4, 6, 5, 1, 2}
+ * AVERAGE  = {3, 4.5, 6, 4.5, 1, 2}
+ * MIN      = {3, 4, 6, 4, 1, 2}
+ * MAX      = {3, 5, 6, 5, 1, 2}
+ * DENSE    = {3, 4, 5, 4, 1, 2}
  *
  * @param input The table to rank
  * @param method The ranking method used for tie breaking (same values).
@@ -144,10 +154,10 @@ std::unique_ptr<table> sort_by_key(
  * @param _include_nulls  flag to include nulls during ranking
  * @param null_precedence The desired order of null compared to other elements
  * for all columns
- * @param percentage flag to convert ranks to percentage in range (0,1]
+ * @param percentage flag to convert ranks to percentage in range (0,1}
  * @param mr The device memory resource used to allocate the returned table
- * @return std::unique_ptr<column> A non-nullable column of INT32 elements
- * containing the permuted row indices of `input` if it were sorted
+ * @return std::unique_ptr<column> A column of FLOAT64 elements
+ * containing the rank of the each element of the column of `input`
  *---------------------------------------------------------------------------**/
 std::unique_ptr<table> rank(
     table_view input,
