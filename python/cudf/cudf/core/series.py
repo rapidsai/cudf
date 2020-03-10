@@ -651,9 +651,8 @@ class Series(Frame):
                     rhs = rhs.fillna(fill_value)
                     result = func(lhs, rhs)
                     data = column.build_column(
-                        data=result.data,
-                        dtype=result.dtype,
-                        mask=mask)
+                        data=result.data, dtype=result.dtype, mask=mask
+                    )
                     return lhs._copy_construct(data=data)
                 elif lhs.nullable:
                     return func(lhs.fillna(fill_value), rhs)

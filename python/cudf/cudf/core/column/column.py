@@ -4,6 +4,7 @@ import pickle
 import warnings
 from numbers import Number
 
+import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -431,7 +432,7 @@ class ColumnBase(Column):
             else:
                 # Need to create a gather map for given slice with stride
                 gather_map = as_column(
-                    cudautils.arange(
+                    cupy.arange(
                         start=start,
                         stop=stop,
                         step=stride,
@@ -469,7 +470,7 @@ class ColumnBase(Column):
                 return self.copy()
             if key_stride != 1 or key_stride is not None or is_scalar(value):
                 key = as_column(
-                    cudautils.arange(
+                    cupy.arange(
                         start=key_start,
                         stop=key_stop,
                         step=key_stride,

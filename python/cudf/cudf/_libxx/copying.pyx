@@ -181,7 +181,8 @@ def _scatter_table(Table source_table, Column scatter_map,
     )
 
     out_table._index = (
-        None if target_table._index is None else target_table._index.copy(deep=False)
+        None if target_table._index is None else target_table._index.copy(
+            deep=False)
     )
 
     return out_table
@@ -219,7 +220,8 @@ def _scatter_scalar(scalars, Column scatter_map,
     )
 
     out_table._index = (
-        None if target_table._index is None else target_table._index.copy(deep=False)
+        None if target_table._index is None else target_table._index.copy(
+            deep=False)
     )
 
     return out_table
