@@ -143,6 +143,7 @@
 - PR #4362 Move pq_chunked_state struct into it's own header to match how orc writer is doing it.
 - PR #4339 Port libcudf strings `wrap` api to cython/python
 - PR #4311 Port nvstrings String Manipulations functions to cuDF Python/Cython
+- PR #4373 Port nvstrings Regular Expressions functions to cuDF Python/Cython
 - PR #4377 Support loading avro files that contain nested arrays
 
 ## Bug Fixes
@@ -220,6 +221,7 @@
 - PR #4327 Preemptive dispatch fix for changes in dask#5973
 - PR #4358 Fix strings::concat where narep is an empty string
 - PR #4369 Fix race condition in gpuinflate
+- PR #4390 Disable ScatterValid and ScatterNull legacy tests
 
 
 # cuDF 0.12.0 (04 Feb 2020)
