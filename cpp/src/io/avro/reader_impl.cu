@@ -270,11 +270,12 @@ void reader::impl::decode_data(
   for (size_t i = 0; i < _metadata->schema.size(); i++) {
     type_kind_e kind = _metadata->schema[i].kind;
     if (skip_field_cnt != 0) {
-      // Exclude union members from min_row_data_size
+      // Exclude union and array members from min_row_data_size
       skip_field_cnt += _metadata->schema[i].num_children - 1;
     } else {
       switch (kind) {
         case type_union:
+        case type_array:
           skip_field_cnt = _metadata->schema[i].num_children;
           // fall through
         case type_boolean:
@@ -283,7 +284,6 @@ void reader::impl::decode_data(
         case type_bytes:
         case type_string:
         case type_enum:
-        case type_array:
           min_row_data_size += 1;
           break;
         case type_float:
