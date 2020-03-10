@@ -26,6 +26,7 @@
 - PR #4063 Define and implement string capitalize and title API
 - PR #4217 Add libcudf++ quantiles Cython implementation
 - PR #4216 Add cudf.Scalar Python type
+- PR #4272 Add stable sorted order
 - PR #4129 Add libcudf++ interleave_columns and tile Cython implementation
 - PR #4262 Port unaryops.pyx to use libcudf++ APIs
 - PR #4276 Port avro.pyx to libcudf++
@@ -36,6 +37,7 @@
 - PR #4291 Add Java callback support for RMM events
 - PR #4298 Port orc.pyx to libcudf++
 - PR #4352 Add factory function make_column_from_scalar
+- PR #4338 Add cudf::sequence() for generating an incrementing list of numeric values
 
 ## Improvements
 
@@ -213,6 +215,8 @@
 - PR #4324 Fix slice_strings for out-of-range start position value
 - PR #4115 Serialize an empty column table with non zero rows
 - PR #4327 Preemptive dispatch fix for changes in dask#5973
+- PR #4358 Fix strings::concat where narep is an empty string
+- PR #4369 Fix race condition in gpuinflate
 
 
 # cuDF 0.12.0 (04 Feb 2020)
