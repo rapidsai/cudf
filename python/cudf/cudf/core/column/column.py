@@ -146,6 +146,8 @@ class ColumnBase(Column):
         return self.unordered_compare("eq", other).min()
 
     def all(self):
+        if self.null_count != 0:
+            return False
         return bool(libcudfxx.reduce.reduce("all", self, dtype=np.bool_))
 
     def any(self):

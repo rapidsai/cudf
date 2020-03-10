@@ -2355,38 +2355,6 @@ class Series(Frame):
 
         return Series(numerical.digitize(self._column, bins, right))
 
-    def shift(self, periods=1, freq=None, axis=0, fill_value=None):
-        """Shift values of an input array by periods positions and store the
-        output in a new array.
-
-        Notes
-        -----
-        Shift currently only supports float and integer dtype columns with
-        no null values.
-        """
-        assert axis in (None, 0) and freq is None and fill_value is None
-
-        if self.has_nulls:
-            raise AssertionError(
-                "Shift currently requires columns with no " "null values"
-            )
-
-        if not np.issubdtype(self.dtype, np.number):
-            raise NotImplementedError(
-                "Shift currently only supports " "numeric dtypes"
-            )
-        if periods == 0:
-            return self
-
-        # TODO: This all goes away with the port of copying.pyx
-        input_col = self.to_gpu_array()
-        output_col = column_empty_like(input_col)
-        if output_col.size > 0:
-            cudautils.gpu_shift.forall(output_col.size)(
-                input_col, output_col, periods
-            )
-        return Series(output_col, name=self.name, index=self.index)
-
     def diff(self, periods=1):
         """Calculate the difference between values at positions i and i - N in
         an array and store the output in a new array.
