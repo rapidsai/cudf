@@ -192,64 +192,6 @@ def test_groupby_getitem_getattr(as_index):
     )
 
 
-@pytest.mark.parametrize("nelem", get_nelem())
-def test_groupby_mean(nelem):
-    got_df = make_frame(DataFrame, nelem=nelem).groupby(["x", "y"]).mean()
-    expect_df = (
-        make_frame(pd.DataFrame, nelem=nelem).groupby(["x", "y"]).mean()
-    )
-    assert_eq(got_df, expect_df)
-
-
-@pytest.mark.parametrize("nelem", get_nelem())
-def test_groupby_mean_3level(nelem):
-    lvls = "z"
-    bys = list("xyz")
-    got_df = (
-        make_frame(DataFrame, nelem=nelem, extra_levels=lvls)
-        .groupby(bys)
-        .mean()
-    )
-    expect_df = (
-        make_frame(pd.DataFrame, nelem=nelem, extra_levels=lvls)
-        .groupby(bys)
-        .mean()
-    )
-
-    assert_eq(got_df, expect_df)
-
-
-@pytest.mark.parametrize("nelem", get_nelem())
-def test_groupby_agg_mean_min(nelem):
-    got_df = (
-        make_frame(DataFrame, nelem=nelem)
-        .groupby(["x", "y"])
-        .agg(["mean", "min"])
-    )
-    expect_df = (
-        make_frame(pd.DataFrame, nelem=nelem)
-        .groupby(["x", "y"])
-        .agg(["mean", "min"])
-    )
-
-    assert_eq(expect_df, got_df)
-
-
-@pytest.mark.parametrize("nelem", get_nelem())
-def test_groupby_agg_min_max_dictargs(nelem):
-    got_df = (
-        make_frame(DataFrame, nelem=nelem, extra_vals="ab")
-        .groupby(["x", "y"])
-        .agg({"a": "min", "b": "max"})
-    )
-    expect_df = (
-        make_frame(pd.DataFrame, nelem=nelem, extra_vals="ab")
-        .groupby(["x", "y"])
-        .agg({"a": "min", "b": "max"})
-    )
-    assert_eq(expect_df, got_df)
-
-
 def test_groupby_cats():
     df = DataFrame()
     df["cats"] = pd.Categorical(list("aabaacaab"))
@@ -356,7 +298,6 @@ def test_groupby_apply_grouped():
 def test_groupby_cudf_2keys_agg(nelem, func):
     got_df = make_frame(DataFrame, nelem=nelem).groupby(["x", "y"]).agg(func)
 
-    got_agg = np.sort(got_df["val"].to_array())
     # pandas
     expect_df = (
         make_frame(pd.DataFrame, nelem=nelem).groupby(["x", "y"]).agg(func)

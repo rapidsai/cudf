@@ -32,7 +32,10 @@ cdef extern from "cudf/groupby.hpp" \
 
     cdef cppclass groupby:
         groupby(const table_view& keys) except +
-        groupby(const table_view& keys, include_nulls include_null_keys) except +
+        groupby(
+            const table_view& keys,
+            include_nulls include_null_keys
+        ) except +
 
         groupby(
             const table_view& keys,

@@ -12,14 +12,14 @@ from cudf.utils import cudautils
 
 from cudf._libxx.types import np_to_cudf_types, cudf_to_np_types, IncludeNulls
 from cudf._libxx.move cimport move
-
-cimport cudf._libxx.cpp.types as libcudf_types
-cimport cudf._libxx.cpp.aggregation as libcudf_aggregation
 from cudf._libxx.types cimport (
     underlying_type_t_interpolation,
     underlying_type_t_include_nulls
 )
 from cudf._libxx.types import Interpolation
+
+cimport cudf._libxx.cpp.types as libcudf_types
+cimport cudf._libxx.cpp.aggregation as libcudf_aggregation
 
 
 class AggregationKind(Enum):
@@ -105,7 +105,9 @@ cdef class _AggregationFactory:
     def size(cls, *args, **kwargs):
         cdef Aggregation agg = Aggregation.__new__(Aggregation)
         agg.c_obj = move(libcudf_aggregation.make_count_aggregation(
-            <libcudf_types.include_nulls><underlying_type_t_include_nulls>(IncludeNulls.YES)
+            <libcudf_types.include_nulls><underlying_type_t_include_nulls>(
+                IncludeNulls.YES
+            )
         ))
         return agg
 
@@ -180,7 +182,9 @@ cdef class _AggregationFactory:
                 )
             )
         )
-        agg.c_obj = move(libcudf_aggregation.make_quantile_aggregation(c_q, c_interp))
+        agg.c_obj = move(
+            libcudf_aggregation.make_quantile_aggregation(c_q, c_interp)
+        )
         return agg
 
     @classmethod

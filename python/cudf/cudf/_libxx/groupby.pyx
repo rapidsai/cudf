@@ -163,6 +163,7 @@ cdef class GroupBy:
         result = Table(data=result_data, index=grouped_keys)
         return result
 
+
 def _drop_unsupported_aggs(Table values, aggs):
     """
     Drop any aggregations that are not supported.

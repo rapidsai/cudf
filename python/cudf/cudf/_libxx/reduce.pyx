@@ -76,7 +76,9 @@ def scan(scan_op, Column incol, inclusive, **kwargs):
     """
     cdef column_view c_incol_view = incol.view()
     cdef unique_ptr[column] c_result
-    cdef unique_ptr[aggregation] c_agg = move(make_aggregation(scan_op, kwargs))
+    cdef unique_ptr[aggregation] c_agg = move(
+        make_aggregation(scan_op, kwargs)
+    )
 
     cdef scan_type c_inclusive
     if inclusive is True:
