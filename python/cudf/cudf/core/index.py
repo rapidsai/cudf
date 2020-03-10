@@ -10,7 +10,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-import nvstrings
 import rmm
 
 import cudf
@@ -220,7 +219,7 @@ class Index(Frame):
             return as_index(op())
 
     def unique(self):
-        return as_index(self._values.unique())
+        return as_index(self._values.unique(), name=self.name)
 
     def __add__(self, other):
         return self._apply_op("__add__", other)
@@ -979,7 +978,11 @@ class StringIndex(GenericIndex):
         elif isinstance(values, StringIndex):
             values = values._values.copy()
         else:
-            values = column.as_column(nvstrings.to_device(values))
+            values = column.as_column(values, dtype="str")
+            if not pd.api.types.is_string_dtype(values.dtype):
+                raise ValueError(
+                    "Couldn't create StringIndex from passed in object"
+                )
         super(StringIndex, self).__init__(values, **kwargs)
 
     def to_pandas(self):
