@@ -26,6 +26,7 @@
 - PR #4063 Define and implement string capitalize and title API
 - PR #4217 Add libcudf++ quantiles Cython implementation
 - PR #4216 Add cudf.Scalar Python type
+- PR #4272 Add stable sorted order
 - PR #4129 Add libcudf++ interleave_columns and tile Cython implementation
 - PR #4262 Port unaryops.pyx to use libcudf++ APIs
 - PR #4276 Port avro.pyx to libcudf++
@@ -36,6 +37,8 @@
 - PR #4291 Add Java callback support for RMM events
 - PR #4298 Port orc.pyx to libcudf++
 - PR #4381 Add Java support for copying buffers with asynchronous streams
+- PR #4288 Add libcudf++ shift Cython implementation
+- PR #4338 Add cudf::sequence() for generating an incrementing list of numeric values
 
 ## Improvements
 
@@ -136,9 +139,11 @@
 - PR #4328 Add memory threshold callbacks for Java RMM event handler
 - PR #4336 Move a bunch of internal nvstrings code to use native StringColumns
 - PR #4166 Port `is_sorted.pyx` to use libcudf++ APIs
+- PR #4333 nvstrings case/capitalization cython bindings
 - PR #4345 Removed an undesirable backwards include from /include to /src in cuIO writers.hpp
 - PR #4362 Move pq_chunked_state struct into it's own header to match how orc writer is doing it.
 - PR #4339 Port libcudf strings `wrap` api to cython/python
+- PR #4311 Port nvstrings String Manipulations functions to cuDF Python/Cython
 
 ## Bug Fixes
 
@@ -213,7 +218,9 @@
 - PR #4324 Fix slice_strings for out-of-range start position value
 - PR #4115 Serialize an empty column table with non zero rows
 - PR #4327 Preemptive dispatch fix for changes in dask#5973
+- PR #4358 Fix strings::concat where narep is an empty string
 - PR #4369 Fix race condition in gpuinflate
+- PR #4390 Disable ScatterValid and ScatterNull legacy tests
 
 
 # cuDF 0.12.0 (04 Feb 2020)
