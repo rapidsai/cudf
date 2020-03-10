@@ -1098,3 +1098,14 @@ def test_raise_data_error():
 
     with pytest.raises(typ, match=msg):
         gdf.groupby("a").mean()
+
+
+def test_drop_unsupported_multi_agg():
+
+    gdf = cudf.DataFrame(
+        {"a": [1, 1, 2, 2], "b": [1, 2, 3, 4], "c": ["a", "b", "c", "d"]}
+    )
+    assert_eq(
+        gdf.groupby("a").agg(["count", "mean"]),
+        gdf.groupby("a").agg({"b": ["count", "mean"], "c": ["count"]}),
+    )

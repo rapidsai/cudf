@@ -282,6 +282,8 @@ class GroupBy(object):
         for col, agg in out.items():
             if not pd.api.types.is_list_like(agg):
                 out[col] = [agg]
+            else:
+                out[col] = list(agg)
 
         return out
 

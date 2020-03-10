@@ -165,9 +165,6 @@ cdef class GroupBy:
 
 def _drop_unsupported_aggs(Table values, aggs):
     """
-    Normalize aggs to a dictionary mapping
-    column names to a list of _Aggregation objects.
-
     Drop any aggregations that are not supported.
     """
     from pandas.core.groupby.groupby import DataError
