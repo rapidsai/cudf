@@ -50,6 +50,7 @@ std::unique_ptr<column> sorted_order(
 /**
  * @brief Computes the row indices that would produce `input` in a stable
  * lexicographical sorted order.
+ * The order of equivalent elements is guaranteed to be preserved.
  *
  * @copydetails cudf::experimental::detail::sorted_order
  */
