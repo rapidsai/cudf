@@ -7,8 +7,6 @@ from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.vector cimport vector
 from libc.stdint cimport int32_t
 
-from cudf.core.column.column import as_column
-
 from cudf._libxx.column cimport Column
 from cudf._libxx.scalar cimport Scalar
 from cudf._libxx.table cimport Table
@@ -233,6 +231,8 @@ def scatter(object input, object scatter_map, Table target,
     Scattering input into taregt as per the scatter map,
     input can be a list of scalars or can be a table
     """
+
+    from cudf.core.column.column import as_column
 
     if not isinstance(scatter_map, Column):
         scatter_map = as_column(scatter_map)
