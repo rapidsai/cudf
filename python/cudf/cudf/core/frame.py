@@ -150,9 +150,10 @@ class Frame(libcudfxx.table.Table):
         """
         Try to normalizes scalar values as per self dtype
         """
-        if (other is not None and (isinstance (other, float) and not np.isnan(other))) and (
-            self.dtype.type(other) != other
-        ):
+        if (
+            other is not None
+            and (isinstance(other, float) and not np.isnan(other))
+        ) and (self.dtype.type(other) != other):
             raise TypeError(
                 "Cannot safely cast non-equivalent {} to {}".format(
                     type(other).__name__, self.dtype.name
@@ -161,7 +162,10 @@ class Frame(libcudfxx.table.Table):
 
         return (
             self.dtype.type(other)
-            if (other is not None and (isinstance (other, float) and not np.isnan(other)))
+            if (
+                other is not None
+                and (isinstance(other, float) and not np.isnan(other))
+            )
             else other
         )
 
@@ -176,6 +180,13 @@ class Frame(libcudfxx.table.Table):
         other : Can be a DataFrame, Series, Index, Array
                 like object or a scalar value
 
+                if self is DataFrame, other can be only a
+                scalar or array like with size of number of columns
+                in DataFrame or a DataFrame with same dimenstion
+
+                if self is Series, other can be only a scalar or
+                a series like with same length as self
+
         Returns:
         --------
         A dataframe/series/list/scalar form of normalized other
@@ -188,10 +199,11 @@ class Frame(libcudfxx.table.Table):
                 for self_col in self.columns
             ]
 
-        elif isinstance(self, (cudf.Series, cudf.Index)) and isinstance(
-            other, (cudf.Series, cudf.Index)
+        elif isinstance(self, (cudf.Series, cudf.Index)) and not is_scalar(
+            other
         ):
-            return other.astype(self.dtype)._column
+            other = as_column(other)
+            return other.astype(self.dtype)
 
         else:
             # Handles scalar or list/array like scalars
@@ -199,9 +211,11 @@ class Frame(libcudfxx.table.Table):
                 other
             ):
                 return self._normalize_scalars(other)
+
             elif (self, cudf.DataFrame):
                 out = []
-
+                if is_scalar(other):
+                    other = [other for i in range(len(self.columns))]
                 out = [
                     self[in_col_name]._normalize_scalars(sclr)
                     for in_col_name, sclr in zip(self.columns, other)
@@ -222,13 +236,18 @@ class Frame(libcudfxx.table.Table):
         Parameters
         ----------
         cond : boolean
-            Where cond is True, keep the original value. Where False,
-            replace with corresponding value from other. Callables are not
-            supported.
+            This can be Frame of booleans, where cond is True, keep the
+            original value. Where False, replace with corresponding value
+            from other. Callables are not supported.
         other: list of scalars or a dataframe or a series,
             Entries where cond is False are replaced with
             corresponding value from other. Callables are not
             supported.
+
+            DataFrame expects only Scalar or array like with scalars or
+            dataframe with same dimention as self.
+
+            Series expects only scalar or series like with same length
 
         Returns
         -------
@@ -259,13 +278,19 @@ class Frame(libcudfxx.table.Table):
         4
         """
 
-        other = self._normalize_columns_and_scalars_type(other)
         if isinstance(self, cudf.DataFrame):
+            if not isinstance(boolean_mask, cudf.DataFrame):
+                boolean_mask = self.from_pandas(pd.DataFrame(boolean_mask))
+            other = self._normalize_columns_and_scalars_type(other)
             out_df = cudf.DataFrame(index=self.index)
             if len(self._columns) != len(other):
                 raise ValueError(
                     """Replacement list length or number of dataframe columns
                     should be equal to Number of columns of dataframe"""
+                )
+            if len(self._columns) != len(boolean_mask._columns):
+                raise ValueError(
+                    """Array conditional must be same shape as self"""
                 )
 
             for in_col_name, cond_col_name, otr_col in zip(
@@ -280,9 +305,7 @@ class Frame(libcudfxx.table.Table):
                     input_col = input_col.codes
 
                 result = libcudfxx.copying.copy_if_else(
-                    input_col,
-                    otr_col,
-                    boolean_mask[cond_col_name]._column
+                    input_col, otr_col, boolean_mask[cond_col_name]._column
                 )
 
                 if is_categorical_dtype(self[in_col_name].dtype):
@@ -300,6 +323,7 @@ class Frame(libcudfxx.table.Table):
             return out_df
 
         else:
+            other = self._normalize_columns_and_scalars_type(other)
             if isinstance(other, (cudf.Series, cudf.Index)):
                 other = other._column
 
@@ -311,7 +335,7 @@ class Frame(libcudfxx.table.Table):
                     other = other.codes
                 input_col = input_col.codes
             result = libcudfxx.copying.copy_if_else(
-                    self._column, other, boolean_mask._column
+                self._column, other, boolean_mask._column
             )
 
             if is_categorical_dtype(self.dtype):
