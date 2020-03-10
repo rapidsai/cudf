@@ -386,3 +386,68 @@ TEST_F(FixedPointTest, Decimal32FloatVector) {
     float_vector_test(0.15, 20, -2, std::multiplies<>());
 
 }
+
+struct cast_to_int32_fn
+{
+    using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
+    int32_t __host__ __device__ operator()(decimal32 fp) {
+        return static_cast<int32_t>(fp);
+    }
+};
+
+TEST_F(FixedPointTest, DecimalXXThrustOnDevice) {
+
+    using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
+
+    thrust::device_vector<decimal32> vec1(1000, decimal32{1, scale_type{-2}});
+
+    auto x = thrust::reduce(
+        rmm::exec_policy(0)->on(0),
+        std::cbegin(vec1),
+        std::cend(vec1),
+        decimal32{0, scale_type{-2}});
+
+    EXPECT_EQ(static_cast<int32_t>(x), 1000);
+
+    // thrust::sequence doesn't work on device without modifying fixed_point
+    // thrust::inclusive_scan and thrust::adjacent_difference (map algorithms
+    // requiring accumulators) don't work on device either
+    thrust::host_vector<decimal32> vec1_host = vec1;
+
+    thrust::inclusive_scan(
+        std::cbegin(vec1_host),
+        std::cend(vec1_host),
+        std::begin(vec1_host));
+
+    vec1 = vec1_host;
+
+    std::vector<int32_t> vec2(1000);
+    std::iota(std::begin(vec2), std::end(vec2), 1);
+
+    auto const res1 = thrust::reduce(
+        rmm::exec_policy(0)->on(0),
+        std::cbegin(vec1),
+        std::cend(vec1),
+        decimal32{0, scale_type{-2}});
+
+    auto const res2 = std::accumulate(
+        std::cbegin(vec2),
+        std::cend(vec2),
+        0);
+
+    EXPECT_EQ(static_cast<int32_t>(res1), res2);
+
+    thrust::device_vector<int32_t> vec3(1000);
+
+    thrust::transform(
+        rmm::exec_policy(0)->on(0),
+        std::cbegin(vec1),
+        std::cend(vec1),
+        std::begin(vec3),
+        cast_to_int32_fn{});
+
+    thrust::host_vector<int32_t> vec3_host = vec3;
+
+    EXPECT_EQ(vec2, vec3);
+
+}
