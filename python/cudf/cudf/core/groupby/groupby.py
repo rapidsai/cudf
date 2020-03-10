@@ -237,6 +237,7 @@ class GroupBy(object):
 
         grouped_keys = cudf.Index._from_table(grouped_keys)
         grouped_values = self.obj.__class__._from_table(grouped_values)
+        grouped_values._copy_categories(self.obj)
         group_names = grouped_keys.unique()
         return (
             group_names,
@@ -326,7 +327,6 @@ class GroupBy(object):
         """
         if not callable(function):
             raise TypeError("type {!r} is not callable", type(function))
-
         _, offsets, grouped_values = self._grouped()
         ends = itertools.chain(offsets[1:], [None])
         chunks = [grouped_values[s:e] for s, e in zip(offsets, ends)]
