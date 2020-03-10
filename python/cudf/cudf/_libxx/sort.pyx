@@ -245,9 +245,9 @@ def rank_columns(Table source_table, str method, str na_option, bool ascending,
         else:
             null_precedence = null_order.BEFORE
     cdef include_nulls _include_nulls = (
-        include_nulls.EXCLUDE_NULLS
+        include_nulls.NO
         if na_option == 'keep'
-        else include_nulls.INCLUDE_NULLS
+        else include_nulls.YES
     )
     cdef unique_ptr[table] c_result
     cdef bool percentage = True if pct else False

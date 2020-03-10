@@ -21,8 +21,8 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         DESCENDING "cudf::order::DESCENDING"
 
     ctypedef enum include_nulls "cudf::include_nulls":
-        EXCLUDE_NULLS "cudf::include_nulls::NO"
-        INCLUDE_NULLS "cudf::include_nulls::YES"
+        NO "cudf::include_nulls::NO"
+        YES "cudf::include_nulls::YES"
 
     ctypedef enum null_order "cudf::null_order":
         AFTER "cudf::null_order::AFTER"
