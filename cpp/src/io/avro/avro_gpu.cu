@@ -28,7 +28,7 @@ namespace gpu {
  * Avro varint encoding - see
  * https://avro.apache.org/docs/1.2.0/spec.html#binary_encoding
  */
-static inline int64_t __device__ avro_decode_varint(const uint8_t *&cur, const uint8_t *end) {
+static inline int64_t __device__ avro_decode_zigzag_varint(const uint8_t *&cur, const uint8_t *end) {
   uint64_t u = 0;
   if (cur < end) {
     u = *cur++;
@@ -109,7 +109,7 @@ static const uint8_t * __device__ avro_decode_row(
     case type_string:
     case type_enum:
       {
-        int64_t v = avro_decode_varint(cur, end);
+        int64_t v = avro_decode_zigzag_varint(cur, end);
         if (kind == type_int) {
           if (dataptr && row < max_rows) {
             reinterpret_cast<int32_t *>(dataptr)[row] = static_cast<int32_t>(v);
@@ -187,9 +187,9 @@ static const uint8_t * __device__ avro_decode_row(
 
     case type_array:
       {
-        int32_t array_block_count = avro_decode_varint(cur, end);
+        int32_t array_block_count = avro_decode_zigzag_varint(cur, end);
         if (array_block_count < 0) {
-          avro_decode_varint(cur, end); // block size in bytes, ignored
+          avro_decode_zigzag_varint(cur, end); // block size in bytes, ignored
           array_block_count = -array_block_count;
         }
         array_start = i;
