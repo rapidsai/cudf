@@ -1252,43 +1252,6 @@ class Series(Frame):
         else:
             return self._copy_construct(data=data)
 
-    def where(self, cond, other=None, axis=None):
-        """
-        Replace values with other where the condition is False.
-
-        Parameters
-        ----------
-        cond : boolean
-            Where cond is True, keep the original value. Where False,
-            replace with corresponding value from other.
-        other: scalar, default None
-            Entries where cond is False are replaced with
-            corresponding value from other.
-
-        Returns
-        -------
-        result : Series
-
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series([4, 3, 2, 1, 0])
-        >>> print(ser.where(ser > 2, 10))
-        0     4
-        1     3
-        2    10
-        3    10
-        4    10
-        >>> print(ser.where(ser > 2))
-        0    4
-        1    3
-        2
-        3
-        4
-        """
-        other = self._normalize_columns_and_scalars_type(other)
-        return self._copy_if_else(cond, other)
-
     def to_array(self, fillna=None):
         """Get a dense numpy array for the data.
 

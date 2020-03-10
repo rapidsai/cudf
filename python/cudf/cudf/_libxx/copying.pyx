@@ -142,7 +142,10 @@ def gather(Table source_table, Column gather_map):
     return Table.from_unique_ptr(
         move(c_result),
         column_names=source_table._column_names,
-        index_names=source_table._index._column_names
+        index_names=(
+            None if (
+                source_table._index is None) else source_table._index_names
+        )
     )
 
 

@@ -380,20 +380,39 @@ def test_dataframe_with_nulls_where_with_scalars(fill_value):
     assert_eq(expect, got)
 
 
-def test_dataframe_with_nulls_where_with_df():
+def test_dataframe_with_different_types():
+
+    # Testing for int and float
     pdf = pd.DataFrame(
         {
-            "A": [-1, 2, -3, None, 5, 6, -7, 0],
-            "B": [4, -2, 3, None, 7, 6, 8, 0],
+            "A": [111, 22, 31, 410, 56],
+            "B": [-10.12, 121.2, 45.7, 98.4, 87.6]
         }
     )
     gdf = DataFrame.from_pandas(pdf)
-
-    expect = pdf.where(pdf % 3 == 0, -pdf)
-    got = gdf.where(gdf % 3 == 0, -gdf)
+    expect = pdf.where(pdf > 50, -pdf)
+    got = gdf.where(gdf > 50, -gdf)
 
     assert_eq(expect, got)
 
+    # Testing for string
+    pdf = pd.DataFrame({"A":["a", "bc", "cde", "fghi"]})
+    gdf = DataFrame.from_pandas(pdf)
+    pdf_mask = pd.DataFrame({"A":[True, False, True, False]})
+    gdf_mask = DataFrame.from_pandas(pdf_mask)
+    expect = pdf.where(pdf_mask, ["cudf"] )
+    got = gdf.where(gdf_mask, ["cudf"] )
+
+    assert_eq(expect, got)
+
+    # Testing for categoriacal
+    pdf = pd.DataFrame({"A":["a", "b", "b", "c"]})
+    pdf["A"] = pdf["A"].astype('category')
+    gdf = DataFrame.from_pandas(pdf)
+    expect = pdf.where(pdf_mask, "c")
+    got = gdf.where(gdf_mask, ["c"] )
+
+    assert_eq(expect, got)
 
 def test_series_multiple_times_with_nulls():
     sr = Series([1, 2, 3, None])

@@ -484,51 +484,6 @@ class DataFrame(Frame):
             msg = "__getitem__ on type {!r} is not supported"
             raise TypeError(msg.format(type(arg)))
 
-    def where(self, cond, other):
-        """
-        Replace values with other where the condition is False.
-
-        Parameters
-        ----------
-        cond : boolean
-            Where cond is True, keep the original value. Where False,
-            replace with corresponding value from other.
-        other: list of scalars or a dataframe,
-            Entries where cond is False are replaced with
-            corresponding value from other.
-
-        Returns
-        -------
-        result : DataFrame
-
-        Examples:
-        ---------
-        >>> import cudf
-        >>> df = cudf.DataFrame({"A":[1, 4, 5], "B":[3, 5, 8]})
-        >>> print (df.where(df % 2 == 0, [-1, -1]))
-           A  B
-        0 -1 -1
-        1  4 -1
-        2 -1  8
-
-        """
-        out_df = cudf.DataFrame(index=self.index)
-        other = self._normalize_columns_and_scalars_type(other)
-        if len(self._columns) != len(other):
-            raise ValueError(
-                """Replacement list length or number of dataframe columns
-                should be equal to Number of columns of dataframe"""
-            )
-
-        for in_col_name, cond_col_name, otr_col in zip(
-            self.columns, cond.columns, other
-        ):
-            out_df[in_col_name] = self[in_col_name]._copy_if_else(
-                cond[cond_col_name], otr_col
-            )
-
-        return out_df
-
     def mask(self, other):
         df = self.copy()
         for col in self.columns:
