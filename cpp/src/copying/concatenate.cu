@@ -34,7 +34,7 @@ namespace cudf {
 
 // Allow strategy switching at runtime for easier benchmarking
 // TODO remove when done
-static concatenate_mode current_mode = concatenate_mode::UNOPTIMIZED;
+static concatenate_mode current_mode = concatenate_mode::AUTOMATIC;
 void temp_set_concatenate_mode(concatenate_mode mode) {
   current_mode = mode;
 }
@@ -168,6 +168,7 @@ void concatenate_masks(std::vector<column_view> const &views,
 
 struct for_each_concatenate {
   std::vector<cudf::column_view> views;
+  bool const has_nulls;
   cudaStream_t stream;
   rmm::mr::device_memory_resource *mr;
 
@@ -203,8 +204,6 @@ struct for_each_concatenate {
       std::accumulate(views.begin(), views.end(), 0,
           [](auto accumulator, auto const& v) { return accumulator + v.size(); });
 
-    bool const has_nulls = std::any_of(views.begin(), views.end(),
-                        [](const column_view col) { return col.has_nulls(); });
     using mask_policy = cudf::experimental::mask_allocation_policy;
 
     mask_policy policy{mask_policy::NEVER};
@@ -301,12 +300,14 @@ fused_concatenate_kernel(
 }
 
 struct fused_concatenate {
+  std::vector<column_view> const& views;
+  bool const has_nulls;
+  rmm::mr::device_memory_resource* mr;
+  cudaStream_t stream;
+
   template <typename T,
       std::enable_if_t<is_fixed_width<T>()>* = nullptr>
-  std::unique_ptr<column> operator()(
-      std::vector<column_view> const& views,
-      rmm::mr::device_memory_resource* mr,
-      cudaStream_t stream) {
+  std::unique_ptr<column> operator()() {
     using mask_policy = cudf::experimental::mask_allocation_policy;
 
     // Preprocess and upload inputs to device memory
@@ -314,10 +315,6 @@ struct fused_concatenate {
     auto const& d_views = std::get<1>(device_views);
     auto const& d_offsets = std::get<2>(device_views);
     auto const output_size = std::get<3>(device_views);
-
-    bool const has_nulls = std::any_of(
-      views.begin(), views.end(),
-      [](auto const& col) { return col.has_nulls(); });
 
     // Allocate output
     auto const policy = has_nulls ? mask_policy::ALWAYS : mask_policy::NEVER;
@@ -352,19 +349,13 @@ struct fused_concatenate {
 
   template <typename T,
       std::enable_if_t<std::is_same<T, cudf::dictionary32>::value>* = nullptr>
-  std::unique_ptr<column> operator()(
-      std::vector<column_view> const& views,
-      rmm::mr::device_memory_resource* mr,
-      cudaStream_t stream) {
+  std::unique_ptr<column> operator()() {
     CUDF_FAIL("dictionary concatenate not yet supported");
   }
 
   template <typename T,
       std::enable_if_t<std::is_same<T, cudf::string_view>::value>* = nullptr>
-  std::unique_ptr<column> operator()(
-      std::vector<column_view> const& views,
-      rmm::mr::device_memory_resource* mr,
-      cudaStream_t stream) {
+  std::unique_ptr<column> operator()() {
     CUDF_FAIL("strings concatenate not yet supported");
   }
 };
@@ -404,14 +395,28 @@ concatenate(std::vector<column_view> const& columns_to_concat,
       "Type mismatch in columns to concatenate.");
 
   // TODO dispatch to fused kernel if num inputs <= 4?
+  bool const has_nulls = std::any_of(
+      columns_to_concat.begin(), columns_to_concat.end(),
+      [](auto const& col) { return col.has_nulls(); });
+
+  bool const fixed_width = cudf::is_fixed_width(type);
 
   switch (current_mode) {
+    case concatenate_mode::AUTOMATIC:
+      // TODO switch to fused kernel when strings and dictionary support added
+      if (fixed_width && (has_nulls || columns_to_concat.size() > 4)) {
+        return experimental::type_dispatcher(type,
+            detail::fused_concatenate{columns_to_concat, has_nulls, mr, stream});
+      } else {
+        return experimental::type_dispatcher(type,
+            detail::for_each_concatenate{columns_to_concat, has_nulls, stream, mr});
+      }
     case concatenate_mode::UNOPTIMIZED:
       return experimental::type_dispatcher(type,
-          detail::for_each_concatenate{columns_to_concat, stream, mr});
+          detail::for_each_concatenate{columns_to_concat, has_nulls, stream, mr});
     case concatenate_mode::FUSED_KERNEL:
       return experimental::type_dispatcher(type,
-          detail::fused_concatenate{}, columns_to_concat, mr, stream);
+          detail::fused_concatenate{columns_to_concat, has_nulls, mr, stream});
     default:
       CUDF_FAIL("Invalid concatenate mode");
   }

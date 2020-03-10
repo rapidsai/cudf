@@ -84,6 +84,8 @@ BENCHMARK_REGISTER_F(Concatenate, name)                               \
   ->Unit(benchmark::kMillisecond)                                     \
   ->UseManualTime();
 
+CONCAT_BENCHMARK_DEFINE(concat_columns_int64_automatic_non_null,
+  int64_t, cudf::concatenate_mode::AUTOMATIC, false)
 CONCAT_BENCHMARK_DEFINE(concat_columns_int64_unoptimized_non_null,
   int64_t, cudf::concatenate_mode::UNOPTIMIZED, false)
 CONCAT_BENCHMARK_DEFINE(concat_columns_int64_fused_kernel_non_null,
@@ -158,7 +160,7 @@ BENCHMARK_TEMPLATE_DEFINE_F(Concatenate, name, type, mode, nullable)  \
 }                                                                     \
 BENCHMARK_REGISTER_F(Concatenate, name)                               \
   ->RangeMultiplier(4)                                                \
-  ->Ranges({{1<<6, 1<<18}, {2, 128}, {2, 1024}})                                \
+  ->Ranges({{1<<8, 1<<12}, {2, 32}, {2, 128}})                      \
   ->Unit(benchmark::kMillisecond)                                     \
   ->UseManualTime();
 

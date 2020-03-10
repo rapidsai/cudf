@@ -26,6 +26,7 @@ namespace cudf {
 // Allow strategy switching at runtime for easier benchmarking
 // TODO remove when done
 enum class concatenate_mode {
+  AUTOMATIC,
   UNOPTIMIZED,
   FUSED_KERNEL
 };
