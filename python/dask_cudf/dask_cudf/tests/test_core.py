@@ -383,21 +383,22 @@ def test_repartition_simple_divisions(start, stop):
 
 
 @pytest.mark.parametrize("by", [["b"], ["c"], ["d"], ["b", "c"]])
-def test_repartition_hash(by):
-    npartitions = 4
-    datarange = 8
+@pytest.mark.parametrize("npartitions", [4, 5])
+def test_repartition_hash(by, npartitions):
+    npartitions_i = 4
+    datarange = 26
     size = 100
     gdf = cudf.DataFrame(
         {
             "a": np.arange(0, stop=size, dtype="int64"),
             "b": np.random.randint(datarange, size=size),
             "c": np.random.choice(list("abcdefgh"), size=size),
-            "d": np.random.choice(np.arange(8), size=size),
+            "d": np.random.choice(np.arange(26), size=size),
         }
     )
     gdf.d = gdf.d.astype("datetime64[ms]")
-    ddf = dgd.from_cudf(gdf, npartitions=npartitions)
-    ddf_new = ddf.repartition(columns=by)
+    ddf = dgd.from_cudf(gdf, npartitions=npartitions_i)
+    ddf_new = ddf.repartition(columns=by, npartitions=npartitions)
 
     # Check that the length was preserved
     assert len(ddf_new) == len(ddf)

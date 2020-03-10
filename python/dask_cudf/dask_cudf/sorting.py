@@ -5,7 +5,6 @@ from operator import getitem
 
 import cupy
 import numpy as np
-import toolz
 
 from dask.base import tokenize
 from dask.dataframe.core import DataFrame, Index, Series, _concat
@@ -17,29 +16,15 @@ from dask.utils import M, digit, insert
 import cudf as gd
 from cudf.utils.dtypes import is_categorical_dtype
 
+try:
+    import cytoolz as toolz
+except ImportError:
+    import toolz
+
 
 def set_partitions_hash(df, columns, npartitions):
     c = hash_object_dispatch(df[columns], index=False)
     return np.mod(c, npartitions)
-
-
-def _shuffle_group_2(df, columns, ignore_index):
-    if not len(df):
-        return {}, df
-    ind = hash_object_dispatch(df[columns], index=False)
-    n = ind.max() + 1
-    result2 = group_split_dispatch(
-        df, ind.values.view(), n, ignore_index=ignore_index
-    )
-    return result2, df.iloc[:0]
-
-
-def _shuffle_group_get(g_head, i):
-    g, head = g_head
-    if i in g:
-        return g[i]
-    else:
-        return head
 
 
 def _shuffle_group(df, columns, stage, k, npartitions, ignore_index):
@@ -54,8 +39,25 @@ def _shuffle_group(df, columns, stage, k, npartitions, ignore_index):
 
 
 def rearrange_by_hash(
-    df, columns, npartitions, max_branch=None, ignore_index=False
+    df, columns, npartitions, max_branch=None, ignore_index=True
 ):
+    if npartitions and npartitions != df.npartitions:
+        # Use main-line dask for new npartitions
+        meta = df._meta._constructor_sliced([0])
+        partitions = df[columns].map_partitions(
+            set_partitions_hash, columns, npartitions, meta=meta
+        )
+        # Note: Dask will use a shallow copy for assign
+        df2 = df.assign(_partitions=partitions)
+        return rearrange_by_column(
+            df2,
+            "_partitions",
+            shuffle="tasks",
+            max_branch=max_branch,
+            npartitions=npartitions,
+            ignore_index=ignore_index,
+        )
+
     n = df.npartitions
     if max_branch is False:
         stages = 1
@@ -75,7 +77,7 @@ def rearrange_by_hash(
 
     groups = []
     splits = []
-    joins = []
+    combines = []
 
     inputs = [
         tuple(digit(i, j, k) for j in range(stages))
@@ -85,7 +87,7 @@ def rearrange_by_hash(
     token = tokenize(df, columns, max_branch)
 
     start = {
-        ("shuffle-join-" + token, 0, inp): (df._name, i)
+        ("shuffle-combine-" + token, 0, inp): (df._name, i)
         if i < df.npartitions
         else df._meta
         for i, inp in enumerate(inputs)
@@ -95,7 +97,7 @@ def rearrange_by_hash(
         group = {  # Convert partition into dict of dataframe pieces
             ("shuffle-group-" + token, stage, inp): (
                 _shuffle_group,
-                ("shuffle-join-" + token, stage - 1, inp),
+                ("shuffle-combine-" + token, stage - 1, inp),
                 columns,
                 stage - 1,
                 k,
@@ -115,8 +117,8 @@ def rearrange_by_hash(
             for inp in inputs
         }
 
-        join = {  # concatenate those pieces together, with their friends
-            ("shuffle-join-" + token, stage, inp): (
+        combine = {  # concatenate those pieces together, with their friends
+            ("shuffle-combine-" + token, stage, inp): (
                 _concat,
                 [
                     (
@@ -133,50 +135,21 @@ def rearrange_by_hash(
         }
         groups.append(group)
         splits.append(split)
-        joins.append(join)
+        combines.append(combine)
 
     end = {
-        ("shuffle-" + token, i): ("shuffle-join-" + token, stages, inp)
+        ("shuffle-" + token, i): ("shuffle-combine-" + token, stages, inp)
         for i, inp in enumerate(inputs)
     }
 
-    dsk = toolz.merge(start, end, *(groups + splits + joins))
+    dsk = toolz.merge(start, end, *(groups + splits + combines))
     graph = HighLevelGraph.from_collections(
         "shuffle-" + token, dsk, dependencies=[df]
     )
     df2 = DataFrame(graph, "shuffle-" + token, df, df.divisions)
+    df2.divisions = (None,) * (df.npartitions + 1)
 
-    if npartitions is not None and npartitions != df.npartitions:
-        parts = [i % df.npartitions for i in range(npartitions)]
-        token = tokenize(df2, npartitions)
-
-        dsk = {
-            ("repartition-group-" + token, i): (
-                _shuffle_group_2,
-                k,
-                columns,
-                ignore_index,
-            )
-            for i, k in enumerate(df2.__dask_keys__())
-        }
-        for p in range(npartitions):
-            dsk[("repartition-get-" + token, p)] = (
-                _shuffle_group_get,
-                ("repartition-group-" + token, parts[p]),
-                p,
-            )
-
-        graph2 = HighLevelGraph.from_collections(
-            "repartition-get-" + token, dsk, dependencies=[df2]
-        )
-        df3 = DataFrame(
-            graph2, "repartition-get-" + token, df2, [None] * (npartitions + 1)
-        )
-    else:
-        df3 = df2
-        df3.divisions = (None,) * (df.npartitions + 1)
-
-    return df3
+    return df2
 
 
 def set_index_post(df, index_name, drop, column_dtype):
