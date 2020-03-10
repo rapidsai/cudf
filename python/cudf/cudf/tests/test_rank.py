@@ -44,13 +44,6 @@ class TestRank:
                 ascending=ascending,
                 pct=pct,
             )
-            if not ranked_ps.equals(ranked_gs.to_pandas()):
-                print(
-                    pd.concat(
-                        [ps, ranked_ps, gs.to_pandas(), ranked_gs.to_pandas()],
-                        axis=1,
-                    )
-                )
             assert_eq(ranked_ps, ranked_gs.to_pandas())
         # # Series
         _check(
