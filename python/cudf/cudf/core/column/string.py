@@ -584,8 +584,8 @@ class StringMethods(object):
 
         Examples
         --------
-        >>> import nvstrings
-        >>> s = nvstrings.to_device(["Hello, Friend","Goodbye, Friend"])
+        >>> import cudf
+        >>> s = cudf.Series(["Hello, Friend","Goodbye, Friend"])
         >>> print(s.lower())
         ['hello, friend', 'goodbye, friend']
 
@@ -599,8 +599,8 @@ class StringMethods(object):
 
         Examples
         --------
-        >>> import nvstrings
-        >>> s = nvstrings.to_device(["Hello, friend","Goodbye, friend"])
+        >>> import cudf
+        >>> s = cudf.Series(["Hello, friend","Goodbye, friend"])
         >>> print(s.upper())
         ['HELLO, FRIEND', 'GOODBYE, FRIEND']
 
@@ -614,8 +614,8 @@ class StringMethods(object):
 
         Examples
         --------
-        >>> import nvstrings
-        >>> s = nvstrings.to_device(["hello, friend","goodbye, friend"])
+        >>> import cudf
+        >>> s = cudf.Series(["hello, friend","goodbye, friend"])
         >>> print(s.capitalize())
         ['Hello, friend", "Goodbye, friend"]
 
@@ -629,8 +629,8 @@ class StringMethods(object):
 
         Examples
         --------
-        >>> import nvstrings
-        >>> s = nvstrings.to_device(["Hello, Friend","Goodbye, Friend"])
+        >>> import cudf
+        >>> s = cudf.Series(["Hello, Friend","Goodbye, Friend"])
         >>> print(s.swapcase())
         ['hELLO, fRIEND', 'gOODBYE, fRIEND']
 
@@ -645,8 +645,8 @@ class StringMethods(object):
 
         Examples
         --------
-        >>> import nvstrings
-        >>> s = nvstrings.to_device(["Hello friend","goodnight moon"])
+        >>> import cudf
+        >>> s = cudf.Series(["Hello friend","goodnight moon"])
         >>> print(s.title())
         ['Hello Friend', 'Goodnight Moon']
 
