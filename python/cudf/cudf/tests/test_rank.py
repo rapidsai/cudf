@@ -9,6 +9,7 @@ from cudf.tests.utils import assert_eq
 
 
 class TestRank:
+    index = np.array([5, 4, 3, 2, 1, 6, 7, 8, 9, 10])
     col1 = np.array([5, 4, 3, 5, 8, 5, 2, 1, 6, 6])
     col2 = np.array([5, 4, np.nan, 5, 8, 5, np.inf, np.nan, 6, -np.inf])
 
@@ -25,7 +26,7 @@ class TestRank:
         if method == "first" and dtype == 'O':
             # not supported by pandas
             return
-        pdf = pd.DataFrame()
+        pdf = pd.DataFrame(index=self.index)
         pdf["col1"] = self.col1.astype(dtype)
         pdf["col2"] = self.col2.astype(dtype)
         gdf = DataFrame.from_pandas(pdf)
