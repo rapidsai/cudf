@@ -476,23 +476,16 @@ def test_string_extract(ps_gs, pat, expand, flags, flags_raise):
         ("FGHI", False),
     ],
 )
-@pytest.mark.parametrize("case,case_raise", [(False, 1)])
 @pytest.mark.parametrize("flags,flags_raise", [(0, 0), (1, 1)])
 @pytest.mark.parametrize("na,na_raise", [(np.nan, 0), (None, 1), ("", 1)])
-def test_string_contains(
-    ps_gs, pat, regex, case, case_raise, flags, flags_raise, na, na_raise
-):
+def test_string_contains(ps_gs, pat, regex, flags, flags_raise, na, na_raise):
     ps, gs = ps_gs
 
-    expectation = raise_builder(
-        [case_raise, flags_raise, na_raise], NotImplementedError
-    )
+    expectation = raise_builder([flags_raise, na_raise], NotImplementedError)
 
     with expectation:
-        expect = ps.str.contains(
-            pat, case=case, flags=flags, na=na, regex=regex
-        )
-        got = gs.str.contains(pat, case=case, flags=flags, na=na, regex=regex)
+        expect = ps.str.contains(pat, flags=flags, na=na, regex=regex)
+        got = gs.str.contains(pat, flags=flags, na=na, regex=regex)
         assert_eq(expect, got)
 
 
