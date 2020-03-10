@@ -1601,7 +1601,7 @@ class event_attributes {
    *
    */
   template <typename... Args>
-  NVTX3_RELAXED_CONSTEXPR explicit event_attributes(
+  explicit event_attributes(
       message const& m, Args const&... args) noexcept
       : event_attributes(args...) {
     attributes_.message = m.get_value();
