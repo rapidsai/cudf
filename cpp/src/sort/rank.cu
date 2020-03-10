@@ -78,13 +78,12 @@ std::unique_ptr<table> rank(table_view const &input, rank_method method,
     auto rank_data = rank_mutable_view.data<double>();
     auto device_table =
         table_device_view::create(table_view{{input_col}}, stream);
-    rmm::device_vector<double> dense_rank_sorted; // as key for min, max,
-                                                  // average
-    // TODO: double? or size_type?
+    rmm::device_vector<size_type> dense_rank_sorted; // as key for min, max,
+                                                     // average
     if (method != rank_method::FIRST) {
-      dense_rank_sorted = rmm::device_vector<double>(size);
+      dense_rank_sorted = rmm::device_vector<size_type>(size);
       if (input_col.has_nulls()) {
-        auto conv = unique_comparator<true, double>(
+        auto conv = unique_comparator<true, size_type>(
             *device_table, sorted_order_view.data<size_type>());
         auto it = thrust::make_transform_iterator(
             thrust::make_counting_iterator<size_type>(0), conv);
@@ -92,7 +91,7 @@ std::unique_ptr<table> rank(table_view const &input, rank_method method,
                                it + size,
                                dense_rank_sorted.data().get());
       } else {
-        auto conv = unique_comparator<false, double>(
+        auto conv = unique_comparator<false, size_type>(
             *device_table, sorted_order_view.data<size_type>());
         auto it = thrust::make_transform_iterator(
             thrust::make_counting_iterator<size_type>(0), conv);
@@ -153,7 +152,7 @@ std::unique_ptr<table> rank(table_view const &input, rank_method method,
               thrust::make_tuple(thrust::make_counting_iterator<size_type>(1),
                                  thrust::make_constant_iterator<size_type>(1))),
           thrust::make_discard_iterator(), min_count.begin(),
-          thrust::equal_to<double>{}, [] __device__(auto i, auto j) {
+          thrust::equal_to<size_type>{}, [] __device__(auto i, auto j) {
             return MinCount{std::min(thrust::get<0>(i), thrust::get<0>(j)),
                             thrust::get<1>(i) + thrust::get<1>(j)};
           });
