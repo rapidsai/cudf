@@ -1000,7 +1000,7 @@ def test_string_get(string, index):
     ],
 )
 @pytest.mark.parametrize(
-    "number", [0, 1, 3, 10],
+    "number", [-10, 0, 1, 3, 10],
 )
 @pytest.mark.parametrize(
     "diff", [0, 2, 5, 9],
@@ -1351,10 +1351,8 @@ def test_strings_filling_tests(data, width, fillchar):
     [
         ["A,,B", "1,,5", "3,00,0"],
         ["Linda van der Berg", "George Pitt-Rivers"],
-        # TODO: Uncomment following two lines
-        # once this is fixed: https://github.com/rapidsai/cudf/issues/4355
-        # ["+23", "³", "⅕", ""],
-        # ["hello", "there", "world", "+1234", "-1234", None, "accént", ""],
+        ["+23", "³", "⅕", ""],
+        ["hello", "there", "world", "+1234", "-1234", None, "accént", ""],
         [" ", "\t\r\n ", ""],
         ["1. Ant.  ", "2. Bee!\n", "3. Cat?\t", None],
     ],
