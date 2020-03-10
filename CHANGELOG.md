@@ -142,6 +142,7 @@
 - PR #4345 Removed an undesirable backwards include from /include to /src in cuIO writers.hpp
 - PR #4362 Move pq_chunked_state struct into it's own header to match how orc writer is doing it.
 - PR #4339 Port libcudf strings `wrap` api to cython/python
+- PR #4311 Port nvstrings String Manipulations functions to cuDF Python/Cython
 
 ## Bug Fixes
 

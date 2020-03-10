@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2020, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from cudf._libxx.move cimport move
@@ -7,12 +7,13 @@ from cudf._libxx.cpp.scalar.scalar cimport string_scalar
 from cudf._libxx.cpp.types cimport size_type
 from cudf._libxx.column cimport Column
 from cudf._libxx.scalar cimport Scalar
+from cudf._libxx.cpp.column.column cimport column
 
-from cudf._libxx.strings.replace cimport (
+from cudf._libxx.cpp.strings.replace cimport (
     replace_slice as cpp_replace_slice
 )
 
-from cudf._libxx.strings.substring cimport (
+from cudf._libxx.cpp.strings.substring cimport (
     slice_strings as cpp_slice_strings
 )
 
