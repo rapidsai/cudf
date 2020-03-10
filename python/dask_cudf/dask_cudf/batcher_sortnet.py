@@ -6,6 +6,7 @@ import math
 from operator import getitem
 
 import numpy as np
+import tlz as toolz
 
 from dask import compute, delayed
 from dask.base import tokenize
@@ -16,8 +17,6 @@ from dask.highlevelgraph import HighLevelGraph
 from dask.utils import digit, insert
 
 import cudf as gd
-
-import tlz as toolz
 
 
 def get_oversized(length):
