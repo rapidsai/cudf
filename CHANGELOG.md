@@ -33,10 +33,12 @@
 - PR #4259 Ability to create Java host buffers from memory-mapped files
 - PR #4240 Add groupby::groups()
 - PR #4304 Add new NVTX infrastructure and add ranges to all top-level compute APIs.
+- PR #4319 Add repartition_by_hash API to dask_cudf
 - PR #4315 ShiftLeft, ShiftRight, ShiftRightUnsigned binops
 - PR #4321 Expose Python Semi and Anti Joins
 - PR #4291 Add Java callback support for RMM events
 - PR #4298 Port orc.pyx to libcudf++
+- PR #4381 Add Java support for copying buffers with asynchronous streams
 - PR #4288 Add libcudf++ shift Cython implementation
 - PR #4338 Add cudf::sequence() for generating an incrementing list of numeric values
 
