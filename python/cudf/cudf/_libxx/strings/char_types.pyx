@@ -4,8 +4,9 @@ from cudf._libxx.move cimport move
 from cudf._libxx.cpp.column.column_view cimport column_view
 from libcpp.memory cimport unique_ptr
 from cudf._libxx.column cimport Column
+from cudf._libxx.cpp.column.column cimport column
 
-from cudf._libxx.strings.char_types cimport (
+from cudf._libxx.cpp.strings.char_types cimport (
     all_characters_of_type as cpp_all_characters_of_type,
     string_character_types as string_character_types
 )
