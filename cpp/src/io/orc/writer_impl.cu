@@ -937,7 +937,7 @@ void writer::impl::write(table_view const &table, const table_metadata *metadata
 
 void writer::impl::write_chunked_begin(orc_chunked_state& state) {
   // Write file header
-  out_sink_->write(MAGIC, std::strlen(MAGIC));
+  out_sink_->host_write(MAGIC, std::strlen(MAGIC));
 }
 
 void writer::impl::write_chunked(table_view const& table, orc_chunked_state& state) {
@@ -1104,12 +1104,6 @@ void writer::impl::write_chunked(table_view const& table, orc_chunked_state& sta
 
   ProtobufWriter pbw_(&buffer_);
 
-<<<<<<< HEAD
-  // Write file header
-  out_sink_->host_write(MAGIC, std::strlen(MAGIC));
-
-=======
->>>>>>> branch-0.13
   // Write stripes
   size_t group = 0;
   for (size_t stripe_id = 0; stripe_id < stripes.size(); stripe_id++) {
@@ -1245,7 +1239,7 @@ void writer::impl::write_chunked_end(orc_chunked_state& state) {
     pbw_.write(&state.md);
     add_uncompressed_block_headers(buffer_);
     ps.metadataLength = buffer_.size();
-    out_sink_->write(buffer_.data(), buffer_.size());
+    out_sink_->host_write(buffer_.data(), buffer_.size());
   }
   else {
     ps.metadataLength = 0;
