@@ -264,7 +264,9 @@ def rank_columns(Table source_table, str method, str na_option, bool ascending,
             )
         )
 
-    return Table.from_unique_ptr(
+    out_table = Table.from_unique_ptr(
         move(c_result),
         column_names=source_table._column_names
     )
+    out_table._index = source_table._index
+    return out_table
