@@ -97,6 +97,28 @@ class writer {
    * @param stream Optional stream to use for device memory alloc and kernels
    */
   void write_all(table_view const& table, const table_metadata *metadata = nullptr, cudaStream_t stream = 0);
+
+  /**
+   * @brief Begins the chunked/streamed write process.
+   *
+   * @param[in] state State information that crosses _begin() / write_chunked() / _end() boundaries.
+   */
+  void write_chunked_begin(struct orc_chunked_state& state);
+
+  /**
+   * @brief Writes a single subtable as part of a larger ORC file/table write.
+   *
+   * @param[in] table The table information to be written
+   * @param[in] state State information that crosses _begin() / write_chunked() / _end() boundaries.
+   */
+  void write_chunked(table_view const& table, struct orc_chunked_state& state);
+
+  /**
+   * @brief Finishes the chunked/streamed write process.
+   *
+   * @param[in] state State information that crosses _begin() / write_chunked() / _end() boundaries.
+   */
+  void write_chunked_end(struct orc_chunked_state& state);
 };
 
 }  // namespace orc

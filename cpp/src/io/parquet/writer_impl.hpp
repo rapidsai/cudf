@@ -36,6 +36,8 @@
 #include <string>
 #include <vector>
 
+#include "chunked_state.hpp"
+
 namespace cudf {
 namespace experimental {
 namespace io {

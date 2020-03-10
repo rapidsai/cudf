@@ -114,7 +114,7 @@ class parquet_column_view {
         _ts_scale(0),
         _data_count(col.size()),
         _null_count(col.null_count()),
-        _data(col.data<uint8_t>()),
+        _data(col.head<uint8_t>() + col.offset() * _type_width),
         _nulls(col.nullable() ? col.null_mask() : nullptr) {
     switch(col.type().id()) {
       case cudf::type_id::INT8:
