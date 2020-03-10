@@ -37,10 +37,12 @@ auto is_sorted(
 {
     cudaStream_t stream = 0;
     auto in_d = table_device_view::create(in);
+    rmm::device_vector<order> d_column_order(column_order);
+    rmm::device_vector<null_order> const d_null_precedence = (has_nulls) ? rmm::device_vector<null_order>{null_precedence} : rmm::device_vector<null_order>{};
     auto ineq_op = row_lexicographic_comparator<has_nulls>(
         *in_d, *in_d,
-        rmm::device_vector<order>(column_order).data().get(),
-        rmm::device_vector<null_order>(null_precedence).data().get());
+        d_column_order.data().get(),
+        d_null_precedence.data().get());
 
     auto sorted = thrust::is_sorted(rmm::exec_policy(stream)->on(stream),
                                     thrust::make_counting_iterator(0),

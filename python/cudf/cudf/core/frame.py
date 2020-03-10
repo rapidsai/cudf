@@ -51,7 +51,7 @@ class Frame(libcudfxx.table.Table):
                     new_data, name=labels, index=self.index
                 )
         return self._constructor(
-            new_data, columns=new_data.to_pandas_index(), index=self.index,
+            new_data, columns=new_data.to_pandas_index(), index=self.index
         )
 
     def _get_columns_by_index(self, indices):
@@ -61,7 +61,7 @@ class Frame(libcudfxx.table.Table):
         """
         data = self._data.get_by_index(indices)
         return self._constructor(
-            data, columns=data.to_pandas_index(), index=self.index,
+            data, columns=data.to_pandas_index(), index=self.index
         )
 
     def _gather(self, gather_map):
@@ -237,6 +237,17 @@ class Frame(libcudfxx.table.Table):
 
         result._copy_categories(self)
         return result
+
+    def shift(self, periods=1, freq=None, axis=0, fill_value=None):
+        """Shift values by `periods` positions.
+        """
+        assert axis in (None, 0) and freq is None
+        return self._shift(periods)
+
+    def _shift(self, offset, fill_value=None):
+        data_columns = (col.shift(offset, fill_value) for col in self._columns)
+        data = zip(self._column_names, data_columns)
+        return self.__class__._from_table(Frame(data, self._index))
 
     def drop_duplicates(self, subset=None, keep="first", nulls_are_equal=True):
         """
@@ -477,7 +488,7 @@ class Frame(libcudfxx.table.Table):
         len_right_on = len(right_on) if right_on is not None else 0
 
         # must actually support the requested merge type
-        if how not in ["left", "inner", "outer"]:
+        if how not in ["left", "inner", "outer", "leftanti", "leftsemi"]:
             raise NotImplementedError(
                 "{!r} merge not supported yet".format(how)
             )
@@ -595,7 +606,7 @@ class Frame(libcudfxx.table.Table):
                 if name in left_on:
                     left_on[left_on.index(name)] = "%s%s" % (name, lsuffix)
                 if name in right_on:
-                    right_on[right_on.index(name)] = "%s%s" % (name, rsuffix,)
+                    right_on[right_on.index(name)] = "%s%s" % (name, rsuffix)
 
         categorical_dtypes = {}
         for name, col in itertools.chain(lhs._data.items(), rhs._data.items()):
@@ -796,3 +807,33 @@ class Frame(libcudfxx.table.Table):
                 rhs[rcol] = rhs[rcol].astype(to_dtype)
 
         return lhs, rhs, to_categorical
+
+    def _is_sorted(self, ascending=None, null_position=None):
+        """
+        Returns a boolean indicating whether the data of the Frame are sorted
+        based on the parameters given. Does not account for the index.
+
+        Parameters
+        ----------
+        self : Frame
+            Frame whose columns are to be checked for sort order
+        ascending : None or list-like of booleans
+            None or list-like of boolean values indicating expected sort order
+            of each column. If list-like, size of list-like must be
+            len(columns). If None, all columns expected sort order is set to
+            ascending. False (0) - ascending, True (1) - descending.
+        null_position : None or list-like of booleans
+            None or list-like of boolean values indicating desired order of
+            nulls compared to other elements. If list-like, size of list-like
+            must be len(columns). If None, null order is set to before. False
+            (0) - before, True (1) - after.
+
+        Returns
+        -------
+        returns : boolean
+            Returns True, if sorted as expected by ``ascending`` and
+            ``null_position``, False otherwise.
+        """
+        return libcudfxx.sort.is_sorted(
+            self, ascending=ascending, null_position=null_position
+        )
