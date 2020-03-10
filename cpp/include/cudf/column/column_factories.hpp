@@ -371,7 +371,7 @@ std::unique_ptr<column> make_strings_column(
  * given scalar.
  *
  * The output column will have the same type as `s.type()`
- * The output column will not contain all null rows if `s.invalid()==false`
+ * The output column will contain all null rows if `s.invalid()==false`
  * The output column will be empty if `size==0`.
  *
  * @param s The scalar to use for values in the column.
