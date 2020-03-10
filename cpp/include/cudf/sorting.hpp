@@ -30,6 +30,7 @@ enum class rank_method {
   MAX,     // max  of first in the group
   DENSE    // like min/max, but rank always increases by 1 between groups
 };
+
 namespace experimental {
 
 /**---------------------------------------------------------------------------*
@@ -43,7 +44,7 @@ namespace experimental {
  * @param null_precedence The desired order of null compared to other elements
  * for each column.  Size must be equal to `input.num_columns()` or empty.
  * If empty, all columns will be sorted in `null_order::BEFORE`.
- * @return std::unique_ptr<column> A non-nullable column of INT32 elements
+ * @return std::unique_ptr<column> A non-nullable column of `size_type` elements
  * containing the permuted row indices of `input` if it were sorted
  *---------------------------------------------------------------------------**/
 std::unique_ptr<column> sorted_order(
@@ -52,10 +53,10 @@ std::unique_ptr<column> sorted_order(
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @copybrief sorted_order(table_view, std::vector<order> const&, std::vector<null_order> const&, rmm::mr::device_memory_resource*)
- * The sort order is stable. 
- *  
- * @copydetails sorted_order(table_view, std::vector<order> const&, std::vector<null_order> const&, rmm::mr::device_memory_resource*)
+ * @brief Computes the row indices that would produce `input` in a stable
+ * lexicographical sorted order.
+ *
+ * @copydetails cudf::experimental::sorted_order
  */
 std::unique_ptr<column> stable_sorted_order(
     table_view input, std::vector<order> const& column_order = {},
@@ -101,16 +102,6 @@ std::unique_ptr<table> sort(
     std::vector<null_order> const& null_precedence = {},
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-/**
- * @copybrief sort(table_view, std::vector<order> const&, std::vector<null_order> const&, rmm::mr::device_memory_resource*)
- * The sort order is stable. 
- * 
- * @copydetails sort(table_view, std::vector<order> const&, std::vector<null_order> const&, rmm::mr::device_memory_resource*)
- */
-std::unique_ptr<table> stable_sort(
-    table_view input, std::vector<order> const& column_order = {},
-    std::vector<null_order> const& null_precedence = {},
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Performs a key-value sort.
@@ -139,18 +130,6 @@ std::unique_ptr<table> sort_by_key(
     std::vector<null_order> const& null_precedence = {},
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-/**
- * @copybrief sort_by_key(table_view const&, table_view const&, std::vector<order> const&, std::vector<null_order> const&, rmm::mr::device_memory_resource*)
- * The sort order is stable. 
- * 
- * @copydetails sort_by_key(table_view const&, table_view const&, std::vector<order> const&, std::vector<null_order> const&, rmm::mr::device_memory_resource*)
- */
-std::unique_ptr<table> stable_sort_by_key(
-    table_view const& values, table_view const& keys,
-    std::vector<order> const& column_order = {},
-    std::vector<null_order> const& null_precedence = {},
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-
 
 /**---------------------------------------------------------------------------*
  * @brief Computes the ranks of each column in a lexicographical sorted order.
@@ -174,6 +153,6 @@ std::unique_ptr<table> rank(
     null_order null_precedence,
     bool percentage,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-    
-} // namespace experimental
-} // namespace cudf
+ 
+}  // namespace experimental
+}  // namespace cudf

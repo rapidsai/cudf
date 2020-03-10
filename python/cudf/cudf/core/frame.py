@@ -296,6 +296,17 @@ class Frame(libcudfxx.table.Table):
 
         return self._from_table(out_rank_table)
 
+    def shift(self, periods=1, freq=None, axis=0, fill_value=None):
+        """Shift values by `periods` positions.
+        """
+        assert axis in (None, 0) and freq is None
+        return self._shift(periods)
+
+    def _shift(self, offset, fill_value=None):
+        data_columns = (col.shift(offset, fill_value) for col in self._columns)
+        data = zip(self._column_names, data_columns)
+        return self.__class__._from_table(Frame(data, self._index))
+
     def drop_duplicates(self, subset=None, keep="first", nulls_are_equal=True):
         """
         Drops rows in frame as per duplicate rows in `subset` columns from

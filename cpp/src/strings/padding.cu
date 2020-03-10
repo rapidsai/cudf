@@ -55,7 +55,7 @@ struct compute_pad_output_length_fn
 
 //
 std::unique_ptr<column> pad( strings_column_view const& strings,
-                             size_type width, pad_side side = pad_side::right,
+                             size_type width, pad_side side = pad_side::RIGHT,
                              std::string const& fill_char = " ",
                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                              cudaStream_t stream = 0 )
@@ -86,7 +86,7 @@ std::unique_ptr<column> pad( strings_column_view const& strings,
     auto chars_view = chars_column->mutable_view();
     auto d_chars = chars_view.data<char>();
 
-    if( side==pad_side::left )
+    if( side==pad_side::LEFT)
     {
         thrust::for_each_n(rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator<cudf::size_type>(0), strings_count,
             [d_strings, width, d_fill_char, d_offsets, d_chars] __device__ (size_type idx) {
@@ -100,7 +100,7 @@ std::unique_ptr<column> pad( strings_column_view const& strings,
                 copy_string( ptr, d_str );
             });
     }
-    else if( side==pad_side::right )
+    else if( side==pad_side::RIGHT )
     {
         thrust::for_each_n(rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator<cudf::size_type>(0), strings_count,
             [d_strings, width, d_fill_char, d_offsets, d_chars] __device__ (size_type idx) {
@@ -114,7 +114,7 @@ std::unique_ptr<column> pad( strings_column_view const& strings,
                     ptr += from_char_utf8(d_fill_char,ptr);
             });
     }
-    else if( side==pad_side::both )
+    else if( side==pad_side::BOTH )
     {
         thrust::for_each_n(rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator<cudf::size_type>(0), strings_count,
             [d_strings, width, d_fill_char, d_offsets, d_chars] __device__ (size_type idx) {
