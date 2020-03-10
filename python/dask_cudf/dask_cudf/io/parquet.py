@@ -2,102 +2,13 @@ import warnings
 from functools import partial
 
 import pyarrow.parquet as pq
-from pyarrow.compat import guid
 
 import dask.dataframe as dd
 from dask.dataframe.io.parquet.arrow import ArrowEngine
 
 import cudf
 from cudf.core.column import build_categorical_column
-
-
-def _get_partition_groups(df, partition_cols, preserve_index=False):
-    df = df.sort_values(partition_cols)
-    if not preserve_index:
-        df = df.reset_index(drop=True)
-    divisions = df[partition_cols].drop_duplicates()
-    splits = df[partition_cols].searchsorted(divisions, side="left")
-    splits = splits.tolist() + [len(df[partition_cols])]
-    return [
-        df.iloc[splits[i] : splits[i + 1]].copy(deep=False)
-        for i in range(0, len(splits) - 1)
-    ]
-
-
-# Logic chosen to match: https://arrow.apache.org/
-# docs/_modules/pyarrow/parquet.html#write_to_dataset
-def write_to_dataset(
-    df, root_path, partition_cols=None, fs=None, preserve_index=False, **kwargs
-):
-    """Wrapper around cudf's `to_parquet` for writing partitioned
-    Parquet datasets. For each combination of partition group and value,
-    subdirectories are created as follows:
-
-    root_dir/
-      group=value1
-        <uuid>.parquet
-      ...
-      group=valueN
-        <uuid>.parquet
-
-    Parameters
-    ----------
-    df : cudf.DataFrame
-    root_path : string,
-        The root directory of the dataset
-    fs : FileSystem, default None
-        If nothing passed, paths assumed to be found in the local on-disk
-        filesystem
-    preserve_index : bool, default False
-        Preserve index values in each parquet file.
-    partition_cols : list,
-        Column names by which to partition the dataset
-        Columns are partitioned in the order they are given
-    **kwargs : dict,
-        kwargs for to_parquet function.
-    """
-
-    def _mkdir_if_not_exists(fs, path):
-        if fs._isfilestore() and not fs.exists(path):
-            try:
-                fs.mkdir(path)
-            except OSError:
-                assert fs.exists(path)
-
-    _mkdir_if_not_exists(fs, root_path)
-
-    if partition_cols is not None and len(partition_cols) > 0:
-
-        data_cols = df.columns.drop(partition_cols)
-        if len(data_cols) == 0:
-            raise ValueError("No data left to save outside partition columns")
-
-        #  Loop through the partition groups
-        for i, sub_df in enumerate(
-            _get_partition_groups(
-                df, partition_cols, preserve_index=preserve_index
-            )
-        ):
-            if sub_df is None or len(sub_df) < 1:
-                continue
-            keys = sub_df[partition_cols[0]].iloc[0]
-            if not isinstance(keys, tuple):
-                keys = (keys,)
-            subdir = "/".join(
-                [
-                    "{colname}={value}".format(colname=name, value=val)
-                    for name, val in zip(partition_cols, keys)
-                ]
-            )
-            prefix = "/".join([root_path, subdir])
-            _mkdir_if_not_exists(fs, prefix)
-            outfile = guid() + ".parquet"
-            full_path = "/".join([prefix, outfile])
-            sub_df.drop(columns=partition_cols).to_parquet(full_path, **kwargs)
-    else:
-        outfile = guid() + ".parquet"
-        full_path = "/".join([root_path, outfile])
-        df.to_parquet(full_path, **kwargs)
+from cudf.io import write_to_dataset
 
 
 class CudfEngine(ArrowEngine):
