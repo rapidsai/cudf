@@ -35,7 +35,9 @@ def as_contiguous(arr):
 def full(size, value, dtype):
     cupy_dtype = dtype
     if np.issubdtype(cupy_dtype, np.datetime64):
+        time_unit, _ = np.datetime_data(cupy_dtype)
         cupy_dtype = np.int64
+        value = np.datetime64(value, time_unit).view(cupy_dtype)
 
     out = cupy.full(size, value, cupy_dtype)
     return cuda.as_cuda_array(out).view(dtype)
