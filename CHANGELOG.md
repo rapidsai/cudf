@@ -1,3 +1,13 @@
+# cuDF 0.14.0 (Date TBD)
+
+## New Features
+
+## Improvements
+
+## Bug Fixes
+- PR #4386 Update Java package to 0.14
+
+
 # cuDF 0.13.0 (Date TBD)
 
 ## New Features
@@ -143,6 +153,7 @@
 - PR #4362 Move pq_chunked_state struct into it's own header to match how orc writer is doing it.
 - PR #4339 Port libcudf strings `wrap` api to cython/python
 - PR #4311 Port nvstrings String Manipulations functions to cuDF Python/Cython
+- PR #4373 Port nvstrings Regular Expressions functions to cuDF Python/Cython
 
 ## Bug Fixes
 
@@ -1426,7 +1437,8 @@
 
 - PR #821 Fix flake8 issues revealed by flake8 update
 - PR #808 Resolved renamed `d_columns_valids` variable name
-- PR #820 CSV Reader: fix the issue where reader adds additional rows when file uses \r\n as a line terminator
+- PR #820 CSV Reader: fix the issue where reader adds additional rows when file uses 
+ as a line terminator
 - PR #780 CSV Reader: Fix scientific notation parsing and null values for empty quotes
 - PR #815 CSV Reader: Fix data parsing when tabs are present in the input CSV file
 - PR #850 Fix bug where left joins where the left df has 0 rows causes a crash
