@@ -73,7 +73,11 @@ from cudf._libxx.strings.strip import (
     rstrip as cpp_rstrip,
     strip as cpp_strip,
 )
-from cudf._libxx.strings.substring import slice_from as cpp_slice_from
+from cudf._libxx.strings.substring import (
+    get as cpp_string_get,
+    slice_from as cpp_slice_from,
+    slice_strings as cpp_slice_strings,
+)
 from cudf._libxx.strings.wrap import wrap as cpp_wrap
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
@@ -628,32 +632,30 @@ class StringMethods(object):
             cpp_replace_with_backrefs(self._column, pat, repl,), **kwargs
         )
 
-    # def slice(self, start=None, stop=None, step=None, **kwargs):
-    #     """
-    #     Returns a substring of each string.
+    def slice(self, start=None, stop=None, step=None, **kwargs):
+        """
+        Slice substrings from each element in the Series or Index.
 
-    #     Parameters
-    #     ----------
-    #     start : int
-    #         Beginning position of the string to extract.
-    #         Default is beginning of the each string.
-    #     stop : int
-    #         Ending position of the string to extract.
-    #         Default is end of each string.
-    #     step : int
-    #         Characters that are to be captured within the specified section.
-    #         Default is every character.
+        Parameters
+        ----------
+        start : int
+            Start position for slice operation.
+        stop : int
+            Stop position for slice operation.
+        step : int
+            Step size for slice operation.
 
-    #     Returns
-    #     -------
-    #     Series/Index of str dtype
-    #         A substring of each string.
+        Returns
+        -------
+        Series/Index of str dtype
+            Series or Index from sliced substring from
+            original string object.
 
-    #     """
+        """
 
-    #     return self._return_or_inplace(
-    #         cpp_slice_strings(self._column, start, stop, step), **kwargs,
-    #     )
+        return self._return_or_inplace(
+            cpp_slice_strings(self._column, start, stop, step), **kwargs,
+        )
 
     def isdecimal(self, **kwargs):
         """
@@ -928,28 +930,24 @@ class StringMethods(object):
             cpp_string_insert(self._column, start, Scalar(repl)), **kwargs
         )
 
-    # def get(self, i=0, **kwargs):
-    #     """
-    #     Returns the character specified in each string as a new string.
-    #     The nvstrings returned contains a list of single character strings.
+    def get(self, i=0, **kwargs):
+        """
+        Extract element from each component at specified position.
 
-    #     Parameters
-    #     ----------
-    #     i : int
-    #         The character position identifying the character
-    #         in each string to return.
+        Parameters
+        ----------
+        i : int
+            Position of element to extract.
 
-    #     Returns
-    #     -------
-    #     Series/Index of str dtype
-    #         A new string series with character at the position
-    #         `i` of each `i` inserted at the specified position.
+        Returns
+        -------
+        Series/Index of str dtype
 
-    #     """
+        """
 
-    #     return self._return_or_inplace(
-    #         cpp_string_get(self._column, i), **kwargs
-    #     )
+        return self._return_or_inplace(
+            cpp_string_get(self._column, i), **kwargs
+        )
 
     def split(self, pat=None, n=-1, expand=True, **kwargs):
         """
