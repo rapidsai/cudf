@@ -80,7 +80,10 @@ def find(Column source_strings,
          size_type start,
          size_type end):
     """
-
+    Returns a Column containing lowest indexes in each string of
+    `source_strings` that fully contain `target` string.
+    Scan portion of strings in `source_strings` can be
+    controlled by setting `start` and `end` values.
     """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
@@ -103,7 +106,10 @@ def rfind(Column source_strings,
           size_type start,
           size_type end):
     """
-
+    Returns a Column containing highest indexes in each string of
+    `source_strings` that fully contain `target` string.
+    Scan portion of strings in `source_strings` can be
+    controlled by setting `start` and `end` values.
     """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()

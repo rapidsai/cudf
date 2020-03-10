@@ -55,8 +55,8 @@ def count_re(Column source_strings, object reg_ex):
 
 def match_re(Column source_strings, object reg_ex):
     """
-    Returns a Column with count of occurrences of `reg_ex` in
-    each string of `source_strings`
+    Returns a Column with each value True if the string matches `reg_ex`
+    regular expression with each record of `source_strings`
     """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()

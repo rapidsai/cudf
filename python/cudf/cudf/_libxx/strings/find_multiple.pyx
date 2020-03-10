@@ -13,7 +13,8 @@ from cudf._libxx.cpp.strings.find_multiple cimport (
 
 def find_multiple(Column source_strings, Column target_strings):
     """
-
+    Returns a column with character position values where each
+    of the `target_strings` are found in each string of `source_strings`.
     """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()

@@ -1557,6 +1557,21 @@ class StringMethods(object):
         return self._return_or_inplace(cpp_isspace(self._column), **kwargs)
 
     def endswith(self, pat, na=np.nan, **kwargs):
+        """
+        Test if the end of each string element matches a pattern.
+
+        Parameters
+        ----------
+        pat : str
+            Character sequence. Regular expressions are not accepted.
+
+        Returns
+        -------
+        Series or Index of bool
+            A Series of booleans indicating whether the given
+            pattern matches the end of each string element.
+
+        """
         if na is not np.nan:
             raise NotImplementedError("`na` parameter is not yet supported")
 
@@ -1567,6 +1582,21 @@ class StringMethods(object):
         )
 
     def startswith(self, pat, na=np.nan, **kwargs):
+        """
+        Test if the start of each string element matches a pattern.
+
+        Parameters
+        ----------
+        pat : str
+            Character sequence. Regular expressions are not accepted.
+
+        Returns
+        -------
+        Series or Index of bool
+            A Series of booleans indicating whether the given
+            pattern matches the start of each string element.
+
+        """
         if na is not np.nan:
             raise NotImplementedError("`na` parameter is not yet supported")
 
@@ -1577,6 +1607,27 @@ class StringMethods(object):
         )
 
     def find(self, sub, start=0, end=None, **kwargs):
+        """
+        Return lowest indexes in each strings in the Series/Index
+        where the substring is fully contained between [start:end].
+        Return -1 on failure.
+
+        Parameters
+        ----------
+        sub : str
+            Substring being searched.
+
+        start : int
+            Left edge index.
+
+        end : int
+            Right edge index.
+
+        Returns
+        -------
+        Series or Index of int
+
+        """
         from cudf._libxx.scalar import Scalar
 
         if end is None:
@@ -1587,6 +1638,27 @@ class StringMethods(object):
         )
 
     def rfind(self, sub, start=0, end=None, **kwargs):
+        """
+        Return highest indexes in each strings in the Series/Index
+        where the substring is fully contained between [start:end].
+        Return -1 on failure.
+
+        Parameters
+        ----------
+        sub : str
+            Substring being searched.
+
+        start : int
+            Left edge index.
+
+        end : int
+            Right edge index.
+
+        Returns
+        -------
+        Series or Index of int
+
+        """
         from cudf._libxx.scalar import Scalar
 
         if end is None:
@@ -1596,6 +1668,28 @@ class StringMethods(object):
         )
 
     def index(self, sub, start=0, end=None, **kwargs):
+        """
+        Return lowest indexes in each strings where the substring
+        is fully contained between [start:end]. This is the same
+        as str.find except instead of returning -1, it raises a ValueError
+        when the substring is not found.
+
+        Parameters
+        ----------
+        sub : str
+            Substring being searched.
+
+        start : int
+            Left edge index.
+
+        end : int
+            Right edge index.
+
+        Returns
+        -------
+        Series or Index of object
+
+        """
         from cudf._libxx.scalar import Scalar
 
         if end is None:
@@ -1611,6 +1705,28 @@ class StringMethods(object):
             return result
 
     def rindex(self, sub, start=0, end=None, **kwargs):
+        """
+        Return highest indexes in each strings where the substring
+        is fully contained between [start:end]. This is the same
+        as str.rfind except instead of returning -1, it raises a ValueError
+        when the substring is not found.
+
+        Parameters
+        ----------
+        sub : str
+            Substring being searched.
+
+        start : int
+            Left edge index.
+
+        end : int
+            Right edge index.
+
+        Returns
+        -------
+        Series or Index of object
+
+        """
         from cudf._libxx.scalar import Scalar
 
         if end is None:
@@ -1626,6 +1742,19 @@ class StringMethods(object):
             return result
 
     def match(self, pat, case=True, flags=0, na=np.nan, **kwargs):
+        """
+        Determine if each string matches a regular expression.
+
+        Parameters
+        ----------
+        pat : str
+            Character sequence or regular expression.
+
+        Returns
+        -------
+        Series or Index of boolean values.
+
+        """
         if case is not True:
             raise NotImplementedError("`case` parameter is not yet supported")
         elif flags != 0:
