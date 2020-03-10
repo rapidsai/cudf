@@ -5,6 +5,7 @@ import pandas as pd
 from libcpp cimport bool
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.vector cimport vector
+from libc.stdint cimport int32_t
 
 from cudf.core.column.column import as_column
 
@@ -12,6 +13,8 @@ from cudf._libxx.column cimport Column
 from cudf._libxx.scalar cimport Scalar
 from cudf._libxx.table cimport Table
 from cudf._libxx.move cimport move
+from cudf._libxx.scalar cimport Scalar
+from cudf._libxx.table cimport Table
 
 from cudf._libxx.cpp.column.column cimport column
 from cudf._libxx.cpp.column.column_view cimport (
@@ -40,7 +43,9 @@ def copy_column(Column input_column):
     """
 
     cdef column_view input_column_view = input_column.view()
-    cdef unique_ptr[column] c_result = make_unique[column](input_column_view)
+    cdef unique_ptr[column] c_result
+    with nogil:
+        c_result = move(make_unique[column](input_column_view))
 
     return Column.from_unique_ptr(move(c_result))
 
@@ -176,7 +181,7 @@ def _scatter_table(Table source_table, Column scatter_map,
     )
 
     out_table._index = (
-        None if target_table._index is None else target_table._index.copy()
+        None if target_table._index is None else target_table._index.copy(deep=False)
     )
 
     return out_table
@@ -214,7 +219,7 @@ def _scatter_scalar(scalars, Column scatter_map,
     )
 
     out_table._index = (
-        None if target_table._index is None else target_table._index.copy()
+        None if target_table._index is None else target_table._index.copy(deep=False)
     )
 
     return out_table
@@ -597,3 +602,29 @@ def boolean_mask_scatter(object input, Table target_table,
     else:
         scalar_list = [Scalar(i) for i in input]
         _boolean_mask_scatter_scalar(scalar_list, target_table, boolean_mask)
+
+
+def shift(Column input, int offset, object fill_value=None):
+
+    cdef Scalar fill
+
+    if isinstance(fill_value, Scalar):
+        fill = fill_value
+    else:
+        fill = Scalar(fill_value, input.dtype)
+
+    cdef column_view c_input = input.view()
+    cdef int32_t c_offset = offset
+    cdef scalar* c_fill_value = fill.c_value.get()
+    cdef unique_ptr[column] c_output
+
+    with nogil:
+        c_output = move(
+            cpp_copying.shift(
+                c_input,
+                c_offset,
+                c_fill_value[0]
+            )
+        )
+
+    return Column.from_unique_ptr(move(c_output))

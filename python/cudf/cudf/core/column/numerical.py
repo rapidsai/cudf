@@ -139,7 +139,7 @@ class NumericalColumn(column.ColumnBase):
         return build_column(
             data=self.astype("int64").base_data,
             dtype=dtype,
-            mask=self.mask,
+            mask=self.base_mask,
             offset=self.offset,
             size=self.size,
         )

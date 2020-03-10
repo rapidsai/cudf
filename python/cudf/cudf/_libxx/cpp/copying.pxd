@@ -3,6 +3,7 @@
 from rmm._lib.device_buffer cimport device_buffer
 
 from libcpp cimport bool
+from libc.stdint cimport int32_t
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 
@@ -19,8 +20,14 @@ from cudf._libxx.cpp.types cimport size_type
 
 cdef extern from "cudf/copying.hpp" namespace "cudf::experimental" nogil:
     cdef unique_ptr[table] gather (
-        table_view source_table,
-        column_view gather_map
+        const table_view& source_table,
+        const column_view& gather_map
+    ) except +
+
+    cdef unique_ptr[column] shift(
+        const column_view& input,
+        size_type offset,
+        const scalar& fill_values
     ) except +
 
     cdef unique_ptr[table] scatter (

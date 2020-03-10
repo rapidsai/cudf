@@ -321,6 +321,9 @@ class ColumnBase(Column):
         """
         return self.to_gpu_array(fillna=fillna).copy_to_host()
 
+    def shift(self, offset, fill_value):
+        return libcudfxx.copying.shift(self, offset, fill_value)
+
     @property
     def valid_count(self):
         """Number of non-null values"""
@@ -489,8 +492,8 @@ class ColumnBase(Column):
         if is_scalar(value):
             if is_categorical_dtype(self.dtype):
                 value = self._encode(value)
-
-            value = self.dtype.type(value) if value is not None else value
+            else:
+                value = self.dtype.type(value) if value is not None else value
         else:
             if len(value) != nelem:
                 msg = (
@@ -517,7 +520,7 @@ class ColumnBase(Column):
                 out = build_categorical_column(
                     categories=value.categories,
                     codes=out,
-                    mask=out.mask,
+                    mask=out.base_mask,
                     size=out.size,
                     offset=out.offset,
                     ordered=value.ordered,
@@ -535,7 +538,7 @@ class ColumnBase(Column):
                         out = build_categorical_column(
                             categories=self.categories,
                             codes=out,
-                            mask=out.mask,
+                            mask=out.base_mask,
                             size=out.size,
                             offset=out.offset,
                             ordered=self.ordered,

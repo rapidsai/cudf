@@ -178,14 +178,14 @@ class Frame(libcudfxx.table.Table):
 
         self : Can be a DataFrame or Series or Index
         other : Can be a DataFrame, Series, Index, Array
-                like object or a scalar value
+            like object or a scalar value
 
-                if self is DataFrame, other can be only a
-                scalar or array like with size of number of columns
-                in DataFrame or a DataFrame with same dimenstion
+            if self is DataFrame, other can be only a
+            scalar or array like with size of number of columns
+            in DataFrame or a DataFrame with same dimenstion
 
-                if self is Series, other can be only a scalar or
-                a series like with same length as self
+            if self is Series, other can be only a scalar or
+            a series like with same length as self
 
         Returns:
         --------
@@ -312,7 +312,7 @@ class Frame(libcudfxx.table.Table):
                     result = build_categorical_column(
                         categories=self[in_col_name]._column.categories,
                         codes=result,
-                        mask=result.mask,
+                        mask=result.base_mask,
                         size=result.size,
                         offset=result.offset,
                         ordered=self[in_col_name]._column.ordered,
@@ -342,7 +342,7 @@ class Frame(libcudfxx.table.Table):
                 result = build_categorical_column(
                     categories=self._column.categories,
                     codes=result,
-                    mask=result.mask,
+                    mask=result.base_mask,
                     size=result.size,
                     offset=result.offset,
                     ordered=self._column.ordered,
@@ -505,6 +505,17 @@ class Frame(libcudfxx.table.Table):
 
         result._copy_categories(self)
         return result
+
+    def shift(self, periods=1, freq=None, axis=0, fill_value=None):
+        """Shift values by `periods` positions.
+        """
+        assert axis in (None, 0) and freq is None
+        return self._shift(periods)
+
+    def _shift(self, offset, fill_value=None):
+        data_columns = (col.shift(offset, fill_value) for col in self._columns)
+        data = zip(self._column_names, data_columns)
+        return self.__class__._from_table(Frame(data, self._index))
 
     def drop_duplicates(self, subset=None, keep="first", nulls_are_equal=True):
         """
