@@ -295,13 +295,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         # Iloc Step 3:
         # Reindex
         if df.shape[0] == 1:  # we have a single row without an index
-            if isinstance(arg[0], slice):
-                start = arg[0].start
-                if start is None:
-                    start = 0
-                df.index = as_index(self._df.index[start])
-            else:
-                df.index = as_index(self._df.index[arg[0]])
+            df.index = as_index(self._df.index[arg[0]])
 
         # Iloc Step 4:
         # Downcast
