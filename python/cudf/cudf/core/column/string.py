@@ -16,12 +16,23 @@ import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
 import cudf._libxx.string_casting as str_cast
 from cudf._lib.nvtx import nvtx_range_pop, nvtx_range_push
+from cudf._libxx.strings.capitalize import (
+    capitalize as cpp_capitalize,
+    title as cpp_title,
+)
+from cudf._libxx.strings.case import (
+    swapcase as cpp_swapcase,
+    to_lower as cpp_to_lower,
+    to_upper as cpp_to_upper,
+)
 from cudf._libxx.strings.char_types import (
     is_alnum as cpp_is_alnum,
     is_alpha as cpp_is_alpha,
     is_decimal as cpp_is_decimal,
     is_digit as cpp_is_digit,
+    is_lower as cpp_is_lower,
     is_numeric as cpp_is_numeric,
+    is_upper as cpp_is_upper,
 )
 from cudf._libxx.strings.replace import (
     insert as cpp_string_insert,
@@ -434,20 +445,6 @@ class StringMethods(object):
             **kwargs,
         )
 
-    def lower(self, **kwargs):
-        """
-        Convert strings in the Series/Index to lowercase.
-
-        Returns
-        -------
-        Series/Index of str dtype
-            A copy of the object with all strings converted to lowercase.
-        """
-
-        return self._return_or_inplace(
-            self._column.nvstrings.lower(), **kwargs
-        )
-
     # def slice(self, start=None, stop=None, step=None, **kwargs):
     #     """
     #     Returns a substring of each string.
@@ -537,6 +534,124 @@ class StringMethods(object):
 
         """
         return self._return_or_inplace(cpp_is_numeric(self._column))
+
+    def isupper(self, **kwargs):
+        """
+        Returns a Series/Index of boolean values with True for strings
+        that contain only upper-case characters.
+
+        Returns
+        -------
+        Series/Index of bool dtype
+
+        Notes
+        -----
+        Results are incompatible with standard python string logic. Use caution
+        when operating on data which contains non-alphabetical characters.
+        """
+        warnings.warn(
+            "isupper currently returns False for non-cased characters whereas"
+            + "Pandas returns True, this will be fixed in the near future"
+        )
+
+        return self._return_or_inplace(cpp_is_upper(self._column))
+
+    def islower(self, **kwargs):
+        """
+        Returns a Series/Index of boolean values with True for strings
+        that contain only lower-case characters.
+
+        Returns
+        -------
+        Series/Index of bool dtype
+
+        Notes
+        -----
+        Results are incompatible with standard python string logic. Use caution
+        when operating on data which contains non-alphabetical characters.
+        """
+        warnings.warn(
+            "islower currently returns False for non-cased characters whereas"
+            + "Pandas returns True, this will be fixed in the near future"
+        )
+
+        return self._return_or_inplace(cpp_is_lower(self._column))
+
+    def lower(self):
+        """
+        Convert each string to lowercase.
+        This only applies to ASCII characters at this time.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["Hello, Friend","Goodbye, Friend"])
+        >>> print(s.str.lower())
+        ['hello, friend', 'goodbye, friend']
+
+        """
+        return self._return_or_inplace(cpp_to_lower(self._column))
+
+    def upper(self):
+        """
+        Convert each string to uppercase.
+        This only applies to ASCII characters at this time.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["Hello, friend","Goodbye, friend"])
+        >>> print(s.str.upper())
+        ['HELLO, FRIEND', 'GOODBYE, FRIEND']
+
+        """
+        return self._return_or_inplace(cpp_to_upper(self._column))
+
+    def capitalize(self):
+        """
+        Capitalize first character of each string.
+        This only applies to ASCII characters at this time.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["hello, friend","goodbye, friend"])
+        >>> print(s.str.capitalize())
+        ['Hello, friend", "Goodbye, friend"]
+
+        """
+        return self._return_or_inplace(cpp_capitalize(self._column))
+
+    def swapcase(self):
+        """
+        Change each lowercase character to uppercase and vice versa.
+        This only applies to ASCII characters at this time.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["Hello, Friend","Goodbye, Friend"])
+        >>> print(s.str.swapcase())
+        ['hELLO, fRIEND', 'gOODBYE, fRIEND']
+
+        """
+        return self._return_or_inplace(cpp_swapcase(self._column))
+
+    def title(self):
+        """
+        Uppercase the first letter of each letter after a space
+        and lowercase the rest.
+        This only applies to ASCII characters at this time.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["Hello friend","goodnight moon"])
+        >>> print(s.str.title())
+        ['Hello Friend', 'Goodnight Moon']
+
+        """
+        return self._return_or_inplace(cpp_title(self._column))
 
     def slice_from(self, starts=0, stops=0, **kwargs):
         """
