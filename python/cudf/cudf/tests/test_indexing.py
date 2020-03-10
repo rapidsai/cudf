@@ -887,16 +887,9 @@ def test_out_of_bounds_indexing():
         a[[0, 1, -4]] = 2
 
 
-@pytest.mark.parametrize(
-    "index",
-    [
-        ["a"],
-        ["a", "a"],
-        ["a", "a", "b", "c"]
-    ]
-)
+@pytest.mark.parametrize("index", [["a"], ["a", "a"], ["a", "a", "b", "c"]])
 def test_iloc_categorical_index(index):
-    gdf = cudf.DataFrame({'data': range(len(index))}, index=index)
+    gdf = cudf.DataFrame({"data": range(len(index))}, index=index)
     gdf.index = gdf.index.astype("category")
     pdf = gdf.to_pandas()
     expect = pdf.iloc[:, 0]
