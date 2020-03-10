@@ -69,6 +69,8 @@ static const uint8_t * __device__ avro_decode_row(
     const uint8_t *cur, const uint8_t *end,
     const nvstrdesc_s *global_dictionary, uint32_t num_dictionary_entries)
 {
+  uint32_t array_start = 0, array_repeat_count = 0;
+  int array_children = 0;
   for (uint32_t i = 0; i < schema_len; ) {
     uint32_t kind = schema[i].kind;
     int skip = 0;
@@ -182,6 +184,28 @@ static const uint8_t * __device__ avro_decode_row(
       }
       cur++;
       break;
+
+    case type_array:
+      {
+        int32_t array_block_count = avro_decode_varint(cur, end);
+        if (array_block_count < 0) {
+          avro_decode_varint(cur, end); // block size in bytes, ignored
+          array_block_count = -array_block_count;
+        }
+        array_start = i;
+        array_repeat_count = array_block_count;
+        array_children = 1;
+        if (array_repeat_count == 0) {
+          skip += schema[i].count; // Should always be 1
+        }
+      }
+      break;
+    }
+    if (array_repeat_count != 0) {
+      array_children--;
+      if (schema[i].kind >= type_record) {
+        array_children += schema[i].count;
+      }
     }
     i++;
     while (skip > 0 && i < schema_len) {
@@ -190,6 +214,16 @@ static const uint8_t * __device__ avro_decode_row(
       }
       ++i;
       --skip;
+    }
+    // If within an array, check if we reached the end
+    if (array_repeat_count != 0 && array_children <= 0 && cur < end) {
+      if (!--array_repeat_count) {
+        i = array_start; // Restart at the array parent
+      }
+      else {
+        i = array_start + 1; // Restart after the array parent
+        array_children = schema[array_start].count;
+      }
     }
   }
   return cur;

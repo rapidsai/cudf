@@ -260,7 +260,7 @@ bool schema_parser::parse(std::vector<schema_entry> &schema, const std::string &
                 {
                     if (entry_idx < 0)
                         return false;
-                    schema[entry_idx].name = str;
+                    schema[entry_idx].name = std::move(str);
                 }
                 if (state == state_attrvalue_last)
                 {
@@ -273,7 +273,7 @@ bool schema_parser::parse(std::vector<schema_entry> &schema, const std::string &
             {
                 if (entry_idx < 0)
                     return false;
-                schema[entry_idx].symbols.emplace_back(str);
+                schema[entry_idx].symbols.emplace_back(std::move(str));
             }
             break;
         case ':':
