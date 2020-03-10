@@ -11,6 +11,10 @@ from cudf.utils import ioutils
 
 
 def _get_partition_groups(df, partition_cols, preserve_index=False):
+    # TODO: We can use groupby functionality here after cudf#4346.
+    #       Longer term, we want more slicing logic to be pushed down
+    #       into cpp.  For example, it would be best to pass libcudf
+    #       a single sorted table with group offsets).
     df = df.sort_values(partition_cols)
     if not preserve_index:
         df = df.reset_index(drop=True)
