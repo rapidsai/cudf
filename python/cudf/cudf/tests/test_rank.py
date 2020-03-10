@@ -12,7 +12,7 @@ class TestRank:
     col1 = np.array([5, 4, 3, 5, 8, 5, 2, 1, 6, 6])
     col2 = np.array([5, 4, np.nan, 5, 8, 5, np.inf, np.nan, 6, -np.inf])
 
-    @pytest.mark.parametrize("dtype", ["O", "f8", "i8"])
+    @pytest.mark.parametrize("dtype", ["O", "f8", "i4"])
     @pytest.mark.parametrize("ascending", [True, False])
     @pytest.mark.parametrize(
         "method", ["average", "min", "max", "first", "dense"]
@@ -22,6 +22,9 @@ class TestRank:
     def test_rank_all_arguments(
         self, dtype, ascending, method, na_option, pct
     ):
+        if method == "first" and dtype == 'O':
+            # not supported by pandas
+            return
         pdf = pd.DataFrame()
         pdf["col1"] = self.col1.astype(dtype)
         pdf["col2"] = self.col2.astype(dtype)
