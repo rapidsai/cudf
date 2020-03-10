@@ -401,13 +401,13 @@ TEST_F(FixedPointTest, DecimalXXThrustOnDevice) {
 
     thrust::device_vector<decimal32> vec1(1000, decimal32{1, scale_type{-2}});
 
-    auto x = thrust::reduce(
+    auto const sum = thrust::reduce(
         rmm::exec_policy(0)->on(0),
         std::cbegin(vec1),
         std::cend(vec1),
         decimal32{0, scale_type{-2}});
 
-    EXPECT_EQ(static_cast<int32_t>(x), 1000);
+    EXPECT_EQ(static_cast<int32_t>(sum), 1000);
 
     // thrust::sequence doesn't work on device without modifying fixed_point
     // thrust::inclusive_scan and thrust::adjacent_difference (map algorithms
