@@ -108,17 +108,13 @@ class CudfEngine(ArrowEngine):
 
         # Must use arrow engine if return_metadata=True
         # (cudf does not collect/return metadata on write)
-        use_arrow = return_metadata
-        if use_arrow:
+        if return_metadata:
             if index_cols:
                 df = df.set_index(index_cols)
                 preserve_index = True
             md_list = []
             t = df.to_arrow(preserve_index=preserve_index)
-        else:
-            md_list = [None]
-        if partition_on:
-            if use_arrow:
+            if partition_on:
                 pq.write_to_dataset(
                     t,
                     path,
@@ -128,17 +124,6 @@ class CudfEngine(ArrowEngine):
                     **kwargs,
                 )
             else:
-                write_to_dataset(
-                    df,
-                    path,
-                    partition_cols=partition_on,
-                    metadata_collector=md_list,
-                    fs=fs,
-                    preserve_index=preserve_index,
-                    **kwargs,
-                )
-        else:
-            if use_arrow:
                 with fs.open(fs.sep.join([path, filename]), "wb") as fil:
                     pq.write_table(
                         t,
@@ -149,6 +134,18 @@ class CudfEngine(ArrowEngine):
                     )
                 if md_list:
                     md_list[0].set_file_path(filename)
+
+        else:
+            md_list = [None]
+            if partition_on:
+                write_to_dataset(
+                    df,
+                    path,
+                    partition_cols=partition_on,
+                    fs=fs,
+                    preserve_index=preserve_index,
+                    **kwargs,
+                )
             else:
                 df.to_parquet(
                     fs.sep.join([path, filename]),
