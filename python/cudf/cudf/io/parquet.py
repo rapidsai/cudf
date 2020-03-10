@@ -94,7 +94,8 @@ def write_to_dataset(
             _mkdir_if_not_exists(fs, prefix)
             outfile = guid() + ".parquet"
             full_path = "/".join([prefix, outfile])
-            sub_df.drop(columns=partition_cols).to_parquet(
+            write_df = sub_df.copy(deep=False)
+            write_df.drop(columns=partition_cols, inplace=True).to_parquet(
                 full_path, index=preserve_index, **kwargs
             )
     else:
