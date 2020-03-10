@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,12 +23,16 @@
 
 namespace cudf {
 
+/**
+ * @brief Tie-breaker method to use for ranking the column.
+ * 
+ */
 enum class rank_method {
-  FIRST,   // stable sort order ranking (no ties)
-  AVERAGE, // mean of first in the group
-  MIN,     // min  of first in the group
-  MAX,     // max  of first in the group
-  DENSE    // like min/max, but rank always increases by 1 between groups
+  FIRST,   ///< stable sort order ranking (no ties)
+  AVERAGE, ///< mean of first in the group
+  MIN,     ///< min  of first in the group
+  MAX,     ///< max  of first in the group
+  DENSE    ///< rank always increases by 1 between groups
 };
 
 namespace experimental {
