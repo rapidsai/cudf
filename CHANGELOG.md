@@ -36,6 +36,7 @@
 - PR #4321 Expose Python Semi and Anti Joins
 - PR #4291 Add Java callback support for RMM events
 - PR #4298 Port orc.pyx to libcudf++
+- PR #4381 Add Java support for copying buffers with asynchronous streams
 - PR #4288 Add libcudf++ shift Cython implementation
 - PR #4338 Add cudf::sequence() for generating an incrementing list of numeric values
 
