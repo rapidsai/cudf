@@ -329,6 +329,9 @@ class ColumnBase(Column):
         """
         return self.to_gpu_array(fillna=fillna).copy_to_host()
 
+    def shift(self, offset, fill_value):
+        return libcudfxx.copying.shift(self, offset, fill_value)
+
     @property
     def valid_count(self):
         """Number of non-null values"""
