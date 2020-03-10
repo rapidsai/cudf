@@ -6,7 +6,7 @@
 
 ## Bug Fixes
 - PR #4386 Update Java package to 0.14
-
+- PR #4403 Fix repl-template copy logic error in cudf::strings::replace_with_backrefs
 
 # cuDF 0.13.0 (Date TBD)
 
