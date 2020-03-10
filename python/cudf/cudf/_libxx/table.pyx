@@ -87,7 +87,6 @@ cdef class Table:
         column_names : iterable
         """
         cdef vector[unique_ptr[column]] columns
-        print(c_tbl.get().num_columns())
         columns = move(c_tbl.get()[0].release())
 
         cdef vector[unique_ptr[column]].iterator it = columns.begin()

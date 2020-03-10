@@ -104,8 +104,10 @@ cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
     # Setup parquet reader arguments
     cdef read_parquet_args args = read_parquet_args(source)
 
-    for col in columns or []:
-        args.columns.push_back(str(col).encode())
+    if columns is not None:
+        args.columns.reserve(len(columns))
+        for col in columns or []:
+            args.columns.push_back(str(col).encode())
     args.strings_to_categorical = strings_to_categorical
     args.use_pandas_metadata = use_pandas_metadata
 
@@ -138,12 +140,15 @@ cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
                               column_names=column_names)
     )
 
+    # if index_col is not None and index_col in column_names:
     if index_col is not None and index_col in column_names:
         df = df.set_index(index_col)
         new_index_name = pa.pandas_compat._backwards_compatible_index_name(
             df.index.name, df.index.name
         )
         df.index.name = new_index_name
+    else:
+        df.index.name = index_col
 
     return df
 

@@ -47,12 +47,12 @@ def read_parquet(
     if engine == "cudf":
         return libparquet.read_parquet(
             filepath_or_buffer,
-            columns,
-            row_group,
-            skip_rows,
-            num_rows,
-            strings_to_categorical,
-            use_pandas_metadata,
+            columns=columns,
+            row_group=row_group,
+            skip_rows=skip_rows,
+            num_rows=num_rows,
+            strings_to_categorical=strings_to_categorical,
+            use_pandas_metadata=use_pandas_metadata,
         )
     else:
         warnings.warn("Using CPU via PyArrow to read Parquet dataset.")
