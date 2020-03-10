@@ -32,6 +32,7 @@ from cudf._libxx.strings.char_types import (
     is_digit as cpp_is_digit,
     is_lower as cpp_is_lower,
     is_numeric as cpp_is_numeric,
+    is_space as cpp_isspace,
     is_upper as cpp_is_upper,
 )
 from cudf._libxx.strings.contains import (
@@ -1527,6 +1528,26 @@ class StringMethods(object):
         return self._return_or_inplace(
             cpp_findall(self._column, pat), **kwargs
         )
+
+    def isempty(self, **kwargs):
+        """
+        Check whether each string is a an empty string.
+
+        Returns : Series or Index of bool
+            Series or Index of boolean values with the same length as
+            the original Series/Index.
+        """
+        return self._return_or_inplace(self._parent == "", **kwargs)
+
+    def isspace(self, **kwargs):
+        """
+        Check whether all characters in each string are whitespace.
+
+        Returns : Series or Index of bool
+            Series or Index of boolean values with the same length as
+            the original Series/Index.
+        """
+        return self._return_or_inplace(cpp_isspace(self._column), **kwargs)
 
 
 class StringColumn(column.ColumnBase):
