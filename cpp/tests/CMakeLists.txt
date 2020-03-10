@@ -399,7 +399,7 @@ ConfigureTest(CLAMP_TEST "${CLAMP_TEST_SRC}")
 # - fixed_point tests -----------------------------------------------------------------------------
 
 set(FIXED_POINT_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/fixed_point/fixed_point_tests.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/fixed_point/fixed_point_tests.cu")
 
 ConfigureTest(FIXED_POINT_TEST "${FIXED_POINT_TEST_SRC}")
 
