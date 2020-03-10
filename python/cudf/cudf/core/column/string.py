@@ -38,9 +38,16 @@ from cudf._libxx.strings.char_types import (
 from cudf._libxx.strings.contains import (
     contains_re as cpp_contains_re,
     count_re as cpp_count_re,
+    match_re as cpp_match_re,
 )
 from cudf._libxx.strings.extract import extract as cpp_extract
-from cudf._libxx.strings.find import contains as cpp_contains
+from cudf._libxx.strings.find import (
+    contains as cpp_contains,
+    endswith as cpp_endswith,
+    find as cpp_find,
+    rfind as cpp_rfind,
+    startswith as cpp_startswith,
+)
 from cudf._libxx.strings.findall import findall as cpp_findall
 from cudf._libxx.strings.padding import (
     PadSide,
@@ -1548,6 +1555,87 @@ class StringMethods(object):
             the original Series/Index.
         """
         return self._return_or_inplace(cpp_isspace(self._column), **kwargs)
+
+    def endswith(self, pat, na=np.nan, **kwargs):
+        if na is not np.nan:
+            raise NotImplementedError("`na` parameter is not yet supported")
+
+        from cudf._libxx.scalar import Scalar
+
+        return self._return_or_inplace(
+            cpp_endswith(self._column, Scalar(pat, "str")), **kwargs
+        )
+
+    def startswith(self, pat, na=np.nan, **kwargs):
+        if na is not np.nan:
+            raise NotImplementedError("`na` parameter is not yet supported")
+
+        from cudf._libxx.scalar import Scalar
+
+        return self._return_or_inplace(
+            cpp_startswith(self._column, Scalar(pat, "str")), **kwargs
+        )
+
+    def find(self, sub, start=0, end=None, **kwargs):
+        from cudf._libxx.scalar import Scalar
+
+        if end is None:
+            end = -1
+
+        return self._return_or_inplace(
+            cpp_find(self._column, Scalar(sub, "str"), start, end), **kwargs
+        )
+
+    def rfind(self, sub, start=0, end=None, **kwargs):
+        from cudf._libxx.scalar import Scalar
+
+        if end is None:
+            end = -1
+        return self._return_or_inplace(
+            cpp_rfind(self._column, Scalar(sub, "str"), start, end), **kwargs
+        )
+
+    def index(self, sub, start=0, end=None, **kwargs):
+        from cudf._libxx.scalar import Scalar
+
+        if end is None:
+            end = -1
+
+        result = self._return_or_inplace(
+            cpp_find(self._column, Scalar(sub, "str"), start, end), **kwargs
+        )
+
+        if (result == -1).any():
+            raise ValueError("substring not found")
+        else:
+            return result
+
+    def rindex(self, sub, start=0, end=None, **kwargs):
+        from cudf._libxx.scalar import Scalar
+
+        if end is None:
+            end = -1
+
+        result = self._return_or_inplace(
+            cpp_rfind(self._column, Scalar(sub, "str"), start, end), **kwargs
+        )
+
+        if (result == -1).any():
+            raise ValueError("substring not found")
+        else:
+            return result
+
+    def match(self, pat, case=True, flags=0, na=np.nan, **kwargs):
+        if case is not True:
+            raise NotImplementedError("`case` parameter is not yet supported")
+        elif flags != 0:
+            raise NotImplementedError("`flags` parameter is not yet supported")
+        elif na is not np.nan:
+            raise NotImplementedError("`na` parameter is not yet supported")
+
+        return self._return_or_inplace(
+            cpp_match_re(self._column, pat), **kwargs
+        )
 
 
 class StringColumn(column.ColumnBase):
