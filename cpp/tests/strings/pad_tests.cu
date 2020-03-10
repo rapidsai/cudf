@@ -42,7 +42,7 @@ TEST_F(StringsPadTest, Padding)
     auto strings_view = cudf::strings_column_view(strings);
 
     {
-        auto results = cudf::strings::pad(strings_view, width, cudf::strings::pad_side::right, phil);
+        auto results = cudf::strings::pad(strings_view, width, cudf::strings::pad_side::RIGHT, phil);
 
         std::vector<const char*> h_expected{ "eee ddd", "bb cc+", nullptr, "++++++", "aa++++", "bbb+++", "ééé+++", "o+++++" };
         cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
@@ -50,7 +50,7 @@ TEST_F(StringsPadTest, Padding)
         cudf::test::expect_columns_equal(*results,expected);
     }
     {
-        auto results = cudf::strings::pad(strings_view, width, cudf::strings::pad_side::left, phil);
+        auto results = cudf::strings::pad(strings_view, width, cudf::strings::pad_side::LEFT, phil);
 
         std::vector<const char*> h_expected{ "eee ddd", "+bb cc", nullptr, "++++++", "++++aa", "+++bbb", "+++ééé", "+++++o" };
         cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
@@ -58,7 +58,7 @@ TEST_F(StringsPadTest, Padding)
         cudf::test::expect_columns_equal(*results,expected);
     }
     {
-        auto results = cudf::strings::pad(strings_view, width, cudf::strings::pad_side::both, phil);
+        auto results = cudf::strings::pad(strings_view, width, cudf::strings::pad_side::BOTH, phil);
         
         std::vector<const char*> h_expected{ "eee ddd", "bb cc+", nullptr, "++++++", "++aa++", "+bbb++", "+ééé++", "++o+++" };
         cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
@@ -84,7 +84,7 @@ TEST_P(StringsPadParmsTest, Padding)
     cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end() );
     cudf::size_type width = GetParam();
     auto strings_view = cudf::strings_column_view(strings);
-    auto results = cudf::strings::pad(strings_view, width, cudf::strings::pad_side::right);
+    auto results = cudf::strings::pad(strings_view, width, cudf::strings::pad_side::RIGHT);
 
     std::vector<std::string> h_expected;
     for( auto itr=h_strings.begin(); itr != h_strings.end(); ++itr )
