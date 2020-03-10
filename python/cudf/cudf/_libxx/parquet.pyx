@@ -126,7 +126,7 @@ cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
     column_names = [x.decode() for x in c_out_table.metadata.column_names]
 
     # Access the Parquet user_data json to find the index
-    index_col = None
+    index_col = ''
     cdef map[string, string] user_data = c_out_table.metadata.user_data
     json_str = user_data[b'pandas'].decode('utf-8')
     if json_str != "":
@@ -140,14 +140,26 @@ cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
     )
 
     # if index_col is not None and index_col in column_names:
-    if index_col is not None and index_col in column_names:
-        df = df.set_index(index_col)
-        new_index_name = pa.pandas_compat._backwards_compatible_index_name(
-            df.index.name, df.index.name
-        )
-        df.index.name = new_index_name
-    else:
-        df.index.name = index_col
+    print("JSON: " + str(json_str))
+    print("Index Col: " + str(index_col))
+    print("Column Names: " + str(column_names))
+    print("Index Col Type: " + str(type(index_col)))
+    print("DataFrame Default Index: " + str(df.index))
+    print("Use Pandas Metadata: " + str(use_pandas_metadata))
+    print("\n\n")
+
+    # Set the index column
+    if index_col is not '' and isinstance(index_col, str):
+        if index_col in column_names:
+            print("Assigning index column to: " + str(index_col))
+            df = df.set_index(index_col)
+            new_index_name = pa.pandas_compat._backwards_compatible_index_name(
+                df.index.name, df.index.name
+            )
+            df.index.name = new_index_name
+        else:
+            print("Just setting index name to: " + str(index_col))
+            df.index.name = index_col
 
     return df
 
