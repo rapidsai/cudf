@@ -44,6 +44,12 @@ def merge_sorted(
     column_order = (libcudf_types.order.ASCENDING
                     if ascending
                     else libcudf_types.order.DESCENDING)
+
+    if ascending == False:
+        if na_position == "last":
+            na_position = "first"
+        else:
+            na_position = "last"
     null_precedence = (
         libcudf_types.null_order.BEFORE if na_position == "first"
         else libcudf_types.null_order.AFTER
