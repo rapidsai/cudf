@@ -1,5 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+from enum import IntEnum
 from libc.stdint cimport uint32_t
 
 from cudf._libxx.cpp.nvtx cimport (
@@ -7,9 +8,21 @@ from cudf._libxx.cpp.nvtx cimport (
     range_push_hex as cpp_range_push_hex,
     range_pop as cpp_range_pop,
 
-    _color as nvtx_color,
+    color_type,
+    underlying_type_t_color
+
 )
 
+class Color(IntEnum):
+    GREEN = <underlying_type_t_color> color_type.GREEN
+    BLUE = <underlying_type_t_color> color_type.BLUE
+    YELLOW = <underlying_type_t_color> color_type.YELLOW
+    PURPLE = <underlying_type_t_color> color_type.PURPLE
+    CYAN = <underlying_type_t_color> color_type.CYAN
+    RED = <underlying_type_t_color> color_type.RED
+    WHITE = <underlying_type_t_color> color_type.WHITE
+    DARK_GREEN = <underlying_type_t_color> color_type.DARK_GREEN
+    ORANGE = <underlying_type_t_color> color_type.ORANGE
 
 def range_push(object name, object color='green'):
     """
@@ -25,38 +38,14 @@ def range_push(object name, object color='green'):
     """
     cdef const char* _name = name
     cdef uint32_t _color = color
+    cdef color_type _Color = Color[color]
     try:
         _color = int(_color, 16)
         with nogil:
             cpp_range_push_hex(_name, _color)
     except ValueError:
-        if color == 'green':
-            with nogil:
-                cpp_range_push(_name, nvtx_color.GREEN)
-        elif color == 'blue':
-            with nogil:
-                cpp_range_push(_name, nvtx_color.BLUE)
-        elif color == 'yellow':
-            with nogil:
-                cpp_range_push(_name, nvtx_color.YELLOW)
-        elif color == 'purple':
-            with nogil:
-                cpp_range_push(_name, nvtx_color.PURPLE)
-        elif color == 'cyan':
-            with nogil:
-                cpp_range_push(_name, nvtx_color.CYAN)
-        elif color == 'red':
-            with nogil:
-                cpp_range_push(_name, nvtx_color.RED)
-        elif color == 'white':
-            with nogil:
-                cpp_range_push(_name, nvtx_color.WHITE)
-        elif color == 'darkgreen':
-            with nogil:
-                cpp_range_push(_name, nvtx_color.DARK_GREEN)
-        elif color == 'orange':
-            with nogil:
-                cpp_range_push(_name, nvtx_color.ORANGE)
+        with nogil:
+            cpp_range_push(_name, _Color)
 
 
 def range_pop():

@@ -2,8 +2,10 @@
 
 from libc.stdint cimport uint32_t
 
+ctypedef uint32_t underlying_type_t_color
+
 cdef extern from "cudf/utilities/nvtx_utils.hpp" namespace "cudf::nvtx" nogil:
-    ctypedef enum _color 'color':
+    ctypedef enum color_type 'color':
         GREEN 'cudf::nvtx::color::GREEN'
         BLUE 'cudf::nvtx::color::BLUE'
         YELLOW 'cudf::nvtx::color::YELLOW'
@@ -14,14 +16,14 @@ cdef extern from "cudf/utilities/nvtx_utils.hpp" namespace "cudf::nvtx" nogil:
         DARK_GREEN 'cudf::nvtx::color::DARK_GREEN'
         ORANGE 'cudf::nvtx::color::ORANGE'
 
-    _color JOIN_COLOR 'cudf::nvtx::JOIN_COLOR'
-    _color GROUP_COLOR 'cudf::nvtx::GROUP_COLOR'
-    _color BINARY_OP_COLOR 'cudf::nvtx::BINARY_OP_COLOR'
-    _color PARTITION_COLOR 'cudf::nvtx::PARTITION_COLOR'
-    _color READ_CSV_COLOR 'cudf::nvtx::READ_CSV_COLOR'
+    color_type JOIN_COLOR 'cudf::nvtx::JOIN_COLOR'
+    color_type GROUP_COLOR 'cudf::nvtx::GROUP_COLOR'
+    color_type BINARY_OP_COLOR 'cudf::nvtx::BINARY_OP_COLOR'
+    color_type PARTITION_COLOR 'cudf::nvtx::PARTITION_COLOR'
+    color_type READ_CSV_COLOR 'cudf::nvtx::READ_CSV_COLOR'
 
     cdef void range_push(
-        const char* const name, _color color
+        const char* const name, color_type color
     ) except +
 
     cdef void range_push_hex(
