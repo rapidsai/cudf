@@ -230,6 +230,7 @@
 - PR #4358 Fix strings::concat where narep is an empty string
 - PR #4369 Fix race condition in gpuinflate
 - PR #4390 Disable ScatterValid and ScatterNull legacy tests
+- PR #4399 Make scalar destructor virtual.
 
 
 # cuDF 0.12.0 (04 Feb 2020)
