@@ -123,7 +123,7 @@ class metadata : public file_metadata {
       for (int i = 0; i < num_avro_columns; ++i) {
         // Exclude array columns (unsupported)
         bool column_in_array = false;
-        for (int parent_idx = schema[columns[i].schema_data_idx].parent_idx; parent_idx >= 0; parent_idx = schema[parent_idx].parent_idx) {
+        for (int parent_idx = schema[columns[i].schema_data_idx].parent_idx; parent_idx > 0; parent_idx = schema[parent_idx].parent_idx) {
           if (schema[parent_idx].kind == avro::type_array) {
             column_in_array = true;
             break;

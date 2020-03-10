@@ -215,7 +215,7 @@ static const uint8_t * __device__ avro_decode_row(
       ++i;
       --skip;
     }
-    // If within an array, check if we reached the end
+    // If within an array, check if we reached the last item
     if (array_repeat_count != 0 && array_children <= 0 && cur < end) {
       if (!--array_repeat_count) {
         i = array_start; // Restart at the array parent
