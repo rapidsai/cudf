@@ -664,11 +664,15 @@ def test_merge_left_right_index_left_right_on_kwargs2(kwargs):
     "hows", [{"how": "inner"}, {"how": "left"}, {"how": "outer"}]
 )
 @pytest.mark.parametrize(
-    "kwargs",
+    "ons",
     [{"on": "k1"}, {"on": "k2"}, {"on": "k3"}, {"on": "k4"}, {"on": "k5"}],
 )
-def test_merge_sort(kwargs, hows):
+@pytest.mark.parametrize("indexes", [{"left_index": False, "right_index": False}, {"left_index": True, "right_index": True}])
+def test_merge_sort(ons, hows, indexes):
+    kwargs = {}
     kwargs.update(hows)
+    kwargs.update(ons)
+    kwargs.update(indexes)
     kwargs["sort"] = True
     d = [1,3,2,5,4,6]
     left = pd.DataFrame({"k2": d, "k1": d, "k4": d, "k3": d, "k5": d})
