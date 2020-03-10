@@ -5,6 +5,7 @@ import pandas as pd
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
+from enum import IntEnum
 
 from cudf._libxx.column cimport Column
 from cudf._libxx.table cimport Table
@@ -15,7 +16,8 @@ from cudf._libxx.cpp.table.table cimport table
 from cudf._libxx.cpp.table.table_view cimport table_view
 from cudf._libxx.cpp.search cimport lower_bound, upper_bound
 from cudf._libxx.cpp.sorting cimport(
-    rank, rank_method, sorted_order, is_sorted as cpp_is_sorted
+    rank, rank_method, underlying_type_t_rank_method, sorted_order,
+    is_sorted as cpp_is_sorted
 )
 from cudf._libxx.cpp.types cimport order, null_order, include_nulls
 
@@ -200,25 +202,25 @@ def digitize(Table source_values_table, Table bins, bool right=False):
     return Column.from_unique_ptr(move(c_result))
 
 
-def rank_columns(Table source_table, str method, str na_option, bool ascending,
-                 bool pct
+class RankMethod(IntEnum):
+    FIRST = < underlying_type_t_rank_method > rank_method.FIRST
+    AVERAGE = < underlying_type_t_rank_method > rank_method.AVERAGE
+    MIN = < underlying_type_t_rank_method > rank_method.MIN
+    MAX = < underlying_type_t_rank_method > rank_method.MAX
+    DENSE = < underlying_type_t_rank_method > rank_method.DENSE
+
+
+def rank_columns(Table source_table, object method, str na_option,
+                 bool ascending, bool pct
                  ):
     """
     Compute numerical data ranks (1 through n) of each column in the dataframe
     """
     cdef table_view source_table_view = source_table.data_view()
 
-    cdef rank_method c_rank_method
-    if method == 'min':
-        c_rank_method = rank_method.MIN
-    elif method == 'max':
-        c_rank_method = rank_method.MAX
-    elif method == 'first':
-        c_rank_method = rank_method.FIRST
-    elif method == 'dense':
-        c_rank_method = rank_method.DENSE
-    else:
-        c_rank_method = rank_method.AVERAGE
+    cdef rank_method c_rank_method = < rank_method > (
+        < underlying_type_t_rank_method > method
+    )
 
     cdef order column_order = (
         order.ASCENDING

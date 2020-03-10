@@ -282,6 +282,7 @@ class Frame(libcudfxx.table.Table):
         """
         if method not in {"average", "min", "max", "first", "dense"}:
             raise KeyError(method)
+        method_enum = libcudfxx.sort.RankMethod[method.upper()]
         if na_option not in {"keep", "top", "bottom"}:
             raise KeyError(na_option)
 
@@ -291,7 +292,7 @@ class Frame(libcudfxx.table.Table):
             warnings.warn("numeric_only=True is not implemented yet")
 
         out_rank_table = libcudfxx.sort.rank_columns(
-            source, method, na_option, ascending, pct
+            source, method_enum, na_option, ascending, pct
         )
 
         return self._from_table(out_rank_table)
