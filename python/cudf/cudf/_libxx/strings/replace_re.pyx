@@ -84,7 +84,9 @@ def replace_multi_re(Column source_strings,
     cdef column_view source_view = source_strings.view()
     cdef column_view repl_view = repl_strings.view()
 
+    cdef int pattern_size = len(patterns)
     cdef vector[string] patterns_vector
+    patterns_vector.reserve(pattern_size)
 
     for pattern in patterns:
         patterns_vector.push_back(str.encode(pattern))
