@@ -58,7 +58,6 @@
 - PR #3911 Adding null boolean handling for copy_if_else
 - PR #4003 Drop old `to_device` utility wrapper function
 - PR #4002 Adding to_frame and fix for categorical column issue
-- PR #4016 Adding experimental code path for dask_cudf sorting
 - PR #4035 Port NVText tokenize function to libcudf++
 - PR #4009 build script update to enable cudf build without installing
 - PR #3897 Port cuIO JSON reader to cudf::column types
@@ -147,6 +146,7 @@
 - PR #4339 Port libcudf strings `wrap` api to cython/python
 - PR #4311 Port nvstrings String Manipulations functions to cuDF Python/Cython
 - PR #4373 Port nvstrings Regular Expressions functions to cuDF Python/Cython
+- PR #4308 Replace dask_cudf sort_values and improve set_index
 
 ## Bug Fixes
 
