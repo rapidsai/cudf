@@ -24,6 +24,8 @@
 #include <cudf/strings/copying.hpp>
 #include <cudf/strings/detail/concatenate.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
+
 
 #include <rmm/device_buffer.hpp>
 
@@ -129,6 +131,7 @@ mutable_column_view column::mutable_view() {
 
 // If the null count is known, return it. Else, compute and return it
 size_type column::null_count() const {
+  CUDF_FUNC_RANGE();
   if (_null_count <= cudf::UNKNOWN_NULL_COUNT) {
     _null_count = cudf::count_unset_bits(
         static_cast<bitmask_type const *>(_null_mask.data()), 0, size());
@@ -166,6 +169,7 @@ void column::set_null_count(size_type new_null_count) {
   }
   _null_count = new_null_count;
 }
+namespace{
 
 struct create_column_from_view {
   cudf::column_view view;
@@ -274,6 +278,7 @@ struct create_column_from_view_vector {
  }
 
 };
+} // anonymous namespace
 
 // Copy from a view
 column::column(column_view view, cudaStream_t stream,
