@@ -23,6 +23,7 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/detail/scatter.cuh>
 #include <cudf/detail/gather.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 #include <thrust/tabulate.h>
 
@@ -679,6 +680,7 @@ hash_partition(table_view const& input,
                int num_partitions,
                rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::hash_partition(input, columns_to_hash, num_partitions, mr);
 }
 
@@ -686,6 +688,7 @@ std::unique_ptr<column> hash(table_view const& input,
                              std::vector<uint32_t> const& initial_hash,
                              rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::hash(input, initial_hash, mr);
 }
 

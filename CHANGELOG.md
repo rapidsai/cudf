@@ -32,11 +32,13 @@
 - PR #4276 Port avro.pyx to libcudf++
 - PR #4259 Ability to create Java host buffers from memory-mapped files
 - PR #4240 Add groupby::groups()
+- PR #4304 Add new NVTX infrastructure and add ranges to all top-level compute APIs.
 - PR #4319 Add repartition_by_hash API to dask_cudf
 - PR #4315 ShiftLeft, ShiftRight, ShiftRightUnsigned binops
 - PR #4321 Expose Python Semi and Anti Joins
 - PR #4291 Add Java callback support for RMM events
 - PR #4298 Port orc.pyx to libcudf++
+- PR #4352 Add factory function make_column_from_scalar
 - PR #4381 Add Java support for copying buffers with asynchronous streams
 - PR #4288 Add libcudf++ shift Cython implementation
 - PR #4338 Add cudf::sequence() for generating an incrementing list of numeric values
@@ -146,11 +148,13 @@
 - PR #4367 Port copying.pyx to use new libcudf
 - PR #4362 Move pq_chunked_state struct into it's own header to match how orc writer is doing it.
 - PR #4339 Port libcudf strings `wrap` api to cython/python
+- PR #4236 Update dask_cudf.io.to_parquet to use cudf to_parquet
 - PR #4311 Port nvstrings String Manipulations functions to cuDF Python/Cython
 - PR #4373 Port nvstrings Regular Expressions functions to cuDF Python/Cython
 - PR #4407 Enable `.str.slice` & `.str.get` and `.str.zfill` unit-tests
 - PR #4412 Require Dask + Distributed 2.12.0+
 - PR #4377 Support loading avro files that contain nested arrays
+- PR #4405 Port nvstrings (Sub)string Comparisons functions to cuDF Python/Cython
 
 ## Bug Fixes
 
@@ -232,6 +236,8 @@
 - PR #4390 Disable ScatterValid and ScatterNull legacy tests
 - PR #4406 Fix sorted merge issue with null values and ascending=False
 - PR #4445 Fix string issue for parquet reader and support `keep_index` for `scatter_to_tables`
+- PR #4423 Tighten up Dask serialization checks
+- PR #4434 Fix join_strings logic with all-null strings and non-null narep
 
 
 # cuDF 0.12.0 (04 Feb 2020)
