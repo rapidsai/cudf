@@ -461,8 +461,7 @@ def _numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
 
     is_op_comparison = op in ["lt", "gt", "le", "ge", "eq", "ne"]
 
-    operator = libcudfxx.binaryop.BinaryOperation[op.upper()]
-    out = libcudfxx.binaryop.binaryop(lhs, rhs, operator, out_dtype)
+    out = libcudfxx.binaryop.binaryop(lhs, rhs, op, out_dtype)
 
     if is_op_comparison:
         out = out.fillna(op == "ne")

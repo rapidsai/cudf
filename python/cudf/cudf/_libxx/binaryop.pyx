@@ -154,6 +154,7 @@ def binaryop(lhs, rhs, op, dtype):
     """
     Dispatches a binary op call to the appropriate libcudf function:
     """
+    op = BinaryOperation[op.upper()]
     cdef binary_operator c_op = <binary_operator> (
         <underlying_type_t_binary_operator> op
     )
