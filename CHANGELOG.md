@@ -3,6 +3,7 @@
 ## New Features
 
 ## Improvements
+- PR #4450 Parquet writer: add parameter to retrieve the raw file metadata
 
 ## Bug Fixes
 - PR #4386 Update Java package to 0.14
