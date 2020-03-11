@@ -327,10 +327,12 @@ class ColumnBase(Column):
         """
         return self.to_gpu_array(fillna=fillna).copy_to_host()
 
-    def fill(self, fill_value, begin=0, end=-1, inplace=False):
+    def _fill(self, fill_value, begin, end, inplace=False):
+        begin = 0 if begin is None else begin
+        end = self.size if end is None else end
 
-        if end == -1:
-            end = self.size
+        if end < 0:
+            end = self.size + end
 
         assert end <= self.size
         assert begin <= end
@@ -338,10 +340,10 @@ class ColumnBase(Column):
         if begin == end or begin == self.size:
             return self if inplace else self.copy()
 
-        fill_value = Scalar(fill_value)
+        fill_scalar = Scalar(fill_value, self.dtype)
 
         if not inplace:
-            return libcudfxx.filling.fill(self, begin, end, fill_value)
+            return libcudfxx.filling.fill(self, begin, end, fill_scalar)
 
         fixed_width = True
 
@@ -352,10 +354,14 @@ class ColumnBase(Column):
             fixed_width = False
 
         if fixed_width:
-            libcudfxx.filling.fill_in_place(self, begin, end, fill_value)
+            if fill_value is None and not self.nullable:
+                mask = create_null_mask(self.size, state=MaskState.ALL_VALID)
+                self.set_base_mask(mask)
+
+            libcudfxx.filling.fill_in_place(self, begin, end, fill_scalar)
             return self
 
-        result = libcudfxx.filling.fill(self, begin, end, fill_value)
+        result = libcudfxx.filling.fill(self, begin, end, fill_scalar)
 
         return self._mimic_inplace(result, inplace=True)
 
@@ -512,9 +518,13 @@ class ColumnBase(Column):
         from cudf.core import column
 
         if isinstance(key, slice):
-            key_start, key_stop, key_stride = key.indices(len(self))
-            if key_stride != 1:
+            if key.step:
                 raise NotImplementedError("Stride not supported in slice")
+
+            if is_scalar(value):
+                return self._fill(value, key.start, key.stop, inplace=True)
+
+            key_start, key_stop, key_stride = key.indices(len(self))
             nelem = abs(key_stop - key_start)
         else:
             key = column.as_column(key)

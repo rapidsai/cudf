@@ -4,20 +4,6 @@ from pandas.util.testing import assert_series_equal
 import cudf
 
 
-def cpu_fill(data, fill_value, begin, end):
-
-    if end == -1:
-        end = len(data)
-
-    fill_size = end - begin
-
-    a = list(data[i] for i in range(begin))
-    b = list(fill_value for i in range(fill_size))
-    c = list(data[i + begin + fill_size] for i in range(len(data) - end))
-
-    return a + b + c
-
-
 @pytest.mark.parametrize(
     "fill_value,data",
     [
@@ -29,12 +15,16 @@ def cpu_fill(data, fill_value, begin, end):
 @pytest.mark.parametrize("begin,end", [(0, -1), (0, 4), (1, -1), (1, 4)])
 @pytest.mark.parametrize("inplace", [True, False])
 def test_fill(data, fill_value, begin, end, inplace):
-    original = cudf.Series(data)
-    expected = cudf.Series(cpu_fill(data, fill_value, begin, end))
-
-    actual = original.fill(fill_value, begin, end, inplace)
+    gs = cudf.Series(data)
+    ps = gs.to_pandas()
 
     if inplace:
-        assert actual is original
+        actual = gs
+        gs[begin:end] = fill_value
+    else:
+        actual = gs._fill([fill_value], begin, end, inplace)
+        assert actual is not gs
 
-    assert_series_equal(expected.to_pandas(), actual.to_pandas())
+    ps[begin:end] = fill_value
+
+    assert_series_equal(ps, actual.to_pandas())
