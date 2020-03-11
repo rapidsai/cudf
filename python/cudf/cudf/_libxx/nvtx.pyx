@@ -36,9 +36,14 @@ def range_push(object name, object color='GREEN'):
         The color to use for the range.
         Can be named color or hex RGB string.
     """
+    try:
+        color = int(color, 16)
+    except ValueError:
+        color = int(Color[color])
+    
     cdef const char* _name = name
-    cdef uint32_t _color = int(Color[color])
-
+    cdef uint32_t _color = color
+    
     with nogil:
         cpp_range_push_hex(_name, _color)
 
