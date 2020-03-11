@@ -10,7 +10,7 @@
 
 ## Improvements
 
-- PR #4140 Add cudf series examples in docs and corr() method for dataframe in dataframe.py
+- PR #4140 Add cudf series examples and corr() method for dataframe in dataframe.py
 - PR #3525 build.sh option to disable nvtx
 - PR #3748 Optimize hash_partition using shared memory
 - PR #3698 Add count_(un)set_bits functions taking multiple ranges and updated slice to compute null counts at once.
