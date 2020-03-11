@@ -23,7 +23,7 @@ class TestRank:
     def test_rank_all_arguments(
         self, dtype, ascending, method, na_option, pct
     ):
-        if method == "first" and dtype == 'O':
+        if method == "first" and dtype == "O":
             # not supported by pandas
             return
         pdf = pd.DataFrame(index=self.index)
@@ -45,6 +45,7 @@ class TestRank:
                 pct=pct,
             )
             assert_eq(ranked_ps, ranked_gs.to_pandas())
+
         # # Series
         _check(
             gdf["col1"],
@@ -71,3 +72,23 @@ class TestRank:
         #     ascending=ascending,
         #     pct=pct,
         # )
+
+    def test_rank_error_arguments(self):
+        pdf = pd.DataFrame(index=self.index)
+        pdf["col1"] = self.col1
+        pdf["col2"] = self.col2
+        gdf = DataFrame.from_pandas(pdf)
+        with pytest.raises(KeyError):
+            gdf["col1"].rank(
+                method="randomname",
+                na_option="keep",
+                ascending=True,
+                pct=True,
+            )
+        with pytest.raises(KeyError):
+            gdf["col1"].rank(
+                method="first",
+                na_option="randomname",
+                ascending=True,
+                pct=True,
+            )
