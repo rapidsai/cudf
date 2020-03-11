@@ -13,6 +13,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+#include <cudf/types.hpp>
+#include <cudf/table/table.hpp>
+#include <cudf/table/table_device_view.cuh>
+#include <cudf/table/row_operators.cuh>
+#include <cudf/utilities/type_dispatcher.hpp>
+#include <rmm/thrust_rmm_allocator.h>
+#include <cudf/utilities/bit.hpp>
+#include <cudf/null_mask.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/gather.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
+
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -27,18 +41,6 @@
 #include <memory>
 #include <type_traits>
 #include <cmath> // for std::ceil()
-
-#include <cudf/types.hpp>
-#include <cudf/table/table.hpp>
-#include <cudf/table/table_device_view.cuh>
-#include <cudf/table/row_operators.cuh>
-#include <cudf/utilities/type_dispatcher.hpp>
-#include <rmm/thrust_rmm_allocator.h>
-#include <cudf/utilities/bit.hpp>
-#include <cudf/null_mask.hpp>
-#include <cudf/copying.hpp>
-#include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/gather.cuh>
 
 
 namespace {
@@ -268,6 +270,7 @@ round_robin_partition(table_view const& input,
                       cudf::size_type start_partition = 0,
                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) {
   
+  CUDF_FUNC_RANGE();
   return cudf::experimental::detail::round_robin_partition(input, num_partitions, start_partition, mr);
 }
   

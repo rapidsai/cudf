@@ -21,6 +21,7 @@
 #include <cudf/detail/fill.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 
@@ -54,6 +55,7 @@ std::unique_ptr<column> make_empty_column(data_type type) {
 std::unique_ptr<column> make_numeric_column(
     data_type type, size_type size, mask_state state, cudaStream_t stream,
     rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   CUDF_EXPECTS(is_numeric(type), "Invalid, non-numeric type.");
 
   return std::make_unique<column>(
@@ -66,6 +68,7 @@ std::unique_ptr<column> make_numeric_column(
 std::unique_ptr<column> make_timestamp_column(
     data_type type, size_type size, mask_state state, cudaStream_t stream,
     rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   CUDF_EXPECTS(is_timestamp(type), "Invalid, non-timestamp type.");
 
   return std::make_unique<column>(
@@ -78,6 +81,7 @@ std::unique_ptr<column> make_timestamp_column(
 std::unique_ptr<column> make_fixed_width_column(
     data_type type, size_type size, mask_state state, cudaStream_t stream,
     rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   CUDF_EXPECTS(is_fixed_width(type), "Invalid, non-fixed-width type.");
       
   if(is_timestamp(type)){
