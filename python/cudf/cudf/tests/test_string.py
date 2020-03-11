@@ -1663,7 +1663,7 @@ def test_string_str_index(data, sub, er):
         assert not er
 
     try:
-        ps.str.index(sub)
+        gs.str.index(sub)
     except er:
         pass
     else:
@@ -1701,7 +1701,7 @@ def test_string_str_rindex(data, sub, er):
         assert not er
 
     try:
-        ps.str.index(sub)
+        gs.str.index(sub)
     except er:
         pass
     else:
