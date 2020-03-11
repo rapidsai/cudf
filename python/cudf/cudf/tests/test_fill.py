@@ -27,14 +27,14 @@ def cpu_fill(data, fill_value, begin, end):
     ],
 )
 @pytest.mark.parametrize("begin,end", [(0, -1), (0, 4), (1, -1), (1, 4)])
-def test_fill(data, fill_value, begin, end):
+@pytest.mark.parametrize("inplace", [True, False])
+def test_fill(data, fill_value, begin, end, inplace):
     original = cudf.Series(data)
     expected = cudf.Series(cpu_fill(data, fill_value, begin, end))
 
-    actual = original.fill(fill_value, begin, end)
+    actual = original.fill(fill_value, begin, end, inplace)
 
-    print(cpu_fill(data, fill_value, begin, end))
-    print(actual)
-    print(expected)
+    if inplace:
+        assert actual is original
 
     assert_series_equal(expected.to_pandas(), actual.to_pandas())

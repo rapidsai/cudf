@@ -355,7 +355,7 @@ class ColumnBase(Column):
             libcudfxx.filling.fill_in_place(self, begin, end, fill_value)
             return self
 
-        result = libcudfxx.filling.fill(self, fill_value, begin, end)
+        result = libcudfxx.filling.fill(self, begin, end, fill_value)
 
         return self._mimic_inplace(result, inplace=True)
 

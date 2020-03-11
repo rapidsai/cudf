@@ -306,6 +306,8 @@ class Frame(libcudfxx.table.Table):
         for (c, v) in col_and_fill:
             c.fill(v, begin, end, inplace=True)
 
+        return self
+
     def shift(self, periods=1, freq=None, axis=0, fill_value=None):
         """Shift values by `periods` positions.
         """
