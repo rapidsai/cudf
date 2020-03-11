@@ -97,6 +97,274 @@ class Frame(libcudfxx.table.Table):
 
         return self._data[None].copy(deep=False)
 
+    def _scatter(self, key, value):
+        result = self._from_table(libcudfxx.copying.scatter(value, key, self))
+
+        result._copy_categories(self)
+        return result
+
+    def _empty_like(self):
+        result = self._from_table(libcudfxx.copying.table_empty_like(self))
+
+        result._copy_categories(self)
+        return result
+
+    def _slice(self, arg):
+        """
+       _slice : slice the frame as per the arg
+
+       Parameters
+       ----------
+       arg : should always be of type slice and doesn't handle step
+
+       """
+        num_rows = len(self)
+        if num_rows == 0:
+            return self
+        start, stop, stride = arg.indices(num_rows)
+
+        if stride is not None and stride != 1:
+            raise ValueError(
+                """Step size is not supported other than None and 1"""
+            )
+
+        if start < 0:
+            start = start + num_rows
+        if stop < 0:
+            stop = stop + num_rows
+
+        if start > stop:
+            return self._empty_like()
+        else:
+            start = len(self) if start > num_rows else start
+            stop = len(self) if stop > num_rows else stop
+
+            result = self._from_table(
+                libcudfxx.copying.table_slice(self, [start, stop])[0]
+            )
+
+            result._copy_categories(self)
+            return result
+
+    def _normalize_scalars(self, other):
+        """
+        Try to normalizes scalar values as per self dtype
+        """
+        if (
+            other is not None
+            and (isinstance(other, float) and not np.isnan(other))
+        ) and (self.dtype.type(other) != other):
+            raise TypeError(
+                "Cannot safely cast non-equivalent {} to {}".format(
+                    type(other).__name__, self.dtype.name
+                )
+            )
+
+        return (
+            self.dtype.type(other)
+            if (
+                other is not None
+                and (isinstance(other, float) and not np.isnan(other))
+            )
+            else other
+        )
+
+    def _normalize_columns_and_scalars_type(self, other):
+        """
+        Try to normalize the other's dtypes as per self.
+
+        Parameters
+        ----------
+
+        self : Can be a DataFrame or Series or Index
+        other : Can be a DataFrame, Series, Index, Array
+            like object or a scalar value
+
+            if self is DataFrame, other can be only a
+            scalar or array like with size of number of columns
+            in DataFrame or a DataFrame with same dimenstion
+
+            if self is Series, other can be only a scalar or
+            a series like with same length as self
+
+        Returns:
+        --------
+        A dataframe/series/list/scalar form of normalized other
+        """
+        if isinstance(self, cudf.DataFrame) and isinstance(
+            other, cudf.DataFrame
+        ):
+            return [
+                other[self_col].astype(self[self_col].dtype)._column
+                for self_col in self.columns
+            ]
+
+        elif isinstance(self, (cudf.Series, cudf.Index)) and not is_scalar(
+            other
+        ):
+            other = as_column(other)
+            return other.astype(self.dtype)
+
+        else:
+            # Handles scalar or list/array like scalars
+            if isinstance(self, (cudf.Series, cudf.Index)) and is_scalar(
+                other
+            ):
+                return self._normalize_scalars(other)
+
+            elif (self, cudf.DataFrame):
+                out = []
+                if is_scalar(other):
+                    other = [other for i in range(len(self.columns))]
+                out = [
+                    self[in_col_name]._normalize_scalars(sclr)
+                    for in_col_name, sclr in zip(self.columns, other)
+                ]
+
+                return out
+            else:
+                raise ValueError(
+                    "Inappropriate input {} and other {} combination".format(
+                        type(self), type(other)
+                    )
+                )
+
+    def where(self, boolean_mask, other):
+        """
+        Replace values with other where the condition is False.
+
+        Parameters
+        ----------
+        cond : boolean
+            This can be Frame of booleans, where cond is True, keep the
+            original value. Where False, replace with corresponding value
+            from other. Callables are not supported.
+        other: list of scalars or a dataframe or a series,
+            Entries where cond is False are replaced with
+            corresponding value from other. Callables are not
+            supported.
+
+            DataFrame expects only Scalar or array like with scalars or
+            dataframe with same dimention as self.
+
+            Series expects only scalar or series like with same length
+
+        Returns
+        -------
+        result : DataFrame/Series
+
+        Examples:
+        ---------
+        >>> import cudf
+        >>> df = cudf.DataFrame({"A":[1, 4, 5], "B":[3, 5, 8]})
+        >>> print (df.where(df % 2 == 0, [-1, -1]))
+           A  B
+        0 -1 -1
+        1  4 -1
+        2 -1  8
+
+        >>> ser = cudf.Series([4, 3, 2, 1, 0])
+        >>> print(ser.where(ser > 2, 10))
+        0     4
+        1     3
+        2    10
+        3    10
+        4    10
+        >>> print(ser.where(ser > 2))
+        0    4
+        1    3
+        2
+        3
+        4
+        """
+
+        if isinstance(self, cudf.DataFrame):
+            if not isinstance(boolean_mask, cudf.DataFrame):
+                boolean_mask = self.from_pandas(pd.DataFrame(boolean_mask))
+            other = self._normalize_columns_and_scalars_type(other)
+            out_df = cudf.DataFrame(index=self.index)
+            if len(self._columns) != len(other):
+                raise ValueError(
+                    """Replacement list length or number of dataframe columns
+                    should be equal to Number of columns of dataframe"""
+                )
+            if len(self._columns) != len(boolean_mask._columns):
+                raise ValueError(
+                    """Array conditional must be same shape as self"""
+                )
+
+            for in_col_name, cond_col_name, otr_col in zip(
+                self.columns, boolean_mask.columns, other
+            ):
+                input_col = self[in_col_name]._column
+                if is_categorical_dtype(input_col.dtype):
+                    if np.isscalar(otr_col):
+                        otr_col = input_col._encode(otr_col)
+                    else:
+                        otr_col = otr_col.codes
+                    input_col = input_col.codes
+
+                result = libcudfxx.copying.copy_if_else(
+                    input_col, otr_col, boolean_mask[cond_col_name]._column
+                )
+
+                if is_categorical_dtype(self[in_col_name].dtype):
+                    result = build_categorical_column(
+                        categories=self[in_col_name]._column.categories,
+                        codes=result,
+                        mask=result.base_mask,
+                        size=result.size,
+                        offset=result.offset,
+                        ordered=self[in_col_name]._column.ordered,
+                    )
+
+                out_df[in_col_name] = self[in_col_name].__class__(result)
+
+            return out_df
+
+        else:
+            other = self._normalize_columns_and_scalars_type(other)
+            if isinstance(other, (cudf.Series, cudf.Index)):
+                other = other._column
+
+            input_col = self._column
+            if is_categorical_dtype(input_col.dtype):
+                if np.isscalar(otr_col):
+                    other = input_col._encode(other)
+                else:
+                    other = other.codes
+                input_col = input_col.codes
+            result = libcudfxx.copying.copy_if_else(
+                self._column, other, boolean_mask._column
+            )
+
+            if is_categorical_dtype(self.dtype):
+                result = build_categorical_column(
+                    categories=self._column.categories,
+                    codes=result,
+                    mask=result.base_mask,
+                    size=result.size,
+                    offset=result.offset,
+                    ordered=self._column.ordered,
+                )
+
+            result = self.__class__(result)
+            result.index = self.index
+            return result
+
+    def _scatter_to_tables(self, scatter_map):
+        """
+       scatter the dataframe/table to a list of dataframes/tables
+       as per scatter_map
+
+       """
+
+        result = libcudfxx.copying.scatter_to_tables(self, scatter_map)
+        result = [self._from_table(tbl) for tbl in result]
+        [frame._copy_categories(self) for frame in result]
+
+        return result
+
     def dropna(self, axis=0, how="any", subset=None, thresh=None):
         """
         Drops rows (or columns) containing nulls from a Column.
@@ -704,9 +972,11 @@ class Frame(libcudfxx.table.Table):
             else:
 
                 to_frame_data[name] = column.build_column(
-                    col.data,
+                    col.base_data,
                     dtype=categorical_dtypes.get(name, col.dtype),
-                    mask=col.mask,
+                    mask=col.base_mask,
+                    offset=col.offset,
+                    size=col.size,
                 )
         gdf_result._data = to_frame_data
 

@@ -4,7 +4,7 @@ import pickle
 import warnings
 from numbers import Number
 
-import cupy.binary.elementwise
+import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -354,7 +354,7 @@ class ColumnBase(Column):
         copies the references of the data and mask.
         """
         if deep:
-            return libcudf.copying.copy_column(self)
+            return libcudfxx.copying.copy_column(self)
         else:
             return build_column(
                 self.base_data,
@@ -426,40 +426,30 @@ class ColumnBase(Column):
                 )
 
             start, stop, stride = arg.indices(len(self))
-            if start == stop:
+
+            if start < 0:
+                start = start + len(self)
+            if stop < 0:
+                stop = stop + len(self)
+
+            if start >= stop:
                 return column_empty(0, self.dtype, masked=True)
             # compute mask slice
-            if self.has_nulls:
-                if arg.step is not None and arg.step != 1:
-                    raise NotImplementedError(arg)
+            if stride == 1 or stride is None:
 
-                # slicing data
-                slice_data = self.data_array_view[arg]
-                # slicing mask
-                data_size = self.size
-                bytemask = cudautils.expand_mask_bits(
-                    data_size, self.mask_array_view
+                return libcudfxx.copying.column_slice(self, [start, stop])[0]
+            else:
+                # Need to create a gather map for given slice with stride
+                gather_map = as_column(
+                    cupy.arange(
+                        start=start,
+                        stop=stop,
+                        step=stride,
+                        dtype=np.dtype(np.int32),
+                    )
                 )
-                bytemask = as_column(bytemask)
-                slice_mask = bools_to_mask(bytemask[arg])
-            else:
-                slice_data = self.data_array_view[arg]
-                slice_mask = None
-            if self.dtype == "object":
-                return as_column(slice_data)
-            else:
-                if arg.step is not None and arg.step != 1:
-                    slice_data = cudautils.as_contiguous(slice_data)
-                    slice_data = Buffer(slice_data)
-                else:
-                    # data Buffer lifetime is tied to self:
-                    slice_data = Buffer(data=slice_data, owner=self)
+                return self.as_frame()._gather(gather_map)._as_column()
 
-                # mask Buffer lifetime is not:
-                if slice_mask is not None:
-                    slice_mask = Buffer(slice_mask)
-
-                return build_column(slice_data, self.dtype, mask=slice_mask)
         else:
             arg = column.as_column(arg)
             if len(arg) == 0:
@@ -481,9 +471,24 @@ class ColumnBase(Column):
 
         if isinstance(key, slice):
             key_start, key_stop, key_stride = key.indices(len(self))
-            if key_stride != 1:
-                raise NotImplementedError("Stride not supported in slice")
-            nelem = abs(key_stop - key_start)
+            if key_start < 0:
+                key_start = key_start + len(self)
+            if key_stop < 0:
+                key_stop = key_stop + len(self)
+            if key_start >= key_stop:
+                return self.copy()
+            if key_stride != 1 or key_stride is not None or is_scalar(value):
+                key = as_column(
+                    cupy.arange(
+                        start=key_start,
+                        stop=key_stop,
+                        step=key_stride,
+                        dtype=np.dtype(np.int32),
+                    )
+                )
+                nelem = len(key)
+            else:
+                nelem = abs(key_stop - key_start)
         else:
             key = column.as_column(key)
             if pd.api.types.is_bool_dtype(key.dtype):
@@ -496,40 +501,67 @@ class ColumnBase(Column):
 
         if is_scalar(value):
             if is_categorical_dtype(self.dtype):
-                data = column_empty(nelem, dtype=self.codes.dtype)
-                data.data_array_view[:] = self._encode(value)
-                value = build_categorical_column(
-                    categories=self.dtype.categories,
-                    codes=as_column(data),
-                    ordered=self.dtype.ordered,
-                )
-            elif value is None:
-                value = column.column_empty(nelem, self.dtype, masked=True)
+                value = self._encode(value)
             else:
-                to_dtype = pd.api.types.pandas_dtype(self.dtype)
-                value = utils.scalar_broadcast_to(value, nelem, to_dtype)
+                value = self.dtype.type(value) if value is not None else value
+        else:
+            if len(value) != nelem:
+                msg = (
+                    f"Size mismatch: cannot set value "
+                    f"of size {len(value)} to indexing result of size "
+                    f"{nelem}"
+                )
+                raise ValueError(msg)
+            value = column.as_column(value).astype(self.dtype)
+            if is_categorical_dtype(value.dtype):
+                value = value.cat().set_categories(self.categories)
+                assert self.dtype == value.dtype
 
-        value = column.as_column(value).astype(self.dtype)
+        if (
+            isinstance(key, slice)
+            and (key_stride == 1 or key_stride is None)
+            and not is_scalar(value)
+        ):
 
-        if len(value) != nelem:
-            msg = (
-                f"Size mismatch: cannot set value "
-                f"of size {len(value)} to indexing result of size "
-                f"{nelem}"
+            out = libcudfxx.copying.copy_range(
+                value, self, 0, nelem, key_start, key_stop, False
             )
-            raise ValueError(msg)
-
-        if is_categorical_dtype(value.dtype):
-            value = value.cat().set_categories(self.categories)
-            assert self.dtype == value.dtype
-
-        if isinstance(key, slice):
-            out = libcudf.copying.copy_range(
-                self, value, key_start, key_stop, 0
-            )
+            if is_categorical_dtype(value.dtype):
+                out = build_categorical_column(
+                    categories=value.categories,
+                    codes=out,
+                    mask=out.base_mask,
+                    size=out.size,
+                    offset=out.offset,
+                    ordered=value.ordered,
+                )
         else:
             try:
-                out = libcudf.copying.scatter(value, key, self)
+                if is_scalar(value):
+                    input = self
+                    if is_categorical_dtype(self.dtype):
+                        input = self.codes
+
+                    out = input.as_frame()._scatter(key, [value])._as_column()
+
+                    if is_categorical_dtype(self.dtype):
+                        out = build_categorical_column(
+                            categories=self.categories,
+                            codes=out,
+                            mask=out.base_mask,
+                            size=out.size,
+                            offset=out.offset,
+                            ordered=self.ordered,
+                        )
+
+                else:
+                    if not isinstance(value, Column):
+                        value = as_column(value)
+                    out = (
+                        self.as_frame()
+                        ._scatter(key, value.as_frame())
+                        ._as_column()
+                    )
             except RuntimeError as e:
                 if "out of bounds" in str(e):
                     raise IndexError(

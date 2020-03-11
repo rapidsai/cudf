@@ -456,11 +456,7 @@ class DataFrame(Frame):
             return self._get_columns_by_label(arg, downcast=True)
 
         elif isinstance(arg, slice):
-            df = DataFrame(index=self.index[arg])
-            for k, col in self._data.items():
-                df[k] = col[arg]
-            df.columns = self.columns
-            return df
+            return self._slice(arg)
 
         elif isinstance(
             arg,
@@ -3953,24 +3949,7 @@ class DataFrame(Frame):
                 "Use an integer array/column for better performance."
             )
 
-        if keep_index:
-            if isinstance(self.index, cudf.MultiIndex):
-                index = self.index.to_frame()._columns
-                index_names = self.index.to_frame().columns.to_list()
-            else:
-                index = [self.index._values]
-                index_names = [self.index.name]
-        else:
-            index = None
-            index_names = []
-
-        tables = libcudf.copying.scatter_to_frames(
-            self._columns,
-            map_index._column,
-            index,
-            names=self.columns.to_list(),
-            index_names=index_names,
-        )
+        tables = self._scatter_to_tables(map_index._column)
 
         if map_size:
             # Make sure map_size is >= the number of uniques in map_index
@@ -3981,6 +3960,7 @@ class DataFrame(Frame):
                 )
 
             # Append empty dataframes if map_size > len(tables)
+
             for i in range(map_size - len(tables)):
                 tables.append(self.take([]))
         return tables

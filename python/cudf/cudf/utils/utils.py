@@ -10,8 +10,6 @@ from numba import njit
 
 import rmm
 
-from cudf._lib.arrow._cuda import CudaBuffer as arrowCudaBuffer
-from cudf._libxx.null_mask import bitmask_allocation_size_bytes
 from cudf.core.buffer import Buffer
 
 mask_dtype = np.dtype(np.int32)
@@ -114,6 +112,8 @@ def buffers_from_pyarrow(pa_arr, dtype=None):
         - cudf.Buffer --> data
         - cudf.Buffer --> string characters
     """
+    from cudf._libxx.null_mask import bitmask_allocation_size_bytes
+
     buffers = pa_arr.buffers()
 
     if pa_arr.null_count:
@@ -141,6 +141,8 @@ def pyarrow_buffer_to_cudf_buffer(arrow_buf, mask_size=0):
     Given a PyArrow Buffer backed by either host or device memory, convert it
     to a cuDF Buffer
     """
+    from cudf._lib.arrow._cuda import CudaBuffer as arrowCudaBuffer
+
     # Try creating a PyArrow CudaBuffer from the PyArrow Buffer object, it
     # fails with an ArrowTypeError if it's a host based Buffer so we catch and
     # process as expected
