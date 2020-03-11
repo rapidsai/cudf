@@ -248,6 +248,7 @@
 - PR #4399 Make scalar destructor virtual.
 - PR #4406 Fix sorted merge issue with null values and ascending=False
 - PR #4423 Tighten up Dask serialization checks
+- PR #4434 Fix join_strings logic with all-null strings and non-null narep
 
 
 # cuDF 0.12.0 (04 Feb 2020)
