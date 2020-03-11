@@ -1,7 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 import numpy as np
-import numba.cuda
 import numba.numpy_support
 from cudf.utils import cudautils
 
