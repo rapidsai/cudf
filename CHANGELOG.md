@@ -148,6 +148,7 @@
 - PR #4311 Port nvstrings String Manipulations functions to cuDF Python/Cython
 - PR #4373 Port nvstrings Regular Expressions functions to cuDF Python/Cython
 - PR #4407 Enable `.str.slice` & `.str.get` and `.str.zfill` unit-tests
+- PR #4412 Require Dask + Distributed 2.12.0+
 - PR #4377 Support loading avro files that contain nested arrays
 
 ## Bug Fixes
