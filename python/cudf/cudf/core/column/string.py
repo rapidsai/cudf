@@ -1544,7 +1544,9 @@ class StringMethods(object):
             Series or Index of boolean values with the same length as
             the original Series/Index.
         """
-        return self._return_or_inplace(self._parent == "", **kwargs)
+        return self._return_or_inplace(
+            (self._parent == "").fillna(False), **kwargs
+        )
 
     def isspace(self, **kwargs):
         """
