@@ -125,3 +125,20 @@ TEST_F(StringsCombineTest, JoinZeroSizeStringsColumn)
     auto results = cudf::strings::join_strings(strings_view);
     cudf::test::expect_strings_empty(results->view());
 }
+
+TEST_F(StringsCombineTest, JoinAllNullStringsColumn)
+{
+    cudf::test::strings_column_wrapper strings( {"","",""}, {0,0,0} );
+
+    auto results = cudf::strings::join_strings(cudf::strings_column_view(strings));
+    cudf::test::strings_column_wrapper expected1( {""}, {0} );
+    cudf::test::expect_columns_equal(*results,expected1);
+
+    results = cudf::strings::join_strings(cudf::strings_column_view(strings),cudf::string_scalar(""),cudf::string_scalar("3"));
+    cudf::test::strings_column_wrapper expected2( {"333"} );
+    cudf::test::expect_columns_equal(*results,expected2);
+
+    results = cudf::strings::join_strings(cudf::strings_column_view(strings),cudf::string_scalar("-"),cudf::string_scalar("*"));
+    cudf::test::strings_column_wrapper expected3( {"*-*-*"} );
+    cudf::test::expect_columns_equal(*results,expected3);
+}

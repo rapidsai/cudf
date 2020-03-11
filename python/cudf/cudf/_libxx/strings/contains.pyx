@@ -9,7 +9,8 @@ from cudf._libxx.cpp.column.column cimport column
 
 from cudf._libxx.cpp.strings.contains cimport (
     contains_re as cpp_contains_re,
-    count_re as cpp_count_re
+    count_re as cpp_count_re,
+    matches_re as cpp_matches_re
 )
 from libcpp.string cimport string
 
@@ -45,6 +46,25 @@ def count_re(Column source_strings, object reg_ex):
 
     with nogil:
         c_result = move(cpp_count_re(
+            source_view,
+            reg_ex_string
+        ))
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def match_re(Column source_strings, object reg_ex):
+    """
+    Returns a Column with each value True if the string matches `reg_ex`
+    regular expression with each record of `source_strings`
+    """
+    cdef unique_ptr[column] c_result
+    cdef column_view source_view = source_strings.view()
+
+    cdef string reg_ex_string = <string>str(reg_ex).encode()
+
+    with nogil:
+        c_result = move(cpp_matches_re(
             source_view,
             reg_ex_string
         ))
