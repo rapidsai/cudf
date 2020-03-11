@@ -31,6 +31,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/binaryop.hpp>
 #include <cudf/detail/unary.hpp>
+#include <cudf/detail/gather.hpp>
 
 #include <memory>
 #include <utility>
@@ -160,19 +161,6 @@ void store_result_functor::operator()<aggregation::SUM>(
 };
 
 template <>
-void store_result_functor::operator()<aggregation::MIN>(
-  std::unique_ptr<aggregation> const& agg)
-{
-  if (cache.has_result(col_idx, agg))
-    return;
-
-  cache.add_result(col_idx, agg, 
-                  detail::group_min(get_grouped_values(), helper.num_groups(), 
-                                    helper.group_labels(),
-                                    mr, stream));
-};
-
-template <>
 void store_result_functor::operator()<aggregation::MAX>(
   std::unique_ptr<aggregation> const& agg)
 {
@@ -211,6 +199,46 @@ void store_result_functor::operator()<aggregation::ARGMIN>(
                          helper.group_labels(),
                          helper.key_sort_order(),
                          mr, stream));
+};
+
+template <>
+void store_result_functor::operator()<aggregation::MIN>(
+  std::unique_ptr<aggregation> const& agg)
+{
+  if (cache.has_result(col_idx, agg))
+    return;
+
+  auto result = [&](){
+    if (cudf::is_fixed_width(values.type())) {
+      return detail::group_min(get_grouped_values(), helper.num_groups(), 
+                               helper.group_labels(),
+                               mr, stream);
+    } else {
+      auto argmin_agg = make_argmin_aggregation();
+      operator()<aggregation::ARGMIN>(argmin_agg);
+      column_view argmin_result = cache.get_result(col_idx, argmin_agg);
+
+      if (argmin_result.nullable()) {
+        // We make a view of ARGMIN result without a null mask and gather using
+        // this mask. The values in data buffer of ARGMIN result corresponding 
+        // to null values was initialized to ARGMIN_SENTINEL which is an out of 
+        // bounds index value and causes the gathered value to be null.
+        column_view null_removed_map(data_type(type_to_id<size_type>()),
+          argmin_result.size(), 
+          static_cast<void const*>(argmin_result.template data<size_type>()));
+        auto transformed_result = experimental::detail::gather(
+          table_view({values}), null_removed_map, false, true, false, mr, stream);
+        return std::move(transformed_result->release()[0]);
+      }
+      else {
+        auto transformed_result = experimental::detail::gather(
+          table_view({values}), argmin_result, false, false, false, mr, stream);
+        return std::move(transformed_result->release()[0]);
+      }
+    }
+  }();
+
+  cache.add_result(col_idx, agg, std::move(result));
 };
 
 template <>

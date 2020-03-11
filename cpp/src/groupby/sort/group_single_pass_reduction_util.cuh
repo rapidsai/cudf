@@ -42,9 +42,9 @@ struct reduce_functor {
     if (k == aggregation::SUM)
       return cudf::is_numeric<T>();
     else if (k == aggregation::MIN or k == aggregation::MAX)
-      return cudf::is_fixed_width<T>();
+      return cudf::is_fixed_width<T>() and is_relationally_comparable<T,T>();
     else if (k == aggregation::ARGMIN or k == aggregation::ARGMAX)
-      return true;
+      return is_relationally_comparable<T,T>();
     else
       return false;
   }
