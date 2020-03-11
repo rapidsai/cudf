@@ -46,7 +46,7 @@ cpdef concat_columns(object columns):
 cpdef concat_tables(object tables, bool ignore_index=False):
     cdef unique_ptr[table] c_result
     cdef vector[table_view] c_views
-    if ignore_index == False:
+    if ignore_index is False:
         c_views = make_table_views(tables)
     else:
         c_views = make_table_data_views(tables)

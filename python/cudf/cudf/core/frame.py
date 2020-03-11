@@ -1,9 +1,9 @@
+import functools
 import itertools
 import warnings
 from collections import OrderedDict
 
 import cupy
-import functools
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_dtype_equal
@@ -104,11 +104,15 @@ class Frame(libcudfxx.table.Table):
                     # will be re-assigned at the end
                     dtypes[idx] = min_scalar_type(len(categories[idx]))
                 # Otherwise raise an error if columns have different dtypes
-                elif not all(is_dtype_equal(c.dtype, dtypes[idx]) for c in cols):
+                elif not all(
+                    is_dtype_equal(c.dtype, dtypes[idx]) for c in cols
+                ):
                     raise ValueError("All columns must be the same type")
             return categories
 
-        def cast_cols_to_common_dtypes(col_idxs, list_of_columns, dtypes, categories):
+        def cast_cols_to_common_dtypes(
+            col_idxs, list_of_columns, dtypes, categories
+        ):
             # Cast all columns to a common dtype, assign combined categories,
             # and back-fill missing columns with all-null columns
             for idx in col_idxs:
@@ -125,7 +129,8 @@ class Frame(libcudfxx.table.Table):
                         if idx in categories:
                             cols[idx] = (
                                 cols[idx]
-                                .cat()._set_categories(
+                                .cat()
+                                ._set_categories(
                                     categories[idx], is_unique=True
                                 )
                                 .codes
@@ -149,8 +154,8 @@ class Frame(libcudfxx.table.Table):
         # list of [...index_cols, ...table_cols]. If a table is
         # missing a column, that list will have None in the slot instead
         columns = [
-            ([] if ignore_index else list(f._index._data.columns)) +
-            [f[name]._column if name in f else None for name in names]
+            ([] if ignore_index else list(f._index._data.columns))
+            + [f[name]._column if name in f else None for name in names]
             for i, f in enumerate(objs)
         ]
 
@@ -188,20 +193,18 @@ class Frame(libcudfxx.table.Table):
             tables.append(table)
 
         # Concatenate the Tables
-        out = cls._from_table(libcudfxx.concat.concat_tables(
-            tables, ignore_index=ignore_index
-        ))
+        out = cls._from_table(
+            libcudfxx.concat.concat_tables(tables, ignore_index=ignore_index)
+        )
 
         # Reassign the categories for any categorical table cols
         reassign_categories(
-            categories, out._data,
-            indices[first_data_column_position:]
+            categories, out._data, indices[first_data_column_position:]
         )
 
         # Reassign the categories for any categorical index cols
         reassign_categories(
-            categories, out._index._data,
-            indices[:first_data_column_position]
+            categories, out._index._data, indices[:first_data_column_position]
         )
 
         # Reassign index and column names
