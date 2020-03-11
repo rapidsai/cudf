@@ -152,6 +152,7 @@
 - PR #4166 Port `is_sorted.pyx` to use libcudf++ APIs
 - PR #4333 nvstrings case/capitalization cython bindings
 - PR #4345 Removed an undesirable backwards include from /include to /src in cuIO writers.hpp
+- PR #4367 Port copying.pyx to use new libcudf
 - PR #4362 Move pq_chunked_state struct into it's own header to match how orc writer is doing it.
 - PR #4339 Port libcudf strings `wrap` api to cython/python
 - PR #4311 Port nvstrings String Manipulations functions to cuDF Python/Cython
