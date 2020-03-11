@@ -243,12 +243,18 @@ def scatter(object input, object scatter_map, Table target,
         return _scatter_scalar(input, scatter_map, target, bounds_check)
 
 
-def scatter_to_tables(Table source_table, Column partition_map):
+def scatter_to_tables(Table source_table, Column partition_map,
+                      bool keep_index):
     """
     Scatter the source_table to a set of tables as per the partition_map
     """
 
-    cdef table_view source_table_view = source_table.view()
+    cdef table_view source_table_view
+
+    if keep_index is True:
+        source_table_view = source_table.view()
+    else:
+        source_table_view = source_table.data_view()
     cdef column_view partition_map_view = partition_map.view()
 
     cdef vector[unique_ptr[table]] c_result
@@ -263,7 +269,10 @@ def scatter_to_tables(Table source_table, Column partition_map):
         Table.from_unique_ptr(
             move(c_result[i]),
             column_names=source_table._column_names,
-            index_names=source_table._index._column_names
+            index_names=(
+                source_table._index._column_names if (
+                    keep_index is True and source_table._index is not None)
+                else None)
         ) for i in range(c_result.size())]
 
     return result
