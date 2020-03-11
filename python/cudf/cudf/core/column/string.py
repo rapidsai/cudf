@@ -10,27 +10,76 @@ import pandas as pd
 import pyarrow as pa
 
 import nvstrings
-import rmm
 
 import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
 import cudf._libxx.string_casting as str_cast
 from cudf._lib.nvtx import nvtx_range_pop, nvtx_range_push
+from cudf._libxx.strings.capitalize import (
+    capitalize as cpp_capitalize,
+    title as cpp_title,
+)
+from cudf._libxx.strings.case import (
+    swapcase as cpp_swapcase,
+    to_lower as cpp_to_lower,
+    to_upper as cpp_to_upper,
+)
 from cudf._libxx.strings.char_types import (
     is_alnum as cpp_is_alnum,
     is_alpha as cpp_is_alpha,
     is_decimal as cpp_is_decimal,
     is_digit as cpp_is_digit,
+    is_lower as cpp_is_lower,
     is_numeric as cpp_is_numeric,
+    is_upper as cpp_is_upper,
+)
+from cudf._libxx.strings.contains import (
+    contains_re as cpp_contains_re,
+    count_re as cpp_count_re,
+)
+from cudf._libxx.strings.extract import extract as cpp_extract
+from cudf._libxx.strings.find import contains as cpp_contains
+from cudf._libxx.strings.findall import findall as cpp_findall
+from cudf._libxx.strings.padding import (
+    PadSide,
+    center as cpp_center,
+    ljust as cpp_ljust,
+    pad as cpp_pad,
+    rjust as cpp_rjust,
+    zfill as cpp_zfill,
 )
 from cudf._libxx.strings.replace import (
     insert as cpp_string_insert,
+    replace as cpp_replace,
+    replace_multi as cpp_replace_multi,
     slice_replace as cpp_slice_replace,
 )
-from cudf._libxx.strings.substring import slice_from as cpp_slice_from
+from cudf._libxx.strings.replace_re import (
+    replace_multi_re as cpp_replace_multi_re,
+    replace_re as cpp_replace_re,
+    replace_with_backrefs as cpp_replace_with_backrefs,
+)
+from cudf._libxx.strings.split.partition import (
+    partition as cpp_partition,
+    rpartition as cpp_rpartition,
+)
+from cudf._libxx.strings.split.split import (
+    rsplit as cpp_rsplit,
+    split as cpp_split,
+)
+from cudf._libxx.strings.strip import (
+    lstrip as cpp_lstrip,
+    rstrip as cpp_rstrip,
+    strip as cpp_strip,
+)
+from cudf._libxx.strings.substring import (
+    get as cpp_string_get,
+    slice_from as cpp_slice_from,
+    slice_strings as cpp_slice_strings,
+)
 from cudf._libxx.strings.wrap import wrap as cpp_wrap
 from cudf.core.buffer import Buffer
-from cudf.core.column import column
+from cudf.core.column import column, column_empty
 from cudf.utils import utils
 from cudf.utils.dtypes import is_list_like, is_scalar
 
@@ -119,10 +168,17 @@ class StringMethods(object):
                 # This branch indicates the passed as new_col
                 # is actually a table-like data
                 table = new_col
-                return self._parent._constructor_expanddim(
-                    {index: value for index, value in enumerate(table)},
-                    index=self._parent.index,
-                )
+                from cudf._libxx.table import Table
+
+                if isinstance(table, Table):
+                    return self._parent._constructor_expanddim(
+                        data=table._data, index=self._parent.index
+                    )
+                else:
+                    return self._parent._constructor_expanddim(
+                        {index: value for index, value in enumerate(table)},
+                        index=self._parent.index,
+                    )
             elif isinstance(self._parent, Series):
                 return Series(
                     new_col, index=self._parent.index, name=self._parent.name
@@ -150,8 +206,8 @@ class StringMethods(object):
             indicating the length of each element in the Series or Index.
         """
 
-        out_dev_arr = rmm.device_array(len(self._column), dtype="int32")
-        ptr = libcudf.cudf.get_ctype_ptr(out_dev_arr)
+        out_col = column_empty(len(self._column), dtype="int32")
+        ptr = out_col.data_ptr
         self._column.nvstrings.len(ptr)
 
         mask = None
@@ -159,21 +215,83 @@ class StringMethods(object):
             mask = self._column.mask
 
         return self._return_or_inplace(
-            column.build_column(
-                Buffer(out_dev_arr), np.dtype("int32"), mask=mask
-            ),
+            column.build_column(out_col.data, np.dtype("int32"), mask=mask),
             **kwargs,
         )
+
+    # TODO, PREM: Uncomment in future PR
+    # def cat(self, others=None, sep=None, na_rep=None, **kwargs):
+    #     """
+    #     Concatenate strings in the Series/Index with given separator.
+
+    #     If *others* is specified, this function concatenates the Series/Index
+    #     and elements of others element-wise. If others is not passed, then
+    # all
+    #     values in the Series/Index are concatenated into a single string with
+    #     a given sep.
+
+    #     Parameters
+    #     ----------
+    #         others : Series or List of str
+    #             Strings to be appended.
+    #             The number of strings must match size() of this instance.
+    #             This must be either a Series of string dtype or a Python
+    #             list of strings.
+
+    #         sep : str
+    #             If specified, this separator will be appended to each string
+    #             before appending the others.
+
+    #         na_rep : str
+    #             This character will take the place of any null strings
+    #             (not empty strings) in either list.
+
+    #             - If `na_rep` is None, and `others` is None, missing values
+    # in
+    #             the Series/Index are omitted from the result.
+    #             - If `na_rep` is None, and `others` is not None, a row
+    #             containing a missing value in any of the columns (before
+    #             concatenation) will have a missing value in the result.
+
+    #     Returns
+    #     -------
+    #     concat : str or Series/Index of str dtype
+    #         If `others` is None, `str` is returned,
+    # otherwise a `Series/Index`
+    #         (same type as caller) of str dtype is returned.
+    #     """
+    #     from cudf.core import DataFrame
+
+    #     if sep is None:
+    #         sep = ""
+
+    #     from cudf._libxx.scalar import Scalar
+
+    #     if others is None:
+    #         data = cpp_join(self._column, Scalar(sep), Scalar(na_rep, "str"))
+    #     else:
+    #         other_cols = _get_cols_list(others)
+    #         all_cols = [self._column] + other_cols
+    #         data = cpp_concatenate(
+    #             DataFrame(
+    #                 {index: value for index, value in enumerate(all_cols)}
+    #             ),
+    #             Scalar(sep),
+    #             Scalar(na_rep, "str"),
+    #         )
+
+    #     out = self._return_or_inplace(data, **kwargs)
+    #     if len(out) == 1 and others is None:
+    #         out = out[0]
+    #     return out
 
     def cat(self, others=None, sep=None, na_rep=None, **kwargs):
         """
         Concatenate strings in the Series/Index with given separator.
-
         If *others* is specified, this function concatenates the Series/Index
         and elements of others element-wise. If others is not passed, then all
         values in the Series/Index are concatenated into a single string with
         a given sep.
-
         Parameters
         ----------
             others : Series or List of str
@@ -181,21 +299,17 @@ class StringMethods(object):
                 The number of strings must match size() of this instance.
                 This must be either a Series of string dtype or a Python
                 list of strings.
-
             sep : str
                 If specified, this separator will be appended to each string
                 before appending the others.
-
             na_rep : str
                 This character will take the place of any null strings
                 (not empty strings) in either list.
-
                 - If `na_rep` is None, and `others` is None, missing values in
                 the Series/Index are omitted from the result.
                 - If `na_rep` is None, and `others` is not None, a row
                 containing a missing value in any of the columns (before
                 concatenation) will have a missing value in the result.
-
         Returns
         -------
         concat : str or Series/Index of str dtype
@@ -228,7 +342,6 @@ class StringMethods(object):
             """
             Picking first element and checking if it really adheres to
             list like conditions, if not we switch to next case
-
             Note: We have made a call not to iterate over the entire list as
             it could be more expensive if it was of very large size.
             Thus only doing a sanity check on just the first element of list.
@@ -268,7 +381,6 @@ class StringMethods(object):
                 """
                 Picking first element and checking if it really adheres to
                 non-list like conditions.
-
                 Note: We have made a call not to iterate over the entire
                 list as it could be more expensive if it was of very
                 large size. Thus only doing a sanity check on just the
@@ -288,6 +400,44 @@ class StringMethods(object):
         if len(out) == 1 and others is None:
             out = out[0]
         return out
+
+    # TODO, PREM: Uncomment in future PR
+    # def join(self, sep, na_rep="", **kwargs):
+    #     """
+    #     Join lists contained as elements in the Series/Index with passed
+    #     delimiter.
+
+    #     Parameters
+    #     ----------
+    #         sep : str
+    #             Delimiter to use between list entries.
+
+    #         na_rep : str
+    #             This character will take the place of any null strings
+    #             (not empty strings) in either list.
+
+    #     Returns
+    #     -------
+    #     Series/Index of str dtype
+    #         The list entries concatenated by intervening
+    #         occurrences of the delimiter.
+
+    #     """
+    #     from cudf._libxx.scalar import Scalar
+    #     from cudf.core.series import Series
+    #     # import pdb; pdb.set_trace()
+
+    #     data = cpp_join(self._column, Scalar(sep), Scalar(na_rep))
+    #     if len(data) != len(self._parent):
+    #         data = column.as_column(
+    #             utils.scalar_broadcast_to(data[0],
+    # len(self._parent), dtype='str')
+    #         )
+    #     return Series(
+    #         data=data,
+    #         index=self._parent.index,
+    #         dtype='str'
+    #     )
 
     def join(self, sep):
         """
@@ -329,9 +479,9 @@ class StringMethods(object):
         if flags != 0:
             raise NotImplementedError("`flags` parameter is not yet supported")
 
-        out = self._column.nvstrings.extract(pat)
-        if len(out) == 1 and expand is False:
-            return self._return_or_inplace(out[0], **kwargs)
+        out = cpp_extract(self._column, pat)
+        if out._num_columns == 1 and expand is False:
+            return self._return_or_inplace(out._columns[0], **kwargs)
         else:
             kwargs.setdefault("expand", expand)
             return self._return_or_inplace(out, **kwargs)
@@ -374,18 +524,12 @@ class StringMethods(object):
         elif na is not np.nan:
             raise NotImplementedError("`na` parameter is not yet supported")
 
-        out_dev_arr = rmm.device_array(len(self._column), dtype="bool")
-        ptr = libcudf.cudf.get_ctype_ptr(out_dev_arr)
-        self._column.nvstrings.contains(pat, regex=regex, devptr=ptr)
-
-        mask = None
-        if self._column.has_nulls:
-            mask = self._column.mask
+        from cudf._libxx.scalar import Scalar
 
         return self._return_or_inplace(
-            column.build_column(
-                Buffer(out_dev_arr), dtype=np.dtype("bool"), mask=mask
-            ),
+            cpp_contains_re(self._column, pat)
+            if regex is True
+            else cpp_contains(self._column, Scalar(pat, "str")),
             **kwargs,
         )
 
@@ -398,11 +542,11 @@ class StringMethods(object):
 
         Parameters
         ----------
-        pat : str
-            String to be replaced as a character sequence or regular
+        pat : str or list-like
+            String(s) to be replaced as a character sequence or regular
             expression.
-        repl : str
-            String to be used as replacement.
+        repl : str or list-like
+            String(s) to be used as replacement.
         n : int, default -1 (all)
             Number of replacements to make from the start.
         regex : bool, default True
@@ -424,56 +568,91 @@ class StringMethods(object):
             raise NotImplementedError("`case` parameter is not yet supported")
         elif flags != 0:
             raise NotImplementedError("`flags` parameter is not yet supported")
+        from cudf.core import Series, Index
 
+        if (
+            is_list_like(pat)
+            or isinstance(pat, (Series, Index, pd.Series, pd.Index))
+        ) and (
+            is_list_like(repl)
+            or isinstance(repl, (Series, Index, pd.Series, pd.Index))
+        ):
+            warnings.warn(
+                "`n` parameter is not supported when \
+                `pat` and `repl` are list-like inputs"
+            )
+
+            return self._return_or_inplace(
+                cpp_replace_multi_re(
+                    self._column, pat, column.as_column(repl, dtype="str")
+                )
+                if regex
+                else cpp_replace_multi(
+                    self._column,
+                    column.as_column(pat, dtype="str"),
+                    column.as_column(repl, dtype="str"),
+                ),
+                **kwargs,
+            )
         # Pandas treats 0 as all
         if n == 0:
             n = -1
+        from cudf._libxx.scalar import Scalar
 
         return self._return_or_inplace(
-            self._column.nvstrings.replace(pat, repl, n=n, regex=regex),
+            cpp_replace_re(self._column, pat, Scalar(repl, "str"), n)
+            if regex is True
+            else cpp_replace(
+                self._column, Scalar(pat, "str"), Scalar(repl, "str"), n
+            ),
             **kwargs,
         )
 
-    def lower(self, **kwargs):
+    def replace_with_backrefs(self, pat, repl, **kwargs):
         """
-        Convert strings in the Series/Index to lowercase.
+        Use the `repl` back-ref template to create a new string
+        with the extracted elements found using the `pat` expression.
+
+        Parameters
+        ----------
+        pat : str
+            Regex with groupings to identify extract sections.
+            This should not be a compiled regex.
+        repl : str
+            String template containing back-reference indicators.
 
         Returns
         -------
         Series/Index of str dtype
-            A copy of the object with all strings converted to lowercase.
+        """
+        return self._return_or_inplace(
+            cpp_replace_with_backrefs(self._column, pat, repl), **kwargs
+        )
+
+    def slice(self, start=None, stop=None, step=None, **kwargs):
+        """
+        Slice substrings from each element in the Series or Index.
+
+        Parameters
+        ----------
+        start : int
+            Start position for slice operation.
+        stop : int
+            Stop position for slice operation.
+        step : int
+            Step size for slice operation.
+
+        Returns
+        -------
+        Series/Index of str dtype
+            Series or Index from sliced substring from
+            original string object.
+
         """
 
         return self._return_or_inplace(
-            self._column.nvstrings.lower(), **kwargs
+            cpp_slice_strings(self._column, start, stop, step), **kwargs,
         )
-
-    # def slice(self, start=None, stop=None, step=None, **kwargs):
-    #     """
-    #     Returns a substring of each string.
-
-    #     Parameters
-    #     ----------
-    #     start : int
-    #         Beginning position of the string to extract.
-    #         Default is beginning of the each string.
-    #     stop : int
-    #         Ending position of the string to extract.
-    #         Default is end of each string.
-    #     step : int
-    #         Characters that are to be captured within the specified section.
-    #         Default is every character.
-
-    #     Returns
-    #     -------
-    #     Series/Index of str dtype
-    #         A substring of each string.
-
-    #     """
-
-    #     return self._return_or_inplace(
-    #         cpp_slice_strings(self._column, start, stop, step), **kwargs,
-    #     )
 
     def isdecimal(self, **kwargs):
         """
@@ -486,7 +665,7 @@ class StringMethods(object):
         Series/Index of bool dtype
 
         """
-        return self._return_or_inplace(cpp_is_decimal(self._column))
+        return self._return_or_inplace(cpp_is_decimal(self._column), **kwargs)
 
     def isalnum(self, **kwargs):
         """
@@ -499,7 +678,7 @@ class StringMethods(object):
         Series/Index of bool dtype
 
         """
-        return self._return_or_inplace(cpp_is_alnum(self._column))
+        return self._return_or_inplace(cpp_is_alnum(self._column), **kwargs)
 
     def isalpha(self, **kwargs):
         """
@@ -511,7 +690,7 @@ class StringMethods(object):
         Series/Index of bool dtype
 
         """
-        return self._return_or_inplace(cpp_is_alpha(self._column))
+        return self._return_or_inplace(cpp_is_alpha(self._column), **kwargs)
 
     def isdigit(self, **kwargs):
         """
@@ -523,7 +702,7 @@ class StringMethods(object):
         Series/Index of bool dtype
 
         """
-        return self._return_or_inplace(cpp_is_digit(self._column))
+        return self._return_or_inplace(cpp_is_digit(self._column), **kwargs)
 
     def isnumeric(self, **kwargs):
         """
@@ -536,7 +715,122 @@ class StringMethods(object):
         Series/Index of bool dtype
 
         """
-        return self._return_or_inplace(cpp_is_numeric(self._column))
+        return self._return_or_inplace(cpp_is_numeric(self._column), **kwargs)
+
+    def isupper(self, **kwargs):
+        """
+        Returns a Series/Index of boolean values with True for strings
+        that contain only upper-case characters.
+
+        Returns
+        -------
+        Series/Index of bool dtype
+
+        Notes
+        -----
+        Results are incompatible with standard python string logic. Use caution
+        when operating on data which contains non-alphabetical characters.
+        """
+        warnings.warn(
+            "isupper currently returns False for non-cased characters whereas"
+            + "Pandas returns True, this will be fixed in the near future"
+        )
+
+        return self._return_or_inplace(cpp_is_upper(self._column), **kwargs)
+
+    def islower(self, **kwargs):
+        """
+        Returns a Series/Index of boolean values with True for strings
+        that contain only lower-case characters.
+
+        Returns
+        -------
+        Series/Index of bool dtype
+
+        Notes
+        -----
+        Results are incompatible with standard python string logic. Use caution
+        when operating on data which contains non-alphabetical characters.
+        """
+        warnings.warn(
+            "islower currently returns False for non-cased characters whereas"
+            + "Pandas returns True, this will be fixed in the near future"
+        )
+
+        return self._return_or_inplace(cpp_is_lower(self._column), **kwargs)
+
+    def lower(self, **kwargs):
+        """
+        Convert strings in the Series/Index to lowercase.
+
+        Returns
+        -------
+        Series/Index of str dtype
+            A copy of the object with all strings converted to lowercase.
+
+        """
+        return self._return_or_inplace(cpp_to_lower(self._column), **kwargs)
+
+    def upper(self, **kwargs):
+        """
+        Convert each string to uppercase.
+        This only applies to ASCII characters at this time.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["Hello, friend","Goodbye, friend"])
+        >>> print(s.str.upper())
+        ['HELLO, FRIEND', 'GOODBYE, FRIEND']
+
+        """
+        return self._return_or_inplace(cpp_to_upper(self._column), **kwargs)
+
+    def capitalize(self, **kwargs):
+        """
+        Capitalize first character of each string.
+        This only applies to ASCII characters at this time.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["hello, friend","goodbye, friend"])
+        >>> print(s.str.capitalize())
+        ['Hello, friend", "Goodbye, friend"]
+
+        """
+        return self._return_or_inplace(cpp_capitalize(self._column), **kwargs)
+
+    def swapcase(self, **kwargs):
+        """
+        Change each lowercase character to uppercase and vice versa.
+        This only applies to ASCII characters at this time.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["Hello, Friend","Goodbye, Friend"])
+        >>> print(s.str.swapcase())
+        ['hELLO, fRIEND', 'gOODBYE, fRIEND']
+
+        """
+        return self._return_or_inplace(cpp_swapcase(self._column), **kwargs)
+
+    def title(self, **kwargs):
+        """
+        Uppercase the first letter of each letter after a space
+        and lowercase the rest.
+        This only applies to ASCII characters at this time.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["Hello friend","goodnight moon"])
+        >>> print(s.str.title())
+        ['Hello Friend', 'Goodnight Moon']
+
+        """
+        return self._return_or_inplace(cpp_title(self._column), **kwargs)
 
     def slice_from(self, starts=0, stops=0, **kwargs):
         """
@@ -633,28 +927,24 @@ class StringMethods(object):
             cpp_string_insert(self._column, start, Scalar(repl)), **kwargs
         )
 
-    # def get(self, i=0, **kwargs):
-    #     """
-    #     Returns the character specified in each string as a new string.
-    #     The nvstrings returned contains a list of single character strings.
+    def get(self, i=0, **kwargs):
+        """
+        Extract element from each component at specified position.
 
-    #     Parameters
-    #     ----------
-    #     i : int
-    #         The character position identifying the character
-    #         in each string to return.
+        Parameters
+        ----------
+        i : int
+            Position of element to extract.
 
-    #     Returns
-    #     -------
-    #     Series/Index of str dtype
-    #         A new string series with character at the position
-    #         `i` of each `i` inserted at the specified position.
+        Returns
+        -------
+        Series/Index of str dtype
 
-    #     """
+        """
 
-    #     return self._return_or_inplace(
-    #         cpp_string_get(self._column, i), **kwargs
-    #     )
+        return self._return_or_inplace(
+            cpp_string_get(self._column, i), **kwargs
+        )
 
     def split(self, pat=None, n=-1, expand=True, **kwargs):
         """
@@ -689,9 +979,415 @@ class StringMethods(object):
             n = -1
 
         kwargs.setdefault("expand", expand)
+        if pat is None:
+            pat = " "
+
+        from cudf._libxx.scalar import Scalar
 
         return self._return_or_inplace(
-            self._column.nvstrings.split(delimiter=pat, n=n), **kwargs
+            cpp_split(self._column, Scalar(pat), n), **kwargs
+        )
+
+    def rsplit(self, pat=None, n=-1, expand=True, **kwargs):
+        """
+        Split strings around given separator/delimiter.
+
+        Splits the string in the Series/Index from the end, at the
+        specified delimiter string.
+
+        Parameters
+        ----------
+        pat : str, default ' ' (space)
+            String to split on, does not yet support regular expressions.
+        n : int, default -1 (all)
+            Limit number of splits in output. `None`, 0, and -1 will all be
+            interpreted as "all splits".
+
+        Returns
+        -------
+        DataFrame
+            Returns a DataFrame with each split as a column.
+
+        Notes
+        -----
+        The parameter `expand` is not yet supported and will raise a
+        NotImplementedError if anything other than the default value is set.
+        """
+        if expand is not True:
+            raise NotImplementedError("`expand=False` is not yet supported")
+
+        # Pandas treats 0 as all
+        if n == 0:
+            n = -1
+
+        kwargs.setdefault("expand", expand)
+        if pat is None:
+            pat = " "
+
+        from cudf._libxx.scalar import Scalar
+
+        return self._return_or_inplace(
+            cpp_rsplit(self._column, Scalar(pat), n), **kwargs
+        )
+
+    def partition(self, sep=" ", expand=True, **kwargs):
+        """
+        Split the string at the first occurrence of sep.
+
+        This method splits the string at the first occurrence
+        of sep, and returns 3 elements containing the part
+        before the separator, the separator itself, and the
+        part after the separator. If the separator is not found,
+        return 3 elements containing the string itself, followed
+        by two empty strings.
+
+        Parameters
+        ----------
+        sep : str, default ' ' (whitespace)
+            String to split on.
+
+        Returns
+        -------
+        DataFrame
+            Returns a DataFrame
+
+        Notes
+        -----
+        The parameter `expand` is not yet supported and will raise a
+        NotImplementedError if anything other than the default value is set.
+        """
+        if expand is not True:
+            raise NotImplementedError(
+                "`expand=False` is currently not supported"
+            )
+
+        kwargs.setdefault("expand", expand)
+        if sep is None:
+            sep = " "
+
+        from cudf._libxx.scalar import Scalar
+
+        return self._return_or_inplace(
+            cpp_partition(self._column, Scalar(sep)), **kwargs
+        )
+
+    def rpartition(self, sep=" ", expand=True, **kwargs):
+        """
+        Split the string at the last occurrence of sep.
+
+        This method splits the string at the last occurrence
+        of sep, and returns 3 elements containing the part
+        before the separator, the separator itself, and the
+        part after the separator. If the separator is not
+        found, return 3 elements containing two empty strings,
+        followed by the string itself.
+
+        Parameters
+        ----------
+        sep : str, default ' ' (whitespace)
+            String to split on.
+
+        Returns
+        -------
+        DataFrame
+            Returns a DataFrame
+
+        Notes
+        -----
+        The parameter `expand` is not yet supported and will raise a
+        NotImplementedError if anything other than the default value is set.
+        """
+        if expand is not True:
+            raise NotImplementedError(
+                "`expand=False` is currently not supported"
+            )
+
+        kwargs.setdefault("expand", expand)
+        if sep is None:
+            sep = " "
+
+        from cudf._libxx.scalar import Scalar
+
+        return self._return_or_inplace(
+            cpp_rpartition(self._column, Scalar(sep)), **kwargs
+        )
+
+    def pad(self, width, side="left", fillchar=" ", **kwargs):
+        """
+        Pad strings in the Series/Index up to width.
+
+        Parameters
+        ----------
+        width : int
+            Minimum width of resulting string;
+            additional characters will be filled with
+            character defined in fillchar.
+
+        side : {‘left’, ‘right’, ‘both’}, default ‘left’
+            Side from which to fill resulting string.
+
+        fillchar : str,  default ' ' (whitespace)
+            Additional character for filling, default is whitespace.
+
+        Returns
+        -------
+        Series/Index of str dtype
+            Returns Series or Index with minimum number
+            of char in object.
+
+        """
+        if not isinstance(fillchar, str):
+            msg = (
+                f"fillchar must be a character, not {type(fillchar).__name__}"
+            )
+            raise TypeError(msg)
+
+        if len(fillchar) != 1:
+            raise TypeError("fillchar must be a character, not str")
+
+        if not pd.api.types.is_integer(width):
+            msg = f"width must be of integer type, not {type(width).__name__}"
+            raise TypeError(msg)
+
+        try:
+            side = PadSide[side.upper()]
+        except KeyError:
+            raise ValueError(
+                "side has to be either one of {‘left’, ‘right’, ‘both’}"
+            )
+
+        return self._return_or_inplace(
+            cpp_pad(self._column, width, fillchar, side), **kwargs
+        )
+
+    def zfill(self, width, **kwargs):
+        """
+        Pad strings in the Series/Index by prepending ‘0’ characters.
+
+        Parameters
+        ----------
+        width : int
+            Minimum length of resulting string;
+            strings with length less than width
+            be prepended with ‘0’ characters.
+
+        Returns
+        -------
+        Series/Index of str dtype
+            Returns Series or Index with prepended ‘0’ characters.
+
+        """
+        if not pd.api.types.is_integer(width):
+            msg = f"width must be of integer type, not {type(width).__name__}"
+            raise TypeError(msg)
+
+        return self._return_or_inplace(
+            cpp_zfill(self._column, width), **kwargs
+        )
+
+    def center(self, width, fillchar=" ", **kwargs):
+        """
+        Filling left and right side of strings in the Series/Index with an
+        additional character.
+
+        Parameters
+        ----------
+        width : int
+            Minimum width of resulting string;
+            additional characters will be filled
+            with fillchar.
+
+        fillchar : str, default ' ' (whitespace)
+            Additional character for filling, default is whitespace.
+
+        Returns
+        -------
+        Series/Index of str dtype
+            Returns Series or Index.
+
+        """
+        if not isinstance(fillchar, str):
+            msg = (
+                f"fillchar must be a character, not {type(fillchar).__name__}"
+            )
+            raise TypeError(msg)
+
+        if len(fillchar) != 1:
+            raise TypeError("fillchar must be a character, not str")
+
+        if not pd.api.types.is_integer(width):
+            msg = f"width must be of integer type, not {type(width).__name__}"
+            raise TypeError(msg)
+
+        return self._return_or_inplace(
+            cpp_center(self._column, width, fillchar), **kwargs
+        )
+
+    def ljust(self, width, fillchar=" ", **kwargs):
+        """
+        Filling right side of strings in the Series/Index with an additional
+        character.
+
+        Parameters
+        ----------
+        width : int
+            Minimum width of resulting string;
+            additional characters will be filled
+            with fillchar.
+
+        fillchar : str, default ' ' (whitespace)
+            Additional character for filling, default is whitespace.
+
+        Returns
+        -------
+        Series/Index of str dtype
+            Returns Series or Index.
+
+        """
+        if not isinstance(fillchar, str):
+            msg = (
+                f"fillchar must be a character, not {type(fillchar).__name__}"
+            )
+            raise TypeError(msg)
+
+        if len(fillchar) != 1:
+            raise TypeError("fillchar must be a character, not str")
+
+        if not pd.api.types.is_integer(width):
+            msg = f"width must be of integer type, not {type(width).__name__}"
+            raise TypeError(msg)
+
+        return self._return_or_inplace(
+            cpp_ljust(self._column, width, fillchar), **kwargs
+        )
+
+    def rjust(self, width, fillchar=" ", **kwargs):
+        """
+        Filling left side of strings in the Series/Index with an additional
+        character.
+
+        Parameters
+        ----------
+        width : int
+            Minimum width of resulting string;
+            additional characters will be filled
+            with fillchar.
+
+        fillchar : str, default ' ' (whitespace)
+            Additional character for filling, default is whitespace.
+
+        Returns
+        -------
+        Series/Index of str dtype
+            Returns Series or Index.
+
+        """
+        if not isinstance(fillchar, str):
+            msg = (
+                f"fillchar must be a character, not {type(fillchar).__name__}"
+            )
+            raise TypeError(msg)
+
+        if len(fillchar) != 1:
+            raise TypeError("fillchar must be a character, not str")
+
+        if not pd.api.types.is_integer(width):
+            msg = f"width must be of integer type, not {type(width).__name__}"
+            raise TypeError(msg)
+
+        return self._return_or_inplace(
+            cpp_rjust(self._column, width, fillchar), **kwargs
+        )
+
+    def strip(self, to_strip=None, **kwargs):
+        """
+        Remove leading and trailing characters.
+
+        Strip whitespaces (including newlines) or a set of
+        specified characters from each string in the Series/Index
+        from left and right sides.
+
+        Parameters
+        ----------
+        to_strip : str or None, default None
+            Specifying the set of characters to be removed.
+            All combinations of this set of characters
+            will be stripped. If None then whitespaces are removed.
+
+        Returns
+        -------
+        Series/Index of str dtype
+            Returns Series or Index.
+
+        """
+        if to_strip is None:
+            to_strip = ""
+
+        from cudf._libxx.scalar import Scalar
+
+        return self._return_or_inplace(
+            cpp_strip(self._column, Scalar(to_strip)), **kwargs
+        )
+
+    def lstrip(self, to_strip=None, **kwargs):
+        """
+        Remove leading and trailing characters.
+
+        Strip whitespaces (including newlines)
+        or a set of specified characters from
+        each string in the Series/Index from left side.
+
+        Parameters
+        ----------
+        to_strip : str or None, default None
+            Specifying the set of characters to be removed.
+            All combinations of this set of characters will
+            be stripped. If None then whitespaces are removed.
+
+        Returns
+        -------
+        Series/Index of str dtype
+            Returns Series or Index.
+
+        """
+        if to_strip is None:
+            to_strip = ""
+
+        from cudf._libxx.scalar import Scalar
+
+        return self._return_or_inplace(
+            cpp_lstrip(self._column, Scalar(to_strip)), **kwargs
+        )
+
+    def rstrip(self, to_strip=None, **kwargs):
+        """
+        Remove leading and trailing characters.
+
+        Strip whitespaces (including newlines)
+        or a set of specified characters from each
+        string in the Series/Index from right side.
+
+        Parameters
+        ----------
+        to_strip : str or None, default None
+            Specifying the set of characters to
+            be removed. All combinations of this
+            set of characters will be stripped.
+            If None then whitespaces are removed.
+
+        Returns
+        -------
+        Series/Index of str dtype
+            Returns Series or Index.
+
+        """
+        if to_strip is None:
+            to_strip = ""
+
+        from cudf._libxx.scalar import Scalar
+
+        return self._return_or_inplace(
+            cpp_rstrip(self._column, Scalar(to_strip)), **kwargs
         )
 
     def wrap(self, width, **kwargs):
@@ -777,6 +1473,55 @@ class StringMethods(object):
             )
 
         return self._return_or_inplace(cpp_wrap(self._column, width), **kwargs)
+
+    def count(self, pat, flags=0, **kwargs):
+        """
+        Count occurrences of pattern in each string of the Series/Index.
+
+        This function is used to count the number of times a particular
+        regex pattern is repeated in each of the string elements of the Series.
+
+        Parameters
+        ----------
+        pat : str
+            Valid regular expression.
+
+        Returns
+        -------
+        Series or Index
+
+        """
+        if flags != 0:
+            raise NotImplementedError("`flags` parameter is not yet supported")
+
+        return self._return_or_inplace(
+            cpp_count_re(self._column, pat), **kwargs
+        )
+
+    def findall(self, pat, flags=0, **kwargs):
+        """
+        Find all occurrences of pattern or regular expression in the
+        Series/Index.
+
+        Parameters
+        ----------
+        pat : str
+            Pattern or regular expression.
+
+        Returns
+        -------
+        DataFrame
+            All non-overlapping matches of pattern or
+            regular expression in each string of this Series/Index.
+
+        """
+        if flags != 0:
+            raise NotImplementedError("`flags` parameter is not yet supported")
+
+        kwargs.setdefault("expand", True)
+        return self._return_or_inplace(
+            cpp_findall(self._column, pat), **kwargs
+        )
 
 
 class StringColumn(column.ColumnBase):
@@ -958,6 +1703,7 @@ class StringColumn(column.ColumnBase):
             self._nvcategory = nvc.from_strings(self.nvstrings)
         return self._nvcategory
 
+    # TODO: Remove these once NVStrings is fully deprecated / removed
     @nvcategory.setter
     def nvcategory(self, nvc):
         self._nvcategory = nvc
@@ -970,15 +1716,14 @@ class StringColumn(column.ColumnBase):
 
         super()._set_mask(value)
 
+    # TODO: Remove these once NVStrings is fully deprecated / removed
     @property
     def indices(self):
         if self._indices is None:
-            out_dev_arr = rmm.device_array(
-                self.nvcategory.size(), dtype="int32"
-            )
-            ptr = libcudf.cudf.get_ctype_ptr(out_dev_arr)
+            out_col = column_empty(self.nvcategory.size(), dtype="int32")
+            ptr = out_col.data_ptr
             self.nvcategory.values(devptr=ptr)
-            self._indices = out_dev_arr
+            self._indices = out_col.data_array_view
         return self._indices
 
     @property
@@ -1194,3 +1939,32 @@ def _string_column_binop(lhs, rhs, op):
     _ = libcudf.binops.apply_op(lhs=lhs, rhs=rhs, out=out, op=op)
     nvtx_range_pop()
     return out
+
+
+def _get_cols_list(others):
+    from cudf.core import Series, Index
+    from cudf.core.column import as_column
+
+    if (
+        is_list_like(others)
+        and len(others) > 0
+        and (
+            is_list_like(others[0])
+            or isinstance(others[0], (Series, Index, pd.Series, pd.Index))
+        )
+    ):
+        """
+        If others is a list-like object (in our case lists & tuples)
+        just another Series/Index, great go ahead with concatenation.
+        """
+        cols_list = [as_column(frame, dtype="str") for frame in others]
+        return cols_list
+    elif others is not None:
+        return [as_column(others, dtype="str")]
+    else:
+        raise TypeError(
+            "others must be Series, Index, DataFrame, np.ndarrary "
+            "or list-like (either containing only strings or "
+            "containing only objects of type Series/Index/"
+            "np.ndarray[1-dim])"
+        )
