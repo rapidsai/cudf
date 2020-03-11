@@ -1574,11 +1574,10 @@ class StringMethods(object):
             pattern matches the end of each string element.
 
         """
-        na = kwargs.get("na", None)
-        if na is not None:
+        if "na" in kwargs:
             warnings.warn(
                 "`na` parameter is not yet supported, \
-                as input series is expected to have true strings"
+                as cudf uses native strings instead of Python objects"
             )
 
         from cudf._libxx.scalar import Scalar
@@ -1603,11 +1602,10 @@ class StringMethods(object):
             pattern matches the start of each string element.
 
         """
-        na = kwargs.get("na", None)
-        if na is not None:
+        if "na" in kwargs:
             warnings.warn(
                 "`na` parameter is not yet supported, \
-                as input series is expected to have true strings"
+                as cudf uses native strings instead of Python objects"
             )
 
         from cudf._libxx.scalar import Scalar
@@ -1770,11 +1768,10 @@ class StringMethods(object):
         elif flags != 0:
             raise NotImplementedError("`flags` parameter is not yet supported")
 
-        na = kwargs.get("na", None)
-        if na is not None:
+        if "na" in kwargs:
             warnings.warn(
                 "`na` parameter is not yet supported, \
-                as input series is expected to have true strings"
+                as cudf uses native strings instead of Python objects"
             )
 
         return self._return_or_inplace(
