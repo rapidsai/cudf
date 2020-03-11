@@ -40,7 +40,7 @@ def range_push(object name, object color='GREEN'):
         color = int(color, 16)
     except ValueError:
         color = int(Color[color])
-    
+
     cdef const char* _name = name
     cdef uint32_t _color = color
 
