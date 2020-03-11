@@ -2,7 +2,7 @@
 from libc.stdint cimport uint32_t
 
 cdef extern from "cudf/utilities/nvtx_utils.hpp" namespace "cudf::nvtx" nogil:
-    ctypedef enum color 'cudf::nvtx::color':
+    ctypedef enum color:
         GREEN 'cudf::nvtx::color::GREEN'
         BLUE 'cudf::nvtx::color::BLUE'
         YELLOW 'cudf::nvtx::color::YELLOW'
@@ -19,6 +19,7 @@ cdef extern from "cudf/utilities/nvtx_utils.hpp" namespace "cudf::nvtx" nogil:
     cdef color PARTITION_COLOR 'cudf::nvtx::PARTITION_COLOR'
     cdef color READ_CSV_COLOR 'cudf::nvtx::READ_CSV_COLOR'
 
+cdef extern from "cudf/utilities/nvtx_utils.hpp" namespace "cudf::nvtx" nogil:
     cdef void range_push(
         const char* const name,
         color color
@@ -26,7 +27,7 @@ cdef extern from "cudf/utilities/nvtx_utils.hpp" namespace "cudf::nvtx" nogil:
 
     cdef void range_push_hex(
         const char* const name,
-        color color
+        uint32_t color
     ) except +
 
     cdef void range_pop() except +

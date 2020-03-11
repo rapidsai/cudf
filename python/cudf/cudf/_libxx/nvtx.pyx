@@ -37,14 +37,11 @@ def range_push(object name, object color='GREEN'):
         Can be named color or hex RGB string.
     """
     cdef const char* _name = name
-    cdef color_types _color = Color[color]
+    cdef uint32_t _color = int(Color[color])
 
-    #with nogil:
-    #    cpp_range_push_hex(_name, color_hex)
-    
     with nogil:
-        cpp_range_push(_name, _color)
-    
+        cpp_range_push_hex(_name, _color)
+        
 
 def range_pop():
     """
