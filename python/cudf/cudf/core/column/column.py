@@ -11,7 +11,6 @@ import pyarrow as pa
 from numba import cuda, njit
 
 import nvstrings
-import rmm
 
 import cudf
 import cudf._lib as libcudf
@@ -146,6 +145,16 @@ class ColumnBase(Column):
             return bool(val)
         return self.unordered_compare("eq", other).min()
 
+    def all(self):
+        if self.null_count != 0:
+            return False
+        return bool(libcudfxx.reduce.reduce("all", self, dtype=np.bool_))
+
+    def any(self):
+        if self.valid_count == 0:
+            return False
+        return bool(libcudfxx.reduce.reduce("any", self, dtype=np.bool_))
+
     def __sizeof__(self):
         n = self.data.size
         if self.nullable:
@@ -276,7 +285,7 @@ class ColumnBase(Column):
         return dropped_col
 
     def _get_mask_as_column(self):
-        data = Buffer(cudautils.ones(len(self), dtype=np.bool_))
+        data = Buffer(cupy.ones(len(self), dtype=np.bool_))
         mask = as_column(data=data)
         if self.nullable:
             mask = mask.set_mask(self._mask).fillna(False)
@@ -487,7 +496,7 @@ class ColumnBase(Column):
                     raise ValueError(
                         "Boolean mask must be of same length as column"
                     )
-                key = column.as_column(cudautils.arange(len(self)))[key]
+                key = column.as_column(cupy.arange(len(self)))[key]
             nelem = len(key)
 
         if is_scalar(value):
@@ -1010,15 +1019,17 @@ def build_categorical_column(
     )
 
 
-def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
+def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
     """Create a Column from an arbitrary object
 
     Parameters
     ----------
     arbitrary : object
         Object to construct the Column from. See *Notes*.
-    nan_as_null : bool,optional
-        If True (default), treat NaN values in arbitrary as null.
+    nan_as_null : bool, optional, default None
+        If None (default), treats NaN values in arbitrary as null if there is
+        no mask passed along with it. If True, combines the mask and NaNs to
+        form a new validity mask. If False, leaves NaN values as is.
     dtype : optional
         Optionally typecast the construted Column to the given
         dtype.
@@ -1098,36 +1109,29 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
             raise TypeError(f"dtype cannot be None if 'arbitrary' is a Buffer")
         data = build_column(arbitrary, dtype=dtype)
 
-    elif cuda.devicearray.is_cuda_ndarray(arbitrary):
-        data = as_column(Buffer(arbitrary), dtype=arbitrary.dtype)
-        if (
-            data.dtype in [np.float16, np.float32, np.float64]
-            and arbitrary.size > 0
-        ):
-            if nan_as_null:
-                mask = libcudfxx.transform.nans_to_nulls(data)
-                data = data.set_mask(mask)
-
-        elif data.dtype.kind == "M":
-            null = column_empty_like(data, masked=True, newsize=1)
-            col = libcudfxx.replace.replace(
-                as_column(Buffer(arbitrary), dtype=arbitrary.dtype),
-                as_column(
-                    Buffer(np.array([np.datetime64("NaT")], dtype=data.dtype)),
-                    dtype=arbitrary.dtype,
-                ),
-                null,
-            )
-            data = datetime.DatetimeColumn(
-                data=Buffer(arbitrary), dtype=data.dtype, mask=col.mask
-            )
-
     elif hasattr(arbitrary, "__cuda_array_interface__"):
         desc = arbitrary.__cuda_array_interface__
+        dtype = np.dtype(desc["typestr"])
         data = _data_from_cuda_array_interface_desc(arbitrary)
         mask = _mask_from_cuda_array_interface_desc(arbitrary)
-        dtype = np.dtype(desc["typestr"])
         col = build_column(data, dtype=dtype, mask=mask)
+        if np.issubdtype(col.dtype, np.floating):
+            if nan_as_null or (mask is None and nan_as_null is None):
+                mask = libcudfxx.transform.nans_to_nulls(col.fillna(np.nan))
+                col = col.set_mask(mask)
+        elif np.issubdtype(col.dtype, np.datetime64):
+            if nan_as_null or (mask is None and nan_as_null is None):
+                null = column_empty_like(col, masked=True, newsize=1)
+                col = libcudfxx.replace.replace(
+                    col,
+                    as_column(
+                        Buffer(
+                            np.array([np.datetime64("NaT")], dtype=col.dtype)
+                        ),
+                        dtype=col.dtype,
+                    ),
+                    null,
+                )
         return col
 
     elif isinstance(arbitrary, np.ndarray):
@@ -1142,9 +1146,11 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
             data = datetime.DatetimeColumn.from_numpy(arbitrary)
 
         elif arbitrary.dtype.kind in ("O", "U"):
-            data = as_column(pa.Array.from_pandas(arbitrary))
+            data = as_column(
+                pa.Array.from_pandas(arbitrary), dtype=arbitrary.dtype
+            )
         else:
-            data = as_column(rmm.to_device(arbitrary), nan_as_null=nan_as_null)
+            data = as_column(cupy.asarray(arbitrary), nan_as_null=nan_as_null)
 
     elif isinstance(arbitrary, pa.Array):
         if isinstance(arbitrary, pa.StringArray):
@@ -1286,9 +1292,15 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
             data = as_column(pa.array(arbitrary, from_pandas=True))
         elif arbitrary.dtype == np.bool:
             # Bug in PyArrow or HDF that requires us to do this
-            data = as_column(pa.array(np.asarray(arbitrary), from_pandas=True))
+            data = as_column(
+                pa.array(np.asarray(arbitrary), from_pandas=True),
+                dtype=arbitrary.dtype,
+            )
         else:
-            data = as_column(pa.array(arbitrary, from_pandas=nan_as_null))
+            data = as_column(
+                pa.array(arbitrary, from_pandas=nan_as_null),
+                dtype=arbitrary.dtype,
+            )
 
     elif isinstance(arbitrary, pd.Timestamp):
         # This will always treat NaTs as nulls since it's not technically a
@@ -1301,7 +1313,10 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
             utils.scalar_broadcast_to(arbitrary, length, dtype=dtype)
         )
         if not nan_as_null:
-            data = data.fillna(np.nan)
+            if np.issubdtype(data.dtype, np.floating):
+                data = data.fillna(np.nan)
+            elif np.issubdtype(data.dtype, np.datetime64):
+                data = data.fillna(np.datetime64("NaT"))
 
     elif isinstance(arbitrary, memoryview):
         data = as_column(
@@ -1361,10 +1376,10 @@ def column_applymap(udf, column, out_dtype):
 
     Returns
     -------
-    result : rmm.device_array
+    result : Column
     """
     core = njit(udf)
-    results = rmm.device_array(shape=len(column), dtype=out_dtype)
+    results = column_empty(len(column), dtype=out_dtype)
     values = column.data_array_view
     if column.nullable:
         # For masked columns
@@ -1398,7 +1413,7 @@ def column_applymap(udf, column, out_dtype):
 def _data_from_cuda_array_interface_desc(obj):
     desc = obj.__cuda_array_interface__
     ptr = desc["data"][0]
-    nelem = desc["shape"][0]
+    nelem = desc["shape"][0] if len(desc["shape"]) > 0 else 1
     dtype = np.dtype(desc["typestr"])
 
     data = Buffer(data=ptr, size=nelem * dtype.itemsize, owner=obj)

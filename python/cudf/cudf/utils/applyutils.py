@@ -2,13 +2,14 @@
 
 import functools
 
+import cupy
 from numba import cuda, six
 from numba.utils import exec_, pysignature
 
 import cudf._lib as libcudf
 from cudf.core.column import column
 from cudf.core.series import Series
-from cudf.utils import cudautils, utils
+from cudf.utils import utils
 from cudf.utils.docutils import docfmt_partial
 
 _doc_applyparams = """
@@ -206,7 +207,7 @@ class ApplyChunksCompiler(ApplyKernelCompilerBase):
     def normalize_chunks(self, size, chunks):
         if isinstance(chunks, six.integer_types):
             # *chunks* is the chunksize
-            return cudautils.arange(0, size, chunks)
+            return cupy.arange(0, size, chunks)
         else:
             # *chunks* is an array of chunk leading offset
             chunks = column.as_column(chunks)
