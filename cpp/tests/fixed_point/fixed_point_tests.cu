@@ -409,9 +409,8 @@ TEST_F(FixedPointTest, DecimalXXThrustOnDevice) {
 
     EXPECT_EQ(static_cast<int32_t>(sum), 1000);
 
-    // thrust::sequence doesn't work on device without modifying fixed_point
-    // thrust::inclusive_scan and thrust::adjacent_difference (map algorithms
-    // requiring accumulators) don't work on device either
+    // TODO: Once nvbugs/1990211 is fixed (ExclusiveSum initial_value = 0 bug)
+    //       change inclusive scan to run on device (avoid copying to host)
     thrust::host_vector<decimal32> vec1_host = vec1;
 
     thrust::inclusive_scan(
