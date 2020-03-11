@@ -685,7 +685,14 @@ def test_merge_sort(ons, hows):
     # require the join keys themselves to be sorted correctly
     # the non-key columns will NOT match pandas ordering 
     assert_eq(pd_merge[kwargs['on']], gd_merge[kwargs['on']])
+    pd_merge = pd_merge.drop(kwargs['on'], axis=1)
+    gd_merge = gd_merge.drop(kwargs['on'])
+    if not pd_merge.empty:
+        # check to make sure the non join key columns are the same
+        pd_merge = pd_merge.sort_values(list(pd_merge.columns)).reset_index(drop=True)
+        gd_merge = gd_merge.sort_values(list(gd_merge.columns)).reset_index(drop=True)
 
+    assert_eq(pd_merge, gd_merge)
 
 @pytest.mark.parametrize(
     "dtype",
