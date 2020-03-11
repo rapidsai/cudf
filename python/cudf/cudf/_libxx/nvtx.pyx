@@ -9,7 +9,6 @@ from cudf._libxx.cpp.nvtx cimport (
     color as color_types
 )
 
-from cudf._libxx.move cimport move
 cimport cudf._libxx.nvtx as underlying_type_t_color
 
 
@@ -24,7 +23,8 @@ class Color(IntEnum):
     DARK_GREEN = <underlying_type_t_color> color_types.DARK_GREEN
     ORANGE = <underlying_type_t_color> color_types.ORANGE
 
-def range_push(object name, color='GREEN'):
+
+def range_push(object name, object color='GREEN'):
     """
     Demarcate the beginning of a user-defined NVTX range.
 
@@ -37,17 +37,14 @@ def range_push(object name, color='GREEN'):
         Can be named color or hex RGB string.
     """
     cdef const char* _name = name
-    cdef color_types color_hex = color_types.GREEN
-    # cdef color_types _color = _c
+    cdef color_types _color = Color[color]
 
-    #try:
     #with nogil:
     #    cpp_range_push_hex(_name, color_hex)
-    #except ValueError:
+    
     with nogil:
-        cpp_range_push(_name, color_hex)
-    pass
-
+        cpp_range_push(_name, _color)
+    
 
 def range_pop():
     """
@@ -55,4 +52,3 @@ def range_pop():
     """
     with nogil:
         cpp_range_pop()
-    pass

@@ -27,5 +27,6 @@ cdef extern from "cudf/utilities/nvtx_utils.hpp" namespace "cudf::nvtx" nogil:
     cdef void range_push_hex(
         const char* const name,
         color color
+    ) except +
 
     cdef void range_pop() except +
