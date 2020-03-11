@@ -23,7 +23,7 @@ try:
     def cuda_serialize_cudf_object(x):
         with log_errors():
             header, frames = x.serialize()
-            assert all(isinstance(f, cudf.core.buffer.Buffer) for f in frames)
+            assert all((type(f) is cudf.core.buffer.Buffer) for f in frames)
             return header, frames
 
     # all (de-)serializtion are attached to cudf Objects:
