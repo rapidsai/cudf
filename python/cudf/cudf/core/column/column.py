@@ -27,7 +27,12 @@ from cudf.core._sort import get_sorted_inds
 from cudf.core.buffer import Buffer
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils import cudautils, ioutils, utils
-from cudf.utils.dtypes import is_categorical_dtype, is_scalar, np_to_pa_dtype
+from cudf.utils.dtypes import (
+    is_categorical_dtype,
+    is_scalar,
+    is_string_dtype,
+    np_to_pa_dtype,
+)
 from cudf.utils.utils import buffers_from_pyarrow, mask_dtype
 
 
@@ -323,6 +328,27 @@ class ColumnBase(Column):
 
     def shift(self, offset, fill_value):
         return libcudfxx.copying.shift(self, offset, fill_value)
+
+    def fill(self, fill_value, begin=0, end=-1, inplace=False):
+        if not inplace:
+            return libcudfxx.copying.fill(self, fill_value, begin, end)
+
+        fixed_width = True
+
+        if is_categorical_dtype(self.dtype):
+            fixed_width = False
+
+        if is_string_dtype(self.dtype):
+            fixed_width = False
+
+        if fixed_width:
+            return libcudfxx.copying.fill_in_place(
+                self, fill_value, begin, end
+            )
+
+        return self._mimic_inplace(
+            libcudfxx.copying.fill(self, fill_value, begin, end), inplace=True
+        )
 
     @property
     def valid_count(self):
