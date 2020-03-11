@@ -15,6 +15,10 @@ import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
 import cudf._libxx.string_casting as str_cast
 from cudf._lib.nvtx import nvtx_range_pop, nvtx_range_push
+from cudf._libxx.strings.attributes import (
+    code_points as cpp_code_points,
+    count_characters as cpp_count_characters,
+)
 from cudf._libxx.strings.capitalize import (
     capitalize as cpp_capitalize,
     title as cpp_title,
@@ -38,6 +42,10 @@ from cudf._libxx.strings.contains import (
     contains_re as cpp_contains_re,
     count_re as cpp_count_re,
     match_re as cpp_match_re,
+)
+from cudf._libxx.strings.convert.convert_urls import (
+    url_decode as cpp_url_decode,
+    url_encode as cpp_url_encode,
 )
 from cudf._libxx.strings.extract import extract as cpp_extract
 from cudf._libxx.strings.find import (
@@ -85,6 +93,7 @@ from cudf._libxx.strings.substring import (
     slice_from as cpp_slice_from,
     slice_strings as cpp_slice_strings,
 )
+from cudf._libxx.strings.translate import translate as cpp_translate
 from cudf._libxx.strings.wrap import wrap as cpp_wrap
 from cudf.core.buffer import Buffer
 from cudf.core.column import column, column_empty
@@ -214,17 +223,8 @@ class StringMethods(object):
             indicating the length of each element in the Series or Index.
         """
 
-        out_col = column_empty(len(self._column), dtype="int32")
-        ptr = out_col.data_ptr
-        self._column.nvstrings.len(ptr)
-
-        mask = None
-        if self._column.has_nulls:
-            mask = self._column.mask
-
         return self._return_or_inplace(
-            column.build_column(out_col.data, np.dtype("int32"), mask=mask),
-            **kwargs,
+            cpp_count_characters(self._column), **kwargs,
         )
 
     # TODO, PREM: Uncomment in future PR
@@ -1771,6 +1771,22 @@ class StringMethods(object):
 
         return self._return_or_inplace(
             cpp_match_re(self._column, pat), **kwargs
+        )
+
+    def url_decode(self, **kwargs):
+        return self._return_or_inplace(cpp_url_decode(self._column), **kwargs)
+
+    def url_encode(self, **kwargs):
+        return self._return_or_inplace(cpp_url_encode(self._column), **kwargs)
+
+    def code_points(self, **kwargs):
+        from cudf.core.series import Series
+
+        return Series(cpp_code_points(self._column),)
+
+    def translate(self, table, **kwargs):
+        return self._return_or_inplace(
+            cpp_translate(self._column, table), **kwargs
         )
 
 
