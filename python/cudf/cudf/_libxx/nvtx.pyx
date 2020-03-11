@@ -2,29 +2,29 @@
 
 from enum import IntEnum
 from libc.stdint cimport uint32_t
-
 from cudf._libxx.cpp.nvtx cimport (
     range_push as cpp_range_push,
     range_push_hex as cpp_range_push_hex,
     range_pop as cpp_range_pop,
-
-    color_type,
-    underlying_type_t_color
-
+    color as color_types
 )
 
-class Color(IntEnum):
-    GREEN = <underlying_type_t_color> color_type.GREEN
-    BLUE = <underlying_type_t_color> color_type.BLUE
-    YELLOW = <underlying_type_t_color> color_type.YELLOW
-    PURPLE = <underlying_type_t_color> color_type.PURPLE
-    CYAN = <underlying_type_t_color> color_type.CYAN
-    RED = <underlying_type_t_color> color_type.RED
-    WHITE = <underlying_type_t_color> color_type.WHITE
-    DARK_GREEN = <underlying_type_t_color> color_type.DARK_GREEN
-    ORANGE = <underlying_type_t_color> color_type.ORANGE
+from cudf._libxx.move cimport move
+cimport cudf._libxx.nvtx as underlying_type_t_color
 
-def range_push(object name, object color='green'):
+
+class Color(IntEnum):
+    GREEN = <underlying_type_t_color> color_types.GREEN
+    BLUE = <underlying_type_t_color> color_types.BLUE
+    YELLOW = <underlying_type_t_color> color_types.YELLOW
+    PURPLE = <underlying_type_t_color> color_types.PURPLE
+    CYAN = <underlying_type_t_color> color_types.CYAN
+    RED = <underlying_type_t_color> color_types.RED
+    WHITE = <underlying_type_t_color> color_types.WHITE
+    DARK_GREEN = <underlying_type_t_color> color_types.DARK_GREEN
+    ORANGE = <underlying_type_t_color> color_types.ORANGE
+
+def range_push(object name, color='GREEN'):
     """
     Demarcate the beginning of a user-defined NVTX range.
 
@@ -37,15 +37,16 @@ def range_push(object name, object color='green'):
         Can be named color or hex RGB string.
     """
     cdef const char* _name = name
-    cdef uint32_t _color = color
-    cdef color_type _Color = Color[color]
-    try:
-        _color = int(_color, 16)
-        with nogil:
-            cpp_range_push_hex(_name, _color)
-    except ValueError:
-        with nogil:
-            cpp_range_push(_name, _Color)
+    cdef color_types color_hex = color_types.GREEN
+    # cdef color_types _color = _c
+
+    #try:
+    #with nogil:
+    #    cpp_range_push_hex(_name, color_hex)
+    #except ValueError:
+    with nogil:
+        cpp_range_push(_name, color_hex)
+    pass
 
 
 def range_pop():
@@ -54,3 +55,4 @@ def range_pop():
     """
     with nogil:
         cpp_range_pop()
+    pass
