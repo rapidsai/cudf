@@ -43,7 +43,7 @@ def range_push(object name, object color='GREEN'):
     
     cdef const char* _name = name
     cdef uint32_t _color = color
-    
+
     with nogil:
         cpp_range_push_hex(_name, _color)
 
