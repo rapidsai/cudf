@@ -6,24 +6,24 @@ from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from cudf._libxx.cpp.column.column cimport column
 from cudf._libxx.cpp.scalar.scalar cimport string_scalar
+from cudf._libxx.cpp.table.table cimport table
 from libcpp.string cimport string
-from libc.stdint cimport int32_t
+from libcpp.vector cimport vector
 
+cdef extern from "cudf/strings/replace_re.hpp" namespace "cudf::strings" nogil:
 
-cdef extern from "cudf/strings/replace.hpp" namespace "cudf::strings" nogil:
-    cdef unique_ptr[column] replace_slice(
+    cdef unique_ptr[column] replace_re(
         column_view source_strings,
+        string pattern,
         string_scalar repl,
-        size_type start,
-        size_type stop) except +
+        size_type maxrepl) except +
 
-    cdef unique_ptr[column] replace(
+    cdef unique_ptr[column] replace_with_backrefs(
         column_view source_strings,
-        string_scalar target,
-        string_scalar repl,
-        int32_t maxrepl) except +
+        string pattern,
+        string repl) except +
 
-    cdef unique_ptr[column] replace(
+    cdef unique_ptr[column] replace_re(
         column_view source_strings,
-        column_view target_strings,
-        column_view repl_strings) except +
+        vector[string] patterns,
+        column_view repls) except +

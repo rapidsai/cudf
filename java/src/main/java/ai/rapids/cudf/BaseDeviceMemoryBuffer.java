@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -44,6 +44,24 @@ public class BaseDeviceMemoryBuffer extends MemoryBuffer {
   }
 
   /**
+   * Copy a subset of src to this buffer starting at destOffset using the specified CUDA stream.
+   * The copy has completed when this returns, but the memory copy could overlap with
+   * operations occurring on other streams.
+   * @param destOffset the offset in this to start copying from.
+   * @param src what to copy from
+   * @param srcOffset offset into src to start out
+   * @param length how many bytes to copy
+   * @param stream CUDA stream to use
+   */
+  public final void copyFromHostBuffer(long destOffset, HostMemoryBuffer src,
+      long srcOffset, long length, Cuda.Stream stream) {
+    addressOutOfBoundsCheck(address + destOffset, length, "copy range dest");
+    src.addressOutOfBoundsCheck(src.address + srcOffset, length, "copy range src");
+    Cuda.memcpy(address + destOffset, src.address + srcOffset, length,
+        CudaMemcpyKind.HOST_TO_DEVICE, stream);
+  }
+
+  /**
    * Copy a subset of src to this buffer starting at the beginning of this.
    * @param src what to copy from
    * @param srcOffset offset into src to start out
@@ -59,6 +77,17 @@ public class BaseDeviceMemoryBuffer extends MemoryBuffer {
    */
   public final void copyFromHostBuffer(HostMemoryBuffer src) {
     copyFromHostBuffer(0, src, 0, src.length);
+  }
+
+  /**
+   * Copy entire host buffer starting at the beginning of this buffer using a CUDA stream.
+   * The copy has completed when this returns, but the memory copy could overlap with
+   * operations occurring on other streams.
+   * @param src host buffer to copy from
+   * @param stream CUDA stream to use
+   */
+  public final void copyFromHostBuffer(HostMemoryBuffer src, Cuda.Stream stream) {
+    copyFromHostBuffer(0, src, 0, src.length, stream);
   }
 
   /**
