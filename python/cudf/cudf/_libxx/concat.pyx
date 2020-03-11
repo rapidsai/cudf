@@ -1,5 +1,6 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2020, NVIDIA CORPORATION.
 
+from libcpp cimport bool
 from libcpp.memory cimport unique_ptr, make_unique
 from libcpp.vector cimport vector
 
@@ -14,12 +15,17 @@ from cudf._libxx.cpp.table.table cimport table, table_view
 from cudf._libxx.column cimport Column
 from cudf._libxx.table cimport Table
 from cudf._libxx.move cimport move
+from cudf._libxx.utils cimport (
+    make_column_views,
+    make_table_views,
+    make_table_data_views
+)
 
 from cudf.core.buffer import Buffer
 
 from rmm._lib.device_buffer cimport device_buffer, DeviceBuffer
 
-cpdef concat_masks(columns):
+cpdef concat_masks(object columns):
     cdef device_buffer c_result
     cdef unique_ptr[device_buffer] c_unique_result
     cdef vector[column_view] c_views = make_column_views(columns)
@@ -29,7 +35,7 @@ cpdef concat_masks(columns):
     return Buffer(DeviceBuffer.c_from_unique_ptr(move(c_unique_result)))
 
 
-cpdef concat_columns(columns):
+cpdef concat_columns(object columns):
     cdef unique_ptr[column] c_result
     cdef vector[column_view] c_views = make_column_views(columns)
     with nogil:
@@ -37,28 +43,17 @@ cpdef concat_columns(columns):
     return Column.from_unique_ptr(move(c_result))
 
 
-cpdef concat_tables(tables):
+cpdef concat_tables(object tables, bool ignore_index=False):
     cdef unique_ptr[table] c_result
-    cdef vector[table_view] c_views = make_table_views(tables)
+    cdef vector[table_view] c_views
+    if ignore_index == False:
+        c_views = make_table_views(tables)
+    else:
+        c_views = make_table_data_views(tables)
     with nogil:
         c_result = move(libcudf_concatenate_tables(c_views))
     return Table.from_unique_ptr(
         move(c_result),
-        column_names=tables[0]._column_names
+        column_names=tables[0]._column_names,
+        index_names=None if ignore_index else tables[0]._index_names
     )
-
-
-cdef vector[column_view] make_column_views(columns):
-    cdef vector[column_view] views
-    views.reserve(len(columns))
-    for col in columns:
-        views.push_back((<Column> col).view())
-    return views
-
-
-cdef vector[table_view] make_table_views(tables):
-    cdef vector[table_view] views
-    views.reserve(len(tables))
-    for tbl in tables:
-        views.push_back((<Table> tbl).data_view())
-    return views
