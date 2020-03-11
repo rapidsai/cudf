@@ -104,13 +104,13 @@ struct column_scatterer_impl<dictionary32, MapIterator>
 
     // first combine keys so both dictionaries have the same set
     auto target_matched = dictionary::detail::add_keys(target,source.keys(),mr,stream);
-    auto target_view = dictionary_column_view(target_matched->view());
+    auto const target_view = dictionary_column_view(target_matched->view());
     auto source_matched = dictionary::detail::set_keys(source,target_view.keys(),mr,stream);
-    auto source_view = dictionary_column_view(source_matched->view());
+    auto const source_view = dictionary_column_view(source_matched->view());
 
     // now build the new indices by doing a scatter on just the matched indices
-    column_view const source_indices = dictionary_column_view(source_matched->view()).get_indices_annotated();
-    column_view const target_indices = dictionary_column_view(target_matched->view()).get_indices_annotated();
+    column_view const source_indices = source_view.get_indices_annotated();
+    column_view const target_indices = target_view.get_indices_annotated();
     column_scatterer_impl<int32_t,MapIterator> index_scatterer;
     auto new_indices = index_scatterer( source_indices, scatter_map_begin, scatter_map_end, target_indices, mr, stream);
     auto const output_size = new_indices->size();       // record these
