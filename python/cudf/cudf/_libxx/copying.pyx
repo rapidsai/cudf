@@ -244,7 +244,7 @@ def scatter(object input, object scatter_map, Table target,
 
 
 def scatter_to_tables(Table source_table, Column partition_map,
-                      bool keep_index):
+                      bool keep_index=True):
     """
     Scatter the source_table to a set of tables as per the partition_map
     """

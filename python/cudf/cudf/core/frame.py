@@ -352,7 +352,7 @@ class Frame(libcudfxx.table.Table):
             result.index = self.index
             return result
 
-    def _scatter_to_tables(self, scatter_map, keep_index):
+    def _scatter_to_tables(self, scatter_map, keep_index=True):
         """
        scatter the dataframe/table to a list of dataframes/tables
        as per scatter_map
