@@ -615,7 +615,7 @@ class Series(Frame):
             # e.g. for fn = 'and', _apply_op equivalent is '__and__'
             return other._apply_op(self, fn)
 
-        libcudf.nvtx.nvtx_range_push("CUDF_BINARY_OP", "orange")
+        libcudfxx.nvtx.range_push("CUDF_BINARY_OP", "ORANGE")
         result_name = utils.get_result_name(self, other)
         if isinstance(other, Series):
             lhs, rhs = _align_indices([self, other], allow_non_unique=True)
@@ -624,7 +624,7 @@ class Series(Frame):
         rhs = self._normalize_binop_value(rhs)
         outcol = lhs._column.binary_operator(fn, rhs, reflect=reflect)
         result = lhs._copy_construct(data=outcol, name=result_name)
-        libcudf.nvtx.nvtx_range_pop()
+        libcudfxx.nvtx.range_pop()
         return result
 
     def _rbinaryop(self, other, fn):
@@ -994,21 +994,23 @@ class Series(Frame):
             return self._column.normalize_binop_value(other)
 
     def _unordered_compare(self, other, cmpops):
-        libcudf.nvtx.nvtx_range_push("CUDF_UNORDERED_COMP", "orange")
+        libcudfxx.nvtx.range_push("CUDF_UNORDERED_COMP", "ORANGE")
         result_name = utils.get_result_name(self, other)
         other = self._normalize_binop_value(other)
         outcol = self._column.unordered_compare(cmpops, other)
         result = self._copy_construct(data=outcol, name=result_name)
-        libcudf.nvtx.nvtx_range_pop()
+        libcudfxx.nvtx.range_pop()
         return result
 
     def _ordered_compare(self, other, cmpops):
-        libcudf.nvtx.nvtx_range_push("CUDF_ORDERED_COMP", "orange")
+        libcudfxx.nvtx.range_push("CUDF_ORDERED_COMP", "ORANGE")
         result_name = utils.get_result_name(self, other)
         other = self._normalize_binop_value(other)
         outcol = self._column.ordered_compare(cmpops, other)
         result = self._copy_construct(data=outcol, name=result_name)
-        libcudf.nvtx.nvtx_range_pop()
+        
+        
+        
         return result
 
     def eq(self, other, fill_value=None, axis=0):

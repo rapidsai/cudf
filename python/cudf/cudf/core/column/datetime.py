@@ -264,9 +264,9 @@ class DatetimeColumn(column.ColumnBase):
 
 
 def binop(lhs, rhs, op, out_dtype):
-    libcudf.nvtx.nvtx_range_push("CUDF_BINARY_OP", "orange")
+    libcudfxx.nvtx.range_push("CUDF_BINARY_OP", "ORANGE")
     masked = lhs.nullable or rhs.nullable
     out = column.column_empty_like(lhs, dtype=out_dtype, masked=masked)
     _ = libcudf.binops.apply_op(lhs, rhs, out, op)
-    libcudf.nvtx.nvtx_range_pop()
+    libcudfxx.nvtx.range_pop()
     return out

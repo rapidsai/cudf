@@ -1854,7 +1854,7 @@ class DataFrame(Frame):
     @classmethod
     def _concat(cls, objs, axis=0, ignore_index=False):
 
-        libcudf.nvtx.nvtx_range_push("CUDF_CONCAT", "orange")
+        libcudfxx.nvtx.range_push("CUDF_CONCAT", "ORANGE")
 
         if ignore_index:
             index = RangeIndex(sum(map(len, objs)))
@@ -1892,7 +1892,7 @@ class DataFrame(Frame):
         else:
             out.columns = unique_columns_ordered_ls
 
-        libcudf.nvtx.nvtx_range_pop()
+        libcudfxx.nvtx.range_pop()
         return out
 
     def as_gpu_matrix(self, columns=None, order="F"):
@@ -2295,7 +2295,7 @@ class DataFrame(Frame):
         4    3    13.0
         2    4    14.0    12.0
         """
-        libcudf.nvtx.nvtx_range_push("CUDF_JOIN", "blue")
+        libcudfxx.nvtx.range_push("CUDF_JOIN", "BLUE")
         if indicator:
             raise NotImplementedError(
                 "Only indicator=False is currently supported"
@@ -2375,7 +2375,7 @@ class DataFrame(Frame):
         - *on* is not supported yet due to lack of multi-index support.
         """
 
-        libcudf.nvtx.nvtx_range_push("CUDF_JOIN", "blue")
+        libcudfxx.nvtx.range_push("CUDF_JOIN", "BLUE")
 
         # Outer joins still use the old implementation
         if type != "":
@@ -2576,7 +2576,7 @@ class DataFrame(Frame):
 
             # The corresponding pop() is in
             # DataFrameGroupBy._apply_aggregation()
-            libcudf.nvtx.nvtx_range_push("CUDF_GROUPBY", "purple")
+            libcudfxx.nvtx.range_push("CUDF_GROUPBY", "PURPLE")
 
             result = DataFrameGroupBy(
                 self,
@@ -2674,7 +2674,7 @@ class DataFrame(Frame):
                 )
             )
 
-        libcudf.nvtx.nvtx_range_push("CUDF_QUERY", "purple")
+        libcudfxx.nvtx.range_push("CUDF_QUERY", "PURPLE")
         # Get calling environment
         callframe = inspect.currentframe().f_back
         callenv = {
@@ -2691,7 +2691,7 @@ class DataFrame(Frame):
             newseries = self[col][selected]
             newdf[col] = newseries
         result = newdf
-        libcudf.nvtx.nvtx_range_pop()
+        libcudfxx.nvtx.range_pop()
         return result
 
     @applyutils.doc_apply()

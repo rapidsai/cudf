@@ -14,7 +14,10 @@ import nvstrings
 import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
 import cudf._libxx.string_casting as str_cast
-from cudf._lib.nvtx import nvtx_range_pop, nvtx_range_push
+from cudf._libxx.nvtx import (
+    range_push as nvtx_range_push, 
+    range_pop as nvtx_range_pop
+)
 from cudf._libxx.strings.capitalize import (
     capitalize as cpp_capitalize,
     title as cpp_title,
@@ -1931,7 +1934,7 @@ class StringColumn(column.ColumnBase):
 
 
 def _string_column_binop(lhs, rhs, op):
-    nvtx_range_push("CUDF_BINARY_OP", "orange")
+    nvtx_range_push("CUDF_BINARY_OP", "ORANGE")
     # Allocate output
     masked = lhs.nullable or rhs.nullable
     out = column.column_empty_like(lhs, dtype="bool", masked=masked)

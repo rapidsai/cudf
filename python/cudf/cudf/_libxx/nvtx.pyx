@@ -2,6 +2,7 @@
 
 from enum import IntEnum
 from libc.stdint cimport uint32_t
+from libcpp.string cimport string
 from cudf._libxx.cpp.nvtx cimport (
     range_push as cpp_range_push,
     range_push_hex as cpp_range_push_hex,
@@ -41,7 +42,7 @@ def range_push(object name, object color='GREEN'):
     except ValueError:
         color = int(Color[color])
 
-    cdef const char* _name = name
+    cdef const char* _name = <bytes> name
     cdef uint32_t _color = color
 
     with nogil:
