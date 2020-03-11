@@ -41,7 +41,7 @@ def range_push(object name, object color='GREEN'):
 
     with nogil:
         cpp_range_push_hex(_name, _color)
-        
+
 
 def range_pop():
     """
