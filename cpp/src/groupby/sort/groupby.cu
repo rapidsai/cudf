@@ -186,6 +186,20 @@ void store_result_functor::operator()<aggregation::MAX>(
 };
 
 template <>
+void store_result_functor::operator()<aggregation::ARGMAX>(
+  std::unique_ptr<aggregation> const& agg)
+{
+  if (cache.has_result(col_idx, agg))
+    return;
+
+  cache.add_result(col_idx, agg, 
+    detail::group_argmax(get_grouped_values(), helper.num_groups(), 
+                         helper.group_labels(),
+                         helper.key_sort_order(),
+                         mr, stream));
+};
+
+template <>
 void store_result_functor::operator()<aggregation::MEAN>(
   std::unique_ptr<aggregation> const& agg)
 {

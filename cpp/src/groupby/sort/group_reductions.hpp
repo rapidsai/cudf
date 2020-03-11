@@ -77,6 +77,24 @@ std::unique_ptr<column> group_max(
     cudaStream_t stream = 0);
 
 /**
+ * @brief Internal API to calculate groupwise maximum value's index
+ * 
+ * @param values Ungrouped values to get maximum value's index from
+ * @param num_groups Number of groups
+ * @param group_labels ID of group that the corresponding value belongs to
+ * @param key_sort_order Indices indicating sort order of groupby keys
+ * @param mr Memory resource to allocate output with
+ * @param stream Stream to perform computation in
+ */
+std::unique_ptr<column> group_argmax(
+    column_view const& values,
+    size_type num_groups,
+    rmm::device_vector<size_type> const& group_labels,
+    column_view const& key_sort_order,
+    rmm::mr::device_memory_resource* mr,
+    cudaStream_t stream = 0);
+
+/**
  * @brief Internal API to calculate number of non-null values in each group of
  *  @p values
  * 

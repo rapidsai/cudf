@@ -39,10 +39,11 @@ struct reduce_functor {
 
   template <typename T>
   static constexpr bool is_supported(){
-    if (cudf::is_numeric<T>())
-      return true;
-    else if (cudf::is_timestamp<T>() and 
-              (k == aggregation::MIN or k == aggregation::MAX))
+    if (k == aggregation::SUM)
+      return cudf::is_numeric<T>();
+    else if (k == aggregation::MIN or k == aggregation::MAX)
+      return cudf::is_fixed_width<T>();
+    else if (k == aggregation::ARGMIN or k == aggregation::ARGMAX)
       return true;
     else
       return false;
@@ -61,9 +62,9 @@ struct reduce_functor {
 
     std::unique_ptr<column> result = make_fixed_width_column(
       data_type(type_to_id<ResultType>()), 
-                                       num_groups,
+      num_groups,
       values.has_nulls() ? mask_state::ALL_NULL : mask_state::UNALLOCATED,
-                                       stream, mr);
+      stream, mr);
 
     if (values.size() == 0) {
       return result;
