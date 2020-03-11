@@ -382,6 +382,35 @@ def test_repartition_simple_divisions(start, stop):
     dd.utils.assert_eq(a, b)
 
 
+def test_repartition_hash_staged():
+    by = ["b"]
+    datarange = 350
+    size = 1_000
+    gdf = cudf.DataFrame(
+        {
+            "a": np.arange(size, dtype="int64"),
+            "b": np.random.randint(datarange, size=size),
+        }
+    )
+    ddf = dgd.from_cudf(gdf, npartitions=35)
+    ddf_new = ddf.repartition(columns=by, max_branch=32)
+
+    # Check that the length was preserved
+    assert len(ddf_new) == len(ddf)
+
+    # Check that the partitions have unique keys,
+    # and that the key values are preserved
+    expect_unique = gdf[by].drop_duplicates().sort_values(by)
+    got_unique = cudf.concat(
+        [
+            part[by].compute().drop_duplicates()
+            for part in ddf_new[by].partitions
+        ],
+        ignore_index=True,
+    ).sort_values(by)
+    dd.assert_eq(got_unique, expect_unique, check_index=False)
+
+
 @pytest.mark.parametrize("by", [["b"], ["c"], ["d"], ["b", "c"]])
 @pytest.mark.parametrize("npartitions", [4, 5])
 def test_repartition_hash(by, npartitions):
