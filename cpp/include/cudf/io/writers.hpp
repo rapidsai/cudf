@@ -160,12 +160,12 @@ class writer {
   /**
    * @brief Constructor for output to a file.
    *
-   * @param sinkp The data sink to write the data to
+   * @param sink The data sink to write the data to
    * @param options Settings for controlling writing behavior
    * @param mr Optional resource to use for device memory allocation
    */
   explicit writer(
-        std::unique_ptr<cudf::io::data_sink> sinkp, writer_options const& options,
+        std::unique_ptr<cudf::io::data_sink> sink, writer_options const& options,
         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
   /**
