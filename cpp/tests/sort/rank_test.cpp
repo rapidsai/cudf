@@ -67,32 +67,37 @@ using test_case_t = std::tuple<input_arg_t, table_view, table_view>;
 
 template <typename T>
 struct Rank : public BaseFixture {
-        void run_all_tests(
-        rank_method method,
-        column_view const col1,
-        column_view const col2, 
-        column_view const col3,
-        //ASCENDING,
-        column_view const col1_asce_keep,
-        column_view const col1_asce_top,
-        column_view const col1_asce_bottom,
-        column_view const col2_asce_keep,
-        column_view const col2_asce_top,
-        column_view const col2_asce_bottom,
-        column_view const col3_asce_keep,
-        column_view const col3_asce_top,
-        column_view const col3_asce_bottom,
-        //DESCENDING,
-        column_view const col1_desc_keep,
-        column_view const col1_desc_top,
-        column_view const col1_desc_bottom,
-        column_view const col2_desc_keep,
-        column_view const col2_desc_top,
-        column_view const col2_desc_bottom,
-        column_view const col3_desc_keep,
-        column_view const col3_desc_top,
-        column_view const col3_desc_bottom)
-        {
+    
+    fixed_width_column_wrapper<T>   col1{{  5,   4,   3,   5,   8,   5}};
+    fixed_width_column_wrapper<T>   col2{{  5,   4,   3,   5,   8,   5}, {1, 1, 0, 1, 1, 1}};
+    strings_column_wrapper          col3{{"d", "e", "a", "d", "k", "d"}, {1, 1, 1, 1, 1, 1}};
+
+    void run_all_tests(
+    rank_method method,
+    column_view const col1,
+    column_view const col2,
+    column_view const col3,
+    //ASCENDING,
+    column_view const col1_asce_keep,
+    column_view const col1_asce_top,
+    column_view const col1_asce_bottom,
+    column_view const col2_asce_keep,
+    column_view const col2_asce_top,
+    column_view const col2_asce_bottom,
+    column_view const col3_asce_keep,
+    column_view const col3_asce_top,
+    column_view const col3_asce_bottom,
+    //DESCENDING,
+    column_view const col1_desc_keep,
+    column_view const col1_desc_top,
+    column_view const col1_desc_bottom,
+    column_view const col2_desc_keep,
+    column_view const col2_desc_top,
+    column_view const col2_desc_bottom,
+    column_view const col3_desc_keep,
+    column_view const col3_desc_top,
+    column_view const col3_desc_bottom)
+    {
         for (auto const &test_case : {
         // Single column, Ascending
         //Non-null column
@@ -142,11 +147,8 @@ TYPED_TEST(Rank, First)
 {
     using T = TypeParam;
 
-    fixed_width_column_wrapper<T>   col1{{  5,   4,   3,   5,   8,   5}};
-    fixed_width_column_wrapper<T>   col2{{  5,   4,   3,   5,   8,   5}, {1, 1, 0, 1, 1, 1}};
-    strings_column_wrapper          col3({"d", "e", "a", "d", "k", "d"}, {1, 1, 1, 1, 1, 1});
-
-    //FIRST
+    //fixed_width_column_wrapper<T>   col1{{  5,   4,   3,   5,   8,   5}};
+    //                                        3,   2,   1,   4,   6,   5
     //ASCENDING
     fixed_width_column_wrapper<double>  col1_asce_keep   {{3, 2, 1, 4, 6, 5}};
     fixed_width_column_wrapper<double>& col1_asce_top    = col1_asce_keep;
@@ -171,7 +173,7 @@ TYPED_TEST(Rank, First)
     // Rank
     if (std::is_same<T, cudf::experimental::bool8>::value) return;
     
-    this->run_all_tests(rank_method::FIRST, col1, col2, col3,
+    this->run_all_tests(rank_method::FIRST, this->col1, this->col2, this->col3,
                         col1_asce_keep, col1_asce_top, col1_asce_bottom,
                         col2_asce_keep, col2_asce_top, col2_asce_bottom,
                         col3_asce_keep, col3_asce_top, col3_asce_bottom,
@@ -184,10 +186,8 @@ TYPED_TEST(Rank, Dense)
 {
     using T = TypeParam;
 
-    fixed_width_column_wrapper<T>   col1{{  5,   4,   3,   5,   8,   5}};
-    fixed_width_column_wrapper<T>   col2{{  5,   4,   3,   5,   8,   5}, {1, 1, 0, 1, 1, 1}};
-    strings_column_wrapper          col3({"d", "e", "a", "d", "k", "d"}, {1, 1, 1, 1, 1, 1});
-    //                                                  3    2    1   3    4     3
+    //fixed_width_column_wrapper<T>   col1{{  5,   4,   3,   5,   8,   5}};
+    //                                        3    2    1    3    4    3
     //ASCENDING
     fixed_width_column_wrapper<double> col1_asce_keep    {{3, 2, 1, 3, 4, 3} };
     fixed_width_column_wrapper<double> col1_asce_top     {{3, 2, 1, 3, 4, 3} };
@@ -211,7 +211,7 @@ TYPED_TEST(Rank, Dense)
 
     // Rank
     if (std::is_same<T, cudf::experimental::bool8>::value) return;
-    this->run_all_tests(rank_method::DENSE, col1, col2, col3,
+    this->run_all_tests(rank_method::DENSE, this->col1, this->col2, this->col3,
                         col1_asce_keep, col1_asce_top, col1_asce_bottom,
                         col2_asce_keep, col2_asce_top, col2_asce_bottom,
                         col3_asce_keep, col3_asce_top, col3_asce_bottom,
