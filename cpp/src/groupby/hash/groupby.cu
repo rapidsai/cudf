@@ -169,12 +169,12 @@ void sparse_to_dense_results(
     (auto const& agg_kind) {
       auto tranformed_agg = std::make_unique<aggregation>(agg_kind);
       auto arg_result = to_dense_agg_result(tranformed_agg);
-      if (arg_result->has_nulls()) {
-        auto replacement = numeric_scalar<size_type>(-1, true, stream);
-        auto null_replaced_map = cudf::detail::replace_nulls(
-          *arg_result, replacement, rmm::mr::get_default_resource(), stream);
+      if (arg_result->nullable()) {
+        column_view null_removed_map(data_type(type_to_id<size_type>()),
+          arg_result->size(), 
+          static_cast<void const*>(arg_result->view().template data<size_type>()));
         auto transformed_result = experimental::detail::gather(
-          table_view({col}), *null_replaced_map, false, true, false, mr, stream);
+          table_view({col}), null_removed_map, false, true, false, mr, stream);
         return std::move(transformed_result->release()[0]);
       }
       else {
