@@ -115,7 +115,8 @@ class writer {
    * @param metadata Table metadata and column names
    * @param stream Optional stream to use for device memory alloc and kernels
    */
-  void write_all(table_view const& table, const table_metadata *metadata = nullptr, cudaStream_t stream = 0);
+  void write_all(table_view const& table, const table_metadata *metadata = nullptr,
+                 cudaStream_t stream = 0);
 
   /**
    * @brief Begins the chunked/streamed write process.
@@ -217,9 +218,14 @@ class writer {
    *
    * @param table Set of columns to output
    * @param metadata Table metadata and column names
+   * @param raw_metadata_out Optional raw parquet file metadata output
+   * @param metadata_out_file_path Column chunks file path to be set in the raw output metadata
    * @param stream Optional stream to use for device memory alloc and kernels
    */
-  void write_all(table_view const& table, const table_metadata *metadata = nullptr, cudaStream_t stream = 0);
+  void write_all(table_view const& table, const table_metadata *metadata = nullptr,
+                 std::vector<uint8_t> *raw_metadata_out = nullptr,
+                 const std::string metadata_out_file_path = "",
+                 cudaStream_t stream = 0);
 
   /**
    * @brief Begins the chunked/streamed write process.

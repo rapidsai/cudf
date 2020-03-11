@@ -480,13 +480,17 @@ struct write_parquet_args {
   /// Specify the sink to use for writer output
   sink_info sink;
   /// Specify the compression format to use
-  compression_type compression;
+  compression_type compression = compression_type::AUTO;
   /// Specify the level of statistics in the output file
-  statistics_freq stats_level;
+  statistics_freq stats_level = statistics_freq::STATISTICS_ROWGROUP;
   /// Set of columns to output
   table_view table;
   /// Optional associated metadata
   const table_metadata *metadata;
+  /// Optional raw parquet file metadata output
+  std::vector<uint8_t> *raw_metadata_out = nullptr;
+  /// Column chunks file path to be set in the raw output metadata
+  std::string metadata_out_file_path;
 
   write_parquet_args() = default;
 

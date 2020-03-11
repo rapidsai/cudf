@@ -77,9 +77,13 @@ class writer::impl {
    *
    * @param table The set of columns
    * @param metadata The metadata associated with the table
+   * @param raw_metadata_out Optional raw parquet file metadata output
+   * @param metadata_out_file_path Column chunks file path to be set in the raw output metadata
    * @param stream Stream to use for memory allocation and kernels
    **/
-  void write(table_view const& table, const table_metadata *metadata, cudaStream_t stream);
+  void write(table_view const& table, const table_metadata *metadata,
+             std::vector<uint8_t> *raw_metadata_out, const std::string metadata_out_file_path,
+             cudaStream_t stream);
   
   /**
    * @brief Begins the chunked/streamed write process.

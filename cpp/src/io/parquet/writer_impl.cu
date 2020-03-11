@@ -384,7 +384,9 @@ writer::impl::impl(std::unique_ptr<data_sink> sink, writer_options const &option
   stats_granularity_(options.stats_granularity),
   out_sink_(std::move(sink)){}
 
-void writer::impl::write(table_view const &table, const table_metadata *metadata, cudaStream_t stream) {    
+void writer::impl::write(table_view const &table, const table_metadata *metadata,
+                         std::vector<uint8_t> *raw_metadata_out, const std::string metadata_out_file_path,
+                         cudaStream_t stream) {    
   pq_chunked_state state;
   state.user_metadata = metadata;
   state.stream = stream;
@@ -392,7 +394,19 @@ void writer::impl::write(table_view const &table, const table_metadata *metadata
 
   write_chunked_begin(state);
   write_chunked(table, state);
-  write_chunked_end(state);    
+  write_chunked_end(state);
+
+  // Optionally output raw file metadata with the specified column chunk file path
+  if (raw_metadata_out) {
+    CompactProtocolWriter cpw(raw_metadata_out);
+    raw_metadata_out->resize(0);
+    for (auto& rowgroup : state.md.row_groups) {
+      for (auto& col : rowgroup.columns) {
+        col.file_path = metadata_out_file_path;
+      }
+    }
+    cpw.write(&state.md);  
+  }
 }
 
 void writer::impl::write_chunked_begin(pq_chunked_state& state){
@@ -749,6 +763,7 @@ size_type num_columns = table.num_columns();
 void writer::impl::write_chunked_end(pq_chunked_state &state){    
   CompactProtocolWriter cpw(&buffer_);
   file_ender_s fendr;
+  buffer_.resize(0);
   fendr.footer_len = (uint32_t)cpw.write(&state.md);  
   fendr.magic = PARQUET_MAGIC;
   out_sink_->write(buffer_.data(), buffer_.size());  
@@ -773,8 +788,11 @@ writer::writer(writer_options const& options,
 writer::~writer() = default;
 
 // Forward to implementation
-void writer::write_all(table_view const &table, const table_metadata *metadata, cudaStream_t stream) {
-  _impl->write(table, metadata, stream);
+void writer::write_all(table_view const &table, const table_metadata *metadata,
+                 std::vector<uint8_t> *raw_metadata_out,
+                 const std::string metadata_out_file_path,
+                 cudaStream_t stream) {
+  _impl->write(table, metadata, raw_metadata_out, metadata_out_file_path, stream);
 }
 
 // Forward to implementation

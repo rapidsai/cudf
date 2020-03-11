@@ -223,15 +223,15 @@ class CompactProtocolReader
     m_base = m_cur = base;
     m_end = base + len;
   }
-  ptrdiff_t bytecount() const { return m_cur - m_base; }
-  unsigned int getb() { return (m_cur < m_end) ? *m_cur++ : 0; }
-  void skip_bytes(size_t bytecnt) { bytecnt = std::min(bytecnt, (size_t)(m_end - m_cur)); m_cur += bytecnt; }
-  uint32_t get_u32() { uint32_t v = 0; for (uint32_t l = 0; ; l += 7) { uint32_t c = getb(); v |= (c & 0x7f) << l; if (c < 0x80) break; } return v; }
-  uint64_t get_u64() { uint64_t v = 0; for (uint64_t l = 0; ; l += 7) { uint64_t c = getb(); v |= (c & 0x7f) << l; if (c < 0x80) break; } return v; }
-  int32_t get_i16() { return get_i32(); }
-  int32_t get_i32() { uint32_t u = get_u32(); return (int32_t)((u >> 1u) ^ -(int32_t)(u & 1)); }
-  int64_t get_i64() { uint64_t u = get_u64(); return (int64_t)((u >> 1u) ^ -(int64_t)(u & 1)); }
-  int32_t get_listh(uint8_t *el_type) { uint32_t c = getb(); int32_t sz = c >> 4; *el_type = c & 0xf; if (sz == 0xf) sz = get_u32(); return sz; }
+  ptrdiff_t bytecount() const noexcept { return m_cur - m_base; }
+  unsigned int getb() noexcept { return (m_cur < m_end) ? *m_cur++ : 0; }
+  void skip_bytes(size_t bytecnt) noexcept { bytecnt = std::min(bytecnt, (size_t)(m_end - m_cur)); m_cur += bytecnt; }
+  uint32_t get_u32() noexcept { uint32_t v = 0; for (uint32_t l = 0; ; l += 7) { uint32_t c = getb(); v |= (c & 0x7f) << l; if (c < 0x80) break; } return v; }
+  uint64_t get_u64() noexcept { uint64_t v = 0; for (uint64_t l = 0; ; l += 7) { uint64_t c = getb(); v |= (c & 0x7f) << l; if (c < 0x80) break; } return v; }
+  int32_t get_i16() noexcept { return get_i32(); }
+  int32_t get_i32() noexcept { uint32_t u = get_u32(); return (int32_t)((u >> 1u) ^ -(int32_t)(u & 1)); }
+  int64_t get_i64() noexcept { uint64_t u = get_u64(); return (int64_t)((u >> 1u) ^ -(int64_t)(u & 1)); }
+  int32_t get_listh(uint8_t *el_type) noexcept { uint32_t c = getb(); int32_t sz = c >> 4; *el_type = c & 0xf; if (sz == 0xf) sz = get_u32(); return sz; }
   bool skip_struct_field(int t, int depth = 0);
 
  public:
@@ -249,7 +249,7 @@ class CompactProtocolReader
 #undef DECL_PARQUET_STRUCT
 
  public:
-  static int NumRequiredBits(uint32_t max_level) {
+  static int NumRequiredBits(uint32_t max_level) noexcept {
     return 32 - CountLeadingZeros32(max_level);
   }
   bool InitSchema(FileMetaData *md);
