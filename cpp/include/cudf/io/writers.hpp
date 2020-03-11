@@ -26,6 +26,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
+#include <cudf/io/data_sink.hpp>
+
 #include <memory>
 #include <utility>
 
@@ -74,33 +76,12 @@ class writer {
   /**
    * @brief Constructor for output to a file.
    *
-   * @param filepath Path to the output file
+   * @param sinkp The data sink to write the data to
    * @param options Settings for controlling writing behavior
    * @param mr Optional resource to use for device memory allocation
    */
   explicit writer(
-      std::string const& filepath, writer_options const& options,
-      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-  
-  /**
-   * @brief Constructor for output to host buffer.
-   *
-   * @param buffer Pointer to the output vector
-   * @param options Settings for controlling writing behavior
-   * @param mr Optional resource to use for device memory allocation
-   */
-  explicit writer(
-      std::vector<char>* buffer, writer_options const& options,
-      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-
-  /**
-   * @brief Constructor for output to void (no io performed).
-   *   
-   * @param options Settings for controlling writing behavior
-   * @param mr Optional resource to use for device memory allocation
-   */
-  explicit writer(
-      writer_options const& options,
+      std::unique_ptr<cudf::io::data_sink> sinkp, writer_options const& options,
       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
     
   /**
@@ -179,34 +160,14 @@ class writer {
   /**
    * @brief Constructor for output to a file.
    *
-   * @param filepath Path to the output file
+   * @param sink The data sink to write the data to
    * @param options Settings for controlling writing behavior
    * @param mr Optional resource to use for device memory allocation
    */
   explicit writer(
-      std::string const& filepath, writer_options const& options,
-      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+        std::unique_ptr<cudf::io::data_sink> sink, writer_options const& options,
+        rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-  /**
-   * @brief Constructor for output to host buffer.
-   *
-   * @param buffer Pointer to the output vector
-   * @param options Settings for controlling writing behavior
-   * @param mr Optional resource to use for device memory allocation
-   */
-  explicit writer(
-      std::vector<char>* buffer, writer_options const &options,
-      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-
-  /**
-   * @brief Constructor for output to void (no io performed).
-   *   
-   * @param options Settings for controlling writing behavior
-   * @param mr Optional resource to use for device memory allocation
-   */
-  explicit writer(
-      writer_options const &options,
-      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header
    */
