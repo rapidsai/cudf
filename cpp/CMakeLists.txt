@@ -636,6 +636,7 @@ add_library(cudf
             src/groupby/sort/group_min.cu
             src/groupby/sort/group_max.cu
             src/groupby/sort/group_argmax.cu
+            src/groupby/sort/group_argmin.cu
             src/groupby/sort/group_count.cu
             src/groupby/sort/group_nunique.cu
             src/groupby/sort/group_nth_element.cu
