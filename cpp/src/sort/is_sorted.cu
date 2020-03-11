@@ -19,6 +19,7 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 
@@ -57,6 +58,7 @@ bool is_sorted(cudf::table_view const& in,
                std::vector<order> const& column_order,
                std::vector<null_order> const& null_precedence)
 {
+    CUDF_FUNC_RANGE();
     if (in.num_columns() == 0 || in.num_rows() == 0) {
         return true;
     }
