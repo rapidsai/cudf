@@ -1521,3 +1521,14 @@ def test_string_replace_with_backrefs(find, replace):
     got = gs.str.replace_with_backrefs(find, replace)
     expected = ps.str.replace(find, replace, regex=True)
     assert_eq(got, expected)
+
+
+def test_string_table_view_creation():
+    data = ["hi"] * 25 + [None] * 5000
+    psr = pd.Series(data)
+    gsr = Series.from_pandas(psr)
+
+    expect = psr[:1]
+    got = gsr[:1]
+
+    assert_eq(expect, got)
