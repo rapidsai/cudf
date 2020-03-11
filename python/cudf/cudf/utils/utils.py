@@ -2,6 +2,7 @@ import functools
 from collections import OrderedDict
 from math import floor, isinf, isnan
 
+import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -56,7 +57,6 @@ def check_equals_int(a, b):
 
 
 def scalar_broadcast_to(scalar, size, dtype=None):
-    from cudf.utils.cudautils import fill_value
     from cudf.utils.dtypes import to_cudf_compatible_scalar, is_string_dtype
     from cudf.core.column import column_empty
 
@@ -79,16 +79,15 @@ def scalar_broadcast_to(scalar, size, dtype=None):
 
     if np.dtype(dtype) == np.dtype("object"):
         from cudf.core.column import as_column
-        from cudf.utils.cudautils import zeros
 
-        gather_map = zeros(size, dtype="int32")
+        gather_map = cupy.zeros(size, dtype="int32")
         scalar_str_col = as_column([scalar], dtype="str")
         return scalar_str_col[gather_map]
     else:
-        da = rmm.device_array((size,), dtype=dtype)
-        if da.size != 0:
-            fill_value(da, scalar)
-        return da
+        out_col = column_empty(size, dtype=dtype)
+        if out_col.size != 0:
+            out_col.data_array_view[:] = scalar
+        return out_col
 
 
 def normalize_index(index, size, doraise=True):

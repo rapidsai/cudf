@@ -2,6 +2,7 @@
 
 import pickle
 
+import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -150,7 +151,6 @@ class CategoricalAccessor(object):
         """
 
         from cudf import DataFrame, Series
-        from cudf.utils import cudautils
 
         cur_cats = self._column.categories
         new_cats = column.as_column(new_categories)
@@ -165,9 +165,9 @@ class CategoricalAccessor(object):
             new_cats = Series(new_cats).drop_duplicates()._column
 
         cur_codes = self.codes
-        cur_order = cudautils.arange(len(cur_codes))
-        old_codes = cudautils.arange(len(cur_cats), dtype=cur_codes.dtype)
-        new_codes = cudautils.arange(len(new_cats), dtype=cur_codes.dtype)
+        cur_order = cupy.arange(len(cur_codes))
+        old_codes = cupy.arange(len(cur_cats), dtype=cur_codes.dtype)
+        new_codes = cupy.arange(len(new_cats), dtype=cur_codes.dtype)
 
         new_df = DataFrame({"new_codes": new_codes, "cats": new_cats})
         old_df = DataFrame({"old_codes": old_codes, "cats": cur_cats})

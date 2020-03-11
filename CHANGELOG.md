@@ -140,6 +140,7 @@
 - PR #4328 Add memory threshold callbacks for Java RMM event handler
 - PR #4336 Move a bunch of internal nvstrings code to use native StringColumns
 - PR #4166 Port `is_sorted.pyx` to use libcudf++ APIs
+- PR #4351 Remove a bunch of internal usage of Numba; set rmm as cupy allocator
 - PR #4333 nvstrings case/capitalization cython bindings
 - PR #4345 Removed an undesirable backwards include from /include to /src in cuIO writers.hpp
 - PR #4367 Port copying.pyx to use new libcudf
@@ -148,6 +149,8 @@
 - PR #4311 Port nvstrings String Manipulations functions to cuDF Python/Cython
 - PR #4373 Port nvstrings Regular Expressions functions to cuDF Python/Cython
 - PR #4308 Replace dask_cudf sort_values and improve set_index
+- PR #4407 Enable `.str.slice` & `.str.get` and `.str.zfill` unit-tests
+- PR #4412 Require Dask + Distributed 2.12.0+
 - PR #4377 Support loading avro files that contain nested arrays
 
 ## Bug Fixes
@@ -223,10 +226,12 @@
 - PR #4324 Fix slice_strings for out-of-range start position value
 - PR #4115 Serialize an empty column table with non zero rows
 - PR #4327 Preemptive dispatch fix for changes in dask#5973
+- PR #4379 Correct regex reclass count variable to number of pairs instead of the number of literals
 - PR #4364 Fix libcudf zfill strings to ignore '+/-' chars
 - PR #4358 Fix strings::concat where narep is an empty string
 - PR #4369 Fix race condition in gpuinflate
 - PR #4390 Disable ScatterValid and ScatterNull legacy tests
+- PR #4406 Fix sorted merge issue with null values and ascending=False
 
 
 # cuDF 0.12.0 (04 Feb 2020)

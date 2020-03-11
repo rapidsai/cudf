@@ -4,14 +4,13 @@ from contextlib import ExitStack as does_not_raise
 from sys import getsizeof
 from unittest.mock import patch
 
+import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
-from numba import cuda
 
 import nvstrings
-import rmm
 
 from cudf import concat
 from cudf.core import DataFrame, Series
@@ -108,7 +107,7 @@ def test_string_export(ps_gs):
         [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
         [0, 1, 2, 3, 4, 4, 3, 2, 1, 0],
         np.array([0, 1, 2, 3, 4]),
-        rmm.to_device(np.array([0, 1, 2, 3, 4])),
+        cupy.asarray(np.array([0, 1, 2, 3, 4])),
     ],
 )
 def test_string_get_item(ps_gs, item):
@@ -118,8 +117,8 @@ def test_string_get_item(ps_gs, item):
     if isinstance(got, Series):
         got = got.to_arrow()
 
-    if isinstance(item, cuda.devicearray.DeviceNDArray):
-        item = item.copy_to_host()
+    if isinstance(item, cupy.ndarray):
+        item = cupy.asnumpy(item)
 
     expect = ps.iloc[item]
     if isinstance(expect, pd.Series):
@@ -136,11 +135,11 @@ def test_string_get_item(ps_gs, item):
         [False] * 5,
         np.array([True] * 5),
         np.array([False] * 5),
-        rmm.to_device(np.array([True] * 5)),
-        rmm.to_device(np.array([False] * 5)),
+        cupy.asarray(np.array([True] * 5)),
+        cupy.asarray(np.array([False] * 5)),
         np.random.randint(0, 2, 5).astype("bool").tolist(),
         np.random.randint(0, 2, 5).astype("bool"),
-        rmm.to_device(np.random.randint(0, 2, 5).astype("bool")),
+        cupy.asarray(np.random.randint(0, 2, 5).astype("bool")),
     ],
 )
 def test_string_bool_mask(ps_gs, item):
@@ -150,8 +149,8 @@ def test_string_bool_mask(ps_gs, item):
     if isinstance(got, Series):
         got = got.to_arrow()
 
-    if isinstance(item, cuda.devicearray.DeviceNDArray):
-        item = item.copy_to_host()
+    if isinstance(item, cupy.ndarray):
+        item = cupy.asnumpy(item)
 
     expect = ps[item]
     if isinstance(expect, pd.Series):
@@ -991,37 +990,37 @@ def test_string_get(string, index):
     assert_eq(pds.str.get(index).fillna(""), gds.str.get(index).fillna(""))
 
 
-# @pytest.mark.parametrize(
-#     "string",
-#     [
-#         ["abc", "xyz", "a", "ab", "123", "097"],
-#         ["abcdefghij", "0123456789", "9876543210", None, "accénted", ""],
-#         ["koala", "fox", "chameleon"],
-#     ],
-# )
-# @pytest.mark.parametrize(
-#     "number", [0, 1, 3, 10],
-# )
-# @pytest.mark.parametrize(
-#     "diff", [0, 2, 5, 9],
-# )
-# def test_string_slice_str(string, number, diff):
-#     pds = pd.Series(string)
-#     gds = Series(string)
+@pytest.mark.parametrize(
+    "string",
+    [
+        ["abc", "xyz", "a", "ab", "123", "097"],
+        ["abcdefghij", "0123456789", "9876543210", None, "accénted", ""],
+        ["koala", "fox", "chameleon"],
+    ],
+)
+@pytest.mark.parametrize(
+    "number", [-10, 0, 1, 3, 10],
+)
+@pytest.mark.parametrize(
+    "diff", [0, 2, 5, 9],
+)
+def test_string_slice_str(string, number, diff):
+    pds = pd.Series(string)
+    gds = Series(string)
 
-#     assert_eq(pds.str.slice(start=number), gds.str.slice(start=number))
-#     assert_eq(pds.str.slice(stop=number), gds.str.slice(stop=number))
-#     assert_eq(pds.str.slice(), gds.str.slice())
-#     assert_eq(
-#         pds.str.slice(start=number, stop=number + diff),
-#         gds.str.slice(start=number, stop=number + diff),
-#     )
-#     if diff != 0:
-#         assert_eq(pds.str.slice(step=diff), gds.str.slice(step=diff))
-#         assert_eq(
-#             pds.str.slice(start=number, stop=number + diff, step=diff),
-#             gds.str.slice(start=number, stop=number + diff, step=diff),
-#         )
+    assert_eq(pds.str.slice(start=number), gds.str.slice(start=number))
+    assert_eq(pds.str.slice(stop=number), gds.str.slice(stop=number))
+    assert_eq(pds.str.slice(), gds.str.slice())
+    assert_eq(
+        pds.str.slice(start=number, stop=number + diff),
+        gds.str.slice(start=number, stop=number + diff),
+    )
+    if diff != 0:
+        assert_eq(pds.str.slice(step=diff), gds.str.slice(step=diff))
+        assert_eq(
+            pds.str.slice(start=number, stop=number + diff, step=diff),
+            gds.str.slice(start=number, stop=number + diff, step=diff),
+        )
 
 
 def test_string_slice_from():
@@ -1351,10 +1350,8 @@ def test_strings_filling_tests(data, width, fillchar):
     [
         ["A,,B", "1,,5", "3,00,0"],
         ["Linda van der Berg", "George Pitt-Rivers"],
-        # TODO: Uncomment following two lines
-        # once this is fixed: https://github.com/rapidsai/cudf/issues/4355
-        # ["+23", "³", "⅕", ""],
-        # ["hello", "there", "world", "+1234", "-1234", None, "accént", ""],
+        ["+23", "³", "⅕", ""],
+        ["hello", "there", "world", "+1234", "-1234", None, "accént", ""],
         [" ", "\t\r\n ", ""],
         ["1. Ant.  ", "2. Bee!\n", "3. Cat?\t", None],
     ],

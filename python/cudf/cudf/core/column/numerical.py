@@ -5,8 +5,6 @@ import pandas as pd
 import pyarrow as pa
 from pandas.api.types import is_integer_dtype
 
-import rmm
-
 import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
 from cudf.core.buffer import Buffer
@@ -179,14 +177,6 @@ class NumericalColumn(column.ColumnBase):
             return out.cast(pa.bool_())
         else:
             return out
-
-    def all(self):
-        return bool(libcudfxx.reduce.reduce("all", self, dtype=np.bool_))
-
-    def any(self):
-        if self.valid_count == 0:
-            return False
-        return bool(libcudfxx.reduce.reduce("any", self, dtype=np.bool_))
 
     def min(self, dtype=None):
         return libcudfxx.reduce.reduce("min", self, dtype=dtype)
@@ -542,7 +532,7 @@ def digitize(column, bins, right=False):
     A device array containing the indices
     """
     assert column.dtype == bins.dtype
-    bins_buf = Buffer(rmm.to_device(bins))
+    bins_buf = Buffer(bins)
     bin_col = NumericalColumn(data=bins_buf, dtype=bins.dtype)
     return as_column(
         libcudfxx.sort.digitize(column.as_frame(), bin_col.as_frame(), right)
