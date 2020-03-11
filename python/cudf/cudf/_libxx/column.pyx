@@ -418,6 +418,8 @@ cdef class Column:
         column_owner = isinstance(owner, Column)
 
         size = cv.size()
+        offset = cv.offset()
+
         dtype = cudf_to_np_types[cv.type().id()]
 
         data_ptr = <uintptr_t>(cv.head[void]())
@@ -428,14 +430,19 @@ cdef class Column:
                 data_owner = owner.base_data
             if data_owner is None:
                 data = Buffer(
-                    rmm.DeviceBuffer(ptr=data_ptr, size=size * dtype.itemsize)
+                    rmm.DeviceBuffer(ptr=data_ptr,
+                                     size=(size+offset) * dtype.itemsize)
                 )
             else:
                 data = Buffer(
                     data=data_ptr,
-                    size=size * dtype.itemsize,
+                    size=(size+offset) * dtype.itemsize,
                     owner=data_owner
                 )
+        else:
+            data = Buffer(
+                rmm.DeviceBuffer(ptr=data_ptr, size=0)
+            )
 
         mask_ptr = <uintptr_t>(cv.null_mask())
         mask = None
@@ -447,17 +454,15 @@ cdef class Column:
                 mask = Buffer(
                     rmm.DeviceBuffer(
                         ptr=mask_ptr,
-                        size=bitmask_allocation_size_bytes(size)
+                        size=bitmask_allocation_size_bytes(size+offset)
                     )
                 )
             else:
                 mask = Buffer(
-                    mask=mask_ptr,
-                    size=bitmask_allocation_size_bytes(size),
+                    data=mask_ptr,
+                    size=bitmask_allocation_size_bytes(size+offset),
                     owner=mask_owner
                 )
-
-        offset = cv.offset()
 
         children = []
         for child_index in range(cv.num_children()):
