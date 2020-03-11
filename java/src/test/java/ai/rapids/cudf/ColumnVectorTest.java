@@ -1578,12 +1578,6 @@ public class ColumnVectorTest extends CudfTestBase {
   @Test
   void testsubstringThrowsException() {
     assertThrows(AssertionError.class, () -> {
-      try (ColumnVector cv = ColumnVector.fromStrings("Héllo", "thésé", null, "ARé", "tést " +
-              "strings");
-           ColumnVector substring = cv.substring(-2, 6)) {
-      }
-    });
-    assertThrows(AssertionError.class, () -> {
       try (ColumnVector v = ColumnVector.fromStrings("Héllo", "thésé", null, "", "ARé", "strings");
            ColumnVector start = ColumnVector.fromInts(2, 1, 1, 1, 0, 1);
            ColumnVector end = ColumnVector.fromInts(5, 3, 1, 1, -1);
