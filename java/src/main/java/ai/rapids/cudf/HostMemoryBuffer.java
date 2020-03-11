@@ -518,14 +518,29 @@ public class HostMemoryBuffer extends MemoryBuffer {
   }
 
   /**
-   * Method to copy from a DeviceMemoryBuffer to a HostMemoryBuffer
-   * @param deviceMemoryBuffer - Buffer to copy data from
+   * Synchronously copy from a DeviceMemoryBuffer to a HostMemoryBuffer
+   * @param deviceMemoryBuffer buffer to copy data from
    */
   public final void copyFromDeviceBuffer(BaseDeviceMemoryBuffer deviceMemoryBuffer) {
     addressOutOfBoundsCheck(address, deviceMemoryBuffer.length, "copy range dest");
     assert !deviceMemoryBuffer.closed;
     Cuda.memcpy(address, deviceMemoryBuffer.address, deviceMemoryBuffer.length,
         CudaMemcpyKind.DEVICE_TO_HOST);
+  }
+
+  /**
+   * Copy from a DeviceMemoryBuffer to a HostMemoryBuffer using the specified stream.
+   * The copy has completed when this returns, but the memory copy could overlap with
+   * operations occurring on other streams.
+   * @param deviceMemoryBuffer buffer to copy data from
+   * @param stream CUDA stream to use
+   */
+  public final void copyFromDeviceBuffer(BaseDeviceMemoryBuffer deviceMemoryBuffer,
+      Cuda.Stream stream) {
+    addressOutOfBoundsCheck(address, deviceMemoryBuffer.length, "copy range dest");
+    assert !deviceMemoryBuffer.closed;
+    Cuda.memcpy(address, deviceMemoryBuffer.address, deviceMemoryBuffer.length,
+        CudaMemcpyKind.DEVICE_TO_HOST, stream);
   }
 
   /**
