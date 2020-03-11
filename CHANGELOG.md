@@ -140,6 +140,7 @@
 - PR #4339 Port libcudf strings `wrap` api to cython/python
 - PR #4311 Port nvstrings String Manipulations functions to cuDF Python/Cython
 - PR #4373 Port nvstrings Regular Expressions functions to cuDF Python/Cython
+- PR #4407 Enable `.str.slice` & `.str.get` and `.str.zfill` unit-tests
 - PR #4412 Require Dask + Distributed 2.12.0+
 - PR #4377 Support loading avro files that contain nested arrays
 
@@ -212,6 +213,7 @@
 - PR #4324 Fix slice_strings for out-of-range start position value
 - PR #4115 Serialize an empty column table with non zero rows
 - PR #4327 Preemptive dispatch fix for changes in dask#5973
+- PR #4379 Correct regex reclass count variable to number of pairs instead of the number of literals
 - PR #4364 Fix libcudf zfill strings to ignore '+/-' chars
 - PR #4358 Fix strings::concat where narep is an empty string
 - PR #4369 Fix race condition in gpuinflate

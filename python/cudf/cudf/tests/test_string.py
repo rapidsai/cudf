@@ -990,37 +990,37 @@ def test_string_get(string, index):
     assert_eq(pds.str.get(index).fillna(""), gds.str.get(index).fillna(""))
 
 
-# @pytest.mark.parametrize(
-#     "string",
-#     [
-#         ["abc", "xyz", "a", "ab", "123", "097"],
-#         ["abcdefghij", "0123456789", "9876543210", None, "accénted", ""],
-#         ["koala", "fox", "chameleon"],
-#     ],
-# )
-# @pytest.mark.parametrize(
-#     "number", [0, 1, 3, 10],
-# )
-# @pytest.mark.parametrize(
-#     "diff", [0, 2, 5, 9],
-# )
-# def test_string_slice_str(string, number, diff):
-#     pds = pd.Series(string)
-#     gds = Series(string)
+@pytest.mark.parametrize(
+    "string",
+    [
+        ["abc", "xyz", "a", "ab", "123", "097"],
+        ["abcdefghij", "0123456789", "9876543210", None, "accénted", ""],
+        ["koala", "fox", "chameleon"],
+    ],
+)
+@pytest.mark.parametrize(
+    "number", [-10, 0, 1, 3, 10],
+)
+@pytest.mark.parametrize(
+    "diff", [0, 2, 5, 9],
+)
+def test_string_slice_str(string, number, diff):
+    pds = pd.Series(string)
+    gds = Series(string)
 
-#     assert_eq(pds.str.slice(start=number), gds.str.slice(start=number))
-#     assert_eq(pds.str.slice(stop=number), gds.str.slice(stop=number))
-#     assert_eq(pds.str.slice(), gds.str.slice())
-#     assert_eq(
-#         pds.str.slice(start=number, stop=number + diff),
-#         gds.str.slice(start=number, stop=number + diff),
-#     )
-#     if diff != 0:
-#         assert_eq(pds.str.slice(step=diff), gds.str.slice(step=diff))
-#         assert_eq(
-#             pds.str.slice(start=number, stop=number + diff, step=diff),
-#             gds.str.slice(start=number, stop=number + diff, step=diff),
-#         )
+    assert_eq(pds.str.slice(start=number), gds.str.slice(start=number))
+    assert_eq(pds.str.slice(stop=number), gds.str.slice(stop=number))
+    assert_eq(pds.str.slice(), gds.str.slice())
+    assert_eq(
+        pds.str.slice(start=number, stop=number + diff),
+        gds.str.slice(start=number, stop=number + diff),
+    )
+    if diff != 0:
+        assert_eq(pds.str.slice(step=diff), gds.str.slice(step=diff))
+        assert_eq(
+            pds.str.slice(start=number, stop=number + diff, step=diff),
+            gds.str.slice(start=number, stop=number + diff, step=diff),
+        )
 
 
 def test_string_slice_from():
@@ -1350,10 +1350,8 @@ def test_strings_filling_tests(data, width, fillchar):
     [
         ["A,,B", "1,,5", "3,00,0"],
         ["Linda van der Berg", "George Pitt-Rivers"],
-        # TODO: Uncomment following two lines
-        # once this is fixed: https://github.com/rapidsai/cudf/issues/4355
-        # ["+23", "³", "⅕", ""],
-        # ["hello", "there", "world", "+1234", "-1234", None, "accént", ""],
+        ["+23", "³", "⅕", ""],
+        ["hello", "there", "world", "+1234", "-1234", None, "accént", ""],
         [" ", "\t\r\n ", ""],
         ["1. Ant.  ", "2. Bee!\n", "3. Cat?\t", None],
     ],
