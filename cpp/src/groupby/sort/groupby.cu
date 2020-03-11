@@ -153,12 +153,8 @@ void store_result_functor::operator()<aggregation::SUM>(
   if (cache.has_result(col_idx, agg))
     return;
 
-  auto count_agg = make_count_aggregation();
-  operator()<aggregation::COUNT_VALID>(count_agg);
-  column_view count_result = cache.get_result(col_idx, count_agg);
-
   cache.add_result(col_idx, agg, 
-                  detail::group_sum(get_grouped_values(), count_result, 
+                  detail::group_sum(get_grouped_values(), helper.num_groups(), 
                                     helper.group_labels(),
                                     mr, stream));
 };
@@ -170,12 +166,8 @@ void store_result_functor::operator()<aggregation::MIN>(
   if (cache.has_result(col_idx, agg))
     return;
 
-  auto count_agg = make_count_aggregation();
-  operator()<aggregation::COUNT_VALID>(count_agg);
-  column_view count_result = cache.get_result(col_idx, count_agg);
-
   cache.add_result(col_idx, agg, 
-                  detail::group_min(get_grouped_values(), count_result, 
+                  detail::group_min(get_grouped_values(), helper.num_groups(), 
                                     helper.group_labels(),
                                     mr, stream));
 };
@@ -187,12 +179,8 @@ void store_result_functor::operator()<aggregation::MAX>(
   if (cache.has_result(col_idx, agg))
     return;
 
-  auto count_agg = make_count_aggregation();
-  operator()<aggregation::COUNT_VALID>(count_agg);
-  column_view count_result = cache.get_result(col_idx, count_agg);
-
   cache.add_result(col_idx, agg, 
-                  detail::group_max(get_grouped_values(), count_result, 
+                  detail::group_max(get_grouped_values(), helper.num_groups(), 
                                     helper.group_labels(),
                                     mr, stream));
 };

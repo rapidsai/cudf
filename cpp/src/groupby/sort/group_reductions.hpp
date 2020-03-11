@@ -32,14 +32,14 @@ namespace detail {
  * @brief Internal API to calculate groupwise sum
  * 
  * @param values Grouped values to get sum of
- * @param group_sizes Number of valid elements per group
+ * @param num_groups Number of groups
  * @param group_labels ID of group that the corresponding value belongs to
  * @param mr Memory resource to allocate output with
  * @param stream Stream to perform computation in
  */
 std::unique_ptr<column> group_sum(
     column_view const& values,
-    column_view const& group_sizes,
+    size_type num_groups,
     rmm::device_vector<size_type> const& group_labels,
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream = 0);
@@ -48,14 +48,14 @@ std::unique_ptr<column> group_sum(
  * @brief Internal API to calculate groupwise minimum value
  * 
  * @param values Grouped values to get minimum from
- * @param group_sizes Number of valid elements per group
+ * @param num_groups Number of groups
  * @param group_labels ID of group that the corresponding value belongs to
  * @param mr Memory resource to allocate output with
  * @param stream Stream to perform computation in
  */
 std::unique_ptr<column> group_min(
     column_view const& values,
-    column_view const& group_sizes,
+    size_type num_groups,
     rmm::device_vector<size_type> const& group_labels,
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream = 0);
@@ -64,14 +64,14 @@ std::unique_ptr<column> group_min(
  * @brief Internal API to calculate groupwise maximum value
  * 
  * @param values Grouped values to get maximum from
- * @param group_sizes Number of valid elements per group
+ * @param num_groups Number of groups
  * @param group_labels ID of group that the corresponding value belongs to
  * @param mr Memory resource to allocate output with
  * @param stream Stream to perform computation in
  */
 std::unique_ptr<column> group_max(
     column_view const& values,
-    column_view const& group_sizes,
+    size_type num_groups,
     rmm::device_vector<size_type> const& group_labels,
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream = 0);
