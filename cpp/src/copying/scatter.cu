@@ -28,6 +28,7 @@
 #include <cudf/strings/detail/scatter.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/detail/fill.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/sequence.h>
@@ -462,6 +463,7 @@ std::unique_ptr<table> scatter(
     table_view const& source, column_view const& scatter_map,
     table_view const& target, bool check_bounds,
     rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   return detail::scatter(source, scatter_map, target, check_bounds, mr);
 }
 
@@ -469,12 +471,14 @@ std::unique_ptr<table> scatter(
     std::vector<std::unique_ptr<scalar>> const& source, column_view const& indices,
     table_view const& target, bool check_bounds,
     rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   return detail::scatter(source, indices, target, check_bounds, mr);
 }
 
 std::vector<std::unique_ptr<table>> scatter_to_tables(
     table_view const& input, column_view const& partition_map,
     rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   return detail::scatter_to_tables(input, partition_map, mr);
 }
 
@@ -482,14 +486,16 @@ std::unique_ptr<table> boolean_mask_scatter(
     table_view const& input, table_view const& target,
     column_view const& boolean_mask,
     rmm::mr::device_memory_resource *mr) {
-    return detail::boolean_mask_scatter(input, target, boolean_mask, mr);
+  CUDF_FUNC_RANGE();
+  return detail::boolean_mask_scatter(input, target, boolean_mask, mr);
 }
 
 std::unique_ptr<table> boolean_mask_scatter(
     std::vector<std::reference_wrapper<scalar>> const& input, table_view const& target,
     column_view const& boolean_mask,
     rmm::mr::device_memory_resource *mr) {
-    return detail::boolean_mask_scatter(input, target, boolean_mask, mr);
+  CUDF_FUNC_RANGE();
+  return detail::boolean_mask_scatter(input, target, boolean_mask, mr);
 }
 
 }  // namespace experimental
