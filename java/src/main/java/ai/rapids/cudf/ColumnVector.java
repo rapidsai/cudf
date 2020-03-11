@@ -1730,7 +1730,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector substring(int start, int end) {
     assert type == DType.STRING : "column type must be a String";
-    assert start >= 0 : "start must be a positive value, negative value currently not supported";
     try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT32), "subString")) {
       return new ColumnVector(substring(getNativeView(), start, end));
     }
