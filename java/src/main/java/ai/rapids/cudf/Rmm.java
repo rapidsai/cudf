@@ -15,6 +15,8 @@
  */
 package ai.rapids.cudf;
 
+import java.util.Arrays;
+
 /**
  * This is the binding class for rmm lib.
  */
@@ -36,22 +38,6 @@ public class Rmm {
    */
   public static void initialize(int allocationMode, boolean enableLogging, long poolSize)
       throws RmmException {
-    initialize(allocationMode, enableLogging, poolSize, null);
-  }
-
-  /**
-   * Initialize memory manager state and storage.
-   * @param allocationMode Allocation strategy to use. Bit set using
-   *                       {@link RmmAllocationMode#CUDA_DEFAULT},
-   *                       {@link RmmAllocationMode#POOL} and
-   *                       {@link RmmAllocationMode#CUDA_MANAGED_MEMORY}
-   * @param enableLogging  Enable logging memory manager events
-   * @param poolSize       The initial pool size in bytes
-   * @param eventHandler   The object to invoke on RMM events (e.g.: allocation failure) or null
-   * @throws IllegalStateException if RMM has already been initialized
-   */
-  public static void initialize(int allocationMode, boolean enableLogging, long poolSize,
-      RmmEventHandler eventHandler) throws RmmException {
     if (defaultInitialized) {
       synchronized(Rmm.class) {
         if (defaultInitialized) {
@@ -60,21 +46,32 @@ public class Rmm {
         }
       }
     }
-    initializeInternal(allocationMode, enableLogging, poolSize, eventHandler);
+    initializeInternal(allocationMode, enableLogging, poolSize);
   }
 
   /**
    * Sets the event handler to be called on RMM events (e.g.: allocation failure).
-   * @param handler event handler to invoke on RMM events
+   * @param handler event handler to invoke on RMM events or null to clear an existing handler
    * @throws RmmException if an active handler is already set
    */
   public static void setEventHandler(RmmEventHandler handler) throws RmmException {
-    setEventHandlerInternal(handler);
+    long[] allocThresholds = (handler != null) ? sortThresholds(handler.getAllocThresholds()) : null;
+    long[] deallocThresholds = (handler != null) ? sortThresholds(handler.getDeallocThresholds()) : null;
+    setEventHandlerInternal(handler, allocThresholds, deallocThresholds);
   }
 
   /** Clears the active RMM event handler if one is set. */
-  public static void clearEventHandler() {
-    setEventHandlerInternal(null);
+  public static void clearEventHandler() throws RmmException {
+    setEventHandlerInternal(null, null, null);
+  }
+
+  private static long[] sortThresholds(long[] thresholds) {
+    if (thresholds == null) {
+      return null;
+    }
+    long[] result = Arrays.copyOf(thresholds, thresholds.length);
+    Arrays.sort(result);
+    return result;
   }
 
   /**
@@ -82,13 +79,13 @@ public class Rmm {
    */
   static synchronized void defaultInitialize() {
     if (!defaultInitialized && !isInitializedInternal()) {
-      initializeInternal(RmmAllocationMode.CUDA_DEFAULT, false, 0, null);
+      initializeInternal(RmmAllocationMode.CUDA_DEFAULT, false, 0);
       defaultInitialized = true;
     }
   }
 
   private static native void initializeInternal(int allocationMode, boolean enableLogging,
-      long poolSize, RmmEventHandler eventHandler) throws RmmException;
+      long poolSize) throws RmmException;
 
   /**
    * Check if RMM has been initialized already or not.
@@ -123,7 +120,6 @@ public class Rmm {
    * <p> Mapping: RMM_FREE in rmm.h
    * @param ptr    the pointer to memory location to be relinquished
    * @param stream the stream in which to synchronize this command
-   * @throws RmmException
    */
   static native void free(long ptr, long stream) throws RmmException;
 
@@ -132,7 +128,8 @@ public class Rmm {
    */
   static native void freeDeviceBuffer(long rmmBufferAddress) throws RmmException;
 
-  static native void setEventHandlerInternal(RmmEventHandler handler) throws RmmException;
+  static native void setEventHandlerInternal(RmmEventHandler handler,
+      long[] allocThresholds, long[] deallocThresholds) throws RmmException;
 
   /**
    * If logging is enabled get the log as a String.

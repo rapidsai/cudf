@@ -25,4 +25,38 @@ public interface RmmEventHandler {
    * @return true if the memory allocation should be retried or false if it should fail
    */
   boolean onAllocFailure(long sizeRequested);
+
+  /**
+   * Get the memory thresholds that will trigger {@link #onAllocThreshold(long)}
+   * to be called when one or more of the thresholds is crossed during a memory allocation.
+   * A threshold is crossed when the total memory allocated before the RMM allocate operation
+   * is less than a threshold value and the threshold value is less than or equal to the
+   * total memory allocated after the RMM memory allocate operation.
+   * @return allocate memory thresholds or null for no thresholds.
+   */
+  long[] getAllocThresholds();
+
+  /**
+   * Get the memory thresholds that will trigger {@link #onDeallocThreshold(long)}
+   * to be called when one or more of the thresholds is crossed during a memory deallocation.
+   * A threshold is crossed when the total memory allocated before the RMM deallocate operation
+   * is greater than or equal to a threshold value and the threshold value is greater than the
+   * total memory allocated after the RMM memory deallocate operation.
+   * @return deallocate memory thresholds or null for no thresholds.
+   */
+  long[] getDeallocThresholds();
+
+  /**
+   * Invoked after an RMM memory allocate operation when an allocate threshold is crossed.
+   * See {@link #getAllocThresholds()} for details on allocate threshold crossing.
+   * @param totalAllocSize total amount of memory allocated after the crossing
+   */
+  void onAllocThreshold(long totalAllocSize);
+
+  /**
+   * Invoked after an RMM memory deallocation operation when a deallocate threshold is crossed.
+   * See {@link #getDeallocThresholds()} for details on deallocate threshold crossing.
+   * @param totalAllocSize total amount of memory allocated after the crossing
+   */
+  void onDeallocThreshold(long totalAllocSize);
 }
