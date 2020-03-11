@@ -10,7 +10,6 @@ import pandas as pd
 import pyarrow as pa
 
 import nvstrings
-import rmm
 
 import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
@@ -34,6 +33,13 @@ from cudf._libxx.strings.char_types import (
     is_numeric as cpp_is_numeric,
     is_upper as cpp_is_upper,
 )
+from cudf._libxx.strings.contains import (
+    contains_re as cpp_contains_re,
+    count_re as cpp_count_re,
+)
+from cudf._libxx.strings.extract import extract as cpp_extract
+from cudf._libxx.strings.find import contains as cpp_contains
+from cudf._libxx.strings.findall import findall as cpp_findall
 from cudf._libxx.strings.padding import (
     PadSide,
     center as cpp_center,
@@ -44,7 +50,14 @@ from cudf._libxx.strings.padding import (
 )
 from cudf._libxx.strings.replace import (
     insert as cpp_string_insert,
+    replace as cpp_replace,
+    replace_multi as cpp_replace_multi,
     slice_replace as cpp_slice_replace,
+)
+from cudf._libxx.strings.replace_re import (
+    replace_multi_re as cpp_replace_multi_re,
+    replace_re as cpp_replace_re,
+    replace_with_backrefs as cpp_replace_with_backrefs,
 )
 from cudf._libxx.strings.split.partition import (
     partition as cpp_partition,
@@ -62,7 +75,7 @@ from cudf._libxx.strings.strip import (
 from cudf._libxx.strings.substring import slice_from as cpp_slice_from
 from cudf._libxx.strings.wrap import wrap as cpp_wrap
 from cudf.core.buffer import Buffer
-from cudf.core.column import column
+from cudf.core.column import column, column_empty
 from cudf.utils import utils
 from cudf.utils.dtypes import is_list_like, is_scalar
 
@@ -155,7 +168,7 @@ class StringMethods(object):
 
                 if isinstance(table, Table):
                     return self._parent._constructor_expanddim(
-                        data=table._data
+                        data=table._data, index=self._parent.index
                     )
                 else:
                     return self._parent._constructor_expanddim(
@@ -189,8 +202,8 @@ class StringMethods(object):
             indicating the length of each element in the Series or Index.
         """
 
-        out_dev_arr = rmm.device_array(len(self._column), dtype="int32")
-        ptr = libcudf.cudf.get_ctype_ptr(out_dev_arr)
+        out_col = column_empty(len(self._column), dtype="int32")
+        ptr = out_col.data_ptr
         self._column.nvstrings.len(ptr)
 
         mask = None
@@ -198,9 +211,7 @@ class StringMethods(object):
             mask = self._column.mask
 
         return self._return_or_inplace(
-            column.build_column(
-                Buffer(out_dev_arr), np.dtype("int32"), mask=mask
-            ),
+            column.build_column(out_col.data, np.dtype("int32"), mask=mask),
             **kwargs,
         )
 
@@ -464,9 +475,9 @@ class StringMethods(object):
         if flags != 0:
             raise NotImplementedError("`flags` parameter is not yet supported")
 
-        out = self._column.nvstrings.extract(pat)
-        if len(out) == 1 and expand is False:
-            return self._return_or_inplace(out[0], **kwargs)
+        out = cpp_extract(self._column, pat)
+        if out._num_columns == 1 and expand is False:
+            return self._return_or_inplace(out._columns[0], **kwargs)
         else:
             kwargs.setdefault("expand", expand)
             return self._return_or_inplace(out, **kwargs)
@@ -509,18 +520,12 @@ class StringMethods(object):
         elif na is not np.nan:
             raise NotImplementedError("`na` parameter is not yet supported")
 
-        out_dev_arr = rmm.device_array(len(self._column), dtype="bool")
-        ptr = libcudf.cudf.get_ctype_ptr(out_dev_arr)
-        self._column.nvstrings.contains(pat, regex=regex, devptr=ptr)
-
-        mask = None
-        if self._column.has_nulls:
-            mask = self._column.mask
+        from cudf._libxx.scalar import Scalar
 
         return self._return_or_inplace(
-            column.build_column(
-                Buffer(out_dev_arr), dtype=np.dtype("bool"), mask=mask
-            ),
+            cpp_contains_re(self._column, pat)
+            if regex is True
+            else cpp_contains(self._column, Scalar(pat, "str")),
             **kwargs,
         )
 
@@ -533,11 +538,11 @@ class StringMethods(object):
 
         Parameters
         ----------
-        pat : str
-            String to be replaced as a character sequence or regular
+        pat : str or list-like
+            String(s) to be replaced as a character sequence or regular
             expression.
-        repl : str
-            String to be used as replacement.
+        repl : str or list-like
+            String(s) to be used as replacement.
         n : int, default -1 (all)
             Number of replacements to make from the start.
         regex : bool, default True
@@ -559,14 +564,65 @@ class StringMethods(object):
             raise NotImplementedError("`case` parameter is not yet supported")
         elif flags != 0:
             raise NotImplementedError("`flags` parameter is not yet supported")
+        from cudf.core import Series, Index
 
+        if (
+            is_list_like(pat)
+            or isinstance(pat, (Series, Index, pd.Series, pd.Index))
+        ) and (
+            is_list_like(repl)
+            or isinstance(repl, (Series, Index, pd.Series, pd.Index))
+        ):
+            warnings.warn(
+                "`n` parameter is not supported when \
+                `pat` and `repl` are list-like inputs"
+            )
+
+            return self._return_or_inplace(
+                cpp_replace_multi_re(
+                    self._column, pat, column.as_column(repl, dtype="str")
+                )
+                if regex
+                else cpp_replace_multi(
+                    self._column,
+                    column.as_column(pat, dtype="str"),
+                    column.as_column(repl, dtype="str"),
+                ),
+                **kwargs,
+            )
         # Pandas treats 0 as all
         if n == 0:
             n = -1
+        from cudf._libxx.scalar import Scalar
 
         return self._return_or_inplace(
-            self._column.nvstrings.replace(pat, repl, n=n, regex=regex),
+            cpp_replace_re(self._column, pat, Scalar(repl, "str"), n)
+            if regex is True
+            else cpp_replace(
+                self._column, Scalar(pat, "str"), Scalar(repl, "str"), n
+            ),
             **kwargs,
+        )
+
+    def replace_with_backrefs(self, pat, repl, **kwargs):
+        """
+        Use the `repl` back-ref template to create a new string
+        with the extracted elements found using the `pat` expression.
+
+        Parameters
+        ----------
+        pat : str
+            Regex with groupings to identify extract sections.
+            This should not be a compiled regex.
+        repl : str
+            String template containing back-reference indicators.
+
+        Returns
+        -------
+        Series/Index of str dtype
+        """
+        return self._return_or_inplace(
+            cpp_replace_with_backrefs(self._column, pat, repl), **kwargs
         )
 
     # def slice(self, start=None, stop=None, step=None, **kwargs):
@@ -607,7 +663,7 @@ class StringMethods(object):
         Series/Index of bool dtype
 
         """
-        return self._return_or_inplace(cpp_is_decimal(self._column))
+        return self._return_or_inplace(cpp_is_decimal(self._column), **kwargs)
 
     def isalnum(self, **kwargs):
         """
@@ -620,7 +676,7 @@ class StringMethods(object):
         Series/Index of bool dtype
 
         """
-        return self._return_or_inplace(cpp_is_alnum(self._column))
+        return self._return_or_inplace(cpp_is_alnum(self._column), **kwargs)
 
     def isalpha(self, **kwargs):
         """
@@ -632,7 +688,7 @@ class StringMethods(object):
         Series/Index of bool dtype
 
         """
-        return self._return_or_inplace(cpp_is_alpha(self._column))
+        return self._return_or_inplace(cpp_is_alpha(self._column), **kwargs)
 
     def isdigit(self, **kwargs):
         """
@@ -644,7 +700,7 @@ class StringMethods(object):
         Series/Index of bool dtype
 
         """
-        return self._return_or_inplace(cpp_is_digit(self._column))
+        return self._return_or_inplace(cpp_is_digit(self._column), **kwargs)
 
     def isnumeric(self, **kwargs):
         """
@@ -657,7 +713,7 @@ class StringMethods(object):
         Series/Index of bool dtype
 
         """
-        return self._return_or_inplace(cpp_is_numeric(self._column))
+        return self._return_or_inplace(cpp_is_numeric(self._column), **kwargs)
 
     def isupper(self, **kwargs):
         """
@@ -678,7 +734,7 @@ class StringMethods(object):
             + "Pandas returns True, this will be fixed in the near future"
         )
 
-        return self._return_or_inplace(cpp_is_upper(self._column))
+        return self._return_or_inplace(cpp_is_upper(self._column), **kwargs)
 
     def islower(self, **kwargs):
         """
@@ -699,24 +755,21 @@ class StringMethods(object):
             + "Pandas returns True, this will be fixed in the near future"
         )
 
-        return self._return_or_inplace(cpp_is_lower(self._column))
+        return self._return_or_inplace(cpp_is_lower(self._column), **kwargs)
 
-    def lower(self):
+    def lower(self, **kwargs):
         """
-        Convert each string to lowercase.
-        This only applies to ASCII characters at this time.
+        Convert strings in the Series/Index to lowercase.
 
-        Examples
-        --------
-        >>> import cudf
-        >>> s = cudf.Series(["Hello, Friend","Goodbye, Friend"])
-        >>> print(s.str.lower())
-        ['hello, friend', 'goodbye, friend']
+        Returns
+        -------
+        Series/Index of str dtype
+            A copy of the object with all strings converted to lowercase.
 
         """
-        return self._return_or_inplace(cpp_to_lower(self._column))
+        return self._return_or_inplace(cpp_to_lower(self._column), **kwargs)
 
-    def upper(self):
+    def upper(self, **kwargs):
         """
         Convert each string to uppercase.
         This only applies to ASCII characters at this time.
@@ -729,9 +782,9 @@ class StringMethods(object):
         ['HELLO, FRIEND', 'GOODBYE, FRIEND']
 
         """
-        return self._return_or_inplace(cpp_to_upper(self._column))
+        return self._return_or_inplace(cpp_to_upper(self._column), **kwargs)
 
-    def capitalize(self):
+    def capitalize(self, **kwargs):
         """
         Capitalize first character of each string.
         This only applies to ASCII characters at this time.
@@ -744,9 +797,9 @@ class StringMethods(object):
         ['Hello, friend", "Goodbye, friend"]
 
         """
-        return self._return_or_inplace(cpp_capitalize(self._column))
+        return self._return_or_inplace(cpp_capitalize(self._column), **kwargs)
 
-    def swapcase(self):
+    def swapcase(self, **kwargs):
         """
         Change each lowercase character to uppercase and vice versa.
         This only applies to ASCII characters at this time.
@@ -759,9 +812,9 @@ class StringMethods(object):
         ['hELLO, fRIEND', 'gOODBYE, fRIEND']
 
         """
-        return self._return_or_inplace(cpp_swapcase(self._column))
+        return self._return_or_inplace(cpp_swapcase(self._column), **kwargs)
 
-    def title(self):
+    def title(self, **kwargs):
         """
         Uppercase the first letter of each letter after a space
         and lowercase the rest.
@@ -775,7 +828,7 @@ class StringMethods(object):
         ['Hello Friend', 'Goodnight Moon']
 
         """
-        return self._return_or_inplace(cpp_title(self._column))
+        return self._return_or_inplace(cpp_title(self._column), **kwargs)
 
     def slice_from(self, starts=0, stops=0, **kwargs):
         """
@@ -934,7 +987,7 @@ class StringMethods(object):
         from cudf._libxx.scalar import Scalar
 
         return self._return_or_inplace(
-            cpp_split(self._column, Scalar(pat), n), **kwargs,
+            cpp_split(self._column, Scalar(pat), n), **kwargs
         )
 
     def rsplit(self, pat=None, n=-1, expand=True, **kwargs):
@@ -976,7 +1029,7 @@ class StringMethods(object):
         from cudf._libxx.scalar import Scalar
 
         return self._return_or_inplace(
-            cpp_rsplit(self._column, Scalar(pat), n), **kwargs,
+            cpp_rsplit(self._column, Scalar(pat), n), **kwargs
         )
 
     def partition(self, sep=" ", expand=True, **kwargs):
@@ -1017,7 +1070,7 @@ class StringMethods(object):
         from cudf._libxx.scalar import Scalar
 
         return self._return_or_inplace(
-            cpp_partition(self._column, Scalar(sep)), **kwargs,
+            cpp_partition(self._column, Scalar(sep)), **kwargs
         )
 
     def rpartition(self, sep=" ", expand=True, **kwargs):
@@ -1058,7 +1111,7 @@ class StringMethods(object):
         from cudf._libxx.scalar import Scalar
 
         return self._return_or_inplace(
-            cpp_rpartition(self._column, Scalar(sep)), **kwargs,
+            cpp_rpartition(self._column, Scalar(sep)), **kwargs
         )
 
     def pad(self, width, side="left", fillchar=" ", **kwargs):
@@ -1423,6 +1476,55 @@ class StringMethods(object):
 
         return self._return_or_inplace(cpp_wrap(self._column, width), **kwargs)
 
+    def count(self, pat, flags=0, **kwargs):
+        """
+        Count occurrences of pattern in each string of the Series/Index.
+
+        This function is used to count the number of times a particular
+        regex pattern is repeated in each of the string elements of the Series.
+
+        Parameters
+        ----------
+        pat : str
+            Valid regular expression.
+
+        Returns
+        -------
+        Series or Index
+
+        """
+        if flags != 0:
+            raise NotImplementedError("`flags` parameter is not yet supported")
+
+        return self._return_or_inplace(
+            cpp_count_re(self._column, pat), **kwargs
+        )
+
+    def findall(self, pat, flags=0, **kwargs):
+        """
+        Find all occurrences of pattern or regular expression in the
+        Series/Index.
+
+        Parameters
+        ----------
+        pat : str
+            Pattern or regular expression.
+
+        Returns
+        -------
+        DataFrame
+            All non-overlapping matches of pattern or
+            regular expression in each string of this Series/Index.
+
+        """
+        if flags != 0:
+            raise NotImplementedError("`flags` parameter is not yet supported")
+
+        kwargs.setdefault("expand", True)
+        return self._return_or_inplace(
+            cpp_findall(self._column, pat), **kwargs
+        )
+
 
 class StringColumn(column.ColumnBase):
     """Implements operations for Columns of String type
@@ -1603,6 +1705,7 @@ class StringColumn(column.ColumnBase):
             self._nvcategory = nvc.from_strings(self.nvstrings)
         return self._nvcategory
 
+    # TODO: Remove these once NVStrings is fully deprecated / removed
     @nvcategory.setter
     def nvcategory(self, nvc):
         self._nvcategory = nvc
@@ -1615,15 +1718,14 @@ class StringColumn(column.ColumnBase):
 
         super()._set_mask(value)
 
+    # TODO: Remove these once NVStrings is fully deprecated / removed
     @property
     def indices(self):
         if self._indices is None:
-            out_dev_arr = rmm.device_array(
-                self.nvcategory.size(), dtype="int32"
-            )
-            ptr = libcudf.cudf.get_ctype_ptr(out_dev_arr)
+            out_col = column_empty(self.nvcategory.size(), dtype="int32")
+            ptr = out_col.data_ptr
             self.nvcategory.values(devptr=ptr)
-            self._indices = out_dev_arr
+            self._indices = out_col.data_array_view
         return self._indices
 
     @property

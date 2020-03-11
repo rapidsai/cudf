@@ -32,11 +32,13 @@
 - PR #4276 Port avro.pyx to libcudf++
 - PR #4259 Ability to create Java host buffers from memory-mapped files
 - PR #4240 Add groupby::groups()
+- PR #4319 Add repartition_by_hash API to dask_cudf
 - PR #4315 ShiftLeft, ShiftRight, ShiftRightUnsigned binops
 - PR #4321 Expose Python Semi and Anti Joins
 - PR #4291 Add Java callback support for RMM events
 - PR #4298 Port orc.pyx to libcudf++
 - PR #4352 Add factory function make_column_from_scalar
+- PR #4381 Add Java support for copying buffers with asynchronous streams
 - PR #4288 Add libcudf++ shift Cython implementation
 - PR #4338 Add cudf::sequence() for generating an incrementing list of numeric values
 
@@ -139,11 +141,16 @@
 - PR #4328 Add memory threshold callbacks for Java RMM event handler
 - PR #4336 Move a bunch of internal nvstrings code to use native StringColumns
 - PR #4166 Port `is_sorted.pyx` to use libcudf++ APIs
+- PR #4351 Remove a bunch of internal usage of Numba; set rmm as cupy allocator
 - PR #4333 nvstrings case/capitalization cython bindings
 - PR #4345 Removed an undesirable backwards include from /include to /src in cuIO writers.hpp
+- PR #4367 Port copying.pyx to use new libcudf
 - PR #4362 Move pq_chunked_state struct into it's own header to match how orc writer is doing it.
 - PR #4339 Port libcudf strings `wrap` api to cython/python
 - PR #4311 Port nvstrings String Manipulations functions to cuDF Python/Cython
+- PR #4373 Port nvstrings Regular Expressions functions to cuDF Python/Cython
+- PR #4412 Require Dask + Distributed 2.12.0+
+- PR #4377 Support loading avro files that contain nested arrays
 
 ## Bug Fixes
 
@@ -218,9 +225,12 @@
 - PR #4324 Fix slice_strings for out-of-range start position value
 - PR #4115 Serialize an empty column table with non zero rows
 - PR #4327 Preemptive dispatch fix for changes in dask#5973
+- PR #4379 Correct regex reclass count variable to number of pairs instead of the number of literals
+- PR #4364 Fix libcudf zfill strings to ignore '+/-' chars
 - PR #4358 Fix strings::concat where narep is an empty string
 - PR #4369 Fix race condition in gpuinflate
 - PR #4390 Disable ScatterValid and ScatterNull legacy tests
+- PR #4406 Fix sorted merge issue with null values and ascending=False
 
 
 # cuDF 0.12.0 (04 Feb 2020)
