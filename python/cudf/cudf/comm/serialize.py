@@ -30,8 +30,8 @@ try:
     # Series/DataFrame/Index/Column/Buffer/etc
     @dask_serialize.register(serializable_classes)
     def dask_serialize_cudf_object(x):
+        header, frames = cuda_serialize_cudf_object(x)
         with log_errors():
-            header, frames = x.serialize()
             frames = [f.to_host_array().data for f in frames]
             return header, frames
 
