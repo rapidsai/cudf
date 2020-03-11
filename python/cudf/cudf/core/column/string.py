@@ -980,13 +980,17 @@ class StringMethods(object):
 
         kwargs.setdefault("expand", expand)
         if pat is None:
-            pat = " "
+            pat = ""
 
         from cudf._libxx.scalar import Scalar
 
-        return self._return_or_inplace(
-            cpp_split(self._column, Scalar(pat), n), **kwargs
-        )
+        result_table = cpp_split(self._column, Scalar(pat, "str"), n)
+
+        if len(result_table._data) == 1:
+            if result_table._data[0].null_count == len(self._parent):
+                result_table = []
+
+        return self._return_or_inplace(result_table, **kwargs,)
 
     def rsplit(self, pat=None, n=-1, expand=True, **kwargs):
         """
