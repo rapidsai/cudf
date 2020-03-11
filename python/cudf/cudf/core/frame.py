@@ -671,14 +671,28 @@ class Frame(libcudfxx.table.Table):
 
         to_return = self.__class__._from_table(gdf_result)
         if sort:
-            if left_index:
-                by = right_on
+            to_sort = self.__class__()
+
+            if left_index and right_index:
+                by = list(to_return._index.column)
+                if left_on and right_on:
+                    by += list(to_return[left_on]._data.columns)
+            elif left_index:
+                by = list(to_return[right_on]._data.columns)
             elif right_index:
-                by = left_on
+                by = list(to_return[left_on]._data.columns)
             else:
-                assert left_on == right_on
-                return to_return.sort_values(left_on).reset_index(drop=True)
-            return to_return.sort_values(by)
+                # left_on == right_on, or different names but same columns
+                # in both cases we can sort by either
+                by = list(to_return[left_on]._data.columns)
+            for i, col in enumerate(by):
+                to_sort[i] = col
+            inds = to_sort.argsort()
+            to_return_copy = to_return.copy(deep=False)
+            for col in to_return.columns:
+                from cudf import Series
+                to_return[col] = Series(to_return_copy[col].take(inds)._column)
+            return to_return
         else:
             return to_return
 
