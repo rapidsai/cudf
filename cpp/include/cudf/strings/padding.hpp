@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,9 +29,9 @@ namespace strings
  * character should be placed.
  */
 enum class pad_side {
-    left,   ///< Add padding to the left.
-    right,  ///< Add padding to the right.
-    both    ///< Add padding equally to the right and left.
+    LEFT,   ///< Add padding to the left.
+    RIGHT,  ///< Add padding to the right.
+    BOTH    ///< Add padding equally to the right and left.
 };
 
 /**
@@ -57,7 +57,7 @@ enum class pad_side {
  * @return New column with padded strings.
  */
 std::unique_ptr<column> pad( strings_column_view const& strings,
-                             size_type width, pad_side side = pad_side::right,
+                             size_type width, pad_side side = cudf::strings::pad_side::RIGHT,
                              std::string const& fill_char = " ",
                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
 
@@ -67,14 +67,14 @@ std::unique_ptr<column> pad( strings_column_view const& strings,
  * If the string is already width or more characters, no padding is performed.
  * No strings are truncated.
  *
- * This will skip any leading '+' or '-' character encountered in each string.
+ * This equivalent to `pad(width,left,'0')` but is more optimized for this special case.
  *
  * Null string entries result in null entries in the output column.
  *
  * ```
  * s = ['1234','-9876','+0.34','-342567']
  * r = zfill(s,6)
- * r is now ['001234','-09876','+00.34','-342567']
+ * r is now ['001234','0-9876','0+0.34','-342567']
  * ```
  *
  * @param strings Strings instance for this operation.
