@@ -550,3 +550,53 @@ def test_parquet_writer_gpu_multi_index(tmpdir, simple_pdf, simple_gdf):
     got = pd.read_parquet(gdf_fname)
 
     assert_eq(expect, got, check_categorical=False)
+
+
+@pytest.mark.parametrize("cols", [["b"], ["c", "b"]])
+def test_parquet_write_partitioned(tmpdir_factory, cols):
+    # Checks that write_to_dataset is wrapping to_parquet
+    # as expected
+    gdf_dir = str(tmpdir_factory.mktemp("gdf_dir"))
+    pdf_dir = str(tmpdir_factory.mktemp("pdf_dir"))
+    size = 100
+    pdf = pd.DataFrame(
+        {
+            "a": np.arange(0, stop=size, dtype="int64"),
+            "b": np.random.choice(list("abcd"), size=size),
+            "c": np.random.choice(np.arange(4), size=size),
+        }
+    )
+    pdf.to_parquet(pdf_dir, index=False, partition_cols=cols)
+    gdf = cudf.from_pandas(pdf)
+    gdf.to_parquet(gdf_dir, index=False, partition_cols=cols)
+
+    # Use pandas since dataset may be partitioned
+    expect = pd.read_parquet(pdf_dir)
+    got = pd.read_parquet(gdf_dir)
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("cols", [None, ["b"]])
+def test_parquet_write_to_dataset(tmpdir_factory, cols):
+    dir1 = tmpdir_factory.mktemp("dir1")
+    dir2 = tmpdir_factory.mktemp("dir2")
+    if cols is None:
+        dir1 = dir1.join("file.pq")
+        dir2 = dir2.join("file.pq")
+    dir1 = str(dir1)
+    dir2 = str(dir2)
+
+    size = 100
+    gdf = cudf.DataFrame(
+        {
+            "a": np.arange(0, stop=size),
+            "b": np.random.choice(np.arange(4), size=size),
+        }
+    )
+    gdf.to_parquet(dir1, partition_cols=cols)
+    cudf.io.write_to_dataset(gdf, dir2, partition_cols=cols)
+
+    # cudf read_parquet cannot handle partitioned dataset
+    expect = pd.read_parquet(dir1)
+    got = pd.read_parquet(dir2)
+    assert_eq(expect, got)
