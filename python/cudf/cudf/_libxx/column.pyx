@@ -432,7 +432,7 @@ cdef class Column:
             if data_owner is None:
                 data = Buffer(
                     rmm.DeviceBuffer(ptr=data_ptr,
-                                     size=(size) * dtype.itemsize)
+                                     size=(size+offset) * dtype.itemsize)
                 )
             else:
                 data = Buffer(
@@ -455,7 +455,7 @@ cdef class Column:
                 mask = Buffer(
                     rmm.DeviceBuffer(
                         ptr=mask_ptr,
-                        size=bitmask_allocation_size_bytes(size)
+                        size=bitmask_allocation_size_bytes(size+offset)
                     )
                 )
             else:

@@ -231,6 +231,7 @@
 - PR #4369 Fix race condition in gpuinflate
 - PR #4390 Disable ScatterValid and ScatterNull legacy tests
 - PR #4406 Fix sorted merge issue with null values and ascending=False
+- PR #4445 Fix string issue for parquet reader and support `keep_index` for `scatter_to_tables`
 
 
 # cuDF 0.12.0 (04 Feb 2020)
