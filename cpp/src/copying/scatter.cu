@@ -45,7 +45,7 @@ struct dispatch_map_type {
     std::unique_ptr<table> operator()(
       table_view const& source, column_view const& scatter_map,
       table_view const& target, bool check_bounds,
-      rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+      rmm::mr::device_memory_resource* mr, cudaStream_t stream) const
   {
 
     return detail::scatter<map_type>(source,
@@ -59,7 +59,7 @@ struct dispatch_map_type {
   std::unique_ptr<table> operator()(
       table_view const& source, column_view const& scatter_map,
       table_view const& target, bool check_bounds,
-      rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+      rmm::mr::device_memory_resource* mr, cudaStream_t stream) const
   {
     CUDF_FAIL("Scatter map column must be an integral, non-boolean type");
   }
@@ -122,7 +122,7 @@ struct column_scalar_scatterer_impl
 {
   std::unique_ptr<column> operator()(std::unique_ptr<scalar> const& source,
       MapIterator scatter_iter, size_type scatter_rows, column_view const& target,
-      rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+      rmm::mr::device_memory_resource* mr, cudaStream_t stream) const
   {
     auto result = std::make_unique<column>(target, stream, mr);
     auto result_view = result->mutable_view();
@@ -145,7 +145,7 @@ struct column_scalar_scatterer_impl<string_view, MapIterator>
 {
   std::unique_ptr<column> operator()(std::unique_ptr<scalar> const& source,
       MapIterator scatter_iter, size_type scatter_rows, column_view const& target,
-      rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+      rmm::mr::device_memory_resource* mr, cudaStream_t stream) const
   {
     auto const scalar_impl = static_cast<string_scalar*>(source.get());
     auto const source_view = string_view(scalar_impl->data(), scalar_impl->size());
@@ -160,15 +160,9 @@ struct column_scalar_scatterer_impl<dictionary32, MapIterator>
 {
   std::unique_ptr<column> operator()(std::unique_ptr<scalar> const& source,
       MapIterator scatter_iter, size_type scatter_rows, column_view const& target,
-      rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+      rmm::mr::device_memory_resource* mr, cudaStream_t stream) const
   {
-    //// create a column from the scalar
-    //column_view scalar_column{ source->type(), 1,
-    //  is_compound(type) ? nullptr : rmm::device_buffer{},
-    //  create_null_mask{1,ALL_NULL,stream,mr}, 1 };
-    //auto source_keys = fill( scalar_column, 0, 1, scalar, mr, stream );
     CUDF_FAIL("scatter scalar to dictionary not implemented");
-    return nullptr; 
   }
 };
 
@@ -178,7 +172,7 @@ struct column_scalar_scatterer
   template <typename Element>
   std::unique_ptr<column> operator()(std::unique_ptr<scalar> const& source,
       MapIterator scatter_iter, size_type scatter_rows, column_view const& target,
-      rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+      rmm::mr::device_memory_resource* mr, cudaStream_t stream) const
   {
       column_scalar_scatterer_impl<Element, MapIterator> scatterer{};
       return scatterer(source, scatter_iter, scatter_rows, target, mr, stream);
@@ -191,7 +185,7 @@ struct scatter_scalar_impl {
   std::unique_ptr<table> operator()(
       std::vector<std::unique_ptr<scalar>> const& source,
       column_view const& indices, table_view const& target, bool check_bounds,
-      rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+      rmm::mr::device_memory_resource* mr, cudaStream_t stream) const
   {
     if (check_bounds) {
       auto const begin = -target.num_rows();
@@ -227,7 +221,7 @@ struct scatter_scalar_impl {
   std::unique_ptr<table> operator()(
       std::vector<std::unique_ptr<scalar>> const& source,
       column_view const& indices, table_view const& target, bool check_bounds,
-      rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+      rmm::mr::device_memory_resource* mr, cudaStream_t stream) const
   {
     CUDF_FAIL("Scatter index column must be an integral, non-boolean type");
   }
@@ -238,7 +232,7 @@ struct scatter_to_tables_impl {
       and not std::is_same<T, bool8>::value>* = nullptr>
   std::vector<std::unique_ptr<table>> operator()(
       table_view const& input, column_view const& partition_map,
-      rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+      rmm::mr::device_memory_resource* mr, cudaStream_t stream) const
   {
     // Make a mutable copy of the partition map
     auto d_partitions = rmm::device_vector<T>(
@@ -293,7 +287,7 @@ struct scatter_to_tables_impl {
       or std::is_same<T, bool8>::value>* = nullptr>
   std::vector<std::unique_ptr<table>> operator()(
       table_view const& input, column_view const& partition_map,
-      rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+      rmm::mr::device_memory_resource* mr, cudaStream_t stream) const
   {
     CUDF_FAIL("Partition map column must be an integral, non-boolean type");
   }

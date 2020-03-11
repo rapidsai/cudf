@@ -17,19 +17,14 @@
 #pragma once
 
 #include <cudf/copying.hpp>
-#include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.cuh>
-#include <cudf/detail/gather.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/table/table_device_view.cuh>
-#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/detail/scatter.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
-#include <memory>
 
 namespace cudf {
 namespace experimental {
@@ -57,10 +52,9 @@ rmm::device_vector<T> scatter_to_gather(MapIterator scatter_map_begin,
 template <typename Element, typename MapIterator>
 struct column_scatterer_impl
 {
-//  template <typename T, std::enable_if_t<is_fixed_width<T>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& source,
       MapIterator scatter_map_begin, MapIterator scatter_map_end, column_view const& target,
-      rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+      rmm::mr::device_memory_resource* mr, cudaStream_t stream) const
   {
     auto result = std::make_unique<column>(target, stream, mr);
     auto result_view = result->mutable_view();
@@ -76,13 +70,12 @@ struct column_scatterer_impl
   }
 };
 
-//template <typename T, std::enable_if_t<not is_fixed_width<T>()>* = nullptr>
 template <typename MapIterator>
 struct column_scatterer_impl<string_view, MapIterator>
 {
   std::unique_ptr<column> operator()(column_view const& source,
       MapIterator scatter_map_begin, MapIterator scatter_map_end, column_view const& target,
-      rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+      rmm::mr::device_memory_resource* mr, cudaStream_t stream) const
   {
     using strings::detail::create_string_vector_from_column;
     auto const source_vector = create_string_vector_from_column(source, stream);
@@ -97,7 +90,7 @@ struct column_scatterer_impl<dictionary32, MapIterator>
 {
   std::unique_ptr<column> operator()(column_view const& source_in,
       MapIterator scatter_map_begin, MapIterator scatter_map_end, column_view const& target_in,
-      rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+      rmm::mr::device_memory_resource* mr, cudaStream_t stream) const
   {
     if( target_in.size() == 0 ) // empty begets empty
       return make_empty_column(data_type{DICTIONARY32});
@@ -105,8 +98,8 @@ struct column_scatterer_impl<dictionary32, MapIterator>
       return std::make_unique<column>( target_in, stream, mr );
 
     // check the keys match
-    dictionary_column_view source(source_in);
-    dictionary_column_view target(target_in);
+    dictionary_column_view const source(source_in);
+    dictionary_column_view const target(target_in);
     CUDF_EXPECTS( source.keys().type()==target.keys().type(), "scatter dictionary keys must be the same type");
 
     // first combine keys so both dictionaries have the same set
@@ -116,12 +109,12 @@ struct column_scatterer_impl<dictionary32, MapIterator>
     auto source_view = dictionary_column_view(source_matched->view());
 
     // now build the new indices by doing a scatter on just the matched indices
-    column_view source_indices = dictionary_column_view(source_matched->view()).get_indices_annotated();
-    column_view target_indices = dictionary_column_view(target_matched->view()).get_indices_annotated();
+    column_view const source_indices = dictionary_column_view(source_matched->view()).get_indices_annotated();
+    column_view const target_indices = dictionary_column_view(target_matched->view()).get_indices_annotated();
     column_scatterer_impl<int32_t,MapIterator> index_scatterer;
     auto new_indices = index_scatterer( source_indices, scatter_map_begin, scatter_map_end, target_indices, mr, stream);
-    auto output_size = new_indices->size();       // record these
-    auto null_count = new_indices->null_count();  // before the release
+    auto const output_size = new_indices->size();       // record these
+    auto const null_count = new_indices->null_count();  // before the release
     auto contents = new_indices->release();
     auto indices_column = std::make_unique<column>( data_type{INT32},
           static_cast<size_type>(output_size), std::move(*(contents.data.release())),
@@ -142,7 +135,7 @@ struct column_scatterer
   template <typename Element>
   std::unique_ptr<column> operator()(column_view const& source,
       MapIterator scatter_map_begin, MapIterator scatter_map_end, column_view const& target,
-      rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+      rmm::mr::device_memory_resource* mr, cudaStream_t stream) const
   {
       column_scatterer_impl<Element, MapIterator> scatterer{};
       return scatterer(source, scatter_map_begin, scatter_map_end, target, mr, stream);
