@@ -18,6 +18,7 @@
 #include <cudf/hashing.hpp>
 #include <cudf/io/functions.hpp>
 #include <cudf/join.hpp>
+#include <cudf/round_robin.hpp>
 #include <cudf/search.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/stream_compaction.hpp>
@@ -569,7 +570,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_concatenate(JNIEnv *env, 
   CATCH_STD(env, NULL);
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_partition(
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_hashPartition(
     JNIEnv *env, jclass clazz, jlong input_table, jintArray columns_to_hash,
     jint number_of_partitions, jintArray output_offsets) {
 
@@ -603,6 +604,30 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_partition(
   CATCH_STD(env, NULL);
 }
 
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_roundRobinPartition(
+    JNIEnv *env, jclass, jlong input_table,
+    jint num_partitions, jint start_partition, jintArray output_offsets) {
+  JNI_NULL_CHECK(env, input_table, "input table is null", NULL);
+  JNI_NULL_CHECK(env, output_offsets, "output_offsets is null", NULL);
+  JNI_ARG_CHECK(env, num_partitions > 0, "num_partitions <= 0", NULL);
+  JNI_ARG_CHECK(env, start_partition >= 0, "start_partition is negative", NULL);
+
+  try {
+    auto n_input_table = reinterpret_cast<cudf::table_view *>(input_table);
+    int n_num_partitions = static_cast<int>(num_partitions);
+    cudf::jni::native_jintArray n_output_offsets(env, output_offsets);
+
+    auto result = cudf::experimental::round_robin_partition(*n_input_table, num_partitions, start_partition);
+
+    for (int i = 0; i < result.second.size(); i++) {
+      n_output_offsets[i] = result.second[i];
+    }
+
+    return cudf::jni::convert_table_for_return(env, result.first);
+  }
+  CATCH_STD(env, NULL);
+}
+
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_groupByAggregate(
     JNIEnv *env, jclass clazz, jlong input_table, jintArray keys,
     jintArray aggregate_column_indices, jintArray agg_types, jboolean ignore_null_keys) {
@@ -623,7 +648,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_groupByAggregate(
     }
 
     cudf::table_view n_keys_table(n_keys_cols);
-    cudf::experimental::groupby::groupby grouper(n_keys_table, ignore_null_keys);
+    cudf::experimental::groupby::groupby grouper(n_keys_table,
+            ignore_null_keys ? cudf::include_nulls::NO : cudf::include_nulls::YES);
 
     // Aggregates are passed in already grouped by column, so we just need to fill it in
     // as we go.

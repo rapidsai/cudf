@@ -1,9 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
-
-# cython: profile=False
-# distutils: language = c++
-# cython: embedsignature = True
-# cython: language_level = 3
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
 import numba.cuda
 import numba.numpy_support
@@ -20,6 +15,7 @@ from cudf.utils import cudautils
 from cudf.core.buffer import Buffer
 
 from cudf._libxx.column cimport Column
+from cudf._libxx.null_mask import bitmask_allocation_size_bytes
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
 from cudf._lib.GDFError import GDFError
@@ -141,10 +137,6 @@ def apply_dt_extract_op(Column incol, Column outcol, op):
 
 
 def nans_to_nulls(Column py_col):
-    from cudf.core.column import as_column
-    from cudf.core.buffer import Buffer
-    from cudf.utils.utils import mask_bitsize, calc_chunk_size
-
     cdef gdf_column* c_col = column_view_from_column(py_col)
     cdef pair[cpp_unaryops.bit_mask_t_ptr, size_type] result
     cdef cudaStream_t stream = <cudaStream_t><size_t>(0)
@@ -157,7 +149,7 @@ def nans_to_nulls(Column py_col):
         mask_ptr = rmm._DevicePointer(int(<uintptr_t>result.first))
         mask_buf = Buffer(
             mask_ptr,
-            calc_chunk_size(len(py_col), mask_bitsize)
+            bitmask_allocation_size_bytes(len(py_col))
         )
     else:
         c_free(<void*><uintptr_t>result.first, <cudaStream_t><uintptr_t>0)

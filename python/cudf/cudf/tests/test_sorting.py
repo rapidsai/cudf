@@ -26,9 +26,9 @@ def test_dataframe_sort_values(nelem, dtype):
     sorted_df = df.sort_values(by="a")
     # Check
     sorted_index = np.argsort(aa, kind="mergesort")
-    np.testing.assert_array_equal(sorted_df.index.values, sorted_index)
-    np.testing.assert_array_equal(sorted_df["a"], aa[sorted_index])
-    np.testing.assert_array_equal(sorted_df["b"], bb[sorted_index])
+    assert_eq(sorted_df.index.values, sorted_index)
+    assert_eq(sorted_df["a"].values, aa[sorted_index])
+    assert_eq(sorted_df["b"].values, bb[sorted_index])
 
 
 @pytest.mark.parametrize(
@@ -119,9 +119,9 @@ def test_dataframe_nlargest(nelem, n):
 
     # Check
     inds = np.argsort(aa)
-    np.testing.assert_array_equal(res["a"].to_array(), aa[inds][-n:][::-1])
-    np.testing.assert_array_equal(res["b"].to_array(), bb[inds][-n:][::-1])
-    np.testing.assert_array_equal(res.index.values, inds[-n:][::-1])
+    assert_eq(res["a"].to_array(), aa[inds][-n:][::-1])
+    assert_eq(res["b"].to_array(), bb[inds][-n:][::-1])
+    assert_eq(res.index.values, inds[-n:][::-1])
 
 
 @pytest.mark.parametrize("nelem,n", [(10, 5), (100, 10)])
@@ -134,9 +134,9 @@ def test_dataframe_nsmallest(nelem, n):
 
     # Check
     inds = np.argsort(-aa)
-    np.testing.assert_array_equal(res["a"].to_array(), aa[inds][-n:][::-1])
-    np.testing.assert_array_equal(res["b"].to_array(), bb[inds][-n:][::-1])
-    np.testing.assert_array_equal(res.index.values, inds[-n:][::-1])
+    assert_eq(res["a"].to_array(), aa[inds][-n:][::-1])
+    assert_eq(res["b"].to_array(), bb[inds][-n:][::-1])
+    assert_eq(res.index.values, inds[-n:][::-1])
 
 
 @pytest.mark.parametrize(

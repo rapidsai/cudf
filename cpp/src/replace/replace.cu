@@ -31,14 +31,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <thrust/device_ptr.h>
-#include <thrust/find.h>
-#include <thrust/execution_policy.h>
-#include <cub/cub.cuh>
 #include <cudf/copying.hpp>
 #include <cudf/replace.hpp>
 #include <cudf/detail/replace.hpp>
-#include <rmm/rmm.h>
 #include <cudf/types.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -60,7 +55,12 @@
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/detail/copy.hpp>
 #include <cudf/null_mask.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 
+#include <thrust/device_ptr.h>
+#include <thrust/find.h>
+#include <thrust/execution_policy.h>
+#include <cub/cub.cuh>
 namespace { //anonymous
 
 static constexpr int BLOCK_SIZE = 256;
@@ -489,8 +489,8 @@ std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& inpu
   CUDF_EXPECTS(input_col.type() == values_to_replace.type() &&
                    input_col.type() == replacement_values.type(),
                "Columns type mismatch");
-  CUDF_EXPECTS(values_to_replace.nullable() == false,
-               "values_to_replace must be non-nullable");
+  CUDF_EXPECTS(values_to_replace.has_nulls() == false,
+               "values_to_replace must not have nulls");
 
   if (0 == input_col.size() || 0 == values_to_replace.size() || 0 == replacement_values.size()) {
     return std::make_unique < cudf::column > (input_col);
@@ -896,17 +896,17 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
 
 namespace experimental {
 
-std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
-                                            cudf::column_view const& replacement,
-                                            rmm::mr::device_memory_resource* mr)
-                                            {
+std::unique_ptr<cudf::column> replace_nulls(
+    cudf::column_view const& input, cudf::column_view const& replacement,
+    rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   return cudf::detail::replace_nulls(input, replacement, mr, 0);
 }
 
-std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
-                                            cudf::scalar const& replacement,
-                                            rmm::mr::device_memory_resource* mr)
-                                            {
+std::unique_ptr<cudf::column> replace_nulls(
+    cudf::column_view const& input, cudf::scalar const& replacement,
+    rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   return cudf::detail::replace_nulls(input, replacement, mr, 0);
 }
 } //end experimental
@@ -1007,9 +1007,9 @@ void normalize_nans_and_zeros(mutable_column_view in_out,
  *
  * @returns new column with the modified data
  */
-std::unique_ptr<column> normalize_nans_and_zeros(column_view const& input,
-                                                 rmm::mr::device_memory_resource *mr)
-                                                 {
+std::unique_ptr<column> normalize_nans_and_zeros(
+    column_view const& input, rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   // output. copies the input
   std::unique_ptr<column> out = std::make_unique < column > (input, (cudaStream_t) 0, mr);
   // from device. unique_ptr which gets automatically cleaned up when we leave.
@@ -1030,8 +1030,8 @@ std::unique_ptr<column> normalize_nans_and_zeros(column_view const& input,
  * @throws cudf::logic_error if column does not have floating point data type.
  * @param[in, out] mutable_column_view representing input data. data is processed in-place
  */
-void normalize_nans_and_zeros(mutable_column_view& in_out)
-                              {
+void normalize_nans_and_zeros(mutable_column_view& in_out) {
+  CUDF_FUNC_RANGE();
   detail::normalize_nans_and_zeros(in_out, 0);
 }
 

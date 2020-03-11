@@ -9,8 +9,6 @@ import pandas as pd
 import pyarrow as pa
 import pytest
 
-import rmm
-
 import cudf as gd
 from cudf.core.dataframe import DataFrame, Series
 from cudf.tests import utils
@@ -214,7 +212,7 @@ def test_dataframe_basic():
     df = DataFrame()
 
     # Populate with cuda memory
-    df["keys"] = rmm.to_device(np.arange(10, dtype=np.float64))
+    df["keys"] = np.arange(10, dtype=np.float64)
     np.testing.assert_equal(df["keys"].to_array(), np.arange(10))
     assert len(df) == 10
 
@@ -444,7 +442,7 @@ def test_dataframe_to_string():
     df = DataFrame({"a": [1, 2, 3, 4, 5, 6], "b": [11, 12, 13, 14, 15, 16]})
 
     data = np.arange(6)
-    mask = np.zeros(1, dtype=np.uint8)
+    mask = np.zeros(1, dtype=gd.utils.utils.mask_dtype)
     mask[0] = 0b00101101
 
     masked = Series.from_masked_array(data, mask)
@@ -700,7 +698,7 @@ def test_dataframe_setitem_from_masked_object():
     )
     assert test2_nan["a"].null_count == 0
 
-    gpu_ary = rmm.to_device(ary)
+    gpu_ary = cupy.asarray(ary)
     test3_null = Series(gpu_ary, nan_as_null=True)
     assert test3_null.nullable
     assert test3_null.null_count == 20
@@ -1053,7 +1051,7 @@ def test_from_records(dtypes):
 
 def test_from_gpu_matrix():
     h_ary = np.array([[1, 2, 3], [4, 5, 6]], np.int32)
-    d_ary = rmm.to_device(h_ary)
+    d_ary = cupy.asarray(h_ary)
 
     gdf = gd.DataFrame.from_gpu_matrix(d_ary, columns=["a", "b", "c"])
     df = pd.DataFrame(h_ary, columns=["a", "b", "c"])
@@ -1070,7 +1068,7 @@ def test_from_gpu_matrix():
 
 @pytest.mark.xfail(reason="matrix dimension is not 2")
 def test_from_gpu_matrix_wrong_dimensions():
-    d_ary = rmm.device_array((2, 3, 4), dtype=np.int32)
+    d_ary = cupy.empty((2, 3, 4), dtype=np.int32)
     gdf = gd.DataFrame.from_gpu_matrix(d_ary)
     assert gdf is not None
 
@@ -1203,8 +1201,8 @@ def test_to_from_arrow_nulls(data_type):
     # We have 64B padded buffers for nulls whereas Arrow returns a minimal
     # number of bytes, so only check the first byte in this case
     np.testing.assert_array_equal(
-        np.array(s1.buffers()[0])[0],
-        gs1._column.mask_array_view.copy_to_host()[0],
+        np.asarray(s1.buffers()[0]).view("u1")[0],
+        gs1._column.mask_array_view.copy_to_host().view("u1")[0],
     )
     assert pa.Array.equals(s1, gs1.to_arrow())
 
@@ -1214,8 +1212,8 @@ def test_to_from_arrow_nulls(data_type):
     # We have 64B padded buffers for nulls whereas Arrow returns a minimal
     # number of bytes, so only check the first byte in this case
     np.testing.assert_array_equal(
-        np.array(s2.buffers()[0])[0],
-        gs2._column.mask_array_view.copy_to_host()[0],
+        np.asarray(s2.buffers()[0]).view("u1")[0],
+        gs2._column.mask_array_view.copy_to_host().view("u1")[0],
     )
     assert pa.Array.equals(s2, gs2.to_arrow())
 
@@ -1362,22 +1360,22 @@ def test_dataframe_shape_empty():
 )
 @pytest.mark.parametrize("nulls", ["none", "some", "all"])
 def test_dataframe_transpose(nulls, num_cols, num_rows, dtype):
-    if dtype not in ["float32", "float64"] and nulls in ["some", "all"]:
-        pytest.skip(msg="nulls not supported in dtype: " + dtype)
 
     pdf = pd.DataFrame()
     from string import ascii_lowercase
 
+    null_rep = np.nan if dtype in ["float32", "float64"] else None
+
     for i in range(num_cols):
         colname = ascii_lowercase[i]
-        data = np.random.randint(0, 26, num_rows).astype(dtype)
+        data = pd.Series(np.random.randint(0, 26, num_rows).astype(dtype))
         if nulls == "some":
             idx = np.random.choice(
                 num_rows, size=int(num_rows / 2), replace=False
             )
-            data[idx] = np.nan
+            data[idx] = null_rep
         elif nulls == "all":
-            data[:] = np.nan
+            data[:] = null_rep
         pdf[colname] = data
 
     gdf = DataFrame.from_pandas(pdf)
@@ -1391,10 +1389,9 @@ def test_dataframe_transpose(nulls, num_cols, num_rows, dtype):
     assert_eq(expect, got_property)
 
 
-@pytest.mark.parametrize("num_cols", [0, 1, 2, 10])
-@pytest.mark.parametrize("num_rows", [0, 1, 2, 1000])
-def test_dataframe_tranpose_category(num_cols, num_rows):
-    pytest.xfail("category dtype not yet supported for transpose")
+@pytest.mark.parametrize("num_cols", [1, 2, 10])
+@pytest.mark.parametrize("num_rows", [1, 2, 20])
+def test_dataframe_transpose_category(num_cols, num_rows):
     pdf = pd.DataFrame()
     from string import ascii_lowercase
 
@@ -1409,10 +1406,17 @@ def test_dataframe_tranpose_category(num_cols, num_rows):
     got_function = gdf.transpose()
     got_property = gdf.T
 
+    # materialize our categoricals because pandas
+    for name, col in got_function._data.items():
+        got_function[name] = col.astype(col.dtype.type)
+
+    for name, col in got_property._data.items():
+        got_property[name] = col.astype(col.dtype.type)
+
     expect = pdf.transpose()
 
-    pd.testing.assert_frame_equal(expect, got_function.to_pandas())
-    pd.testing.assert_frame_equal(expect, got_property.to_pandas())
+    assert_eq(expect, got_function.to_pandas())
+    assert_eq(expect, got_property.to_pandas())
 
 
 def test_generated_column():
@@ -2629,7 +2633,7 @@ def test_shift(dtype, period, data_empty):
     gdf = DataFrame({"a": Series(data, dtype=dtype)})
     pdf = pd.DataFrame({"a": pd.Series(data, dtype=dtype)})
 
-    shifted_outcome = gdf.a.shift(period)
+    shifted_outcome = gdf.a.shift(period).fillna(-1)
     expected_outcome = pdf.a.shift(period).fillna(-1).astype(dtype)
 
     if data_empty:
@@ -2929,11 +2933,13 @@ def test_round_nan_as_null_false(series, decimal):
     ],
 )
 def test_all(data):
+    # Pandas treats `None` in object type columns as True for some reason, so
+    # replacing with `False`
     if np.array(data).ndim <= 1:
-        pdata = pd.Series(data)
+        pdata = pd.Series(data).replace([None], False)
         gdata = Series.from_pandas(pdata)
     else:
-        pdata = pd.DataFrame(data, columns=["a", "b"])
+        pdata = pd.DataFrame(data, columns=["a", "b"]).replace([None], False)
         gdata = DataFrame.from_pandas(pdata)
 
         # test bool_only
@@ -2974,11 +2980,13 @@ def test_all(data):
     ],
 )
 def test_any(data):
+    # Pandas treats `None` in object type columns as True for some reason, so
+    # replacing with `False`
     if np.array(data).ndim <= 1:
-        pdata = pd.Series(data)
+        pdata = pd.Series(data).replace([None], False)
         gdata = Series.from_pandas(pdata)
     else:
-        pdata = pd.DataFrame(data, columns=["a", "b"])
+        pdata = pd.DataFrame(data, columns=["a", "b"]).replace([None], False)
         gdata = DataFrame.from_pandas(pdata)
 
         # test bool_only
@@ -2999,9 +3007,9 @@ def test_dataframe_sizeof(indexed):
 
     gdf = gd.DataFrame({"A": [8] * rows, "B": [32] * rows}, index=index)
 
-    for c in gdf._data.values():
+    for c in gdf._data.columns:
         assert gdf._index.__sizeof__() == gdf._index.__sizeof__()
-    cols_sizeof = sum(c.__sizeof__() for c in gdf._data.values())
+    cols_sizeof = sum(c.__sizeof__() for c in gdf._data.columns)
     assert gdf.__sizeof__() == (gdf._index.__sizeof__() + cols_sizeof)
 
 
@@ -4015,10 +4023,12 @@ def test_series_astype_error_handling(errors):
 def test_df_constructor_dtype(dtype):
     if "datetime" in dtype:
         data = ["1991-11-20", "2004-12-04", "2016-09-13", None]
-    elif dtype == "str" or "float" in dtype:
-        data = [1, 2, 3, None]
-    else:
+    elif dtype == "str":
+        data = ["a", "b", "c", None]
+    elif "float" in dtype:
         data = [1.0, 0.5, -1.1, np.nan, None]
+    else:
+        data = [1, 2, 3, None]
 
     sr = Series(data, dtype=dtype)
 
@@ -4269,16 +4279,14 @@ def test_memory_usage_string():
     )
 
     # Check string column
-    assert (
-        gdf.B.memory_usage(deep=True, index=False)
-        == gdf.B._column.nvstrings.device_memory()
+    assert gdf.B.memory_usage(deep=True, index=False) == df.B.memory_usage(
+        deep=True, index=False
     )
 
     # Check string index
-    assert (
-        gdf.set_index("B").index.memory_usage(deep=True)
-        == gdf.B._column.nvstrings.device_memory()
-    )
+    assert gdf.set_index("B").index.memory_usage(
+        deep=True
+    ) == df.B.memory_usage(deep=True, index=False)
 
 
 @pytest.mark.xfail
@@ -4345,10 +4353,7 @@ def test_memory_usage_multi():
 def test_setitem_diff_size_list(list_input, key):
     gdf = gd.datasets.randomdata(5)
     with pytest.raises(
-        ValueError,
-        match=(
-            "Cannot insert Column of different length into OrderedColumnDict"
-        ),
+        ValueError, match=("All values must be of equal length")
     ):
         gdf[key] = list_input
 
@@ -4407,3 +4412,45 @@ def test_init_multiindex_from_dict():
     gdf = DataFrame({("a", "b"): [1]})
     assert_eq(pdf, gdf)
     assert_eq(pdf.columns, gdf.columns)
+
+
+def test_change_column_dtype_in_empty():
+    pdf = pd.DataFrame({"a": [], "b": []})
+    gdf = gd.from_pandas(pdf)
+    assert_eq(pdf, gdf)
+    pdf["b"] = pdf["b"].astype("int64")
+    gdf["b"] = gdf["b"].astype("int64")
+    assert_eq(pdf, gdf)
+
+
+def test_dataframe_from_table_empty_index():
+    from cudf._libxx.table import Table
+
+    df = DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    odict = df._data
+    tbl = Table(odict)
+
+    result = DataFrame._from_table(tbl)  # noqa: F841
+
+
+@pytest.mark.parametrize("dtype", ["int64", "str"])
+def test_dataframe_from_dictionary_series_same_name_index(dtype):
+    pd_idx1 = pd.Index([1, 2, 0], name="test_index").astype(dtype)
+    pd_idx2 = pd.Index([2, 0, 1], name="test_index").astype(dtype)
+    pd_series1 = pd.Series([1, 2, 3], index=pd_idx1)
+    pd_series2 = pd.Series([1, 2, 3], index=pd_idx2)
+
+    gd_idx1 = gd.from_pandas(pd_idx1)
+    gd_idx2 = gd.from_pandas(pd_idx2)
+    gd_series1 = gd.Series([1, 2, 3], index=gd_idx1)
+    gd_series2 = gd.Series([1, 2, 3], index=gd_idx2)
+
+    expect = pd.DataFrame({"a": pd_series1, "b": pd_series2})
+    got = gd.DataFrame({"a": gd_series1, "b": gd_series2})
+
+    if dtype == "str":
+        # Pandas actually loses its index name erroneously here...
+        expect.index.name = "test_index"
+
+    assert_eq(expect, got)
+    assert expect.index.names == got.index.names

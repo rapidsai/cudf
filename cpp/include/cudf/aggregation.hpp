@@ -33,10 +33,49 @@
 
 namespace cudf {
 namespace experimental {
+
 /**
- * @brief Base class for abstract representation of an aggregation.
+ * @brief Base class for specifying the desired aggregation in an
+ * `aggregation_request`.
+ *
+ * Other kinds of aggregations may derive from this class to encapsulate
+ * additional information needed to compute the aggregation.
  */
-class aggregation;
+class aggregation {
+ public:
+  /**
+   * @brief Possible aggregation operations
+   */
+  enum Kind {
+    SUM,       ///< sum reduction
+    PRODUCT,   ///< product reduction
+    MIN,       ///< min reduction
+    MAX,       ///< max reduction
+    COUNT_VALID,    ///< count number of valid elements
+    COUNT_ALL,      ///< count number of elements
+    ANY,       ///< any reduction
+    ALL,       ///< all reduction
+    SUM_OF_SQUARES, ///< sum of squares reduction
+    MEAN,      ///< arithmetic mean reduction
+    VARIANCE,  ///< groupwise variance
+    STD,       ///< groupwise standard deviation
+    MEDIAN,    ///< median reduction
+    QUANTILE,  ///< compute specified quantile(s)
+    ARGMAX,    ///< Index of max element
+    ARGMIN,    ///< Index of min element
+    NUNIQUE,   ///< count number of unique elements
+    NTH_ELEMENT, ///< get the nth element
+    PTX,       ///< PTX UDF based reduction
+    CUDA       ///< CUDA UDf based reduction
+  };
+
+  aggregation(aggregation::Kind a) : kind{a} {}
+  Kind kind;  ///< The aggregation to perform
+
+  bool operator==(aggregation const& other) const { return kind == other.kind; }
+
+  ~aggregation() = default; 
+};
 
 enum class udf_type : bool {
    CUDA,
@@ -55,8 +94,12 @@ std::unique_ptr<aggregation> make_min_aggregation();
 /// Factory to create a MAX aggregation
 std::unique_ptr<aggregation> make_max_aggregation();
 
-/// Factory to create a COUNT aggregation
-std::unique_ptr<aggregation> make_count_aggregation();
+/**
+ * @brief Factory to create a COUNT aggregation
+ * 
+ * @param _include_nulls Indicates if null values will be counted.
+*/
+std::unique_ptr<aggregation> make_count_aggregation(include_nulls _include_nulls = include_nulls::NO);
 
 /// Factory to create a ANY aggregation
 std::unique_ptr<aggregation> make_any_aggregation();
@@ -111,6 +154,31 @@ std::unique_ptr<aggregation> make_argmax_aggregation();
  * `argmin` returns the index of the minimum element.
 */
 std::unique_ptr<aggregation> make_argmin_aggregation();
+
+/**
+ * @brief Factory to create a `nunique` aggregation
+ * 
+ * `nunique` returns the number of unique elements.
+ * @param _include_nulls Indicates if null values will be counted.
+*/
+std::unique_ptr<aggregation>
+make_nunique_aggregation(include_nulls _include_nulls = include_nulls::NO);
+
+/**
+ * @brief Factory to create a `nth_element` aggregation
+ *
+ * `nth_element` returns the n'th element of the group/series.
+ *
+ * If @p n is not within the range `[-group_size, group_size)`, the result of
+ * the respective group will be null. Negative indices `[-group_size, -1]`
+ * corresponds to `[0, group_size-1]` indices respectively where `group_size` is
+ * the size of each group.
+ *
+ * @param n index of nth element in each group.
+ * @param _include_nulls include nulls during indexing.
+ */
+std::unique_ptr<aggregation>
+make_nth_element_aggregation(size_type n, include_nulls _include_nulls = include_nulls::YES);
 
 /**
  * @brief Factory to create a aggregation base on UDF for PTX or CUDA

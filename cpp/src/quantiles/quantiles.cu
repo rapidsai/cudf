@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,96 +14,95 @@
  * limitations under the License.
  */
 
-#include <memory>
-#include <thrust/functional.h>
-#include <thrust/iterator/counting_iterator.h>
-#include <cudf/copying.hpp>
-#include <cudf/scalar/scalar.hpp>
-#include <cudf/table/row_operators.cuh>
-#include <cudf/table/table_device_view.cuh>
-#include <cudf/types.hpp>
-#include <cudf/utilities/traits.hpp>
+
 #include <quantiles/quantiles_util.hpp>
-#include "cudf/utilities/error.hpp"
+#include <cudf/copying.hpp>
+#include <cudf/detail/gather.cuh>
+#include <cudf/detail/sorting.hpp>
+#include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
+
+
+#include <memory>
+#include <vector>
 
 namespace cudf {
 namespace experimental {
+
 namespace detail {
-namespace {
 
-using ScalarResult = double;
-
-struct quantile_functor
+template<typename SortMapIterator>
+std::unique_ptr<table>
+quantiles(table_view const& input,
+          SortMapIterator sortmap,
+          std::vector<double> const& q,
+          interpolation interp,
+          rmm::mr::device_memory_resource* mr)
 {
-    template<typename T, typename... Args>
-    std::enable_if_t<not std::is_arithmetic<T>::value, std::unique_ptr<scalar>>
-    operator()(Args&&... args)
-    {
-        CUDF_FAIL("Only numeric types are supported in quantiles.");
-    }
-
-    template<typename T>
-    std::enable_if_t<std::is_arithmetic<T>::value, std::unique_ptr<scalar>>
-    operator()(column_view const& input,
-               double percent,
-               interpolation interp,
-               order_info column_order,
-               rmm::mr::device_memory_resource *mr =
-                 rmm::mr::get_default_resource(),
-               cudaStream_t stream = 0)
-    {
-        if (input.size() == input.null_count()) {
-            return std::make_unique<numeric_scalar<ScalarResult>>(0, false, stream);
-        }
-
-        if (input.size() == 1) {
-            auto result = get_array_value<ScalarResult>(input.begin<T>(), 0);
-            return std::make_unique<numeric_scalar<ScalarResult>>(result, true, stream);
-        }
-
-        auto valid_count = input.size() - input.null_count();
-
-        if (not column_order.is_ordered)
-        {
-            table_view const in_table { { input } };
-            auto sortmap = sorted_order(in_table, { order::ASCENDING }, { null_order::AFTER });
-            auto sortmap_begin = sortmap->view().begin<size_type>();
-            auto input_begin = input.begin<T>();
-
-            auto selector = [&](size_type location) {
-                auto idx = detail::get_array_value<size_type>(sortmap_begin, location);
-                return detail::get_array_value<T>(input_begin, idx);
+    auto quantile_idx_lookup = [sortmap, interp, size=input.num_rows()]
+        __device__ (double q) {
+            auto selector = [sortmap] __device__ (auto idx) {
+                return sortmap[idx];
             };
-
-            auto result = select_quantile<ScalarResult>(selector, valid_count, percent, interp);
-            return std::make_unique<numeric_scalar<ScalarResult>>(result, true, stream);
-        }
-
-        auto input_begin = column_order.ordering == order::ASCENDING
-            ? input.begin<T>() + (column_order.null_ordering == null_order::BEFORE ? input.null_count() : 0)
-            : input.begin<T>() - (column_order.null_ordering == null_order::AFTER  ? input.null_count() : 0) + input.size() - 1;
-
-        auto selector = [&](size_type location) {
-            return get_array_value<T>(input_begin, column_order.ordering == order::ASCENDING ? location : -location);
+            return detail::select_quantile<size_type>(selector, size, q, interp);
         };
 
-        auto result = select_quantile<ScalarResult>(selector, valid_count, percent, interp);
-        return std::make_unique<numeric_scalar<ScalarResult>>(result, true, stream);
-    }
-};
+    rmm::device_vector<double> q_device{q};
 
-} // anonymous namespace
-} // namespace detail
+    auto quantile_idx_iter = thrust::make_transform_iterator(q_device.begin(),
+                                                             quantile_idx_lookup);
 
-std::unique_ptr<scalar>
-quantile(column_view const& input,
-         double q,
-         interpolation interp,
-         order_info column_order)
-{
-        return type_dispatcher(input.type(), detail::quantile_functor{},
-                               input, q, interp, column_order);
+    return detail::gather(input,
+                          quantile_idx_iter,
+                          quantile_idx_iter + q.size(),
+                          false,
+                          mr);
 }
 
-} // namespace experimental
-} // namespace cudf
+}
+
+std::unique_ptr<table>
+quantiles(table_view const& input,
+          std::vector<double> const& q,
+          interpolation interp,
+          cudf::sorted is_input_sorted,
+          std::vector<order> const& column_order,
+          std::vector<null_order> const& null_precedence,
+          rmm::mr::device_memory_resource* mr)
+{
+    CUDF_FUNC_RANGE();
+    if (q.size() == 0) {
+        return empty_like(input);
+    }
+
+    CUDF_EXPECTS(interp == interpolation::HIGHER ||
+                 interp == interpolation::LOWER ||
+                 interp == interpolation::NEAREST,
+                 "multi-column quantiles require a non-arithmetic interpolation strategy.");
+
+    CUDF_EXPECTS(input.num_rows() > 0,
+                 "multi-column quantiles require at least one input row.");
+
+    if (is_input_sorted == sorted::YES)
+    {
+        return detail::quantiles(input,
+                                 thrust::make_counting_iterator<size_type>(0),
+                                 q,
+                                 interp,
+                                 mr);
+    }
+    else
+    {
+        auto sorted_idx = detail::sorted_order(input, column_order, null_precedence);
+        return detail::quantiles(input,
+                                 sorted_idx->view().data<size_type>(),
+                                 q,
+                                 interp,
+                                 mr);
+    }
+}
+
+}
+}

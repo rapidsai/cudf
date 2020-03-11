@@ -4,33 +4,31 @@ import pickle
 import warnings
 from numbers import Number
 
+import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 from numba import cuda, njit
 
 import nvstrings
-import rmm
 
 import cudf
 import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
-from cudf._lib.stream_compaction import nunique as cpp_unique_count
 from cudf._libxx.column import Column
+from cudf._libxx.null_mask import (
+    MaskState,
+    bitmask_allocation_size_bytes,
+    create_null_mask,
+)
+from cudf._libxx.stream_compaction import unique_count as cpp_unique_count
+from cudf._libxx.transform import bools_to_mask
+from cudf.core._sort import get_sorted_inds
 from cudf.core.buffer import Buffer
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils import cudautils, ioutils, utils
-from cudf.utils.dtypes import (
-    is_categorical_dtype,
-    is_scalar,
-    is_string_dtype,
-    np_to_pa_dtype,
-)
-from cudf.utils.utils import (
-    buffers_from_pyarrow,
-    calc_chunk_size,
-    mask_bitsize,
-)
+from cudf.utils.dtypes import is_categorical_dtype, is_scalar, np_to_pa_dtype
+from cudf.utils.utils import buffers_from_pyarrow, mask_dtype
 
 
 class ColumnBase(Column):
@@ -56,34 +54,48 @@ class ColumnBase(Column):
     def __reduce__(self):
         return (
             build_column,
-            (self.data, self.dtype, self.mask, self.offset, self.children),
+            (
+                self.base_data,
+                self.dtype,
+                self.base_mask,
+                self.size,
+                self.offset,
+                self.base_children,
+            ),
         )
 
-    def as_frame(self, name=None):
+    def as_frame(self):
         from cudf.core.frame import Frame
 
         """
         Converts a Column to Frame
         """
-        return Frame({name: self.copy(deep=False)})
+        return Frame({None: self.copy(deep=False)})
 
     @property
     def data_array_view(self):
         """
-        View the data as a device array or nvstrings object
+        View the data as a device array object
         """
         if self.dtype == "object":
+            # TODO: Change this to raise exception once copying.pyx is ported
             return self.nvstrings
+            # raise ValueError("Cannot get an array view of a StringColumn")
 
         if is_categorical_dtype(self.dtype):
             return self.codes.data_array_view
         else:
             dtype = self.dtype
 
-        result = rmm.device_array_from_ptr(
-            ptr=self.data.ptr, nelem=len(self), dtype=dtype
+        result = cuda.as_cuda_array(self.data)
+        # Workaround until `.view(...)` can change itemsize
+        # xref: https://github.com/numba/numba/issues/4829
+        result = cuda.devicearray.DeviceNDArray(
+            shape=(result.nbytes // dtype.itemsize,),
+            strides=(dtype.itemsize,),
+            dtype=dtype,
+            gpu_data=result.gpu_data,
         )
-        result.gpu_data._obj = self
         return result
 
     @property
@@ -91,12 +103,17 @@ class ColumnBase(Column):
         """
         View the mask as a device array
         """
-        result = rmm.device_array_from_ptr(
-            ptr=self.mask.ptr,
-            nelem=calc_chunk_size(len(self), mask_bitsize),
-            dtype=np.int8,
+        result = cuda.as_cuda_array(self.mask)
+        dtype = mask_dtype
+
+        # Workaround until `.view(...)` can change itemsize
+        # xref: https://github.com/numba/numba/issues/4829
+        result = cuda.devicearray.DeviceNDArray(
+            shape=(result.nbytes // dtype.itemsize,),
+            strides=(dtype.itemsize,),
+            dtype=dtype,
+            gpu_data=result.gpu_data,
         )
-        result.gpu_data._obj = self
         return result
 
     def __len__(self):
@@ -107,9 +124,8 @@ class ColumnBase(Column):
         sr = pd.Series(arr.copy_to_host())
 
         if self.nullable:
-            mask_bits = self.mask_array_view.copy_to_host()
             mask_bytes = (
-                cudautils.expand_mask_bits(len(self), mask_bits)
+                cudautils.expand_mask_bits(len(self), self.mask_array_view)
                 .copy_to_host()
                 .astype(bool)
             )
@@ -129,41 +145,21 @@ class ColumnBase(Column):
             return bool(val)
         return self.unordered_compare("eq", other).min()
 
+    def all(self):
+        if self.null_count != 0:
+            return False
+        return bool(libcudfxx.reduce.reduce("all", self, dtype=np.bool_))
+
+    def any(self):
+        if self.valid_count == 0:
+            return False
+        return bool(libcudfxx.reduce.reduce("any", self, dtype=np.bool_))
+
     def __sizeof__(self):
         n = self.data.size
         if self.nullable:
             n += self.mask.size
         return n
-
-    def set_mask(self, mask):
-        """
-        Return a Column with the same data but new mask.
-
-        Parameters
-        ----------
-        mask : 1D array-like
-            The null-mask.  Valid values are marked as ``1``; otherwise ``0``.
-            The mask bit given the data index ``idx`` is computed as::
-
-                (mask[idx // 8] >> (idx % 8)) & 1
-        """
-        if mask is None:
-            return self
-        mask = Buffer(mask)
-        return build_column(
-            self.data,
-            self.dtype,
-            mask=mask,
-            offset=self.offset,
-            children=self.children,
-        )
-
-    @staticmethod
-    def from_mem_views(data_mem, mask_mem=None, null_count=None):
-        """Create a Column object from a data device array (or nvstrings
-           object), and an optional mask device array
-        """
-        raise NotImplementedError
 
     @classmethod
     def _concat(cls, objs, dtype=None):
@@ -252,6 +248,7 @@ class ColumnBase(Column):
                         libcudfxx.MAX_STRING_COLUMN_BYTES_STR
                     )
                 )
+            # TODO: remove nvstrings when concat.pyx is ported
             objs = [o.nvstrings for o in objs]
             return as_column(nvstrings.from_strings(*objs))
 
@@ -271,7 +268,7 @@ class ColumnBase(Column):
         # Allocate output mask only if there's nulls in the input objects
         mask = None
         if nulls:
-            mask = Buffer(utils.make_mask(newsize))
+            mask = create_null_mask(newsize, state=MaskState.UNINITIALIZED)
 
         col = build_column(
             data=data, dtype=head.dtype, mask=mask, children=children
@@ -284,16 +281,11 @@ class ColumnBase(Column):
         return col
 
     def dropna(self):
-        dropped_col = libcudf.stream_compaction.drop_nulls([self])
-        if not dropped_col:
-            return column_empty_like(self, newsize=0)
-        else:
-            dropped_col = dropped_col[0]
-            dropped_col.mask = None
-            return dropped_col
+        dropped_col = self.as_frame().dropna()._as_column()
+        return dropped_col
 
     def _get_mask_as_column(self):
-        data = Buffer(cudautils.ones(len(self), dtype=np.bool_))
+        data = Buffer(cupy.ones(len(self), dtype=np.bool_))
         mask = as_column(data=data)
         if self.nullable:
             mask = mask.set_mask(self._mask).fillna(False)
@@ -301,19 +293,6 @@ class ColumnBase(Column):
 
     def _memory_usage(self, **kwargs):
         return self.__sizeof__()
-
-    def allocate_mask(self, all_valid=True):
-        """Return a new Column with a newly allocated mask buffer.
-        If ``all_valid`` is True, the new mask is set to all valid.
-        If ``all_valid`` is False, the new mask is set to all null.
-        """
-        nelem = len(self)
-        mask_sz = utils.calc_chunk_size(nelem, utils.mask_bitsize)
-        mask = rmm.device_array(mask_sz, dtype=utils.mask_dtype)
-        if nelem > 0:
-            cudautils.fill_value(mask, 0xFF if all_valid else 0)
-        mask = Buffer(mask)
-        return self.set_mask(mask=mask)
 
     def to_gpu_array(self, fillna=None):
         """Get a dense numba device array for the data.
@@ -352,6 +331,9 @@ class ColumnBase(Column):
         """
         return self.to_gpu_array(fillna=fillna).copy_to_host()
 
+    def shift(self, offset, fill_value):
+        return libcudfxx.copying.shift(self, offset, fill_value)
+
     @property
     def valid_count(self):
         """Number of non-null values"""
@@ -366,26 +348,21 @@ class ColumnBase(Column):
         else:
             raise ValueError("Column has no null mask")
 
-    def copy_data(self):
-        """Copy the column with a new allocation of the data but not the mask,
-        which is shared by the new column.
-        """
-        return self.replace(data=self.data.copy())
-
     def copy(self, deep=True):
         """Columns are immutable, so a deep copy produces a copy of the
         underlying data and mask and a shallow copy creates a new column and
         copies the references of the data and mask.
         """
         if deep:
-            return libcudf.copying.copy_column(self)
+            return libcudfxx.copying.copy_column(self)
         else:
             return build_column(
-                self.data,
+                self.base_data,
                 self.dtype,
-                mask=self.mask,
+                mask=self.base_mask,
+                size=self.size,
                 offset=self.offset,
-                children=self.children,
+                children=self.base_children,
             )
 
     def view(self, newcls, **kwargs):
@@ -420,6 +397,7 @@ class ColumnBase(Column):
             index = len(self) + index
         if index > len(self) - 1:
             raise IndexError
+        # TODO: Remove this when copying.pyx is ported
         val = self.data_array_view[index]  # this can raise IndexError
         if isinstance(val, nvstrings.nvstrings):
             val = val.to_host()[0]
@@ -448,43 +426,30 @@ class ColumnBase(Column):
                 )
 
             start, stop, stride = arg.indices(len(self))
-            if start == stop:
+
+            if start < 0:
+                start = start + len(self)
+            if stop < 0:
+                stop = stop + len(self)
+
+            if start >= stop:
                 return column_empty(0, self.dtype, masked=True)
             # compute mask slice
-            if self.has_nulls:
-                if arg.step is not None and arg.step != 1:
-                    raise NotImplementedError(arg)
+            if stride == 1 or stride is None:
 
-                # slicing data
-                slice_data = self.data_array_view[arg]
-                # slicing mask
-                data_size = self.size
-                bytemask = cudautils.expand_mask_bits(
-                    data_size, self.mask_array_view
-                )
-                slice_mask = cudautils.compact_mask_bytes(bytemask[arg])
+                return libcudfxx.copying.column_slice(self, [start, stop])[0]
             else:
-                slice_data = self.data_array_view[arg]
-                slice_mask = None
-            if self.dtype == "object":
-                return as_column(slice_data)
-            else:
-                if arg.step is not None and arg.step != 1:
-                    slice_data = cudautils.as_contiguous(slice_data)
-                    slice_data = Buffer(slice_data)
-                else:
-                    # data Buffer lifetime is tied to self:
-                    slice_data = Buffer(
-                        data=slice_data.device_ctypes_pointer.value,
-                        size=slice_data.nbytes,
-                        owner=self,
+                # Need to create a gather map for given slice with stride
+                gather_map = as_column(
+                    cupy.arange(
+                        start=start,
+                        stop=stop,
+                        step=stride,
+                        dtype=np.dtype(np.int32),
                     )
+                )
+                return self.as_frame()._gather(gather_map)._as_column()
 
-                # mask Buffer lifetime is not:
-                if slice_mask is not None:
-                    slice_mask = Buffer(slice_mask)
-
-                return build_column(slice_data, self.dtype, mask=slice_mask)
         else:
             arg = column.as_column(arg)
             if len(arg) == 0:
@@ -506,9 +471,24 @@ class ColumnBase(Column):
 
         if isinstance(key, slice):
             key_start, key_stop, key_stride = key.indices(len(self))
-            if key_stride != 1:
-                raise NotImplementedError("Stride not supported in slice")
-            nelem = abs(key_stop - key_start)
+            if key_start < 0:
+                key_start = key_start + len(self)
+            if key_stop < 0:
+                key_stop = key_stop + len(self)
+            if key_start >= key_stop:
+                return self.copy()
+            if key_stride != 1 or key_stride is not None or is_scalar(value):
+                key = as_column(
+                    cupy.arange(
+                        start=key_start,
+                        stop=key_stop,
+                        step=key_stride,
+                        dtype=np.dtype(np.int32),
+                    )
+                )
+                nelem = len(key)
+            else:
+                nelem = abs(key_stop - key_start)
         else:
             key = column.as_column(key)
             if pd.api.types.is_bool_dtype(key.dtype):
@@ -516,47 +496,72 @@ class ColumnBase(Column):
                     raise ValueError(
                         "Boolean mask must be of same length as column"
                     )
-                key = column.as_column(cudautils.arange(len(self)))[key]
+                key = column.as_column(cupy.arange(len(self)))[key]
             nelem = len(key)
 
         if is_scalar(value):
             if is_categorical_dtype(self.dtype):
-                from cudf.utils.cudautils import fill_value
-
-                data = rmm.device_array(nelem, dtype=self.codes.dtype)
-                fill_value(data, self._encode(value))
-                value = build_categorical_column(
-                    categories=self.dtype.categories,
-                    codes=as_column(data),
-                    ordered=self.dtype.ordered,
-                )
-            elif value is None:
-                value = column.column_empty(nelem, self.dtype, masked=True)
+                value = self._encode(value)
             else:
-                to_dtype = pd.api.types.pandas_dtype(self.dtype)
-                value = utils.scalar_broadcast_to(value, nelem, to_dtype)
+                value = self.dtype.type(value) if value is not None else value
+        else:
+            if len(value) != nelem:
+                msg = (
+                    f"Size mismatch: cannot set value "
+                    f"of size {len(value)} to indexing result of size "
+                    f"{nelem}"
+                )
+                raise ValueError(msg)
+            value = column.as_column(value).astype(self.dtype)
+            if is_categorical_dtype(value.dtype):
+                value = value.cat().set_categories(self.categories)
+                assert self.dtype == value.dtype
 
-        value = column.as_column(value).astype(self.dtype)
+        if (
+            isinstance(key, slice)
+            and (key_stride == 1 or key_stride is None)
+            and not is_scalar(value)
+        ):
 
-        if len(value) != nelem:
-            msg = (
-                f"Size mismatch: cannot set value "
-                f"of size {len(value)} to indexing result of size "
-                f"{nelem}"
+            out = libcudfxx.copying.copy_range(
+                value, self, 0, nelem, key_start, key_stop, False
             )
-            raise ValueError(msg)
-
-        if is_categorical_dtype(value.dtype):
-            value = value.cat().set_categories(self.categories)._column
-            assert self.dtype == value.dtype
-
-        if isinstance(key, slice):
-            out = libcudf.copying.copy_range(
-                self, value, key_start, key_stop, 0
-            )
+            if is_categorical_dtype(value.dtype):
+                out = build_categorical_column(
+                    categories=value.categories,
+                    codes=out,
+                    mask=out.base_mask,
+                    size=out.size,
+                    offset=out.offset,
+                    ordered=value.ordered,
+                )
         else:
             try:
-                out = libcudf.copying.scatter(value, key, self)
+                if is_scalar(value):
+                    input = self
+                    if is_categorical_dtype(self.dtype):
+                        input = self.codes
+
+                    out = input.as_frame()._scatter(key, [value])._as_column()
+
+                    if is_categorical_dtype(self.dtype):
+                        out = build_categorical_column(
+                            categories=self.categories,
+                            codes=out,
+                            mask=out.base_mask,
+                            size=out.size,
+                            offset=out.offset,
+                            ordered=self.ordered,
+                        )
+
+                else:
+                    if not isinstance(value, Column):
+                        value = as_column(value)
+                    out = (
+                        self.as_frame()
+                        ._scatter(key, value.as_frame())
+                        ._as_column()
+                    )
             except RuntimeError as e:
                 if "out of bounds" in str(e):
                     raise IndexError(
@@ -571,46 +576,27 @@ class ColumnBase(Column):
 
         Returns a copy with null filled.
         """
-        if not self.nullable:
-            return self
-        out = cudautils.fillna(
-            data=self.data_array_view, mask=self.mask_array_view, value=value
-        )
-        return self.replace(data=Buffer(out), mask=None, null_count=0)
+        raise NotImplementedError
 
     def isnull(self):
         """Identify missing values in a Column.
         """
-        return libcudf.unaryops.is_null(self)
+        return libcudfxx.unary.is_null(self)
 
     def isna(self):
         """Identify missing values in a Column. Alias for isnull.
         """
         return self.isnull()
 
-    def notna(self):
+    def notnull(self):
         """Identify non-missing values in a Column.
         """
-        return libcudf.unaryops.is_not_null(self)
+        return libcudfxx.unary.is_valid(self)
 
-    def notnull(self):
-        """Identify non-missing values in a Column. Alias for notna.
+    def notna(self):
+        """Identify non-missing values in a Column. Alias for notnull.
         """
-        return self.notna()
-
-    def _invert(self):
-        """Internal convenience function for inverting masked array
-
-        Returns
-        -------
-        DeviceNDArray
-           logical inverted mask
-        """
-        if self.has_nulls:
-            raise ValueError("Column must have no nulls.")
-        gpu_mask = self.data_array_view
-        cudautils.invert_mask(gpu_mask, gpu_mask)
-        return self.replace(data=Buffer(gpu_mask), mask=None, null_count=0)
+        return self.notnull()
 
     def find_first_value(self, value):
         """
@@ -673,13 +659,13 @@ class ColumnBase(Column):
 
         Returns
         -------
-        device array
+        Buffer
         """
 
         if self.has_nulls:
             raise ValueError("Column must have no nulls.")
 
-        return cudautils.compact_mask_bytes(self.data_array_view)
+        return bools_to_mask(self)
 
     @ioutils.doc_to_dlpack()
     def to_dlpack(self):
@@ -698,11 +684,25 @@ class ColumnBase(Column):
 
     @property
     def is_monotonic_increasing(self):
-        raise (NotImplementedError)
+        if not hasattr(self, "_is_monotonic_increasing"):
+            if self.has_nulls:
+                self._is_monotonic_increasing = False
+            else:
+                self._is_monotonic_increasing = self.as_frame()._is_sorted(
+                    ascending=None, null_position=None
+                )
+        return self._is_monotonic_increasing
 
     @property
     def is_monotonic_decreasing(self):
-        raise (NotImplementedError)
+        if not hasattr(self, "_is_monotonic_decreasing"):
+            if self.has_nulls:
+                self._is_monotonic_decreasing = False
+            else:
+                self._is_monotonic_decreasing = self.as_frame()._is_sorted(
+                    ascending=[False], null_position=None
+                )
+        return self._is_monotonic_decreasing
 
     def get_slice_bound(self, label, side, kind):
         """
@@ -729,52 +729,20 @@ class ColumnBase(Column):
         if side == "right":
             return self.find_last_value(label, closest=True) + 1
 
-    def sort_by_values(self):
-        raise NotImplementedError
-
-    def _unique_segments(self):
-        """ Common code for unique, unique_count and value_counts"""
-        # make dense column
-        densecol = self.dropna()
-        # sort the column
-        sortcol, _ = densecol.sort_by_values()
-        # find segments
-        sortedvals = sortcol.data_array_view
-        segs, begins = cudautils.find_segments(sortedvals)
-        return segs, sortedvals
+    def sort_by_values(self, ascending=True, na_position="last"):
+        col_inds = get_sorted_inds(self, ascending, na_position)
+        col_keys = self[col_inds]
+        return col_keys, col_inds
 
     def unique_count(self, method="sort", dropna=True):
         if method != "sort":
             msg = "non sort based unique_count() not implemented yet"
             raise NotImplementedError(msg)
-        return cpp_unique_count(self, dropna)
+        return cpp_unique_count(self, ignore_nulls=dropna)
 
     def repeat(self, repeats, axis=None):
         assert axis in (None, 0)
         return libcudf.filling.repeat([self], repeats)[0]
-
-    def _mimic_inplace(self, result, inplace=False):
-        """
-        If `inplace=True`, used to mimic an inplace operation
-        by replacing data in ``self`` with data in ``result``.
-
-        Otherwise, returns ``result`` unchanged.
-        """
-        if inplace:
-            self.data = result.data
-            self.mask = result.mask
-            self.dtype = result.dtype
-            self.size = result.size
-            self.offset = result.offset
-            if hasattr(result, "children"):
-                self.children = result.children
-                if is_string_dtype(self):
-                    # force recomputation of nvstrings/nvcategory
-                    self._nvstrings = None
-                    self._nvcategory = None
-            self.__class__ = result.__class__
-        else:
-            return result
 
     def astype(self, dtype, **kwargs):
         if is_categorical_dtype(dtype):
@@ -797,15 +765,13 @@ class ColumnBase(Column):
         sr = cudf.Series(self)
         labels, cats = sr.factorize()
 
-        # string columns include null index in factorization; remove:
-        if (
-            pd.api.types.pandas_dtype(self.dtype).type in (np.str_, np.object_)
-        ) and self.has_nulls:
+        # columns include null index in factorization; remove:
+        if self.has_nulls:
             cats = cats.dropna()
             labels = labels - 1
 
         return build_categorical_column(
-            categories=cats,
+            categories=cats._column,
             codes=labels._column,
             mask=self.mask,
             ordered=ordered,
@@ -822,12 +788,10 @@ class ColumnBase(Column):
 
     def apply_boolean_mask(self, mask):
         mask = as_column(mask, dtype="bool")
-        data = libcudf.stream_compaction.apply_boolean_mask([self], mask)
-        if not data:
-            return column_empty_like(self, newsize=0)
-        else:
-            result = data[0]
-            return result
+        result = (
+            self.as_frame()._apply_boolean_mask(boolean_mask=mask)._as_column()
+        )
+        return result
 
     def argsort(self, ascending):
         _, inds = self.sort_by_values(ascending=ascending)
@@ -839,7 +803,7 @@ class ColumnBase(Column):
             "shape": (len(self),),
             "strides": (self.dtype.itemsize,),
             "typestr": self.dtype.str,
-            "data": (self.data.ptr, True),
+            "data": (self.data_ptr, True),
             "version": 1,
         }
 
@@ -853,7 +817,7 @@ class ColumnBase(Column):
                 __cuda_array_interface__={
                     "shape": (len(self),),
                     "typestr": "<t1",
-                    "data": (self.mask.ptr, True),
+                    "data": (self.mask_ptr, True),
                     "version": 1,
                 }
             )
@@ -861,29 +825,45 @@ class ColumnBase(Column):
 
         return output
 
+    def searchsorted(
+        self, value, side="left", ascending=True, na_position="last"
+    ):
+        values = as_column(value).as_frame()
+        return self.as_frame().searchsorted(
+            values, side, ascending=ascending, na_position=na_position
+        )
+
+    def unique(self):
+        """
+        Get unique values in the data
+        """
+        return self.as_frame().drop_duplicates(keep="first")._as_column()
+
     def serialize(self):
         header = {}
         frames = []
-        header["type"] = pickle.dumps(type(self))
+        header["type-serialized"] = pickle.dumps(type(self))
         header["dtype"] = self.dtype.str
-        data_frames = [self.data_array_view]
+
+        data_header, data_frames = self.data.serialize()
+        header["data"] = data_header
         frames.extend(data_frames)
 
         if self.nullable:
-            mask_frames = [self.mask_array_view]
-        else:
-            mask_frames = []
-        frames.extend(mask_frames)
+            mask_header, mask_frames = self.mask.serialize()
+            header["mask"] = mask_header
+            frames.extend(mask_frames)
+
         header["frame_count"] = len(frames)
         return header, frames
 
     @classmethod
     def deserialize(cls, header, frames):
         dtype = header["dtype"]
-        data = Buffer(frames[0])
+        data = Buffer.deserialize(header["data"], [frames[0]])
         mask = None
-        if header["frame_count"] > 1:
-            mask = Buffer(frames[1])
+        if "mask" in header:
+            mask = Buffer.deserialize(header["mask"], [frames[1]])
         return build_column(data=data, dtype=dtype, mask=mask)
 
 
@@ -917,7 +897,7 @@ def column_empty_like_same_mask(column, dtype):
     """
     result = column_empty_like(column, dtype)
     if column.nullable:
-        result.mask = column.mask
+        result = result.set_mask(column.mask)
     return result
 
 
@@ -953,16 +933,14 @@ def column_empty(row_count, dtype="object", masked=False):
         data = Buffer.empty(row_count * dtype.itemsize)
 
     if masked:
-        mask = Buffer(cudautils.make_empty_mask(row_count))
+        mask = create_null_mask(row_count, state=MaskState.ALL_NULL)
     else:
         mask = None
 
     return build_column(data, dtype, mask=mask, children=children)
 
 
-def build_column(
-    data, dtype, mask=None, offset=0, children=(), categories=None
-):
+def build_column(data, dtype, mask=None, size=None, offset=0, children=()):
     """
     Build a Column of the appropriate type from the given parameters
 
@@ -975,11 +953,9 @@ def build_column(
         The dtype associated with the Column to construct
     mask : Buffer, optionapl
         The mask buffer
+    size : int, optional
     offset : int, optional
     children : tuple, optional
-    categories : Column, optional
-        If constructing a CategoricalColumn, a Column containing
-        the categories
     """
     from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.datetime import DatetimeColumn
@@ -996,20 +972,24 @@ def build_column(
         if not isinstance(children[0], ColumnBase):
             raise TypeError("children must be a tuple of Columns")
         return CategoricalColumn(
-            dtype=dtype, mask=mask, offset=offset, children=children
+            dtype=dtype, mask=mask, size=size, offset=offset, children=children
         )
     elif dtype.type is np.datetime64:
-        return DatetimeColumn(data=data, dtype=dtype, mask=mask, offset=offset)
+        return DatetimeColumn(
+            data=data, dtype=dtype, mask=mask, size=size, offset=offset
+        )
     elif dtype.type in (np.object_, np.str_):
-        return StringColumn(mask=mask, offset=offset, children=children)
+        return StringColumn(
+            mask=mask, size=size, offset=offset, children=children
+        )
     else:
         return NumericalColumn(
-            data=data, dtype=dtype, mask=mask, offset=offset
+            data=data, dtype=dtype, mask=mask, size=size, offset=offset
         )
 
 
 def build_categorical_column(
-    categories, codes, mask=None, offset=0, ordered=None
+    categories, codes, mask=None, size=None, offset=0, ordered=None
 ):
     """
     Build a CategoricalColumn
@@ -1023,7 +1003,8 @@ def build_categorical_column(
         the size of `codes`
     mask : Buffer
         Null mask
-    offset : int
+    size : int, optional
+    offset : int, optional
     ordered : bool
         Indicates whether the categories are ordered
     """
@@ -1032,20 +1013,23 @@ def build_categorical_column(
         data=None,
         dtype=dtype,
         mask=mask,
+        size=size,
         offset=offset,
         children=(as_column(codes),),
     )
 
 
-def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
+def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
     """Create a Column from an arbitrary object
 
     Parameters
     ----------
     arbitrary : object
         Object to construct the Column from. See *Notes*.
-    nan_as_null : bool,optional
-        If True (default), treat NaN values in arbitrary as null.
+    nan_as_null : bool, optional, default None
+        If None (default), treats NaN values in arbitrary as null if there is
+        no mask passed along with it. If True, combines the mask and NaNs to
+        form a new validity mask. If False, leaves NaN values as is.
     dtype : optional
         Optionally typecast the construted Column to the given
         dtype.
@@ -1089,6 +1073,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
         data = arbitrary._values
         if dtype is not None:
             data = data.astype(dtype)
+    # TODO: Remove nvstrings here when nvstrings is fully removed
     elif isinstance(arbitrary, nvstrings.nvstrings):
         byte_count = arbitrary.byte_count()
         if byte_count > libcudfxx.MAX_STRING_COLUMN_BYTES:
@@ -1105,8 +1090,9 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
 
         nbuf = None
         if arbitrary.null_count() > 0:
-            mask_size = calc_chunk_size(arbitrary.size(), mask_bitsize)
-            nbuf = Buffer.empty(mask_size)
+            nbuf = create_null_mask(
+                arbitrary.size(), state=MaskState.UNINITIALIZED
+            )
             arbitrary.set_null_bitmask(nbuf.ptr, bdevmem=True)
         arbitrary.to_offsets(sbuf.ptr, obuf.ptr, None, bdevmem=True)
         children = (
@@ -1123,36 +1109,29 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
             raise TypeError(f"dtype cannot be None if 'arbitrary' is a Buffer")
         data = build_column(arbitrary, dtype=dtype)
 
-    elif cuda.devicearray.is_cuda_ndarray(arbitrary):
-        data = as_column(Buffer(arbitrary), dtype=arbitrary.dtype)
-        if (
-            data.dtype in [np.float16, np.float32, np.float64]
-            and arbitrary.size > 0
-        ):
-            if nan_as_null:
-                mask = libcudf.unaryops.nans_to_nulls(data)
-                data.mask = mask
-
-        elif data.dtype.kind == "M":
-            null = column_empty_like(data, masked=True, newsize=1)
-            col = libcudf.replace.replace(
-                as_column(Buffer(arbitrary), dtype=arbitrary.dtype),
-                as_column(
-                    Buffer(np.array([np.datetime64("NaT")], dtype=data.dtype)),
-                    dtype=arbitrary.dtype,
-                ),
-                null,
-            )
-            data = datetime.DatetimeColumn(
-                data=Buffer(arbitrary), dtype=data.dtype, mask=col.mask
-            )
-
     elif hasattr(arbitrary, "__cuda_array_interface__"):
         desc = arbitrary.__cuda_array_interface__
+        dtype = np.dtype(desc["typestr"])
         data = _data_from_cuda_array_interface_desc(arbitrary)
         mask = _mask_from_cuda_array_interface_desc(arbitrary)
-        dtype = np.dtype(desc["typestr"])
         col = build_column(data, dtype=dtype, mask=mask)
+        if np.issubdtype(col.dtype, np.floating):
+            if nan_as_null or (mask is None and nan_as_null is None):
+                mask = libcudfxx.transform.nans_to_nulls(col.fillna(np.nan))
+                col = col.set_mask(mask)
+        elif np.issubdtype(col.dtype, np.datetime64):
+            if nan_as_null or (mask is None and nan_as_null is None):
+                null = column_empty_like(col, masked=True, newsize=1)
+                col = libcudfxx.replace.replace(
+                    col,
+                    as_column(
+                        Buffer(
+                            np.array([np.datetime64("NaT")], dtype=col.dtype)
+                        ),
+                        dtype=col.dtype,
+                    ),
+                    null,
+                )
         return col
 
     elif isinstance(arbitrary, np.ndarray):
@@ -1167,19 +1146,25 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
             data = datetime.DatetimeColumn.from_numpy(arbitrary)
 
         elif arbitrary.dtype.kind in ("O", "U"):
-            data = as_column(pa.Array.from_pandas(arbitrary))
+            data = as_column(
+                pa.Array.from_pandas(arbitrary), dtype=arbitrary.dtype
+            )
         else:
-            data = as_column(rmm.to_device(arbitrary), nan_as_null=nan_as_null)
+            data = as_column(cupy.asarray(arbitrary), nan_as_null=nan_as_null)
 
     elif isinstance(arbitrary, pa.Array):
         if isinstance(arbitrary, pa.StringArray):
-            nbuf, obuf, sbuf = buffers_from_pyarrow(arbitrary)
+            pa_size, pa_offset, nbuf, obuf, sbuf = buffers_from_pyarrow(
+                arbitrary
+            )
             children = (
                 build_column(data=obuf, dtype="int32"),
                 build_column(data=sbuf, dtype="int8"),
             )
 
-            data = string.StringColumn(mask=nbuf, children=children)
+            data = string.StringColumn(
+                mask=nbuf, children=children, size=pa_size, offset=pa_offset
+            )
 
         elif isinstance(arbitrary, pa.NullArray):
             new_dtype = pd.api.types.pandas_dtype(dtype)
@@ -1215,20 +1200,36 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
                 categories=categories, ordered=arbitrary.type.ordered
             )
             data = categorical.CategoricalColumn(
-                dtype=dtype, mask=codes.mask, children=(codes,)
+                dtype=dtype,
+                mask=codes.base_mask,
+                children=(codes,),
+                size=codes.size,
+                offset=codes.offset,
             )
         elif isinstance(arbitrary, pa.TimestampArray):
             dtype = np.dtype("M8[{}]".format(arbitrary.type.unit))
-            pamask, padata, _ = buffers_from_pyarrow(arbitrary, dtype=dtype)
+            pa_size, pa_offset, pamask, padata, _ = buffers_from_pyarrow(
+                arbitrary, dtype=dtype
+            )
 
             data = datetime.DatetimeColumn(
-                data=padata, mask=pamask, dtype=dtype
+                data=padata,
+                mask=pamask,
+                dtype=dtype,
+                size=pa_size,
+                offset=pa_offset,
             )
         elif isinstance(arbitrary, pa.Date64Array):
             raise NotImplementedError
-            pamask, padata, _ = buffers_from_pyarrow(arbitrary, dtype="M8[ms]")
+            pa_size, pa_offset, pamask, padata, _ = buffers_from_pyarrow(
+                arbitrary, dtype="M8[ms]"
+            )
             data = datetime.DatetimeColumn(
-                data=padata, mask=pamask, dtype=np.dtype("M8[ms]")
+                data=padata,
+                mask=pamask,
+                dtype=np.dtype("M8[ms]"),
+                size=pa_size,
+                offset=pa_offset,
             )
         elif isinstance(arbitrary, pa.Date32Array):
             # No equivalent np dtype and not yet supported
@@ -1247,16 +1248,27 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
                 arbitrary = arbitrary.cast(pa.int8())
             else:
                 arbitrary = pa.array([], type=pa.int8())
-            pamask, padata, _ = buffers_from_pyarrow(arbitrary, dtype=dtype)
+
+            pa_size, pa_offset, pamask, padata, _ = buffers_from_pyarrow(
+                arbitrary, dtype=dtype
+            )
             data = numerical.NumericalColumn(
-                data=padata, mask=pamask, dtype=dtype
+                data=padata,
+                mask=pamask,
+                dtype=dtype,
+                size=pa_size,
+                offset=pa_offset,
             )
         else:
-            pamask, padata, _ = buffers_from_pyarrow(arbitrary)
+            pa_size, pa_offset, pamask, padata, _ = buffers_from_pyarrow(
+                arbitrary
+            )
             data = numerical.NumericalColumn(
                 data=padata,
                 dtype=np.dtype(arbitrary.type.to_pandas_dtype()),
                 mask=pamask,
+                size=pa_size,
+                offset=pa_offset,
             )
 
     elif isinstance(arbitrary, pa.ChunkedArray):
@@ -1280,9 +1292,15 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
             data = as_column(pa.array(arbitrary, from_pandas=True))
         elif arbitrary.dtype == np.bool:
             # Bug in PyArrow or HDF that requires us to do this
-            data = as_column(pa.array(np.array(arbitrary), from_pandas=True))
+            data = as_column(
+                pa.array(np.asarray(arbitrary), from_pandas=True),
+                dtype=arbitrary.dtype,
+            )
         else:
-            data = as_column(pa.array(arbitrary, from_pandas=nan_as_null))
+            data = as_column(
+                pa.array(arbitrary, from_pandas=nan_as_null),
+                dtype=arbitrary.dtype,
+            )
 
     elif isinstance(arbitrary, pd.Timestamp):
         # This will always treat NaTs as nulls since it's not technically a
@@ -1295,7 +1313,10 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, length=None):
             utils.scalar_broadcast_to(arbitrary, length, dtype=dtype)
         )
         if not nan_as_null:
-            data = data.fillna(np.nan)
+            if np.issubdtype(data.dtype, np.floating):
+                data = data.fillna(np.nan)
+            elif np.issubdtype(data.dtype, np.datetime64):
+                data = data.fillna(np.datetime64("NaT"))
 
     elif isinstance(arbitrary, memoryview):
         data = as_column(
@@ -1355,10 +1376,10 @@ def column_applymap(udf, column, out_dtype):
 
     Returns
     -------
-    result : rmm.device_array
+    result : Column
     """
     core = njit(udf)
-    results = rmm.device_array(shape=len(column), dtype=out_dtype)
+    results = column_empty(len(column), dtype=out_dtype)
     values = column.data_array_view
     if column.nullable:
         # For masked columns
@@ -1392,7 +1413,7 @@ def column_applymap(udf, column, out_dtype):
 def _data_from_cuda_array_interface_desc(obj):
     desc = obj.__cuda_array_interface__
     ptr = desc["data"][0]
-    nelem = desc["shape"][0]
+    nelem = desc["shape"][0] if len(desc["shape"]) > 0 else 1
     dtype = np.dtype(desc["typestr"])
 
     data = Buffer(data=ptr, size=nelem * dtype.itemsize, owner=obj)
@@ -1400,9 +1421,6 @@ def _data_from_cuda_array_interface_desc(obj):
 
 
 def _mask_from_cuda_array_interface_desc(obj):
-    from cudf.utils.utils import calc_chunk_size, mask_dtype, mask_bitsize
-    from cudf.utils.cudautils import compact_mask_bytes
-
     desc = obj.__cuda_array_interface__
     mask = desc.get("mask", None)
 
@@ -1413,18 +1431,11 @@ def _mask_from_cuda_array_interface_desc(obj):
         typestr = desc["typestr"]
         typecode = typestr[1]
         if typecode == "t":
-            nelem = calc_chunk_size(nelem, mask_bitsize)
-            mask = Buffer(
-                data=ptr, size=nelem * mask_dtype.itemsize, owner=obj
-            )
+            mask_size = bitmask_allocation_size_bytes(nelem)
+            mask = Buffer(data=ptr, size=mask_size, owner=obj)
         elif typecode == "b":
-            dtype = np.dtype(typestr)
-            mask = compact_mask_bytes(
-                rmm.device_array_from_ptr(
-                    ptr, nelem=nelem, dtype=dtype, finalizer=None
-                )
-            )
-            mask = Buffer(mask)
+            col = as_column(mask)
+            mask = bools_to_mask(col)
         else:
             raise NotImplementedError(
                 f"Cannot infer mask from typestr {typestr}"
@@ -1468,7 +1479,7 @@ def deserialize_columns(headers, frames):
 
     for meta in headers:
         col_frame_count = meta["frame_count"]
-        col_typ = pickle.loads(meta["type"])
+        col_typ = pickle.loads(meta["type-serialized"])
         colobj = col_typ.deserialize(meta, frames[:col_frame_count])
         columns.append(colobj)
         # Advance frames

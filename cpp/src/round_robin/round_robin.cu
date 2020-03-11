@@ -13,6 +13,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+#include <cudf/types.hpp>
+#include <cudf/table/table.hpp>
+#include <cudf/table/table_device_view.cuh>
+#include <cudf/table/row_operators.cuh>
+#include <cudf/utilities/type_dispatcher.hpp>
+#include <rmm/thrust_rmm_allocator.h>
+#include <cudf/utilities/bit.hpp>
+#include <cudf/null_mask.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/gather.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
+
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -27,18 +41,6 @@
 #include <memory>
 #include <type_traits>
 #include <cmath> // for std::ceil()
-
-#include <cudf/types.hpp>
-#include <cudf/table/table.hpp>
-#include <cudf/table/table_device_view.cuh>
-#include <cudf/table/row_operators.cuh>
-#include <cudf/utilities/type_dispatcher.hpp>
-#include <rmm/thrust_rmm_allocator.h>
-#include <cudf/utilities/bit.hpp>
-#include <cudf/null_mask.hpp>
-#include <cudf/copying.hpp>
-#include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/gather.cuh>
 
 
 namespace {
@@ -97,7 +99,7 @@ degenerate_partitions(cudf::table_view const& input,
 
     auto uniq_tbl = cudf::experimental::detail::gather(input,
                                                        rotated_iter_begin, rotated_iter_begin + nrows,//map
-                                                       false, false, false,
+                                                       false,
                                                        mr,
                                                        stream);
 
@@ -128,7 +130,7 @@ degenerate_partitions(cudf::table_view const& input,
     //
     auto uniq_tbl = cudf::experimental::detail::gather(input,
                                                        d_row_indices.begin(), d_row_indices.end(),//map
-                                                       false, false, false,
+                                                       false,
                                                        mr,
                                                        stream);
 
@@ -174,7 +176,7 @@ round_robin_partition(table_view const& input,
 {
   auto nrows = input.num_rows();
   
-  CUDF_EXPECTS( num_partitions > 1, "Incorrect number of partitions. Must be greater than 1." );
+  CUDF_EXPECTS( num_partitions > 0, "Incorrect number of partitions. Must be greater than 0." );
   CUDF_EXPECTS( start_partition < num_partitions, "Incorrect start_partition index. Must be less than number of partitions." );
   CUDF_EXPECTS( start_partition >= 0, "Incorrect start_partition index. Must be positive." );//since cudf::size_type is an alias for int32_t, it _can_ be negative
 
@@ -230,7 +232,7 @@ round_robin_partition(table_view const& input,
 
   auto uniq_tbl = cudf::experimental::detail::gather(input,
                                                      iter_begin, iter_begin + nrows,
-                                                     false, false, false,
+                                                     false,
                                                      mr,
                                                      stream);
   auto ret_pair =
@@ -268,6 +270,7 @@ round_robin_partition(table_view const& input,
                       cudf::size_type start_partition = 0,
                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) {
   
+  CUDF_FUNC_RANGE();
   return cudf::experimental::detail::round_robin_partition(input, num_partitions, start_partition, mr);
 }
   

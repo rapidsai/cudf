@@ -1,5 +1,7 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+
 import warnings
+from distutils.version import LooseVersion
 
 import numpy as np
 import pandas as pd
@@ -29,6 +31,8 @@ from dask_cudf.accessor import (
     CategoricalAccessor,
     DatetimeAccessor,
 )
+
+DASK_VERSION = LooseVersion(dask.__version__)
 
 
 def optimize(dsk, keys, **kwargs):
@@ -91,7 +95,7 @@ class _Frame(dd.core._Frame, OperatorMethodMixin):
                     self._partition_type.__name__, type(meta).__name__
                 )
             )
-        self._meta = dd.core.make_meta(meta)
+        self._meta = meta
         self.divisions = tuple(divisions)
 
     def __getstate__(self):
@@ -178,29 +182,6 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 % kwargs["shuffle"]
             )
         return super().set_index(other, shuffle="tasks", **kwargs)
-
-    def reset_index(self, force=False, drop=False):
-        """Reset index to range based
-        """
-        if force:
-            dfs = self.to_delayed()
-            sizes = np.asarray(compute(*map(delayed(len), dfs)))
-            prefixes = np.zeros_like(sizes)
-            prefixes[1:] = np.cumsum(sizes[:-1])
-
-            @delayed
-            def fix_index(df, startpos):
-                stoppos = startpos + len(df)
-                return df.set_index(
-                    cudf.core.index.RangeIndex(start=startpos, stop=stoppos)
-                )
-
-            outdfs = [
-                fix_index(df, startpos) for df, startpos in zip(dfs, prefixes)
-            ]
-            return from_delayed(outdfs, meta=self._meta.reset_index(drop=True))
-        else:
-            return self.map_partitions(M.reset_index, drop=drop)
 
     def sort_values(self, by, ignore_index=False):
         """Sort by the given column
@@ -323,6 +304,59 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 result.divisions = (min(self.columns), max(self.columns))
             return handle_out(out, result)
 
+    def repartition_by_hash(
+        self,
+        columns=None,
+        npartitions=None,
+        max_branch=None,
+        ignore_index=True,
+        **kwargs,
+    ):
+        """Repartition a dask_cudf DataFrame by hashing.
+
+        Warning: By default, index will be ignored/dropped.
+
+        Parameter
+        ---------
+        columns : list, default None
+            List of columns (by name) to be used for hashing. If None,
+            all columns will be used.
+        npartitions : int, default None
+            Number of output partitions. If None, the output partitions
+            are chosen to match self.npartitions.
+        max_branch : int or False, default None
+            Passed to `rearrange_by_hash` - If False, single-stage shuffling
+            will be used (no matter the number of partitions).
+        ignore_index : bool, default True
+            Ignore the index values while shuffling data into new
+            partitions. This can boost performance significantly.
+        kwargs : dict
+            Other `repartition` arguments.  Ignored.
+        """
+        npartitions = npartitions or self.npartitions
+        columns = columns or [col for col in self.columns]
+
+        return batcher_sortnet.rearrange_by_hash(
+            self,
+            columns,
+            npartitions,
+            max_branch=max_branch,
+            ignore_index=ignore_index,
+        )
+
+    def repartition(self, *args, **kwargs):
+        """ Wraps dask.dataframe DataFrame.repartition method.
+        Uses repartition_by_hash if `columns=` is specified.
+        """
+        columns = kwargs.pop("columns", None)
+        if columns:
+            warnings.warn(
+                "Repartitioning by column hash. Divisions will lost. "
+                "Set ignore_index=False to preserve Index values."
+            )
+            return self.repartition_by_hash(columns=columns, **kwargs)
+        return super().repartition(*args, **kwargs)
+
 
 def sum_of_squares(x):
     x = x.astype("f8")._column
@@ -428,28 +462,6 @@ class Series(_Frame, dd.core.Series):
 
 class Index(Series, dd.core.Index):
     _partition_type = cudf.Index
-
-
-def splits_divisions_sorted_cudf(df, chunksize):
-    segments = list(df.index.find_segments().to_array())
-    segments.append(len(df) - 1)
-
-    splits = [0]
-    last = current_size = 0
-    for s in segments:
-        size = s - last
-        last = s
-        current_size += size
-        if current_size >= chunksize:
-            splits.append(s)
-            current_size = 0
-    # Ensure end is included
-    if splits[-1] != segments[-1]:
-        splits.append(segments[-1])
-    divisions = tuple(df.index.take(np.array(splits)).values)
-    splits[-1] += 1  # Offset to extract to end
-
-    return splits, divisions
 
 
 def _extract_meta(x):
@@ -658,12 +670,14 @@ for name in [
     "rpow",
 ]:
     meth = getattr(cudf.DataFrame, name)
-    DataFrame._bind_operator_method(name, meth)
+    kwargs = {"original": cudf.DataFrame} if DASK_VERSION >= "2.11.1" else {}
+    DataFrame._bind_operator_method(name, meth, **kwargs)
 
     meth = getattr(cudf.Series, name)
-    Series._bind_operator_method(name, meth)
+    kwargs = {"original": cudf.Series} if DASK_VERSION >= "2.11.1" else {}
+    Series._bind_operator_method(name, meth, **kwargs)
 
 for name in ["lt", "gt", "le", "ge", "ne", "eq"]:
-
     meth = getattr(cudf.Series, name)
-    Series._bind_comparison_method(name, meth)
+    kwargs = {"original": cudf.Series} if DASK_VERSION >= "2.11.1" else {}
+    Series._bind_comparison_method(name, meth, **kwargs)

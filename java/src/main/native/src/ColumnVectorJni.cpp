@@ -32,6 +32,9 @@
 #include <cudf/transform.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/strings/convert/convert_booleans.hpp>
+#include <cudf/strings/convert/convert_floats.hpp>
+#include <cudf/strings/convert/convert_integers.hpp>
 
 #include "jni_utils.hpp"
 
@@ -96,12 +99,12 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromScalar(JNIEnv *env,
     } else if (cudf::is_fixed_width(dtype)) {
       col = cudf::make_fixed_width_column(dtype, row_count, mask_state);
       auto mut_view = col->mutable_view();
-      cudf::experimental::fill(mut_view, 0, row_count, *scalar_val);
+      cudf::experimental::fill_in_place(mut_view, 0, row_count, *scalar_val);
     } else if (dtype.id() == cudf::type_id::STRING) {
       // create a string column of all empty strings to fill (cheapest string column to create)
       auto offsets = cudf::make_numeric_column(cudf::data_type{cudf::INT32}, row_count + 1, cudf::mask_state::UNALLOCATED);
       auto data = cudf::make_empty_column(cudf::data_type{cudf::INT8});
-      auto mask_buffer = cudf::create_null_mask(row_count, cudf::UNALLOCATED);
+      auto mask_buffer = cudf::create_null_mask(row_count, cudf::mask_state::UNALLOCATED);
       auto str_col = cudf::make_strings_column(row_count, std::move(offsets), std::move(data), 0, std::move(mask_buffer));
 
       col = cudf::experimental::fill(str_col->view(), 0, row_count, *scalar_val);
@@ -471,7 +474,54 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_castTo(JNIEnv *env,
   try {
     cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
     cudf::data_type n_data_type(static_cast<cudf::type_id>(type));
-    std::unique_ptr<cudf::column> result = cudf::experimental::cast(*column, n_data_type);
+    std::unique_ptr<cudf::column> result;
+    if (n_data_type.id() == cudf::type_id::STRING) {
+        switch (column->type().id()) {
+        case cudf::type_id::BOOL8:
+            result = cudf::strings::from_booleans(*column);
+            break;
+        case cudf::type_id::FLOAT32:
+        case cudf::type_id::FLOAT64:
+            result = cudf::strings::from_floats(*column);
+            break;
+        case cudf::type_id::INT8:
+        case cudf::type_id::INT16:
+        case cudf::type_id::INT32:
+        case cudf::type_id::INT64:
+            result = cudf::strings::from_integers(*column);
+            break;
+        default:
+            JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Invalid data type", 0);
+        }
+    } else if (column->type().id() == cudf::type_id::STRING) {
+        switch (n_data_type.id()) {
+        case cudf::type_id::BOOL8:
+            result = cudf::strings::to_booleans(*column);
+            break;
+        case cudf::type_id::FLOAT32:
+            result = cudf::strings::to_floats(*column, cudf::data_type{cudf::type_id::FLOAT32});
+            break;
+        case cudf::type_id::FLOAT64:
+            result = cudf::strings::to_floats(*column, cudf::data_type{cudf::type_id::FLOAT64});
+            break;
+        case cudf::type_id::INT8:
+            result = cudf::strings::to_integers(*column, cudf::data_type{cudf::type_id::INT8});
+            break;
+        case cudf::type_id::INT16:
+            result = cudf::strings::to_integers(*column, cudf::data_type{cudf::type_id::INT16});
+            break;
+        case cudf::type_id::INT32:
+            result = cudf::strings::to_integers(*column, cudf::data_type{cudf::type_id::INT32});
+            break;
+        case cudf::type_id::INT64:
+            result = cudf::strings::to_integers(*column, cudf::data_type{cudf::type_id::INT64});
+            break;
+        default:
+            JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Invalid data type", 0);
+        }
+    } else {
+        result = cudf::experimental::cast(*column, n_data_type);
+    }
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
@@ -488,6 +538,21 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringTimestampToTimest
     cudf::strings_column_view strings_column(*column);
 
     std::unique_ptr<cudf::column> result = cudf::strings::to_timestamps(strings_column, cudf::data_type(static_cast<cudf::type_id>(time_unit)), format.get());
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_timestampToStringTimestamp(
+    JNIEnv *env, jobject j_object, jlong handle, jstring j_format) {
+  JNI_NULL_CHECK(env, handle, "column is null", 0);
+  JNI_NULL_CHECK(env, j_format, "format is null", 0);
+
+  try {
+    cudf::jni::native_jstring format(env, j_format);
+    cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
+
+    std::unique_ptr<cudf::column> result = cudf::strings::from_timestamps(*column, format.get());
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
@@ -646,7 +711,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeCudfColumnView(
     jlong j_offset, jlong j_valid, jint j_null_count, jint size) {
 
   JNI_ARG_CHECK(env, (size != 0), "size is 0", 0);
-  JNI_NULL_CHECK(env, j_data, "char data is null", 0);
 
   cudf::type_id n_type = static_cast<cudf::type_id>(j_type);
   cudf::data_type n_data_type(n_type);

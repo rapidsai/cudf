@@ -573,21 +573,22 @@ table_with_metadata reader::impl::read(int skip_rows, int num_rows, int row_grou
   const auto selected_row_groups =
       _metadata->select_row_groups(row_group, max_rowgroup_count, skip_rows, num_rows);
 
-  if (selected_row_groups.size() != 0 && _selected_columns.size() != 0) {
-    // Get a list of column data types
-    std::vector<data_type> column_types;
+  // Get a list of column data types
+  std::vector<data_type> column_types;
+  if (_metadata->row_groups.size() != 0) {
     for (const auto &col : _selected_columns) {
       auto &col_schema =
-          _metadata->schema[_metadata->row_groups[selected_row_groups[0].first]
-                                .columns[col.first]
-                                .schema_idx];
+          _metadata->schema[_metadata->row_groups[0].columns[col.first].schema_idx];
       auto col_type = to_type_id(col_schema.type, col_schema.converted_type,
                                  _strings_to_categorical, _timestamp_type.id(),
                                  col_schema.decimal_scale);
       CUDF_EXPECTS(col_type != type_id::EMPTY, "Unknown type");
       column_types.emplace_back(col_type);
     }
+  }
+  out_columns.reserve(column_types.size());
 
+  if (selected_row_groups.size() != 0 && column_types.size() != 0) {
     // Descriptors for all the chunks that make up the selected columns
     const auto num_columns = _selected_columns.size();
     const auto num_chunks = selected_row_groups.size() * num_columns;
@@ -680,8 +681,15 @@ table_with_metadata reader::impl::read(int skip_rows, int num_rows, int row_grou
       }
 
       std::vector<column_buffer> out_buffers;
+      out_buffers.reserve(column_types.size());
       for (size_t i = 0; i < column_types.size(); ++i) {
-        out_buffers.emplace_back(column_types[i], num_rows, stream, _mr);
+        auto col = _selected_columns[i];
+        auto &col_schema =
+          _metadata->schema[_metadata->row_groups[selected_row_groups[0].first]
+                                .columns[col.first]
+                                .schema_idx];
+        bool is_nullable = (col_schema.max_definition_level != 0);
+        out_buffers.emplace_back(column_types[i], num_rows, is_nullable, stream, _mr);
       }
 
       decode_page_data(chunks, pages, skip_rows, num_rows, chunk_map,
@@ -692,6 +700,11 @@ table_with_metadata reader::impl::read(int skip_rows, int num_rows, int row_grou
                                              out_buffers[i], stream, _mr));
       }
     }
+  }
+
+  // Create empty columns as needed
+  for (size_t i = out_columns.size(); i < column_types.size(); ++i) {
+    out_columns.emplace_back(make_empty_column(column_types[i]));
   }
 
   // Return column names (must match order of returned columns)

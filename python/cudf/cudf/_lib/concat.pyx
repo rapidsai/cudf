@@ -1,9 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
-
-# cython: profile=False
-# distutils: language = c++
-# cython: embedsignature = True
-# cython: language_level = 3
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
@@ -30,8 +25,7 @@ def _column_concat(cols_to_concat, Column output_col):
             num_cols
         )
 
-    if hasattr(output_col, "null_count"):
-        del output_col.null_count  # force null_count to be recomputed
+    output_col._null_count = None
 
     check_gdf_error(result)
 

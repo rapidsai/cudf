@@ -439,6 +439,7 @@ add_library(cudf
             src/hash/hashing.cu
             src/hash/legacy/hashing.cu
             src/quantiles/legacy/quantiles.cu
+            src/quantiles/quantile.cu
             src/quantiles/quantiles.cu
             src/quantiles/legacy/group_quantiles.cu
             src/reductions/legacy/reductions.cu
@@ -507,6 +508,7 @@ add_library(cudf
             src/io/orc/stripe_init.cu
             src/io/orc/stripe_enc.cu
             src/io/orc/dict_enc.cu
+            src/io/orc/stats_enc.cu
             src/io/orc/reader_impl.cu
             src/io/orc/writer_impl.cu
             src/io/parquet/page_data.cu
@@ -557,6 +559,7 @@ add_library(cudf
             src/filling/legacy/repeat.cu
             src/filling/repeat.cu
             src/filling/legacy/tile.cu
+            src/filling/sequence.cu
             src/reshape/tile.cu
             src/search/legacy/search.cu
             src/search/search.cu
@@ -572,9 +575,12 @@ add_library(cudf
             src/rolling/jit/code/kernel.cpp
             src/rolling/jit/code/operation.cpp
             src/sort/sort.cu
+            src/sort/stable_sort.cu
             src/column/legacy/interop.cpp
             src/strings/attributes.cu
             src/strings/case.cu
+            src/strings/wrap.cu
+            src/strings/capitalize.cu
             src/strings/char_types/char_types.cu
             src/strings/combine.cu
             src/strings/contains.cu
@@ -609,24 +615,34 @@ add_library(cudf
             src/strings/substring.cu
             src/strings/translate.cu
             src/strings/utilities.cu
+            src/text/generate_ngrams.cu
+            src/text/normalize.cu
+            src/text/tokenize.cu
+            src/text/ngrams_tokenize.cu
             src/scalar/scalar.cpp
             src/scalar/scalar_factories.cpp
+            src/dictionary/add_keys.cu
             src/dictionary/dictionary_column_view.cpp
             src/dictionary/dictionary_factories.cu
-            src/dictionary/encode.cu
             src/dictionary/decode.cu
+            src/dictionary/encode.cu
+            src/dictionary/remove_keys.cu
+            src/dictionary/set_keys.cu
             src/groupby/groupby.cu
             src/groupby/hash/groupby.cu
             src/groupby/sort/groupby.cu
             src/groupby/sort/sort_helper.cu
-            src/groupby/sort/result_cache.cpp
             src/groupby/sort/group_sum.cu
             src/groupby/sort/group_min.cu
             src/groupby/sort/group_max.cu
             src/groupby/sort/group_count.cu
+            src/groupby/sort/group_nunique.cu
+            src/groupby/sort/group_nth_element.cu
             src/groupby/sort/group_std.cu
             src/groupby/sort/group_quantiles.cu
             src/aggregation/aggregation.cpp
+            src/aggregation/aggregation.cu
+            src/aggregation/result_cache.cpp
 )
 
 # Rename installation to proper names for later finding

@@ -12,7 +12,7 @@ from cudf.utils.dtypes import is_scalar
 
 
 def columns_from_dataframe(df):
-    cols = list(df._data.values())
+    cols = list(df._data.columns)
     # strip column names
     for col in cols:
         col.name = None
@@ -54,12 +54,12 @@ class _Groupby(object):
 
     def serialize(self):
         header, frames = self._groupby.serialize()
-        header["type"] = pickle.dumps(type(self))
+        header["type-serialized"] = pickle.dumps(type(self))
         return header, frames
 
     @classmethod
     def deserialize(cls, header, frames):
-        groupby_type = pickle.loads(header["type"])
+        groupby_type = pickle.loads(header["type-serialized"])
         _groupby = _GroupbyHelper.deserialize(header, frames)
         by = None
         if _groupby.level is None:
