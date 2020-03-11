@@ -114,6 +114,9 @@ TYPED_TEST(groupby_max_test, null_keys_and_values)
 
     auto agg = cudf::experimental::make_max_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+
+    auto agg2 = cudf::experimental::make_max_aggregation();
+    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
 
