@@ -74,9 +74,6 @@ struct Rank : public BaseFixture {
 
     void run_all_tests(
     rank_method method,
-    column_view const col1,
-    column_view const col2,
-    column_view const col3,
     //ASCENDING,
     column_view const col1_asce_keep,
     column_view const col1_asce_top,
@@ -173,7 +170,7 @@ TYPED_TEST(Rank, First)
     // Rank
     if (std::is_same<T, cudf::experimental::bool8>::value) return;
     
-    this->run_all_tests(rank_method::FIRST, this->col1, this->col2, this->col3,
+    this->run_all_tests(rank_method::FIRST,
                         col1_asce_keep, col1_asce_top, col1_asce_bottom,
                         col2_asce_keep, col2_asce_top, col2_asce_bottom,
                         col3_asce_keep, col3_asce_top, col3_asce_bottom,
@@ -211,7 +208,7 @@ TYPED_TEST(Rank, Dense)
 
     // Rank
     if (std::is_same<T, cudf::experimental::bool8>::value) return;
-    this->run_all_tests(rank_method::DENSE, this->col1, this->col2, this->col3,
+    this->run_all_tests(rank_method::DENSE,
                         col1_asce_keep, col1_asce_top, col1_asce_bottom,
                         col2_asce_keep, col2_asce_top, col2_asce_bottom,
                         col3_asce_keep, col3_asce_top, col3_asce_bottom,
@@ -248,7 +245,7 @@ TYPED_TEST(Rank, Min)
     cudf::test::fixed_width_column_wrapper<double> col3_desc_bottom  {{3, 2, 6, 3, 1, 3} };
     // Rank Test
     if (std::is_same<T, cudf::experimental::bool8>::value) return;
-    this->run_all_tests(rank_method::MIN, this->col1, this->col2, this->col3,
+    this->run_all_tests(rank_method::MIN,
                         col1_asce_keep, col1_asce_top, col1_asce_bottom,
                         col2_asce_keep, col2_asce_top, col2_asce_bottom,
                         col3_asce_keep, col3_asce_top, col3_asce_bottom,
@@ -256,7 +253,6 @@ TYPED_TEST(Rank, Min)
                         col2_desc_keep, col2_desc_top, col2_desc_bottom,
                         col3_desc_keep, col3_desc_top, col3_desc_bottom);
 }
-
 
 TYPED_TEST(Rank, Max)
 {
@@ -286,7 +282,44 @@ TYPED_TEST(Rank, Max)
     cudf::test::fixed_width_column_wrapper<double> col3_desc_bottom  {{5, 2, 6, 5, 1, 5} };
     // Rank Test
     if (std::is_same<T, cudf::experimental::bool8>::value) return;
-    this->run_all_tests(rank_method::MAX, this->col1, this->col2, this->col3,
+    this->run_all_tests(rank_method::MAX,
+                        col1_asce_keep, col1_asce_top, col1_asce_bottom,
+                        col2_asce_keep, col2_asce_top, col2_asce_bottom,
+                        col3_asce_keep, col3_asce_top, col3_asce_bottom,
+                        col1_desc_keep, col1_desc_top, col1_desc_bottom,
+                        col2_desc_keep, col2_desc_top, col2_desc_bottom,
+                        col3_desc_keep, col3_desc_top, col3_desc_bottom);
+}
+
+TYPED_TEST(Rank, Average)
+{
+    using T = TypeParam;
+
+    //fixed_width_column_wrapper<T>   col1{{  5,   4,   3,   5,   8,   5}};
+    //                                        4    2    1    4    6    4
+    //ASCENDING
+    cudf::test::fixed_width_column_wrapper<double> col1_asce_keep    {{4, 2, 1, 4, 6, 4} };
+    cudf::test::fixed_width_column_wrapper<double> col1_asce_top     {{4, 2, 1, 4, 6, 4} };
+    cudf::test::fixed_width_column_wrapper<double> col1_asce_bottom  {{4, 2, 1, 4, 6, 4} };
+    cudf::test::fixed_width_column_wrapper<double> col2_asce_keep    {{3, 1, -1, 3, 5, 3} , {1, 1, 0, 1, 1, 1} };
+    cudf::test::fixed_width_column_wrapper<double> col2_asce_top     {{4, 2, 1, 4, 6, 4} };
+    cudf::test::fixed_width_column_wrapper<double> col2_asce_bottom  {{3, 1, 6, 3, 5, 3} };
+    cudf::test::fixed_width_column_wrapper<double> col3_asce_keep    {{3, 5, 1, 3, 6, 3} , {1, 1, 1, 1, 1, 1} };
+    cudf::test::fixed_width_column_wrapper<double> col3_asce_top     {{3, 5, 1, 3, 6, 3} };
+    cudf::test::fixed_width_column_wrapper<double> col3_asce_bottom  {{3, 5, 1, 3, 6, 3} };
+    //DESCENDING
+    cudf::test::fixed_width_column_wrapper<double> col1_desc_keep    {{3, 5, 6, 3, 1, 3} };
+    cudf::test::fixed_width_column_wrapper<double> col1_desc_top     {{3, 5, 6, 3, 1, 3} };
+    cudf::test::fixed_width_column_wrapper<double> col1_desc_bottom  {{3, 5, 6, 3, 1, 3} };
+    cudf::test::fixed_width_column_wrapper<double> col2_desc_keep    {{3, 5, -1, 3, 1, 3} , {1, 1, 0, 1, 1, 1} };
+    cudf::test::fixed_width_column_wrapper<double> col2_desc_top     {{4, 6, 1, 4, 2, 4} };
+    cudf::test::fixed_width_column_wrapper<double> col2_desc_bottom  {{3, 5, 6, 3, 1, 3} };
+    cudf::test::fixed_width_column_wrapper<double> col3_desc_keep    {{4, 2, 6, 4, 1, 4} , {1, 1, 1, 1, 1, 1} };
+    cudf::test::fixed_width_column_wrapper<double> col3_desc_top     {{4, 2, 6, 4, 1, 4} };
+    cudf::test::fixed_width_column_wrapper<double> col3_desc_bottom  {{4, 2, 6, 4, 1, 4} };
+    // Rank Test
+    if (std::is_same<T, cudf::experimental::bool8>::value) return;
+    this->run_all_tests(rank_method::AVERAGE,
                         col1_asce_keep, col1_asce_top, col1_asce_bottom,
                         col2_asce_keep, col2_asce_top, col2_asce_bottom,
                         col3_asce_keep, col3_asce_top, col3_asce_bottom,
