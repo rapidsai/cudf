@@ -1219,6 +1219,9 @@ class Series(Frame):
         else:
             return result
 
+    def fill(self, fill_value, begin=0, end=-1, inplace=False):
+        return self._fill([fill_value], begin, end, inplace)
+
     def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
         """Fill null values with ``value``.
 

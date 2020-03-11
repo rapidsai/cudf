@@ -21,13 +21,19 @@ from cudf._libxx.null_mask import (
     bitmask_allocation_size_bytes,
     create_null_mask,
 )
+from cudf._libxx.scalar import Scalar
 from cudf._libxx.stream_compaction import unique_count as cpp_unique_count
 from cudf._libxx.transform import bools_to_mask
 from cudf.core._sort import get_sorted_inds
 from cudf.core.buffer import Buffer
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils import cudautils, ioutils, utils
-from cudf.utils.dtypes import is_categorical_dtype, is_scalar, np_to_pa_dtype
+from cudf.utils.dtypes import (
+    is_categorical_dtype,
+    is_scalar,
+    is_string_dtype,
+    np_to_pa_dtype,
+)
 from cudf.utils.utils import buffers_from_pyarrow, mask_dtype
 
 
@@ -320,6 +326,38 @@ class ColumnBase(Column):
         output size could be smaller.
         """
         return self.to_gpu_array(fillna=fillna).copy_to_host()
+
+    def fill(self, fill_value, begin=0, end=-1, inplace=False):
+
+        if end == -1:
+            end = self.size
+
+        assert end <= self.size
+        assert begin <= end
+
+        if begin == end or begin == self.size:
+            return self if inplace else self.copy()
+
+        fill_value = Scalar(fill_value)
+
+        if not inplace:
+            return libcudfxx.filling.fill(self, begin, end, fill_value)
+
+        fixed_width = True
+
+        if is_string_dtype(self.dtype):
+            fixed_width = False
+
+        if is_categorical_dtype(self.dtype):
+            fixed_width = False
+
+        if fixed_width:
+            libcudfxx.filling.fill_in_place(self, begin, end, fill_value)
+            return self
+
+        result = libcudfxx.filling.fill(self, fill_value, begin, end)
+
+        return self._mimic_inplace(result, inplace=True)
 
     def shift(self, offset, fill_value):
         return libcudfxx.copying.shift(self, offset, fill_value)
