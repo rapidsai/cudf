@@ -10,7 +10,6 @@ import pandas as pd
 import pyarrow as pa
 
 import nvstrings
-import rmm
 
 import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
@@ -76,7 +75,7 @@ from cudf._libxx.strings.strip import (
 from cudf._libxx.strings.substring import slice_from as cpp_slice_from
 from cudf._libxx.strings.wrap import wrap as cpp_wrap
 from cudf.core.buffer import Buffer
-from cudf.core.column import column
+from cudf.core.column import column, column_empty
 from cudf.utils import utils
 from cudf.utils.dtypes import is_list_like, is_scalar
 
@@ -169,7 +168,7 @@ class StringMethods(object):
 
                 if isinstance(table, Table):
                     return self._parent._constructor_expanddim(
-                        data=table._data, index=self._parent.index,
+                        data=table._data, index=self._parent.index
                     )
                 else:
                     return self._parent._constructor_expanddim(
@@ -203,8 +202,8 @@ class StringMethods(object):
             indicating the length of each element in the Series or Index.
         """
 
-        out_dev_arr = rmm.device_array(len(self._column), dtype="int32")
-        ptr = libcudf.cudf.get_ctype_ptr(out_dev_arr)
+        out_col = column_empty(len(self._column), dtype="int32")
+        ptr = out_col.data_ptr
         self._column.nvstrings.len(ptr)
 
         mask = None
@@ -212,9 +211,7 @@ class StringMethods(object):
             mask = self._column.mask
 
         return self._return_or_inplace(
-            column.build_column(
-                Buffer(out_dev_arr), np.dtype("int32"), mask=mask
-            ),
+            column.build_column(out_col.data, np.dtype("int32"), mask=mask),
             **kwargs,
         )
 
@@ -625,7 +622,7 @@ class StringMethods(object):
         Series/Index of str dtype
         """
         return self._return_or_inplace(
-            cpp_replace_with_backrefs(self._column, pat, repl,), **kwargs
+            cpp_replace_with_backrefs(self._column, pat, repl), **kwargs
         )
 
     # def slice(self, start=None, stop=None, step=None, **kwargs):
@@ -990,7 +987,7 @@ class StringMethods(object):
         from cudf._libxx.scalar import Scalar
 
         return self._return_or_inplace(
-            cpp_split(self._column, Scalar(pat), n), **kwargs,
+            cpp_split(self._column, Scalar(pat), n), **kwargs
         )
 
     def rsplit(self, pat=None, n=-1, expand=True, **kwargs):
@@ -1032,7 +1029,7 @@ class StringMethods(object):
         from cudf._libxx.scalar import Scalar
 
         return self._return_or_inplace(
-            cpp_rsplit(self._column, Scalar(pat), n), **kwargs,
+            cpp_rsplit(self._column, Scalar(pat), n), **kwargs
         )
 
     def partition(self, sep=" ", expand=True, **kwargs):
@@ -1073,7 +1070,7 @@ class StringMethods(object):
         from cudf._libxx.scalar import Scalar
 
         return self._return_or_inplace(
-            cpp_partition(self._column, Scalar(sep)), **kwargs,
+            cpp_partition(self._column, Scalar(sep)), **kwargs
         )
 
     def rpartition(self, sep=" ", expand=True, **kwargs):
@@ -1114,7 +1111,7 @@ class StringMethods(object):
         from cudf._libxx.scalar import Scalar
 
         return self._return_or_inplace(
-            cpp_rpartition(self._column, Scalar(sep)), **kwargs,
+            cpp_rpartition(self._column, Scalar(sep)), **kwargs
         )
 
     def pad(self, width, side="left", fillchar=" ", **kwargs):
@@ -1708,6 +1705,7 @@ class StringColumn(column.ColumnBase):
             self._nvcategory = nvc.from_strings(self.nvstrings)
         return self._nvcategory
 
+    # TODO: Remove these once NVStrings is fully deprecated / removed
     @nvcategory.setter
     def nvcategory(self, nvc):
         self._nvcategory = nvc
@@ -1720,15 +1718,14 @@ class StringColumn(column.ColumnBase):
 
         super()._set_mask(value)
 
+    # TODO: Remove these once NVStrings is fully deprecated / removed
     @property
     def indices(self):
         if self._indices is None:
-            out_dev_arr = rmm.device_array(
-                self.nvcategory.size(), dtype="int32"
-            )
-            ptr = libcudf.cudf.get_ctype_ptr(out_dev_arr)
+            out_col = column_empty(self.nvcategory.size(), dtype="int32")
+            ptr = out_col.data_ptr
             self.nvcategory.values(devptr=ptr)
-            self._indices = out_dev_arr
+            self._indices = out_col.data_array_view
         return self._indices
 
     @property
