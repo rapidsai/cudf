@@ -100,9 +100,7 @@ def write_to_dataset(
             full_path = "/".join([prefix, outfile])
             write_df = sub_df.copy(deep=False)
             write_df.drop(columns=partition_cols, inplace=True)
-            write_df.to_parquet(
-                full_path, index=preserve_index, **kwargs
-            )
+            write_df.to_parquet(full_path, index=preserve_index, **kwargs)
     else:
         outfile = guid() + ".parquet"
         full_path = "/".join([root_path, outfile])
