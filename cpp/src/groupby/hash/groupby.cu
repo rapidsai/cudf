@@ -23,10 +23,12 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/detail/groupby.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/gather.hpp>
+#include <cudf/detail/replace.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -166,10 +168,20 @@ void sparse_to_dense_results(
     [&col, to_dense_agg_result, mr, stream]
     (auto const& agg_kind) {
       auto tranformed_agg = std::make_unique<aggregation>(agg_kind);
-      auto argmax_result = to_dense_agg_result(tranformed_agg);
-      auto transformed_result = experimental::detail::gather(
-        table_view({col}), *argmax_result, false, false, false, mr, stream);
-      return std::move(transformed_result->release()[0]);
+      auto arg_result = to_dense_agg_result(tranformed_agg);
+      if (arg_result->nullable()) {
+        column_view null_removed_map(data_type(type_to_id<size_type>()),
+          arg_result->size(), 
+          static_cast<void const*>(arg_result->view().template data<size_type>()));
+        auto transformed_result = experimental::detail::gather(
+          table_view({col}), null_removed_map, false, true, false, mr, stream);
+        return std::move(transformed_result->release()[0]);
+      }
+      else {
+        auto transformed_result = experimental::detail::gather(
+          table_view({col}), *arg_result, false, false, false, mr, stream);
+        return std::move(transformed_result->release()[0]);
+      }
     };
 
     for (auto &&agg : agg_v) {

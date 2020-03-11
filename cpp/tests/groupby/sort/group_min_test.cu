@@ -136,5 +136,19 @@ TEST_F(groupby_min_string_test, basic)
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
+TEST_F(groupby_min_string_test, zero_valid_values)
+{
+    using K = int32_t;
+
+    fixed_width_column_wrapper<K> keys        { 1, 1, 1};
+    strings_column_wrapper        vals      ( { "año", "bit", "₹1"}, all_null() );
+
+    fixed_width_column_wrapper<K> expect_keys { 1 };
+    strings_column_wrapper        expect_vals({ "" }, all_null());
+
+    auto agg = cudf::experimental::make_min_aggregation();
+    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+}
+
 } // namespace test
 } // namespace cudf
