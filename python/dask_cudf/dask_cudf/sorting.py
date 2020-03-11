@@ -158,6 +158,10 @@ def _set_partitions_pre(s, divisions):
     partitions = divisions.searchsorted(s, side="right") - 1
 
     # Use searchsorted to avoid string-compare limitations
+    # TODO: Simplify after github issue #4432 is resolved...
+    #       partitions[
+    #           (s >= divisions.iloc[-1])
+    #       ] = len(divisions) - 2
     partitions[
         divisions.tail(1).searchsorted(s, side="right").astype("bool")
     ] = (len(divisions) - 2)
@@ -343,10 +347,10 @@ def sort_values(
     """ Sort by the given list/tuple of column names.
     """
     npartitions = df.npartitions
-    if isinstance(by, str):
-        by = [by]
-    elif isinstance(by, tuple):
+    if isinstance(by, tuple):
         by = list(by)
+    elif not isinstance(by, list):
+        by = [by]
 
     # Step 1 - Calculate new divisions (if necessary)
     if divisions is None:
