@@ -38,6 +38,7 @@
 - PR #4291 Add Java callback support for RMM events
 - PR #4298 Port orc.pyx to libcudf++
 - PR #4329 Add support for dictionary columns in scatter
+- PR #4352 Add factory function make_column_from_scalar
 - PR #4381 Add Java support for copying buffers with asynchronous streams
 - PR #4288 Add libcudf++ shift Cython implementation
 - PR #4338 Add cudf::sequence() for generating an incrementing list of numeric values
@@ -232,6 +233,7 @@
 - PR #4369 Fix race condition in gpuinflate
 - PR #4390 Disable ScatterValid and ScatterNull legacy tests
 - PR #4406 Fix sorted merge issue with null values and ascending=False
+- PR #4423 Tighten up Dask serialization checks
 
 
 # cuDF 0.12.0 (04 Feb 2020)
