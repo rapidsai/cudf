@@ -39,6 +39,11 @@ try:
     @dask_deserialize.register(serializable_classes)
     def deserialize_cudf_object(header, frames):
         with log_errors():
+            if header["serializer"] == "cuda":
+                assert all(hasattr(f, "__cuda_array_interface__") for f in frames)
+            if header["serializer"] == "dask":
+                frames = [memoryview(f) for f in frames]
+
             cudf_typ = pickle.loads(header["type-serialized"])
             cudf_obj = cudf_typ.deserialize(header, frames)
             return cudf_obj
