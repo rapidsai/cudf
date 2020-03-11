@@ -6,6 +6,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/gather.hpp>
 #include <hash/concurrent_unordered_map.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 #include <join/join_common_utils.hpp>
 
@@ -141,6 +142,7 @@ std::unique_ptr<cudf::experimental::table> left_semi_join(cudf::table_view const
                                                           std::vector<cudf::size_type> const& return_columns,
                                                           rmm::mr::device_memory_resource* mr) {
 
+  CUDF_FUNC_RANGE();
   return detail::left_semi_anti_join<detail::join_kind::LEFT_SEMI_JOIN>(left, right, left_on, right_on, return_columns, mr, 0);
   
 
@@ -153,6 +155,7 @@ std::unique_ptr<cudf::experimental::table> left_anti_join(cudf::table_view const
                                                           std::vector<cudf::size_type> const& return_columns,
                                                           rmm::mr::device_memory_resource* mr) {
 
+  CUDF_FUNC_RANGE();
   return detail::left_semi_anti_join<detail::join_kind::LEFT_ANTI_JOIN>(left, right, left_on, right_on, return_columns, mr, 0);
 }
 

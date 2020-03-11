@@ -20,6 +20,7 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/detail/transform.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 #include <jit/launcher.h>
 #include <jit/type.h>
@@ -115,6 +116,7 @@ std::unique_ptr<column> transform(column_view const& input,
                                   data_type output_type, bool is_ptx,
                                   rmm::mr::device_memory_resource *mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::transform(input, unary_udf, output_type, is_ptx, mr);
 }
 

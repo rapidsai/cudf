@@ -1162,6 +1162,9 @@ def test_string_char_case(case_op, data):
     assert_eq(gs.str.isalpha(), ps.str.isalpha())
     assert_eq(gs.str.isdigit(), ps.str.isdigit())
     assert_eq(gs.str.isnumeric(), ps.str.isnumeric())
+    assert_eq(gs.str.isspace(), ps.str.isspace())
+
+    assert_eq(gs.str.isempty(), ps == "")
 
 
 @pytest.mark.parametrize(
@@ -1522,3 +1525,203 @@ def test_string_replace_with_backrefs(find, replace):
     got = gs.str.replace_with_backrefs(find, replace)
     expected = ps.str.replace(find, replace, regex=True)
     assert_eq(got, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["abc", "xyz", "a", "ab", "123", "097"],
+        ["A B", "1.5", "3,000"],
+        ["23", "³", "⅕", ""],
+        [" ", "\t\r\n ", ""],
+        ["$", "B", "Aab$", "$$ca", "C$B$", "cat"],
+        ["line to be wrapped", "another line to be wrapped"],
+        ["hello", "there", "world", "+1234", "-1234", None, "accént", ""],
+        ["1. Ant.  ", "2. Bee!\n", "3. Cat?\t", None],
+    ],
+)
+@pytest.mark.parametrize(
+    "pat",
+    [
+        # TODO, PREM: Uncomment after this issue is fixed
+        # '',
+        # None,
+        " ",
+        "a",
+        "abc",
+        "cat",
+        "$",
+        "\n",
+    ],
+)
+def test_string_starts_ends(data, pat):
+    ps = pd.Series(data)
+    gs = Series(data)
+
+    assert_eq(ps.str.startswith(pat), gs.str.startswith(pat))
+    assert_eq(ps.str.endswith(pat), gs.str.endswith(pat))
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["abc", "xyz", "a", "ab", "123", "097"],
+        ["A B", "1.5", "3,000"],
+        ["23", "³", "⅕", ""],
+        [" ", "\t\r\n ", ""],
+        ["$", "B", "Aab$", "$$ca", "C$B$", "cat"],
+        ["line to be wrapped", "another line to be wrapped"],
+        ["hello", "there", "world", "+1234", "-1234", None, "accént", ""],
+        ["1. Ant.  ", "2. Bee!\n", "3. Cat?\t", None],
+    ],
+)
+@pytest.mark.parametrize(
+    "sub",
+    [
+        # TODO, PREM: Uncomment after this issue is fixed
+        # '',
+        # None,
+        " ",
+        "a",
+        "abc",
+        "cat",
+        "$",
+        "\n",
+    ],
+)
+def test_string_find(data, sub):
+    ps = pd.Series(data)
+    gs = Series(data)
+
+    assert_eq(ps.str.find(sub).fillna(-1), gs.str.find(sub), check_dtype=False)
+    assert_eq(
+        ps.str.find(sub, start=1).fillna(-1),
+        gs.str.find(sub, start=1),
+        check_dtype=False,
+    )
+    assert_eq(
+        ps.str.find(sub, end=10).fillna(-1),
+        gs.str.find(sub, end=10),
+        check_dtype=False,
+    )
+    assert_eq(
+        ps.str.find(sub, start=2, end=10).fillna(-1),
+        gs.str.find(sub, start=2, end=10),
+        check_dtype=False,
+    )
+
+    assert_eq(
+        ps.str.rfind(sub).fillna(-1), gs.str.rfind(sub), check_dtype=False
+    )
+    assert_eq(
+        ps.str.rfind(sub, start=1).fillna(-1),
+        gs.str.rfind(sub, start=1),
+        check_dtype=False,
+    )
+    assert_eq(
+        ps.str.rfind(sub, end=10).fillna(-1),
+        gs.str.rfind(sub, end=10),
+        check_dtype=False,
+    )
+    assert_eq(
+        ps.str.rfind(sub, start=2, end=10).fillna(-1),
+        gs.str.rfind(sub, start=2, end=10),
+        check_dtype=False,
+    )
+
+
+@pytest.mark.parametrize(
+    "data,sub,er",
+    [
+        (["abc", "xyz", "a", "ab", "123", "097"], "a", ValueError),
+        (["A B", "1.5", "3,000"], "abc", ValueError),
+        (["23", "³", "⅕", ""], "⅕", ValueError),
+        ([" ", "\t\r\n ", ""], "\n", ValueError),
+        (["$", "B", "Aab$", "$$ca", "C$B$", "cat"], "$", ValueError),
+        (["line to be wrapped", "another line to be wrapped"], " ", None),
+        (
+            ["hello", "there", "world", "+1234", "-1234", None, "accént", ""],
+            "+",
+            ValueError,
+        ),
+    ],
+)
+def test_string_str_index(data, sub, er):
+    ps = pd.Series(data)
+    gs = Series(data)
+
+    if er is None:
+        assert_eq(ps.str.index(sub), gs.str.index(sub), check_dtype=False)
+
+    try:
+        ps.str.index(sub)
+    except er:
+        pass
+    else:
+        assert not er
+
+    try:
+        gs.str.index(sub)
+    except er:
+        pass
+    else:
+        assert not er
+
+
+@pytest.mark.parametrize(
+    "data,sub,er",
+    [
+        (["abc", "xyz", "a", "ab", "123", "097"], "a", ValueError),
+        (["A B", "1.5", "3,000"], "abc", ValueError),
+        (["23", "³", "⅕", ""], "⅕", ValueError),
+        ([" ", "\t\r\n ", ""], "\n", ValueError),
+        (["$", "B", "Aab$", "$$ca", "C$B$", "cat"], "$", ValueError),
+        (["line to be wrapped", "another line to be wrapped"], " ", None),
+        (
+            ["hello", "there", "world", "+1234", "-1234", None, "accént", ""],
+            "+",
+            ValueError,
+        ),
+    ],
+)
+def test_string_str_rindex(data, sub, er):
+    ps = pd.Series(data)
+    gs = Series(data)
+
+    if er is None:
+        assert_eq(ps.str.rindex(sub), gs.str.rindex(sub), check_dtype=False)
+
+    try:
+        ps.str.index(sub)
+    except er:
+        pass
+    else:
+        assert not er
+
+    try:
+        gs.str.index(sub)
+    except er:
+        pass
+    else:
+        assert not er
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["abc", "xyz", "a", "ab", "123", "097"],
+        ["A B", "1.5", "3,000"],
+        ["23", "³", "⅕", ""],
+        [" ", "\t\r\n ", ""],
+        ["$", "B", "Aab$", "$$ca", "C$B$", "cat"],
+        ["line to be wrapped", "another line to be wrapped"],
+        ["hello", "there", "world", "+1234", "-1234", None, "accént", ""],
+        ["1. Ant.  ", "2. Bee!\n", "3. Cat?\t", None],
+    ],
+)
+@pytest.mark.parametrize("pat", ["", " ", "a", "abc", "cat", "$", "\n"])
+def test_string_str_match(data, pat):
+    ps = pd.Series(data)
+    gs = Series(data)
+
+    assert_eq(ps.str.match(pat), gs.str.match(pat))

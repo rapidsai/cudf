@@ -1213,9 +1213,9 @@ class DataFrame(Frame):
 
         Examples
         --------
-        >>> df = DataFrame([('a', list(range(20))),
-        ...                 ('b', list(range(20))),
-        ...                 ('c', list(range(20)))])
+        >>> df = cudf.DataFrame([('a', range(20)),
+        ...                      ('b', range(20)),
+        ...                      ('c', range(20))])
 
         Select a single row using an integer index.
 
@@ -4040,6 +4040,16 @@ class DataFrame(Frame):
         """
         cov = cupy.cov(self.values, rowvar=False)
         df = DataFrame.from_gpu_matrix(cupy.asfortranarray(cov)).set_index(
+            self.columns
+        )
+        df.columns = self.columns
+        return df
+
+    def corr(self):
+        """Compute the correlation matrix of a DataFrame.
+        """
+        corr = cupy.corrcoef(self.values, rowvar=False)
+        df = DataFrame.from_gpu_matrix(cupy.asfortranarray(corr)).set_index(
             self.columns
         )
         df.columns = self.columns
