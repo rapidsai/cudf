@@ -158,6 +158,7 @@
 - PR #4367 Port copying.pyx to use new libcudf
 - PR #4362 Move pq_chunked_state struct into it's own header to match how orc writer is doing it.
 - PR #4339 Port libcudf strings `wrap` api to cython/python
+- PR #4236 Update dask_cudf.io.to_parquet to use cudf to_parquet
 - PR #4311 Port nvstrings String Manipulations functions to cuDF Python/Cython
 - PR #4373 Port nvstrings Regular Expressions functions to cuDF Python/Cython
 - PR #4407 Enable `.str.slice` & `.str.get` and `.str.zfill` unit-tests
