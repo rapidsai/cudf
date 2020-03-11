@@ -8,6 +8,7 @@ from dask.dataframe.io.parquet.arrow import ArrowEngine
 
 import cudf
 from cudf.core.column import build_categorical_column
+from cudf.io import write_to_dataset
 
 
 class CudfEngine(ArrowEngine):
@@ -103,37 +104,54 @@ class CudfEngine(ArrowEngine):
         index_cols=None,
         **kwargs,
     ):
-        # TODO: Replace `pq.write_table` with gpu-accelerated
-        #       write after cudf.io.to_parquet is supported.
-
-        md_list = []
         preserve_index = False
-        if index_cols:
-            df = df.set_index(index_cols)
-            preserve_index = True
 
-        # NOTE: `to_arrow` does not accept `schema` argument
-        t = df.to_arrow(preserve_index=preserve_index)
-        if partition_on:
-            pq.write_to_dataset(
-                t,
-                path,
-                partition_cols=partition_on,
-                filesystem=fs,
-                metadata_collector=md_list,
-                **kwargs,
-            )
-        else:
-            with fs.open(fs.sep.join([path, filename]), "wb") as fil:
-                pq.write_table(
+        # Must use arrow engine if return_metadata=True
+        # (cudf does not collect/return metadata on write)
+        if return_metadata:
+            if index_cols:
+                df = df.set_index(index_cols)
+                preserve_index = True
+            md_list = []
+            t = df.to_arrow(preserve_index=preserve_index)
+            if partition_on:
+                pq.write_to_dataset(
                     t,
-                    fil,
-                    compression=compression,
+                    path,
+                    partition_cols=partition_on,
+                    filesystem=fs,
                     metadata_collector=md_list,
                     **kwargs,
                 )
-            if md_list:
-                md_list[0].set_file_path(filename)
+            else:
+                with fs.open(fs.sep.join([path, filename]), "wb") as fil:
+                    pq.write_table(
+                        t,
+                        fil,
+                        compression=compression,
+                        metadata_collector=md_list,
+                        **kwargs,
+                    )
+                if md_list:
+                    md_list[0].set_file_path(filename)
+
+        else:
+            md_list = [None]
+            if partition_on:
+                write_to_dataset(
+                    df,
+                    path,
+                    partition_cols=partition_on,
+                    fs=fs,
+                    preserve_index=preserve_index,
+                    **kwargs,
+                )
+            else:
+                df.to_parquet(
+                    fs.sep.join([path, filename]),
+                    compression=compression,
+                    **kwargs,
+                )
         # Return the schema needed to write the metadata
         if return_metadata:
             return [{"schema": t.schema, "meta": md_list[0]}]
