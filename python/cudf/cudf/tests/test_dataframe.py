@@ -2933,11 +2933,13 @@ def test_round_nan_as_null_false(series, decimal):
     ],
 )
 def test_all(data):
+    # Pandas treats `None` in object type columns as True for some reason, so
+    # replacing with `False`
     if np.array(data).ndim <= 1:
-        pdata = pd.Series(data)
+        pdata = pd.Series(data).replace([None], False)
         gdata = Series.from_pandas(pdata)
     else:
-        pdata = pd.DataFrame(data, columns=["a", "b"])
+        pdata = pd.DataFrame(data, columns=["a", "b"]).replace([None], False)
         gdata = DataFrame.from_pandas(pdata)
 
         # test bool_only
@@ -2978,11 +2980,13 @@ def test_all(data):
     ],
 )
 def test_any(data):
+    # Pandas treats `None` in object type columns as True for some reason, so
+    # replacing with `False`
     if np.array(data).ndim <= 1:
-        pdata = pd.Series(data)
+        pdata = pd.Series(data).replace([None], False)
         gdata = Series.from_pandas(pdata)
     else:
-        pdata = pd.DataFrame(data, columns=["a", "b"])
+        pdata = pd.DataFrame(data, columns=["a", "b"]).replace([None], False)
         gdata = DataFrame.from_pandas(pdata)
 
         # test bool_only
