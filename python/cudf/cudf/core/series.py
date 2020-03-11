@@ -10,7 +10,6 @@ import pandas as pd
 from pandas.api.types import is_dict_like
 
 import cudf
-import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
 from cudf.core.column import (
     ColumnBase,
@@ -1008,9 +1007,7 @@ class Series(Frame):
         other = self._normalize_binop_value(other)
         outcol = self._column.ordered_compare(cmpops, other)
         result = self._copy_construct(data=outcol, name=result_name)
-        
-        
-        
+        libcudfxx.nvtx.range_pop()
         return result
 
     def eq(self, other, fill_value=None, axis=0):

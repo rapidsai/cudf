@@ -7,7 +7,7 @@ from cudf._lib.cudf import *
 from cudf._lib.utils cimport *
 from cudf._lib.utils import *
 from cudf._libxx.nvtx import (
-    range_push as nvtx_range_push, 
+    range_push as nvtx_range_push,
     range_pop as nvtx_range_pop
 )
 from cudf._lib.includes.csv cimport (

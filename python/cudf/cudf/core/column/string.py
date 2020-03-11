@@ -15,8 +15,8 @@ import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
 import cudf._libxx.string_casting as str_cast
 from cudf._libxx.nvtx import (
-    range_push as nvtx_range_push, 
-    range_pop as nvtx_range_pop
+    range_pop as nvtx_range_pop,
+    range_push as nvtx_range_push,
 )
 from cudf._libxx.strings.capitalize import (
     capitalize as cpp_capitalize,
