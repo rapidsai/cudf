@@ -1558,7 +1558,7 @@ class StringMethods(object):
         """
         return self._return_or_inplace(cpp_isspace(self._column), **kwargs)
 
-    def endswith(self, pat, na=np.nan, **kwargs):
+    def endswith(self, pat, **kwargs):
         """
         Test if the end of each string element matches a pattern.
 
@@ -1574,8 +1574,12 @@ class StringMethods(object):
             pattern matches the end of each string element.
 
         """
-        if na is not np.nan:
-            raise NotImplementedError("`na` parameter is not yet supported")
+        na = kwargs.get("na", None)
+        if na is not None:
+            warnings.warn(
+                "`na` parameter is not yet supported, \
+                as input series is expected to have true strings"
+            )
 
         from cudf._libxx.scalar import Scalar
 
@@ -1583,7 +1587,7 @@ class StringMethods(object):
             cpp_endswith(self._column, Scalar(pat, "str")), **kwargs
         )
 
-    def startswith(self, pat, na=np.nan, **kwargs):
+    def startswith(self, pat, **kwargs):
         """
         Test if the start of each string element matches a pattern.
 
@@ -1599,8 +1603,12 @@ class StringMethods(object):
             pattern matches the start of each string element.
 
         """
-        if na is not np.nan:
-            raise NotImplementedError("`na` parameter is not yet supported")
+        na = kwargs.get("na", None)
+        if na is not None:
+            warnings.warn(
+                "`na` parameter is not yet supported, \
+                as input series is expected to have true strings"
+            )
 
         from cudf._libxx.scalar import Scalar
 
@@ -1743,7 +1751,7 @@ class StringMethods(object):
         else:
             return result
 
-    def match(self, pat, case=True, flags=0, na=np.nan, **kwargs):
+    def match(self, pat, case=True, flags=0, **kwargs):
         """
         Determine if each string matches a regular expression.
 
@@ -1761,8 +1769,13 @@ class StringMethods(object):
             raise NotImplementedError("`case` parameter is not yet supported")
         elif flags != 0:
             raise NotImplementedError("`flags` parameter is not yet supported")
-        elif na is not np.nan:
-            raise NotImplementedError("`na` parameter is not yet supported")
+
+        na = kwargs.get("na", None)
+        if na is not None:
+            warnings.warn(
+                "`na` parameter is not yet supported, \
+                as input series is expected to have true strings"
+            )
 
         return self._return_or_inplace(
             cpp_match_re(self._column, pat), **kwargs
