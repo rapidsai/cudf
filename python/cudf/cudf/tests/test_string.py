@@ -1524,7 +1524,7 @@ def test_string_replace_with_backrefs(find, replace):
 
 
 def test_string_table_view_creation():
-    data = ["hi"] * 25 + [None] * 5000
+    data = ["hi"] * 25 + [None] * 2027
     psr = pd.Series(data)
     gsr = Series.from_pandas(psr)
 
