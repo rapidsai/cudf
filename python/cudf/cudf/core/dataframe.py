@@ -2845,7 +2845,7 @@ class DataFrame(Frame):
 
         return Series(table_to_hash._hash()).values
 
-    def partition_by_hash(self, columns, nparts):
+    def partition_by_hash(self, columns, nparts, keep_index=True):
         """Partition the dataframe by the hashed value of data in *columns*.
 
         Parameters
@@ -2855,6 +2855,8 @@ class DataFrame(Frame):
             Must have at least one name.
         nparts : int
             Number of output partitions
+        keep_index : boolean
+            Whether to keep the index or drop it
 
         Returns
         -------
@@ -2862,7 +2864,7 @@ class DataFrame(Frame):
         """
         idx = 0 if self._index is None else self._index._num_columns
         key_indices = [self._data.names.index(k) + idx for k in columns]
-        outdf, offsets = self._hash_partition(key_indices, nparts)
+        outdf, offsets = self._hash_partition(key_indices, nparts, keep_index)
         # Slice into partition
         return [outdf[s:e] for s, e in zip(offsets, offsets[1:] + [None])]
 
