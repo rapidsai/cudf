@@ -573,8 +573,10 @@ class Frame(libcudfxx.table.Table):
                 self._data[name] = build_categorical_column(
                     categories=other_col.categories,
                     codes=col,
-                    mask=col.mask,
+                    mask=col.base_mask,
                     ordered=other_col.ordered,
+                    size=col.size,
+                    offset=col.offset,
                 )
         if include_index:
             from cudf.core.index import RangeIndex
