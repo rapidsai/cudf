@@ -25,6 +25,8 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 
+#include <cub/cub.cuh>
+
 namespace cudf {
 namespace experimental {
 namespace {
@@ -601,7 +603,16 @@ hash_partition(table_view const& input,
                                        stream);
   }
 }
+
+std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>>
+partition(table_view const& t, column_view const& partition_map,
+          int num_partitions, rmm::mr::device_memory_resource* mr,
+          cudaStream_t stream = 0) {
+  return std::make_pair(experimental::empty_like(t), std::vector<size_type>{});
+}
+
 }  // namespace detail
+
 std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>>
 hash_partition(table_view const& input,
                std::vector<size_type> const& columns_to_hash,
@@ -609,5 +620,13 @@ hash_partition(table_view const& input,
   CUDF_FUNC_RANGE();
   return detail::hash_partition(input, columns_to_hash, num_partitions, mr);
 }
+
+std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>>
+partition(table_view const& t, column_view const& partition_map,
+          int num_partitions, rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
+  return detail::partition(t, partition_map, num_partitions, mr);
+}
+
 }  // namespace experimental
 }  // namespace cudf
