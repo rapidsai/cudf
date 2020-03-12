@@ -32,13 +32,6 @@
 
 namespace cudf {
 
-// Allow strategy switching at runtime for easier benchmarking
-// TODO remove when done
-static concatenate_mode current_mode = concatenate_mode::AUTOMATIC;
-void temp_set_concatenate_mode(concatenate_mode mode) {
-  current_mode = mode;
-}
-
 namespace detail {
 
 auto create_device_views(
@@ -394,31 +387,18 @@ concatenate(std::vector<column_view> const& columns_to_concat,
       [type](auto const& c) { return c.type() == type; }),
       "Type mismatch in columns to concatenate.");
 
-  // TODO dispatch to fused kernel if num inputs <= 4?
   bool const has_nulls = std::any_of(
       columns_to_concat.begin(), columns_to_concat.end(),
       [](auto const& col) { return col.has_nulls(); });
-
   bool const fixed_width = cudf::is_fixed_width(type);
 
-  switch (current_mode) {
-    case concatenate_mode::AUTOMATIC:
-      // TODO switch to fused kernel when strings and dictionary support added
-      if (fixed_width && (has_nulls || columns_to_concat.size() > 4)) {
-        return experimental::type_dispatcher(type,
-            detail::fused_concatenate{columns_to_concat, has_nulls, mr, stream});
-      } else {
-        return experimental::type_dispatcher(type,
-            detail::for_each_concatenate{columns_to_concat, has_nulls, stream, mr});
-      }
-    case concatenate_mode::UNOPTIMIZED:
-      return experimental::type_dispatcher(type,
-          detail::for_each_concatenate{columns_to_concat, has_nulls, stream, mr});
-    case concatenate_mode::FUSED_KERNEL:
-      return experimental::type_dispatcher(type,
-          detail::fused_concatenate{columns_to_concat, has_nulls, mr, stream});
-    default:
-      CUDF_FAIL("Invalid concatenate mode");
+  // Select fused kernel when it can improve performance
+  if (fixed_width && (has_nulls || columns_to_concat.size() > 4)) {
+    return experimental::type_dispatcher(type,
+        detail::fused_concatenate{columns_to_concat, has_nulls, mr, stream});
+  } else {
+    return experimental::type_dispatcher(type,
+        detail::for_each_concatenate{columns_to_concat, has_nulls, stream, mr});
   }
 }
 
