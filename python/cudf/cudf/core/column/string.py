@@ -1111,8 +1111,8 @@ class StringColumn(column.ColumnBase):
             lhs, rhs = rhs, lhs
         if isinstance(rhs, StringColumn) and op == "add":
             return lhs.nvstrings.cat(others=rhs.nvstrings)
-        elif op in ("eq", "ne"):
-            return _string_column_binop(self, rhs, op=op)
+        elif op in ("eq", "ne", "gt", "lt", "ge", "le"):
+            return _string_column_binop(self, rhs, op=op, out_dtype="bool")
         else:
             msg = "{!r} operator not supported between {} and {}"
             raise TypeError(msg.format(op, type(self), type(rhs)))
@@ -1164,12 +1164,8 @@ class StringColumn(column.ColumnBase):
         return out
 
 
-def _string_column_binop(lhs, rhs, op):
+def _string_column_binop(lhs, rhs, op, out_dtype):
     nvtx_range_push("CUDF_BINARY_OP", "orange")
-    # Allocate output
-    masked = lhs.nullable or rhs.nullable
-    out = column.column_empty_like(lhs, dtype="bool", masked=masked)
-    # Call and fix null_count
-    _ = libcudf.binops.apply_op(lhs=lhs, rhs=rhs, out=out, op=op)
+    out = libcudfxx.binaryop.binaryop(lhs=lhs, rhs=rhs, op=op, dtype=out_dtype)
     nvtx_range_pop()
     return out
