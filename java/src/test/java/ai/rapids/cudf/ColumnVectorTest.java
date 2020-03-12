@@ -1578,4 +1578,38 @@ public class ColumnVectorTest extends CudfTestBase {
            ColumnVector concat = cv.stringLocate(pattern, 0, -1)) {}
     });
   }
+
+  @Test
+  void testsubstring() {
+    try (ColumnVector v = ColumnVector.fromStrings("Héllo", "thésé", null,"", "ARé", "strings");
+         ColumnVector e_allParameters = ColumnVector.fromStrings("llo", "ésé", null, "", "é", "rin");
+         ColumnVector e_withoutStop = ColumnVector.fromStrings("llo", "ésé", null, "", "é", "rings");
+         ColumnVector substring_allParam = v.substring(2, 5);
+         ColumnVector substring_NoEnd = v.substring(2)) {
+      assertColumnsAreEqual(e_allParameters, substring_allParam);
+      assertColumnsAreEqual(e_withoutStop, substring_NoEnd);
+    }
+  }
+
+  @Test
+  void testsubstringColumn() {
+    try (ColumnVector v = ColumnVector.fromStrings("Héllo", "thésé", null, "", "ARé", "strings");
+         ColumnVector start = ColumnVector.fromInts(2, 1, 1, 1, 0, 1);
+         ColumnVector end = ColumnVector.fromInts(5, 3, 1, 1, -1, -1);
+         ColumnVector expected = ColumnVector.fromStrings("llo", "hé", null, "", "ARé", "trings");
+         ColumnVector result = v.substring(start, end)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testsubstringThrowsException() {
+    assertThrows(AssertionError.class, () -> {
+      try (ColumnVector v = ColumnVector.fromStrings("Héllo", "thésé", null, "", "ARé", "strings");
+           ColumnVector start = ColumnVector.fromInts(2, 1, 1, 1, 0, 1);
+           ColumnVector end = ColumnVector.fromInts(5, 3, 1, 1, -1);
+           ColumnVector substring = v.substring(start, end)) {
+      }
+    });
+  }
 }

@@ -66,6 +66,25 @@ inline __device__ double Int128ToDouble_rn(uint64_t lo, int64_t hi)
     return sign * __fma_rn(__ll2double_rn(hi), 4294967296.0 * 4294967296.0, __ull2double_rn(lo));
 }
 
+inline __device__ uint32_t unaligned_load32(const uint8_t *p) {
+  uint32_t ofs = 3 & reinterpret_cast<uintptr_t>(p);
+  const uint32_t *p32 = reinterpret_cast<const uint32_t *>(p - ofs);
+  uint32_t v = p32[0];
+  return (ofs) ? __funnelshift_r(v, p32[1], ofs * 8) : v;
+}
+
+inline __device__ uint64_t unaligned_load64(const uint8_t *p) {
+  uint32_t ofs = 3 & reinterpret_cast<uintptr_t>(p);
+  const uint32_t *p32 = reinterpret_cast<const uint32_t *>(p - ofs);
+  uint32_t v0 = p32[0];
+  uint32_t v1 = p32[1];
+  if (ofs) {
+    v0 = __funnelshift_r(v0, v1, ofs * 8);
+    v1 = __funnelshift_r(v1, p32[2], ofs * 8);
+  }
+  return (((uint64_t)v1) << 32) | v0;
+}
+
 
 template<unsigned int nthreads, bool sync_before_store>
 inline __device__ void memcpy_block(void *dstv, const void *srcv, uint32_t len, uint32_t t)

@@ -540,12 +540,14 @@ def test_empty_boolean_mask(dtype):
     gdf = cudf.datasets.randomdata(nrows=0, dtypes={"a": dtype})
     pdf = gdf.to_pandas()
 
-    expected = pdf[pdf.a == 1]
-    got = gdf[gdf.a == 1]
+    compare_val = dtype(1)
+
+    expected = pdf[pdf.a == compare_val]
+    got = gdf[gdf.a == compare_val]
     assert_eq(expected, got)
 
-    expected = pdf.a[pdf.a == 1]
-    got = gdf.a[gdf.a == 1]
+    expected = pdf.a[pdf.a == compare_val]
+    got = gdf.a[gdf.a == compare_val]
     assert_eq(expected, got)
 
 
