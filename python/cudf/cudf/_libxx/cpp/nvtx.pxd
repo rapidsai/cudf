@@ -2,6 +2,8 @@
 
 from libc.stdint cimport uint32_t
 
+ctypedef uint32_t underlying_type_t_color
+
 cdef extern from "cudf/utilities/nvtx_utils.hpp" namespace "cudf::nvtx" nogil:
     ctypedef enum color:
         GREEN 'cudf::nvtx::color::GREEN'

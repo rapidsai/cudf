@@ -6,10 +6,9 @@ from cudf._libxx.cpp.nvtx cimport (
     range_push as cpp_range_push,
     range_push_hex as cpp_range_push_hex,
     range_pop as cpp_range_pop,
-    color as color_types
+    color as color_types,
+    underlying_type_t_color,
 )
-
-from cudf._libxx.cpp.utilities.nvtx_utils cimport underlying_type_t_color
 
 
 class Color(IntEnum):
@@ -41,7 +40,10 @@ def range_push(object name, object color='GREEN'):
     except ValueError:
         color = int(Color[color.upper()])
 
-    cdef const char* _name = <bytes> name
+    cdef const char *_name 
+    name = name.encode()
+    _name = name
+
     cdef underlying_type_t_color _color = color
 
     with nogil:
