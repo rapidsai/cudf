@@ -894,7 +894,7 @@ class DatetimeIndex(GenericIndex):
         out_column = column.build_column(
             data=out_column.base_data,
             dtype=out_column.dtype,
-            mask=out_column.mask,
+            mask=out_column.base_mask,
             offset=out_column.offset,
         )
         return as_index(out_column, name=self.name)

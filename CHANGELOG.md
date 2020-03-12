@@ -250,6 +250,7 @@
 - PR #4390 Disable ScatterValid and ScatterNull legacy tests
 - PR #4399 Make scalar destructor virtual.
 - PR #4406 Fix sorted merge issue with null values and ascending=False
+- PR #4445 Fix string issue for parquet reader and support `keep_index` for `scatter_to_tables`
 - PR #4423 Tighten up Dask serialization checks
 - PR #4434 Fix join_strings logic with all-null strings and non-null narep
 
