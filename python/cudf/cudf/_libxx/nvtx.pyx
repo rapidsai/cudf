@@ -40,7 +40,7 @@ def range_push(object name, object color='GREEN'):
     except ValueError:
         color = int(Color[color.upper()].value)
 
-    cdef const char *_name 
+    cdef const char *_name
     name = name.encode()
     _name = name
 
