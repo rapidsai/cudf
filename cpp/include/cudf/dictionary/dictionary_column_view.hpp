@@ -57,6 +57,12 @@ public:
     column_view indices() const noexcept;
 
     /**
+     * @brief Returns a column_view combining the indices data
+     * with offset, size, and nulls from the parent.
+     */
+    column_view get_indices_annotated() const noexcept;
+
+    /**
      * @brief Returns the column of keys
      */
     column_view keys() const noexcept;
