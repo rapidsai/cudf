@@ -1834,6 +1834,7 @@ class StringMethods(object):
         -------
         Series or Index.
         """
+        table = str.maketrans(table)
         return self._return_or_inplace(
             cpp_translate(self._column, table), **kwargs
         )

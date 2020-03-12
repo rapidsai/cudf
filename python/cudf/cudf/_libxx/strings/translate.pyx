@@ -27,7 +27,10 @@ def translate(Column source_strings,
     mapping_table_dict = OrderedDict()
 
     for key in mapping_table:
-        mapping_table_dict[(key, mapping_table[key])] = None
+        value = mapping_table[key]
+        if type(value) is str:
+            value = ord(value)
+        mapping_table_dict[(key, value)] = None
 
     cdef vector[pair[char_utf8, char_utf8]] c_mapping_table
     c_mapping_table = list(mapping_table_dict.keys())

@@ -1724,3 +1724,135 @@ def test_string_str_match(data, pat):
     gs = Series(data)
 
     assert_eq(ps.str.match(pat), gs.str.match(pat))
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["abc", "xyz", "a", "ab", "123", "097"],
+        ["A B", "1.5", "3,000"],
+        ["23", "³", "⅕", ""],
+        [" ", "\t\r\n ", ""],
+        ["$", "B", "Aab$", "$$ca", "C$B$", "cat"],
+        ["line to be wrapped", "another line to be wrapped"],
+        ["hello", "there", "world", "+1234", "-1234", None, "accént", ""],
+        ["1. Ant.  ", "2. Bee!\n", "3. Cat?\t", None],
+    ],
+)
+def test_string_str_translate(data):
+    ps = pd.Series(data)
+    gs = Series(data)
+
+    assert_eq(
+        ps.str.translate(str.maketrans({"a": "z"})),
+        gs.str.translate(str.maketrans({"a": "z"})),
+    )
+    assert_eq(
+        ps.str.translate(str.maketrans({"a": "z", "i": "$", "z": "1"})),
+        gs.str.translate(str.maketrans({"a": "z", "i": "$", "z": "1"})),
+    )
+    assert_eq(
+        ps.str.translate(
+            str.maketrans({"+": "-", "-": "$", "?": "!", "B": "."})
+        ),
+        gs.str.translate(
+            str.maketrans({"+": "-", "-": "$", "?": "!", "B": "."})
+        ),
+    )
+
+
+def test_string_str_code_points():
+
+    data = [
+        "abc",
+        "Def",
+        None,
+        "jLl",
+        "dog and cat",
+        "accénted",
+        "",
+        " 1234 ",
+        "XYZ",
+    ]
+    gs = Series(data)
+    expected = [
+        97,
+        98,
+        99,
+        68,
+        101,
+        102,
+        106,
+        76,
+        108,
+        100,
+        111,
+        103,
+        32,
+        97,
+        110,
+        100,
+        32,
+        99,
+        97,
+        116,
+        97,
+        99,
+        99,
+        50089,
+        110,
+        116,
+        101,
+        100,
+        32,
+        49,
+        50,
+        51,
+        52,
+        32,
+        88,
+        89,
+        90,
+    ]
+    expected = Series(expected)
+
+    assert_eq(expected, gs.str.code_points(), check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["http://www.hellow.com", "/home/nvidia/nfs", "123.45 ~ABCDEF"],
+        ["23", "³", "⅕", ""],
+        [" ", "\t\r\n ", ""],
+        ["$", "B", "Aab$", "$$ca", "C$B$", "cat"],
+    ],
+)
+def test_string_str_url_encode(data):
+    import urllib.parse
+
+    gs = Series(data)
+
+    got = gs.str.url_encode()
+    expected = pd.Series([urllib.parse.quote(url, safe="~") for url in data])
+    assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [
+            "http://www.hellow.com?k1=acc%C3%A9nted&k2=a%2F/b.c",
+            "%2Fhome%2fnfs",
+            "987%20ZYX",
+        ]
+    ],
+)
+def test_string_str_decode_url(data):
+    import urllib.parse
+
+    gs = Series(data)
+
+    got = gs.str.url_decode()
+    expected = pd.Series([urllib.parse.unquote(url) for url in data])
+    assert_eq(expected, got)
