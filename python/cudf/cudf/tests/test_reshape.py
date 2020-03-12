@@ -266,7 +266,7 @@ def test_df_merge_sorted(nparts, keys, na_position, ascending):
     keys_1 = keys or ["timestamp"]
     # Null values NOT currently supported with Categorical data
     # or when `ascending=False`
-    add_null = ascending and keys_1[0] not in ("name")
+    add_null = keys_1[0] not in ("name")
     df, dfs = _prepare_merge_sorted_test(
         size,
         nparts,
@@ -314,7 +314,7 @@ def test_df_merge_sorted_ignore_index(keys, na_position, ascending):
     keys_1 = keys or ["timestamp"]
     # Null values NOT currently supported with Categorical data
     # or when `ascending=False`
-    add_null = ascending and keys_1[0] not in ("name")
+    add_null = keys_1[0] not in ("name")
     df, dfs = _prepare_merge_sorted_test(
         size,
         nparts,

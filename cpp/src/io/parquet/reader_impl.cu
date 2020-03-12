@@ -548,12 +548,12 @@ reader::impl::impl(std::unique_ptr<datasource> source,
   // Open and parse the source dataset metadata
   _metadata = std::make_unique<metadata>(_source.get());
 
+  // Store the index column (PANDAS-specific)
+  _pandas_index = _metadata->get_pandas_index_name();
+
   // Select only columns required by the options
   _selected_columns = _metadata->select_columns(
       options.columns, options.use_pandas_metadata, _pandas_index);
-
-  // Store the index column (PANDAS-specific)
-  _pandas_index = _metadata->get_pandas_index_name();
 
   // Override output timestamp resolution if requested
   if (options.timestamp_type.id() != EMPTY) {

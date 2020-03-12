@@ -464,28 +464,6 @@ class Index(Series, dd.core.Index):
     _partition_type = cudf.Index
 
 
-def splits_divisions_sorted_cudf(df, chunksize):
-    segments = list(df.index.find_segments().to_array())
-    segments.append(len(df) - 1)
-
-    splits = [0]
-    last = current_size = 0
-    for s in segments:
-        size = s - last
-        last = s
-        current_size += size
-        if current_size >= chunksize:
-            splits.append(s)
-            current_size = 0
-    # Ensure end is included
-    if splits[-1] != segments[-1]:
-        splits.append(segments[-1])
-    divisions = tuple(df.index.take(np.array(splits)).values)
-    splits[-1] += 1  # Offset to extract to end
-
-    return splits, divisions
-
-
 def _extract_meta(x):
     """
     Extract internal cache data (``_meta``) from dask_cudf objects

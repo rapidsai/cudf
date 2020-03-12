@@ -26,6 +26,7 @@
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/replace.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 namespace cudf {
 namespace experimental {
@@ -286,8 +287,8 @@ std::unique_ptr<column> clamp(column_view const& input,
                               scalar const& hi,
                               scalar const& hi_replace,
                               rmm::mr::device_memory_resource* mr) {
-
-    return detail::clamp(input, lo, lo_replace, hi, hi_replace, mr);
+  CUDF_FUNC_RANGE();
+  return detail::clamp(input, lo, lo_replace, hi, hi_replace, mr);
 }
 
 // clamp input at lo and hi
@@ -295,8 +296,8 @@ std::unique_ptr<column> clamp(column_view const& input,
                               scalar const& lo,
                               scalar const& hi,
                               rmm::mr::device_memory_resource* mr) {
-
-    return detail::clamp(input, lo, lo, hi, hi, mr);
+  CUDF_FUNC_RANGE();
+  return detail::clamp(input, lo, lo, hi, hi, mr);
 }
 }// namespace experimental
 }// namespace cudf
