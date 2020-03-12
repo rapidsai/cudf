@@ -16,7 +16,6 @@
 
 #include <cudf/groupby.hpp>
 #include <cudf/hashing.hpp>
-#include <cudf/partitioning.hpp>
 #include <cudf/io/functions.hpp>
 #include <cudf/join.hpp>
 #include <cudf/partitioning.hpp>
