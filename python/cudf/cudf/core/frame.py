@@ -687,10 +687,11 @@ class Frame(libcudfxx.table.Table):
             for i, col in enumerate(by):
                 to_sort[i] = col
             inds = to_sort.argsort()
-            to_return_copy = to_return.copy(deep=False)
             for col in to_return.columns:
-                from cudf import Series
-                to_return[col] = Series(to_return_copy[col].take(inds)._column)
+                to_return._data[col] = to_return._data[col].take(inds)
+            if left_index or right_index:
+                name = to_return._index.name
+                to_return._index._data[name] = to_return._index._data[name].take(inds)
             return to_return
         else:
             return to_return
