@@ -162,6 +162,7 @@
 - PR #4405 Port nvstrings (Sub)string Comparisons functions to cuDF Python/Cython
 - PR #4316 Add Java and JNI bindings for substring expression
 - PR #4314 Add Java and JNI bindings for string contains
+- PR #4461 Port nvstrings Miscellaneous functions to cuDF Python/Cython
 
 ## Bug Fixes
 
@@ -247,6 +248,7 @@
 - PR #4423 Tighten up Dask serialization checks
 - PR #4438 Fix repl-template error for replace_with_backrefs
 - PR #4434 Fix join_strings logic with all-null strings and non-null narep
+- PR #4464 Update Cmake to always link in libnvToolsExt
 
 
 # cuDF 0.12.0 (04 Feb 2020)
