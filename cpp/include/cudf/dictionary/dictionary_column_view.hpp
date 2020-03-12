@@ -17,7 +17,6 @@
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/column/column.hpp>
-#include <cudf/scalar/scalar.hpp>
 
 namespace cudf
 {
@@ -72,35 +71,6 @@ public:
      */
     size_type keys_size() const noexcept;
 
-private:
-    column_view _dictionary;
 };
-
-
-/**
- * @brief Return the index value for a given key.
- *
- * If the key does not exist in the dictionary the returned scalar will have `is_valid()==false`
- * 
- * @throw cudf::logic_error if `key.type() != dictionary.keys().type()`
- * 
- * @param dictionary The dictionary to search for the key.
- * @param key The value to search for in the dictionary keyset.
- * @return index value of the key within the dictionary
- */
-numeric_scalar<int32_t> get_index( dictionary_column_view const& dictionary, scalar const& key, cudaStream_t stream = 0 );
-
-/**
- * @brief Return the index value for a given key if it were to be added into the dictionary.
- *
- * This allows finding the position without actually creating a new dictionary.
- * 
- * @throw cudf::logic_error if `key.type() != dictionary.keys().type()`
- * 
- * @param dictionary The dictionary to search for the key.
- * @param key The value to search for in the dictionary keyset.
- * @return potential index value of the key within the dictionary
- */
-numeric_scalar<int32_t> get_index_bounds( dictionary_column_view const& dictionary, scalar const& key, cudaStream_t stream = 0 );
 
 } // namespace cudf

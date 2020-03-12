@@ -59,17 +59,4 @@ size_type dictionary_column_view::keys_size() const noexcept
     return keys().size();
 }
 
-numeric_scalar<int32_t> get_index( dictionary_column_view const& dictionary, scalar const& key, cudaStream_t stream )
-{
-    numeric_scalar<int32_t> result{0};
-    return result;
-}
-
-numeric_scalar<int32_t> get_index_bounds( dictionary_column_view const& dictionary, scalar const& key, cudaStream_t stream )
-{
-    numeric_scalar<int32_t> result{0};
-    return result;
-}
-
-
 } // namespace cudf
