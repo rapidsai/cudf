@@ -831,6 +831,10 @@ std::vector<uint8_t> writer::merge_rowgroup_metadata(const std::vector<const std
       md.num_rows += tmp.num_rows;
     }
   }
+  // Reader doesn't currently populate column_order, so infer it here
+  if (md.row_groups.size() != 0 && md.row_groups[0].columns.size() != 0) {
+    md.column_order_listsize = (md.row_groups[0].columns[0].meta_data.statistics_blob.size()) ? md.row_groups[0].columns.size() : 0;
+  }
   // Thrift-encode the resulting output
   file_header_s fhdr;
   file_ender_s fendr;
