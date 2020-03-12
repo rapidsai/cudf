@@ -62,7 +62,7 @@ conda install "rmm=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL" \
               "rapidjson" "flatbuffers" "boost-cpp" "fsspec>=0.3.3" "dlpack" \
               "feather-format" "cupy>=6.6.0,<8.0.0a0,!=7.1.0" "arrow-cpp=0.15.0" "pyarrow=0.15.0" \
               "fastavro>=0.22.0" "pandas>=0.25,<0.26" "hypothesis" "s3fs" "gcsfs" \
-              "boto3" "moto" "httpretty" "streamz"
+              "boto3" "moto" "httpretty" "streamz" "ipython=7.3*" "jupyterlab"
 
 # Install the master version of dask, distributed, and streamz
 logger "pip install git+https://github.com/dask/distributed.git --upgrade --no-deps"
@@ -83,7 +83,7 @@ conda list
 ################################################################################
 
 logger "Build libcudf..."
-$WORKSPACE/build.sh clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks
+$WORKSPACE/build.sh clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks tests
 
 ################################################################################
 # TEST - Run GoogleTest and py.tests for libnvstrings, nvstrings, libcudf, and
@@ -96,20 +96,22 @@ else
     logger "Check GPU usage..."
     nvidia-smi
 
-    logger "GoogleTest for libnvstrings..."
+    logger "GoogleTests..."
     cd $WORKSPACE/cpp/build
-    GTEST_OUTPUT="xml:${WORKSPACE}/test-results/" make -j${PARALLEL_LEVEL} test_nvstrings
 
-    logger "GoogleTest for libcudf..."
-    cd $WORKSPACE/cpp/build
-    GTEST_OUTPUT="xml:${WORKSPACE}/test-results/" make -j${PARALLEL_LEVEL} test_cudf
+    for gt in ${WORKSPACE}/cpp/build/gtests/* ; do
+        test_name=$(basename ${gt})
+        echo "Running GoogleTest $test_name"
+        ${gt} --gtest_output=xml:${WORKSPACE}/test-results/
+    done
+
 
     # set environment variable for numpy 1.16
     # will be enabled for later versions by default
     np_ver=$(python -c "import numpy; print('.'.join(numpy.__version__.split('.')[:-1]))")
     if [ "$np_ver" == "1.16" ];then
-      logger "export NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=1"
-      export NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=1
+        logger "export NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=1"
+        export NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=1
     fi
 
     cd $WORKSPACE/python/nvstrings
@@ -128,4 +130,6 @@ else
     logger "Python py.test for cuStreamz..."
     py.test --cache-clear --junitxml=${WORKSPACE}/junit-custreamz.xml -v --cov-config=.coveragerc --cov=custreamz --cov-report=xml:${WORKSPACE}/python/custreamz/custreamz-coverage.xml --cov-report term
 
+    ${WORKSPACE}/ci/gpu/test-notebooks.sh 2>&1 | tee nbtest.log
+    python ${WORKSPACE}/ci/utils/nbtestlog2junitxml.py nbtest.log
 fi

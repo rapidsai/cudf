@@ -2,16 +2,17 @@
 
 import pickle
 
+import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 
 import cudf
-import cudf._lib as libcudf
+import cudf._libxx as libcudfxx
+from cudf._libxx.transform import bools_to_mask
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.core.dtypes import CategoricalDtype
-from cudf.utils import cudautils, utils
 
 
 class CategoricalAccessor(object):
@@ -164,9 +165,9 @@ class CategoricalAccessor(object):
             new_cats = Series(new_cats).drop_duplicates()._column
 
         cur_codes = self.codes
-        cur_order = cudautils.arange(len(cur_codes))
-        old_codes = cudautils.arange(len(cur_cats), dtype=cur_codes.dtype)
-        new_codes = cudautils.arange(len(new_cats), dtype=cur_codes.dtype)
+        cur_order = cupy.arange(len(cur_codes))
+        old_codes = cupy.arange(len(cur_cats), dtype=cur_codes.dtype)
+        new_codes = cupy.arange(len(new_cats), dtype=cur_codes.dtype)
 
         new_df = DataFrame({"new_codes": new_codes, "cats": new_cats})
         old_df = DataFrame({"old_codes": old_codes, "cats": cur_cats})
@@ -244,6 +245,12 @@ class CategoricalColumn(column.ColumnBase):
 
         self._codes = None
 
+    @property
+    def base_size(self):
+        return int(
+            (self.base_children[0].size) / self.base_children[0].dtype.itemsize
+        )
+
     def __contains__(self, item):
         try:
             self._encode(item)
@@ -254,7 +261,7 @@ class CategoricalColumn(column.ColumnBase):
     def serialize(self):
         header = {}
         frames = []
-        header["type"] = pickle.dumps(type(self))
+        header["type-serialized"] = pickle.dumps(type(self))
         header["dtype"], dtype_frames = self.dtype.serialize()
         header["dtype_frames_count"] = len(dtype_frames)
         frames.extend(dtype_frames)
@@ -276,7 +283,7 @@ class CategoricalColumn(column.ColumnBase):
         )
         n_data_frames = header["data_frames_count"]
 
-        column_type = pickle.loads(header["data"]["type"])
+        column_type = pickle.loads(header["data"]["type-serialized"])
         data = column_type.deserialize(
             header["data"],
             frames[n_dtype_frames : n_dtype_frames + n_data_frames],
@@ -316,7 +323,7 @@ class CategoricalColumn(column.ColumnBase):
                 dtype=codes_column.dtype,
                 mask=codes_column.base_mask,
                 size=self.size,
-                offset=self.offset,
+                offset=self.offset + codes_column.offset,
             )
             self._children = (codes_column,)
         return self._children
@@ -382,6 +389,8 @@ class CategoricalColumn(column.ColumnBase):
         return self.as_numerical.ordered_compare(cmpop, rhs.as_numerical)
 
     def normalize_binop_value(self, other):
+        from cudf.utils import utils
+
         ary = utils.scalar_broadcast_to(
             self._encode(other), size=len(self), dtype=self.codes.dtype
         )
@@ -431,8 +440,8 @@ class CategoricalColumn(column.ColumnBase):
             dictionary=self.categories.to_arrow(),
         )
 
-    def unique(self, method="sort"):
-        codes = self.as_numerical.unique(method=method)
+    def unique(self):
+        codes = self.as_numerical.unique()
         return column.build_categorical_column(
             categories=self.categories,
             codes=codes,
@@ -469,7 +478,7 @@ class CategoricalColumn(column.ColumnBase):
             )
         )
 
-        output = libcudf.replace.replace(
+        output = libcudfxx.replace.replace(
             replaced, to_replace_col, replacement_col
         )
 
@@ -509,7 +518,7 @@ class CategoricalColumn(column.ColumnBase):
                 self.codes.dtype
             )
 
-        result = libcudf.replace.replace_nulls(self, fill_value)
+        result = libcudfxx.replace.replace_nulls(self, fill_value)
 
         result = column.build_categorical_column(
             categories=self.dtype.categories,
@@ -531,16 +540,6 @@ class CategoricalColumn(column.ColumnBase):
         Returns offset of last value that matches
         """
         return self.as_numerical.find_last_value(self._encode(value))
-
-    def searchsorted(self, value, side="left"):
-        if not self.ordered:
-            raise ValueError("Requires ordered categories")
-
-        value_col = column.as_column(value)
-        if self.dtype != value_col.dtype:
-            raise TypeError("Categoricals can only compare with the same type")
-
-        return libcudf.search.search_sorted(self, value_col, side)
 
     @property
     def is_monotonic_increasing(self):
@@ -587,7 +586,7 @@ class CategoricalColumn(column.ColumnBase):
 
     def copy(self, deep=True):
         if deep:
-            copied_col = libcudf.copying.copy_column(self)
+            copied_col = libcudfxx.copying.copy_column(self)
             return column.build_categorical_column(
                 categories=self.dtype.categories,
                 codes=copied_col,
@@ -633,12 +632,11 @@ def pandas_categorical_as_column(categorical, codes=None):
     codes = categorical.codes if codes is None else codes
     codes = column.as_column(codes)
 
-    valid_codes = codes != -1
+    valid_codes = codes.unordered_compare("ne", codes.dtype.type(-1))
 
     mask = None
-    if not np.all(valid_codes):
-        mask = cudautils.compact_mask_bytes(valid_codes)
-        mask = Buffer(mask)
+    if not valid_codes.all():
+        mask = bools_to_mask(valid_codes)
 
     return column.build_categorical_column(
         categories=categorical.categories,

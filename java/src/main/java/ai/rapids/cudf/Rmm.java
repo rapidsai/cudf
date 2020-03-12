@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,8 @@
  */
 package ai.rapids.cudf;
 
+import java.util.Arrays;
+
 /**
  * This is the binding class for rmm lib.
  */
@@ -25,7 +27,6 @@ public class Rmm {
   }
 
   /**
-   * ---------------------------------------------------------------------------*
    * Initialize memory manager state and storage.
    * @param allocationMode Allocation strategy to use. Bit set using
    *                       {@link RmmAllocationMode#CUDA_DEFAULT},
@@ -49,6 +50,31 @@ public class Rmm {
   }
 
   /**
+   * Sets the event handler to be called on RMM events (e.g.: allocation failure).
+   * @param handler event handler to invoke on RMM events or null to clear an existing handler
+   * @throws RmmException if an active handler is already set
+   */
+  public static void setEventHandler(RmmEventHandler handler) throws RmmException {
+    long[] allocThresholds = (handler != null) ? sortThresholds(handler.getAllocThresholds()) : null;
+    long[] deallocThresholds = (handler != null) ? sortThresholds(handler.getDeallocThresholds()) : null;
+    setEventHandlerInternal(handler, allocThresholds, deallocThresholds);
+  }
+
+  /** Clears the active RMM event handler if one is set. */
+  public static void clearEventHandler() throws RmmException {
+    setEventHandlerInternal(null, null, null);
+  }
+
+  private static long[] sortThresholds(long[] thresholds) {
+    if (thresholds == null) {
+      return null;
+    }
+    long[] result = Arrays.copyOf(thresholds, thresholds.length);
+    Arrays.sort(result);
+    return result;
+  }
+
+  /**
    * Initialize RMM in CUDA default mode.
    */
   static synchronized void defaultInitialize() {
@@ -58,8 +84,8 @@ public class Rmm {
     }
   }
 
-  private static native void initializeInternal(int allocationMode, boolean enableLogging, long poolSize)
-      throws RmmException;
+  private static native void initializeInternal(int allocationMode, boolean enableLogging,
+      long poolSize) throws RmmException;
 
   /**
    * Check if RMM has been initialized already or not.
@@ -94,7 +120,6 @@ public class Rmm {
    * <p> Mapping: RMM_FREE in rmm.h
    * @param ptr    the pointer to memory location to be relinquished
    * @param stream the stream in which to synchronize this command
-   * @throws RmmException
    */
   static native void free(long ptr, long stream) throws RmmException;
 
@@ -102,6 +127,9 @@ public class Rmm {
    * Delete an rmm::device_buffer.
    */
   static native void freeDeviceBuffer(long rmmBufferAddress) throws RmmException;
+
+  static native void setEventHandlerInternal(RmmEventHandler handler,
+      long[] allocThresholds, long[] deallocThresholds) throws RmmException;
 
   /**
    * If logging is enabled get the log as a String.

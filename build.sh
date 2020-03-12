@@ -18,8 +18,8 @@ ARGS=$*
 # script, and that this script resides in the repo dir!
 REPODIR=$(cd $(dirname $0); pwd)
 
-VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks external  --external-lib-dir -v -g -n --allgpuarch --disable_nvtx -h"
-HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [external] [--external-lib-dir] [--disable_nvtx] [-v] [-g] [-n] [-h]
+VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf custreamz benchmarks external  --external-lib-dir -v -g -n --allgpuarch --disable_nvtx -h"
+HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [custreamz] [benchmarks] [external] [--external-lib-dir] [--disable_nvtx] [-v] [-g] [-n] [-h]
    clean                - remove all existing build artifacts and configuration (start
                         over)
    libnvstrings         - build the nvstrings C++ code only
@@ -27,6 +27,7 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [external] [--externa
    libcudf              - build the cudf C++ code only
    cudf                 - build the cudf Python package
    dask_cudf            - build the dask_cudf Python package
+   custreamz            - build the custreamz Python package
    benchmarks           - build benchmarks
    external             - build external datasource support for libcudf
    --external-lib-dir   - default directory to search for external datasource libraries
@@ -45,8 +46,9 @@ EXTERNAL_BUILD_DIR=${REPODIR}/external/build
 EXTERNAL_LIB_DIR=/usr/lib/cudf/external
 NVSTRINGS_BUILD_DIR=${REPODIR}/python/nvstrings/build
 CUDF_BUILD_DIR=${REPODIR}/python/cudf/build
+CUSTREAMZ_BUILD_DIR=${REPODIR}/python/custreamz/build
 DASK_CUDF_BUILD_DIR=${REPODIR}/python/dask_cudf/build
-BUILD_DIRS="${LIB_BUILD_DIR} ${NVSTRINGS_BUILD_DIR} ${CUDF_BUILD_DIR} ${DASK_CUDF_BUILD_DIR} ${EXTERNAL_BUILD_DIR}"
+BUILD_DIRS="${LIB_BUILD_DIR} ${NVSTRINGS_BUILD_DIR} ${CUDF_BUILD_DIR} ${DASK_CUDF_BUILD_DIR} ${CUSTREAMZ_BUILD_DIR} ${EXTERNAL_BUILD_DIR}"
 
 # Set defaults for vars modified by flags to this script
 VERBOSE=""
@@ -56,6 +58,7 @@ BENCHMARKS=OFF
 BUILD_EXTERNAL_DATASOURCES=OFF
 BUILD_ALL_GPU_ARCH=0
 BUILD_NVTX=ON
+BUILD_TESTS="OFF"
 
 # Set defaults for vars that may not have been defined externally
 #  FIXME: if INSTALL_PREFIX is not set, check PREFIX, then check
@@ -102,7 +105,10 @@ if hasArg --allgpuarch; then
     BUILD_ALL_GPU_ARCH=1
 fi
 if hasArg benchmarks; then
-    BENCHMARKS=ON
+    BENCHMARKS="ON"
+fi
+if hasArg tests; then
+    BUILD_TESTS=ON
 fi
 if hasArg external; then
     BUILD_EXTERNAL_DATASOURCES="ON"
@@ -160,6 +166,10 @@ if buildAll || hasArg libnvstrings; then
     else
         make -j${PARALLEL_LEVEL} nvstrings VERBOSE=${VERBOSE}
     fi
+
+    if [[ ${BUILD_TESTS} == "ON" ]]; then
+        make -j${PARALLEL_LEVEL} build_tests_nvstrings VERBOSE=${VERBOSE}
+    fi
 fi
 
 # Build and install the nvstrings Python package
@@ -183,6 +193,10 @@ if buildAll || hasArg libcudf; then
     else
         make -j${PARALLEL_LEVEL} cudf VERBOSE=${VERBOSE}
     fi
+
+    if [[ ${BUILD_TESTS} == "ON" ]]; then
+        make -j${PARALLEL_LEVEL} build_tests_cudf VERBOSE=${VERBOSE}
+    fi
 fi
 
 # Build and install the cudf Python package
@@ -190,10 +204,10 @@ if buildAll || hasArg cudf; then
 
     cd ${REPODIR}/python/cudf
     if [[ ${INSTALL_TARGET} != "" ]]; then
-        python setup.py build_ext --inplace
+        PARALLEL_LEVEL=${PARALLEL_LEVEL} python setup.py build_ext --inplace
         python setup.py install --single-version-externally-managed --record=record.txt
     else
-        python setup.py build_ext --inplace --library-dir=${LIBCUDF_BUILD_DIR}
+        PARALLEL_LEVEL=${PARALLEL_LEVEL} python setup.py build_ext --inplace --library-dir=${LIBCUDF_BUILD_DIR}
     fi
 fi
 
@@ -205,6 +219,18 @@ if buildAll || hasArg dask_cudf; then
         python setup.py install --single-version-externally-managed --record=record.txt
     else
         python setup.py build_ext --inplace
+    fi
+fi
+
+# Build and install the custreamz Python package
+if buildAll || hasArg custreamz; then
+
+    cd ${REPODIR}/python/custreamz
+    if [[ ${INSTALL_TARGET} != "" ]]; then
+        python setup.py build_ext --inplace
+        python setup.py install --single-version-externally-managed --record=record.txt
+    else
+        python setup.py build_ext --inplace --library-dir=${CUSTREAMZ_BUILD_DIR}
     fi
 fi
 

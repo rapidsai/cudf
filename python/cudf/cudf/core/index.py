@@ -10,11 +10,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-import nvstrings
-import rmm
-
 import cudf
-from cudf.core.buffer import Buffer
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
@@ -24,7 +20,7 @@ from cudf.core.column import (
     column,
 )
 from cudf.core.frame import Frame
-from cudf.utils import cudautils, ioutils, utils
+from cudf.utils import ioutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import is_categorical_dtype, is_scalar, min_signed_type
 from cudf.utils.utils import cached_property
@@ -76,7 +72,7 @@ class Index(Frame):
 
         header["name"] = pickle.dumps(self.name)
         header["dtype"] = pickle.dumps(self.dtype)
-        header["type"] = pickle.dumps(type(self))
+        header["type-serialized"] = pickle.dumps(type(self))
         header["frame_count"] = len(frames)
         return header, frames
 
@@ -88,25 +84,38 @@ class Index(Frame):
         """
         """
         h = header["index_column"]
-        idx_typ = pickle.loads(header["type"])
+        idx_typ = pickle.loads(header["type-serialized"])
         name = pickle.loads(header["name"])
 
-        col_typ = pickle.loads(h["type"])
+        col_typ = pickle.loads(h["type-serialized"])
         index = col_typ.deserialize(h, frames[: header["frame_count"]])
         return idx_typ(index, name=name)
 
     @property
+    def names(self):
+        return (self.name,)
+
+    @names.setter
+    def names(self, values):
+        if not pd.api.types.is_list_like(values):
+            raise ValueError("Names must be a list-like")
+
+        num_values = len(values)
+        if num_values > 1:
+            raise ValueError(
+                "Length of new names must be 1, got %d" % num_values
+            )
+
+        self.name = values[0]
+
+    @property
     def name(self):
-        return next(iter(self._data.keys()))
+        return next(iter(self._data.names))
 
     @name.setter
     def name(self, value):
         col = self._data.pop(self.name)
         self._data[value] = col
-
-    @property
-    def names(self):
-        return (self.name,)
 
     def dropna(self):
         """
@@ -167,23 +176,6 @@ class Index(Frame):
     def sum(self):
         return self._values.sum()
 
-    def find_segments(self):
-        """Return the beginning index for segments
-
-        Returns
-        -------
-        result : NumericalColumn
-        """
-        segments, _ = self._find_segments()
-        return segments
-
-    def _find_segments(self):
-        seg, markers = cudautils.find_segments(self.gpu_values)
-        return (
-            column.build_column(data=Buffer(seg), dtype=seg.dtype),
-            markers,
-        )
-
     @classmethod
     def _concat(cls, objs):
         data = ColumnBase._concat([o._values for o in objs])
@@ -207,7 +199,7 @@ class Index(Frame):
             return as_index(op())
 
     def unique(self):
-        return as_index(self._values.unique())
+        return as_index(self._values.unique(), name=self.name)
 
     def __add__(self, other):
         return self._apply_op("__add__", other)
@@ -370,26 +362,6 @@ class Index(Frame):
 
         return Series(self._values)
 
-    def isnull(self):
-        """Identify missing values in an Index.
-        """
-        return as_index(self._values.isnull(), name=self.name)
-
-    def isna(self):
-        """Identify missing values in an Index. Alias for isnull.
-        """
-        return self.isnull()
-
-    def notna(self):
-        """Identify non-missing values in an Index.
-        """
-        return as_index(self._values.notna(), name=self.name)
-
-    def notnull(self):
-        """Identify non-missing values in an Index. Alias for notna.
-        """
-        return self.notna()
-
     @property
     @property
     def is_unique(self):
@@ -473,7 +445,7 @@ class Index(Frame):
             raise ValueError("Cannot construct Index from any empty Table")
         if table._num_columns == 1:
             return as_index(
-                next(iter(table._data.values())),
+                next(iter(table._data.columns)),
                 name=next(iter(table._data.keys())),
             )
         else:
@@ -523,16 +495,16 @@ class RangeIndex(Index):
     @cached_property
     def _values(self):
         if len(self) > 0:
-            vals = cudautils.arange(self._start, self._stop, dtype=self.dtype)
+            vals = cupy.arange(self._start, self._stop, dtype=self.dtype)
             return column.as_column(vals)
         else:
             return column.column_empty(0, masked=False, dtype=self.dtype)
 
     @property
     def _data(self):
-        from cudf.utils.utils import OrderedColumnDict
+        from cudf.core.column_accessor import ColumnAccessor
 
-        return OrderedColumnDict({self.name: self._values})
+        return ColumnAccessor({self.name: self._values})
 
     def __contains__(self, item):
         if not isinstance(
@@ -585,10 +557,6 @@ class RangeIndex(Index):
             index = utils.normalize_index(index, len(self))
             index += self._start
             return index
-        elif isinstance(index, (list, np.ndarray)):
-            index = np.asarray(index)
-            index = rmm.to_device(index)
-
         else:
             if is_scalar(index):
                 index = min_signed_type(index)(index)
@@ -628,7 +596,7 @@ class RangeIndex(Index):
 
         header["name"] = pickle.dumps(self.name)
         header["dtype"] = pickle.dumps(self.dtype)
-        header["type"] = pickle.dumps(type(self))
+        header["type-serialized"] = pickle.dumps(type(self))
         header["frame_count"] = 0
         return header, frames
 
@@ -725,7 +693,7 @@ class RangeIndex(Index):
 
 
 def index_from_range(start, stop=None, step=None):
-    vals = cudautils.arange(start, stop, step, dtype=np.int64)
+    vals = cupy.arange(start, stop, step, dtype=np.int64)
     return as_index(vals)
 
 
@@ -772,7 +740,7 @@ class GenericIndex(Index):
 
     @property
     def _values(self):
-        return next(iter(self._data.values()))
+        return next(iter(self._data.columns))
 
     def copy(self, deep=True):
         result = as_index(self._values.copy(deep=deep))
@@ -841,27 +809,6 @@ class GenericIndex(Index):
             end = col.find_last_value(last, closest=True)
             end += 1
         return begin, end
-
-    def searchsorted(self, value, side="left"):
-        """Find indices where elements should be inserted to maintain order
-
-        Parameters
-        ----------
-        value : Column
-            Column of values to search for
-        side : str {‘left’, ‘right’} optional
-            If ‘left’, the index of the first suitable location found is given.
-            If ‘right’, return the last such index
-
-        Returns
-        -------
-        An index series of insertion points with the same shape as value
-        """
-        from cudf.core.series import Series
-
-        idx_series = Series(self, name=self.name)
-        result = idx_series.searchsorted(value, side)
-        return as_index(result)
 
     @property
     def is_unique(self):
@@ -945,7 +892,10 @@ class DatetimeIndex(GenericIndex):
         # but we need a NumericalColumn for GenericIndex..
         # how should this be handled?
         out_column = column.build_column(
-            data=out_column.data, dtype=out_column.dtype, mask=out_column.mask
+            data=out_column.base_data,
+            dtype=out_column.dtype,
+            mask=out_column.base_mask,
+            offset=out_column.offset,
         )
         return as_index(out_column, name=self.name)
 
@@ -1011,7 +961,11 @@ class StringIndex(GenericIndex):
         elif isinstance(values, StringIndex):
             values = values._values.copy()
         else:
-            values = column.as_column(nvstrings.to_device(values))
+            values = column.as_column(values, dtype="str")
+            if not pd.api.types.is_string_dtype(values.dtype):
+                raise ValueError(
+                    "Couldn't create StringIndex from passed in object"
+                )
         super(StringIndex, self).__init__(values, **kwargs)
 
     def to_pandas(self):
@@ -1075,13 +1029,13 @@ def as_index(arbitrary, **kwargs):
     elif isinstance(arbitrary, cudf.Series):
         return as_index(arbitrary._column, **kwargs)
     elif isinstance(arbitrary, pd.RangeIndex):
-        return RangeIndex(
-            start=arbitrary._start, stop=arbitrary._stop, **kwargs
-        )
+        return RangeIndex(start=arbitrary.start, stop=arbitrary.stop, **kwargs)
     elif isinstance(arbitrary, pd.MultiIndex):
         return cudf.MultiIndex.from_pandas(arbitrary)
-    else:
-        return as_index(column.as_column(arbitrary), **kwargs)
+    elif isinstance(arbitrary, range):
+        if arbitrary.step == 1:
+            return RangeIndex(arbitrary.start, arbitrary.stop, **kwargs)
+    return as_index(column.as_column(arbitrary), **kwargs)
 
 
 def _setdefault_name(values, kwargs):

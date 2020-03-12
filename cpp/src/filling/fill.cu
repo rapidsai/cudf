@@ -25,6 +25,7 @@
 #include <cudf/strings/detail/fill.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 #include <cuda_runtime.h>
 
@@ -82,7 +83,7 @@ struct out_of_place_fill_range_dispatch {
     if (end != begin) {  // otherwise no fill
       if (!p_ret->nullable() && !value.is_valid()) {
         p_ret->set_null_mask(
-          cudf::create_null_mask(p_ret->size(), cudf::ALL_VALID, stream, mr), 0);
+          cudf::create_null_mask(p_ret->size(), cudf::mask_state::ALL_VALID, stream, mr), 0);
       }
 
       auto ret_view = p_ret->mutable_view();
@@ -174,6 +175,7 @@ void fill_in_place(mutable_column_view& destination,
                    size_type begin,
                    size_type end,
                    scalar const& value) {
+  CUDF_FUNC_RANGE();
   return detail::fill_in_place(destination, begin, end, value, 0);
 }
 
@@ -182,6 +184,7 @@ std::unique_ptr<column> fill(column_view const& input,
                              size_type end,
                              scalar const& value,
                              rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   return detail::fill(input, begin, end, value, mr, 0);
 }
 

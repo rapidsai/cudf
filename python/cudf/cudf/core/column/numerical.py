@@ -5,12 +5,10 @@ import pandas as pd
 import pyarrow as pa
 from pandas.api.types import is_integer_dtype
 
-import rmm
-
 import cudf._lib as libcudf
-from cudf.core._sort import get_sorted_inds
+import cudf._libxx as libcudfxx
 from cudf.core.buffer import Buffer
-from cudf.core.column import column
+from cudf.core.column import as_column, column
 from cudf.utils import cudautils, utils
 from cudf.utils.dtypes import (
     min_numeric_column_type,
@@ -53,7 +51,10 @@ class NumericalColumn(column.ColumnBase):
                 return False
         except Exception:
             return False
-        return libcudf.search.contains(self, item)
+        # TODO: Use `scalar`-based `contains` wrapper
+        return libcudfxx.search.contains(
+            self, column.as_column([item], dtype=self.dtype)
+        ).any()
 
     def binary_operator(self, binop, rhs, reflect=False):
         int_dtypes = [
@@ -92,9 +93,7 @@ class NumericalColumn(column.ColumnBase):
         return _numeric_column_compare(self, rhs, op=cmpop)
 
     def _apply_scan_op(self, op):
-        out_col = column.column_empty_like_same_mask(self, dtype=self.dtype)
-        libcudf.reduce.scan(self, out_col, op, inclusive=True)
-        return out_col
+        return libcudfxx.reduce.scan(op, self, True)
 
     def normalize_binop_value(self, other):
         if other is None:
@@ -126,21 +125,9 @@ class NumericalColumn(column.ColumnBase):
         from cudf.core.column import string, as_column
 
         if len(self) > 0:
-            if self.dtype in (np.dtype("int8"), np.dtype("int16")):
-                self_as_int32 = self.astype("int32", **kwargs)
-                dev_array = self_as_int32.data_array_view
-                dev_ptr = self_as_int32.data_ptr
-            else:
-                dev_array = self.data_array_view
-                dev_ptr = self.data_ptr
-            null_ptr = None
-            if self.nullable:
-                null_ptr = self.mask_ptr
-            kwargs = {"count": len(self), "nulls": null_ptr, "bdevmem": True}
-            data = string._numeric_to_str_typecast_functions[
-                np.dtype(dev_array.dtype)
-            ](dev_ptr, **kwargs)
-            return as_column(data)
+            return string._numeric_to_str_typecast_functions[
+                np.dtype(self.dtype)
+            ](self, **kwargs)
         else:
             return as_column([], dtype="object")
 
@@ -148,26 +135,18 @@ class NumericalColumn(column.ColumnBase):
         from cudf.core.column import build_column
 
         return build_column(
-            data=self.astype("int64").data, dtype=dtype, mask=self.mask
+            data=self.astype("int64").base_data,
+            dtype=dtype,
+            mask=self.base_mask,
+            offset=self.offset,
+            size=self.size,
         )
 
     def as_numerical_column(self, dtype, **kwargs):
-        casted = libcudf.typecast.cast(self, dtype)
-        return column.build_column(
-            data=casted.data,
-            dtype=casted.dtype,
-            mask=casted.mask,
-            size=casted.size,
-            offset=casted.offset,
-        )
-
-    def sort_by_values(self, ascending=True, na_position="last"):
-        sort_inds = get_sorted_inds(self, ascending, na_position)
-        col_keys = self[sort_inds]
-        col_inds = column.build_column(
-            sort_inds.data, dtype=sort_inds.dtype, mask=sort_inds.mask
-        )
-        return col_keys, col_inds
+        dtype = np.dtype(dtype)
+        if dtype == self.dtype:
+            return self
+        return libcudfxx.unary.cast(self, dtype)
 
     def to_pandas(self, index=None):
         if self.has_nulls and self.dtype == np.bool:
@@ -199,48 +178,29 @@ class NumericalColumn(column.ColumnBase):
         else:
             return out
 
-    def unique(self, method="sort"):
-        # method variable will indicate what algorithm to use to
-        # calculate unique, not used right now
-        if method != "sort":
-            msg = "non sort based unique() not implemented yet"
-            raise NotImplementedError(msg)
-        segs, sortedvals = self._unique_segments()
-        # gather result
-        out_col = column.as_column(sortedvals)[segs]
-        return out_col
-
-    def all(self):
-        return bool(libcudf.reduce.reduce("all", self, dtype=np.bool_))
-
-    def any(self):
-        if self.valid_count == 0:
-            return False
-        return bool(libcudf.reduce.reduce("any", self, dtype=np.bool_))
-
     def min(self, dtype=None):
-        return libcudf.reduce.reduce("min", self, dtype=dtype)
+        return libcudfxx.reduce.reduce("min", self, dtype=dtype)
 
     def max(self, dtype=None):
-        return libcudf.reduce.reduce("max", self, dtype=dtype)
+        return libcudfxx.reduce.reduce("max", self, dtype=dtype)
 
     def sum(self, dtype=None):
-        return libcudf.reduce.reduce("sum", self, dtype=dtype)
+        return libcudfxx.reduce.reduce("sum", self, dtype=dtype)
 
     def product(self, dtype=None):
-        return libcudf.reduce.reduce("product", self, dtype=dtype)
+        return libcudfxx.reduce.reduce("product", self, dtype=dtype)
 
     def mean(self, dtype=np.float64):
-        return libcudf.reduce.reduce("mean", self, dtype=dtype)
+        return libcudfxx.reduce.reduce("mean", self, dtype=dtype)
 
     def var(self, ddof=1, dtype=np.float64):
-        return libcudf.reduce.reduce("var", self, dtype=dtype, ddof=ddof)
+        return libcudfxx.reduce.reduce("var", self, dtype=dtype, ddof=ddof)
 
     def std(self, ddof=1, dtype=np.float64):
-        return libcudf.reduce.reduce("std", self, dtype=dtype, ddof=ddof)
+        return libcudfxx.reduce.reduce("std", self, dtype=dtype, ddof=ddof)
 
     def sum_of_squares(self, dtype=None):
-        return libcudf.reduce.reduce("sum_of_squares", self, dtype=dtype)
+        return libcudfxx.reduce.reduce("sum_of_squares", self, dtype=dtype)
 
     def round(self, decimals=0):
         if decimals < 0:
@@ -312,10 +272,9 @@ class NumericalColumn(column.ColumnBase):
         to_replace_col, replacement_col, replaced = numeric_normalize_types(
             to_replace_col, replacement_col, replaced
         )
-        output = libcudf.replace.replace(
+        return libcudfxx.replace.replace(
             replaced, to_replace_col, replacement_col
         )
-        return output
 
     def fillna(self, fill_value):
         """
@@ -338,8 +297,14 @@ class NumericalColumn(column.ColumnBase):
                 fill_value = _safe_cast_to_int(fill_value, self.dtype)
             else:
                 fill_value = fill_value.astype(self.dtype)
-        result = libcudf.replace.replace_nulls(self, fill_value)
-        result = column.build_column(result.data, result.dtype, mask=None)
+        result = libcudfxx.replace.replace_nulls(self, fill_value)
+        result = column.build_column(
+            result.base_data,
+            result.dtype,
+            mask=None,
+            offset=result.offset,
+            size=result.size,
+        )
 
         return result
 
@@ -390,32 +355,6 @@ class NumericalColumn(column.ColumnBase):
         elif found == -1:
             raise ValueError("value not found")
         return found
-
-    def searchsorted(self, value, side="left"):
-        value_col = column.as_column(value)
-        return libcudf.search.search_sorted(self, value_col, side)
-
-    @property
-    def is_monotonic_increasing(self):
-        if not hasattr(self, "_is_monotonic_increasing"):
-            if self.nullable and self.has_nulls:
-                self._is_monotonic_increasing = False
-            else:
-                self._is_monotonic_increasing = libcudf.issorted.issorted(
-                    [self]
-                )
-        return self._is_monotonic_increasing
-
-    @property
-    def is_monotonic_decreasing(self):
-        if not hasattr(self, "_is_monotonic_decreasing"):
-            if self.nullable and self.has_nulls:
-                self._is_monotonic_decreasing = False
-            else:
-                self._is_monotonic_decreasing = libcudf.issorted.issorted(
-                    [self], [1]
-                )
-        return self._is_monotonic_decreasing
 
     def can_cast_safely(self, to_dtype):
         """
@@ -509,8 +448,11 @@ def _numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
 
 
 def _numeric_column_unaryop(operand, op):
-    out = libcudf.unaryops.apply_unary_op(operand, op)
-    return out
+    if callable(op):
+        return libcudfxx.transform.transform(operand, op)
+
+    op = libcudfxx.unary.UnaryOp[op.upper()]
+    return libcudfxx.unary.unary_operation(operand, op)
 
 
 def _numeric_column_compare(lhs, rhs, op):
@@ -573,20 +515,6 @@ def _normalize_find_and_replace_input(input_column_dtype, col_to_normalize):
     return normalized_column.astype(input_column_dtype)
 
 
-def column_hash_values(column0, *other_columns, initial_hash_values=None):
-    """Hash all values in the given columns.
-    Returns a new NumericalColumn[int32]
-    """
-    from cudf.core.column import column_empty
-
-    columns = [column0] + list(other_columns)
-    result = column_empty(len(column0), dtype=np.int32, masked=False)
-    if initial_hash_values:
-        initial_hash_values = rmm.to_device(initial_hash_values)
-    libcudf.hash.hash_columns(columns, result, initial_hash_values)
-    return result
-
-
 def digitize(column, bins, right=False):
     """Return the indices of the bins to which each value in column belongs.
 
@@ -604,6 +532,8 @@ def digitize(column, bins, right=False):
     A device array containing the indices
     """
     assert column.dtype == bins.dtype
-    bins_buf = Buffer(rmm.to_device(bins))
+    bins_buf = Buffer(bins)
     bin_col = NumericalColumn(data=bins_buf, dtype=bins.dtype)
-    return libcudf.sort.digitize(column, bin_col, right)
+    return as_column(
+        libcudfxx.sort.digitize(column.as_frame(), bin_col.as_frame(), right)
+    )

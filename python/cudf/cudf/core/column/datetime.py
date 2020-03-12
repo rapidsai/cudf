@@ -6,7 +6,7 @@ import pyarrow as pa
 
 import cudf
 import cudf._lib as libcudf
-from cudf.core._sort import get_sorted_inds
+import cudf._libxx as libcudfxx
 from cudf.core.buffer import Buffer
 from cudf.core.column import as_column, column
 from cudf.utils import utils
@@ -81,7 +81,7 @@ class DatetimeColumn(column.ColumnBase):
             null = cudf.core.column.column_empty_like(
                 array, masked=True, newsize=1
             )
-            col = libcudf.replace.replace(
+            col = libcudfxx.replace.replace(
                 as_column(Buffer(array), dtype=array.dtype),
                 as_column(
                     Buffer(
@@ -155,13 +155,19 @@ class DatetimeColumn(column.ColumnBase):
     def as_numerical(self):
         from cudf.core.column import build_column
 
-        return build_column(data=self.data, dtype=np.int64, mask=self.mask)
+        return build_column(
+            data=self.base_data,
+            dtype=np.int64,
+            mask=self.base_mask,
+            offset=self.offset,
+            size=self.size,
+        )
 
     def as_datetime_column(self, dtype, **kwargs):
         dtype = np.dtype(dtype)
         if dtype == self.dtype:
             return self
-        return libcudf.typecast.cast(self, dtype=dtype)
+        return libcudfxx.unary.cast(self, dtype=dtype)
 
     def as_numerical_column(self, dtype, **kwargs):
         return self.as_numerical.astype(dtype)
@@ -170,22 +176,9 @@ class DatetimeColumn(column.ColumnBase):
         from cudf.core.column import string
 
         if len(self) > 0:
-            dev_ptr = self.data_ptr
-            null_ptr = None
-            if self.nullable:
-                null_ptr = self.mask_ptr
-            kwargs.update(
-                {
-                    "count": len(self),
-                    "nulls": null_ptr,
-                    "bdevmem": True,
-                    "units": self.time_unit,
-                }
-            )
-            data = string._numeric_to_str_typecast_functions[
+            return string._numeric_to_str_typecast_functions[
                 np.dtype(self.dtype)
-            ](dev_ptr, **kwargs)
-            return as_column(data)
+            ](self, **kwargs)
         else:
             return column.column_empty(0, dtype="object", masked=False)
 
@@ -232,15 +225,16 @@ class DatetimeColumn(column.ColumnBase):
         else:
             fill_value = column.as_column(fill_value, nan_as_null=False)
 
-        result = libcudf.replace.replace_nulls(self, fill_value)
-        result = column.build_column(result.data, result.dtype, mask=None)
+        result = libcudfxx.replace.replace_nulls(self, fill_value)
+        result = column.build_column(
+            result.base_data,
+            result.dtype,
+            mask=None,
+            offset=result.offset,
+            size=result.size,
+        )
 
         return result
-
-    def sort_by_values(self, ascending=True, na_position="last"):
-        col_inds = get_sorted_inds(self, ascending, na_position)
-        col_keys = self[col_inds]
-        return col_keys, col_inds
 
     def min(self, dtype=None):
         return libcudf.reduce.reduce("min", self, dtype=dtype)
@@ -264,46 +258,9 @@ class DatetimeColumn(column.ColumnBase):
         value = column.as_column(value).as_numerical[0]
         return self.as_numerical.find_last_value(value, closest=closest)
 
-    def searchsorted(self, value, side="left"):
-        value_col = column.as_column(value)
-        return libcudf.search.search_sorted(self, value_col, side)
-
-    def unique(self, method="sort"):
-        # method variable will indicate what algorithm to use to
-        # calculate unique, not used right now
-        if method != "sort":
-            msg = "non sort based unique() not implemented yet"
-            raise NotImplementedError(msg)
-        segs, sortedvals = self._unique_segments()
-        # gather result
-        out_col = column.as_column(sortedvals)[segs]
-        return out_col
-
     @property
     def is_unique(self):
         return self.as_numerical.is_unique
-
-    @property
-    def is_monotonic_increasing(self):
-        if not hasattr(self, "_is_monotonic_increasing"):
-            if self.nullable and self.has_nulls:
-                self._is_monotonic_increasing = False
-            else:
-                self._is_monotonic_increasing = libcudf.issorted.issorted(
-                    [self]
-                )
-        return self._is_monotonic_increasing
-
-    @property
-    def is_monotonic_decreasing(self):
-        if not hasattr(self, "_is_monotonic_decreasing"):
-            if self.nullable and self.has_nulls:
-                self._is_monotonic_decreasing = False
-            else:
-                self._is_monotonic_decreasing = libcudf.issorted.issorted(
-                    [self], [1]
-                )
-        return self._is_monotonic_decreasing
 
 
 def binop(lhs, rhs, op, out_dtype):

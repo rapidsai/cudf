@@ -88,17 +88,20 @@ std::unique_ptr<column> concatenate( std::vector<strings_column_view> const& str
         size_type column_offset = column->offset();
         column_view offsets_child = column->offsets();
         column_view chars_child = column->chars();
+
         // copy the offsets column
-        auto d_offsets = offsets_child.data<int32_t>();
-        CUDA_TRY(cudaMemcpyAsync( d_new_offsets, d_offsets+1+column_offset, column_size*sizeof(int32_t), cudaMemcpyDeviceToDevice, stream ));
-        // adjust offsets
-        int32_t bytes_offset = thrust::device_pointer_cast(d_offsets)[column_offset];
-        thrust::for_each_n( rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator<size_type>(0), column_size,
-            [d_new_offsets, bytes_offset, offset_adjust] __device__ (size_type idx) { d_new_offsets[idx] += offset_adjust - bytes_offset; });
+        auto d_offsets = offsets_child.data<int32_t>() + column_offset;
+        int32_t bytes_offset = thrust::device_pointer_cast(d_offsets)[0];
+        
+        thrust::transform( rmm::exec_policy(stream)->on(stream), d_offsets + 1, d_offsets + column_size + 1, d_new_offsets,
+            [offset_adjust, bytes_offset] __device__ (int32_t old_offset) {
+                return old_offset - bytes_offset + offset_adjust;
+            } );
+
         // copy the chars column data
-        auto d_chars = chars_child.data<char>();
-        size_type bytes = chars_child.size() - bytes_offset;
-        CUDA_TRY(cudaMemcpyAsync( d_new_chars, d_chars+bytes_offset, bytes, cudaMemcpyDeviceToDevice, stream ));
+        auto d_chars = chars_child.data<char>() + bytes_offset;
+        size_type bytes = thrust::device_pointer_cast(d_offsets)[column_size] - bytes_offset;
+        CUDA_TRY(cudaMemcpyAsync( d_new_chars, d_chars, bytes, cudaMemcpyDeviceToDevice, stream ));
         // get ready for the next column
         offset_adjust += bytes;
         d_new_chars += bytes;
@@ -110,7 +113,7 @@ std::unique_ptr<column> concatenate( std::vector<strings_column_view> const& str
     // create blank null mask -- caller will be setting this
     rmm::device_buffer null_mask;
     if( null_count > 0 )
-        null_mask = create_null_mask( strings_count, UNINITIALIZED, stream,mr );
+        null_mask = create_null_mask( strings_count, mask_state::UNINITIALIZED, stream,mr );
     offsets_column->set_null_count(0);  // reset the null counts
     chars_column->set_null_count(0);    // for children columns
     return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
