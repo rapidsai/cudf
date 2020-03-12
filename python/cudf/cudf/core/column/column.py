@@ -335,57 +335,47 @@ class ColumnBase(Column):
         if end < 0:
             end += self.size
 
+        begin = max(0, min(self.size, begin))
+        end = max(0, min(self.size, end))
+
         if begin < 0 or end <= begin or begin >= self.size:
             return self if inplace else self.copy()
+
+        if is_categorical_dtype(self.dtype):
+            return self._fill_categorical(fill_value, begin, end, inplace)
 
         fill_scalar = Scalar(fill_value, self.dtype)
 
         if not inplace:
             return libcudfxx.filling.fill(self, begin, end, fill_scalar)
 
-        fixed_width = True
-
         if is_string_dtype(self.dtype):
-            fixed_width = False
+            return self._mimic_inplace(
+                libcudfxx.filling.fill(self, begin, end, fill_scalar),
+                inplace=True,
+            )
 
-        if is_categorical_dtype(self.dtype):
-            fixed_width = False
+        if fill_value is None and not self.nullable:
+            mask = create_null_mask(self.size, state=MaskState.ALL_VALID)
+            self.set_base_mask(mask)
 
-        if fixed_width:
-            if fill_value is None and not self.nullable:
-                mask = create_null_mask(self.size, state=MaskState.ALL_VALID)
-                self.set_base_mask(mask)
+        libcudfxx.filling.fill_in_place(self, begin, end, fill_scalar)
 
-            libcudfxx.filling.fill_in_place(self, begin, end, fill_scalar)
-            return self
+        return self
 
-        result = libcudfxx.filling.fill(self, begin, end, fill_scalar)
+    def _fill_categorical(self, fill_value, begin, end, inplace):
+        fill_code = self._encode(fill_value)
+        fill_scalar = Scalar(fill_code, self.codes.dtype)
 
-        return self._mimic_inplace(result, inplace=True)
+        result = self if inplace else self.copy()
+
+        print(begin, end, self.codes.size)
+
+        libcudfxx.filling.fill_in_place(result.codes, begin, end, fill_scalar)
+        return result
 
     def shift(self, offset, fill_value):
         return libcudfxx.copying.shift(self, offset, fill_value)
-
-    def fill(self, fill_value, begin=0, end=-1, inplace=False):
-        if not inplace:
-            return libcudfxx.copying.fill(self, fill_value, begin, end)
-
-        fixed_width = True
-
-        if is_categorical_dtype(self.dtype):
-            fixed_width = False
-
-        if is_string_dtype(self.dtype):
-            fixed_width = False
-
-        if fixed_width:
-            return libcudfxx.copying.fill_in_place(
-                self, fill_value, begin, end
-            )
-
-        return self._mimic_inplace(
-            libcudfxx.copying.fill(self, fill_value, begin, end), inplace=True
-        )
 
     @property
     def valid_count(self):

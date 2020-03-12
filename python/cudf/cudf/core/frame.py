@@ -292,9 +292,6 @@ class Frame(libcudfxx.table.Table):
         result._copy_categories(self)
         return result
 
-    def fill(self, fill_values, begin=0, end=-1, inplace=False):
-        return self._fill(fill_values, begin, end, inplace=inplace)
-
     def _fill(self, fill_values, begin, end, inplace):
         col_and_fill = zip(self._columns, fill_values)
 
