@@ -17,11 +17,11 @@
 #pragma once
 
 #include <cudf/types.hpp>
-
 #include <memory>
 #include <vector>
 
 namespace cudf {
+namespace experimental {
 /**
  * @brief Partitions rows from the input table into multiple output tables.
  *
@@ -45,4 +45,5 @@ hash_partition(
     int num_partitions,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+}  // namespace experimental
 }  // namespace cudf

@@ -14,19 +14,19 @@
  * limitations under the License.
  */
 
-#include <cudf/partitioning.hpp>
-#include <cudf/copying.hpp>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/table/table_device_view.cuh>
-#include <cudf/detail/utilities/hash_functions.cuh>
-#include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/table/row_operators.cuh>
-#include <cudf/detail/scatter.cuh>
+#include <cudf/copying.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/scatter.cuh>
+#include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/partitioning.hpp>
+#include <cudf/table/row_operators.cuh>
+#include <cudf/table/table_device_view.cuh>
 
 namespace cudf {
-
+namespace experimental {
 namespace {
 
 // Launch configuration for optimized hash partition
@@ -584,7 +584,6 @@ hash_partition(table_view const& input,
                std::vector<size_type> const& columns_to_hash,
                int num_partitions, rmm::mr::device_memory_resource* mr,
                cudaStream_t stream = 0) {
-
   auto table_to_hash = input.select(columns_to_hash);
 
   // Return empty result if there are no partitions or nothing to hash
@@ -603,7 +602,6 @@ hash_partition(table_view const& input,
   }
 }
 }  // namespace detail
-
 std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>>
 hash_partition(table_view const& input,
                std::vector<size_type> const& columns_to_hash,
@@ -611,4 +609,5 @@ hash_partition(table_view const& input,
   CUDF_FUNC_RANGE();
   return detail::hash_partition(input, columns_to_hash, num_partitions, mr);
 }
+}  // namespace experimental
 }  // namespace cudf
