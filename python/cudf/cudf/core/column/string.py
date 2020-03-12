@@ -1023,9 +1023,6 @@ class StringColumn(column.ColumnBase):
     def copy(self, deep=True):
         return column.as_column(self.nvstrings.copy())
 
-    def unordered_compare(self, cmpop, rhs):
-        return _string_column_binop(self, rhs, op=cmpop)
-
     def find_and_replace(self, to_replace, replacement, all_nan):
         """
         Return col with *to_replace* replaced with *value*
@@ -1108,15 +1105,17 @@ class StringColumn(column.ColumnBase):
     def default_na_value(self):
         return None
 
-    def binary_operator(self, binop, rhs, reflect=False):
+    def binary_operator(self, op, rhs, reflect=False):
         lhs = self
         if reflect:
             lhs, rhs = rhs, lhs
-        if isinstance(rhs, StringColumn) and binop == "add":
+        if isinstance(rhs, StringColumn) and op == "add":
             return lhs.nvstrings.cat(others=rhs.nvstrings)
+        elif op in ("eq", "ne"):
+            return _string_column_binop(self, rhs, op=op)
         else:
             msg = "{!r} operator not supported between {} and {}"
-            raise TypeError(msg.format(binop, type(self), type(rhs)))
+            raise TypeError(msg.format(op, type(self), type(rhs)))
 
     def sum(self, dtype=None):
         # dtype is irrelevant it is needed to be in sync with

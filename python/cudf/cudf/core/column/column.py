@@ -140,7 +140,7 @@ class ColumnBase(Column):
             if isinstance(val, np.ndarray):
                 return val.all()
             return bool(val)
-        return self.unordered_compare("eq", other).min()
+        return self.binary_operator("eq", other).min()
 
     def __sizeof__(self):
         n = self.data.size

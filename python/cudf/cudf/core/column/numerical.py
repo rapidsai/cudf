@@ -59,6 +59,9 @@ class NumericalColumn(column.ColumnBase):
             self, column.as_column([item], dtype=self.dtype)
         ).any()
 
+    def unary_operator(self, unaryop):
+        return _numeric_column_unaryop(self, op=unaryop)
+
     def binary_operator(self, binop, rhs, reflect=False):
         int_dtypes = [
             np.dtype("int8"),
@@ -88,12 +91,6 @@ class NumericalColumn(column.ColumnBase):
 
     def unary_operator(self, unaryop):
         return _numeric_column_unaryop(self, op=unaryop)
-
-    def unordered_compare(self, cmpop, rhs):
-        return _numeric_column_compare(self, rhs, op=cmpop)
-
-    def ordered_compare(self, cmpop, rhs):
-        return _numeric_column_compare(self, rhs, op=cmpop)
 
     def _apply_scan_op(self, op):
         return libcudfxx.reduce.scan(op, self, True)
@@ -461,6 +458,9 @@ def _numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
 
     is_op_comparison = op in ["lt", "gt", "le", "ge", "eq", "ne"]
 
+    if is_op_comparison:
+        out_dtype = "bool"
+
     out = libcudfxx.binaryop.binaryop(lhs, rhs, op, out_dtype)
 
     if is_op_comparison:
@@ -478,10 +478,6 @@ def _numeric_column_unaryop(operand, op):
     return libcudfxx.unary.unary_operation(operand, op)
 
 
-def _numeric_column_compare(lhs, rhs, op):
-    return _numeric_column_binop(lhs, rhs, op, out_dtype=np.bool_)
-
-
 def _safe_cast_to_int(col, dtype):
     """
     Cast given NumericalColumn to given integer dtype safely.
@@ -492,7 +488,7 @@ def _safe_cast_to_int(col, dtype):
         return col
 
     new_col = col.astype(dtype)
-    if new_col.unordered_compare("eq", col).all():
+    if new_col.binary_operator("eq", col).all():
         return new_col
     else:
         raise TypeError(

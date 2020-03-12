@@ -619,6 +619,11 @@ class Series(Frame):
             lhs, rhs = self, other
         rhs = self._normalize_binop_value(rhs)
 
+        if fn == "truediv":
+            if str(lhs.dtype) in truediv_int_dtype_corrections:
+                truediv_type = truediv_int_dtype_corrections[str(lhs.dtype)]
+                lhs = lhs.astype(truediv_type)
+
         if fill_value is not None:
             if is_scalar(rhs):
                 lhs = lhs.fillna(fill_value)
@@ -857,9 +862,7 @@ class Series(Frame):
         """
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._binaryop(
-            other, "floordiv", fill_value, True
-        )
+        return self._binaryop(other, "floordiv", fill_value, True)
 
     def __rfloordiv__(self, other):
         return self._binaryop(other, "floordiv", reflect=True)
@@ -880,11 +883,7 @@ class Series(Frame):
         return self._binaryop(other, "truediv", fill_value)
 
     def __truediv__(self, other):
-        if self.dtype in list(truediv_int_dtype_corrections.keys()):
-            truediv_type = truediv_int_dtype_corrections[str(self.dtype)]
-            return self.astype(truediv_type)._binaryop(other, "truediv")
-        else:
-            return self._binaryop(other, "truediv")
+        return self._binaryop(other, "truediv")
 
     def rtruediv(self, other, fill_value=None, axis=0):
         """Floating division of series and other, element-wise
@@ -902,15 +901,7 @@ class Series(Frame):
         return self._binaryop(other, "truediv", fill_value, True)
 
     def __rtruediv__(self, other):
-        if self.dtype in list(truediv_int_dtype_corrections.keys()):
-            truediv_type = truediv_int_dtype_corrections[str(self.dtype)]
-            return self.astype(truediv_type)._binaryop(
-                other,
-                "truediv",
-                reflect=True
-            )
-        else:
-            return self._binaryop(other, "truediv", reflect=True)
+        return self._binaryop(other, "truediv", reflect=True)
 
     __div__ = __truediv__
 
@@ -978,24 +969,6 @@ class Series(Frame):
         else:
             return self._column.normalize_binop_value(other)
 
-    def _unordered_compare(self, other, cmpops):
-        libcudf.nvtx.nvtx_range_push("CUDF_UNORDERED_COMP", "orange")
-        result_name = utils.get_result_name(self, other)
-        other = self._normalize_binop_value(other)
-        outcol = self._column.unordered_compare(cmpops, other)
-        result = self._copy_construct(data=outcol, name=result_name)
-        libcudf.nvtx.nvtx_range_pop()
-        return result
-
-    def _ordered_compare(self, other, cmpops):
-        libcudf.nvtx.nvtx_range_push("CUDF_ORDERED_COMP", "orange")
-        result_name = utils.get_result_name(self, other)
-        other = self._normalize_binop_value(other)
-        outcol = self._column.ordered_compare(cmpops, other)
-        result = self._copy_construct(data=outcol, name=result_name)
-        libcudf.nvtx.nvtx_range_pop()
-        return result
-
     def eq(self, other, fill_value=None, axis=0):
         """Equal to of series and other, element-wise
         (binary operator eq).
@@ -1012,14 +985,14 @@ class Series(Frame):
         return self._binaryop(other, "eq", fill_value)
 
     def __eq__(self, other):
-        return self._unordered_compare(other, "eq")
+        return self._binaryop(other, "eq")
 
     def equals(self, other):
         if self is other:
             return True
         if other is None or len(self) != len(other):
             return False
-        return self._unordered_compare(other, "eq").min()
+        return self._binaryop(other, "eq").min()
 
     def ne(self, other, fill_value=None, axis=0):
         """Not equal to of series and other, element-wise
@@ -1037,7 +1010,7 @@ class Series(Frame):
         return self._binaryop(other, "ne", fill_value)
 
     def __ne__(self, other):
-        return self._unordered_compare(other, "ne")
+        return self._binaryop(other, "ne")
 
     def lt(self, other, fill_value=None, axis=0):
         """Less than of series and other, element-wise
@@ -1055,7 +1028,7 @@ class Series(Frame):
         return self._binaryop(other, "lt", fill_value)
 
     def __lt__(self, other):
-        return self._ordered_compare(other, "lt")
+        return self._binaryop(other, "lt")
 
     def le(self, other, fill_value=None, axis=0):
         """Less than or equal to of series and other, element-wise
@@ -1073,7 +1046,7 @@ class Series(Frame):
         return self._binaryop(other, "le", fill_value)
 
     def __le__(self, other):
-        return self._ordered_compare(other, "le")
+        return self._binaryop(other, "le")
 
     def gt(self, other, fill_value=None, axis=0):
         """Greater than of series and other, element-wise
@@ -1091,7 +1064,7 @@ class Series(Frame):
         return self._binaryop(other, "gt", fill_value)
 
     def __gt__(self, other):
-        return self._ordered_compare(other, "gt")
+        return self._binaryop(other, "gt")
 
     def ge(self, other, fill_value=None, axis=0):
         """Greater than or equal to of series and other, element-wise
@@ -1109,7 +1082,7 @@ class Series(Frame):
         return self._binaryop(other, "ge", fill_value)
 
     def __ge__(self, other):
-        return self._ordered_compare(other, "ge")
+        return self._binaryop(other, "ge")
 
     def __invert__(self):
         """Bitwise invert (~) for each element.
