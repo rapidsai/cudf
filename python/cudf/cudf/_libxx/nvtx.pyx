@@ -39,7 +39,7 @@ def range_push(object name, object color='GREEN'):
     try:
         color = int(color, 16)
     except ValueError:
-        color = int(Color[color.upper()])
+        color = int(Color[color.upper()].value)
 
     cdef const char* _name = <bytes> name
     cdef underlying_type_t_color _color = color
