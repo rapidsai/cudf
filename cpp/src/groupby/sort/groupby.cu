@@ -161,19 +161,6 @@ void store_result_functor::operator()<aggregation::SUM>(
 };
 
 template <>
-void store_result_functor::operator()<aggregation::MAX>(
-  std::unique_ptr<aggregation> const& agg)
-{
-  if (cache.has_result(col_idx, agg))
-    return;
-
-  cache.add_result(col_idx, agg, 
-                  detail::group_max(get_grouped_values(), helper.num_groups(), 
-                                    helper.group_labels(),
-                                    mr, stream));
-};
-
-template <>
 void store_result_functor::operator()<aggregation::ARGMAX>(
   std::unique_ptr<aggregation> const& agg)
 {
@@ -233,6 +220,46 @@ void store_result_functor::operator()<aggregation::MIN>(
       else {
         auto transformed_result = experimental::detail::gather(
           table_view({values}), argmin_result, false, false, false, mr, stream);
+        return std::move(transformed_result->release()[0]);
+      }
+    }
+  }();
+
+  cache.add_result(col_idx, agg, std::move(result));
+};
+
+template <>
+void store_result_functor::operator()<aggregation::MAX>(
+  std::unique_ptr<aggregation> const& agg)
+{
+  if (cache.has_result(col_idx, agg))
+    return;
+
+  auto result = [&](){
+    if (cudf::is_fixed_width(values.type())) {
+      return detail::group_max(get_grouped_values(), helper.num_groups(), 
+                               helper.group_labels(),
+                               mr, stream);
+    } else {
+      auto argmax_agg = make_argmax_aggregation();
+      operator()<aggregation::ARGMAX>(argmax_agg);
+      column_view argmax_result = cache.get_result(col_idx, argmax_agg);
+
+      if (argmax_result.nullable()) {
+        // We make a view of ARGMAX result without a null mask and gather using
+        // this mask. The values in data buffer of ARGMAX result corresponding 
+        // to null values was initialized to ARGMAX_SENTINEL which is an out of 
+        // bounds index value and causes the gathered value to be null.
+        column_view null_removed_map(data_type(type_to_id<size_type>()),
+          argmax_result.size(), 
+          static_cast<void const*>(argmax_result.template data<size_type>()));
+        auto transformed_result = experimental::detail::gather(
+          table_view({values}), null_removed_map, false, true, false, mr, stream);
+        return std::move(transformed_result->release()[0]);
+      }
+      else {
+        auto transformed_result = experimental::detail::gather(
+          table_view({values}), argmax_result, false, false, false, mr, stream);
         return std::move(transformed_result->release()[0]);
       }
     }
