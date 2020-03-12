@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cub/cub.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/gather.cuh>
@@ -24,8 +25,6 @@
 #include <cudf/partitioning.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
-
-#include <cub/cub.cuh>
 
 namespace cudf {
 namespace experimental {
@@ -578,6 +577,74 @@ hash_partition_table(table_view const& input, table_view const& table_to_hash,
   }
 }
 
+struct map_partition_to_output {
+  size_type* const __restrict__ offsets{};
+
+  template <typename MapType>
+  auto operator()(MapType partition_number) {
+    return atomicAdd(&offsets[partition_number], 1);
+  }
+};
+
+struct dispatch_map_type {
+  template <typename MapType,
+            std::enable_if_t<std::is_integral<MapType>::value>* = nullptr>
+  std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>>
+  operator()(table_view const& t, column_view const& partition_map,
+             size_type num_partitions, rmm::mr::device_memory_resource* mr,
+             cudaStream_t stream) const {
+    // Build a histogram of the number of rows in each partition
+    rmm::device_vector<size_type> histogram(num_partitions + 1);
+    std::size_t temp_storage_bytes{};
+    std::size_t const num_levels = num_partitions + 1;
+    size_type const lower_level = 0;
+    size_type const upper_level = num_partitions;
+    cub::DeviceHistogram::HistogramEven(
+        nullptr, temp_storage_bytes, partition_map.begin<MapType>(),
+        histogram.data().get(), num_levels, lower_level, upper_level,
+        partition_map.size(), stream);
+
+    rmm::device_buffer temp_storage(temp_storage_bytes, stream);
+
+    cub::DeviceHistogram::HistogramEven(
+        temp_storage.data(), temp_storage_bytes, partition_map.begin<MapType>(),
+        histogram.data().get(), num_levels, lower_level, upper_level,
+        partition_map.size(), stream);
+
+    // `histogram` was created with an extra entry at the end such that an
+    // exclusive scan will put the total number of rows at the end
+    thrust::exclusive_scan(rmm::exec_policy()->on(stream), histogram.begin(),
+                           histogram.end(), histogram.begin());
+
+    // Copy offsets to host
+    std::vector<size_type> partition_offsets(histogram.size());
+    thrust::copy(histogram.begin(), histogram.end(), partition_offsets.begin());
+
+    auto scatter_map = thrust::make_transform_iterator(
+        partition_map.begin<MapType>(),
+        map_partition_to_output{histogram.data().get()});
+
+    (void)scatter_map;
+
+    // auto gathered = cudf::experimental::detail::gather(
+    //    t, gather_map, gather_map + partition_map.size(), false, mr, stream);
+    // auto scattered = cudf::experimental::detail::scatter(
+    //    t, scatter_map, scatter_map + partition_map.size(), t);
+
+    return std::make_pair(experimental::empty_like(t),
+                          std::move(partition_offsets));
+  }
+
+  template <typename MapType,
+            std::enable_if_t<not std::is_integral<MapType>::value>* = nullptr>
+  std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>>
+  operator()(table_view const& t, column_view const& partition_map,
+             size_type num_partitions, rmm::mr::device_memory_resource* mr,
+             cudaStream_t stream) const {
+    CUDF_FAIL("Unexpected, non-integral partition map.");
+  }
+};
+
 }  // namespace
 
 namespace detail {
@@ -606,11 +673,12 @@ hash_partition(table_view const& input,
 
 std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>>
 partition(table_view const& t, column_view const& partition_map,
-          int num_partitions, rmm::mr::device_memory_resource* mr,
+          size_type num_partitions, rmm::mr::device_memory_resource* mr,
           cudaStream_t stream = 0) {
-  return std::make_pair(experimental::empty_like(t), std::vector<size_type>{});
+  return cudf::experimental::type_dispatcher(
+      partition_map.type(), dispatch_map_type{}, t, partition_map,
+      num_partitions, mr, stream);
 }
-
 }  // namespace detail
 
 std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>>
@@ -623,7 +691,7 @@ hash_partition(table_view const& input,
 
 std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>>
 partition(table_view const& t, column_view const& partition_map,
-          int num_partitions, rmm::mr::device_memory_resource* mr) {
+          size_type num_partitions, rmm::mr::device_memory_resource* mr) {
   CUDF_FUNC_RANGE();
   return detail::partition(t, partition_map, num_partitions, mr);
 }
