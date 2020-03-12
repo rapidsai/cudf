@@ -1,7 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 from enum import IntEnum
-from libc.stdint cimport uint32_t
 from libcpp.string cimport string
 from cudf._libxx.cpp.nvtx cimport (
     range_push as cpp_range_push,
@@ -10,7 +9,7 @@ from cudf._libxx.cpp.nvtx cimport (
     color as color_types
 )
 
-cimport cudf._libxx.nvtx as underlying_type_t_color
+cimport cudf._libxx.cpp.utilities.nvtx_utils as underlying_type_t_color
 
 
 class Color(IntEnum):
@@ -43,7 +42,7 @@ def range_push(object name, object color='GREEN'):
         color = int(Color[color.upper()])
 
     cdef const char* _name = <bytes> name
-    cdef uint32_t _color = color
+    cdef underlying_type_t_color _color = color
 
     with nogil:
         cpp_range_push_hex(_name, _color)

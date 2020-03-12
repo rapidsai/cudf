@@ -1854,7 +1854,7 @@ class DataFrame(Frame):
     @classmethod
     def _concat(cls, objs, axis=0, ignore_index=False):
 
-        libcudfxx.nvtx.range_push("CUDF_CONCAT", "ORANGE")
+        libcudfxx.nvtx.range_push("CUDF_CONCAT", "orange")
 
         if ignore_index:
             index = RangeIndex(sum(map(len, objs)))
@@ -2295,7 +2295,7 @@ class DataFrame(Frame):
         4    3    13.0
         2    4    14.0    12.0
         """
-        libcudfxx.nvtx.range_push("CUDF_JOIN", "BLUE")
+        libcudfxx.nvtx.range_push("CUDF_JOIN", "blue")
         if indicator:
             raise NotImplementedError(
                 "Only indicator=False is currently supported"
