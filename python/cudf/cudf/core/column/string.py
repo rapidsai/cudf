@@ -205,7 +205,7 @@ class StringMethods(object):
                     new_col, index=self._parent.index, name=self._parent.name
                 )
             elif isinstance(self._parent, Index):
-                return as_index(new_col, name=self._parent.index)
+                return as_index(new_col, name=self._parent.name)
             else:
                 if self._parent is None:
                     return new_col
@@ -1711,7 +1711,7 @@ class StringMethods(object):
         elif isinstance(self._parent, Series):
             return Series(new_col, name=self._parent.name)
         elif isinstance(self._parent, Index):
-            return column.as_index(new_col, name=self._parent.index.name)
+            return column.as_index(new_col, name=self._parent.name)
 
     def translate(self, table, **kwargs):
         """
