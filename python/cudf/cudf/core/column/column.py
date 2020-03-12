@@ -1343,7 +1343,13 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                         else:
                             pa_type = np_to_pa_dtype(np.dtype(dtype))
                 data = as_column(
-                    pa.array(arbitrary, type=pa_type, from_pandas=nan_as_null),
+                    pa.array(
+                        arbitrary,
+                        type=pa_type,
+                        from_pandas=True
+                        if nan_as_null is None
+                        else nan_as_null,
+                    ),
                     dtype=dtype,
                     nan_as_null=nan_as_null,
                 )
