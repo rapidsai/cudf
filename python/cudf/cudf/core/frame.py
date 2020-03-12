@@ -145,7 +145,7 @@ class Frame(libcudfxx.table.Table):
                         codes=cols[name],
                         mask=cols[name].base_mask,
                         offset=cols[name].offset,
-                        size=cols[name].size
+                        size=cols[name].size,
                     )
 
         # Get a list of the unique table column names
