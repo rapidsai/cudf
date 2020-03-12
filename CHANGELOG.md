@@ -158,6 +158,7 @@
 - PR #4377 Support loading avro files that contain nested arrays
 - PR #4436 Enable `.str.cat` and fix `.str.split` on python side
 - PR #4405 Port nvstrings (Sub)string Comparisons functions to cuDF Python/Cython
+- PR #4316 Add Java and JNI bindings for substring expression
 
 ## Bug Fixes
 
