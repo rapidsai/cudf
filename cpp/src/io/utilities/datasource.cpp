@@ -25,6 +25,9 @@
 #include <cudf/cudf.h>
 #include <cudf/utilities/error.hpp>
 
+#include <dlfcn.h>
+#include <gnu/lib-names.h>
+
 namespace cudf {
 namespace io {
 

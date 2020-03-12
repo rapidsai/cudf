@@ -30,6 +30,9 @@ python/cudf/*/_libxx/**/*.h
 python/cudf/*/_libxx/.nfs*
 python/cudf/*.ipynb
 python/cudf/.ipynb_checkpoints
+python/custreamz/*/_libxx/**/*.cpp
+python/custreamz/*/_libxx/**/*.h
+python/custreamz/*/_libxx/**/*.so
 python/nvstrings/nvstrings-coverage.xml
 python/*/record.txt
 .Python

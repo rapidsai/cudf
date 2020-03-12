@@ -16,6 +16,7 @@
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
 project(CUDA_DATAFRAME_EXTERNAL VERSION 0.13.0 LANGUAGES C CXX)
+set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/" ${CMAKE_MODULE_PATH})
 
 ###################################################################################################
 # - build type ------------------------------------------------------------------------------------
@@ -72,6 +73,25 @@ elseif(DEFINED ENV{CONDA_PREFIX})
 endif("$ENV{CONDA_BUILD}" STREQUAL "1")
 
 ###################################################################################################
+# - add gtest -------------------------------------------------------------------------------------
+
+if(BUILD_TESTS)
+    include(CTest)
+    include(ConfigureGoogleTest)
+
+    if(GTEST_FOUND)
+        message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
+        include_directories(${GTEST_INCLUDE_DIR})
+        add_subdirectory(${CMAKE_SOURCE_DIR}/kafka/tests)
+    else()
+        message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
+    endif(GTEST_FOUND)
+
+    message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
+    message(STATUS "NVSTRINGS_TEST_LIST set to: ${NVSTRINGS_TEST_LIST}")
+endif(BUILD_TESTS)
+
+###################################################################################################
 # - set libcudf headers ---------------------------------------------------------------------------
 
 set(CUDF_INCLUDE "${PROJECT_SOURCE_DIR}/../cpp/src/io/utilities")
@@ -82,21 +102,17 @@ message(STATUS "CUDF_INCLUDE: CUDF_INCLUDE set to ${CUDF_INCLUDE}")
 
 find_path(RDKAFKA_INCLUDE "librdkafka"
         HINTS "$ENV{RDKAFKA_ROOT}/include")
-find_library(RDKAFKA_LIBRARY "rdkafka"
-        HINTS "$ENV{RDKAFKA_ROOT}/lib" "$ENV{RDKAFKA_ROOT}/build")
 find_library(RDKAFKA++_LIBRARY "rdkafka++"
         HINTS "$ENV{RDKAFKA_ROOT}/lib" "$ENV{RDKAFKA_ROOT}/build")
 
-message(STATUS "RDKAFKA: RDKAFKA_LIBRARY set to ${RDKAFKA_LIBRARY}")
 message(STATUS "RDKAFKA: RDKAFKA++_LIBRARY set to ${RDKAFKA++_LIBRARY}")
 message(STATUS "RDKAFKA: RDKAFKA_INCLUDE set to ${RDKAFKA_INCLUDE}")
 
-add_library(rdkafka SHARED IMPORTED ${RDKAFKA_LIBRARY})
+#add_library(rdkafka SHARED IMPORTED ${RDKAFKA_LIBRARY})
 add_library(rdkafka++ SHARED IMPORTED ${RDKAFKA++_LIBRARY})
-if(RDKAFKA_INCLUDE AND RDKAFKA_LIBRARY)
-    set_target_properties(rdkafka PROPERTIES IMPORTED_LOCATION ${RDKAFKA_LIBRARY})
+if(RDKAFKA_INCLUDE AND RDKAFKA++_LIBRARY)
     set_target_properties(rdkafka++ PROPERTIES IMPORTED_LOCATION ${RDKAFKA++_LIBRARY})
-endif(RDKAFKA_INCLUDE AND RDKAFKA_LIBRARY)
+endif(RDKAFKA_INCLUDE AND RDKAFKA++_LIBRARY)
 
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
@@ -129,14 +145,21 @@ add_library(cudf_kafka SHARED
 
 # Include librdkafka exclusively for libcudf_kafka
 target_include_directories(cudf_kafka PUBLIC "${RDKAFKA_INCLUDE}")
-target_link_directories(cudf_kafka PUBLIC "${RDKAFKA_LIBRARY}")
+target_link_directories(cudf_kafka PUBLIC "${RDKAFKA++_LIBRARY}")
 
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
 # link targets for cudf_kafka
-target_link_libraries(cudf_kafka rdkafka rdkafka++)
+target_link_libraries(cudf_kafka rdkafka++)
 
 install(TARGETS cudf_kafka
         DESTINATION lib/external
         COMPONENT cudf_kafka)
+
+install(TARGETS cudf_kafka
+        DESTINATION lib
+        COMPONENT cudf_kafka)
+
+add_custom_target(build_tests_cudf
+                  DEPENDS ${CUDF_TEST_LIST})

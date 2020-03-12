@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,233 +14,290 @@
  * limitations under the License.
  */
 
-#include "external_datasource.hpp"
-#include <iostream>
-#include <fcntl.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <unistd.h>
-#include <map>
-
-#include <chrono>
-#include <thread>
-
-#include <cudf/cudf.h>
-#include <librdkafka/rdkafkacpp.h>
+#include "kafka_datasource.hpp"
 
 namespace cudf {
 namespace io {
 namespace external {
 
-/**
- * @brief External Datasource for Apache Kafka
- **/
-class kafka_datasource : public external_datasource {
- public:
-
-  kafka_datasource() {
-    DATASOURCE_ID = "librdkafka-1.2.2";
+  kafka_datasource::kafka_datasource() {
+    DATASOURCE_ID = "librdkafka-";
+    DATASOURCE_ID.append(RdKafka::version_str());
 
     // Create an empty RdKafka::Conf instance. The configurations will be constructed later
     kafka_conf_ = std::unique_ptr<RdKafka::Conf>(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL));
   }
 
-  kafka_datasource(std::map<std::string, std::string> configs) {
-    DATASOURCE_ID = "librdkafka-1.2.2";
+  kafka_datasource::kafka_datasource(std::map<std::string, std::string> configs, std::vector<std::string> topics, std::vector<int> partitions) {
+    DATASOURCE_ID = "librdkafka-";
+    DATASOURCE_ID.append(RdKafka::version_str());
 
     // Construct the RdKafka::Conf object
     kafka_conf_ = std::unique_ptr<RdKafka::Conf>(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL));
-    configure_datasource(configs);
+    configure_datasource(configs, topics, partitions);
   }
 
-  std::string libcudf_datasource_identifier() {
+  std::string kafka_datasource::libcudf_datasource_identifier() {
     return DATASOURCE_ID;
   }
 
-  bool configure_datasource(std::map<std::string, std::string> configs) {
-    // Populate the RdKafka::Conf using the user supplied configs
-    printf("Entering configure_datasource\n");
-    std::map<std::string, std::string>::iterator it = configs.begin();
-    while (it != configs.end())
-    {
-      std::string name = it->first;
-      std::string value = it->second;
-      printf("Configuring '%s' - '%s' -> '%s'\n", DATASOURCE_ID.c_str(), name.c_str(), value.c_str());
+  bool kafka_datasource::configure_datasource(std::map<std::string, std::string> configs,
+                                              std::vector<std::string> topics,
+                                              std::vector<int> partitions) {
 
-      conf_res_ = kafka_conf_.get()->set(name, value, errstr_);
-  
-      // Increment the Iterator to point to next entry
-      it++;
+    //Set Kafka global configurations
+    for (auto const& x : configs) {
+      conf_res_ = kafka_conf_->set(x.first, x.second, errstr_);
+      if (conf_res_ != RdKafka::Conf::ConfResult::CONF_OK) {
+        if (conf_res_ == RdKafka::Conf::ConfResult::CONF_INVALID) {
+          //TODO
+          printf("Invalid configuration supplied ... what to do here?\n");
+        } else if (conf_res_ == RdKafka::Conf::ConfResult::CONF_UNKNOWN) {
+          //TODO
+          printf("Invalid configuration property supplied ... what to do here? Likely just ignore???\n");
+        }
+      }
     }
-    printf("configurations set\n");
 
-    std::map<std::string, std::string>::iterator conf_it;
-    conf_it = configs.find("ex_ds.kafka.topic");
-    if (conf_it != configs.end()) {
-      printf("Setting topic name to '%s'\n", conf_it->second.c_str());
-      topics_.push_back(conf_it->second);
-    } else {
-      printf("Unable to find topic configuration value\n");
+    // Create Toppar instances
+    for (const auto& x : topics) {
+      for (const auto& y : partitions) {
+        partitions_.push_back(RdKafka::TopicPartition::create(x, y));
+      }
     }
 
     // Kafka 0.9 > requires at least a group.id in the configuration so lets
     // make sure that is present.
-    conf_res_ = kafka_conf_.get()->get("group.id", conf_val);
-
-    printf("After getting group id\n");
+    conf_res_ = kafka_conf_->get("group.id", conf_val);
 
     // Create the Rebalance callback so Partition Offsets can be assigned.
-    KafkaRebalanceCB rebalance_cb(kafka_start_offset_);
-    kafka_conf_->set("rebalance_cb", &rebalance_cb, errstr_);
+    ExampleRebalanceCb ex_rebalance_cb;
+    kafka_conf_->set("rebalance_cb", &ex_rebalance_cb, errstr_);
 
-    printf("Before creating consumer\n");
     consumer_ = std::unique_ptr<RdKafka::KafkaConsumer>(RdKafka::KafkaConsumer::create(kafka_conf_.get(), errstr_));
+    consumer_.get()->assign(partitions_);
 
-    printf("Before subscribing to topics\n");
-    err_ = consumer_.get()->subscribe(topics_);
-
-    printf("Before consuming messages\n");
-    consume_messages(kafka_conf_);
+    producer_ = std::unique_ptr<RdKafka::Producer>(RdKafka::Producer::create(kafka_conf_.get(), errstr_));
 
     return true;
   }
 
-  const std::shared_ptr<arrow::Buffer> get_buffer(size_t offset,
-                                                  size_t size) override {
-    return arrow::Buffer::Wrap(buffer_.c_str(), buffer_.size());
+  void kafka_datasource::print_consumer_metadata() {
+
+    printf("\n====== START - LIBRDKAFKA CONSUMER METADATA ======\n");
+
+    RdKafka::Topic *topic = NULL;
+    class RdKafka::Metadata *metadata;
+
+    /* Fetch metadata */
+    err_ = consumer_->metadata(1, topic,
+                              &metadata, default_timeout_);
+    if (err_ != RdKafka::ERR_NO_ERROR) {
+      printf("Failed to acquire metadata: '%s', returning.\n", RdKafka::err2str(err_).c_str());
+      return;
+    }
+
+    printf("Metadata for topic(s) (for broker '%d:%s')\n", metadata->orig_broker_id(), metadata->orig_broker_name().c_str());
+
+    /* Iterate brokers */
+    printf("'%lu' broker(s)\n", metadata->brokers()->size());
+    RdKafka::Metadata::BrokerMetadataIterator ib;
+    for (ib = metadata->brokers()->begin(); ib != metadata->brokers()->end(); ++ib) {
+      printf("\tBroker ID:'%d' at '%s:%d'\n", (*ib)->id(), (*ib)->host().c_str(), (*ib)->port());
+    }
+
+    /* Iterate topics */
+    printf("'%lu' topic(s)", metadata->topics()->size());
+    RdKafka::Metadata::TopicMetadataIterator it;
+    for (it = metadata->topics()->begin(); it != metadata->topics()->end(); ++it) {
+      printf("\n\tTopic '%s' has '%lu' partitions ->\n", (*it)->topic().c_str(), (*it)->partitions()->size());
+
+      if ((*it)->err() != RdKafka::ERR_NO_ERROR) {
+        printf("'%s'\n", RdKafka::err2str((*it)->err()).c_str());
+        if ((*it)->err() == RdKafka::ERR_LEADER_NOT_AVAILABLE) {
+          printf("Leader not available, try again.\n");
+        }
+      }
+
+      /* Iterate Topic's partitions */
+      RdKafka::TopicMetadata::PartitionMetadataIterator ip;
+      for (ip = (*it)->partitions()->begin(); ip != (*it)->partitions()->end(); ++ip) {
+        printf("\t\tPartition '%d', leader: '%d', replicas: ", (*ip)->id(), (*ip)->leader());
+
+        /* Iterate partition's replicas */
+        RdKafka::PartitionMetadata::ReplicasIterator ir;
+        for (ir = (*ip)->replicas()->begin(); ir != (*ip)->replicas()->end(); ++ir) {
+          std::cout << (ir == (*ip)->replicas()->begin() ? "":",") << *ir;
+        }
+
+        /* Iterate partition's ISRs */
+        printf(" isrs: ");
+        RdKafka::PartitionMetadata::ISRSIterator iis;
+        for (iis = (*ip)->isrs()->begin(); iis != (*ip)->isrs()->end() ; ++iis) {
+          std::cout << (iis == (*ip)->isrs()->begin() ? "":",") << *iis;
+        }
+
+        if ((*ip)->err() != RdKafka::ERR_NO_ERROR) {
+          std::cout << ", " << RdKafka::err2str((*ip)->err()) << std::endl;
+        } else {
+          std::cout << std::endl;
+        }
+      }
+    }
+
+     printf("\n====== END - LIBRDKAFKA CONSUMER METADATA ======\n");
   }
 
-  size_t size() const override { return buffer_.size(); }
+  std::map<std::string, std::string> kafka_datasource::current_configs() {
+    std::map<std::string, std::string> configs;
+    std::list<std::string> *dump = kafka_conf_->dump();
+    std::string key;
+    std::string val;
+    for (std::list<std::string>::iterator it = dump->begin(); it != dump->end(); ) {
+      key = (*it);
+      it++;
+      val = (*it);
+      it++;
+      configs.insert(std::pair<std::string, std::string>{key, val});
+    }
+    return configs;
+  }
 
-  /**
-   * @brief Base class destructor
-   **/
-  virtual ~kafka_datasource(){};
+ int64_t kafka_datasource::get_committed_offset(std::string topic, int partition) {
+    std::vector<RdKafka::TopicPartition*> toppar_list;
+    toppar_list.push_back(find_toppar(topic, partition));
 
-  private:
+    // Query Kafka to populate the TopicPartitions with the desired offsets
+    err_ = consumer_->committed(toppar_list, default_timeout_);
 
-    void consume_messages(std::unique_ptr<RdKafka::Conf> const &kafka_conf) {
-      // Kafka messages are already stored in a queue outside of libcudf. Here the
-      // messages will be transferred from the external queue directly to the
-      // arrow::Buffer.
-      RdKafka::Message *msg;
+    // std::vector<RdKafka::TopicPartition*>::iterator top_it = toppar_list.begin();
+    // while (top_it != toppar_list.end()) {
+    //   offsets.insert({(*top_it)->partition(), (*top_it)->offset()});
+    //   top_it++;
+    // }
 
-      for (int i = 0; i < kafka_batch_size_; i++) {
-        printf("\tMessage read\n");
-        msg = consumer_->consume(default_timeout_);
-        if (msg->err() == RdKafka::ErrorCode::ERR_NO_ERROR) {
-          buffer_.append(static_cast<char *>(msg->payload()));
-          buffer_.append("\n");
-          msg_count_++;
-        } else {
-          handle_error(msg, kafka_conf);
+    return toppar_list[0]->offset();
+  }
 
-          // handle_error handles specific errors. Any coded logic error case will
-          // generate an exception and cease execution. Kafka has hundreds of
-          // possible exceptions however. To be safe its best break the consumer loop.
-          break;
-        }
+  std::string kafka_datasource::consume_range(std::string topic,
+                                              int partition,
+                                              int64_t start_offset,
+                                              int64_t end_offset,
+                                              int batch_timeout,
+                                              std::string delimiter) {
+    std::string json_str;
+    int64_t messages_read = 0;
+    int64_t batch_size = end_offset - start_offset;
+    int64_t end = now() + batch_timeout;
+    int remaining_timeout = batch_timeout;
+    RdKafka::Message *msg;
+
+    update_consumer_toppar_assignment(topic, partition, start_offset);
+
+    while (messages_read < batch_size) {
+      msg = consumer_->consume(remaining_timeout);
+
+      if (msg->err() == RdKafka::ErrorCode::ERR_NO_ERROR) {
+        json_str.append(static_cast<char *>(msg->payload()));
+        json_str.append(delimiter);
+        messages_read++;
+      } else {
+        handle_error(msg);
+        break;
       }
 
-      printf("Buffer: '%s'\n", buffer_.c_str());
-
-      delete msg;
-    }
-
-    class KafkaRebalanceCB : public RdKafka::RebalanceCb {
-      public:
-        KafkaRebalanceCB(int64_t start_offset) : start_offset_(start_offset) {}
-
-        void rebalance_cb(RdKafka::KafkaConsumer *consumer, RdKafka::ErrorCode err,
-                          std::vector<RdKafka::TopicPartition *> &partitions) {
-          if (err == RdKafka::ERR__ASSIGN_PARTITIONS) {
-            // NOTICE: We currently purposely only support a single partition. Enhancement PR to be opened later.
-            partitions.at(0)->set_offset(start_offset_);
-            err = consumer->assign(partitions);
-            //CUDF_EXPECTS(err == RdKafka::ErrorCode::ERR_NO_ERROR,
-              //          "Error occured while reassigning the topic partition offset");
-          } else {
-            consumer->unassign();
-          }
-        }
-
-      private:
-        int64_t start_offset_;
-    };
-
-    void handle_error(RdKafka::Message *msg, std::unique_ptr<RdKafka::Conf> const &kafka_conf) {
-      err_ = msg->err();
-      const std::string err_str = msg->errstr();
-      std::string error_msg;
-
-      if (msg_count_ == 0 &&
-          err_ == RdKafka::ErrorCode::ERR__PARTITION_EOF) {
-        // The topic was empty and had no data in it. Most likely best to error
-        // here since the most likely cause of this would be a user entering the
-        // wrong topic name.
-        error_msg.append("Kafka Topic '");
-        error_msg.append(topics_.at(0).c_str());
-        error_msg.append("' is empty or does not exist on broker(s)");
-        //CUDF_FAIL(error_msg);
-      } else if (msg_count_ == 0 &&
-                err_ == RdKafka::ErrorCode::ERR__TIMED_OUT) {
-        // unable to connect to the specified Kafka Broker(s)
-        std::string brokers_val;
-        conf_res_ = kafka_conf->get("metadata.broker.list", brokers_val);
-        if (brokers_val.empty()) {
-          // 'bootstrap.servers' is an alias configuration so its valid that
-          // either 'metadata.broker.list' or 'bootstrap.servers' is set
-          conf_res_ = kafka_conf->get("bootstrap.servers", brokers_val);
-        }
-
-        if (conf_res_ == RdKafka::Conf::ConfResult::CONF_OK) {
-          error_msg.append("Connection attempt to Kafka broker(s) '");
-          error_msg.append(brokers_val);
-          error_msg.append("' timed out.");
-          //CUDF_FAIL(error_msg);
-        } else {
-          //CUDF_FAIL(
-          //    "No Kafka broker(s) were specified for connection. Connection "
-          //    "Failed.");
-        }
-      } else if (err_ == RdKafka::ErrorCode::ERR__PARTITION_EOF) {
-        // Kafka treats PARTITION_EOF as an "error". In our Rapids use case it is
-        // not however and just means all messages have been read.
-        // Just print imformative message and break consume loop.
-        printf("%ld messages read from Kafka\n", msg_count_);
+      remaining_timeout = end - now();
+      if (remaining_timeout < 0) {
+        break;
       }
     }
 
-  private:
-    std::unique_ptr<RdKafka::Conf> kafka_conf_;
-    std::unique_ptr<RdKafka::KafkaConsumer> consumer_;
-    RdKafka::Conf::ConfResult conf_res_;
-    RdKafka::ErrorCode err_;
+    // librdkafka requires Message be explicity deleted using
+    delete msg;
 
-    std::vector<std::string> topics_;
-    std::string errstr_;
-    
-    std::string conf_val;
-    int64_t kafka_start_offset_ = 0;
-    int32_t kafka_batch_size_ = 10000;  // 10K is the Kafka standard. Max is 999,999
-    int32_t default_timeout_ = 10000;  // 10 seconds
-    int64_t msg_count_ = 0;  // Running tally of the messages consumed. Useful for retry logic.
+    return json_str;
+  }
 
-    std::string buffer_;
-};
+  bool kafka_datasource::produce_message(std::string topic, std::string message_val, std::string message_key) {
+    err_ = producer_->produce(topic,
+                       RdKafka::Topic::PARTITION_UA,
+                       RdKafka::Producer::RK_MSG_COPY,
+                       const_cast<char *>(message_val.c_str()),
+                       message_val.size(),
+                       const_cast<char *>(message_key.c_str()),
+                       message_key.size(),
+                       0,
+                       NULL,
+                       NULL);
+    if (err_ != RdKafka::ERR_NO_ERROR) {
+      printf("Failed to produce to topic '%s' : '%s'\n", topic.c_str(), RdKafka::err2str(err_).c_str());
+      return false;
+    } else {
+      return true;
+    }
+  }
 
-extern "C" external_datasource* libcudf_external_datasource_load() {
-  return new kafka_datasource;
-}
+  bool kafka_datasource::flush(int timeout) {
+    err_ = producer_.get()->flush(timeout);
+    if (err_ != RdKafka::ERR_NO_ERROR) {
+      printf("Timeout occurred while flushing Kafka producer\n");
+      return false;
+    } else {
+      return true;
+    }
+  }
 
-extern "C" external_datasource* libcudf_external_datasource_load_from_conf(std::map<std::string, std::string>& configs) {
-  return new kafka_datasource(configs);
-}
+  std::map<std::string, int64_t> kafka_datasource::get_watermark_offset(std::string topic, int partition, int timeout, bool cached) {
+    int64_t low;
+    int64_t high;
+    std::map<std::string, int64_t> results;
 
-extern "C" void libcudf_external_datasource_destroy(external_datasource* eds) {
-  delete eds;
-}
+    if (cached == true) {
+      err_ = consumer_->get_watermark_offsets(topic, partition, &low, &high);
+    } else {
+      err_ = consumer_->query_watermark_offsets(topic, partition, &low, &high, timeout);
+    }
+
+    if (err_ != RdKafka::ErrorCode::ERR_NO_ERROR) {
+      printf("Error: '%s'\n", err2str(err_).c_str());
+    } else {
+      results.insert(std::pair<std::string, int64_t>("low", low));
+      results.insert(std::pair<std::string, int64_t>("high", high));
+    }
+
+    return results;
+  }
+
+  bool kafka_datasource::commit_offset(std::string topic, int partition, int64_t offset) {
+    RdKafka::TopicPartition* toppar = find_toppar(topic, partition);
+    if (toppar != NULL) {
+      toppar->set_offset(offset);
+      err_ = consumer_->commitSync(partitions_);
+      return true;
+    } else {
+      return false;
+    }
+  }
+
+  bool kafka_datasource::unsubscribe() {
+    err_ = consumer_.get()->unassign();
+    if (err_ != RdKafka::ERR_NO_ERROR) {
+      printf("Timeout occurred while unsubscribing from Kafka Consumer assignments.\n");
+      return false;
+    } else {
+      return true;
+    }
+  }
+
+  bool kafka_datasource::close() {
+    err_ = consumer_.get()->close();
+    if (err_ != RdKafka::ERR_NO_ERROR) {
+      printf("Timeout occurred while closing Kafka Consumer\n");
+      return false;
+    } else {
+      return true;
+    }
+  }
 
 }  // namespace external
 }  // namespace io

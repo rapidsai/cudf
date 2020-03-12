@@ -30,7 +30,7 @@ namespace cudf {
 namespace io {
 namespace external {
 
-// Default `EXTERNAL_DATASOURCE_LIB_PATH` to `/usr/local/lib/cudf_external_lib`.
+// Default `EXTERNAL_DATASOURCE_LIB_PATH` to `$CONDA_PREFIX/lib/external`.
 // This definition can be overridden at compile time by specifying a
 // `-DEXTERNAL_DATASOURCE_LIB_PATH=/home/lib/cudf_external_lib` CMake argument.
 // Use `boost::filesystem` for cross-platform path resolution and dir
@@ -147,9 +147,9 @@ class datasource_factory {
         return open_;
       }
 
-      bool configure(std::map<std::string, std::string> datasource_confs) {
+      bool configure(std::map<std::string, std::string> datasource_confs, std::vector<std::string> topics, std::vector<int> partitions) {
         datasource_confs_ = datasource_confs;
-        return ex_ds_->configure_datasource(datasource_confs);
+        return ex_ds_->configure_datasource(datasource_confs, topics, partitions);
       }
 
       std::string unique_id() {
