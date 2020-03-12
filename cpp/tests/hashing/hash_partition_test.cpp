@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include <cudf/hashing.hpp>
+#include <cudf/partitioning.hpp>
 #include <cudf/sorting.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/type_lists.hpp>

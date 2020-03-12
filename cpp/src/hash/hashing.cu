@@ -24,6 +24,7 @@
 #include <cudf/detail/scatter.cuh>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/partitioning.hpp>
 
 #include <thrust/tabulate.h>
 
