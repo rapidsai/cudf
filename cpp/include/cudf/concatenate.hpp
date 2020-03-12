@@ -23,14 +23,6 @@
 
 namespace cudf {
 
-// Allow strategy switching at runtime for easier benchmarking
-// TODO remove when done
-enum class concatenate_mode {
-  UNOPTIMIZED,
-  FUSED_KERNEL
-};
-void temp_set_concatenate_mode(concatenate_mode mode);
-
 /**---------------------------------------------------------------------------*
  * @brief Concatenates `views[i]`'s bitmask from the bits
  * `[views[i].offset(), views[i].offset() + views[i].size())` for all elements

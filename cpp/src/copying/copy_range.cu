@@ -26,6 +26,7 @@
 #include <cudf/strings/detail/copy_range.cuh>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 
@@ -215,6 +216,7 @@ std::unique_ptr<column> copy_range(column_view const& source,
 void copy_range_in_place(column_view const& source, mutable_column_view& target,
                          size_type source_begin, size_type source_end,
                          size_type target_begin) {
+  CUDF_FUNC_RANGE();
   return detail::copy_range_in_place(source, target, source_begin, source_end,
                                      target_begin, 0);
 }
@@ -224,6 +226,7 @@ std::unique_ptr<column> copy_range(column_view const& source,
                                    size_type source_begin, size_type source_end,
                                    size_type target_begin,
                                    rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   return detail::copy_range(source, target, source_begin, source_end,
                             target_begin, mr, 0);
 }

@@ -23,6 +23,7 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 
 #include <thrust/copy.h>
@@ -128,6 +129,7 @@ __global__ void set_null_mask_kernel(bitmask_type *__restrict__ destination,
 //or null, otherwise;
 void set_null_mask(bitmask_type *bitmask, size_type begin_bit,
                    size_type end_bit, bool valid, cudaStream_t stream) {
+  CUDF_FUNC_RANGE();
   CUDF_EXPECTS(begin_bit >= 0, "Invalid range.");
   CUDF_EXPECTS(begin_bit < end_bit, "Invalid bit range.");
   if (bitmask != nullptr) {
@@ -580,12 +582,14 @@ segmented_count_unset_bits(bitmask_type const* bitmask,
 // Count non-zero bits in the specified range
 cudf::size_type count_set_bits(bitmask_type const *bitmask, size_type start,
                                size_type stop) {
+  CUDF_FUNC_RANGE();
   return detail::count_set_bits(bitmask, start, stop);
 }
 
 // Count zero bits in the specified range
 cudf::size_type count_unset_bits(bitmask_type const *bitmask, size_type start,
                                  size_type stop) {
+  CUDF_FUNC_RANGE();
   return detail::count_unset_bits(bitmask, start, stop);
 }
 
@@ -593,6 +597,7 @@ cudf::size_type count_unset_bits(bitmask_type const *bitmask, size_type start,
 std::vector<size_type>
 segmented_count_set_bits(bitmask_type const *bitmask,
                          std::vector<size_type> const& indices) {
+  CUDF_FUNC_RANGE();
   return detail::segmented_count_set_bits(bitmask, indices, 0);
 }
 
@@ -600,6 +605,7 @@ segmented_count_set_bits(bitmask_type const *bitmask,
 std::vector<size_type>
 segmented_count_unset_bits(bitmask_type const *bitmask,
                            std::vector<size_type> const& indices) {
+  CUDF_FUNC_RANGE();
   return detail::segmented_count_unset_bits(bitmask, indices, 0);
 }
 
@@ -607,6 +613,7 @@ segmented_count_unset_bits(bitmask_type const *bitmask,
 rmm::device_buffer copy_bitmask(bitmask_type const *mask, size_type begin_bit,
                                 size_type end_bit, cudaStream_t stream,
                                 rmm::mr::device_memory_resource *mr) {
+  CUDF_FUNC_RANGE();
   CUDF_EXPECTS(begin_bit >= 0, "Invalid range.");
   CUDF_EXPECTS(begin_bit <= end_bit, "Invalid bit range.");
   rmm::device_buffer dest_mask{};
@@ -645,6 +652,7 @@ rmm::device_buffer copy_bitmask(column_view const &view, cudaStream_t stream,
 rmm::device_buffer bitmask_and(table_view const& view,
                                rmm::mr::device_memory_resource *mr,
                                cudaStream_t stream) {
+  CUDF_FUNC_RANGE();
   rmm::device_buffer null_mask{};
   if (view.num_rows() == 0 or view.num_columns() == 0) {
     return null_mask;

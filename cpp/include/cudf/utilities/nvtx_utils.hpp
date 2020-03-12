@@ -62,12 +62,5 @@ void range_push_hex(const char* name, uint32_t color);
  *---------------------------------------------------------------------------**/
 void range_pop();
 
-// Utility wrapper for automatic range management
-// TODO replace with https://github.com/rapidsai/cudf/issues/2397
-struct raii_range {
-  raii_range(char const* name, color color) { range_push(name, color); }
-  ~raii_range() { range_pop(); }
-};
-
 }  // namespace nvtx
 }  // namespace cudf
