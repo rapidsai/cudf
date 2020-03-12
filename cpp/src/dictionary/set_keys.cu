@@ -97,11 +97,11 @@ std::unique_ptr<column> set_keys( dictionary_column_view const& dictionary_colum
     std::unique_ptr<column> keys_column(std::move(table_keys.front()));
 
     // compute the new nulls
-    auto matches = experimental::detail::contains( keys, new_keys, mr, stream );
+    auto matches = experimental::detail::contains( keys, keys_column->view(), mr, stream );
     auto d_matches = matches->view().data<experimental::bool8>();
     auto d_indices = dictionary_column.indices().data<int32_t>();
     auto d_null_mask = dictionary_column.null_mask();
-    auto new_nulls = experimental::detail::valid_if( 
+    auto new_nulls = experimental::detail::valid_if(
                     thrust::make_counting_iterator<size_type>(dictionary_column.offset()),
                     thrust::make_counting_iterator<size_type>(dictionary_column.offset()+dictionary_column.size()),
                     [d_null_mask, d_indices, d_matches] __device__ (size_type idx) {
@@ -111,8 +111,8 @@ std::unique_ptr<column> set_keys( dictionary_column_view const& dictionary_colum
                     }, stream, mr);
 
     // compute the new indices
-    auto indices_column = experimental::type_dispatcher( new_keys.type(), dispatch_compute_indices{},
-        dictionary_column, new_keys, mr, stream );
+    auto indices_column = experimental::type_dispatcher( keys_column->type(), dispatch_compute_indices{},
+        dictionary_column, keys_column->view(), mr, stream );
 
     // create column with keys_column and indices_column
     return make_dictionary_column( std::move(keys_column), std::move(indices_column),
