@@ -667,17 +667,22 @@ def test_merge_left_right_index_left_right_on_kwargs2(kwargs):
     "ons",
     [{"on": "a"}, {"on": ['a', 'b']}, {"on": ['b', 'a']}, {"on": ['a','aa', 'b']}, {"on": ['b','a', 'aa']}],
 )
-#@pytest.mark.parametrize("indexes", [{"left_index": False, "right_index": False}, {"left_index": True, "right_index": True}])
-def test_merge_sort(ons, hows):
+@pytest.mark.parametrize("indexes", [{"left_index": False, "right_index": False}, {"left_index": True, "right_index": True}])
+def test_merge_sort(ons, hows, indexes):
     kwargs = {}
     kwargs.update(hows)
     kwargs.update(ons)
+    kwargs.update(indexes)
     kwargs["sort"] = True
-    a = [3,2,4,6,9,5,2,1,1,4,3,9]
-    b = [9,8,7,8,3,9,0,0,0,3,5,3]
-    aa = [8,9,3,9,3,3,2,3,6,5,0,2]
+    a = [3,2,4,6,9,5,2,1,1,4,3,9,6,5,3,3,1,8,7,1,1,4]
+    b = [9,8,7,8,3,9,0,0,0,3,5,3,3,5,2,7,7,6,5,9,8,3]
+    aa = [8,9,3,9,3,3,2,3,6,5,0,2,1,2,3,8,7,4,9,7,2,1]
     left = pd.DataFrame({"a": a, "b": b, "aa": aa})
     right = left.copy(deep=True)
+
+    left.index = [1,1,6,5,4,7,5,8,9,5,4,7,9,4,7,2,7,2,8,5,2,6]
+    right.index = [8,2,5,4,1,9,4,7,5,3,2,6,4,2,2,3,9,6,4,5,6,7]
+
     gleft = DataFrame.from_pandas(left)
     gright = DataFrame.from_pandas(right)
     gd_merge = gleft.merge(gright, **kwargs)
