@@ -143,8 +143,8 @@ bool CompactProtocolReader::skip_struct_field(int t, int depth)
             case id: if (t != ST_FLD_STRUCT) return false; \
                 { const uint8_t *start = m_cur;            \
                   skip_struct_field(t);                    \
-                 s->m.assign(start, (m_cur > start) ? m_cur - 1 : start); \
-                 break; }                                  \
+                  s->m.assign(start, (m_cur > start) ? m_cur - 1 : start); \
+                  break; }                                  \
 
 #define PARQUET_END_STRUCT()              \
             default: /*printf("unknown fld %d of type %d\n", fld, t);*/ skip_struct_field(t);      \
