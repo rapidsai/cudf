@@ -3,6 +3,7 @@
 from libcpp cimport bool
 from libcpp.string cimport string
 from libcpp.vector cimport vector
+from libc.stdint cimport uint8_t
 
 from cudf._libxx.cpp.types cimport data_type, size_type
 cimport cudf._libxx.cpp.io.types as cudf_io_types
@@ -131,6 +132,8 @@ cdef extern from "cudf/io/functions.hpp" \
         cudf_io_types.statistics_freq stats_level
         cudf_table_view.table_view table
         const cudf_io_types.table_metadata *metadata
+        vector[uint8_t] *raw_metadata_out
+        string metadata_out_file_path
 
         write_parquet_args() except +
         write_parquet_args(cudf_io_types.sink_info sink_,
