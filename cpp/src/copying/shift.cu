@@ -14,12 +14,6 @@
  * limitations under the License.
  */
 
-#include <algorithm>
-#include <iterator>
-#include <memory>
-#include <thrust/copy.h>
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/transform.h>
 #include <cudf/types.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/copying.hpp>
@@ -29,6 +23,14 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
+
+#include <algorithm>
+#include <iterator>
+#include <memory>
+#include <thrust/copy.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/transform.h>
 
 namespace cudf {
 namespace experimental {
@@ -122,8 +124,10 @@ std::unique_ptr<column> shift(column_view const& input,
                               rmm::mr::device_memory_resource *mr,
                               cudaStream_t stream)
 {
+    CUDF_FUNC_RANGE();
     CUDF_EXPECTS(input.type() == fill_value.type(),
                 "shift requires each fill value type to match the corrosponding column type.");
+
 
     if (input.size() == 0) {
         return empty_like(input);

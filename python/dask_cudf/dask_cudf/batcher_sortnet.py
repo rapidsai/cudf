@@ -3,8 +3,18 @@ Batcher's Odd-even sorting network
 Adapted from https://en.wikipedia.org/wiki/Batcher_odd%E2%80%93even_mergesort
 """
 import math
+from operator import getitem
+
+import numpy as np
+import tlz as toolz
 
 from dask import compute, delayed
+from dask.base import tokenize
+from dask.dataframe.core import DataFrame, _concat
+from dask.dataframe.shuffle import rearrange_by_column_tasks
+from dask.dataframe.utils import group_split_dispatch, hash_object_dispatch
+from dask.highlevelgraph import HighLevelGraph
+from dask.utils import digit, insert
 
 import cudf as gd
 
@@ -137,3 +147,132 @@ def sort_delayed_frame(parts, by):
     valid = compute(valid_ct)[0]
     validparts = parts[:valid]
     return validparts
+
+
+def set_partitions_hash(df, columns, npartitions):
+    c = hash_object_dispatch(df[columns], index=False)
+    return np.mod(c, npartitions)
+
+
+def _shuffle_group(df, columns, stage, k, npartitions, ignore_index):
+    c = hash_object_dispatch(df[columns], index=False)
+    typ = np.min_scalar_type(npartitions * 2)
+    c = np.mod(c, npartitions).astype(typ, copy=False)
+    np.floor_divide(c, k ** stage, out=c)
+    np.mod(c, k, out=c)
+    return group_split_dispatch(
+        df, c.astype(np.int32), k, ignore_index=ignore_index
+    )
+
+
+def rearrange_by_hash(
+    df, columns, npartitions, max_branch=None, ignore_index=True
+):
+    if npartitions and npartitions != df.npartitions:
+        # Use main-line dask for new npartitions
+        meta = df._meta._constructor_sliced([0])
+        partitions = df[columns].map_partitions(
+            set_partitions_hash, columns, npartitions, meta=meta
+        )
+        # Note: Dask will use a shallow copy for assign
+        df2 = df.assign(_partitions=partitions)
+        return rearrange_by_column_tasks(
+            df2,
+            "_partitions",
+            max_branch=max_branch,
+            npartitions=npartitions,
+            ignore_index=ignore_index,
+        )
+
+    n = df.npartitions
+    if max_branch is False:
+        stages = 1
+    else:
+        max_branch = max_branch or 32
+        stages = int(math.ceil(math.log(n) / math.log(max_branch)))
+
+    if stages > 1:
+        k = int(math.ceil(n ** (1 / stages)))
+    else:
+        k = n
+
+    if isinstance(columns, str):
+        columns = [columns]
+    elif isinstance(columns, tuple):
+        columns = list(columns)
+
+    groups = []
+    splits = []
+    combines = []
+
+    inputs = [
+        tuple(digit(i, j, k) for j in range(stages))
+        for i in range(k ** stages)
+    ]
+
+    token = tokenize(df, columns, max_branch)
+
+    start = {
+        ("shuffle-combine-" + token, 0, inp): (df._name, i)
+        if i < df.npartitions
+        else df._meta
+        for i, inp in enumerate(inputs)
+    }
+
+    for stage in range(1, stages + 1):
+        group = {  # Convert partition into dict of dataframe pieces
+            ("shuffle-group-" + token, stage, inp): (
+                _shuffle_group,
+                ("shuffle-combine-" + token, stage - 1, inp),
+                columns,
+                stage - 1,
+                k,
+                n,
+                ignore_index,
+            )
+            for inp in inputs
+        }
+
+        split = {  # Get out each individual dataframe piece from the dicts
+            ("shuffle-split-" + token, stage, i, inp): (
+                getitem,
+                ("shuffle-group-" + token, stage, inp),
+                i,
+            )
+            for i in range(k)
+            for inp in inputs
+        }
+
+        combine = {  # concatenate those pieces together, with their friends
+            ("shuffle-combine-" + token, stage, inp): (
+                _concat,
+                [
+                    (
+                        "shuffle-split-" + token,
+                        stage,
+                        inp[stage - 1],
+                        insert(inp, stage - 1, j),
+                    )
+                    for j in range(k)
+                ],
+                ignore_index,
+            )
+            for inp in inputs
+        }
+        groups.append(group)
+        splits.append(split)
+        combines.append(combine)
+
+    end = {
+        ("shuffle-" + token, i): ("shuffle-combine-" + token, stages, inp)
+        for i, inp in enumerate(inputs)
+    }
+
+    dsk = toolz.merge(start, end, *(groups + splits + combines))
+    graph = HighLevelGraph.from_collections(
+        "shuffle-" + token, dsk, dependencies=[df]
+    )
+    df2 = DataFrame(graph, "shuffle-" + token, df, df.divisions)
+    df2.divisions = (None,) * (df.npartitions + 1)
+
+    return df2

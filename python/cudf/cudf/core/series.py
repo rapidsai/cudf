@@ -9,12 +9,15 @@ import numpy as np
 import pandas as pd
 from pandas.api.types import is_dict_like
 
-import rmm
-
 import cudf
 import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
-from cudf.core.column import ColumnBase, DatetimeColumn, column
+from cudf.core.column import (
+    ColumnBase,
+    DatetimeColumn,
+    column,
+    column_empty_like,
+)
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
 from cudf.core.index import Index, RangeIndex, as_index
@@ -1248,69 +1251,6 @@ class Series(Frame):
         else:
             return self._copy_construct(data=data)
 
-    def where(self, cond, other=None, axis=None):
-        """
-        Replace values with other where the condition is False.
-
-        Parameters
-        ----------
-        cond : boolean
-            Where cond is True, keep the original value. Where False,
-            replace with corresponding value from other.
-        other: scalar, default None
-            Entries where cond is False are replaced with
-            corresponding value from other.
-
-        Returns
-        -------
-        result : Series
-
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series([4, 3, 2, 1, 0])
-        >>> print(ser.where(ser > 2, 10))
-        0     4
-        1     3
-        2    10
-        3    10
-        4    10
-        >>> print(ser.where(ser > 2))
-        0    4
-        1    3
-        2
-        3
-        4
-        """
-        if not pd.api.types.is_numeric_dtype(self.dtype):
-            raise TypeError(
-                "`Series.where` is only supported for numeric column types."
-            )
-        to_replace = self._column.apply_boolean_mask(~cond & self.notna())
-        if is_scalar(other):
-            all_nan = other is None
-            if all_nan:
-                new_value = [other] * len(to_replace)
-            else:
-                new_value = [other]
-        else:
-            raise NotImplementedError(
-                "Replacement arg of {} is not supported.".format(type(other))
-            )
-
-        result = self._column.find_and_replace(
-            to_replace, new_value, all_nan=all_nan
-        )
-
-        # To replace nulls:: If there are nulls in `cond` series, then we will
-        # fill them with `False`, which means, by default, elements containing
-        # nulls, are failing the given condition.
-        # But, if condition is deliberately setting the `True` for nulls (i.e.
-        # `s.isnulls()`), then there are no nulls in `cond`
-        if not all_nan and (~cond.fillna(False) & self.isnull()).any():
-            result = result.fillna(other)
-        return self._copy_construct(data=result)
-
     def to_array(self, fillna=None):
         """Get a dense numpy array for the data.
 
@@ -1344,24 +1284,12 @@ class Series(Frame):
         """
         """
         assert axis in (None, 0) and skipna is True and level in (None,)
-        if self.dtype.kind not in "biuf":
-            raise NotImplementedError(
-                "All does not currently support columns of {} dtype.".format(
-                    self.dtype
-                )
-            )
         return self._column.all()
 
     def any(self, axis=0, skipna=True, level=None):
         """
         """
         assert axis in (None, 0) and skipna is True and level in (None,)
-        if self.dtype.kind not in "biuf":
-            raise NotImplementedError(
-                "Any does not currently support columns of {} dtype.".format(
-                    self.dtype
-                )
-            )
         return self._column.any()
 
     def to_gpu_array(self, fillna=None):
@@ -1643,7 +1571,7 @@ class Series(Frame):
     def reverse(self):
         """Reverse the Series
         """
-        rinds = cudautils.arange_reversed(self._column.size, dtype=np.int32)
+        rinds = cupy.arange((self._column.size - 1), -1, -1, dtype=np.int32)
         col = self._column[rinds]
         index = self.index._values[rinds]
         return self._copy_construct(data=col, index=index)
@@ -1692,8 +1620,8 @@ class Series(Frame):
             dtype = min_scalar_type(len(cats), 32)
 
         cats = Series(cats).astype(self.dtype)
-        order = Series(cudautils.arange(len(self)))
-        codes = Series(cudautils.arange(len(cats), dtype=dtype))
+        order = Series(cupy.arange(len(self)))
+        codes = Series(cupy.arange(len(cats), dtype=dtype))
 
         value = DataFrame({"value": cats, "code": codes})
         codes = DataFrame({"value": self.copy(), "order": order})
@@ -1828,7 +1756,21 @@ class Series(Frame):
         return self.product(axis=axis, skipna=skipna, dtype=dtype)
 
     def cummin(self, axis=0, skipna=True):
-        """Compute the cumulative minimum of the series"""
+        """
+        Compute the cumulative minimum of the series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series([1, 5, 2, 4, 3])
+        >>> ser.cummin()
+        0    1
+        1    1
+        2    1
+        3    1
+        4    1
+        """
+
         assert axis in (None, 0) and skipna is True
         return Series(
             self._column._apply_scan_op("min"),
@@ -1837,7 +1779,20 @@ class Series(Frame):
         )
 
     def cummax(self, axis=0, skipna=True):
-        """Compute the cumulative maximum of the series"""
+        """
+        Compute the cumulative maximum of the series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series([1, 5, 2, 4, 3])
+        >>> ser.cummax()
+        0    1
+        1    5
+        2    5
+        3    5
+        4    5
+        """
         assert axis in (None, 0) and skipna is True
         return Series(
             self._column._apply_scan_op("max"),
@@ -1846,7 +1801,21 @@ class Series(Frame):
         )
 
     def cumsum(self, axis=0, skipna=True):
-        """Compute the cumulative sum of the series"""
+        """
+        Compute the cumulative sum of the series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series([1, 5, 2, 4, 3])
+        >>> ser.cumsum()
+        0    1
+        1    6
+        2    8
+        3    12
+        4    15
+        """
+
         assert axis in (None, 0) and skipna is True
 
         # pandas always returns int64 dtype if original dtype is int or `bool`
@@ -1866,7 +1835,20 @@ class Series(Frame):
             )
 
     def cumprod(self, axis=0, skipna=True):
-        """Compute the cumulative product of the series"""
+        """
+        Compute the cumulative product of the series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series([1, 5, 2, 4, 3])
+        >>> ser.cumprod()
+        0    1
+        1    5
+        2    10
+        3    40
+        4    120
+        """
         assert axis in (None, 0) and skipna is True
 
         # pandas always returns int64 dtype if original dtype is int or `bool`
@@ -1886,7 +1868,16 @@ class Series(Frame):
             )
 
     def mean(self, axis=None, skipna=True):
-        """Compute the mean of the series
+        """
+
+        Compute the mean of the series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series([10, 25, 3, 25, 24, 6])
+        >>> ser.mean()
+        15.5
         """
         assert axis in (None, 0) and skipna is True
         return self._column.mean()
@@ -1989,6 +1980,14 @@ class Series(Frame):
     def cov(self, other, min_periods=None):
         """Calculates the sample covariance between two Series,
         excluding missing values.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser1 = cudf.Series([0.9, 0.13, 0.62])
+        >>> ser2 = cudf.Series([0.12, 0.26, 0.51])
+        >>> ser1.cov(ser2)
+        -0.015750000000000004
         """
         assert min_periods in (None,)
 
@@ -2010,7 +2009,16 @@ class Series(Frame):
     def corr(self, other, method="pearson", min_periods=None):
         """Calculates the sample correlation between two Series,
         excluding missing values.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser1 = cudf.Series([0.9, 0.13, 0.62])
+        >>> ser2 = cudf.Series([0.12, 0.26, 0.51])
+        >>> ser1.corr(ser2)
+        -0.20454263717316112
         """
+
         assert method in ("pearson",) and min_periods in (None,)
 
         if self.empty or other.empty:
@@ -2043,7 +2051,7 @@ class Series(Frame):
         except Exception:
             # pandas functionally returns all False when cleansing via
             # typecasting fails
-            return Series(cudautils.zeros(len(self), dtype="bool"))
+            return Series(cupy.zeros(len(self), dtype="bool"))
 
         # If categorical, combine categories first
         if is_categorical_dtype(lhs):
@@ -2059,7 +2067,7 @@ class Series(Frame):
                 # list doesn't have any nulls. If it does have nulls, make
                 # the test list a Categorical with a single null
                 if not rhs.has_nulls:
-                    return Series(cudautils.zeros(len(self), dtype="bool"))
+                    return Series(cupy.zeros(len(self), dtype="bool"))
                 rhs = Series(pd.Categorical.from_codes([-1], categories=[]))
                 rhs = rhs.cat.set_categories(lhs_cats).astype(self.dtype)
 
@@ -2068,8 +2076,8 @@ class Series(Frame):
             lhs = lhs.fillna(lhs._column.default_na_value())
             rhs = rhs.fillna(lhs._column.default_na_value())
 
-        lhs = DataFrame({"x": lhs, "orig_order": cudautils.arange(len(lhs))})
-        rhs = DataFrame({"x": rhs, "bool": cudautils.ones(len(rhs), "bool")})
+        lhs = DataFrame({"x": lhs, "orig_order": cupy.arange(len(lhs))})
+        rhs = DataFrame({"x": rhs, "bool": cupy.ones(len(rhs), "bool")})
         res = lhs.merge(rhs, on="x", how="left").sort_values(by="orig_order")
         res = res.drop_duplicates(subset="orig_order").reset_index(drop=True)
         res = res["bool"].fillna(False)
@@ -2116,14 +2124,9 @@ class Series(Frame):
     def scale(self):
         """Scale values to [0, 1] in float64
         """
-        if self.has_nulls:
-            msg = "masked series not supported by this operation"
-            raise NotImplementedError(msg)
-
         vmin = self.min()
         vmax = self.max()
-        gpuarr = self._column.data_array_view
-        scaled = cudautils.compute_scale(gpuarr, vmin, vmax)
+        scaled = (self - vmin) / (vmax - vmin)
         return self._copy_construct(data=scaled)
 
     # Absolute
@@ -2179,14 +2182,13 @@ class Series(Frame):
         assert stop > 0
 
         initial_hash = [hash(self.name) & 0xFFFFFFFF] if use_name else None
-        hashed_values = self._hash(initial_hash)
+        hashed_values = Series(self._hash(initial_hash))
 
         if hashed_values.has_nulls:
             raise ValueError("Column must have no nulls.")
 
-        # TODO: Binary op when https://github.com/rapidsai/cudf/pull/892 merged
-        mod_vals = cudautils.modulo(hashed_values.to_gpu_array(), stop)
-        return Series(mod_vals, index=self.index)
+        mod_vals = hashed_values % stop
+        return Series(mod_vals._column, index=self.index, name=self.name)
 
     def quantile(
         self, q=0.5, interpolation="linear", exact=True, quant_index=True
@@ -2370,37 +2372,6 @@ class Series(Frame):
 
         return Series(numerical.digitize(self._column, bins, right))
 
-    def shift(self, periods=1, freq=None, axis=0, fill_value=None):
-        """Shift values of an input array by periods positions and store the
-        output in a new array.
-
-        Notes
-        -----
-        Shift currently only supports float and integer dtype columns with
-        no null values.
-        """
-        assert axis in (None, 0) and freq is None and fill_value is None
-
-        if self.has_nulls:
-            raise AssertionError(
-                "Shift currently requires columns with no " "null values"
-            )
-
-        if not np.issubdtype(self.dtype, np.number):
-            raise NotImplementedError(
-                "Shift currently only supports " "numeric dtypes"
-            )
-        if periods == 0:
-            return self
-
-        input_dary = self.to_gpu_array()
-        output_dary = rmm.device_array_like(input_dary)
-        if output_dary.size > 0:
-            cudautils.gpu_shift.forall(output_dary.size)(
-                input_dary, output_dary, periods
-            )
-        return Series(output_dary, name=self.name, index=self.index)
-
     def diff(self, periods=1):
         """Calculate the difference between values at positions i and i - N in
         an array and store the output in a new array.
@@ -2412,21 +2383,22 @@ class Series(Frame):
         """
         if self.has_nulls:
             raise AssertionError(
-                "Diff currently requires columns with no " "null values"
+                "Diff currently requires columns with no null values"
             )
 
         if not np.issubdtype(self.dtype, np.number):
             raise NotImplementedError(
-                "Diff currently only supports " "numeric dtypes"
+                "Diff currently only supports numeric dtypes"
             )
 
-        input_dary = self.to_gpu_array()
-        output_dary = rmm.device_array_like(input_dary)
-        if output_dary.size > 0:
-            cudautils.gpu_diff.forall(output_dary.size)(
-                input_dary, output_dary, periods
+        # TODO: move this libcudf
+        input_col = self._column
+        output_col = column_empty_like(input_col)
+        if output_col.size > 0:
+            cudautils.gpu_diff.forall(output_col.size)(
+                input_col, output_col, periods
             )
-        return Series(output_dary, name=self.name, index=self.index)
+        return Series(output_col, name=self.name, index=self.index)
 
     def groupby(
         self,
@@ -2490,9 +2462,9 @@ class Series(Frame):
 
     def rename(self, index=None, copy=True):
         """
-        Alter Series name.
+        Alter Series name
 
-        Change Series.name with a scalar value.
+        Change Series.name with a scalar value
 
         Parameters
         ----------
