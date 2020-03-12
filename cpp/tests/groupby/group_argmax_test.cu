@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <tests/groupby/common/groupby_test_util.hpp>
+#include <tests/groupby/groupby_test_util.hpp>
 
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_wrapper.hpp>
@@ -27,15 +27,15 @@ namespace test {
 
 
 template <typename V>
-struct groupby_argmin_test : public cudf::test::BaseFixture {};
+struct groupby_argmax_test : public cudf::test::BaseFixture {};
 
-TYPED_TEST_CASE(groupby_argmin_test, cudf::test::FixedWidthTypes);
+TYPED_TEST_CASE(groupby_argmax_test, cudf::test::FixedWidthTypes);
 
-TYPED_TEST(groupby_argmin_test, basic)
+TYPED_TEST(groupby_argmax_test, basic)
 {
     using K = int32_t;
     using V = TypeParam;
-    using R = experimental::detail::target_type_t<V, experimental::aggregation::ARGMIN>;
+    using R = experimental::detail::target_type_t<V, experimental::aggregation::ARGMAX>;
 
     if (std::is_same<V, experimental::bool8>::value) return;
 
@@ -43,17 +43,20 @@ TYPED_TEST(groupby_argmin_test, basic)
     fixed_width_column_wrapper<V> vals        { 9, 8, 7, 6, 5, 4, 3, 2, 1, 0};
 
     fixed_width_column_wrapper<K> expect_keys { 1, 2, 3 };
-    fixed_width_column_wrapper<R> expect_vals { 6, 9, 8 };
+    fixed_width_column_wrapper<R> expect_vals { 0, 1, 2 };
 
-    auto agg = cudf::experimental::make_argmin_aggregation();
+    auto agg = cudf::experimental::make_argmax_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+
+    auto agg2 = cudf::experimental::make_argmax_aggregation();
+    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
-TYPED_TEST(groupby_argmin_test, zero_valid_keys)
+TYPED_TEST(groupby_argmax_test, zero_valid_keys)
 {
     using K = int32_t;
     using V = TypeParam;
-    using R = experimental::detail::target_type_t<V, experimental::aggregation::ARGMIN>;
+    using R = experimental::detail::target_type_t<V, experimental::aggregation::ARGMAX>;
 
     if (std::is_same<V, experimental::bool8>::value) return;
 
@@ -63,15 +66,18 @@ TYPED_TEST(groupby_argmin_test, zero_valid_keys)
     fixed_width_column_wrapper<K> expect_keys { };
     fixed_width_column_wrapper<R> expect_vals { };
 
-    auto agg = cudf::experimental::make_argmin_aggregation();
+    auto agg = cudf::experimental::make_argmax_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+
+    auto agg2 = cudf::experimental::make_argmax_aggregation();
+    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
-TYPED_TEST(groupby_argmin_test, zero_valid_values)
+TYPED_TEST(groupby_argmax_test, zero_valid_values)
 {
     using K = int32_t;
     using V = TypeParam;
-    using R = experimental::detail::target_type_t<V, experimental::aggregation::ARGMIN>;
+    using R = experimental::detail::target_type_t<V, experimental::aggregation::ARGMAX>;
 
     if (std::is_same<V, experimental::bool8>::value) return;
 
@@ -81,54 +87,59 @@ TYPED_TEST(groupby_argmin_test, zero_valid_values)
     fixed_width_column_wrapper<K> expect_keys { 1 };
     fixed_width_column_wrapper<R> expect_vals({ 0 }, all_null());
 
-    auto agg = cudf::experimental::make_argmin_aggregation();
+    auto agg = cudf::experimental::make_argmax_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+
+    auto agg2 = cudf::experimental::make_argmax_aggregation();
+    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
-TYPED_TEST(groupby_argmin_test, null_keys_and_values)
+TYPED_TEST(groupby_argmax_test, null_keys_and_values)
 {
     using K = int32_t;
     using V = TypeParam;
-    using R = experimental::detail::target_type_t<V, experimental::aggregation::ARGMIN>;
+    using R = experimental::detail::target_type_t<V, experimental::aggregation::ARGMAX>;
 
     if (std::is_same<V, experimental::bool8>::value) return;
 
     fixed_width_column_wrapper<K> keys(       { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
-                                              { 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1});
+                                              { 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1});
     fixed_width_column_wrapper<V> vals(       { 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 4},
-                                              { 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 0});
+                                              { 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0});
 
                                           //  { 1, 1,     2, 2, 2,   3, 3,    4}
     fixed_width_column_wrapper<K> expect_keys({ 1,        2,         3,       4}, all_valid());
-                                          //  { 9, 6,     8, 5, 0,   7, 1,    -}
-    fixed_width_column_wrapper<R> expect_vals({ 3,        9,         8,       0},
+                                          //  { 6, 3,     5, 4, 0,   2, 1,    -}
+    fixed_width_column_wrapper<R> expect_vals({ 3,        4,         7,       0},
                                               { 1,        1,         1,       0});
 
-    auto agg = cudf::experimental::make_argmin_aggregation();
+    auto agg = cudf::experimental::make_argmax_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-    // TODO: explore making this a gtest parameter
-    auto agg2 = cudf::experimental::make_argmin_aggregation();
+    auto agg2 = cudf::experimental::make_argmax_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
 
-struct groupby_argmin_string_test : public cudf::test::BaseFixture {};
+struct groupby_argmax_string_test : public cudf::test::BaseFixture {};
 
-TEST_F(groupby_argmin_string_test, basic)
+TEST_F(groupby_argmax_string_test, basic)
 {
     using K = int32_t;
     using V = string_view;
-    using R = experimental::detail::target_type_t<V, experimental::aggregation::ARGMIN>;
+    using R = experimental::detail::target_type_t<V, experimental::aggregation::ARGMAX>;
 
     fixed_width_column_wrapper<K> keys        {     1,     2,    3,     1,     2,     2,     1,    3,    3,    2 };
     strings_column_wrapper        vals        { "año", "bit", "₹1", "aaa", "zit", "bat", "aab", "$1", "€1", "wut"};
 
     fixed_width_column_wrapper<K> expect_keys { 1, 2, 3 };
-    fixed_width_column_wrapper<R> expect_vals({ 3, 5, 7 });
+    fixed_width_column_wrapper<R> expect_vals({ 0, 4, 2 });
 
-    auto agg = cudf::experimental::make_argmin_aggregation();
+    auto agg = cudf::experimental::make_argmax_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+
+    auto agg2 = cudf::experimental::make_argmax_aggregation();
+    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
 } // namespace test

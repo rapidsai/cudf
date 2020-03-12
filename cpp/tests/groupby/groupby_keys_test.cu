@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <tests/groupby/common/groupby_test_util.hpp>
+#include <tests/groupby/groupby_test_util.hpp>
 
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_wrapper.hpp>
