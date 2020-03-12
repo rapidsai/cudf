@@ -9,6 +9,8 @@ import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq
 from dask.utils import natural_sort_key, parse_bytes
 
+import cudf
+
 import dask_cudf
 
 nrows = 40
@@ -61,14 +63,15 @@ def test_roundtrip_from_dask(tmpdir):
     assert_eq(ddf[["y"]], ddf2)
 
 
-def test_roundtrip_from_dask_cudf(tmpdir):
+@pytest.mark.parametrize("write_meta", [True, False])
+def test_roundtrip_from_dask_cudf(tmpdir, write_meta):
     tmpdir = str(tmpdir)
     gddf = dask_cudf.from_dask_dataframe(ddf)
-    gddf.to_parquet(tmpdir)
+    gddf.to_parquet(tmpdir, write_metadata_file=write_meta)
 
     # NOTE: Need `.compute()` to resolve correct index
     #       name after `from_dask_dataframe`
-    gddf2 = dask_cudf.read_parquet(tmpdir)
+    gddf2 = dask_cudf.read_parquet(tmpdir, index="index")
     assert_eq(gddf.compute(), gddf2)
 
 
@@ -168,10 +171,11 @@ def test_filters(tmpdir):
     assert not len(c)
 
 
+@pytest.mark.parametrize("daskcudf", [True, False])
 @pytest.mark.parametrize(
     "parts", [["year", "month", "day"], ["year", "month"], ["year"]]
 )
-def test_roundtrip_from_dask_partitioned(tmpdir, parts):
+def test_roundtrip_from_dask_partitioned(tmpdir, parts, daskcudf):
     tmpdir = str(tmpdir)
 
     df = pd.DataFrame()
@@ -180,9 +184,12 @@ def test_roundtrip_from_dask_partitioned(tmpdir, parts):
     df["day"] = [1, 1, 1, 2, 2, 1]
     df["data"] = [0, 0, 0, 0, 0, 0]
     df.index.name = "index"
-    ddf2 = dd.from_pandas(df, npartitions=2)
-
-    ddf2.to_parquet(tmpdir, engine="pyarrow", partition_on=parts)
+    if daskcudf:
+        ddf2 = dask_cudf.from_cudf(cudf.from_pandas(df), npartitions=2)
+        ddf2.to_parquet(tmpdir, write_metadata_file=False, partition_on=parts)
+    else:
+        ddf2 = dd.from_pandas(df, npartitions=2)
+        ddf2.to_parquet(tmpdir, engine="pyarrow", partition_on=parts)
     df_read = dd.read_parquet(tmpdir, engine="pyarrow", index="index")
     gdf_read = dask_cudf.read_parquet(tmpdir, index="index")
 

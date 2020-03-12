@@ -10,11 +10,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-import nvstrings
-import rmm
-
 import cudf
-from cudf.core.buffer import Buffer
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
@@ -24,7 +20,7 @@ from cudf.core.column import (
     column,
 )
 from cudf.core.frame import Frame
-from cudf.utils import cudautils, ioutils, utils
+from cudf.utils import ioutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import is_categorical_dtype, is_scalar, min_signed_type
 from cudf.utils.utils import cached_property
@@ -180,23 +176,6 @@ class Index(Frame):
     def sum(self):
         return self._values.sum()
 
-    def find_segments(self):
-        """Return the beginning index for segments
-
-        Returns
-        -------
-        result : NumericalColumn
-        """
-        segments, _ = self._find_segments()
-        return segments
-
-    def _find_segments(self):
-        seg, markers = cudautils.find_segments(self.gpu_values)
-        return (
-            column.build_column(data=Buffer(seg), dtype=seg.dtype),
-            markers,
-        )
-
     @classmethod
     def _concat(cls, objs):
         data = ColumnBase._concat([o._values for o in objs])
@@ -220,7 +199,7 @@ class Index(Frame):
             return as_index(op())
 
     def unique(self):
-        return as_index(self._values.unique())
+        return as_index(self._values.unique(), name=self.name)
 
     def __add__(self, other):
         return self._apply_op("__add__", other)
@@ -516,7 +495,7 @@ class RangeIndex(Index):
     @cached_property
     def _values(self):
         if len(self) > 0:
-            vals = cudautils.arange(self._start, self._stop, dtype=self.dtype)
+            vals = cupy.arange(self._start, self._stop, dtype=self.dtype)
             return column.as_column(vals)
         else:
             return column.column_empty(0, masked=False, dtype=self.dtype)
@@ -578,10 +557,6 @@ class RangeIndex(Index):
             index = utils.normalize_index(index, len(self))
             index += self._start
             return index
-        elif isinstance(index, (list, np.ndarray)):
-            index = np.asarray(index)
-            index = rmm.to_device(index)
-
         else:
             if is_scalar(index):
                 index = min_signed_type(index)(index)
@@ -718,7 +693,7 @@ class RangeIndex(Index):
 
 
 def index_from_range(start, stop=None, step=None):
-    vals = cudautils.arange(start, stop, step, dtype=np.int64)
+    vals = cupy.arange(start, stop, step, dtype=np.int64)
     return as_index(vals)
 
 
@@ -917,7 +892,10 @@ class DatetimeIndex(GenericIndex):
         # but we need a NumericalColumn for GenericIndex..
         # how should this be handled?
         out_column = column.build_column(
-            data=out_column.data, dtype=out_column.dtype, mask=out_column.mask
+            data=out_column.base_data,
+            dtype=out_column.dtype,
+            mask=out_column.base_mask,
+            offset=out_column.offset,
         )
         return as_index(out_column, name=self.name)
 
@@ -983,7 +961,11 @@ class StringIndex(GenericIndex):
         elif isinstance(values, StringIndex):
             values = values._values.copy()
         else:
-            values = column.as_column(nvstrings.to_device(values))
+            values = column.as_column(values, dtype="str")
+            if not pd.api.types.is_string_dtype(values.dtype):
+                raise ValueError(
+                    "Couldn't create StringIndex from passed in object"
+                )
         super(StringIndex, self).__init__(values, **kwargs)
 
     def to_pandas(self):

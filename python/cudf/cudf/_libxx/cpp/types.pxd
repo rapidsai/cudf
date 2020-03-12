@@ -6,6 +6,7 @@ from libc.stdint cimport int32_t, uint32_t
 cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
     ctypedef int32_t size_type
     ctypedef uint32_t bitmask_type
+    ctypedef uint32_t char_utf8
 
     cdef enum:
         UNKNOWN_NULL_COUNT = -1

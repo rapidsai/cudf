@@ -12,7 +12,6 @@ from libc.stdlib cimport malloc, free
 
 import cudf
 from cudf.core.buffer import Buffer
-from cudf.utils.cudautils import zeros
 from cudf.utils.dtypes import is_categorical_dtype
 
 from cudf._lib.cudf cimport *

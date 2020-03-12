@@ -342,6 +342,88 @@ void write_orc(write_orc_args const& args, rmm::mr::device_memory_resource* mr =
                                                rmm::mr::get_default_resource());
 
 /**
+ * @brief Settings to use for `write_orc_chunked()`
+ */
+struct write_orc_chunked_args {
+  /// Specify the sink to use for writer output
+  sink_info sink;
+  /// Specify the compression format to use
+  compression_type compression;
+  /// Enable writing column statistics
+  bool enable_statistics;
+  /// Optional associated metadata
+  const table_metadata_with_nullability *metadata;
+
+  explicit write_orc_chunked_args(sink_info const& sink_,
+                          const table_metadata_with_nullability *metadata_ = nullptr,
+                          compression_type compression_ = compression_type::AUTO,
+                          bool stats_en = true)
+      : sink(sink_), metadata(metadata_), compression(compression_),
+        enable_statistics(stats_en) {}
+};
+
+/**
+ * @brief Forward declaration of anonymous chunked-writer state struct.
+ */
+namespace detail {
+namespace orc {
+  struct orc_chunked_state;
+};
+};
+
+/**
+ * @brief Begin the process of writing an ORC file in a chunked/stream form.
+ *
+ * The intent of the write_orc_chunked_ path is to allow writing of an
+ * arbitrarily large / arbitrary number of rows to an ORC file in multiple passes.
+ *
+ * The following code snippet demonstrates how to write a single ORC file containing
+ * one logical table by writing a series of individual cudf::tables.
+ * @code
+ *  #include <cudf.h>
+ *  ...
+ *  std::string filepath = "dataset.orc";
+ *  cudf::experimental::io::write_orc_chunked_args args{cudf::sink_info(filepath), table->view()};
+ *  ...
+ *  auto state = cudf::write_orc_chunked_begin(args);
+ *    cudf::write_orc_chunked(table0, state);
+ *    cudf::write_orc_chunked(table1, state);
+ *    ...
+ *  cudf_write_orc_chunked_end(state);
+ * @endcode
+ *
+ * @param[in] args Settings for controlling writing behavior
+ * @param[in] mr Optional resource to use for device memory allocation
+ *
+ * @returns pointer to an anonymous state structure storing information about the chunked write. this
+ *          pointer must be passed to all subsequent write_orc_chunked() and write_orc_chunked_end()
+ *          calls.
+ */
+std::shared_ptr<detail::orc::orc_chunked_state> write_orc_chunked_begin(
+                                                write_orc_chunked_args const& args,
+                                                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+/**
+ * @brief Write a single table as a subtable of a larger logical orc file/table.
+ *
+ * All tables passed into multiple calls of this function must contain the same # of columns and have columns
+ * of the same type.
+ *
+ * @param[in] table The table data to be written.
+ * @param[in] state Opaque state information about the writer process. Must be the same pointer returned
+ *            from write_orc_chunked_begin()
+ */
+void write_orc_chunked(table_view const& table, std::shared_ptr<detail::orc::orc_chunked_state> state);
+
+/**
+ * @brief Finish writing a chunked/stream orc file.
+ *
+ * @param[in] state Opaque state information about the writer process. Must be the same pointer returned
+ *            from write_orc_chunked_begin()
+ */
+void write_orc_chunked_end(std::shared_ptr<detail::orc::orc_chunked_state>& state);
+
+
+/**
  * @brief Settings to use for `read_parquet()`
  */
 struct read_parquet_args {
@@ -412,7 +494,7 @@ struct write_parquet_args {
                               const table_metadata *metadata_ = nullptr,
                               compression_type compression_ = compression_type::AUTO,
                               statistics_freq stats_lvl_ = statistics_freq::STATISTICS_ROWGROUP)
-      : sink(sink_), table(table_), metadata(metadata_), compression(compression_), stats_level(stats_lvl_) {}
+      : sink(sink_), compression(compression_), stats_level(stats_lvl_), table(table_), metadata(metadata_)  {}
 };
 
 /**
@@ -452,7 +534,7 @@ struct write_parquet_chunked_args {
                               const table_metadata_with_nullability *metadata_ = nullptr,
                               compression_type compression_ = compression_type::AUTO,
                               statistics_freq stats_lvl_ = statistics_freq::STATISTICS_ROWGROUP)
-      : sink(sink_), metadata(metadata_), compression(compression_), stats_level(stats_lvl_) {}
+      : sink(sink_), compression(compression_), stats_level(stats_lvl_), metadata(metadata_) {}
 };
 
 /**
