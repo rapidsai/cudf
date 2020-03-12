@@ -18,6 +18,10 @@ from cudf._libxx.nvtx import (
     range_pop as nvtx_range_pop,
     range_push as nvtx_range_push,
 )
+from cudf._libxx.strings.attributes import (
+    code_points as cpp_code_points,
+    count_characters as cpp_count_characters,
+)
 from cudf._libxx.strings.capitalize import (
     capitalize as cpp_capitalize,
     title as cpp_title,
@@ -45,6 +49,10 @@ from cudf._libxx.strings.contains import (
     contains_re as cpp_contains_re,
     count_re as cpp_count_re,
     match_re as cpp_match_re,
+)
+from cudf._libxx.strings.convert.convert_urls import (
+    url_decode as cpp_url_decode,
+    url_encode as cpp_url_encode,
 )
 from cudf._libxx.strings.extract import extract as cpp_extract
 from cudf._libxx.strings.find import (
@@ -92,6 +100,7 @@ from cudf._libxx.strings.substring import (
     slice_from as cpp_slice_from,
     slice_strings as cpp_slice_strings,
 )
+from cudf._libxx.strings.translate import translate as cpp_translate
 from cudf._libxx.strings.wrap import wrap as cpp_wrap
 from cudf.core.buffer import Buffer
 from cudf.core.column import column, column_empty
@@ -199,7 +208,7 @@ class StringMethods(object):
                     new_col, index=self._parent.index, name=self._parent.name
                 )
             elif isinstance(self._parent, Index):
-                return as_index(new_col, name=self._parent.index)
+                return as_index(new_col, name=self._parent.name)
             else:
                 if self._parent is None:
                     return new_col
@@ -221,17 +230,8 @@ class StringMethods(object):
             indicating the length of each element in the Series or Index.
         """
 
-        out_col = column_empty(len(self._column), dtype="int32")
-        ptr = out_col.data_ptr
-        self._column.nvstrings.len(ptr)
-
-        mask = None
-        if self._column.has_nulls:
-            mask = self._column.mask
-
         return self._return_or_inplace(
-            column.build_column(out_col.data, np.dtype("int32"), mask=mask),
-            **kwargs,
+            cpp_count_characters(self._column), **kwargs,
         )
 
     def cat(self, others=None, sep=None, na_rep=None, **kwargs):
@@ -1664,6 +1664,78 @@ class StringMethods(object):
 
         return self._return_or_inplace(
             cpp_match_re(self._column, pat), **kwargs
+        )
+
+    def url_decode(self, **kwargs):
+        """
+        Returns a URL-decoded format of each string.
+        No format checking is performed. All characters
+        are expected to be encoded as UTF-8 hex values.
+
+        Returns
+        -------
+        Series or Index.
+
+        """
+
+        return self._return_or_inplace(cpp_url_decode(self._column), **kwargs)
+
+    def url_encode(self, **kwargs):
+        """
+        Returns a URL-encoded format of each string.
+        No format checking is performed.
+        All characters are encoded except for ASCII letters,
+        digits, and these characters: ‘.’,’_’,’-‘,’~’.
+        Encoding converts to hex using UTF-8 encoded bytes.
+
+        Returns
+        -------
+        Series or Index.
+
+        """
+        return self._return_or_inplace(cpp_url_encode(self._column), **kwargs)
+
+    def code_points(self, **kwargs):
+        """
+        Returns an array by filling it with the UTF-8 code point
+        values for each character of each string.
+        This function uses the len() method to determine
+        the size of each sub-array of integers.
+
+        Returns
+        -------
+        Series or Index.
+        """
+        from cudf.core.series import Series, Index
+
+        new_col = cpp_code_points(self._column)
+        if self._parent is None:
+            return new_col
+        elif isinstance(self._parent, Series):
+            return Series(new_col, name=self._parent.name)
+        elif isinstance(self._parent, Index):
+            return column.as_index(new_col, name=self._parent.name)
+
+    def translate(self, table, **kwargs):
+        """
+        Map all characters in the string through the given
+        mapping table.
+
+        Parameters
+        ----------
+        table : dict
+            Table is a mapping of Unicode ordinals to Unicode
+            ordinals, strings, or None.
+            Unmapped characters are left untouched.
+            str.maketrans() is a helper function for making translation tables.
+
+        Returns
+        -------
+        Series or Index.
+        """
+        table = str.maketrans(table)
+        return self._return_or_inplace(
+            cpp_translate(self._column, table), **kwargs
         )
 
 
