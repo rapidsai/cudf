@@ -665,23 +665,35 @@ def test_merge_left_right_index_left_right_on_kwargs2(kwargs):
 )
 @pytest.mark.parametrize(
     "ons",
-    [{"on": "a"}, {"on": ['a', 'b']}, {"on": ['b', 'a']}, {"on": ['a','aa', 'b']}, {"on": ['b','a', 'aa']}],
+    [
+        {"on": "a"},
+        {"on": ["a", "b"]},
+        {"on": ["b", "a"]},
+        {"on": ["a", "aa", "b"]},
+        {"on": ["b", "a", "aa"]},
+    ],
 )
-@pytest.mark.parametrize("indexes", [{"left_index": False, "right_index": False}, {"left_index": True, "right_index": True}])
+@pytest.mark.parametrize(
+    "indexes",
+    [
+        {"left_index": False, "right_index": False},
+        {"left_index": True, "right_index": True},
+    ],
+)
 def test_merge_sort(ons, hows, indexes):
     kwargs = {}
     kwargs.update(hows)
     kwargs.update(ons)
     kwargs.update(indexes)
     kwargs["sort"] = True
-    a = [4,6,9,5,2,4,1,8,1]
-    b = [9,8,7,8,3,9,7,9,2]
-    aa = [8,9,2,9,3,1,2,3,4]
+    a = [4, 6, 9, 5, 2, 4, 1, 8, 1]
+    b = [9, 8, 7, 8, 3, 9, 7, 9, 2]
+    aa = [8, 9, 2, 9, 3, 1, 2, 3, 4]
     left = pd.DataFrame({"a": a, "b": b, "aa": aa})
     right = left.copy(deep=True)
 
-    left.index = [6,5,4,7,5,5,5,4,4]
-    right.index = [5,4,1,9,4,3,5,4,4]
+    left.index = [6, 5, 4, 7, 5, 5, 5, 4, 4]
+    right.index = [5, 4, 1, 9, 4, 3, 5, 4, 4]
 
     gleft = DataFrame.from_pandas(left)
     gright = DataFrame.from_pandas(right)
@@ -689,16 +701,21 @@ def test_merge_sort(ons, hows, indexes):
 
     pd_merge = left.merge(right, **kwargs)
     # require the join keys themselves to be sorted correctly
-    # the non-key columns will NOT match pandas ordering 
-    assert_eq(pd_merge[kwargs['on']], gd_merge[kwargs['on']])
-    pd_merge = pd_merge.drop(kwargs['on'], axis=1)
-    gd_merge = gd_merge.drop(kwargs['on'])
+    # the non-key columns will NOT match pandas ordering
+    assert_eq(pd_merge[kwargs["on"]], gd_merge[kwargs["on"]])
+    pd_merge = pd_merge.drop(kwargs["on"], axis=1)
+    gd_merge = gd_merge.drop(kwargs["on"])
     if not pd_merge.empty:
         # check to make sure the non join key columns are the same
-        pd_merge = pd_merge.sort_values(list(pd_merge.columns)).reset_index(drop=True)
-        gd_merge = gd_merge.sort_values(list(gd_merge.columns)).reset_index(drop=True)
+        pd_merge = pd_merge.sort_values(list(pd_merge.columns)).reset_index(
+            drop=True
+        )
+        gd_merge = gd_merge.sort_values(list(gd_merge.columns)).reset_index(
+            drop=True
+        )
 
     assert_eq(pd_merge, gd_merge)
+
 
 @pytest.mark.parametrize(
     "dtype",

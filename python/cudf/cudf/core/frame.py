@@ -671,7 +671,6 @@ class Frame(libcudfxx.table.Table):
         to_return = self.__class__._from_table(gdf_result)
         if sort:
             to_sort = self.__class__()
-
             if left_index and right_index:
                 by = list(to_return._index._data.columns)
                 if left_on and right_on:
@@ -691,7 +690,9 @@ class Frame(libcudfxx.table.Table):
                 to_return._data[col] = to_return._data[col].take(inds)
             if left_index or right_index:
                 name = to_return._index.name
-                to_return._index._data[name] = to_return._index._data[name].take(inds)
+                to_return._index._data[name] = to_return._index._data[
+                    name
+                ].take(inds)
             return to_return
         else:
             return to_return
