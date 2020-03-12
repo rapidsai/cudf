@@ -437,6 +437,7 @@ add_library(cudf
             src/datetime/datetime_ops.cu
             src/datetime/datetime_util.cpp
             src/hash/hashing.cu
+            src/partitioning/partitioning.cu
             src/hash/legacy/hashing.cu
             src/quantiles/legacy/quantiles.cu
             src/quantiles/quantile.cu
