@@ -212,6 +212,7 @@ struct create_column_from_view {
  }
 
 };
+} // anonymous namespace
 
 // Copy from a view
 column::column(column_view view, cudaStream_t stream,
