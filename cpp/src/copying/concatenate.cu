@@ -22,7 +22,7 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/detail/concatenate.hpp>
-#include <cudf/utilities/nvtx_utils.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 #include <thrust/binary_search.h>
 #include <thrust/transform_scan.h>
@@ -385,7 +385,7 @@ rmm::device_buffer concatenate_masks(std::vector<column_view> const &views,
 std::unique_ptr<column>
 concatenate(std::vector<column_view> const& columns_to_concat,
             rmm::mr::device_memory_resource *mr, cudaStream_t stream) {
-  nvtx::raii_range range("cudf::concatenate", nvtx::color::DARK_GREEN);
+  CUDF_FUNC_RANGE();
 
   if (columns_to_concat.empty()) { return std::make_unique<column>(); }
 
