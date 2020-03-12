@@ -26,6 +26,7 @@
 - PR #4063 Define and implement string capitalize and title API
 - PR #4217 Add libcudf++ quantiles Cython implementation
 - PR #4216 Add cudf.Scalar Python type
+- PR #3782 Add `fixed_point` class to support DecimalType
 - PR #4272 Add stable sorted order
 - PR #4129 Add libcudf++ interleave_columns and tile Cython implementation
 - PR #4262 Port unaryops.pyx to use libcudf++ APIs
