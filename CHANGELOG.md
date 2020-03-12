@@ -150,7 +150,6 @@
 - PR #4367 Port copying.pyx to use new libcudf
 - PR #4362 Move pq_chunked_state struct into it's own header to match how orc writer is doing it.
 - PR #4339 Port libcudf strings `wrap` api to cython/python
-- PR #4314 Add Java and JNI bindings for string contains
 - PR #4236 Update dask_cudf.io.to_parquet to use cudf to_parquet
 - PR #4311 Port nvstrings String Manipulations functions to cuDF Python/Cython
 - PR #4373 Port nvstrings Regular Expressions functions to cuDF Python/Cython
@@ -160,6 +159,7 @@
 - PR #4436 Enable `.str.cat` and fix `.str.split` on python side
 - PR #4405 Port nvstrings (Sub)string Comparisons functions to cuDF Python/Cython
 - PR #4316 Add Java and JNI bindings for substring expression
+- PR #4314 Add Java and JNI bindings for string contains
 
 ## Bug Fixes
 
