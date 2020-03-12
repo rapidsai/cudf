@@ -87,7 +87,7 @@ cpdef generate_pandas_metadata(Table table, index):
 
 cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
                    row_group_count=None, skip_rows=None, num_rows=None,
-                   strings_to_categorical=False, use_pandas_metadata=False):
+                   strings_to_categorical=False, use_pandas_metadata=True):
     """
     Cython function to call into libcudf API, see `read_parquet`.
 
@@ -139,27 +139,17 @@ cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
                               column_names=column_names)
     )
 
-    # if index_col is not None and index_col in column_names:
-    print("JSON: " + str(json_str))
-    print("Index Col: " + str(index_col))
-    print("Column Names: " + str(column_names))
-    print("Index Col Type: " + str(type(index_col)))
-    print("DataFrame Default Index: " + str(df.index))
-    print("Use Pandas Metadata: " + str(use_pandas_metadata))
-    print("\n\n")
-
     # Set the index column
     if index_col is not '' and isinstance(index_col, str):
         if index_col in column_names:
-            print("Assigning index column to: " + str(index_col))
             df = df.set_index(index_col)
             new_index_name = pa.pandas_compat._backwards_compatible_index_name(
                 df.index.name, df.index.name
             )
             df.index.name = new_index_name
         else:
-            print("Just setting index name to: " + str(index_col))
-            df.index.name = index_col
+            if use_pandas_metadata:
+                df.index.name = index_col
 
     return df
 
