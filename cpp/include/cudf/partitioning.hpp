@@ -28,10 +28,10 @@ namespace experimental {
  * `partition_map`.
  *
  * For each row at `i` in `t`, `partition_map[i]` indicates which partition row
- * `i` belongs to. Creates a new table by rearranging the rows of `t` such that
- * rows in the same partition are contiguous. The returned table is in ascending
- * partition order from `[0, num_partitions)`. The order within each partition
- * is undefined.
+ * `i` belongs to. `partition` creates a new table by rearranging the rows of
+ * `t` such that rows in the same partition are contiguous. The returned table
+ * is in ascending partition order from `[0, num_partitions)`. The order within
+ * each partition is undefined.
  *
  * Returns a `vector<size_type>` of `num_partitions + 1` values that indicate
  * the starting position of each partition within the returned table, i.e.,
