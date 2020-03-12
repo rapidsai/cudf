@@ -879,10 +879,11 @@ class StringMethods(object):
         from cudf._libxx.scalar import Scalar
 
         result_table = cpp_split(self._column, Scalar(pat, "str"), n)
-
         if len(result_table._data) == 1:
             if result_table._data[0].null_count == len(self._parent):
                 result_table = []
+            elif self._parent.null_count == len(self._parent):
+                result_table = [self._column.copy()]
 
         return self._return_or_inplace(result_table, **kwargs,)
 
@@ -920,13 +921,18 @@ class StringMethods(object):
 
         kwargs.setdefault("expand", expand)
         if pat is None:
-            pat = " "
+            pat = ""
 
         from cudf._libxx.scalar import Scalar
 
-        return self._return_or_inplace(
-            cpp_rsplit(self._column, Scalar(pat), n), **kwargs
-        )
+        result_table = cpp_rsplit(self._column, Scalar(pat), n)
+        if len(result_table._data) == 1:
+            if result_table._data[0].null_count == len(self._parent):
+                result_table = []
+            elif self._parent.null_count == len(self._parent):
+                result_table = [self._column.copy()]
+
+        return self._return_or_inplace(result_table, **kwargs)
 
     def partition(self, sep=" ", expand=True, **kwargs):
         """
