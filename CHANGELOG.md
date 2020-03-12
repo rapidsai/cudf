@@ -26,6 +26,7 @@
 - PR #4063 Define and implement string capitalize and title API
 - PR #4217 Add libcudf++ quantiles Cython implementation
 - PR #4216 Add cudf.Scalar Python type
+- PR #3782 Add `fixed_point` class to support DecimalType
 - PR #4272 Add stable sorted order
 - PR #4129 Add libcudf++ interleave_columns and tile Cython implementation
 - PR #4262 Port unaryops.pyx to use libcudf++ APIs
@@ -38,6 +39,7 @@
 - PR #4321 Expose Python Semi and Anti Joins
 - PR #4291 Add Java callback support for RMM events
 - PR #4298 Port orc.pyx to libcudf++
+- PR #4329 Add support for dictionary columns in scatter
 - PR #4352 Add factory function make_column_from_scalar
 - PR #4381 Add Java support for copying buffers with asynchronous streams
 - PR #4288 Add libcudf++ shift Cython implementation
@@ -45,6 +47,7 @@
 
 ## Improvements
 
+- PR #4140 Add cudf series examples and corr() method for dataframe in dataframe.py
 - PR #4187 exposed getNativeView method in Java bindings
 - PR #3525 build.sh option to disable nvtx
 - PR #3748 Optimize hash_partition using shared memory
@@ -128,6 +131,7 @@
 - PR #4233 Porting replace.pyx to use new libcudf APIs
 - PR #4223 Fix a few of the Cython warnings
 - PR #4234 Add BUILD_LEGACY_TESTS cmake option
+- PR #4231 Support for custom cuIO data_sink classes.
 - PR #4251 Add class to docs in `dask-cudf` `derived_from`
 - PR #4261 libxx Cython reorganization
 - PR #4274 Support negative position values in slice_strings
@@ -154,7 +158,10 @@
 - PR #4407 Enable `.str.slice` & `.str.get` and `.str.zfill` unit-tests
 - PR #4412 Require Dask + Distributed 2.12.0+
 - PR #4377 Support loading avro files that contain nested arrays
+- PR #4436 Enable `.str.cat` and fix `.str.split` on python side
 - PR #4405 Port nvstrings (Sub)string Comparisons functions to cuDF Python/Cython
+- PR #4316 Add Java and JNI bindings for substring expression
+- PR #4314 Add Java and JNI bindings for string contains
 
 ## Bug Fixes
 
@@ -226,6 +233,7 @@
 - PR #4297 Fix specification of package_data in setup.py
 - PR #4302 Fix `_is_local_filesystem` check
 - PR #4303 Parquet reader: fix empty columns missing from table
+- PR #4317 Fix fill() when using string_scalar with an empty string
 - PR #4324 Fix slice_strings for out-of-range start position value
 - PR #4115 Serialize an empty column table with non zero rows
 - PR #4327 Preemptive dispatch fix for changes in dask#5973
@@ -235,6 +243,7 @@
 - PR #4369 Fix race condition in gpuinflate
 - PR #4390 Disable ScatterValid and ScatterNull legacy tests
 - PR #4406 Fix sorted merge issue with null values and ascending=False
+- PR #4445 Fix string issue for parquet reader and support `keep_index` for `scatter_to_tables`
 - PR #4423 Tighten up Dask serialization checks
 - PR #4438 Fix repl-template error for replace_with_backrefs
 - PR #4434 Fix join_strings logic with all-null strings and non-null narep

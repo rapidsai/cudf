@@ -1213,9 +1213,9 @@ class DataFrame(Frame):
 
         Examples
         --------
-        >>> df = DataFrame([('a', list(range(20))),
-        ...                 ('b', list(range(20))),
-        ...                 ('c', list(range(20)))])
+        >>> df = cudf.DataFrame([('a', range(20)),
+        ...                      ('b', range(20)),
+        ...                      ('c', range(20))])
 
         Select a single row using an integer index.
 
@@ -2845,7 +2845,7 @@ class DataFrame(Frame):
 
         return Series(table_to_hash._hash()).values
 
-    def partition_by_hash(self, columns, nparts):
+    def partition_by_hash(self, columns, nparts, keep_index=True):
         """Partition the dataframe by the hashed value of data in *columns*.
 
         Parameters
@@ -2855,6 +2855,8 @@ class DataFrame(Frame):
             Must have at least one name.
         nparts : int
             Number of output partitions
+        keep_index : boolean
+            Whether to keep the index or drop it
 
         Returns
         -------
@@ -2862,7 +2864,7 @@ class DataFrame(Frame):
         """
         idx = 0 if self._index is None else self._index._num_columns
         key_indices = [self._data.names.index(k) + idx for k in columns]
-        outdf, offsets = self._hash_partition(key_indices, nparts)
+        outdf, offsets = self._hash_partition(key_indices, nparts, keep_index)
         # Slice into partition
         return [outdf[s:e] for s, e in zip(offsets, offsets[1:] + [None])]
 
@@ -3949,7 +3951,7 @@ class DataFrame(Frame):
                 "Use an integer array/column for better performance."
             )
 
-        tables = self._scatter_to_tables(map_index._column)
+        tables = self._scatter_to_tables(map_index._column, keep_index)
 
         if map_size:
             # Make sure map_size is >= the number of uniques in map_index
@@ -4040,6 +4042,16 @@ class DataFrame(Frame):
         """
         cov = cupy.cov(self.values, rowvar=False)
         df = DataFrame.from_gpu_matrix(cupy.asfortranarray(cov)).set_index(
+            self.columns
+        )
+        df.columns = self.columns
+        return df
+
+    def corr(self):
+        """Compute the correlation matrix of a DataFrame.
+        """
+        corr = cupy.corrcoef(self.values, rowvar=False)
+        df = DataFrame.from_gpu_matrix(cupy.asfortranarray(corr)).set_index(
             self.columns
         )
         df.columns = self.columns
