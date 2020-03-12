@@ -246,6 +246,7 @@
 - PR #4445 Fix string issue for parquet reader and support `keep_index` for `scatter_to_tables`
 - PR #4423 Tighten up Dask serialization checks
 - PR #4434 Fix join_strings logic with all-null strings and non-null narep
+- PR #4465 Fix use_pandas_index having no effect in libcudf++ parquet reader
 
 
 # cuDF 0.12.0 (04 Feb 2020)
