@@ -292,16 +292,21 @@ class Frame(libcudfxx.table.Table):
         result._copy_categories(self)
         return result
 
-    def _fill(self, fill_values, begin=0, end=-1, inplace=False):
+    def fill(self, fill_values, begin=0, end=-1, inplace=False):
+        return self._fill(fill_values, begin, end, inplace=inplace)
+
+    def _fill(self, fill_values, begin, end, inplace):
         col_and_fill = zip(self._columns, fill_values)
 
         if not inplace:
-            data_columns = (c.fill(v, begin, end) for (c, v) in col_and_fill)
+            data_columns = (c._fill(v, begin, end) for (c, v) in col_and_fill)
             data = zip(self._column_names, data_columns)
             return self.__class__._from_table(Frame(data, self._index))
 
         for (c, v) in col_and_fill:
             c.fill(v, begin, end, inplace=True)
+
+        return self
 
     def shift(self, periods=1, freq=None, axis=0, fill_value=None):
         """Shift values by `periods` positions.

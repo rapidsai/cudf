@@ -4018,12 +4018,8 @@ class DataFrame(Frame):
         """
         assert level in (None, -1)
         repeated_index = self.index.repeat(self.shape[1])
-        repeated_index = [c for c in repeated_index._columns]
-
-        name_index = DataFrame({0: self._column_names}).tile(self.shape[0])
-        name_index = [c for c in name_index._columns]
-
-        new_index = [*(c for c in repeated_index), name_index[0]]
+        name_index = Frame({0: self._column_names}).tile(self.shape[0])
+        new_index = list(repeated_index._columns) + [name_index._columns[0]]
         new_index = cudf.core.multiindex.MultiIndex.from_frame(
             DataFrame(dict(zip(range(0, len(new_index)), new_index)))
         )

@@ -21,6 +21,7 @@ from cudf._libxx.null_mask import (
     bitmask_allocation_size_bytes,
     create_null_mask,
 )
+from cudf._libxx.scalar import Scalar
 from cudf._libxx.stream_compaction import unique_count as cpp_unique_count
 from cudf._libxx.transform import bools_to_mask
 from cudf.core._sort import get_sorted_inds
@@ -326,6 +327,44 @@ class ColumnBase(Column):
         """
         return self.to_gpu_array(fillna=fillna).copy_to_host()
 
+    def _fill(self, fill_value, begin, end, inplace=False):
+        begin = 0 if begin is None else begin
+        end = self.size if end is None else end
+
+        if end < 0:
+            end = self.size + end
+
+        assert end <= self.size
+        assert begin <= end
+
+        if begin == end or begin == self.size:
+            return self if inplace else self.copy()
+
+        fill_scalar = Scalar(fill_value, self.dtype)
+
+        if not inplace:
+            return libcudfxx.filling.fill(self, begin, end, fill_scalar)
+
+        fixed_width = True
+
+        if is_string_dtype(self.dtype):
+            fixed_width = False
+
+        if is_categorical_dtype(self.dtype):
+            fixed_width = False
+
+        if fixed_width:
+            if fill_value is None and not self.nullable:
+                mask = create_null_mask(self.size, state=MaskState.ALL_VALID)
+                self.set_base_mask(mask)
+
+            libcudfxx.filling.fill_in_place(self, begin, end, fill_scalar)
+            return self
+
+        result = libcudfxx.filling.fill(self, begin, end, fill_scalar)
+
+        return self._mimic_inplace(result, inplace=True)
+
     def shift(self, offset, fill_value):
         return libcudfxx.copying.shift(self, offset, fill_value)
 
@@ -500,9 +539,13 @@ class ColumnBase(Column):
         from cudf.core import column
 
         if isinstance(key, slice):
-            key_start, key_stop, key_stride = key.indices(len(self))
-            if key_stride != 1:
+            if key.step:
                 raise NotImplementedError("Stride not supported in slice")
+
+            if is_scalar(value):
+                return self._fill(value, key.start, key.stop, inplace=True)
+
+            key_start, key_stop, key_stride = key.indices(len(self))
             nelem = abs(key_stop - key_start)
         else:
             key = column.as_column(key)
