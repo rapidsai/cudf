@@ -162,6 +162,7 @@
 - PR #4405 Port nvstrings (Sub)string Comparisons functions to cuDF Python/Cython
 - PR #4316 Add Java and JNI bindings for substring expression
 - PR #4314 Add Java and JNI bindings for string contains
+- PR #4461 Port nvstrings Miscellaneous functions to cuDF Python/Cython
 
 ## Bug Fixes
 
