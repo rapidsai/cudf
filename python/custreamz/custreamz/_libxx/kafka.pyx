@@ -5,7 +5,6 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
-import cudf
 from custreamz._libxx.includes.kafka cimport (
     kafka_datasource as kafka_external,
 )
@@ -26,19 +25,27 @@ cimport cudf._libxx.cpp.io.types as cudf_io_types
 cdef kafka_external *kds
 cdef string ds_id
 
-cpdef create_kafka_handle(kafka_conf, topics=[], partitions=[]):
+cpdef create_kafka_consumer(kafka_conf):
     global kds, ds_id
     cdef map[string, string] kafka_confs
     for key, value in kafka_conf.items():
         kafka_confs[str.encode(key)] = str.encode(value)
     cdef vector[string] v_topics
+    kds = new kafka_external(kafka_confs)
+    ds_id = kds.libcudf_datasource_identifier()
+
+
+cpdef assign(topics=[], partitions=[]):
+
+    cdef vector[string] v_topics
+    cdef vector[int] v_partitions
+
     for top in topics:
         v_topics.push_back(top.encode())
-    cdef vector[int] v_partitions
     for part in partitions:
         v_partitions.push_back(part)
-    kds = new kafka_external(kafka_confs, v_topics, v_partitions)
-    ds_id = kds.libcudf_datasource_identifier()
+
+    return kds.assign(v_topics, v_partitions)
 
 cpdef read_gdf(lines=True,
                dtype=True,

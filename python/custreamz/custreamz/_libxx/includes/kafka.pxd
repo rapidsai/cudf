@@ -16,9 +16,9 @@ cdef extern from "kafka_datasource.hpp" namespace "cudf::io::external" nogil:
 
     cdef cppclass kafka_datasource:
 
-        kafka_datasource(map[string, string] configs,
-                         vector[string] topics,
-                         vector[int] partitions) except +
+        kafka_datasource(map[string, string] configs) except +
+
+        bool assign(vector[string] topics, vector[int] partitions) except +
 
         string libcudf_datasource_identifier() except +
 

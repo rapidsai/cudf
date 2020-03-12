@@ -8,20 +8,19 @@ import custreamz._libxx.kafka as libkafka
 from custreamz.utils import docutils
 
 
-class KafkaHandle(object):
-    def __init__(self, kafka_configs, topics=[], partitions=[]):
+class Consumer(object):
+    def __init__(self, kafka_configs):
         self.kafka_configs = kafka_configs
-        if len(topics) == 0:
-            raise ValueError(
-                "ERROR: You must specify the topic(s) this "
-                + "consumer will consume from!"
-            )
-        if len(partitions) == 0:
-            raise ValueError(
-                "ERROR: You must specify the topic partitions "
-                + "that this consumer will consume from!"
-            )
-        libkafka.create_kafka_handle(kafka_configs, topics, partitions)
+        libkafka.create_kafka_consumer(kafka_configs)
+
+    def assign(self, partitions=[]):
+        topics = []
+        partitions = []
+        for toppar in partitions:
+            topics.append(toppar.topic)
+            partitions.append(toppar.partition)
+
+        return libkafka.assign(topics, partitions)
 
     def metadata(self):
         libkafka.print_consumer_metadata()

@@ -28,22 +28,44 @@ namespace external {
     kafka_conf_ = std::unique_ptr<RdKafka::Conf>(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL));
   }
 
-  kafka_datasource::kafka_datasource(std::map<std::string, std::string> configs, std::vector<std::string> topics, std::vector<int> partitions) {
+  kafka_datasource::kafka_datasource(std::map<std::string, std::string> configs) {
     DATASOURCE_ID = "librdkafka-";
     DATASOURCE_ID.append(RdKafka::version_str());
 
     // Construct the RdKafka::Conf object
     kafka_conf_ = std::unique_ptr<RdKafka::Conf>(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL));
-    configure_datasource(configs, topics, partitions);
+    configure_datasource(configs);
+  }
+
+  bool kafka_datasource::assign(std::vector<std::string> topics, std::vector<int> partitions) {
+
+    if (topics.size() != partitions.size()) {
+      printf("Topic(s) and Partition(s) size do not match in assign\n");
+      return false;
+    }
+
+    // Clear out the existing partitions
+    partitions_.clear();
+
+    // Raw loops are bad
+    for (int i = 0; i < topics.size(); i++) {
+      partitions_.push_back(RdKafka::TopicPartition::create(topics[i], partitions[i]));
+    }
+
+    err_ = consumer_.get()->assign(partitions_);
+
+    if (err_ != RdKafka::ERR_NO_ERROR) {
+      return false;
+    } else {
+      return true;
+    }
   }
 
   std::string kafka_datasource::libcudf_datasource_identifier() {
     return DATASOURCE_ID;
   }
 
-  bool kafka_datasource::configure_datasource(std::map<std::string, std::string> configs,
-                                              std::vector<std::string> topics,
-                                              std::vector<int> partitions) {
+  bool kafka_datasource::configure_datasource(std::map<std::string, std::string> configs) {
 
     //Set Kafka global configurations
     for (auto const& x : configs) {
@@ -59,13 +81,6 @@ namespace external {
       }
     }
 
-    // Create Toppar instances
-    for (const auto& x : topics) {
-      for (const auto& y : partitions) {
-        partitions_.push_back(RdKafka::TopicPartition::create(x, y));
-      }
-    }
-
     // Kafka 0.9 > requires at least a group.id in the configuration so lets
     // make sure that is present.
     conf_res_ = kafka_conf_->get("group.id", conf_val);
@@ -75,8 +90,6 @@ namespace external {
     kafka_conf_->set("rebalance_cb", &ex_rebalance_cb, errstr_);
 
     consumer_ = std::unique_ptr<RdKafka::KafkaConsumer>(RdKafka::KafkaConsumer::create(kafka_conf_.get(), errstr_));
-    consumer_.get()->assign(partitions_);
-
     producer_ = std::unique_ptr<RdKafka::Producer>(RdKafka::Producer::create(kafka_conf_.get(), errstr_));
 
     return true;

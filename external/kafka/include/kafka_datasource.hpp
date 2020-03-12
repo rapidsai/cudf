@@ -43,8 +43,6 @@ class kafka_datasource : public external_datasource {
     std::unique_ptr<RdKafka::Conf> kafka_conf_;
     std::unique_ptr<RdKafka::KafkaConsumer> consumer_ = NULL;
     std::unique_ptr<RdKafka::Producer> producer_ = NULL;
-
-
     
     std::vector<RdKafka::TopicPartition*> partitions_;
     RdKafka::Conf::ConfResult conf_res_;
@@ -64,7 +62,9 @@ class kafka_datasource : public external_datasource {
 
   kafka_datasource();
 
-  kafka_datasource(std::map<std::string, std::string> configs, std::vector<std::string> topics, std::vector<int> partitions);
+  kafka_datasource(std::map<std::string, std::string> configs);
+
+  bool assign(std::vector<std::string> topics, std::vector<int> partitions);
 
   std::string libcudf_datasource_identifier();
 
@@ -72,7 +72,7 @@ class kafka_datasource : public external_datasource {
 
   std::map<std::string, int64_t> get_watermark_offset(std::string topic, int partition, int timeout, bool cached);
 
-  bool configure_datasource(std::map<std::string, std::string> configs, std::vector<std::string> topics, std::vector<int> partitions);
+  bool configure_datasource(std::map<std::string, std::string> configs);
 
   void print_consumer_metadata();
 
@@ -190,8 +190,8 @@ extern "C" external_datasource* libcudf_external_datasource_load() {
   return new kafka_datasource;
 }
 
-extern "C" external_datasource* libcudf_external_datasource_load_from_conf(std::map<std::string, std::string>& configs, std::vector<std::string>& topics, std::vector<int>& partitions) {
-  return new kafka_datasource(configs, topics, partitions);
+extern "C" external_datasource* libcudf_external_datasource_load_from_conf(std::map<std::string, std::string>& configs) {
+  return new kafka_datasource(configs);
 }
 
 extern "C" void libcudf_external_datasource_destroy(external_datasource* eds) {
