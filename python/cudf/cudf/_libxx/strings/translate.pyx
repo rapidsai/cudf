@@ -9,7 +9,6 @@ from cudf._libxx.cpp.strings.translate cimport (
     translate as cpp_translate
 )
 from cudf._libxx.column cimport Column
-from collections import OrderedDict
 from libcpp.vector cimport vector
 from libcpp.pair cimport pair
 from cudf._libxx.cpp.types cimport char_utf8
@@ -23,8 +22,11 @@ def translate(Column source_strings,
     """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
+    cdef int table_size
+    table_size = len(mapping_table)
 
-    mapping_table_dict = OrderedDict()
+    cdef vector[pair[char_utf8, char_utf8]] c_mapping_table
+    c_mapping_table.reserve(table_size)
 
     for key in mapping_table:
         value = mapping_table[key]
@@ -32,10 +34,7 @@ def translate(Column source_strings,
             value = ord(value)
         if type(key) is str:
             key = ord(key)
-        mapping_table_dict[(key, value)] = None
-
-    cdef vector[pair[char_utf8, char_utf8]] c_mapping_table
-    c_mapping_table = list(mapping_table_dict.keys())
+        c_mapping_table.push_back((key, value))
 
     with nogil:
         c_result = move(cpp_translate(source_view, c_mapping_table))
