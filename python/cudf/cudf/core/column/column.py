@@ -327,17 +327,15 @@ class ColumnBase(Column):
         """
         return self.to_gpu_array(fillna=fillna).copy_to_host()
 
-    def _fill(self, fill_value, begin, end, inplace=False):
-        begin = 0 if begin is None else begin
-        end = self.size if end is None else end
+    def _fill(self, fill_value, begin=0, end=-1, inplace=False):
+
+        if begin < 0:
+            begin += self.size
 
         if end < 0:
-            end = self.size + end
+            end += self.size
 
-        assert end <= self.size
-        assert begin <= end
-
-        if begin == end or begin == self.size:
+        if begin < 0 or end <= begin or begin >= self.size:
             return self if inplace else self.copy()
 
         fill_scalar = Scalar(fill_value, self.dtype)

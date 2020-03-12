@@ -12,7 +12,22 @@ import cudf
         (0.8, [0.6, 0.3, 0.4, 0.2, 0.1, 0.7, 0.8, 0.5]),
     ],
 )
-@pytest.mark.parametrize("begin,end", [(0, -1), (0, 4), (1, -1), (1, 4)])
+@pytest.mark.parametrize(
+    "begin,end",
+    [
+        (0, -1),
+        (0, 4),
+        (1, -1),
+        (1, 4),
+        (-2, 1),
+        (-2, -1),
+        (10, 12),
+        (8, 10),
+        (10, 8),
+        (-10, -8),
+        (-2, 6),
+    ],
+)
 @pytest.mark.parametrize("inplace", [True, False])
 def test_fill(data, fill_value, begin, end, inplace):
     gs = cudf.Series(data)
