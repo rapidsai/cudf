@@ -810,6 +810,41 @@ void writer::write_chunked_end(pq_chunked_state &state){
   _impl->write_chunked_end(state);
 }
 
+std::vector<uint8_t> writer::merge_rowgroup_metadata(std::vector<const std::vector<uint8_t>*> metadata_list)
+{
+  std::vector<uint8_t> output;
+  CompactProtocolWriter cpw(&output);
+  FileMetaData md;
+
+  if (metadata_list.size() != 0) {
+    for (auto& pmd : metadata_list) {
+      CompactProtocolReader cpreader(pmd->data(), pmd->size());
+      if (md.num_rows == 0) {
+        cpreader.read(&md);
+      }
+      else {
+        FileMetaData tmp;
+        cpreader.read(&tmp);
+        md.row_groups.insert(md.row_groups.end(),
+                             std::make_move_iterator(tmp.row_groups.begin()),
+                             std::make_move_iterator(tmp.row_groups.end()));
+        md.num_rows += tmp.num_rows;
+      }
+    }
+  }
+  // Thrift-encode the resulting output
+  file_header_s fhdr;
+  file_ender_s fendr;
+  fhdr.magic = PARQUET_MAGIC;
+  output.insert(output.end(), reinterpret_cast<const uint8_t *>(&fhdr),
+                              reinterpret_cast<const uint8_t *>(&fhdr) + sizeof(fhdr));
+  fendr.footer_len = (uint32_t)cpw.write(&md);
+  fendr.magic = PARQUET_MAGIC;
+  output.insert(output.end(), reinterpret_cast<const uint8_t *>(&fendr),
+                              reinterpret_cast<const uint8_t *>(&fendr) + sizeof(fendr));
+  return output;
+}
+
 }  // namespace parquet
 }  // namespace detail
 }  // namespace io

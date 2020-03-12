@@ -248,6 +248,14 @@ class writer {
    * @param[in] pq_chunked_state State information that crosses _begin() / write_chunked() / _end() boundaries.   
    */
   void write_chunked_end(struct pq_chunked_state& state);    
+
+  /**
+   * @brief Merges multiple metadata blobs returned by write_all into a single metadata blob
+   *
+   * @param[in] metadata_list List of input file metadata
+   * @return A parquet-compatible blob that contains the data for all rowgroups in the list
+   */
+  static std::vector<uint8_t> merge_rowgroup_metadata(std::vector<const std::vector<uint8_t>*> metadata_list);
 };
 
 }  // namespace parquet

@@ -211,12 +211,12 @@ void write_orc_chunked_end(std::shared_ptr<orc::orc_chunked_state>& state){
   state.reset();
 }
 
+using namespace cudf::experimental::io::detail::parquet;
+namespace parquet = cudf::experimental::io::detail::parquet;
 
 // Freeform API wraps the detail reader class API
 table_with_metadata read_parquet(read_parquet_args const& args,
                                     rmm::mr::device_memory_resource* mr) {
-  namespace parquet = cudf::experimental::io::detail::parquet;
-
   parquet::reader_options options{args.columns, args.strings_to_categorical,
                                   args.use_pandas_metadata,
                                   args.timestamp_type};
@@ -234,16 +234,20 @@ table_with_metadata read_parquet(read_parquet_args const& args,
 // Freeform API wraps the detail writer class API
 void write_parquet(write_parquet_args const& args,
                rmm::mr::device_memory_resource* mr) {
-  namespace parquet = cudf::experimental::io::detail::parquet;
-
   parquet::writer_options options{args.compression, args.stats_level};
   auto writer = make_writer<parquet::writer>(args.sink, options, mr);
 
   writer->write_all(args.table, args.metadata);
 }
 
-using namespace cudf::experimental::io::detail::parquet;
-namespace parquet = cudf::experimental::io::detail::parquet;
+/**
+ * @copydoc cudf::experimental::io::merge_rowgroup_metadata
+ *
+ **/
+std::vector<uint8_t> merge_rowgroup_metadata(std::vector<const std::vector<uint8_t>*> metadata_list)
+{
+  return parquet::writer::merge_rowgroup_metadata(metadata_list);
+}
 
 /**
  * @copydoc cudf::experimental::io::write_parquet_chunked_begin
