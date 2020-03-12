@@ -1786,6 +1786,23 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     }
   }
 
+  /**
+   * Checks if each string in a column contains a specified comparison string, resulting in a
+   * parallel column of the boolean results.
+   * @param compString scalar containing the string being searched for.
+   * @return A new java column vector containing the boolean results.
+   */
+
+  public ColumnVector stringContains(Scalar compString) {
+    assert type == DType.STRING : "column type must be a String";
+    assert compString != null : "compString scalar may not be null";
+    assert compString.getType() == DType.STRING : "compString scalar must be a string scalar";
+    assert compString.isValid() : "compString string scalar may not contain a null value";
+    assert !compString.getJavaString().isEmpty() : "compString string scalar may not be empty";
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.BOOL8), "stringContains")) {
+      return new ColumnVector(stringContains(getNativeView(), compString.getScalarHandle()));
+    }
+  }
 
   /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS
@@ -1900,6 +1917,14 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return native handle of the resulting cudf column containing the boolean results.
    */
   private static native long stringEndWith(long cudfViewHandle, long compString) throws CudfException;
+
+  /**
+   * Native method for checking if strings in a column contains a specified comparison string.
+   * @param cudfViewHandle native handle of the cudf::column_view being operated on.
+   * @param compString handle of scalar containing the string being searched for.
+   * @return native handle of the resulting cudf column containing the boolean results.
+   */
+  private static native long stringContains(long cudfViewHandle, long compString) throws CudfException;
 
   /**
    * Native method to concatenate columns of strings together, combining a row from
