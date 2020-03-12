@@ -618,7 +618,6 @@ class Frame(libcudfxx.table.Table):
         (lhs, rhs, to_categorical) = self._typecast_before_merge(
             lhs, rhs, left_on, right_on, left_index, right_index, how
         )
-
         gdf_result = libcudfxx.join.join(
             lhs,
             rhs,
@@ -674,7 +673,7 @@ class Frame(libcudfxx.table.Table):
             to_sort = self.__class__()
 
             if left_index and right_index:
-                by = list(to_return._index.column)
+                by = list(to_return._index._data.columns)
                 if left_on and right_on:
                     by += list(to_return[left_on]._data.columns)
             elif left_index:
