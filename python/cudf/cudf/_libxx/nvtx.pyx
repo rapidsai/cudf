@@ -2,7 +2,7 @@
 
 from enum import IntEnum
 from libcpp.string cimport string
-from cudf._libxx.cpp.nvtx cimport (
+from cudf._libxx.cpp.utilities.nvtx_utils cimport (
     range_push as cpp_range_push,
     range_push_hex as cpp_range_push_hex,
     range_pop as cpp_range_pop,
