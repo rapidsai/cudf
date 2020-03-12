@@ -810,26 +810,25 @@ void writer::write_chunked_end(pq_chunked_state &state){
   _impl->write_chunked_end(state);
 }
 
-std::vector<uint8_t> writer::merge_rowgroup_metadata(std::vector<const std::vector<uint8_t>*> metadata_list)
+std::vector<uint8_t> writer::merge_rowgroup_metadata(const std::vector<const std::vector<uint8_t>*>& metadata_list)
 {
   std::vector<uint8_t> output;
   CompactProtocolWriter cpw(&output);
   FileMetaData md;
 
-  if (metadata_list.size() != 0) {
-    for (auto& pmd : metadata_list) {
-      CompactProtocolReader cpreader(pmd->data(), pmd->size());
-      if (md.num_rows == 0) {
-        cpreader.read(&md);
-      }
-      else {
-        FileMetaData tmp;
-        cpreader.read(&tmp);
-        md.row_groups.insert(md.row_groups.end(),
-                             std::make_move_iterator(tmp.row_groups.begin()),
-                             std::make_move_iterator(tmp.row_groups.end()));
-        md.num_rows += tmp.num_rows;
-      }
+  md.row_groups.reserve(metadata_list.size());
+  for (auto& pmd : metadata_list) {
+    CompactProtocolReader cpreader(pmd->data(), pmd->size());
+    if (md.num_rows == 0) {
+      cpreader.read(&md);
+    }
+    else {
+      FileMetaData tmp;
+      cpreader.read(&tmp);
+      md.row_groups.insert(md.row_groups.end(),
+                           std::make_move_iterator(tmp.row_groups.begin()),
+                           std::make_move_iterator(tmp.row_groups.end()));
+      md.num_rows += tmp.num_rows;
     }
   }
   // Thrift-encode the resulting output
