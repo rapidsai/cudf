@@ -13,6 +13,10 @@ from cudf._libxx.column cimport Column
 
 
 def count_characters(Column source_strings):
+    """
+    Returns an integer numeric column containing the
+    length of each string in characters.
+    """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
@@ -23,6 +27,10 @@ def count_characters(Column source_strings):
 
 
 def code_points(Column source_strings):
+    """
+    Creates a numeric column with code point values (integers)
+    for each character of each string.
+    """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 

@@ -15,17 +15,22 @@ from libcpp.pair cimport pair
 from cudf._libxx.cpp.types cimport char_utf8
 
 
-def translate(Column source_strings, mapping_table):
+def translate(Column source_strings,
+              object mapping_table):
+    """
+    Translates individual characters within each string
+    mapping present in the mapping_table.
+    """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    columns_in_common = OrderedDict()
+    mapping_table_dict = OrderedDict()
 
     for key in mapping_table:
-        columns_in_common[(key, mapping_table[key])] = None
+        mapping_table_dict[(key, mapping_table[key])] = None
 
     cdef vector[pair[char_utf8, char_utf8]] c_mapping_table
-    c_mapping_table = list(columns_in_common.keys())
+    c_mapping_table = list(mapping_table_dict.keys())
 
     with nogil:
         c_result = move(cpp_translate(source_view, c_mapping_table))

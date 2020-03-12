@@ -3,15 +3,8 @@
 from libcpp.memory cimport unique_ptr
 from cudf._libxx.move cimport move
 from cudf._libxx.cpp.column.column_view cimport column_view
-from cudf._libxx.cpp.scalar.scalar cimport string_scalar
-from cudf._libxx.cpp.types cimport size_type
 from cudf._libxx.column cimport Column
-
-
 from cudf._libxx.cpp.column.column cimport column
-
-from cudf._libxx.scalar cimport Scalar
-from libcpp.string cimport string
 
 from cudf._libxx.cpp.strings.convert.convert_urls cimport (
     url_encode as cpp_url_encode,

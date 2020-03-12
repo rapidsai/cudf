@@ -1774,17 +1774,66 @@ class StringMethods(object):
         )
 
     def url_decode(self, **kwargs):
+        """
+        Returns a URL-decoded format of each string.
+        No format checking is performed. All characters
+        are expected to be encoded as UTF-8 hex values.
+
+        Returns
+        -------
+        Series or Index.
+
+        """
+
         return self._return_or_inplace(cpp_url_decode(self._column), **kwargs)
 
     def url_encode(self, **kwargs):
+        """
+        Returns a URL-encoded format of each string.
+        No format checking is performed.
+        All characters are encoded except for ASCII letters,
+        digits, and these characters: ‘.’,’_’,’-‘,’~’.
+        Encoding converts to hex using UTF-8 encoded bytes.
+
+        Returns
+        -------
+        Series or Index.
+
+        """
         return self._return_or_inplace(cpp_url_encode(self._column), **kwargs)
 
     def code_points(self, **kwargs):
+        """
+        Returns an array by filling it with the UTF-8 code point
+        values for each character of each string.
+        This function uses the len() method to determine
+        the size of each sub-array of integers.
+
+        Returns
+        -------
+        Series or Index.
+        """
         from cudf.core.series import Series
 
         return Series(cpp_code_points(self._column),)
 
     def translate(self, table, **kwargs):
+        """
+        Map all characters in the string through the given
+        mapping table.
+
+        Parameters
+        ----------
+        table : dict
+            Table is a mapping of Unicode ordinals to Unicode
+            ordinals, strings, or None.
+            Unmapped characters are left untouched.
+            str.maketrans() is a helper function for making translation tables.
+
+        Returns
+        -------
+        Series or Index.
+        """
         return self._return_or_inplace(
             cpp_translate(self._column, table), **kwargs
         )
