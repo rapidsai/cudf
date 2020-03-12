@@ -45,7 +45,7 @@ public enum BinaryOp {
   //NOT IMPLEMENTED YET GENERIC_BINARY(21);
   SHIFT_LEFT(22), // bitwise shift left (<<)
   SHIFT_RIGHT(23), // bitwise shift right (>>)
-  SHIFT_RIGHT_UNSINGED(24); // bitwise shift right (>>>)
+  SHIFT_RIGHT_UNSIGNED(24); // bitwise shift right (>>>)
 
 
   static final EnumSet<BinaryOp> COMPARISON = EnumSet.of(
