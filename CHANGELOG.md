@@ -167,6 +167,7 @@
 - PR #4407 Enable `.str.slice` & `.str.get` and `.str.zfill` unit-tests
 - PR #4412 Require Dask + Distributed 2.12.0+
 - PR #4377 Support loading avro files that contain nested arrays
+- PR #4436 Enable `.str.cat` and fix `.str.split` on python side
 - PR #4405 Port nvstrings (Sub)string Comparisons functions to cuDF Python/Cython
 
 ## Bug Fixes
