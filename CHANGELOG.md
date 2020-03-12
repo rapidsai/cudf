@@ -13,6 +13,7 @@
 
 ## New Features
 
+- PR #4360 Added Java bindings for bitwise shift operators
 - PR #3577 Add initial dictionary support to column classes
 - PR #3917 Add dictionary add_keys function
 - PR #3777 Add support for dictionary column in gather
@@ -173,6 +174,7 @@
 - PR #4405 Port nvstrings (Sub)string Comparisons functions to cuDF Python/Cython
 - PR #4316 Add Java and JNI bindings for substring expression
 - PR #4314 Add Java and JNI bindings for string contains
+- PR #4461 Port nvstrings Miscellaneous functions to cuDF Python/Cython
 
 ## Bug Fixes
 
@@ -258,6 +260,9 @@
 - PR #4445 Fix string issue for parquet reader and support `keep_index` for `scatter_to_tables`
 - PR #4423 Tighten up Dask serialization checks
 - PR #4434 Fix join_strings logic with all-null strings and non-null narep
+- PR #4465 Fix use_pandas_index having no effect in libcudf++ parquet reader
+- PR #4464 Update Cmake to always link in libnvToolsExt
+- PR #4467 Fix dropna issue for a DataFrame having np.nan
 
 
 # cuDF 0.12.0 (04 Feb 2020)
