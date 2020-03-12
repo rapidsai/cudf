@@ -486,7 +486,6 @@ class RangeIndex(Index):
         self._cached_values = None
         self._index = None
         self._name = name
-        self._num_columns = 1
 
     @property
     def name(self):
@@ -498,7 +497,7 @@ class RangeIndex(Index):
 
     @property
     def _num_columns(self):
-        return self._num_columns
+        return 1
 
     @cached_property
     def _values(self):
