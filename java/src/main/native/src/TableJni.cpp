@@ -18,7 +18,7 @@
 #include <cudf/hashing.hpp>
 #include <cudf/io/functions.hpp>
 #include <cudf/join.hpp>
-#include <cudf/round_robin.hpp>
+#include <cudf/partitioning.hpp>
 #include <cudf/search.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/stream_compaction.hpp>
