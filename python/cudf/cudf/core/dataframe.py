@@ -2336,7 +2336,7 @@ class DataFrame(Frame):
             how,
             method,
         )
-
+        libcudfxx.nvtx.range_pop()
         return gdf_result
 
     def join(
@@ -2375,7 +2375,7 @@ class DataFrame(Frame):
         - *on* is not supported yet due to lack of multi-index support.
         """
 
-        libcudfxx.nvtx.range_push("CUDF_JOIN", "BLUE")
+        libcudfxx.nvtx.range_push("CUDF_JOIN", "blue")
 
         # Outer joins still use the old implementation
         if type != "":
@@ -2510,7 +2510,7 @@ class DataFrame(Frame):
             df.index.names = index_frame_l.columns
             for new_key, old_key in zip(index_frame_l.columns, idx_col_names):
                 df.index._data[new_key] = df.index._data.pop(old_key)
-
+        libcudfxx.nvtx.range_pop()
         return df
 
     def groupby(
@@ -2576,7 +2576,7 @@ class DataFrame(Frame):
 
             # The corresponding pop() is in
             # DataFrameGroupBy._apply_aggregation()
-            libcudfxx.nvtx.range_push("CUDF_GROUPBY", "PURPLE")
+            libcudfxx.nvtx.range_push("CUDF_GROUPBY", "purple")
 
             result = DataFrameGroupBy(
                 self,
@@ -2674,7 +2674,7 @@ class DataFrame(Frame):
                 )
             )
 
-        libcudfxx.nvtx.range_push("CUDF_QUERY", "PURPLE")
+        libcudfxx.nvtx.range_push("CUDF_QUERY", "purple")
         # Get calling environment
         callframe = inspect.currentframe().f_back
         callenv = {

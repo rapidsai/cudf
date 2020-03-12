@@ -9,7 +9,7 @@ from cudf._libxx.cpp.nvtx cimport (
     color as color_types
 )
 
-cimport cudf._libxx.cpp.utilities.nvtx_utils as underlying_type_t_color
+from cudf._libxx.cpp.utilities.nvtx_utils cimport underlying_type_t_color
 
 
 class Color(IntEnum):
