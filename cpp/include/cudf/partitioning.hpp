@@ -40,6 +40,9 @@ namespace experimental {
  * appear in `partition_map`, partition `j` will be empty, i.e.,
  * `offsets[j+1] - offsets[j] == 0`.
  *
+ * Values in `partition_map` must be in the range `[0, num_partitions)`,
+ * otherwise behavior is undefined.
+ *
  * @throw cudf::logic_error when `partition_map` is a non-integer type
  * @throw cudf::logic_error when `partition_map.has_nulls() == true`
  * @throw cudf::logic_error when `partition_map.size() != t.num_rows()`
