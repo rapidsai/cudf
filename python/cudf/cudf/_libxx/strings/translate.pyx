@@ -30,6 +30,8 @@ def translate(Column source_strings,
         value = mapping_table[key]
         if type(value) is str:
             value = ord(value)
+        if type(key) is str:
+            key = ord(key)
         mapping_table_dict[(key, value)] = None
 
     cdef vector[pair[char_utf8, char_utf8]] c_mapping_table
