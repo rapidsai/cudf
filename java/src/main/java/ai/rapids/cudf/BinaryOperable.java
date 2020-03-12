@@ -419,7 +419,7 @@ public interface BinaryOperable {
    *    with this[i] >>> shiftBy
    */
   default ColumnVector shiftRightUnsigned(BinaryOperable shiftBy, DType outType) {
-    return binaryOp(BinaryOp.SHIFT_RIGHT_UNSINGED, shiftBy, outType);
+    return binaryOp(BinaryOp.SHIFT_RIGHT_UNSIGNED, shiftBy, outType);
   }
 
   /**
