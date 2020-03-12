@@ -251,6 +251,7 @@
 - PR #4465 Fix use_pandas_index having no effect in libcudf++ parquet reader
 - PR #4464 Update Cmake to always link in libnvToolsExt
 - PR #4467 Fix dropna issue for a DataFrame having np.nan
+- PR #4480 Fix string_scalar.value to return an empty string_view for empty string-scalar
 
 
 # cuDF 0.12.0 (04 Feb 2020)
