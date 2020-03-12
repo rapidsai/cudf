@@ -162,7 +162,8 @@ cpdef write_parquet(
         path,
         index=None,
         compression=None,
-        statistics="ROWGROUP"):
+        statistics="ROWGROUP",
+        metadata_file_path=None):
     """
     Cython function to call into libcudf API, see `write_parquet`.
 
@@ -223,6 +224,8 @@ cpdef write_parquet(
         raise ValueError("Unsupported `statistics_freq` type")
 
     cdef write_parquet_args args
+    cdef vector[uint8_t] out_metadata_c
+    cdef bytes out_metadata_py
 
     # Perform write
     with nogil:
@@ -231,4 +234,14 @@ cpdef write_parquet(
                                   tbl_meta.get(),
                                   comp_type,
                                   stat_freq)
+
+    if metadata_file_path is not None:
+        args.metadata_out_file_path = str.encode(metadata_file_path)
+        args.raw_metadata_out = &out_metadata_c
+
+    with nogil:
         parquet_writer(args)
+
+    if metadata_file_path is not None:
+        out_metadata_py = out_metadata_c.data()[:len(out_metadata_c)]
+        return out_metadata_py

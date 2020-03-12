@@ -72,6 +72,7 @@ def to_parquet(
     index=None,
     partition_cols=None,
     statistics="ROWGROUP",
+    metadata_file_path=None,
     *args,
     **kwargs,
 ):
@@ -93,7 +94,12 @@ def to_parquet(
                 )
 
         return libparquet.write_parquet(
-            df, path, index, compression=compression, statistics=statistics
+            df,
+            path,
+            index,
+            compression=compression,
+            statistics=statistics,
+            metadata_file_path=metadata_file_path,
         )
     else:
 
