@@ -1,4 +1,5 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
+
 from libc.stdint cimport uint32_t
 
 cdef extern from "cudf/utilities/nvtx_utils.hpp" namespace "cudf::nvtx" nogil:
