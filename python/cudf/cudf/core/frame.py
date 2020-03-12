@@ -219,7 +219,7 @@ class Frame(libcudfxx.table.Table):
 
         libcudf.nvtx.nvtx_range_pop()
 
-        return out[list(names)]
+        return out
 
     def _get_columns_by_label(self, labels, downcast=False):
         """
