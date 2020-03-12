@@ -239,6 +239,7 @@
 - PR #4406 Fix sorted merge issue with null values and ascending=False
 - PR #4423 Tighten up Dask serialization checks
 - PR #4434 Fix join_strings logic with all-null strings and non-null narep
+- PR #4467 Fix dropna issue for a DataFrame having np.nan
 
 
 # cuDF 0.12.0 (04 Feb 2020)
