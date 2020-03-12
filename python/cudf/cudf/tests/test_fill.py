@@ -40,7 +40,16 @@ def test_fill(data, fill_value, begin, end, inplace):
         actual = gs
         gs[begin:end] = fill_value
     else:
-        actual = gs._fill([fill_value], begin, end, inplace)
+        # private impl doesn't take care of rounding or bounds check
+        if begin < 0:
+            begin += len(gs)
+
+        if end < 0:
+            end += len(gs)
+
+        begin = max(0, min(len(gs), begin))
+        end = max(0, min(len(gs), end))
+        actual = gs._fill([fill_value], begin, end, False)
         assert actual is not gs
 
     ps[begin:end] = fill_value

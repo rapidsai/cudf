@@ -21,6 +21,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/unary.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 namespace cudf {
 namespace experimental {
@@ -102,12 +103,14 @@ std::unique_ptr<column> is_not_nan(cudf::column_view const& input,
 std::unique_ptr<column> is_nan(cudf::column_view const& input,
                                rmm::mr::device_memory_resource* mr) {
 
+    CUDF_FUNC_RANGE();
     return detail::is_nan(input, mr);
 }
 
 std::unique_ptr<column> is_not_nan(cudf::column_view const& input,
                                  rmm::mr::device_memory_resource* mr) {
 
+    CUDF_FUNC_RANGE();
     return detail::is_not_nan(input, mr);
 }
 

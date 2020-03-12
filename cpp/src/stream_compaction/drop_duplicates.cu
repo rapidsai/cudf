@@ -27,6 +27,8 @@
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/gather.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
+
 #include <thrust/logical.h>
 #include <thrust/functional.h>
 #include <thrust/execution_policy.h>
@@ -265,16 +267,16 @@ std::unique_ptr<experimental::table>
                   duplicate_keep_option const& keep,
                   bool const& nulls_are_equal,
                   rmm::mr::device_memory_resource* mr) {
-
-    return detail::drop_duplicates(input, keys, keep, nulls_are_equal, mr);
+  CUDF_FUNC_RANGE();
+  return detail::drop_duplicates(input, keys, keep, nulls_are_equal, mr);
 }
 
 cudf::size_type unique_count(column_view const& input,
                              bool const& ignore_nulls,
                              bool const& nan_as_null,
                              rmm::mr::device_memory_resource *mr) {
-
-    return detail::unique_count(input, ignore_nulls, nan_as_null);
+  CUDF_FUNC_RANGE();
+  return detail::unique_count(input, ignore_nulls, nan_as_null);
 }
 
 }// namespace experimental
