@@ -539,7 +539,8 @@ class ColumnBase(Column):
         from cudf.core import column
 
         if isinstance(key, slice):
-            if key.step:
+
+            if key.step and key.step != 1:
                 raise NotImplementedError("Stride not supported in slice")
 
             if is_scalar(value):
