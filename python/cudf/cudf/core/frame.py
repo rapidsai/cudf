@@ -54,9 +54,9 @@ class Frame(libcudfxx.table.Table):
 
         # Create a dictionary of the common, non-null columns
         def get_non_null_cols_and_dtypes(col_idxs, list_of_columns):
-            # A mapping of { [idx]: np.dtype }
+            # A mapping of {idx: np.dtype}
             dtypes = dict()
-            # A mapping of { [idx]: [...columns] }, where `[...columns]`
+            # A mapping of {idx: [...columns]}, where `[...columns]`
             # is a list of columns with at least one valid value for each
             # column name across all input dataframes
             non_null_columns = dict()
@@ -79,7 +79,7 @@ class Frame(libcudfxx.table.Table):
             return non_null_columns, dtypes
 
         def find_common_dtypes_and_categories(non_null_columns, dtypes):
-            # A mapping of { [idx]: categories }, where `categories` is a
+            # A mapping of {idx: categories}, where `categories` is a
             # column of all the unique categorical values from each
             # categorical column across all input dataframes
             categories = dict()
@@ -143,7 +143,9 @@ class Frame(libcudfxx.table.Table):
                     cols[name] = build_categorical_column(
                         categories=categories[idx],
                         codes=cols[name],
-                        mask=cols[name].mask,
+                        mask=cols[name].base_mask,
+                        offset=cols[name].offset,
+                        size=cols[name].size
                     )
 
         # Get a list of the unique table column names
@@ -211,13 +213,9 @@ class Frame(libcudfxx.table.Table):
         if isinstance(objs[0].columns, pd.MultiIndex):
             out.columns = objs[0].columns
         else:
-            if first_data_column_position <= 1:
-                # If only one index column, reassign its name
-                out._index.name = objs[0]._index.name
-            else:
-                # If more than one index column, reassign MultiIndex names
-                out._index.names = objs[0]._index.names
             out.columns = names
+            out._index.name = objs[0]._index.name
+            out._index.names = objs[0]._index.names
 
         # TODO (ptaylor):
         # libcudf.nvtx.nvtx_range_pop()
