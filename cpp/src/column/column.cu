@@ -23,6 +23,8 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/strings/copying.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
+
 
 #include <rmm/device_buffer.hpp>
 
@@ -128,6 +130,7 @@ mutable_column_view column::mutable_view() {
 
 // If the null count is known, return it. Else, compute and return it
 size_type column::null_count() const {
+  CUDF_FUNC_RANGE();
   if (_null_count <= cudf::UNKNOWN_NULL_COUNT) {
     _null_count = cudf::count_unset_bits(
         static_cast<bitmask_type const *>(_null_mask.data()), 0, size());
@@ -165,6 +168,7 @@ void column::set_null_count(size_type new_null_count) {
   }
   _null_count = new_null_count;
 }
+namespace{
 
 struct create_column_from_view {
   cudf::column_view view;
@@ -181,7 +185,12 @@ struct create_column_from_view {
  template <typename ColumnType,
            std::enable_if_t<std::is_same<ColumnType, cudf::dictionary32>::value>* = nullptr>
  std::unique_ptr<column> operator()() {
-   CUDF_FAIL("dictionary not supported yet");
+   std::vector<std::unique_ptr<column>> children;
+   for (size_type i = 0; i < view.num_children(); ++i)
+     children.emplace_back(std::make_unique<column>(view.child(i), stream, mr));
+   return std::make_unique<column>(view.type(), view.size(), rmm::device_buffer{},
+                                   cudf::copy_bitmask(view, stream, mr),
+                                   view.null_count(), std::move(children));
  }
  
  template <typename ColumnType,

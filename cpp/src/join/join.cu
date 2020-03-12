@@ -21,6 +21,7 @@
 #include <cudf/concatenate.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/gather.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 #include <join/join_common_utils.hpp>
 #include <join/hash_join.cuh>
@@ -475,6 +476,7 @@ std::unique_ptr<experimental::table> inner_join(
                              std::vector<size_type> const& right_on,
                              std::vector<std::pair<size_type, size_type>> const& columns_in_common,
                              rmm::mr::device_memory_resource* mr) {
+    CUDF_FUNC_RANGE();
     return detail::join_call_compute_df<::cudf::experimental::detail::join_kind::INNER_JOIN>(
         left,
         right,
@@ -491,6 +493,7 @@ std::unique_ptr<experimental::table> left_join(
                              std::vector<size_type> const& right_on,
                              std::vector<std::pair<size_type, size_type>> const& columns_in_common,
                              rmm::mr::device_memory_resource* mr) {
+    CUDF_FUNC_RANGE();
     return detail::join_call_compute_df<::cudf::experimental::detail::join_kind::LEFT_JOIN>(
            left,
            right,
@@ -507,6 +510,7 @@ std::unique_ptr<experimental::table> full_join(
                              std::vector<size_type> const& right_on,
                              std::vector<std::pair<size_type, size_type>> const& columns_in_common,
                          rmm::mr::device_memory_resource* mr) {
+    CUDF_FUNC_RANGE();
     return detail::join_call_compute_df<::cudf::experimental::detail::join_kind::FULL_JOIN>(
            left,
            right,

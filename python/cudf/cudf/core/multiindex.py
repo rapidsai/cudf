@@ -5,13 +5,13 @@ import pickle
 import warnings
 from collections.abc import Sequence
 
+import cupy
 import numpy as np
 import pandas as pd
 
 import cudf
 from cudf.core.column import column
 from cudf.core.index import Index, as_index
-from cudf.utils import cudautils
 
 
 class MultiIndex(Index):
@@ -253,7 +253,6 @@ class MultiIndex(Index):
         from cudf import DataFrame
         from cudf import Series
         from cudf import concat
-        from cudf.utils.cudautils import arange
 
         lookup = DataFrame()
         for idx, row in enumerate(row_tuple):
@@ -263,7 +262,9 @@ class MultiIndex(Index):
         data_table = concat(
             [
                 index._source_data,
-                DataFrame({"idx": Series(arange(len(index._source_data)))}),
+                DataFrame(
+                    {"idx": Series(cupy.arange(len(index._source_data)))}
+                ),
             ],
             axis=1,
         )
@@ -279,7 +280,6 @@ class MultiIndex(Index):
         return result
 
     def _get_valid_indices_by_tuple(self, index, row_tuple, max_length):
-        from cudf.utils.cudautils import arange
         from cudf import Series
 
         # Instructions for Slicing
@@ -296,14 +296,16 @@ class MultiIndex(Index):
             ):
                 stop = row_tuple.stop or max_length
                 start, stop, step = row_tuple.indices(stop)
-                return arange(start, stop, step)
+                return cupy.arange(start, stop, step)
             start_values = self._compute_validity_mask(
                 index, row_tuple.start, max_length
             )
             stop_values = self._compute_validity_mask(
                 index, row_tuple.stop, max_length
             )
-            return Series(arange(start_values.min(), stop_values.max() + 1))
+            return Series(
+                cupy.arange(start_values.min(), stop_values.max() + 1)
+            )
         elif isinstance(row_tuple, numbers.Number):
             return row_tuple
         return self._compute_validity_mask(index, row_tuple, max_length)
@@ -449,7 +451,7 @@ class MultiIndex(Index):
             indices = indices
         elif isinstance(indices, slice):
             start, stop, step = indices.indices(len(self))
-            indices = cudautils.arange(start, stop, step)
+            indices = cupy.arange(start, stop, step)
         result = MultiIndex(source_data=self._source_data.take(indices))
         if self._codes is not None:
             result._codes = self._codes.take(indices)
@@ -547,9 +549,7 @@ class MultiIndex(Index):
             level = DataFrame(
                 {
                     "idx": Series(
-                        cudautils.arange(
-                            len(self.levels[idx]), dtype=df[col].dtype
-                        )
+                        cupy.arange(len(self.levels[idx]), dtype=df[col].dtype)
                     ),
                     "level": self.levels[idx],
                 }
