@@ -1813,9 +1813,15 @@ class StringMethods(object):
         -------
         Series or Index.
         """
-        from cudf.core.series import Series
+        from cudf.core.series import Series, Index
 
-        return Series(cpp_code_points(self._column),)
+        new_col = cpp_code_points(self._column)
+        if self._parent is None:
+            return new_col
+        elif isinstance(self._parent, Series):
+            return Series(new_col, name=self._parent.name)
+        elif isinstance(self._parent, Index):
+            return column.as_index(new_col, name=self._parent.index.name)
 
     def translate(self, table, **kwargs):
         """
