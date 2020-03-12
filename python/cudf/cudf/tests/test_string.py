@@ -1527,6 +1527,17 @@ def test_string_replace_with_backrefs(find, replace):
     assert_eq(got, expected)
 
 
+def test_string_table_view_creation():
+    data = ["hi"] * 25 + [None] * 2027
+    psr = pd.Series(data)
+    gsr = Series.from_pandas(psr)
+
+    expect = psr[:1]
+    got = gsr[:1]
+
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize(
     "data",
     [
