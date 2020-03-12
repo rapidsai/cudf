@@ -238,6 +238,32 @@ table_with_metadata read_csv(
     read_csv_args const& args,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+
+/**
+ * @brief Settings to use for `write_csv()`
+ */
+struct write_csv_args; //<- TODO
+
+/**
+ * @brief Writes a set of columns to CSV format
+ *
+ * The following code snippet demonstrates how to write columns to a file:
+ * @code
+ *  #include <cudf.h>
+ *  ...
+ *  std::string filepath = "dataset.csv";
+ *  cudf::write_orc_args args{cudf::sink_info(filepath), table->view()};
+ *  ...
+ *  cudf::write_csv(args);
+ * @endcode
+ *
+ * @param args Settings for controlling writing behavior
+ * @param mr Optional resource to use for device memory allocation
+ */
+void write_csv(write_csv_args const& args, rmm::mr::device_memory_resource* mr =
+                                               rmm::mr::get_default_resource());
+  
+
 /**
  * @brief Settings to use for `read_orc()`
  */
