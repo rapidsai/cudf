@@ -577,7 +577,13 @@ class Frame(libcudfxx.table.Table):
                     ordered=other_col.ordered,
                 )
         if include_index:
-            if self._index is not None:
+            from cudf.core.index import RangeIndex
+
+            # include_index will still behave as False
+            # incase of self._index being a RangeIndex
+            if (self._index is not None) and (
+                not isinstance(self._index, RangeIndex)
+            ):
                 self._index._copy_categories(other._index)
         return self
 
