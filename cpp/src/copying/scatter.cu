@@ -27,12 +27,12 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/detail/scatter.cuh>
 #include <cudf/strings/string_view.cuh>
-#include "thrust/iterator/counting_iterator.h"
+#include <cudf/detail/fill.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/sequence.h>
 #include <numeric>
-
-#include <thrust/iterator/discard_iterator.h>
 
 namespace cudf {
 namespace experimental {
@@ -46,7 +46,7 @@ struct dispatch_map_type {
     std::unique_ptr<table> operator()(
       table_view const& source, column_view const& scatter_map,
       table_view const& target, bool check_bounds,
-      rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+      rmm::mr::device_memory_resource* mr, cudaStream_t stream) const
   {
 
     return detail::scatter<map_type>(source,
@@ -60,7 +60,7 @@ struct dispatch_map_type {
   std::unique_ptr<table> operator()(
       table_view const& source, column_view const& scatter_map,
       table_view const& target, bool check_bounds,
-      rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+      rmm::mr::device_memory_resource* mr, cudaStream_t stream) const
   {
     CUDF_FAIL("Scatter map column must be an integral, non-boolean type");
   }
@@ -118,32 +118,35 @@ void scatter_scalar_bitmask(std::vector<std::unique_ptr<scalar>> const& source,
   }
 }
 
-template <typename MapIterator>
-struct column_scalar_scatterer {
-  template <typename T, std::enable_if_t<is_fixed_width<T>()>* = nullptr>
+template <typename Element, typename MapIterator>
+struct column_scalar_scatterer_impl 
+{
   std::unique_ptr<column> operator()(std::unique_ptr<scalar> const& source,
       MapIterator scatter_iter, size_type scatter_rows, column_view const& target,
-      rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+      rmm::mr::device_memory_resource* mr, cudaStream_t stream) const
   {
     auto result = std::make_unique<column>(target, stream, mr);
     auto result_view = result->mutable_view();
 
     // Use permutation iterator with constant index to dereference scalar data
-    auto scalar_impl = static_cast<scalar_type_t<T>*>(source.get());
+    auto scalar_impl = static_cast<scalar_type_t<Element>*>(source.get());
     auto scalar_iter = thrust::make_permutation_iterator(
       scalar_impl->data(), thrust::make_constant_iterator(0));
 
     thrust::scatter(rmm::exec_policy(stream)->on(stream), scalar_iter,
       scalar_iter + scatter_rows, scatter_iter,
-      result_view.begin<T>());
+      result_view.begin<Element>());
 
     return result;
   }
+};
 
-  template <typename T, std::enable_if_t<not is_fixed_width<T>()>* = nullptr>
+template <typename MapIterator>
+struct column_scalar_scatterer_impl<string_view, MapIterator>
+{
   std::unique_ptr<column> operator()(std::unique_ptr<scalar> const& source,
       MapIterator scatter_iter, size_type scatter_rows, column_view const& target,
-      rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+      rmm::mr::device_memory_resource* mr, cudaStream_t stream) const
   {
     auto const scalar_impl = static_cast<string_scalar*>(source.get());
     auto const source_view = string_view(scalar_impl->data(), scalar_impl->size());
@@ -153,13 +156,37 @@ struct column_scalar_scatterer {
   }
 };
 
+template <typename MapIterator>
+struct column_scalar_scatterer_impl<dictionary32, MapIterator>
+{
+  std::unique_ptr<column> operator()(std::unique_ptr<scalar> const& source,
+      MapIterator scatter_iter, size_type scatter_rows, column_view const& target,
+      rmm::mr::device_memory_resource* mr, cudaStream_t stream) const
+  {
+    CUDF_FAIL("scatter scalar to dictionary not implemented");
+  }
+};
+
+template <typename MapIterator>
+struct column_scalar_scatterer
+{
+  template <typename Element>
+  std::unique_ptr<column> operator()(std::unique_ptr<scalar> const& source,
+      MapIterator scatter_iter, size_type scatter_rows, column_view const& target,
+      rmm::mr::device_memory_resource* mr, cudaStream_t stream) const
+  {
+      column_scalar_scatterer_impl<Element, MapIterator> scatterer{};
+      return scatterer(source, scatter_iter, scatter_rows, target, mr, stream);
+  }
+};
+
 struct scatter_scalar_impl {
   template <typename T, std::enable_if_t<std::is_integral<T>::value
       and not std::is_same<T, bool8>::value>* = nullptr>
   std::unique_ptr<table> operator()(
       std::vector<std::unique_ptr<scalar>> const& source,
       column_view const& indices, table_view const& target, bool check_bounds,
-      rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+      rmm::mr::device_memory_resource* mr, cudaStream_t stream) const
   {
     if (check_bounds) {
       auto const begin = -target.num_rows();
@@ -195,7 +222,7 @@ struct scatter_scalar_impl {
   std::unique_ptr<table> operator()(
       std::vector<std::unique_ptr<scalar>> const& source,
       column_view const& indices, table_view const& target, bool check_bounds,
-      rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+      rmm::mr::device_memory_resource* mr, cudaStream_t stream) const
   {
     CUDF_FAIL("Scatter index column must be an integral, non-boolean type");
   }
@@ -206,7 +233,7 @@ struct scatter_to_tables_impl {
       and not std::is_same<T, bool8>::value>* = nullptr>
   std::vector<std::unique_ptr<table>> operator()(
       table_view const& input, column_view const& partition_map,
-      rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+      rmm::mr::device_memory_resource* mr, cudaStream_t stream) const
   {
     // Make a mutable copy of the partition map
     auto d_partitions = rmm::device_vector<T>(
@@ -261,7 +288,7 @@ struct scatter_to_tables_impl {
       or std::is_same<T, bool8>::value>* = nullptr>
   std::vector<std::unique_ptr<table>> operator()(
       table_view const& input, column_view const& partition_map,
-      rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+      rmm::mr::device_memory_resource* mr, cudaStream_t stream) const
   {
     CUDF_FAIL("Partition map column must be an integral, non-boolean type");
   }
