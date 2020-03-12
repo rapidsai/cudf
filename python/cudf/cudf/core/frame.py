@@ -76,9 +76,11 @@ class Frame(libcudfxx.table.Table):
     def _hash(self, initial_hash_values=None):
         return libcudfxx.hash.hash(self, initial_hash_values)
 
-    def _hash_partition(self, columns_to_hash, num_partitions):
+    def _hash_partition(
+        self, columns_to_hash, num_partitions, keep_index=True
+    ):
         output, offsets = libcudfxx.hash.hash_partition(
-            self, columns_to_hash, num_partitions
+            self, columns_to_hash, num_partitions, keep_index
         )
         output = self.__class__._from_table(output)
         output._copy_categories(self)
@@ -352,14 +354,16 @@ class Frame(libcudfxx.table.Table):
             result.index = self.index
             return result
 
-    def _scatter_to_tables(self, scatter_map):
+    def _scatter_to_tables(self, scatter_map, keep_index=True):
         """
        scatter the dataframe/table to a list of dataframes/tables
        as per scatter_map
 
        """
 
-        result = libcudfxx.copying.scatter_to_tables(self, scatter_map)
+        result = libcudfxx.copying.scatter_to_tables(
+            self, scatter_map, keep_index
+        )
         result = [self._from_table(tbl) for tbl in result]
         [frame._copy_categories(self) for frame in result]
 

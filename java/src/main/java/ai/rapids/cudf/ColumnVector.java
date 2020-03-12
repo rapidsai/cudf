@@ -1711,6 +1711,48 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Returns a new strings column that contains substrings of the strings in the provided column.
+   * Overloading subString to support if end index is not provided. Appending -1 to indicate to
+   * read until end of string.
+   * @param start first character index to begin the substring(inclusive).
+   */
+  public ColumnVector substring(int start) {
+    return substring(start, -1);
+  }
+
+  /**
+   * Returns a new strings column that contains substrings of the strings in the provided column.
+   * 0-based indexing, If the stop position is past end of a string's length, then end of string is
+   * used as stop position for that string.
+   * @param start first character index to begin the substring(inclusive).
+   * @param end   last character index to stop the substring(exclusive)
+   * @return A new java column vector containing the substrings.
+   */
+  public ColumnVector substring(int start, int end) {
+    assert type == DType.STRING : "column type must be a String";
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT32), "subString")) {
+      return new ColumnVector(substring(getNativeView(), start, end));
+    }
+  }
+
+  /**
+   * Returns a new strings column that contains substrings of the strings in the provided column
+   * which uses unique ranges for each string
+   * @param start Vector containing start indices of each string
+   * @param end   Vector containing end indices of each string. -1 indicated to read until end of string.
+   * @return A new java column vector containing the substrings/
+   */
+  public ColumnVector substring(ColumnVector start, ColumnVector end) {
+    assert type == DType.STRING : "column type must be a String";
+    assert (rows == start.getRowCount() && rows == end.getRowCount()) : "Number of rows must be equal";
+    assert (start.getType() == DType.INT32 && end.getType() == DType.INT32) : "start and end " +
+            "vectors must be of integer type";
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT32), "subString")) {
+      return new ColumnVector(substringColumn(getNativeView(), start.getNativeView(), end.getNativeView()));
+    }
+  }
+
+  /**
    * Checks if each string in a column starts with a specified comparison string, resulting in a
    * parallel column of the boolean results.
    * @param pattern scalar containing the string being searched for at the beginning of the column's strings.
@@ -1744,6 +1786,23 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     }
   }
 
+  /**
+   * Checks if each string in a column contains a specified comparison string, resulting in a
+   * parallel column of the boolean results.
+   * @param compString scalar containing the string being searched for.
+   * @return A new java column vector containing the boolean results.
+   */
+
+  public ColumnVector stringContains(Scalar compString) {
+    assert type == DType.STRING : "column type must be a String";
+    assert compString != null : "compString scalar may not be null";
+    assert compString.getType() == DType.STRING : "compString scalar must be a string scalar";
+    assert compString.isValid() : "compString string scalar may not contain a null value";
+    assert !compString.getJavaString().isEmpty() : "compString string scalar may not be empty";
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.BOOL8), "stringContains")) {
+      return new ColumnVector(stringContains(getNativeView(), compString.getScalarHandle()));
+    }
+  }
 
   /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS
@@ -1826,6 +1885,22 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   private static native long substringLocate(long columnView, long substringScalar, int start, int end);
 
   /**
+   * Native method to calculate substring from a given string column. 0 indexing.
+   * @param columnView native handle of the cudf::column_view being operated on.
+   * @param start      first character index to begin the substring(inclusive).
+   * @param end        last character index to stop the substring(exclusive).
+   */
+  private static native long substring(long columnView, int start, int end) throws CudfException;
+
+  /**
+   * Native method to calculate substring from a given string column.
+   * @param columnView native handle of the cudf::column_view being operated on.
+   * @param startColumn handle of cudf::column_view which has start indices of each string.
+   * @param endColumn handle of cudf::column_view which has end indices of each string.
+   */
+  private static native long substringColumn(long columnView, long startColumn, long endColumn)
+          throws CudfException;
+  /**
    * Native method for checking if strings in a column starts with a specified comparison string.
    * @param cudfViewHandle native handle of the cudf::column_view being operated on.
    * @param compString handle of scalar containing the string being searched for at the beginning
@@ -1842,6 +1917,14 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return native handle of the resulting cudf column containing the boolean results.
    */
   private static native long stringEndWith(long cudfViewHandle, long compString) throws CudfException;
+
+  /**
+   * Native method for checking if strings in a column contains a specified comparison string.
+   * @param cudfViewHandle native handle of the cudf::column_view being operated on.
+   * @param compString handle of scalar containing the string being searched for.
+   * @return native handle of the resulting cudf column containing the boolean results.
+   */
+  private static native long stringContains(long cudfViewHandle, long compString) throws CudfException;
 
   /**
    * Native method to concatenate columns of strings together, combining a row from
