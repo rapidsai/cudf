@@ -155,6 +155,7 @@
 - PR #4412 Require Dask + Distributed 2.12.0+
 - PR #4377 Support loading avro files that contain nested arrays
 - PR #4405 Port nvstrings (Sub)string Comparisons functions to cuDF Python/Cython
+- PR #4461 Port nvstrings Miscellaneous functions to cuDF Python/Cython
 
 ## Bug Fixes
 
