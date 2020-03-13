@@ -585,8 +585,8 @@ struct dispatch_map_type {
    * - Compute the histogram of the size each partition
    * - Compute the exclusive scan of the histogram to get the offset for each
    * partition in the final partitioned output
-   * - Use a transform iterator to scatter the rows from `t` into the final
-   * output.
+   * - Use a transform iterator to materialize the scatter map of the rows from
+   * `t` into the final output.
    *
    * @note JH: It would likely be more efficient to avoid the atomic increments
    * in the transform iterator. It would probably be faster to compute a
