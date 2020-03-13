@@ -83,11 +83,12 @@ conda list
 ################################################################################
 
 logger "Build libcudf..."
-if [[ ${BUILD_MODE} == "pr-builder" ]]; then
+if [[ ${BUILD_MODE} == "pull-request" ]]; then
     $WORKSPACE/build.sh clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks tests
 else
     $WORKSPACE/build.sh clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks tests -l
 fi
+
 ################################################################################
 # TEST - Run GoogleTest and py.tests for libnvstrings, nvstrings, libcudf, and
 # cuDF
