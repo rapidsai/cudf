@@ -260,7 +260,6 @@ def test_parquet_reader_pandas_metadata(tmpdir, columns, pandas_compat):
         assert got.index.name == "b"
     else:
         assert got.index.name is None
-
     assert_eq(expect, got, check_categorical=False)
 
 
