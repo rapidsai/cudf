@@ -159,7 +159,8 @@ class string_scalar_device_view
    * @brief Returns string_view of the value of this scalar.
    */
   __device__ string_view value() const noexcept {
-    return string_view(this->data(), _size);
+    return (is_valid() && _size==0) ? string_view{"",0} :
+              string_view(this->data(), _size);
   }
 
   /**

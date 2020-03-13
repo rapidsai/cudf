@@ -25,6 +25,7 @@
 #include <cudf/strings/detail/fill.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 #include <cuda_runtime.h>
 
@@ -172,6 +173,7 @@ void fill_in_place(mutable_column_view& destination,
                    size_type begin,
                    size_type end,
                    scalar const& value) {
+  CUDF_FUNC_RANGE();
   return detail::fill_in_place(destination, begin, end, value, 0);
 }
 
@@ -180,6 +182,7 @@ std::unique_ptr<column> fill(column_view const& input,
                              size_type end,
                              scalar const& value,
                              rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   return detail::fill(input, begin, end, value, mr, 0);
 }
 

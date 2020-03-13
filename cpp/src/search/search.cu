@@ -21,6 +21,7 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 #include <hash/unordered_multiset.cuh>
 #include <cudf/detail/iterator.cuh>
@@ -62,7 +63,6 @@ void launch_search(DataIterator it_data,
   }
 }
 
-} // namespace
 
 
 std::unique_ptr<column> search_ordered(table_view const& t,
@@ -104,7 +104,7 @@ std::unique_ptr<column> search_ordered(table_view const& t,
   rmm::device_vector<order> d_column_order(column_order.begin(), column_order.end());
   rmm::device_vector<null_order> d_null_precedence(null_precedence.begin(), null_precedence.end());
 
-  if (has_nulls(t)) {
+  if (has_nulls(t) or has_nulls(values)) {
     auto ineq_op = (find_first)
       ? row_lexicographic_comparator<true>(*d_t, *d_values, d_column_order.data().get(), d_null_precedence.data().get())
       : row_lexicographic_comparator<true>(*d_values, *d_t, d_column_order.data().get(), d_null_precedence.data().get());
@@ -154,6 +154,7 @@ bool contains_scalar_dispatch::operator()<cudf::dictionary32>(column_view const&
                 cudaStream_t stream, rmm::mr::device_memory_resource *mr) {
     CUDF_FAIL("dictionary type not supported yet");
 }
+} // namespace
 
 namespace detail {
 
@@ -281,6 +282,7 @@ std::unique_ptr<column> lower_bound(table_view const& t,
                                     std::vector<null_order> const& null_precedence,
                                     rmm::mr::device_memory_resource *mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::lower_bound(t, values, column_order, null_precedence, mr);
 }
 
@@ -290,16 +292,19 @@ std::unique_ptr<column> upper_bound(table_view const& t,
                                     std::vector<null_order> const& null_precedence,
                                     rmm::mr::device_memory_resource *mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::upper_bound(t, values, column_order, null_precedence, mr);
 }
 
 bool contains(column_view const& col, scalar const& value, rmm::mr::device_memory_resource *mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::contains(col, value, mr);
 }
 
 std::unique_ptr<column> contains(column_view const& haystack, column_view const& needles,
                                        rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   return detail::contains(haystack, needles, mr);
 }
 

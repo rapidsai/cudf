@@ -17,9 +17,8 @@ import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from numba import cuda
 from pandas.api.types import is_dict_like
-
-import rmm
 
 import cudf
 import cudf._lib as libcudf
@@ -41,7 +40,7 @@ from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
 from cudf.core.series import Series
 from cudf.core.window import Rolling
-from cudf.utils import applyutils, cudautils, ioutils, queryutils, utils
+from cudf.utils import applyutils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     cudf_dtype_from_pydata_dtype,
@@ -457,11 +456,7 @@ class DataFrame(Frame):
             return self._get_columns_by_label(arg, downcast=True)
 
         elif isinstance(arg, slice):
-            df = DataFrame(index=self.index[arg])
-            for k, col in self._data.items():
-                df[k] = col[arg]
-            df.columns = self.columns
-            return df
+            return self._slice(arg)
 
         elif isinstance(
             arg,
@@ -935,7 +930,7 @@ class DataFrame(Frame):
             def fallback(col, fn):
                 if fill_value is None:
                     return Series.from_masked_array(
-                        data=rmm.device_array(max_num_rows, dtype="float64"),
+                        data=column_empty(max_num_rows, dtype="float64"),
                         mask=create_null_mask(
                             max_num_rows, state=MaskState.ALL_NULL
                         ),
@@ -1218,9 +1213,9 @@ class DataFrame(Frame):
 
         Examples
         --------
-        >>> df = DataFrame([('a', list(range(20))),
-        ...                 ('b', list(range(20))),
-        ...                 ('c', list(range(20)))])
+        >>> df = cudf.DataFrame([('a', range(20)),
+        ...                      ('b', range(20)),
+        ...                      ('c', range(20))])
 
         Select a single row using an integer index.
 
@@ -1914,7 +1909,7 @@ class DataFrame(Frame):
 
         Returns
         -------
-        A (nrow x ncol) numpy ndarray in "F" order.
+        A (nrow x ncol) numba device ndarray
         """
         if columns is None:
             columns = self.columns
@@ -1939,23 +1934,22 @@ class DataFrame(Frame):
                     "hint: use .fillna() to replace null values"
                 )
                 raise ValueError(errmsg.format(k))
+        cupy_dtype = dtype
+        if np.issubdtype(cupy_dtype, np.datetime64):
+            cupy_dtype = np.dtype("int64")
 
-        if order == "F":
-            matrix = rmm.device_array(
-                shape=(nrow, ncol), dtype=dtype, order=order
-            )
-            for colidx, inpcol in enumerate(cols):
-                dense = inpcol.astype(dtype).to_gpu_array(fillna="pandas")
-                matrix[:, colidx].copy_to_device(dense)
-        elif order == "C":
-            matrix = cudautils.row_matrix(cols, nrow, ncol, dtype)
-        else:
+        if order not in ("F", "C"):
             errmsg = (
                 "order parameter should be 'C' for row major or 'F' for"
                 "column major GPU matrix"
             )
             raise ValueError(errmsg.format(k))
-        return matrix
+
+        matrix = cupy.empty(shape=(nrow, ncol), dtype=cupy_dtype, order=order)
+        for colidx, inpcol in enumerate(cols):
+            dense = inpcol.astype(cupy_dtype)
+            matrix[:, colidx] = dense
+        return cuda.as_cuda_array(matrix).view(dtype)
 
     def as_matrix(self, columns=None):
         """Convert to a matrix in host memory.
@@ -2391,9 +2385,6 @@ class DataFrame(Frame):
                 DeprecationWarning,
             )
             method = type
-
-        if how not in ["left", "right", "inner", "outer"]:
-            raise NotImplementedError("unsupported {!r} join".format(how))
 
         if how == "right":
             # libgdf doesn't support right join directly, we will swap the
@@ -2854,7 +2845,7 @@ class DataFrame(Frame):
 
         return Series(table_to_hash._hash()).values
 
-    def partition_by_hash(self, columns, nparts):
+    def partition_by_hash(self, columns, nparts, keep_index=True):
         """Partition the dataframe by the hashed value of data in *columns*.
 
         Parameters
@@ -2864,6 +2855,8 @@ class DataFrame(Frame):
             Must have at least one name.
         nparts : int
             Number of output partitions
+        keep_index : boolean
+            Whether to keep the index or drop it
 
         Returns
         -------
@@ -2871,7 +2864,7 @@ class DataFrame(Frame):
         """
         idx = 0 if self._index is None else self._index._num_columns
         key_indices = [self._data.names.index(k) + idx for k in columns]
-        outdf, offsets = self._hash_partition(key_indices, nparts)
+        outdf, offsets = self._hash_partition(key_indices, nparts, keep_index)
         # Slice into partition
         return [outdf[s:e] for s, e in zip(offsets, offsets[1:] + [None])]
 
@@ -3536,9 +3529,7 @@ class DataFrame(Frame):
             result.index = q
             return result
 
-    def quantiles(
-        self, q=0.5, interpolation="nearest",
-    ):
+    def quantiles(self, q=0.5, interpolation="nearest"):
         """
         Return values at the given quantile.
 
@@ -3960,24 +3951,7 @@ class DataFrame(Frame):
                 "Use an integer array/column for better performance."
             )
 
-        if keep_index:
-            if isinstance(self.index, cudf.MultiIndex):
-                index = self.index.to_frame()._columns
-                index_names = self.index.to_frame().columns.to_list()
-            else:
-                index = [self.index._values]
-                index_names = [self.index.name]
-        else:
-            index = None
-            index_names = []
-
-        tables = libcudf.copying.scatter_to_frames(
-            self._columns,
-            map_index._column,
-            index,
-            names=self.columns.to_list(),
-            index_names=index_names,
-        )
+        tables = self._scatter_to_tables(map_index._column, keep_index)
 
         if map_size:
             # Make sure map_size is >= the number of uniques in map_index
@@ -3988,35 +3962,10 @@ class DataFrame(Frame):
                 )
 
             # Append empty dataframes if map_size > len(tables)
+
             for i in range(map_size - len(tables)):
                 tables.append(self.take([]))
         return tables
-
-    def repeat(self, repeats, axis=None):
-        assert axis in (None, 0)
-        new_index = self.index.repeat(repeats)
-        cols = libcudf.filling.repeat(self._columns, repeats)
-        # to preserve col names, need to get it from old _cols dict
-        column_names = self._data.names
-        result = DataFrame(data=dict(zip(column_names, cols)))
-        return result.set_index(new_index)
-
-    def tile(self, reps):
-        """Construct a DataFrame by repeating this DataFrame the number of
-        times given by reps
-
-        Parameters
-        ----------
-        reps : non-negative integer
-            The number of repetitions of this DataFrame along axis 0
-
-        Returns
-        -------
-        The tiled output cudf.DataFrame
-        """
-        cols = libcudf.filling.tile(self._columns, reps)
-        column_names = self._data.names
-        return DataFrame(data=dict(zip(column_names, cols)))
 
     def stack(self, level=-1, dropna=True):
         """Stack the prescribed level(s) from columns to index
@@ -4046,16 +3995,12 @@ class DataFrame(Frame):
         dtype: int64
         """
         assert level in (None, -1)
-        index_as_cols = self.index.to_frame(index=False)._columns
-        new_index_cols = libcudf.filling.repeat(index_as_cols, self.shape[1])
-        [last_index] = libcudf.filling.tile(
-            [column.as_column(self.columns)], self.shape[0]
+        repeated_index = self.index.repeat(self.shape[1])
+        name_index = Frame({0: self._column_names}).tile(self.shape[0])
+        new_index = list(repeated_index._columns) + [name_index._columns[0]]
+        new_index = cudf.core.multiindex.MultiIndex.from_frame(
+            DataFrame(dict(zip(range(0, len(new_index)), new_index)))
         )
-        new_index_cols.append(last_index)
-        index_df = DataFrame(
-            dict(zip(range(0, len(new_index_cols)), new_index_cols))
-        )
-        new_index = cudf.core.multiindex.MultiIndex.from_frame(index_df)
 
         # Collect datatypes and cast columns as that type
         common_type = np.result_type(*self.dtypes)
@@ -4084,6 +4029,16 @@ class DataFrame(Frame):
         """
         cov = cupy.cov(self.values, rowvar=False)
         df = DataFrame.from_gpu_matrix(cupy.asfortranarray(cov)).set_index(
+            self.columns
+        )
+        df.columns = self.columns
+        return df
+
+    def corr(self):
+        """Compute the correlation matrix of a DataFrame.
+        """
+        corr = cupy.corrcoef(self.values, rowvar=False)
+        df = DataFrame.from_gpu_matrix(cupy.asfortranarray(corr)).set_index(
             self.columns
         )
         df.columns = self.columns
