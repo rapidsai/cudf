@@ -8,6 +8,7 @@ import pandas as pd
 
 import cudf
 import cudf._libxx as libcudfxx
+from cudf._libxx.scalar import Scalar
 from cudf.core import column
 from cudf.core.column import as_column, build_categorical_column
 from cudf.utils.dtypes import (
@@ -509,6 +510,72 @@ class Frame(libcudfxx.table.Table):
 
         result._copy_categories(self)
         return result
+
+    def repeat(self, repeats, axis=None):
+        """Repeats elements consecutively
+
+        Parameters
+        ----------
+        repeats : int, array, numpy array, or Column
+            the number of times to repeat each element
+
+        Example
+        -------
+        >>> import cudf as cudf
+        >>> s = cudf.Series([0, 2]) # or DataFrame
+        >>> s
+        0    0
+        1    2
+        dtype: int64
+        >>> s.repeat([3, 4])
+        0    0
+        0    0
+        0    0
+        1    2
+        1    2
+        1    2
+        1    2
+        dtype: int64
+        >>> s.repeat(2)
+        0    0
+        0    0
+        1    2
+        1    2
+        dtype: int64
+        >>>
+        """
+        if axis is not None:
+            raise NotImplementedError(
+                "Only axis=`None` supported at this time."
+            )
+
+        return self._repeat(repeats)
+
+    def _repeat(self, count):
+        if is_scalar(count):
+            count = Scalar(count)
+        else:
+            count = as_column(count)
+
+        result = self.__class__._from_table(
+            libcudfxx.filling.repeat(self, count)
+        )
+
+        result._copy_categories(self)
+        return result
+
+    def _fill(self, fill_values, begin, end, inplace):
+        col_and_fill = zip(self._columns, fill_values)
+
+        if not inplace:
+            data_columns = (c._fill(v, begin, end) for (c, v) in col_and_fill)
+            data = zip(self._column_names, data_columns)
+            return self.__class__._from_table(Frame(data, self._index))
+
+        for (c, v) in col_and_fill:
+            c.fill(v, begin, end, inplace=True)
+
+        return self
 
     def shift(self, periods=1, freq=None, axis=0, fill_value=None):
         """Shift values by `periods` positions.
