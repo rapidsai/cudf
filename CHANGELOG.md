@@ -145,6 +145,7 @@
 - PR #4244 Port nvstrings Substring Gather/Scatter functions to cuDF Python/Cython
 - PR #4280 Port nvstrings Numeric Handling functions to cuDF Python/Cython
 - PR #4278 Port filling.pyx to libcudf++ API
+- PR #4278 Port filling.pyx to libcudf++ API
 - PR #4328 Add memory threshold callbacks for Java RMM event handler
 - PR #4336 Move a bunch of internal nvstrings code to use native StringColumns
 - PR #4166 Port `is_sorted.pyx` to use libcudf++ APIs
@@ -165,6 +166,7 @@
 - PR #4316 Add Java and JNI bindings for substring expression
 - PR #4314 Add Java and JNI bindings for string contains
 - PR #4461 Port nvstrings Miscellaneous functions to cuDF Python/Cython
+- PR #4495 Port nvtext to cuDF Python/Cython
 
 ## Bug Fixes
 
