@@ -569,7 +569,7 @@ hash_partition_table(table_view const& input, table_view const& table_to_hash,
         scanned_block_partition_sizes_ptr);
 
     // Use the resulting scatter map to materialize the output
-    auto output = experimental::detail::scatter<size_type>(
+    auto output = experimental::detail::scatter(
         input, row_partition_numbers.begin(), row_partition_numbers.end(),
         input, false, mr, stream);
 
@@ -577,9 +577,18 @@ hash_partition_table(table_view const& input, table_view const& table_to_hash,
   }
 }
 
+/**
+ * @brief Maps a partition number to it's corresponding location in the
+ * partitioned output
+ *
+ */
 struct map_partition_to_output {
-  size_type* const __restrict__ offsets{};
+  size_type* const __restrict__ offsets{};  ///< The starting position of each
+                                            ///< partition in the final output
 
+  /**
+   * @brief Returns the output location for the given `partition_number`
+   */
   template <typename MapType>
   auto operator()(MapType partition_number) {
     return atomicAdd(&offsets[partition_number], 1);
@@ -587,12 +596,32 @@ struct map_partition_to_output {
 };
 
 struct dispatch_map_type {
+  /**
+   * @brief Partitions the table `t` according to the `partition_map`.
+   *
+   * Algorithm:
+   * - Compute the histogram of the size each partition
+   * - Compute the exclusive scan of the histogram to get the offset for each
+   * partition in the final partitioned output
+   * - Use a transform iterator to scatter the rows from `t` into the final
+   * output.
+   *
+   * @note JH: It would likely be more efficient to avoid the atomic increments
+   * in the transform iterator. It would probably be faster to compute a
+   * per-thread block histogram and compute an exclusive scan of all of the
+   * per-block histograms (like in hash partition). But I'm purposefully trying
+   * to reduce memory pressure by avoiding intermediate materializations. Plus,
+   * atomics resolve in L2 and should be pretty fast since all the offsets will
+   * fit in L2.
+   *
+   */
   template <typename MapType,
             std::enable_if_t<std::is_integral<MapType>::value>* = nullptr>
   std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>>
   operator()(table_view const& t, column_view const& partition_map,
              size_type num_partitions, rmm::mr::device_memory_resource* mr,
              cudaStream_t stream) const {
+
     // Build a histogram of the number of rows in each partition
     rmm::device_vector<size_type> histogram(num_partitions + 1);
     std::size_t temp_storage_bytes{};
@@ -620,19 +649,17 @@ struct dispatch_map_type {
     std::vector<size_type> partition_offsets(histogram.size());
     thrust::copy(histogram.begin(), histogram.end(), partition_offsets.begin());
 
+    // Transform iterator that atomically increments the offsets to determine
+    // where each row in each partition should be written
     auto scatter_map = thrust::make_transform_iterator(
         partition_map.begin<MapType>(),
         map_partition_to_output{histogram.data().get()});
 
-    (void)scatter_map;
+    // Scatter the rows into their partitions
+    auto scattered = cudf::experimental::detail::scatter(
+        t, scatter_map, scatter_map + partition_map.size(), t);
 
-    // auto gathered = cudf::experimental::detail::gather(
-    //    t, gather_map, gather_map + partition_map.size(), false, mr, stream);
-    // auto scattered = cudf::experimental::detail::scatter(
-    //    t, scatter_map, scatter_map + partition_map.size(), t);
-
-    return std::make_pair(experimental::empty_like(t),
-                          std::move(partition_offsets));
+    return std::make_pair(std::move(scattered), std::move(partition_offsets));
   }
 
   template <typename MapType,
@@ -681,6 +708,7 @@ partition(table_view const& t, column_view const& partition_map,
 }
 }  // namespace detail
 
+// Partition based on hash values
 std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>>
 hash_partition(table_view const& input,
                std::vector<size_type> const& columns_to_hash,
@@ -689,6 +717,7 @@ hash_partition(table_view const& input,
   return detail::hash_partition(input, columns_to_hash, num_partitions, mr);
 }
 
+// Partion based on an explicit partition map
 std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>>
 partition(table_view const& t, column_view const& partition_map,
           size_type num_partitions, rmm::mr::device_memory_resource* mr) {
