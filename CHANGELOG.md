@@ -3,6 +3,7 @@
 ## New Features
 
 ## Improvements
+- PR #4486 Remove explicit template parameter from detail::scatter.
 
 ## Bug Fixes
 - PR #4386 Update Java package to 0.14
