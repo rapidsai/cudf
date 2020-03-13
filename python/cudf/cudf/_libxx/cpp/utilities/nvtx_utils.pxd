@@ -22,7 +22,6 @@ cdef extern from "cudf/utilities/nvtx_utils.hpp" namespace "cudf::nvtx" nogil:
     cdef color PARTITION_COLOR 'cudf::nvtx::PARTITION_COLOR'
     cdef color READ_CSV_COLOR 'cudf::nvtx::READ_CSV_COLOR'
 
-cdef extern from "cudf/utilities/nvtx_utils.hpp" namespace "cudf::nvtx" nogil:
     cdef void range_push(
         const char* const name,
         color color
