@@ -431,3 +431,10 @@ TEST_F(StringColumnTest, ConcatenateColumnView) {
     cudf::test::strings_column_wrapper expected( h_strings.begin(), h_strings.end() );
     cudf::test::expect_columns_equal(*results,expected);
 }
+
+int main(int argc, char **argv) {
+  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::Environment* const rmm_env =
+    ::testing::AddGlobalTestEnvironment(new cudf::test::RmmTestEnvironment);
+  return RUN_ALL_TESTS();
+}

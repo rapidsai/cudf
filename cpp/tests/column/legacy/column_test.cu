@@ -1,6 +1,6 @@
 #include <tests/utilities/legacy/cudf_test_utils.cuh>
 #include <tests/utilities/cudf_gtest.hpp>
-#include <tests/utilities/base_fixture.hpp>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
 
 #include <utilities/legacy/cudf_utils.h>
 #include <utilities/legacy/column_utils.hpp>
@@ -26,7 +26,7 @@ struct print {
 };
 
 template <typename ColumnType>
-struct ColumnConcatTest : public cudf::test::BaseFixture
+struct ColumnConcatTest : public GdfTest
 {
   ColumnConcatTest() {}
   ~ColumnConcatTest() {}

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,10 +46,6 @@ class BaseFixture : public ::testing::Test {
    * all tests inheritng from this fixture
    *---------------------------------------------------------------------------**/
   rmm::mr::device_memory_resource* mr() { return _mr; }
-
-  static void SetUpTestCase() { ASSERT_EQ(rmmInitialize(nullptr), RMM_SUCCESS); }
-
-  static void TearDownTestCase() { ASSERT_EQ(rmmFinalize(), RMM_SUCCESS); }
 };
 
 template <typename T, typename Enable = void>
@@ -164,6 +160,19 @@ class TempDirTestEnvironment : public ::testing::Environment {
    */
   std::string get_temp_filepath(std::string filename) {
     return tmpdir + filename;
+  }
+};
+
+class RmmTestEnvironment : public ::testing::Environment {
+ public:
+
+  void SetUp() {
+    rmmOptions_t opts{PoolAllocation};
+    ASSERT_EQ(rmmInitialize(&opts), RMM_SUCCESS);
+  }
+
+  void TearDown() {
+    ASSERT_EQ(rmmFinalize(), RMM_SUCCESS);
   }
 };
 
