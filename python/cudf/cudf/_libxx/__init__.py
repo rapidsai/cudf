@@ -6,6 +6,7 @@ from . import (
     avro,
     copying,
     dlpack,
+    filling,
     gpuarrow,
     hash,
     join,

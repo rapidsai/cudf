@@ -144,6 +144,7 @@
 - PR #4305 Move gpuarrow.pyx and related libarrow_cuda files into `_libxx`
 - PR #4244 Port nvstrings Substring Gather/Scatter functions to cuDF Python/Cython
 - PR #4280 Port nvstrings Numeric Handling functions to cuDF Python/Cython
+- PR #4278 Port filling.pyx to libcudf++ API
 - PR #4328 Add memory threshold callbacks for Java RMM event handler
 - PR #4336 Move a bunch of internal nvstrings code to use native StringColumns
 - PR #4166 Port `is_sorted.pyx` to use libcudf++ APIs
@@ -247,12 +248,15 @@
 - PR #4406 Fix sorted merge issue with null values and ascending=False
 - PR #4445 Fix string issue for parquet reader and support `keep_index` for `scatter_to_tables`
 - PR #4423 Tighten up Dask serialization checks
+- PR #4438 Fix repl-template error for replace_with_backrefs
 - PR #4434 Fix join_strings logic with all-null strings and non-null narep
 - PR #4465 Fix use_pandas_index having no effect in libcudf++ parquet reader
 - PR #4464 Update Cmake to always link in libnvToolsExt
 - PR #4467 Fix dropna issue for a DataFrame having np.nan
+- PR #4480 Fix string_scalar.value to return an empty string_view for empty string-scalar
 - PR #4474 Fix to not materialize RangeIndex in copy_categories
 - PR #4482 Fix `.str.rsplit` & `.str.split` and enable related tests
+
 
 # cuDF 0.12.0 (04 Feb 2020)
 
