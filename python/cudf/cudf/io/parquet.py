@@ -147,6 +147,7 @@ def read_parquet(
             filepath_or_buffer,
             columns=columns,
             row_group=row_group,
+            row_group_count=row_group_count,
             skip_rows=skip_rows,
             num_rows=num_rows,
             strings_to_categorical=strings_to_categorical,
