@@ -140,11 +140,19 @@ class Frame(libcudfxx.table.Table):
         else:
             start = len(self) if start > num_rows else start
             stop = len(self) if stop > num_rows else stop
+            from cudf.core.index import RangeIndex
 
-            result = self._from_table(
-                libcudfxx.copying.table_slice(self, [start, stop])[0]
-            )
-
+            if isinstance(self._index, RangeIndex):
+                new_index = self._index[start:stop]
+                self = self.reset_index(drop=True)
+                result = self._from_table(
+                    libcudfxx.copying.table_slice(self, [start, stop])[0]
+                )
+                result._index = new_index
+            else:
+                result = self._from_table(
+                    libcudfxx.copying.table_slice(self, [start, stop])[0]
+                )
             result._copy_categories(self)
             return result
 
