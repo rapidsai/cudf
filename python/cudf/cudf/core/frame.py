@@ -669,6 +669,11 @@ class Frame(libcudfxx.table.Table):
         gdf_result._data = to_frame_data
 
         to_return = self.__class__._from_table(gdf_result)
+
+        # If sort=True, Pandas would sort on the key columns in the
+        # same order as given in 'on'. If the indices are used as
+        # keys, the index will be sorted. If one index is specified,
+        # the key column on the other side will be used to sort.
         if sort:
             to_sort = self.__class__()
             if left_index and right_index:
