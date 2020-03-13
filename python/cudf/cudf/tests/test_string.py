@@ -1563,56 +1563,28 @@ def test_string_starts_ends(data, pat):
     ],
 )
 @pytest.mark.parametrize(
-    "sub",
-    [
-        # TODO, PREM: Uncomment after this issue is fixed
-        # '',
-        " ",
-        "a",
-        "abc",
-        "cat",
-        "$",
-        "\n",
-    ],
+    "sub", ["", " ", "a", "abc", "cat", "$", "\n"],
 )
 def test_string_find(data, sub):
     ps = pd.Series(data)
     gs = Series(data)
 
-    assert_eq(ps.str.find(sub).fillna(-1), gs.str.find(sub), check_dtype=False)
+    assert_eq(ps.str.find(sub), gs.str.find(sub))
     assert_eq(
-        ps.str.find(sub, start=1).fillna(-1),
-        gs.str.find(sub, start=1),
-        check_dtype=False,
+        ps.str.find(sub, start=1), gs.str.find(sub, start=1),
     )
+    assert_eq(ps.str.find(sub, end=10), gs.str.find(sub, end=10))
     assert_eq(
-        ps.str.find(sub, end=10).fillna(-1),
-        gs.str.find(sub, end=10),
-        check_dtype=False,
-    )
-    assert_eq(
-        ps.str.find(sub, start=2, end=10).fillna(-1),
-        gs.str.find(sub, start=2, end=10),
-        check_dtype=False,
+        ps.str.find(sub, start=2, end=10), gs.str.find(sub, start=2, end=10),
     )
 
+    assert_eq(ps.str.rfind(sub), gs.str.rfind(sub))
+    assert_eq(ps.str.rfind(sub, start=1), gs.str.rfind(sub, start=1))
     assert_eq(
-        ps.str.rfind(sub).fillna(-1), gs.str.rfind(sub), check_dtype=False
+        ps.str.rfind(sub, end=10), gs.str.rfind(sub, end=10),
     )
     assert_eq(
-        ps.str.rfind(sub, start=1).fillna(-1),
-        gs.str.rfind(sub, start=1),
-        check_dtype=False,
-    )
-    assert_eq(
-        ps.str.rfind(sub, end=10).fillna(-1),
-        gs.str.rfind(sub, end=10),
-        check_dtype=False,
-    )
-    assert_eq(
-        ps.str.rfind(sub, start=2, end=10).fillna(-1),
-        gs.str.rfind(sub, start=2, end=10),
-        check_dtype=False,
+        ps.str.rfind(sub, start=2, end=10), gs.str.rfind(sub, start=2, end=10),
     )
 
 
@@ -1630,6 +1602,7 @@ def test_string_find(data, sub):
             "+",
             ValueError,
         ),
+        (["line to be wrapped", "another line to be wrapped"], "", None),
     ],
 )
 def test_string_str_index(data, sub, er):
@@ -1668,6 +1641,7 @@ def test_string_str_index(data, sub, er):
             "+",
             ValueError,
         ),
+        (["line to be wrapped", "another line to be wrapped"], "", None),
     ],
 )
 def test_string_str_rindex(data, sub, er):

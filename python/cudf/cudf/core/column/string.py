@@ -1507,14 +1507,33 @@ class StringMethods(object):
         Series or Index of int
 
         """
+        if not isinstance(sub, str):
+            msg = "expected a string object, not {0}"
+            raise TypeError(msg.format(type(sub).__name__))
+
         from cudf._libxx.scalar import Scalar
 
         if end is None:
             end = -1
+        mask = self._column.mask
 
-        return self._return_or_inplace(
-            cpp_find(self._column, Scalar(sub, "str"), start, end), **kwargs
-        )
+        if sub == "":
+            result_col = column.as_column(
+                start, dtype="float", length=len(self._column)
+            )
+        else:
+            result_col = cpp_find(self._column, Scalar(sub, "str"), start, end)
+
+        result_col = result_col.set_mask(mask)
+        if self._column.has_nulls:
+            result_col = result_col.astype("float64")
+        else:
+            result_col = result_col.astype("int64")
+
+        result = self._return_or_inplace(result_col, **kwargs)
+        if sub == "":
+            result[self._parent.str.len() < start] = -1
+        return result
 
     def rfind(self, sub, start=0, end=None, **kwargs):
         """
@@ -1538,13 +1557,35 @@ class StringMethods(object):
         Series or Index of int
 
         """
+        if not isinstance(sub, str):
+            msg = "expected a string object, not {0}"
+            raise TypeError(msg.format(type(sub).__name__))
+
         from cudf._libxx.scalar import Scalar
 
         if end is None:
             end = -1
-        return self._return_or_inplace(
-            cpp_rfind(self._column, Scalar(sub, "str"), start, end), **kwargs
-        )
+        mask = self._column.mask
+
+        if sub == "":
+            result_col = cpp_count_characters(self._column)
+        else:
+            result_col = cpp_rfind(
+                self._column, Scalar(sub, "str"), start, end
+            )
+
+        result_col = result_col.set_mask(mask)
+        if self._column.has_nulls:
+            result_col = result_col.astype("float64")
+        else:
+            result_col = result_col.astype("int64")
+
+        result = self._return_or_inplace(result_col, **kwargs)
+        if sub == "":
+            result[result < start] = -1
+            if end != -1:
+                result[result > end] = end
+        return result
 
     def index(self, sub, start=0, end=None, **kwargs):
         """
@@ -1569,14 +1610,25 @@ class StringMethods(object):
         Series or Index of object
 
         """
+        if not isinstance(sub, str):
+            msg = "expected a string object, not {0}"
+            raise TypeError(msg.format(type(sub).__name__))
+
         from cudf._libxx.scalar import Scalar
 
         if end is None:
             end = -1
 
-        result = self._return_or_inplace(
-            cpp_find(self._column, Scalar(sub, "str"), start, end), **kwargs
-        )
+        if sub == "":
+            result_col = column.as_column(
+                0.0, dtype="float", length=len(self._column)
+            ).set_mask(self._column.mask)
+        else:
+            result_col = cpp_find(self._column, Scalar(sub, "str"), start, end)
+
+        result = self._return_or_inplace(result_col, **kwargs)
+        if sub == "":
+            result[self._parent.str.len() < start] = -1
 
         if (result == -1).any():
             raise ValueError("substring not found")
@@ -1606,14 +1658,27 @@ class StringMethods(object):
         Series or Index of object
 
         """
+        if not isinstance(sub, str):
+            msg = "expected a string object, not {0}"
+            raise TypeError(msg.format(type(sub).__name__))
+
         from cudf._libxx.scalar import Scalar
 
         if end is None:
             end = -1
 
-        result = self._return_or_inplace(
-            cpp_rfind(self._column, Scalar(sub, "str"), start, end), **kwargs
-        )
+        if sub == "":
+            result_col = cpp_count_characters(self._column)
+        else:
+            result_col = cpp_rfind(
+                self._column, Scalar(sub, "str"), start, end
+            )
+
+        result = self._return_or_inplace(result_col, **kwargs)
+        if sub == "":
+            result[result < start] = -1
+            if end != -1:
+                result[result > end] = end
 
         if (result == -1).any():
             raise ValueError("substring not found")
