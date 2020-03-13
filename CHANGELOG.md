@@ -234,7 +234,7 @@
 - PR #4358 Fix strings::concat where narep is an empty string
 - PR #4369 Fix race condition in gpuinflate
 - PR #4390 Disable ScatterValid and ScatterNull legacy tests
-- PR #4398 Fixes the bug in groupby in MIN/MAX on strings when strings some groups are empty
+- PR #4398 Fixes the failure in groupby in MIN/MAX on strings when some groups are empty
 - PR #4406 Fix sorted merge issue with null values and ascending=False
 - PR #4423 Tighten up Dask serialization checks
 - PR #4434 Fix join_strings logic with all-null strings and non-null narep
