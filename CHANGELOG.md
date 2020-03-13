@@ -256,6 +256,7 @@
 - PR #4480 Fix string_scalar.value to return an empty string_view for empty string-scalar
 - PR #4474 Fix to not materialize RangeIndex in copy_categories
 - PR #4496 Skip tests which require 2+ GPUs
+- PR #4494 Update Java memory event handler for new RMM resource API
 
 
 # cuDF 0.12.0 (04 Feb 2020)
