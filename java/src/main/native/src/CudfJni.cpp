@@ -106,9 +106,9 @@ native_jobjectArray<jobject> contiguous_table_array(JNIEnv* env, jsize length) {
 }
 
 static jclass host_memory_buffer_jclass;
-static jmethodID host_buffer_allocate;
-static jfieldID host_buffer_address;
-static jfieldID host_buffer_length;
+static jmethodID Host_buffer_allocate;
+static jfieldID Host_buffer_address;
+static jfieldID Host_buffer_length;
 
 #define HOST_MEMORY_BUFFER_CLASS "ai/rapids/cudf/HostMemoryBuffer"
 #define HOST_MEMORY_BUFFER_SIG(param_sig) "(" param_sig ")L" HOST_MEMORY_BUFFER_CLASS ";"
@@ -119,19 +119,19 @@ static bool cache_host_memory_buffer_jni(JNIEnv *env) {
     return false;
   }
 
-  host_buffer_allocate = env->GetStaticMethodID(cls,
+  Host_buffer_allocate = env->GetStaticMethodID(cls,
           "allocate", HOST_MEMORY_BUFFER_SIG("JZ"));
-  if (host_buffer_allocate == nullptr) {
+  if (Host_buffer_allocate == nullptr) {
     return false;
   }
 
-  host_buffer_address = env->GetFieldID(cls, "address", "J");
-  if (host_buffer_address == nullptr) {
+  Host_buffer_address = env->GetFieldID(cls, "address", "J");
+  if (Host_buffer_address == nullptr) {
     return false;
   }
 
-  host_buffer_length = env->GetFieldID(cls, "length", "J");
-  if (host_buffer_length == nullptr) {
+  Host_buffer_length = env->GetFieldID(cls, "length", "J");
+  if (Host_buffer_length == nullptr) {
     return false;
   }
 
@@ -151,7 +151,7 @@ static void release_host_memory_buffer_jni(JNIEnv *env) {
 }
 
 jobject allocate_host_buffer(JNIEnv* env, jlong amount, jboolean prefer_pinned) {
-  jobject ret = env->CallStaticObjectMethod(host_memory_buffer_jclass, host_buffer_allocate,
+  jobject ret = env->CallStaticObjectMethod(host_memory_buffer_jclass, Host_buffer_allocate,
           amount, prefer_pinned);
 
   if (env->ExceptionCheck()) {
@@ -161,11 +161,11 @@ jobject allocate_host_buffer(JNIEnv* env, jlong amount, jboolean prefer_pinned) 
 }
 
 jlong get_host_buffer_address(JNIEnv* env, jobject buffer) {
-  return env->GetLongField(buffer, host_buffer_address);
+  return env->GetLongField(buffer, Host_buffer_address);
 }
 
 jlong get_host_buffer_length(JNIEnv* env, jobject buffer) {
-  return env->GetLongField(buffer, host_buffer_length);
+  return env->GetLongField(buffer, Host_buffer_length);
 }
 
 // Get the JNI environment, attaching the current thread to the JVM if necessary. If the thread

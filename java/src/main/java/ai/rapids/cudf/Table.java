@@ -221,6 +221,7 @@ public final class Table implements AutoCloseable {
   /**
    * Setup everything to write parquet formatted data to a file.
    * @param columnNames     names that correspond to the table columns
+   * @param nullable        true if the column can have nulls else false
    * @param metadataKeys    Metadata key names to place in the Parquet file
    * @param metadataValues  Metadata values corresponding to metadataKeys
    * @param compression     native compression codec ID
@@ -239,6 +240,7 @@ public final class Table implements AutoCloseable {
   /**
    * Setup everything to write parquet formatted data to a buffer.
    * @param columnNames     names that correspond to the table columns
+   * @param nullable        true if the column can have nulls else false
    * @param metadataKeys    Metadata key names to place in the Parquet file
    * @param metadataValues  Metadata values corresponding to metadataKeys
    * @param compression     native compression codec ID
@@ -286,6 +288,7 @@ public final class Table implements AutoCloseable {
   /**
    * Setup everything to write ORC formatted data to a file.
    * @param columnNames     names that correspond to the table columns
+   * @param nullable        true if the column can have nulls else false
    * @param metadataKeys    Metadata key names to place in the Parquet file
    * @param metadataValues  Metadata values corresponding to metadataKeys
    * @param compression     native compression codec ID
@@ -302,6 +305,7 @@ public final class Table implements AutoCloseable {
   /**
    * Setup everything to write ORC formatted data to a buffer.
    * @param columnNames     names that correspond to the table columns
+   * @param nullable        true if the column can have nulls else false
    * @param metadataKeys    Metadata key names to place in the Parquet file
    * @param metadataValues  Metadata values corresponding to metadataKeys
    * @param compression     native compression codec ID
@@ -689,6 +693,7 @@ public final class Table implements AutoCloseable {
       handle = 0;
       if (consumer != null) {
         consumer.done();
+        consumer = null;
       }
     }
   }
@@ -780,6 +785,7 @@ public final class Table implements AutoCloseable {
       handle = 0;
       if (consumer != null) {
         consumer.done();
+        consumer = null;
       }
     }
   }

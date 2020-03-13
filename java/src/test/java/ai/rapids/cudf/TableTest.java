@@ -2142,11 +2142,6 @@ public class TableTest extends CudfTestBase {
     }
 
     @Override
-    public void done() {
-      // NOOP
-    }
-
-    @Override
     public void close() {
       buffer.close();
     }

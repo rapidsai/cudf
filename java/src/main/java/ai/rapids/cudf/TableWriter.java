@@ -30,7 +30,7 @@ public interface TableWriter extends AutoCloseable {
    * and the format of each table cannot change.
    * @param table what to write out.
    */
-  void write(Table table);
+  void write(Table table) throws CudfException;
 
   @Override
   void close() throws CudfException;

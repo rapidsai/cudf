@@ -29,6 +29,8 @@
 namespace cudf {
 namespace jni {
 
+constexpr long MINIMUM_WRITE_BUFFER_SIZE = 10 * 1024 * 1024; // 10 MB
+
 class jni_writer_data_sink final : public cudf::io::data_sink {
 public:
   explicit jni_writer_data_sink(JNIEnv* env,
@@ -182,24 +184,24 @@ private:
   long current_buffer_len = 0;
   long current_buffer_written = 0;
   size_t total_written = 0;
-  long alloc_size = 10 * 1024 * 1024;
+  long alloc_size = MINIMUM_WRITE_BUFFER_SIZE;
   cudaStream_t stream = nullptr;
   bool is_stream_set = false;
 };
 
 template <typename STATE>
-class jni_x_writer_handle final {
+class jni_table_writer_handle final {
 public:
-  explicit jni_x_writer_handle(std::shared_ptr<STATE> & state) : state(state), sink() {}
-  jni_x_writer_handle(std::shared_ptr<STATE> & state,
+  explicit jni_table_writer_handle(std::shared_ptr<STATE> & state) : state(state), sink() {}
+  jni_table_writer_handle(std::shared_ptr<STATE> & state,
           std::unique_ptr<jni_writer_data_sink> & sink) : state(state), sink(std::move(sink)) {}
 
   std::shared_ptr<STATE> state;
   std::unique_ptr<jni_writer_data_sink> sink;
 };
 
-typedef jni_x_writer_handle<cudf::experimental::io::detail::parquet::pq_chunked_state> native_parquet_writer_handle;
-typedef jni_x_writer_handle<cudf::experimental::io::detail::orc::orc_chunked_state> native_orc_writer_handle;
+typedef jni_table_writer_handle<cudf::experimental::io::detail::parquet::pq_chunked_state> native_parquet_writer_handle;
+typedef jni_table_writer_handle<cudf::experimental::io::detail::orc::orc_chunked_state> native_orc_writer_handle;
 
 /**
  * Take a table returned by some operation and turn it into an array of column* so we can track them ourselves
@@ -568,11 +570,8 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeParquetChunk(JNIEnv* env, 
   cudf::jni::native_parquet_writer_handle * state =
       reinterpret_cast<cudf::jni::native_parquet_writer_handle *>(j_state);
 
-  if (state->sink.get() != nullptr) {
-    long alloc_size = 1024 * 1024 * 10; // 10 MB minimum
-    if (alloc_size < mem_size/2) {
-      alloc_size = mem_size/2;
-    }
+  if (state->sink) {
+    long alloc_size = std::max(cudf::jni::MINIMUM_WRITE_BUFFER_SIZE, mem_size/2);
     state->sink->set_alloc_size(alloc_size);
   }
   try {
@@ -587,10 +586,9 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeParquetEnd(JNIEnv* env, jc
   using namespace cudf::experimental::io;
   cudf::jni::native_parquet_writer_handle * state =
       reinterpret_cast<cudf::jni::native_parquet_writer_handle *>(j_state);
+  std::unique_ptr<cudf::jni::native_parquet_writer_handle> make_sure_we_delete(state);
   try {
     write_parquet_chunked_end(state->state);
-    // TODO should we do something to be 100% sure this is deleted???
-    delete state;
   } CATCH_STD(env, )
 }
 
@@ -732,11 +730,8 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeORCChunk(JNIEnv* env, jcla
   cudf::jni::native_orc_writer_handle * state =
       reinterpret_cast<cudf::jni::native_orc_writer_handle *>(j_state);
 
-  if (state->sink.get() != nullptr) {
-    long alloc_size = 1024 * 1024 * 10; // 10 MB minimum
-    if (alloc_size < mem_size/2) {
-      alloc_size = mem_size/2;
-    }
+  if (state->sink) {
+    long alloc_size = std::max(cudf::jni::MINIMUM_WRITE_BUFFER_SIZE, mem_size/2);
     state->sink->set_alloc_size(alloc_size);
   }
   try {
@@ -751,10 +746,9 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeORCEnd(JNIEnv* env, jclass
   using namespace cudf::experimental::io;
   cudf::jni::native_orc_writer_handle * state =
       reinterpret_cast<cudf::jni::native_orc_writer_handle *>(j_state);
+  std::unique_ptr<cudf::jni::native_orc_writer_handle> make_sure_we_delete(state);
   try {
     write_orc_chunked_end(state->state);
-    // TODO should we do something to be 100% sure this is deleted???
-    delete state;
   } CATCH_STD(env, )
 }
 
