@@ -882,7 +882,7 @@ class StringMethods(object):
         if len(result_table._data) == 1:
             if result_table._data[0].null_count == len(self._parent):
                 result_table = []
-            elif self._parent.null_count == len(self._parent):
+            elif self._column.null_count == len(self._column):
                 result_table = [self._column.copy()]
 
         return self._return_or_inplace(result_table, **kwargs,)
