@@ -588,6 +588,10 @@ struct map_partition_to_output {
 
   /**
    * @brief Returns the output location for the given `partition_number`
+   *
+   * For a given `partition_number`, atomically increments the offset value
+   * corresponding to `partition_number` to retrieve the corresponding output
+   * location.
    */
   template <typename MapType>
   auto operator()(MapType partition_number) {
@@ -621,7 +625,6 @@ struct dispatch_map_type {
   operator()(table_view const& t, column_view const& partition_map,
              size_type num_partitions, rmm::mr::device_memory_resource* mr,
              cudaStream_t stream) const {
-
     // Build a histogram of the number of rows in each partition
     rmm::device_vector<size_type> histogram(num_partitions + 1);
     std::size_t temp_storage_bytes{};
@@ -702,6 +705,15 @@ std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>>
 partition(table_view const& t, column_view const& partition_map,
           size_type num_partitions, rmm::mr::device_memory_resource* mr,
           cudaStream_t stream = 0) {
+  CUDF_EXPECTS(t.num_rows() == partition_map.size(),
+               "Size mismatch between table and partition map.");
+  CUDF_EXPECTS(not partition_map.has_nulls(),
+               "Unexpected null values inpartition_map.");
+
+  if (num_partitions == 0 or t.num_rows() == 0) {
+    std::make_pair(empty_like(t), std::vector<size_type>{});
+  }
+
   return cudf::experimental::type_dispatcher(
       partition_map.type(), dispatch_map_type{}, t, partition_map,
       num_partitions, mr, stream);
