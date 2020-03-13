@@ -369,8 +369,6 @@ class ColumnBase(Column):
 
         result = self if inplace else self.copy()
 
-        print(begin, end, self.codes.size)
-
         libcudfxx.filling.fill_in_place(result.codes, begin, end, fill_scalar)
         return result
 
