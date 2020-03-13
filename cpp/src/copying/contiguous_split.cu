@@ -22,6 +22,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 #include <numeric>
 
@@ -464,8 +465,10 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
 std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& input,
                                                       std::vector<size_type> const& splits,
                                                       rmm::mr::device_memory_resource* mr)
-{    
-   return cudf::experimental::detail::contiguous_split(input, splits, mr, (cudaStream_t)0);   
+{
+  CUDF_FUNC_RANGE();
+  return cudf::experimental::detail::contiguous_split(input, splits, mr,
+                                                      (cudaStream_t)0);   
 }
 
 }; // namespace experimental

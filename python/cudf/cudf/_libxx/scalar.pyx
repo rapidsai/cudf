@@ -114,7 +114,7 @@ cdef class Scalar:
 
 
 cdef _set_string_from_np_string(unique_ptr[scalar]& s, value, bool valid=True):
-    value = value.item() if valid else ""
+    value = value if valid else ""
     s.reset(new string_scalar(value.encode(), valid))
 
 
