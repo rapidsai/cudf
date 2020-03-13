@@ -21,13 +21,19 @@ from cudf._libxx.null_mask import (
     bitmask_allocation_size_bytes,
     create_null_mask,
 )
+from cudf._libxx.scalar import Scalar
 from cudf._libxx.stream_compaction import unique_count as cpp_unique_count
 from cudf._libxx.transform import bools_to_mask
 from cudf.core._sort import get_sorted_inds
 from cudf.core.buffer import Buffer
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils import cudautils, ioutils, utils
-from cudf.utils.dtypes import is_categorical_dtype, is_scalar, np_to_pa_dtype
+from cudf.utils.dtypes import (
+    is_categorical_dtype,
+    is_scalar,
+    is_string_dtype,
+    np_to_pa_dtype,
+)
 from cudf.utils.utils import buffers_from_pyarrow, mask_dtype
 
 
@@ -331,6 +337,41 @@ class ColumnBase(Column):
         """
         return self.to_gpu_array(fillna=fillna).copy_to_host()
 
+    def _fill(self, fill_value, begin=0, end=-1, inplace=False):
+        if end <= begin or begin >= self.size:
+            return self if inplace else self.copy()
+
+        if is_categorical_dtype(self.dtype):
+            return self._fill_categorical(fill_value, begin, end, inplace)
+
+        fill_scalar = Scalar(fill_value, self.dtype)
+
+        if not inplace:
+            return libcudfxx.filling.fill(self, begin, end, fill_scalar)
+
+        if is_string_dtype(self.dtype):
+            return self._mimic_inplace(
+                libcudfxx.filling.fill(self, begin, end, fill_scalar),
+                inplace=True,
+            )
+
+        if fill_value is None and not self.nullable:
+            mask = create_null_mask(self.size, state=MaskState.ALL_VALID)
+            self.set_base_mask(mask)
+
+        libcudfxx.filling.fill_in_place(self, begin, end, fill_scalar)
+
+        return self
+
+    def _fill_categorical(self, fill_value, begin, end, inplace):
+        fill_code = self._encode(fill_value)
+        fill_scalar = Scalar(fill_code, self.codes.dtype)
+
+        result = self if inplace else self.copy()
+
+        libcudfxx.filling.fill_in_place(result.codes, begin, end, fill_scalar)
+        return result
+
     def shift(self, offset, fill_value):
         return libcudfxx.copying.shift(self, offset, fill_value)
 
@@ -477,6 +518,8 @@ class ColumnBase(Column):
                 key_stop = key_stop + len(self)
             if key_start >= key_stop:
                 return self.copy()
+            if (key_stride is None or key_stride == 1) and is_scalar(value):
+                return self._fill(value, key_start, key_stop, inplace=True)
             if key_stride != 1 or key_stride is not None or is_scalar(value):
                 key = as_column(
                     cupy.arange(
@@ -739,10 +782,6 @@ class ColumnBase(Column):
             msg = "non sort based unique_count() not implemented yet"
             raise NotImplementedError(msg)
         return cpp_unique_count(self, ignore_nulls=dropna)
-
-    def repeat(self, repeats, axis=None):
-        assert axis in (None, 0)
-        return libcudf.filling.repeat([self], repeats)[0]
 
     def astype(self, dtype, **kwargs):
         if is_categorical_dtype(dtype):
@@ -1343,7 +1382,13 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                         else:
                             pa_type = np_to_pa_dtype(np.dtype(dtype))
                 data = as_column(
-                    pa.array(arbitrary, type=pa_type, from_pandas=nan_as_null),
+                    pa.array(
+                        arbitrary,
+                        type=pa_type,
+                        from_pandas=True
+                        if nan_as_null is None
+                        else nan_as_null,
+                    ),
                     dtype=dtype,
                     nan_as_null=nan_as_null,
                 )
