@@ -137,6 +137,7 @@
 - PR #4261 libxx Cython reorganization
 - PR #4274 Support negative position values in slice_strings
 - PR #4282 Porting nvstrings conversion functions from new libcudf++ to Python/Cython
+- PR #4290 Port Parquet to use new libcudf APIs
 - PR #4299 Convert cudf::shift to column-based api
 - PR #4301 Add support for writing large ORC files in a chunked manner
 - PR #4306 Use libcudf++ `unary.pyx` cast instead of legacy cast
@@ -166,6 +167,7 @@
 - PR #4314 Add Java and JNI bindings for string contains
 - PR #4461 Port nvstrings Miscellaneous functions to cuDF Python/Cython
 - PR #4495 Port nvtext to cuDF Python/Cython
+- PR #4493 Skip legacy testing in CI
 
 ## Bug Fixes
 
@@ -233,7 +235,7 @@
 - PR #4279 Fix converting `np.float64` to Scalar
 - PR #4285 Add init files for cython pkgs and fix `setup.py`
 - PR #4287 Parquet reader: fix empty string potentially read as null
-- PR #4310 Fix empty values case in groupby 
+- PR #4310 Fix empty values case in groupby
 - PR #4297 Fix specification of package_data in setup.py
 - PR #4302 Fix `_is_local_filesystem` check
 - PR #4303 Parquet reader: fix empty columns missing from table
@@ -256,6 +258,9 @@
 - PR #4467 Fix dropna issue for a DataFrame having np.nan
 - PR #4480 Fix string_scalar.value to return an empty string_view for empty string-scalar
 - PR #4474 Fix to not materialize RangeIndex in copy_categories
+- PR #4496 Skip tests which require 2+ GPUs
+- PR #4494 Update Java memory event handler for new RMM resource API
+- PR #4505 Fix 0 length buffers during serialization
 
 
 # cuDF 0.12.0 (04 Feb 2020)
@@ -270,7 +275,7 @@
 - PR #3555 Add column names support to libcudf++ io readers and writers
 - PR #3527 Add string functionality for merge API
 - PR #3610 Add memory_usage to DataFrame and Series APIs
-- PR #3557 Add contiguous_split() function. 
+- PR #3557 Add contiguous_split() function.
 - PR #3619 Support CuPy 7
 - PR #3604 Add nvtext ngrams-tokenize function
 - PR #3403 Define and implement new stack + tile APIs

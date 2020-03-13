@@ -17,6 +17,7 @@ DartConfiguration.tcl
 .nfs*
 
 ## Python build directories & artifacts
+dask-worker-space/
 dist/
 cudf.egg-info/
 python/build
