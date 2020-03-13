@@ -11,9 +11,9 @@ from cudf._libxx.cpp.table.table_view cimport table_view
 cimport cudf._libxx.cpp.types as libcudf_types
 
 
-cdef extern from "cudf/partitioning.hpp" namespace "cudf" nogil:
+cdef extern from "cudf/partitioning.hpp" namespace "cudf::experimental" nogil:
     cdef pair[unique_ptr[table], vector[libcudf_types.size_type]] \
-        hash_partition "cudf::hash_partition" (
+        hash_partition "cudf::experimental::hash_partition" (
         const table_view& input,
         const vector[libcudf_types.size_type]& columns_to_hash,
         int num_partitions

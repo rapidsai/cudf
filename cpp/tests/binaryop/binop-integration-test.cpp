@@ -468,6 +468,22 @@ TEST_F(BinaryOperationIntegrationTest, Equal_Vector_Vector_B8_STR_STR) {
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, EQUAL());
 }
 
+TEST_F(BinaryOperationIntegrationTest, Equal_Vector_Scalar_B8_STR_STR) {
+  using TypeOut = cudf::experimental::bool8;
+  using TypeLhs = std::string;
+  using TypeRhs = std::string;
+
+  using EQUAL = cudf::library::operation::Equal<TypeOut, TypeLhs, TypeRhs>;
+
+  auto rhs = cudf::test::strings_column_wrapper( {"eee", "bb", "<null>", "", "aa", "bbb", "ééé"} );
+  auto lhs = cudf::string_scalar("");
+  auto out = cudf::experimental::binary_operation(
+      lhs, rhs, cudf::experimental::binary_operator::EQUAL,
+      data_type(experimental::type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, EQUAL());
+}
+
 TEST_F(BinaryOperationIntegrationTest, LessEqual_Vector_Vector_B8_STR_STR) {
   using TypeOut = cudf::experimental::bool8;
   using TypeLhs = std::string;
