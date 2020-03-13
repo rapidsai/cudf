@@ -256,7 +256,7 @@
 - PR #4480 Fix string_scalar.value to return an empty string_view for empty string-scalar
 - PR #4474 Fix to not materialize RangeIndex in copy_categories
 - PR #4494 Update Java memory event handler for new RMM resource API
-- PR #4482 Fix `.str.rsplit` & `.str.split` and enable related tests
+- PR #4482 Fix `.str.rsplit`, `.str.split`, `.str.find`, `.str.rfind`, `.str.index`, `.str.rindex` and enable related tests
 
 # cuDF 0.12.0 (04 Feb 2020)
 
