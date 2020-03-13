@@ -295,44 +295,6 @@ class StringMethods(object):
             out = out[0]
         return out
 
-    # TODO, PREM: Uncomment in future PR
-    # def join(self, sep, na_rep="", **kwargs):
-    #     """
-    #     Join lists contained as elements in the Series/Index with passed
-    #     delimiter.
-
-    #     Parameters
-    #     ----------
-    #         sep : str
-    #             Delimiter to use between list entries.
-
-    #         na_rep : str
-    #             This character will take the place of any null strings
-    #             (not empty strings) in either list.
-
-    #     Returns
-    #     -------
-    #     Series/Index of str dtype
-    #         The list entries concatenated by intervening
-    #         occurrences of the delimiter.
-
-    #     """
-    #     from cudf._libxx.scalar import Scalar
-    #     from cudf.core.series import Series
-    #     # import pdb; pdb.set_trace()
-
-    #     data = cpp_join(self._column, Scalar(sep), Scalar(na_rep))
-    #     if len(data) != len(self._parent):
-    #         data = column.as_column(
-    #             utils.scalar_broadcast_to(data[0],
-    # len(self._parent), dtype='str')
-    #         )
-    #     return Series(
-    #         data=data,
-    #         index=self._parent.index,
-    #         dtype='str'
-    #     )
-
     def join(self, sep):
         """
         Join lists contained as elements in the Series/Index with passed
