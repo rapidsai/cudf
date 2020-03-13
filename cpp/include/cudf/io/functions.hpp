@@ -527,7 +527,7 @@ void write_parquet(write_parquet_args const& args, rmm::mr::device_memory_resour
  * @param[in] metadata_list List of input file metadata
  * @return A parquet-compatible blob that contains the data for all rowgroups in the list
  */
-std::vector<uint8_t> merge_rowgroup_metadata(const std::vector<const std::vector<uint8_t>*>& metadata_list);
+std::vector<uint8_t> merge_rowgroup_metadata(const std::vector<std::vector<uint8_t>>& metadata_list);
 
 /**
  * @brief Settings to use for `write_parquet_chunked()`

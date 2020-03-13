@@ -810,15 +810,15 @@ void writer::write_chunked_end(pq_chunked_state &state){
   _impl->write_chunked_end(state);
 }
 
-std::vector<uint8_t> writer::merge_rowgroup_metadata(const std::vector<const std::vector<uint8_t>*>& metadata_list)
+std::vector<uint8_t> writer::merge_rowgroup_metadata(const std::vector<std::vector<uint8_t>>& metadata_list)
 {
   std::vector<uint8_t> output;
   CompactProtocolWriter cpw(&output);
   FileMetaData md;
 
   md.row_groups.reserve(metadata_list.size());
-  for (auto& pmd : metadata_list) {
-    CompactProtocolReader cpreader(pmd->data(), pmd->size());
+  for (const auto& blob : metadata_list) {
+    CompactProtocolReader cpreader(blob.data(), blob.size());
     if (md.num_rows == 0) {
       cpreader.read(&md);
     }

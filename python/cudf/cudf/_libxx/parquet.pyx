@@ -31,7 +31,8 @@ from cudf._libxx.cpp.io.parquet cimport (
 )
 from cudf._libxx.cpp.io.functions cimport (
     write_parquet_args,
-    write_parquet as parquet_writer
+    write_parquet as parquet_writer,
+    merge_rowgroup_metadata as parquet_merge_metadata
 )
 
 cimport cudf._lib.utils as lib
@@ -245,3 +246,26 @@ cpdef write_parquet(
     if metadata_file_path is not None:
         out_metadata_py = out_metadata_c.data()[:len(out_metadata_c)]
         return out_metadata_py
+
+cpdef merge_filemetadata(filemetadata_list):
+    """
+    Cython function to call into libcudf API, see `merge_rowgroup_metadata`.
+
+    See Also
+    --------
+    cudf.io.parquet.merge_rowgroup_metadata
+    """
+    cdef vector[vector[uint8_t]] list_c
+    cdef vector[uint8_t] blob_c
+    cdef vector[uint8_t] output_c
+    cdef bytes output_py
+
+    for blob_py in filemetadata_list:
+        blob_c = blob_py
+        list_c.push_back(move(blob_c))
+
+    with nogil:
+        output_c = parquet_merge_metadata(list_c)
+
+    output_py = output_c.data()[:len(output_c)]
+    return output_py

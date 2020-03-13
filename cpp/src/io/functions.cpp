@@ -244,7 +244,7 @@ void write_parquet(write_parquet_args const& args,
  * @copydoc cudf::experimental::io::merge_rowgroup_metadata
  *
  **/
-std::vector<uint8_t> merge_rowgroup_metadata(const std::vector<const std::vector<uint8_t>*>& metadata_list)
+std::vector<uint8_t> merge_rowgroup_metadata(const std::vector<std::vector<uint8_t>>& metadata_list)
 {
   return parquet::writer::merge_rowgroup_metadata(metadata_list);
 }

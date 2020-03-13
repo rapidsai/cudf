@@ -143,3 +143,5 @@ cdef extern from "cudf/io/functions.hpp" \
                            cudf_io_types.statistics_freq stats_lvl_) except +
 
     cdef void write_parquet(write_parquet_args args) except +
+
+    cdef vector[uint8_t] merge_rowgroup_metadata(const vector[vector[uint8_t]]& metadata_list) except +

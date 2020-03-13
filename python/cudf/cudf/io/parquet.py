@@ -111,3 +111,9 @@ def to_parquet(
         pq.write_to_dataset(
             pa_table, path, partition_cols=partition_cols, *args, **kwargs
         )
+
+@ioutils.doc_merge_parquet_filemetadata()
+def merge_parquet_filemetadata(filemetadata_list):
+    """{docstring}"""
+
+    return libparquet.merge_filemetadata(filemetadata_list)
