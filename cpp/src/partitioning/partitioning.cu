@@ -577,28 +577,6 @@ hash_partition_table(table_view const& input, table_view const& table_to_hash,
   }
 }
 
-/**
- * @brief Maps a partition number to it's corresponding location in the
- * partitioned output
- *
- */
-struct map_partition_to_output {
-  size_type* const __restrict__ offsets{};  ///< The starting position of each
-                                            ///< partition in the final output
-
-  /**
-   * @brief Returns the output location for the given `partition_number`
-   *
-   * For a given `partition_number`, atomically increments the offset value
-   * corresponding to `partition_number` to retrieve the corresponding output
-   * location.
-   */
-  template <typename MapType>
-  auto operator()(MapType partition_number) {
-    return atomicAdd(&offsets[partition_number], 1);
-  }
-};
-
 struct dispatch_map_type {
   /**
    * @brief Partitions the table `t` according to the `partition_map`.
@@ -655,13 +633,20 @@ struct dispatch_map_type {
 
     // Transform iterator that atomically increments the offsets to determine
     // where each row in each partition should be written
-    auto scatter_map = thrust::make_transform_iterator(
+    auto transform = thrust::make_transform_iterator(
         partition_map.begin<MapType>(),
-        map_partition_to_output{histogram.data().get()});
+        [offsets = histogram.data().get()] __device__(auto partition_number) {
+          return atomicAdd(&offsets[partition_number], 1);
+        });
+
+    // Unfortunately need to materialize the scatter map because
+    // `detail::scatter` requires multiple passes through the iterator
+    rmm::device_vector<MapType> scatter_map(transform,
+                                            transform + partition_map.size());
 
     // Scatter the rows into their partitions
-    auto scattered = cudf::experimental::detail::scatter(
-        t, scatter_map, scatter_map + partition_map.size(), t);
+    auto scattered = cudf::experimental::detail::scatter(t, scatter_map.begin(),
+                                                         scatter_map.end(), t);
 
     return std::make_pair(std::move(scattered), std::move(partition_offsets));
   }
@@ -710,7 +695,7 @@ partition(table_view const& t, column_view const& partition_map,
   CUDF_EXPECTS(t.num_rows() == partition_map.size(),
                "Size mismatch between table and partition map.");
   CUDF_EXPECTS(not partition_map.has_nulls(),
-               "Unexpected null values inpartition_map.");
+               "Unexpected null values in partition_map.");
 
   if (num_partitions == 0 or t.num_rows() == 0) {
     std::make_pair(empty_like(t), std::vector<size_type>{});
