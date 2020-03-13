@@ -56,9 +56,6 @@ class NumericalColumn(column.ColumnBase):
             self, column.as_column([item], dtype=self.dtype)
         ).any()
 
-    def unary_operator(self, unaryop):
-        return _numeric_column_unaryop(self, op=unaryop)
-
     def binary_operator(self, binop, rhs, reflect=False):
         int_dtypes = [
             np.dtype("int8"),
@@ -85,9 +82,6 @@ class NumericalColumn(column.ColumnBase):
         return _numeric_column_binop(
             lhs=self, rhs=rhs, op=binop, out_dtype=out_dtype, reflect=reflect
         )
-
-    def unary_operator(self, unaryop):
-        return _numeric_column_unaryop(self, op=unaryop)
 
     def _apply_scan_op(self, op):
         return libcudfxx.reduce.scan(op, self, True)

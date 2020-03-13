@@ -11,7 +11,6 @@ import pyarrow as pa
 
 import nvstrings
 
-import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
 import cudf._libxx.string_casting as str_cast
 from cudf._lib.nvtx import nvtx_range_pop, nvtx_range_push
