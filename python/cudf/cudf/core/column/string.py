@@ -880,7 +880,7 @@ class StringMethods(object):
 
         result_table = cpp_split(self._column, Scalar(pat, "str"), n)
         if len(result_table._data) == 1:
-            if result_table._data[0].null_count == len(self._parent):
+            if result_table._data[0].null_count == len(self._column):
                 result_table = []
             elif self._column.null_count == len(self._column):
                 result_table = [self._column.copy()]
