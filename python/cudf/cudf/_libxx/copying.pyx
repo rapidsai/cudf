@@ -435,7 +435,7 @@ def column_split(Column input_column, object splits):
     return result
 
 
-def table_split(Table input_table, object splits, keep_index=True):
+def table_split(Table input_table, object splits, bool keep_index=True):
 
     cdef table_view input_table_view
     if keep_index is True:
