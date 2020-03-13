@@ -4,6 +4,7 @@
 
 ## Improvements
 - PR #4471 Consolidate partitioning functionality into a single header.
+- PR #4483 Add support fill() on dictionary columns
 
 ## Bug Fixes
 - PR #4386 Update Java package to 0.14
