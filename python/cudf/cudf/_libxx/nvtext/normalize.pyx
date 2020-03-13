@@ -9,7 +9,6 @@ from cudf._libxx.cpp.nvtext.normalize cimport (
     normalize_spaces as cpp_normalize_spaces
 )
 from cudf._libxx.column cimport Column
-from cudf._libxx.scalar cimport Scalar
 
 
 def normalize_spaces(Column strings, int ngrams):
