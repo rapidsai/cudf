@@ -84,7 +84,7 @@ class Frame(libcudfxx.table.Table):
             self, columns_to_hash, num_partitions, keep_index
         )
         output = self.__class__._from_table(output)
-        output._copy_categories(self)
+        output._copy_categories(self, include_index=keep_index)
         return output, offsets
 
     def _as_column(self):
@@ -111,7 +111,7 @@ class Frame(libcudfxx.table.Table):
             libcudfxx.copying.table_empty_like(self, keep_index)
         )
 
-        result._copy_categories(self)
+        result._copy_categories(self, include_index=keep_index)
         return result
 
     def _slice(self, arg):
@@ -124,6 +124,7 @@ class Frame(libcudfxx.table.Table):
 
        """
         from cudf.core.index import RangeIndex
+        from cudf import DataFrame, Series
 
         num_rows = len(self)
         if num_rows == 0:
@@ -138,7 +139,9 @@ class Frame(libcudfxx.table.Table):
         # This is just to handle RangeIndex type, stop
         # it from materializing unnecessarily
         keep_index = True
-        if isinstance(self.index, RangeIndex):
+        if isinstance(self, (DataFrame, Series)) and isinstance(
+            self.index, RangeIndex
+        ):
             keep_index = False
 
         if start < 0:
@@ -158,11 +161,11 @@ class Frame(libcudfxx.table.Table):
                 ]
             )
 
-            result._copy_categories(self, keep_index)
+            result._copy_categories(self, include_index=keep_index)
             # Adding index of type RangeIndex back to
             # result
-            if keep_index is False:
-                result.index = RangeIndex(start, stop)
+            if keep_index is False and isinstance(self, (DataFrame, Series)):
+                result.index = self.index[start:stop]
             return result
 
     def _normalize_scalars(self, other):
@@ -382,7 +385,10 @@ class Frame(libcudfxx.table.Table):
             self, scatter_map, keep_index
         )
         result = [self._from_table(tbl) for tbl in result]
-        [frame._copy_categories(self, keep_index) for frame in result]
+        [
+            frame._copy_categories(self, include_index=keep_index)
+            for frame in result
+        ]
 
         return result
 

@@ -1490,7 +1490,6 @@ class DataFrame(Frame):
             result = self
         else:
             result = self.copy()
-        index_columns = self.index._data.columns
         if all(name is None for name in self.index.names):
             if isinstance(self.index, cudf.MultiIndex):
                 names = tuple(
@@ -1502,6 +1501,7 @@ class DataFrame(Frame):
             names = self.index.names
 
         if not drop:
+            index_columns = self.index._data.columns
             for name, index_column in zip(
                 reversed(names), reversed(index_columns)
             ):
