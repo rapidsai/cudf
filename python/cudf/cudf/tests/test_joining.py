@@ -673,18 +673,10 @@ def test_merge_left_right_index_left_right_on_kwargs2(kwargs):
         {"on": ["b", "a", "aa"]},
     ],
 )
-@pytest.mark.parametrize(
-    "indexes",
-    [
-        {"left_index": False, "right_index": False},
-        {"left_index": True, "right_index": True},
-    ],
-)
-def test_merge_sort(ons, hows, indexes):
+def test_merge_sort(ons, hows):
     kwargs = {}
     kwargs.update(hows)
     kwargs.update(ons)
-    kwargs.update(indexes)
     kwargs["sort"] = True
     a = [4, 6, 9, 5, 2, 4, 1, 8, 1]
     b = [9, 8, 7, 8, 3, 9, 7, 9, 2]
@@ -715,6 +707,46 @@ def test_merge_sort(ons, hows, indexes):
         )
 
     assert_eq(pd_merge, gd_merge)
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"left_on": ["a"], "left_index": False, "right_index": True},
+        {"right_on": ["b"], "left_index": True, "right_index": False},
+        {
+            "left_on": ["a"],
+            "right_on": ["b"],
+            "left_index": True,
+            "right_index": True,
+        },
+    ],
+)
+def test_merge_sort_on_indexes(kwargs):
+    left_index = kwargs["left_index"]
+    right_index = kwargs["right_index"]
+    kwargs["sort"] = True
+    a = [4, 6, 9, 5, 2, 4, 1, 8, 1]
+    left = pd.DataFrame({"a": a})
+    right = pd.DataFrame({"b": a})
+
+    left.index = [6, 5, 4, 7, 5, 5, 5, 4, 4]
+    right.index = [5, 4, 1, 9, 4, 3, 5, 4, 4]
+
+    gleft = DataFrame.from_pandas(left)
+    gright = DataFrame.from_pandas(right)
+    gd_merge = gleft.merge(gright, **kwargs)
+
+    if left_index and right_index:
+        check_if_sorted = gd_merge[["a", "b"]].to_pandas()
+        check_if_sorted.index.name = "index"
+        definitely_sorted = check_if_sorted.sort_values(["index", "a", "b"])
+        definitely_sorted.index.name = None
+        assert_eq(gd_merge, definitely_sorted)
+    elif left_index:
+        assert gd_merge["b"].is_monotonic
+    elif right_index:
+        assert gd_merge["a"].is_monotonic
 
 
 @pytest.mark.parametrize(
