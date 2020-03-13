@@ -123,7 +123,7 @@ class MultiIndex(Index):
     def names(self, value):
         value = [None] * self.nlevels if value is None else value
         assert len(value) == self.nlevels
-        self._names = value
+        self._names = [n for n in value]
 
     @classmethod
     def _from_table(cls, table):
@@ -514,7 +514,7 @@ class MultiIndex(Index):
         df = self._source_data
         if index:
             df = df.set_index(self)
-        if name:
+        if name is not None:
             if len(name) != len(self.levels):
                 raise ValueError(
                     "'name' should have th same length as "
