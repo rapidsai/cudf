@@ -13,7 +13,7 @@ cdef extern from "nvtext/tokenize.hpp" namespace "nvtext" nogil:
         const string_scalar & delimiter
     ) except +
 
-    cdef unique_ptr[column] tokenize_multi "nvtext::tokenize" (
+    cdef unique_ptr[column] tokenize(
         const column_view & strings,
         const column_view & delimiters
     ) except +
@@ -23,7 +23,7 @@ cdef extern from "nvtext/tokenize.hpp" namespace "nvtext" nogil:
         const string_scalar & delimiter
     ) except +
 
-    cdef unique_ptr[column] count_tokens_multi "nvtext::count_tokens" (
+    cdef unique_ptr[column] count_tokens(
         const column_view & strings,
         const column_view & delimiters
     ) except +

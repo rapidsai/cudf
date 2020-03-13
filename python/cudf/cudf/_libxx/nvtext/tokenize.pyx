@@ -9,9 +9,7 @@ from cudf._libxx.cpp.types cimport size_type
 from cudf._libxx.cpp.column.column_view cimport column_view
 from cudf._libxx.cpp.nvtext.tokenize cimport (
     tokenize as cpp_tokenize,
-    tokenize_multi as cpp_tokenize_multi,
     count_tokens as cpp_count_tokens,
-    count_tokens_multi as cpp_count_tokens_multi,
 )
 from cudf._libxx.column cimport Column
 from cudf._libxx.scalar cimport Scalar
@@ -55,7 +53,7 @@ def _tokenize_column(Column strings, Column delimiters):
 
     with nogil:
         c_result = move(
-            cpp_tokenize_multi(
+            cpp_tokenize(
                 c_strings,
                 c_delimiters
             )
@@ -101,7 +99,7 @@ def _count_tokens_column(Column strings, Column delimiters):
 
     with nogil:
         c_result = move(
-            cpp_count_tokens_multi(
+            cpp_count_tokens(
                 c_strings,
                 c_delimiters
             )
