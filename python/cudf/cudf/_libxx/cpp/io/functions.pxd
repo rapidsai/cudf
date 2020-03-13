@@ -144,4 +144,6 @@ cdef extern from "cudf/io/functions.hpp" \
 
     cdef void write_parquet(write_parquet_args args) except +
 
-    cdef vector[uint8_t] merge_rowgroup_metadata(const vector[vector[uint8_t]]& metadata_list) except +
+    cdef vector[uint8_t] merge_rowgroup_metadata(
+        const vector[vector[uint8_t]]& metadata_list
+    ) except +
