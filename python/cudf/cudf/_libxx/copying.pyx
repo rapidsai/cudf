@@ -313,9 +313,14 @@ def column_allocate_like(Column input_column, size=None):
     return Column.from_unique_ptr(move(c_result))
 
 
-def table_empty_like(Table input_table):
+def table_empty_like(Table input_table, bool keep_index=True):
 
-    cdef table_view input_table_view = input_table.view()
+    cdef table_view input_table_view
+    if keep_index is True:
+        input_table_view = input_table.view()
+    else:
+        input_table_view = input_table.data_view()
+
     cdef unique_ptr[table] c_result
 
     with nogil:
@@ -324,7 +329,9 @@ def table_empty_like(Table input_table):
     return Table.from_unique_ptr(
         move(c_result),
         column_names=input_table._column_names,
-        index_names=input_table._index._column_names
+        index_names=(
+            input_table._index._column_names if keep_index is True else None
+        )
     )
 
 
@@ -357,9 +364,14 @@ def column_slice(Column input_column, object indices):
     return result
 
 
-def table_slice(Table input_table, object indices):
+def table_slice(Table input_table, object indices, bool keep_index=True):
 
-    cdef table_view input_table_view = input_table.view()
+    cdef table_view input_table_view
+    if keep_index is True:
+        input_table_view = input_table.view()
+    else:
+        input_table_view = input_table.data_view()
+
     cdef vector[size_type] c_indices
     c_indices.reserve(len(indices))
 
@@ -382,7 +394,11 @@ def table_slice(Table input_table, object indices):
             c_result[i],
             input_table,
             column_names=input_table._column_names,
-            index_names=input_table._index._column_names
+            index_names=(
+                input_table._index._column_names if (
+                    keep_index is True)
+                else None
+            )
         ) for i in range(num_of_result_cols)]
 
     return result
@@ -419,9 +435,14 @@ def column_split(Column input_column, object splits):
     return result
 
 
-def table_split(Table input_table, object splits):
+def table_split(Table input_table, object splits, keep_index=True):
 
-    cdef table_view input_table_view = input_table.view()
+    cdef table_view input_table_view
+    if keep_index is True:
+        input_table_view = input_table.view()
+    else:
+        input_table_view = input_table.data_view()
+
     cdef vector[size_type] c_splits
     c_splits.reserve(len(splits))
 
@@ -444,7 +465,11 @@ def table_split(Table input_table, object splits):
             c_result[i],
             input_table,
             column_names=input_table._column_names,
-            index_names=input_table._index._column_names
+            index_names=(
+                input_table._index._column_names if (
+                    keep_index is True)
+                else None
+            )
         ) for i in range(num_of_result_cols)]
 
     return result

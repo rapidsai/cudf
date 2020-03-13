@@ -3964,7 +3964,7 @@ class DataFrame(Frame):
             # Append empty dataframes if map_size > len(tables)
 
             for i in range(map_size - len(tables)):
-                tables.append(self.take([]))
+                tables.append(self._empty_like(keep_index))
         return tables
 
     def stack(self, level=-1, dropna=True):
