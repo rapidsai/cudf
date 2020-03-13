@@ -338,7 +338,7 @@ class ColumnBase(Column):
         return self.to_gpu_array(fillna=fillna).copy_to_host()
 
     def _fill(self, fill_value, begin=0, end=-1, inplace=False):
-        if begin < 0 or end <= begin or begin >= self.size:
+        if end <= begin or begin >= self.size:
             return self if inplace else self.copy()
 
         if is_categorical_dtype(self.dtype):
@@ -511,9 +511,6 @@ class ColumnBase(Column):
         from cudf.core import column
 
         if isinstance(key, slice):
-            key_start, key_stop, key_stride = key.indices(len(self))
-            nelem = abs(key_stop - key_start)
-
             key_start, key_stop, key_stride = key.indices(len(self))
             if key_start < 0:
                 key_start = key_start + len(self)
