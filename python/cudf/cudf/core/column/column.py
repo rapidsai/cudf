@@ -1175,7 +1175,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
 
     elif isinstance(arbitrary, np.ndarray):
         # CUDF assumes values are always contiguous
-        if hasattr(arbitrary, "ndim") and arbitrary.ndim != 1:
+        if arbitrary.ndim > 1:
             raise ValueError("Data must be 1-dimensional")
 
         if not arbitrary.flags["C_CONTIGUOUS"]:
