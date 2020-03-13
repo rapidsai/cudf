@@ -573,11 +573,19 @@ class Frame(libcudfxx.table.Table):
                 self._data[name] = build_categorical_column(
                     categories=other_col.categories,
                     codes=col,
-                    mask=col.mask,
+                    mask=col.base_mask,
                     ordered=other_col.ordered,
+                    size=col.size,
+                    offset=col.offset,
                 )
         if include_index:
-            if self._index is not None:
+            from cudf.core.index import RangeIndex
+
+            # include_index will still behave as False
+            # incase of self._index being a RangeIndex
+            if (self._index is not None) and (
+                not isinstance(self._index, RangeIndex)
+            ):
                 self._index._copy_categories(other._index)
         return self
 
