@@ -305,10 +305,18 @@ ConfigureTest(DATETIME_OPS_TEST "${DATETIME_OPS_TEST_SRC}")
 # - hashing tests ---------------------------------------------------------------------------------
 
 set(HASHING_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/hashing/hash_test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/hashing/hash_partition_test.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/hashing/hash_test.cpp")
 
 ConfigureTest(HASHING_TEST "${HASHING_TEST_SRC}")
+
+###################################################################################################
+# - partitioning tests ---------------------------------------------------------------------------------
+
+set(PARTITIONING_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/partitioning/hash_partition_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/partitioning/round_robin_test.cpp")
+
+ConfigureTest(PARTITIONING_TEST "${PARTITIONING_TEST_SRC}")
 
 ###################################################################################################
 # - legacy hashing tests ---------------------------------------------------------------------------------
@@ -706,14 +714,6 @@ set(MERGE_TEST_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/merge/merge_string_test.cpp")
 
 ConfigureTest(MERGE_TEST "${MERGE_TEST_SRC}")
-
-###################################################################################################
-# - round-robin new tests ----------------------------------------------------------------------------
-
-set(ROUND_ROBIN_TEST_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/round_robin/round_robin_test.cpp")
-
-ConfigureTest(ROUND_ROBIN_TEST "${ROUND_ROBIN_TEST_SRC}")
 
 ###################################################################################################
 # - stream compaction tests -----------------------------------------------------------------------

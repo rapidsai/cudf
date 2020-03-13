@@ -18,7 +18,7 @@
 #include <cudf/hashing.hpp>
 #include <cudf/io/functions.hpp>
 #include <cudf/join.hpp>
-#include <cudf/round_robin.hpp>
+#include <cudf/partitioning.hpp>
 #include <cudf/search.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/stream_compaction.hpp>
@@ -592,8 +592,9 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_hashPartition(
       columns_to_hash_vec[i] = n_columns_to_hash[i];
     }
 
-    std::pair<std::unique_ptr<cudf::experimental::table>, std::vector<cudf::size_type>> result
-        = cudf::hash_partition(*n_input_table, columns_to_hash_vec, number_of_partitions);
+    std::pair<std::unique_ptr<cudf::experimental::table>, std::vector<cudf::size_type>> result =
+        cudf::experimental::hash_partition(*n_input_table, columns_to_hash_vec,
+                                           number_of_partitions);
 
     for (int i = 0; i < result.second.size(); i++) {
       n_output_offsets[i] = result.second[i];
