@@ -30,8 +30,8 @@ namespace cudf {
 enum class rank_method {
   FIRST,   ///< stable sort order ranking (no ties)
   AVERAGE, ///< mean of first in the group
-  MIN,     ///< min  of first in the group
-  MAX,     ///< max  of first in the group
+  MIN,     ///< min of first in the group
+  MAX,     ///< max of first in the group
   DENSE    ///< rank always increases by 1 between groups
 };
 
