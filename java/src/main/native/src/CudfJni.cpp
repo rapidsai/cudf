@@ -105,6 +105,69 @@ native_jobjectArray<jobject> contiguous_table_array(JNIEnv* env, jsize length) {
   return native_jobjectArray<jobject>(env, env->NewObjectArray(length, contiguous_table_jclass, nullptr));
 }
 
+static jclass host_memory_buffer_jclass;
+static jmethodID host_buffer_allocate;
+static jfieldID host_buffer_address;
+static jfieldID host_buffer_length;
+
+#define HOST_MEMORY_BUFFER_CLASS "ai/rapids/cudf/HostMemoryBuffer"
+#define HOST_MEMORY_BUFFER_SIG(param_sig) "(" param_sig ")L" HOST_MEMORY_BUFFER_CLASS ";"
+
+static bool cache_host_memory_buffer_jni(JNIEnv *env) {
+  jclass cls = env->FindClass(HOST_MEMORY_BUFFER_CLASS);
+  if (cls == nullptr) {
+    return false;
+  }
+
+  host_buffer_allocate = env->GetStaticMethodID(cls,
+          "allocate", HOST_MEMORY_BUFFER_SIG("JZ"));
+  if (host_buffer_allocate == nullptr) {
+    return false;
+  }
+
+  host_buffer_address = env->GetFieldID(cls, "address", "J");
+  if (host_buffer_address == nullptr) {
+    return false;
+  }
+
+  host_buffer_length = env->GetFieldID(cls, "length", "J");
+  if (host_buffer_length == nullptr) {
+    return false;
+  }
+
+  // Convert local reference to global so it cannot be garbage collected.
+  host_memory_buffer_jclass = static_cast<jclass>(env->NewGlobalRef(cls));
+  if (host_memory_buffer_jclass == nullptr) {
+    return false;
+  }
+  return true;
+}
+
+static void release_host_memory_buffer_jni(JNIEnv *env) {
+  if (host_memory_buffer_jclass != nullptr) {
+    env->DeleteGlobalRef(host_memory_buffer_jclass);
+    host_memory_buffer_jclass = nullptr;
+  }
+}
+
+jobject allocate_host_buffer(JNIEnv* env, jlong amount, jboolean prefer_pinned) {
+  jobject ret = env->CallStaticObjectMethod(host_memory_buffer_jclass, host_buffer_allocate,
+          amount, prefer_pinned);
+
+  if (env->ExceptionCheck()) {
+    throw std::runtime_error("allocateHostBuffer threw an exception");
+  }
+  return ret;
+}
+
+jlong get_host_buffer_address(JNIEnv* env, jobject buffer) {
+  return env->GetLongField(buffer, host_buffer_address);
+}
+
+jlong get_host_buffer_length(JNIEnv* env, jobject buffer) {
+  return env->GetLongField(buffer, host_buffer_length);
+}
+
 // Get the JNI environment, attaching the current thread to the JVM if necessary. If the thread
 // needs to be attached, the thread will automatically detach when the thread terminates.
 JNIEnv* get_jni_env(JavaVM* jvm) {
@@ -148,6 +211,10 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *) {
     return JNI_ERR;
   }
 
+  if (!cudf::jni::cache_host_memory_buffer_jni(env)) {
+    return JNI_ERR;
+  }
+
   return cudf::jni::MINIMUM_JNI_VERSION;
 }
 
@@ -159,6 +226,7 @@ JNIEXPORT void JNI_OnUnload(JavaVM *vm, void *) {
 
   // release cached class objects here.
   cudf::jni::release_contiguous_table_jni(env);
+  cudf::jni::release_host_memory_buffer_jni(env);
 }
 
 } // extern "C"

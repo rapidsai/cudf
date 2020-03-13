@@ -22,11 +22,184 @@
 #include <cudf/search.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/stream_compaction.hpp>
+#include <cudf/io/data_sink.hpp>
 
 #include "jni_utils.hpp"
 
 namespace cudf {
 namespace jni {
+
+class jni_writer_data_sink final : public cudf::io::data_sink {
+public:
+  explicit jni_writer_data_sink(JNIEnv* env,
+          jobject callback) {
+    if (env->GetJavaVM(&jvm) < 0) {
+      throw std::runtime_error("GetJavaVM failed");
+    }
+
+    jclass cls = env->GetObjectClass(callback);
+    if (cls == nullptr) {
+      throw cudf::jni::jni_exception("class not found");
+    }
+
+    handle_buffer_method =
+        env->GetMethodID(cls, "handleBuffer", "(Lai/rapids/cudf/HostMemoryBuffer;J)V");
+    if (handle_buffer_method == nullptr) {
+      throw cudf::jni::jni_exception("handleBuffer method");
+    }
+
+    this->callback = env->NewGlobalRef(callback);
+    if (this->callback == nullptr) {
+      throw cudf::jni::jni_exception("global ref");
+    }
+  }
+
+  virtual ~jni_writer_data_sink() {
+    // This should normally be called by a JVM thread. If the JVM environment is missing then this
+    // is likely being triggered by the C++ runtime during shutdown. In that case the JVM may
+    // already be destroyed and this thread should not try to attach to get an environment.
+    JNIEnv* env = nullptr;
+    if (jvm->GetEnv(reinterpret_cast<void**>(&env), cudf::jni::MINIMUM_JNI_VERSION) == JNI_OK) {
+      env->DeleteGlobalRef(callback);
+      if (current_buffer != nullptr) {
+        env->DeleteGlobalRef(current_buffer);
+      }
+    }
+    callback = nullptr;
+    current_buffer = nullptr;
+  }
+
+  void host_write(void const* data, size_t size) override {
+    JNIEnv* env = cudf::jni::get_jni_env(jvm);
+    size_t left_to_copy = size;
+    const char * copy_from = static_cast<const char*>(data);
+    while (left_to_copy > 0) {
+      long buffer_amount_available = current_buffer_len - current_buffer_written;
+      if (buffer_amount_available <= 0) {
+        // should never be < 0, but just to be safe
+        rotate_buffer(env);
+        buffer_amount_available = current_buffer_len - current_buffer_written;
+      }
+      long amount_to_copy = left_to_copy < buffer_amount_available ? left_to_copy : buffer_amount_available;
+      char * copy_to = current_buffer_data + current_buffer_written;
+
+      std::memcpy(copy_to, copy_from, amount_to_copy);
+      copy_from = copy_from + amount_to_copy;
+      current_buffer_written += amount_to_copy;
+      total_written += amount_to_copy;
+      left_to_copy -= amount_to_copy;
+    }
+  }
+
+  bool supports_device_write() const override {
+    return true;
+  }
+
+  void device_write(void const* gpu_data, size_t size, cudaStream_t stream) {
+    if (this->stream != stream) {
+      if (is_stream_set) {
+        CUDA_TRY(cudaStreamSynchronize(this->stream));
+      }
+      this->stream = stream;
+    }
+    this->is_stream_set = true;
+
+    JNIEnv* env = cudf::jni::get_jni_env(jvm);
+    size_t left_to_copy = size;
+    const char * copy_from = static_cast<const char*>(gpu_data);
+    while (left_to_copy > 0) {
+      long buffer_amount_available = current_buffer_len - current_buffer_written;
+      if (buffer_amount_available <= 0) {
+        // should never be < 0, but just to be safe
+        rotate_buffer(env);
+        buffer_amount_available = current_buffer_len - current_buffer_written;
+      }
+      long amount_to_copy = left_to_copy < buffer_amount_available ? left_to_copy : buffer_amount_available;
+      char * copy_to = current_buffer_data + current_buffer_written;
+
+      CUDA_TRY(cudaMemcpyAsync(copy_to, copy_from, amount_to_copy, cudaMemcpyDeviceToHost, stream));
+
+      copy_from = copy_from + amount_to_copy;
+      current_buffer_written += amount_to_copy;
+      total_written += amount_to_copy;
+      left_to_copy -= amount_to_copy;
+    }
+  }
+
+  void flush() override {
+    if (current_buffer_written > 0) {
+      if (is_stream_set) {
+        // only sync with the stream when we are going to use the data.
+        CUDA_TRY(cudaStreamSynchronize(stream));
+      }
+      JNIEnv* env = cudf::jni::get_jni_env(jvm);
+      handle_buffer(env, current_buffer, current_buffer_written);
+      current_buffer = nullptr;
+      current_buffer_len = 0;
+      current_buffer_data = nullptr;
+      current_buffer_written = 0;
+    }
+  }
+
+  size_t bytes_written() override {
+    return total_written;
+  }
+
+  void set_alloc_size(long size) {
+    this->alloc_size = size;
+  }
+
+private:
+  void rotate_buffer(JNIEnv* env) {
+    if (current_buffer != nullptr) {
+      if (is_stream_set) {
+        // only sync with the stream when we are going to use the data.
+        CUDA_TRY(cudaStreamSynchronize(stream));
+      }
+      handle_buffer(env, current_buffer, current_buffer_written);
+      env->DeleteGlobalRef(current_buffer);
+      current_buffer = nullptr;
+    }
+    jobject tmp_buffer = allocate_host_buffer(env, alloc_size, true);
+    current_buffer = env->NewGlobalRef(tmp_buffer);
+    current_buffer_len = get_host_buffer_length(env, current_buffer);
+    current_buffer_data = reinterpret_cast<char *>(get_host_buffer_address(env, current_buffer));
+    current_buffer_written = 0;
+  }
+
+  void handle_buffer(JNIEnv* env, jobject buffer, jlong len) {
+    env->CallVoidMethod(callback, handle_buffer_method, buffer, len);
+    if (env->ExceptionCheck()) {
+      throw std::runtime_error("handleBuffer threw an exception");
+    }
+  }
+
+  JavaVM* jvm;
+  jobject callback;
+  jmethodID handle_buffer_method;
+  jobject current_buffer = nullptr;
+  char * current_buffer_data = nullptr;
+  long current_buffer_len = 0;
+  long current_buffer_written = 0;
+  size_t total_written = 0;
+  long alloc_size = 10 * 1024 * 1024;
+  cudaStream_t stream = nullptr;
+  bool is_stream_set = false;
+};
+
+template <typename STATE>
+class jni_x_writer_handle final {
+public:
+  explicit jni_x_writer_handle(std::shared_ptr<STATE> & state) : state(state), sink() {}
+  jni_x_writer_handle(std::shared_ptr<STATE> & state,
+          std::unique_ptr<jni_writer_data_sink> & sink) : state(state), sink(std::move(sink)) {}
+
+  std::shared_ptr<STATE> state;
+  std::unique_ptr<jni_writer_data_sink> sink;
+};
+
+typedef jni_x_writer_handle<cudf::experimental::io::detail::parquet::pq_chunked_state> native_parquet_writer_handle;
+typedef jni_x_writer_handle<cudf::experimental::io::detail::orc::orc_chunked_state> native_orc_writer_handle;
 
 /**
  * Take a table returned by some operation and turn it into an array of column* so we can track them ourselves
@@ -299,26 +472,76 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readParquet(
   CATCH_STD(env, NULL);
 }
 
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeParquet(JNIEnv* env, jclass,
-    jlong j_table,
+JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(JNIEnv* env, jclass,
     jobjectArray j_col_names,
+    jbooleanArray j_col_nullability,
+    jobjectArray j_metadata_keys,
+    jobjectArray j_metadata_values,
+    jint j_compression,
+    jint j_stats_freq,
+    jobject consumer) {
+  JNI_NULL_CHECK(env, j_col_names, "null columns", 0);
+  JNI_NULL_CHECK(env, j_col_nullability, "null nullability", 0);
+  JNI_NULL_CHECK(env, j_metadata_keys, "null metadata keys", 0);
+  JNI_NULL_CHECK(env, j_metadata_values, "null metadata values", 0);
+  JNI_NULL_CHECK(env, consumer, "null consumer", 0);
+  try {
+    using namespace cudf::experimental::io;
+    cudf::jni::native_jstringArray col_names(env, j_col_names);
+    cudf::jni::native_jbooleanArray col_nullability(env, j_col_nullability);
+    cudf::jni::native_jstringArray meta_keys(env, j_metadata_keys);
+    cudf::jni::native_jstringArray meta_values(env, j_metadata_values);
+
+    auto d = col_nullability.data();
+    std::vector<bool> nullability(d, d + col_nullability.size());
+    table_metadata_with_nullability metadata;
+    metadata.column_nullable = nullability;
+    metadata.column_names = col_names.as_cpp_vector();
+    for (size_t i = 0; i < meta_keys.size(); ++i) {
+      metadata.user_data[meta_keys[i].get()] = meta_values[i].get();
+    }
+
+    std::unique_ptr<cudf::jni::jni_writer_data_sink> data_sink(
+            new cudf::jni::jni_writer_data_sink(env, consumer));
+    sink_info sink{data_sink.get()};
+    compression_type compression{static_cast<compression_type>(j_compression)};
+    statistics_freq stats{static_cast<statistics_freq>(j_stats_freq)};
+
+    write_parquet_chunked_args args(sink, &metadata, compression, stats);
+    std::shared_ptr<detail::parquet::pq_chunked_state> state = write_parquet_chunked_begin(args);
+    cudf::jni::native_parquet_writer_handle * ret =
+        new cudf::jni::native_parquet_writer_handle(state, data_sink);
+    return reinterpret_cast<jlong>(ret);
+  } CATCH_STD(env, 0)
+}
+
+
+JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetFileBegin(JNIEnv* env, jclass,
+    jobjectArray j_col_names,
+    jbooleanArray j_col_nullability,
     jobjectArray j_metadata_keys,
     jobjectArray j_metadata_values,
     jint j_compression,
     jint j_stats_freq,
     jstring j_output_path) {
-  JNI_NULL_CHECK(env, j_table, "null table", );
-  JNI_NULL_CHECK(env, j_col_names, "null columns", );
-  JNI_NULL_CHECK(env, j_metadata_keys, "null metadata keys", );
-  JNI_NULL_CHECK(env, j_metadata_values, "null metadata values", );
+  JNI_NULL_CHECK(env, j_col_names, "null columns", 0);
+  JNI_NULL_CHECK(env, j_col_nullability, "null nullability", 0);
+  JNI_NULL_CHECK(env, j_metadata_keys, "null metadata keys", 0);
+  JNI_NULL_CHECK(env, j_metadata_values, "null metadata values", 0);
+  JNI_NULL_CHECK(env, j_output_path, "null output path", 0);
   try {
     using namespace cudf::experimental::io;
     cudf::jni::native_jstringArray col_names(env, j_col_names);
+    cudf::jni::native_jbooleanArray col_nullability(env, j_col_nullability);
     cudf::jni::native_jstringArray meta_keys(env, j_metadata_keys);
     cudf::jni::native_jstringArray meta_values(env, j_metadata_values);
     cudf::jni::native_jstring output_path(env, j_output_path);
 
-    table_metadata metadata{col_names.as_cpp_vector()};
+    auto d = col_nullability.data();
+    std::vector<bool> nullability(d, d + col_nullability.size());
+    table_metadata_with_nullability metadata;
+    metadata.column_nullable = nullability;
+    metadata.column_names = col_names.as_cpp_vector();
     for (size_t i = 0; i < meta_keys.size(); ++i) {
       metadata.user_data[meta_keys[i].get()] = meta_values[i].get();
     }
@@ -327,9 +550,47 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeParquet(JNIEnv* env, jclas
     compression_type compression{static_cast<compression_type>(j_compression)};
     statistics_freq stats{static_cast<statistics_freq>(j_stats_freq)};
 
-    cudf::table_view *tview = reinterpret_cast<cudf::table_view *>(j_table);
-    write_parquet_args args(sink, *tview, &metadata, compression, stats);
-    write_parquet(args);
+    write_parquet_chunked_args args(sink, &metadata, compression, stats);
+    std::shared_ptr<detail::parquet::pq_chunked_state> state = write_parquet_chunked_begin(args);
+    cudf::jni::native_parquet_writer_handle * ret =
+        new cudf::jni::native_parquet_writer_handle(state);
+    return reinterpret_cast<jlong>(ret);
+  } CATCH_STD(env, 0)
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeParquetChunk(JNIEnv* env, jclass,
+    jlong j_state, jlong j_table, jlong mem_size) {
+  JNI_NULL_CHECK(env, j_table, "null table", );
+  JNI_NULL_CHECK(env, j_state, "null state", );
+
+  using namespace cudf::experimental::io;
+  cudf::table_view *tview = reinterpret_cast<cudf::table_view *>(j_table);
+  cudf::jni::native_parquet_writer_handle * state =
+      reinterpret_cast<cudf::jni::native_parquet_writer_handle *>(j_state);
+
+  if (state->sink.get() != nullptr) {
+    long alloc_size = 1024 * 1024 * 10; // 10 MB minimum
+    if (alloc_size < mem_size/2) {
+      alloc_size = mem_size/2;
+    }
+    state->sink->set_alloc_size(alloc_size);
+  }
+  try {
+    write_parquet_chunked(*tview, state->state);
+  } CATCH_STD(env, )
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeParquetEnd(JNIEnv* env, jclass,
+    jlong j_state) {
+  JNI_NULL_CHECK(env, j_state, "null state", );
+
+  using namespace cudf::experimental::io;
+  cudf::jni::native_parquet_writer_handle * state =
+      reinterpret_cast<cudf::jni::native_parquet_writer_handle *>(j_state);
+  try {
+    write_parquet_chunked_end(state->state);
+    // TODO should we do something to be 100% sure this is deleted???
+    delete state;
   } CATCH_STD(env, )
 }
 
@@ -379,48 +640,122 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readORC(
   CATCH_STD(env, NULL);
 }
 
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeORC(JNIEnv *env, jclass,
-                                                              jint j_compression_type,
-                                                              jobjectArray j_col_names,
-                                                              jobjectArray j_metadata_keys,
-                                                              jobjectArray j_metadata_values,
-                                                              jstring outputfilepath, jlong buffer,
-                                                              jlong buffer_length, jlong j_table_view) {
-  bool write_buffer = true;
-  if (buffer == 0) {
-    JNI_NULL_CHECK(env, outputfilepath, "output file or buffer must be supplied", );
-    write_buffer = false;
-  } else if (outputfilepath != NULL) {
-    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
-                  "cannot pass in both a buffer and an outputfilepath", );
-  } else if (buffer_length <= 0) {
-    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "An empty buffer is not supported", );
-  }
-  JNI_NULL_CHECK(env, j_col_names, "null columns", );
-  JNI_NULL_CHECK(env, j_metadata_keys, "null metadata keys", );
-  JNI_NULL_CHECK(env, j_metadata_values, "null metadata values", );
-
+JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeORCBufferBegin(JNIEnv* env, jclass,
+    jobjectArray j_col_names,
+    jbooleanArray j_col_nullability,
+    jobjectArray j_metadata_keys,
+    jobjectArray j_metadata_values,
+    jint j_compression,
+    jobject consumer) {
+  JNI_NULL_CHECK(env, j_col_names, "null columns", 0);
+  JNI_NULL_CHECK(env, j_col_nullability, "null nullability", 0);
+  JNI_NULL_CHECK(env, j_metadata_keys, "null metadata keys", 0);
+  JNI_NULL_CHECK(env, j_metadata_values, "null metadata values", 0);
+  JNI_NULL_CHECK(env, consumer, "null consumer", 0);
   try {
-    cudf::jni::native_jstring filename(env, outputfilepath);
+    using namespace cudf::experimental::io;
+    cudf::jni::native_jstringArray col_names(env, j_col_names);
+    cudf::jni::native_jbooleanArray col_nullability(env, j_col_nullability);
     cudf::jni::native_jstringArray meta_keys(env, j_metadata_keys);
     cudf::jni::native_jstringArray meta_values(env, j_metadata_values);
-    cudf::jni::native_jstringArray col_names(env, j_col_names);
-    namespace orc = cudf::experimental::io;
-    if (write_buffer) {
-      JNI_THROW_NEW(env, "java/lang/UnsupportedOperationException",
-                        "buffers are not supported", );
-    } else {
-      orc::sink_info info(filename.get());
-      orc::table_metadata metadata{col_names.as_cpp_vector()};
-      for (size_t i = 0; i < meta_keys.size(); ++i) {
-        metadata.user_data[meta_keys[i].get()] = meta_values[i].get();
-      }
-      orc::write_orc_args args(info, *reinterpret_cast<cudf::table_view*>(j_table_view), &metadata,
-                                                static_cast<orc::compression_type>(j_compression_type));
-      orc::write_orc(args);
+
+    auto d = col_nullability.data();
+    std::vector<bool> nullability(d, d + col_nullability.size());
+    table_metadata_with_nullability metadata;
+    metadata.column_nullable = nullability;
+    metadata.column_names = col_names.as_cpp_vector();
+    for (size_t i = 0; i < meta_keys.size(); ++i) {
+      metadata.user_data[meta_keys[i].get()] = meta_values[i].get();
     }
+
+    std::unique_ptr<cudf::jni::jni_writer_data_sink> data_sink(
+            new cudf::jni::jni_writer_data_sink(env, consumer));
+    sink_info sink{data_sink.get()};
+    compression_type compression{static_cast<compression_type>(j_compression)};
+
+    write_orc_chunked_args args(sink, &metadata, compression, true);
+    std::shared_ptr<detail::orc::orc_chunked_state> state = write_orc_chunked_begin(args);
+    cudf::jni::native_orc_writer_handle * ret =
+        new cudf::jni::native_orc_writer_handle(state, data_sink);
+    return reinterpret_cast<jlong>(ret);
+  } CATCH_STD(env, 0)
+}
+
+
+JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeORCFileBegin(JNIEnv* env, jclass,
+    jobjectArray j_col_names,
+    jbooleanArray j_col_nullability,
+    jobjectArray j_metadata_keys,
+    jobjectArray j_metadata_values,
+    jint j_compression,
+    jstring j_output_path) {
+  JNI_NULL_CHECK(env, j_col_names, "null columns", 0);
+  JNI_NULL_CHECK(env, j_col_nullability, "null nullability", 0);
+  JNI_NULL_CHECK(env, j_metadata_keys, "null metadata keys", 0);
+  JNI_NULL_CHECK(env, j_metadata_values, "null metadata values", 0);
+  JNI_NULL_CHECK(env, j_output_path, "null output path", 0);
+  try {
+    using namespace cudf::experimental::io;
+    cudf::jni::native_jstringArray col_names(env, j_col_names);
+    cudf::jni::native_jbooleanArray col_nullability(env, j_col_nullability);
+    cudf::jni::native_jstringArray meta_keys(env, j_metadata_keys);
+    cudf::jni::native_jstringArray meta_values(env, j_metadata_values);
+    cudf::jni::native_jstring output_path(env, j_output_path);
+
+    auto d = col_nullability.data();
+    std::vector<bool> nullability(d, d + col_nullability.size());
+    table_metadata_with_nullability metadata;
+    metadata.column_nullable = nullability;
+    metadata.column_names = col_names.as_cpp_vector();
+    for (size_t i = 0; i < meta_keys.size(); ++i) {
+      metadata.user_data[meta_keys[i].get()] = meta_values[i].get();
+    }
+
+    sink_info sink{output_path.get()};
+    compression_type compression{static_cast<compression_type>(j_compression)};
+
+    write_orc_chunked_args args(sink, &metadata, compression, true);
+    std::shared_ptr<detail::orc::orc_chunked_state> state = write_orc_chunked_begin(args);
+    cudf::jni::native_orc_writer_handle * ret =
+        new cudf::jni::native_orc_writer_handle(state);
+    return reinterpret_cast<jlong>(ret);
+  } CATCH_STD(env, 0)
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeORCChunk(JNIEnv* env, jclass,
+    jlong j_state, jlong j_table, jlong mem_size) {
+  JNI_NULL_CHECK(env, j_table, "null table", );
+  JNI_NULL_CHECK(env, j_state, "null state", );
+
+  using namespace cudf::experimental::io;
+  cudf::table_view *tview = reinterpret_cast<cudf::table_view *>(j_table);
+  cudf::jni::native_orc_writer_handle * state =
+      reinterpret_cast<cudf::jni::native_orc_writer_handle *>(j_state);
+
+  if (state->sink.get() != nullptr) {
+    long alloc_size = 1024 * 1024 * 10; // 10 MB minimum
+    if (alloc_size < mem_size/2) {
+      alloc_size = mem_size/2;
+    }
+    state->sink->set_alloc_size(alloc_size);
   }
-  CATCH_STD(env, );
+  try {
+    write_orc_chunked(*tview, state->state);
+  } CATCH_STD(env, )
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeORCEnd(JNIEnv* env, jclass,
+    jlong j_state) {
+  JNI_NULL_CHECK(env, j_state, "null state", );
+
+  using namespace cudf::experimental::io;
+  cudf::jni::native_orc_writer_handle * state =
+      reinterpret_cast<cudf::jni::native_orc_writer_handle *>(j_state);
+  try {
+    write_orc_chunked_end(state->state);
+    // TODO should we do something to be 100% sure this is deleted???
+    delete state;
+  } CATCH_STD(env, )
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftJoin(
