@@ -26,7 +26,6 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
-#include <cudf/concatenate.hpp>
 
 #include <type_traits>
 
