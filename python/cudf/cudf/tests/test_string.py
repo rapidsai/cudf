@@ -1479,8 +1479,6 @@ def test_string_replace_multi():
     assert_eq(expect, got)
 
 
-# TODO, PREM: Uncomment this following tests after
-# this is fixed: https://github.com/rapidsai/cudf/issues/4380
 @pytest.mark.parametrize(
     "find",
     [
@@ -1488,22 +1486,15 @@ def test_string_replace_multi():
         "(\\d)(\\d)",
         "(\\d)(\\d)",
         "(\\d)(\\d)",
-        # "([a-z])-([a-z])",
+        "([a-z])-([a-z])",
         "([a-z])-([a-zé])",
         "([a-z])-([a-z])",
-        # "([a-z])-([a-zé])",
+        "([a-z])-([a-zé])",
     ],
 )
 @pytest.mark.parametrize(
     "replace",
-    [
-        "\\1-\\2",
-        "V\\2-\\1",
-        "\\1 \\2",
-        "\\2 \\1",
-        # "X\\1+\\2Z",
-        #  "X\\1+\\2Z"
-    ],
+    ["\\1-\\2", "V\\2-\\1", "\\1 \\2", "\\2 \\1", "X\\1+\\2Z", "X\\1+\\2Z"],
 )
 def test_string_replace_with_backrefs(find, replace):
     s = [
@@ -1513,7 +1504,7 @@ def test_string_replace_with_backrefs(find, replace):
         None,
         "tést-string",
         "two-thréé four-fivé",
-        # "abcd-éfgh",
+        "abcd-éfgh",
         "tést-string-again",
     ]
     ps = pd.Series(s)
