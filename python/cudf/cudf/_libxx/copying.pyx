@@ -315,7 +315,7 @@ def table_empty_like(Table input_table):
     return Table.from_unique_ptr(
         move(c_result),
         column_names=input_table._column_names,
-        index_names=input_table._index._column_names
+        index_names=input_table._index_names
     )
 
 

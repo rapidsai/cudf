@@ -501,6 +501,7 @@ class DataFrame(Frame):
     def __setitem__(self, arg, value):
         """Add/set column by *arg or DataFrame*
         """
+        print("__setitem__ is being called ___________________")
         if isinstance(arg, DataFrame):
             # not handling set_item where arg = df & value = df
             if isinstance(value, DataFrame):
@@ -513,10 +514,12 @@ class DataFrame(Frame):
                 for col_name in self._data:
                     scatter_map = arg[col_name]
                     if is_scalar(value):
-                        value = utils.scalar_broadcast_to(value, len(self))
-                    self._data[col_name][scatter_map] = column.as_column(
-                        value
-                    )[scatter_map]
+                        self._data[col_name][scatter_map] = value
+                    else:
+
+                        self._data[col_name][scatter_map] = column.as_column(
+                            value
+                        )[scatter_map]
         elif is_scalar(arg) or isinstance(arg, tuple):
             if isinstance(value, DataFrame):
                 _setitem_with_dataframe(
@@ -527,30 +530,34 @@ class DataFrame(Frame):
                 )
             else:
                 if arg in self._data:
-                    if is_scalar(value):
-                        value = utils.scalar_broadcast_to(value, len(self))
                     if len(self) == 0:
-                        if isinstance(value, (pd.Series, Series)):
-                            self._index = as_index(value.index)
-                        elif len(value) > 0:
-                            self._index = RangeIndex(start=0, stop=len(value))
                         value = column.as_column(value)
                         new_data = self._data.__class__()
                         for key in self._data:
-                            if key == arg:
+                            if key in arg or key == arg:
                                 new_data[key] = value
                             else:
                                 new_data[key] = column.column_empty_like(
-                                    self._data[key],
-                                    masked=True,
-                                    newsize=len(value),
+                                            self._data[key],
+                                            masked=True,
+                                            newsize=len(value),
                                 )
+
                         self._data = new_data
+                        return
                     elif isinstance(value, (pd.Series, Series)):
                         value = Series(value)._align_to_index(
                             self._index, how="right", allow_non_unique=True
                         )
-                    self._data[arg] = column.as_column(value)
+                    if is_scalar(arg):
+                        arg=[arg]
+                    if is_scalar(value):
+                        for key in arg:
+                            self._data[key][:] = value
+                    else:
+                        value = as_column(value)
+                        for key in arg:
+                            self._data[key] = value
                 else:
                     # disc. with pandas here
                     # pandas raises key error here
@@ -562,13 +569,10 @@ class DataFrame(Frame):
             mask = arg
             if isinstance(mask, list):
                 mask = np.array(mask)
-
-            if is_scalar(value):
-                value = column.as_column(
-                    utils.scalar_broadcast_to(value, len(self))
-                )
-
+            mask = np.array(arg)
             if mask.dtype == "bool":
+                mask = column.as_column(arg)
+
                 if isinstance(value, DataFrame):
                     _setitem_with_dataframe(
                         input_df=self,
@@ -577,10 +581,10 @@ class DataFrame(Frame):
                         mask=mask,
                     )
                 else:
+                    if not is_scalar(value):
+                        value = column.as_column(value)[mask]
                     for col_name in self._data:
-                        self._data[col_name][mask] = column.as_column(value)[
-                            mask
-                        ]
+                        self._data[col_name][mask] = value
             else:
                 if isinstance(value, DataFrame):
                     _setitem_with_dataframe(
@@ -590,11 +594,17 @@ class DataFrame(Frame):
                         mask=None,
                     )
                 else:
+                    if not is_scalar(value):
+                        value = column.as_column(value)
                     for col in arg:
                         # we will raise a key error if col not in dataframe
                         # this behavior will make it
                         # consistent to pandas >0.21.0
-                        self._data[col] = column.as_column(value)
+                        if not is_scalar(value):
+                            self._data[col] = value
+                        else:
+                            self._data[col][:] = value
+
         else:
             msg = "__setitem__ on type {!r} is not supported"
             raise TypeError(msg.format(type(arg)))
