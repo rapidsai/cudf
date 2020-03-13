@@ -318,10 +318,16 @@ cdef class Column:
         else:
             mask = NULL
 
-        null_count = self.null_count
+        null_count = self._null_count
+
         if null_count is None:
             null_count = libcudf_types.UNKNOWN_NULL_COUNT
         cdef libcudf_types.size_type c_null_count = null_count
+
+        self._mask = None
+        self._null_count = None
+        self._children = None
+        self._data = None
 
         return mutable_column_view(
             dtype,
