@@ -619,9 +619,10 @@ struct dispatch_map_type {
    * fit in L2.
    *
    */
-  template <typename MapType,
-            std::enable_if_t<std::is_integral<MapType>::value>* = nullptr>
-  std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>>
+  template <typename MapType>
+  std::enable_if_t<
+      std::is_integral<MapType>::value and not is_boolean<MapType>(),
+      std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>>>
   operator()(table_view const& t, column_view const& partition_map,
              size_type num_partitions, rmm::mr::device_memory_resource* mr,
              cudaStream_t stream) const {
@@ -665,9 +666,10 @@ struct dispatch_map_type {
     return std::make_pair(std::move(scattered), std::move(partition_offsets));
   }
 
-  template <typename MapType,
-            std::enable_if_t<not std::is_integral<MapType>::value>* = nullptr>
-  std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>>
+  template <typename MapType>
+  std::enable_if_t<
+      not std::is_integral<MapType>::value or is_boolean<MapType>(),
+      std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>>>
   operator()(table_view const& t, column_view const& partition_map,
              size_type num_partitions, rmm::mr::device_memory_resource* mr,
              cudaStream_t stream) const {
