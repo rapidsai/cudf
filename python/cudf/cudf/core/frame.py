@@ -124,7 +124,6 @@ class Frame(libcudfxx.table.Table):
 
        """
         from cudf.core.index import RangeIndex
-        from cudf import DataFrame, Series
 
         num_rows = len(self)
         if num_rows == 0:
@@ -139,9 +138,7 @@ class Frame(libcudfxx.table.Table):
         # This is just to handle RangeIndex type, stop
         # it from materializing unnecessarily
         keep_index = True
-        if isinstance(self, (DataFrame, Series)) and isinstance(
-            self.index, RangeIndex
-        ):
+        if self.index is not None and isinstance(self.index, RangeIndex):
             keep_index = False
 
         if start < 0:
@@ -164,7 +161,7 @@ class Frame(libcudfxx.table.Table):
             result._copy_categories(self, include_index=keep_index)
             # Adding index of type RangeIndex back to
             # result
-            if keep_index is False and isinstance(self, (DataFrame, Series)):
+            if keep_index is False and self.index is not None:
                 result.index = self.index[start:stop]
             return result
 
