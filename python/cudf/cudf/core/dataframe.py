@@ -3922,15 +3922,6 @@ class DataFrame(Frame):
                 tables.append(self.take([]))
         return tables
 
-    def repeat(self, repeats, axis=None):
-        assert axis in (None, 0)
-        new_index = self.index.repeat(repeats)
-        cols = libcudf.filling.repeat(self._columns, repeats)
-        # to preserve col names, need to get it from old _cols dict
-        column_names = self._data.names
-        result = DataFrame(data=dict(zip(column_names, cols)))
-        return result.set_index(new_index)
-
     def stack(self, level=-1, dropna=True):
         """Stack the prescribed level(s) from columns to index
 
@@ -3959,16 +3950,12 @@ class DataFrame(Frame):
         dtype: int64
         """
         assert level in (None, -1)
-        index_as_cols = self.index.to_frame(index=False)._columns
-        new_index_cols = libcudf.filling.repeat(index_as_cols, self.shape[1])
-        [last_index] = libcudf.filling.tile(
-            [column.as_column(self.columns)], self.shape[0]
+        repeated_index = self.index.repeat(self.shape[1])
+        name_index = Frame({0: self._column_names}).tile(self.shape[0])
+        new_index = list(repeated_index._columns) + [name_index._columns[0]]
+        new_index = cudf.core.multiindex.MultiIndex.from_frame(
+            DataFrame(dict(zip(range(0, len(new_index)), new_index)))
         )
-        new_index_cols.append(last_index)
-        index_df = DataFrame(
-            dict(zip(range(0, len(new_index_cols)), new_index_cols))
-        )
-        new_index = cudf.core.multiindex.MultiIndex.from_frame(index_df)
 
         # Collect datatypes and cast columns as that type
         common_type = np.result_type(*self.dtypes)

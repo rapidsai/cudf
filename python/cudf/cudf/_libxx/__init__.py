@@ -7,6 +7,7 @@ from . import (
     concat,
     copying,
     dlpack,
+    filling,
     gpuarrow,
     hash,
     join,
