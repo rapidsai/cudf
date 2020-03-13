@@ -1183,6 +1183,9 @@ class Series(Frame):
         else:
             return result
 
+    def fill(self, fill_value, begin=0, end=-1, inplace=False):
+        return self._fill([fill_value], begin, end, inplace)
+
     def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
         """Fill null values with ``value``.
 
@@ -2468,12 +2471,6 @@ class Series(Frame):
     @property
     def __cuda_array_interface__(self):
         return self._column.__cuda_array_interface__
-
-    def repeat(self, repeats, axis=None):
-        assert axis in (None, 0)
-        data = self._column.repeat(repeats)
-        new_index = self.index.repeat(repeats)
-        return Series(data, index=new_index, name=self.name)
 
     def _align_to_index(
         self, index, how="outer", sort=True, allow_non_unique=False

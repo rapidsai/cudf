@@ -7,6 +7,7 @@ from . import (
     binaryop,
     copying,
     dlpack,
+    filling,
     gpuarrow,
     hash,
     join,
