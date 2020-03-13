@@ -2341,7 +2341,7 @@ class DataFrame(Frame):
             rsuffix,
             how,
             method,
-            sort=sort
+            sort=sort,
         )
 
         return gdf_result
