@@ -63,6 +63,7 @@ class TestRank:
             ascending=ascending,
             pct=pct,
         )
+        # TODO: https://github.com/pandas-dev/pandas/issues/32593
         # Dataframe (possible bug in pandas)
         # _check(
         #     gdf,
