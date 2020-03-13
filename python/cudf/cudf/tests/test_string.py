@@ -1539,18 +1539,7 @@ def test_string_table_view_creation():
     ],
 )
 @pytest.mark.parametrize(
-    "pat",
-    [
-        # TODO, PREM: Uncomment after this issue is fixed
-        # '',
-        # None,
-        " ",
-        "a",
-        "abc",
-        "cat",
-        "$",
-        "\n",
-    ],
+    "pat", ["", None, " ", "a", "abc", "cat", "$", "\n"],
 )
 def test_string_starts_ends(data, pat):
     ps = pd.Series(data)

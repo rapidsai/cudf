@@ -1435,9 +1435,18 @@ class StringMethods(object):
 
         from cudf._libxx.scalar import Scalar
 
-        return self._return_or_inplace(
-            cpp_endswith(self._column, Scalar(pat, "str")), **kwargs
-        )
+        # TODO: Cleanup if/else blocks after this issue is fixed:
+        # https://github.com/rapidsai/cudf/issues/4500
+        if pat == "":
+            result_col = column.as_column(
+                True, dtype="bool", length=len(self._column)
+            ).set_mask(self._column.mask)
+        elif pat is None:
+            result_col = column.as_column(np.nan, length=len(self._column))
+        else:
+            result_col = cpp_endswith(self._column, Scalar(pat, "str"))
+
+        return self._return_or_inplace(result_col, **kwargs)
 
     def startswith(self, pat, **kwargs):
         """
@@ -1463,9 +1472,18 @@ class StringMethods(object):
 
         from cudf._libxx.scalar import Scalar
 
-        return self._return_or_inplace(
-            cpp_startswith(self._column, Scalar(pat, "str")), **kwargs
-        )
+        # TODO: Cleanup if/else blocks after this issue is fixed:
+        # https://github.com/rapidsai/cudf/issues/4500
+        if pat == "":
+            result_col = column.as_column(
+                True, dtype="bool", length=len(self._column)
+            ).set_mask(self._column.mask)
+        elif pat is None:
+            result_col = column.as_column(np.nan, length=len(self._column))
+        else:
+            result_col = cpp_startswith(self._column, Scalar(pat, "str"))
+
+        return self._return_or_inplace(result_col, **kwargs)
 
     def find(self, sub, start=0, end=None, **kwargs):
         """
