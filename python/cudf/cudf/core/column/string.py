@@ -1834,22 +1834,22 @@ def _massage_string_arg(value, name, allow_col=False):
     from cudf._libxx.column import Column
     from cudf.utils.dtypes import is_string_dtype
 
-    allowed_types = ["Scalar"]
-
     if isinstance(value, str):
         return Scalar(value, dtype="str")
 
     if isinstance(value, Scalar) and is_string_dtype(value.dtype):
         return value
 
-    if allow_col:
-        allowed_types += ["Column"]
+    allowed_types = ["Scalar"]
 
+    if allow_col:
         if isinstance(value, list):
             return column.as_column(value, dtype="str")
 
         if isinstance(value, Column) and is_string_dtype(value.dtype):
             return value
+
+        allowed_types.append("Column")
 
     raise ValueError(
         "Expected {} for {} but got {}".format(
@@ -1859,9 +1859,6 @@ def _massage_string_arg(value, name, allow_col=False):
 
 
 def _expected_types_format(types):
-    if len(types) == 0:
-        raise ValueError
-
     if len(types) == 1:
         return types[0]
 
