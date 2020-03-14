@@ -213,7 +213,13 @@ class DatetimeColumn(column.ColumnBase):
 
     def binary_operator(self, op, rhs, reflect=False):
         lhs, rhs = self, rhs
-        return binop(lhs, rhs, op=op, out_dtype=np.bool)
+
+        if op in ("eq", "ne", "lt", "gt", "le", "ge"):
+            out_dtype = np.bool
+        else:
+            raise TypeError(f"Series of dtype {self.dtype} cannot perform "
+                            f" the operation {op}")
+        return binop(lhs, rhs, op=op, out_dtype=out_dtype)
 
     def fillna(self, fill_value):
         if is_scalar(fill_value):
