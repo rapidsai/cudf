@@ -193,7 +193,7 @@ std::unique_ptr<table> rank(table_view const &input, rank_method method,
                       rank_data);
       break;
     case rank_method::MIN:
-      // min  of first in the group
+      // min of first in the group
       // All equal values have min of ranks among them.
       // algorithm: reduce_by_key(dense_rank, 1, n, min)
       tie_break_ranks(dense_rank_sorted, sorted_order_view, rank_data, thrust::minimum<double>{}, stream);
