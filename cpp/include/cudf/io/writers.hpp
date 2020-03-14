@@ -218,12 +218,13 @@ class writer {
    *
    * @param table Set of columns to output
    * @param metadata Table metadata and column names
-   * @param raw_metadata_out Optional raw parquet file metadata output
+   * @param return_filemetadata If true, return the raw file metadata
    * @param metadata_out_file_path Column chunks file path to be set in the raw output metadata
    * @param stream Optional stream to use for device memory alloc and kernels
    */
-  void write_all(table_view const& table, const table_metadata *metadata = nullptr,
-                 std::vector<uint8_t> *raw_metadata_out = nullptr,
+  std::unique_ptr<std::vector<uint8_t>> write_all(table_view const& table,
+                 const table_metadata *metadata = nullptr,
+                 bool return_filemetadata = false,
                  const std::string metadata_out_file_path = "",
                  cudaStream_t stream = 0);
 
@@ -255,7 +256,8 @@ class writer {
    * @param[in] metadata_list List of input file metadata
    * @return A parquet-compatible blob that contains the data for all rowgroups in the list
    */
-  static std::vector<uint8_t> merge_rowgroup_metadata(const std::vector<std::vector<uint8_t>>& metadata_list);
+  static std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
+                        const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list);
 };
 
 }  // namespace parquet

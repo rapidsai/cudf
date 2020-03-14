@@ -232,19 +232,20 @@ table_with_metadata read_parquet(read_parquet_args const& args,
 }
 
 // Freeform API wraps the detail writer class API
-void write_parquet(write_parquet_args const& args,
-               rmm::mr::device_memory_resource* mr) {
+std::unique_ptr<std::vector<uint8_t>> write_parquet(
+               write_parquet_args const& args, rmm::mr::device_memory_resource* mr) {
   parquet::writer_options options{args.compression, args.stats_level};
   auto writer = make_writer<parquet::writer>(args.sink, options, mr);
 
-  writer->write_all(args.table, args.metadata);
+  return writer->write_all(args.table, args.metadata, args.return_filemetadata);
 }
 
 /**
  * @copydoc cudf::experimental::io::merge_rowgroup_metadata
  *
  **/
-std::vector<uint8_t> merge_rowgroup_metadata(const std::vector<std::vector<uint8_t>>& metadata_list)
+std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
+               const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list)
 {
   return parquet::writer::merge_rowgroup_metadata(metadata_list);
 }

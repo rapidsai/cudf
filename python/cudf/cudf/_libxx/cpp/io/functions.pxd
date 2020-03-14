@@ -3,6 +3,7 @@
 from libcpp cimport bool
 from libcpp.string cimport string
 from libcpp.vector cimport vector
+from libcpp.memory cimport unique_ptr
 from libc.stdint cimport uint8_t
 
 from cudf._libxx.cpp.types cimport data_type, size_type
@@ -124,15 +125,13 @@ cdef extern from "cudf/io/functions.hpp" \
 
     cdef void write_orc(write_orc_args args) except +
 
-    cdef void write_parquet(write_parquet_args args) except +
-
     cdef cppclass write_parquet_args:
         cudf_io_types.sink_info sink
         cudf_io_types.compression_type compression
         cudf_io_types.statistics_freq stats_level
         cudf_table_view.table_view table
         const cudf_io_types.table_metadata *metadata
-        vector[uint8_t] *raw_metadata_out
+        bool return_filemetadata
         string metadata_out_file_path
 
         write_parquet_args() except +
@@ -142,8 +141,8 @@ cdef extern from "cudf/io/functions.hpp" \
                            cudf_io_types.compression_type compression_,
                            cudf_io_types.statistics_freq stats_lvl_) except +
 
-    cdef void write_parquet(write_parquet_args args) except +
+    cdef unique_ptr[vector[uint8_t]] write_parquet(write_parquet_args args) except +
 
-    cdef vector[uint8_t] merge_rowgroup_metadata(
-        const vector[vector[uint8_t]]& metadata_list
+    cdef unique_ptr[vector[uint8_t]] merge_rowgroup_metadata(
+        const vector[unique_ptr[vector[uint8_t]]]& metadata_list
     ) except +

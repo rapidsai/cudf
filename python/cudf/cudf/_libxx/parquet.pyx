@@ -29,6 +29,7 @@ from cudf._libxx.cpp.io.parquet cimport (
     reader as parquet_reader,
     reader_options as parquet_reader_options,
 )
+from cudf._libxx.move cimport move
 from cudf._libxx.cpp.io.functions cimport (
     write_parquet_args,
     write_parquet as parquet_writer,
@@ -225,8 +226,7 @@ cpdef write_parquet(
         raise ValueError("Unsupported `statistics_freq` type")
 
     cdef write_parquet_args args
-    cdef vector[uint8_t] out_metadata_c
-    cdef bytes out_metadata_py
+    cdef unique_ptr[vector[uint8_t]] out_metadata_c
 
     # Perform write
     with nogil:
@@ -238,14 +238,16 @@ cpdef write_parquet(
 
     if metadata_file_path is not None:
         args.metadata_out_file_path = str.encode(metadata_file_path)
-        args.raw_metadata_out = &out_metadata_c
+        args.return_filemetadata = True
 
     with nogil:
-        parquet_writer(args)
+        out_metadata_c = move(parquet_writer(args))
 
     if metadata_file_path is not None:
-        out_metadata_py = out_metadata_c.data()[:len(out_metadata_c)]
+        out_metadata_py = out_metadata_c.get().data()[:out_metadata_c.get().size()]
         return out_metadata_py
+    else:
+        return None
 
 cpdef merge_filemetadata(filemetadata_list):
     """
@@ -255,17 +257,17 @@ cpdef merge_filemetadata(filemetadata_list):
     --------
     cudf.io.parquet.merge_rowgroup_metadata
     """
-    cdef vector[vector[uint8_t]] list_c
+    cdef vector[unique_ptr[vector[uint8_t]]] list_c
     cdef vector[uint8_t] blob_c
-    cdef vector[uint8_t] output_c
+    cdef unique_ptr[vector[uint8_t]] output_c
     cdef bytes output_py
 
     for blob_py in filemetadata_list:
         blob_c = blob_py
-        list_c.push_back(move(blob_c))
+        list_c.push_back(make_unique[vector[uint8_t]](blob_c))
 
     with nogil:
-        output_c = parquet_merge_metadata(list_c)
+        output_c = move(parquet_merge_metadata(list_c))
 
-    output_py = output_c.data()[:len(output_c)]
+    output_py = output_c.get().data()[:output_c.get().size()]
     return output_py

@@ -384,8 +384,9 @@ writer::impl::impl(std::unique_ptr<data_sink> sink, writer_options const &option
   stats_granularity_(options.stats_granularity),
   out_sink_(std::move(sink)){}
 
-void writer::impl::write(table_view const &table, const table_metadata *metadata,
-                         std::vector<uint8_t> *raw_metadata_out, const std::string metadata_out_file_path,
+std::unique_ptr<std::vector<uint8_t>> writer::impl::write(
+                         table_view const &table, const table_metadata *metadata,
+                         bool return_filemetadata, const std::string metadata_out_file_path,
                          cudaStream_t stream) {    
   pq_chunked_state state;
   state.user_metadata = metadata;
@@ -397,15 +398,19 @@ void writer::impl::write(table_view const &table, const table_metadata *metadata
   write_chunked_end(state);
 
   // Optionally output raw file metadata with the specified column chunk file path
-  if (raw_metadata_out) {
-    CompactProtocolWriter cpw(raw_metadata_out);
-    raw_metadata_out->resize(0);
+  if (return_filemetadata) {
+    CompactProtocolWriter cpw(&buffer_);
+    buffer_.resize(0);
     for (auto& rowgroup : state.md.row_groups) {
       for (auto& col : rowgroup.columns) {
         col.file_path = metadata_out_file_path;
       }
     }
-    cpw.write(&state.md);  
+    cpw.write(&state.md);
+    return std::make_unique<std::vector<uint8_t>>(std::move(buffer_));
+  }
+  else {
+    return {nullptr};
   }
 }
 
@@ -788,11 +793,12 @@ writer::writer(writer_options const& options,
 writer::~writer() = default;
 
 // Forward to implementation
-void writer::write_all(table_view const &table, const table_metadata *metadata,
-                 std::vector<uint8_t> *raw_metadata_out,
+std::unique_ptr<std::vector<uint8_t>> writer::write_all(
+                 table_view const &table, const table_metadata *metadata,
+                 bool return_filemetadata,
                  const std::string metadata_out_file_path,
                  cudaStream_t stream) {
-  _impl->write(table, metadata, raw_metadata_out, metadata_out_file_path, stream);
+  return _impl->write(table, metadata, return_filemetadata, metadata_out_file_path, stream);
 }
 
 // Forward to implementation
@@ -810,7 +816,8 @@ void writer::write_chunked_end(pq_chunked_state &state){
   _impl->write_chunked_end(state);
 }
 
-std::vector<uint8_t> writer::merge_rowgroup_metadata(const std::vector<std::vector<uint8_t>>& metadata_list)
+std::unique_ptr<std::vector<uint8_t>> writer::merge_rowgroup_metadata(
+  const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list)
 {
   std::vector<uint8_t> output;
   CompactProtocolWriter cpw(&output);
@@ -818,7 +825,7 @@ std::vector<uint8_t> writer::merge_rowgroup_metadata(const std::vector<std::vect
 
   md.row_groups.reserve(metadata_list.size());
   for (const auto& blob : metadata_list) {
-    CompactProtocolReader cpreader(blob.data(), blob.size());
+    CompactProtocolReader cpreader(blob.get()->data(), blob.get()->size());
     if (md.num_rows == 0) {
       cpreader.read(&md);
     }
@@ -846,7 +853,7 @@ std::vector<uint8_t> writer::merge_rowgroup_metadata(const std::vector<std::vect
   fendr.magic = PARQUET_MAGIC;
   output.insert(output.end(), reinterpret_cast<const uint8_t *>(&fendr),
                               reinterpret_cast<const uint8_t *>(&fendr) + sizeof(fendr));
-  return output;
+  return std::make_unique<std::vector<uint8_t>>(std::move(output));
 }
 
 }  // namespace parquet

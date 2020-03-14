@@ -3,6 +3,7 @@
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 from libcpp.pair cimport pair
+from libc.stdint cimport uint8_t
 from rmm._lib.device_buffer cimport device_buffer
 from cudf._libxx.cpp.types cimport (
     size_type,
@@ -44,10 +45,12 @@ cdef extern from "<utility>" namespace "std" nogil:
     cdef unique_ptr[table] move(unique_ptr[table])
     cdef unique_ptr[aggregation] move(unique_ptr[aggregation])
     cdef unique_ptr[CMessageReader] move(unique_ptr[CMessageReader])
+    cdef unique_ptr[vector[uint8_t]] move(unique_ptr[vector[uint8_t]])
     cdef vector[unique_ptr[column]] move(vector[unique_ptr[column]])
     cdef vector[unique_ptr[table]] move(vector[unique_ptr[table]])
     cdef vector[column_view] move(vector[column_view])
     cdef vector[table_view] move(vector[table_view])
+    cdef vector[uint8_t] move(vector[uint8_t])
     cdef pair[unique_ptr[table], vector[size_type]] move(
         pair[unique_ptr[table], vector[size_type]])
     cdef device_buffer move(device_buffer)

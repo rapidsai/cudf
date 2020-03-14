@@ -487,8 +487,8 @@ struct write_parquet_args {
   table_view table;
   /// Optional associated metadata
   const table_metadata *metadata;
-  /// Optional raw parquet file metadata output
-  std::vector<uint8_t> *raw_metadata_out = nullptr;
+  /// Optionally return the raw parquet file metadata output
+  bool return_filemetadata = false;
   /// Column chunks file path to be set in the raw output metadata
   std::string metadata_out_file_path;
 
@@ -517,8 +517,9 @@ struct write_parquet_args {
  * @param args Settings for controlling writing behavior
  * @param mr Optional resource to use for device memory allocation
  */
-void write_parquet(write_parquet_args const& args, rmm::mr::device_memory_resource* mr =
-                                               rmm::mr::get_default_resource());
+std::unique_ptr<std::vector<uint8_t>> write_parquet(
+  write_parquet_args const& args,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Merges multiple raw metadata blobs that were previously created by write_parquet
@@ -527,7 +528,8 @@ void write_parquet(write_parquet_args const& args, rmm::mr::device_memory_resour
  * @param[in] metadata_list List of input file metadata
  * @return A parquet-compatible blob that contains the data for all rowgroups in the list
  */
-std::vector<uint8_t> merge_rowgroup_metadata(const std::vector<std::vector<uint8_t>>& metadata_list);
+std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
+  const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list);
 
 /**
  * @brief Settings to use for `write_parquet_chunked()`
