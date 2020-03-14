@@ -1490,7 +1490,6 @@ class DataFrame(Frame):
             result = self
         else:
             result = self.copy()
-        index_columns = self.index._data.columns
         if all(name is None for name in self.index.names):
             if isinstance(self.index, cudf.MultiIndex):
                 names = tuple(
@@ -1502,6 +1501,7 @@ class DataFrame(Frame):
             names = self.index.names
 
         if not drop:
+            index_columns = self.index._data.columns
             for name, index_column in zip(
                 reversed(names), reversed(index_columns)
             ):
@@ -3925,33 +3925,33 @@ class DataFrame(Frame):
         """
 
         # map_index might be a column name or array,
-        # make it a Series
+        # make it a Column
         if isinstance(map_index, str):
-            map_index = self[map_index]
+            map_index = self[map_index]._column
+        elif isinstance(map_index, Series):
+            map_index = map_index._column
         else:
-            map_index = Series(map_index)
+            map_index = as_column(map_index)
 
         # Convert float to integer
         if map_index.dtype == np.float:
             map_index = map_index.astype(np.int32)
 
         # Convert string or categorical to integer
-        if isinstance(map_index._column, StringColumn):
-            map_index = Series(
-                map_index._column.as_categorical_column(np.int32).as_numerical
-            )
+        if isinstance(map_index, StringColumn):
+            map_index = map_index.as_categorical_column(np.int32).as_numerical
             warnings.warn(
                 "Using StringColumn for map_index in scatter_by_map. "
                 "Use an integer array/column for better performance."
             )
-        elif isinstance(map_index._column, CategoricalColumn):
-            map_index = Series(map_index._column.as_numerical)
+        elif isinstance(map_index, CategoricalColumn):
+            map_index = map_index.as_numerical
             warnings.warn(
                 "Using CategoricalColumn for map_index in scatter_by_map. "
                 "Use an integer array/column for better performance."
             )
 
-        tables = self._scatter_to_tables(map_index._column, keep_index)
+        tables = self._scatter_to_tables(map_index, keep_index)
 
         if map_size:
             # Make sure map_size is >= the number of uniques in map_index
@@ -3964,7 +3964,7 @@ class DataFrame(Frame):
             # Append empty dataframes if map_size > len(tables)
 
             for i in range(map_size - len(tables)):
-                tables.append(self.take([]))
+                tables.append(self._empty_like(keep_index))
         return tables
 
     def stack(self, level=-1, dropna=True):
