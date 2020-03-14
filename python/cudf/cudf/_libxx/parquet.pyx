@@ -9,6 +9,7 @@ import pyarrow as pa
 import json
 
 from libc.stdlib cimport free
+from libc.stdint cimport uint8_t
 from libcpp.memory cimport unique_ptr, make_unique
 from libcpp.string cimport string
 from libcpp.map cimport map
@@ -24,7 +25,7 @@ from cudf._libxx.move cimport move
 from cudf._libxx.cpp.io.functions cimport (
     write_parquet_args,
     write_parquet as parquet_writer,
-    merge_rowgroup_metadata as parquet_merge_metadata
+    merge_rowgroup_metadata as parquet_merge_metadata,
     read_parquet_args,
     read_parquet as parquet_reader
 )
@@ -239,7 +240,8 @@ cpdef write_parquet(
         out_metadata_c = move(parquet_writer(args))
 
     if metadata_file_path is not None:
-        out_metadata_py = out_metadata_c.get().data()[:out_metadata_c.get().size()]
+        out_metadata_py = \
+            out_metadata_c.get().data()[:out_metadata_c.get().size()]
         return out_metadata_py
     else:
         return None

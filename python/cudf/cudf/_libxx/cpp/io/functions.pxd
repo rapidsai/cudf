@@ -158,7 +158,8 @@ cdef extern from "cudf/io/functions.hpp" \
                            cudf_io_types.compression_type compression_,
                            cudf_io_types.statistics_freq stats_lvl_) except +
 
-    cdef unique_ptr[vector[uint8_t]] write_parquet(write_parquet_args args) except +
+    cdef unique_ptr[vector[uint8_t]] \
+        write_parquet(write_parquet_args args) except +
 
     cdef unique_ptr[vector[uint8_t]] merge_rowgroup_metadata(
         const vector[unique_ptr[vector[uint8_t]]]& metadata_list
