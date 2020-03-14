@@ -262,6 +262,7 @@
 - PR #4494 Update Java memory event handler for new RMM resource API
 - PR #4505 Fix 0 length buffers during serialization
 - PR #4482 Fix `.str.rsplit`, `.str.split`, `.str.find`, `.str.rfind`, `.str.index`, `.str.rindex` and enable related tests
+- PR #4513 Backport scalar virtual destructor fix
 
 
 # cuDF 0.12.0 (04 Feb 2020)
