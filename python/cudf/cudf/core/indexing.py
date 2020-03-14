@@ -1,9 +1,11 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
+import cupy
 import numpy as np
 import pandas as pd
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 import cudf
-from cudf.utils.cudautils import arange
 from cudf.utils.dtypes import is_categorical_dtype, is_scalar
 
 
@@ -24,7 +26,7 @@ def indices_from_labels(obj, labels):
         labels = labels.astype(obj.index.dtype)
 
     lhs = cudf.DataFrame({}, index=labels)
-    rhs = cudf.DataFrame({"_": arange(len(obj))}, index=obj.index)
+    rhs = cudf.DataFrame({"_": cupy.arange(len(obj))}, index=obj.index)
     return lhs.join(rhs)["_"]
 
 

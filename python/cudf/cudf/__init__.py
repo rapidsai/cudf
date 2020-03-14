@@ -1,5 +1,8 @@
 # Copyright (c) 2018-2019, NVIDIA CORPORATION.
 
+import cupy
+
+import rmm
 
 from cudf import core, datasets
 from cudf._version import get_versions
@@ -32,6 +35,8 @@ from cudf.io import (
     read_parquet,
 )
 from cudf.utils.utils import set_allocator
+
+cupy.cuda.set_allocator(rmm.rmm_cupy_allocator)
 
 __version__ = get_versions()["version"]
 del get_versions

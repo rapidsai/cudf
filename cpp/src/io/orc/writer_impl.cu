@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -872,7 +872,7 @@ void writer::impl::write_index_stream(
     buffer_[1] = static_cast<uint8_t>(uncomp_ix_len >> 8);
     buffer_[2] = static_cast<uint8_t>(uncomp_ix_len >> 16);
   }
-  out_sink_->write(buffer_.data(), buffer_.size());
+  out_sink_->host_write(buffer_.data(), buffer_.size());
   stripe.indexLength += buffer_.size();
 }
 
@@ -893,7 +893,7 @@ void writer::impl::write_data_stream(gpu::StripeStream const &strm_desc,
                              cudaMemcpyDeviceToHost, stream));
     CUDA_TRY(cudaStreamSynchronize(stream));
 
-    out_sink_->write(stream_out, length);
+    out_sink_->host_write(stream_out, length);
   }
   stripe.dataLength += length;
 }
@@ -937,7 +937,7 @@ void writer::impl::write(table_view const &table, const table_metadata *metadata
 
 void writer::impl::write_chunked_begin(orc_chunked_state& state) {
   // Write file header
-  out_sink_->write(MAGIC, std::strlen(MAGIC));
+  out_sink_->host_write(MAGIC, std::strlen(MAGIC));
 }
 
 void writer::impl::write_chunked(table_view const& table, orc_chunked_state& state) {
@@ -1155,7 +1155,7 @@ void writer::impl::write_chunked(table_view const& table, orc_chunked_state& sta
       buffer_[1] = static_cast<uint8_t>(uncomp_sf_len >> 8);
       buffer_[2] = static_cast<uint8_t>(uncomp_sf_len >> 16);
     }
-    out_sink_->write(buffer_.data(), buffer_.size());
+    out_sink_->host_write(buffer_.data(), buffer_.size());
 
     group += groups_in_stripe;
   }
@@ -1239,7 +1239,7 @@ void writer::impl::write_chunked_end(orc_chunked_state& state) {
     pbw_.write(&state.md);
     add_uncompressed_block_headers(buffer_);
     ps.metadataLength = buffer_.size();
-    out_sink_->write(buffer_.data(), buffer_.size());
+    out_sink_->host_write(buffer_.data(), buffer_.size());
   }
   else {
     ps.metadataLength = 0;
@@ -1256,23 +1256,16 @@ void writer::impl::write_chunked_end(orc_chunked_state& state) {
   ps.magic = MAGIC;
   const auto ps_length = static_cast<uint8_t>(pbw_.write(&ps));
   buffer_.push_back(ps_length);
-  out_sink_->write(buffer_.data(), buffer_.size());
+  out_sink_->host_write(buffer_.data(), buffer_.size());
   out_sink_->flush();
 }
 
 
 // Forward to implementation
-writer::writer(std::string const& filepath, writer_options const& options,
-               rmm::mr::device_memory_resource *mr)
-    : _impl(std::make_unique<impl>(data_sink::create(filepath), options, mr)) {}
+writer::writer(std::unique_ptr<data_sink> sink, writer_options const& options,
+                rmm::mr::device_memory_resource* mr)
+                : _impl(std::make_unique<impl>(std::move(sink), options, mr)) {}
 
-writer::writer(std::vector<char>* buffer, writer_options const& options,
-                   rmm::mr::device_memory_resource *mr)
-        : _impl(std::make_unique<impl>(data_sink::create(buffer), options, mr)) {}
-
-writer::writer(writer_options const& options,
-                   rmm::mr::device_memory_resource *mr)
-        : _impl(std::make_unique<impl>(data_sink::create(), options, mr)) {}  
 
 // Destructor within this translation unit
 writer::~writer() = default;

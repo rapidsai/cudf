@@ -165,4 +165,24 @@ public class HostMemoryBufferTest extends CudfTestBase {
       Files.delete(tempFile);
     }
   }
+
+
+  @Test
+  public void testCopyWithStream() {
+    Random random = new Random(12345L);
+    byte[] data = new byte[4096];
+    byte[] result = new byte[data.length];
+    random.nextBytes(data);
+    try (Cuda.Stream stream1 = new Cuda.Stream(true);
+         Cuda.Stream stream2 = new Cuda.Stream(true);
+         HostMemoryBuffer hostBuffer = HostMemoryBuffer.allocate(data.length);
+         DeviceMemoryBuffer devBuffer = DeviceMemoryBuffer.allocate(data.length);
+         HostMemoryBuffer hostBuffer2 = HostMemoryBuffer.allocate(data.length)) {
+      hostBuffer.setBytes(0, data, 0, data.length);
+      devBuffer.copyFromHostBuffer(hostBuffer, stream1);
+      hostBuffer2.copyFromDeviceBuffer(devBuffer, stream2);
+      hostBuffer2.getBytes(result, 0, 0, result.length);
+      assertArrayEquals(data, result);
+    }
+  }
 }
