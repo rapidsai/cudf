@@ -168,6 +168,7 @@
 - PR #4461 Port nvstrings Miscellaneous functions to cuDF Python/Cython
 - PR #4499 Adding changes to handle include `keep_index` and `RangeIndex`
 - PR #4493 Skip legacy testing in CI
+- PR #4346 Port groupby Cython/Python to use libcudf++ API
 
 ## Bug Fixes
 
