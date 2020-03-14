@@ -1799,26 +1799,34 @@ class StringMethods(object):
             cpp_translate(self._column, table), **kwargs
         )
 
-    def normalize_spaces(self):
-        return cpp_normalize_spaces(self._column)
+    def normalize_spaces(self, **kwargs):
+        return self._return_or_inplace(
+            cpp_normalize_spaces(self._column), **kwargs
+        )
 
-    def tokenize(self, delimiter=" "):
+    def tokenize(self, delimiter=" ", **kwargs):
         delimiter = _massage_string_arg(delimiter, "delimiter", allow_col=True)
-        return cpp_tokenize(self._column, delimiter)
+        return self._return_or_inplace(cpp_tokenize(self._column, delimiter))
 
-    def token_count(self, delimiter=" "):
+    def token_count(self, delimiter=" ", **kwargs):
         delimiter = _massage_string_arg(delimiter, "delimiter", allow_col=True)
-        return cpp_count_tokens(self._column, delimiter)
+        return self._return_or_inplace(
+            cpp_count_tokens(self._column, delimiter)
+        )
 
-    def ngrams(self, n=2, separator="_"):
+    def ngrams(self, n=2, separator="_", **kwargs):
         separator = _massage_string_arg(separator, "separator")
-        return cpp_generate_ngrams(self._column, n, separator)
+        return self._return_or_inplace(
+            cpp_generate_ngrams(self._column, n, separator)
+        )
 
-    def ngrams_tokenize(self, n=2, delimiter=" ", separator="_"):
+    def ngrams_tokenize(self, n=2, delimiter=" ", separator="_", **kwargs):
         delimiter = _massage_string_arg(delimiter, "delimiter")
         separator = _massage_string_arg(separator, "separator")
 
-        return cpp_ngrams_tokenize(self._column, n, delimiter, separator)
+        return self._return_or_inplace(
+            cpp_ngrams_tokenize(self._column, n, delimiter, separator)
+        )
 
 
 def _massage_string_arg(value, name, allow_col=False):
