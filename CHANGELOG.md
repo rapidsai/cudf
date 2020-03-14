@@ -167,6 +167,7 @@
 - PR #4314 Add Java and JNI bindings for string contains
 - PR #4461 Port nvstrings Miscellaneous functions to cuDF Python/Cython
 - PR #4495 Port nvtext to cuDF Python/Cython
+- PR #4499 Adding changes to handle include `keep_index` and `RangeIndex`
 - PR #4493 Skip legacy testing in CI
 
 ## Bug Fixes
@@ -261,6 +262,7 @@
 - PR #4496 Skip tests which require 2+ GPUs
 - PR #4494 Update Java memory event handler for new RMM resource API
 - PR #4505 Fix 0 length buffers during serialization
+- PR #4482 Fix `.str.rsplit`, `.str.split`, `.str.find`, `.str.rfind`, `.str.index`, `.str.rindex` and enable related tests
 
 
 # cuDF 0.12.0 (04 Feb 2020)
