@@ -828,7 +828,10 @@ class StringMethods(object):
             String to split on, does not yet support regular expressions.
         n : int, default -1 (all)
             Limit number of splits in output. `None`, 0, and -1 will all be
-            interpreted as "all splits".libcudfxx.nvtext.tokenize
+            interpreted as "all splits".
+
+        Returns
+        -------
         DataFrame
             Returns a DataFrame with each split as a column.
 
@@ -1150,6 +1153,11 @@ class StringMethods(object):
             with fillchar.
 
         fillchar : str, default ' ' (whitespace)
+            Additional character for filling, default is whitespace.
+
+        Returns
+        -------
+        Series/Index of str dtype
             Returns Series or Index.
 
         """
