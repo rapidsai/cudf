@@ -199,7 +199,7 @@ std::unique_ptr<table> rank(table_view const &input, rank_method method,
       tie_break_ranks(dense_rank_sorted, sorted_order_view, rank_data, thrust::minimum<double>{}, stream);
     break;
     case rank_method::MAX:
-      // max  of first in the group
+      // max of first in the group
       // All equal values have max of ranks among them.
       // algorithm: reduce_by_key(dense_rank, 1, n, max)
       tie_break_ranks(dense_rank_sorted, sorted_order_view, rank_data, thrust::maximum<double>{}, stream);
