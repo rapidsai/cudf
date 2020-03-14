@@ -214,9 +214,15 @@ class StringMethods(object):
                         index=self._parent.index,
                     )
             elif isinstance(self._parent, Series):
-                return Series(
-                    new_col, index=self._parent.index, name=self._parent.name
-                )
+                retain_index = kwargs.get("retain_index", True)
+                if retain_index:
+                    return Series(
+                        new_col,
+                        name=self._parent.name,
+                        index=self._parent.index,
+                    )
+                else:
+                    return Series(new_col, name=self._parent.name)
             elif isinstance(self._parent, Index):
                 return as_index(new_col, name=self._parent.name)
             else:
@@ -1806,26 +1812,31 @@ class StringMethods(object):
 
     def tokenize(self, delimiter=" ", **kwargs):
         delimiter = _massage_string_arg(delimiter, "delimiter", allow_col=True)
-        return self._return_or_inplace(cpp_tokenize(self._column, delimiter))
+        kwargs.setdefault("retain_index", False)
+        return self._return_or_inplace(
+            cpp_tokenize(self._column, delimiter), **kwargs
+        )
 
     def token_count(self, delimiter=" ", **kwargs):
         delimiter = _massage_string_arg(delimiter, "delimiter", allow_col=True)
         return self._return_or_inplace(
-            cpp_count_tokens(self._column, delimiter)
+            cpp_count_tokens(self._column, delimiter), **kwargs
         )
 
     def ngrams(self, n=2, separator="_", **kwargs):
         separator = _massage_string_arg(separator, "separator")
+        kwargs.setdefault("retain_index", False)
         return self._return_or_inplace(
-            cpp_generate_ngrams(self._column, n, separator)
+            cpp_generate_ngrams(self._column, n, separator), **kwargs
         )
 
     def ngrams_tokenize(self, n=2, delimiter=" ", separator="_", **kwargs):
         delimiter = _massage_string_arg(delimiter, "delimiter")
         separator = _massage_string_arg(separator, "separator")
-
+        kwargs.setdefault("retain_index", False)
         return self._return_or_inplace(
-            cpp_ngrams_tokenize(self._column, n, delimiter, separator)
+            cpp_ngrams_tokenize(self._column, n, delimiter, separator),
+            **kwargs,
         )
 
 
