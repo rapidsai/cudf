@@ -1222,6 +1222,9 @@ class Series(Frame):
         else:
             return result
 
+    def fill(self, fill_value, begin=0, end=-1, inplace=False):
+        return self._fill([fill_value], begin, end, inplace)
+
     def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
         """Fill null values with ``value``.
 
@@ -1756,7 +1759,21 @@ class Series(Frame):
         return self.product(axis=axis, skipna=skipna, dtype=dtype)
 
     def cummin(self, axis=0, skipna=True):
-        """Compute the cumulative minimum of the series"""
+        """
+        Compute the cumulative minimum of the series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series([1, 5, 2, 4, 3])
+        >>> ser.cummin()
+        0    1
+        1    1
+        2    1
+        3    1
+        4    1
+        """
+
         assert axis in (None, 0) and skipna is True
         return Series(
             self._column._apply_scan_op("min"),
@@ -1765,7 +1782,20 @@ class Series(Frame):
         )
 
     def cummax(self, axis=0, skipna=True):
-        """Compute the cumulative maximum of the series"""
+        """
+        Compute the cumulative maximum of the series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series([1, 5, 2, 4, 3])
+        >>> ser.cummax()
+        0    1
+        1    5
+        2    5
+        3    5
+        4    5
+        """
         assert axis in (None, 0) and skipna is True
         return Series(
             self._column._apply_scan_op("max"),
@@ -1774,7 +1804,21 @@ class Series(Frame):
         )
 
     def cumsum(self, axis=0, skipna=True):
-        """Compute the cumulative sum of the series"""
+        """
+        Compute the cumulative sum of the series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series([1, 5, 2, 4, 3])
+        >>> ser.cumsum()
+        0    1
+        1    6
+        2    8
+        3    12
+        4    15
+        """
+
         assert axis in (None, 0) and skipna is True
 
         # pandas always returns int64 dtype if original dtype is int or `bool`
@@ -1794,7 +1838,20 @@ class Series(Frame):
             )
 
     def cumprod(self, axis=0, skipna=True):
-        """Compute the cumulative product of the series"""
+        """
+        Compute the cumulative product of the series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series([1, 5, 2, 4, 3])
+        >>> ser.cumprod()
+        0    1
+        1    5
+        2    10
+        3    40
+        4    120
+        """
         assert axis in (None, 0) and skipna is True
 
         # pandas always returns int64 dtype if original dtype is int or `bool`
@@ -1814,7 +1871,16 @@ class Series(Frame):
             )
 
     def mean(self, axis=None, skipna=True):
-        """Compute the mean of the series
+        """
+
+        Compute the mean of the series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series([10, 25, 3, 25, 24, 6])
+        >>> ser.mean()
+        15.5
         """
         assert axis in (None, 0) and skipna is True
         return self._column.mean()
@@ -1917,6 +1983,14 @@ class Series(Frame):
     def cov(self, other, min_periods=None):
         """Calculates the sample covariance between two Series,
         excluding missing values.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser1 = cudf.Series([0.9, 0.13, 0.62])
+        >>> ser2 = cudf.Series([0.12, 0.26, 0.51])
+        >>> ser1.cov(ser2)
+        -0.015750000000000004
         """
         assert min_periods in (None,)
 
@@ -1938,7 +2012,16 @@ class Series(Frame):
     def corr(self, other, method="pearson", min_periods=None):
         """Calculates the sample correlation between two Series,
         excluding missing values.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser1 = cudf.Series([0.9, 0.13, 0.62])
+        >>> ser2 = cudf.Series([0.12, 0.26, 0.51])
+        >>> ser1.corr(ser2)
+        -0.20454263717316112
         """
+
         assert method in ("pearson",) and min_periods in (None,)
 
         if self.empty or other.empty:
@@ -2382,9 +2465,9 @@ class Series(Frame):
 
     def rename(self, index=None, copy=True):
         """
-        Alter Series name.
+        Alter Series name
 
-        Change Series.name with a scalar value.
+        Change Series.name with a scalar value
 
         Parameters
         ----------
@@ -2427,12 +2510,6 @@ class Series(Frame):
     @property
     def __cuda_array_interface__(self):
         return self._column.__cuda_array_interface__
-
-    def repeat(self, repeats, axis=None):
-        assert axis in (None, 0)
-        data = self._column.repeat(repeats)
-        new_index = self.index.repeat(repeats)
-        return Series(data, index=new_index, name=self.name)
 
     def _align_to_index(
         self, index, how="outer", sort=True, allow_non_unique=False

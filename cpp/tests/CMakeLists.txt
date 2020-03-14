@@ -305,10 +305,18 @@ ConfigureTest(DATETIME_OPS_TEST "${DATETIME_OPS_TEST_SRC}")
 # - hashing tests ---------------------------------------------------------------------------------
 
 set(HASHING_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/hashing/hash_test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/hashing/hash_partition_test.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/hashing/hash_test.cpp")
 
 ConfigureTest(HASHING_TEST "${HASHING_TEST_SRC}")
+
+###################################################################################################
+# - partitioning tests ---------------------------------------------------------------------------------
+
+set(PARTITIONING_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/partitioning/hash_partition_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/partitioning/round_robin_test.cpp")
+
+ConfigureTest(PARTITIONING_TEST "${PARTITIONING_TEST_SRC}")
 
 ###################################################################################################
 # - legacy hashing tests ---------------------------------------------------------------------------------
@@ -396,6 +404,14 @@ set(CLAMP_TEST_SRC
 
 ConfigureTest(CLAMP_TEST "${CLAMP_TEST_SRC}")
 ###################################################################################################
+# - fixed_point tests -----------------------------------------------------------------------------
+
+set(FIXED_POINT_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/fixed_point/fixed_point_tests.cu")
+
+ConfigureTest(FIXED_POINT_TEST "${FIXED_POINT_TEST_SRC}")
+
+###################################################################################################
 # - unary tests -----------------------------------------------------------------------------------
 
 set(UNARY_TEST_SRC
@@ -404,7 +420,7 @@ set(UNARY_TEST_SRC
 ConfigureTest(UNARY_TEST "${UNARY_TEST_SRC}")
 
 ###################################################################################################
-# - legacy unary tests -----------------------------------------------------------------------------------
+# - legacy unary tests ----------------------------------------------------------------------------
 
 set(LEGACY_UNARY_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/unary/legacy/unary_ops_test.cu")
@@ -700,14 +716,6 @@ set(MERGE_TEST_SRC
 ConfigureTest(MERGE_TEST "${MERGE_TEST_SRC}")
 
 ###################################################################################################
-# - round-robin new tests ----------------------------------------------------------------------------
-
-set(ROUND_ROBIN_TEST_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/round_robin/round_robin_test.cpp")
-
-ConfigureTest(ROUND_ROBIN_TEST "${ROUND_ROBIN_TEST_SRC}")
-
-###################################################################################################
 # - stream compaction tests -----------------------------------------------------------------------
 
 set(STREAM_COMPACTION_TEST_SRC
@@ -884,6 +892,7 @@ set(DICTIONARY_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/factories_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/gather_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/remove_keys_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/scatter_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/set_keys_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/slice_test.cpp")
 

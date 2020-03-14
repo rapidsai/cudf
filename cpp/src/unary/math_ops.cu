@@ -17,6 +17,7 @@
 #include <unary/unary_ops.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/detail/unary.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 #include <cmath>
 #include <algorithm>
@@ -463,6 +464,7 @@ unary_operation(cudf::column_view const& input,
                 cudf::experimental::unary_op op,
                 rmm::mr::device_memory_resource* mr)
 {
+    CUDF_FUNC_RANGE();
     return detail::unary_operation(input, op, mr);
 }
 

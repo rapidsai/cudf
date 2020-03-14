@@ -2,6 +2,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 #include <rmm/rmm.h>
 #include <cudf/utilities/error.hpp>
@@ -254,6 +255,7 @@ std::unique_ptr<column> scan(const column_view &input,
                              std::unique_ptr<aggregation> const &agg,
                              scan_type inclusive, include_nulls include_nulls_flag,
                              rmm::mr::device_memory_resource *mr) {
+  CUDF_FUNC_RANGE();
   return detail::scan(input, agg, inclusive, include_nulls_flag, mr);
 }
 

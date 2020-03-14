@@ -385,7 +385,7 @@ add_library(cudf
             src/column/legacy/context.cpp
             src/table/legacy/table.cpp
             src/merge/merge.cu
-            src/round_robin/round_robin.cu
+            src/partitioning/round_robin.cu
             src/strings/nvcategory_util.cpp
             src/join/legacy/joining.cu
             src/join/join.cu
@@ -437,6 +437,7 @@ add_library(cudf
             src/datetime/datetime_ops.cu
             src/datetime/datetime_util.cpp
             src/hash/hashing.cu
+            src/partitioning/partitioning.cu
             src/hash/legacy/hashing.cu
             src/quantiles/legacy/quantiles.cu
             src/quantiles/quantile.cu
@@ -764,12 +765,19 @@ add_dependencies(cudf stringify_run)
 ###################################################################################################
 # - build options ---------------------------------------------------------------------------------
 
+
+# Link NVTX library
+find_library(NVTX_LIBRARY nvToolsExt PATH ${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES})
+target_link_libraries(cudf ${NVTX_LIBRARY})
+
 option(USE_NVTX "Build with NVTX support" ON)
 if(USE_NVTX)
     message(STATUS "Using Nvidia Tools Extension")
-    find_library(NVTX_LIBRARY nvToolsExt PATH ${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES})
-    target_link_libraries(cudf ${NVTX_LIBRARY})
+    # The `USE_NVTX` macro is deprecated
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_NVTX")
+else()
+    # Makes NVTX APIs no-ops
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDISABLE_NVTX")
 endif(USE_NVTX)
 
 option(HT_DEFAULT_ALLOCATOR "Use the default allocator for hash tables" ON)

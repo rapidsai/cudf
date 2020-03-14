@@ -21,6 +21,9 @@
 #include <vector>
 #include <string>
 
+#include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
+
 namespace cudf {
 namespace io {
 
@@ -53,6 +56,18 @@ class data_sink {
   static std::unique_ptr<data_sink> create();
 
   /**
+   * @brief Create a wrapped custom user data sink
+   * 
+   * @param[in] User-provided data sink (typically custom class)
+   *
+   * The data sink returned here is not the one passed by the user. It is an internal
+   * class that wraps the user pointer.  The principle is to allow the user to declare
+   * a custom sink instance and use it across multiple write() calls.
+   *   
+   **/
+  static std::unique_ptr<data_sink> create(cudf::io::data_sink *const user_sink);
+
+  /**
    * @brief Base class destructor
    **/
   virtual ~data_sink(){};
@@ -65,7 +80,43 @@ class data_sink {
    *
    * @return void
    **/
-  virtual void write(void const* data, size_t size) = 0;
+  virtual void host_write(void const* data, size_t size) = 0;
+
+  /**
+   * @brief Whether or not this sink supports writing from gpu memory addresses.
+   * 
+   * Internal to some of the file format writers, we have code that does things like
+   * 
+   * tmp_buffer = alloc_temp_buffer();
+   * cudaMemcpy(tmp_buffer, device_buffer, size);
+   * sink->write(tmp_buffer, size);
+   * 
+   * In the case where the sink type is itself a memory buffered write, this ends up
+   * being effectively a second memcpy.  So a useful optimization for a "smart" 
+   * custom data_sink is to do it's own internal management of the movement 
+   * of data between cpu and gpu; turning the internals of the writer into simply
+   * 
+   * sink->device_write(device_buffer, size)
+   * 
+   * If this function returns true, the data_sink will receive calls to device_write() 
+   * instead of write() when possible.  However, it is still possible to receive
+   * write() calls as well.
+   *
+   * @return bool If this writer supports device_write() calls.
+   **/
+  virtual bool supports_device_write() const { return false; }
+
+  /**
+   * @brief Append the buffer content to the sink from a gpu address
+   *
+   * @param[in] data Pointer to the buffer to be written into the sink object
+   * @param[in] size Number of bytes to write
+   *
+   * @return void
+   **/
+  virtual void device_write(void const* gpu_data, size_t size, cudaStream_t stream) { 
+    CUDF_FAIL("data_sink classes that support device_write must override this function.");
+  }
 
   /**
    * @brief Flush the data written into the sink
