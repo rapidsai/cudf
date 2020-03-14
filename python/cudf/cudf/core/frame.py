@@ -8,6 +8,7 @@ import pandas as pd
 
 import cudf
 import cudf._libxx as libcudfxx
+from cudf._libxx.scalar import Scalar
 from cudf.core import column
 from cudf.core.column import as_column, build_categorical_column
 from cudf.utils.dtypes import (
@@ -51,7 +52,7 @@ class Frame(libcudfxx.table.Table):
                     new_data, name=labels, index=self.index
                 )
         return self._constructor(
-            new_data, columns=new_data.to_pandas_index(), index=self.index,
+            new_data, columns=new_data.to_pandas_index(), index=self.index
         )
 
     def _get_columns_by_index(self, indices):
@@ -61,7 +62,7 @@ class Frame(libcudfxx.table.Table):
         """
         data = self._data.get_by_index(indices)
         return self._constructor(
-            data, columns=data.to_pandas_index(), index=self.index,
+            data, columns=data.to_pandas_index(), index=self.index
         )
 
     def _gather(self, gather_map):
@@ -76,12 +77,14 @@ class Frame(libcudfxx.table.Table):
     def _hash(self, initial_hash_values=None):
         return libcudfxx.hash.hash(self, initial_hash_values)
 
-    def _hash_partition(self, columns_to_hash, num_partitions):
+    def _hash_partition(
+        self, columns_to_hash, num_partitions, keep_index=True
+    ):
         output, offsets = libcudfxx.hash.hash_partition(
-            self, columns_to_hash, num_partitions
+            self, columns_to_hash, num_partitions, keep_index
         )
         output = self.__class__._from_table(output)
-        output._copy_categories(self)
+        output._copy_categories(self, include_index=keep_index)
         return output, offsets
 
     def _as_column(self):
@@ -96,6 +99,295 @@ class Frame(libcudfxx.table.Table):
             no index and None as the name to use this method"""
 
         return self._data[None].copy(deep=False)
+
+    def _scatter(self, key, value):
+        result = self._from_table(libcudfxx.copying.scatter(value, key, self))
+
+        result._copy_categories(self)
+        return result
+
+    def _empty_like(self, keep_index=True):
+        result = self._from_table(
+            libcudfxx.copying.table_empty_like(self, keep_index)
+        )
+
+        result._copy_categories(self, include_index=keep_index)
+        return result
+
+    def _slice(self, arg):
+        """
+       _slice : slice the frame as per the arg
+
+       Parameters
+       ----------
+       arg : should always be of type slice and doesn't handle step
+
+       """
+        from cudf.core.index import RangeIndex
+
+        num_rows = len(self)
+        if num_rows == 0:
+            return self
+        start, stop, stride = arg.indices(num_rows)
+
+        if stride is not None and stride != 1:
+            raise ValueError(
+                """Step size is not supported other than None and 1"""
+            )
+
+        # This is just to handle RangeIndex type, stop
+        # it from materializing unnecessarily
+        keep_index = True
+        if self.index is not None and isinstance(self.index, RangeIndex):
+            keep_index = False
+
+        if start < 0:
+            start = start + num_rows
+        if stop < 0:
+            stop = stop + num_rows
+
+        if start > stop:
+            return self._empty_like(keep_index)
+        else:
+            start = len(self) if start > num_rows else start
+            stop = len(self) if stop > num_rows else stop
+
+            result = self._from_table(
+                libcudfxx.copying.table_slice(self, [start, stop], keep_index)[
+                    0
+                ]
+            )
+
+            result._copy_categories(self, include_index=keep_index)
+            # Adding index of type RangeIndex back to
+            # result
+            if keep_index is False and self.index is not None:
+                result.index = self.index[start:stop]
+            return result
+
+    def _normalize_scalars(self, other):
+        """
+        Try to normalizes scalar values as per self dtype
+        """
+        if (
+            other is not None
+            and (isinstance(other, float) and not np.isnan(other))
+        ) and (self.dtype.type(other) != other):
+            raise TypeError(
+                "Cannot safely cast non-equivalent {} to {}".format(
+                    type(other).__name__, self.dtype.name
+                )
+            )
+
+        return (
+            self.dtype.type(other)
+            if (
+                other is not None
+                and (isinstance(other, float) and not np.isnan(other))
+            )
+            else other
+        )
+
+    def _normalize_columns_and_scalars_type(self, other):
+        """
+        Try to normalize the other's dtypes as per self.
+
+        Parameters
+        ----------
+
+        self : Can be a DataFrame or Series or Index
+        other : Can be a DataFrame, Series, Index, Array
+            like object or a scalar value
+
+            if self is DataFrame, other can be only a
+            scalar or array like with size of number of columns
+            in DataFrame or a DataFrame with same dimenstion
+
+            if self is Series, other can be only a scalar or
+            a series like with same length as self
+
+        Returns:
+        --------
+        A dataframe/series/list/scalar form of normalized other
+        """
+        if isinstance(self, cudf.DataFrame) and isinstance(
+            other, cudf.DataFrame
+        ):
+            return [
+                other[self_col].astype(self[self_col].dtype)._column
+                for self_col in self.columns
+            ]
+
+        elif isinstance(self, (cudf.Series, cudf.Index)) and not is_scalar(
+            other
+        ):
+            other = as_column(other)
+            return other.astype(self.dtype)
+
+        else:
+            # Handles scalar or list/array like scalars
+            if isinstance(self, (cudf.Series, cudf.Index)) and is_scalar(
+                other
+            ):
+                return self._normalize_scalars(other)
+
+            elif (self, cudf.DataFrame):
+                out = []
+                if is_scalar(other):
+                    other = [other for i in range(len(self.columns))]
+                out = [
+                    self[in_col_name]._normalize_scalars(sclr)
+                    for in_col_name, sclr in zip(self.columns, other)
+                ]
+
+                return out
+            else:
+                raise ValueError(
+                    "Inappropriate input {} and other {} combination".format(
+                        type(self), type(other)
+                    )
+                )
+
+    def where(self, boolean_mask, other):
+        """
+        Replace values with other where the condition is False.
+
+        Parameters
+        ----------
+        cond : boolean
+            This can be Frame of booleans, where cond is True, keep the
+            original value. Where False, replace with corresponding value
+            from other. Callables are not supported.
+        other: list of scalars or a dataframe or a series,
+            Entries where cond is False are replaced with
+            corresponding value from other. Callables are not
+            supported.
+
+            DataFrame expects only Scalar or array like with scalars or
+            dataframe with same dimention as self.
+
+            Series expects only scalar or series like with same length
+
+        Returns
+        -------
+        result : DataFrame/Series
+
+        Examples:
+        ---------
+        >>> import cudf
+        >>> df = cudf.DataFrame({"A":[1, 4, 5], "B":[3, 5, 8]})
+        >>> print (df.where(df % 2 == 0, [-1, -1]))
+           A  B
+        0 -1 -1
+        1  4 -1
+        2 -1  8
+
+        >>> ser = cudf.Series([4, 3, 2, 1, 0])
+        >>> print(ser.where(ser > 2, 10))
+        0     4
+        1     3
+        2    10
+        3    10
+        4    10
+        >>> print(ser.where(ser > 2))
+        0    4
+        1    3
+        2
+        3
+        4
+        """
+
+        if isinstance(self, cudf.DataFrame):
+            if not isinstance(boolean_mask, cudf.DataFrame):
+                boolean_mask = self.from_pandas(pd.DataFrame(boolean_mask))
+            other = self._normalize_columns_and_scalars_type(other)
+            out_df = cudf.DataFrame(index=self.index)
+            if len(self._columns) != len(other):
+                raise ValueError(
+                    """Replacement list length or number of dataframe columns
+                    should be equal to Number of columns of dataframe"""
+                )
+            if len(self._columns) != len(boolean_mask._columns):
+                raise ValueError(
+                    """Array conditional must be same shape as self"""
+                )
+
+            for in_col_name, cond_col_name, otr_col in zip(
+                self.columns, boolean_mask.columns, other
+            ):
+                input_col = self[in_col_name]._column
+                if is_categorical_dtype(input_col.dtype):
+                    if np.isscalar(otr_col):
+                        otr_col = input_col._encode(otr_col)
+                    else:
+                        otr_col = otr_col.codes
+                    input_col = input_col.codes
+
+                result = libcudfxx.copying.copy_if_else(
+                    input_col, otr_col, boolean_mask[cond_col_name]._column
+                )
+
+                if is_categorical_dtype(self[in_col_name].dtype):
+                    result = build_categorical_column(
+                        categories=self[in_col_name]._column.categories,
+                        codes=result,
+                        mask=result.base_mask,
+                        size=result.size,
+                        offset=result.offset,
+                        ordered=self[in_col_name]._column.ordered,
+                    )
+
+                out_df[in_col_name] = self[in_col_name].__class__(result)
+
+            return out_df
+
+        else:
+            other = self._normalize_columns_and_scalars_type(other)
+            if isinstance(other, (cudf.Series, cudf.Index)):
+                other = other._column
+
+            input_col = self._column
+            if is_categorical_dtype(input_col.dtype):
+                if np.isscalar(otr_col):
+                    other = input_col._encode(other)
+                else:
+                    other = other.codes
+                input_col = input_col.codes
+            result = libcudfxx.copying.copy_if_else(
+                self._column, other, boolean_mask._column
+            )
+
+            if is_categorical_dtype(self.dtype):
+                result = build_categorical_column(
+                    categories=self._column.categories,
+                    codes=result,
+                    mask=result.base_mask,
+                    size=result.size,
+                    offset=result.offset,
+                    ordered=self._column.ordered,
+                )
+
+            result = self.__class__(result)
+            result.index = self.index
+            return result
+
+    def _scatter_to_tables(self, scatter_map, keep_index=True):
+        """
+       scatter the dataframe/table to a list of dataframes/tables
+       as per scatter_map
+
+       """
+
+        result = libcudfxx.copying.scatter_to_tables(
+            self, scatter_map, keep_index
+        )
+        result = [self._from_table(tbl) for tbl in result]
+        [
+            frame._copy_categories(self, include_index=keep_index)
+            for frame in result
+        ]
+
+        return result
 
     def dropna(self, axis=0, how="any", subset=None, thresh=None):
         """
@@ -238,6 +530,83 @@ class Frame(libcudfxx.table.Table):
         result._copy_categories(self)
         return result
 
+    def repeat(self, repeats, axis=None):
+        """Repeats elements consecutively
+
+        Parameters
+        ----------
+        repeats : int, array, numpy array, or Column
+            the number of times to repeat each element
+
+        Example
+        -------
+        >>> import cudf as cudf
+        >>> s = cudf.Series([0, 2]) # or DataFrame
+        >>> s
+        0    0
+        1    2
+        dtype: int64
+        >>> s.repeat([3, 4])
+        0    0
+        0    0
+        0    0
+        1    2
+        1    2
+        1    2
+        1    2
+        dtype: int64
+        >>> s.repeat(2)
+        0    0
+        0    0
+        1    2
+        1    2
+        dtype: int64
+        >>>
+        """
+        if axis is not None:
+            raise NotImplementedError(
+                "Only axis=`None` supported at this time."
+            )
+
+        return self._repeat(repeats)
+
+    def _repeat(self, count):
+        if is_scalar(count):
+            count = Scalar(count)
+        else:
+            count = as_column(count)
+
+        result = self.__class__._from_table(
+            libcudfxx.filling.repeat(self, count)
+        )
+
+        result._copy_categories(self)
+        return result
+
+    def _fill(self, fill_values, begin, end, inplace):
+        col_and_fill = zip(self._columns, fill_values)
+
+        if not inplace:
+            data_columns = (c._fill(v, begin, end) for (c, v) in col_and_fill)
+            data = zip(self._column_names, data_columns)
+            return self.__class__._from_table(Frame(data, self._index))
+
+        for (c, v) in col_and_fill:
+            c.fill(v, begin, end, inplace=True)
+
+        return self
+
+    def shift(self, periods=1, freq=None, axis=0, fill_value=None):
+        """Shift values by `periods` positions.
+        """
+        assert axis in (None, 0) and freq is None
+        return self._shift(periods)
+
+    def _shift(self, offset, fill_value=None):
+        data_columns = (col.shift(offset, fill_value) for col in self._columns)
+        data = zip(self._column_names, data_columns)
+        return self.__class__._from_table(Frame(data, self._index))
+
     def drop_duplicates(self, subset=None, keep="first", nulls_are_equal=True):
         """
         Drops rows in frame as per duplicate rows in `subset` columns from
@@ -290,18 +659,118 @@ class Frame(libcudfxx.table.Table):
                 self._data[name] = build_categorical_column(
                     categories=other_col.categories,
                     codes=col,
-                    mask=col.mask,
+                    mask=col.base_mask,
                     ordered=other_col.ordered,
+                    size=col.size,
+                    offset=col.offset,
                 )
         if include_index:
-            if self._index is not None:
+            from cudf.core.index import RangeIndex
+
+            # include_index will still behave as False
+            # incase of self._index being a RangeIndex
+            if (self._index is not None) and (
+                not isinstance(self._index, RangeIndex)
+            ):
                 self._index._copy_categories(other._index)
         return self
 
     def _unaryop(self, op):
-        result = self.copy()
-        for name, col in result._data.items():
-            result._data[name] = col.unary_operator(op)
+        data_columns = (col.unary_operator(op) for col in self._columns)
+        data = zip(self._column_names, data_columns)
+        return self.__class__._from_table(Frame(data, self._index))
+
+    def isnull(self):
+        """Identify missing values.
+        """
+        data_columns = (col.isnull() for col in self._columns)
+        data = zip(self._column_names, data_columns)
+        return self.__class__._from_table(Frame(data, self._index))
+
+    def isna(self):
+        """Identify missing values. Alias for `isnull`
+        """
+        return self.isnull()
+
+    def notnull(self):
+        """Identify non-missing values.
+        """
+        data_columns = (col.notnull() for col in self._columns)
+        data = zip(self._column_names, data_columns)
+        return self.__class__._from_table(Frame(data, self._index))
+
+    def notna(self):
+        """Identify non-missing values. Alias for `notnull`.
+        """
+        return self.notnull()
+
+    def interleave_columns(self):
+        """
+        Interleave Series columns of a table into a single column.
+
+        Converts the column major table `cols` into a row major column.
+        Parameters
+        ----------
+        cols : input Table containing columns to interleave.
+
+        Example
+        -------
+        >>> df = DataFrame([['A1', 'A2', 'A3'], ['B1', 'B2', 'B3']])
+        >>> df
+        0    [A1, A2, A3]
+        1    [B1, B2, B3]
+        >>> df.interleave_columns()
+        0    A1
+        1    B1
+        2    A2
+        3    B2
+        4    A3
+        5    B3
+
+        Returns
+        -------
+        The interleaved columns as a single column
+        """
+        if ("category" == self.dtypes).any():
+            raise ValueError(
+                "interleave_columns does not support 'category' dtype."
+            )
+
+        result = self._constructor_sliced(
+            libcudfxx.reshape.interleave_columns(self)
+        )
+
+        return result
+
+    def tile(self, count):
+        """
+        Repeats the rows from `self` DataFrame `count` times to form a
+        new DataFrame.
+
+        Parameters
+        ----------
+        self : input Table containing columns to interleave.
+        count : Number of times to tile "rows". Must be non-negative.
+
+        Example
+        -------
+        >>> df  = Dataframe([[8, 4, 7], [5, 2, 3]])
+        >>> count = 2
+        >>> df.tile(df, count)
+           0  1  2
+        0  8  4  7
+        1  5  2  3
+        0  8  4  7
+        1  5  2  3
+
+        Returns
+        -------
+        The table containing the tiled "rows".
+        """
+        result = self.__class__._from_table(
+            libcudfxx.reshape.tile(self, count)
+        )
+        result._copy_categories(self)
         return result
 
     def searchsorted(
@@ -385,7 +854,7 @@ class Frame(libcudfxx.table.Table):
         len_right_on = len(right_on) if right_on is not None else 0
 
         # must actually support the requested merge type
-        if how not in ["left", "inner", "outer"]:
+        if how not in ["left", "inner", "outer", "leftanti", "leftsemi"]:
             raise NotImplementedError(
                 "{!r} merge not supported yet".format(how)
             )
@@ -503,7 +972,7 @@ class Frame(libcudfxx.table.Table):
                 if name in left_on:
                     left_on[left_on.index(name)] = "%s%s" % (name, lsuffix)
                 if name in right_on:
-                    right_on[right_on.index(name)] = "%s%s" % (name, rsuffix,)
+                    right_on[right_on.index(name)] = "%s%s" % (name, rsuffix)
 
         categorical_dtypes = {}
         for name, col in itertools.chain(lhs._data.items(), rhs._data.items()):
@@ -601,9 +1070,11 @@ class Frame(libcudfxx.table.Table):
             else:
 
                 to_frame_data[name] = column.build_column(
-                    col.data,
+                    col.base_data,
                     dtype=categorical_dtypes.get(name, col.dtype),
-                    mask=col.mask,
+                    mask=col.base_mask,
+                    offset=col.offset,
+                    size=col.size,
                 )
         gdf_result._data = to_frame_data
 
@@ -704,3 +1175,33 @@ class Frame(libcudfxx.table.Table):
                 rhs[rcol] = rhs[rcol].astype(to_dtype)
 
         return lhs, rhs, to_categorical
+
+    def _is_sorted(self, ascending=None, null_position=None):
+        """
+        Returns a boolean indicating whether the data of the Frame are sorted
+        based on the parameters given. Does not account for the index.
+
+        Parameters
+        ----------
+        self : Frame
+            Frame whose columns are to be checked for sort order
+        ascending : None or list-like of booleans
+            None or list-like of boolean values indicating expected sort order
+            of each column. If list-like, size of list-like must be
+            len(columns). If None, all columns expected sort order is set to
+            ascending. False (0) - ascending, True (1) - descending.
+        null_position : None or list-like of booleans
+            None or list-like of boolean values indicating desired order of
+            nulls compared to other elements. If list-like, size of list-like
+            must be len(columns). If None, null order is set to before. False
+            (0) - before, True (1) - after.
+
+        Returns
+        -------
+        returns : boolean
+            Returns True, if sorted as expected by ``ascending`` and
+            ``null_position``, False otherwise.
+        """
+        return libcudfxx.sort.is_sorted(
+            self, ascending=ascending, null_position=null_position
+        )

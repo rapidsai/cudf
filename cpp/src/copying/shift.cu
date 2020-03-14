@@ -14,12 +14,6 @@
  * limitations under the License.
  */
 
-#include <algorithm>
-#include <iterator>
-#include <memory>
-#include <thrust/copy.h>
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/transform.h>
 #include <cudf/types.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/copying.hpp>
@@ -29,6 +23,14 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
+
+#include <algorithm>
+#include <iterator>
+#include <memory>
+#include <thrust/copy.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/transform.h>
 
 namespace cudf {
 namespace experimental {
@@ -38,7 +40,7 @@ inline bool __device__ out_of_bounds(size_type size, size_type idx) {
     return idx < 0 || idx >= size;
 }
 
-struct functor {
+struct shift_functor {
 
     template<typename T, typename... Args>
     std::enable_if_t<not cudf::is_fixed_width<T>(), std::unique_ptr<column>>
@@ -116,37 +118,24 @@ struct functor {
 
 } // anonymous namespace
 
-std::unique_ptr<table> shift(table_view const& input,
-                             size_type offset,
-                             std::vector<std::reference_wrapper<scalar>> const& fill_values,
-                             rmm::mr::device_memory_resource *mr,
-                             cudaStream_t stream)
+std::unique_ptr<column> shift(column_view const& input,
+                              size_type offset,
+                              scalar const& fill_value,
+                              rmm::mr::device_memory_resource *mr,
+                              cudaStream_t stream)
 {
-    CUDF_EXPECTS(input.num_columns() == static_cast<size_type>(fill_values.size()),
-                 "shift requires one fill value for each column.");
+    CUDF_FUNC_RANGE();
+    CUDF_EXPECTS(input.type() == fill_value.type(),
+                "shift requires each fill value type to match the corrosponding column type.");
 
-    for (size_type i = 0; i < input.num_columns(); ++i) {
-        CUDF_EXPECTS(input.column(i).type() == fill_values[i].get().type(),
-                     "shift requires each fill value type to match the corrosponding column type.");
-    }
 
-    if (input.num_rows() == 0) {
+    if (input.size() == 0) {
         return empty_like(input);
     }
 
-    auto output_columns = std::vector<std::unique_ptr<column>>{};
-
-    std::transform(input.begin(),
-                   input.end(),
-                   fill_values.begin(),
-                   std::back_inserter(output_columns),
-                   [offset, mr, stream] (auto const& input_column, auto const& fill_value) {
-                       return type_dispatcher(input_column.type(), functor{},
-                                              input_column, offset, fill_value,
-                                              mr, stream);
-                   });
-
-    return std::make_unique<table>(std::move(output_columns));
+    return type_dispatcher(input.type(), shift_functor{},
+                           input, offset, fill_value,
+                           mr, stream);
 }
 
 } // namespace experimental
