@@ -357,3 +357,5 @@ TYPED_TEST(DLPackNumericTests, FromDlpackEmpty1D)
   // Verify that from_dlpack(to_dlpack(input)) == input
   EXPECT_THROW(cudf::from_dlpack(tensor.get()), cudf::logic_error);
 }
+
+CUDF_TEST_PROGRAM_MAIN()

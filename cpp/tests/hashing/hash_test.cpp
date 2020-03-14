@@ -174,3 +174,4 @@ TYPED_TEST(HashTestFloatTyped, TestExtremes)
   expect_columns_equal(output1->view(), output2->view(), true);
 }
 
+CUDF_TEST_PROGRAM_MAIN()

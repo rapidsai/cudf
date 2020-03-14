@@ -1778,3 +1778,5 @@ TEST_F(SearchTest, multi_contains_empty_input_set_string)
 
   expect_columns_equal(*result, expect);
 }
+
+CUDF_TEST_PROGRAM_MAIN()

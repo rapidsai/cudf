@@ -85,3 +85,5 @@ TEST_F(MaskToNullTest, NonBoolTypeColumn){
 
     EXPECT_THROW(cudf::experimental::bools_to_mask(input_column), cudf::logic_error);
 }
+
+CUDF_TEST_PROGRAM_MAIN()

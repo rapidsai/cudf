@@ -178,3 +178,10 @@ class RmmTestEnvironment : public ::testing::Environment {
 
 }  // namespace test
 }  // namespace cudf
+
+#define CUDF_TEST_PROGRAM_MAIN() int main(int argc, char **argv) {\
+  ::testing::InitGoogleTest(&argc, argv); \
+  ::testing::Environment* const rmm_env = \
+    ::testing::AddGlobalTestEnvironment(new cudf::test::RmmTestEnvironment); \
+  return RUN_ALL_TESTS(); \
+}

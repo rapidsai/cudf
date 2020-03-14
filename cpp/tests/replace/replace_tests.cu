@@ -543,3 +543,5 @@ TYPED_TEST(ReplaceTest, LargeScaleReplaceTest)
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{input_column.begin(), input_column.end()};
   expect_columns_equal(expected, *actual_result);
 }
+
+CUDF_TEST_PROGRAM_MAIN()

@@ -224,3 +224,5 @@ TYPED_TEST(TransposeTest, MismatchedColumns)
   cudf::table_view input{{col1, col2, col3}};
   EXPECT_THROW(cudf::transpose(input), cudf::logic_error);
 }
+
+CUDF_TEST_PROGRAM_MAIN()

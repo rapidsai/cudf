@@ -84,3 +84,5 @@ TEST_F(DictionaryAddKeysTest, Errors)
     cudf::test::fixed_width_column_wrapper<int64_t> null_keys{ {1,2,3},{1,0,1} };
     EXPECT_THROW( cudf::dictionary::add_keys( dictionary->view(), null_keys ), cudf::logic_error);
 }
+
+CUDF_TEST_PROGRAM_MAIN()

@@ -943,3 +943,5 @@ TEST_F(ParquetWriterStressTest, DeviceWriteLargeTableWithValids)
   auto custom_tbl = cudf_io::read_parquet(custom_args);
   expect_tables_equal(custom_tbl.tbl->view(), expected->view()); 
 }
+
+CUDF_TEST_PROGRAM_MAIN()

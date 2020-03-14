@@ -496,3 +496,5 @@ TEST_F(JsonReaderTest, InvalidFloatingPoint) {
   // col_data.second contains the bitmasks
   ASSERT_EQ(0u, col_data.second[0]);
 }
+
+CUDF_TEST_PROGRAM_MAIN()

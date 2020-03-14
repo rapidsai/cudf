@@ -731,3 +731,5 @@ TEST_F(BinaryOperationIntegrationTest, ShiftRightUnsigned_Vector_Scalar_SI32) {
 }  // namespace binop
 }  // namespace test
 }  // namespace cudf
+
+CUDF_TEST_PROGRAM_MAIN()

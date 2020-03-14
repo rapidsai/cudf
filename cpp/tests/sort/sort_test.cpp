@@ -298,3 +298,5 @@ TEST_F(SortByKey, ValueKeysSizeMismatch) {
 
 } // namespace test
 } // namespace cudf
+
+CUDF_TEST_PROGRAM_MAIN()

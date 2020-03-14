@@ -172,3 +172,5 @@ TYPED_TEST(InterleaveColumnsTest, MismatchedDtypes)
         
     }
 }
+
+CUDF_TEST_PROGRAM_MAIN()

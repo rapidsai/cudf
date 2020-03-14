@@ -286,3 +286,5 @@ TYPED_TEST(ReplaceNullsTest, LargeScaleScalar) {
       replacement,
       cudf::test::fixed_width_column_wrapper<TypeParam>{expectedColumn.begin(), expectedColumn.end()});
 }
+
+CUDF_TEST_PROGRAM_MAIN()

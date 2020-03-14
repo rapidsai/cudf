@@ -582,3 +582,5 @@ TYPED_TEST(QuantileUnsupportedTypesTest, TestMultipleElements)
 }
 
 } // anonymous namespace
+
+CUDF_TEST_PROGRAM_MAIN()

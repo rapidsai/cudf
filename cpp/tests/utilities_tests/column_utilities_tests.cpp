@@ -224,3 +224,5 @@ TEST_F(ColumnUtilitiesStringsTest, StringsToString) {
   
   EXPECT_EQ(cudf::test::to_string(strings, delimiter), tmp.str());
 }
+
+CUDF_TEST_PROGRAM_MAIN()

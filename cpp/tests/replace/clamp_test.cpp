@@ -448,3 +448,5 @@ TEST_F(ClampStringTest, WithReplaceString)
 
     cudf::test::expect_columns_equal(expected, got->view());
 }
+
+CUDF_TEST_PROGRAM_MAIN()

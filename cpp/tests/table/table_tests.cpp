@@ -285,3 +285,5 @@ TEST_F(TableTest, ConcatenateTablesWithOffsetsAndNulls)
     cudf::test::expect_tables_equal( concatenated_tables->view(), table_view_exp1);
   }
 }
+
+CUDF_TEST_PROGRAM_MAIN()

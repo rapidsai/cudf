@@ -120,3 +120,5 @@ TYPED_TEST(DefaultScalarFactory, TypeCast) {
   EXPECT_FALSE(numeric_s->is_valid());
   EXPECT_FALSE(s->is_valid());
 }
+
+CUDF_TEST_PROGRAM_MAIN()

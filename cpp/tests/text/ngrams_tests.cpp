@@ -80,3 +80,5 @@ TEST_F(TextGenerateNgramsTest, Errors)
         thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
     EXPECT_THROW( nvtext::generate_ngrams(cudf::strings_column_view(strings_no_tokens)), cudf::logic_error );
 }
+
+CUDF_TEST_PROGRAM_MAIN()

@@ -877,3 +877,4 @@ TEST_F(RollingTestUdf, DynamicWindow)
   cudf::test::expect_columns_equal(*output, expected);
 }
 
+CUDF_TEST_PROGRAM_MAIN()

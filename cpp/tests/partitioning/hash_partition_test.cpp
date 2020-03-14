@@ -294,3 +294,5 @@ TYPED_TEST(HashPartitionFixedWidth, LargeInput) {
 TYPED_TEST(HashPartitionFixedWidth, HasNulls) {
   run_fixed_width_test<TypeParam>(10, 1000, 10, true);
 }
+
+CUDF_TEST_PROGRAM_MAIN()

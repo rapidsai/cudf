@@ -683,3 +683,5 @@ TEST_F(JoinTest, InnerJoinCornerCase)
   auto sorted_gold = cudf::experimental::gather(gold.view(), *gold_sort_order);
   cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
 }
+
+CUDF_TEST_PROGRAM_MAIN()
