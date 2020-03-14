@@ -15,6 +15,19 @@ import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
 import cudf._libxx.string_casting as str_cast
 from cudf._lib.nvtx import nvtx_range_pop, nvtx_range_push
+from cudf._libxx.nvtext.generate_ngrams import (
+    generate_ngrams as cpp_generate_ngrams,
+)
+from cudf._libxx.nvtext.ngrams_tokenize import (
+    ngrams_tokenize as cpp_ngrams_tokenize,
+)
+from cudf._libxx.nvtext.normalize import (
+    normalize_spaces as cpp_normalize_spaces,
+)
+from cudf._libxx.nvtext.tokenize import (
+    count_tokens as cpp_count_tokens,
+    tokenize as cpp_tokenize,
+)
 from cudf._libxx.strings.attributes import (
     code_points as cpp_code_points,
     count_characters as cpp_count_characters,
@@ -815,10 +828,7 @@ class StringMethods(object):
             String to split on, does not yet support regular expressions.
         n : int, default -1 (all)
             Limit number of splits in output. `None`, 0, and -1 will all be
-            interpreted as "all splits".
-
-        Returns
-        -------
+            interpreted as "all splits".libcudfxx.nvtext.tokenize
         DataFrame
             Returns a DataFrame with each split as a column.
 
@@ -1782,27 +1792,25 @@ class StringMethods(object):
         )
 
     def normalize_spaces(self):
-        return libcudfxx.nvtext.normalize_spaces(self._column)
+        return cpp_normalize_spaces(self._column)
 
-    def tokenize(self, delimiter=None):
+    def tokenize(self, delimiter=" "):
         delimiter = _massage_string_arg(delimiter, "delimiter", allow_col=True)
-        return libcudfxx.nvtext.tokenize(self._column, delimiter)
+        return cpp_tokenize(self._column, delimiter)
 
-    def token_count(self, delimiter=None):
+    def token_count(self, delimiter=" "):
         delimiter = _massage_string_arg(delimiter, "delimiter", allow_col=True)
-        return libcudfxx.nvtext.count_tokens(self._column, delimiter)
+        return cpp_count_tokens(self._column, delimiter)
 
-    def ngrams(self, ngrams=2, separator="_"):
+    def ngrams(self, n=2, separator="_"):
         separator = _massage_string_arg(separator, "separator")
-        return libcudfxx.nvtext.ngrams(self._column, ngrams, separator)
+        return cpp_generate_ngrams(self._column, n, separator)
 
-    def ngrams_tokenize(self, ngrams=2, delimiter=" ", separator="_"):
+    def ngrams_tokenize(self, n=2, delimiter=" ", separator="_"):
         delimiter = _massage_string_arg(delimiter, "delimiter")
         separator = _massage_string_arg(separator, "separator")
 
-        return libcudfxx.nvtext.ngrams_tokenize(
-            self._column, ngrams, delimiter, separator
-        )
+        return cpp_ngrams_tokenize(self._column, n, delimiter, separator)
 
 
 def _massage_string_arg(value, name, allow_col=False):
