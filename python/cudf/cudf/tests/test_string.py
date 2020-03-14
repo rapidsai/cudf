@@ -979,15 +979,20 @@ def test_string_no_children_properties():
     [
         ["Cbe", "cbe", "CbeD", "Cb", "ghi", "Cb"],
         ["abc", "xyz", "a", "ab", "123", "097"],
-        ["abcdefghij", "0123456789", "9876543210", None, "accénted", ""],
+        ["abcdefghij", "0123456789", "9876543210", None, "accénted"],
     ],
 )
-@pytest.mark.parametrize("index", [0, 1, 2, 3, 9, 10])
+@pytest.mark.parametrize(
+    "index", [-100, -5, -2, -6, -1, 0, 1, 2, 3, 9, 10, 100]
+)
 def test_string_get(string, index):
     pds = pd.Series(string)
     gds = Series(string)
 
-    assert_eq(pds.str.get(index).fillna(""), gds.str.get(index).fillna(""))
+    assert_eq(
+        pds.str.get(index).fillna(""),
+        gds.str.get(index).fillna("").str.replace("\x00", ""),
+    )
 
 
 @pytest.mark.parametrize(
