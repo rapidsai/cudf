@@ -2065,9 +2065,6 @@ class StringColumn(column.ColumnBase):
         )
         return col
 
-    def copy(self, deep=True):
-        return column.as_column(self.nvstrings.copy())
-
     def find_and_replace(self, to_replace, replacement, all_nan):
         """
         Return col with *to_replace* replaced with *value*
