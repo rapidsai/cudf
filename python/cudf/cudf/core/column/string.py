@@ -1172,11 +1172,6 @@ class StringMethods(object):
             with fillchar.
 
         fillchar : str, default ' ' (whitespace)
-            Additional character for filling, default is whitespace.
-
-        Returns
-        -------
-        Series/Index of str dtype
             Returns Series or Index.
 
         """
@@ -1734,6 +1729,68 @@ class StringMethods(object):
         return self._return_or_inplace(
             cpp_translate(self._column, table), **kwargs
         )
+
+    def normalize_spaces(self):
+        return libcudfxx.nvtext.normalize_spaces(self._column)
+
+    def tokenize(self, delimiter=None):
+        delimiter = _massage_string_arg(delimiter, "delimiter", allow_col=True)
+        return libcudfxx.nvtext.tokenize(self._column, delimiter)
+
+    def token_count(self, delimiter=None):
+        delimiter = _massage_string_arg(delimiter, "delimiter", allow_col=True)
+        return libcudfxx.nvtext.count_tokens(self._column, delimiter)
+
+    def ngrams(self, ngrams=2, separator="_"):
+        separator = _massage_string_arg(separator, "separator")
+        return libcudfxx.nvtext.ngrams(self._column, ngrams, separator)
+
+    def ngrams_tokenize(self, ngrams=2, delimiter=" ", separator="_"):
+        delimiter = _massage_string_arg(delimiter, "delimiter")
+        separator = _massage_string_arg(separator, "separator")
+
+        return libcudfxx.nvtext.ngrams_tokenize(
+            self._column, ngrams, delimiter, separator
+        )
+
+
+def _massage_string_arg(value, name, allow_col=False):
+    from cudf._libxx.scalar import Scalar
+    from cudf._libxx.column import Column
+    from cudf.utils.dtypes import is_string_dtype
+
+    allowed_types = ["Scalar"]
+
+    if isinstance(value, str):
+        return Scalar(value, dtype="str")
+
+    if isinstance(value, Scalar) and is_string_dtype(value.dtype):
+        return value
+
+    if allow_col:
+        allowed_types += ["Column"]
+
+        if isinstance(value, list):
+            return column.as_column(value, dtype="str")
+
+        if isinstance(value, Column) and is_string_dtype(value.dtype):
+            return value
+
+    raise ValueError(
+        "Expected {} for {} but got {}".format(
+            _expected_types_format(allowed_types), name, type(value)
+        )
+    )
+
+
+def _expected_types_format(types):
+    if len(types) == 0:
+        raise ValueError
+
+    if len(types) == 1:
+        return types[0]
+
+    return ", ".join(types[:-1]) + ", or " + types[-1]
 
 
 class StringColumn(column.ColumnBase):

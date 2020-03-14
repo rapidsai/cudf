@@ -11,7 +11,7 @@ from cudf._libxx.cpp.nvtext.normalize cimport (
 from cudf._libxx.column cimport Column
 
 
-def normalize_spaces(Column strings, int ngrams):
+def normalize_spaces(Column strings):
     cdef column_view c_strings = strings.view()
     cdef unique_ptr[column] c_result
 
