@@ -217,8 +217,10 @@ class DatetimeColumn(column.ColumnBase):
         if op in ("eq", "ne", "lt", "gt", "le", "ge"):
             out_dtype = np.bool
         else:
-            raise TypeError(f"Series of dtype {self.dtype} cannot perform "
-                            f" the operation {op}")
+            raise TypeError(
+                f"Series of dtype {self.dtype} cannot perform "
+                f" the operation {op}"
+            )
         return binop(lhs, rhs, op=op, out_dtype=out_dtype)
 
     def fillna(self, fill_value):
