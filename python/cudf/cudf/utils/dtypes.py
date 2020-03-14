@@ -143,6 +143,8 @@ def to_cudf_compatible_scalar(val, dtype=None):
     if val is None:
         return val
 
+    dtype = "str" if is_string_dtype(dtype) else dtype
+
     if not is_scalar(val):
         raise ValueError(
             f"Cannot convert value of type {type(val).__name__} "
