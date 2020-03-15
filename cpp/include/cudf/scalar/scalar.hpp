@@ -40,7 +40,7 @@ namespace cudf {
  */
 class scalar {
  public:
-  ~scalar() = default;
+  virtual ~scalar() = default;
   scalar(scalar&& other) = default;
   scalar(scalar const& other) = default;
   scalar& operator=(scalar const& other) = delete;
