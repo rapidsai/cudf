@@ -2,7 +2,6 @@
 
 from . import (
     avro,
-    binops,
     concat,
     copying,
     csv,
