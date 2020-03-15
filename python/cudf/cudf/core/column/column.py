@@ -1173,27 +1173,6 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 )
         return col
 
-    elif isinstance(arbitrary, np.ndarray):
-        # CUDF assumes values are always contiguous
-        if arbitrary.ndim > 1:
-            raise ValueError("Data must be 1-dimensional")
-
-        if not arbitrary.flags["C_CONTIGUOUS"]:
-            arbitrary = np.ascontiguousarray(arbitrary)
-
-        if dtype is not None:
-            arbitrary = arbitrary.astype(dtype)
-
-        if arbitrary.dtype.kind == "M":
-            data = datetime.DatetimeColumn.from_numpy(arbitrary)
-
-        elif arbitrary.dtype.kind in ("O", "U"):
-            data = as_column(
-                pa.Array.from_pandas(arbitrary), dtype=arbitrary.dtype
-            )
-        else:
-            data = as_column(cupy.asarray(arbitrary), nan_as_null=nan_as_null)
-
     elif isinstance(arbitrary, pa.Array):
         if isinstance(arbitrary, pa.StringArray):
             pa_size, pa_offset, nbuf, obuf, sbuf = buffers_from_pyarrow(
@@ -1359,6 +1338,31 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 data = data.fillna(np.nan)
             elif np.issubdtype(data.dtype, np.datetime64):
                 data = data.fillna(np.datetime64("NaT"))
+
+    elif hasattr(arbitrary, "__array_interface__"):
+        # CUDF assumes values are always contiguous
+        desc = arbitrary.__array_interface__
+        shape = desc["shape"]
+        arb_dtype = np.dtype(desc["typestr"])
+        # CUDF assumes values are always contiguous
+        if len(shape) > 1:
+            raise ValueError("Data must be 1-dimensional")
+
+        if desc["strides"] is not None:
+            arbitrary = np.ascontiguousarray(arbitrary)
+
+        if dtype is not None:
+            arbitrary = arbitrary.astype(dtype)
+
+        if arb_dtype.kind == "M":
+            data = datetime.DatetimeColumn.from_numpy(arbitrary)
+
+        elif arb_dtype.kind in ("O", "U"):
+            data = as_column(
+                pa.Array.from_pandas(arbitrary), dtype=arbitrary.dtype
+            )
+        else:
+            data = as_column(cupy.asarray(arbitrary), nan_as_null=nan_as_null)
 
     elif isinstance(arbitrary, memoryview):
         data = as_column(
