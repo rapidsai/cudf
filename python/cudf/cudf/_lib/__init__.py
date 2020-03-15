@@ -9,7 +9,6 @@ from . import (
     cudf,
     dlpack,
     gpuarrow,
-    groupby,
     hash,
     issorted,
     join,
