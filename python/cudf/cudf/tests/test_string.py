@@ -979,7 +979,7 @@ def test_string_no_children_properties():
     [
         ["Cbe", "cbe", "CbeD", "Cb", "ghi", "Cb"],
         ["abc", "xyz", "a", "ab", "123", "097"],
-        ["abcdefghij", "0123456789", "9876543210", None, "accénted"],
+        ["abcdefghij", "0123456789", "9876543210", None, "accénted", ""],
     ],
 )
 @pytest.mark.parametrize(
@@ -989,9 +989,11 @@ def test_string_get(string, index):
     pds = pd.Series(string)
     gds = Series(string)
 
+    # TODO: Remove .to_pandas.str.replace("\x00","")
+    # after this issue is fixed:https://github.com/rapidsai/cudf/issues/4515
     assert_eq(
         pds.str.get(index).fillna(""),
-        gds.str.get(index).fillna("").str.replace("\x00", ""),
+        gds.str.get(index).fillna("").to_pandas().str.replace("\x00", ""),
     )
 
 
