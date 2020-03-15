@@ -182,14 +182,6 @@ class DatetimeColumn(column.ColumnBase):
         else:
             return column.column_empty(0, dtype="object", masked=False)
 
-    def unordered_compare(self, cmpop, rhs):
-        lhs, rhs = self, rhs
-        return binop(lhs, rhs, op=cmpop, out_dtype=np.bool)
-
-    def ordered_compare(self, cmpop, rhs):
-        lhs, rhs = self, rhs
-        return binop(lhs, rhs, op=cmpop, out_dtype=np.bool)
-
     def to_pandas(self, index=None):
         return pd.Series(
             self.to_array(fillna="pandas").astype(self.dtype), index=index
@@ -218,6 +210,18 @@ class DatetimeColumn(column.ColumnBase):
             raise TypeError(
                 "datetime column of {} has no NaN value".format(self.dtype)
             )
+
+    def binary_operator(self, op, rhs, reflect=False):
+        lhs, rhs = self, rhs
+
+        if op in ("eq", "ne", "lt", "gt", "le", "ge"):
+            out_dtype = np.bool
+        else:
+            raise TypeError(
+                f"Series of dtype {self.dtype} cannot perform "
+                f" the operation {op}"
+            )
+        return binop(lhs, rhs, op=op, out_dtype=out_dtype)
 
     def fillna(self, fill_value):
         if is_scalar(fill_value):
@@ -265,8 +269,6 @@ class DatetimeColumn(column.ColumnBase):
 
 def binop(lhs, rhs, op, out_dtype):
     libcudf.nvtx.nvtx_range_push("CUDF_BINARY_OP", "orange")
-    masked = lhs.nullable or rhs.nullable
-    out = column.column_empty_like(lhs, dtype=out_dtype, masked=masked)
-    _ = libcudf.binops.apply_op(lhs, rhs, out, op)
+    out = libcudfxx.binaryop.binaryop(lhs, rhs, op, out_dtype)
     libcudf.nvtx.nvtx_range_pop()
     return out
