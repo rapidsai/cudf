@@ -3,6 +3,7 @@
 ## New Features
 
 ## Improvements
+- PR #4486 Remove explicit template parameter from detail::scatter.
 - PR #4471 Consolidate partitioning functionality into a single header.
 
 ## Bug Fixes
