@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-import cudf
 import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
 from cudf.core.buffer import Buffer
@@ -78,19 +77,8 @@ class DatetimeColumn(column.ColumnBase):
 
         mask = None
         if np.any(np.isnat(array)):
-            null = cudf.core.column.column_empty_like(
-                array, masked=True, newsize=1
-            )
-            col = libcudfxx.replace.replace(
-                as_column(Buffer(array), dtype=array.dtype),
-                as_column(
-                    Buffer(
-                        np.array([np.datetime64("NaT")], dtype=array.dtype)
-                    ),
-                    dtype=array.dtype,
-                ),
-                null,
-            )
+            col = as_column(Buffer(array), dtype=array.dtype)
+            col = utils.time_col_replace_nulls(col)
             mask = col.mask
 
         return cls(data=Buffer(array), mask=mask, dtype=array.dtype)

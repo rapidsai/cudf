@@ -1160,17 +1160,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 col = col.set_mask(mask)
         elif np.issubdtype(col.dtype, np.datetime64):
             if nan_as_null or (mask is None and nan_as_null is None):
-                null = column_empty_like(col, masked=True, newsize=1)
-                col = libcudfxx.replace.replace(
-                    col,
-                    as_column(
-                        Buffer(
-                            np.array([np.datetime64("NaT")], dtype=col.dtype)
-                        ),
-                        dtype=col.dtype,
-                    ),
-                    null,
-                )
+                col = utils.time_col_replace_nulls(col)
         return col
 
     elif isinstance(arbitrary, pa.Array):
@@ -1357,6 +1347,8 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
 
         if arb_dtype.kind == "M":
             data = as_column(pa.array(arbitrary), nan_as_null=nan_as_null)
+            if np.issubdtype(data.dtype, np.datetime64):
+                data = utils.time_col_replace_nulls(data)
         elif arb_dtype.kind in ("O", "U"):
             data = as_column(
                 pa.Array.from_pandas(arbitrary), dtype=arbitrary.dtype
