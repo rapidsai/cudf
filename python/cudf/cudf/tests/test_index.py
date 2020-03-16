@@ -323,3 +323,10 @@ def test_index_names():
 )
 def test_range_index_from_range(data):
     assert_eq(pd.Index(data), cudf.core.index.as_index(data))
+
+
+def test_empty_df_head_tail_index():
+    df = cudf.DataFrame()
+    pdf = pd.DataFrame()
+    assert_eq(df.head().index.values, pdf.head().index.values)
+    assert_eq(df.tail().index.values, pdf.tail().index.values)
