@@ -661,7 +661,6 @@ struct dispatch_map_type {
     CUDF_FAIL("Unexpected, non-integral partition map.");
   }
 };
-
 }  // namespace
 
 namespace detail {
@@ -698,7 +697,7 @@ partition(table_view const& t, column_view const& partition_map,
                "Unexpected null values in partition_map.");
 
   if (num_partitions == 0 or t.num_rows() == 0) {
-    std::make_pair(empty_like(t), std::vector<size_type>{});
+    return std::make_pair(empty_like(t), std::vector<size_type>{});
   }
 
   return cudf::experimental::type_dispatcher(
