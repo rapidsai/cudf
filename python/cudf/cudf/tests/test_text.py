@@ -38,6 +38,7 @@ def test_tokenize():
 
     actual = strings.str.tokenize()
 
+    assert type(expected) == type(actual)
     assert_series_equal(expected.to_pandas(), actual.to_pandas())
 
 
@@ -65,6 +66,7 @@ def test_token_count(delimiter, expected_token_counts):
 
     actual = strings.str.token_count(delimiter)
 
+    assert type(expected) == type(actual)
     assert_series_equal(
         expected.to_pandas(), actual.to_pandas(), check_dtype=False
     )
@@ -90,6 +92,7 @@ def test_normalize_spaces():
 
     actual = strings.str.normalize_spaces()
 
+    assert type(expected) == type(actual)
     assert_series_equal(expected.to_pandas(), actual.to_pandas())
 
 
@@ -127,8 +130,12 @@ def test_ngrams(n, separator, expected_values):
     strings = cudf.Series(
         ["this", "is", "my", "favorite", "book", "on", "my", "bookshelf"]
     )
+
     expected = cudf.Series(expected_values)
+
     actual = strings.str.ngrams(n=n, separator=separator)
+
+    assert type(expected) == type(actual)
     assert_series_equal(expected.to_pandas(), actual.to_pandas())
 
 
@@ -156,6 +163,10 @@ def test_ngrams(n, separator, expected_values):
 )
 def test_ngrams_tokenize(n, separator, expected_values):
     strings = cudf.Series(["this is my favorite", "book on my bookshelf"])
+
     expected = cudf.Series(expected_values)
+
     actual = strings.str.ngrams_tokenize(n=n, separator=separator)
+
+    assert type(expected) == type(actual)
     assert_series_equal(expected.to_pandas(), actual.to_pandas())

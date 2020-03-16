@@ -213,9 +213,15 @@ class StringMethods(object):
                         index=self._parent.index,
                     )
             elif isinstance(self._parent, Series):
-                return Series(
-                    new_col, index=self._parent.index, name=self._parent.name
-                )
+                retain_index = kwargs.get("retain_index", True)
+                if retain_index:
+                    return Series(
+                        new_col,
+                        name=self._parent.name,
+                        index=self._parent.index,
+                    )
+                else:
+                    return Series(new_col, name=self._parent.name)
             elif isinstance(self._parent, Index):
                 return as_index(new_col, name=self._parent.name)
             else:
@@ -1798,26 +1804,39 @@ class StringMethods(object):
             cpp_translate(self._column, table), **kwargs
         )
 
-    def normalize_spaces(self):
-        return cpp_normalize_spaces(self._column)
+    def normalize_spaces(self, **kwargs):
+        return self._return_or_inplace(
+            cpp_normalize_spaces(self._column), **kwargs
+        )
 
-    def tokenize(self, delimiter=""):
+    def tokenize(self, delimiter="", **kwargs):
         delimiter = _massage_string_arg(delimiter, "delimiter", allow_col=True)
-        return cpp_tokenize(self._column, delimiter)
+        kwargs.setdefault("retain_index", False)
+        return self._return_or_inplace(
+            cpp_tokenize(self._column, delimiter), **kwargs
+        )
 
-    def token_count(self, delimiter=""):
+    def token_count(self, delimiter="", **kwargs):
         delimiter = _massage_string_arg(delimiter, "delimiter", allow_col=True)
-        return cpp_count_tokens(self._column, delimiter)
+        return self._return_or_inplace(
+            cpp_count_tokens(self._column, delimiter), **kwargs
+        )
 
-    def ngrams(self, n=2, separator="_"):
+    def ngrams(self, n=2, separator="_", **kwargs):
         separator = _massage_string_arg(separator, "separator")
-        return cpp_generate_ngrams(self._column, n, separator)
+        kwargs.setdefault("retain_index", False)
+        return self._return_or_inplace(
+            cpp_generate_ngrams(self._column, n, separator), **kwargs
+        )
 
-    def ngrams_tokenize(self, n=2, delimiter="", separator="_"):
+    def ngrams_tokenize(self, n=2, delimiter="", separator="_", **kwargs):
         delimiter = _massage_string_arg(delimiter, "delimiter")
         separator = _massage_string_arg(separator, "separator")
-
-        return cpp_ngrams_tokenize(self._column, n, delimiter, separator)
+        kwargs.setdefault("retain_index", False)
+        return self._return_or_inplace(
+            cpp_ngrams_tokenize(self._column, n, delimiter, separator),
+            **kwargs,
+        )
 
 
 def _massage_string_arg(value, name, allow_col=False):
@@ -1825,22 +1844,22 @@ def _massage_string_arg(value, name, allow_col=False):
     from cudf._libxx.column import Column
     from cudf.utils.dtypes import is_string_dtype
 
-    allowed_types = ["Scalar"]
-
     if isinstance(value, str):
         return Scalar(value, dtype="str")
 
     if isinstance(value, Scalar) and is_string_dtype(value.dtype):
         return value
 
-    if allow_col:
-        allowed_types += ["Column"]
+    allowed_types = ["Scalar"]
 
+    if allow_col:
         if isinstance(value, list):
             return column.as_column(value, dtype="str")
 
         if isinstance(value, Column) and is_string_dtype(value.dtype):
             return value
+
+        allowed_types.append("Column")
 
     raise ValueError(
         "Expected {} for {} but got {}".format(
@@ -1850,9 +1869,6 @@ def _massage_string_arg(value, name, allow_col=False):
 
 
 def _expected_types_format(types):
-    if len(types) == 0:
-        raise ValueError
-
     if len(types) == 1:
         return types[0]
 
