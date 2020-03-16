@@ -313,10 +313,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         if df.shape[0] == 0 and df.shape[1] == 0 and isinstance(arg[0], slice):
             from cudf.core.index import RangeIndex
 
-            if len(self._df) > 0:
-                slice_len = arg[0].stop or len(self._df)
-            else:
-                slice_len = len(self._df)
+            slice_len = len(self._df)
             start, stop, step = arg[0].indices(slice_len)
             df._index = RangeIndex(start, stop)
         return df
