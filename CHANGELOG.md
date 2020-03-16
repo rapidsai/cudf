@@ -2,11 +2,16 @@
 
 ## New Features
 
+
 ## Improvements
+
+- PR #4479 Adding cuda 10.2 support via conda environment file addition
 - PR #4486 Remove explicit template parameter from detail::scatter.
 - PR #4471 Consolidate partitioning functionality into a single header.
+- PR #4498 Adds in support for chunked writers to java
 
 ## Bug Fixes
+
 - PR #4386 Update Java package to 0.14
 - PR #4402 Fix cudf::strings::join_strings logic with all-null strings and null narep
 
@@ -279,6 +284,7 @@
 - PR #4505 Fix 0 length buffers during serialization
 - PR #4482 Fix `.str.rsplit`, `.str.split`, `.str.find`, `.str.rfind`, `.str.index`, `.str.rindex` and enable related tests
 - PR #4513 Backport scalar virtual destructor fix
+- PR #4519 Remove `n` validation for `nlargest` & `nsmallest` and add negative support for `n`
 
 
 # cuDF 0.12.0 (04 Feb 2020)
