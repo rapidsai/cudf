@@ -47,14 +47,13 @@ class MultiIndex(Index):
         # early termination enables lazy evaluation of codes
         if "source_data" in kwargs:
             source_data = kwargs["source_data"].reset_index(drop=True)
-            self._names = (
-                names if names is not None else source_data._data.names
-            )
+            names = names if names is not None else source_data._data.names
             # if names are unique
             # try using those as the source_data column names:
-            if len(dict.fromkeys(self.names)) == len(self.names):
+            if len(dict.fromkeys(names)) == len(names):
                 source_data.columns = names
             self._data = source_data._data
+            self.names = names
             self._codes = codes
             self._levels = levels
             return
@@ -123,13 +122,13 @@ class MultiIndex(Index):
 
     @property
     def names(self):
-        return pd.core.indexes.frozen.FrozenList(self._names)
+        return self._names
 
     @names.setter
     def names(self, value):
         value = [None] * self.nlevels if value is None else value
         assert len(value) == self.nlevels
-        self._names = value
+        self._names = pd.core.indexes.frozen.FrozenList(value)
 
     @classmethod
     def _from_table(cls, table, names=None):
