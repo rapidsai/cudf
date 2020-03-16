@@ -3,6 +3,7 @@
 ## New Features
 
 ## Improvements
+- PR #4479 Adding cuda 10.2 support via conda environment file addition
 
 ## Bug Fixes
 - PR #4386 Update Java package to 0.14
