@@ -98,14 +98,6 @@ public:
   }
 
   void device_write(void const* gpu_data, size_t size, cudaStream_t stream) {
-    if (this->stream != stream) {
-      if (is_stream_set) {
-        CUDA_TRY(cudaStreamSynchronize(this->stream));
-      }
-      this->stream = stream;
-    }
-    this->is_stream_set = true;
-
     JNIEnv* env = cudf::jni::get_jni_env(jvm);
     size_t left_to_copy = size;
     const char * copy_from = static_cast<const char*>(gpu_data);
@@ -113,6 +105,7 @@ public:
       long buffer_amount_available = current_buffer_len - current_buffer_written;
       if (buffer_amount_available <= 0) {
         // should never be < 0, but just to be safe
+        CUDA_TRY(cudaStreamSynchronize(stream));
         rotate_buffer(env);
         buffer_amount_available = current_buffer_len - current_buffer_written;
       }
@@ -126,14 +119,11 @@ public:
       total_written += amount_to_copy;
       left_to_copy -= amount_to_copy;
     }
+    CUDA_TRY(cudaStreamSynchronize(stream));
   }
 
   void flush() override {
     if (current_buffer_written > 0) {
-      if (is_stream_set) {
-        // only sync with the stream when we are going to use the data.
-        CUDA_TRY(cudaStreamSynchronize(stream));
-      }
       JNIEnv* env = cudf::jni::get_jni_env(jvm);
       handle_buffer(env, current_buffer, current_buffer_written);
       current_buffer = nullptr;
@@ -154,10 +144,6 @@ public:
 private:
   void rotate_buffer(JNIEnv* env) {
     if (current_buffer != nullptr) {
-      if (is_stream_set) {
-        // only sync with the stream when we are going to use the data.
-        CUDA_TRY(cudaStreamSynchronize(stream));
-      }
       handle_buffer(env, current_buffer, current_buffer_written);
       env->DeleteGlobalRef(current_buffer);
       current_buffer = nullptr;
@@ -185,8 +171,6 @@ private:
   long current_buffer_written = 0;
   size_t total_written = 0;
   long alloc_size = MINIMUM_WRITE_BUFFER_SIZE;
-  cudaStream_t stream = nullptr;
-  bool is_stream_set = false;
 };
 
 template <typename STATE>
