@@ -25,6 +25,18 @@
 namespace cudf {
 namespace detail {
 
+/**
+ * @brief Concatenates the null mask bits of all the column device views in the
+ * `views` array to the destination bitmask.
+ *
+ * @param d_views Vector of column device views whose bitmasks need to be concatenated
+ * @param d_offsets Prefix sum of sizes of elements of `d_views`
+ * @param dest_mask Pointer to array that contains the combined bitmask
+ * of the column views
+ * @param output_size The total number of null masks bits that are being concatenated
+ * @param stream stream on which all memory allocations and copies
+ * will be performed
+ */
 void concatenate_masks(
     rmm::device_vector<column_device_view> const& d_views,
     rmm::device_vector<size_type> const& d_offsets,
@@ -32,23 +44,23 @@ void concatenate_masks(
     size_type output_size,
     cudaStream_t stream);
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Concatenates `views[i]`'s bitmask from the bits
  * `[views[i].offset(), views[i].offset() + views[i].size())` for all elements
  * views[i] in views into an array
  *
- * @param views Vector of column views whose bitmask needs to be copied
+ * @param views Vector of column views whose bitmasks need to be concatenated
  * @param dest_mask Pointer to array that contains the combined bitmask
  * of the column views
  * @param stream stream on which all memory allocations and copies
  * will be performed
- *---------------------------------------------------------------------------**/
+ */
 void concatenate_masks(
     std::vector<column_view> const &views,
     bitmask_type * dest_mask,
     cudaStream_t stream);
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Concatenates multiple columns into a single column.
  *
  * @throws cudf::logic_error
@@ -60,7 +72,7 @@ void concatenate_masks(
  * @param stream Optional The stream on which to execute all allocations and copies
  * @return Unique pointer to a single table having all the rows from the
  * elements of `columns_to_concat` respectively in the same order.
- *---------------------------------------------------------------------------**/
+ */
  std::unique_ptr<column>
  concatenate(std::vector<column_view> const& columns_to_concat,
              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
