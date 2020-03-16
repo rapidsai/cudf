@@ -380,22 +380,26 @@ concatenate(std::vector<column_view> const& columns_to_concat,
 
 }  // namespace detail
 
-rmm::device_buffer concatenate_masks(std::vector<column_view> const &views,
-                                     rmm::mr::device_memory_resource *mr) {
-  rmm::device_buffer null_mask{};
-  bool const has_nulls = std::any_of(views.begin(), views.end(),
-                     [](const column_view col) { return col.has_nulls(); });
+rmm::device_buffer concatenate_masks(std::vector<column_view> const& views,
+                                     rmm::mr::device_memory_resource* mr) {
+  bool const has_nulls =
+      std::any_of(views.begin(), views.end(),
+                  [](const column_view col) { return col.has_nulls(); });
   if (has_nulls) {
-   size_type const total_element_count =
-     std::accumulate(views.begin(), views.end(), 0,
-         [](auto accumulator, auto const& v) { return accumulator + v.size(); });
-    null_mask = create_null_mask(total_element_count, mask_state::UNINITIALIZED, 0, mr);
+    size_type const total_element_count = std::accumulate(
+        views.begin(), views.end(), 0,
+        [](auto accumulator, auto const& v) { return accumulator + v.size(); });
 
-    detail::concatenate_masks(
-        views, static_cast<bitmask_type *>(null_mask.data()), 0);
+    rmm::device_buffer null_mask =
+        create_null_mask(total_element_count, mask_state::UNINITIALIZED, 0, mr);
+
+    detail::concatenate_masks(views,
+                              static_cast<bitmask_type*>(null_mask.data()), 0);
+
+    return null_mask;
   }
-
-  return null_mask;
+  // no nulls, so return an empty device buffer
+  return rmm::device_buffer{};
 }
 
 // Concatenates the elements from a vector of column_views
