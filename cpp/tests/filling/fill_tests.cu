@@ -352,10 +352,10 @@ TEST_F(FillErrorTestFixture, InvalidRange)
                  *p_val),
                cudf::logic_error);
 
-  // out_begin >= destination.size()
-  EXPECT_THROW(cudf::experimental::fill_in_place(destination_view, 100, 100, *p_val),
-               cudf::logic_error);
-  EXPECT_THROW(auto p_ret = cudf::experimental::fill(destination, 100, 100,
+  // out_begin > destination.size()
+  EXPECT_THROW(cudf::experimental::fill_in_place(destination_view, 101, 100, *p_val),
+                  cudf::logic_error);
+  EXPECT_THROW(auto p_ret = cudf::experimental::fill(destination, 101, 100,
                  *p_val),
                cudf::logic_error);
 
@@ -365,6 +365,16 @@ TEST_F(FillErrorTestFixture, InvalidRange)
   EXPECT_THROW(auto p_ret = cudf::experimental::fill(destination, 99, 101,
                  *p_val),
                cudf::logic_error);
+
+  // Empty Column
+  destination = cudf::test::fixed_width_column_wrapper<int32_t>{};
+  destination_view = destination;
+
+  // empty column, this is valid
+  EXPECT_NO_THROW(cudf::experimental::fill_in_place(destination_view, 0,
+                    destination_view.size(), *p_val));
+  EXPECT_NO_THROW(auto p_ret = cudf::experimental::fill(destination, 0,
+                    destination_view.size(), *p_val));
 }
 
 TEST_F(FillErrorTestFixture, DTypeMismatch)
