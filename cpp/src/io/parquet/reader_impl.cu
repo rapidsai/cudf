@@ -220,24 +220,41 @@ struct metadata : public FileMetaData {
    * dataframe to a file to aid in exact reconstruction. The JSON-formatted
    * metadata contains the index column(s) and PANDA-specific datatypes.
    *
-   * @return std::string Name of the index column
+   * @param names List of column names to load, where index column name(s) will be added
    */
-  std::string get_pandas_index_name() {
+  void add_pandas_index_names(std::vector<std::string>& names) {
     auto it =
         std::find_if(key_value_metadata.begin(), key_value_metadata.end(),
                      [](const auto &item) { return item.key == "pandas"; });
 
     if (it != key_value_metadata.end()) {
-      const auto pos = it->value.find("index_columns");
-      if (pos != std::string::npos) {
-        const auto begin = it->value.find('[', pos);
-        const auto end = it->value.find(']', begin);
-        if ((end - begin) > 1) {
-          return it->value.substr(begin + 2, end - begin - 3);
+      const auto index_start = it->value.find("index_columns");
+      if (index_start != std::string::npos) {
+        auto pos = it->value.find('[', index_start);
+        while (pos != std::string::npos) {
+          auto begin = it->value.find_first_of("\"\']", pos, 3);
+          if (begin == std::string::npos)
+            break;
+          char ch = it->value[begin];
+          if (ch == ']')
+            break;
+          begin++;
+          auto end = it->value.find(ch, begin);
+          if (end == std::string::npos)
+            break;
+          if (end > begin) {
+            std::string pandas_index = it->value.substr(begin, end);
+            if (std::find(names.begin(), names.end(), pandas_index) == names.end()) {
+              names.emplace_back(std::move(pandas_index));
+            }
+          }
+          pos = it->value.find_first_of(",]", end + 1);
+          if (pos == std::string::npos || it->value[pos] == ']')
+            break;
+          pos++;
         }
       }
     }
-    return "";
   }
 
   /**
@@ -289,13 +306,11 @@ struct metadata : public FileMetaData {
    * @brief Filters and reduces down to a selection of columns
    *
    * @param use_names List of column names to select
-   * @param include_index Whether to always include the PANDAS index column
-   * @param pandas_index Name of the PANDAS index column
+   * @param include_index Whether to always include the PANDAS index column(s)
    *
    * @return List of column names
    */
-  auto select_columns(std::vector<std::string> use_names, bool include_index,
-                      const std::string &pandas_index) {
+  auto select_columns(std::vector<std::string> use_names, bool include_index) {
     std::vector<std::pair<int, std::string>> selection;
 
     const auto names = get_column_names();
@@ -307,10 +322,7 @@ struct metadata : public FileMetaData {
     } else {
       // Load subset of columns; include PANDAS index unless excluded
       if (include_index) {
-        if (std::find(use_names.begin(), use_names.end(), pandas_index) ==
-            use_names.end()) {
-          use_names.push_back(pandas_index);
-        }
+        add_pandas_index_names(use_names);
       }
       for (const auto &use_name : use_names) {
         for (size_t i = 0; i < names.size(); ++i) {
@@ -548,12 +560,9 @@ reader::impl::impl(std::unique_ptr<datasource> source,
   // Open and parse the source dataset metadata
   _metadata = std::make_unique<metadata>(_source.get());
 
-  // Store the index column (PANDAS-specific)
-  _pandas_index = _metadata->get_pandas_index_name();
-
   // Select only columns required by the options
   _selected_columns = _metadata->select_columns(
-      options.columns, options.use_pandas_metadata, _pandas_index);
+      options.columns, options.use_pandas_metadata);
 
   // Override output timestamp resolution if requested
   if (options.timestamp_type.id() != EMPTY) {
@@ -740,9 +749,6 @@ reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
 
 // Destructor within this translation unit
 reader::~reader() = default;
-
-// Forward to implementation
-std::string reader::get_pandas_index() { return _impl->get_pandas_index(); }
 
 // Forward to implementation
 table_with_metadata reader::read_all(cudaStream_t stream) {

@@ -615,13 +615,6 @@ class reader {
   ~reader();
 
   /**
-   * @brief Returns the PANDAS-specific index column derived from the metadata.
-   *
-   * @return std::string The name of the column if it exists
-   */
-  std::string get_pandas_index();
-
-  /**
    * @brief Reads the entire dataset.
    *
    * @param stream Optional stream to use for device memory alloc and kernels
