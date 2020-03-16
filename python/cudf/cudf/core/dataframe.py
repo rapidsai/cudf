@@ -501,7 +501,6 @@ class DataFrame(Frame):
     def __setitem__(self, arg, value):
         """Add/set column by *arg or DataFrame*
         """
-        print("__setitem__ is being called ___________________")
         if isinstance(arg, DataFrame):
             # not handling set_item where arg = df & value = df
             if isinstance(value, DataFrame):
@@ -531,6 +530,10 @@ class DataFrame(Frame):
             else:
                 if arg in self._data:
                     if len(self) == 0:
+                        if isinstance(value, (pd.Series, Series)):
+                            self._index = as_index(value.index)
+                        elif len(value) > 0:
+                            self._index = RangeIndex(start=0, stop=len(value))
                         value = column.as_column(value)
                         new_data = self._data.__class__()
                         for key in self._data:
@@ -549,15 +552,11 @@ class DataFrame(Frame):
                         value = Series(value)._align_to_index(
                             self._index, how="right", allow_non_unique=True
                         )
-                    if is_scalar(arg):
-                        arg=[arg]
                     if is_scalar(value):
-                        for key in arg:
-                            self._data[key][:] = value
+                        self._data[arg][:] = value
                     else:
                         value = as_column(value)
-                        for key in arg:
-                            self._data[key] = value
+                        self._data[arg] = value
                 else:
                     # disc. with pandas here
                     # pandas raises key error here
