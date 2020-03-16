@@ -1348,7 +1348,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         if len(shape) > 1:
             raise ValueError("Data must be 1-dimensional")
 
-        arbitrary = _arr_from_array_interface_(array_interface=desc)
+        arbitrary = _arr_from_array_interface(array_interface=desc)
         if desc["strides"] is not None:
             arbitrary = np.ascontiguousarray(arbitrary)
 
@@ -1414,7 +1414,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
     return data
 
 
-def _arr_from_array_interface_(array_interface=None, copy=False):
+def _arr_from_array_interface(array_interface=None, copy=False):
     """Generates numpy array from memory address
     https://docs.scipy.org/doc/numpy-1.13.0/reference/arrays.interface.html
 
@@ -1427,8 +1427,6 @@ def _arr_from_array_interface_(array_interface=None, copy=False):
     copy : bool
         Copy array.  Default False
 
-    read_only_flag : bool
-        Read only array.  Default False.
     """
 
     class numpy_holder:
