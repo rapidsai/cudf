@@ -7,6 +7,7 @@
 ## Bug Fixes
 - PR #4386 Update Java package to 0.14
 - PR #4402 Fix cudf::strings::join_strings logic with all-null strings and null narep
+- PR #4520 Fix several single char -> single char case mapping values.
 
 
 # cuDF 0.13.0 (Date TBD)
