@@ -167,21 +167,19 @@ void sparse_to_dense_results(
     auto transformed_result =
     [&col, to_dense_agg_result, mr, stream]
     (auto const& agg_kind) {
-      auto tranformed_agg = std::make_unique<aggregation>(agg_kind);
-      auto arg_result = to_dense_agg_result(tranformed_agg);
-      if (arg_result->nullable()) {
-        column_view null_removed_map(data_type(type_to_id<size_type>()),
-          arg_result->size(), 
-          static_cast<void const*>(arg_result->view().template data<size_type>()));
-        auto transformed_result = experimental::detail::gather(
-          table_view({col}), null_removed_map, false, true, false, mr, stream);
-        return std::move(transformed_result->release()[0]);
-      }
-      else {
-        auto transformed_result = experimental::detail::gather(
-          table_view({col}), *arg_result, false, false, false, mr, stream);
-        return std::move(transformed_result->release()[0]);
-      }
+      auto transformed_agg = std::make_unique<aggregation>(agg_kind);
+      auto arg_result = to_dense_agg_result(transformed_agg);
+      // We make a view of ARG(MIN/MAX) result without a null mask and gather 
+      // using this map. The values in data buffer of ARG(MIN/MAX) result 
+      // corresponding to null values was initialized to ARG(MIN/MAX)_SENTINEL
+      // which is an out of bounds index value (-1) and causes the gathered
+      // value to be null.
+      column_view null_removed_map(data_type(type_to_id<size_type>()),
+        arg_result->size(), 
+        static_cast<void const*>(arg_result->view().template data<size_type>()));
+      auto transformed_result = experimental::detail::gather(table_view({col}),
+        null_removed_map, false, arg_result->nullable(), false, mr, stream);
+      return std::move(transformed_result->release()[0]);
     };
 
     for (auto &&agg : agg_v) {
