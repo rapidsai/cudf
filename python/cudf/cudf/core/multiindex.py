@@ -76,7 +76,7 @@ class MultiIndex(Index):
         from cudf import DataFrame
 
         if not isinstance(codes, DataFrame) and not isinstance(
-            codes[0], Sequence
+            codes[0], (Sequence, np.ndarray)
         ):
             raise TypeError("Codes is not a Sequence of sequences")
 
