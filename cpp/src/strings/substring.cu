@@ -70,10 +70,10 @@ struct substring_fn
             return 0; // null string
         string_view d_str = d_column.template element<string_view>(idx);
         auto const length = d_str.length();
+        if( length==0 )
+            return 0; // empty string
         size_type const step = d_step.is_valid() ? d_step.value() : 1;
         auto const begin = [&] {  // always inclusive
-            if( length==0 ) // simplifies the rest of this logic
-                return d_str.begin();
             // when invalid, default depends on step
             if( !d_start.is_valid() )
                 return (step > 0) ? d_str.begin() : (d_str.end()-1);
