@@ -99,8 +99,8 @@ std::unique_ptr<cudf::column> child_chars_from_string_vector(
     auto d_strings = strings.data().get();
     auto execpol = rmm::exec_policy(stream);
     size_type bytes = thrust::device_pointer_cast(d_offsets)[count];
-    if( (bytes==0) && (null_count < count) )
-        bytes = 1; // all entries are empty strings
+//    if( (bytes==0) && (null_count < count) )
+//        bytes = 1; // all entries are empty strings
 
     // create column
     auto chars_column = make_numeric_column( data_type{INT8}, bytes,
@@ -111,9 +111,8 @@ std::unique_ptr<cudf::column> child_chars_from_string_vector(
     thrust::for_each_n(execpol->on(stream),
         thrust::make_counting_iterator<size_type>(0), count,
         [d_strings, d_offsets, d_chars] __device__(size_type idx){
-            string_view d_str = d_strings[idx];
-            if( !d_str.is_null() )
-                memcpy(d_chars + d_offsets[idx], d_str.data(), d_str.size_bytes() );
+            string_view const d_str = d_strings[idx];
+            memcpy(d_chars + d_offsets[idx], d_str.data(), d_str.size_bytes() );
         });
 
     return chars_column;
@@ -129,8 +128,8 @@ std::unique_ptr<column> create_chars_child_column( cudf::size_type strings_count
     // If we have all nulls, a null chars column is allowed.
     // If all non-null strings are empty strings, we need a non-null chars column.
     // In this case we set the bytes to 1 to create a minimal one-byte chars column.
-    if( (total_bytes==0) && (null_count < strings_count) )
-        total_bytes = 1; // all entries are empty strings (not nulls)
+//    if( (total_bytes==0) && (null_count < strings_count) )
+//        total_bytes = 1; // all entries are empty strings (not nulls)
     // return chars column
     return make_numeric_column( data_type{INT8}, total_bytes, mask_state::UNALLOCATED, stream, mr );
 }
