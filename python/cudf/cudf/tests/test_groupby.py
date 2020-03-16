@@ -1,4 +1,5 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
+import itertools
 
 import numpy as np
 import pandas as pd
@@ -1049,4 +1050,22 @@ def test_drop_unsupported_multi_agg():
     assert_eq(
         gdf.groupby("a").agg(["count", "mean"]),
         gdf.groupby("a").agg({"b": ["count", "mean"], "c": ["count"]}),
+    )
+
+
+@pytest.mark.parametrize(
+    "agg", list(itertools.combinations(["count", "max", "min", "nunique"], 2)),
+)
+def test_groupby_string_agg_combinations(agg):
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 1, 2, 2, 3],
+            "b": ["a", "a", "b", "c", "d"],
+            "c": [1, 2, 3, 4, 5],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(
+        pdf.groupby("a").agg(agg), gdf.groupby("a").agg(agg), check_dtype=False
     )
