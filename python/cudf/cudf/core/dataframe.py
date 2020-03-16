@@ -593,12 +593,14 @@ class DataFrame(Frame):
                         mask=None,
                     )
                 else:
+                    if not is_scalar(value):	
+                        value = column.as_column(value)
                     for col in arg:
                         # we will raise a key error if col not in dataframe
                         # this behavior will make it
                         # consistent to pandas >0.21.0
                         if not is_scalar(value):
-                            self._data[col] = column.as_column(value)
+                            self._data[col] = value
                         else:
                             self._data[col][:] = value
 
