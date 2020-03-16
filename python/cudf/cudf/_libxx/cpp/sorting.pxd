@@ -8,6 +8,7 @@ from libc.stdint cimport int32_t
 from cudf._libxx.types import np_to_cudf_types, cudf_to_np_types
 
 from cudf._libxx.cpp.column.column cimport column
+from cudf._libxx.cpp.column.column_view cimport column_view
 from cudf._libxx.cpp.table.table cimport table
 from cudf._libxx.cpp.table.table_view cimport table_view
 cimport cudf._libxx.cpp.types as libcudf_types
@@ -28,8 +29,8 @@ cdef extern from "cudf/sorting.hpp" namespace "cudf::experimental" nogil:
         vector[libcudf_types.order] column_order,
         vector[libcudf_types.null_order] null_precedence) except +
 
-    cdef unique_ptr[table] rank(
-        table_view input_view,
+    cdef unique_ptr[column] rank(
+        column_view input_view,
         rank_method method,
         libcudf_types.order column_order,
         libcudf_types.include_nulls _include_nulls,

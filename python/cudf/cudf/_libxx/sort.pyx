@@ -12,6 +12,7 @@ from cudf._libxx.table cimport Table
 from cudf._libxx.move cimport move
 
 from cudf._libxx.cpp.column.column cimport column
+from cudf._libxx.cpp.column.column_view cimport column_view
 from cudf._libxx.cpp.table.table cimport table
 from cudf._libxx.cpp.table.table_view cimport table_view
 from cudf._libxx.cpp.search cimport lower_bound, upper_bound
@@ -251,21 +252,27 @@ def rank_columns(Table source_table, object method, str na_option,
         if na_option == 'keep'
         else include_nulls.YES
     )
-    cdef unique_ptr[table] c_result
     cdef bool percentage = True if pct else False
 
-    with nogil:
-        c_result = move(
-            rank(
-                source_table_view,
-                c_rank_method,
-                column_order,
-                _include_nulls,
-                null_precedence,
-                percentage
-            )
-        )
-
+    cdef vector[unique_ptr[column]] c_results
+    cdef column_view c_view
+    cdef Column col
+    for col in source_table._columns:
+        c_view = col.view()
+        with nogil:
+            c_results.push_back(move(
+                rank(
+                    c_view,
+                    c_rank_method,
+                    column_order,
+                    _include_nulls,
+                    null_precedence,
+                    percentage
+                )
+            ))
+    
+    cdef unique_ptr[table] c_result
+    c_result.reset(new table(move(c_results)))
     out_table = Table.from_unique_ptr(
         move(c_result),
         column_names=source_table._column_names

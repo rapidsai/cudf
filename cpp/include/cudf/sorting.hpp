@@ -135,11 +135,10 @@ std::unique_ptr<table> sort_by_key(
     std::vector<null_order> const& null_precedence = {},
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-
 /**---------------------------------------------------------------------------*
- * @brief Computes the ranks of each column in a lexicographical sorted order.
+ * @brief Computes the ranks of input column in a lexicographical sorted order.
  * Rank indicate the position of each element in the sorted column and rank
- * value starts from 1. Each column in the table is ranked separately.
+ * value starts from 1.
  *
  * @example input = { 3, 4, 5, 4, 1, 2}
  * Result for different rank_method are
@@ -149,19 +148,20 @@ std::unique_ptr<table> sort_by_key(
  * MAX      = {3, 5, 6, 5, 1, 2}
  * DENSE    = {3, 4, 5, 4, 1, 2}
  *
- * @param input The table to rank
+ * @param input The column to rank
  * @param method The ranking method used for tie breaking (same values).
- * @param column_order The desired sort order for all columns
- * @param _include_nulls  flag to include nulls during ranking
+ * @param column_order The desired sort order for ranking
+ * @param _include_nulls  flag to include nulls during ranking. If nulls are not
+ * included, corresponding rank will be null.
  * @param null_precedence The desired order of null compared to other elements
- * for all columns
+ * for column
  * @param percentage flag to convert ranks to percentage in range (0,1}
- * @param mr The device memory resource used to allocate the returned table
+ * @param mr The device memory resource used to allocate the returned column
  * @return std::unique_ptr<column> A column of FLOAT64 elements
  * containing the rank of the each element of the column of `input`
  *---------------------------------------------------------------------------**/
-std::unique_ptr<table> rank(
-    table_view input,
+std::unique_ptr<column> rank(
+    column_view const &input,
     rank_method method,
     order column_order,
     include_nulls _include_nulls,

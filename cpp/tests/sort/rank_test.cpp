@@ -42,17 +42,21 @@ void run_rank_test (table_view input,
                     null_order null_precedence,
                     bool debug=false
                     ) {
-    // Rank
-    auto got_rank_table = cudf::experimental::rank( input,
-                                                    method,
-                                                    column_order, 
-                                                    _include_nulls, 
-                                                    null_precedence,
-                                                    false);
-    if(debug) {
-        cudf::test::print(got_rank_table->view().column(0)); std::cout<<"\n";
+    int i=0;
+    for(auto &&input_column : input) {
+        // Rank
+        auto got_rank_column = cudf::experimental::rank(input_column,
+                                                        method,
+                                                        column_order, 
+                                                        _include_nulls, 
+                                                        null_precedence,
+                                                        false);
+        if(debug) {
+            cudf::test::print(got_rank_column->view()); std::cout<<"\n";
+        }
+        expect_columns_equal(expected.column(i), got_rank_column->view());
+        i++;
     }
-    expect_tables_equal(expected, got_rank_table->view());
 }
 
 using input_arg_t = std::tuple<order, include_nulls, null_order>;
