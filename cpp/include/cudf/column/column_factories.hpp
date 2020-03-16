@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,12 +15,9 @@
  */
 #pragma once
 
-#include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/error.hpp>
+#include <cudf/column/column.hpp>
 #include <cudf/utilities/traits.hpp>
-#include "column.hpp"
-
 #include <rmm/thrust_rmm_allocator.h>
 
 namespace cudf {
@@ -367,5 +364,24 @@ std::unique_ptr<column> make_strings_column(
     std::unique_ptr<column> chars_column, size_type null_count,
     rmm::device_buffer&& null_mask, cudaStream_t stream = 0,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+
+/**
+ * @brief Return a column with size elements that are all equal to the
+ * given scalar.
+ *
+ * The output column will have the same type as `s.type()`
+ * The output column will contain all null rows if `s.invalid()==false`
+ * The output column will be empty if `size==0`.
+ *
+ * @param s The scalar to use for values in the column.
+ * @param size The number of rows for the output column.
+ * @param stream Optional stream for use with all memory allocation
+ *               and device kernels
+ * @param mr Optional resource to use for device memory.
+ */
+std::unique_ptr<column> make_column_from_scalar(scalar const& s, size_type size,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+    cudaStream_t stream = 0 );
 
 }  // namespace cudf

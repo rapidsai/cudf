@@ -469,11 +469,8 @@ def test_string_extract(ps_gs, pat, expand, flags, flags_raise):
         ("a", False),
         ("a", True),
         ("f", False),
-        # TODO, PREM: Analyse and uncomment the
-        # two tests as they seem to pass when run
-        # as independent test but seem to fail as a group test.
-        # (r"[a-z]", True),
-        # (r"[A-Z]", True),
+        (r"[a-z]", True),
+        (r"[A-Z]", True),
         ("hello", False),
         ("FGHI", False),
     ],
@@ -537,8 +534,7 @@ def test_string_upper(ps_gs):
         ["a b", " c ", "   d", "e   ", "f"],
         ["a-b", "-c-", "---d", "e---", "f"],
         ["ab", "c", "d", "e", "f"],
-        # TODO, PREM: Uncomment in future PR
-        # [None, None, None, None, None],
+        [None, None, None, None, None],
     ],
 )
 @pytest.mark.parametrize("pat", [None, " ", "-"])
@@ -1162,6 +1158,9 @@ def test_string_char_case(case_op, data):
     assert_eq(gs.str.isalpha(), ps.str.isalpha())
     assert_eq(gs.str.isdigit(), ps.str.isdigit())
     assert_eq(gs.str.isnumeric(), ps.str.isnumeric())
+    assert_eq(gs.str.isspace(), ps.str.isspace())
+
+    assert_eq(gs.str.isempty(), ps == "")
 
 
 @pytest.mark.parametrize(
@@ -1223,11 +1222,11 @@ def test_strings_rsplit(data, n, expand):
     gs = Series(data)
     ps = pd.Series(data)
 
-    # TODO: Uncomment this test once
-    # this is fixed: https://github.com/rapidsai/cudf/issues/4357
-    # assert_eq(
-    #     ps.str.rsplit(n=n, expand=expand), gs.str.rsplit(n=n, expand=expand)
-    # )
+    pd.testing.assert_frame_equal(
+        ps.str.rsplit(n=n, expand=expand).reset_index(),
+        gs.str.rsplit(n=n, expand=expand).to_pandas().reset_index(),
+        check_index_type=False,
+    )
     assert_eq(
         ps.str.rsplit(",", n=n, expand=expand),
         gs.str.rsplit(",", n=n, expand=expand),
@@ -1259,11 +1258,12 @@ def test_strings_split(data, n, expand):
     gs = Series(data)
     ps = pd.Series(data)
 
-    # TODO: Uncomment this test once
-    # this is fixed: https://github.com/rapidsai/cudf/issues/4357
-    # assert_eq(
-    #     ps.str.split(n=n, expand=expand), gs.str.split(n=n, expand=expand)
-    # )
+    pd.testing.assert_frame_equal(
+        ps.str.split(n=n, expand=expand).reset_index(),
+        gs.str.split(n=n, expand=expand).to_pandas().reset_index(),
+        check_index_type=False,
+    )
+
     assert_eq(
         ps.str.split(",", n=n, expand=expand),
         gs.str.split(",", n=n, expand=expand),
@@ -1479,8 +1479,6 @@ def test_string_replace_multi():
     assert_eq(expect, got)
 
 
-# TODO, PREM: Uncomment this following tests after
-# this is fixed: https://github.com/rapidsai/cudf/issues/4380
 @pytest.mark.parametrize(
     "find",
     [
@@ -1488,22 +1486,15 @@ def test_string_replace_multi():
         "(\\d)(\\d)",
         "(\\d)(\\d)",
         "(\\d)(\\d)",
-        # "([a-z])-([a-z])",
+        "([a-z])-([a-z])",
         "([a-z])-([a-zé])",
         "([a-z])-([a-z])",
-        # "([a-z])-([a-zé])",
+        "([a-z])-([a-zé])",
     ],
 )
 @pytest.mark.parametrize(
     "replace",
-    [
-        "\\1-\\2",
-        "V\\2-\\1",
-        "\\1 \\2",
-        "\\2 \\1",
-        # "X\\1+\\2Z",
-        #  "X\\1+\\2Z"
-    ],
+    ["\\1-\\2", "V\\2-\\1", "\\1 \\2", "\\2 \\1", "X\\1+\\2Z", "X\\1+\\2Z"],
 )
 def test_string_replace_with_backrefs(find, replace):
     s = [
@@ -1513,7 +1504,7 @@ def test_string_replace_with_backrefs(find, replace):
         None,
         "tést-string",
         "two-thréé four-fivé",
-        # "abcd-éfgh",
+        "abcd-éfgh",
         "tést-string-again",
     ]
     ps = pd.Series(s)
@@ -1521,3 +1512,308 @@ def test_string_replace_with_backrefs(find, replace):
     got = gs.str.replace_with_backrefs(find, replace)
     expected = ps.str.replace(find, replace, regex=True)
     assert_eq(got, expected)
+
+
+def test_string_table_view_creation():
+    data = ["hi"] * 25 + [None] * 2027
+    psr = pd.Series(data)
+    gsr = Series.from_pandas(psr)
+
+    expect = psr[:1]
+    got = gsr[:1]
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["abc", "xyz", "a", "ab", "123", "097"],
+        ["A B", "1.5", "3,000"],
+        ["23", "³", "⅕", ""],
+        [" ", "\t\r\n ", ""],
+        ["$", "B", "Aab$", "$$ca", "C$B$", "cat"],
+        ["line to be wrapped", "another line to be wrapped"],
+        ["hello", "there", "world", "+1234", "-1234", None, "accént", ""],
+        ["1. Ant.  ", "2. Bee!\n", "3. Cat?\t", None],
+    ],
+)
+@pytest.mark.parametrize(
+    "pat", ["", None, " ", "a", "abc", "cat", "$", "\n"],
+)
+def test_string_starts_ends(data, pat):
+    ps = pd.Series(data)
+    gs = Series(data)
+
+    assert_eq(ps.str.startswith(pat), gs.str.startswith(pat))
+    assert_eq(ps.str.endswith(pat), gs.str.endswith(pat))
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["abc", "xyz", "a", "ab", "123", "097"],
+        ["A B", "1.5", "3,000"],
+        ["23", "³", "⅕", ""],
+        [" ", "\t\r\n ", ""],
+        ["$", "B", "Aab$", "$$ca", "C$B$", "cat"],
+        ["line to be wrapped", "another line to be wrapped"],
+        ["hello", "there", "world", "+1234", "-1234", None, "accént", ""],
+        ["1. Ant.  ", "2. Bee!\n", "3. Cat?\t", None],
+    ],
+)
+@pytest.mark.parametrize(
+    "sub", ["", " ", "a", "abc", "cat", "$", "\n"],
+)
+def test_string_find(data, sub):
+    ps = pd.Series(data)
+    gs = Series(data)
+
+    assert_eq(ps.str.find(sub), gs.str.find(sub))
+    assert_eq(
+        ps.str.find(sub, start=1), gs.str.find(sub, start=1),
+    )
+    assert_eq(ps.str.find(sub, end=10), gs.str.find(sub, end=10))
+    assert_eq(
+        ps.str.find(sub, start=2, end=10), gs.str.find(sub, start=2, end=10),
+    )
+
+    assert_eq(ps.str.rfind(sub), gs.str.rfind(sub))
+    assert_eq(ps.str.rfind(sub, start=1), gs.str.rfind(sub, start=1))
+    assert_eq(
+        ps.str.rfind(sub, end=10), gs.str.rfind(sub, end=10),
+    )
+    assert_eq(
+        ps.str.rfind(sub, start=2, end=10), gs.str.rfind(sub, start=2, end=10),
+    )
+
+
+@pytest.mark.parametrize(
+    "data,sub,er",
+    [
+        (["abc", "xyz", "a", "ab", "123", "097"], "a", ValueError),
+        (["A B", "1.5", "3,000"], "abc", ValueError),
+        (["23", "³", "⅕", ""], "⅕", ValueError),
+        ([" ", "\t\r\n ", ""], "\n", ValueError),
+        (["$", "B", "Aab$", "$$ca", "C$B$", "cat"], "$", ValueError),
+        (["line to be wrapped", "another line to be wrapped"], " ", None),
+        (
+            ["hello", "there", "world", "+1234", "-1234", None, "accént", ""],
+            "+",
+            ValueError,
+        ),
+        (["line to be wrapped", "another line to be wrapped"], "", None),
+    ],
+)
+def test_string_str_index(data, sub, er):
+    ps = pd.Series(data)
+    gs = Series(data)
+
+    if er is None:
+        assert_eq(ps.str.index(sub), gs.str.index(sub), check_dtype=False)
+
+    try:
+        ps.str.index(sub)
+    except er:
+        pass
+    else:
+        assert not er
+
+    try:
+        gs.str.index(sub)
+    except er:
+        pass
+    else:
+        assert not er
+
+
+@pytest.mark.parametrize(
+    "data,sub,er",
+    [
+        (["abc", "xyz", "a", "ab", "123", "097"], "a", ValueError),
+        (["A B", "1.5", "3,000"], "abc", ValueError),
+        (["23", "³", "⅕", ""], "⅕", ValueError),
+        ([" ", "\t\r\n ", ""], "\n", ValueError),
+        (["$", "B", "Aab$", "$$ca", "C$B$", "cat"], "$", ValueError),
+        (["line to be wrapped", "another line to be wrapped"], " ", None),
+        (
+            ["hello", "there", "world", "+1234", "-1234", None, "accént", ""],
+            "+",
+            ValueError,
+        ),
+        (["line to be wrapped", "another line to be wrapped"], "", None),
+    ],
+)
+def test_string_str_rindex(data, sub, er):
+    ps = pd.Series(data)
+    gs = Series(data)
+
+    if er is None:
+        assert_eq(ps.str.rindex(sub), gs.str.rindex(sub), check_dtype=False)
+
+    try:
+        ps.str.index(sub)
+    except er:
+        pass
+    else:
+        assert not er
+
+    try:
+        gs.str.index(sub)
+    except er:
+        pass
+    else:
+        assert not er
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["abc", "xyz", "a", "ab", "123", "097"],
+        ["A B", "1.5", "3,000"],
+        ["23", "³", "⅕", ""],
+        [" ", "\t\r\n ", ""],
+        ["$", "B", "Aab$", "$$ca", "C$B$", "cat"],
+        ["line to be wrapped", "another line to be wrapped"],
+        ["hello", "there", "world", "+1234", "-1234", None, "accént", ""],
+        ["1. Ant.  ", "2. Bee!\n", "3. Cat?\t", None],
+    ],
+)
+@pytest.mark.parametrize("pat", ["", " ", "a", "abc", "cat", "$", "\n"])
+def test_string_str_match(data, pat):
+    ps = pd.Series(data)
+    gs = Series(data)
+
+    assert_eq(ps.str.match(pat), gs.str.match(pat))
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["abc", "xyz", "a", "ab", "123", "097"],
+        ["A B", "1.5", "3,000"],
+        ["23", "³", "⅕", ""],
+        [" ", "\t\r\n ", ""],
+        ["$", "B", "Aab$", "$$ca", "C$B$", "cat"],
+        ["line to be wrapped", "another line to be wrapped"],
+        ["hello", "there", "world", "+1234", "-1234", None, "accént", ""],
+        ["1. Ant.  ", "2. Bee!\n", "3. Cat?\t", None],
+    ],
+)
+def test_string_str_translate(data):
+    ps = pd.Series(data)
+    gs = Series(data)
+
+    assert_eq(
+        ps.str.translate(str.maketrans({"a": "z"})),
+        gs.str.translate(str.maketrans({"a": "z"})),
+    )
+    assert_eq(
+        ps.str.translate(str.maketrans({"a": "z", "i": "$", "z": "1"})),
+        gs.str.translate(str.maketrans({"a": "z", "i": "$", "z": "1"})),
+    )
+    assert_eq(
+        ps.str.translate(
+            str.maketrans({"+": "-", "-": "$", "?": "!", "B": "."})
+        ),
+        gs.str.translate(
+            str.maketrans({"+": "-", "-": "$", "?": "!", "B": "."})
+        ),
+    )
+
+
+def test_string_str_code_points():
+
+    data = [
+        "abc",
+        "Def",
+        None,
+        "jLl",
+        "dog and cat",
+        "accénted",
+        "",
+        " 1234 ",
+        "XYZ",
+    ]
+    gs = Series(data)
+    expected = [
+        97,
+        98,
+        99,
+        68,
+        101,
+        102,
+        106,
+        76,
+        108,
+        100,
+        111,
+        103,
+        32,
+        97,
+        110,
+        100,
+        32,
+        99,
+        97,
+        116,
+        97,
+        99,
+        99,
+        50089,
+        110,
+        116,
+        101,
+        100,
+        32,
+        49,
+        50,
+        51,
+        52,
+        32,
+        88,
+        89,
+        90,
+    ]
+    expected = Series(expected)
+
+    assert_eq(expected, gs.str.code_points(), check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["http://www.hellow.com", "/home/nvidia/nfs", "123.45 ~ABCDEF"],
+        ["23", "³", "⅕", ""],
+        [" ", "\t\r\n ", ""],
+        ["$", "B", "Aab$", "$$ca", "C$B$", "cat"],
+    ],
+)
+def test_string_str_url_encode(data):
+    import urllib.parse
+
+    gs = Series(data)
+
+    got = gs.str.url_encode()
+    expected = pd.Series([urllib.parse.quote(url, safe="~") for url in data])
+    assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [
+            "http://www.hellow.com?k1=acc%C3%A9nted&k2=a%2F/b.c",
+            "%2Fhome%2fnfs",
+            "987%20ZYX",
+        ]
+    ],
+)
+def test_string_str_decode_url(data):
+    import urllib.parse
+
+    gs = Series(data)
+
+    got = gs.str.url_decode()
+    expected = pd.Series([urllib.parse.unquote(url) for url in data])
+    assert_eq(expected, got)

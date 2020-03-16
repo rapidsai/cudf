@@ -25,6 +25,7 @@
 #include <cudf/strings/detail/fill.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 #include <cuda_runtime.h>
 
@@ -131,9 +132,8 @@ void fill_in_place(mutable_column_view& destination,
   CUDF_EXPECTS(cudf::is_fixed_width(destination.type()) == true,
                "In-place fill does not support variable-sized types.");
   CUDF_EXPECTS((begin >= 0) &&
-               (begin <= end) &&
-               (begin < destination.size()) &&
-               (end <= destination.size()),
+               (end <= destination.size()) &&
+               (begin <= end),
                "Range is out of bounds.");
   CUDF_EXPECTS((destination.nullable() == true) || (value.is_valid() == true),
                "destination should be nullable or value should be non-null.");
@@ -156,9 +156,8 @@ std::unique_ptr<column> fill(column_view const& input,
                              rmm::mr::device_memory_resource* mr,
                              cudaStream_t stream) {
   CUDF_EXPECTS((begin >= 0) &&
-               (begin <= end) &&
-               (begin < input.size()) &&
-               (end <= input.size()),
+               (end <= input.size()) &&
+               (begin <= end),
                "Range is out of bounds.");
   CUDF_EXPECTS(input.type() == value.type(), "Data type mismatch.");
 
@@ -174,6 +173,7 @@ void fill_in_place(mutable_column_view& destination,
                    size_type begin,
                    size_type end,
                    scalar const& value) {
+  CUDF_FUNC_RANGE();
   return detail::fill_in_place(destination, begin, end, value, 0);
 }
 
@@ -182,6 +182,7 @@ std::unique_ptr<column> fill(column_view const& input,
                              size_type end,
                              scalar const& value,
                              rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   return detail::fill(input, begin, end, value, mr, 0);
 }
 
