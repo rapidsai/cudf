@@ -38,10 +38,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-import java.util.stream.LongStream;
 
 import static ai.rapids.cudf.Aggregate.max;
 import static ai.rapids.cudf.Table.TestBuilder;
@@ -2126,16 +2123,58 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  private final class MyBufferConsumer implements HostBufferConsumer, AutoCloseable {
+    public final HostMemoryBuffer buffer;
+    long offset = 0;
+
+    public MyBufferConsumer() {
+      buffer = HostMemoryBuffer.allocate(10 * 1024 * 1024);
+    }
+
+    @Override
+    public void handleBuffer(HostMemoryBuffer src, long len) {
+      try {
+        this.buffer.copyFromHostBuffer(offset, src, 0, len);
+        offset += len;
+      } finally {
+        src.close();
+      }
+    }
+
+    @Override
+    public void close() {
+      buffer.close();
+    }
+  }
+
+  @Test
+  void testParquetWriteToBufferChunked() {
+    try (Table table0 = getExpectedFileTable();
+         MyBufferConsumer consumer = new MyBufferConsumer()) {
+         try (TableWriter writer = Table.writeParquetChunked(ParquetWriterOptions.DEFAULT, consumer)) {
+           writer.write(table0);
+           writer.write(table0);
+           writer.write(table0);
+         }
+      try (Table table1 = Table.readParquet(ParquetOptions.DEFAULT, consumer.buffer, 0, consumer.offset);
+           Table concat = Table.concatenate(table0, table0, table0)) {
+        assertTablesAreEqual(concat, table1);
+      }
+    }
+  }
+
   @Test
   void testParquetWriteToFileWithNames() throws IOException {
     File tempFile = File.createTempFile("test-names", ".parquet");
     try (Table table0 = getExpectedFileTable()) {
       ParquetWriterOptions options = ParquetWriterOptions.builder()
-          .withColumnNames("first", "second", "third", "fourth", "fifth", "sixth")
+          .withColumnNames("first", "second", "third", "fourth", "fifth", "sixth", "seventh")
           .withCompressionType(CompressionType.NONE)
           .withStatisticsFrequency(ParquetWriterOptions.StatisticsFrequency.NONE)
           .build();
-      table0.writeParquet(options, tempFile.getAbsoluteFile());
+      try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
+        writer.write(table0);
+      }
       try (Table table2 = Table.readParquet(tempFile.getAbsoluteFile())) {
         assertTablesAreEqual(table0, table2);
       }
@@ -2149,12 +2188,14 @@ public class TableTest extends CudfTestBase {
     File tempFile = File.createTempFile("test-names-metadata", ".parquet");
     try (Table table0 = getExpectedFileTable()) {
       ParquetWriterOptions options = ParquetWriterOptions.builder()
-          .withColumnNames("first", "second", "third", "fourth", "fifth", "sixth")
+          .withColumnNames("first", "second", "third", "fourth", "fifth", "sixth", "seventh")
           .withMetadata("somekey", "somevalue")
           .withCompressionType(CompressionType.NONE)
           .withStatisticsFrequency(ParquetWriterOptions.StatisticsFrequency.NONE)
           .build();
-      table0.writeParquet(options, tempFile.getAbsoluteFile());
+      try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
+        writer.write(table0);
+      }
       try (Table table2 = Table.readParquet(tempFile.getAbsoluteFile())) {
         assertTablesAreEqual(table0, table2);
       }
@@ -2171,12 +2212,30 @@ public class TableTest extends CudfTestBase {
           .withCompressionType(CompressionType.NONE)
           .withStatisticsFrequency(ParquetWriterOptions.StatisticsFrequency.NONE)
           .build();
-      table0.writeParquet(options, tempFile.getAbsoluteFile());
+      try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
+        writer.write(table0);
+      }
       try (Table table2 = Table.readParquet(tempFile.getAbsoluteFile())) {
         assertTablesAreEqual(table0, table2);
       }
     } finally {
       tempFile.delete();
+    }
+  }
+
+  @Test
+  void testORCWriteToBufferChunked() {
+    try (Table table0 = getExpectedFileTable();
+         MyBufferConsumer consumer = new MyBufferConsumer()) {
+      try (TableWriter writer = Table.writeORCChunked(ORCWriterOptions.DEFAULT, consumer)) {
+        writer.write(table0);
+        writer.write(table0);
+        writer.write(table0);
+      }
+      try (Table table1 = Table.readORC(ORCOptions.DEFAULT, consumer.buffer, 0, consumer.offset);
+           Table concat = Table.concatenate(table0, table0, table0)) {
+        assertTablesAreEqual(concat, table1);
+      }
     }
   }
 

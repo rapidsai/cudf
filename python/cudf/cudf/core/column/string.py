@@ -11,7 +11,6 @@ import pyarrow as pa
 
 import nvstrings
 
-import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
 import cudf._libxx.string_casting as str_cast
 from cudf._lib.nvtx import nvtx_range_pop, nvtx_range_push
@@ -294,44 +293,6 @@ class StringMethods(object):
         if len(out) == 1 and others is None:
             out = out[0]
         return out
-
-    # TODO, PREM: Uncomment in future PR
-    # def join(self, sep, na_rep="", **kwargs):
-    #     """
-    #     Join lists contained as elements in the Series/Index with passed
-    #     delimiter.
-
-    #     Parameters
-    #     ----------
-    #         sep : str
-    #             Delimiter to use between list entries.
-
-    #         na_rep : str
-    #             This character will take the place of any null strings
-    #             (not empty strings) in either list.
-
-    #     Returns
-    #     -------
-    #     Series/Index of str dtype
-    #         The list entries concatenated by intervening
-    #         occurrences of the delimiter.
-
-    #     """
-    #     from cudf._libxx.scalar import Scalar
-    #     from cudf.core.series import Series
-    #     # import pdb; pdb.set_trace()
-
-    #     data = cpp_join(self._column, Scalar(sep), Scalar(na_rep))
-    #     if len(data) != len(self._parent):
-    #         data = column.as_column(
-    #             utils.scalar_broadcast_to(data[0],
-    # len(self._parent), dtype='str')
-    #         )
-    #     return Series(
-    #         data=data,
-    #         index=self._parent.index,
-    #         dtype='str'
-    #     )
 
     def join(self, sep):
         """
@@ -879,10 +840,11 @@ class StringMethods(object):
         from cudf._libxx.scalar import Scalar
 
         result_table = cpp_split(self._column, Scalar(pat, "str"), n)
-
         if len(result_table._data) == 1:
-            if result_table._data[0].null_count == len(self._parent):
+            if result_table._data[0].null_count == len(self._column):
                 result_table = []
+            elif self._column.null_count == len(self._column):
+                result_table = [self._column.copy()]
 
         return self._return_or_inplace(result_table, **kwargs,)
 
@@ -920,13 +882,18 @@ class StringMethods(object):
 
         kwargs.setdefault("expand", expand)
         if pat is None:
-            pat = " "
+            pat = ""
 
         from cudf._libxx.scalar import Scalar
 
-        return self._return_or_inplace(
-            cpp_rsplit(self._column, Scalar(pat), n), **kwargs
-        )
+        result_table = cpp_rsplit(self._column, Scalar(pat), n)
+        if len(result_table._data) == 1:
+            if result_table._data[0].null_count == len(self._parent):
+                result_table = []
+            elif self._parent.null_count == len(self._parent):
+                result_table = [self._column.copy()]
+
+        return self._return_or_inplace(result_table, **kwargs)
 
     def partition(self, sep=" ", expand=True, **kwargs):
         """
@@ -1467,9 +1434,18 @@ class StringMethods(object):
 
         from cudf._libxx.scalar import Scalar
 
-        return self._return_or_inplace(
-            cpp_endswith(self._column, Scalar(pat, "str")), **kwargs
-        )
+        # TODO: Cleanup if/else blocks after this issue is fixed:
+        # https://github.com/rapidsai/cudf/issues/4500
+        if pat == "":
+            result_col = column.as_column(
+                True, dtype="bool", length=len(self._column)
+            ).set_mask(self._column.mask)
+        elif pat is None:
+            result_col = column.as_column(np.nan, length=len(self._column))
+        else:
+            result_col = cpp_endswith(self._column, Scalar(pat, "str"))
+
+        return self._return_or_inplace(result_col, **kwargs)
 
     def startswith(self, pat, **kwargs):
         """
@@ -1495,9 +1471,18 @@ class StringMethods(object):
 
         from cudf._libxx.scalar import Scalar
 
-        return self._return_or_inplace(
-            cpp_startswith(self._column, Scalar(pat, "str")), **kwargs
-        )
+        # TODO: Cleanup if/else blocks after this issue is fixed:
+        # https://github.com/rapidsai/cudf/issues/4500
+        if pat == "":
+            result_col = column.as_column(
+                True, dtype="bool", length=len(self._column)
+            ).set_mask(self._column.mask)
+        elif pat is None:
+            result_col = column.as_column(np.nan, length=len(self._column))
+        else:
+            result_col = cpp_startswith(self._column, Scalar(pat, "str"))
+
+        return self._return_or_inplace(result_col, **kwargs)
 
     def find(self, sub, start=0, end=None, **kwargs):
         """
@@ -1521,14 +1506,33 @@ class StringMethods(object):
         Series or Index of int
 
         """
+        if not isinstance(sub, str):
+            msg = "expected a string object, not {0}"
+            raise TypeError(msg.format(type(sub).__name__))
+
         from cudf._libxx.scalar import Scalar
 
         if end is None:
             end = -1
+        mask = self._column.mask
 
-        return self._return_or_inplace(
-            cpp_find(self._column, Scalar(sub, "str"), start, end), **kwargs
-        )
+        if sub == "":
+            result_col = column.as_column(
+                start, dtype="float", length=len(self._column)
+            )
+        else:
+            result_col = cpp_find(self._column, Scalar(sub, "str"), start, end)
+
+        result_col = result_col.set_mask(mask)
+        if self._column.has_nulls:
+            result_col = result_col.astype("float64")
+        else:
+            result_col = result_col.astype("int64")
+
+        result = self._return_or_inplace(result_col, **kwargs)
+        if sub == "":
+            result[self._parent.str.len() < start] = -1
+        return result
 
     def rfind(self, sub, start=0, end=None, **kwargs):
         """
@@ -1552,13 +1556,35 @@ class StringMethods(object):
         Series or Index of int
 
         """
+        if not isinstance(sub, str):
+            msg = "expected a string object, not {0}"
+            raise TypeError(msg.format(type(sub).__name__))
+
         from cudf._libxx.scalar import Scalar
 
         if end is None:
             end = -1
-        return self._return_or_inplace(
-            cpp_rfind(self._column, Scalar(sub, "str"), start, end), **kwargs
-        )
+        mask = self._column.mask
+
+        if sub == "":
+            result_col = cpp_count_characters(self._column)
+        else:
+            result_col = cpp_rfind(
+                self._column, Scalar(sub, "str"), start, end
+            )
+
+        result_col = result_col.set_mask(mask)
+        if self._column.has_nulls:
+            result_col = result_col.astype("float64")
+        else:
+            result_col = result_col.astype("int64")
+
+        result = self._return_or_inplace(result_col, **kwargs)
+        if sub == "":
+            result[result < start] = -1
+            if end != -1:
+                result[result > end] = end
+        return result
 
     def index(self, sub, start=0, end=None, **kwargs):
         """
@@ -1583,14 +1609,25 @@ class StringMethods(object):
         Series or Index of object
 
         """
+        if not isinstance(sub, str):
+            msg = "expected a string object, not {0}"
+            raise TypeError(msg.format(type(sub).__name__))
+
         from cudf._libxx.scalar import Scalar
 
         if end is None:
             end = -1
 
-        result = self._return_or_inplace(
-            cpp_find(self._column, Scalar(sub, "str"), start, end), **kwargs
-        )
+        if sub == "":
+            result_col = column.as_column(
+                0.0, dtype="float", length=len(self._column)
+            ).set_mask(self._column.mask)
+        else:
+            result_col = cpp_find(self._column, Scalar(sub, "str"), start, end)
+
+        result = self._return_or_inplace(result_col, **kwargs)
+        if sub == "":
+            result[self._parent.str.len() < start] = -1
 
         if (result == -1).any():
             raise ValueError("substring not found")
@@ -1620,14 +1657,27 @@ class StringMethods(object):
         Series or Index of object
 
         """
+        if not isinstance(sub, str):
+            msg = "expected a string object, not {0}"
+            raise TypeError(msg.format(type(sub).__name__))
+
         from cudf._libxx.scalar import Scalar
 
         if end is None:
             end = -1
 
-        result = self._return_or_inplace(
-            cpp_rfind(self._column, Scalar(sub, "str"), start, end), **kwargs
-        )
+        if sub == "":
+            result_col = cpp_count_characters(self._column)
+        else:
+            result_col = cpp_rfind(
+                self._column, Scalar(sub, "str"), start, end
+            )
+
+        result = self._return_or_inplace(result_col, **kwargs)
+        if sub == "":
+            result[result < start] = -1
+            if end != -1:
+                result[result > end] = end
 
         if (result == -1).any():
             raise ValueError("substring not found")
@@ -1768,6 +1818,16 @@ class StringColumn(column.ColumnBase):
         super().__init__(
             None, size, dtype, mask=mask, offset=offset, children=children
         )
+
+        # For an "all empty" StringColumn (e.g., [""]) libcudf still
+        # needs the chars child column pointer to be non-null:
+        if self.size:
+            if self.children[1].size == 0 and self.null_count != self.size:
+                offsets = self.base_children[0]
+                chars = column_empty(
+                    self.base_children[1].size + 1, dtype="int8"
+                )
+                self.set_base_children((offsets, chars))
 
         # TODO: Remove these once NVStrings is fully deprecated / removed
         self._nvstrings = None
@@ -2056,9 +2116,6 @@ class StringColumn(column.ColumnBase):
         )
         return col
 
-    def unordered_compare(self, cmpop, rhs):
-        return _string_column_binop(self, rhs, op=cmpop)
-
     def find_and_replace(self, to_replace, replacement, all_nan):
         """
         Return col with *to_replace* replaced with *value*
@@ -2099,15 +2156,17 @@ class StringColumn(column.ColumnBase):
     def default_na_value(self):
         return None
 
-    def binary_operator(self, binop, rhs, reflect=False):
+    def binary_operator(self, op, rhs, reflect=False):
         lhs = self
         if reflect:
             lhs, rhs = rhs, lhs
-        if isinstance(rhs, StringColumn) and binop == "add":
+        if isinstance(rhs, StringColumn) and op == "add":
             return lhs.str().cat(others=rhs)
+        elif op in ("eq", "ne", "gt", "lt", "ge", "le"):
+            return _string_column_binop(self, rhs, op=op, out_dtype="bool")
         else:
             msg = "{!r} operator not supported between {} and {}"
-            raise TypeError(msg.format(binop, type(self), type(rhs)))
+            raise TypeError(msg.format(op, type(self), type(rhs)))
 
     def sum(self, dtype=None):
         # Should we be raising here? Pandas can't handle the mix of strings and
@@ -2142,13 +2201,9 @@ class StringColumn(column.ColumnBase):
         return out
 
 
-def _string_column_binop(lhs, rhs, op):
+def _string_column_binop(lhs, rhs, op, out_dtype):
     nvtx_range_push("CUDF_BINARY_OP", "orange")
-    # Allocate output
-    masked = lhs.nullable or rhs.nullable
-    out = column.column_empty_like(lhs, dtype="bool", masked=masked)
-    # Call and fix null_count
-    _ = libcudf.binops.apply_op(lhs=lhs, rhs=rhs, out=out, op=op)
+    out = libcudfxx.binaryop.binaryop(lhs=lhs, rhs=rhs, op=op, dtype=out_dtype)
     nvtx_range_pop()
     return out
 

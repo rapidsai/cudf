@@ -14,8 +14,10 @@ from cudf._libxx.cpp.column.column cimport column
 from cudf._libxx.cpp.table.table cimport table
 from cudf._libxx.cpp.table.table_view cimport table_view
 from cudf._libxx.cpp.hash cimport (
-    hash_partition as cpp_hash_partition,
     hash as cpp_hash
+)
+from cudf._libxx.cpp.partitioning cimport (
+    hash_partition as cpp_hash_partition,
 )
 cimport cudf._libxx.cpp.types as libcudf_types
 
