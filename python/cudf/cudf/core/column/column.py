@@ -1357,7 +1357,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             arbitrary = arbitrary.astype(dtype)
 
         if arb_dtype.kind == "M":
-            data = datetime.DatetimeColumn.from_numpy(arbitrary)
+            data = as_column(pa.array(arbitrary), nan_as_null=nan_as_null)
         elif arb_dtype.kind in ("O", "U"):
             data = as_column(
                 pa.Array.from_pandas(arbitrary), dtype=arbitrary.dtype
