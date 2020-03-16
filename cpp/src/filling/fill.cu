@@ -22,7 +22,8 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/dictionary/detail/encode.hpp>
-#include <cudf/dictionary/update_keys.hpp>
+#include <cudf/dictionary/detail/update_keys.hpp>
+#include <cudf/dictionary/detail/search.hpp>
 #include <cudf/detail/copy_range.cuh>
 #include <cudf/detail/fill.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -122,14 +123,15 @@ struct out_of_place_fill_range_dispatch {
         auto scalar_column = cudf::make_column_from_scalar(value,1,mr,stream);
 
         // add the scalar to get the output dictionary keyset
-        auto target_matched = cudf::dictionary::add_keys(target, scalar_column->view(), mr);
-        //cudf::column_view const target_indices = cudf::dictionary_column_view(target_matched->view()).get_indices_annotated();
-        cudf::column_view target_indices( cudf::data_type{cudf::INT32}, target_matched->size(),
-                        cudf::dictionary_column_view(target_matched->view()).indices().data<int32_t>(),
-                        target_matched->view().null_mask(), target_matched->null_count(), 0 );
+        auto target_matched = cudf::dictionary::detail::add_keys(target, scalar_column->view(), mr, stream);
+        cudf::column_view const target_indices = cudf::dictionary_column_view(target_matched->view()).get_indices_annotated();
+        //cudf::column_view target_indices( cudf::data_type{cudf::INT32}, target_matched->size(),
+        //                cudf::dictionary_column_view(target_matched->view()).indices().data<int32_t>(),
+        //                target_matched->view().null_mask(), target_matched->null_count(), 0 );
 
-        cudf::numeric_scalar<int32_t> index_of_value{0};
-        out_of_place_fill_range_dispatch filler{index_of_value,target_indices};
+        auto index_of_value = cudf::dictionary::detail::get_index( target_matched->view(), value, mr, stream );
+        //cudf::numeric_scalar<int32_t> index_of_value{0};
+        out_of_place_fill_range_dispatch filler{*index_of_value,target_indices};
         auto new_indices = filler.template operator()<int32_t>( begin, end, mr, stream);
 
         auto const output_size = new_indices->size();       // record these
