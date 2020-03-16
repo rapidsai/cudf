@@ -314,7 +314,8 @@ ConfigureTest(HASHING_TEST "${HASHING_TEST_SRC}")
 
 set(PARTITIONING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/partitioning/hash_partition_test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/partitioning/round_robin_test.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/partitioning/round_robin_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/partitioning/partition_test.cpp")
 
 ConfigureTest(PARTITIONING_TEST "${PARTITIONING_TEST_SRC}")
 
