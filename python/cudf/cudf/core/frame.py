@@ -1034,6 +1034,7 @@ class Frame(libcudfxx.table.Table):
         # same order as given in 'on'. If the indices are used as
         # keys, the index will be sorted. If one index is specified,
         # the key column on the other side will be used to sort.
+        # If no index is specified, return a new RangeIndex
         if sort:
             to_sort = self.__class__()
             if left_index and right_index:
