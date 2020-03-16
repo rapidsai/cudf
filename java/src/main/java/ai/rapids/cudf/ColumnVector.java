@@ -1804,11 +1804,27 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     }
   }
 
+  /**
+   * Returns a boolean ColumnVector identifying rows which
+   * matching the given regex pattern but only at the beginning the string.
+   *
+   * ```
+   * cv = ["abc","123","def456"]
+   * result = cv.matches_re("\\d+")
+   * r is now [false, true, false]
+   * ```
+   * Any null string entries return corresponding null output column entries.
+   * For supported regex patterns refer to:
+   * @link https://rapidsai.github.io/projects/nvstrings/en/0.13.0/regex.html
+   *
+   * @param pattern Regex pattern to match to each string.
+   * @return New ColumnVector of boolean results for each string.
+   */
   public ColumnVector matchesRe(String pattern) {
     assert type == DType.STRING : "column type must be a String";
-    assert pattern != null : "pattern scalar may not be null";
-    assert pattern.isEmpty() == false : "pattern string scalar may not be empty";
-    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.BOOL8), "endsWith")) {
+    assert pattern != null : "pattern may not be null";
+    assert pattern.isEmpty() == false : "pattern string may not be empty";
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.BOOL8), "matchesRe")) {
       return new ColumnVector(matchesRe(getNativeView(), pattern));
     }
   }
