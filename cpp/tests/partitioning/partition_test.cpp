@@ -51,13 +51,22 @@ TEST_F(PartitionTest, Second){
 
     auto result_offsets = result.second;
 
-    std::copy(result_offsets.begin(), result_offsets.end(), std::ostream_iterator<int32_t>(std::cout, ","));
-    std::cout << std::endl;
-
     EXPECT_TRUE(std::equal(expected_offsets.begin(), expected_offsets.end(), result_offsets.begin()));
 
-    cudf::test::print(result.first->get_column(0));
-    std::cout << std::endl;
-
     cudf::test::expect_columns_equal(expected_ints, result.first->get_column(0));
+}
+
+TEST_F(PartitionTest, EmptyInputs){
+    fixed_width_column_wrapper<int32_t> empty_column{};
+    fixed_width_column_wrapper<int32_t> empty_map{};
+
+    auto result = cudf::experimental::partition(cudf::table_view{{empty_column}}, empty_map, 10);
+
+    auto result_offsets = result.second;
+
+    EXPECT_TRUE(result_offsets.empty());
+
+    std::copy(result_offsets.begin(), result_offsets.end(), std::ostream_iterator<int32_t>(std::cout, ","));
+
+    cudf::test::expect_columns_equal(empty_column, result.first->get_column(0));
 }
