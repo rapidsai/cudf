@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/hashing.hpp>
+#include <cudf/partitioning.hpp>
 
 #include <tests/utilities/column_wrapper.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
