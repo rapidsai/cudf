@@ -495,6 +495,10 @@ class RangeIndex(Index):
     def _num_columns(self):
         return 1
 
+    @property
+    def _num_rows(self):
+        return len(self)
+
     @cached_property
     def _values(self):
         if len(self) > 0:

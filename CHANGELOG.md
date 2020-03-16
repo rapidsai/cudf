@@ -166,6 +166,9 @@
 - PR #4316 Add Java and JNI bindings for substring expression
 - PR #4314 Add Java and JNI bindings for string contains
 - PR #4461 Port nvstrings Miscellaneous functions to cuDF Python/Cython
+- PR #4503 Port binaryop.pyx to libcudf++ API
+- PR #4499 Adding changes to handle include `keep_index` and `RangeIndex`
+- PR #4493 Skip legacy testing in CI
 
 ## Bug Fixes
 
@@ -208,6 +211,7 @@
 - PR #4137 Update Java for mutating fill and rolling window changes
 - PR #4184 Add missing except+ to Cython bindings
 - PR #4141 Fix NVStrings test_convert failure in 10.2 build
+- PR #4156 Make fill/copy_range no-op on empty columns
 - PR #4158 Fix merge issue with empty table return if one of the two tables are empty
 - PR #4162 Properly handle no index metadata generation for to_parquet
 - PR #4175 Fix `__sizeof__` calculation in `StringColumn`
@@ -258,6 +262,9 @@
 - PR #4474 Fix to not materialize RangeIndex in copy_categories
 - PR #4496 Skip tests which require 2+ GPUs
 - PR #4494 Update Java memory event handler for new RMM resource API
+- PR #4505 Fix 0 length buffers during serialization
+- PR #4482 Fix `.str.rsplit`, `.str.split`, `.str.find`, `.str.rfind`, `.str.index`, `.str.rindex` and enable related tests
+- PR #4513 Backport scalar virtual destructor fix
 - PR #4519 Remove `n` validation for `nlargest` & `nsmallest` and add negative support for `n`
 
 
