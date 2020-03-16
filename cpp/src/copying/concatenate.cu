@@ -314,7 +314,7 @@ struct fused_concatenate {
     auto out_view = out_col->mutable_view();
     auto d_out_view = mutable_column_device_view::create(out_view, stream);
 
-    rmm::device_vector<size_type> d_valid_count(has_nulls ? 1 : 0);
+    rmm::device_scalar<size_type> d_valid_count(0);
 
     // Launch kernel
     constexpr size_type block_size{256};
@@ -327,11 +327,10 @@ struct fused_concatenate {
         d_offsets.data().get(),
         static_cast<size_type>(d_views.size()),
         *d_out_view,
-        d_valid_count.data().get());
+        d_valid_count.data());
 
     if (has_nulls) {
-      thrust::host_vector<size_type> valid_count{d_valid_count};
-      out_col->set_null_count(output_size - valid_count[0]);
+      out_col->set_null_count(output_size - d_valid_count.value(stream));
     }
 
     return out_col;
