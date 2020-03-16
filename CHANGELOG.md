@@ -168,6 +168,7 @@
 - PR #4461 Port nvstrings Miscellaneous functions to cuDF Python/Cython
 - PR #4503 Port binaryop.pyx to libcudf++ API
 - PR #4499 Adding changes to handle include `keep_index` and `RangeIndex`
+- PR #4533 Import `tlz` for optional `cytoolz` support
 - PR #4493 Skip legacy testing in CI
 
 ## Bug Fixes
