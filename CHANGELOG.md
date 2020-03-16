@@ -9,6 +9,7 @@
 - PR #4486 Remove explicit template parameter from detail::scatter.
 - PR #4471 Consolidate partitioning functionality into a single header.
 - PR #4498 Adds in support for chunked writers to java
+- PR #4532 Parquet reader: add support for multiple pandas index columns
 
 ## Bug Fixes
 
