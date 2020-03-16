@@ -212,6 +212,7 @@
 - PR #4137 Update Java for mutating fill and rolling window changes
 - PR #4184 Add missing except+ to Cython bindings
 - PR #4141 Fix NVStrings test_convert failure in 10.2 build
+- PR #4156 Make fill/copy_range no-op on empty columns
 - PR #4158 Fix merge issue with empty table return if one of the two tables are empty
 - PR #4162 Properly handle no index metadata generation for to_parquet
 - PR #4175 Fix `__sizeof__` calculation in `StringColumn`
@@ -265,6 +266,7 @@
 - PR #4505 Fix 0 length buffers during serialization
 - PR #4482 Fix `.str.rsplit`, `.str.split`, `.str.find`, `.str.rfind`, `.str.index`, `.str.rindex` and enable related tests
 - PR #4513 Backport scalar virtual destructor fix
+- PR #4519 Remove `n` validation for `nlargest` & `nsmallest` and add negative support for `n`
 
 
 # cuDF 0.12.0 (04 Feb 2020)
