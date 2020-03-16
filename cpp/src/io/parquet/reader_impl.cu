@@ -243,7 +243,7 @@ struct metadata : public FileMetaData {
           if (end == std::string::npos)
             break;
           if (end > begin) {
-            std::string pandas_index = it->value.substr(begin, end);
+            std::string pandas_index = it->value.substr(begin, end - begin);
             if (std::find(names.begin(), names.end(), pandas_index) == names.end()) {
               names.emplace_back(std::move(pandas_index));
             }
