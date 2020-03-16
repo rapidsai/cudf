@@ -1462,13 +1462,18 @@ class Series(Frame):
         return vals.set_index(index)
 
     def _n_largest_or_smallest(self, largest, n, keep):
-        if not (0 <= n <= len(self)):
-            raise ValueError("n out-of-bound")
         direction = largest
         if keep == "first":
-            return self.sort_values(ascending=not direction)[:n]
+            if n < 0:
+                n = 0
+            return self.sort_values(ascending=not direction).head(n)
         elif keep == "last":
-            return self.sort_values(ascending=direction)[-n:].reverse()
+            data = self.sort_values(ascending=direction)
+            if n <= 0:
+                data = data[-n:-n]
+            else:
+                data = data.tail(n)
+            return data.reverse()
         else:
             raise ValueError('keep must be either "first", "last"')
 
