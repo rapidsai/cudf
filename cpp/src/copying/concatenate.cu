@@ -416,13 +416,17 @@ concatenate(std::vector<table_view> const& tables_to_concat,
             rmm::mr::device_memory_resource *mr) {
   if (tables_to_concat.size() == 0) { return std::make_unique<table>(); }
 
-  size_type const number_of_cols = tables_to_concat.front().num_columns();
+  table_view const first_table = tables_to_concat.front();
   CUDF_EXPECTS(std::all_of(tables_to_concat.begin(), tables_to_concat.end(),
-        [number_of_cols](auto const& t) { return t.num_columns() == number_of_cols; }),
-      "Mismatch in table number of columns to concatenate.");
+                           [&first_table](auto const& t) {
+                             return t.num_columns() ==
+                                        first_table.num_columns() &&
+                                        have_same_types(first_table, t);
+                           }),
+               "Mismatch in table columns to concatenate.");
 
   std::vector<std::unique_ptr<column>> concat_columns;
-  for (size_type i = 0; i < number_of_cols; ++i) {
+  for (size_type i = 0; i < first_table.num_columns(); ++i) {
     std::vector<column_view> cols;
     for (auto &t : tables_to_concat) {
       cols.emplace_back(t.column(i));
