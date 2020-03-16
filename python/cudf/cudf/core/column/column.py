@@ -1348,10 +1348,9 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         if len(shape) > 1:
             raise ValueError("Data must be 1-dimensional")
 
-        if desc["strides"] is not None:
+        arbitrary = np.asarray(arbitrary)
+        if not arbitrary.flags["C_CONTIGUOUS"]:
             arbitrary = np.ascontiguousarray(arbitrary)
-        else:
-            arbitrary = np.asarray(arbitrary)
 
         if dtype is not None:
             arbitrary = arbitrary.astype(dtype)
