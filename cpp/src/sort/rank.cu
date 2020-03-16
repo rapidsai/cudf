@@ -33,19 +33,23 @@ namespace experimental {
 namespace detail {
 
 namespace {
+
+// Functor to identify unique elements in a sorted order table/column
 template <bool has_nulls, typename ReturnType = bool>
 struct unique_comparator {
   unique_comparator(table_device_view device_table,
                     size_type const *sorted_order)
-      : comp(device_table, device_table, true), perm(sorted_order) {}
+      : comparator(device_table, device_table, true),
+        permute(sorted_order) {}
   __device__ ReturnType operator()(size_type index) const noexcept {
-    return index == 0 || not comp(perm[index], perm[index - 1]);
+    return index == 0 || not comparator(permute[index], permute[index - 1]);
 };
 
 private:
-  row_equality_comparator<has_nulls> comp;
-  size_type const *perm;
+  row_equality_comparator<has_nulls> comparator;
+  size_type const *permute;
 };
+
 rmm::device_vector<size_type>
 sorted_dense_rank(column_view input_col,
                   column_view sorted_order_view,

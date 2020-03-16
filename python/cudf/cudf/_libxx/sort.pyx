@@ -270,7 +270,7 @@ def rank_columns(Table source_table, object method, str na_option,
                     percentage
                 )
             ))
-    
+
     cdef unique_ptr[table] c_result
     c_result.reset(new table(move(c_results)))
     out_table = Table.from_unique_ptr(
