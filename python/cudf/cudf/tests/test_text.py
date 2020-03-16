@@ -44,11 +44,10 @@ def test_tokenize():
 @pytest.mark.parametrize(
     "delimiter, expected_token_counts",
     [
-        (" ", [10, 9, 0, 0, 1]),  # TODO: verify last count should be 1, not 5
+        ("", [10, 9, 0, 0, 5]),
         ("o", [6, 3, 0, 0, 1]),
         (["a", "e", "i", "o", "u"], [13, 13, 0, 0, 6]),
         (["a", "e", "i", "o"], [12, 11, 0, 0, 6]),
-        # ([], [10, 9, 0, 0, 5]), # throws
     ],
 )
 def test_token_count(delimiter, expected_token_counts):

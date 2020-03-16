@@ -1801,11 +1801,11 @@ class StringMethods(object):
     def normalize_spaces(self):
         return cpp_normalize_spaces(self._column)
 
-    def tokenize(self, delimiter=" "):
+    def tokenize(self, delimiter=""):
         delimiter = _massage_string_arg(delimiter, "delimiter", allow_col=True)
         return cpp_tokenize(self._column, delimiter)
 
-    def token_count(self, delimiter=" "):
+    def token_count(self, delimiter=""):
         delimiter = _massage_string_arg(delimiter, "delimiter", allow_col=True)
         return cpp_count_tokens(self._column, delimiter)
 
@@ -1813,7 +1813,7 @@ class StringMethods(object):
         separator = _massage_string_arg(separator, "separator")
         return cpp_generate_ngrams(self._column, n, separator)
 
-    def ngrams_tokenize(self, n=2, delimiter=" ", separator="_"):
+    def ngrams_tokenize(self, n=2, delimiter="", separator="_"):
         delimiter = _massage_string_arg(delimiter, "delimiter")
         separator = _massage_string_arg(separator, "separator")
 
