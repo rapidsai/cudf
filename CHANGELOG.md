@@ -2,12 +2,16 @@
 
 ## New Features
 
+
 ## Improvements
+
+- PR #4479 Adding cuda 10.2 support via conda environment file addition
 - PR #4486 Remove explicit template parameter from detail::scatter.
 - PR #4471 Consolidate partitioning functionality into a single header.
 - PR #4498 Adds in support for chunked writers to java
 
 ## Bug Fixes
+
 - PR #4386 Update Java package to 0.14
 - PR #4402 Fix cudf::strings::join_strings logic with all-null strings and null narep
 
