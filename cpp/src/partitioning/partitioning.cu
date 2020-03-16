@@ -631,18 +631,18 @@ struct dispatch_map_type {
     std::vector<size_type> partition_offsets(histogram.size());
     thrust::copy(histogram.begin(), histogram.end(), partition_offsets.begin());
 
-    // Transform iterator that atomically increments the offsets to determine
-    // where each row in each partition should be written
-    auto transform = thrust::make_transform_iterator(
-        partition_map.begin<MapType>(),
+    // Unfortunately need to materialize the scatter map because
+    // `detail::scatter` requires multiple passes through the iterator
+    rmm::device_vector<MapType> scatter_map(partition_map.size());
+
+    // For each `partition_map[i]`, atomically increment the corresponding
+    // partition offset to determine `i`s location in the output
+    thrust::transform(
+        rmm::exec_policy(stream)->on(stream), partition_map.begin<MapType>(),
+        partition_map.end<MapType>(), scatter_map.begin(),
         [offsets = histogram.data().get()] __device__(auto partition_number) {
           return atomicAdd(&offsets[partition_number], 1);
         });
-
-    // Unfortunately need to materialize the scatter map because
-    // `detail::scatter` requires multiple passes through the iterator
-    rmm::device_vector<MapType> scatter_map(transform,
-                                            transform + partition_map.size());
 
     // Scatter the rows into their partitions
     auto scattered = cudf::experimental::detail::scatter(t, scatter_map.begin(),
