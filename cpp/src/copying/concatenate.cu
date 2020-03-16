@@ -364,7 +364,7 @@ concatenate(std::vector<column_view> const& columns_to_concat,
 
   data_type const type = columns_to_concat.front().type();
   CUDF_EXPECTS(std::all_of(columns_to_concat.begin(), columns_to_concat.end(),
-      [type](auto const& c) { return c.type() == type; }),
+      [&type](auto const& c) { return c.type() == type; }),
       "Type mismatch in columns to concatenate.");
 
   bool const has_nulls = std::any_of(
