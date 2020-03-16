@@ -593,7 +593,7 @@ class DataFrame(Frame):
                         mask=None,
                     )
                 else:
-                    if not is_scalar(value):	
+                    if not is_scalar(value):
                         value = column.as_column(value)
                     for col in arg:
                         # we will raise a key error if col not in dataframe
