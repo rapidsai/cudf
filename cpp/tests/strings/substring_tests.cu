@@ -153,31 +153,31 @@ TEST_F(StringsSubstringsTest, ZeroSizeStringsColumn)
 
 TEST_F(StringsSubstringsTest, NegativePositions)
 {
-    cudf::test::strings_column_wrapper strings{ "a", "bc", "def", "ghij", "klmno", "pqrstu", "vwxyz" };
+    cudf::test::strings_column_wrapper strings{ "a", "bc", "def", "ghij", "klmno", "pqrstu", "vwxyz", "" };
     auto strings_column = cudf::strings_column_view(strings);
     {
         auto results = cudf::strings::slice_strings(strings_column, -1);
-        cudf::test::strings_column_wrapper expected{ "a", "c", "f", "j", "o", "u", "z" };
+        cudf::test::strings_column_wrapper expected{ "a", "c", "f", "j", "o", "u", "z", "" };
         cudf::test::expect_columns_equal(*results, expected);
     }
     {
         auto results = cudf::strings::slice_strings(strings_column, 0, -1);
-        cudf::test::strings_column_wrapper expected{ "", "b", "de", "ghi", "klmn", "pqrst", "vwxy" };
+        cudf::test::strings_column_wrapper expected{ "", "b", "de", "ghi", "klmn", "pqrst", "vwxy", "" };
         cudf::test::expect_columns_equal(*results, expected);
     }
     {
         auto results = cudf::strings::slice_strings(strings_column, 7, -2, -1);
-        cudf::test::strings_column_wrapper expected{ "a", "c", "f", "j", "o", "u", "z" };
+        cudf::test::strings_column_wrapper expected{ "a", "c", "f", "j", "o", "u", "z", "" };
         cudf::test::expect_columns_equal(*results, expected);
     }
     {
         auto results = cudf::strings::slice_strings(strings_column, 7, -7, -1 );
-        cudf::test::strings_column_wrapper expected{ "a", "cb", "fed", "jihg", "onmlk", "utsrqp", "zyxwv" };
+        cudf::test::strings_column_wrapper expected{ "a", "cb", "fed", "jihg", "onmlk", "utsrqp", "zyxwv", "" };
         cudf::test::expect_columns_equal(*results, expected);
     }
     {
         auto results = cudf::strings::slice_strings(strings_column, -3, -1 );
-        cudf::test::strings_column_wrapper expected{ "", "b", "de", "hi", "mn", "st", "xy" };
+        cudf::test::strings_column_wrapper expected{ "", "b", "de", "hi", "mn", "st", "xy", "" };
         cudf::test::expect_columns_equal(*results, expected);
     }
 }
