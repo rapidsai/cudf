@@ -258,6 +258,7 @@
 - PR #4474 Fix to not materialize RangeIndex in copy_categories
 - PR #4496 Skip tests which require 2+ GPUs
 - PR #4494 Update Java memory event handler for new RMM resource API
+- PR #4519 Remove `n` validation for `nlargest` & `nsmallest` and add negative support for `n`
 
 
 # cuDF 0.12.0 (04 Feb 2020)
