@@ -86,7 +86,9 @@ cdef unique_ptr[aggregation] make_aggregation(op, kwargs={}) except *:
         raise TypeError("Unknown aggregation {}".format(op))
     return move(agg.c_obj)
 
-
+# The Cython pattern below enables us to create an Aggregation
+# without ever calling its `__init__` method, which would otherwise
+# result in a RecursionError.
 cdef class _AggregationFactory:
 
     @classmethod
