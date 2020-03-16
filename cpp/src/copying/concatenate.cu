@@ -358,7 +358,6 @@ std::unique_ptr<column>
 concatenate(std::vector<column_view> const& columns_to_concat,
             rmm::mr::device_memory_resource *mr,
             cudaStream_t stream) {
-  CUDF_FUNC_RANGE();
 
   if (columns_to_concat.empty()) { return std::make_unique<column>(); }
 
@@ -406,6 +405,7 @@ rmm::device_buffer concatenate_masks(std::vector<column_view> const &views,
 std::unique_ptr<column>
 concatenate(std::vector<column_view> const& columns_to_concat,
             rmm::mr::device_memory_resource *mr) {
+  CUDF_FUNC_RANGE();
   return detail::concatenate(columns_to_concat, mr, 0);
 }
 
