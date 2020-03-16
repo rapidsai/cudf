@@ -92,37 +92,37 @@ cdef unique_ptr[aggregation] make_aggregation(op, kwargs={}) except *:
 cdef class _AggregationFactory:
 
     @classmethod
-    def sum(cls, *args, **kwargs):
+    def sum(cls):
         cdef Aggregation agg = Aggregation.__new__(Aggregation)
         agg.c_obj = move(libcudf_aggregation.make_sum_aggregation())
         return agg
 
     @classmethod
-    def min(cls, *args, **kwargs):
+    def min(cls):
         cdef Aggregation agg = Aggregation.__new__(Aggregation)
         agg.c_obj = move(libcudf_aggregation.make_min_aggregation())
         return agg
 
     @classmethod
-    def max(cls, *args, **kwargs):
+    def max(cls):
         cdef Aggregation agg = Aggregation.__new__(Aggregation)
         agg.c_obj = move(libcudf_aggregation.make_max_aggregation())
         return agg
 
     @classmethod
-    def mean(cls, *args, **kwargs):
+    def mean(cls):
         cdef Aggregation agg = Aggregation.__new__(Aggregation)
         agg.c_obj = move(libcudf_aggregation.make_mean_aggregation())
         return agg
 
     @classmethod
-    def count(cls, *args, **kwargs):
+    def count(cls):
         cdef Aggregation agg = Aggregation.__new__(Aggregation)
         agg.c_obj = move(libcudf_aggregation.make_count_aggregation())
         return agg
 
     @classmethod
-    def size(cls, *args, **kwargs):
+    def size(cls):
         cdef Aggregation agg = Aggregation.__new__(Aggregation)
         agg.c_obj = move(libcudf_aggregation.make_count_aggregation(
             <libcudf_types.include_nulls><underlying_type_t_include_nulls>(
@@ -132,13 +132,13 @@ cdef class _AggregationFactory:
         return agg
 
     @classmethod
-    def nunique(cls, *args, **kwargs):
+    def nunique(cls):
         cdef Aggregation agg = Aggregation.__new__(Aggregation)
         agg.c_obj = move(libcudf_aggregation.make_nunique_aggregation())
         return agg
 
     @classmethod
-    def nth(cls, libcudf_types.size_type size, *args, **kwargs):
+    def nth(cls, libcudf_types.size_type size):
         cdef Aggregation agg = Aggregation.__new__(Aggregation)
         agg.c_obj = move(
             libcudf_aggregation.make_nth_element_aggregation(size)
@@ -146,43 +146,43 @@ cdef class _AggregationFactory:
         return agg
 
     @classmethod
-    def any(cls, *args, **kwargs):
+    def any(cls):
         cdef Aggregation agg = Aggregation.__new__(Aggregation)
         agg.c_obj = move(libcudf_aggregation.make_any_aggregation())
         return agg
 
     @classmethod
-    def all(cls, *args, **kwargs):
+    def all(cls):
         cdef Aggregation agg = Aggregation.__new__(Aggregation)
         agg.c_obj = move(libcudf_aggregation.make_all_aggregation())
         return agg
 
     @classmethod
-    def product(cls, *args, **kwargs):
+    def product(cls):
         cdef Aggregation agg = Aggregation.__new__(Aggregation)
         agg.c_obj = move(libcudf_aggregation.make_product_aggregation())
         return agg
 
     @classmethod
-    def sum_of_squares(cls, *args, **kwargs):
+    def sum_of_squares(cls):
         cdef Aggregation agg = Aggregation.__new__(Aggregation)
         agg.c_obj = move(libcudf_aggregation.make_sum_of_squares_aggregation())
         return agg
 
     @classmethod
-    def var(cls, ddof=1, *args, **kwargs):
+    def var(cls, ddof=1):
         cdef Aggregation agg = Aggregation.__new__(Aggregation)
         agg.c_obj = move(libcudf_aggregation.make_variance_aggregation(ddof))
         return agg
 
     @classmethod
-    def std(cls, ddof=1, *args, **kwargs):
+    def std(cls, ddof=1):
         cdef Aggregation agg = Aggregation.__new__(Aggregation)
         agg.c_obj = move(libcudf_aggregation.make_std_aggregation(ddof))
         return agg
 
     @classmethod
-    def median(cls, *args, **kwargs):
+    def median(cls):
         cdef Aggregation agg = Aggregation.__new__(Aggregation)
         agg.c_obj = move(libcudf_aggregation.make_median_aggregation())
         return agg
