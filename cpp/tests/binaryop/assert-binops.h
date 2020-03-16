@@ -56,7 +56,7 @@ void ASSERT_BINOP(column_view const& out,
         uint32_t lhs_valid = (lhs.is_valid() 
                             ? std::numeric_limits<bitmask_type>::max() : 0);
         ASSERT_EQ(out_valid.size(), rhs_valid.size());
-        for (decltype(out_valid.size()) i = 0; i < out_valid.size(); ++i) {
+        for (size_type i = 0; i < num_bitmask_words(out_data.size()); ++i) {
             ASSERT_EQ(out_valid[i], (lhs_valid & rhs_valid[i]));
         }
     } 
@@ -66,7 +66,7 @@ void ASSERT_BINOP(column_view const& out,
         } 
         else {
             auto out_valid = out_h.second;
-            for (decltype(out_valid.size()) i = 0; i < out_valid.size(); ++i) {
+            for (size_type i = 0; i < num_bitmask_words(out_data.size()); ++i) {
                 ASSERT_EQ(out_valid[i], 0);
             }
         }
@@ -98,7 +98,7 @@ void ASSERT_BINOP(column_view const& out,
         uint32_t rhs_valid = (rhs.is_valid() 
                             ? std::numeric_limits<bitmask_type>::max() : 0);
         ASSERT_EQ(out_valid.size(), lhs_valid.size());
-        for (decltype(out_valid.size()) i = 0; i < out_valid.size(); ++i) {
+        for (size_type i = 0; i < num_bitmask_words(out_data.size()); ++i) {
             ASSERT_EQ(out_valid[i], (rhs_valid & lhs_valid[i]));
         }
     } 
@@ -108,7 +108,7 @@ void ASSERT_BINOP(column_view const& out,
         } 
         else {
             auto out_valid = out_h.second;
-            for (decltype(out_valid.size()) i = 0; i < out_valid.size(); ++i) {
+            for (size_type i = 0; i < num_bitmask_words(out_data.size()); ++i) {
                 ASSERT_EQ(out_valid[i], 0);
             }
         }
@@ -141,7 +141,7 @@ void ASSERT_BINOP(column_view const& out,
 
         ASSERT_EQ(out_valid.size(), lhs_valid.size());
         ASSERT_EQ(out_valid.size(), rhs_valid.size());
-        for (decltype(out_valid.size()) i = 0; i < out_valid.size(); ++i) {
+        for (size_type i = 0; i < num_bitmask_words(out_data.size()); ++i) {
             ASSERT_EQ(out_valid[i], (lhs_valid[i] & rhs_valid[i]));
         }
     }
@@ -151,7 +151,7 @@ void ASSERT_BINOP(column_view const& out,
         auto out_valid = out_h.second;
 
         ASSERT_EQ(out_valid.size(), rhs_valid.size());
-        for (decltype(out_valid.size()) i = 0; i < out_valid.size(); ++i) {
+        for (size_type i = 0; i < num_bitmask_words(out_data.size()); ++i) {
             ASSERT_EQ(out_valid[i], rhs_valid[i]);
         }
     }
@@ -161,7 +161,7 @@ void ASSERT_BINOP(column_view const& out,
         auto out_valid = out_h.second;
 
         ASSERT_EQ(out_valid.size(), lhs_valid.size());
-        for (decltype(out_valid.size()) i = 0; i < out_valid.size(); ++i) {
+        for (size_type i = 0; i < num_bitmask_words(out_data.size()); ++i) {
             ASSERT_EQ(out_valid[i], lhs_valid[i]);
         }
     }
@@ -200,7 +200,7 @@ void ASSERT_BINOP(column_view const& out,
 
     ASSERT_EQ(out_valid.size(), lhs_valid.size());
     ASSERT_EQ(out_valid.size(), rhs_valid.size());
-    for (decltype(out_valid.size()) index = 0; index < out_valid.size(); ++index) {
+    for (size_type index = 0; index < num_bitmask_words(out_data.size()); ++index) {
         ASSERT_EQ(out_valid[index], (lhs_valid[index] & rhs_valid[index]));
     }
 }
