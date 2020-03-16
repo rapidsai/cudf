@@ -538,6 +538,17 @@ class MultiIndex(Index):
         return df
 
     def get_level_values(self, level):
+        """
+        Return the values at the requested level
+
+        Parameters
+        ----------
+        level : int or label
+
+        Returns
+        -------
+        An Index containing the values at the requested level.
+        """
         colnames = list(self._source_data.columns)
         if level not in colnames:
             if isinstance(level, int):
@@ -554,8 +565,9 @@ class MultiIndex(Index):
                 raise KeyError(f"Level not found: '{level}'")
         else:
             level_idx = colnames.index(level)
-        level_values = self._source_data[level]
-        level_values.name = self.names[level_idx]
+        level_values = as_index(
+            self._source_data._data[level], name=self.names[level_idx]
+        )
         return level_values
 
     def _to_frame(self):

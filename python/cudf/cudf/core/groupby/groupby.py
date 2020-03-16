@@ -172,7 +172,7 @@ class GroupBy(object):
                 result.insert(
                     0,
                     col_name,
-                    result.index.get_level_values(col_name)._column,
+                    result.index.get_level_values(col_name)._values,
                 )
             result.index = cudf.core.index.RangeIndex(len(result))
 
@@ -595,7 +595,7 @@ class _Grouping(object):
 
     def _handle_level(self, by):
         level_values = self._obj.index.get_level_values(by)
-        self._key_columns.append(level_values._column)
+        self._key_columns.append(level_values._values)
         self.names.append(level_values.name)
 
     def _handle_misc(self, by):
