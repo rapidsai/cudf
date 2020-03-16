@@ -1804,6 +1804,14 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     }
   }
 
+  public ColumnVector matchesRe(String pattern) {
+    assert type == DType.STRING : "column type must be a String";
+    assert pattern != null : "pattern scalar may not be null";
+    assert pattern.isEmpty() == false : "pattern string scalar may not be empty";
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.BOOL8), "endsWith")) {
+      return new ColumnVector(matchesRe(getNativeView(), pattern));
+    }
+  }
   /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS
   /////////////////////////////////////////////////////////////////////////////
@@ -1917,6 +1925,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return native handle of the resulting cudf column containing the boolean results.
    */
   private static native long stringEndWith(long cudfViewHandle, long compString) throws CudfException;
+
+  private static native long matchesRe(long cudfViewHandle, String compString) throws CudfException;
 
   /**
    * Native method for checking if strings in a column contains a specified comparison string.
