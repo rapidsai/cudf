@@ -139,7 +139,7 @@ class CategoricalAccessor(object):
 
             cur_categories = Series(cur_categories).sort_values()
             new_categories = Series(new_categories).sort_values()
-        return cur_categories.equals(new_categories)
+        return cur_categories._column.equals(new_categories._column)
 
     def _set_categories(self, new_categories, **kwargs):
         """Returns a new CategoricalColumn with the categories set to the
@@ -361,13 +361,6 @@ class CategoricalColumn(column.ColumnBase):
     def cat(self, parent=None):
         return CategoricalAccessor(self, parent=parent)
 
-    def binary_operator(self, binop, rhs, reflect=False):
-        msg = (
-            "Series of dtype `category` cannot perform the operation: "
-            "{}".format(binop)
-        )
-        raise TypeError(msg)
-
     def unary_operator(self, unaryop):
         msg = (
             "Series of dtype `category` cannot perform the operation: "
@@ -375,18 +368,20 @@ class CategoricalColumn(column.ColumnBase):
         )
         raise TypeError(msg)
 
-    def unordered_compare(self, cmpop, rhs):
-        if self.dtype != rhs.dtype:
-            raise TypeError("Categoricals can only compare with the same type")
-        return self.as_numerical.unordered_compare(cmpop, rhs.as_numerical)
+    def binary_operator(self, op, rhs, reflect=False):
 
-    def ordered_compare(self, cmpop, rhs):
-        if not (self.ordered and rhs.ordered):
-            msg = "Unordered Categoricals can only compare equality or not"
-            raise TypeError(msg)
+        if not (self.ordered and rhs.ordered) and op not in ("eq", "ne"):
+            if op in ("lt", "gt", "le", "ge"):
+                raise TypeError(
+                    f"Unordered Categoricals can only compare equality or not"
+                )
+            raise TypeError(
+                f"Series of dtype `{self.dtype}` cannot perform the "
+                f"operation: {op}"
+            )
         if self.dtype != rhs.dtype:
             raise TypeError("Categoricals can only compare with the same type")
-        return self.as_numerical.ordered_compare(cmpop, rhs.as_numerical)
+        return self.as_numerical.binary_operator(op, rhs.as_numerical)
 
     def normalize_binop_value(self, other):
         from cudf.utils import utils
@@ -632,7 +627,7 @@ def pandas_categorical_as_column(categorical, codes=None):
     codes = categorical.codes if codes is None else codes
     codes = column.as_column(codes)
 
-    valid_codes = codes.unordered_compare("ne", codes.dtype.type(-1))
+    valid_codes = codes.binary_operator("ne", codes.dtype.type(-1))
 
     mask = None
     if not valid_codes.all():
