@@ -37,8 +37,8 @@ private:
 namespace cudf {
 namespace jni {
 
-static jclass contiguous_table_jclass;
-static jmethodID from_contiguous_column_views;
+static jclass Contiguous_table_jclass;
+static jmethodID From_contiguous_column_views;
 
 #define CONTIGUOUS_TABLE_CLASS "ai/rapids/cudf/ContiguousTable"
 #define CONTIGUOUS_TABLE_FACTORY_SIG(param_sig) "(" param_sig ")L" CONTIGUOUS_TABLE_CLASS ";"
@@ -49,24 +49,24 @@ static bool cache_contiguous_table_jni(JNIEnv *env) {
     return false;
   }
 
-  from_contiguous_column_views = env->GetStaticMethodID(cls, 
+  From_contiguous_column_views = env->GetStaticMethodID(cls, 
           "fromContiguousColumnViews", CONTIGUOUS_TABLE_FACTORY_SIG("[JJJJ"));
-  if (from_contiguous_column_views == nullptr) {
+  if (From_contiguous_column_views == nullptr) {
     return false;
   }
 
   // Convert local reference to global so it cannot be garbage collected.
-  contiguous_table_jclass = static_cast<jclass>(env->NewGlobalRef(cls));
-  if (contiguous_table_jclass == nullptr) {
+  Contiguous_table_jclass = static_cast<jclass>(env->NewGlobalRef(cls));
+  if (Contiguous_table_jclass == nullptr) {
     return false;
   }
   return true;
 }
 
 static void release_contiguous_table_jni(JNIEnv *env) {
-  if (contiguous_table_jclass != nullptr) {
-    env->DeleteGlobalRef(contiguous_table_jclass);
-    contiguous_table_jclass = nullptr;
+  if (Contiguous_table_jclass != nullptr) {
+    env->DeleteGlobalRef(Contiguous_table_jclass);
+    Contiguous_table_jclass = nullptr;
   }
 }
 
@@ -91,7 +91,7 @@ jobject contiguous_table_from(JNIEnv* env, cudf::experimental::contiguous_split_
   }
 
   views.commit();
-  jobject ret = env->CallStaticObjectMethod(contiguous_table_jclass, from_contiguous_column_views,
+  jobject ret = env->CallStaticObjectMethod(Contiguous_table_jclass, From_contiguous_column_views,
           views.get_jArray(),
           address, size, buff_address);
 
@@ -102,7 +102,70 @@ jobject contiguous_table_from(JNIEnv* env, cudf::experimental::contiguous_split_
 }
 
 native_jobjectArray<jobject> contiguous_table_array(JNIEnv* env, jsize length) {
-  return native_jobjectArray<jobject>(env, env->NewObjectArray(length, contiguous_table_jclass, nullptr));
+  return native_jobjectArray<jobject>(env, env->NewObjectArray(length, Contiguous_table_jclass, nullptr));
+}
+
+static jclass Host_memory_buffer_jclass;
+static jmethodID Host_buffer_allocate;
+static jfieldID Host_buffer_address;
+static jfieldID Host_buffer_length;
+
+#define HOST_MEMORY_BUFFER_CLASS "ai/rapids/cudf/HostMemoryBuffer"
+#define HOST_MEMORY_BUFFER_SIG(param_sig) "(" param_sig ")L" HOST_MEMORY_BUFFER_CLASS ";"
+
+static bool cache_host_memory_buffer_jni(JNIEnv *env) {
+  jclass cls = env->FindClass(HOST_MEMORY_BUFFER_CLASS);
+  if (cls == nullptr) {
+    return false;
+  }
+
+  Host_buffer_allocate = env->GetStaticMethodID(cls,
+          "allocate", HOST_MEMORY_BUFFER_SIG("JZ"));
+  if (Host_buffer_allocate == nullptr) {
+    return false;
+  }
+
+  Host_buffer_address = env->GetFieldID(cls, "address", "J");
+  if (Host_buffer_address == nullptr) {
+    return false;
+  }
+
+  Host_buffer_length = env->GetFieldID(cls, "length", "J");
+  if (Host_buffer_length == nullptr) {
+    return false;
+  }
+
+  // Convert local reference to global so it cannot be garbage collected.
+  Host_memory_buffer_jclass = static_cast<jclass>(env->NewGlobalRef(cls));
+  if (Host_memory_buffer_jclass == nullptr) {
+    return false;
+  }
+  return true;
+}
+
+static void release_host_memory_buffer_jni(JNIEnv *env) {
+  if (Host_memory_buffer_jclass != nullptr) {
+    env->DeleteGlobalRef(Host_memory_buffer_jclass);
+    Host_memory_buffer_jclass = nullptr;
+  }
+}
+
+jobject allocate_host_buffer(JNIEnv* env, jlong amount, jboolean prefer_pinned) {
+  jobject ret = env->CallStaticObjectMethod(Host_memory_buffer_jclass, Host_buffer_allocate,
+          amount, prefer_pinned);
+
+  if (env->ExceptionCheck()) {
+    throw std::runtime_error("allocateHostBuffer threw an exception");
+  }
+  return ret;
+}
+
+jlong get_host_buffer_address(JNIEnv* env, jobject buffer) {
+  return env->GetLongField(buffer, Host_buffer_address);
+}
+
+jlong get_host_buffer_length(JNIEnv* env, jobject buffer) {
+  return env->GetLongField(buffer, Host_buffer_length);
 }
 
 // Get the JNI environment, attaching the current thread to the JVM if necessary. If the thread
@@ -148,6 +211,10 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *) {
     return JNI_ERR;
   }
 
+  if (!cudf::jni::cache_host_memory_buffer_jni(env)) {
+    return JNI_ERR;
+  }
+
   return cudf::jni::MINIMUM_JNI_VERSION;
 }
 
@@ -159,6 +226,7 @@ JNIEXPORT void JNI_OnUnload(JavaVM *vm, void *) {
 
   // release cached class objects here.
   cudf::jni::release_contiguous_table_jni(env);
+  cudf::jni::release_host_memory_buffer_jni(env);
 }
 
 } // extern "C"
