@@ -58,7 +58,6 @@ class MultiIndex(Index):
             names,
             (
                 Sequence,
-                pd.core.indexes.frozen.FrozenNDArray,
                 pd.core.indexes.frozen.FrozenList,
             ),
         ):
@@ -77,7 +76,7 @@ class MultiIndex(Index):
         from cudf import DataFrame
 
         if not isinstance(codes, DataFrame) and not isinstance(
-            codes[0], (Sequence, pd.core.indexes.frozen.FrozenNDArray)
+            codes[0], Sequence
         ):
             raise TypeError("Codes is not a Sequence of sequences")
 
