@@ -250,6 +250,7 @@
 - PR #4358 Fix strings::concat where narep is an empty string
 - PR #4369 Fix race condition in gpuinflate
 - PR #4390 Disable ScatterValid and ScatterNull legacy tests
+- PR #4398 Fixes the failure in groupby in MIN/MAX on strings when some groups are empty
 - PR #4406 Fix sorted merge issue with null values and ascending=False
 - PR #4445 Fix string issue for parquet reader and support `keep_index` for `scatter_to_tables`
 - PR #4423 Tighten up Dask serialization checks
@@ -265,6 +266,7 @@
 - PR #4505 Fix 0 length buffers during serialization
 - PR #4482 Fix `.str.rsplit`, `.str.split`, `.str.find`, `.str.rfind`, `.str.index`, `.str.rindex` and enable related tests
 - PR #4513 Backport scalar virtual destructor fix
+- PR #4519 Remove `n` validation for `nlargest` & `nsmallest` and add negative support for `n`
 
 
 # cuDF 0.12.0 (04 Feb 2020)
