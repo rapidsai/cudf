@@ -30,6 +30,11 @@
 namespace cudf {
 namespace test {
 
+enum class force_use_sort_impl : bool {
+    NO,
+    YES
+};
+
 inline void test_groups(column_view const& keys,
                         column_view const& expect_grouped_keys,
                         std::vector<size_type> const& expect_group_offsets,
@@ -63,8 +68,8 @@ inline void test_single_agg(column_view const& keys,
                             column_view const& expect_keys,
                             column_view const& expect_vals,
                             std::unique_ptr<experimental::aggregation>&& agg,
+                            force_use_sort_impl use_sort = force_use_sort_impl::NO,
                             include_nulls include_null_keys = include_nulls::NO,
-                            bool stable_order = false,
                             sorted keys_are_sorted = sorted::NO,
                             std::vector<order> const& column_order = {},
                             std::vector<null_order> const& null_precedence = {})
@@ -75,13 +80,18 @@ inline void test_single_agg(column_view const& keys,
     requests[0].values = values;
 
     requests[0].aggregations.push_back(std::move(agg));
+    
+    if (use_sort == force_use_sort_impl::YES) {
+        // WAR to force groupby to use sort implementation
+        requests[0].aggregations.push_back(experimental::make_nth_element_aggregation(0));
+    }
 
     experimental::groupby::groupby gb_obj(table_view({keys}),
         include_null_keys, keys_are_sorted, column_order, null_precedence);
 
     auto result = gb_obj.aggregate(requests);
 
-    if (stable_order) 
+    if (use_sort == force_use_sort_impl::YES) 
     {
         expect_tables_equal(table_view({expect_keys}), result.first->view());
         expect_columns_equal(expect_vals, *result.second[0].results[0], true);

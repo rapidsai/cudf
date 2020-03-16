@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,20 +16,34 @@
 
 #include <groupby/sort/group_single_pass_reduction_util.cuh>
 
+#include <thrust/transform.h>
+
 namespace cudf {
 namespace experimental {
 namespace groupby {
 namespace detail {
 
-std::unique_ptr<column> group_max(
+std::unique_ptr<column> group_argmax(
     column_view const& values,
     size_type num_groups,
     rmm::device_vector<size_type> const& group_labels,
+    column_view const& key_sort_order,
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream)
 {
-  return type_dispatcher(values.type(), reduce_functor<aggregation::MAX>{},
-                         values, num_groups, group_labels, mr, stream);
+  auto indices = type_dispatcher(
+    values.type(), reduce_functor<aggregation::ARGMAX>{},
+    values, num_groups, group_labels, mr, stream);
+
+  mutable_column_view indices_view(indices->mutable_view());
+  thrust::transform(rmm::exec_policy(stream)->on(stream),
+    indices_view.begin<size_type>(), indices_view.end<size_type>(),
+    indices_view.begin<size_type>(),
+    [sort_order = key_sort_order.data<size_type>()] __device__ (size_type arg) {
+      return sort_order[arg];
+    });
+
+  return indices;
 }
 
 }  // namespace detail

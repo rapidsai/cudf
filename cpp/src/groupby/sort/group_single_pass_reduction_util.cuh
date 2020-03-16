@@ -39,11 +39,12 @@ struct reduce_functor {
 
   template <typename T>
   static constexpr bool is_supported(){
-    if (cudf::is_numeric<T>())
-      return true;
-    else if (cudf::is_timestamp<T>() and 
-              (k == aggregation::MIN or k == aggregation::MAX))
-      return true;
+    if (k == aggregation::SUM)
+      return cudf::is_numeric<T>();
+    else if (k == aggregation::MIN or k == aggregation::MAX)
+      return cudf::is_fixed_width<T>() and is_relationally_comparable<T,T>();
+    else if (k == aggregation::ARGMIN or k == aggregation::ARGMAX)
+      return is_relationally_comparable<T,T>();
     else
       return false;
   }
@@ -51,47 +52,27 @@ struct reduce_functor {
   template <typename T>
   std::enable_if_t<is_supported<T>(), std::unique_ptr<column> >
   operator()(column_view const& values,
-             column_view const& group_sizes,
+             size_type num_groups,
              rmm::device_vector<cudf::size_type> const& group_labels,
              rmm::mr::device_memory_resource* mr,
              cudaStream_t stream)
   {
-    CUDF_EXPECTS(static_cast<size_t>(values.size()) == group_labels.size(),
-      "Size of values column should be same as that of group labels");
-
     using OpType = cudf::experimental::detail::corresponding_operator_t<k>;
     using ResultType = cudf::experimental::detail::target_type_t<T, k>;
-    size_type num_groups = group_sizes.size();
 
-    rmm::device_buffer result_bitmask;
-    size_type result_null_count;
-    std::tie(result_bitmask, result_null_count) = 
-      experimental::detail::valid_if(
-        group_sizes.begin<size_type>(), group_sizes.end<size_type>(),
-        [] __device__ (auto s) { return s > 0; });
-
-    std::unique_ptr<column> result;
-    if (result_null_count > 0) {
-      result = make_fixed_width_column(data_type(type_to_id<ResultType>()), 
-                                       num_groups,
-                                       std::move(result_bitmask),
-                                       result_null_count,
-                                       stream, mr);
-    } else {
-      result = make_fixed_width_column(data_type(type_to_id<ResultType>()), 
-                                       num_groups,
-                                       mask_state::UNALLOCATED,
-                                       stream, mr);
-    }
+    std::unique_ptr<column> result = make_fixed_width_column(
+      data_type(type_to_id<ResultType>()), 
+      num_groups,
+      values.has_nulls() ? mask_state::ALL_NULL : mask_state::UNALLOCATED,
+      stream, mr);
 
     if (values.size() == 0) {
       return result;
     }
 
-    thrust::fill(rmm::exec_policy(stream)->on(stream),
-      result->mutable_view().begin<ResultType>(), 
-      result->mutable_view().end<ResultType>(),
-      OpType::template identity<ResultType>());
+    auto result_table = mutable_table_view({*result});
+    experimental::detail::initialize_with_identity(
+      result_table, {k}, stream);
 
     auto resultview = mutable_column_device_view::create(result->mutable_view());
     auto valuesview = column_device_view::create(values);
@@ -103,23 +84,8 @@ struct reduce_functor {
         d_result = *resultview,
         dest_indices = group_labels.data().get()
       ] __device__ (auto i) {
-        if (d_values.is_valid(i))
-          switch (k) {
-          case aggregation::Kind::SUM:
-            atomicAdd(d_result.data<ResultType>() + dest_indices[i],
-                      static_cast<ResultType>(d_values.element<T>(i)));
-            break;
-          case aggregation::Kind::MIN:
-            atomicMin(d_result.data<ResultType>() + dest_indices[i],
-                      static_cast<ResultType>(d_values.element<T>(i)));
-            break;
-          case aggregation::Kind::MAX:
-            atomicMax(d_result.data<ResultType>() + dest_indices[i],
-                      static_cast<ResultType>(d_values.element<T>(i)));
-            break;
-          default:
-            break;
-          }
+        experimental::detail::update_target_element<T, k, true, true>{}( 
+          d_result, dest_indices[i], d_values, i );
       });
     
     return result;
