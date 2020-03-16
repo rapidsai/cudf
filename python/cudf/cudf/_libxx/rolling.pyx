@@ -48,9 +48,14 @@ def rolling(Column source_column, Column pre_column_window,
     cdef column_view source_column_view = source_column.view()
     cdef column_view pre_column_window_view
     cdef column_view fwd_column_window_view
-    cdef unique_ptr[aggregation] agg = move(
-        make_aggregation(op, {'dtype': source_column.dtype})
-    )
+    cdef unique_ptr[aggregation] agg
+
+    if callable(op):
+        agg = move(
+            make_aggregation(op, {'dtype': source_column.dtype})
+        )
+    else:
+        agg = move(make_aggregation(op))
 
     if window is None:
         if center:
