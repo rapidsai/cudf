@@ -1406,13 +1406,6 @@ def test_dataframe_transpose_category(num_cols, num_rows):
     got_function = gdf.transpose()
     got_property = gdf.T
 
-    # materialize our categoricals because pandas
-    for name, col in got_function._data.items():
-        got_function[name] = col.astype(col.dtype.type)
-
-    for name, col in got_property._data.items():
-        got_property[name] = col.astype(col.dtype.type)
-
     expect = pdf.transpose()
 
     assert_eq(expect, got_function.to_pandas())
