@@ -205,23 +205,16 @@ void store_result_functor::operator()<aggregation::MIN>(
       operator()<aggregation::ARGMIN>(argmin_agg);
       column_view argmin_result = cache.get_result(col_idx, argmin_agg);
 
-      if (argmin_result.nullable()) {
-        // We make a view of ARGMIN result without a null mask and gather using
-        // this mask. The values in data buffer of ARGMIN result corresponding 
-        // to null values was initialized to ARGMIN_SENTINEL which is an out of 
-        // bounds index value and causes the gathered value to be null.
-        column_view null_removed_map(data_type(type_to_id<size_type>()),
-          argmin_result.size(), 
-          static_cast<void const*>(argmin_result.template data<size_type>()));
-        auto transformed_result = experimental::detail::gather(
-          table_view({values}), null_removed_map, false, true, false, mr, stream);
-        return std::move(transformed_result->release()[0]);
-      }
-      else {
-        auto transformed_result = experimental::detail::gather(
-          table_view({values}), argmin_result, false, false, false, mr, stream);
-        return std::move(transformed_result->release()[0]);
-      }
+      // We make a view of ARGMIN result without a null mask and gather using
+      // this mask. The values in data buffer of ARGMIN result corresponding 
+      // to null values was initialized to ARGMIN_SENTINEL which is an out of 
+      // bounds index value and causes the gathered value to be null.
+      column_view null_removed_map(data_type(type_to_id<size_type>()),
+        argmin_result.size(), 
+        static_cast<void const*>(argmin_result.template data<size_type>()));
+      auto transformed_result = experimental::detail::gather(table_view({values}),
+        null_removed_map, false, argmin_result.nullable(), false, mr, stream);
+      return std::move(transformed_result->release()[0]);
     }
   }();
 
@@ -245,23 +238,16 @@ void store_result_functor::operator()<aggregation::MAX>(
       operator()<aggregation::ARGMAX>(argmax_agg);
       column_view argmax_result = cache.get_result(col_idx, argmax_agg);
 
-      if (argmax_result.nullable()) {
-        // We make a view of ARGMAX result without a null mask and gather using
-        // this mask. The values in data buffer of ARGMAX result corresponding 
-        // to null values was initialized to ARGMAX_SENTINEL which is an out of 
-        // bounds index value and causes the gathered value to be null.
-        column_view null_removed_map(data_type(type_to_id<size_type>()),
-          argmax_result.size(), 
-          static_cast<void const*>(argmax_result.template data<size_type>()));
-        auto transformed_result = experimental::detail::gather(
-          table_view({values}), null_removed_map, false, true, false, mr, stream);
-        return std::move(transformed_result->release()[0]);
-      }
-      else {
-        auto transformed_result = experimental::detail::gather(
-          table_view({values}), argmax_result, false, false, false, mr, stream);
-        return std::move(transformed_result->release()[0]);
-      }
+      // We make a view of ARGMAX result without a null mask and gather using
+      // this mask. The values in data buffer of ARGMAX result corresponding 
+      // to null values was initialized to ARGMAX_SENTINEL which is an out of 
+      // bounds index value and causes the gathered value to be null.
+      column_view null_removed_map(data_type(type_to_id<size_type>()),
+        argmax_result.size(), 
+        static_cast<void const*>(argmax_result.template data<size_type>()));
+      auto transformed_result = experimental::detail::gather(table_view({values}),
+        null_removed_map, false, argmax_result.nullable(), false, mr, stream);
+      return std::move(transformed_result->release()[0]);
     }
   }();
 
