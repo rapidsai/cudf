@@ -652,7 +652,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringContains(JNIEnv *
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_matchesRe(JNIEnv *env, jobject j_object,
                                                                     jlong j_view_handle, jstring patternObj) {
     JNI_NULL_CHECK(env, j_view_handle, "column is null", false);
-    JNI_NULL_CHECK(env, patternObj, "comparison string is null", false);
+    JNI_NULL_CHECK(env, patternObj, "pattern is null", false);
 
   try {
     cudf::column_view* column_view = reinterpret_cast<cudf::column_view*>(j_view_handle);
