@@ -1054,9 +1054,18 @@ def test_drop_unsupported_multi_agg():
 
 
 @pytest.mark.parametrize(
-    "agg", list(itertools.combinations(["count", "max", "min", "nunique"], 2)),
+    "agg",
+    (
+        list(itertools.combinations(["count", "max", "min", "nunique"], 2))
+        + [
+            {"b": "min", "c": "mean"},
+            {"b": "max", "c": "mean"},
+            {"b": "count", "c": "mean"},
+            {"b": "nunique", "c": "mean"},
+        ]
+    ),
 )
-def test_groupby_string_agg_combinations(agg):
+def test_groupby_agg_combinations(agg):
     pdf = pd.DataFrame(
         {
             "a": [1, 1, 2, 2, 3],
