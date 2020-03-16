@@ -229,15 +229,11 @@ struct for_each_concatenate {
 };
 
 template <typename T, size_type block_size, bool Nullable>
-__global__
-void
-fused_concatenate_kernel(
-    column_device_view const* input_views,
-    size_type const* input_offsets,
-    size_type input_size,
-    mutable_column_device_view output_view,
-    size_type* out_valid_count) {
-
+__global__ void fused_concatenate_kernel(column_device_view const* input_views,
+                                         size_type const* input_offsets,
+                                         size_type num_input_views,
+                                         mutable_column_device_view output_view,
+                                         size_type* out_valid_count) {
   auto const output_size = output_view.size();
   auto* output_data = output_view.data<T>();
 
@@ -251,15 +247,16 @@ fused_concatenate_kernel(
   while (output_index < output_size) {
 
     // Lookup input index by searching for output index in offsets
-    auto const offset_it = thrust::upper_bound(thrust::seq,
-        input_offsets, input_offsets + input_size, output_index) - 1;
-    size_type const input_index = offset_it - input_offsets;
+    auto const offset_it =
+        thrust::upper_bound(thrust::seq, input_offsets,
+                            input_offsets + num_input_views, output_index) - 1;
+    size_type const partition_index = offset_it - input_offsets;
 
     // Copy input data to output and read bitmask
     bool bit_is_set = false;
-    if (input_index < input_size) {
+    if (partition_index < num_input_views) {
       auto const offset_index = output_index - *offset_it;
-      auto const& input_view = input_views[input_index];
+      auto const& input_view = input_views[partition_index];
       auto const* input_data = input_view.data<T>();
       output_data[output_index] = input_data[offset_index];
       if (Nullable) {
