@@ -79,11 +79,6 @@ class string_view
    * @brief Return true if string has no characters
    */
   __host__ __device__ bool empty() const;
-  /**
-   * @brief Return true if string is NULL.
-   * That is, `data()==nullptr` for this instance.
-   */
-  __host__ __device__ bool is_null() const;
 
   /**
    * @brief Handy iterator for navigating through encoded characters.
