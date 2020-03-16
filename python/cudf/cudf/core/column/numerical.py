@@ -5,8 +5,6 @@ import pandas as pd
 import pyarrow as pa
 from pandas.api.types import is_integer_dtype
 
-import rmm
-
 import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
 from cudf.core.buffer import Buffer
@@ -58,6 +56,9 @@ class NumericalColumn(column.ColumnBase):
             self, column.as_column([item], dtype=self.dtype)
         ).any()
 
+    def unary_operator(self, unaryop):
+        return _numeric_column_unaryop(self, op=unaryop)
+
     def binary_operator(self, binop, rhs, reflect=False):
         int_dtypes = [
             np.dtype("int8"),
@@ -84,15 +85,6 @@ class NumericalColumn(column.ColumnBase):
         return _numeric_column_binop(
             lhs=self, rhs=rhs, op=binop, out_dtype=out_dtype, reflect=reflect
         )
-
-    def unary_operator(self, unaryop):
-        return _numeric_column_unaryop(self, op=unaryop)
-
-    def unordered_compare(self, cmpop, rhs):
-        return _numeric_column_compare(self, rhs, op=cmpop)
-
-    def ordered_compare(self, cmpop, rhs):
-        return _numeric_column_compare(self, rhs, op=cmpop)
 
     def _apply_scan_op(self, op):
         return libcudfxx.reduce.scan(op, self, True)
@@ -179,14 +171,6 @@ class NumericalColumn(column.ColumnBase):
             return out.cast(pa.bool_())
         else:
             return out
-
-    def all(self):
-        return bool(libcudfxx.reduce.reduce("all", self, dtype=np.bool_))
-
-    def any(self):
-        if self.valid_count == 0:
-            return False
-        return bool(libcudfxx.reduce.reduce("any", self, dtype=np.bool_))
 
     def min(self, dtype=None):
         return libcudfxx.reduce.reduce("min", self, dtype=dtype)
@@ -426,29 +410,13 @@ def _numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
     if reflect:
         lhs, rhs = rhs, lhs
     libcudf.nvtx.nvtx_range_push("CUDF_BINARY_OP", "orange")
-    # Allocate output
-    masked = False
-    if np.isscalar(lhs):
-        masked = rhs.nullable
-        row_count = len(rhs)
-    elif np.isscalar(rhs):
-        masked = lhs.nullable
-        row_count = len(lhs)
-    elif rhs is None:
-        masked = True
-        row_count = len(lhs)
-    elif lhs is None:
-        masked = True
-        row_count = len(rhs)
-    else:
-        masked = lhs.nullable or rhs.nullable
-        row_count = len(lhs)
 
     is_op_comparison = op in ["lt", "gt", "le", "ge", "eq", "ne"]
 
-    out = column.column_empty(row_count, dtype=out_dtype, masked=masked)
+    if is_op_comparison:
+        out_dtype = "bool"
 
-    _ = libcudf.binops.apply_op(lhs, rhs, out, op)
+    out = libcudfxx.binaryop.binaryop(lhs, rhs, op, out_dtype)
 
     if is_op_comparison:
         out = out.fillna(op == "ne")
@@ -465,10 +433,6 @@ def _numeric_column_unaryop(operand, op):
     return libcudfxx.unary.unary_operation(operand, op)
 
 
-def _numeric_column_compare(lhs, rhs, op):
-    return _numeric_column_binop(lhs, rhs, op, out_dtype=np.bool_)
-
-
 def _safe_cast_to_int(col, dtype):
     """
     Cast given NumericalColumn to given integer dtype safely.
@@ -479,7 +443,7 @@ def _safe_cast_to_int(col, dtype):
         return col
 
     new_col = col.astype(dtype)
-    if new_col.unordered_compare("eq", col).all():
+    if new_col.binary_operator("eq", col).all():
         return new_col
     else:
         raise TypeError(
@@ -542,7 +506,7 @@ def digitize(column, bins, right=False):
     A device array containing the indices
     """
     assert column.dtype == bins.dtype
-    bins_buf = Buffer(rmm.to_device(bins))
+    bins_buf = Buffer(bins)
     bin_col = NumericalColumn(data=bins_buf, dtype=bins.dtype)
     return as_column(
         libcudfxx.sort.digitize(column.as_frame(), bin_col.as_frame(), right)

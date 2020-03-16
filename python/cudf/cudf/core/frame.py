@@ -8,6 +8,7 @@ import pandas as pd
 
 import cudf
 import cudf._libxx as libcudfxx
+from cudf._libxx.scalar import Scalar
 from cudf.core import column
 from cudf.core.column import as_column, build_categorical_column
 from cudf.utils.dtypes import (
@@ -76,12 +77,14 @@ class Frame(libcudfxx.table.Table):
     def _hash(self, initial_hash_values=None):
         return libcudfxx.hash.hash(self, initial_hash_values)
 
-    def _hash_partition(self, columns_to_hash, num_partitions):
+    def _hash_partition(
+        self, columns_to_hash, num_partitions, keep_index=True
+    ):
         output, offsets = libcudfxx.hash.hash_partition(
-            self, columns_to_hash, num_partitions
+            self, columns_to_hash, num_partitions, keep_index
         )
         output = self.__class__._from_table(output)
-        output._copy_categories(self)
+        output._copy_categories(self, include_index=keep_index)
         return output, offsets
 
     def _as_column(self):
@@ -103,10 +106,12 @@ class Frame(libcudfxx.table.Table):
         result._copy_categories(self)
         return result
 
-    def _empty_like(self):
-        result = self._from_table(libcudfxx.copying.table_empty_like(self))
+    def _empty_like(self, keep_index=True):
+        result = self._from_table(
+            libcudfxx.copying.table_empty_like(self, keep_index)
+        )
 
-        result._copy_categories(self)
+        result._copy_categories(self, include_index=keep_index)
         return result
 
     def _slice(self, arg):
@@ -118,6 +123,8 @@ class Frame(libcudfxx.table.Table):
        arg : should always be of type slice and doesn't handle step
 
        """
+        from cudf.core.index import RangeIndex
+
         num_rows = len(self)
         if num_rows == 0:
             return self
@@ -128,22 +135,34 @@ class Frame(libcudfxx.table.Table):
                 """Step size is not supported other than None and 1"""
             )
 
+        # This is just to handle RangeIndex type, stop
+        # it from materializing unnecessarily
+        keep_index = True
+        if self.index is not None and isinstance(self.index, RangeIndex):
+            keep_index = False
+
         if start < 0:
             start = start + num_rows
         if stop < 0:
             stop = stop + num_rows
 
         if start > stop:
-            return self._empty_like()
+            return self._empty_like(keep_index)
         else:
             start = len(self) if start > num_rows else start
             stop = len(self) if stop > num_rows else stop
 
             result = self._from_table(
-                libcudfxx.copying.table_slice(self, [start, stop])[0]
+                libcudfxx.copying.table_slice(self, [start, stop], keep_index)[
+                    0
+                ]
             )
 
-            result._copy_categories(self)
+            result._copy_categories(self, include_index=keep_index)
+            # Adding index of type RangeIndex back to
+            # result
+            if keep_index is False and self.index is not None:
+                result.index = self.index[start:stop]
             return result
 
     def _normalize_scalars(self, other):
@@ -352,16 +371,21 @@ class Frame(libcudfxx.table.Table):
             result.index = self.index
             return result
 
-    def _scatter_to_tables(self, scatter_map):
+    def _scatter_to_tables(self, scatter_map, keep_index=True):
         """
        scatter the dataframe/table to a list of dataframes/tables
        as per scatter_map
 
        """
 
-        result = libcudfxx.copying.scatter_to_tables(self, scatter_map)
+        result = libcudfxx.copying.scatter_to_tables(
+            self, scatter_map, keep_index
+        )
         result = [self._from_table(tbl) for tbl in result]
-        [frame._copy_categories(self) for frame in result]
+        [
+            frame._copy_categories(self, include_index=keep_index)
+            for frame in result
+        ]
 
         return result
 
@@ -565,6 +589,72 @@ class Frame(libcudfxx.table.Table):
 
         return self._from_table(out_rank_table)
 
+    def repeat(self, repeats, axis=None):
+        """Repeats elements consecutively
+
+        Parameters
+        ----------
+        repeats : int, array, numpy array, or Column
+            the number of times to repeat each element
+
+        Example
+        -------
+        >>> import cudf as cudf
+        >>> s = cudf.Series([0, 2]) # or DataFrame
+        >>> s
+        0    0
+        1    2
+        dtype: int64
+        >>> s.repeat([3, 4])
+        0    0
+        0    0
+        0    0
+        1    2
+        1    2
+        1    2
+        1    2
+        dtype: int64
+        >>> s.repeat(2)
+        0    0
+        0    0
+        1    2
+        1    2
+        dtype: int64
+        >>>
+        """
+        if axis is not None:
+            raise NotImplementedError(
+                "Only axis=`None` supported at this time."
+            )
+
+        return self._repeat(repeats)
+
+    def _repeat(self, count):
+        if is_scalar(count):
+            count = Scalar(count)
+        else:
+            count = as_column(count)
+
+        result = self.__class__._from_table(
+            libcudfxx.filling.repeat(self, count)
+        )
+
+        result._copy_categories(self)
+        return result
+
+    def _fill(self, fill_values, begin, end, inplace):
+        col_and_fill = zip(self._columns, fill_values)
+
+        if not inplace:
+            data_columns = (c._fill(v, begin, end) for (c, v) in col_and_fill)
+            data = zip(self._column_names, data_columns)
+            return self.__class__._from_table(Frame(data, self._index))
+
+        for (c, v) in col_and_fill:
+            c.fill(v, begin, end, inplace=True)
+
+        return self
+
     def shift(self, periods=1, freq=None, axis=0, fill_value=None):
         """Shift values by `periods` positions.
         """
@@ -628,11 +718,19 @@ class Frame(libcudfxx.table.Table):
                 self._data[name] = build_categorical_column(
                     categories=other_col.categories,
                     codes=col,
-                    mask=col.mask,
+                    mask=col.base_mask,
                     ordered=other_col.ordered,
+                    size=col.size,
+                    offset=col.offset,
                 )
         if include_index:
-            if self._index is not None:
+            from cudf.core.index import RangeIndex
+
+            # include_index will still behave as False
+            # incase of self._index being a RangeIndex
+            if (self._index is not None) and (
+                not isinstance(self._index, RangeIndex)
+            ):
                 self._index._copy_categories(other._index)
         return self
 

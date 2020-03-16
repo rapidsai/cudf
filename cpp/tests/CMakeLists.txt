@@ -396,6 +396,14 @@ set(CLAMP_TEST_SRC
 
 ConfigureTest(CLAMP_TEST "${CLAMP_TEST_SRC}")
 ###################################################################################################
+# - fixed_point tests -----------------------------------------------------------------------------
+
+set(FIXED_POINT_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/fixed_point/fixed_point_tests.cu")
+
+ConfigureTest(FIXED_POINT_TEST "${FIXED_POINT_TEST_SRC}")
+
+###################################################################################################
 # - unary tests -----------------------------------------------------------------------------------
 
 set(UNARY_TEST_SRC
@@ -404,7 +412,7 @@ set(UNARY_TEST_SRC
 ConfigureTest(UNARY_TEST "${UNARY_TEST_SRC}")
 
 ###################################################################################################
-# - legacy unary tests -----------------------------------------------------------------------------------
+# - legacy unary tests ----------------------------------------------------------------------------
 
 set(LEGACY_UNARY_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/unary/legacy/unary_ops_test.cu")
@@ -885,6 +893,7 @@ set(DICTIONARY_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/factories_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/gather_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/remove_keys_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/scatter_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/set_keys_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/slice_test.cpp")
 

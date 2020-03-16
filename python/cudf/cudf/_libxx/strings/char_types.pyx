@@ -133,3 +133,20 @@ def is_lower(Column source_strings):
         ))
 
     return Column.from_unique_ptr(move(c_result))
+
+
+def is_space(Column source_strings):
+    """
+    Returns a Column of boolean values with True for `source_strings`
+    that contains all characters which are spaces only.
+    """
+    cdef unique_ptr[column] c_result
+    cdef column_view source_view = source_strings.view()
+
+    with nogil:
+        c_result = move(cpp_all_characters_of_type(
+            source_view,
+            string_character_types.SPACE
+        ))
+
+    return Column.from_unique_ptr(move(c_result))
