@@ -2,11 +2,17 @@
 
 ## New Features
 
+
 ## Improvements
+
+- PR #4479 Adding cuda 10.2 support via conda environment file addition
+- PR #4486 Remove explicit template parameter from detail::scatter.
 - PR #4471 Consolidate partitioning functionality into a single header.
 - PR #4483 Add support fill() on dictionary columns
+- PR #4498 Adds in support for chunked writers to java
 
 ## Bug Fixes
+
 - PR #4386 Update Java package to 0.14
 - PR #4402 Fix cudf::strings::join_strings logic with all-null strings and null narep
 
@@ -179,6 +185,9 @@
 - PR #4316 Add Java and JNI bindings for substring expression
 - PR #4314 Add Java and JNI bindings for string contains
 - PR #4461 Port nvstrings Miscellaneous functions to cuDF Python/Cython
+- PR #4503 Port binaryop.pyx to libcudf++ API
+- PR #4499 Adding changes to handle include `keep_index` and `RangeIndex`
+- PR #4493 Skip legacy testing in CI
 
 ## Bug Fixes
 
@@ -221,6 +230,7 @@
 - PR #4137 Update Java for mutating fill and rolling window changes
 - PR #4184 Add missing except+ to Cython bindings
 - PR #4141 Fix NVStrings test_convert failure in 10.2 build
+- PR #4156 Make fill/copy_range no-op on empty columns
 - PR #4158 Fix merge issue with empty table return if one of the two tables are empty
 - PR #4162 Properly handle no index metadata generation for to_parquet
 - PR #4175 Fix `__sizeof__` calculation in `StringColumn`
@@ -246,7 +256,7 @@
 - PR #4279 Fix converting `np.float64` to Scalar
 - PR #4285 Add init files for cython pkgs and fix `setup.py`
 - PR #4287 Parquet reader: fix empty string potentially read as null
-- PR #4310 Fix empty values case in groupby 
+- PR #4310 Fix empty values case in groupby
 - PR #4297 Fix specification of package_data in setup.py
 - PR #4302 Fix `_is_local_filesystem` check
 - PR #4303 Parquet reader: fix empty columns missing from table
@@ -270,7 +280,12 @@
 - PR #4467 Fix dropna issue for a DataFrame having np.nan
 - PR #4480 Fix string_scalar.value to return an empty string_view for empty string-scalar
 - PR #4474 Fix to not materialize RangeIndex in copy_categories
+- PR #4496 Skip tests which require 2+ GPUs
 - PR #4494 Update Java memory event handler for new RMM resource API
+- PR #4505 Fix 0 length buffers during serialization
+- PR #4482 Fix `.str.rsplit`, `.str.split`, `.str.find`, `.str.rfind`, `.str.index`, `.str.rindex` and enable related tests
+- PR #4513 Backport scalar virtual destructor fix
+- PR #4519 Remove `n` validation for `nlargest` & `nsmallest` and add negative support for `n`
 
 
 # cuDF 0.12.0 (04 Feb 2020)
@@ -285,7 +300,7 @@
 - PR #3555 Add column names support to libcudf++ io readers and writers
 - PR #3527 Add string functionality for merge API
 - PR #3610 Add memory_usage to DataFrame and Series APIs
-- PR #3557 Add contiguous_split() function. 
+- PR #3557 Add contiguous_split() function.
 - PR #3619 Support CuPy 7
 - PR #3604 Add nvtext ngrams-tokenize function
 - PR #3403 Define and implement new stack + tile APIs

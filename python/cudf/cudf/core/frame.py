@@ -84,7 +84,7 @@ class Frame(libcudfxx.table.Table):
             self, columns_to_hash, num_partitions, keep_index
         )
         output = self.__class__._from_table(output)
-        output._copy_categories(self)
+        output._copy_categories(self, include_index=keep_index)
         return output, offsets
 
     def _as_column(self):
@@ -106,10 +106,12 @@ class Frame(libcudfxx.table.Table):
         result._copy_categories(self)
         return result
 
-    def _empty_like(self):
-        result = self._from_table(libcudfxx.copying.table_empty_like(self))
+    def _empty_like(self, keep_index=True):
+        result = self._from_table(
+            libcudfxx.copying.table_empty_like(self, keep_index)
+        )
 
-        result._copy_categories(self)
+        result._copy_categories(self, include_index=keep_index)
         return result
 
     def _slice(self, arg):
@@ -121,6 +123,8 @@ class Frame(libcudfxx.table.Table):
        arg : should always be of type slice and doesn't handle step
 
        """
+        from cudf.core.index import RangeIndex
+
         num_rows = len(self)
         if num_rows == 0:
             return self
@@ -131,22 +135,34 @@ class Frame(libcudfxx.table.Table):
                 """Step size is not supported other than None and 1"""
             )
 
+        # This is just to handle RangeIndex type, stop
+        # it from materializing unnecessarily
+        keep_index = True
+        if self.index is not None and isinstance(self.index, RangeIndex):
+            keep_index = False
+
         if start < 0:
             start = start + num_rows
         if stop < 0:
             stop = stop + num_rows
 
         if start > stop:
-            return self._empty_like()
+            return self._empty_like(keep_index)
         else:
             start = len(self) if start > num_rows else start
             stop = len(self) if stop > num_rows else stop
 
             result = self._from_table(
-                libcudfxx.copying.table_slice(self, [start, stop])[0]
+                libcudfxx.copying.table_slice(self, [start, stop], keep_index)[
+                    0
+                ]
             )
 
-            result._copy_categories(self)
+            result._copy_categories(self, include_index=keep_index)
+            # Adding index of type RangeIndex back to
+            # result
+            if keep_index is False and self.index is not None:
+                result.index = self.index[start:stop]
             return result
 
     def _normalize_scalars(self, other):
@@ -366,7 +382,10 @@ class Frame(libcudfxx.table.Table):
             self, scatter_map, keep_index
         )
         result = [self._from_table(tbl) for tbl in result]
-        [frame._copy_categories(self) for frame in result]
+        [
+            frame._copy_categories(self, include_index=keep_index)
+            for frame in result
+        ]
 
         return result
 

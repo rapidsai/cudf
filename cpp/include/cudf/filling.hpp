@@ -37,8 +37,7 @@ namespace experimental {
  * @throws `cudf::logic_error` if memory reallocation is required (e.g. for
  * variable width types).
  * @throws `cudf::logic_error` for invalid range (if @p begin < 0,
- * @p begin > @p end, @p begin >= @p destination.size(), or
- * @p end > @p destination.size()).
+ * @p begin > @p end, or @p end > @p destination.size()).
  * @throws `cudf::logic_error` if @p destination and @p value have different
  * types.
  * @throws `cudf::logic_error` if @p value is invalid but @p destination is not
@@ -62,8 +61,7 @@ void fill_in_place(mutable_column_view& destination, size_type begin,
  * indicated by the indices [@p begin, @p end) were overwritten by @p value.
  *
  * @throws `cudf::logic_error` for invalid range (if @p begin < 0,
- * @p begin > @p end, @p begin >= @p destination.size(), or
- * @p end > @p destination.size()).
+ * @p begin > @p end, or @p end > @p destination.size()).
  * @throws `cudf::logic_error` if @p destination and @p value have different
  * types.
  *

@@ -41,22 +41,20 @@ namespace detail {
 namespace {
 
 struct dispatch_map_type {
-    template <typename map_type, std::enable_if_t<std::is_integral<map_type>::value
-     and not std::is_same<map_type, bool8>::value>* = nullptr>
+    template <typename MapType, std::enable_if_t<std::is_integral<MapType>::value
+     and not std::is_same<MapType, bool8>::value>* = nullptr>
     std::unique_ptr<table> operator()(
       table_view const& source, column_view const& scatter_map,
       table_view const& target, bool check_bounds,
       rmm::mr::device_memory_resource* mr, cudaStream_t stream) const
   {
-
-    return detail::scatter<map_type>(source,
-           scatter_map.begin<map_type>(),
-           scatter_map.end<map_type>(),
-           target, check_bounds, mr, stream);
+      return detail::scatter(source, scatter_map.begin<MapType>(),
+                             scatter_map.end<MapType>(), target, check_bounds,
+                             mr, stream);
   }
 
-  template <typename map_type, std::enable_if_t<not std::is_integral<map_type>::value
-      or std::is_same<map_type, bool8>::value>* = nullptr>
+  template <typename MapType, std::enable_if_t<not std::is_integral<MapType>::value
+      or std::is_same<MapType, bool8>::value>* = nullptr>
   std::unique_ptr<table> operator()(
       table_view const& source, column_view const& scatter_map,
       table_view const& target, bool check_bounds,
@@ -377,10 +375,11 @@ std::unique_ptr<column> boolean_mask_scatter(
                      0);
 
     // The scatter map is actually a table with only one column, which is scatter map.
-    auto scatter_map = detail::apply_boolean_mask(table_view{{indices->view()}}, boolean_mask,
-                                                  mr, stream);
-    auto output_table =  detail::scatter(table_view{{input}}, scatter_map->get_column(0).view(),
-                                             table_view{{target}}, false, mr, stream);
+    auto scatter_map = detail::apply_boolean_mask(table_view{{indices->view()}},
+                                                  boolean_mask, mr, stream);
+    auto output_table =
+        detail::scatter(table_view{{input}}, scatter_map->get_column(0).view(),
+                        table_view{{target}}, false, mr, stream);
 
     // There is only one column in output_table
     return std::make_unique<column>(std::move(output_table->get_column(0)));
