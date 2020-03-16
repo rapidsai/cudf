@@ -2137,8 +2137,7 @@ class DataFrame(Frame):
             [column] = columns
         else:
             column = columns
-        if not (0 <= n <= len(self)):
-            raise ValueError("n out-of-bound")
+
         col = self[column].reset_index(drop=True)
         # Operate
         sorted_series = getattr(col, method)(n=n, keep=keep)
