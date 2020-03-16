@@ -10,10 +10,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-import rmm
-
 import cudf
-from cudf.core.buffer import Buffer
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
@@ -23,7 +20,7 @@ from cudf.core.column import (
     column,
 )
 from cudf.core.frame import Frame
-from cudf.utils import cudautils, ioutils, utils
+from cudf.utils import ioutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import is_categorical_dtype, is_scalar, min_signed_type
 from cudf.utils.utils import cached_property
@@ -178,23 +175,6 @@ class Index(Frame):
 
     def sum(self):
         return self._values.sum()
-
-    def find_segments(self):
-        """Return the beginning index for segments
-
-        Returns
-        -------
-        result : NumericalColumn
-        """
-        segments, _ = self._find_segments()
-        return segments
-
-    def _find_segments(self):
-        seg, markers = cudautils.find_segments(self.gpu_values)
-        return (
-            column.build_column(data=Buffer(seg), dtype=seg.dtype),
-            markers,
-        )
 
     @classmethod
     def _concat(cls, objs):
@@ -443,10 +423,6 @@ class Index(Frame):
     def __cuda_array_interface__(self):
         raise (NotImplementedError)
 
-    def repeat(self, repeats, axis=None):
-        assert axis in (None, 0)
-        return as_index(self._values.repeat(repeats))
-
     def memory_usage(self, deep=False):
         return self._values._memory_usage(deep=deep)
 
@@ -461,15 +437,18 @@ class Index(Frame):
 
     @classmethod
     def _from_table(cls, table):
-        if table._num_columns == 0:
-            raise ValueError("Cannot construct Index from any empty Table")
-        if table._num_columns == 1:
-            return as_index(
-                next(iter(table._data.columns)),
-                name=next(iter(table._data.keys())),
-            )
+        if not isinstance(table, RangeIndex):
+            if table._num_columns == 0:
+                raise ValueError("Cannot construct Index from any empty Table")
+            if table._num_columns == 1:
+                return as_index(
+                    next(iter(table._data.columns)),
+                    name=next(iter(table._data.keys())),
+                )
+            else:
+                return cudf.MultiIndex._from_table(table)
         else:
-            return cudf.MultiIndex._from_table(table)
+            return as_index(table)
 
 
 class RangeIndex(Index):
@@ -512,10 +491,18 @@ class RangeIndex(Index):
     def name(self, value):
         self._name = value
 
+    @property
+    def _num_columns(self):
+        return 1
+
+    @property
+    def _num_rows(self):
+        return len(self)
+
     @cached_property
     def _values(self):
         if len(self) > 0:
-            vals = cudautils.arange(self._start, self._stop, dtype=self.dtype)
+            vals = cupy.arange(self._start, self._stop, dtype=self.dtype)
             return column.as_column(vals)
         else:
             return column.column_empty(0, masked=False, dtype=self.dtype)
@@ -577,10 +564,6 @@ class RangeIndex(Index):
             index = utils.normalize_index(index, len(self))
             index += self._start
             return index
-        elif isinstance(index, (list, np.ndarray)):
-            index = np.asarray(index)
-            index = rmm.to_device(index)
-
         else:
             if is_scalar(index):
                 index = min_signed_type(index)(index)
@@ -717,7 +700,7 @@ class RangeIndex(Index):
 
 
 def index_from_range(start, stop=None, step=None):
-    vals = cudautils.arange(start, stop, step, dtype=np.int64)
+    vals = cupy.arange(start, stop, step, dtype=np.int64)
     return as_index(vals)
 
 
@@ -916,7 +899,10 @@ class DatetimeIndex(GenericIndex):
         # but we need a NumericalColumn for GenericIndex..
         # how should this be handled?
         out_column = column.build_column(
-            data=out_column.data, dtype=out_column.dtype, mask=out_column.mask
+            data=out_column.base_data,
+            dtype=out_column.dtype,
+            mask=out_column.base_mask,
+            offset=out_column.offset,
         )
         return as_index(out_column, name=self.name)
 

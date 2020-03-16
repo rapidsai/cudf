@@ -1,6 +1,7 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 from libc.stdint cimport uint32_t
+from libcpp cimport bool
 from libcpp.pair cimport pair
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
@@ -20,10 +21,14 @@ cimport cudf._libxx.cpp.types as libcudf_types
 
 
 def hash_partition(Table source_table, object columns_to_hash,
-                   int num_partitions):
+                   int num_partitions, bool keep_index=True):
     cdef vector[libcudf_types.size_type] c_columns_to_hash = columns_to_hash
     cdef int c_num_partitions = num_partitions
-    cdef table_view c_source_view = source_table.view()
+    cdef table_view c_source_view
+    if keep_index is True:
+        c_source_view = source_table.view()
+    else:
+        c_source_view = source_table.data_view()
 
     cdef pair[unique_ptr[table], vector[libcudf_types.size_type]] c_result
     with nogil:
@@ -39,7 +44,10 @@ def hash_partition(Table source_table, object columns_to_hash,
         Table.from_unique_ptr(
             move(c_result.first),
             column_names=source_table._column_names,
-            index_names=source_table._index_names
+            index_names=source_table._index_names if(
+                keep_index is True)
+            else None
+
         ),
         list(c_result.second)
     )

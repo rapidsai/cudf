@@ -51,9 +51,7 @@ cdef class Table:
     @property
     def _num_rows(self):
         if self._index is not None:
-            if len(self._index._data) == 0:
-                return 0
-            return self._index._num_rows
+            return len(self._index)
         return len(self._data.columns[0])
 
     @property
@@ -137,7 +135,7 @@ cdef class Table:
             for _ in index_names:
                 column_owner = owner
                 if table_owner:
-                    column_owner = table_owner._columns[column_idx]
+                    column_owner = owner._index._columns[column_idx]
                 index_columns.append(
                     Column.from_column_view(
                         tv.column(column_idx),
@@ -148,15 +146,17 @@ cdef class Table:
             index = Table(dict(zip(index_names, index_columns)))
 
         # Construct the data OrderedColumnDict
+        cdef size_type source_column_idx = 0
         data_columns = []
         for _ in column_names:
             column_owner = owner
             if table_owner:
-                column_owner = table_owner._columns[column_idx]
+                column_owner = owner._columns[source_column_idx]
             data_columns.append(
                 Column.from_column_view(tv.column(column_idx), column_owner)
             )
             column_idx += 1
+            source_column_idx += 1
         data = dict(zip(column_names, data_columns))
 
         return Table(data=data, index=index)
