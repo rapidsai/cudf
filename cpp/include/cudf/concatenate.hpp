@@ -33,14 +33,11 @@ namespace cudf {
  * @param views Vector of column views whose bitmask will to be concatenated
  * @param mr Optional, the memory resource that will be used for allocating
  * the device memory for the new device_buffer
- * @param stream Optional, stream on which all memory allocations and copies
- * will be performed
  * @return rmm::device_buffer A `device_buffer` containing the bitmasks of all
  * the column views in the views vector
  *---------------------------------------------------------------------------**/
 rmm::device_buffer concatenate_masks(std::vector<column_view> const &views,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0);
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**---------------------------------------------------------------------------*
  * @brief Concatenates multiple columns into a single column.
@@ -51,14 +48,12 @@ rmm::device_buffer concatenate_masks(std::vector<column_view> const &views,
  * @param columns_to_concat The column views to be concatenated into a single
  * column
  * @param mr Optional The resource to use for all allocations
- * @param stream Optional The stream on which to execute all allocations and copies
  * @return Unique pointer to a single table having all the rows from the
  * elements of `columns_to_concat` respectively in the same order.
  *---------------------------------------------------------------------------**/
 std::unique_ptr<column>
 concatenate(std::vector<column_view> const& columns_to_concat,
-            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-            cudaStream_t stream = 0);
+            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 namespace experimental {
 
@@ -84,13 +79,11 @@ namespace experimental {
  * @param tables_to_concat The table views to be concatenated into a single
  * table
  * @param mr Optional The resource to use for all allocations
- * @param stream Optional The stream on which to execute all allocations and copies
  * @return Unique pointer to a single table having all the rows from the
  * elements of `tables_to_concat` respectively in the same order.
  *---------------------------------------------------------------------------**/
 std::unique_ptr<table> concatenate(std::vector<table_view> const& tables_to_concat,
-            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-            cudaStream_t stream = 0);
+            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 }  // namespace experimental
 
