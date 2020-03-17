@@ -169,6 +169,7 @@
 - PR #4503 Port binaryop.pyx to libcudf++ API
 - PR #4499 Adding changes to handle include `keep_index` and `RangeIndex`
 - PR #4493 Skip legacy testing in CI
+- PR #4534 Disable deprecation warnings as errors.
 
 ## Bug Fixes
 
