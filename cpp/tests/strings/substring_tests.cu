@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -233,7 +233,7 @@ TEST_F(StringsSubstringsTest, MaxPositions)
 
     results = cudf::strings::slice_strings(strings_column, 0, -10);
     cudf::test::expect_columns_equal(*results, expected);
- 
+
     results = cudf::strings::slice_strings(strings_column, cudf::numeric_scalar<cudf::size_type>(0,false), -10);
     cudf::test::expect_columns_equal(*results, expected);
 
