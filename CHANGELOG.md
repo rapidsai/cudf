@@ -9,6 +9,7 @@
 - PR #4486 Remove explicit template parameter from detail::scatter.
 - PR #4471 Consolidate partitioning functionality into a single header.
 - PR #4498 Adds in support for chunked writers to java
+- PR #4073 Enable contiguous split java test
 
 ## Bug Fixes
 
@@ -104,7 +105,6 @@
 - PR #3786 Adding string support to rolling_windows
 - PR #4067 Removed unused `CATEGORY` type ID.
 - PR #3891 Port NVStrings (r)split_record to contiguous_(r)split_record
-- PR #4073 Enable contiguous split java test
 - PR #4070 Port NVText normalize_spaces to use libcudf strings column
 - PR #4072 Allow round_robin_partition to single partition
 - PR #4064 Add cudaGetDeviceCount to JNI layer
