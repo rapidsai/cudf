@@ -123,7 +123,7 @@ class MultiIndex(Index):
     def names(self, value):
         value = [None] * self.nlevels if value is None else value
         assert len(value) == self.nlevels
-        self._names = [n for n in value]
+        self._names = list(value)
 
     @classmethod
     def _from_table(cls, table):
