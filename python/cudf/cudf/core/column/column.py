@@ -1130,36 +1130,8 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 col = col.set_mask(mask)
         elif np.issubdtype(col.dtype, np.datetime64):
             if nan_as_null or (mask is None and nan_as_null is None):
-                null = column_empty_like(col, masked=True, newsize=1)
-                col = libcudfxx.replace.replace(
-                    col,
-                    as_column(
-                        Buffer(
-                            np.array([np.datetime64("NaT")], dtype=col.dtype)
-                        ),
-                        dtype=col.dtype,
-                    ),
-                    null,
-                )
+                col = utils.time_col_replace_nulls(col)
         return col
-
-    elif isinstance(arbitrary, np.ndarray):
-        # CUDF assumes values are always contiguous
-        if not arbitrary.flags["C_CONTIGUOUS"]:
-            arbitrary = np.ascontiguousarray(arbitrary)
-
-        if dtype is not None:
-            arbitrary = arbitrary.astype(dtype)
-
-        if arbitrary.dtype.kind == "M":
-            data = datetime.DatetimeColumn.from_numpy(arbitrary)
-
-        elif arbitrary.dtype.kind in ("O", "U"):
-            data = as_column(
-                pa.Array.from_pandas(arbitrary), dtype=arbitrary.dtype
-            )
-        else:
-            data = as_column(cupy.asarray(arbitrary), nan_as_null=nan_as_null)
 
     elif isinstance(arbitrary, pa.Array):
         if isinstance(arbitrary, pa.StringArray):
@@ -1326,6 +1298,49 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 data = data.fillna(np.nan)
             elif np.issubdtype(data.dtype, np.datetime64):
                 data = data.fillna(np.datetime64("NaT"))
+
+    elif hasattr(arbitrary, "__array_interface__"):
+        # CUDF assumes values are always contiguous
+        desc = arbitrary.__array_interface__
+        shape = desc["shape"]
+        arb_dtype = np.dtype(desc["typestr"])
+        # CUDF assumes values are always contiguous
+        if len(shape) > 1:
+            raise ValueError("Data must be 1-dimensional")
+
+        arbitrary = np.asarray(arbitrary)
+        if not arbitrary.flags["C_CONTIGUOUS"]:
+            arbitrary = np.ascontiguousarray(arbitrary)
+
+        if dtype is not None:
+            arbitrary = arbitrary.astype(dtype)
+
+        if arb_dtype.kind == "M":
+
+            time_unit, _ = np.datetime_data(arbitrary.dtype)
+            cast_dtype = time_unit in ("D", "W", "M", "Y")
+
+            if cast_dtype:
+                arbitrary = arbitrary.astype(np.dtype("datetime64[s]"))
+
+            buffer = Buffer(arbitrary)
+            mask = None
+            if nan_as_null:
+                data = as_column(
+                    buffer, dtype=arbitrary.dtype, nan_as_null=nan_as_null
+                )
+                data = utils.time_col_replace_nulls(data)
+                mask = data.mask
+
+            data = datetime.DatetimeColumn(
+                data=buffer, mask=mask, dtype=arbitrary.dtype
+            )
+        elif arb_dtype.kind in ("O", "U"):
+            data = as_column(
+                pa.Array.from_pandas(arbitrary), dtype=arbitrary.dtype
+            )
+        else:
+            data = as_column(cupy.asarray(arbitrary), nan_as_null=nan_as_null)
 
     elif isinstance(arbitrary, memoryview):
         data = as_column(
