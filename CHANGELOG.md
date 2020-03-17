@@ -158,6 +158,7 @@
 - PR #4236 Update dask_cudf.io.to_parquet to use cudf to_parquet
 - PR #4311 Port nvstrings String Manipulations functions to cuDF Python/Cython
 - PR #4373 Port nvstrings Regular Expressions functions to cuDF Python/Cython
+- PR #4308 Replace dask_cudf sort_values and improve set_index
 - PR #4407 Enable `.str.slice` & `.str.get` and `.str.zfill` unit-tests
 - PR #4412 Require Dask + Distributed 2.12.0+
 - PR #4377 Support loading avro files that contain nested arrays
@@ -173,6 +174,7 @@
 - PR #4493 Skip legacy testing in CI
 - PR #4524 Updating `__setitem__` for DataFrame to use scalar scatter
 - PR #4534 Disable deprecation warnings as errors.
+- PR #4506 Check for multi-dimensional data in column/Series creation
 
 ## Bug Fixes
 
@@ -258,6 +260,7 @@
 - PR #4406 Fix sorted merge issue with null values and ascending=False
 - PR #4445 Fix string issue for parquet reader and support `keep_index` for `scatter_to_tables`
 - PR #4423 Tighten up Dask serialization checks
+- PR #4537 Use `elif` in Dask deserialize check
 - PR #4438 Fix repl-template error for replace_with_backrefs
 - PR #4434 Fix join_strings logic with all-null strings and non-null narep
 - PR #4465 Fix use_pandas_index having no effect in libcudf++ parquet reader
