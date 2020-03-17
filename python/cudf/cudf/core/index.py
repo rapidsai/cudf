@@ -852,13 +852,11 @@ class DatetimeIndex(GenericIndex):
         # and then just dispatch upstream
         kwargs = _setdefault_name(values, kwargs)
         if isinstance(values, np.ndarray) and values.dtype.kind == "M":
-            values = DatetimeColumn.from_numpy(values)
+            values = column.as_column(values)
         elif isinstance(values, pd.DatetimeIndex):
-            values = DatetimeColumn.from_numpy(values.values)
+            values = column.as_column(values.values)
         elif isinstance(values, (list, tuple)):
-            values = DatetimeColumn.from_numpy(
-                np.array(values, dtype="<M8[ms]")
-            )
+            values = column.as_column(np.array(values, dtype="<M8[ms]"))
         super(DatetimeIndex, self).__init__(values, **kwargs)
 
     @property
