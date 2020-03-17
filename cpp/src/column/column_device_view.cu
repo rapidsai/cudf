@@ -17,6 +17,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <numeric>
 
 #include <rmm/rmm_api.h>
 #include <rmm/thrust_rmm_allocator.h>
@@ -32,7 +33,6 @@ column_device_view::column_device_view(column_view source)
 
 // Free device memory allocated for children
 void column_device_view::destroy() {
-  RMM_FREE(d_children,0);
   delete this;
 }
 
@@ -69,16 +69,18 @@ column_device_view::column_device_view( column_view source, void * h_ptr, void* 
 }
 
 // Construct a unique_ptr that invokes `destroy()` as it's deleter
-std::unique_ptr<column_device_view, std::function<void(column_device_view*)>> column_device_view::create(column_view source, cudaStream_t stream) {
-    auto deleter = [](column_device_view* v) { v->destroy(); };
-    size_type num_children = source.num_children();
+std::unique_ptr<column_device_view, std::function<void(column_device_view*)>>
+column_device_view::create(column_view source, cudaStream_t stream) {
+
+  size_type num_children = source.num_children();
   if (num_children == 0) {
     // Can't use make_unique since the ctor is protected
     return std::unique_ptr<column_device_view>(new column_device_view(source));
-    }
-    // First calculate the size of memory needed to hold the
-    // child columns. This is done by calling extent()
-    // for each of the children.
+  }
+
+  // First calculate the size of memory needed to hold the
+  // child columns. This is done by calling extent()
+  // for each of the children.
   auto get_extent = thrust::make_transform_iterator(
       thrust::make_counting_iterator(0),
       [&source](auto i) { return extent(source.child(i)); });
@@ -86,14 +88,15 @@ std::unique_ptr<column_device_view, std::function<void(column_device_view*)>> co
   std::size_t const child_storage_bytes =
       std::accumulate(get_extent, get_extent + num_children, 0);
 
-    // A buffer of CPU memory is allocated to hold the column_device_view
-    // objects. Once filled, the CPU memory is copied to device memory
-    // and then set into the d_children member pointer.
-    std::vector<int8_t> h_buffer(size_bytes);
-    auto h_start = h_buffer.data();
-    // Each column_device_view instance may have child objects that
-    // require setting some internal device pointers before being copied
-    // from CPU to device.
+  // A buffer of CPU memory is allocated to hold the column_device_view
+  // objects. Once filled, the CPU memory is copied to device memory
+  // and then set into the d_children member pointer.
+  std::vector<char> h_buffer(child_storage_bytes);
+  char* h_start = h_buffer.data();
+
+  // Each column_device_view instance may have child objects that
+  // require setting some internal device pointers before being copied
+  // from CPU to device.
   rmm::device_buffer* const child_storage = new rmm::device_buffer(child_storage_bytes, stream);
   char* d_start = static_cast<char*>(child_storage->data());
 
@@ -102,13 +105,21 @@ std::unique_ptr<column_device_view, std::function<void(column_device_view*)>> co
     delete child_storage;
   };
 
-    // copy the CPU memory with all the children into device memory
-    CUDA_TRY(cudaMemcpyAsync(d_start, h_start, size_bytes,
-                              cudaMemcpyHostToDevice, stream));
-    p->_num_children = num_children;
-    p->d_children = reinterpret_cast<column_device_view*>(d_start);
-    CUDA_TRY(cudaStreamSynchronize(stream));
-    return p;
+  using Deleter = std::function<void(column_device_view*)>;
+
+  std::unique_ptr<column_device_view, Deleter> p{
+      new column_device_view(source, h_buffer.data(), child_storage->data()),
+      deleter};
+
+  // copy the CPU memory with all the children into device memory
+  CUDA_TRY(cudaMemcpyAsync(d_start, h_start, child_storage_bytes,
+                           cudaMemcpyDefault, stream));
+
+  p->_num_children = num_children;
+  p->d_children = reinterpret_cast<column_device_view*>(d_start);
+
+  //CUDA_TRY(cudaStreamSynchronize(stream));
+  return p;
 }
 
 size_type column_device_view::extent(column_view const& source) {
