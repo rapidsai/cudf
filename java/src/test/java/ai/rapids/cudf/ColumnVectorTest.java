@@ -41,6 +41,8 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 public class ColumnVectorTest extends CudfTestBase {
 
   public static final double DELTA = 0.0001;
+  public static final float[] FLOATS = {2.33f, 32.12f, -121.32f, 0.0f, 0.00001f, Float.NEGATIVE_INFINITY,
+          Float.POSITIVE_INFINITY, Float.NaN};
 
   // c = a * a - a
   static String ptx = "***(" +
@@ -71,6 +73,15 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testSignum() {
+   try (ColumnVector cv = ColumnVector.fromFloats(FLOATS);
+        ColumnVector result = cv.signum();
+        ColumnVector expected = ColumnVector.fromFloats(1.0f, 1.0f, -1.0f, 0.0f, 1.0f, -1.0f, 1.0f, Float.NaN)) {
+     assertColumnsAreEqual(expected, result);
+    }
+  }
+
+ @Test
   void testStringCreation() {
     try (ColumnVector cv = ColumnVector.fromStrings("d", "sd", "sde", null, "END");
          HostColumnVector host = cv.copyToHost();

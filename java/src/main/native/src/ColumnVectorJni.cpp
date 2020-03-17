@@ -17,6 +17,7 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/datetime.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/quantiles.hpp>
@@ -1080,6 +1081,28 @@ JNIEXPORT jint JNICALL Java_ai_rapids_cudf_ColumnVector_getNativeNullCountColumn
     return static_cast<jint>(column->null_count());
   }
   CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_signum(JNIEnv *env, jobject j_object, jlong handle) {
+
+    JNI_NULL_CHECK(env, handle, "native view handle is null", 0)
+    using cudf::experimental::clamp;
+    using ScalarType = cudf::experimental::scalar_type_t<float>;
+    try {
+      cudf::column_view *column_view = reinterpret_cast<cudf::column_view *>(handle);
+      std::unique_ptr<cudf::scalar> num = cudf::make_numeric_scalar(cudf::data_type{cudf::FLOAT32});
+      std::unique_ptr<cudf::scalar> lo_replace = cudf::make_numeric_scalar(cudf::data_type(cudf::FLOAT32));
+      std::unique_ptr<cudf::scalar> hi_replace = cudf::make_numeric_scalar(cudf::data_type(cudf::FLOAT32));
+      num->set_valid(true);
+      lo_replace->set_valid(true);
+      hi_replace->set_valid(true);
+      static_cast<ScalarType*>(num.get())->set_value(0.0f);
+      static_cast<ScalarType*>(lo_replace.get())->set_value(-1.0f);
+      static_cast<ScalarType*>(hi_replace.get())->set_value(1.0f);
+      std::unique_ptr<cudf::column> result = clamp(*column_view, *num.get(), *lo_replace.get(), *num.get(), *hi_replace.get());
+      return reinterpret_cast<jlong>(result.release());
+    }
+    CATCH_STD(env, 0);
 }
 
 } // extern "C"
