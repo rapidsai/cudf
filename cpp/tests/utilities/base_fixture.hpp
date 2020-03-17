@@ -47,6 +47,9 @@ class BaseFixture : public ::testing::Test {
    *---------------------------------------------------------------------------**/
   rmm::mr::device_memory_resource* mr() { return _mr; }
 
+  static void SetUpTestCase() { ASSERT_EQ(rmmInitialize(nullptr), RMM_SUCCESS); }
+
+  static void TearDownTestCase() { ASSERT_EQ(rmmFinalize(), RMM_SUCCESS); }
 };
 
 template <typename T, typename Enable = void>
