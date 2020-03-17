@@ -513,10 +513,12 @@ class DataFrame(Frame):
                 for col_name in self._data:
                     scatter_map = arg[col_name]
                     if is_scalar(value):
-                        value = utils.scalar_broadcast_to(value, len(self))
-                    self._data[col_name][scatter_map] = column.as_column(
-                        value
-                    )[scatter_map]
+                        self._data[col_name][scatter_map] = value
+                    else:
+
+                        self._data[col_name][scatter_map] = column.as_column(
+                            value
+                        )[scatter_map]
         elif is_scalar(arg) or isinstance(arg, tuple):
             if isinstance(value, DataFrame):
                 _setitem_with_dataframe(
@@ -527,8 +529,6 @@ class DataFrame(Frame):
                 )
             else:
                 if arg in self._data:
-                    if is_scalar(value):
-                        value = utils.scalar_broadcast_to(value, len(self))
                     if len(self) == 0:
                         if isinstance(value, (pd.Series, Series)):
                             self._index = as_index(value.index)
@@ -545,12 +545,18 @@ class DataFrame(Frame):
                                     masked=True,
                                     newsize=len(value),
                                 )
+
                         self._data = new_data
+                        return
                     elif isinstance(value, (pd.Series, Series)):
                         value = Series(value)._align_to_index(
                             self._index, how="right", allow_non_unique=True
                         )
-                    self._data[arg] = column.as_column(value)
+                    if is_scalar(value):
+                        self._data[arg][:] = value
+                    else:
+                        value = as_column(value)
+                        self._data[arg] = value
                 else:
                     # disc. with pandas here
                     # pandas raises key error here
@@ -563,12 +569,9 @@ class DataFrame(Frame):
             if isinstance(mask, list):
                 mask = np.array(mask)
 
-            if is_scalar(value):
-                value = column.as_column(
-                    utils.scalar_broadcast_to(value, len(self))
-                )
-
             if mask.dtype == "bool":
+                mask = column.as_column(arg)
+
                 if isinstance(value, DataFrame):
                     _setitem_with_dataframe(
                         input_df=self,
@@ -577,10 +580,10 @@ class DataFrame(Frame):
                         mask=mask,
                     )
                 else:
+                    if not is_scalar(value):
+                        value = column.as_column(value)[mask]
                     for col_name in self._data:
-                        self._data[col_name][mask] = column.as_column(value)[
-                            mask
-                        ]
+                        self._data[col_name][mask] = value
             else:
                 if isinstance(value, DataFrame):
                     _setitem_with_dataframe(
@@ -590,11 +593,17 @@ class DataFrame(Frame):
                         mask=None,
                     )
                 else:
+                    if not is_scalar(value):
+                        value = column.as_column(value)
                     for col in arg:
                         # we will raise a key error if col not in dataframe
                         # this behavior will make it
                         # consistent to pandas >0.21.0
-                        self._data[col] = column.as_column(value)
+                        if not is_scalar(value):
+                            self._data[col] = value
+                        else:
+                            self._data[col][:] = value
+
         else:
             msg = "__setitem__ on type {!r} is not supported"
             raise TypeError(msg.format(type(arg)))
@@ -1490,7 +1499,6 @@ class DataFrame(Frame):
             result = self
         else:
             result = self.copy()
-        index_columns = self.index._data.columns
         if all(name is None for name in self.index.names):
             if isinstance(self.index, cudf.MultiIndex):
                 names = tuple(
@@ -1502,6 +1510,7 @@ class DataFrame(Frame):
             names = self.index.names
 
         if not drop:
+            index_columns = self.index._data.columns
             for name, index_column in zip(
                 reversed(names), reversed(index_columns)
             ):
@@ -2137,8 +2146,7 @@ class DataFrame(Frame):
             [column] = columns
         else:
             column = columns
-        if not (0 <= n <= len(self)):
-            raise ValueError("n out-of-bound")
+
         col = self[column].reset_index(drop=True)
         # Operate
         sorted_series = getattr(col, method)(n=n, keep=keep)
@@ -3925,33 +3933,33 @@ class DataFrame(Frame):
         """
 
         # map_index might be a column name or array,
-        # make it a Series
+        # make it a Column
         if isinstance(map_index, str):
-            map_index = self[map_index]
+            map_index = self[map_index]._column
+        elif isinstance(map_index, Series):
+            map_index = map_index._column
         else:
-            map_index = Series(map_index)
+            map_index = as_column(map_index)
 
         # Convert float to integer
         if map_index.dtype == np.float:
             map_index = map_index.astype(np.int32)
 
         # Convert string or categorical to integer
-        if isinstance(map_index._column, StringColumn):
-            map_index = Series(
-                map_index._column.as_categorical_column(np.int32).as_numerical
-            )
+        if isinstance(map_index, StringColumn):
+            map_index = map_index.as_categorical_column(np.int32).as_numerical
             warnings.warn(
                 "Using StringColumn for map_index in scatter_by_map. "
                 "Use an integer array/column for better performance."
             )
-        elif isinstance(map_index._column, CategoricalColumn):
-            map_index = Series(map_index._column.as_numerical)
+        elif isinstance(map_index, CategoricalColumn):
+            map_index = map_index.as_numerical
             warnings.warn(
                 "Using CategoricalColumn for map_index in scatter_by_map. "
                 "Use an integer array/column for better performance."
             )
 
-        tables = self._scatter_to_tables(map_index._column, keep_index)
+        tables = self._scatter_to_tables(map_index, keep_index)
 
         if map_size:
             # Make sure map_size is >= the number of uniques in map_index
@@ -3964,17 +3972,8 @@ class DataFrame(Frame):
             # Append empty dataframes if map_size > len(tables)
 
             for i in range(map_size - len(tables)):
-                tables.append(self.take([]))
+                tables.append(self._empty_like(keep_index))
         return tables
-
-    def repeat(self, repeats, axis=None):
-        assert axis in (None, 0)
-        new_index = self.index.repeat(repeats)
-        cols = libcudf.filling.repeat(self._columns, repeats)
-        # to preserve col names, need to get it from old _cols dict
-        column_names = self._data.names
-        result = DataFrame(data=dict(zip(column_names, cols)))
-        return result.set_index(new_index)
 
     def stack(self, level=-1, dropna=True):
         """Stack the prescribed level(s) from columns to index
@@ -4004,16 +4003,12 @@ class DataFrame(Frame):
         dtype: int64
         """
         assert level in (None, -1)
-        index_as_cols = self.index.to_frame(index=False)._columns
-        new_index_cols = libcudf.filling.repeat(index_as_cols, self.shape[1])
-        [last_index] = libcudf.filling.tile(
-            [column.as_column(self.columns)], self.shape[0]
+        repeated_index = self.index.repeat(self.shape[1])
+        name_index = Frame({0: self._column_names}).tile(self.shape[0])
+        new_index = list(repeated_index._columns) + [name_index._columns[0]]
+        new_index = cudf.core.multiindex.MultiIndex.from_frame(
+            DataFrame(dict(zip(range(0, len(new_index)), new_index)))
         )
-        new_index_cols.append(last_index)
-        index_df = DataFrame(
-            dict(zip(range(0, len(new_index_cols)), new_index_cols))
-        )
-        new_index = cudf.core.multiindex.MultiIndex.from_frame(index_df)
 
         # Collect datatypes and cast columns as that type
         common_type = np.result_type(*self.dtypes)

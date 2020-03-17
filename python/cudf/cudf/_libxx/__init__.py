@@ -4,13 +4,16 @@ import numpy as np
 
 from . import (
     avro,
+    binaryop,
     copying,
     dlpack,
+    filling,
     gpuarrow,
     hash,
     join,
     merge,
     null_mask,
+    nvtext,
     nvtx,
     orc,
     quantiles,
