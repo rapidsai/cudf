@@ -15,6 +15,7 @@
  */
 
 #include <groupby/sort/group_single_pass_reduction_util.cuh>
+#include <cudf/detail/gather.hpp>
 
 #include <thrust/transform.h>
 
@@ -33,21 +34,25 @@ std::unique_ptr<column> group_argmin(
 {
   auto indices = type_dispatcher(
     values.type(), reduce_functor<aggregation::ARGMIN>{},
-    values, num_groups, group_labels, mr, stream);
+    values, num_groups, group_labels,
+    rmm::mr::get_default_resource(), stream);
 
   // The functor returns the index of minimum in the sorted values.
   // We need the index of minimum in the original unsorted values.
-  // So we transform it with the sort order used to sort `values`.
-  // The values are transformed in-place so the validity is not changed.
-  mutable_column_view indices_view(indices->mutable_view());
-  thrust::transform(rmm::exec_policy(stream)->on(stream),
-    indices_view.begin<size_type>(), indices_view.end<size_type>(),
-    indices_view.begin<size_type>(),
-    [sort_order = key_sort_order.data<size_type>()] __device__ (size_type arg) {
-      return sort_order[arg];
-    });
+  // So use indices to gather the sort order used to sort `values`.
+  // Gather map cannot be null so we make a view with the mask removed.
+  // The values in data buffer of indices corresponding to null values was 
+  // initialized to ARGMIN_SENTINEL which is an out of bounds index value (-1) 
+  // and causes the gathered value to be null.
+  column_view null_removed_indices(data_type(type_to_id<size_type>()),
+    indices->size(), 
+    static_cast<void const*>(indices->view().template data<size_type>()));
+  auto result_table = cudf::experimental::detail::gather(
+    table_view({key_sort_order}), null_removed_indices, 
+    false, indices->nullable(), false,
+    mr, stream);
 
-  return indices;
+  return std::move(result_table->release()[0]);
 }
 
 }  // namespace detail
