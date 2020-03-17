@@ -155,7 +155,13 @@ class DatetimeColumn(column.ColumnBase):
     def as_numerical(self):
         from cudf.core.column import build_column
 
-        return build_column(data=self.data, dtype=np.int64, mask=self.mask)
+        return build_column(
+            data=self.base_data,
+            dtype=np.int64,
+            mask=self.base_mask,
+            offset=self.offset,
+            size=self.size,
+        )
 
     def as_datetime_column(self, dtype, **kwargs):
         dtype = np.dtype(dtype)
@@ -175,14 +181,6 @@ class DatetimeColumn(column.ColumnBase):
             ](self, **kwargs)
         else:
             return column.column_empty(0, dtype="object", masked=False)
-
-    def unordered_compare(self, cmpop, rhs):
-        lhs, rhs = self, rhs
-        return binop(lhs, rhs, op=cmpop, out_dtype=np.bool)
-
-    def ordered_compare(self, cmpop, rhs):
-        lhs, rhs = self, rhs
-        return binop(lhs, rhs, op=cmpop, out_dtype=np.bool)
 
     def to_pandas(self, index=None):
         return pd.Series(
@@ -213,6 +211,18 @@ class DatetimeColumn(column.ColumnBase):
                 "datetime column of {} has no NaN value".format(self.dtype)
             )
 
+    def binary_operator(self, op, rhs, reflect=False):
+        lhs, rhs = self, rhs
+
+        if op in ("eq", "ne", "lt", "gt", "le", "ge"):
+            out_dtype = np.bool
+        else:
+            raise TypeError(
+                f"Series of dtype {self.dtype} cannot perform "
+                f" the operation {op}"
+            )
+        return binop(lhs, rhs, op=op, out_dtype=out_dtype)
+
     def fillna(self, fill_value):
         if is_scalar(fill_value):
             fill_value = np.datetime64(fill_value, self.time_unit)
@@ -220,7 +230,13 @@ class DatetimeColumn(column.ColumnBase):
             fill_value = column.as_column(fill_value, nan_as_null=False)
 
         result = libcudfxx.replace.replace_nulls(self, fill_value)
-        result = column.build_column(result.data, result.dtype, mask=None)
+        result = column.build_column(
+            result.base_data,
+            result.dtype,
+            mask=None,
+            offset=result.offset,
+            size=result.size,
+        )
 
         return result
 
@@ -253,8 +269,6 @@ class DatetimeColumn(column.ColumnBase):
 
 def binop(lhs, rhs, op, out_dtype):
     libcudf.nvtx.nvtx_range_push("CUDF_BINARY_OP", "orange")
-    masked = lhs.nullable or rhs.nullable
-    out = column.column_empty_like(lhs, dtype=out_dtype, masked=masked)
-    _ = libcudf.binops.apply_op(lhs, rhs, out, op)
+    out = libcudfxx.binaryop.binaryop(lhs, rhs, op, out_dtype)
     libcudf.nvtx.nvtx_range_pop()
     return out

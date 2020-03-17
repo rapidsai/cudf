@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf/null_mask.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -23,11 +22,10 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/error.hpp>
 #include <cudf/detail/valid_if.cuh>
-#include "./utilities.hpp"
-#include "./utilities.cuh"
+#include <strings/utilities.hpp>
+#include <strings/utilities.cuh>
 
 #include <algorithm>
-#include <numeric>
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/transform_scan.h>
 #include <thrust/transform_reduce.h>
@@ -50,8 +48,8 @@ std::unique_ptr<column> concatenate( table_view const& strings_columns,
     auto num_columns = strings_columns.num_columns();
     CUDF_EXPECTS( num_columns > 0, "At least one column must be specified");
     // check all columns are of type string
-    for( auto itr = strings_columns.begin(); itr != strings_columns.end(); ++itr )
-        CUDF_EXPECTS( itr->type().id()==STRING, "All columns must be of type string");
+    CUDF_EXPECTS( std::all_of( strings_columns.begin(), strings_columns.end(), [] (auto c) {return c.type().id()==STRING;}),
+                  "All columns must be of type string" );
     if( num_columns==1 ) // single strings column returns a copy
         return std::make_unique<column>(*(strings_columns.begin()),stream,mr);
     auto strings_count = strings_columns.num_rows();
@@ -59,12 +57,12 @@ std::unique_ptr<column> concatenate( table_view const& strings_columns,
         return detail::make_empty_strings_column(mr,stream);
 
     CUDF_EXPECTS( separator.is_valid(), "Parameter separator must be a valid string_scalar");
-
-    auto execpol = rmm::exec_policy(stream);
     string_view d_separator(separator.data(),separator.size());
-    string_view d_narep(nullptr,0);
-    if( narep.is_valid() ) // narep is allowed to be invalid
-        d_narep = string_view(narep.data(),narep.size());
+    string_view const d_narep = [&narep] {
+        if( !narep.is_valid() )
+            return string_view(nullptr,0);
+        return narep.size()==0 ? string_view("",0) : string_view(narep.data(),narep.size());
+    } ();
 
     // Create device views from the strings columns.
     auto table = table_device_view::create(strings_columns,stream);
@@ -85,18 +83,15 @@ std::unique_ptr<column> concatenate( table_view const& strings_columns,
     // build offsets column by computing sizes of each string in the output
     auto offsets_transformer = [d_table, num_columns, d_separator, d_narep] __device__ (size_type row_idx) {
             // for this row (idx), iterate over each column and add up the bytes
+            bool null_element = thrust::any_of( thrust::seq, d_table.begin(), d_table.end(),
+                [row_idx] (auto const& d_column) { return d_column.is_null(row_idx);});
+            if( null_element && d_narep.is_null() )
+                return 0;
             size_type bytes = thrust::transform_reduce( thrust::seq, d_table.begin(), d_table.end(),
-                [row_idx, d_separator, d_narep] __device__ (column_device_view d_column) {
-                    size_type bytes = 0;
-                    if( d_column.is_null(row_idx) )
-                    {
-                        if( d_narep.is_null() )
-                            return 0; // null entry in result
-                        bytes += d_narep.size_bytes();
-                    }
-                    else
-                        bytes += d_column.element<string_view>(row_idx).size_bytes();
-                    return bytes + d_separator.size_bytes();
+                [row_idx, d_separator, d_narep] __device__ (column_device_view const& d_column) {
+                    return d_separator.size_bytes() +
+                           (d_column.is_null(row_idx) ? d_narep.size_bytes()
+                                                      : d_column.element<string_view>(row_idx).size_bytes());
                 }, 0, thrust::plus<size_type>());
             // separator goes only in between elements
             if( bytes > 0 )  // if not null
@@ -107,19 +102,17 @@ std::unique_ptr<column> concatenate( table_view const& strings_columns,
     auto offsets_column = detail::make_offsets_child_column(offsets_transformer_itr,
                                                             offsets_transformer_itr+strings_count,
                                                             mr, stream);
-    auto offsets_view = offsets_column->view();
-    auto d_results_offsets = offsets_view.data<int32_t>();
+    auto d_results_offsets = offsets_column->view().data<int32_t>();
 
     // create the chars column
     size_type bytes = thrust::device_pointer_cast(d_results_offsets)[strings_count];
     auto chars_column = strings::detail::create_chars_child_column( strings_count, null_count, bytes, mr, stream );
     // fill the chars column
-    auto chars_view = chars_column->mutable_view();
-    auto d_results_chars = chars_view.data<char>();
-    thrust::for_each_n(execpol->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count,
+    auto d_results_chars = chars_column->mutable_view().data<char>();
+    thrust::for_each_n(rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count,
         [d_table, num_columns, d_separator, d_narep, d_results_offsets, d_results_chars] __device__(size_type idx){
             bool null_element = thrust::any_of( thrust::seq, d_table.begin(), d_table.end(),
-                    [idx] (column_device_view col) { return col.is_null(idx);});
+                                                [idx] (column_device_view const& col) { return col.is_null(idx);});
             if( null_element && d_narep.is_null() )
                 return; // do not write to buffer at all if any column element for this row is null
             size_type offset = d_results_offsets[idx];
@@ -128,13 +121,8 @@ std::unique_ptr<column> concatenate( table_view const& strings_columns,
             for( size_type col_idx=0; col_idx < num_columns; ++col_idx )
             {
                 auto d_column = d_table.column(col_idx);
-                if( d_column.is_null(idx) )
-                    d_buffer = detail::copy_string(d_buffer, d_narep);
-                else
-                {
-                    string_view d_str = d_column.element<string_view>(idx);
-                    d_buffer = detail::copy_string(d_buffer, d_str);
-                }
+                string_view d_str = d_column.is_null(idx) ? d_narep : d_column.element<string_view>(idx);
+                d_buffer = detail::copy_string(d_buffer, d_str);
                 // separator goes only in between elements
                 if( col_idx+1 < num_columns )
                     d_buffer = detail::copy_string(d_buffer, d_separator);
@@ -160,9 +148,11 @@ std::unique_ptr<column> join_strings( strings_column_view const& strings,
 
     auto execpol = rmm::exec_policy(stream);
     string_view d_separator(separator.data(),separator.size());
-    string_view d_narep(nullptr,0);
-    if( narep.is_valid() ) // narep is allowed to be invalid
-        d_narep = string_view(narep.data(),narep.size());
+    string_view const d_narep = [&narep] {
+        if( !narep.is_valid() )
+            return string_view(nullptr,0);
+        return narep.size()==0 ? string_view("",0) : string_view(narep.data(),narep.size());
+    } ();
 
     auto strings_column = column_device_view::create(strings.parent(),stream);
     auto d_strings = *strings_column;
@@ -207,7 +197,7 @@ std::unique_ptr<column> join_strings( strings_column_view const& strings,
     // only one entry so it is either all valid or all null
     size_type null_count = 0;
     rmm::device_buffer null_mask; // init to null null-mask
-    if( strings.null_count()==strings_count )
+    if( strings.null_count()==strings_count && d_narep.is_null() )
     {
         null_mask = create_null_mask(1,cudf::mask_state::ALL_NULL,stream,mr);
         null_count = 1;

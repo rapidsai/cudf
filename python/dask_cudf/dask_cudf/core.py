@@ -5,7 +5,7 @@ from distutils.version import LooseVersion
 
 import numpy as np
 import pandas as pd
-from toolz import partition_all
+from tlz import partition_all
 
 import dask
 import dask.dataframe as dd
@@ -304,6 +304,59 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 result.divisions = (min(self.columns), max(self.columns))
             return handle_out(out, result)
 
+    def repartition_by_hash(
+        self,
+        columns=None,
+        npartitions=None,
+        max_branch=None,
+        ignore_index=True,
+        **kwargs,
+    ):
+        """Repartition a dask_cudf DataFrame by hashing.
+
+        Warning: By default, index will be ignored/dropped.
+
+        Parameter
+        ---------
+        columns : list, default None
+            List of columns (by name) to be used for hashing. If None,
+            all columns will be used.
+        npartitions : int, default None
+            Number of output partitions. If None, the output partitions
+            are chosen to match self.npartitions.
+        max_branch : int or False, default None
+            Passed to `rearrange_by_hash` - If False, single-stage shuffling
+            will be used (no matter the number of partitions).
+        ignore_index : bool, default True
+            Ignore the index values while shuffling data into new
+            partitions. This can boost performance significantly.
+        kwargs : dict
+            Other `repartition` arguments.  Ignored.
+        """
+        npartitions = npartitions or self.npartitions
+        columns = columns or [col for col in self.columns]
+
+        return batcher_sortnet.rearrange_by_hash(
+            self,
+            columns,
+            npartitions,
+            max_branch=max_branch,
+            ignore_index=ignore_index,
+        )
+
+    def repartition(self, *args, **kwargs):
+        """ Wraps dask.dataframe DataFrame.repartition method.
+        Uses repartition_by_hash if `columns=` is specified.
+        """
+        columns = kwargs.pop("columns", None)
+        if columns:
+            warnings.warn(
+                "Repartitioning by column hash. Divisions will lost. "
+                "Set ignore_index=False to preserve Index values."
+            )
+            return self.repartition_by_hash(columns=columns, **kwargs)
+        return super().repartition(*args, **kwargs)
+
 
 def sum_of_squares(x):
     x = x.astype("f8")._column
@@ -409,28 +462,6 @@ class Series(_Frame, dd.core.Series):
 
 class Index(Series, dd.core.Index):
     _partition_type = cudf.Index
-
-
-def splits_divisions_sorted_cudf(df, chunksize):
-    segments = list(df.index.find_segments().to_array())
-    segments.append(len(df) - 1)
-
-    splits = [0]
-    last = current_size = 0
-    for s in segments:
-        size = s - last
-        last = s
-        current_size += size
-        if current_size >= chunksize:
-            splits.append(s)
-            current_size = 0
-    # Ensure end is included
-    if splits[-1] != segments[-1]:
-        splits.append(segments[-1])
-    divisions = tuple(df.index.take(np.array(splits)).values)
-    splits[-1] += 1  # Offset to extract to end
-
-    return splits, divisions
 
 
 def _extract_meta(x):

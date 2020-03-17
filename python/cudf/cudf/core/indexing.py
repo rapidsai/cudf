@@ -1,9 +1,11 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
+import cupy
 import numpy as np
 import pandas as pd
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 import cudf
-from cudf.utils.cudautils import arange
 from cudf.utils.dtypes import is_categorical_dtype, is_scalar
 
 
@@ -24,7 +26,7 @@ def indices_from_labels(obj, labels):
         labels = labels.astype(obj.index.dtype)
 
     lhs = cudf.DataFrame({}, index=labels)
-    rhs = cudf.DataFrame({"_": arange(len(obj))}, index=obj.index)
+    rhs = cudf.DataFrame({"_": cupy.arange(len(obj))}, index=obj.index)
     return lhs.join(rhs)["_"]
 
 
@@ -311,7 +313,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         if df.shape[0] == 0 and df.shape[1] == 0 and isinstance(arg[0], slice):
             from cudf.core.index import RangeIndex
 
-            slice_len = arg[0].stop or len(self._df)
+            slice_len = len(self._df)
             start, stop, step = arg[0].indices(slice_len)
             df._index = RangeIndex(start, stop)
         return df

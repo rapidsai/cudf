@@ -7,7 +7,7 @@ from libcpp.pair cimport pair
 from libcpp.vector cimport vector
 from libcpp.pair cimport pair
 from pyarrow.includes.libarrow cimport RandomAccessFile
-cimport cudf._libxx.cpp.table.table as cudf_table
+from cudf._libxx.cpp.table.table cimport table
 
 
 cdef extern from "cudf/io/types.hpp" \
@@ -47,7 +47,7 @@ cdef extern from "cudf/io/types.hpp" \
         map[string, string] user_data
 
     cdef cppclass table_with_metadata:
-        unique_ptr[cudf_table.table] tbl
+        unique_ptr[table] tbl
         table_metadata metadata
 
     cdef cppclass source_info:

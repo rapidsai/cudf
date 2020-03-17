@@ -17,9 +17,8 @@ import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from numba import cuda
 from pandas.api.types import is_dict_like
-
-import rmm
 
 import cudf
 import cudf._lib as libcudf
@@ -41,7 +40,7 @@ from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
 from cudf.core.series import Series
 from cudf.core.window import Rolling
-from cudf.utils import applyutils, cudautils, ioutils, queryutils, utils
+from cudf.utils import applyutils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     cudf_dtype_from_pydata_dtype,
@@ -457,11 +456,7 @@ class DataFrame(Frame):
             return self._get_columns_by_label(arg, downcast=True)
 
         elif isinstance(arg, slice):
-            df = DataFrame(index=self.index[arg])
-            for k, col in self._data.items():
-                df[k] = col[arg]
-            df.columns = self.columns
-            return df
+            return self._slice(arg)
 
         elif isinstance(
             arg,
@@ -518,10 +513,12 @@ class DataFrame(Frame):
                 for col_name in self._data:
                     scatter_map = arg[col_name]
                     if is_scalar(value):
-                        value = utils.scalar_broadcast_to(value, len(self))
-                    self._data[col_name][scatter_map] = column.as_column(
-                        value
-                    )[scatter_map]
+                        self._data[col_name][scatter_map] = value
+                    else:
+
+                        self._data[col_name][scatter_map] = column.as_column(
+                            value
+                        )[scatter_map]
         elif is_scalar(arg) or isinstance(arg, tuple):
             if isinstance(value, DataFrame):
                 _setitem_with_dataframe(
@@ -532,8 +529,6 @@ class DataFrame(Frame):
                 )
             else:
                 if arg in self._data:
-                    if is_scalar(value):
-                        value = utils.scalar_broadcast_to(value, len(self))
                     if len(self) == 0:
                         if isinstance(value, (pd.Series, Series)):
                             self._index = as_index(value.index)
@@ -550,12 +545,18 @@ class DataFrame(Frame):
                                     masked=True,
                                     newsize=len(value),
                                 )
+
                         self._data = new_data
+                        return
                     elif isinstance(value, (pd.Series, Series)):
                         value = Series(value)._align_to_index(
                             self._index, how="right", allow_non_unique=True
                         )
-                    self._data[arg] = column.as_column(value)
+                    if is_scalar(value):
+                        self._data[arg][:] = value
+                    else:
+                        value = as_column(value)
+                        self._data[arg] = value
                 else:
                     # disc. with pandas here
                     # pandas raises key error here
@@ -568,12 +569,9 @@ class DataFrame(Frame):
             if isinstance(mask, list):
                 mask = np.array(mask)
 
-            if is_scalar(value):
-                value = column.as_column(
-                    utils.scalar_broadcast_to(value, len(self))
-                )
-
             if mask.dtype == "bool":
+                mask = column.as_column(arg)
+
                 if isinstance(value, DataFrame):
                     _setitem_with_dataframe(
                         input_df=self,
@@ -582,10 +580,10 @@ class DataFrame(Frame):
                         mask=mask,
                     )
                 else:
+                    if not is_scalar(value):
+                        value = column.as_column(value)[mask]
                     for col_name in self._data:
-                        self._data[col_name][mask] = column.as_column(value)[
-                            mask
-                        ]
+                        self._data[col_name][mask] = value
             else:
                 if isinstance(value, DataFrame):
                     _setitem_with_dataframe(
@@ -595,11 +593,17 @@ class DataFrame(Frame):
                         mask=None,
                     )
                 else:
+                    if not is_scalar(value):
+                        value = column.as_column(value)
                     for col in arg:
                         # we will raise a key error if col not in dataframe
                         # this behavior will make it
                         # consistent to pandas >0.21.0
-                        self._data[col] = column.as_column(value)
+                        if not is_scalar(value):
+                            self._data[col] = value
+                        else:
+                            self._data[col][:] = value
+
         else:
             msg = "__setitem__ on type {!r} is not supported"
             raise TypeError(msg.format(type(arg)))
@@ -935,7 +939,7 @@ class DataFrame(Frame):
             def fallback(col, fn):
                 if fill_value is None:
                     return Series.from_masked_array(
-                        data=rmm.device_array(max_num_rows, dtype="float64"),
+                        data=column_empty(max_num_rows, dtype="float64"),
                         mask=create_null_mask(
                             max_num_rows, state=MaskState.ALL_NULL
                         ),
@@ -1218,9 +1222,9 @@ class DataFrame(Frame):
 
         Examples
         --------
-        >>> df = DataFrame([('a', list(range(20))),
-        ...                 ('b', list(range(20))),
-        ...                 ('c', list(range(20)))])
+        >>> df = cudf.DataFrame([('a', range(20)),
+        ...                      ('b', range(20)),
+        ...                      ('c', range(20))])
 
         Select a single row using an integer index.
 
@@ -1495,7 +1499,6 @@ class DataFrame(Frame):
             result = self
         else:
             result = self.copy()
-        index_columns = self.index._data.columns
         if all(name is None for name in self.index.names):
             if isinstance(self.index, cudf.MultiIndex):
                 names = tuple(
@@ -1507,6 +1510,7 @@ class DataFrame(Frame):
             names = self.index.names
 
         if not drop:
+            index_columns = self.index._data.columns
             for name, index_column in zip(
                 reversed(names), reversed(index_columns)
             ):
@@ -1914,7 +1918,7 @@ class DataFrame(Frame):
 
         Returns
         -------
-        A (nrow x ncol) numpy ndarray in "F" order.
+        A (nrow x ncol) numba device ndarray
         """
         if columns is None:
             columns = self.columns
@@ -1939,23 +1943,22 @@ class DataFrame(Frame):
                     "hint: use .fillna() to replace null values"
                 )
                 raise ValueError(errmsg.format(k))
+        cupy_dtype = dtype
+        if np.issubdtype(cupy_dtype, np.datetime64):
+            cupy_dtype = np.dtype("int64")
 
-        if order == "F":
-            matrix = rmm.device_array(
-                shape=(nrow, ncol), dtype=dtype, order=order
-            )
-            for colidx, inpcol in enumerate(cols):
-                dense = inpcol.astype(dtype).to_gpu_array(fillna="pandas")
-                matrix[:, colidx].copy_to_device(dense)
-        elif order == "C":
-            matrix = cudautils.row_matrix(cols, nrow, ncol, dtype)
-        else:
+        if order not in ("F", "C"):
             errmsg = (
                 "order parameter should be 'C' for row major or 'F' for"
                 "column major GPU matrix"
             )
             raise ValueError(errmsg.format(k))
-        return matrix
+
+        matrix = cupy.empty(shape=(nrow, ncol), dtype=cupy_dtype, order=order)
+        for colidx, inpcol in enumerate(cols):
+            dense = inpcol.astype(cupy_dtype)
+            matrix[:, colidx] = dense
+        return cuda.as_cuda_array(matrix).view(dtype)
 
     def as_matrix(self, columns=None):
         """Convert to a matrix in host memory.
@@ -2143,8 +2146,7 @@ class DataFrame(Frame):
             [column] = columns
         else:
             column = columns
-        if not (0 <= n <= len(self)):
-            raise ValueError("n out-of-bound")
+
         col = self[column].reset_index(drop=True)
         # Operate
         sorted_series = getattr(col, method)(n=n, keep=keep)
@@ -2851,7 +2853,7 @@ class DataFrame(Frame):
 
         return Series(table_to_hash._hash()).values
 
-    def partition_by_hash(self, columns, nparts):
+    def partition_by_hash(self, columns, nparts, keep_index=True):
         """Partition the dataframe by the hashed value of data in *columns*.
 
         Parameters
@@ -2861,6 +2863,8 @@ class DataFrame(Frame):
             Must have at least one name.
         nparts : int
             Number of output partitions
+        keep_index : boolean
+            Whether to keep the index or drop it
 
         Returns
         -------
@@ -2868,7 +2872,7 @@ class DataFrame(Frame):
         """
         idx = 0 if self._index is None else self._index._num_columns
         key_indices = [self._data.names.index(k) + idx for k in columns]
-        outdf, offsets = self._hash_partition(key_indices, nparts)
+        outdf, offsets = self._hash_partition(key_indices, nparts, keep_index)
         # Slice into partition
         return [outdf[s:e] for s, e in zip(offsets, offsets[1:] + [None])]
 
@@ -3533,9 +3537,7 @@ class DataFrame(Frame):
             result.index = q
             return result
 
-    def quantiles(
-        self, q=0.5, interpolation="nearest",
-    ):
+    def quantiles(self, q=0.5, interpolation="nearest"):
         """
         Return values at the given quantile.
 
@@ -3931,50 +3933,33 @@ class DataFrame(Frame):
         """
 
         # map_index might be a column name or array,
-        # make it a Series
+        # make it a Column
         if isinstance(map_index, str):
-            map_index = self[map_index]
+            map_index = self[map_index]._column
+        elif isinstance(map_index, Series):
+            map_index = map_index._column
         else:
-            map_index = Series(map_index)
+            map_index = as_column(map_index)
 
         # Convert float to integer
         if map_index.dtype == np.float:
             map_index = map_index.astype(np.int32)
 
         # Convert string or categorical to integer
-        if isinstance(map_index._column, StringColumn):
-            map_index = Series(
-                map_index._column.as_categorical_column(np.int32).as_numerical
-            )
+        if isinstance(map_index, StringColumn):
+            map_index = map_index.as_categorical_column(np.int32).as_numerical
             warnings.warn(
                 "Using StringColumn for map_index in scatter_by_map. "
                 "Use an integer array/column for better performance."
             )
-        elif isinstance(map_index._column, CategoricalColumn):
-            map_index = Series(map_index._column.as_numerical)
+        elif isinstance(map_index, CategoricalColumn):
+            map_index = map_index.as_numerical
             warnings.warn(
                 "Using CategoricalColumn for map_index in scatter_by_map. "
                 "Use an integer array/column for better performance."
             )
 
-        if keep_index:
-            if isinstance(self.index, cudf.MultiIndex):
-                index = self.index.to_frame()._columns
-                index_names = self.index.to_frame().columns.to_list()
-            else:
-                index = [self.index._values]
-                index_names = [self.index.name]
-        else:
-            index = None
-            index_names = []
-
-        tables = libcudf.copying.scatter_to_frames(
-            self._columns,
-            map_index._column,
-            index,
-            names=self.columns.to_list(),
-            index_names=index_names,
-        )
+        tables = self._scatter_to_tables(map_index, keep_index)
 
         if map_size:
             # Make sure map_size is >= the number of uniques in map_index
@@ -3985,18 +3970,10 @@ class DataFrame(Frame):
                 )
 
             # Append empty dataframes if map_size > len(tables)
-            for i in range(map_size - len(tables)):
-                tables.append(self.take([]))
-        return tables
 
-    def repeat(self, repeats, axis=None):
-        assert axis in (None, 0)
-        new_index = self.index.repeat(repeats)
-        cols = libcudf.filling.repeat(self._columns, repeats)
-        # to preserve col names, need to get it from old _cols dict
-        column_names = self._data.names
-        result = DataFrame(data=dict(zip(column_names, cols)))
-        return result.set_index(new_index)
+            for i in range(map_size - len(tables)):
+                tables.append(self._empty_like(keep_index))
+        return tables
 
     def stack(self, level=-1, dropna=True):
         """Stack the prescribed level(s) from columns to index
@@ -4026,16 +4003,12 @@ class DataFrame(Frame):
         dtype: int64
         """
         assert level in (None, -1)
-        index_as_cols = self.index.to_frame(index=False)._columns
-        new_index_cols = libcudf.filling.repeat(index_as_cols, self.shape[1])
-        [last_index] = libcudf.filling.tile(
-            [column.as_column(self.columns)], self.shape[0]
+        repeated_index = self.index.repeat(self.shape[1])
+        name_index = Frame({0: self._column_names}).tile(self.shape[0])
+        new_index = list(repeated_index._columns) + [name_index._columns[0]]
+        new_index = cudf.core.multiindex.MultiIndex.from_frame(
+            DataFrame(dict(zip(range(0, len(new_index)), new_index)))
         )
-        new_index_cols.append(last_index)
-        index_df = DataFrame(
-            dict(zip(range(0, len(new_index_cols)), new_index_cols))
-        )
-        new_index = cudf.core.multiindex.MultiIndex.from_frame(index_df)
 
         # Collect datatypes and cast columns as that type
         common_type = np.result_type(*self.dtypes)
@@ -4064,6 +4037,16 @@ class DataFrame(Frame):
         """
         cov = cupy.cov(self.values, rowvar=False)
         df = DataFrame.from_gpu_matrix(cupy.asfortranarray(cov)).set_index(
+            self.columns
+        )
+        df.columns = self.columns
+        return df
+
+    def corr(self):
+        """Compute the correlation matrix of a DataFrame.
+        """
+        corr = cupy.corrcoef(self.values, rowvar=False)
+        df = DataFrame.from_gpu_matrix(cupy.asfortranarray(corr)).set_index(
             self.columns
         )
         df.columns = self.columns

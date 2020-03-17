@@ -28,7 +28,11 @@
 #include <cudf/copying.hpp>
 #include <rolling/rolling_detail.hpp>
 #include <cudf/rolling.hpp>
+<<<<<<< HEAD
 #include <cudf/detail/groupby/sort_helper.hpp>
+=======
+#include <cudf/detail/nvtx/ranges.hpp>
+>>>>>>> origin/branch-0.13
 
 #include <jit/type.h>
 #include <jit/launcher.h>
@@ -577,6 +581,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        std::unique_ptr<aggregation> const& agg,
                                        rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   if (input.size() == 0) return empty_like(input);
   CUDF_EXPECTS((min_periods >= 0), "min_periods must be non-negative");
 
@@ -604,6 +609,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        std::unique_ptr<aggregation> const& agg,
                                        rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   if (preceding_window.size() == 0 || following_window.size() == 0 || input.size() == 0) return empty_like(input);
 
   CUDF_EXPECTS(preceding_window.type().id() == INT32 && following_window.type().id() == INT32,
