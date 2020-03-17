@@ -9,6 +9,7 @@
 - PR #4486 Remove explicit template parameter from detail::scatter.
 - PR #4471 Consolidate partitioning functionality into a single header.
 - PR #4498 Adds in support for chunked writers to java
+- PR #4073 Enable contiguous split java test
 - PR #4527 Add JNI and java bindings for matches_re
 
 ## Bug Fixes
@@ -193,6 +194,7 @@
 - PR #4493 Skip legacy testing in CI
 - PR #4524 Updating `__setitem__` for DataFrame to use scalar scatter
 - PR #4534 Disable deprecation warnings as errors.
+- PR #4506 Check for multi-dimensional data in column/Series creation
 
 ## Bug Fixes
 
