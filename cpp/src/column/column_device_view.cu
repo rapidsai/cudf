@@ -106,11 +106,13 @@ std::unique_ptr<column_device_view, std::function<void(column_device_view*)>> co
     return p;
 }
 
-size_type column_device_view::extent(column_view source) {
-  size_type data_size = sizeof(column_device_view);
-  for( size_type idx=0; idx < source.num_children(); ++idx )
-    data_size += extent(source.child(idx));
-  return data_size;
+size_type column_device_view::extent(column_view const& source) {
+  auto get_extent = thrust::make_transform_iterator(
+      thrust::make_counting_iterator(0),
+      [&source](auto i) { return extent(source.child(i)); });
+
+  return std::accumulate(get_extent, get_extent + source.num_children(),
+                         sizeof(column_device_view));
 }
 
 // For use with inplace-new to pre-fill memory to be copied to device
