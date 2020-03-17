@@ -1910,13 +1910,13 @@ class StringColumn(column.ColumnBase):
 
         # For an "all empty" StringColumn (e.g., [""]) libcudf still
         # needs the chars child column pointer to be non-null:
-        if self.size:
-            if self.children[1].size == 0 and self.null_count != self.size:
-                offsets = self.base_children[0]
-                chars = column_empty(
-                    self.base_children[1].size + 1, dtype="int8"
-                )
-                self.set_base_children((offsets, chars))
+        #if self.size:
+        #    if self.children[1].size == 0 and self.null_count != self.size:
+        #        offsets = self.base_children[0]
+        #        chars = column_empty(
+        #            self.base_children[1].size + 1, dtype="int8"
+        #        )
+        #        self.set_base_children((offsets, chars))
 
         # TODO: Remove these once NVStrings is fully deprecated / removed
         self._nvstrings = None
