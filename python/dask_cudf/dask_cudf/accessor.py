@@ -12,7 +12,7 @@ accessor properties.
 
 """
 
-from toolz import partial
+from tlz import partial
 
 import cudf
 from cudf.core.column.categorical import (
