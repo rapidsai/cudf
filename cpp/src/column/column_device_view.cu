@@ -72,11 +72,9 @@ column_device_view::column_device_view( column_view source, void * h_ptr, void* 
 std::unique_ptr<column_device_view, std::function<void(column_device_view*)>> column_device_view::create(column_view source, cudaStream_t stream) {
     auto deleter = [](column_device_view* v) { v->destroy(); };
     size_type num_children = source.num_children();
-    if( num_children == 0 )
-    {
-      std::unique_ptr<column_device_view, decltype(deleter)> p{
-          new column_device_view(source), deleter};
-      return p;
+  if (num_children == 0) {
+    // Can't use make_unique since the ctor is protected
+    return std::unique_ptr<column_device_view>(new column_device_view(source));
     }
     // First calculate the size of memory needed to hold the
     // child columns. This is done by calling extent()
