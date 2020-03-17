@@ -34,16 +34,16 @@ namespace experimental {
 namespace groupby {
 namespace detail {
 
-template <aggregation::Kind k>
+template <aggregation::Kind K>
 struct reduce_functor {
 
   template <typename T>
   static constexpr bool is_supported(){
-    if (k == aggregation::SUM)
+    if (K == aggregation::SUM)
       return cudf::is_numeric<T>();
-    else if (k == aggregation::MIN or k == aggregation::MAX)
+    else if (K == aggregation::MIN or K == aggregation::MAX)
       return cudf::is_fixed_width<T>() and is_relationally_comparable<T,T>();
-    else if (k == aggregation::ARGMIN or k == aggregation::ARGMAX)
+    else if (K == aggregation::ARGMIN or K == aggregation::ARGMAX)
       return is_relationally_comparable<T,T>();
     else
       return false;
@@ -57,8 +57,8 @@ struct reduce_functor {
              rmm::mr::device_memory_resource* mr,
              cudaStream_t stream)
   {
-    using OpType = cudf::experimental::detail::corresponding_operator_t<k>;
-    using ResultType = cudf::experimental::detail::target_type_t<T, k>;
+    using OpType = cudf::experimental::detail::corresponding_operator_t<K>;
+    using ResultType = cudf::experimental::detail::target_type_t<T, K>;
 
     std::unique_ptr<column> result = make_fixed_width_column(
       data_type(type_to_id<ResultType>()), 
@@ -72,7 +72,7 @@ struct reduce_functor {
 
     auto result_table = mutable_table_view({*result});
     experimental::detail::initialize_with_identity(
-      result_table, {k}, stream);
+      result_table, {K}, stream);
 
     auto resultview = mutable_column_device_view::create(result->mutable_view());
     auto valuesview = column_device_view::create(values);
@@ -84,7 +84,7 @@ struct reduce_functor {
         d_result = *resultview,
         dest_indices = group_labels.data().get()
       ] __device__ (auto i) {
-        experimental::detail::update_target_element<T, k, true, true>{}( 
+        experimental::detail::update_target_element<T, K, true, true>{}( 
           d_result, dest_indices[i], d_values, i );
       });
     
