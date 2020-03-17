@@ -1805,6 +1805,17 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Returns -1.0 if this[i] < 0
+   *          0.0 if this[i] == 0
+   *          1.0 if this[i] > 0
+   */
+  public ColumnVector signum() {
+    return new ColumnVector(signum(this.getNativeView()));
+  }
+
+  private static native long signum(long nativeView);
+
+  /**
    * Returns a boolean ColumnVector identifying rows which
    * match the given regex pattern but only at the beginning of the string.
    *
@@ -1828,7 +1839,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       return new ColumnVector(matchesRe(getNativeView(), pattern));
     }
   }
-  /////////////////////////////////////////////////////////////////////////////
+ /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS
   /////////////////////////////////////////////////////////////////////////////
 
