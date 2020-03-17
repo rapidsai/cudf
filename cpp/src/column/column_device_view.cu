@@ -79,9 +79,13 @@ std::unique_ptr<column_device_view, std::function<void(column_device_view*)>> co
     // First calculate the size of memory needed to hold the
     // child columns. This is done by calling extent()
     // for each of the children.
-    size_type size_bytes = 0;
-    for( size_type idx=0; idx < num_children; ++idx )
-      size_bytes += extent(source.child(idx));
+  auto get_extent = thrust::make_transform_iterator(
+      thrust::make_counting_iterator(0),
+      [&source](auto i) { return extent(source.child(i)); });
+
+  std::size_t const child_storage_bytes =
+      std::accumulate(get_extent, get_extent + num_children, 0);
+
     // A buffer of CPU memory is allocated to hold the column_device_view
     // objects. Once filled, the CPU memory is copied to device memory
     // and then set into the d_children member pointer.
