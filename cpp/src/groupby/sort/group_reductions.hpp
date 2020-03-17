@@ -77,7 +77,7 @@ std::unique_ptr<column> group_max(
     cudaStream_t stream = 0);
 
 /**
- * @brief Internal API to calculate groupwise maximum value's index
+ * @brief Internal API to calculate group-wise indices of maximum values.
  * 
  * @param values Ungrouped values to get maximum value's index from
  * @param num_groups Number of groups
@@ -95,7 +95,7 @@ std::unique_ptr<column> group_argmax(
     cudaStream_t stream = 0);
 
 /**
- * @brief Internal API to calculate groupwise minimum value's index
+ * @brief Internal API to calculate group-wise indices of minimum values.
  * 
  * @param values Ungrouped values to get minimum value's index from
  * @param num_groups Number of groups
