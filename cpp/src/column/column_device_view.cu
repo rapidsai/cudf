@@ -118,7 +118,6 @@ column_device_view::create(column_view source, cudaStream_t stream) {
   p->_num_children = num_children;
   p->d_children = reinterpret_cast<column_device_view*>(d_start);
 
-  //CUDA_TRY(cudaStreamSynchronize(stream));
   return p;
 }
 
