@@ -28,11 +28,8 @@
 #include <cudf/copying.hpp>
 #include <rolling/rolling_detail.hpp>
 #include <cudf/rolling.hpp>
-<<<<<<< HEAD
 #include <cudf/detail/groupby/sort_helper.hpp>
-=======
 #include <cudf/detail/nvtx/ranges.hpp>
->>>>>>> origin/branch-0.13
 
 #include <jit/type.h>
 #include <jit/launcher.h>
