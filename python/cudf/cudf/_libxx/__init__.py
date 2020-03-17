@@ -13,6 +13,7 @@ from . import (
     join,
     merge,
     null_mask,
+    nvtext,
     orc,
     quantiles,
     reduce,
