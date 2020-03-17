@@ -7,7 +7,7 @@ import pyarrow as pa
 import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
 from cudf.core.buffer import Buffer
-from cudf.core.column import as_column, column
+from cudf.core.column import column
 from cudf.utils import utils
 from cudf.utils.dtypes import is_scalar, np_to_pa_dtype
 
@@ -52,36 +52,6 @@ class DatetimeColumn(column.ColumnBase):
         except Exception:
             return False
         return item.astype("int_") in self.as_numerical
-
-    @classmethod
-    def from_numpy(cls, array):
-        cast_dtype = array.dtype.type == np.int64
-        if array.dtype.kind == "M":
-            time_unit, _ = np.datetime_data(array.dtype)
-            cast_dtype = time_unit in ("D", "W", "M", "Y") or (
-                len(array) > 0
-                and (
-                    isinstance(array[0], str)
-                    or isinstance(array[0], dt.datetime)
-                )
-            )
-        elif not cast_dtype:
-            raise ValueError(
-                ("Cannot infer datetime dtype " + "from np.array dtype `%s`")
-                % (array.dtype)
-            )
-
-        if cast_dtype:
-            array = array.astype(np.dtype("datetime64[s]"))
-        assert array.dtype.itemsize == 8
-
-        mask = None
-        if np.any(np.isnat(array)):
-            col = as_column(Buffer(array), dtype=array.dtype)
-            col = utils.time_col_replace_nulls(col)
-            mask = col.mask
-
-        return cls(data=Buffer(array), mask=mask, dtype=array.dtype)
 
     @property
     def time_unit(self):

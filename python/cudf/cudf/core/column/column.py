@@ -1346,9 +1346,33 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             arbitrary = arbitrary.astype(dtype)
 
         if arb_dtype.kind == "M":
-            data = as_column(pa.array(arbitrary), nan_as_null=nan_as_null)
-            if np.issubdtype(data.dtype, np.datetime64):
+            import datetime as dt
+
+            time_unit, _ = np.datetime_data(arbitrary.dtype)
+            cast_dtype = time_unit in ("D", "W", "M", "Y") or (
+                len(arbitrary) > 0
+                and (
+                    isinstance(arbitrary[0], str)
+                    or isinstance(arbitrary[0], dt.datetime)
+                )
+            )
+
+            if cast_dtype:
+                arbitrary = arbitrary.astype(np.dtype("datetime64[s]"))
+            assert arbitrary.dtype.itemsize == 8
+
+            buffer = Buffer(arbitrary)
+            mask = None
+            if np.any(np.isnat(arbitrary)) or nan_as_null:
+                data = as_column(
+                    buffer, dtype=arbitrary.dtype, nan_as_null=nan_as_null
+                )
                 data = utils.time_col_replace_nulls(data)
+                mask = data.mask
+
+            data = datetime.DatetimeColumn(
+                data=buffer, mask=mask, dtype=arbitrary.dtype
+            )
         elif arb_dtype.kind in ("O", "U"):
             data = as_column(
                 pa.Array.from_pandas(arbitrary), dtype=arbitrary.dtype
