@@ -94,10 +94,13 @@ std::unique_ptr<column_device_view, std::function<void(column_device_view*)>> co
     // Each column_device_view instance may have child objects that
     // require setting some internal device pointers before being copied
     // from CPU to device.
-    int8_t* d_start;
-    RMM_TRY(RMM_ALLOC(&d_start, size_bytes, stream));
-    std::unique_ptr<column_device_view, decltype(deleter)> p{
-        new column_device_view(source,reinterpret_cast<ptrdiff_t>(h_start),reinterpret_cast<ptrdiff_t>(d_start)), deleter};
+  rmm::device_buffer* const child_storage = new rmm::device_buffer(child_storage_bytes, stream);
+  char* d_start = static_cast<char*>(child_storage->data());
+
+  auto deleter = [child_storage](column_device_view * v){
+    v->destroy();
+    delete child_storage;
+  };
 
     // copy the CPU memory with all the children into device memory
     CUDA_TRY(cudaMemcpyAsync(d_start, h_start, size_bytes,
