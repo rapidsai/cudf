@@ -624,5 +624,3 @@ TEST_F(StringsCopyIfElseTest, CopyIfElseScalarScalar)
    cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(), valids );   
    cudf::test::expect_columns_equal(*results,expected);
 }
-
-CUDF_TEST_PROGRAM_MAIN()
