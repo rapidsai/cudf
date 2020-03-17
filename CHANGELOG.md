@@ -172,6 +172,7 @@
 - PR #4533 Import `tlz` for optional `cytoolz` support
 - PR #4493 Skip legacy testing in CI
 - PR #4524 Updating `__setitem__` for DataFrame to use scalar scatter
+- PR #4534 Disable deprecation warnings as errors.
 
 ## Bug Fixes
 
