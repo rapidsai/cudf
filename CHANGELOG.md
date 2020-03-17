@@ -9,6 +9,7 @@
 - PR #4486 Remove explicit template parameter from detail::scatter.
 - PR #4471 Consolidate partitioning functionality into a single header.
 - PR #4498 Adds in support for chunked writers to java
+- PR #4527 Add JNI and java bindings for matches_re
 
 ## Bug Fixes
 
