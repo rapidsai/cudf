@@ -648,7 +648,7 @@ class Series(Frame):
 
         outcol = lhs._column.binary_operator(fn, rhs, reflect=reflect)
         result = lhs._copy_construct(data=outcol, name=result_name)
-        libcudfxx.nvtx.nvtx_range_pop()
+        libcudfxx.nvtx.range_pop()
         return result
 
     def add(self, other, fill_value=None, axis=0):
