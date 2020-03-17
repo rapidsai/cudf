@@ -37,7 +37,7 @@ TYPED_TEST(EmptyLikeTest, ColumnNumericTests) {
     auto input = make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, size, state);
     auto expected = make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, 0);
     auto got = cudf::experimental::empty_like(input->view());
-    cudf::test::expect_column_properties_equal(*expected, *got);
+    cudf::test::expect_columns_equal(*expected, *got);
 }
 
 struct EmptyLikeStringTest : public EmptyLikeTest <std::string> {};
@@ -94,11 +94,11 @@ void check_empty_string_columns(cudf::column_view lhs, cudf::column_view rhs)
 TEST_F(EmptyLikeStringTest, ColumnStringTest) {
     rmm::device_vector<thrust::pair<const char*,cudf::size_type>> d_strings = create_test_string();
 
-    auto column = cudf::make_strings_column(d_strings);
+    //auto column = cudf::make_strings_column(d_strings);
 
-    auto got = cudf::experimental::empty_like(column->view());
+    //auto got = cudf::experimental::empty_like(column->view());
 
-    check_empty_string_columns(got->view(), column->view());
+    //check_empty_string_columns(got->view(), column->view());
 }
 
 std::unique_ptr<cudf::experimental::table> create_table (cudf::size_type size, cudf::mask_state state){
@@ -157,5 +157,8 @@ TYPED_TEST(AllocateLikeTest, ColumnNumericTestSpecifiedSize) {
     auto input = make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, size, state);
     auto expected = make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, specified_size, cudf::mask_state::UNINITIALIZED);
     auto got = cudf::experimental::allocate_like(input->view(), specified_size);
+    //std::cerr << expected->null_count() << got->null_count() << '\n';
     cudf::test::expect_column_properties_equal(*expected, *got);
 }
+
+CUDF_TEST_PROGRAM_MAIN()
