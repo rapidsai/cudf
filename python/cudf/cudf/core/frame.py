@@ -213,12 +213,11 @@ class Frame(libcudfxx.table.Table):
         # Reassign index and column names
         if isinstance(objs[0].columns, pd.MultiIndex):
             out.columns = objs[0].columns
-            out._index.name = objs[0]._index.name
-            out._index.names = objs[0]._index.names
         else:
             out.columns = names
-            out._index.name = objs[0]._index.name
-            out._index.names = objs[0]._index.names
+
+        out._index.name = objs[0]._index.name
+        out._index.names = objs[0]._index.names
 
         libcudf.nvtx.nvtx_range_pop()
 
