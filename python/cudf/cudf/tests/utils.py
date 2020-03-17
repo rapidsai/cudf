@@ -1,11 +1,12 @@
 from contextlib import contextmanager
 
+import cupy
 import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
 
 from cudf import Series
-from cudf.utils import utils
+from cudf._libxx.null_mask import bitmask_allocation_size_bytes
 
 supported_numpy_dtypes = [
     "bool",
@@ -27,9 +28,9 @@ def random_bitmask(size):
     size : int
         number of bits
     """
-    sz = utils.calc_chunk_size(size, utils.mask_bitsize)
-    data = np.random.randint(0, 255 + 1, size=sz)
-    return data.astype(utils.mask_dtype)
+    sz = bitmask_allocation_size_bytes(size)
+    data = np.random.randint(0, 255, dtype="u1", size=sz)
+    return data.view("i1")
 
 
 def expand_bits_to_bytes(arr):
@@ -61,6 +62,10 @@ def assert_eq(a, b, **kwargs):
         a = a.to_pandas()
     if hasattr(b, "to_pandas"):
         b = b.to_pandas()
+    if isinstance(a, cupy.ndarray):
+        a = cupy.asnumpy(a)
+    if isinstance(b, cupy.ndarray):
+        b = cupy.asnumpy(b)
 
     if isinstance(a, pd.DataFrame):
         tm.assert_frame_equal(a, b, **kwargs)

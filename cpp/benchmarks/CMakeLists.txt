@@ -132,7 +132,8 @@ ConfigureBench(LEGACY_QUANTILES_BENCH "${LEGACY_QUANTILES_BENCH_SRC}")
 # - groupby benchmark -----------------------------------------------------------------------------
 
 set(GROUPBY_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_sum_benchmark.cu")
+  "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_sum_benchmark.cu"
+  "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_nth_benchmark.cu")
 
 ConfigureBench(GROUPBY_BENCH "${GROUPBY_BENCH_SRC}")
 
@@ -161,9 +162,25 @@ set(HASHING_BENCH_SRC
 ConfigureBench(HASHING_BENCH "${HASHING_BENCH_SRC}")
 
 ###################################################################################################
+# - merge benchmark -----------------------------------------------------------------------------
+
+set(MERGE_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/merge/merge_benchmark.cpp")
+
+ConfigureBench(MERGE_BENCH "${MERGE_BENCH_SRC}")
+
+###################################################################################################
 # - null_mask benchmark -----------------------------------------------------------------------------
 
 set(NULLMASK_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/null_mask/set_null_mask_benchmark.cpp")
 
 ConfigureBench(NULLMASK_BENCH "${NULLMASK_BENCH_SRC}")
+
+###################################################################################################
+# - parquet writer benchmark -----------------------------------------------------------------------------
+
+set(PARQUET_WRITER_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/io/parquet_writer_benchmark.cu")
+
+ConfigureBench(PARQUET_WRITER_BENCH "${PARQUET_WRITER_BENCH_SRC}")

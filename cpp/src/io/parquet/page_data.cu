@@ -336,7 +336,7 @@ __device__ void gpuDecodeLevels(page_state_s *s, int32_t target_count, int t)
             coded_count += __popc(valid_mask);
         }
         value_count += batch_len;
-        if (!t && valid_map)
+        if (!t)
         {
             // If needed, adjust batch length to eliminate rows before the first row
             if (value_count < first_row + batch_len)
@@ -358,20 +358,23 @@ __device__ void gpuDecodeLevels(page_state_s *s, int32_t target_count, int t)
             valid_map_offset += batch_len;
             if (valid_map_offset >= 32)
             {
-                if (out_valid_mask == ~0) // Safe to output all 32 bits are within the current page
+                if (valid_map)
                 {
-                    *valid_map = out_valid;
-                }
-                else // Special case for the first valid row, which may not start on a 32-bit boundary (only setting some of the bits)
-                {
-                    atomicAnd(valid_map, ~out_valid_mask);
-                    atomicOr(valid_map, out_valid);
+                    if (out_valid_mask == ~0) // Safe to output all 32 bits are within the current page
+                    {
+                        *valid_map = out_valid;
+                    }
+                    else // Special case for the first valid row, which may not start on a 32-bit boundary (only setting some of the bits)
+                    {
+                        atomicAnd(valid_map, ~out_valid_mask);
+                        atomicOr(valid_map, out_valid);
+                    }
+                    valid_map++;
                 }
                 s->page.valid_count += __popc(out_valid);
                 valid_map_offset &= 0x1f;
                 out_valid = (valid_map_offset > 0) ? valid_mask >> (unsigned int)(batch_len - valid_map_offset) : 0;
                 out_valid_mask = ~0;
-                valid_map++;
             }
             __threadfence_block();
         }
@@ -381,14 +384,17 @@ __device__ void gpuDecodeLevels(page_state_s *s, int32_t target_count, int t)
         s->lvl_start[0] = cur_def;
         s->initial_rle_run[0] = def_run;
         s->initial_rle_value[0] = def_val;
-        if (value_count >= num_values && valid_map && valid_map_offset != 0)
+        if (value_count >= num_values && valid_map_offset != 0)
         {
             // Store the remaining valid bits at the end of the page
             out_valid_mask &= (1 << valid_map_offset) - 1;
             out_valid &= out_valid_mask;
             s->page.valid_count += __popc(out_valid);
-            atomicAnd(valid_map, ~out_valid_mask);
-            atomicOr(valid_map, out_valid);
+            if (valid_map)
+            {
+                atomicAnd(valid_map, ~out_valid_mask);
+                atomicOr(valid_map, out_valid);
+            }
             out_valid_mask = 0;
         }
         s->valid_map_offset = valid_map_offset;
@@ -657,7 +663,7 @@ inline __device__ void gpuOutputString(volatile page_state_s *s, int src_pos, vo
     {
         // Plain encoding
         uint32_t dict_pos = s->dict_idx[src_pos & (NZ_BFRSZ - 1)];
-        if (dict_pos < (uint32_t)s->dict_size)
+        if (dict_pos <= (uint32_t)s->dict_size)
         {
             ptr = reinterpret_cast<const char *>(s->data_start + dict_pos);
             len = s->str_len[src_pos & (NZ_BFRSZ - 1)];
@@ -1201,8 +1207,8 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
                 if (s->valid_map)
                 {
                     s->valid_map += (page_start_row - min_row) >> 5;
-                    s->valid_map_offset = (int32_t)((page_start_row - min_row) & 0x1f);
                 }
+                s->valid_map_offset = (int32_t)((page_start_row - min_row) & 0x1f);
                 s->first_row = 0;
             }
             else // First row starts after the beginning of the page
@@ -1293,14 +1299,15 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
     while (!s->error && (s->value_count < s->num_values || s->out_pos < s->nz_count))
     {
         int target_pos;
+        int out_pos = s->out_pos;
 
         if (t < out_thread0)
         {
-            target_pos = min(s->out_pos + 2 * (NTHREADS - out_thread0), s->nz_count + (NTHREADS - out_thread0));
+            target_pos = min(out_pos + 2 * (NTHREADS - out_thread0), s->nz_count + (NTHREADS - out_thread0));
         }
         else
         {
-            target_pos = min(s->nz_count, s->out_pos + NTHREADS - out_thread0);
+            target_pos = min(s->nz_count, out_pos + NTHREADS - out_thread0);
             if (out_thread0 > 32)
             {
                 target_pos = min(target_pos, s->dict_pos);
@@ -1336,7 +1343,7 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
         {
             // WARP1..WARP3: Decode values
             int dtype = s->col.data_type & 7;
-            int out_pos = s->out_pos + t - out_thread0;
+            out_pos += t - out_thread0;
             int row_idx = s->nz_idx[out_pos & (NZ_BFRSZ - 1)];
             if (out_pos < target_pos && row_idx >= 0 && s->first_row + row_idx < s->num_rows)
             {

@@ -19,50 +19,13 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/detail/utilities/release_assert.cuh>
+#include <cudf/aggregation.hpp>
 #include <cudf/types.hpp>
 
 namespace cudf {
 namespace experimental {
-/**
- * @brief Base class for specifying the desired aggregation in an
- * `aggregation_request`.
- *
- * This type is meant to be opaque in the public interface.
- *
- * Other kinds of aggregations may derive from this class to encapsulate
- * additional information needed to compute the aggregation.
- */
-class aggregation {
- public:
-  /**
-   * @brief Possible aggregation operations
-   */
-  enum Kind {
-    SUM,       ///< sum reduction
-    PRODUCT,   ///< product reduction
-    MIN,       ///< min reduction
-    MAX,       ///< max reduction
-    COUNT,     ///< count number of elements
-    ANY,       ///< any reduction
-    ALL,       ///< all reduction
-    SUM_OF_SQUARES, ///< sum of squares reduction
-    MEAN,      ///< arithmetic mean reduction
-    VARIANCE,  ///< groupwise variance
-    STD,       ///< groupwise standard deviation
-    MEDIAN,    ///< median reduction
-    QUANTILE,  ///< compute specified quantile(s)
-    ARGMAX,    ///< Index of max element
-    ARGMIN,    ///< Index of min element
-    PTX,       ///< PTX UDF based reduction
-    CUDA       ///< CUDA UDf based reduction
-  };
-
-  aggregation(aggregation::Kind a) : kind{a} {}
-  Kind kind;  ///< The aggregation to perform
-
-  bool operator==(aggregation const& other) const { return kind == other.kind; }
-};
 namespace detail {
+
 /**
  * @brief Derived class for specifying a quantile aggregation
  */
@@ -92,6 +55,36 @@ struct std_var_aggregation : aggregation {
   bool operator==(std_var_aggregation const& other) const {
     return aggregation::operator==(other)
        and _ddof == other._ddof;
+  }
+};
+
+/**
+ * @brief Derived class for specifying a nunique aggregation
+ */
+struct nunique_aggregation : aggregation {
+  nunique_aggregation(aggregation::Kind k, include_nulls _include_nulls)
+      : aggregation{k}, _include_nulls{_include_nulls} {}
+include_nulls _include_nulls;    ///< include or exclude nulls
+
+  bool operator==(nunique_aggregation const& other) const {
+    return aggregation::operator==(other)
+       and _include_nulls == other._include_nulls;
+  }
+};
+
+/**
+ * @brief Derived class for specifying a nth element aggregation
+ */
+struct nth_element_aggregation : aggregation {
+  nth_element_aggregation(aggregation::Kind k, size_type n,
+                          include_nulls _include_nulls)
+      : aggregation{k}, n{n}, _include_nulls{_include_nulls} {}
+  size_type n;                  ///< nth index to return
+  include_nulls _include_nulls; ///< include or exclude nulls
+
+  bool operator==(nth_element_aggregation const &other) const {
+    return aggregation::operator==(other) and n == other.n and
+           _include_nulls == other._include_nulls;
   }
 };
 
@@ -153,9 +146,15 @@ struct target_type_impl<Source, aggregation::MAX> {
   using type = Source;
 };
 
-// Always use size_type accumulator for COUNT
+// Always use size_type accumulator for COUNT_VALID
 template <typename Source>
-struct target_type_impl<Source, aggregation::COUNT> {
+struct target_type_impl<Source, aggregation::COUNT_VALID> {
+  using type = cudf::size_type;
+};
+
+// Always use size_type accumulator for COUNT_ALL
+template <typename Source>
+struct target_type_impl<Source, aggregation::COUNT_ALL> {
   using type = cudf::size_type;
 };
 
@@ -172,10 +171,17 @@ struct target_type_impl<Source, aggregation::ALL> {
 };
 
 // Always use `double` for MEAN
-// TODO (dm): Except for timestamp where result is timestamp. (Use FloorDiv)
-template <typename Source>
-struct target_type_impl<Source, aggregation::MEAN> {
+// Except for timestamp where result is timestamp. (Use FloorDiv)
+template <typename Source, aggregation::Kind k>
+struct target_type_impl<Source, k,
+                        std::enable_if_t<!is_timestamp<Source>() && (k == aggregation::MEAN)>> {
   using type = double;
+};
+
+template <typename Source, aggregation::Kind k>
+struct target_type_impl<Source, k,
+                        std::enable_if_t<is_timestamp<Source>() && (k == aggregation::MEAN)>> {
+  using type = Source;
 };
 
 constexpr bool is_sum_product_agg(aggregation::Kind k) {
@@ -242,6 +248,18 @@ struct target_type_impl<Source, aggregation::ARGMIN> {
   using type = size_type;
 };
 
+// Always use size_type accumulator for NUNIQUE
+template <typename Source>
+struct target_type_impl<Source, aggregation::NUNIQUE> {
+  using type = cudf::size_type;
+};
+
+// Always use Source for NTH_ELEMENT
+template <typename Source>
+struct target_type_impl<Source, aggregation::NTH_ELEMENT> {
+  using type = Source;
+};
+
 /**
  * @brief Helper alias to get the accumulator type for performing aggregation
  * `k` on elements of type `Source`
@@ -295,8 +313,11 @@ CUDA_HOST_DEVICE_CALLABLE decltype(auto) aggregation_dispatcher(
       return f.template operator()<aggregation::MIN>(std::forward<Ts>(args)...);
     case aggregation::MAX:
       return f.template operator()<aggregation::MAX>(std::forward<Ts>(args)...);
-    case aggregation::COUNT:
-      return f.template operator()<aggregation::COUNT>(
+    case aggregation::COUNT_VALID:
+      return f.template operator()<aggregation::COUNT_VALID>(
+          std::forward<Ts>(args)...);
+    case aggregation::COUNT_ALL:
+      return f.template operator()<aggregation::COUNT_ALL>(
           std::forward<Ts>(args)...);
     case aggregation::ANY:
       return f.template operator()<aggregation::ANY>(std::forward<Ts>(args)...);
@@ -324,6 +345,12 @@ CUDA_HOST_DEVICE_CALLABLE decltype(auto) aggregation_dispatcher(
           std::forward<Ts>(args)...);
     case aggregation::ARGMIN:
       return f.template operator()<aggregation::ARGMIN>(
+          std::forward<Ts>(args)...);
+    case aggregation::NUNIQUE:
+      return f.template operator()<aggregation::NUNIQUE>(
+          std::forward<Ts>(args)...);
+    case aggregation::NTH_ELEMENT:
+      return f.template operator()<aggregation::NTH_ELEMENT>(
           std::forward<Ts>(args)...);
     default: {
 #ifndef __CUDA_ARCH__

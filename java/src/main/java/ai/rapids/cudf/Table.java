@@ -52,8 +52,8 @@ public final class Table implements AutoCloseable {
    * @param columns - Array of ColumnVectors
    */
   public Table(ColumnVector... columns) {
-    assert columns != null : "ColumnVectors can't be null";
-    rows = columns.length > 0 ? columns[0].getRowCount() : 0;
+    assert columns != null && columns.length > 0 : "ColumnVectors can't be null or empty";
+    rows = columns[0].getRowCount();
 
     for (ColumnVector columnVector : columns) {
       assert (null != columnVector) : "ColumnVectors can't be null";
@@ -74,7 +74,7 @@ public final class Table implements AutoCloseable {
   }
 
   private Table(long[] cudfColumns) {
-    assert cudfColumns != null : "CudfColumns can't be null";
+    assert cudfColumns != null && cudfColumns.length > 0 : "CudfColumns can't be null or empty";
     this.columns = new ColumnVector[cudfColumns.length];
     try {
       for (int i = 0; i < cudfColumns.length; i++) {
@@ -165,19 +165,20 @@ public final class Table implements AutoCloseable {
   
   private static native ContiguousTable[] contiguousSplit(long inputTable, int[] indices);
 
-  private static native long[] partition(long inputTable,
-                                         int[] columnsToHash,
-                                         int numberOfPartitions,
-                                         int[] outputOffsets) throws CudfException;
+  private static native long[] hashPartition(long inputTable,
+                                             int[] columnsToHash,
+                                             int numberOfPartitions,
+                                             int[] outputOffsets) throws CudfException;
+
+  private static native long[] roundRobinPartition(long inputTable,
+                                                   int numberOfPartitions,
+                                                   int startPartition,
+                                                   int[] outputOffsets) throws CudfException;
 
   private static native void deleteCudfTable(long handle) throws CudfException;
 
   private static native long bound(long inputTable, long valueTable,
                                    boolean[] descFlags, boolean[] areNullsSmallest, boolean isUpperBound) throws CudfException;
-
-  private static native void writeORC(int compressionType, String[] colNames, String[] metadataKeys,
-                                      String[] metadataValues, String outputFileName, long buffer,
-                                      long bufferLength, long tableToWrite) throws CudfException;
 
   /**
    * Ugly long function to read CSV.  This is a long function to avoid the overhead of reaching
@@ -218,18 +219,56 @@ public final class Table implements AutoCloseable {
                                            long address, long length, int timeUnit) throws CudfException;
 
   /**
-   * Write Parquet formatted data.
-   * @param table           handle to the native table
+   * Setup everything to write parquet formatted data to a file.
    * @param columnNames     names that correspond to the table columns
+   * @param nullable        true if the column can have nulls else false
    * @param metadataKeys    Metadata key names to place in the Parquet file
    * @param metadataValues  Metadata values corresponding to metadataKeys
    * @param compression     native compression codec ID
    * @param statsFreq       native statistics frequency ID
    * @param filename        local output path
+   * @return a handle that is used in later calls to writeParquetChunk and writeParquetEnd.
    */
-  private static native void writeParquet(long table, String[] columnNames,
-      String[] metadataKeys, String[] metadataValues,
-      int compression, int statsFreq, String filename) throws CudfException;
+  private static native long writeParquetFileBegin(String[] columnNames,
+                                               boolean[] nullable,
+                                               String[] metadataKeys,
+                                               String[] metadataValues,
+                                               int compression,
+                                               int statsFreq,
+                                               String filename) throws CudfException;
+
+  /**
+   * Setup everything to write parquet formatted data to a buffer.
+   * @param columnNames     names that correspond to the table columns
+   * @param nullable        true if the column can have nulls else false
+   * @param metadataKeys    Metadata key names to place in the Parquet file
+   * @param metadataValues  Metadata values corresponding to metadataKeys
+   * @param compression     native compression codec ID
+   * @param statsFreq       native statistics frequency ID
+   * @param consumer        consumer of host buffers produced.
+   * @return a handle that is used in later calls to writeParquetChunk and writeParquetEnd.
+   */
+  private static native long writeParquetBufferBegin(String[] columnNames,
+                                                   boolean[] nullable,
+                                                   String[] metadataKeys,
+                                                   String[] metadataValues,
+                                                   int compression,
+                                                   int statsFreq,
+                                                   HostBufferConsumer consumer) throws CudfException;
+
+  /**
+   * Write out a table to an open handle.
+   * @param handle the handle to the writer.
+   * @param table the table to write out.
+   * @param tableMemSize the size of the table in bytes to help with memory allocation.
+   */
+  private static native void writeParquetChunk(long handle, long table, long tableMemSize);
+
+  /**
+   * Finish writing out parquet.
+   * @param handle the handle.  Do not use again once this returns.
+   */
+  private static native void writeParquetEnd(long handle);
 
   /**
    * Read in ORC formatted data.
@@ -245,6 +284,54 @@ public final class Table implements AutoCloseable {
   private static native long[] readORC(String[] filterColumnNames,
                                        String filePath, long address, long length,
                                        boolean usingNumPyTypes, int timeUnit) throws CudfException;
+
+  /**
+   * Setup everything to write ORC formatted data to a file.
+   * @param columnNames     names that correspond to the table columns
+   * @param nullable        true if the column can have nulls else false
+   * @param metadataKeys    Metadata key names to place in the Parquet file
+   * @param metadataValues  Metadata values corresponding to metadataKeys
+   * @param compression     native compression codec ID
+   * @param filename        local output path
+   * @return a handle that is used in later calls to writeORCChunk and writeORCEnd.
+   */
+  private static native long writeORCFileBegin(String[] columnNames,
+                                                   boolean[] nullable,
+                                                   String[] metadataKeys,
+                                                   String[] metadataValues,
+                                                   int compression,
+                                                   String filename) throws CudfException;
+
+  /**
+   * Setup everything to write ORC formatted data to a buffer.
+   * @param columnNames     names that correspond to the table columns
+   * @param nullable        true if the column can have nulls else false
+   * @param metadataKeys    Metadata key names to place in the Parquet file
+   * @param metadataValues  Metadata values corresponding to metadataKeys
+   * @param compression     native compression codec ID
+   * @param consumer        consumer of host buffers produced.
+   * @return a handle that is used in later calls to writeORCChunk and writeORCEnd.
+   */
+  private static native long writeORCBufferBegin(String[] columnNames,
+                                                     boolean[] nullable,
+                                                     String[] metadataKeys,
+                                                     String[] metadataValues,
+                                                     int compression,
+                                                     HostBufferConsumer consumer) throws CudfException;
+
+  /**
+   * Write out a table to an open handle.
+   * @param handle the handle to the writer.
+   * @param table the table to write out.
+   * @param tableMemSize the size of the table in bytes to help with memory allocation.
+   */
+  private static native void writeORCChunk(long handle, long table, long tableMemSize);
+
+  /**
+   * Finish writing out ORC.
+   * @param handle the handle.  Do not use again once this returns.
+   */
+  private static native void writeORCEnd(long handle);
 
   private static native long[] groupByAggregate(long inputTable, int[] keyIndices, int[] aggColumnsIndices,
                                                 int[] aggTypes, boolean ignoreNullKeys) throws CudfException;
@@ -564,11 +651,82 @@ public final class Table implements AutoCloseable {
     }
   }
 
+  private static class ParquetTableWriter implements TableWriter {
+    private long handle;
+    HostBufferConsumer consumer;
+
+    private ParquetTableWriter(ParquetWriterOptions options, File outputFile) {
+      this.consumer = null;
+      this.handle = writeParquetFileBegin(options.getColumnNames(),
+          options.getColumnNullability(),
+          options.getMetadataKeys(),
+          options.getMetadataValues(),
+          options.getCompressionType().nativeId,
+          options.getStatisticsFrequency().nativeId,
+          outputFile.getAbsolutePath());
+    }
+
+    private ParquetTableWriter(ParquetWriterOptions options, HostBufferConsumer consumer) {
+      this.handle = writeParquetBufferBegin(options.getColumnNames(),
+          options.getColumnNullability(),
+          options.getMetadataKeys(),
+          options.getMetadataValues(),
+          options.getCompressionType().nativeId,
+          options.getStatisticsFrequency().nativeId,
+          consumer);
+      this.consumer = consumer;
+    }
+
+    @Override
+    public void write(Table table) {
+      if (handle == 0) {
+        throw new IllegalStateException("Writer was already closed");
+      }
+      writeParquetChunk(handle, table.nativeHandle, table.getDeviceMemorySize());
+    }
+
+    @Override
+    public void close() throws CudfException {
+      if (handle != 0) {
+        writeParquetEnd(handle);
+      }
+      handle = 0;
+      if (consumer != null) {
+        consumer.done();
+        consumer = null;
+      }
+    }
+  }
+
+  /**
+   * Get a table writer to write parquet data to a file.
+   * @param options the parquet writer options.
+   * @param outputFile where to write the file.
+   * @return a table writer to use for writing out multiple tables.
+   */
+  public static TableWriter writeParquetChunked(ParquetWriterOptions options, File outputFile) {
+    return new ParquetTableWriter(options, outputFile);
+  }
+
+  /**
+   * Get a table writer to write parquet data and handle each chunk with a callback.
+   * @param options the parquet writer options.
+   * @param consumer a class that will be called when host buffers are ready with parquet
+   *                 formatted data in them.
+   * @return a table writer to use for writing out multiple tables.
+   */
+  public static TableWriter writeParquetChunked(ParquetWriterOptions options,
+                                                HostBufferConsumer consumer) {
+    return new ParquetTableWriter(options, consumer);
+  }
+
   /**
    * Writes this table to a Parquet file on the host
    *
    * @param outputFile file to write the table to
+   * @deprecated please use writeParquetChunked instead
    */
+  @Deprecated
   public void writeParquet(File outputFile) {
     writeParquet(ParquetWriterOptions.DEFAULT, outputFile);
   }
@@ -578,35 +736,101 @@ public final class Table implements AutoCloseable {
    *
    * @param options parameters for the writer
    * @param outputFile file to write the table to
+   * @deprecated please use writeParquetChunked instead
    */
+  @Deprecated
   public void writeParquet(ParquetWriterOptions options, File outputFile) {
-    writeParquet(this.nativeHandle,
-        options.getColumnNames(),
-        options.getMetadataKeys(),
-        options.getMetadataValues(),
-        options.getCompressionType().nativeId,
-        options.getStatisticsFrequency().nativeId,
-        outputFile.getAbsolutePath());
+    try (TableWriter writer = writeParquetChunked(options, outputFile)) {
+      writer.write(this);
+    }
+  }
+
+  private static class ORCTableWriter implements TableWriter {
+    private long handle;
+    HostBufferConsumer consumer;
+
+    private ORCTableWriter(ORCWriterOptions options, File outputFile) {
+      this.handle = writeORCFileBegin(options.getColumnNames(),
+          options.getColumnNullability(),
+          options.getMetadataKeys(),
+          options.getMetadataValues(),
+          options.getCompressionType().nativeId,
+          outputFile.getAbsolutePath());
+      this.consumer = null;
+    }
+
+    private ORCTableWriter(ORCWriterOptions options, HostBufferConsumer consumer) {
+      this.handle = writeORCBufferBegin(options.getColumnNames(),
+          options.getColumnNullability(),
+          options.getMetadataKeys(),
+          options.getMetadataValues(),
+          options.getCompressionType().nativeId,
+          consumer);
+      this.consumer = consumer;
+    }
+
+    @Override
+    public void write(Table table) {
+      if (handle == 0) {
+        throw new IllegalStateException("Writer was already closed");
+      }
+      writeORCChunk(handle, table.nativeHandle, table.getDeviceMemorySize());
+    }
+
+    @Override
+    public void close() throws CudfException {
+      if (handle != 0) {
+        writeORCEnd(handle);
+      }
+      handle = 0;
+      if (consumer != null) {
+        consumer.done();
+        consumer = null;
+      }
+    }
   }
 
   /**
-   * Writes this table to a file on the host
-   *
-   * @param outputFile - File to write the table to
+   * Get a table writer to write ORC data to a file.
+   * @param options the ORC writer options.
+   * @param outputFile where to write the file.
+   * @return a table writer to use for writing out multiple tables.
    */
+  public static TableWriter writeORCChunked(ORCWriterOptions options, File outputFile) {
+    return new ORCTableWriter(options, outputFile);
+  }
+
+  /**
+   * Get a table writer to write ORC data and handle each chunk with a callback.
+   * @param options the ORC writer options.
+   * @param consumer a class that will be called when host buffers are ready with ORC
+   *                 formatted data in them.
+   * @return a table writer to use for writing out multiple tables.
+   */
+  public static TableWriter writeORCChunked(ORCWriterOptions options, HostBufferConsumer consumer) {
+    return new ORCTableWriter(options, consumer);
+  }
+
+  /**
+   * Writes this table to a file on the host.
+   * @param outputFile - File to write the table to
+   * @deprecated please use writeORCChunked instead
+   */
+  @Deprecated
   public void writeORC(File outputFile) {
     writeORC(ORCWriterOptions.DEFAULT, outputFile);
   }
 
   /**
-   * Writes this table to a file on the host
-   *
+   * Writes this table to a file on the host.
    * @param outputFile - File to write the table to
+   * @deprecated please use writeORCChunked instead
    */
+  @Deprecated
   public void writeORC(ORCWriterOptions options, File outputFile) {
-    writeORC(options.getCompressionType().nativeId, options.getColumnNames(),
-        options.getMetadataKeys(), options.getMetadataValues(), outputFile.getAbsolutePath(),
-        0, 0, this.nativeHandle);
+    try (TableWriter writer = Table.writeORCChunked(options, outputFile)) {
+      writer.write(this);
+    }
   }
 
   /**
@@ -796,6 +1020,26 @@ public final class Table implements AutoCloseable {
   private AggregateOperation groupByInternal(GroupByOptions groupByOptions, int[] indices) {
     int[] operationIndicesArray = copyAndValidate(indices);
     return new AggregateOperation(this, groupByOptions, operationIndicesArray);
+  }
+
+  /**
+   * Round-robin partition a table into the specified number of partitions. The first row is placed
+   * in the specified starting partition, the next row is placed in the next partition, and so on.
+   * When the last partition is reached then next partition is partition 0 and the algorithm
+   * continues until all rows have been placed in partitions, evenly distributing the rows
+   * among the partitions.
+   * @param numberOfPartitions - number of partitions to use
+   * @param startPartition - starting partition index (i.e.: where first row is placed).
+   * @return - {@link PartitionedTable} - Table that exposes a limited functionality of the
+   * {@link Table} class
+   */
+  public PartitionedTable roundRobinPartition(int numberOfPartitions, int startPartition) {
+    int[] partitionOffsets = new int[numberOfPartitions];
+    try (DevicePrediction dp = new DevicePrediction(getDeviceMemorySize(), "roundRobinPartition")) {
+      return new PartitionedTable(new Table(Table.roundRobinPartition(nativeHandle,
+          numberOfPartitions, startPartition,
+          partitionOffsets)), partitionOffsets);
+    }
   }
 
   public TableOperation onColumns(int... indices) {
@@ -1105,14 +1349,26 @@ public final class Table implements AutoCloseable {
      * @return - {@link PartitionedTable} - Table that exposes a limited functionality of the
      * {@link Table} class
      */
-    public PartitionedTable partition(int numberOfPartitions) {
+    public PartitionedTable hashPartition(int numberOfPartitions) {
       int[] partitionOffsets = new int[numberOfPartitions];
       try (DevicePrediction prediction = new DevicePrediction(operation.table.getDeviceMemorySize(), "partition")) {
-        return new PartitionedTable(new Table(Table.partition(operation.table.nativeHandle,
+        return new PartitionedTable(new Table(Table.hashPartition(operation.table.nativeHandle,
             operation.indices,
             partitionOffsets.length,
             partitionOffsets)), partitionOffsets);
       }
+    }
+
+    /**
+     * Hash partition a table into the specified number of partitions.
+     * @deprecated Use {@link #hashPartition(int)}
+     * @param numberOfPartitions - number of partitions to use
+     * @return - {@link PartitionedTable} - Table that exposes a limited functionality of the
+     * {@link Table} class
+     */
+    @Deprecated
+    public PartitionedTable partition(int numberOfPartitions) {
+      return hashPartition(numberOfPartitions);
     }
   }
 
@@ -1259,9 +1515,6 @@ public final class Table implements AutoCloseable {
       try {
         for (int i = 0; i < types.size(); i++) {
           columns.add(from(types.get(i), typeErasedData.get(i)));
-        }
-        for (ColumnVector cv : columns) {
-          cv.ensureOnDevice();
         }
         return new Table(columns.toArray(new ColumnVector[columns.size()]));
       } finally {

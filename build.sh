@@ -18,8 +18,8 @@ ARGS=$*
 # script, and that this script resides in the repo dir!
 REPODIR=$(cd $(dirname $0); pwd)
 
-VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks -v -g -n -x --allgpuarch --disable_nvtx -h"
-HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [-v] [-g] [-n] [-h] [-x]
+VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks tests -v -g -n -l --allgpuarch --disable_nvtx -h"
+HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [-v] [-g] [-n] [-h] [-l]
    clean            - remove all existing build artifacts and configuration (start
                       over)
    libnvstrings     - build the nvstrings C++ code only
@@ -28,9 +28,11 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [-v] [-g] [-n] [-h] [
    cudf             - build the cudf Python package
    dask_cudf        - build the dask_cudf Python package
    benchmarks       - build benchmarks
+   tests            - build tests
    -v               - verbose build mode
    -g               - build for debug
    -n               - no install step
+   -l               - build legacy tests
    --disable_nvtx   - disable inserting NVTX profiling ranges
    --allgpuarch     - build for all supported GPU architectures
    -h               - print this text
@@ -51,6 +53,8 @@ INSTALL_TARGET=install
 BENCHMARKS=OFF
 BUILD_ALL_GPU_ARCH=0
 BUILD_NVTX=ON
+BUILD_TESTS=OFF
+BUILD_LEGACY_TESTS=OFF
 
 # Set defaults for vars that may not have been defined externally
 #  FIXME: if INSTALL_PREFIX is not set, check PREFIX, then check
@@ -93,11 +97,17 @@ if hasArg -n; then
     LIBCUDF_BUILD_DIR=${LIB_BUILD_DIR}
     LIBNVSTRINGS_BUILD_DIR=${LIB_BUILD_DIR}
 fi
+if hasArg -l; then
+    BUILD_LEGACY_TESTS=ON
+fi
 if hasArg --allgpuarch; then
     BUILD_ALL_GPU_ARCH=1
 fi
 if hasArg benchmarks; then
-    BENCHMARKS=ON
+    BENCHMARKS="ON"
+fi
+if hasArg tests; then
+    BUILD_TESTS=ON
 fi
 if hasArg --disable_nvtx; then
     BUILD_NVTX="OFF"
@@ -137,6 +147,7 @@ if buildAll || hasArg libnvstrings || hasArg libcudf; then
           ${GPU_ARCH} \
           -DUSE_NVTX=${BUILD_NVTX} \
           -DBUILD_BENCHMARKS=${BENCHMARKS} \
+          -DBUILD_LEGACY_TESTS=${BUILD_LEGACY_TESTS} \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ..
 fi
 
@@ -147,6 +158,10 @@ if buildAll || hasArg libnvstrings; then
         make -j${PARALLEL_LEVEL} install_nvstrings VERBOSE=${VERBOSE}
     else
         make -j${PARALLEL_LEVEL} nvstrings VERBOSE=${VERBOSE}
+    fi
+
+    if [[ ${BUILD_TESTS} == "ON" ]]; then
+        make -j${PARALLEL_LEVEL} build_tests_nvstrings VERBOSE=${VERBOSE}
     fi
 fi
 
@@ -171,6 +186,10 @@ if buildAll || hasArg libcudf; then
     else
         make -j${PARALLEL_LEVEL} cudf VERBOSE=${VERBOSE}
     fi
+
+    if [[ ${BUILD_TESTS} == "ON" ]]; then
+        make -j${PARALLEL_LEVEL} build_tests_cudf VERBOSE=${VERBOSE}
+    fi
 fi
 
 # Build and install the cudf Python package
@@ -178,10 +197,10 @@ if buildAll || hasArg cudf; then
 
     cd ${REPODIR}/python/cudf
     if [[ ${INSTALL_TARGET} != "" ]]; then
-        python setup.py build_ext --inplace
+        PARALLEL_LEVEL=${PARALLEL_LEVEL} python setup.py build_ext --inplace
         python setup.py install --single-version-externally-managed --record=record.txt
     else
-        python setup.py build_ext --inplace --library-dir=${LIBCUDF_BUILD_DIR}
+        PARALLEL_LEVEL=${PARALLEL_LEVEL} python setup.py build_ext --inplace --library-dir=${LIBCUDF_BUILD_DIR}
     fi
 fi
 

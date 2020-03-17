@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,9 +49,8 @@ public enum DType {
    * ns since the UNIX epoch
    */
   TIMESTAMP_NANOSECONDS(8, 12, "timestamp[ns]"),
-  CATEGORY(4, 13, "category"),
-  //DICTIONARY32(4, 14, "NO IDEA"),
-  STRING(0, 15, "str");
+  //DICTIONARY32(4, 13, "NO IDEA"),
+  STRING(0, 14, "str");
 
   private static final DType[] D_TYPES = DType.values();
   final int sizeInBytes;
@@ -75,7 +74,11 @@ public enum DType {
     return TIME_RESOLUTION.contains(this);
   }
 
-  static DType fromNative(int nativeId) {
+  public int getNativeId() {
+    return nativeId;
+  }
+
+  public static DType fromNative(int nativeId) {
     for (DType type : D_TYPES) {
       if (type.nativeId == nativeId) {
         return type;

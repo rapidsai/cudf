@@ -18,6 +18,8 @@
 #include <cudf/types.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
+
 #include <memory>
 
 #include <thrust/iterator/counting_iterator.h>
@@ -43,6 +45,7 @@ struct tile_functor {
 std::unique_ptr<table>
 tile(const table_view &in, size_type count, rmm::mr::device_memory_resource *mr)
 {
+    CUDF_FUNC_RANGE();
     CUDF_EXPECTS(count >= 0, "Count cannot be negative");
 
     auto in_num_rows = in.num_rows();
@@ -57,7 +60,7 @@ tile(const table_view &in, size_type count, rmm::mr::device_memory_resource *mr)
     auto tiled_it = thrust::make_transform_iterator(counting_it,
                                                     tile_functor{in_num_rows});
 
-    return detail::gather(in, tiled_it, tiled_it + out_num_rows, mr);
+    return detail::gather(in, tiled_it, tiled_it + out_num_rows, false, mr);
 }
 
 } // namespace experimental

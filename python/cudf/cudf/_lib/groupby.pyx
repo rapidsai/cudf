@@ -1,11 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
-
-# cython: profile=False
-# distutils: language = c++
-# cython: embedsignature = True
-# cython: language_level = 3
-
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 
 import collections
@@ -19,7 +12,6 @@ from libc.stdlib cimport malloc, free
 
 import cudf
 from cudf.core.buffer import Buffer
-from cudf.utils.cudautils import zeros
 from cudf.utils.dtypes import is_categorical_dtype
 
 from cudf._lib.cudf cimport *
