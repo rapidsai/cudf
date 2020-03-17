@@ -5,7 +5,6 @@ import pandas as pd
 import pyarrow as pa
 from pandas.api.types import is_integer_dtype
 
-import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
 from cudf.core.buffer import Buffer
 from cudf.core.column import as_column, column
