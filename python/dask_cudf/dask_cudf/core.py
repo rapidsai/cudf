@@ -5,7 +5,7 @@ from distutils.version import LooseVersion
 
 import numpy as np
 import pandas as pd
-from toolz import partition_all
+from tlz import partition_all
 
 import dask
 import dask.dataframe as dd

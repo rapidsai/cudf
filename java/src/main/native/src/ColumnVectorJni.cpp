@@ -28,6 +28,7 @@
 #include <cudf/strings/case.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/strings/combine.hpp>
+#include <cudf/strings/contains.hpp>
 #include <cudf/strings/find.hpp>
 #include <cudf/strings/substring.hpp>
 #include <cudf/transform.hpp>
@@ -643,6 +644,22 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringContains(JNIEnv *
     cudf::string_scalar* comp_scalar = reinterpret_cast<cudf::string_scalar*>(comp_string);
 
     std::unique_ptr<cudf::column> result = cudf::strings::contains(strings_column, *comp_scalar);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_matchesRe(JNIEnv *env, jobject j_object,
+                                                                    jlong j_view_handle, jstring patternObj) {
+    JNI_NULL_CHECK(env, j_view_handle, "column is null", false);
+    JNI_NULL_CHECK(env, patternObj, "pattern is null", false);
+
+  try {
+    cudf::column_view* column_view = reinterpret_cast<cudf::column_view*>(j_view_handle);
+    cudf::strings_column_view strings_column(*column_view);
+    cudf::jni::native_jstring pattern(env, patternObj);
+
+    std::unique_ptr<cudf::column> result = cudf::strings::matches_re(strings_column, pattern.get());
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
