@@ -14,6 +14,19 @@ import nvstrings
 import cudf._libxx as libcudfxx
 import cudf._libxx.string_casting as str_cast
 from cudf._lib.nvtx import nvtx_range_pop, nvtx_range_push
+from cudf._libxx.nvtext.generate_ngrams import (
+    generate_ngrams as cpp_generate_ngrams,
+)
+from cudf._libxx.nvtext.ngrams_tokenize import (
+    ngrams_tokenize as cpp_ngrams_tokenize,
+)
+from cudf._libxx.nvtext.normalize import (
+    normalize_spaces as cpp_normalize_spaces,
+)
+from cudf._libxx.nvtext.tokenize import (
+    count_tokens as cpp_count_tokens,
+    tokenize as cpp_tokenize,
+)
 from cudf._libxx.strings.attributes import (
     code_points as cpp_code_points,
     count_characters as cpp_count_characters,
@@ -200,9 +213,15 @@ class StringMethods(object):
                         index=self._parent.index,
                     )
             elif isinstance(self._parent, Series):
-                return Series(
-                    new_col, index=self._parent.index, name=self._parent.name
-                )
+                retain_index = kwargs.get("retain_index", True)
+                if retain_index:
+                    return Series(
+                        new_col,
+                        name=self._parent.name,
+                        index=self._parent.index,
+                    )
+                else:
+                    return Series(new_col, name=self._parent.name)
             elif isinstance(self._parent, Index):
                 return as_index(new_col, name=self._parent.name)
             else:
@@ -1784,6 +1803,76 @@ class StringMethods(object):
         return self._return_or_inplace(
             cpp_translate(self._column, table), **kwargs
         )
+
+    def normalize_spaces(self, **kwargs):
+        return self._return_or_inplace(
+            cpp_normalize_spaces(self._column), **kwargs
+        )
+
+    def tokenize(self, delimiter="", **kwargs):
+        delimiter = _massage_string_arg(delimiter, "delimiter", allow_col=True)
+        kwargs.setdefault("retain_index", False)
+        return self._return_or_inplace(
+            cpp_tokenize(self._column, delimiter), **kwargs
+        )
+
+    def token_count(self, delimiter="", **kwargs):
+        delimiter = _massage_string_arg(delimiter, "delimiter", allow_col=True)
+        return self._return_or_inplace(
+            cpp_count_tokens(self._column, delimiter), **kwargs
+        )
+
+    def ngrams(self, n=2, separator="_", **kwargs):
+        separator = _massage_string_arg(separator, "separator")
+        kwargs.setdefault("retain_index", False)
+        return self._return_or_inplace(
+            cpp_generate_ngrams(self._column, n, separator), **kwargs
+        )
+
+    def ngrams_tokenize(self, n=2, delimiter="", separator="_", **kwargs):
+        delimiter = _massage_string_arg(delimiter, "delimiter")
+        separator = _massage_string_arg(separator, "separator")
+        kwargs.setdefault("retain_index", False)
+        return self._return_or_inplace(
+            cpp_ngrams_tokenize(self._column, n, delimiter, separator),
+            **kwargs,
+        )
+
+
+def _massage_string_arg(value, name, allow_col=False):
+    from cudf._libxx.scalar import Scalar
+    from cudf._libxx.column import Column
+    from cudf.utils.dtypes import is_string_dtype
+
+    if isinstance(value, str):
+        return Scalar(value, dtype="str")
+
+    if isinstance(value, Scalar) and is_string_dtype(value.dtype):
+        return value
+
+    allowed_types = ["Scalar"]
+
+    if allow_col:
+        if isinstance(value, list):
+            return column.as_column(value, dtype="str")
+
+        if isinstance(value, Column) and is_string_dtype(value.dtype):
+            return value
+
+        allowed_types.append("Column")
+
+    raise ValueError(
+        "Expected {} for {} but got {}".format(
+            _expected_types_format(allowed_types), name, type(value)
+        )
+    )
+
+
+def _expected_types_format(types):
+    if len(types) == 1:
+        return types[0]
+
+    return ", ".join(types[:-1]) + ", or " + types[-1]
 
 
 class StringColumn(column.ColumnBase):

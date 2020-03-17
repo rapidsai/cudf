@@ -1434,6 +1434,34 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testMatchesRe() {
+    String patternString1 = "\\d+";
+    String patternString2 = "[A-Za-z]+\\s@[A-Za-z]+";
+    String patternString3 = ".*";
+    String patternString4 = "";
+    try (ColumnVector testStrings = ColumnVector.fromStrings("", null, "abCD", "ovér the",
+          "lazy @dog", "1234", "00:0:00");
+         ColumnVector res1 = testStrings.matchesRe(patternString1);
+         ColumnVector res2 = testStrings.matchesRe(patternString2);
+         ColumnVector res3 = testStrings.matchesRe(patternString3);
+         ColumnVector expected1 = ColumnVector.fromBoxedBooleans(false, null, false, false, false,
+           true, true);
+         ColumnVector expected2 = ColumnVector.fromBoxedBooleans(false, null, false, false, true,
+           false, false);
+         ColumnVector expected3 = ColumnVector.fromBoxedBooleans(true, null, true, true, true,
+           true, true)) {
+      assertColumnsAreEqual(expected1, res1);
+      assertColumnsAreEqual(expected2, res2);
+      assertColumnsAreEqual(expected3, res3);
+    }
+    assertThrows(AssertionError.class, () -> {
+      try (ColumnVector testStrings = ColumnVector.fromStrings("", null, "abCD", "ovér the",
+             "lazy @dog", "1234", "00:0:00");
+           ColumnVector res = testStrings.matchesRe(patternString4)) {}
+    });
+  }
+
+  @Test
   void testStringFindOperationsThrowsException() {
     assertThrows(AssertionError.class, () -> {
       try (ColumnVector sv = ColumnVector.fromStrings("a", "B", "cd");

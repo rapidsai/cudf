@@ -20,7 +20,7 @@ def _nonempty_index(idx):
     elif isinstance(idx, cudf.core.index.DatetimeIndex):
         start = "1970-01-01"
         data = np.array([start, "1970-01-02"], dtype=idx.dtype)
-        values = cudf.core.column.DatetimeColumn.from_numpy(data)
+        values = cudf.core.column.as_column(data)
         return cudf.core.index.DatetimeIndex(values, name=idx.name)
     elif isinstance(idx, cudf.core.index.StringIndex):
         return cudf.core.index.StringIndex(["cat", "dog"], name=idx.name)
