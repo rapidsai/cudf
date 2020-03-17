@@ -170,6 +170,7 @@
 - PR #4499 Adding changes to handle include `keep_index` and `RangeIndex`
 - PR #4493 Skip legacy testing in CI
 - PR #4534 Disable deprecation warnings as errors.
+- PR #4542 Remove RMM init/finalize in cudf test fixture.
 
 ## Bug Fixes
 
