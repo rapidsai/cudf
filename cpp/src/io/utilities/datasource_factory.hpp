@@ -149,7 +149,7 @@ class datasource_factory {
 
       bool configure(std::map<std::string, std::string> datasource_confs, std::vector<std::string> topics, std::vector<int> partitions) {
         datasource_confs_ = datasource_confs;
-        return ex_ds_->configure_datasource(datasource_confs, topics, partitions);
+        return ex_ds_->configure_datasource(datasource_confs);
       }
 
       std::string unique_id() {

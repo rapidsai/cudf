@@ -183,12 +183,6 @@ namespace external {
     // Query Kafka to populate the TopicPartitions with the desired offsets
     err_ = consumer_->committed(toppar_list, default_timeout_);
 
-    // std::vector<RdKafka::TopicPartition*>::iterator top_it = toppar_list.begin();
-    // while (top_it != toppar_list.end()) {
-    //   offsets.insert({(*top_it)->partition(), (*top_it)->offset()});
-    //   top_it++;
-    // }
-
     return toppar_list[0]->offset();
   }
 

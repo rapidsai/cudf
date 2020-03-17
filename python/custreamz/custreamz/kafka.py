@@ -15,12 +15,12 @@ class Consumer(object):
 
     def assign(self, partitions=[]):
         topics = []
-        partitions = []
+        parts = []
         for toppar in partitions:
             topics.append(toppar.topic)
-            partitions.append(toppar.partition)
+            parts.append(toppar.partition)
 
-        return libkafka.assign(topics, partitions)
+        return libkafka.assign(topics, parts)
 
     def metadata(self):
         libkafka.print_consumer_metadata()
@@ -80,11 +80,10 @@ class Consumer(object):
     def committed(self, partitions, timeout=10000):
         toppars = []
         for part in partitions:
-            offsets = libkafka.get_committed_offset(part.topic, part.partition)
-            for key, value in offsets.items():
-                if value < 0:
-                    value = 0
-                toppars.append(ck.TopicPartition(part.topic, key, value))
+            offset = libkafka.get_committed_offset(part.topic, part.partition)
+            if offset < 0:
+                offset = 0
+            toppars.append(ck.TopicPartition(part.topic, part.partition, offset))
         return toppars
 
     @docutils.doc_get_watermark_offsets()
