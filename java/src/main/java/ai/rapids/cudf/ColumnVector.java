@@ -1806,7 +1806,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   /**
    * Returns a boolean ColumnVector identifying rows which
-   * matching the given regex pattern but only at the beginning the string.
+   * match the given regex pattern but only at the beginning of the string.
    *
    * ```
    * cv = ["abc","123","def456"]
