@@ -166,9 +166,13 @@
 - PR #4316 Add Java and JNI bindings for substring expression
 - PR #4314 Add Java and JNI bindings for string contains
 - PR #4461 Port nvstrings Miscellaneous functions to cuDF Python/Cython
+- PR #4495 Port nvtext to cuDF Python/Cython
 - PR #4503 Port binaryop.pyx to libcudf++ API
 - PR #4499 Adding changes to handle include `keep_index` and `RangeIndex`
+- PR #4533 Import `tlz` for optional `cytoolz` support
 - PR #4493 Skip legacy testing in CI
+- PR #4524 Updating `__setitem__` for DataFrame to use scalar scatter
+- PR #4534 Disable deprecation warnings as errors.
 
 ## Bug Fixes
 
@@ -267,6 +271,7 @@
 - PR #4482 Fix `.str.rsplit`, `.str.split`, `.str.find`, `.str.rfind`, `.str.index`, `.str.rindex` and enable related tests
 - PR #4513 Backport scalar virtual destructor fix
 - PR #4519 Remove `n` validation for `nlargest` & `nsmallest` and add negative support for `n`
+- PR #4526 Fix index slicing issue for index incase of an empty dataframe
 
 
 # cuDF 0.12.0 (04 Feb 2020)
