@@ -7,8 +7,8 @@ from cudf._libxx.cpp.utilities.nvtx_utils cimport (
     range_push_hex as cpp_range_push_hex,
     range_pop as cpp_range_pop,
     color as color_types,
-    underlying_type_t_color,
 )
+from cudf._libxx.nvtx cimport underlying_type_t_color
 
 
 class Color(IntEnum):
