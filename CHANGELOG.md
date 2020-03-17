@@ -166,7 +166,13 @@
 - PR #4316 Add Java and JNI bindings for substring expression
 - PR #4314 Add Java and JNI bindings for string contains
 - PR #4461 Port nvstrings Miscellaneous functions to cuDF Python/Cython
+- PR #4495 Port nvtext to cuDF Python/Cython
+- PR #4503 Port binaryop.pyx to libcudf++ API
+- PR #4499 Adding changes to handle include `keep_index` and `RangeIndex`
+- PR #4533 Import `tlz` for optional `cytoolz` support
 - PR #4493 Skip legacy testing in CI
+- PR #4524 Updating `__setitem__` for DataFrame to use scalar scatter
+- PR #4534 Disable deprecation warnings as errors.
 - PR #4506 Check for multi-dimensional data in column/Series creation
 
 ## Bug Fixes
@@ -210,6 +216,7 @@
 - PR #4137 Update Java for mutating fill and rolling window changes
 - PR #4184 Add missing except+ to Cython bindings
 - PR #4141 Fix NVStrings test_convert failure in 10.2 build
+- PR #4156 Make fill/copy_range no-op on empty columns
 - PR #4158 Fix merge issue with empty table return if one of the two tables are empty
 - PR #4162 Properly handle no index metadata generation for to_parquet
 - PR #4175 Fix `__sizeof__` calculation in `StringColumn`
@@ -248,6 +255,7 @@
 - PR #4358 Fix strings::concat where narep is an empty string
 - PR #4369 Fix race condition in gpuinflate
 - PR #4390 Disable ScatterValid and ScatterNull legacy tests
+- PR #4398 Fixes the failure in groupby in MIN/MAX on strings when some groups are empty
 - PR #4406 Fix sorted merge issue with null values and ascending=False
 - PR #4445 Fix string issue for parquet reader and support `keep_index` for `scatter_to_tables`
 - PR #4423 Tighten up Dask serialization checks
@@ -260,6 +268,11 @@
 - PR #4474 Fix to not materialize RangeIndex in copy_categories
 - PR #4496 Skip tests which require 2+ GPUs
 - PR #4494 Update Java memory event handler for new RMM resource API
+- PR #4505 Fix 0 length buffers during serialization
+- PR #4482 Fix `.str.rsplit`, `.str.split`, `.str.find`, `.str.rfind`, `.str.index`, `.str.rindex` and enable related tests
+- PR #4513 Backport scalar virtual destructor fix
+- PR #4519 Remove `n` validation for `nlargest` & `nsmallest` and add negative support for `n`
+- PR #4526 Fix index slicing issue for index incase of an empty dataframe
 
 
 # cuDF 0.12.0 (04 Feb 2020)
