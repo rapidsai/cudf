@@ -150,8 +150,7 @@ def test_set_index_quantile(nelem, nparts, by):
     df["b"] = np.random.choice(cudf.datasets.names, size=nelem)
     ddf = dd.from_pandas(df, npartitions=nparts)
 
-    with dask.config.set(scheduler="single-threaded"):
-        got = ddf.set_index(by, divisions="quantile")
+    got = ddf.set_index(by, divisions="quantile")
     expect = df.sort_values(by=by).set_index(by)
     dd.assert_eq(got, expect)
 
