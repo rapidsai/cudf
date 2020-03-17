@@ -81,7 +81,7 @@ table_device_view_base<ColumnDeviceView, HostTableView>::table_device_view_base(
     {
       auto col = *itr;
       // convert the ColumnView into ColumnDeviceView
-      new(h_column) ColumnDeviceView(col,(ptrdiff_t)h_end,(ptrdiff_t)d_end);
+      new(h_column) ColumnDeviceView(col, h_end, d_end);
       h_column++; // point to memory slot for the next ColumnDeviceView
       // update the pointers for holding ColumnDeviceView's child data
       auto col_child_data_size = (ColumnDeviceView::extent(col) - sizeof(ColumnDeviceView));

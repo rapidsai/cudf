@@ -38,7 +38,7 @@ void column_device_view::destroy() {
 
 // Place any child objects in host memory (h_ptr) and use the device
 // memory ptr (d_ptr) to set any child object pointers.
-column_device_view::column_device_view( column_view source, ptrdiff_t h_ptr, ptrdiff_t d_ptr )
+column_device_view::column_device_view( column_view source, void * h_ptr, void* d_ptr )
     : detail::column_device_view_base{source.type(),       source.size(),
                                       source.head(),       source.null_mask(),
                                       source.null_count(), source.offset()},
@@ -58,7 +58,7 @@ column_device_view::column_device_view( column_view source, ptrdiff_t h_ptr, ptr
     for( size_type idx=0; idx < _num_children; ++idx )
     { // inplace-new each child into host memory
       column_view child = source.child(idx);
-      new(h_column) column_device_view(child,reinterpret_cast<ptrdiff_t>(h_end),reinterpret_cast<ptrdiff_t>(d_end));
+      new (h_column) column_device_view(child, h_end, d_end);
       h_column++; // adv to next child
       // update the pointers for holding this child column's child data
       auto col_child_data_size = extent(child) - sizeof(column_device_view);
@@ -124,11 +124,11 @@ mutable_column_device_view::mutable_column_device_view( mutable_column_view sour
   // TODO children may not be actually possible for mutable columns
 }
 
-mutable_column_device_view::mutable_column_device_view( mutable_column_view source, ptrdiff_t h_ptr, ptrdiff_t d_ptr )
+mutable_column_device_view::mutable_column_device_view(
+    mutable_column_view source, void* h_ptr, void* d_ptr)
     : detail::column_device_view_base{source.type(),       source.size(),
                                       source.head(),       source.null_mask(),
-                                      source.null_count(), source.offset()}
-{
+                                      source.null_count(), source.offset()} {
   // TODO children may not be actually possible for mutable columns
 }
 

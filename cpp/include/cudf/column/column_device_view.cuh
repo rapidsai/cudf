@@ -266,7 +266,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @param h_ptr Host memory pointer on which to place any child data.
    * @param d_ptr Device memory pointer on which to base any child pointers.
    *---------------------------------------------------------------------------**/
-  column_device_view(column_view column, ptrdiff_t h_ptr, ptrdiff_t d_ptr);
+  column_device_view(column_view column, void* h_ptr, void* d_ptr);
 
   /**---------------------------------------------------------------------------*
    * @brief Returns reference to element at the specified index.
@@ -451,8 +451,8 @@ class alignas(16) mutable_column_device_view
    * @param h_ptr Host memory pointer on which to place any child data.
    * @param d_ptr Device memory pointer on which to base any child pointers.
    *---------------------------------------------------------------------------**/
-  mutable_column_device_view(mutable_column_view column, ptrdiff_t h_ptr,
-                             ptrdiff_t d_ptr);
+  mutable_column_device_view(mutable_column_view column, void* h_ptr,
+                             void* d_ptr);
 
   /**---------------------------------------------------------------------------*
    * @brief Factory to construct a column view that is usable in device memory.
