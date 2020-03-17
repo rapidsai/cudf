@@ -587,7 +587,7 @@ class Frame(libcudfxx.table.Table):
             source, method_enum, na_option, ascending, pct
         )
 
-        return self._from_table(out_rank_table)
+        return self._from_table(out_rank_table).astype(np.float64)
 
     def repeat(self, repeats, axis=None):
         """Repeats elements consecutively
