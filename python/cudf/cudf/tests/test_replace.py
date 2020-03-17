@@ -502,3 +502,44 @@ def test_numeric_series_replace_dtype(series_dtype, replacement):
         )
         got = sr.replace([-1, 1], [replacement, replacement])
         assert_eq(expect, got)
+
+
+def test_replace_inplace():
+    data = np.array([5, 1, 2, 3, 4])
+    sr = Series(data)
+    psr = pd.Series(data)
+
+    sr_copy = sr.copy()
+    psr_copy = psr.copy()
+
+    assert_eq(sr, psr)
+    assert_eq(sr_copy, psr_copy)
+    sr.replace(5, 0, inplace=True)
+    psr.replace(5, 0, inplace=True)
+    assert_eq(sr, psr)
+    assert_eq(sr_copy, psr_copy)
+
+    psr = pd.Series(["one", "two", "three"], dtype="category")
+    sr = Series.from_pandas(psr)
+
+    sr_copy = sr.copy()
+    psr_copy = psr.copy()
+
+    assert_eq(sr, psr)
+    assert_eq(sr_copy, psr_copy)
+    sr.replace("one", "two", inplace=True)
+    psr.replace("one", "two", inplace=True)
+    assert_eq(sr, psr)
+    assert_eq(sr_copy, psr_copy)
+
+    pdf = pd.DataFrame({"A": [0, 1, 2, 3, 4], "B": [5, 6, 7, 8, 9]})
+    gdf = DataFrame.from_pandas(pdf)
+
+    pdf_copy = pdf.copy()
+    gdf_copy = gdf.copy()
+    assert_eq(pdf, gdf)
+    assert_eq(pdf_copy, gdf_copy)
+    pdf.replace(5, 0, inplace=True)
+    gdf.replace(5, 0, inplace=True)
+    assert_eq(pdf, gdf)
+    assert_eq(pdf_copy, gdf_copy)

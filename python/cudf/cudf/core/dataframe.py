@@ -2876,7 +2876,7 @@ class DataFrame(Frame):
         # Slice into partition
         return [outdf[s:e] for s, e in zip(offsets, offsets[1:] + [None])]
 
-    def replace(self, to_replace, replacement):
+    def replace(self, to_replace, replacement, inplace=False):
         """
         Replace values given in *to_replace* with *replacement*.
 
@@ -2906,13 +2906,16 @@ class DataFrame(Frame):
             its keys must match the keys in *to_replace*, and correponding
             values must be compatible (e.g., if they are lists, then they must
             match in length).
+        inplace : bool, default False
+            If True, in place.
 
         Returns
         -------
         result : DataFrame
             DataFrame after replacement.
         """
-        outdf = self.copy()
+        if not inplace:
+            outdf = self.copy()
 
         if not is_dict_like(to_replace):
             to_replace = dict.fromkeys(self.columns, to_replace)
@@ -2920,9 +2923,15 @@ class DataFrame(Frame):
             replacement = dict.fromkeys(self.columns, replacement)
 
         for k in to_replace:
-            outdf[k] = self[k].replace(to_replace[k], replacement[k])
+            if inplace:
+                self[k].replace(to_replace[k], replacement[k], inplace=inplace)
+            else:
+                outdf[k] = self[k].replace(
+                    to_replace[k], replacement[k], inplace=inplace
+                )
 
-        return outdf
+        if not inplace:
+            return outdf
 
     def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
         """Fill null values with ``value``.

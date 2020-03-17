@@ -1463,7 +1463,7 @@ class Series(Frame):
         sr_inds = self._copy_construct(data=col_inds)
         return sr_keys, sr_inds
 
-    def replace(self, to_replace, replacement):
+    def replace(self, to_replace, replacement, inplace=False):
         """
         Replace values given in *to_replace* with *replacement*.
 
@@ -1478,6 +1478,8 @@ class Series(Frame):
                   *replacement* must be of same length.
         replacement : numeric, str, list-like, or dict
             Value(s) to replace `to_replace` with.
+        inplace : bool, default False
+            If True, in place.
 
         See also
         --------
@@ -1535,7 +1537,10 @@ class Series(Frame):
             to_replace, replacement, all_nan
         )
 
-        return self._copy_construct(data=result)
+        if inplace:
+            self._column._mimic_inplace(result, inplace=True)
+        else:
+            return self._copy_construct(data=result)
 
     def reverse(self):
         """Reverse the Series
