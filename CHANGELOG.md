@@ -270,6 +270,7 @@
 - PR #4538 Fix cudf::strings::slice_strings(step=-1) for empty strings
 - PR #4557 Disable compile-errors on deprecation warnings, for JNI
 - PR #4571 Load JNI native dependencies for Scalar class
+- PR #4577 Fix libcudf.so dependencies
 
 
 # cuDF 0.12.0 (04 Feb 2020)
