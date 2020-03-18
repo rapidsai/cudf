@@ -178,7 +178,7 @@ class DatetimeColumn(column.ColumnBase):
         if len(self) > 0:
             return string._numeric_to_str_typecast_functions[
                 np.dtype(self.dtype)
-            ](self, **kwargs)
+            ](self, format="%Y-%m-%d %H:%M:%S.%f")
         else:
             return column.column_empty(0, dtype="object", masked=False)
 

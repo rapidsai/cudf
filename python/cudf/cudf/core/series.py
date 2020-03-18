@@ -1332,7 +1332,7 @@ class Series(Frame):
         """
         return self._column.as_mask()
 
-    def astype(self, dtype, errors="raise", **kwargs):
+    def astype(self, dtype, errors="raise"):
         """
         Cast the Series to the given dtype
 
@@ -1355,7 +1355,7 @@ class Series(Frame):
             return self
         try:
             return self._copy_construct(
-                data=self._column.astype(dtype, **kwargs)
+                data=self._column.astype(dtype)
             )
         except Exception as e:
             if errors == "raise":

@@ -783,17 +783,17 @@ class ColumnBase(Column):
             raise NotImplementedError(msg)
         return cpp_unique_count(self, ignore_nulls=dropna)
 
-    def astype(self, dtype, **kwargs):
+    def astype(self, dtype):
         if is_categorical_dtype(dtype):
-            return self.as_categorical_column(dtype, **kwargs)
+            return self.as_categorical_column(dtype)
         elif pd.api.types.pandas_dtype(dtype).type in (np.str_, np.object_):
-            return self.as_string_column(dtype, **kwargs)
+            return self.as_string_column(dtype)
 
         elif np.issubdtype(dtype, np.datetime64):
-            return self.as_datetime_column(dtype, **kwargs)
+            return self.as_datetime_column(dtype)
 
         else:
-            return self.as_numerical_column(dtype, **kwargs)
+            return self.as_numerical_column(dtype)
 
     def as_categorical_column(self, dtype, **kwargs):
         if "ordered" in kwargs:

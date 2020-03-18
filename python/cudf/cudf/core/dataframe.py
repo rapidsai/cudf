@@ -764,9 +764,9 @@ class DataFrame(Frame):
     def __str__(self):
         return self.to_string()
 
-    def astype(self, dtype, errors="raise", **kwargs):
+    def astype(self, dtype, errors="raise"):
         return self._apply_support_method(
-            "astype", dtype=dtype, errors=errors, **kwargs
+            "astype", dtype=dtype, errors=errors
         )
 
     def _repr_pandas025_formatting(self, ncols, nrows, dtype=None):
