@@ -519,6 +519,22 @@ def test_replace_inplace():
     assert_eq(sr, psr)
     assert_eq(sr_copy, psr_copy)
 
+    sr = Series(data)
+    psr = pd.Series(data)
+
+    sr_copy = sr.copy()
+    psr_copy = psr.copy()
+
+    assert_eq(sr, psr)
+    assert_eq(sr_copy, psr_copy)
+    sr.replace({5: 0, 3: -5})
+    psr.replace({5: 0, 3: -5})
+    assert_eq(sr, psr)
+    assert_eq(sr_copy, psr_copy)
+    srr = sr.replace()
+    psrr = psr.replace()
+    assert_eq(srr, psrr)
+
     psr = pd.Series(["one", "two", "three"], dtype="category")
     sr = Series.from_pandas(psr)
 

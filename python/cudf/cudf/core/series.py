@@ -1462,100 +1462,42 @@ class Series(Frame):
         sr_inds = self._copy_construct(data=col_inds)
         return sr_keys, sr_inds
 
-    # def replace(self, to_replace, replacement, inplace=False):
-    #     """
-    #     Replace values given in *to_replace* with *replacement*.
-
-    #     Parameters
-    #     ----------
-    #     to_replace : numeric, str or list-like
-    #         Value(s) to replace.
-    #         * numeric or str:
-    #             - values equal to *to_replace* will be replaced with *value*
-    #         * list of numeric or str:
-    #             - If *replacement* is also list-like, *to_replace* and
-    #               *replacement* must be of same length.
-    #     replacement : numeric, str, list-like, or dict
-    #         Value(s) to replace `to_replace` with.
-    #     inplace : bool, default False
-    #         If True, in place.
-
-    #     See also
-    #     --------
-    #     Series.fillna
-
-    #     Returns
-    #     -------
-    #     result : Series
-    #         Series after replacement. The mask and index are preserved.
-    #     """
-    #     # if all the elements of replacement column are
-    # None then propagate the
-    #     # same dtype as self.dtype in column._values for replacement
-    #     all_nan = False
-    #     if not is_scalar(to_replace):
-    #         if is_scalar(replacement):
-    #             all_nan = replacement is None
-    #             if all_nan:
-    #                 replacement = [replacement] * len(to_replace)
-    #             # Do not broadcast numeric dtypes
-    #             elif pd.api.types.is_numeric_dtype(self.dtype):
-    #                 replacement = [replacement]
-    #             else:
-    #                 replacement = utils.scalar_broadcast_to(
-    #                     replacement,
-    #                     (len(to_replace),),
-    #                     np.dtype(type(replacement)),
-    #                 )
-    #         else:
-    #             # If both are non-scalar
-    #             if len(to_replace) != len(replacement):
-    #                 raise ValueError(
-    #                     "Replacement lists must be "
-    #                     "of same length."
-    #                     "Expected {}, got {}.".format(
-    #                         len(to_replace), len(replacement)
-    #                     )
-    #                 )
-    #     else:
-    #         if not is_scalar(replacement):
-    #             raise TypeError(
-    #                 "Incompatible types '{}' and '{}' "
-    #                 "for *to_replace* and *replacement*.".format(
-    #                     type(to_replace).__name__, type(replacement).__name__
-    #                 )
-    #             )
-    #         to_replace = [to_replace]
-    #         replacement = [replacement]
-
-    #     if is_dict_like(to_replace) or is_dict_like(replacement):
-    #         raise TypeError("Dict-like args not supported in
-    # Series.replace()")
-
-    #     if isinstance(replacement, list):
-    #         all_nan = replacement.count(None) == len(replacement)
-    #     result = self._column.find_and_replace(
-    #         to_replace, replacement, all_nan
-    #     )
-
-    #     if inplace:
-    #         self._column._mimic_inplace(result, inplace=True)
-    #     else:
-    #         return self._copy_construct(data=result)
-
-    def replace(self, to_replace, replacement, inplace=False):
+    def replace(self, to_replace=None, value=None, inplace=False):
         """
-        Return Series with duplicate values removed
+        Replace values given in *to_replace* with *replacement*.
+
+        Parameters
+        ----------
+        to_replace : numeric, str or list-like
+            Value(s) to replace.
+            * numeric or str:
+                - values equal to *to_replace* will be replaced with *value*
+            * list of numeric or str:
+                - If *replacement* is also list-like, *to_replace* and
+                  *replacement* must be of same length.
+        value : numeric, str, list-like, or dict
+            Value(s) to replace `to_replace` with.
+        inplace : bool, default False
+            If True, in place.
+
+        See also
+        --------
+        Series.fillna
+
+        Returns
+        -------
+        result : Series
+            Series after replacement. The mask and index are preserved.
         """
+
         result = super().replace(
-            to_replace=to_replace, replacement=replacement, inplace=False
+            to_replace=to_replace, replacement=value, inplace=False
         )
 
         if inplace:
             self._column._mimic_inplace(result[0], inplace=True)
         else:
             return self._copy_construct(data=result[0])
-        # return self._mimic_inplace(result, inplace=inplace)
 
     def reverse(self):
         """Reverse the Series

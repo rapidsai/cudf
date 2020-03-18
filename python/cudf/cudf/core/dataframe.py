@@ -2876,7 +2876,7 @@ class DataFrame(Frame):
         # Slice into partition
         return [outdf[s:e] for s, e in zip(offsets, offsets[1:] + [None])]
 
-    def replace(self, to_replace, replacement, inplace=False):
+    def replace(self, to_replace=None, value=None, inplace=False):
         """
         Replace values given in *to_replace* with *replacement*.
 
@@ -2901,7 +2901,7 @@ class DataFrame(Frame):
                   columns. For example, `{'a': 1, 'z': 2}` specifies that the
                   value 1 in column `a` and the value 2 in column `z` should be
                   replaced with replacement*.
-        replacement : numeric, str, list-like, or dict
+        value : numeric, str, list-like, or dict
             Value(s) to replace `to_replace` with. If a dict is provided, then
             its keys must match the keys in *to_replace*, and correponding
             values must be compatible (e.g., if they are lists, then they must
@@ -2917,22 +2917,8 @@ class DataFrame(Frame):
         if not inplace:
             outdf = self.copy()
 
-        # if not is_dict_like(to_replace):
-        #     to_replace = dict.fromkeys(self.columns, to_replace)
-        # if not is_dict_like(replacement):
-        #     replacement = dict.fromkeys(self.columns, replacement)
-
-        # for k in to_replace:
-        #     if inplace:
-        #         self[k].replace(to_replace[k], replacement[k],
-        # inplace=inplace)
-        #     else:
-        #         outdf[k] = self[k].replace(
-        #             to_replace[k], replacement[k], inplace=inplace
-        #         )
-
         result = super().replace(
-            to_replace=to_replace, replacement=replacement, inplace=False
+            to_replace=to_replace, replacement=value, inplace=False
         )
 
         for index, col in enumerate(self.columns):

@@ -646,31 +646,27 @@ class Frame(libcudfxx.table.Table):
         return result
 
     def replace(self, to_replace, replacement, inplace=False):
-
-        results = []
+        result_cols = []
         for col in self._data.items():
-            try:
-                (
-                    col_all_nan,
-                    col_replacement,
-                    col_replace,
-                ) = _get_replacement_values(replacement, col, to_replace)
-                results.append(
-                    col[1].find_and_replace(
-                        col_replace, col_replacement, col_all_nan
-                    )
-                )
-            except KeyError:
-                results.append(col[1])
+            if to_replace is None and replacement is None:
+                result_cols.append(col[1])
+            else:
+                try:
+                    (
+                        col_all_nan,
+                        col_replacement,
+                        col_replace,
+                    ) = _get_replacement_values(replacement, col, to_replace)
 
-        # results = [col.find_and_replace(
-        #     to_replace, replacement, all_nan
-        # ) for col in self._data.columns]
-        return results
-        # if inplace:
-        #     self._column._mimic_inplace(result, inplace=True)
-        # else:
-        #     return self._copy_construct(data=result)
+                    result_cols.append(
+                        col[1].find_and_replace(
+                            col_replace, col_replacement, col_all_nan
+                        )
+                    )
+                except KeyError:
+                    result_cols.append(col[1])
+
+        return result_cols
 
     def _copy_categories(self, other, include_index=True):
         """
@@ -1236,9 +1232,14 @@ class Frame(libcudfxx.table.Table):
 
 def _get_replacement_values(replacement, col, to_replace):
     from cudf.utils import utils
+    from pandas.api.types import is_dict_like
 
     all_nan = False
-    if not is_scalar(to_replace):
+
+    if is_dict_like(to_replace) and replacement is None:
+        replacement = list(to_replace.values())
+        to_replace = list(to_replace.keys())
+    elif not is_scalar(to_replace):
         if is_scalar(replacement):
             all_nan = replacement is None
             if all_nan:
@@ -1272,13 +1273,11 @@ def _get_replacement_values(replacement, col, to_replace):
             )
         to_replace = [to_replace]
         replacement = [replacement]
-    from pandas.api.types import is_dict_like
 
     if is_dict_like(to_replace) and is_dict_like(replacement):
         replacement = [replacement[col[0]]]
         to_replace = [to_replace[col[0]]]
-        # raise TypeError("Dict-like args not supported in Series.replace()")
-        # import pdb; pdb.set_trace()
+
     if isinstance(replacement, list):
         all_nan = replacement.count(None) == len(replacement)
     return all_nan, replacement, to_replace
