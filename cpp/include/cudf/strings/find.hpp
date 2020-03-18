@@ -28,7 +28,7 @@ namespace strings
  * @brief Returns a column of character position values where the target
  * string is first found in each string of the provided column.
  *
- * If the string is not found, -1 is returned for that row entry.
+ * If `target` is not found, -1 is returned for that row entry in the output column.
  *
  * The target string is searched within each string in the character
  * position range [start,stop). If the stop parameter is -1, then the
@@ -55,7 +55,7 @@ std::unique_ptr<column> find( strings_column_view const& strings,
  * @brief Returns a column of character position values where the target
  * string is first found searching from the end of each string.
  *
- * If the string is not found, -1 is returned for that entry.
+ * If `target` is not found, -1 is returned for that entry.
  *
  * The target string is searched within each string in the character
  * position range [start,stop). If the stop parameter is -1, then the
@@ -81,7 +81,8 @@ std::unique_ptr<column> rfind( strings_column_view const& strings,
  * @brief Returns a column of boolean values for each string where true indicates
  * the target string was found within that string in the provided column.
  *
- * If a target string is not found, false is returned for that entry for that column.
+ * If the `target` is not found for a string, false is returned for that entry in the output column.
+ * If `target` is an empty string, true is returned for all non-null entries in the output column.
  *
  * Any null string entries return corresponding null entries in the output columns.
  *
@@ -98,8 +99,9 @@ std::unique_ptr<column> contains( strings_column_view const& strings,
  * @brief Returns a column of boolean values for each string where true indicates
  * the target string was found at the beginning of that string in the provided column.
  *
- * If a target string is not found at the beginning of the string, false is set for
+ * If `target` is not found at the beginning of a string, false is set for
  * that row entry in the output column.
+ * If `target` is an empty string, true is returned for all non-null entries in the output column.
  *
  * Any null string entries return corresponding null entries in the output columns.
  *
@@ -116,8 +118,9 @@ std::unique_ptr<column> starts_with( strings_column_view const& strings,
  * @brief Returns a column of boolean values for each string where true indicates
  * the target string was found at the end of that string in the provided column.
  *
- * If a target string is not found at the end of the string, false is set for
+ * If `target` is not found at the end of a string, false is set for
  * that row entry in the output column.
+ * If `target` is an empty string, true is returned for all non-null entries in the output column.
  *
  * Any null string entries return corresponding null entries in the output columns.
  *
