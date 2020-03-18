@@ -226,7 +226,7 @@ std::unique_ptr<column> rank(column_view const &input, rank_method method,
                              cudaStream_t stream = 0) {
   data_type const output_type = (percentage or method == rank_method::AVERAGE)
                                     ? data_type(FLOAT64)
-                                    : data_type(INT32);
+                                    : data_type(type_to_id<size_type>());
   std::unique_ptr<column> rank_column = [&_include_nulls, &output_type, &input, &mr, &stream] {
     // na_option=keep assign NA to NA values
     if (_include_nulls == include_nulls::NO)
