@@ -42,9 +42,10 @@
 #include "jni_utils.hpp"
 
 template <class T>
-std::unique_ptr<cudf::column> clamper(cudf::column_view* column_view, T lo, T hi, T lo_replace, T hi_replace) {
+std::unique_ptr<cudf::column> clamper(cudf::column_view* column_view, T lo = 0, T hi = 0, T lo_replace = -1, T hi_replace = 1) {
   using ScalarType = cudf::experimental::scalar_type_t<T>;
   using cudf::experimental::type_to_id;
+  using cudf::experimental::clamp;
   std::unique_ptr<cudf::scalar> lo_scalar = cudf::make_numeric_scalar(cudf::data_type{type_to_id<T>()});
   std::unique_ptr<cudf::scalar> hi_scalar = cudf::make_numeric_scalar(cudf::data_type{type_to_id<T>()});
   std::unique_ptr<cudf::scalar> lo_replace_scalar = cudf::make_numeric_scalar(cudf::data_type{type_to_id<T>()});
@@ -57,7 +58,7 @@ std::unique_ptr<cudf::column> clamper(cudf::column_view* column_view, T lo, T hi
   static_cast<ScalarType*>(hi_scalar.get())->set_valid(true);
   static_cast<ScalarType*>(hi_replace_scalar.get())->set_value(hi_replace);
   static_cast<ScalarType*>(hi_replace_scalar.get())->set_valid(true);
-  return cudf::experimental::clamp(*column_view, *lo_scalar, *lo_replace_scalar, *hi_scalar, *hi_replace_scalar);
+  return clamp(*column_view, *lo_scalar, *lo_replace_scalar, *hi_scalar, *hi_replace_scalar);
 }
 
 extern "C" {
@@ -1105,29 +1106,30 @@ JNIEXPORT jint JNICALL Java_ai_rapids_cudf_ColumnVector_getNativeNullCountColumn
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_signum(JNIEnv *env, jobject j_object, jlong handle) {
 
     JNI_NULL_CHECK(env, handle, "native view handle is null", 0)
-    using cudf::experimental::clamp;
     try {
       cudf::column_view *column_view = reinterpret_cast<cudf::column_view *>(handle);
       std::unique_ptr<cudf::column> result = nullptr;
       switch(column_view->type().id()) {
       case cudf::FLOAT32:
-        result = clamper<float>(column_view, 0, 0, -1, 1);
+        result = clamper<float>(column_view);
         break;
       case cudf::FLOAT64:
-        result = clamper<double>(column_view, 0, 0, -1, 1);
+        result = clamper<double>(column_view);
         break;
       case cudf::INT64:
-        result = clamper<int64_t>(column_view, 0, 0, -1, 1);
+        result = clamper<int64_t>(column_view);
         break;
       case cudf::INT32:
-        result = clamper<int32_t>(column_view, 0, 0, -1, 1);
+        result = clamper<int32_t>(column_view);
         break;
       case cudf::INT16:
-        result = clamper<int16_t>(column_view, 0, 0, -1, 1);
+        result = clamper<int16_t>(column_view);
         break;
       case cudf::INT8:
-        result = clamper<int8_t>(column_view, 0, 0, -1, 1);
+        result = clamper<int8_t>(column_view);
         break;
+      default:
+        cudf::jni::throw_java_exception(env, cudf::jni::ILLEGAL_ARG_CLASS, "Unsupported type");
       }
      return reinterpret_cast<jlong>(result.release());
     }
@@ -1135,5 +1137,3 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_signum(JNIEnv *env, job
 }
 
 } // extern "C"
-
-

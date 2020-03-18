@@ -22,6 +22,7 @@
 
 ## New Features
 
+- PR #4564 Added Java bindings for signum operator.
 - PR #4360 Added Java bindings for bitwise shift operators
 - PR #3577 Add initial dictionary support to column classes
 - PR #3777 Add support for dictionary column in gather
