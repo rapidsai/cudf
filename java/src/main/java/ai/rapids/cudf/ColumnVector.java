@@ -1829,9 +1829,9 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * lo: 3, hi: NULL, lo_replace : 0, hi_replace : 16
    * output:{0, 0, 3, NULL, 5, 6, 7}
    * ```
-   * @param lo - lo Minimum clamp value. All elements less than `lo` will be replaced by `lo`.
+   * @param lo - Minimum clamp value. All elements less than `lo` will be replaced by `lo`.
    *           Ignored if null.
-   * @param hi - hi Maximum clamp value. All elements greater than `hi` will be replaced by `hi`.
+   * @param hi - Maximum clamp value. All elements greater than `hi` will be replaced by `hi`.
    *           Ignored if null.
    * @return Returns a new clamped column as per `lo` and `hi` boundaries
    */
@@ -1869,11 +1869,11 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    *    output:{0, 0, 3, NULL, 5, 6, 7}
    * ```
    *
-   * @param lo - lo Minimum clamp value. All elements less than `lo` will be replaced by `loReplace`. Ignored if null.
-   * @param loReplace - loReplace All elements less than `lo` will be replaced by `loReplace`.
-   * @param hi - hi maximum clamp value. All elements greater than `hi` will be replaced by `hiReplace`. Ignored if null.
-   * @param hiReplace - loReplace All elements greater than `hi` will be replaced by `hiReplace`.
-   * @return - a clamped column as per `lo` and `hi` boundaries
+   * @param lo - Minimum clamp value. All elements less than `lo` will be replaced by `loReplace`. Ignored if null.
+   * @param loReplace - All elements less than `lo` will be replaced by `loReplace`.
+   * @param hi - Maximum clamp value. All elements greater than `hi` will be replaced by `hiReplace`. Ignored if null.
+   * @param hiReplace - All elements greater than `hi` will be replaced by `hiReplace`.
+   * @return - a new clamped column as per `lo` and `hi` boundaries
    */
   public ColumnVector clamp(Scalar lo, Scalar loReplace, Scalar hi, Scalar hiReplace) {
     return new ColumnVector(clamper(this.getNativeView(), lo.getScalarHandle(),
