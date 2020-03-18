@@ -18,6 +18,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/concatenate.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
