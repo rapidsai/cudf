@@ -116,6 +116,11 @@ column_device_view::create(column_view source, cudaStream_t stream) {
                            descendant_storage->size(), cudaMemcpyDefault,
                            stream));
 
+  // This sync is necessary since we are copying from the function local
+  // staging_buffer that goes out of scope when the function returns. Otherwise
+  // the copy may not be complete before the function returns.
+  CUDA_TRY(cudaStreamSynchronize(stream));
+
   return p;
 }
 
