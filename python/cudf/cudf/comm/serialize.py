@@ -8,7 +8,6 @@ import cudf.core.groupby.groupby
 serializable_classes = (
     cudf.DataFrame,
     cudf.Series,
-    cudf.core.series.Series,
     cudf.core.groupby.groupby.GroupBy,
     cudf.core.column.column.Column,
     cudf.core.buffer.Buffer,
