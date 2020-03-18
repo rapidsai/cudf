@@ -40,6 +40,7 @@
 #include <bit.hpp.jit>
 
 #include <rmm/device_scalar.hpp>
+#include <thrust/binary_search.h>
 
 #include <memory>
 
@@ -537,8 +538,8 @@ std::unique_ptr<column> rolling_window_udf(column_view const &input,
 /**
 * @copydoc cudf::experimental::rolling_window(
 *                                  column_view const& input,
-*                                  WindowIterator preceding_window_begin,
-*                                  WindowIterator following_window_begin,
+*                                  PrecedingWindowIterator preceding_window_begin,
+*                                  FollowingWindowIterator following_window_begin,
 *                                  size_type min_periods,
 *                                  std::unique_ptr<aggregation> const& agg,
 *                                  rmm::mr::device_memory_resource* mr)
@@ -649,10 +650,9 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& grouping_keys,
   CUDF_EXPECTS((min_periods > 0), "min_periods must be positive");
 
   using sort_groupby_helper = cudf::experimental::groupby::detail::sort::sort_groupby_helper;
-  sort_groupby_helper helper{grouping_keys, cudf::include_nulls::NO, cudf::sorted::YES};
+  sort_groupby_helper helper{grouping_keys, cudf::include_nulls::YES, cudf::sorted::YES};
 
   auto group_offsets{helper.group_offsets()};
-  group_offsets.push_back(input.size()); // Cap the end with the number of inputs.
   auto const& group_labels{helper.group_labels()};
 
   // `group_offsets` are interpreted in adjacent pairs, each pair representing the offsets
@@ -754,13 +754,9 @@ namespace
         auto group_start = d_group_offsets[group_label];
         auto lower_bound = d_timestamps[idx] - preceding_window_in_days*mult_factor;
 
-        auto preceding_i{idx}; // Start at current row.
-        // If preceding value is part of current group, and also exceeds lower_bound, extend window backwards.
-        while ((preceding_i-1) >= group_start && d_timestamps[preceding_i-1] >= lower_bound) {
-          --preceding_i;
-        }
-
-        return idx - preceding_i + 1; // Preceding must account for current row.
+        return ((d_timestamps + idx) 
+                 - thrust::lower_bound(thrust::seq, d_timestamps + group_start, d_timestamps + idx, lower_bound)) 
+               + 1; // Add 1, for `preceding` to account for current row.
       };
   
     auto following_calculator = 
@@ -775,13 +771,9 @@ namespace
         auto group_end = d_group_offsets[group_label+1]; // Cannot fall off the end, since offsets is capped with `input.size()`.
         auto upper_bound = d_timestamps[idx] + following_window_in_days*mult_factor;
 
-        auto following_i{idx}; // Start at current row.
-        // If following value is part of current group, and does not exceed upper_bound, extend window forwards.
-        while ((following_i+1) < group_end && d_timestamps[following_i+1] <= upper_bound) {
-          ++following_i;
-        }
-
-        return following_i - idx;
+        return (thrust::upper_bound(thrust::seq, d_timestamps + idx, d_timestamps + group_end, upper_bound) 
+                 - (d_timestamps + idx))
+               - 1;
       };
 
     return cudf::experimental::detail::rolling_window(
@@ -813,10 +805,9 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
   CUDF_EXPECTS((min_periods > 0), "min_periods must be positive");
 
   using sort_groupby_helper = cudf::experimental::groupby::detail::sort::sort_groupby_helper;
-  sort_groupby_helper helper{grouping_keys, cudf::include_nulls::NO, cudf::sorted::YES};
+  sort_groupby_helper helper{grouping_keys, cudf::include_nulls::YES, cudf::sorted::YES};
 
   auto group_offsets{helper.group_offsets()};
-  group_offsets.push_back(input.size()); // Cap the end with the number of inputs.
   auto const& group_labels{helper.group_labels()};
 
   // Assumes that `group_offsets` starts with `0`, ends with `input.size`
