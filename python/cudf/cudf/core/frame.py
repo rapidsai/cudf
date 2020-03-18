@@ -655,12 +655,12 @@ class Frame(libcudfxx.table.Table):
                     (
                         col_all_nan,
                         col_replacement,
-                        col_replace,
+                        col_to_replace,
                     ) = _get_replacement_values(replacement, col, to_replace)
 
                     result_cols.append(
                         col[1].find_and_replace(
-                            col_replace, col_replacement, col_all_nan
+                            col_to_replace, col_replacement, col_all_nan
                         )
                     )
                 except KeyError:

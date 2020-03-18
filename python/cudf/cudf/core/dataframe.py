@@ -2917,15 +2917,17 @@ class DataFrame(Frame):
         if not inplace:
             outdf = self.copy()
 
-        result = super().replace(
+        result_cols = super().replace(
             to_replace=to_replace, replacement=value, inplace=False
         )
 
         for index, col in enumerate(self.columns):
             if inplace:
-                self[col]._column._mimic_inplace(result[index], inplace=True)
+                self[col]._column._mimic_inplace(
+                    result_cols[index], inplace=True
+                )
             else:
-                outdf[col] = result[index]
+                outdf[col] = result_cols[index]
 
         if not inplace:
             return outdf
