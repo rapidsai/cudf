@@ -519,7 +519,7 @@ TEST_F(ReductionDtypeTest, different_precision)
         (int_values, static_cast<cudf::category>(expected_value), false,
          sum_agg, cudf::data_type(cudf::CATEGORY));
 
-    this->reduction_test<cudf::experimental::bool8, cudf::date32>
+    this->reduction_test<bool, cudf::date32>
         (int_values, static_cast<cudf::date32>(expected_value), false,
          sum_agg, cudf::data_type(cudf::CATEGORY));
          )
@@ -528,34 +528,32 @@ TEST_F(ReductionDtypeTest, different_precision)
            sum_agg, GDF_STRING_CATEGORY);
      */
 
-    // supported case: cudf::experimental::bool8
     std::vector<bool> v = convert_values<bool>(int_values);
 
     // When summing bool8 values into an non-bool arithmetic type,
     // it's an integer/float sum of ones and zeros.
-    int expected_bool8 = std::accumulate(v.begin(), v.end(), int{0});
+    int expected = std::accumulate(v.begin(), v.end(), int{0});
 
-    this->reduction_test<cudf::experimental::bool8, int8_t>
-        (int_values, static_cast<int8_t>(expected_bool8), true,
+    this->reduction_test<bool, int8_t>
+        (int_values, static_cast<int8_t>(expected), true,
          sum_agg, cudf::data_type(cudf::INT8));
-    this->reduction_test<cudf::experimental::bool8, int16_t>
-        (int_values, static_cast<int16_t>(expected_bool8), true,
+    this->reduction_test<bool, int16_t>
+        (int_values, static_cast<int16_t>(expected), true,
          sum_agg, cudf::data_type(cudf::INT16));
-    this->reduction_test<cudf::experimental::bool8, int32_t>
-        (int_values, static_cast<int32_t>(expected_bool8), true,
+    this->reduction_test<bool, int32_t>
+        (int_values, static_cast<int32_t>(expected), true,
          sum_agg, cudf::data_type(cudf::INT32));
-    this->reduction_test<cudf::experimental::bool8, int64_t>
-        (int_values, static_cast<int64_t>(expected_bool8), true,
+    this->reduction_test<bool, int64_t>
+        (int_values, static_cast<int64_t>(expected), true,
          sum_agg, cudf::data_type(cudf::INT64));
-    this->reduction_test<cudf::experimental::bool8, float>
-        (int_values, static_cast<float>(expected_bool8), true,
+    this->reduction_test<bool, float>
+        (int_values, static_cast<float>(expected), true,
          sum_agg, cudf::data_type(cudf::FLOAT32));
-    this->reduction_test<cudf::experimental::bool8, double>
-        (int_values, static_cast<double>(expected_bool8), true,
+    this->reduction_test<bool, double>
+        (int_values, static_cast<double>(expected), true,
          sum_agg, cudf::data_type(cudf::FLOAT64));
 
-    // make sure boolean arithmetic semantics are obeyed when
-    // reducing to a bool
+    // make sure boolean arithmetic semantics are obeyed when reducing to a bool
     this->reduction_test<bool, bool>
         (int_values, cudf::experimental::true_v, true, sum_agg, cudf::data_type(cudf::BOOL8));
 
