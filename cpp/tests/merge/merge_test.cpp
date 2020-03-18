@@ -47,7 +47,7 @@ class MergeTest_ : public cudf::test::BaseFixture {};
 TYPED_TEST_CASE(MergeTest_, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(MergeTest_, MergeIsZeroWhenShouldNotBeZero) {
-    using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam>;
+    using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam, int>;
 
     columnFactoryT leftColWrap1{1,2,3,4,5};
     columnFactoryT rightColWrap1{};
