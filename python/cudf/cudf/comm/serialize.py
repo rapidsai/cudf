@@ -13,7 +13,7 @@ serializable_classes = (
     cudf.Series,
     cudf.core.groupby.groupby.GroupBy,
     cudf.core.groupby.groupby._Grouping,
-    cudf.core.column.column.Column,
+    cudf.core.column.column.ColumnBase,
     cudf.core.buffer.Buffer,
 )
 
