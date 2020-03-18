@@ -9,7 +9,6 @@ import pandas as pd
 from pandas.api.types import is_dict_like
 
 import cudf
-import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
 from cudf.core.column import (
     ColumnBase,
@@ -614,7 +613,7 @@ class Series(Frame):
             # e.g. for fn = 'and', _apply_op equivalent is '__and__'
             return other._apply_op(self, fn)
 
-        libcudf.nvtx.nvtx_range_push("CUDF_BINARY_OP", "orange")
+        libcudfxx.nvtx.range_push("CUDF_BINARY_OP", "orange")
         result_name = utils.get_result_name(self, other)
         if isinstance(other, Series):
             lhs, rhs = _align_indices([self, other], allow_non_unique=True)
@@ -649,7 +648,7 @@ class Series(Frame):
 
         outcol = lhs._column.binary_operator(fn, rhs, reflect=reflect)
         result = lhs._copy_construct(data=outcol, name=result_name)
-        libcudf.nvtx.nvtx_range_pop()
+        libcudfxx.nvtx.range_pop()
         return result
 
     def add(self, other, fill_value=None, axis=0):
