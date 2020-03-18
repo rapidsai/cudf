@@ -119,7 +119,7 @@ column_device_view::create(column_view source, cudaStream_t stream) {
   return p;
 }
 
-size_type column_device_view::extent(column_view const& source) {
+std::size_t column_device_view::extent(column_view const& source) {
   auto get_extent = thrust::make_transform_iterator(
       thrust::make_counting_iterator(0),
       [&source](auto i) { return extent(source.child(i)); });
@@ -161,11 +161,13 @@ std::unique_ptr<mutable_column_device_view, std::function<void(mutable_column_de
   return p;
 }
 
-size_type mutable_column_device_view::extent(mutable_column_view source) {
-  size_type data_size = sizeof(mutable_column_device_view);
-  for( size_type idx=0; idx < source.num_children(); ++idx )
-    data_size += extent(source.child(idx));
-  return data_size;
+std::size_t mutable_column_device_view::extent(mutable_column_view source) {
+  auto get_extent = thrust::make_transform_iterator(
+      thrust::make_constant_iterator(0),
+      [&source](auto i) { return extent(source.child(i)); });
+
+  return std::accumulate(get_extent, get_extent + source.num_children(),
+                         sizeof(mutable_column_device_view));
 }
 
 

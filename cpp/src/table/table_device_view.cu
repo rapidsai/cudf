@@ -50,9 +50,9 @@ table_device_view_base<ColumnDeviceView, HostTableView>::table_device_view_base(
     // First calculate the size of memory needed to hold the
     // table's ColumnDeviceViews. This is done by calling extent()
     // for each of the table's ColumnViews columns.
-    size_type views_size_bytes =
+    std::size_t views_size_bytes =
         std::accumulate(source_view.begin(), source_view.end(), 0,
-            [](size_type init, auto col) {
+            [](std::size_t init, auto col) {
                 return init + ColumnDeviceView::extent(col);
             });
     // A buffer of CPU memory is allocated to hold the ColumnDeviceView

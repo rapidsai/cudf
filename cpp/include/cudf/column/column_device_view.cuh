@@ -397,7 +397,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    *
    * @param source_view The `column_view` to use for this calculation.
    *---------------------------------------------------------------------------**/
-  static size_type extent(column_view const& source_view);
+  static std::size_t extent(column_view const& source_view);
 
   /**---------------------------------------------------------------------------*
    * @brief Returns the specified child
@@ -637,7 +637,7 @@ class alignas(16) mutable_column_device_view
    *
    * @param source_view The `column_view` to use for this calculation.
    *---------------------------------------------------------------------------**/
-  static size_type extent(mutable_column_view source_view);
+  static std::size_t extent(mutable_column_view source_view);
 
  private:
   mutable_column_device_view*
