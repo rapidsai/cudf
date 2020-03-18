@@ -184,11 +184,11 @@ TYPED_TEST (ClampTestNumeric, WithNoNull){
    
     T lo = 2;
     T hi = 8;
-    std::vector<T> input({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
+    auto input = cudf::test::make_type_param_vector<T>({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
 
     auto got = this->run_clamp(input, {}, lo, true, hi, true, lo, true, hi, true);
 
-    cudf::test::fixed_width_column_wrapper<T> expected({2, 2, 2, 3, 4, 5, 6, 7, 8, 8, 8});
+    cudf::test::fixed_width_column_wrapper<T, int> expected({2, 2, 2, 3, 4, 5, 6, 7, 8, 8, 8});
 
     cudf::test::expect_columns_equal(expected, got->view());
 }
@@ -198,11 +198,11 @@ TYPED_TEST (ClampTestNumeric, LowerNull){
 
     T lo = 2;
     T hi = 8;
-    std::vector<T> input({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
+    auto input = cudf::test::make_type_param_vector<T>({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
 
     auto got = this->run_clamp(input, {}, lo, false, hi, true, lo, false, hi, true);
 
-    cudf::test::fixed_width_column_wrapper<T> expected({0, 1, 2, 3, 4, 5, 6, 7, 8, 8, 8});
+    cudf::test::fixed_width_column_wrapper<T, int> expected({0, 1, 2, 3, 4, 5, 6, 7, 8, 8, 8});
 
     cudf::test::expect_columns_equal(expected, got->view());
 }
@@ -212,11 +212,11 @@ TYPED_TEST (ClampTestNumeric, UpperNull){
 
     T lo = 2;
     T hi = 8;
-    std::vector<T> input({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
+    auto input = cudf::test::make_type_param_vector<T>({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
 
     auto got = this->run_clamp(input, {}, lo, true, hi, false, lo, true, hi, false);
 
-    cudf::test::fixed_width_column_wrapper<T> expected({2, 2, 2, 3, 4, 5, 6, 7, 8, 9, 10});
+    cudf::test::fixed_width_column_wrapper<T, int> expected({2, 2, 2, 3, 4, 5, 6, 7, 8, 9, 10});
 
     cudf::test::expect_columns_equal(expected, got->view());
 }
@@ -226,12 +226,12 @@ TYPED_TEST (ClampTestNumeric, InputNull){
 
     T lo = 2;
     T hi = 8;
-    std::vector<T> input         ({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
+    auto input = cudf::test::make_type_param_vector<T>({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
     std::vector<cudf::size_type> input_validity({0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0});
 
     auto got = this->run_clamp(input, input_validity, lo, true, hi, true, lo, true, hi, true);
 
-    cudf::test::fixed_width_column_wrapper<T> expected({2, 2, 2, 3, 4, 5, 6, 7, 8, 8, 8}, {0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0});
+    cudf::test::fixed_width_column_wrapper<T, int> expected({2, 2, 2, 3, 4, 5, 6, 7, 8, 8, 8}, {0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0});
 
     cudf::test::expect_columns_equal(expected, got->view());
 }
@@ -243,12 +243,12 @@ TYPED_TEST (ClampTestNumeric, InputNulliWithReplace){
     T hi = 8;
     T lo_replace = 16;
     T hi_replace = 32;
-    std::vector<T> input         ({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
+    auto input = cudf::test::make_type_param_vector<T>({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
     std::vector<cudf::size_type> input_validity({0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0});
 
     auto got = this->run_clamp(input, input_validity, lo, true, hi, true, lo_replace, true, hi_replace, true);
 
-    cudf::test::fixed_width_column_wrapper<T> expected({16, 16, 2, 3, 4, 5, 6, 7, 8, 32, 32}, {0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0});
+    cudf::test::fixed_width_column_wrapper<T, int> expected({16, 16, 2, 3, 4, 5, 6, 7, 8, 32, 32}, {0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0});
 
     cudf::test::expect_columns_equal(expected, got->view());
 }
