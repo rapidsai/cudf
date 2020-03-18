@@ -887,3 +887,13 @@ def test_out_of_bounds_indexing():
         a[[0, 1, 9]] = 2
     with pytest.raises(IndexError):
         a[[0, 1, -4]] = 2
+
+
+@pytest.mark.parametrize("index", [["a"], ["a", "a"], ["a", "a", "b", "c"]])
+def test_iloc_categorical_index(index):
+    gdf = cudf.DataFrame({"data": range(len(index))}, index=index)
+    gdf.index = gdf.index.astype("category")
+    pdf = gdf.to_pandas()
+    expect = pdf.iloc[:, 0]
+    got = gdf.iloc[:, 0]
+    assert_eq(expect, got)

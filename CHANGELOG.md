@@ -24,20 +24,18 @@
 
 - PR #4360 Added Java bindings for bitwise shift operators
 - PR #3577 Add initial dictionary support to column classes
-- PR #3917 Add dictionary add_keys function
 - PR #3777 Add support for dictionary column in gather
 - PR #3693 add string support, skipna to scan operation
 - PR #3662 Define and implement `shift`.
-- PR #3842 ORC writer: add support for column statistics
 - PR #3861 Added Series.sum feature for String
 - PR #4069 Added cast of numeric columns from/to String
 - PR #3681 Add cudf::experimental::boolean_mask_scatter
-- PR #4088 Added asString() on ColumnVector in Java that takes a format string
 - PR #4040 Add support for n-way merge of sorted tables
 - PR #4053 Multi-column quantiles.
 - PR #4100 Add set_keys function for dictionary columns
 - PR #3894 Add remove_keys functions for dictionary columns
 - PR #4107 Add groupby nunique aggregation
+- PR #4235 Port nvtx.pyx to use non-legacy libcudf APIs
 - PR #4153 Support Dask serialization protocol on cuDF objects
 - PR #4127 Add python API for n-way sorted merge (merge_sorted)
 - PR #4164 Add Buffer "constructor-kwargs" header
@@ -85,19 +83,15 @@
 - PR #3911 Adding null boolean handling for copy_if_else
 - PR #4003 Drop old `to_device` utility wrapper function
 - PR #4002 Adding to_frame and fix for categorical column issue
-- PR #4035 Port NVText tokenize function to libcudf++
 - PR #4009 build script update to enable cudf build without installing
 - PR #3897 Port cuIO JSON reader to cudf::column types
 - PR #4008 Eliminate extra copy in column constructor
 - PR #4013 Add cython definition for io readers cudf/io/io_types.hpp
 - PR #4028 Port json.pyx to use new libcudf APIs
 - PR #4014 ORC/Parquet: add count parameter to stripe/rowgroup-based reader API
-- PR #4042 Port cudf/io/functions.hpp to Cython for use in IO bindings
-- PR #3880 Add aggregation infrastructure support for reduction
 - PR #3880 Add aggregation infrastructure support for cudf::reduce
-- PR #4059 Add aggregation infrastructure support for cudf::scan
+- PR #4059 Add aggregation infrastructure support for cudf::scan 
 - PR #4021 Change quantiles signature for clarity.
-- PR #4058 Port hash.pyx to use libcudf++ APIs
 - PR #4057 Handle offsets in cython Column class
 - PR #4045 Reorganize `libxx` directory
 - PR #4029 Port stream_compaction.pyx to use libcudf++ APIs
@@ -123,7 +117,6 @@
 - PR #4098 Remove legacy calls from libcudf strings column code
 - PR #4044 Port join.pyx to use libcudf++ APIs
 - PR #4111 Use `Buffer`'s to serialize `StringColumn`
-- PR #4133 Mask cleanup and fixes: use `int32` dtype, ensure 64 byte padding, handle offsets
 - PR #4113 Get `len` of `StringColumn`s without `nvstrings`
 - PR #4147 Remove workaround for UNKNOWN_NULL_COUNT in contiguous_split.
 - PR #4130 Renames in-place `cudf::experimental::fill` to `cudf::experimental::fill_in_place`
@@ -193,9 +186,11 @@
 - PR #4499 Adding changes to handle include `keep_index` and `RangeIndex`
 - PR #4533 Import `tlz` for optional `cytoolz` support
 - PR #4493 Skip legacy testing in CI
+- PR #4346 Port groupby Cython/Python to use libcudf++ API
 - PR #4524 Updating `__setitem__` for DataFrame to use scalar scatter
 - PR #4534 Disable deprecation warnings as errors.
 - PR #4506 Check for multi-dimensional data in column/Series creation
+- PR #4549 Add option to disable deprecation warnings.
 
 ## Bug Fixes
 
@@ -226,13 +221,9 @@
 - PR #4089 Fix dask groupby mutliindex test case issues in join
 - PR #4097 Fix strings concatenate logic with column offsets
 - PR #4076 All null string entries should have null data buffer
-- PR #4145 Support empty index case in DataFrame._from_table
 - PR #4109 Use rmm::device_vector instead of thrust::device_vector
 - PR #4113 Use `.nvstrings` in `StringColumn.sum(...)`
 - PR #4116 Fix a bug in contiguous_split() where tables with mixed column types could corrupt string output
-- PR #4108 Fix dtype bugs in dask_cudf metadata (metadata_nonempty overhaul)
-- PR #4138 Really fix strings concatenate logic with column offsets
-- PR #4119 Fix binary ops slowdown using jitify -remove-unused-globals
 - PR #4125 Fix type enum to account for added Dictionary type in `types.hpp`
 - PR #4132 Fix `hash_partition` null mask allocation
 - PR #4137 Update Java for mutating fill and rolling window changes
@@ -297,6 +288,9 @@
 - PR #4513 Backport scalar virtual destructor fix
 - PR #4519 Remove `n` validation for `nlargest` & `nsmallest` and add negative support for `n`
 - PR #4526 Fix index slicing issue for index incase of an empty dataframe
+- PR #4538 Fix cudf::strings::slice_strings(step=-1) for empty strings
+- PR #4557 Disable compile-errors on deprecation warnings, for JNI
+- PR #4571 Load JNI native dependencies for Scalar class
 
 
 # cuDF 0.12.0 (04 Feb 2020)
