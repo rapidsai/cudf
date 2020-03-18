@@ -503,27 +503,23 @@ class Frame(libcudfxx.table.Table):
         q,
         interpolation="LINEAR",
         is_sorted=False,
-        column_order=(),
-        null_precedence=(),
+        ascending=(),
+        na_position=(),
+        cast_to_doubles=False,
     ):
         interpolation = libcudfxx.types.Interpolation[interpolation]
 
         is_sorted = libcudfxx.types.Sorted["YES" if is_sorted else "NO"]
 
-        column_order = [libcudfxx.types.Order[key] for key in column_order]
-
-        null_precedence = [
-            libcudfxx.types.NullOrder[key] for key in null_precedence
-        ]
+        sortmap = (
+            None
+            if is_sorted
+            else libcudfxx.sort.order_by(self, ascending, na_position,)
+        )
 
         result = self.__class__._from_table(
             libcudfxx.quantiles.quantiles(
-                self,
-                q,
-                interpolation,
-                is_sorted,
-                column_order,
-                null_precedence,
+                self, q, interpolation, sortmap, cast_to_doubles
             )
         )
 

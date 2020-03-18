@@ -1,5 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+from libcpp cimport bool
 from libcpp.vector cimport vector
 from libcpp.memory cimport unique_ptr
 
@@ -15,6 +16,7 @@ from cudf._libxx.types cimport (
 
 from cudf._libxx.cpp.table.table cimport table
 from cudf._libxx.cpp.table.table_view cimport table_view
+from cudf._libxx.cpp.column.column_view cimport column_view
 cimport cudf._libxx.cpp.types as libcudf_types
 cimport cudf._libxx.cpp.quantiles as cpp_quantiles
 
@@ -22,32 +24,21 @@ cimport cudf._libxx.cpp.quantiles as cpp_quantiles
 def quantiles(Table source_table,
               vector[double] q,
               object interp,
-              object is_input_sorted,
-              list column_order,
-              list null_precedence):
+              Column sortmap,
+              bool cast_to_doubles):
     cdef table_view c_input = source_table.data_view()
     cdef vector[double] c_q = q
     cdef libcudf_types.interpolation c_interp = <libcudf_types.interpolation>(
         <underlying_type_t_interpolation> interp
     )
-    cdef libcudf_types.sorted c_is_input_sorted = <libcudf_types.sorted>(
-        <underlying_type_t_sorted> is_input_sorted
-    )
-    cdef vector[libcudf_types.order] c_column_order
-    cdef vector[libcudf_types.null_order] c_null_precedence
+    cdef column_view c_sortmap
 
-    c_column_order.reserve(len(column_order))
-    c_null_precedence.reserve(len(null_precedence))
+    if sortmap is None:
+        c_sortmap = column_view()
+    else:
+        c_sortmap = sortmap.view()
 
-    for value in column_order:
-        c_column_order.push_back(
-            <libcudf_types.order>(<underlying_type_t_order> value)
-        )
-
-    for value in null_precedence:
-        c_null_precedence.push_back(
-            <libcudf_types.null_order>(<underlying_type_t_null_order> value)
-        )
+    cdef bool c_cast_to_doubles = cast_to_doubles
 
     cdef unique_ptr[table] c_result
 
@@ -57,9 +48,8 @@ def quantiles(Table source_table,
                 c_input,
                 c_q,
                 c_interp,
-                c_is_input_sorted,
-                c_column_order,
-                c_null_precedence
+                c_sortmap,
+                c_cast_to_doubles
             )
         )
 
