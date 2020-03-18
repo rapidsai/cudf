@@ -33,4 +33,6 @@ cdef class Table:
         index_names=*
     )
 
+cdef table_view make_table_view(columns) except *
+cdef mutable_table_view make_mutable_table_view(columns) except *
 cdef columns_from_ptr(unique_ptr[table] c_tbl)
