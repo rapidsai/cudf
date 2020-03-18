@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <tests/groupby/common/groupby_test_util.hpp>
+#include <tests/groupby/groupby_test_util.hpp>
 
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_wrapper.hpp>
@@ -47,6 +47,9 @@ TYPED_TEST(groupby_argmin_test, basic)
 
     auto agg = cudf::experimental::make_argmin_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+
+    auto agg2 = cudf::experimental::make_argmin_aggregation();
+    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
 TYPED_TEST(groupby_argmin_test, zero_valid_keys)
@@ -65,6 +68,9 @@ TYPED_TEST(groupby_argmin_test, zero_valid_keys)
 
     auto agg = cudf::experimental::make_argmin_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+
+    auto agg2 = cudf::experimental::make_argmin_aggregation();
+    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
 TYPED_TEST(groupby_argmin_test, zero_valid_values)
@@ -83,6 +89,9 @@ TYPED_TEST(groupby_argmin_test, zero_valid_values)
 
     auto agg = cudf::experimental::make_argmin_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+
+    auto agg2 = cudf::experimental::make_argmin_aggregation();
+    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
 TYPED_TEST(groupby_argmin_test, null_keys_and_values)
@@ -106,6 +115,10 @@ TYPED_TEST(groupby_argmin_test, null_keys_and_values)
 
     auto agg = cudf::experimental::make_argmin_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+
+    // TODO: explore making this a gtest parameter
+    auto agg2 = cudf::experimental::make_argmin_aggregation();
+    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
 
@@ -125,6 +138,28 @@ TEST_F(groupby_argmin_string_test, basic)
 
     auto agg = cudf::experimental::make_argmin_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+
+    auto agg2 = cudf::experimental::make_argmin_aggregation();
+    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
+}
+
+TEST_F(groupby_argmin_string_test, zero_valid_values)
+{
+    using K = int32_t;
+    using V = string_view;
+    using R = experimental::detail::target_type_t<V, experimental::aggregation::ARGMIN>;
+
+    fixed_width_column_wrapper<K> keys        { 1, 1, 1};
+    strings_column_wrapper        vals      ( { "año", "bit", "₹1"}, all_null() );
+
+    fixed_width_column_wrapper<K> expect_keys { 1 };
+    fixed_width_column_wrapper<R> expect_vals({ 0 }, all_null());
+
+    auto agg = cudf::experimental::make_argmin_aggregation();
+    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+
+    auto agg2 = cudf::experimental::make_argmin_aggregation();
+    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
 
 } // namespace test
