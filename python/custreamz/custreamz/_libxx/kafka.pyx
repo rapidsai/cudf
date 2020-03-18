@@ -96,7 +96,7 @@ cpdef commit_topic_offset(topic=None,
                           asynchronous=True):
     return kds.commit_offset(str.encode(topic), partition, offset)
 
-cpdef produce_message(topic=None, message_val=None, message_key=None):
+cpdef produce_message(topic="", message_val="", message_key=""):
     return kds.produce_message(str.encode(topic),
                                str.encode(message_val),
                                str.encode(message_key))

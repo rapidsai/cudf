@@ -81,6 +81,9 @@ class Consumer(object):
     def get_watermark_offsets(self, partition, timeout=10000, cached=False):
         """{docstring}"""
 
+        print("Topic: " + str(partition.topic))
+        print("Partition: " + str(partition.partition))
+
         offsets = libkafka.get_watermark_offsets(
             topic=partition.topic,
             partition=partition.partition,
@@ -92,7 +95,7 @@ class Consumer(object):
             raise ValueError(
                 "Multiple watermark offsets encountered. "
                 + "Only 2 were expected and "
-                + str(len(offsets)) + " encountered")
+                + str(len(offsets)) + " encountered"
             )
 
         if offsets[b"low"] < 0:
@@ -110,6 +113,19 @@ class Consumer(object):
             )
 
     def produce(self, topic=None, message_val=None, message_key=None):
+        if topic == None:
+            raise ValueError(
+                "You must specify a Topic to produce to"
+            )
+        
+        if message_val == None:
+            raise ValueError(
+                "The message value is empty. Please specify a message to produce."
+            )
+
+        if message_key == None:
+            message_key = ""
+
         return libkafka.produce_message(topic, message_val, message_key)
 
     def flush(self, timeout=10000):
