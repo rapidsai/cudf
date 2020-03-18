@@ -9,7 +9,6 @@ import pandas as pd
 from pandas.api.types import is_dict_like
 
 import cudf
-import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
 from cudf.core.column import (
     ColumnBase,
@@ -19,6 +18,7 @@ from cudf.core.column import (
 )
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
+from cudf.core.groupby.groupby import SeriesGroupBy
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
 from cudf.core.window import Rolling
@@ -138,13 +138,12 @@ class Series(Frame):
         self._index = RangeIndex(len(data)) if index is None else index
 
     @classmethod
-    def _from_table(cls, table):
+    def _from_table(cls, table, index=None):
         name = next(iter(table._data.keys()))
         data = next(iter(table._data.values()))
-        if table._index is None:
-            index = None
-        else:
-            index = Index._from_table(table._index)
+        if index is None:
+            if table._index is not None:
+                index = Index._from_table(table._index)
         return cls(data=data, index=index, name=name)
 
     @property
@@ -614,7 +613,7 @@ class Series(Frame):
             # e.g. for fn = 'and', _apply_op equivalent is '__and__'
             return other._apply_op(self, fn)
 
-        libcudf.nvtx.nvtx_range_push("CUDF_BINARY_OP", "orange")
+        libcudfxx.nvtx.range_push("CUDF_BINARY_OP", "orange")
         result_name = utils.get_result_name(self, other)
         if isinstance(other, Series):
             lhs, rhs = _align_indices([self, other], allow_non_unique=True)
@@ -649,7 +648,7 @@ class Series(Frame):
 
         outcol = lhs._column.binary_operator(fn, rhs, reflect=reflect)
         result = lhs._copy_construct(data=outcol, name=result_name)
-        libcudf.nvtx.nvtx_range_pop()
+        libcudfxx.nvtx.range_pop()
         return result
 
     def add(self, other, fill_value=None, axis=0):
@@ -1423,13 +1422,18 @@ class Series(Frame):
         return vals.set_index(index)
 
     def _n_largest_or_smallest(self, largest, n, keep):
-        if not (0 <= n <= len(self)):
-            raise ValueError("n out-of-bound")
         direction = largest
         if keep == "first":
-            return self.sort_values(ascending=not direction)[:n]
+            if n < 0:
+                n = 0
+            return self.sort_values(ascending=not direction).head(n)
         elif keep == "last":
-            return self.sort_values(ascending=direction)[-n:].reverse()
+            data = self.sort_values(ascending=direction)
+            if n <= 0:
+                data = data[-n:-n]
+            else:
+                data = data.tail(n)
+            return data.reverse()
         else:
             raise ValueError('keep must be either "first", "last"')
 
@@ -2364,6 +2368,7 @@ class Series(Frame):
             )
         return Series(output_col, name=self.name, index=self.index)
 
+    @copy_docstring(SeriesGroupBy)
     def groupby(
         self,
         by=None,
@@ -2373,22 +2378,19 @@ class Series(Frame):
         group_keys=True,
         as_index=None,
         dropna=True,
+        method=None,
     ):
         if group_keys is not True:
             raise NotImplementedError(
                 "The group_keys keyword is not yet implemented"
             )
-
-        from cudf.core.groupby.groupby import SeriesGroupBy
-
-        return SeriesGroupBy(
-            self,
-            by=by,
-            level=level,
-            sort=sort,
-            as_index=as_index,
-            dropna=dropna,
-        )
+        else:
+            if method is not None:
+                warnings.warn(
+                    "The 'method' argument is deprecated and will be unused",
+                    DeprecationWarning,
+                )
+            return SeriesGroupBy(self, by=by, level=level, dropna=dropna)
 
     @copy_docstring(Rolling)
     def rolling(
@@ -2490,6 +2492,7 @@ class Series(Frame):
         lhs = self.to_frame(0)
         rhs = cudf.DataFrame(index=as_index(index))
         result = lhs.join(rhs, how=how, sort=sort)[0]
+        result.name = self.name
         result.index.names = index.names
         return result
 
