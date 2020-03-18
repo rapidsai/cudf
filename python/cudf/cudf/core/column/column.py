@@ -667,35 +667,6 @@ class ColumnBase(Column):
 
         return ColumnBase._concat([self, as_column(other)])
 
-    def quantile(self, q, interpolation, exact):
-        if isinstance(q, Number):
-            q = [float(q)]
-        elif isinstance(q, list) or isinstance(q, np.ndarray):
-            q = q
-        else:
-            msg = "`q` must be either a single element, list or numpy array"
-            raise TypeError(msg)
-
-        return self.as_frame()._quantiles(
-            q, interpolation.upper(), cast_to_doubles=not exact
-        )
-
-        # quant = as_column(quant)
-
-        # sortmap = libcudfxx.sort.order_by(
-        #     self,
-        #     [True],
-        #     False
-        # )
-
-        # return libcudfxx.quantiles.quantiles(
-        #     self,
-        #     quant,
-        #     "NEAREST" if exact else interpolation,
-        #     sortmap,
-        #     not exact
-        # )
-
     def take(self, indices):
         """Return Column by taking values from the corresponding *indices*.
         """

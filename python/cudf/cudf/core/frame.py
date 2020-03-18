@@ -505,7 +505,7 @@ class Frame(libcudfxx.table.Table):
         is_sorted=False,
         ascending=(),
         na_position=(),
-        cast_to_doubles=False,
+        retain_dtype=False,
     ):
         if is_scalar(q):
             q = [q]
@@ -517,12 +517,12 @@ class Frame(libcudfxx.table.Table):
         sortmap = (
             None
             if is_sorted
-            else libcudfxx.sort.order_by(self, ascending, na_position,)
+            else libcudfxx.sort.order_by(self, ascending, na_position)
         )
 
         result = self.__class__._from_table(
             libcudfxx.quantiles.quantiles(
-                self, q, interpolation, sortmap, cast_to_doubles
+                self, q, interpolation, sortmap, not retain_dtype
             )
         )
 

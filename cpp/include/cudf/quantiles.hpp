@@ -63,13 +63,20 @@ quantile(column_view const& input,
  * @param input           Table used to compute quantile rows.
  * @param q               Desired quantiles in range [0, 1].
  * @param interp          Strategy used to select between the two rows on either
-                          side of the desired quantile.
- * @param sorted          Indicates if the input has been pre-sorted.
- * @param column_order    The desired sort order for each column.
- * @param null_precedence The desired order of null compared to other elements.
+ *                        side of the desired quantile.
+ * @param sortmap         Indicates the sorted order of the inputs. If empty,
+ *                        the input is assumed to be sorted.
+ * @param retain_types    Indicates if the result should be cast to the input
+ *                        data type after computing the double-based quantile,
+ *                        possibly losing precision.
+ *                        side of the desired quantile.
  *
- * @throws cudf::logic_error if `interp` is an arithmetic interpolation strategy
  * @throws cudf::logic_error if `input` is empty
+ * @throws cudf::logic_error if `input` contains non-numeric columns and one of:
+                            - `interp` is a non-discrete interpolation type.
+                            - `retain_types` is false.
+ * @throws cudf::logic_error if `interp` is an arithmetic interpolation strategy
+                             but input non-numeric.
  */
 
 std::unique_ptr<table>
@@ -77,7 +84,7 @@ quantiles(table_view const& input,
           std::vector<double> const& q,
           interpolation interp = interpolation::LINEAR,
           column_view const& sortmap = {},
-          bool cast_to_doubles = false,
+          bool retain_types = false,
           rmm::mr::device_memory_resource* mr =
             rmm::mr::get_default_resource());
 

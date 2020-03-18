@@ -2160,7 +2160,12 @@ class Series(Frame):
         return Series(mod_vals._column, index=self.index, name=self.name)
 
     def quantile(
-        self, q=0.5, interpolation="linear", exact=True, quant_index=True
+        self,
+        q=0.5,
+        interpolation="linear",
+        retain_dtype=False,
+        quant_index=True,
+        **kwargs,
     ):
         """
         Return values at the given quantile.
@@ -2172,11 +2177,14 @@ class Series(Frame):
             0 <= q <= 1, the quantile(s) to compute
         interpolation : {’linear’, ‘lower’, ‘higher’, ‘midpoint’, ‘nearest’}
             This optional parameter specifies the interpolation method to use,
-            when the desired quantile lies between two data points i and j:
+            when the desired quantile lies between two data points i and j.
+            Must be 'lower', 'higher', or 'nearest' for non-numeric input.
+            Default: 'linear'.
         columns : list of str
             List of column names to include.
-        exact : boolean
-            Whether to use approximate or exact quantile algorithm.
+        retain_dtype : boolean
+            Whether to cast quantile values to the input dtype, possibly losing
+            precision. Required to be True for non-numeric inputs.
         quant_index : boolean
             Whether to use the list of quantiles as index.
 
@@ -2186,6 +2194,8 @@ class Series(Frame):
         DataFrame
 
         """
+        if hasattr(kwargs, "exact"):
+            retain_dtype = not kwargs.exact
 
         q_np = np.asarray(q)
         if (q_np < 0).any() or (q_np > 1).any():
@@ -2199,11 +2209,13 @@ class Series(Frame):
 
             if quant_index:
                 return build_column(
-                    dtype=(self.dtype if exact else np.dtype("float64"))
+                    dtype=(self.dtype if retain_dtype else np.dtype("float64"))
                 )
 
         result = self.__class__._from_table(
-            self._column.quantile(q, interpolation, not exact)
+            self._quantiles(
+                q, interpolation.upper(), retain_dtype=retain_dtype
+            )
         )
 
         if is_scalar(q):

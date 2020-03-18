@@ -89,7 +89,7 @@ struct quantiles_functor
     SortMapIterator sortmap;
     std::vector<double> const& q;
     interpolation interp;
-    bool cast_to_double;
+    bool retain_types;
     rmm::mr::device_memory_resource* mr;
     cudaStream_t stream;
 
@@ -104,9 +104,9 @@ struct quantiles_functor
     std::enable_if_t<std::is_arithmetic<T>::value, std::unique_ptr<column>>
     operator()(column_view const& input)
     {
-        auto type = cast_to_double
-            ? data_type{type_to_id<double>()}
-            : input.type();
+        auto type = retain_types
+            ? input.type()
+            : data_type{type_to_id<double>()};
 
         auto output = make_fixed_width_column(type,
                                               q.size(),
@@ -126,18 +126,7 @@ struct quantiles_functor
         auto sorted_data = thrust::make_permutation_iterator(input.data<T>(),
                                                              sortmap);
 
-        if (cast_to_double)
-        {
-            thrust::transform(
-                q_device.begin(),
-                q_device.end(),
-                d_output->template begin<double>(),
-                [sorted_data, interp=interp, size=input.size()]
-                __device__ (double q){
-                    return select_quantile_data<double>(sorted_data, size, q, interp);
-                });
-        }
-        else
+        if (retain_types)
         {
             thrust::transform(
                 q_device.begin(),
@@ -146,6 +135,17 @@ struct quantiles_functor
                 [sorted_data, interp=interp, size=input.size()]
                 __device__ (double q){
                     return select_quantile_data<T>(sorted_data, size, q, interp);
+                });
+        }
+        else
+        {
+            thrust::transform(
+                q_device.begin(),
+                q_device.end(),
+                d_output->template begin<double>(),
+                [sorted_data, interp=interp, size=input.size()]
+                __device__ (double q){
+                    return select_quantile_data<double>(sorted_data, size, q, interp);
                 });
         }
 
@@ -186,7 +186,7 @@ quantiles(table_view const& input,
           SortMapIterator sortmap,
           std::vector<double> const& q,
           interpolation interp,
-          bool cast_to_doubles,
+          bool retain_types,
           rmm::mr::device_memory_resource* mr)
 {
     auto is_input_numeric = all_of(input.begin(),
@@ -195,14 +195,14 @@ quantiles(table_view const& input,
                                           return cudf::is_numeric(col.type());
                                       });
 
-    CUDF_EXPECTS(is_input_numeric || not cast_to_doubles,
+    CUDF_EXPECTS(is_input_numeric || retain_types,
                  "casting to doubles requires numeric column types");
 
     auto is_discrete_interpolation = interp == interpolation::HIGHER or
                                      interp == interpolation::LOWER or
                                      interp == interpolation::NEAREST;
 
-    if (is_discrete_interpolation and not cast_to_doubles)
+    if (is_discrete_interpolation and retain_types)
     {
         return quantiles_discrete(input, sortmap, q, interp, mr);
     }
@@ -215,7 +215,7 @@ quantiles(table_view const& input,
 
     auto output_inserter = std::back_inserter(output_columns);
 
-    auto functor = quantiles_functor<SortMapIterator>{sortmap, q, interp, cast_to_doubles, mr, 0};
+    auto functor = quantiles_functor<SortMapIterator>{sortmap, q, interp, retain_types, mr, 0};
 
     std::transform(input.begin(),
                    input.end(),
@@ -235,7 +235,7 @@ quantiles(table_view const& input,
           std::vector<double> const& q,
           interpolation interp,
           column_view const& sortmap,
-          bool cast_to_doubles,
+          bool retain_types,
           rmm::mr::device_memory_resource* mr)
 {
     CUDF_FUNC_RANGE();
@@ -248,7 +248,7 @@ quantiles(table_view const& input,
                                  thrust::make_counting_iterator<size_type>(0),
                                  q,
                                  interp,
-                                 cast_to_doubles,
+                                 retain_types,
                                  mr);
     }
     else
@@ -257,7 +257,7 @@ quantiles(table_view const& input,
                                  sortmap.data<size_type>(),
                                  q,
                                  interp,
-                                 cast_to_doubles,
+                                 retain_types,
                                  mr);
     }
 }

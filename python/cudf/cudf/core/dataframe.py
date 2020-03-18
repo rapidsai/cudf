@@ -3472,7 +3472,8 @@ class DataFrame(Frame):
         numeric_only=True,
         interpolation="linear",
         columns=None,
-        exact=True,
+        retain_dtype=False,
+        **kwargs,
     ):
         """
         Return values at the given quantile.
@@ -3489,11 +3490,13 @@ class DataFrame(Frame):
         interpolation : {`linear`, `lower`, `higher`, `midpoint`, `nearest`}
             This parameter specifies the interpolation method to use,
             when the desired quantile lies between two data points i and j.
+            Must be 'lower', 'higher', or 'nearest' for non-numeric input.
             Default 'linear'.
         columns : list of str
             List of column names to include.
-        exact : boolean
-            Whether to use approximate or exact quantile algorithm.
+        retain_dtype : boolean
+            Whether to cast quantile values to the input dtype, possibly losing
+            precision. Required to be True for non-numeric inputs.
 
         Returns
         -------
@@ -3501,6 +3504,9 @@ class DataFrame(Frame):
         DataFrame
 
         """
+        if hasattr(kwargs, "exact"):
+            retain_dtype = not kwargs.exact
+
         if axis not in (0, None):
             raise NotImplementedError("axis is not implemented yet")
 
@@ -3517,7 +3523,7 @@ class DataFrame(Frame):
             columns = self.columns
 
         result = self._quantiles(
-            q, interpolation.upper(), cast_to_doubles=True
+            q, interpolation.upper(), retain_dtype=retain_dtype
         )
 
         if isinstance(q, numbers.Number):
