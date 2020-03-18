@@ -2917,18 +2917,29 @@ class DataFrame(Frame):
         if not inplace:
             outdf = self.copy()
 
-        if not is_dict_like(to_replace):
-            to_replace = dict.fromkeys(self.columns, to_replace)
-        if not is_dict_like(replacement):
-            replacement = dict.fromkeys(self.columns, replacement)
+        # if not is_dict_like(to_replace):
+        #     to_replace = dict.fromkeys(self.columns, to_replace)
+        # if not is_dict_like(replacement):
+        #     replacement = dict.fromkeys(self.columns, replacement)
 
-        for k in to_replace:
+        # for k in to_replace:
+        #     if inplace:
+        #         self[k].replace(to_replace[k], replacement[k],
+        # inplace=inplace)
+        #     else:
+        #         outdf[k] = self[k].replace(
+        #             to_replace[k], replacement[k], inplace=inplace
+        #         )
+
+        result = super().replace(
+            to_replace=to_replace, replacement=replacement, inplace=False
+        )
+
+        for index, col in enumerate(self.columns):
             if inplace:
-                self[k].replace(to_replace[k], replacement[k], inplace=inplace)
+                self[col]._column._mimic_inplace(result[index], inplace=True)
             else:
-                outdf[k] = self[k].replace(
-                    to_replace[k], replacement[k], inplace=inplace
-                )
+                outdf[col] = result[index]
 
         if not inplace:
             return outdf
