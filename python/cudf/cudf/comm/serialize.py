@@ -7,6 +7,8 @@ import cudf.core.groupby.groupby
 # Series/DataFrame/Index/Column/Buffer/etc
 serializable_classes = (
     cudf.DataFrame,
+    cudf.Index,
+    cudf.MultiIndex,
     cudf.Series,
     cudf.core.groupby.groupby.GroupBy,
     cudf.core.column.column.Column,
