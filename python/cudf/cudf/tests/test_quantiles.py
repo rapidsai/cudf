@@ -1,4 +1,5 @@
 import pandas as pd
+import pytest
 
 import cudf
 from cudf.tests.utils import assert_eq
@@ -58,3 +59,47 @@ def test_with_multiindex():
     gdf_q = gdf.quantiles(q, interpolation="nearest")
 
     assert_eq(pdf_q, gdf_q, check_index_type=False)
+
+
+def test_dataframe_quantile():
+    gdf = cudf.DataFrame({"x": [1, 2, 3]})
+    pdf = gdf.to_pandas()
+
+    expected = pdf.quantile()
+    actual = gdf.quantile()
+
+    assert_eq(expected, actual)
+
+
+def test_series_quantile():
+    gdf = cudf.Series([1, 2, 3])
+    pdf = gdf.to_pandas()
+
+    expected = pdf.quantile()
+    actual = gdf.quantile()
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("q", [0, 0.5, 1, [0, 0.5, 1]])
+def test_series_quantile_multi(q):
+    gdf = cudf.Series([1, 2, 3])
+    pdf = gdf.to_pandas()
+
+    expected = pdf.quantile(q)
+    actual = gdf.quantile(q)
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("q", [-1, 2, [-1], [2]])
+@pytest.mark.parametrize("FrameType", [cudf.DataFrame, cudf.Series])
+def test_quantile_out_of_range(q, FrameType):
+    g = FrameType([0, 1, 2])
+    p = g.to_pandas()
+
+    with pytest.raises(ValueError):
+        p.quantile(q)
+
+    with pytest.raises(ValueError):
+        g.quantile(q)

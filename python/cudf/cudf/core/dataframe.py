@@ -3506,25 +3506,19 @@ class DataFrame(Frame):
 
         if not numeric_only:
             raise NotImplementedError("numeric_only is not implemented yet")
+
+        q_np = np.asarray(q)
+        if (q_np < 0).any() or (q_np > 1).any():
+            raise ValueError(
+                "percentiles should all be in the interval [0, 1]"
+            )
+
         if columns is None:
             columns = self.columns
 
-        result = DataFrame()
-
-        for k in self.columns:
-
-            if k in columns:
-                res = self[k].quantile(
-                    q,
-                    interpolation=interpolation,
-                    exact=exact,
-                    quant_index=False,
-                )
-                if not isinstance(res, numbers.Number) and len(res) == 0:
-                    res = column.column_empty_like(
-                        q, dtype="float64", masked=True, newsize=len(q)
-                    )
-                result[k] = column.as_column(res)
+        result = self._quantiles(
+            q, interpolation.upper(), cast_to_doubles=True
+        )
 
         if isinstance(q, numbers.Number):
             result = result.fillna(np.nan)

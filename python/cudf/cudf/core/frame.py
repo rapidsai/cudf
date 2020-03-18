@@ -507,6 +507,9 @@ class Frame(libcudfxx.table.Table):
         na_position=(),
         cast_to_doubles=False,
     ):
+        if is_scalar(q):
+            q = [q]
+
         interpolation = libcudfxx.types.Interpolation[interpolation]
 
         is_sorted = libcudfxx.types.Sorted["YES" if is_sorted else "NO"]

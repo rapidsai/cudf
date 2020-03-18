@@ -14,6 +14,7 @@ import cudf._libxx as libcudfxx
 from cudf.core.column import (
     ColumnBase,
     DatetimeColumn,
+    build_column,
     column,
     column_empty_like,
 )
@@ -27,7 +28,6 @@ from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     is_categorical_dtype,
     is_datetime_dtype,
-    is_list_like,
     is_scalar,
     min_scalar_type,
     to_cudf_compatible_scalar,
@@ -2187,43 +2187,32 @@ class Series(Frame):
 
         """
 
-        if isinstance(q, Number) or is_list_like(q):
-            np_array_q = np.asarray(q)
-            if np.logical_or(np_array_q < 0, np_array_q > 1).any():
-                raise ValueError(
-                    "percentiles should all \
-                             be in the interval [0, 1]"
-                )
-
-        # Beyond this point, q either being scalar or list-like
-        # will only have values in range [0, 1]
-
-        if isinstance(q, Number):
-            res = self._column.quantile(q, interpolation, exact)
-            if len(res) == 0:
-                return np.nan
-            else:
-                # if q is an int/float, we shouldn't be constructing series
-                return res.pop()
-
-        if not quant_index:
-            return Series(
-                self._column.quantile(q, interpolation, exact), name=self.name
+        q_np = np.asarray(q)
+        if (q_np < 0).any() or (q_np > 1).any():
+            raise ValueError(
+                "percentiles should all be in the interval [0, 1]"
             )
-        else:
-            from cudf.core.column import column_empty_like
 
-            np_array_q = np.asarray(q)
-            if len(self) == 0:
-                result = column_empty_like(
-                    np_array_q,
-                    dtype=self.dtype,
-                    masked=True,
-                    newsize=len(np_array_q),
+        if len(self) == 0:
+            if isinstance(q, Number):
+                return np.nan
+
+            if quant_index:
+                return build_column(
+                    dtype=(self.dtype if exact else np.dtype("float64"))
                 )
-            else:
-                result = self._column.quantile(q, interpolation, exact)
-            return Series(result, index=as_index(np_array_q), name=self.name)
+
+        result = self.__class__._from_table(
+            self._column.quantile(q, interpolation, not exact)
+        )
+
+        if is_scalar(q):
+            return result[0]
+
+        if quant_index:
+            result.index = as_index(q)
+
+        return result
 
     def describe(self, percentiles=None, include=None, exclude=None):
         """Compute summary statistics of a Series. For numeric
