@@ -189,27 +189,26 @@ quantiles(table_view const& input,
           bool cast_to_doubles,
           rmm::mr::device_memory_resource* mr)
 {
-    auto is_input_arithmetic = all_of(input.begin(),
+    auto is_input_numeric = all_of(input.begin(),
                                       input.end(),
                                       [](column_view const& col){
-                                          return is_arithmetic(col.type());
+                                          return cudf::is_numeric(col.type());
                                       });
 
-    CUDF_EXPECTS(is_input_arithmetic || not cast_to_doubles,
-                 "casting to doubles requires arithmetic column types");
+    CUDF_EXPECTS(is_input_numeric || not cast_to_doubles,
+                 "casting to doubles requires numeric column types");
 
     auto is_discrete_interpolation = interp == interpolation::HIGHER or
                                      interp == interpolation::LOWER or
                                      interp == interpolation::NEAREST;
 
-    if (is_discrete_interpolation)
+    if (is_discrete_interpolation and not cast_to_doubles)
     {
         return quantiles_discrete(input, sortmap, q, interp, mr);
     }
 
-    CUDF_EXPECTS(is_input_arithmetic,
-                 "arithmetic interpolation requires arithmetic column "
-                 "types");
+    CUDF_EXPECTS(is_input_numeric,
+                 "arithmetic interpolation requires numeric column types");
 
     auto output_columns = std::vector<std::unique_ptr<column>>{};
     output_columns.reserve(input.num_columns());
