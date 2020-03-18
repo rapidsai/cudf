@@ -6,6 +6,7 @@ import pickle
 
 import cudf
 import cudf._lib as libcudf
+import cudf._libxx as libcudfxx
 from cudf import MultiIndex
 from cudf.core.column import deserialize_columns, serialize_columns
 from cudf.utils.dtypes import is_scalar
@@ -130,7 +131,7 @@ class DataFrameGroupBy(_Groupby):
         Applies the aggregation function(s) ``agg`` on all columns
         """
         result = self._groupby.compute_result(agg)
-        libcudf.nvtx.nvtx_range_pop()
+        libcudfxx.nvtx.range_pop()
         return result
 
     def __getitem__(self, arg):

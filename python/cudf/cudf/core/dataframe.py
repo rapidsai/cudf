@@ -1863,7 +1863,7 @@ class DataFrame(Frame):
     @classmethod
     def _concat(cls, objs, axis=0, ignore_index=False):
 
-        libcudf.nvtx.nvtx_range_push("CUDF_CONCAT", "orange")
+        libcudfxx.nvtx.range_push("CUDF_CONCAT", "orange")
 
         if ignore_index:
             index = RangeIndex(sum(map(len, objs)))
@@ -1901,7 +1901,7 @@ class DataFrame(Frame):
         else:
             out.columns = unique_columns_ordered_ls
 
-        libcudf.nvtx.nvtx_range_pop()
+        libcudfxx.nvtx.range_pop()
         return out
 
     def as_gpu_matrix(self, columns=None, order="F"):
@@ -2303,7 +2303,7 @@ class DataFrame(Frame):
         4    3    13.0
         2    4    14.0    12.0
         """
-        libcudf.nvtx.nvtx_range_push("CUDF_JOIN", "blue")
+        libcudfxx.nvtx.range_push("CUDF_JOIN", "blue")
         if indicator:
             raise NotImplementedError(
                 "Only indicator=False is currently supported"
@@ -2344,7 +2344,7 @@ class DataFrame(Frame):
             how,
             method,
         )
-
+        libcudfxx.nvtx.range_pop()
         return gdf_result
 
     def join(
@@ -2383,7 +2383,7 @@ class DataFrame(Frame):
         - *on* is not supported yet due to lack of multi-index support.
         """
 
-        libcudf.nvtx.nvtx_range_push("CUDF_JOIN", "blue")
+        libcudfxx.nvtx.range_push("CUDF_JOIN", "blue")
 
         # Outer joins still use the old implementation
         if type != "":
@@ -2518,7 +2518,7 @@ class DataFrame(Frame):
             df.index.names = index_frame_l.columns
             for new_key, old_key in zip(index_frame_l.columns, idx_col_names):
                 df.index._data[new_key] = df.index._data.pop(old_key)
-
+        libcudfxx.nvtx.range_pop()
         return df
 
     def groupby(
@@ -2584,7 +2584,7 @@ class DataFrame(Frame):
 
             # The corresponding pop() is in
             # DataFrameGroupBy._apply_aggregation()
-            libcudf.nvtx.nvtx_range_push("CUDF_GROUPBY", "purple")
+            libcudfxx.nvtx.range_push("CUDF_GROUPBY", "purple")
 
             result = DataFrameGroupBy(
                 self,
@@ -2682,7 +2682,7 @@ class DataFrame(Frame):
                 )
             )
 
-        libcudf.nvtx.nvtx_range_push("CUDF_QUERY", "purple")
+        libcudfxx.nvtx.range_push("CUDF_QUERY", "purple")
         # Get calling environment
         callframe = inspect.currentframe().f_back
         callenv = {
@@ -2699,7 +2699,7 @@ class DataFrame(Frame):
             newseries = self[col][selected]
             newdf[col] = newseries
         result = newdf
-        libcudf.nvtx.nvtx_range_pop()
+        libcudfxx.nvtx.range_pop()
         return result
 
     @applyutils.doc_apply()
