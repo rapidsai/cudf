@@ -260,7 +260,7 @@ struct metadata : public FileMetaData {
       }
       row_count = 0;
       do {
-        selection.emplace_back(row_group, row_start);
+        selection.emplace_back(row_group, row_count);
         row_count += row_groups[row_group].num_rows;
       } while (--max_rowgroup_count > 0 && ++row_group < get_num_row_groups());
     } else {
