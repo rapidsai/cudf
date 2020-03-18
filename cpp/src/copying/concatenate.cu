@@ -24,6 +24,7 @@
 #include <cudf/strings/detail/concatenate.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 
+#include <thrust/advance.h>
 #include <thrust/binary_search.h>
 #include <thrust/transform_scan.h>
 
@@ -247,21 +248,19 @@ __global__ void fused_concatenate_kernel(column_device_view const* input_views,
   while (output_index < output_size) {
 
     // Lookup input index by searching for output index in offsets
-    auto const offset_it =
+    auto const offset_it = thrust::prev(
         thrust::upper_bound(thrust::seq, input_offsets,
-                            input_offsets + num_input_views, output_index) - 1;
+                            input_offsets + num_input_views, output_index));
     size_type const partition_index = offset_it - input_offsets;
 
     // Copy input data to output and read bitmask
     bool bit_is_set = false;
-    if (partition_index < num_input_views) {
-      auto const offset_index = output_index - *offset_it;
-      auto const& input_view = input_views[partition_index];
-      auto const* input_data = input_view.data<T>();
-      output_data[output_index] = input_data[offset_index];
-      if (Nullable) {
-        bit_is_set = input_view.is_valid(offset_index);
-      }
+    auto const offset_index = output_index - *offset_it;
+    auto const& input_view = input_views[partition_index];
+    auto const* input_data = input_view.data<T>();
+    output_data[output_index] = input_data[offset_index];
+    if (Nullable) {
+      bit_is_set = input_view.is_valid(offset_index);
     }
 
     if (Nullable) {
