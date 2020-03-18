@@ -890,12 +890,12 @@ def test_out_of_bounds_indexing():
 
 
 def test_sliced_indexing():
-    a = list(range(4, 4+150))
-    b = list(range(0, 0+150))
-    pdf = pd.DataFrame({"a":a, "b":b})
+    a = list(range(4, 4 + 150))
+    b = list(range(0, 0 + 150))
+    pdf = pd.DataFrame({"a": a, "b": b})
     gdf = DataFrame.from_pandas(pdf)
-    pdf = pdf.set_index('a')
-    gdf = gdf.set_index('a')
+    pdf = pdf.set_index("a")
+    gdf = gdf.set_index("a")
     pidx = pdf.index[:75]
     gidx = gdf.index[:75]
 

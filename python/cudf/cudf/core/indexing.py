@@ -26,9 +26,9 @@ def indices_from_labels(obj, labels):
         labels = labels.astype(obj.index.dtype)
 
     # There is a chance that the join might jumble the index ordering
-    # so we will sort it with its initial oerdering which is stored 
+    # so we will sort it with its initial ordering which is stored
     # in column "__"
-    lhs = cudf.DataFrame({"__":cupy.arange(len(labels))}, index=labels)
+    lhs = cudf.DataFrame({"__": cupy.arange(len(labels))}, index=labels)
     rhs = cudf.DataFrame({"_": cupy.arange(len(obj))}, index=obj.index)
     return lhs.join(rhs).sort_values("__")["_"]
 
