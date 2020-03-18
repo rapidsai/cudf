@@ -2,14 +2,12 @@
 
 from . import (
     avro,
-    binops,
     concat,
     copying,
     csv,
     cudf,
     dlpack,
     gpuarrow,
-    groupby,
     hash,
     issorted,
     join,

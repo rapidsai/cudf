@@ -75,34 +75,30 @@ def test_series_sort_index(nelem, asc):
     np.testing.assert_array_equal(orig, got)
 
 
-def test_series_nlargest():
+@pytest.mark.parametrize("data", [[0, 1, 1, 2, 2, 2, 3, 3], [0], [1, 2, 3]])
+@pytest.mark.parametrize("n", [-100, -50, -12, -2, 0, 1, 2, 3, 4, 7])
+def test_series_nlargest(data, n):
     """Indirectly tests Series.sort_values()
     """
-    sr = Series([0, 1, 1, 2, 2, 2, 3, 3])
-    got = sr.nlargest(3)  # default keep='first'
-    assert list(got) == [3, 3, 2]
-    assert list(got.index.values) == [6, 7, 3]
-
-    got = sr.nlargest(3, keep="last")
-    assert list(got) == [3, 3, 2]
-    assert list(got.index.values) == [7, 6, 5]
+    sr = Series(data)
+    psr = pd.Series(data)
+    assert_eq(sr.nlargest(n), psr.nlargest(n))
+    assert_eq(sr.nlargest(n, keep="last"), psr.nlargest(n, keep="last"))
 
     with pytest.raises(ValueError) as raises:
         sr.nlargest(3, keep="what")
     assert raises.match('keep must be either "first", "last"')
 
 
-def test_series_nsmallest():
+@pytest.mark.parametrize("data", [[0, 1, 1, 2, 2, 2, 3, 3], [0], [1, 2, 3]])
+@pytest.mark.parametrize("n", [-100, -50, -12, -2, 0, 1, 2, 3, 4, 9])
+def test_series_nsmallest(data, n):
     """Indirectly tests Series.sort_values()
     """
-    sr = Series([0, 1, 1, 2, 2, 2, 3, 3])
-    got = sr.nsmallest(3)  # default keep='first'
-    assert list(got) == [0, 1, 1]
-    assert list(got.index.values) == [0, 1, 2]
-
-    got = sr.nsmallest(3, keep="last")
-    assert list(got) == [0, 1, 1]
-    assert list(got.index.values) == [0, 2, 1]
+    sr = Series(data)
+    psr = pd.Series(data)
+    assert_eq(sr.nsmallest(n), psr.nsmallest(n))
+    assert_eq(sr.nsmallest(n, keep="last"), psr.nsmallest(n, keep="last"))
 
     with pytest.raises(ValueError) as raises:
         sr.nsmallest(3, keep="what")

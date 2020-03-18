@@ -11,10 +11,25 @@ import pyarrow as pa
 
 import nvstrings
 
-import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
 import cudf._libxx.string_casting as str_cast
-from cudf._lib.nvtx import nvtx_range_pop, nvtx_range_push
+from cudf._libxx.nvtext.generate_ngrams import (
+    generate_ngrams as cpp_generate_ngrams,
+)
+from cudf._libxx.nvtext.ngrams_tokenize import (
+    ngrams_tokenize as cpp_ngrams_tokenize,
+)
+from cudf._libxx.nvtext.normalize import (
+    normalize_spaces as cpp_normalize_spaces,
+)
+from cudf._libxx.nvtext.tokenize import (
+    count_tokens as cpp_count_tokens,
+    tokenize as cpp_tokenize,
+)
+from cudf._libxx.nvtx import (
+    range_pop as nvtx_range_pop,
+    range_push as nvtx_range_push,
+)
 from cudf._libxx.strings.attributes import (
     code_points as cpp_code_points,
     count_characters as cpp_count_characters,
@@ -201,9 +216,15 @@ class StringMethods(object):
                         index=self._parent.index,
                     )
             elif isinstance(self._parent, Series):
-                return Series(
-                    new_col, index=self._parent.index, name=self._parent.name
-                )
+                retain_index = kwargs.get("retain_index", True)
+                if retain_index:
+                    return Series(
+                        new_col,
+                        name=self._parent.name,
+                        index=self._parent.index,
+                    )
+                else:
+                    return Series(new_col, name=self._parent.name)
             elif isinstance(self._parent, Index):
                 return as_index(new_col, name=self._parent.name)
             else:
@@ -1786,6 +1807,76 @@ class StringMethods(object):
             cpp_translate(self._column, table), **kwargs
         )
 
+    def normalize_spaces(self, **kwargs):
+        return self._return_or_inplace(
+            cpp_normalize_spaces(self._column), **kwargs
+        )
+
+    def tokenize(self, delimiter="", **kwargs):
+        delimiter = _massage_string_arg(delimiter, "delimiter", allow_col=True)
+        kwargs.setdefault("retain_index", False)
+        return self._return_or_inplace(
+            cpp_tokenize(self._column, delimiter), **kwargs
+        )
+
+    def token_count(self, delimiter="", **kwargs):
+        delimiter = _massage_string_arg(delimiter, "delimiter", allow_col=True)
+        return self._return_or_inplace(
+            cpp_count_tokens(self._column, delimiter), **kwargs
+        )
+
+    def ngrams(self, n=2, separator="_", **kwargs):
+        separator = _massage_string_arg(separator, "separator")
+        kwargs.setdefault("retain_index", False)
+        return self._return_or_inplace(
+            cpp_generate_ngrams(self._column, n, separator), **kwargs
+        )
+
+    def ngrams_tokenize(self, n=2, delimiter="", separator="_", **kwargs):
+        delimiter = _massage_string_arg(delimiter, "delimiter")
+        separator = _massage_string_arg(separator, "separator")
+        kwargs.setdefault("retain_index", False)
+        return self._return_or_inplace(
+            cpp_ngrams_tokenize(self._column, n, delimiter, separator),
+            **kwargs,
+        )
+
+
+def _massage_string_arg(value, name, allow_col=False):
+    from cudf._libxx.scalar import Scalar
+    from cudf._libxx.column import Column
+    from cudf.utils.dtypes import is_string_dtype
+
+    if isinstance(value, str):
+        return Scalar(value, dtype="str")
+
+    if isinstance(value, Scalar) and is_string_dtype(value.dtype):
+        return value
+
+    allowed_types = ["Scalar"]
+
+    if allow_col:
+        if isinstance(value, list):
+            return column.as_column(value, dtype="str")
+
+        if isinstance(value, Column) and is_string_dtype(value.dtype):
+            return value
+
+        allowed_types.append("Column")
+
+    raise ValueError(
+        "Expected {} for {} but got {}".format(
+            _expected_types_format(allowed_types), name, type(value)
+        )
+    )
+
+
+def _expected_types_format(types):
+    if len(types) == 1:
+        return types[0]
+
+    return ", ".join(types[:-1]) + ", or " + types[-1]
+
 
 class StringColumn(column.ColumnBase):
     """Implements operations for Columns of String type
@@ -1819,6 +1910,16 @@ class StringColumn(column.ColumnBase):
         super().__init__(
             None, size, dtype, mask=mask, offset=offset, children=children
         )
+
+        # For an "all empty" StringColumn (e.g., [""]) libcudf still
+        # needs the chars child column pointer to be non-null:
+        if self.size:
+            if self.children[1].size == 0 and self.null_count != self.size:
+                offsets = self.base_children[0]
+                chars = column_empty(
+                    self.base_children[1].size + 1, dtype="int8"
+                )
+                self.set_base_children((offsets, chars))
 
         # TODO: Remove these once NVStrings is fully deprecated / removed
         self._nvstrings = None
@@ -2107,9 +2208,6 @@ class StringColumn(column.ColumnBase):
         )
         return col
 
-    def unordered_compare(self, cmpop, rhs):
-        return _string_column_binop(self, rhs, op=cmpop)
-
     def find_and_replace(self, to_replace, replacement, all_nan):
         """
         Return col with *to_replace* replaced with *value*
@@ -2150,15 +2248,17 @@ class StringColumn(column.ColumnBase):
     def default_na_value(self):
         return None
 
-    def binary_operator(self, binop, rhs, reflect=False):
+    def binary_operator(self, op, rhs, reflect=False):
         lhs = self
         if reflect:
             lhs, rhs = rhs, lhs
-        if isinstance(rhs, StringColumn) and binop == "add":
+        if isinstance(rhs, StringColumn) and op == "add":
             return lhs.str().cat(others=rhs)
+        elif op in ("eq", "ne", "gt", "lt", "ge", "le"):
+            return _string_column_binop(self, rhs, op=op, out_dtype="bool")
         else:
             msg = "{!r} operator not supported between {} and {}"
-            raise TypeError(msg.format(binop, type(self), type(rhs)))
+            raise TypeError(msg.format(op, type(self), type(rhs)))
 
     def sum(self, dtype=None):
         # Should we be raising here? Pandas can't handle the mix of strings and
@@ -2193,13 +2293,9 @@ class StringColumn(column.ColumnBase):
         return out
 
 
-def _string_column_binop(lhs, rhs, op):
+def _string_column_binop(lhs, rhs, op, out_dtype):
     nvtx_range_push("CUDF_BINARY_OP", "orange")
-    # Allocate output
-    masked = lhs.nullable or rhs.nullable
-    out = column.column_empty_like(lhs, dtype="bool", masked=masked)
-    # Call and fix null_count
-    _ = libcudf.binops.apply_op(lhs=lhs, rhs=rhs, out=out, op=op)
+    out = libcudfxx.binaryop.binaryop(lhs=lhs, rhs=rhs, op=op, dtype=out_dtype)
     nvtx_range_pop()
     return out
 
