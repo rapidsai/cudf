@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -70,16 +70,16 @@ struct substring_fn
             return 0; // null string
         string_view d_str = d_column.template element<string_view>(idx);
         auto const length = d_str.length();
+        if( length==0 )
+            return 0; // empty string
         size_type const step = d_step.is_valid() ? d_step.value() : 1;
         auto const begin = [&] {  // always inclusive
-            if( length==0 ) // simplifies the rest of this logic
-                return d_str.begin();
             // when invalid, default depends on step
             if( !d_start.is_valid() )
                 return (step > 0) ? d_str.begin() : (d_str.end()-1);
             // normal positive position logic
             auto start = d_start.value();
-            if( start >=0 )
+            if( start >= 0 )
             {
                 if( start < length )
                     return d_str.begin() + start;
@@ -89,7 +89,7 @@ struct substring_fn
             auto adjust = length + start;
             if( adjust >= 0 )
                 return d_str.begin() + adjust;
-            return d_str.begin() + (step <0 ? -1 : 0);
+            return d_str.begin() + (step < 0 ? -1 : 0);
         } ();
         auto const end = [&] {  // always exclusive
             // when invalid, default depends on step
@@ -97,7 +97,7 @@ struct substring_fn
                 return step > 0 ? d_str.end() : (d_str.begin()-1);
             // normal positive position logic
             auto stop = d_stop.value();
-            if( stop >=0 )
+            if( stop >= 0 )
                 return (stop < length) ? (d_str.begin() + stop) : d_str.end();
             // handle negative position here
             auto adjust = length + stop;
