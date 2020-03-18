@@ -85,28 +85,30 @@ column_device_view::create(column_view source, cudaStream_t stream) {
       thrust::make_counting_iterator(0),
       [&source](auto i) { return extent(source.child(i)); });
 
-  std::size_t const child_storage_bytes =
-      std::accumulate(get_extent, get_extent + num_children, 0);
+  auto const descendant_storage_bytes =
+      std::accumulate(get_extent, get_extent + num_children, std::size_t{0});
 
   // A buffer of CPU memory is allocated to hold the column_device_view
   // objects. Once filled, the CPU memory is copied to device memory
   // and then set into the d_children member pointer.
-  std::vector<char> h_buffer(child_storage_bytes);
+  std::vector<char> staging_buffer(descendant_storage_bytes);
 
   // Each column_device_view instance may have child objects that
   // require setting some internal device pointers before being copied
   // from CPU to device.
-  rmm::device_buffer* const child_storage = new rmm::device_buffer(child_storage_bytes, stream);
+  rmm::device_buffer* const descendant_storage =
+      new rmm::device_buffer(descendant_storage_bytes, stream);
 
-  auto deleter = [child_storage](column_device_view * v){
+  auto deleter = [descendant_storage](column_device_view* v) {
     v->destroy();
-    delete child_storage;
+    delete descendant_storage;
   };
 
   using Deleter = std::function<void(column_device_view*)>;
 
   std::unique_ptr<column_device_view, Deleter> p{
-      new column_device_view(source, h_buffer.data(), child_storage->data()),
+      new column_device_view(source, staging_buffer.data(),
+                             descendant_storage->data()),
       deleter};
 
   // copy the CPU memory with all the children into device memory
