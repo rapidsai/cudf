@@ -114,7 +114,11 @@ class MultiIndex(Index):
                 )
             else:
                 level = DataFrame({name: self._levels[i]})
-            level = DataFrame(index=codes).join(level)
+
+            level = DataFrame(
+                {"original_order": self.codes[name].index}, index=codes
+            ).join(level)
+            level = level.sort_values(by="original_order").reset_index(True)
             source_data[name] = level[name].reset_index(drop=True)
 
         self._data = source_data._data
