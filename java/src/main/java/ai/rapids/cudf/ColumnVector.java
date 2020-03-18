@@ -1805,15 +1805,106 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Returns -1.0 if this[i] < 0
-   *          0.0 if this[i] == 0
-   *          1.0 if this[i] > 0
+   * Replaces values less than `lo` in `input` with `lo`,
+   * and values greater than `hi` with `hi`.
+   *
+   * if `lo` is invalid, then lo will not be considered while
+   * evaluating the input (Essentially considered minimum value of that type).
+   * if `hi` is invalid, then hi will not be considered while
+   * evaluating the input (Essentially considered maximum value of that type).
+   *
+   * ```
+   * Example:
+   * input: {1, 2, 3, NULL, 5, 6, 7}
+   *
+   * valid lo and hi
+   * lo: 3, hi: 5, lo_replace : 0, hi_replace : 16
+   * output:{0, 0, 3, NULL, 5, 16, 16}
+   *
+   * invalid lo
+   * lo: NULL, hi: 5, lo_replace : 0, hi_replace : 16
+   * output:{1, 2, 3, NULL, 5, 16, 16}
+   *
+   * invalid hi
+   * lo: 3, hi: NULL, lo_replace : 0, hi_replace : 16
+   * output:{0, 0, 3, NULL, 5, 6, 7}
+   * ```
+   * @param lo - lo Minimum clamp value. All elements less than `lo` will be replaced by `lo`.
+   *           Ignored if null.
+   * @param hi - hi Maximum clamp value. All elements greater than `hi` will be replaced by `hi`.
+   *           Ignored if null.
+   * @return Returns a new clamped column as per `lo` and `hi` boundaries
    */
-  public ColumnVector signum() {
-    return new ColumnVector(signum(this.getNativeView()));
+  public ColumnVector clamp(Scalar lo, Scalar hi) {
+    return new ColumnVector(clamper(this.getNativeView(), lo.getScalarHandle(),
+        lo.getScalarHandle(), hi.getScalarHandle(), hi.getScalarHandle()));
   }
 
-  private static native long signum(long nativeView);
+  /**
+   * Replaces values less than `lo` in `input` with `lo_replace`,
+   * and values greater than `hi` with `hi_replace`.
+   *
+   * if `lo` is invalid, then lo will not be considered while
+   * evaluating the input (Essentially considered minimum value of that type).
+   * if `hi` is invalid, then hi will not be considered while
+   * evaluating the input (Essentially considered maximum value of that type).
+   *
+   * @note: If `lo` is valid then `lo_replace` should be valid
+   *        If `hi` is valid then `hi_replace` should be valid
+   *
+   * ```
+   * Example:
+   *    input: {1, 2, 3, NULL, 5, 6, 7}
+   *
+   *    valid lo and hi
+   *    lo: 3, hi: 5, lo_replace : 0, hi_replace : 16
+   *    output:{0, 0, 3, NULL, 5, 16, 16}
+   *
+   *    invalid lo
+   *    lo: NULL, hi: 5, lo_replace : 0, hi_replace : 16
+   *    output:{1, 2, 3, NULL, 5, 16, 16}
+   *
+   *    invalid hi
+   *    lo: 3, hi: NULL, lo_replace : 0, hi_replace : 16
+   *    output:{0, 0, 3, NULL, 5, 6, 7}
+   * ```
+   *
+   * @param lo - lo Minimum clamp value. All elements less than `lo` will be replaced by `loReplace`. Ignored if null.
+   * @param loReplace - loReplace All elements less than `lo` will be replaced by `loReplace`.
+   * @param hi - hi maximum clamp value. All elements greater than `hi` will be replaced by `hiReplace`. Ignored if null.
+   * @param hiReplace - loReplace All elements greater than `hi` will be replaced by `hiReplace`.
+   * @return - a clamped column as per `lo` and `hi` boundaries
+   */
+  public ColumnVector clamp(Scalar lo, Scalar loReplace, Scalar hi, Scalar hiReplace) {
+    return new ColumnVector(clamper(this.getNativeView(), lo.getScalarHandle(),
+        loReplace.getScalarHandle(), hi.getScalarHandle(), hiReplace.getScalarHandle()));
+  }
+
+  /**
+   * Convenience method for integral types for ai.rapids.cudf.ColumnVector#clamp(ai.rapids.cudf.Scalar,
+   *                            ai.rapids.cudf.Scalar, ai.rapids.cudf.Scalar, ai.rapids.cudf.Scalar)
+   *
+   */
+  public ColumnVector clamp(long lo, long loReplace, long hi, long hiReplace) {
+    return new ColumnVector(clamperIntegral(this.getNativeView(), lo, loReplace, hi, hiReplace));
+  }
+
+  /**
+   * Convenience method for float types for ai.rapids.cudf.ColumnVector#clamp(ai.rapids.cudf.Scalar,
+   *                            ai.rapids.cudf.Scalar, ai.rapids.cudf.Scalar, ai.rapids.cudf.Scalar)
+   *
+   */
+  public ColumnVector clamp(double lo, double loReplace, double hi, double hiReplace) {
+    return new ColumnVector(clamperFloats(this.getNativeView(), lo, loReplace, hi, hiReplace));
+  }
+
+  private static native long clamper(long nativeView, long loScalarHandle, long loScalarReplaceHandle,
+                                    long hiScalarHandle, long hiScalarReplaceHandle);
+
+  private static native long clamperFloats(long nativeView, double lo, double loReplace, double hi, double hiReplace);
+
+  private static native long clamperIntegral(long nativeView, long loScalarHandle, long loScalarReplaceHandle,
+                                     long hiScalarHandle, long hiScalarReplaceHandle);
 
   /**
    * Returns a boolean ColumnVector identifying rows which

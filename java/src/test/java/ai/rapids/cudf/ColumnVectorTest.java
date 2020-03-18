@@ -71,10 +71,10 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testSignumDouble() {
+  void testClampDouble() {
     try (ColumnVector cv = ColumnVector.fromDoubles(2.33d, 32.12d, -121.32d, 0.0d, 0.00001d,
         Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY, Double.NaN);
-         ColumnVector result = cv.signum();
+         ColumnVector result = cv.clamp(0.0d, -1.0f, 0.0f, 1.0d);
          ColumnVector expected = ColumnVector.fromDoubles(1.0d, 1.0d, -1.0d, 0.0d, 1.0d, -1.0d,
              1.0d, Double.NaN)) {
       assertColumnsAreEqual(expected, result);
@@ -82,37 +82,42 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testSignumFloat() {
+  void testClampFloat() {
     try (ColumnVector cv = ColumnVector.fromBoxedFloats(2.33f, 32.12f, null, -121.32f, 0.0f, 0.00001f, Float.NEGATIVE_INFINITY,
         Float.POSITIVE_INFINITY, Float.NaN);
-         ColumnVector result = cv.signum();
+         ColumnVector result = cv.clamp(0.0f, -1.0f, 0.0f, 1.0f);
          ColumnVector expected = ColumnVector.fromBoxedFloats(1.0f, 1.0f, null, -1.0f, 0.0f, 1.0f, -1.0f, 1.0f, Float.NaN)) {
      assertColumnsAreEqual(expected, result);
     }
   }
 
   @Test
-  void testSignumLong() {
+  void testClampLong() {
     try (ColumnVector cv = ColumnVector.fromBoxedLongs(1l, 3l, 6l, -2l, 23l, -0l, -90l, null);
-         ColumnVector result = cv.signum();
+         ColumnVector result = cv.clamp(0, -1, 0, 1);
          ColumnVector expected = ColumnVector.fromBoxedLongs(1l, 1l, 1l, -1l, 1l, 0l, -1l, null)) {
       assertColumnsAreEqual(expected, result);
     }
   }
 
   @Test
-  void testSignumShort() {
+  void testClampShort() {
     try (ColumnVector cv = ColumnVector.fromShorts(new short[]{1, 3, 6, -2, 23, -0, -90});
-         ColumnVector result = cv.signum();
-         ColumnVector expected = ColumnVector.fromShorts(new short[]{1, 1, 1, -1, 1, 0, -1})) {
+         Scalar lo = Scalar.fromShort((short)1);
+         Scalar hi = Scalar.fromShort((short)2);
+         ColumnVector result = cv.clamp(lo, hi);
+         ColumnVector expected = ColumnVector.fromShorts(new short[]{1, 2, 2, 1, 2, 1, 1})) {
       assertColumnsAreEqual(expected, result);
     }
   }
 
   @Test
-  void testSignumInt() {
+  void testClampInt() {
       try (ColumnVector cv = ColumnVector.fromInts(1, 3, 6, -2, 23, -0, -90);
-           ColumnVector result = cv.signum();
+           Scalar num = Scalar.fromInt(0);
+           Scalar hiReplace = Scalar.fromInt(1);
+           Scalar loReplace = Scalar.fromInt(-1);
+           ColumnVector result = cv.clamp(num, loReplace, num, hiReplace);
            ColumnVector expected = ColumnVector.fromInts(1, 1, 1, -1, 1, 0, -1)) {
           assertColumnsAreEqual(expected, result);
       }

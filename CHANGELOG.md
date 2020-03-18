@@ -22,7 +22,6 @@
 
 ## New Features
 
-- PR #4564 Added Java bindings for signum operator.
 - PR #4360 Added Java bindings for bitwise shift operators
 - PR #3577 Add initial dictionary support to column classes
 - PR #3777 Add support for dictionary column in gather
@@ -65,6 +64,7 @@
 - PR #4288 Add libcudf++ shift Cython implementation
 - PR #4338 Add cudf::sequence() for generating an incrementing list of numeric values
 - PR #4456 Add argmin/max and string min/max to sort groupby
+- PR #4564 Added Java bindings for clamp operator.
 
 ## Improvements
 
