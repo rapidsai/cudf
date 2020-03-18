@@ -2011,8 +2011,11 @@ class StringColumn(column.ColumnBase):
         return True in self.str().contains(f"^{item}$")
 
     def __reduce__(self):
-        cpumem = self.to_arrow()
-        return column.as_column, (cpumem, False, np.dtype("object"))
+        mask = None
+        if self.null_count > 0:
+            mask = self.mask
+
+        return column.build_column, (None, "str", mask, None, 0, self.children)
 
     def str(self, parent=None):
         return StringMethods(self, parent=parent)
