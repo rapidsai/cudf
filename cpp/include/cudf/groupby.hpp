@@ -19,9 +19,7 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-#include <rmm/device_buffer.hpp>
 
-#include <memory>
 #include <utility>
 #include <vector>
 
