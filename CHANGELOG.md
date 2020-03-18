@@ -2,21 +2,20 @@
 
 ## New Features
 
+- PR #4360 Added Java bindings for bitwise shift operators
 - PR #3577 Add initial dictionary support to column classes
-- PR #3917 Add dictionary add_keys function
 - PR #3777 Add support for dictionary column in gather
 - PR #3693 add string support, skipna to scan operation
 - PR #3662 Define and implement `shift`.
-- PR #3842 ORC writer: add support for column statistics
 - PR #3861 Added Series.sum feature for String
 - PR #4069 Added cast of numeric columns from/to String
 - PR #3681 Add cudf::experimental::boolean_mask_scatter
-- PR #4088 Added asString() on ColumnVector in Java that takes a format string
 - PR #4040 Add support for n-way merge of sorted tables
 - PR #4053 Multi-column quantiles.
 - PR #4100 Add set_keys function for dictionary columns
 - PR #3894 Add remove_keys functions for dictionary columns
 - PR #4107 Add groupby nunique aggregation
+- PR #4235 Port nvtx.pyx to use non-legacy libcudf APIs
 - PR #4153 Support Dask serialization protocol on cuDF objects
 - PR #4127 Add python API for n-way sorted merge (merge_sorted)
 - PR #4164 Add Buffer "constructor-kwargs" header
@@ -44,6 +43,7 @@
 - PR #4381 Add Java support for copying buffers with asynchronous streams
 - PR #4288 Add libcudf++ shift Cython implementation
 - PR #4338 Add cudf::sequence() for generating an incrementing list of numeric values
+- PR #4456 Add argmin/max and string min/max to sort groupby
 
 ## Improvements
 
@@ -63,19 +63,15 @@
 - PR #3911 Adding null boolean handling for copy_if_else
 - PR #4003 Drop old `to_device` utility wrapper function
 - PR #4002 Adding to_frame and fix for categorical column issue
-- PR #4035 Port NVText tokenize function to libcudf++
 - PR #4009 build script update to enable cudf build without installing
 - PR #3897 Port cuIO JSON reader to cudf::column types
 - PR #4008 Eliminate extra copy in column constructor
 - PR #4013 Add cython definition for io readers cudf/io/io_types.hpp
 - PR #4028 Port json.pyx to use new libcudf APIs
 - PR #4014 ORC/Parquet: add count parameter to stripe/rowgroup-based reader API
-- PR #4042 Port cudf/io/functions.hpp to Cython for use in IO bindings
-- PR #3880 Add aggregation infrastructure support for reduction
 - PR #3880 Add aggregation infrastructure support for cudf::reduce
-- PR #4059 Add aggregation infrastructure support for cudf::scan
+- PR #4059 Add aggregation infrastructure support for cudf::scan 
 - PR #4021 Change quantiles signature for clarity.
-- PR #4058 Port hash.pyx to use libcudf++ APIs
 - PR #4057 Handle offsets in cython Column class
 - PR #4045 Reorganize `libxx` directory
 - PR #4029 Port stream_compaction.pyx to use libcudf++ APIs
@@ -101,7 +97,6 @@
 - PR #4098 Remove legacy calls from libcudf strings column code
 - PR #4044 Port join.pyx to use libcudf++ APIs
 - PR #4111 Use `Buffer`'s to serialize `StringColumn`
-- PR #4133 Mask cleanup and fixes: use `int32` dtype, ensure 64 byte padding, handle offsets
 - PR #4113 Get `len` of `StringColumn`s without `nvstrings`
 - PR #4147 Remove workaround for UNKNOWN_NULL_COUNT in contiguous_split.
 - PR #4130 Renames in-place `cudf::experimental::fill` to `cudf::experimental::fill_in_place`
@@ -137,6 +132,7 @@
 - PR #4261 libxx Cython reorganization
 - PR #4274 Support negative position values in slice_strings
 - PR #4282 Porting nvstrings conversion functions from new libcudf++ to Python/Cython
+- PR #4290 Port Parquet to use new libcudf APIs
 - PR #4299 Convert cudf::shift to column-based api
 - PR #4301 Add support for writing large ORC files in a chunked manner
 - PR #4306 Use libcudf++ `unary.pyx` cast instead of legacy cast
@@ -144,6 +140,7 @@
 - PR #4305 Move gpuarrow.pyx and related libarrow_cuda files into `_libxx`
 - PR #4244 Port nvstrings Substring Gather/Scatter functions to cuDF Python/Cython
 - PR #4280 Port nvstrings Numeric Handling functions to cuDF Python/Cython
+- PR #4278 Port filling.pyx to libcudf++ API
 - PR #4328 Add memory threshold callbacks for Java RMM event handler
 - PR #4336 Move a bunch of internal nvstrings code to use native StringColumns
 - PR #4166 Port `is_sorted.pyx` to use libcudf++ APIs
@@ -156,6 +153,7 @@
 - PR #4236 Update dask_cudf.io.to_parquet to use cudf to_parquet
 - PR #4311 Port nvstrings String Manipulations functions to cuDF Python/Cython
 - PR #4373 Port nvstrings Regular Expressions functions to cuDF Python/Cython
+- PR #4308 Replace dask_cudf sort_values and improve set_index
 - PR #4407 Enable `.str.slice` & `.str.get` and `.str.zfill` unit-tests
 - PR #4412 Require Dask + Distributed 2.12.0+
 - PR #4377 Support loading avro files that contain nested arrays
@@ -163,6 +161,16 @@
 - PR #4405 Port nvstrings (Sub)string Comparisons functions to cuDF Python/Cython
 - PR #4316 Add Java and JNI bindings for substring expression
 - PR #4314 Add Java and JNI bindings for string contains
+- PR #4461 Port nvstrings Miscellaneous functions to cuDF Python/Cython
+- PR #4495 Port nvtext to cuDF Python/Cython
+- PR #4503 Port binaryop.pyx to libcudf++ API
+- PR #4499 Adding changes to handle include `keep_index` and `RangeIndex`
+- PR #4533 Import `tlz` for optional `cytoolz` support
+- PR #4493 Skip legacy testing in CI
+- PR #4524 Updating `__setitem__` for DataFrame to use scalar scatter
+- PR #4534 Disable deprecation warnings as errors.
+- PR #4506 Check for multi-dimensional data in column/Series creation
+- PR #4549 Add option to disable deprecation warnings.
 
 ## Bug Fixes
 
@@ -193,18 +201,15 @@
 - PR #4089 Fix dask groupby mutliindex test case issues in join
 - PR #4097 Fix strings concatenate logic with column offsets
 - PR #4076 All null string entries should have null data buffer
-- PR #4145 Support empty index case in DataFrame._from_table
 - PR #4109 Use rmm::device_vector instead of thrust::device_vector
 - PR #4113 Use `.nvstrings` in `StringColumn.sum(...)`
 - PR #4116 Fix a bug in contiguous_split() where tables with mixed column types could corrupt string output
-- PR #4108 Fix dtype bugs in dask_cudf metadata (metadata_nonempty overhaul)
-- PR #4138 Really fix strings concatenate logic with column offsets
-- PR #4119 Fix binary ops slowdown using jitify -remove-unused-globals
 - PR #4125 Fix type enum to account for added Dictionary type in `types.hpp`
 - PR #4132 Fix `hash_partition` null mask allocation
 - PR #4137 Update Java for mutating fill and rolling window changes
 - PR #4184 Add missing except+ to Cython bindings
 - PR #4141 Fix NVStrings test_convert failure in 10.2 build
+- PR #4156 Make fill/copy_range no-op on empty columns
 - PR #4158 Fix merge issue with empty table return if one of the two tables are empty
 - PR #4162 Properly handle no index metadata generation for to_parquet
 - PR #4175 Fix `__sizeof__` calculation in `StringColumn`
@@ -230,7 +235,7 @@
 - PR #4279 Fix converting `np.float64` to Scalar
 - PR #4285 Add init files for cython pkgs and fix `setup.py`
 - PR #4287 Parquet reader: fix empty string potentially read as null
-- PR #4310 Fix empty values case in groupby 
+- PR #4310 Fix empty values case in groupby
 - PR #4297 Fix specification of package_data in setup.py
 - PR #4302 Fix `_is_local_filesystem` check
 - PR #4303 Parquet reader: fix empty columns missing from table
@@ -243,10 +248,26 @@
 - PR #4358 Fix strings::concat where narep is an empty string
 - PR #4369 Fix race condition in gpuinflate
 - PR #4390 Disable ScatterValid and ScatterNull legacy tests
+- PR #4398 Fixes the failure in groupby in MIN/MAX on strings when some groups are empty
 - PR #4406 Fix sorted merge issue with null values and ascending=False
 - PR #4445 Fix string issue for parquet reader and support `keep_index` for `scatter_to_tables`
 - PR #4423 Tighten up Dask serialization checks
+- PR #4537 Use `elif` in Dask deserialize check
+- PR #4438 Fix repl-template error for replace_with_backrefs
 - PR #4434 Fix join_strings logic with all-null strings and non-null narep
+- PR #4465 Fix use_pandas_index having no effect in libcudf++ parquet reader
+- PR #4464 Update Cmake to always link in libnvToolsExt
+- PR #4467 Fix dropna issue for a DataFrame having np.nan
+- PR #4480 Fix string_scalar.value to return an empty string_view for empty string-scalar
+- PR #4474 Fix to not materialize RangeIndex in copy_categories
+- PR #4496 Skip tests which require 2+ GPUs
+- PR #4494 Update Java memory event handler for new RMM resource API
+- PR #4505 Fix 0 length buffers during serialization
+- PR #4482 Fix `.str.rsplit`, `.str.split`, `.str.find`, `.str.rfind`, `.str.index`, `.str.rindex` and enable related tests
+- PR #4513 Backport scalar virtual destructor fix
+- PR #4519 Remove `n` validation for `nlargest` & `nsmallest` and add negative support for `n`
+- PR #4526 Fix index slicing issue for index incase of an empty dataframe
+- PR #4557 Disable compile-errors on deprecation warnings, for JNI
 
 
 # cuDF 0.12.0 (04 Feb 2020)
@@ -261,7 +282,7 @@
 - PR #3555 Add column names support to libcudf++ io readers and writers
 - PR #3527 Add string functionality for merge API
 - PR #3610 Add memory_usage to DataFrame and Series APIs
-- PR #3557 Add contiguous_split() function. 
+- PR #3557 Add contiguous_split() function.
 - PR #3619 Support CuPy 7
 - PR #3604 Add nvtext ngrams-tokenize function
 - PR #3403 Define and implement new stack + tile APIs

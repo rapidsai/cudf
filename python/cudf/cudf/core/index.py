@@ -423,10 +423,6 @@ class Index(Frame):
     def __cuda_array_interface__(self):
         raise (NotImplementedError)
 
-    def repeat(self, repeats, axis=None):
-        assert axis in (None, 0)
-        return as_index(self._values.repeat(repeats))
-
     def memory_usage(self, deep=False):
         return self._values._memory_usage(deep=deep)
 
@@ -441,15 +437,18 @@ class Index(Frame):
 
     @classmethod
     def _from_table(cls, table):
-        if table._num_columns == 0:
-            raise ValueError("Cannot construct Index from any empty Table")
-        if table._num_columns == 1:
-            return as_index(
-                next(iter(table._data.columns)),
-                name=next(iter(table._data.keys())),
-            )
+        if not isinstance(table, RangeIndex):
+            if table._num_columns == 0:
+                raise ValueError("Cannot construct Index from any empty Table")
+            if table._num_columns == 1:
+                return as_index(
+                    next(iter(table._data.columns)),
+                    name=next(iter(table._data.keys())),
+                )
+            else:
+                return cudf.MultiIndex._from_table(table)
         else:
-            return cudf.MultiIndex._from_table(table)
+            return as_index(table)
 
 
 class RangeIndex(Index):
@@ -491,6 +490,14 @@ class RangeIndex(Index):
     @name.setter
     def name(self, value):
         self._name = value
+
+    @property
+    def _num_columns(self):
+        return 1
+
+    @property
+    def _num_rows(self):
+        return len(self)
 
     @cached_property
     def _values(self):
@@ -845,13 +852,11 @@ class DatetimeIndex(GenericIndex):
         # and then just dispatch upstream
         kwargs = _setdefault_name(values, kwargs)
         if isinstance(values, np.ndarray) and values.dtype.kind == "M":
-            values = DatetimeColumn.from_numpy(values)
+            values = column.as_column(values)
         elif isinstance(values, pd.DatetimeIndex):
-            values = DatetimeColumn.from_numpy(values.values)
+            values = column.as_column(values.values)
         elif isinstance(values, (list, tuple)):
-            values = DatetimeColumn.from_numpy(
-                np.array(values, dtype="<M8[ms]")
-            )
+            values = column.as_column(np.array(values, dtype="<M8[ms]"))
         super(DatetimeIndex, self).__init__(values, **kwargs)
 
     @property
