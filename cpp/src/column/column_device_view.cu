@@ -104,9 +104,7 @@ column_device_view::create(column_view source, cudaStream_t stream) {
     delete descendant_storage;
   };
 
-  using Deleter = std::function<void(column_device_view*)>;
-
-  std::unique_ptr<column_device_view, Deleter> p{
+  std::unique_ptr<column_device_view, decltype(deleter)> p{
       new column_device_view(source, staging_buffer.data(),
                              descendant_storage->data()),
       deleter};
