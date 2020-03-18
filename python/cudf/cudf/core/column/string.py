@@ -13,7 +13,6 @@ import nvstrings
 
 import cudf._libxx as libcudfxx
 import cudf._libxx.string_casting as str_cast
-from cudf._lib.nvtx import nvtx_range_pop, nvtx_range_push
 from cudf._libxx.nvtext.generate_ngrams import (
     generate_ngrams as cpp_generate_ngrams,
 )
@@ -26,6 +25,10 @@ from cudf._libxx.nvtext.normalize import (
 from cudf._libxx.nvtext.tokenize import (
     count_tokens as cpp_count_tokens,
     tokenize as cpp_tokenize,
+)
+from cudf._libxx.nvtx import (
+    range_pop as nvtx_range_pop,
+    range_push as nvtx_range_push,
 )
 from cudf._libxx.strings.attributes import (
     code_points as cpp_code_points,
