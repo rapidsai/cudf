@@ -74,7 +74,10 @@ public class ColumnVectorTest extends CudfTestBase {
   void testClampDouble() {
     try (ColumnVector cv = ColumnVector.fromDoubles(2.33d, 32.12d, -121.32d, 0.0d, 0.00001d,
         Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY, Double.NaN);
-         ColumnVector result = cv.clamp(0.0d, -1.0f, 0.0f, 1.0d);
+         Scalar num = Scalar.fromDouble(0);
+         Scalar loReplace = Scalar.fromDouble(-1);
+         Scalar hiReplace = Scalar.fromDouble(1);
+         ColumnVector result = cv.clamp(num, loReplace, num, hiReplace);
          ColumnVector expected = ColumnVector.fromDoubles(1.0d, 1.0d, -1.0d, 0.0d, 1.0d, -1.0d,
              1.0d, Double.NaN)) {
       assertColumnsAreEqual(expected, result);
@@ -85,7 +88,10 @@ public class ColumnVectorTest extends CudfTestBase {
   void testClampFloat() {
     try (ColumnVector cv = ColumnVector.fromBoxedFloats(2.33f, 32.12f, null, -121.32f, 0.0f, 0.00001f, Float.NEGATIVE_INFINITY,
         Float.POSITIVE_INFINITY, Float.NaN);
-         ColumnVector result = cv.clamp(0.0f, -1.0f, 0.0f, 1.0f);
+         Scalar num = Scalar.fromFloat(0);
+         Scalar loReplace = Scalar.fromFloat(-1);
+         Scalar hiReplace = Scalar.fromFloat(1);
+         ColumnVector result = cv.clamp(num, loReplace, num, hiReplace);
          ColumnVector expected = ColumnVector.fromBoxedFloats(1.0f, 1.0f, null, -1.0f, 0.0f, 1.0f, -1.0f, 1.0f, Float.NaN)) {
      assertColumnsAreEqual(expected, result);
     }
@@ -94,7 +100,10 @@ public class ColumnVectorTest extends CudfTestBase {
   @Test
   void testClampLong() {
     try (ColumnVector cv = ColumnVector.fromBoxedLongs(1l, 3l, 6l, -2l, 23l, -0l, -90l, null);
-         ColumnVector result = cv.clamp(0, -1, 0, 1);
+         Scalar num = Scalar.fromLong(0);
+         Scalar loReplace = Scalar.fromLong(-1);
+         Scalar hiReplace = Scalar.fromLong(1);
+         ColumnVector result = cv.clamp(num, loReplace, num, hiReplace);
          ColumnVector expected = ColumnVector.fromBoxedLongs(1l, 1l, 1l, -1l, 1l, 0l, -1l, null)) {
       assertColumnsAreEqual(expected, result);
     }

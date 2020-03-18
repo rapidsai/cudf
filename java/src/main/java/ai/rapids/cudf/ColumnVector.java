@@ -1880,31 +1880,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
         loReplace.getScalarHandle(), hi.getScalarHandle(), hiReplace.getScalarHandle()));
   }
 
-  /**
-   * Convenience method for integral types for ai.rapids.cudf.ColumnVector#clamp(ai.rapids.cudf.Scalar,
-   *                            ai.rapids.cudf.Scalar, ai.rapids.cudf.Scalar, ai.rapids.cudf.Scalar)
-   *
-   */
-  public ColumnVector clamp(long lo, long loReplace, long hi, long hiReplace) {
-    return new ColumnVector(clamperIntegral(this.getNativeView(), lo, hi, loReplace, hiReplace));
-  }
-
-  /**
-   * Convenience method for float types for ai.rapids.cudf.ColumnVector#clamp(ai.rapids.cudf.Scalar,
-   *                            ai.rapids.cudf.Scalar, ai.rapids.cudf.Scalar, ai.rapids.cudf.Scalar)
-   *
-   */
-  public ColumnVector clamp(double lo, double loReplace, double hi, double hiReplace) {
-    return new ColumnVector(clamperFloats(this.getNativeView(), lo, hi, loReplace, hiReplace));
-  }
-
   private static native long clamper(long nativeView, long loScalarHandle, long loScalarReplaceHandle,
                                     long hiScalarHandle, long hiScalarReplaceHandle);
-
-  private static native long clamperFloats(long nativeView, double lo, double loReplace, double hi, double hiReplace);
-
-  private static native long clamperIntegral(long nativeView, long loScalarHandle, long loScalarReplaceHandle,
-                                     long hiScalarHandle, long hiScalarReplaceHandle);
 
   /**
    * Returns a boolean ColumnVector identifying rows which
