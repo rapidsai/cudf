@@ -24,7 +24,6 @@
 #include <cudf/strings/detail/concatenate.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 
-#include <thrust/advance.h>
 #include <thrust/binary_search.h>
 #include <thrust/transform_scan.h>
 
@@ -248,9 +247,10 @@ __global__ void fused_concatenate_kernel(column_device_view const* input_views,
   while (output_index < output_size) {
 
     // Lookup input index by searching for output index in offsets
-    auto const offset_it = thrust::prev(
+    // thrust::prev isn't in CUDA 10.0, so subtracting 1 here instead
+    auto const offset_it = -1 +
         thrust::upper_bound(thrust::seq, input_offsets,
-                            input_offsets + num_input_views, output_index));
+                            input_offsets + num_input_views, output_index);
     size_type const partition_index = offset_it - input_offsets;
 
     // Copy input data to output and read bitmask
