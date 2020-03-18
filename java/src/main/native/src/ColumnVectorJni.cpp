@@ -42,7 +42,7 @@
 #include "jni_utils.hpp"
 
 template <class T>
-std::unique_ptr<cudf::column> clamper(cudf::column_view* column_view, T lo = 0, T hi = 0, T lo_replace = -1, T hi_replace = 1) {
+std::unique_ptr<cudf::column> clamper(cudf::column_view* column_view, T lo, T hi, T lo_replace, T hi_replace) {
   using ScalarType = cudf::experimental::scalar_type_t<T>;
   using cudf::experimental::type_to_id;
   using cudf::experimental::clamp;
@@ -1128,7 +1128,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_clamper(JNIEnv *env, jo
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_clamperIntegral(JNIEnv *env, jobject j_object, jlong handle,
-                                                                jlong lo, jlong hi, jlong lo_scalar, jlong hi_scalar) {
+                                                                jlong lo, jlong hi, jlong lo_replace, jlong hi_replace) {
 
     JNI_NULL_CHECK(env, handle, "native view handle is null", 0)
     try {
@@ -1136,16 +1136,16 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_clamperIntegral(JNIEnv 
       std::unique_ptr<cudf::column> result = nullptr;
       switch(column_view->type().id()) {
       case cudf::INT64:
-        result = clamper<int64_t>(column_view);
+        result = clamper<int64_t>(column_view, lo, hi, lo_replace, hi_replace);
         break;
       case cudf::INT32:
-        result = clamper<int32_t>(column_view);
+        result = clamper<int32_t>(column_view, lo, hi, lo_replace, hi_replace);
         break;
       case cudf::INT16:
-        result = clamper<int16_t>(column_view);
+        result = clamper<int16_t>(column_view, lo, hi, lo_replace, hi_replace);
         break;
       case cudf::INT8:
-        result = clamper<int8_t>(column_view);
+        result = clamper<int8_t>(column_view, lo, hi, lo_replace, hi_replace);
         break;
       default:
         cudf::jni::throw_java_exception(env, cudf::jni::ILLEGAL_ARG_CLASS, "Unsupported type");
@@ -1156,7 +1156,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_clamperIntegral(JNIEnv 
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_clamperFloats(JNIEnv *env, jobject j_object, jlong handle,
-                                                                jdouble lo, jdouble hi, jdouble lo_scalar, jdouble hi_scalar) {
+                                                                jdouble lo, jdouble hi, jdouble lo_replace, jdouble hi_replace) {
 
     JNI_NULL_CHECK(env, handle, "native view handle is null", 0)
     try {
@@ -1164,10 +1164,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_clamperFloats(JNIEnv *e
       std::unique_ptr<cudf::column> result = nullptr;
       switch(column_view->type().id()) {
       case cudf::FLOAT32:
-        result = clamper<float>(column_view);
+        result = clamper<float>(column_view, lo, hi, lo_replace, hi_replace);
         break;
       case cudf::FLOAT64:
-        result = clamper<double>(column_view);
+        result = clamper<double>(column_view, lo, hi, lo_replace, hi_replace);
         break;
       default:
         cudf::jni::throw_java_exception(env, cudf::jni::ILLEGAL_ARG_CLASS, "Unsupported type");

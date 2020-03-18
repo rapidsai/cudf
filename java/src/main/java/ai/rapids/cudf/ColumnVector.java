@@ -1886,7 +1886,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    *
    */
   public ColumnVector clamp(long lo, long loReplace, long hi, long hiReplace) {
-    return new ColumnVector(clamperIntegral(this.getNativeView(), lo, loReplace, hi, hiReplace));
+    return new ColumnVector(clamperIntegral(this.getNativeView(), lo, hi, loReplace, hiReplace));
   }
 
   /**
@@ -1895,7 +1895,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    *
    */
   public ColumnVector clamp(double lo, double loReplace, double hi, double hiReplace) {
-    return new ColumnVector(clamperFloats(this.getNativeView(), lo, loReplace, hi, hiReplace));
+    return new ColumnVector(clamperFloats(this.getNativeView(), lo, hi, loReplace, hiReplace));
   }
 
   private static native long clamper(long nativeView, long loScalarHandle, long loScalarReplaceHandle,
