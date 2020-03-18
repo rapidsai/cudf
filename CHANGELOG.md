@@ -277,6 +277,7 @@
 - PR #4513 Backport scalar virtual destructor fix
 - PR #4519 Remove `n` validation for `nlargest` & `nsmallest` and add negative support for `n`
 - PR #4526 Fix index slicing issue for index incase of an empty dataframe
+- PR #4557 Disable compile-errors on deprecation warnings, for JNI
 
 
 # cuDF 0.12.0 (04 Feb 2020)
