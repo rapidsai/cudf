@@ -704,11 +704,11 @@ TYPED_TEST_CASE(BooleanMaskScatter, cudf::test::FixedWidthTypes);
 TYPED_TEST(BooleanMaskScatter, WithNoNullElementsInTarget)
 {
     using T = TypeParam;
-    cudf::test::fixed_width_column_wrapper<T> source({1, 5, 6, 8, 9});
-    cudf::test::fixed_width_column_wrapper<T>  target(                     {   2,     2,     3,     4,   11,   12,     7,    7,   10,    10});
+    cudf::test::fixed_width_column_wrapper<T, int> source({1, 5, 6, 8, 9});
+    cudf::test::fixed_width_column_wrapper<T, int>  target(                     {   2,     2,     3,     4,   11,   12,     7,    7,   10,    10});
     cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> mask({true,  false, false, false, true, true, false, true, true, false});
 
-    cudf::test::fixed_width_column_wrapper<T> expected ({1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
+    cudf::test::fixed_width_column_wrapper<T, int> expected ({1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
     auto source_table = cudf::table_view({source});
     auto target_table = cudf::table_view({target});
     auto expected_table = cudf::table_view({expected});
@@ -721,13 +721,13 @@ TYPED_TEST(BooleanMaskScatter, WithNoNullElementsInTarget)
 TYPED_TEST(BooleanMaskScatter, WithNull)
 {
     using T = TypeParam;
-    cudf::test::fixed_width_column_wrapper<T> source_col1({1, 5, 6, 8, 9}, {1, 0, 1, 0, 1});
+    cudf::test::fixed_width_column_wrapper<T, int> source_col1({1, 5, 6, 8, 9}, {1, 0, 1, 0, 1});
     cudf::test::strings_column_wrapper source_col2 ({"This", "is", "cudf", "test", "column"}, {1, 0, 0, 1, 0});
-    cudf::test::fixed_width_column_wrapper<T>  target_col1({ 2, 2, 3, 4, 11, 12, 7, 7, 10, 10}, {1, 1, 0, 1, 1, 1, 1, 1, 1, 0});
+    cudf::test::fixed_width_column_wrapper<T, int>  target_col1({ 2, 2, 3, 4, 11, 12, 7, 7, 10, 10}, {1, 1, 0, 1, 1, 1, 1, 1, 1, 0});
     cudf::test::strings_column_wrapper target_col2 ({"a", "bc", "cd", "ef", "gh", "ij", "jk", "lm", "no", "pq"}, {1, 1, 0, 1, 1, 1, 1, 1, 1, 0});
     cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> mask({true,  false, false, false, true, true, false, true, true, false});
 
-    cudf::test::fixed_width_column_wrapper<T> expected_col1 ({1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, {1, 1, 0, 1, 0, 1, 1, 0, 1, 0});
+    cudf::test::fixed_width_column_wrapper<T, int> expected_col1 ({1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, {1, 1, 0, 1, 0, 1, 1, 0, 1, 0});
     cudf::test::strings_column_wrapper expected_col2 ({"This", "bc", "cd", "ef", "is", "cudf", "jk", "test", "column", "pq"}, {1, 1, 0, 1, 0, 0, 1, 1, 0, 0});
     auto source_table = cudf::table_view({source_col1, source_col2});
     auto target_table = cudf::table_view({target_col1, target_col2});
@@ -861,10 +861,11 @@ TYPED_TEST(BooleanMaskScalarScatter, WithNoNullElementsInTarget)
     auto scalar = this->form_scalar(source, validity);
     std::vector<std::reference_wrapper<cudf::scalar>> scalar_vect;
     scalar_vect.push_back(*scalar);
-    cudf::test::fixed_width_column_wrapper<T>  target(                     {   2,     2,     3,     4,   11,   12,     7,    7,   10,    10});
+    cudf::test::fixed_width_column_wrapper<T, int>  target(                     {   2,     2,     3,     4,   11,   12,     7,    7,   10,    10});
+    // #CHTODO
     cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> mask({true,  false, false, false, true, true, false, true, true, false});
 
-    cudf::test::fixed_width_column_wrapper<T> expected ({11, 2, 3, 4, 11, 11, 7, 11, 11, 10});
+    cudf::test::fixed_width_column_wrapper<T, int> expected ({11, 2, 3, 4, 11, 11, 7, 11, 11, 10});
     auto target_table = cudf::table_view({target});
     auto expected_table = cudf::table_view({expected});
 
@@ -884,11 +885,11 @@ TYPED_TEST(BooleanMaskScalarScatter, WithNull)
     std::vector<std::reference_wrapper<cudf::scalar>> scalar_vect;
     scalar_vect.push_back(*scalar_1);
     scalar_vect.push_back(*scalar_2);
-    cudf::test::fixed_width_column_wrapper<T>  target_col1(                     {   2,     2,     3,     4,   11,   12,     7,    7,   10,    10}, {1, 1, 0, 1, 1, 1, 1, 1, 1, 0});
+    cudf::test::fixed_width_column_wrapper<T, int>  target_col1(                     {   2,     2,     3,     4,   11,   12,     7,    7,   10,    10}, {1, 1, 0, 1, 1, 1, 1, 1, 1, 0});
     cudf::test::strings_column_wrapper target_col2 ({"a", "bc", "cd", "ef", "gh", "ij", "jk", "lm", "no", "pq"}, {1, 1, 0, 1, 1, 1, 1, 1, 1, 0});
     cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> mask({true,  false, false, false, true, true, false, true, true, false});
 
-    cudf::test::fixed_width_column_wrapper<T> expected_col1 ({11, 2, 3, 4, 11, 11, 7, 11, 11, 10}, {0, 1, 0, 1, 0, 0, 1, 0, 0, 0});
+    cudf::test::fixed_width_column_wrapper<T, int> expected_col1 ({11, 2, 3, 4, 11, 11, 7, 11, 11, 10}, {0, 1, 0, 1, 0, 0, 1, 0, 0, 0});
     cudf::test::strings_column_wrapper expected_col2 ({"cudf", "bc", "cd", "ef", "cudf", "cudf", "jk", "cudf", "cudf", "pq"}, {1, 1, 0, 1, 1, 1, 1, 1, 1, 0});
     auto target_table = cudf::table_view({target_col1, target_col2});
     auto expected_table = cudf::table_view({expected_col1, expected_col2});

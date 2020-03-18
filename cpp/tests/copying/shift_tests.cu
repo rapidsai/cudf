@@ -92,8 +92,8 @@ TYPED_TEST(ShiftTest, OneColumn)
 {
     using T =  TypeParam;
 
-    auto input = fixed_width_column_wrapper<T>{ lowest<T>, 1, 2, 3, 4, 5, highest<T> };
-    auto expected = fixed_width_column_wrapper<T>{ 7, 7, lowest<T>, 1, 2, 3, 4 };
+    auto input    = fixed_width_column_wrapper<T>{ lowest<T>, T(1), T(2), T(3), T(4), T(5), highest<T> };
+    auto expected = fixed_width_column_wrapper<T>{ T(7), T(7), lowest<T>, T(1), T(2), T(3), T(4) };
 
     auto fill = make_scalar<T>(7);
     auto actual = cudf::experimental::shift(input, 2, *fill);
@@ -105,8 +105,8 @@ TYPED_TEST(ShiftTest, OneColumnNegativeShift)
 {
     using T =  TypeParam;
 
-    auto input = fixed_width_column_wrapper<T>{ lowest<T>, 1, 2, 3, 4, 5, highest<T> };
-    auto expected = fixed_width_column_wrapper<T>{ 4, 5, highest<T>, 7, 7, 7, 7 };
+    auto input    = fixed_width_column_wrapper<T>{ lowest<T>, T(1), T(2), T(3), T(4), T(5), highest<T> };
+    auto expected = fixed_width_column_wrapper<T>{ T(4), T(5), highest<T>, T(7), T(7), T(7), T(7) };
 
     auto fill = make_scalar<T>(7);
     auto actual = cudf::experimental::shift(input, -4, *fill);
@@ -118,8 +118,8 @@ TYPED_TEST(ShiftTest, OneColumnNullFill)
 {
     using T =  TypeParam;
 
-    auto input = fixed_width_column_wrapper<T>{ lowest<T>, 5, 0, 3, 0, 1, highest<T> };
-    auto expected = fixed_width_column_wrapper<T>({ 0, 0, lowest<T>, 5, 0, 3, 0 }, { 0, 0, 1, 1, 1, 1, 1 });
+    auto input    = fixed_width_column_wrapper<T>{ lowest<T>, T(5), T(0), T(3), T(0), T(1), highest<T> };
+    auto expected = fixed_width_column_wrapper<T>({ T(0), T(0), lowest<T>, T(5), T(0), T(3), T(0) }, { 0, 0, 1, 1, 1, 1, 1 });
 
     auto fill = make_scalar<T>();
 
@@ -132,8 +132,8 @@ TYPED_TEST(ShiftTest, TwoColumnsNullableInput)
 {
     using T =  TypeParam;
 
-    auto input = fixed_width_column_wrapper<T>({ 1, 2, 3, 4, 5 }, { 0, 1, 1, 1, 0});
-    auto expected = fixed_width_column_wrapper<T>({ 7, 7, 1, 2, 3 }, { 1, 1, 0, 1, 1});
+    auto input    = fixed_width_column_wrapper<T, int>({ 1, 2, 3, 4, 5 }, { 0, 1, 1, 1, 0});
+    auto expected = fixed_width_column_wrapper<T, int>({ 7, 7, 1, 2, 3 }, { 1, 1, 0, 1, 1});
 
     auto fill = make_scalar<T>(7);
     auto actual = cudf::experimental::shift(input, 2, *fill);
