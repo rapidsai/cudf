@@ -35,6 +35,7 @@ from cudf.core.column import (
 )
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
+from cudf.core.groupby.groupby import DataFrameGroupBy
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
 from cudf.core.series import Series
@@ -255,7 +256,8 @@ class DataFrame(Frame):
                 if is_scalar(data[col_name]):
                     num_rows = num_rows or 1
                 else:
-                    num_rows = len(column.as_column(data[col_name]))
+                    data[col_name] = column.as_column(data[col_name])
+                    num_rows = len(data[col_name])
             self._index = RangeIndex(0, num_rows)
         else:
             self._index = as_index(index)
@@ -266,11 +268,10 @@ class DataFrame(Frame):
         self.columns = columns
 
     @classmethod
-    def _from_table(cls, table):
-        if table._index is None:
-            index = None
-        else:
-            index = Index._from_table(table._index)
+    def _from_table(cls, table, index=None):
+        if index is None:
+            if table._index is not None:
+                index = Index._from_table(table._index)
         return cls(data=table._data, index=index)
 
     @staticmethod
@@ -1316,10 +1317,13 @@ class DataFrame(Frame):
                 f"Length mismatch: expected {len(self.columns)} elements ,"
                 f"got {len(columns)} elements"
             )
+
+        data = dict(zip(columns, self._data.columns))
+        if len(columns) != len(data):
+            raise ValueError("Duplicate column names are not allowed")
+
         self._data = ColumnAccessor(
-            dict(zip(columns, self._data.columns)),
-            multiindex=is_multiindex,
-            level_names=columns.names,
+            data, multiindex=is_multiindex, level_names=columns.names,
         )
 
     def _rename_columns(self, new_names):
@@ -2258,7 +2262,7 @@ class DataFrame(Frame):
         4    3    13.0
         2    4    14.0    12.0
         """
-        libcudf.nvtx.nvtx_range_push("CUDF_JOIN", "blue")
+        libcudfxx.nvtx.range_push("CUDF_JOIN", "blue")
         if indicator:
             raise NotImplementedError(
                 "Only indicator=False is currently supported"
@@ -2299,7 +2303,7 @@ class DataFrame(Frame):
             how,
             method,
         )
-
+        libcudfxx.nvtx.range_pop()
         return gdf_result
 
     def join(
@@ -2338,7 +2342,7 @@ class DataFrame(Frame):
         - *on* is not supported yet due to lack of multi-index support.
         """
 
-        libcudf.nvtx.nvtx_range_push("CUDF_JOIN", "blue")
+        libcudfxx.nvtx.range_push("CUDF_JOIN", "blue")
 
         # Outer joins still use the old implementation
         if type != "":
@@ -2473,48 +2477,20 @@ class DataFrame(Frame):
             df.index.names = index_frame_l.columns
             for new_key, old_key in zip(index_frame_l.columns, idx_col_names):
                 df.index._data[new_key] = df.index._data.pop(old_key)
-
+        libcudfxx.nvtx.range_pop()
         return df
 
+    @copy_docstring(DataFrameGroupBy)
     def groupby(
         self,
         by=None,
         sort=True,
         as_index=True,
-        method="hash",
         level=None,
-        group_keys=True,
         dropna=True,
+        method=None,
+        group_keys=True,
     ):
-        """Groupby
-
-        Parameters
-        ----------
-        by : list-of-str or str
-            Column name(s) to form that groups by.
-        sort : bool, default True
-            Force sorting group keys.
-        as_index : bool, default True
-            Indicates whether the grouped by columns become the index
-            of the returned DataFrame
-        method : str, optional
-            A string indicating the method to use to perform the group by.
-            Valid values are "hash" or "cudf".
-            "cudf" method may be deprecated in the future, but is currently
-            the only method supporting group UDFs via the `apply` function.
-        dropna : bool, optional
-            If True (default), drop null keys.
-            If False, perform grouping by keys containing null(s).
-
-        Returns
-        -------
-        The groupby object
-
-        Notes
-        -----
-        No empty rows are returned.  (For categorical keys, pandas returns
-        rows for all categories even if they are no corresponding values.)
-        """
         if group_keys is not True:
             raise NotImplementedError(
                 "The group_keys keyword is not yet implemented"
@@ -2523,34 +2499,15 @@ class DataFrame(Frame):
             raise TypeError(
                 "groupby() requires either by or level to be" "specified."
             )
-        if method == "cudf":
-            from cudf.core.groupby.legacy_groupby import Groupby
 
-            if as_index:
-                warnings.warn(
-                    "as_index==True not supported due to the lack of "
-                    "multi-index with legacy groupby function. Use hash "
-                    "method for multi-index"
-                )
-            result = Groupby(self, by=by)
-            return result
-        else:
-            from cudf.core.groupby.groupby import DataFrameGroupBy
-
-            # The corresponding pop() is in
-            # DataFrameGroupBy._apply_aggregation()
-            libcudf.nvtx.nvtx_range_push("CUDF_GROUPBY", "purple")
-
-            result = DataFrameGroupBy(
-                self,
-                by=by,
-                method=method,
-                as_index=as_index,
-                sort=sort,
-                level=level,
-                dropna=dropna,
+        if method is not None:
+            warnings.warn(
+                "The 'method' argument is deprecated and will be unused",
+                DeprecationWarning,
             )
-            return result
+        return DataFrameGroupBy(
+            self, by=by, level=level, as_index=as_index, dropna=dropna
+        )
 
     @copy_docstring(Rolling)
     def rolling(
@@ -2637,7 +2594,7 @@ class DataFrame(Frame):
                 )
             )
 
-        libcudf.nvtx.nvtx_range_push("CUDF_QUERY", "purple")
+        libcudfxx.nvtx.range_push("CUDF_QUERY", "purple")
         # Get calling environment
         callframe = inspect.currentframe().f_back
         callenv = {
@@ -2654,7 +2611,7 @@ class DataFrame(Frame):
             newseries = self[col][selected]
             newdf[col] = newseries
         result = newdf
-        libcudf.nvtx.nvtx_range_pop()
+        libcudfxx.nvtx.range_pop()
         return result
 
     @applyutils.doc_apply()

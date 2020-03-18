@@ -15,6 +15,7 @@ from . import (
     merge,
     null_mask,
     nvtext,
+    nvtx,
     orc,
     quantiles,
     reduce,
