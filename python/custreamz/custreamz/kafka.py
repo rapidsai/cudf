@@ -92,7 +92,7 @@ class Consumer(object):
             raise ValueError(
                 "Multiple watermark offsets encountered. "
                 + "Only 2 were expected and "
-                + str(len(offsets) + " encountered")
+                + str(len(offsets)) + " encountered")
             )
 
         if offsets[b"low"] < 0:
