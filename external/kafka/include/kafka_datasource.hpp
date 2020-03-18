@@ -44,7 +44,7 @@ class kafka_datasource : public external_datasource {
     std::unique_ptr<RdKafka::KafkaConsumer> consumer_ = NULL;
     std::unique_ptr<RdKafka::Producer> producer_ = NULL;
     
-    std::vector<RdKafka::TopicPartition*> partitions_;
+    //std::vector<RdKafka::TopicPartition*> partitions_;
     RdKafka::Conf::ConfResult conf_res_;
     RdKafka::ErrorCode err_;
 
@@ -63,8 +63,6 @@ class kafka_datasource : public external_datasource {
   kafka_datasource();
 
   kafka_datasource(std::map<std::string, std::string> configs);
-
-  bool assign(std::vector<std::string> topics, std::vector<int> partitions);
 
   std::string libcudf_datasource_identifier();
 
@@ -110,15 +108,15 @@ class kafka_datasource : public external_datasource {
       consumer_.get()->assign(_toppars);
     }
 
-    RdKafka::TopicPartition* find_toppar(std::string topic, int partition) {
-      for (int i = 0; i < partitions_.size(); i++) {
-        if ((partitions_[i]->topic().compare(topic) == 0) && partitions_[i]->partition() == partition) {
-          return partitions_[i];
-        }
-      }
-      printf("ERROR: No matching toppar found for Topic: '%s' Partition: '%d'\n", topic.c_str(), partition);
-      return NULL;
-    }
+    // RdKafka::TopicPartition* find_toppar(std::string topic, int partition) {
+    //   for (int i = 0; i < partitions_.size(); i++) {
+    //     if ((partitions_[i]->topic().compare(topic) == 0) && partitions_[i]->partition() == partition) {
+    //       return partitions_[i];
+    //     }
+    //   }
+    //   printf("ERROR: No matching toppar found for Topic: '%s' Partition: '%d'\n", topic.c_str(), partition);
+    //   return NULL;
+    // }
 
     int64_t now() {
       struct timeval tv;

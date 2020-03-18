@@ -37,30 +37,6 @@ namespace external {
     configure_datasource(configs);
   }
 
-  bool kafka_datasource::assign(std::vector<std::string> topics, std::vector<int> partitions) {
-
-    if (topics.size() != partitions.size()) {
-      printf("Topic(s) and Partition(s) size do not match in assign\n");
-      return false;
-    }
-
-    // Clear out the existing partitions
-    partitions_.clear();
-
-    // Raw loops are bad
-    for (int i = 0; i < topics.size(); i++) {
-      partitions_.push_back(RdKafka::TopicPartition::create(topics[i], partitions[i]));
-    }
-
-    err_ = consumer_.get()->assign(partitions_);
-
-    if (err_ != RdKafka::ERR_NO_ERROR) {
-      return false;
-    } else {
-      return true;
-    }
-  }
-
   std::string kafka_datasource::libcudf_datasource_identifier() {
     return DATASOURCE_ID;
   }
@@ -178,7 +154,8 @@ namespace external {
 
  int64_t kafka_datasource::get_committed_offset(std::string topic, int partition) {
     std::vector<RdKafka::TopicPartition*> toppar_list;
-    toppar_list.push_back(find_toppar(topic, partition));
+    //toppar_list.push_back(find_toppar(topic, partition));
+    toppar_list.push_back(RdKafka::TopicPartition::create(topic, partition));
 
     // Query Kafka to populate the TopicPartitions with the desired offsets
     err_ = consumer_->committed(toppar_list, default_timeout_);
@@ -276,9 +253,11 @@ namespace external {
   }
 
   bool kafka_datasource::commit_offset(std::string topic, int partition, int64_t offset) {
-    RdKafka::TopicPartition* toppar = find_toppar(topic, partition);
+    std::vector<RdKafka::TopicPartition*> partitions_;
+    RdKafka::TopicPartition* toppar = RdKafka::TopicPartition::create(topic, partition, offset);
     if (toppar != NULL) {
       toppar->set_offset(offset);
+      partitions_.push_back(toppar);
       err_ = consumer_->commitSync(partitions_);
       return true;
     } else {

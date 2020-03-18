@@ -34,19 +34,6 @@ cpdef create_kafka_consumer(kafka_conf):
     kds = new kafka_external(kafka_confs)
     ds_id = kds.libcudf_datasource_identifier()
 
-
-cpdef assign(topics=[], partitions=[]):
-
-    cdef vector[string] v_topics
-    cdef vector[int] v_partitions
-
-    for top in topics:
-        v_topics.push_back(top.encode())
-    for part in partitions:
-        v_partitions.push_back(part)
-
-    return kds.assign(v_topics, v_partitions)
-
 cpdef read_gdf(lines=True,
                dtype=True,
                compression="infer",

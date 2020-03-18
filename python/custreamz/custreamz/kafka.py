@@ -13,15 +13,6 @@ class Consumer(object):
         self.kafka_configs = kafka_configs
         libkafka.create_kafka_consumer(kafka_configs)
 
-    def assign(self, partitions=[]):
-        topics = []
-        parts = []
-        for toppar in partitions:
-            topics.append(toppar.topic)
-            parts.append(toppar.partition)
-
-        return libkafka.assign(topics, parts)
-
     def metadata(self):
         libkafka.print_consumer_metadata()
 
@@ -105,7 +96,7 @@ class Consumer(object):
             )
 
         if offsets[b"low"] < 0:
-            offsets[b"low"] = 0
+            offsets[b"low"] = 0 
 
         return offsets[b"low"], offsets[b"high"]
 
