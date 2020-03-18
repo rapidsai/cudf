@@ -77,7 +77,7 @@ class writer::impl {
    *
    * @param table The set of columns
    * @param metadata The metadata associated with the table
-   * @param return_filemetadatIf true, return the raw parquet file metadata
+   * @param return_filemetadata If true, return the raw parquet file metadata
    * @param metadata_out_file_path Column chunks file path to be set in the raw output metadata
    * @param stream Stream to use for memory allocation and kernels
    **/

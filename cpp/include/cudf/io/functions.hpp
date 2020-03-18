@@ -518,6 +518,9 @@ struct write_parquet_args {
  *
  * @param args Settings for controlling writing behavior
  * @param mr Optional resource to use for device memory allocation
+ *
+ * @return A blob that contains the file metadata (parquet FileMetadata thrift message) if
+ *         requested in write_parquet_args (empty blob otherwise)
  */
 std::unique_ptr<std::vector<uint8_t>> write_parquet(
   write_parquet_args const& args,
@@ -540,9 +543,9 @@ struct write_parquet_chunked_args {
   /// Specify the sink to use for writer output
   sink_info sink;
   /// Specify the compression format to use
-  compression_type compression;
+  compression_type compression = compression_type::AUTO;
   /// Specify the level of statistics in the output file
-  statistics_freq stats_level;
+  statistics_freq stats_level = statistics_freq::STATISTICS_ROWGROUP;
   /// Optional associated metadata.
   const table_metadata_with_nullability *metadata;
 
