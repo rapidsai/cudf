@@ -9,7 +9,6 @@ import pandas as pd
 from pandas.api.types import is_dtype_equal
 
 import cudf
-import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
 from cudf._libxx.scalar import Scalar
 from cudf.core import column
@@ -47,7 +46,7 @@ class Frame(libcudfxx.table.Table):
         # is concatenated with itself
         objs = [f.copy(deep=False) for f in objs]
 
-        libcudf.nvtx.nvtx_range_push("CUDF_CONCAT", "orange")
+        libcudfxx.nvtx.nvtx_range_push("CUDF_CONCAT", "orange")
 
         from cudf.core.index import as_index
         from cudf.core.column.column import column_empty
@@ -219,7 +218,7 @@ class Frame(libcudfxx.table.Table):
         out._index.name = objs[0]._index.name
         out._index.names = objs[0]._index.names
 
-        libcudf.nvtx.nvtx_range_pop()
+        libcudfxx.nvtx.nvtx_range_pop()
 
         return out
 
