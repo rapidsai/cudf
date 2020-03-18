@@ -191,6 +191,7 @@
 - PR #4534 Disable deprecation warnings as errors.
 - PR #4506 Check for multi-dimensional data in column/Series creation
 - PR #4549 Add option to disable deprecation warnings.
+- PR #4563 Remove copying to host for metadata generation in `generate_pandas_metadata`
 
 ## Bug Fixes
 
@@ -290,6 +291,7 @@
 - PR #4526 Fix index slicing issue for index incase of an empty dataframe
 - PR #4538 Fix cudf::strings::slice_strings(step=-1) for empty strings
 - PR #4557 Disable compile-errors on deprecation warnings, for JNI
+- PR #4576 Fix typo in `serialize.py`
 - PR #4571 Load JNI native dependencies for Scalar class
 
 
