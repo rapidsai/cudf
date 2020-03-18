@@ -235,24 +235,24 @@ struct ReductionAnyAllTest : public ReductionTest<cudf::experimental::bool8> {
 
 TEST_F(ReductionAnyAllTest, AnyAllTrueTrue)
 {
-   using T = cudf::experimental::bool8;
+   using T = bool;
    std::vector<int> int_values({true, true, true, true});
    std::vector<bool> host_bools({1, 1, 0, 1});
-   std::vector<T> v = convert_values<T>(int_values);
+   std::vector<T> v = convert_values<bool>(int_values);
 
    // Min/Max succeeds for any gdf types including
    // non-arithmetic types (date32, date64, timestamp, category)
-   bool result_error(true);
-   T expected = true;
+   bool result_error = true;
+   bool expected     = true;
 
    // test without nulls
-   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
+   cudf::test::fixed_width_column_wrapper<bool> col(v.begin(), v.end());
 
    this->reduction_test(col, expected, result_error, cudf::experimental::make_any_aggregation());
    this->reduction_test(col, expected, result_error, cudf::experimental::make_all_aggregation());
 
    // test with nulls
-   cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
+   cudf::test::fixed_width_column_wrapper<bool> col_nulls = construct_null_column(v, host_bools);
 
    this->reduction_test(col_nulls, expected, result_error, cudf::experimental::make_any_aggregation());
    this->reduction_test(col_nulls, expected, result_error, cudf::experimental::make_all_aggregation());
@@ -260,24 +260,23 @@ TEST_F(ReductionAnyAllTest, AnyAllTrueTrue)
 
 TEST_F(ReductionAnyAllTest, AnyAllFalseFalse)
 {
-   using T = cudf::experimental::bool8;
    std::vector<int> int_values({false, false, false, false});
    std::vector<bool> host_bools({1, 1, 0, 1});
-   std::vector<T> v = convert_values<T>(int_values);
+   std::vector<bool> v = convert_values<bool>(int_values);
 
    // Min/Max succeeds for any gdf types including
    // non-arithmetic types (date32, date64, timestamp, category)
-   bool result_error(true);
-   T expected = false;
+   bool result_error = true;
+   bool expected     = false;
 
    // test without nulls
-   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
+   cudf::test::fixed_width_column_wrapper<bool> col(v.begin(), v.end());
 
    this->reduction_test(col, expected, result_error, cudf::experimental::make_any_aggregation());
    this->reduction_test(col, expected, result_error, cudf::experimental::make_all_aggregation());
 
    // test with nulls
-   cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
+   cudf::test::fixed_width_column_wrapper<bool> col_nulls = construct_null_column(v, host_bools);
 
    this->reduction_test(col_nulls, expected, result_error, cudf::experimental::make_any_aggregation());
    this->reduction_test(col_nulls, expected, result_error, cudf::experimental::make_all_aggregation());
@@ -557,10 +556,10 @@ TEST_F(ReductionDtypeTest, different_precision)
 
     // make sure boolean arithmetic semantics are obeyed when
     // reducing to a bool
-    this->reduction_test<cudf::experimental::bool8, cudf::experimental::bool8>
+    this->reduction_test<bool, bool>
         (int_values, cudf::experimental::true_v, true, sum_agg, cudf::data_type(cudf::BOOL8));
 
-    this->reduction_test<int32_t, cudf::experimental::bool8>
+    this->reduction_test<int32_t, bool>
         (int_values, cudf::experimental::true_v, true, sum_agg, cudf::data_type(cudf::BOOL8));
 
     // cudf::timestamp_s and int64_t are not convertible types.

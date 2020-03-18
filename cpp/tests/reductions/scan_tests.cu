@@ -74,7 +74,7 @@ struct ScanTest : public cudf::test::BaseFixture
     }
 
     template <typename Ti>
-    void val_check(std::vector<Ti> const & v, bool do_print=false, const char* msg = nullptr){
+    void val_check(thrust::host_vector<Ti> const & v, bool do_print=false, const char* msg = nullptr){
         if( do_print ){
             std::cout << msg << " {";
             std::for_each(v.begin(), v.end(), [](Ti i){ std::cout << ", " <<  i;});
@@ -85,7 +85,7 @@ struct ScanTest : public cudf::test::BaseFixture
 
     // make sure all elements in the range of sint8([-128, 127])
     template <typename Ti>
-    void range_check(std::vector<Ti> const & v){
+    void range_check(thrust::host_vector<Ti> const & v){
         std::for_each(v.begin(), v.end(),
             [](Ti i){
                 ASSERT_GE(static_cast<int>(i), -128);
@@ -102,13 +102,14 @@ TYPED_TEST_CASE(ScanTest, Types);
 // ------------------------------------------------------------------------
 TYPED_TEST(ScanTest, Min)
 {
-    std::vector<TypeParam>  v({123, 64, 63, 99, -5, 123, -16, -120, -111});
-    std::vector<bool> b({  1,  0,  1,  1,  1,   1,   0,    1,    1});
+    auto const v = cudf::test::make_type_param_vector<TypeParam>({123, 64, 63, 99, -5, 123, -16, -120, -111});
+    std::vector<bool> b({ 1, 0, 1, 1, 1, 1, 0, 1, 1});
     std::vector<TypeParam> exact(v.size());
 
+    // #CHTODO
     std::transform(v.cbegin(), v.cend(),
         exact.begin(),
-        [acc=v[0]](auto i) mutable { acc = std::min(acc, i); return acc; }
+        [acc = *v.cbegin()](auto i) mutable { acc = std::min(acc, i); return acc; }
         );
 
     this->scan_test({v.begin(), v.end()}, 
@@ -117,7 +118,7 @@ TYPED_TEST(ScanTest, Min)
 
     std::transform(v.cbegin(), v.cend(), b.begin(),
         exact.begin(),
-        [acc=v[0]](auto i, bool b) mutable { if(b) acc = std::min(acc, i); return acc; }
+        [acc = *v.cbegin()](auto i, bool b) mutable { if(b) acc = std::min(acc, i); return acc; }
         );
 
     this->scan_test({v.begin(), v.end(), b.begin()}, 
@@ -127,13 +128,13 @@ TYPED_TEST(ScanTest, Min)
 
 TYPED_TEST(ScanTest, Max)
 {
-    std::vector<TypeParam>  v({-120, 5, 0, -120, -111, 64, 63, 99, 123, -16});
-    std::vector<bool> b({   1, 0, 1,    1,    1,  1,  0,  1,   1,   1});
+    auto const v = cudf::test::make_type_param_vector<TypeParam>({-120, 5, 0, -120, -111, 64, 63, 99, 123, -16});
+    std::vector<bool> b({ 1, 0, 1, 1, 1, 1, 0, 1, 1, 1});
     std::vector<TypeParam> exact(v.size());
 
     std::transform(v.cbegin(), v.cend(),
         exact.begin(),
-        [acc=v[0]](auto i) mutable { acc = std::max(acc, i); return acc; }
+        [acc = *v.cbegin()](auto i) mutable { acc = std::max(acc, i); return acc; }
         );
 
     this->scan_test({v.begin(), v.end()}, 
@@ -142,7 +143,7 @@ TYPED_TEST(ScanTest, Max)
 
     std::transform(v.cbegin(), v.cend(), b.begin(),
         exact.begin(),
-        [acc=v[0]](auto i, bool b) mutable { if(b) acc = std::max(acc, i); return acc; }
+        [acc = *v.cbegin()](auto i, bool b) mutable { if(b) acc = std::max(acc, i); return acc; }
         );
 
     this->scan_test({v.begin(), v.end(), b.begin()}, 
@@ -153,8 +154,8 @@ TYPED_TEST(ScanTest, Max)
 
 TYPED_TEST(ScanTest, Product)
 {
-    std::vector<TypeParam>  v({5, -1, 1, 3, -2, 4});
-    std::vector<bool> b({1,  1, 1, 0,  1, 1});
+    auto const v = cudf::test::make_type_param_vector<TypeParam>({5, -1, 1, 3, -2, 4});
+    std::vector<bool> b({1, 1, 1, 0, 1, 1});
     std::vector<TypeParam> exact(v.size());
 
     std::transform(v.cbegin(), v.cend(),
@@ -178,8 +179,8 @@ TYPED_TEST(ScanTest, Product)
 
 TYPED_TEST(ScanTest, Sum)
 {
-    std::vector<TypeParam>  v({-120, 5, 6, 113, -111, 64, -63, 9, 34, -16});
-    std::vector<bool> b({   1, 0, 1,   1,    0,  0,   1, 1,  1,   1});
+    auto const v = cudf::test::make_type_param_vector<TypeParam>({-120, 5, 6, 113, -111, 64, -63, 9, 34, -16});
+    std::vector<bool> b({ 1, 0, 1, 1, 0, 0, 1, 1, 1, 1});
     std::vector<TypeParam> exact(v.size());
 
     std::transform(v.cbegin(), v.cend(),
@@ -284,8 +285,8 @@ TEST_F(ScanStringTest, Max)
 TYPED_TEST(ScanTest, skip_nulls)
 {
   bool do_print=false;
-  std::vector<TypeParam> v{1,2,3,4,5,6,7,8,1,1};
-  std::vector<bool>      b{1,1,1,1,1,0,1,0,1,1};
+  auto const v = cudf::test::make_type_param_vector<TypeParam>({1,2,3,4,5,6,7,8,1,1});
+  std::vector<bool> b{1,1,1,1,1,0,1,0,1,1};
   cudf::test::fixed_width_column_wrapper<TypeParam> const col_in{v.begin(), v.end(),
                                                             b.begin()};
   const column_view input_view = col_in;
