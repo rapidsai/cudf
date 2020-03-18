@@ -74,6 +74,9 @@ from cudf._libxx.strings.find import (
     rfind as cpp_rfind,
     startswith as cpp_startswith,
 )
+from cudf._libxx.strings.find_multiple import (
+    find_multiple as cpp_find_multiple,
+)
 from cudf._libxx.strings.findall import findall as cpp_findall
 from cudf._libxx.strings.padding import (
     PadSide,
@@ -1504,6 +1507,12 @@ class StringMethods(object):
         else:
             result_col = cpp_startswith(self._column, Scalar(pat, "str"))
 
+        return self._return_or_inplace(result_col, **kwargs)
+
+    def find_multiple(self, strs, **kwargs):
+        result_col = cpp_find_multiple(
+            self._column, column.as_column(strs, dtype="str")
+        )
         return self._return_or_inplace(result_col, **kwargs)
 
     def find(self, sub, start=0, end=None, **kwargs):
