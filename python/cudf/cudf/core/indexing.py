@@ -25,7 +25,7 @@ def indices_from_labels(obj, labels):
     else:
         labels = labels.astype(obj.index.dtype)
 
-    # There is a chance that the join might jumble the index ordering
+    # join is not guaranteed to maintain the index ordering
     # so we will sort it with its initial ordering which is stored
     # in column "__"
     lhs = cudf.DataFrame({"__": cupy.arange(len(labels))}, index=labels)
