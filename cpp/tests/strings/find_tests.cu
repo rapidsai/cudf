@@ -174,7 +174,6 @@ TEST_P(FindParmsTest, Find)
     auto strings_view = cudf::strings_column_view(strings);
     {
         auto results = cudf::strings::find(strings_view,cudf::string_scalar("e"),position);
-        cudf::test::print(results->view()); std::cout << " find(" << position << ")" << std::endl;
         std::vector<int32_t> h_expected;
         for( auto itr = h_strings.begin(); itr != h_strings.end(); ++itr )
             h_expected.push_back((int32_t)(*itr).find("e",position));
@@ -183,7 +182,6 @@ TEST_P(FindParmsTest, Find)
     }
     {
         auto results = cudf::strings::rfind(strings_view,cudf::string_scalar("e"),0,position+1);
-        cudf::test::print(results->view()); std::cout << " rfind(0," << position << ")" << std::endl;
         std::vector<int32_t> h_expected;
         for( auto itr = h_strings.begin(); itr != h_strings.end(); ++itr )
             h_expected.push_back((int32_t)(*itr).rfind("e",position));
