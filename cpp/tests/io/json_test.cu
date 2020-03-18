@@ -75,11 +75,14 @@ MATCHER_P(FloatNearPointwise, tolerance, "Out-of-range") {
           std::get<0>(arg) < std::get<1>(arg) + tolerance);
 }
 
-template <typename T>
-void expect_float_column_data_equal(std::vector<T> const& lhs,
-                                    cudf::column_view const& rhs) {
-  EXPECT_THAT(cudf::test::to_host<T>(rhs).first,
-              ::testing::Pointwise(FloatNearPointwise(1e-6), lhs));
+// temporary method to verify the float columns until 
+// cudf::test::expect_columns_equal supports floating point
+template <typename T, typename valid_t>
+void check_float_column(cudf::column_view const& col, std::vector<T> const& data, valid_t const& validity){
+  cudf::test::expect_column_properties_equal(col, wrapper<T>{data.begin(), data.end(), validity});
+  CUDF_EXPECTS(col.null_count() == 0, "All elements should be valid");
+  EXPECT_THAT(cudf::test::to_host<T>(col).first,
+              ::testing::Pointwise(FloatNearPointwise(1e-6), data));
 }
 
 /**
@@ -218,18 +221,10 @@ TEST_F(JsonReaderTest, MultiColumn) {
   cudf::test::expect_columns_equal(view.column(4), int_wrapper{int32_values.begin(), int32_values.end(), validity});
   cudf::test::expect_columns_equal(view.column(5), int64_wrapper{int64_values.begin(), int64_values.end(), validity});
   cudf::test::expect_columns_equal(view.column(6), int64_wrapper{int64_values.begin(), int64_values.end(), validity});  
-  
-  cudf::test::expect_column_properties_equal(view.column(7), float_wrapper{float32_values.begin(), float32_values.end(), validity});
-  expect_float_column_data_equal(float32_values, view.column(7));
-  
-  cudf::test::expect_column_properties_equal(view.column(8), float_wrapper{float32_values.begin(), float32_values.end(), validity});
-  expect_float_column_data_equal(float32_values, view.column(8));
-
-  cudf::test::expect_column_properties_equal(view.column(9), float64_wrapper{float64_values.begin(), float64_values.end(), validity});
-  expect_float_column_data_equal(float64_values, view.column(9));
-  
-  cudf::test::expect_column_properties_equal(view.column(10), float64_wrapper{float64_values.begin(), float64_values.end(), validity});
-  expect_float_column_data_equal(float64_values, view.column(10));
+  check_float_column(view.column(7), float32_values, validity);
+  check_float_column(view.column(8), float32_values, validity);
+  check_float_column(view.column(9), float64_values, validity);
+  check_float_column(view.column(10), float64_values, validity);
 }
 
 TEST_F(JsonReaderTest, Booleans) {
