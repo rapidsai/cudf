@@ -112,8 +112,9 @@ column_device_view::create(column_view source, cudaStream_t stream) {
       deleter};
 
   // copy the CPU memory with all the children into device memory
-  CUDA_TRY(cudaMemcpyAsync(child_storage->data(), h_buffer.data(),
-                           child_storage->size(), cudaMemcpyDefault, stream));
+  CUDA_TRY(cudaMemcpyAsync(descendant_storage->data(), staging_buffer.data(),
+                           descendant_storage->size(), cudaMemcpyDefault,
+                           stream));
 
   return p;
 }
