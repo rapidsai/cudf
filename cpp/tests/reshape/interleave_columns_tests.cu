@@ -41,11 +41,11 @@ TYPED_TEST(InterleaveColumnsTest, OneColumn)
 {
     using T = TypeParam;
 
-    fixed_width_column_wrapper<T> a({ -1, 0, 1 });
+    fixed_width_column_wrapper<T, int> a({ -1, 0, 1 });
 
     cudf::table_view in (std::vector<cudf::column_view>{ a });
 
-    auto expected = fixed_width_column_wrapper<T>({ -1, 0, 1});
+    auto expected = fixed_width_column_wrapper<T, int>({ -1, 0, 1});
     auto actual = cudf::experimental::interleave_columns(in);
 
     cudf::test::expect_columns_equal(expected, actual->view());
@@ -55,12 +55,12 @@ TYPED_TEST(InterleaveColumnsTest, TwoColumns)
 {
     using T = TypeParam;
 
-    auto a = fixed_width_column_wrapper<T>({ 0, 2 });
-    auto b = fixed_width_column_wrapper<T>({ 1, 3 });
+    auto a = fixed_width_column_wrapper<T, int>({ 0, 2 });
+    auto b = fixed_width_column_wrapper<T, int>({ 1, 3 });
 
     cudf::table_view in (std::vector<cudf::column_view>{ a, b, });
 
-    auto expected = fixed_width_column_wrapper<T>({ 0, 1, 2, 3 });
+    auto expected = fixed_width_column_wrapper<T, int>({ 0, 1, 2, 3 });
     auto actual = cudf::experimental::interleave_columns(in);
 
     cudf::test::expect_columns_equal(expected, actual->view());
@@ -70,13 +70,13 @@ TYPED_TEST(InterleaveColumnsTest, ThreeColumns)
 {
     using T = TypeParam;
 
-    auto a = fixed_width_column_wrapper<T>({ 0, 3, 6 });
-    auto b = fixed_width_column_wrapper<T>({ 1, 4, 7 });
-    auto c = fixed_width_column_wrapper<T>({ 2, 5, 8 });
+    auto a = fixed_width_column_wrapper<T, int>({ 0, 3, 6 });
+    auto b = fixed_width_column_wrapper<T, int>({ 1, 4, 7 });
+    auto c = fixed_width_column_wrapper<T, int>({ 2, 5, 8 });
 
     cudf::table_view in (std::vector<cudf::column_view>{ a, b, c });
 
-    auto expected = fixed_width_column_wrapper<T>({ 0, 1, 2, 3, 4, 5, 6, 7, 8 });
+    auto expected = fixed_width_column_wrapper<T, int>({ 0, 1, 2, 3, 4, 5, 6, 7, 8 });
     auto actual = cudf::experimental::interleave_columns(in);
 
     cudf::test::expect_columns_equal(expected, actual->view());
@@ -116,11 +116,11 @@ TYPED_TEST(InterleaveColumnsTest, OneColumnNullable)
 {
     using T = TypeParam;
 
-    fixed_width_column_wrapper<T> a({ 1, 2, 3 }, { 0, 1, 0 });
+    fixed_width_column_wrapper<T, int> a({ 1, 2, 3 }, { 0, 1, 0 });
 
     cudf::table_view in (std::vector<cudf::column_view>{ a });
 
-    auto expected = fixed_width_column_wrapper<T>({ 0, 2, 0 }, { 0, 1, 0 });
+    auto expected = fixed_width_column_wrapper<T, int>({ 0, 2, 0 }, { 0, 1, 0 });
     auto actual = cudf::experimental::interleave_columns(in);
 
     cudf::test::expect_columns_equal(expected, actual->view());
@@ -130,12 +130,12 @@ TYPED_TEST(InterleaveColumnsTest, TwoColumnNullable)
 {
     using T = TypeParam;
 
-    fixed_width_column_wrapper<T> a({ 1, 2, 3 }, { 0, 1, 0 });
-    fixed_width_column_wrapper<T> b({ 4, 5, 6 }, { 1, 0, 1 });
+    fixed_width_column_wrapper<T, int> a({ 1, 2, 3 }, { 0, 1, 0 });
+    fixed_width_column_wrapper<T, int> b({ 4, 5, 6 }, { 1, 0, 1 });
 
     cudf::table_view in (std::vector<cudf::column_view>{ a, b });
 
-    auto expected = fixed_width_column_wrapper<T>({ 0, 4, 2, 0, 0, 6 }, { 0, 1, 1, 0, 0, 1 });
+    auto expected = fixed_width_column_wrapper<T, int>({ 0, 4, 2, 0, 0, 6 }, { 0, 1, 1, 0, 0, 1 });
     auto actual = cudf::experimental::interleave_columns(in);
 
     cudf::test::expect_columns_equal(expected, actual->view());
@@ -145,13 +145,13 @@ TYPED_TEST(InterleaveColumnsTest, ThreeColumnsNullable)
 {
     using T = TypeParam;
 
-    fixed_width_column_wrapper<T> a({ 1, 4, 7 }, { 1, 0, 1 });
-    fixed_width_column_wrapper<T> b({ 2, 5, 8 }, { 0, 1, 0 });
-    fixed_width_column_wrapper<T> c({ 3, 6, 9 }, { 1, 0, 1 });
+    fixed_width_column_wrapper<T, int> a({ 1, 4, 7 }, { 1, 0, 1 });
+    fixed_width_column_wrapper<T, int> b({ 2, 5, 8 }, { 0, 1, 0 });
+    fixed_width_column_wrapper<T, int> c({ 3, 6, 9 }, { 1, 0, 1 });
 
     cudf::table_view in (std::vector<cudf::column_view>{ a, b, c });
 
-    auto expected = fixed_width_column_wrapper<T>({ 1, 0, 3, 0, 5, 0, 7, 0, 9 }, { 1, 0, 1, 0, 1, 0, 1, 0, 1 });
+    auto expected = fixed_width_column_wrapper<T, int>({ 1, 0, 3, 0, 5, 0, 7, 0, 9 }, { 1, 0, 1, 0, 1, 0, 1, 0, 1 });
     auto actual = cudf::experimental::interleave_columns(in);
 
     cudf::test::expect_columns_equal(expected, actual->view());
@@ -163,8 +163,8 @@ TYPED_TEST(InterleaveColumnsTest, MismatchedDtypes)
 
     if (not std::is_same<int, T>::value) {
 
-        fixed_width_column_wrapper<int> input_a({ 1, 4, 7 }, { 1, 0, 1 });
-        fixed_width_column_wrapper<T>   input_b({ 2, 5, 8 }, { 0, 1, 0 });
+        fixed_width_column_wrapper<int>    input_a({ 1, 4, 7 }, { 1, 0, 1 });
+        fixed_width_column_wrapper<T, int> input_b({ 2, 5, 8 }, { 0, 1, 0 });
 
         cudf::table_view input (std::vector<cudf::column_view>{ input_a, input_b });
 
