@@ -196,6 +196,7 @@
 - PR #4524 Updating `__setitem__` for DataFrame to use scalar scatter
 - PR #4534 Disable deprecation warnings as errors.
 - PR #4506 Check for multi-dimensional data in column/Series creation
+- PR #4549 Add option to disable deprecation warnings.
 
 ## Bug Fixes
 
