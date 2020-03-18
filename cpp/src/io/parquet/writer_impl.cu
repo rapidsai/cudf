@@ -386,7 +386,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink, writer_options const &option
 
 std::unique_ptr<std::vector<uint8_t>> writer::impl::write(
                          table_view const &table, const table_metadata *metadata,
-                         bool return_filemetadata, const std::string metadata_out_file_path,
+                         bool return_filemetadata, const std::string& metadata_out_file_path,
                          cudaStream_t stream) {    
   pq_chunked_state state;
   state.user_metadata = metadata;
@@ -395,23 +395,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::write(
 
   write_chunked_begin(state);
   write_chunked(table, state);
-  write_chunked_end(state);
-
-  // Optionally output raw file metadata with the specified column chunk file path
-  if (return_filemetadata) {
-    CompactProtocolWriter cpw(&buffer_);
-    buffer_.resize(0);
-    for (auto& rowgroup : state.md.row_groups) {
-      for (auto& col : rowgroup.columns) {
-        col.file_path = metadata_out_file_path;
-      }
-    }
-    cpw.write(&state.md);
-    return std::make_unique<std::vector<uint8_t>>(std::move(buffer_));
-  }
-  else {
-    return {nullptr};
-  }
+  return write_chunked_end(state, return_filemetadata, metadata_out_file_path);
 }
 
 void writer::impl::write_chunked_begin(pq_chunked_state& state){
@@ -784,7 +768,8 @@ void writer::impl::write_chunked(table_view const& table, pq_chunked_state& stat
   }
 }
 
-void writer::impl::write_chunked_end(pq_chunked_state &state){
+std::unique_ptr<std::vector<uint8_t>> writer::impl::write_chunked_end(pq_chunked_state &state,
+                         bool return_filemetadata, const std::string& metadata_out_file_path) {
   CompactProtocolWriter cpw(&buffer_);
   file_ender_s fendr;
   buffer_.resize(0);
@@ -793,6 +778,21 @@ void writer::impl::write_chunked_end(pq_chunked_state &state){
   out_sink_->host_write(buffer_.data(), buffer_.size());  
   out_sink_->host_write(&fendr, sizeof(fendr));  
   out_sink_->flush();
+
+  // Optionally output raw file metadata with the specified column chunk file path
+  if (return_filemetadata) {
+    buffer_.resize(0);
+    for (auto& rowgroup : state.md.row_groups) {
+      for (auto& col : rowgroup.columns) {
+        col.file_path = metadata_out_file_path;
+      }
+    }
+    cpw.write(&state.md);
+    return std::make_unique<std::vector<uint8_t>>(std::move(buffer_));
+  }
+  else {
+    return {nullptr};
+  }
 }
 
 // Forward to implementation
