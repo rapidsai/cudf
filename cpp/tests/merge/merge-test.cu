@@ -29,13 +29,11 @@ class MergeTest_ : public cudf::test::BaseFixture {};
 TYPED_TEST_CASE(MergeTest_, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(MergeTest_, MismatchedNumColumns) {
-    using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam>;
+    using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam, int>;
     
-    auto const tmp = cudf::test::make_type_param_vector<TypeParam>({0, 1, 2, 3});
-
-    columnFactoryT leftColWrap1 (tmp.cbegin(), tmp.cend());
-    columnFactoryT rightColWrap1(tmp.cbegin(), tmp.cend());
-    columnFactoryT rightColWrap2(tmp.cbegin(), tmp.cend());
+    columnFactoryT leftColWrap1{{0,1,2,3}};
+    columnFactoryT rightColWrap1{{0,1,2,3}};
+    columnFactoryT rightColWrap2{{0,1,2,3}};
 
     std::vector<cudf::size_type> key_cols{0};
     std::vector<cudf::order> column_order {cudf::order::ASCENDING};
@@ -74,12 +72,10 @@ TYPED_TEST(MergeTest_, MismatchedColumnDypes) {
 
 
 TYPED_TEST(MergeTest_, EmptyKeyColumns) {
-    using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam>;
+    using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam, int>;
     
-    auto const tmp = cudf::test::make_type_param_vector<TypeParam>({0, 1, 2, 3});
-
-    columnFactoryT leftColWrap1 (tmp.cbegin(), tmp.cend());
-    columnFactoryT rightColWrap1(tmp.cbegin(), tmp.cend());
+    columnFactoryT leftColWrap1{{0,1,2,3}};
+    columnFactoryT rightColWrap1{{0,1,2,3}};
 
     std::vector<cudf::size_type> key_cols{}; // empty! this should trigger exception
     std::vector<cudf::order> column_order {cudf::order::ASCENDING};
@@ -97,12 +93,10 @@ TYPED_TEST(MergeTest_, EmptyKeyColumns) {
 
 
 TYPED_TEST(MergeTest_, TooManyKeyColumns) {
-    using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam>;
+    using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam, int>;
     
-    auto const tmp = cudf::test::make_type_param_vector<TypeParam>({0, 1, 2, 3});
-
-    columnFactoryT leftColWrap1 (tmp.cbegin(), tmp.cend());
-    columnFactoryT rightColWrap1(tmp.cbegin(), tmp.cend());
+    columnFactoryT leftColWrap1{{0,1,2,3}};
+    columnFactoryT rightColWrap1{{0,1,2,3}};
 
     std::vector<cudf::size_type> key_cols{0, 1}; // more keys than columns: this should trigger exception
     std::vector<cudf::order> column_order {cudf::order::ASCENDING};
@@ -120,12 +114,10 @@ TYPED_TEST(MergeTest_, TooManyKeyColumns) {
 
 
 TYPED_TEST(MergeTest_, EmptyOrderTypes) {
-    using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam>;
+    using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam, int>;
     
-    auto const tmp = cudf::test::make_type_param_vector<TypeParam>({0, 1, 2, 3});
-
-    columnFactoryT leftColWrap1 (tmp.cbegin(), tmp.cend());
-    columnFactoryT rightColWrap1(tmp.cbegin(), tmp.cend());
+    columnFactoryT leftColWrap1{{0,1,2,3}};
+    columnFactoryT rightColWrap1{{0,1,2,3}};
 
     std::vector<cudf::size_type> key_cols{0};
     std::vector<cudf::order> column_order {}; // empty! this should trigger exception
@@ -143,12 +135,10 @@ TYPED_TEST(MergeTest_, EmptyOrderTypes) {
 
 
 TYPED_TEST(MergeTest_, TooManyOrderTypes) {
-    using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam>;
+    using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam, int>;
     
-    auto const tmp = cudf::test::make_type_param_vector<TypeParam>({0, 1, 2, 3});
-
-    columnFactoryT leftColWrap1 (tmp.cbegin(), tmp.cend());
-    columnFactoryT rightColWrap1(tmp.cbegin(), tmp.cend());
+    columnFactoryT leftColWrap1{{0,1,2,3}};
+    columnFactoryT rightColWrap1{{0,1,2,3}};
 
     std::vector<cudf::size_type> key_cols{0}; 
     std::vector<cudf::order> column_order {cudf::order::ASCENDING, cudf::order::DESCENDING}; // more order types than columns: this should trigger exception
@@ -165,14 +155,12 @@ TYPED_TEST(MergeTest_, TooManyOrderTypes) {
 }
 
 TYPED_TEST(MergeTest_, MismatchedKeyColumnsAndOrderTypes) {
-    using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam>;
+    using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam, int>;
     
-    auto const tmp = cudf::test::make_type_param_vector<TypeParam>({0, 1, 2, 3});
-
-    columnFactoryT leftColWrap1 (tmp.cbegin(), tmp.cend());
-    columnFactoryT leftColWrap2 (tmp.cbegin(), tmp.cend());
-    columnFactoryT rightColWrap1(tmp.cbegin(), tmp.cend());
-    columnFactoryT rightColWrap2(tmp.cbegin(), tmp.cend());
+    columnFactoryT leftColWrap1{{0,1,2,3}};
+    columnFactoryT leftColWrap2{{0,1,2,3}};
+    columnFactoryT rightColWrap1{{0,1,2,3}};
+    columnFactoryT rightColWrap2{{0,1,2,3}};
 
     cudf::table_view left_view{{leftColWrap1, leftColWrap2}};
     cudf::table_view right_view{{rightColWrap1, rightColWrap2}};
