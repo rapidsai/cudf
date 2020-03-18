@@ -45,6 +45,7 @@
 - PR #4381 Add Java support for copying buffers with asynchronous streams
 - PR #4288 Add libcudf++ shift Cython implementation
 - PR #4338 Add cudf::sequence() for generating an incrementing list of numeric values
+- PR #4456 Add argmin/max and string min/max to sort groupby
 
 ## Improvements
 
@@ -175,6 +176,7 @@
 - PR #4524 Updating `__setitem__` for DataFrame to use scalar scatter
 - PR #4534 Disable deprecation warnings as errors.
 - PR #4506 Check for multi-dimensional data in column/Series creation
+- PR #4549 Add option to disable deprecation warnings.
 
 ## Bug Fixes
 
@@ -275,6 +277,7 @@
 - PR #4513 Backport scalar virtual destructor fix
 - PR #4519 Remove `n` validation for `nlargest` & `nsmallest` and add negative support for `n`
 - PR #4526 Fix index slicing issue for index incase of an empty dataframe
+- PR #4557 Disable compile-errors on deprecation warnings, for JNI
 
 
 # cuDF 0.12.0 (04 Feb 2020)
