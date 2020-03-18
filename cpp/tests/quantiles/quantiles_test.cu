@@ -23,6 +23,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
+#include <cudf/sorting.hpp>
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
@@ -33,97 +34,53 @@ using namespace cudf;
 using namespace test;
 
 template <typename T>
-struct QuantilesTest : public BaseFixture {
+struct DiscreteQuantilesTest : public BaseFixture {
 };
 
-using TestTypes = AllTypes;
+using DiscreteQuantilesTestTypes = AllTypes;
 
-TYPED_TEST_CASE(QuantilesTest, TestTypes);
+TYPED_TEST_CASE(DiscreteQuantilesTest, DiscreteQuantilesTestTypes);
 
-TYPED_TEST(QuantilesTest, TestZeroColumns)
+TYPED_TEST(DiscreteQuantilesTest, TestZeroColumns)
 {
     auto input = table_view(std::vector<column_view>{ });
 
-    EXPECT_THROW(experimental::quantiles(input, { 0.0f }), logic_error);
+    auto interp = experimental::interpolation::NEAREST;
+
+    EXPECT_THROW(experimental::quantiles(input, { 0.0f }, interp), logic_error);
 }
 
-TYPED_TEST(QuantilesTest, TestMultiColumnZeroRows)
+TYPED_TEST(DiscreteQuantilesTest, TestMultiColumnZeroRows)
 {
     using T = TypeParam;
 
     auto input_a = fixed_width_column_wrapper<T>({ });
     auto input = table_view({ input_a });
 
-    EXPECT_THROW(experimental::quantiles(input, { 0.0f }), logic_error);
+    auto interp = experimental::interpolation::NEAREST;
+
+    EXPECT_THROW(
+        experimental::quantiles(input, { 0.0f }, interp),
+        logic_error
+    );
 }
 
-TYPED_TEST(QuantilesTest, TestZeroRequestedQuantiles)
+TYPED_TEST(DiscreteQuantilesTest, TestZeroRequestedQuantiles)
 {
     using T = TypeParam;
 
     auto input_a = fixed_width_column_wrapper<T>({ 1 }, { 1 });
     auto input = table_view(std::vector<column_view>{ input_a });
 
-    auto actual = experimental::quantiles(input, { });
+    auto interp = experimental::interpolation::NEAREST;
+
+    auto actual = experimental::quantiles(input, { }, interp);
     auto expected = experimental::empty_like(input);
 
     expect_tables_equal(expected->view(), actual->view());
 }
 
-TYPED_TEST(QuantilesTest, TestMultiColumnOrderCountMismatch)
-{
-    using T = TypeParam;
-
-    auto input_a = fixed_width_column_wrapper<T>({ });
-    auto input_b = fixed_width_column_wrapper<T>({ });
-    auto input = table_view({ input_a });
-
-    EXPECT_THROW(experimental::quantiles(input,
-                                         { 0.0f },
-                                         experimental::interpolation::NEAREST,
-                                         sorted::NO,
-                                         { order::ASCENDING },
-                                         { null_order::AFTER, null_order::AFTER }),
-                 logic_error);
-}
-
-TYPED_TEST(QuantilesTest, TestMultiColumnNullOrderCountMismatch)
-{
-    using T = TypeParam;
-
-    auto input_a = fixed_width_column_wrapper<T>({ });
-    auto input_b = fixed_width_column_wrapper<T>({ });
-    auto input = table_view({ input_a });
-
-    EXPECT_THROW(experimental::quantiles(input,
-                                         { 0.0f },
-                                         experimental::interpolation::NEAREST,
-                                         sorted::NO,
-                                         { order::ASCENDING, order::ASCENDING },
-                                         { null_order::AFTER }),
-                 logic_error);
-}
-
-TYPED_TEST(QuantilesTest, TestMultiColumnArithmeticInterpolation)
-{
-    using T = TypeParam;
-
-    auto input_a = fixed_width_column_wrapper<T>({ });
-    auto input_b = fixed_width_column_wrapper<T>({ });
-    auto input = table_view({ input_a });
-
-    EXPECT_THROW(experimental::quantiles(input,
-                                         { 0.0f },
-                                         experimental::interpolation::LINEAR),
-                 logic_error);
-
-    EXPECT_THROW(experimental::quantiles(input,
-                                         { 0.0f },
-                                         experimental::interpolation::MIDPOINT),
-                 logic_error);
-}
-
-TYPED_TEST(QuantilesTest, TestMultiColumnUnsorted)
+TYPED_TEST(DiscreteQuantilesTest, TestMultiUsingSortmap)
 {
     using T = TypeParam;
 
@@ -138,11 +95,12 @@ TYPED_TEST(QuantilesTest, TestMultiColumnUnsorted)
 
     auto input = table_view({ input_a, input_b });
 
+    auto sortmap = experimental::sorted_order(input, { order::ASCENDING, order::DESCENDING });
+
     auto actual = experimental::quantiles(input,
                                           { 0.0f, 0.5f, 0.7f, 0.25f, 1.0f },
                                           experimental::interpolation::NEAREST,
-                                          sorted::NO,
-                                          { order::ASCENDING, order::DESCENDING });
+                                          sortmap->view());
 
     auto expected_a = strings_column_wrapper(
         { "A", "C", "C", "B", "D" },
@@ -158,7 +116,7 @@ TYPED_TEST(QuantilesTest, TestMultiColumnUnsorted)
     expect_tables_equal(expected, actual->view());
 }
 
-TYPED_TEST(QuantilesTest, TestMultiColumnAssumedSorted)
+TYPED_TEST(DiscreteQuantilesTest, TestMultiColumnAssumedSorted)
 {
     using T = TypeParam;
 
@@ -175,8 +133,7 @@ TYPED_TEST(QuantilesTest, TestMultiColumnAssumedSorted)
 
     auto actual = experimental::quantiles(input,
                                           { 0.0f, 0.5f, 0.7f, 0.25f, 1.0f },
-                                          experimental::interpolation::NEAREST,
-                                          sorted::YES);
+                                          experimental::interpolation::NEAREST);
 
     auto expected_a = strings_column_wrapper(
         { "C", "D", "C", "D", "A" },
@@ -188,6 +145,28 @@ TYPED_TEST(QuantilesTest, TestMultiColumnAssumedSorted)
     );
 
     auto expected = table_view({ expected_a, expected_b });
+
+    expect_tables_equal(expected, actual->view());
+}
+
+
+template <typename T>
+struct ArithmeticQuantilesTest : public BaseFixture {
+};
+
+using ArithmeticQuantilesTestTypes = NumericTypes;
+
+TYPED_TEST_CASE(ArithmeticQuantilesTest, ArithmeticQuantilesTestTypes);
+
+TYPED_TEST(ArithmeticQuantilesTest, TestCastToDouble)
+{
+    using T = TypeParam;
+
+    auto input_a = fixed_width_column_wrapper<T>({0});
+    auto input = table_view({ input_a });
+    auto expected_a = fixed_width_column_wrapper<double>({0});
+    auto expected = table_view({ expected_a });
+    auto actual = experimental::quantiles(input, {0}, experimental::interpolation::LINEAR, {}, true);
 
     expect_tables_equal(expected, actual->view());
 }

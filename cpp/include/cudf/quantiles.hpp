@@ -71,13 +71,13 @@ quantile(column_view const& input,
  * @throws cudf::logic_error if `interp` is an arithmetic interpolation strategy
  * @throws cudf::logic_error if `input` is empty
  */
+
 std::unique_ptr<table>
 quantiles(table_view const& input,
           std::vector<double> const& q,
-          interpolation interp = interpolation::NEAREST,
-          cudf::sorted is_input_sorted = sorted::NO,
-          std::vector<order> const& column_order = {},
-          std::vector<null_order> const& null_precedence = {},
+          interpolation interp = interpolation::LINEAR,
+          column_view const& sortmap = {},
+          bool cast_to_doubles = false,
           rmm::mr::device_memory_resource* mr =
             rmm::mr::get_default_resource());
 

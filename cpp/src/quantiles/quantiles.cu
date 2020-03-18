@@ -97,7 +97,7 @@ struct quantiles_functor
     std::enable_if_t<not std::is_arithmetic<T>::value, std::unique_ptr<column>>
     operator()(Args&&... args)
     {
-        CUDF_FAIL("Only numeric types are supported in quantiles.");
+        CUDF_FAIL("Only arithmetic types are supported in quantiles.");
     }
 
     template<typename T>
@@ -131,7 +131,7 @@ struct quantiles_functor
             thrust::transform(
                 q_device.begin(),
                 q_device.end(),
-                d_output->template begin<T>(),
+                d_output->template begin<double>(),
                 [sorted_data, interp=interp, size=input.size()]
                 __device__ (double q){
                     return select_quantile_data<double>(sorted_data, size, q, interp);
@@ -189,15 +189,6 @@ quantiles(table_view const& input,
           bool cast_to_doubles,
           rmm::mr::device_memory_resource* mr)
 {
-    auto is_discrete_interpolation = interp == interpolation::HIGHER or
-                                     interp == interpolation::LOWER or
-                                     interp == interpolation::NEAREST;
-
-    if (is_discrete_interpolation)
-    {
-        return quantiles_discrete(input, sortmap, q, interp, mr);
-    }
-
     auto is_input_arithmetic = all_of(input.begin(),
                                       input.end(),
                                       [](column_view const& col){
@@ -206,6 +197,15 @@ quantiles(table_view const& input,
 
     CUDF_EXPECTS(is_input_arithmetic || not cast_to_doubles,
                  "casting to doubles requires arithmetic column types");
+
+    auto is_discrete_interpolation = interp == interpolation::HIGHER or
+                                     interp == interpolation::LOWER or
+                                     interp == interpolation::NEAREST;
+
+    if (is_discrete_interpolation)
+    {
+        return quantiles_discrete(input, sortmap, q, interp, mr);
+    }
 
     CUDF_EXPECTS(is_input_arithmetic,
                  "arithmetic interpolation requires arithmetic column "
@@ -241,7 +241,7 @@ quantiles(table_view const& input,
 {
     CUDF_FUNC_RANGE();
     CUDF_EXPECTS(input.num_rows() > 0,
-                 "multi-column quantiles require at least one input row.");
+                 "quantiles requires at least one input row.");
 
     if (sortmap.size() == 0)
     {
@@ -261,25 +261,6 @@ quantiles(table_view const& input,
                                  cast_to_doubles,
                                  mr);
     }
-}
-
-std::unique_ptr<table>
-quantiles(table_view const& input,
-          std::vector<double> const& q,
-          interpolation interp,
-          cudf::sorted is_input_sorted,
-          std::vector<order> const& column_order,
-          std::vector<null_order> const& null_precedence,
-          rmm::mr::device_memory_resource* mr)
-{
-    return quantiles(input,
-                     q,
-                     interp,
-                     is_input_sorted == sorted::YES
-                        ? column_view{}
-                        : detail::sorted_order(input, column_order, null_precedence)->view(),
-                     false,
-                     mr);
 }
 
 } // namespace experimental
