@@ -1,9 +1,7 @@
 from libcpp.memory cimport unique_ptr
 
-from cudf._libxx.cpp.column cimport column
-from cudf._libxx.cpp.column_view cimport column_view
-from cudf._libxx.cpp.table cimport table
-from cudf._libxx.cpp.table_view cimport table_view
+from cudf._libxx.cpp.column.column cimport column
+from cudf._libxx.cpp.column.column_view cimport column_view
 
 
 cdef extern from "cudf/datetime.hpp" namespace "cudf::datetime" nogil:

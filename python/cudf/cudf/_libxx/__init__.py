@@ -6,6 +6,7 @@ from . import (
     avro,
     binaryop,
     copying,
+    datetime,
     dlpack,
     filling,
     gpuarrow,
