@@ -94,7 +94,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions13_3) {
       
       cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
     } else {
-      fixed_width_column_wrapper<TypeParam> expectedDataWrap2({0,3,6,9,12,1,4,7,10,2,5,8,11});
+      fixed_width_column_wrapper<TypeParam, int> expectedDataWrap2({0,3,6,9,12,1,4,7,10,2,5,8,11});
       auto expected_column_view2{static_cast<cudf::column_view const&>(expectedDataWrap2)};
       cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
     }
@@ -123,6 +123,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions13_3) {
     auto expected_column_view1{static_cast<cudf::column_view const&>(expectedDataWrap1)};
     cudf::test::expect_columns_equal(expected_column_view1, output_column_view1);
 
+    // #CHTODO
     if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8) {
       fixed_width_column_wrapper<TypeParam> expectedDataWrap2({1,0,1,0,1,0,1,0,1,0,1,0,1});
       auto expected_column_view2{static_cast<cudf::column_view const&>(expectedDataWrap2)};
@@ -132,7 +133,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions13_3) {
       
       cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
     } else {
-      fixed_width_column_wrapper<TypeParam> expectedDataWrap2({2,5,8,11,0,3,6,9,12,1,4,7,10});
+      fixed_width_column_wrapper<TypeParam, int> expectedDataWrap2({2,5,8,11,0,3,6,9,12,1,4,7,10});
       auto expected_column_view2{static_cast<cudf::column_view const&>(expectedDataWrap2)};
       cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
     }
@@ -170,7 +171,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions13_3) {
       
       cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
     } else {
-      fixed_width_column_wrapper<TypeParam> expectedDataWrap2({1,4,7,10,2,5,8,11,0,3,6,9,12});
+      fixed_width_column_wrapper<TypeParam, int> expectedDataWrap2({1,4,7,10,2,5,8,11,0,3,6,9,12});
       auto expected_column_view2{static_cast<cudf::column_view const&>(expectedDataWrap2)};
       cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
     }
@@ -228,7 +229,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions11_3) {
       
       cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
     } else {
-      fixed_width_column_wrapper<TypeParam> expectedDataWrap2({0,3,6,9,1,4,7,10,2,5,8});
+      fixed_width_column_wrapper<TypeParam, int> expectedDataWrap2({0,3,6,9,1,4,7,10,2,5,8});
       auto expected_column_view2{static_cast<cudf::column_view const&>(expectedDataWrap2)};
       cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
     }
@@ -266,7 +267,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions11_3) {
       
       cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
     } else {
-      fixed_width_column_wrapper<TypeParam> expectedDataWrap2({2,5,8,0,3,6,9,1,4,7,10});
+      fixed_width_column_wrapper<TypeParam, int> expectedDataWrap2({2,5,8,0,3,6,9,1,4,7,10});
       auto expected_column_view2{static_cast<cudf::column_view const&>(expectedDataWrap2)};
       cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
     }
@@ -304,7 +305,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions11_3) {
       
       cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
     } else {
-      fixed_width_column_wrapper<TypeParam> expectedDataWrap2({1,4,7,10,2,5,8,0,3,6,9});
+      fixed_width_column_wrapper<TypeParam, int> expectedDataWrap2({1,4,7,10,2,5,8,0,3,6,9});
       auto expected_column_view2{static_cast<cudf::column_view const&>(expectedDataWrap2)};
       cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
     }
@@ -362,7 +363,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinDegeneratePartitions11_15) {
       
       cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
     } else {
-      fixed_width_column_wrapper<TypeParam> expectedDataWrap2({0,1,2,3,4,5,6,7,8,9,10});
+      fixed_width_column_wrapper<TypeParam, int> expectedDataWrap2({0,1,2,3,4,5,6,7,8,9,10});
       auto expected_column_view2{static_cast<cudf::column_view const&>(expectedDataWrap2)};
       cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
     }
@@ -400,7 +401,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinDegeneratePartitions11_15) {
       
       cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
     } else {
-      fixed_width_column_wrapper<TypeParam> expectedDataWrap2({5,6,7,8,9,10,0,1,2,3,4});
+      fixed_width_column_wrapper<TypeParam, int> expectedDataWrap2({5,6,7,8,9,10,0,1,2,3,4});
       auto expected_column_view2{static_cast<cudf::column_view const&>(expectedDataWrap2)};
       cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
     }
@@ -438,7 +439,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinDegeneratePartitions11_15) {
       
       cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
     } else {
-      fixed_width_column_wrapper<TypeParam> expectedDataWrap2({1,2,3,4,5,6,7,8,9,10,0});
+      fixed_width_column_wrapper<TypeParam, int> expectedDataWrap2({1,2,3,4,5,6,7,8,9,10,0});
       auto expected_column_view2{static_cast<cudf::column_view const&>(expectedDataWrap2)};
       cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
     }
@@ -496,7 +497,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinDegeneratePartitions11_11) {
       
       cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
     } else {
-      fixed_width_column_wrapper<TypeParam> expectedDataWrap2({9,10,0,1,2,3,4,5,6,7,8});
+      fixed_width_column_wrapper<TypeParam, int> expectedDataWrap2({9,10,0,1,2,3,4,5,6,7,8});
       auto expected_column_view2{static_cast<cudf::column_view const&>(expectedDataWrap2)};
       cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
     }
@@ -569,7 +570,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinNPartitionsDivideNRows) {
       
       cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
     } else {
-      fixed_width_column_wrapper<TypeParam> expectedDataWrap2({0,3,6,9,12,15,18,1,4,7,10,13,16,19,2,5,8,11,14,17,20});
+      fixed_width_column_wrapper<TypeParam, int> expectedDataWrap2({0,3,6,9,12,15,18,1,4,7,10,13,16,19,2,5,8,11,14,17,20});
       auto expected_column_view2{static_cast<cudf::column_view const&>(expectedDataWrap2)};
       cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
     }
@@ -614,7 +615,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinNPartitionsDivideNRows) {
       
       cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
     } else {
-      fixed_width_column_wrapper<TypeParam> expectedDataWrap2({2,5,8,11,14,17,20,0,3,6,9,12,15,18,1,4,7,10,13,16,19});
+      fixed_width_column_wrapper<TypeParam, int> expectedDataWrap2({2,5,8,11,14,17,20,0,3,6,9,12,15,18,1,4,7,10,13,16,19});
       auto expected_column_view2{static_cast<cudf::column_view const&>(expectedDataWrap2)};
       cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
     }
@@ -670,7 +671,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinSinglePartition) {
 
     cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
   } else {
-    fixed_width_column_wrapper<TypeParam> expectedDataWrap2({0,1,2,3,4,5,6,7,8,9,10});
+    fixed_width_column_wrapper<TypeParam, int> expectedDataWrap2({0,1,2,3,4,5,6,7,8,9,10});
     auto expected_column_view2{static_cast<cudf::column_view const&>(expectedDataWrap2)};
     cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
   }
