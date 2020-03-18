@@ -113,9 +113,6 @@ column_device_view::create(column_view source, cudaStream_t stream) {
   CUDA_TRY(cudaMemcpyAsync(child_storage->data(), h_buffer.data(),
                            child_storage->size(), cudaMemcpyDefault, stream));
 
-  p->_num_children = num_children;
-  p->d_children = static_cast<column_device_view*>(child_storage->data());
-
   return p;
 }
 
