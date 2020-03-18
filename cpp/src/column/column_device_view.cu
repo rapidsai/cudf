@@ -116,6 +116,8 @@ column_device_view::create(column_view source, cudaStream_t stream) {
                            descendant_storage->size(), cudaMemcpyDefault,
                            stream));
 
+  CUDA_TRY(cudaStreamSynchronize(stream));
+
   return p;
 }
 
