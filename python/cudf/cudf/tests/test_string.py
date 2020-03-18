@@ -985,11 +985,8 @@ def test_string_get(string, index):
     pds = pd.Series(string)
     gds = Series(string)
 
-    # TODO: Remove .to_pandas.str.replace("\x00","")
-    # after this issue is fixed:https://github.com/rapidsai/cudf/issues/4515
     assert_eq(
-        pds.str.get(index).fillna(""),
-        gds.str.get(index).fillna("").to_pandas().str.replace("\x00", ""),
+        pds.str.get(index).fillna(""), gds.str.get(index).fillna(""),
     )
 
 
