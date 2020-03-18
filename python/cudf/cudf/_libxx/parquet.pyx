@@ -8,6 +8,7 @@ import os
 import pyarrow as pa
 import json
 
+from cudf.utils.dtypes import np_to_pa_dtype, is_categorical_dtype
 from libc.stdlib cimport free
 from libcpp.memory cimport unique_ptr, make_unique
 from libcpp.string cimport string
@@ -43,7 +44,13 @@ cpdef generate_pandas_metadata(Table table, index):
     # Columns
     for name, col in table._data.items():
         col_names.append(name)
-        types.append(col.to_arrow().type)
+        if is_categorical_dtype(col):
+            raise ValueError(
+                "'category' column dtypes are currently not "
+                + "supported by the gpu accelerated parquet writer"
+            )
+        else:
+            types.append(np_to_pa_dtype(col.dtype))
 
     # Indexes
     if index is not False:
@@ -63,10 +70,15 @@ cpdef generate_pandas_metadata(Table table, index):
                         "step": 1,
                     }
                 else:
-                    index_arrow = idx.to_arrow()
                     descr = name
-                    types.append(index_arrow.type)
                     col_names.append(name)
+                    if is_categorical_dtype(idx):
+                        raise ValueError(
+                            "'category' column dtypes are currently not "
+                            + "supported by the gpu accelerated parquet writer"
+                        )
+                    else:
+                        types.append(np_to_pa_dtype(idx.dtype))
                     index_levels.append(idx)
                 index_descriptors.append(descr)
             else:
