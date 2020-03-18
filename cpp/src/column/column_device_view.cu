@@ -92,13 +92,11 @@ column_device_view::create(column_view source, cudaStream_t stream) {
   // objects. Once filled, the CPU memory is copied to device memory
   // and then set into the d_children member pointer.
   std::vector<char> h_buffer(child_storage_bytes);
-  char* h_start = h_buffer.data();
 
   // Each column_device_view instance may have child objects that
   // require setting some internal device pointers before being copied
   // from CPU to device.
   rmm::device_buffer* const child_storage = new rmm::device_buffer(child_storage_bytes, stream);
-  char* d_start = static_cast<char*>(child_storage->data());
 
   auto deleter = [child_storage](column_device_view * v){
     v->destroy();
@@ -112,11 +110,11 @@ column_device_view::create(column_view source, cudaStream_t stream) {
       deleter};
 
   // copy the CPU memory with all the children into device memory
-  CUDA_TRY(cudaMemcpyAsync(d_start, h_start, child_storage_bytes,
-                           cudaMemcpyDefault, stream));
+  CUDA_TRY(cudaMemcpyAsync(child_storage->data(), h_buffer.data(),
+                           child_storage->size(), cudaMemcpyDefault, stream));
 
   p->_num_children = num_children;
-  p->d_children = reinterpret_cast<column_device_view*>(d_start);
+  p->d_children = static_cast<column_device_view*>(child_storage->data());
 
   return p;
 }
