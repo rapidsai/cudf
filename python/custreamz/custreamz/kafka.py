@@ -96,7 +96,10 @@ class Consumer(object):
             )
 
         if offsets[b"low"] < 0:
-            offsets[b"low"] = 0 
+            offsets[b"low"] = 0
+
+        if offsets[b'high'] < 0:
+            offsets[b'high'] = 0
 
         return offsets[b"low"], offsets[b"high"]
 
