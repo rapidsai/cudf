@@ -24,6 +24,7 @@
 #include <cudf/strings/detail/concatenate.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 
+#include <thrust/advance.h>
 #include <thrust/binary_search.h>
 #include <thrust/transform_scan.h>
 
