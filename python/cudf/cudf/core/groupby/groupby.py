@@ -38,9 +38,6 @@ class GroupBy(object):
         as the keys of the resulting DataFrame.
         If as_index=False, the groups are returned as ordinary
         columns of the resulting DataFrame, *if they are named columns*.
-    sort : True, optional
-        If True (default), sort results by group9s). Note that
-        unlike Pandas, this also sorts values within each group.
     dropna : bool, optional
         If True (default), do not include the "null" group.
     """
