@@ -3,18 +3,14 @@
 from collections import OrderedDict
 from collections.abc import Sequence
 
-import numba.cuda.cudadrv.driver
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-import rmm
-
-from cudf._lib.arrow._cuda import CudaBuffer
-from cudf._lib.gpuarrow import (
+from cudf._libxx.gpuarrow import (
     CudaRecordBatchStreamReader as _CudaRecordBatchStreamReader,
 )
-from cudf.core import Series
+from cudf.core import Series, column
 from cudf.utils.utils import mask_bitsize, mask_dtype
 
 
@@ -63,7 +59,7 @@ class GpuArrowNodeReader(object):
     def __init__(self, table, index):
         self._table = table
         self._field = table.schema[index]
-        self._series = array_to_series(table.column(index))
+        self._series = Series(column.as_column(table.column(index)))
         self._series.name = self.name
 
     def __len__(self):
@@ -122,12 +118,12 @@ class GpuArrowNodeReader(object):
     @property
     def data_raw(self):
         "Accessor for the data buffer as a device array"
-        return self._series.data.mem
+        return self._series._column.data_array_view
 
     @property
     def null_raw(self):
         "Accessor for the null buffer as a device array"
-        return self._series.nullmask.mem
+        return self._series._column.mask_array_view
 
     def make_series(self):
         """Make a Series object out of this node
@@ -139,89 +135,6 @@ class GpuArrowNodeReader(object):
         """
         assert self.is_dictionary
         return self._series.copy(deep=False)
-
-
-def gpu_view_as(buf, dtype, shape=None, strides=None):
-    ptr = numba.cuda.cudadrv.driver.device_pointer(buf.to_numba())
-    return rmm.device_array_from_ptr(
-        ptr, buf.size // dtype.itemsize, dtype=dtype
-    )
-
-
-def make_device_arrays(array):
-
-    buffers = array.buffers()
-    dtypes = [np.dtype(np.int8), None, None]
-
-    if pa.types.is_list(array.type):
-        dtypes[1] = np.dtype(np.int32)
-    elif pa.types.is_string(array.type) or pa.types.is_binary(array.type):
-        dtypes[2] = np.dtype(np.int8)
-        dtypes[1] = np.dtype(np.int32)
-    elif not pa.types.is_dictionary(array.type):
-        dtypes[1] = arrow_to_pandas_dtype(array.type)
-    else:
-        dtypes[1] = arrow_to_pandas_dtype(array.type.index_type)
-
-    for i in range(len(buffers)):
-        buffers[i] = (
-            None
-            if buffers[i] is None
-            else gpu_view_as(CudaBuffer.from_buffer(buffers[i]), dtypes[i])
-        )
-
-    return buffers
-
-
-def array_to_series(array):
-
-    if isinstance(array, pa.ChunkedArray):
-        return Series._concat(
-            [array_to_series(chunk) for chunk in array.chunks]
-        )
-
-    array_len = len(array)
-    null_count = array.null_count
-    buffers = make_device_arrays(array)
-    mask, data = buffers[0], buffers[1]
-    dtype = arrow_to_pandas_dtype(array.type)
-
-    if pa.types.is_dictionary(array.type):
-        from cudf.core.column import CategoricalColumn
-
-        codes = array_to_series(array.indices)
-        categories = array_to_series(array.dictionary)
-        data = CategoricalColumn(
-            data=codes.data,
-            mask=mask,
-            null_count=null_count,
-            categories=categories,
-            ordered=array.type.ordered,
-        )
-    elif pa.types.is_string(array.type):
-        import nvstrings
-
-        offs, data = buffers[1], buffers[2]
-        offs = offs[array.offset : array.offset + array_len + 1]
-        data = None if data is None else data.device_ctypes_pointer.value
-        mask = None if mask is None else mask.device_ctypes_pointer.value
-        data = nvstrings.from_offsets(
-            data,
-            offs.device_ctypes_pointer.value,
-            array_len,
-            mask,
-            null_count,
-            True,
-        )
-    elif data is not None:
-        data = data[array.offset : array.offset + len(array)]
-
-    series = Series(data, dtype=dtype)
-
-    if null_count > 0 and mask is not None and not series.has_null_mask:
-        return series.set_mask(mask, null_count)
-
-    return series
 
 
 def arrow_to_pandas_dtype(pa_type):

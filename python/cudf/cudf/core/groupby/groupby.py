@@ -6,13 +6,14 @@ import pickle
 
 import cudf
 import cudf._lib as libcudf
+import cudf._libxx as libcudfxx
 from cudf import MultiIndex
 from cudf.core.column import deserialize_columns, serialize_columns
 from cudf.utils.dtypes import is_scalar
 
 
 def columns_from_dataframe(df):
-    cols = [sr._column for sr in df._cols.values()]
+    cols = list(df._data.columns)
     # strip column names
     for col in cols:
         col.name = None
@@ -54,12 +55,12 @@ class _Groupby(object):
 
     def serialize(self):
         header, frames = self._groupby.serialize()
-        header["type"] = pickle.dumps(type(self))
+        header["type-serialized"] = pickle.dumps(type(self))
         return header, frames
 
     @classmethod
     def deserialize(cls, header, frames):
-        groupby_type = pickle.loads(header["type"])
+        groupby_type = pickle.loads(header["type-serialized"])
         _groupby = _GroupbyHelper.deserialize(header, frames)
         by = None
         if _groupby.level is None:
@@ -130,7 +131,7 @@ class DataFrameGroupBy(_Groupby):
         Applies the aggregation function(s) ``agg`` on all columns
         """
         result = self._groupby.compute_result(agg)
-        libcudf.nvtx.nvtx_range_pop()
+        libcudfxx.nvtx.range_pop()
         return result
 
     def __getitem__(self, arg):
@@ -156,6 +157,7 @@ class DataFrameGroupBy(_Groupby):
             raise AttributeError()
         if key in self._df.columns:
             by_list = []
+
             for by_name, by in zip(
                 self._groupby.key_names, self._groupby.key_columns
             ):
@@ -236,6 +238,7 @@ class _GroupbyHelper(object):
         self.sort = sort
         self.dropna = dropna
         self.normalize_keys()
+        self.original_aggs = None
 
     def serialize(self):
         header = {}
@@ -379,6 +382,10 @@ class _GroupbyHelper(object):
 
         For a Series, the dictionary has a single key ``None``
         """
+        if hasattr(agg, "copy"):
+            self.original_aggs = agg.copy()
+        else:
+            self.original_aggs = agg
         if isinstance(agg, collections.abc.Mapping):
             for col_name, agg_name in agg.items():
                 if not isinstance(agg_name, list):
@@ -470,10 +477,10 @@ class _GroupbyHelper(object):
 
         index = self.compute_result_index(out_key_columns, out_value_columns)
         if len(result) == 0 and len(index) != 0:
-            # len(result) must be len(index) for
-            # ``result.index = index`` to work:
-            result._size = len(index)
-        result.index = index
+            # Can't go through the setter in this case
+            result._index = index
+        else:
+            result.index = index
 
         if isinstance(self.obj, cudf.Series):
             # May need to downcast from DataFrame to Series:
@@ -519,10 +526,19 @@ class _GroupbyHelper(object):
             else:
                 return aggs_as_list
         else:
-            if len(aggs_as_list) == len(self.aggs):
-                return value_names
-            else:
+            return_multi_index = True
+            if isinstance(self.original_aggs, str):
+                return_multi_index = False
+            if isinstance(self.original_aggs, collections.abc.Mapping):
+                return_multi_index = False
+                for key in self.original_aggs:
+                    if not isinstance(self.original_aggs[key], str):
+                        return_multi_index = True
+                        break
+            if return_multi_index:
                 return MultiIndex.from_tuples(zip(value_names, aggs_as_list))
+            else:
+                return value_names
 
     def get_aggs_as_list(self):
         """

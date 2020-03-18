@@ -23,7 +23,7 @@ def test_categorical_basic():
 
     pdsr = pd.Series(cat)
     sr = Series(cat)
-    np.testing.assert_array_equal(cat.codes, sr.to_array())
+    np.testing.assert_array_equal(cat.codes, sr.cat.codes.to_array())
 
     # Test attributes
     assert tuple(pdsr.cat.categories) == tuple(sr.cat.categories)
@@ -50,7 +50,9 @@ def test_categorical_integer():
     cat = pd.Categorical(["a", "_", "_", "c", "a"], categories=["a", "b", "c"])
     pdsr = pd.Series(cat)
     sr = Series(cat)
-    np.testing.assert_array_equal(cat.codes, sr.to_array(fillna="pandas"))
+    np.testing.assert_array_equal(
+        cat.codes, sr.cat.codes.to_array(fillna="pandas")
+    )
     assert sr.null_count == 2
 
     np.testing.assert_array_equal(
@@ -148,7 +150,7 @@ def test_categorical_binary_add():
     with pytest.raises(TypeError) as raises:
         sr + sr
     raises.match(
-        "Series of dtype `category` cannot perform the operation: " "add"
+        "Series of dtype `category` cannot perform the operation: add"
     )
 
 
@@ -164,7 +166,7 @@ def test_categorical_unary_ceil():
     with pytest.raises(TypeError) as raises:
         sr.ceil()
     raises.match(
-        "Series of dtype `category` cannot perform the operation: " "ceil"
+        "Series of dtype `category` cannot perform the operation: ceil"
     )
 
 
@@ -193,10 +195,6 @@ def test_categorical_masking():
     expect_matches = pdsr == "a"
     got_matches = sr == "a"
 
-    print("---expect_matches---")
-    print(expect_matches)
-    print("---got_matches---")
-    print(got_matches)
     np.testing.assert_array_equal(
         expect_matches.values, got_matches.to_array()
     )
@@ -204,11 +202,6 @@ def test_categorical_masking():
     # mask series
     expect_masked = pdsr[expect_matches]
     got_masked = sr[got_matches]
-
-    print("---expect_masked---")
-    print(expect_masked)
-    print("---got_masked---")
-    print(got_masked)
 
     assert len(expect_masked) == len(got_masked)
     assert len(expect_masked) == got_masked.valid_count
@@ -224,10 +217,7 @@ def test_df_cat_set_index():
     pddf = df.to_pandas()
     expect = pddf.set_index("a")
 
-    assert list(expect.columns) == list(got.columns)
-    assert list(expect.index.values) == list(got.index.values)
-    np.testing.assert_array_equal(expect.index.values, got.index.values)
-    np.testing.assert_array_equal(expect["b"].values, got["b"].to_array())
+    assert_eq(got, expect)
 
 
 def test_df_cat_sort_index():
@@ -238,10 +228,7 @@ def test_df_cat_sort_index():
     got = df.set_index("a").sort_index()
     expect = df.to_pandas().set_index("a").sort_index()
 
-    assert list(expect.columns) == list(got.columns)
-    assert list(expect.index.values) == list(got.index.values)
-    np.testing.assert_array_equal(expect.index.values, got.index.values)
-    np.testing.assert_array_equal(expect["b"].values, got["b"].to_array())
+    assert_eq(got, expect)
 
 
 def test_cat_series_binop_error():
@@ -256,7 +243,7 @@ def test_cat_series_binop_error():
     with pytest.raises(TypeError) as raises:
         dfa + dfb
     raises.match(
-        "Series of dtype `category` cannot perform the operation: " "add"
+        "Series of dtype `category` cannot perform the operation: add"
     )
     # if lhs is a numerical
     with pytest.raises(TypeError) as raises:
@@ -322,7 +309,7 @@ def test_categorical_empty():
     cat = pd.Categorical([])
     pdsr = pd.Series(cat)
     sr = Series(cat)
-    np.testing.assert_array_equal(cat.codes, sr.to_array())
+    np.testing.assert_array_equal(cat.codes, sr.cat.codes.to_array())
 
     # Test attributes
     assert tuple(pdsr.cat.categories) == tuple(sr.cat.categories)

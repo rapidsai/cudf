@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,19 +22,27 @@
 namespace cudf {
 namespace experimental {
 
-enum class unary_op {
+enum class unary_op : int32_t {
   SIN,          // < Trigonometric sine
   COS,          // < Trigonometric cosine
   TAN,          // < Trigonometric tangent
   ARCSIN,       // < Trigonometric sine inverse
   ARCCOS,       // < Trigonometric cosine inverse
   ARCTAN,       // < Trigonometric tangent inverse
+  SINH,         // < Hyperbolic sine
+  COSH,         // < Hyperbolic cosine
+  TANH,         // < Hyperbolic tangent
+  ARCSINH,      // < Hyperbolic sine inverse
+  ARCCOSH,      // < Hperbolic cosine inverse
+  ARCTANH,      // < Hyperbolic tangent inverse
   EXP,          // < Exponential (base e, Euler number)
   LOG,          // < Natural Logarithm (base e)
   SQRT,         // < Square-root (x^0.5)
+  CBRT,         // < Cube-root (x^(1.0/3))
   CEIL,         // < Smallest integer value not less than arg
   FLOOR,        // < largest integer value not greater than arg
   ABS,          // < Absolute value
+  RINT,         // < Rounds the floating-point argument arg to an integer value
   BIT_INVERT,   // < Bitwise Not (~)
   NOT,          // < Logical Not (!)
 };
@@ -92,6 +100,40 @@ std::unique_ptr<cudf::column> is_valid(cudf::column_view const& input,
  */
 std::unique_ptr<column> cast(column_view const& input, data_type out_type,
                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @brief Creates a column of `BOOL8` elements indicating the presence of `NaN` values
+ * in a column of floating point values.
+ * The output element at row `i` is `true` if the element in `input` at row i is `NAN`, else `false`
+ *
+ * @throws cudf::logic_error if `input` is a non-floating point type
+ *
+ * @param input A column of floating-point elements
+ * @param mr Optional, The resource to use for allocating the device memory in the returned column.
+ *
+ * @returns unique_ptr<column> A non-nulalble column of `BOOL8` elements with `true`
+ * representing `NAN` values
+ */
+std::unique_ptr<column> is_nan(cudf::column_view const& input,
+                               rmm::mr::device_memory_resource* mr =
+                                   rmm::mr::get_default_resource());
+
+/**
+ * @brief Creates a column of `BOOL8` elements indicating the absence of `NaN` values
+ * in a column of floating point values.
+ * The output element at row `i` is `false` if the element in `input` at row i is `NAN`, else `true`
+ *
+ * @throws cudf::logic_error if `input` is a non-floating point type
+ *
+ * @param input A column of floating-point elements
+ * @param mr Optional, The resource to use for allocating the device memory in the returned column.
+ *
+ * @returns unique_ptr<column> A non-nulalble column of `BOOL8` elements with `false`
+ * representing `NAN` values
+ */
+std::unique_ptr<column> is_not_nan(cudf::column_view const& input,
+                                 rmm::mr::device_memory_resource* mr =
+                                   rmm::mr::get_default_resource());
 
 } // namespace experimental
 } // namespace cudf

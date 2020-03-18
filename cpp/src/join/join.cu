@@ -20,47 +20,16 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/gather.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 
+#include <join/join_common_utils.hpp>
 #include <join/hash_join.cuh>
-#include <algorithm>
-#include <iterator>
 
 namespace cudf {
 
 namespace experimental {
 
 namespace detail {
-
-bool is_trivial_join(
-                     table_view const& left,
-                     table_view const& right,
-                     std::vector<size_type> const& left_on,
-                     std::vector<size_type> const& right_on,
-                     join_kind JoinKind) {
-  // If there is nothing to join, then send empty table with all columns
-  if (left_on.empty() || right_on.empty()) {
-      return true;
-  }
-
-  // If the inputs are empty, immediately return
-  if ((0 == left.num_rows()) && (0 == right.num_rows())) {
-      return true;
-  }
-
-  // If left join and the left table is empty, return immediately
-  if ((join_kind::LEFT_JOIN == JoinKind) && (0 == left.num_rows())) {
-      return true;
-  }
-
-  // If Inner Join and either table is empty, return immediately
-  if ((join_kind::INNER_JOIN == JoinKind) &&
-      ((0 == left.num_rows()) || (0 == right.num_rows()))) {
-      return true;
-  }
-
-  return false;
-}
-
 
 /**---------------------------------------------------------------------------*
  * @brief Returns a vector with non-common indices which is set difference
@@ -361,34 +330,36 @@ construct_join_output_df(
 
   bool const nullify_out_of_bounds{ JoinKind != join_kind::INNER_JOIN };
 
-  std::unique_ptr<experimental::table> common_table;
+  std::unique_ptr<experimental::table> common_table = std::make_unique<experimental::table>();
   // Construct the joined columns
-  if (not columns_in_common.empty()) {
-    if (join_kind::FULL_JOIN == JoinKind) {
-      auto complement_indices =
-        get_left_join_indices_complement(joined_indices.second,
-            left.num_rows(), right.num_rows(), stream);
+  if (join_kind::FULL_JOIN == JoinKind) {
+    auto complement_indices =
+      get_left_join_indices_complement(joined_indices.second,
+        left.num_rows(), right.num_rows(), stream);
+    if (not columns_in_common.empty()) {
       auto common_from_right = experimental::detail::gather(
           right.select(right_common_col),
           complement_indices.second.begin(),
           complement_indices.second.end(),
-          false, nullify_out_of_bounds);
+          nullify_out_of_bounds);
       auto common_from_left = experimental::detail::gather(
           left.select(left_common_col),
           joined_indices.first.begin(),
           joined_indices.first.end(),
-          false, nullify_out_of_bounds);
+          nullify_out_of_bounds);
       common_table = experimental::concatenate(
           {common_from_right->view(), common_from_left->view()});
-      joined_indices =
-        concatenate_vector_pairs(complement_indices, joined_indices);
-    } else {
+    } 
+    joined_indices =
+      concatenate_vector_pairs(complement_indices, joined_indices);
+  } else {
+      if (not columns_in_common.empty()) {
       common_table = experimental::detail::gather(
           left.select(left_common_col),
           joined_indices.first.begin(),
           joined_indices.first.end(),
-          false, nullify_out_of_bounds);
-    }
+          nullify_out_of_bounds);
+      }
   }
 
   // Construct the left non common columns
@@ -397,14 +368,14 @@ construct_join_output_df(
         left.select(left_noncommon_col),
         joined_indices.first.begin(),
         joined_indices.first.end(),
-        false, nullify_out_of_bounds);
+        nullify_out_of_bounds);
 
   std::unique_ptr<experimental::table> right_table =
     experimental::detail::gather(
         right.select(right_noncommon_col),
         joined_indices.second.begin(),
         joined_indices.second.end(),
-        false, nullify_out_of_bounds);
+        nullify_out_of_bounds);
 
   return std::make_unique<experimental::table>(
       combine_join_columns(
@@ -504,6 +475,7 @@ std::unique_ptr<experimental::table> inner_join(
                              std::vector<size_type> const& right_on,
                              std::vector<std::pair<size_type, size_type>> const& columns_in_common,
                              rmm::mr::device_memory_resource* mr) {
+    CUDF_FUNC_RANGE();
     return detail::join_call_compute_df<::cudf::experimental::detail::join_kind::INNER_JOIN>(
         left,
         right,
@@ -520,6 +492,7 @@ std::unique_ptr<experimental::table> left_join(
                              std::vector<size_type> const& right_on,
                              std::vector<std::pair<size_type, size_type>> const& columns_in_common,
                              rmm::mr::device_memory_resource* mr) {
+    CUDF_FUNC_RANGE();
     return detail::join_call_compute_df<::cudf::experimental::detail::join_kind::LEFT_JOIN>(
            left,
            right,
@@ -536,6 +509,7 @@ std::unique_ptr<experimental::table> full_join(
                              std::vector<size_type> const& right_on,
                              std::vector<std::pair<size_type, size_type>> const& columns_in_common,
                          rmm::mr::device_memory_resource* mr) {
+    CUDF_FUNC_RANGE();
     return detail::join_call_compute_df<::cudf::experimental::detail::join_kind::FULL_JOIN>(
            left,
            right,

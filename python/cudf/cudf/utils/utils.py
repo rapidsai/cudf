@@ -1,6 +1,8 @@
 import functools
-from math import ceil, floor, isinf, isnan
+from collections import OrderedDict
+from math import floor, isinf, isnan
 
+import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -8,25 +10,15 @@ from numba import njit
 
 import rmm
 
-mask_dtype = np.dtype(np.int8)
+from cudf.core.buffer import Buffer
+
+mask_dtype = np.dtype(np.int32)
 mask_bitsize = mask_dtype.itemsize * 8
-mask_byte_padding = 64
-
-
-def calc_chunk_size(size, chunksize):
-    return mask_byte_padding * ceil(
-        ((size + chunksize - 1) // chunksize) / mask_byte_padding
-    )
 
 
 @njit
 def mask_get(mask, pos):
     return (mask[pos // mask_bitsize] >> (pos % mask_bitsize)) & 1
-
-
-@njit
-def mask_set(mask, pos):
-    mask[pos // mask_bitsize] |= 1 << (pos % mask_bitsize)
 
 
 @njit
@@ -64,40 +56,38 @@ def check_equals_int(a, b):
     return a == b
 
 
-def make_mask(size):
-    """Create mask to obtain at least *size* number of bits.
-    """
-    size = calc_chunk_size(size, mask_bitsize)
-    return rmm.device_array(shape=size, dtype=mask_dtype)
+def scalar_broadcast_to(scalar, size, dtype=None):
+    from cudf.utils.dtypes import to_cudf_compatible_scalar, is_string_dtype
+    from cudf.core.column import column_empty
 
+    if isinstance(size, (tuple, list)):
+        size = size[0]
 
-def require_writeable_array(arr):
-    # This should be fixed in numba (numba issue #2521)
-    return np.require(arr, requirements="W")
+    if scalar is None:
+        if dtype is None:
+            dtype = "object"
+        return column_empty(size, dtype=dtype, masked=True)
 
+    if isinstance(scalar, pd.Categorical):
+        return scalar_broadcast_to(scalar.categories[0], size).astype(dtype)
 
-def scalar_broadcast_to(scalar, shape, dtype):
-    from cudf.utils.cudautils import fill_value
-    from cudf.utils.dtypes import to_cudf_compatible_scalar
-
-    scalar = to_cudf_compatible_scalar(scalar, dtype=dtype)
-
-    if not isinstance(shape, tuple):
-        shape = (shape,)
+    if isinstance(scalar, str) and (is_string_dtype(dtype) or dtype is None):
+        dtype = "object"
+    else:
+        scalar = to_cudf_compatible_scalar(scalar, dtype=dtype)
+        dtype = scalar.dtype
 
     if np.dtype(dtype) == np.dtype("object"):
-        import nvstrings
-        from cudf.core.column import StringColumn
-        from cudf.utils.cudautils import zeros
+        from cudf.core.column import as_column
 
-        gather_map = zeros(shape[0], dtype="int32")
-        scalar_str_col = StringColumn(nvstrings.to_device([scalar]))
+        gather_map = cupy.zeros(size, dtype="int32")
+        scalar_str_col = as_column([scalar], dtype="str")
         return scalar_str_col[gather_map]
     else:
-        da = rmm.device_array(shape, dtype=dtype)
-        if da.size != 0:
-            fill_value(da, scalar)
-        return da
+        out_col = column_empty(size, dtype=dtype)
+        if out_col.size != 0:
+            out_col.data_array_view[:] = scalar
+        return out_col
 
 
 def normalize_index(index, size, doraise=True):
@@ -114,36 +104,73 @@ list_types_tuple = (list, np.array)
 
 
 def buffers_from_pyarrow(pa_arr, dtype=None):
-    from cudf.core.buffer import Buffer
-    from cudf.utils.cudautils import copy_array
+    """
+    Given a pyarrow array returns a 5 length tuple of:
+        - size
+        - offset
+        - cudf.Buffer --> mask
+        - cudf.Buffer --> data
+        - cudf.Buffer --> string characters
+    """
+    from cudf._libxx.null_mask import bitmask_allocation_size_bytes
 
     buffers = pa_arr.buffers()
 
-    if buffers[0]:
-        mask_dev_array = make_mask(len(pa_arr))
-        arrow_dev_array = rmm.to_device(np.array(buffers[0]).view("int8"))
-        copy_array(arrow_dev_array, mask_dev_array)
-        pamask = Buffer(mask_dev_array)
+    if pa_arr.null_count:
+        mask_size = bitmask_allocation_size_bytes(len(pa_arr))
+        pamask = pyarrow_buffer_to_cudf_buffer(buffers[0], mask_size=mask_size)
     else:
         pamask = None
 
-    if dtype:
-        new_dtype = dtype
-    else:
-        if isinstance(pa_arr, pa.DictionaryArray):
-            new_dtype = pa_arr.indices.type.to_pandas_dtype()
-        else:
-            new_dtype = pa_arr.type.to_pandas_dtype()
+    offset = pa_arr.offset
+    size = len(pa_arr)
 
     if buffers[1]:
-        padata = Buffer(
-            np.array(buffers[1]).view(new_dtype)[
-                pa_arr.offset : pa_arr.offset + len(pa_arr)
-            ]
-        )
+        padata = pyarrow_buffer_to_cudf_buffer(buffers[1])
     else:
-        padata = Buffer(np.empty(0, dtype=new_dtype))
-    return (pamask, padata)
+        padata = Buffer.empty(0)
+
+    pastrs = None
+    if isinstance(pa_arr, pa.StringArray):
+        pastrs = pyarrow_buffer_to_cudf_buffer(buffers[2])
+    return (size, offset, pamask, padata, pastrs)
+
+
+def pyarrow_buffer_to_cudf_buffer(arrow_buf, mask_size=0):
+    """
+    Given a PyArrow Buffer backed by either host or device memory, convert it
+    to a cuDF Buffer
+    """
+    from cudf._lib.arrow._cuda import CudaBuffer as arrowCudaBuffer
+
+    # Try creating a PyArrow CudaBuffer from the PyArrow Buffer object, it
+    # fails with an ArrowTypeError if it's a host based Buffer so we catch and
+    # process as expected
+    if not isinstance(arrow_buf, pa.Buffer):
+        raise TypeError(
+            "Expected type: {}, got type: {}".format(
+                pa.Buffer.__name__, type(arrow_buf).__name__
+            )
+        )
+
+    try:
+        arrow_cuda_buf = arrowCudaBuffer.from_buffer(arrow_buf)
+        buf = Buffer(
+            data=arrow_cuda_buf.address,
+            size=arrow_cuda_buf.size,
+            owner=arrow_cuda_buf,
+        )
+        if buf.size < mask_size:
+            dbuf = rmm.DeviceBuffer(size=mask_size)
+            dbuf.copy_from_device(buf)
+            return Buffer(dbuf)
+        return buf
+    except pa.ArrowTypeError:
+        if arrow_buf.size < mask_size:
+            dbuf = rmm.DeviceBuffer(size=mask_size)
+            dbuf.copy_from_host(np.asarray(arrow_buf).view("u1"))
+            return Buffer(dbuf)
+        return Buffer(arrow_buf)
 
 
 def get_result_name(left, right):
@@ -283,3 +310,123 @@ def set_allocator(
 
 
 IS_NEP18_ACTIVE = _is_nep18_active()
+
+
+class cached_property:
+    """
+    Like @property, but only evaluated upon first invocation.
+    To force re-evaluation of a cached_property, simply delete
+    it with `del`.
+    """
+
+    def __init__(self, func):
+        self.func = func
+
+    def __get__(self, instance, cls):
+        if instance is None:
+            return self
+        else:
+            value = self.func(instance)
+            setattr(instance, self.func.__name__, value)
+            return value
+
+
+class ColumnValuesMappingMixin:
+    """
+    Coerce provided values for the mapping to Columns.
+    """
+
+    def __setitem__(self, key, value):
+        from cudf.core.column import as_column
+
+        value = as_column(value)
+        super().__setitem__(key, value)
+
+
+class EqualLengthValuesMappingMixin:
+    """
+    Require all values in the mapping to have the same length.
+    """
+
+    def __setitem__(self, key, value):
+        if len(self) > 0:
+            first = next(iter(self.values()))
+            if len(value) != len(first):
+                raise ValueError("All values must be of equal length")
+        super().__setitem__(key, value)
+
+
+class OrderedColumnDict(
+    ColumnValuesMappingMixin, EqualLengthValuesMappingMixin, OrderedDict
+):
+    pass
+
+
+class NestedMappingMixin:
+    """
+    Make missing values of a mapping empty instances
+    of the same type as the mapping.
+    """
+
+    def __getitem__(self, key):
+        if isinstance(key, tuple):
+            d = self
+            for k in key[:-1]:
+                d = d[k]
+            return d.__getitem__(key[-1])
+        else:
+            return super().__getitem__(key)
+
+    def __setitem__(self, key, value):
+        if isinstance(key, tuple):
+            d = self
+            for k in key[:-1]:
+                d = d.setdefault(k, self.__class__())
+            d.__setitem__(key[-1], value)
+        else:
+            super().__setitem__(key, value)
+
+
+class NestedOrderedDict(NestedMappingMixin, OrderedDict):
+    pass
+
+
+def to_flat_dict(d):
+    """
+    Convert the given nested dictionary to a flat dictionary
+    with tuple keys.
+    """
+
+    def _inner(d, parents=[]):
+        for k, v in d.items():
+            if not isinstance(v, d.__class__):
+                if parents:
+                    k = tuple(parents + [k])
+                yield (k, v)
+            else:
+                yield from _inner(d=v, parents=parents + [k])
+
+    return {k: v for k, v in _inner(d)}
+
+
+def to_nested_dict(d):
+    """
+    Convert the given dictionary with tuple keys to a NestedOrderedDict.
+    """
+    return NestedOrderedDict(d)
+
+
+def time_col_replace_nulls(input_col):
+    from cudf.core.column import column_empty_like, as_column
+    import cudf._libxx.replace as replace
+
+    null = column_empty_like(input_col, masked=True, newsize=1)
+    out_col = replace.replace(
+        input_col,
+        as_column(
+            Buffer(np.array([np.datetime64("NaT")], dtype=input_col.dtype)),
+            dtype=input_col.dtype,
+        ),
+        null,
+    )
+    return out_col

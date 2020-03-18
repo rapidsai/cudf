@@ -1,5 +1,5 @@
 #=============================================================================
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -44,7 +44,7 @@ set(CMAKE_CUDA_STANDARD 14)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
 if(CMAKE_COMPILER_IS_GNUCXX)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wno-error=deprecated-declarations")
 
     option(CMAKE_CXX11_ABI "Enable the GLIBCXX11 ABI" ON)
     if(CMAKE_CXX11_ABI)
@@ -65,7 +65,7 @@ set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-
 
 # set warnings as errors
 # TODO: remove `no-maybe-unitialized` used to suppress warnings in rmm::exec_policy
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Werror cross-execution-space-call -Xcompiler -Wall,-Werror")
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Werror cross-execution-space-call -Xcompiler -Wall,-Werror,-Wno-error=deprecated-declarations")
 
 # Option to enable line info in CUDA device compilation to allow introspection when profiling / memchecking
 option(CMAKE_CUDA_LINEINFO "Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler" OFF)
@@ -96,7 +96,9 @@ include(CheckLibraryExists)
 
 set(CUDF_INCLUDE "${PROJECT_SOURCE_DIR}/../../../../cpp/include"
                  "${PROJECT_SOURCE_DIR}/../../../../cpp/src/"
-                 "${PROJECT_SOURCE_DIR}/../../../../cpp/thirdparty/cub")
+                 "${PROJECT_SOURCE_DIR}/../../../../cpp/thirdparty/cub"
+                 "${PROJECT_SOURCE_DIR}/../../../../cpp/thirdparty/libcudacxx/include")
+                 
 
 find_library(CUDF_LIBRARY "cudf"
     HINTS "$ENV{CUDF_ROOT}/lib"
@@ -201,6 +203,7 @@ set(SOURCE_FILES
     "src/ColumnVectorJni.cpp"
     "src/NvtxRangeJni.cpp"
     "src/RmmJni.cpp"
+    "src/ScalarJni.cpp"
     "src/TableJni.cpp")
 add_library(cudfjni SHARED ${SOURCE_FILES})
 
@@ -221,7 +224,7 @@ endif(USE_NVTX)
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(cudfjni cudf rmm cudart cuda NVCategory NVStrings nvrtc)
+target_link_libraries(cudfjni cudf rmm cudart cuda nvrtc)
 
 
 

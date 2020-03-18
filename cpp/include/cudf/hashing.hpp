@@ -20,28 +20,6 @@
 
 namespace cudf {
 
-/** --------------------------------------------------------------------------*
- * @brief Partitions rows from the input table into multiple output tables.
- *
- * Partitions rows of `input` into `num_partitions` bins based on the hash
- * value of the columns specified by `columns_to_hash`. Rows partitioned into
- * the same bin are grouped together into a new table. Returns a vector
- * containing `num_partitions` new tables.
- * 
- * @throw std::out_of_range if index is `columns_to_hash` is invalid
- *
- * @param input The table to partition
- * @param columns_to_hash Indices of input columns to hash
- * @param num_partitions The number of partitions to use
- * @param mr Optional resource to use for device memory allocation
- *
- * @returns A vector of tables partitioned from the input
- * -------------------------------------------------------------------------**/
-std::vector<std::unique_ptr<experimental::table>>
-hash_partition(table_view const& input,
-               std::vector<size_type> const& columns_to_hash,
-               int num_partitions,
-               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /** --------------------------------------------------------------------------*
  * @brief Computes the hash value of each row in the input set of columns.

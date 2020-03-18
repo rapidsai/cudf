@@ -196,16 +196,14 @@ def test_index_rename_inplace():
 
     # inplace=False should yield a deep copy
     gds_renamed_deep = gds.rename("new_name", inplace=False)
-    gds._values.data.mem = GenericIndex([2, 3, 4])._values.data.mem
 
-    assert (gds_renamed_deep.values == [1, 2, 3]).all()
+    assert gds_renamed_deep._values.data_ptr != gds._values.data_ptr
 
     # inplace=True returns none
-    gds_to_rename = gds
+    expected_ptr = gds._values.data_ptr
     gds.rename("new_name", inplace=True)
-    gds._values.data.mem = GenericIndex([3, 4, 5])._values.data.mem
 
-    assert (gds_to_rename.values == [3, 4, 5]).all()
+    assert expected_ptr == gds._values.data_ptr
 
 
 def test_index_rename_preserves_arg():
@@ -234,20 +232,20 @@ def test_set_index_as_property():
     # Check set_index(Series)
     cdf.index = cdf["b"]
 
-    np.testing.assert_array_equal(cdf.index.values, col2)
+    assert_eq(cdf.index._values.to_array(), col2)
 
     with pytest.raises(ValueError):
         cdf.index = [list(range(10))]
 
-    idx = np.arange(0, 1000, 100)
+    idx = pd.Index(np.arange(0, 1000, 100))
     cdf.index = idx
-    np.testing.assert_array_equal(cdf.index.values, idx)
+    assert_eq(cdf.index.to_pandas(), idx)
 
     df = cdf.to_pandas()
-    np.testing.assert_array_equal(df.index.values, idx)
+    assert_eq(df.index, idx)
 
     head = cdf.head().to_pandas()
-    np.testing.assert_array_equal(head.index.values, idx[:5])
+    assert_eq(head.index, idx[:5])
 
 
 @pytest.mark.parametrize(
@@ -304,3 +302,44 @@ def test_from_pandas_gen():
     gidx_2 = cudf.from_pandas(pidx)
 
     assert_eq(gidx_1, gidx_2)
+
+
+def test_index_names():
+    idx = cudf.core.index.as_index([1, 2, 3], name="idx")
+    assert idx.names == ("idx",)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        range(0),
+        range(1),
+        range(0, 1),
+        range(0, 5),
+        range(1, 10),
+        range(1, 10, 1),
+        range(-5, 10),
+    ],
+)
+def test_range_index_from_range(data):
+    assert_eq(pd.Index(data), cudf.core.index.as_index(data))
+
+
+@pytest.mark.parametrize(
+    "n", [-10, -5, -2, 0, 1, 0, 2, 5, 10],
+)
+def test_empty_df_head_tail_index(n):
+    df = cudf.DataFrame()
+    pdf = pd.DataFrame()
+    assert_eq(df.head(n).index.values, pdf.head(n).index.values)
+    assert_eq(df.tail(n).index.values, pdf.tail(n).index.values)
+
+    df = cudf.DataFrame({"a": [11, 2, 33, 44, 55]})
+    pdf = pd.DataFrame({"a": [11, 2, 33, 44, 55]})
+    assert_eq(df.head(n).index.values, pdf.head(n).index.values)
+    assert_eq(df.tail(n).index.values, pdf.tail(n).index.values)
+
+    df = cudf.DataFrame(index=[1, 2, 3])
+    pdf = pd.DataFrame(index=[1, 2, 3])
+    assert_eq(df.head(n).index.values, pdf.head(n).index.values)
+    assert_eq(df.tail(n).index.values, pdf.tail(n).index.values)

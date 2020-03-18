@@ -1,9 +1,6 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
-# cython: profile=False
-# distutils: language = c++
-# cython: embedsignature = True
-# cython: language_level = 3
+# cython: boundscheck = False
 
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
@@ -32,15 +29,14 @@ cdef unique_ptr[cudf_table] make_table_from_columns(columns):
     """
     cdef vector[gdf_column*] c_columns
     for idx, (col_name, col) in enumerate(columns.items()):
-        check_gdf_compatibility(col._column)
         # Workaround for string columns
         if col.dtype.type == np.object_:
             c_columns.push_back(
-                column_view_from_string_column(col._column, col_name)
+                column_view_from_string_column(col, col_name)
             )
         else:
             c_columns.push_back(
-                column_view_from_column(col._column, col_name)
+                column_view_from_column(col, col_name)
             )
 
     return make_unique[cudf_table](c_columns)

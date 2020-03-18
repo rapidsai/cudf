@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,24 @@ public class Cuda {
 
   static {
     NativeDepsLoader.loadNativeDeps();
+  }
+
+  /** A class representing a CUDA stream */
+  public static final class Stream implements AutoCloseable {
+    final long stream;
+
+    /**
+     * Create a new CUDA stream
+     * @param isNonBlocking whether stream should be non-blocking with respect to the default stream
+     */
+    public Stream(boolean isNonBlocking) {
+      this.stream = createStream(isNonBlocking);
+    }
+
+    @Override
+    public void close() {
+      destroyStream(stream);
+    }
   }
 
   /**
@@ -79,6 +97,60 @@ public class Cuda {
    * @throws CudaException on any error
    */
   public static native int getDevice() throws CudaException;
+
+  /**
+   * Get the device count.
+   * @return returns the number of compute-capable devices
+   * @throws CudaException on any error
+   */
+  public static native int getDeviceCount() throws CudaException;
+
+  /**
+   * Set the id of the current device.
+   * Note this is relative to CUDA_SET_VISIBLE_DEVICES, e.g. if
+   * CUDA_SET_VISIBLE_DEVICES=1,0, and you call setDevice(0), you will get device 1.
+   * @throws CudaException on any error
+   */
+  public static native void setDevice(int device) throws CudaException;
+
+  /**
+   * Calls cudaFree(0). This can be used to initialize the GPU after a setDevice()
+   * @throws CudaException on any error
+   */
+  public static native void freeZero() throws CudaException;
+
+  /**
+   * Create a CUDA stream
+   * @param isNonBlocking whether stream should be non-blocking with respect to the default stream
+   * @return handle to a CUDA stream
+   * @throws CudaException on any error
+   */
+  static native long createStream(boolean isNonBlocking) throws CudaException;
+
+  /**
+   * Destroy a CUDA stream
+   * @param stream handle to the CUDA stream to destroy
+   * @throws CudaException on any error
+   */
+  static native void destroyStream(long stream) throws CudaException;
+
+  /**
+   * Copies bytes between the host and device using the specified CUDA stream.
+   * The copy has completed when this returns, but the memory copy could overlap with
+   * operations occurring on other streams.
+   * Specifying pointers that do not match the copy direction results in undefined behavior.
+   * @param dst destination memory address
+   * @param src source memory address
+   * @param count size in bytes to copy
+   * @param kind direction of transfer. {@link CudaMemcpyKind}
+   * @param stream CUDA stream to use for the copy
+   */
+  static void memcpy(long dst, long src, long count, CudaMemcpyKind kind, Stream stream) {
+    memcpyOnStream(dst, src, count, kind.getValue(), stream.stream);
+  }
+
+  private static native void memcpyOnStream(long dst, long src, long count, int kind,
+      long stream) throws CudaException;
 
   /**
    * This should only be used for tests, to enable or disable tests if the current environment

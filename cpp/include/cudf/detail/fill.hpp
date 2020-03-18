@@ -18,9 +18,6 @@
 
 #include <cudf/filling.hpp>
 #include <cudf/types.hpp>
-#include <rmm/mr/device_memory_resource.hpp>
-
-#include <cuda_runtime.h>
 
 #include <memory>
 
@@ -57,8 +54,8 @@ namespace detail {
  * @param stream CUDA stream to run this function
  * @return void
  *---------------------------------------------------------------------------**/
-void fill(mutable_column_view& destination, size_type begin, size_type end,
-          scalar const& value, cudaStream_t stream = 0);
+void fill_in_place(mutable_column_view& destination, size_type begin, size_type end,
+                   scalar const& value, cudaStream_t stream = 0);
 
 /**---------------------------------------------------------------------------*
  * @brief Internal API to fill a range of elements in a column out-of-place with

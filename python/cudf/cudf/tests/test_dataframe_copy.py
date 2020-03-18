@@ -185,9 +185,10 @@ def test_kernel_deep_copy():
     gdf = DataFrame.from_pandas(pdf)
     cdf = gdf.copy(deep=True)
     sr = gdf["b"]
+
     # column.to_gpu_array calls to_dense_buffer which returns a copy
     # need to access buffer directly and then call gpu_array
-    add_one[1, len(sr)](sr.data.to_gpu_array())
+    add_one[1, len(sr)](sr._column.data_array_view)
     assert not gdf.to_string().split() == cdf.to_string().split()
 
 

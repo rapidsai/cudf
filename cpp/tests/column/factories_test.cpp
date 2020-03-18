@@ -17,12 +17,11 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/types.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/type_lists.hpp>
 
-#include <rmm/mr/default_memory_resource.hpp>
-#include <rmm/mr/device_memory_resource.hpp>
 
 #include <gmock/gmock.h>
 
@@ -326,3 +325,69 @@ TEST_P(NonFixedWidthFactoryTest, NonFixedWidthThrow) {
 
 INSTANTIATE_TEST_CASE_P(NonFixedWidth, NonFixedWidthFactoryTest,
                         testing::ValuesIn(cudf::test::non_fixed_width_type_ids));                        
+
+TYPED_TEST(NumericFactoryTest, FromScalar) {
+  cudf::numeric_scalar<TypeParam> value(12);
+  auto column = cudf::make_column_from_scalar(value,10);
+  EXPECT_EQ(column->type(),value.type());
+  EXPECT_EQ(10, column->size());
+  EXPECT_EQ(0, column->null_count());
+  EXPECT_FALSE(column->nullable());
+  EXPECT_FALSE(column->has_nulls());
+  EXPECT_EQ(0, column->num_children());
+}
+
+TYPED_TEST(NumericFactoryTest, FromNullScalar) {
+  cudf::numeric_scalar<TypeParam> value(0,false);
+  auto column = cudf::make_column_from_scalar(value,10);
+  EXPECT_EQ(column->type(),value.type());
+  EXPECT_EQ(10, column->size());
+  EXPECT_EQ(10, column->null_count());
+  EXPECT_TRUE(column->nullable());
+  EXPECT_TRUE(column->has_nulls());
+  EXPECT_EQ(0, column->num_children());
+}
+
+TYPED_TEST(NumericFactoryTest, FromScalarWithZeroSize) {
+  cudf::numeric_scalar<TypeParam> value(7);
+  auto column = cudf::make_column_from_scalar(value,0);
+  EXPECT_EQ(column->type(),value.type());
+  EXPECT_EQ(0, column->size());
+  EXPECT_EQ(0, column->null_count());
+  EXPECT_FALSE(column->nullable());
+  EXPECT_FALSE(column->has_nulls());
+  EXPECT_EQ(0, column->num_children());
+}
+
+TEST_F(ColumnFactoryTest, FromStringScalar)
+{
+  cudf::string_scalar value("hello");
+  auto column = cudf::make_column_from_scalar(value,1);
+  EXPECT_EQ(1,column->size());
+  EXPECT_EQ(column->type(),value.type());
+  EXPECT_EQ(0, column->null_count());
+  EXPECT_FALSE(column->nullable());
+  EXPECT_FALSE(column->has_nulls());
+}
+
+TEST_F(ColumnFactoryTest, FromNullStringScalar)
+{
+  cudf::string_scalar value("",false);
+  auto column = cudf::make_column_from_scalar(value,2);
+  EXPECT_EQ(2,column->size());
+  EXPECT_EQ(column->type(),value.type());
+  EXPECT_EQ(2, column->null_count());
+  EXPECT_TRUE(column->nullable());
+  EXPECT_TRUE(column->has_nulls());
+}
+
+TEST_F(ColumnFactoryTest, FromStringScalarWithZeroSize)
+{
+  cudf::string_scalar value("hello");
+  auto column = cudf::make_column_from_scalar(value,0);
+  EXPECT_EQ(0,column->size());
+  EXPECT_EQ(column->type(),value.type());
+  EXPECT_EQ(0, column->null_count());
+  EXPECT_FALSE(column->nullable());
+  EXPECT_FALSE(column->has_nulls());
+}

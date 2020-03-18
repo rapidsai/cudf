@@ -23,7 +23,6 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <rmm/device_scalar.hpp>
-#include <rmm/mr/device_memory_resource.hpp>
 
 #include <cub/cub.cuh>
 
@@ -226,10 +225,10 @@ void copy_range(SourceValueIterator source_value_begin,
  * @param target_begin The starting index of the target range (inclusive)
  * @return void
  */
-void copy_range(column_view const& source, mutable_column_view& target,
-                size_type source_begin, size_type source_end,
-                size_type target_begin,
-                cudaStream_t stream = 0);
+void copy_range_in_place(column_view const& source, mutable_column_view& target,
+                         size_type source_begin, size_type source_end,
+                         size_type target_begin,
+                         cudaStream_t stream = 0);
 
 /**
  * @brief Internal API to copy a range of elements out-of-place from one column

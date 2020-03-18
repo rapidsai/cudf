@@ -3,38 +3,51 @@ import pickle
 import cudf
 import cudf.core.groupby.groupby
 
+# all (de-)serializtion are attached to cudf Objects:
+# Series/DataFrame/Index/Column/Buffer/etc
+serializable_classes = (
+    cudf.DataFrame,
+    cudf.Series,
+    cudf.core.series.Series,
+    cudf.core.groupby.groupby._Groupby,
+    cudf.core.column.column.Column,
+    cudf.core.buffer.Buffer,
+)
+
 try:
+    from distributed.protocol import dask_deserialize, dask_serialize
     from distributed.protocol.cuda import cuda_deserialize, cuda_serialize
     from distributed.utils import log_errors
 
-    # all (de-)serializtion are attached to cudf Objects:
-    # Series/DataFrame/Index/Column/Buffer/etc
-    @cuda_serialize.register(
-        (
-            cudf.DataFrame,
-            cudf.Series,
-            cudf.core.series.Series,
-            cudf.core.groupby.groupby._Groupby,
-            cudf.core.column.column.Column,
-        )
-    )
-    def serialize_cudf_dataframe(x):
+    @cuda_serialize.register(serializable_classes)
+    def cuda_serialize_cudf_object(x):
         with log_errors():
             header, frames = x.serialize()
+            assert all((type(f) is cudf.core.buffer.Buffer) for f in frames)
             return header, frames
 
-    @cuda_deserialize.register(
-        (
-            cudf.DataFrame,
-            cudf.Series,
-            cudf.core.series.Series,
-            cudf.core.groupby.groupby._Groupby,
-            cudf.core.column.column.Column,
-        )
-    )
-    def deserialize_cudf_dataframe(header, frames):
+    # all (de-)serializtion are attached to cudf Objects:
+    # Series/DataFrame/Index/Column/Buffer/etc
+    @dask_serialize.register(serializable_classes)
+    def dask_serialize_cudf_object(x):
+        header, frames = cuda_serialize_cudf_object(x)
         with log_errors():
-            cudf_typ = pickle.loads(header["type"])
+            frames = [f.to_host_array().data for f in frames]
+            return header, frames
+
+    @cuda_deserialize.register(serializable_classes)
+    @dask_deserialize.register(serializable_classes)
+    def deserialize_cudf_object(header, frames):
+        with log_errors():
+            if header["serializer"] == "cuda":
+                for f in frames:
+                    # some frames are empty -- meta/empty partitions/etc
+                    if len(f) > 0:
+                        assert hasattr(f, "__cuda_array_interface__")
+            elif header["serializer"] == "dask":
+                frames = [memoryview(f) for f in frames]
+
+            cudf_typ = pickle.loads(header["type-serialized"])
             cudf_obj = cudf_typ.deserialize(header, frames)
             return cudf_obj
 

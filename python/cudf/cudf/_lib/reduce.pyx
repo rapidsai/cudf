@@ -1,11 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
-
-# cython: profile=False
-# distutils: language = c++
-# cython: embedsignature = True
-# cython: language_level = 3
-
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -21,6 +14,7 @@ import rmm
 
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
+from cudf._libxx.column cimport Column
 from cudf._lib.utils cimport *
 cimport cudf._lib.includes.reduce as cpp_reduce
 
@@ -47,7 +41,7 @@ _SCAN_OP = {
 }
 
 
-def reduce(reduction_op, col, dtype=None, ddof=1):
+def reduce(reduction_op, Column col, dtype=None, ddof=1):
     """
       Call gdf reductions.
 
@@ -62,13 +56,9 @@ def reduce(reduction_op, col, dtype=None, ddof=1):
 
     Returns:
         dtype scalar value of reduction operation on column
-
     """
-
-    check_gdf_compatibility(col)
-
     # check empty case
-    if col.data.size <= col.null_count:
+    if len(col) <= col.null_count:
         if reduction_op == 'sum' or reduction_op == 'sum_of_squares':
             return col.dtype.type(0)
         if reduction_op == 'product' and pandas_version >= (0, 22):
@@ -81,7 +71,7 @@ def reduce(reduction_op, col, dtype=None, ddof=1):
     col_dtype = col_dtype if dtype is None else dtype
 
     cdef gdf_column* c_col = column_view_from_column(col)
-    cdef gdf_dtype c_out_dtype = gdf_dtype_from_value(col, col_dtype)
+    cdef gdf_dtype c_out_dtype = gdf_dtype_from_dtype(col_dtype)
     cdef gdf_scalar c_result
     cdef size_type c_ddof = ddof
     cdef cpp_reduce.operators c_op = _REDUCTION_OP[reduction_op]

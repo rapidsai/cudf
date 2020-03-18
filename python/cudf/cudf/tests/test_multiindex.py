@@ -8,6 +8,8 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core.column import as_column
+from cudf.core.index import as_index
 from cudf.tests.utils import assert_eq, assert_neq
 
 
@@ -93,7 +95,7 @@ def test_multiindex_series_assignment():
 
 
 def test_string_index():
-    from cudf.core.index import StringIndex, StringColumn
+    from cudf.core.index import StringIndex
 
     pdf = pd.DataFrame(np.random.rand(5, 5))
     gdf = cudf.from_pandas(pdf)
@@ -109,7 +111,7 @@ def test_string_index():
     pdf.index = stringIndex
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
-    stringIndex = StringColumn(["a", "b", "c", "d", "e"], name="name")
+    stringIndex = as_index(as_column(["a", "b", "c", "d", "e"]), name="name")
     pdf.index = stringIndex
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
@@ -186,6 +188,12 @@ def test_from_pandas(pdf, pdfIndex):
     pdf.index = pdfIndex
     gdf = cudf.from_pandas(pdf)
     assert_eq(pdf, gdf)
+
+
+def test_multiindex_transpose(pdf, pdfIndex):
+    pdf.index = pdfIndex
+    gdf = cudf.from_pandas(pdf)
+    assert_eq(pdf.transpose(), gdf.transpose())
 
 
 def test_from_pandas_series():
@@ -327,26 +335,26 @@ def test_multiindex_column_shape():
         gdf.columns = gdfIndex
 
 
-def test_multiindex_columns(pdf, gdf, pdfIndex):
+@pytest.mark.parametrize(
+    "query",
+    [
+        ("a", "store", "clouds", "fire"),
+        ("a", "store", "storm", "smoke"),
+        ("a", "store"),
+        ("b", "house"),
+        ("a", "store", "storm"),
+        ("a",),
+        ("c", "forest", "clear"),
+    ],
+)
+def test_multiindex_columns(pdf, gdf, pdfIndex, query):
     pdf = pdf.T
     gdf = cudf.from_pandas(pdf)
     gdfIndex = cudf.from_pandas(pdfIndex)
     assert_eq(pdfIndex, gdfIndex)
     pdf.columns = pdfIndex
     gdf.columns = gdfIndex
-    assert_eq(
-        pdf[("a", "store", "clouds", "fire")],
-        gdf[("a", "store", "clouds", "fire")],
-    )
-    assert_eq(
-        pdf[("a", "store", "storm", "smoke")],
-        gdf[("a", "store", "storm", "smoke")],
-    )
-    assert_eq(pdf[("a", "store")], gdf[("a", "store")])
-    assert_eq(pdf[("b", "house")], gdf[("b", "house")])
-    assert_eq(pdf[("a", "store", "storm")], gdf[("a", "store", "storm")])
-    assert_eq(pdf[("a",)], gdf[("a",)])
-    assert_eq(pdf[("c", "forest", "clear")], gdf[("c", "forest", "clear")])
+    assert_eq(pdf[query], gdf[query])
 
 
 def test_multiindex_from_tuples():
@@ -391,9 +399,8 @@ def test_multiindex_index_and_columns():
         levels=[["val"], ["mean", "min"]], codes=[[0, 0], [0, 1]]
     )
     gdf.columns = mc
-    pdf.index = mi
-    pdf.index.names = ["x", "y"]
-    pdf.columns = mc
+    pdf.index = mi.to_pandas()
+    pdf.columns = mc.to_pandas()
     assert_eq(pdf, gdf)
 
 
@@ -607,7 +614,7 @@ def test_multiindex_iloc(pdf, gdf, pdfIndex, iloc_rows, iloc_columns):
             presult, gresult, check_index_type=False, check_column_type=False
         )
     else:
-        assert_eq(presult, gresult, check_index_type=False)
+        assert_eq(presult, gresult, check_index_type=False, check_dtype=False)
 
 
 @pytest.mark.parametrize(
@@ -651,12 +658,12 @@ def test_multicolumn_iloc(pdf, gdf, pdfIndex, iloc_rows, iloc_columns):
         name = gresult.name[len(gresult.name) - 1]
         if isinstance(name, str) and "cudf" in name:
             gresult.name = name
-    if isinstance(presult, cudf.DataFrame):
+    if isinstance(presult, pd.DataFrame):
         assert_eq(
             presult, gresult, check_index_type=False, check_column_type=False
         )
     else:
-        assert_eq(presult, gresult, check_index_type=False)
+        assert_eq(presult, gresult, check_index_type=False, check_dtype=False)
 
 
 def test_multicolumn_item():
@@ -707,11 +714,31 @@ def test_multiindex_groupby_reset_index():
     assert_eq(pdg.reset_index(), gdg.reset_index())
 
 
-def test_multiindex_columns_from_pandas(pdf, pdfIndex):
-    pdf.index = pdfIndex
-    pdfT = pdf.T
-    gdfT = cudf.from_pandas(pdfT)
-    assert isinstance(gdfT.columns, cudf.core.multiindex.MultiIndex)
+def test_multicolumn_reset_index():
+    gdf = cudf.DataFrame({"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5]})
+    pdf = gdf.to_pandas()
+    gdg = gdf.groupby(["x"]).agg({"y": ["count", "mean"]})
+    pdg = pdf.groupby(["x"]).agg({"y": ["count", "mean"]})
+    assert_eq(pdg.reset_index(), gdg.reset_index(), check_dtype=False)
+    gdg = gdf.groupby(["x"]).agg({"y": ["count"]})
+    pdg = pdf.groupby(["x"]).agg({"y": ["count"]})
+    assert_eq(pdg.reset_index(), gdg.reset_index(), check_dtype=False)
+    gdg = gdf.groupby(["x"]).agg({"y": "count"})
+    pdg = pdf.groupby(["x"]).agg({"y": "count"})
+    assert_eq(pdg.reset_index(), gdg.reset_index(), check_dtype=False)
+
+
+def test_multiindex_multicolumn_reset_index():
+    gdf = cudf.DataFrame(
+        {"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5], "z": [1, 2, 3, 4, 5]}
+    )
+    pdf = gdf.to_pandas()
+    gdg = gdf.groupby(["x", "y"]).agg({"y": ["count", "mean"]})
+    pdg = pdf.groupby(["x", "y"]).agg({"y": ["count", "mean"]})
+    assert_eq(pdg.reset_index(), gdg.reset_index(), check_dtype=False)
+    gdg = gdf.groupby(["x", "z"]).agg({"y": ["count", "mean"]})
+    pdg = pdf.groupby(["x", "z"]).agg({"y": ["count", "mean"]})
+    assert_eq(pdg.reset_index(), gdg.reset_index(), check_dtype=False)
 
 
 def test_groupby_multiindex_columns_from_pandas(pdf, gdf, pdfIndex):
@@ -747,3 +774,32 @@ def test_multiindex_rows_with_wildcard(pdf, gdf, pdfIndex):
         pdf.loc[(slice(None), slice(None), slice(None), "smoke"), :],
         gdf.loc[(slice(None), slice(None), slice(None), "smoke"), :],
     )
+
+
+def test_multiindex_multicolumn_zero_row_slice():
+    gdf = cudf.DataFrame(
+        {"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5], "z": [1, 2, 3, 4, 5]}
+    )
+    pdf = gdf.to_pandas()
+    gdg = gdf.groupby(["x", "y"]).agg({"z": ["count"]}).iloc[:0]
+    pdg = pdf.groupby(["x", "y"]).agg({"z": ["count"]}).iloc[:0]
+    assert_eq(pdg, gdg, check_dtype=False)
+
+
+def test_multicolumn_loc(pdf, pdfIndex):
+    pdf = pdf.T
+    pdf.columns = pdfIndex
+    gdf = cudf.from_pandas(pdf)
+    assert_eq(pdf.loc[:, "a"], gdf.loc[:, "a"])
+    assert_eq(pdf.loc[:, ("a", "store")], gdf.loc[:, ("a", "store")])
+    assert_eq(pdf.loc[:, "a":"b"], gdf.loc[:, "a":"b"])
+    assert_eq(pdf.loc[:, ["a", "b"]], gdf.loc[:, ["a", "b"]])
+
+
+def test_multicolumn_set_item(pdf, pdfIndex):
+    pdf = pdf.T
+    pdf.columns = pdfIndex
+    gdf = cudf.from_pandas(pdf)
+    pdf["d"] = [1, 2, 3, 4, 5]
+    gdf["d"] = [1, 2, 3, 4, 5]
+    assert_eq(pdf, gdf)

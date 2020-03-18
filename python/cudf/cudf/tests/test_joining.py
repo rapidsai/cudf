@@ -1,27 +1,25 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-from timeit import default_timer as timer
-
 import numpy as np
 import pandas as pd
 import pytest
 
 import cudf
-from cudf.core import DataFrame
+from cudf.core import DataFrame, Series
 from cudf.tests.utils import assert_eq
 
 
 def make_params():
     np.random.seed(0)
 
-    hows = "left,inner,outer,right".split(",")
+    hows = "left,inner,outer,right,leftanti,leftsemi".split(",")
     methods = "hash,sort".split(",")
 
     # Test specific cases (1)
     aa = [0, 0, 4, 5, 5]
     bb = [0, 0, 2, 3, 5]
     for how in hows:
-        if how in ["left", "inner", "right"]:
+        if how in ["left", "inner", "right", "leftanti", "leftsemi"]:
             for method in methods:
                 yield (aa, bb, how, method)
         else:
@@ -31,7 +29,7 @@ def make_params():
     aa = [0, 0, 1, 2, 3]
     bb = [0, 1, 2, 2, 3]
     for how in hows:
-        if how in ["left", "inner", "right"]:
+        if how in ["left", "inner", "right", "leftanti", "leftsemi"]:
             for method in methods:
                 yield (aa, bb, how, method)
         else:
@@ -41,7 +39,7 @@ def make_params():
     aa = np.random.randint(0, 50, 100)
     bb = np.random.randint(0, 50, 100)
     for how in hows:
-        if how in ["left", "inner", "right"]:
+        if how in ["left", "inner", "right", "leftanti", "leftsemi"]:
             for method in methods:
                 yield (aa, bb, how, method)
         else:
@@ -51,11 +49,18 @@ def make_params():
     aa = np.random.random(50)
     bb = np.random.random(50)
     for how in hows:
-        if how in ["left", "inner", "right"]:
+        if how in ["left", "inner", "right", "leftanti", "leftsemi"]:
             for method in methods:
                 yield (aa, bb, how, method)
         else:
             yield (aa, bb, how, "sort")
+
+
+def pd_odd_joins(left, right, join_type):
+    if join_type == "leftanti":
+        return left[~left.index.isin(right.index)][left.columns]
+    elif join_type == "leftsemi":
+        return left[left.index.isin(right.index)][left.columns]
 
 
 @pytest.mark.parametrize("aa,bb,how,method", make_params())
@@ -64,49 +69,37 @@ def test_dataframe_join_how(aa, bb, how, method):
     df["a"] = aa
     df["b"] = bb
 
-    def work_pandas(df):
-        ts = timer()
+    def work_pandas(df, how):
         df1 = df.set_index("a")
         df2 = df.set_index("b")
-        joined = df1.join(df2, how=how, sort=True)
-        te = timer()
-        print("timing", type(df), te - ts)
+        if how == "leftanti":
+            joined = pd_odd_joins(df1, df2, "leftanti")
+        elif how == "leftsemi":
+            joined = pd_odd_joins(df1, df2, "leftsemi")
+        else:
+            joined = df1.join(df2, how=how, sort=True)
         return joined
 
     def work_gdf(df):
-        ts = timer()
         df1 = df.set_index("a")
         df2 = df.set_index("b")
         joined = df1.join(df2, how=how, sort=True, method=method)
-        te = timer()
-        print("timing", type(df), te - ts)
         return joined
 
-    expect = work_pandas(df.to_pandas())
+    expect = work_pandas(df.to_pandas(), how)
     got = work_gdf(df)
     expecto = expect.copy()
     goto = got.copy()
 
-    # Type conversion to handle NoneType
-    expectb = expect.b
-    expecta = expect.a
-    gotb = got.b
-    gota = got.a
-    del got["b"]
-    got.insert(len(got._cols), "b", gotb.astype(np.float64).fillna(np.nan))
-    del got["a"]
-    got.insert(len(got._cols), "a", gota.astype(np.float64).fillna(np.nan))
-    expect.drop(["b"], axis=1)
-    expect["b"] = expectb.astype(np.float64).fillna(np.nan)
-    expect.drop(["a"], axis=1)
-    expect["a"] = expecta.astype(np.float64).fillna(np.nan)
+    expect = expect.astype(np.float64).fillna(np.nan)[expect.columns]
+    got = got.astype(np.float64).fillna(np.nan)[expect.columns]
 
     assert got.index.name is None
 
     assert list(expect.columns) == list(got.columns)
     # test disabled until libgdf sort join gets updated with new api
     if method == "hash":
-        assert np.all(expect.index.values == got.index.values)
+        assert_eq(sorted(expect.index.values), sorted(got.index.values))
         if how != "outer":
             # Newly introduced ambiguous ValueError thrown when
             # an index and column have the same name. Rename the
@@ -115,8 +108,12 @@ def test_dataframe_join_how(aa, bb, how, method):
             expect.index.name = "bob"
             got.index.name = "mary"
             pd.util.testing.assert_frame_equal(
-                got.to_pandas().sort_values(["b", "a"]).reset_index(drop=True),
-                expect.sort_values(["b", "a"]).reset_index(drop=True),
+                got.to_pandas()
+                .sort_values(got.columns.to_list())
+                .reset_index(drop=True),
+                expect.sort_values(expect.columns.to_list()).reset_index(
+                    drop=True
+                ),
             )
         # if(how=='right'):
         #     _sorted_check_series(expect['a'], expect['b'],
@@ -125,8 +122,8 @@ def test_dataframe_join_how(aa, bb, how, method):
         #     _sorted_check_series(expect['b'], expect['a'], got['b'],
         #                          got['a'])
         else:
-            _check_series(expecto["b"].fillna(-1), goto["b"].fillna(-1))
-            _check_series(expecto["a"].fillna(-1), goto["a"].fillna(-1))
+            for c in expecto.columns:
+                _check_series(expecto[c].fillna(-1), goto[c].fillna(-1))
 
 
 def _check_series(expect, got):
@@ -167,7 +164,7 @@ def test_dataframe_join_suffix():
     )
     # Check
     assert list(expect.columns) == list(got.columns)
-    assert np.all(expect.index.values == got.index.values)
+    assert_eq(expect.index.values, got.index.values)
     for k in expect.columns:
         _check_series(expect[k].fillna(-1), got[k].fillna(-1))
 
@@ -198,7 +195,7 @@ def test_dataframe_join_cats():
     # Just do some rough checking here.
     assert list(got.columns) == ["b", "c"]
     assert len(got) > 0
-    assert set(got.index.values) & set("abc")
+    assert set(got.index.to_pandas()) & set("abc")
     assert set(got["b"]) & set(bb)
     assert set(got["c"]) & set(cc)
 
@@ -799,3 +796,208 @@ def test_join_multi(how, column_a, column_b, column_c):
         gdf_result.reset_index(drop=True).fillna(-1),
         pdf_result.sort_index().reset_index(drop=True).fillna(-1),
     )
+
+
+@pytest.mark.parametrize("dtype_l", ["int8", "int16", "int32", "int64"])
+@pytest.mark.parametrize("dtype_r", ["int8", "int16", "int32", "int64"])
+def test_typecast_on_join_int_to_int(dtype_l, dtype_r):
+    other_data = ["a", "b", "c"]
+
+    join_data_l = Series([1, 2, 3], dtype=dtype_l)
+    join_data_r = Series([1, 2, 4], dtype=dtype_r)
+
+    gdf_l = DataFrame({"join_col": join_data_l, "B": other_data})
+    gdf_r = DataFrame({"join_col": join_data_r, "B": other_data})
+
+    exp_dtype = np.find_common_type([], [np.dtype(dtype_l), np.dtype(dtype_r)])
+
+    exp_join_data = [1, 2]
+    exp_other_data = ["a", "b"]
+    exp_join_col = Series(exp_join_data, dtype=exp_dtype)
+
+    expect = DataFrame(
+        {
+            "join_col": exp_join_col,
+            "B_x": exp_other_data,
+            "B_y": exp_other_data,
+        }
+    )
+
+    got = gdf_l.merge(gdf_r, on="join_col", how="inner")
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("dtype_l", ["float32", "float64"])
+@pytest.mark.parametrize("dtype_r", ["float32", "float64"])
+def test_typecast_on_join_float_to_float(dtype_l, dtype_r):
+    other_data = ["a", "b", "c", "d", "e", "f"]
+
+    join_data_l = Series([1, 2, 3, 0.9, 4.5, 6], dtype=dtype_l)
+    join_data_r = Series([1, 2, 3, 0.9, 4.5, 7], dtype=dtype_r)
+
+    gdf_l = DataFrame({"join_col": join_data_l, "B": other_data})
+    gdf_r = DataFrame({"join_col": join_data_r, "B": other_data})
+
+    exp_dtype = np.find_common_type([], [np.dtype(dtype_l), np.dtype(dtype_r)])
+
+    if dtype_l != dtype_r:
+        exp_join_data = [1, 2, 3, 4.5]
+        exp_other_data = ["a", "b", "c", "e"]
+    else:
+        exp_join_data = [1, 2, 3, 0.9, 4.5]
+        exp_other_data = ["a", "b", "c", "d", "e"]
+
+    exp_join_col = Series(exp_join_data, dtype=exp_dtype)
+
+    expect = DataFrame(
+        {
+            "join_col": exp_join_col,
+            "B_x": exp_other_data,
+            "B_y": exp_other_data,
+        }
+    )
+
+    got = gdf_l.merge(gdf_r, on="join_col", how="inner")
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "dtype_l", ["int8", "int16", "int32", "int64", "float32", "float64"]
+)
+@pytest.mark.parametrize(
+    "dtype_r", ["int8", "int16", "int32", "int64", "float32", "float64"]
+)
+def test_typecast_on_join_mixed_int_float(dtype_l, dtype_r):
+    if ("int" in dtype_l and "int" in dtype_r) or (
+        "float" in dtype_l and "float" in dtype_r
+    ):
+        pytest.skip("like types not tested in this function")
+
+    other_data = ["a", "b", "c", "d", "e", "f"]
+
+    join_data_l = Series([1, 2, 3, 0.9, 4.5, 6], dtype=dtype_l)
+    join_data_r = Series([1, 2, 3, 0.9, 4.5, 7], dtype=dtype_r)
+
+    gdf_l = DataFrame({"join_col": join_data_l, "B": other_data})
+    gdf_r = DataFrame({"join_col": join_data_r, "B": other_data})
+
+    exp_dtype = np.find_common_type([], [np.dtype(dtype_l), np.dtype(dtype_r)])
+
+    exp_join_data = [1, 2, 3]
+    exp_other_data = ["a", "b", "c"]
+    exp_join_col = Series(exp_join_data, dtype=exp_dtype)
+
+    expect = DataFrame(
+        {
+            "join_col": exp_join_col,
+            "B_x": exp_other_data,
+            "B_y": exp_other_data,
+        }
+    )
+
+    got = gdf_l.merge(gdf_r, on="join_col", how="inner")
+
+    assert_eq(expect, got)
+
+
+def test_typecast_on_join_no_float_round():
+
+    other_data = ["a", "b", "c", "d", "e"]
+
+    join_data_l = Series([1, 2, 3, 4, 5], dtype="int8")
+    join_data_r = Series([1, 2, 3, 4.01, 4.99], dtype="float32")
+
+    gdf_l = DataFrame({"join_col": join_data_l, "B": other_data})
+    gdf_r = DataFrame({"join_col": join_data_r, "B": other_data})
+
+    exp_join_data = [1, 2, 3, 4, 5]
+    exp_Bx = ["a", "b", "c", "d", "e"]
+    exp_By = ["a", "b", "c", None, None]
+    exp_join_col = Series(exp_join_data, dtype="float32")
+
+    expect = DataFrame(
+        {"join_col": exp_join_col, "B_x": exp_Bx, "B_y": exp_By}
+    )
+
+    got = gdf_l.merge(gdf_r, on="join_col", how="left")
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "dtype_l",
+    ["datetime64[s]", "datetime64[ms]", "datetime64[us]", "datetime64[ns]"],
+)
+@pytest.mark.parametrize(
+    "dtype_r",
+    ["datetime64[s]", "datetime64[ms]", "datetime64[us]", "datetime64[ns]"],
+)
+def test_typecast_on_join_dt_to_dt(dtype_l, dtype_r):
+    other_data = ["a", "b", "c", "d", "e"]
+    join_data_l = Series(
+        ["1991-11-20", "1999-12-31", "2004-12-04", "2015-01-01", "2019-08-15"]
+    ).astype(dtype_l)
+    join_data_r = Series(
+        ["1991-11-20", "1999-12-31", "2004-12-04", "2015-01-01", "2019-08-16"]
+    ).astype(dtype_r)
+
+    gdf_l = DataFrame({"join_col": join_data_l, "B": other_data})
+    gdf_r = DataFrame({"join_col": join_data_r, "B": other_data})
+
+    exp_dtype = max(np.dtype(dtype_l), np.dtype(dtype_r))
+
+    exp_join_data = ["1991-11-20", "1999-12-31", "2004-12-04", "2015-01-01"]
+    exp_other_data = ["a", "b", "c", "d"]
+    exp_join_col = Series(exp_join_data, dtype=exp_dtype)
+
+    expect = DataFrame(
+        {
+            "join_col": exp_join_col,
+            "B_x": exp_other_data,
+            "B_y": exp_other_data,
+        }
+    )
+
+    got = gdf_l.merge(gdf_r, on="join_col", how="inner")
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("dtype_l", ["category", "str", "int32", "float32"])
+@pytest.mark.parametrize("dtype_r", ["category", "str", "int32", "float32"])
+def test_typecast_on_join_categorical(dtype_l, dtype_r):
+    if not (dtype_l == "category" or dtype_r == "category"):
+        pytest.skip("at least one side must be category for this set of tests")
+    if dtype_l == "category" and dtype_r == "category":
+        pytest.skip("Can't determine which categorical to use")
+
+    other_data = ["a", "b", "c", "d", "e"]
+    join_data_l = Series([1, 2, 3, 4, 5], dtype=dtype_l)
+    join_data_r = Series([1, 2, 3, 4, 6], dtype=dtype_r)
+    if dtype_l == "category":
+        exp_dtype = join_data_l.dtype
+        exp_categories = join_data_l.astype(int)._column
+    elif dtype_r == "category":
+        exp_dtype = join_data_r.dtype
+        exp_categories = join_data_r.astype(int)._column
+
+    gdf_l = DataFrame({"join_col": join_data_l, "B": other_data})
+    gdf_r = DataFrame({"join_col": join_data_r, "B": other_data})
+
+    exp_join_data = [1, 2, 3, 4]
+    exp_other_data = ["a", "b", "c", "d"]
+    exp_join_col = Series(exp_join_data, dtype=exp_dtype)
+
+    expect = DataFrame(
+        {
+            "join_col": exp_join_col,
+            "B_x": exp_other_data,
+            "B_y": exp_other_data,
+        }
+    )
+    expect["join_col"] = expect["join_col"].cat.set_categories(exp_categories)
+
+    got = gdf_l.merge(gdf_r, on="join_col", how="inner")
+    assert_eq(expect, got, check_dtype=False)

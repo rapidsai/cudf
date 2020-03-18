@@ -15,6 +15,7 @@
  */
 
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/copying.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
@@ -60,6 +61,50 @@ TYPED_TEST(ColumnUtilitiesTest, NonNullableToHost) {
   EXPECT_TRUE(std::equal(data.begin(), data.end(), host_data.first.begin()));
 }
 
+TYPED_TEST(ColumnUtilitiesTest, NonNullableToHostWithOffset) {
+  auto sequence = cudf::test::make_counting_transform_iterator(
+      0, [](auto i) { return TypeParam(i); });
+
+  auto size = this->size();
+  auto split = 2;
+
+  std::vector<TypeParam> data(sequence, sequence + size);
+  std::vector<TypeParam> expected_data(sequence+split, sequence + size);
+  cudf::test::fixed_width_column_wrapper<TypeParam> col(
+    data.begin(), data.end());
+
+  std::vector<cudf::size_type> splits{split};
+  std::vector<cudf::column_view> result = cudf::experimental::split(col, splits);
+
+  auto host_data = cudf::test::to_host<TypeParam>(result.back());
+
+  EXPECT_TRUE(std::equal(expected_data.begin(), expected_data.end(), host_data.first.begin()));
+}
+
+TYPED_TEST(ColumnUtilitiesTest, NullableToHostWithOffset) {
+  auto sequence = cudf::test::make_counting_transform_iterator(
+      0, [](auto i) { return TypeParam(i); });
+
+  auto split = 2;
+  auto size = this->size();
+  auto valid = cudf::test::make_counting_transform_iterator(0, [&split](auto i) { return (i < (split+1) or i > 10)? false: true;});
+  std::vector<TypeParam> data(sequence, sequence + size);
+  std::vector<TypeParam> expected_data(sequence + split, sequence + size);
+  cudf::test::fixed_width_column_wrapper<TypeParam> col(
+    data.begin(), data.end(), valid);
+
+  std::vector<cudf::size_type> splits{split};
+  std::vector<cudf::column_view> result = cudf::experimental::split(col, splits);
+
+  auto host_data = cudf::test::to_host<TypeParam>(result.back());
+
+  EXPECT_TRUE(std::equal(expected_data.begin(), expected_data.end(), host_data.first.begin()));
+
+  auto masks = cudf::test::detail::make_null_mask_vector(valid + split, valid + size);
+
+  EXPECT_TRUE(cudf::test::validate_host_masks(masks, host_data.second, expected_data.size()));
+}
+
 TYPED_TEST(ColumnUtilitiesTest, NullableToHostAllValid) {
   auto sequence = cudf::test::make_counting_transform_iterator(
       0, [](auto i) { return TypeParam(i); });
@@ -79,6 +124,24 @@ TYPED_TEST(ColumnUtilitiesTest, NullableToHostAllValid) {
   auto masks = cudf::test::detail::make_null_mask_vector(all_valid, all_valid + size);
 
   EXPECT_TRUE(std::equal(masks.begin(), masks.end(), host_data.second.begin()));
+}
+
+struct ColumnUtilitiesEquivalenceTest : public cudf::test::BaseFixture {};
+
+TEST_F(ColumnUtilitiesEquivalenceTest, DoubleTest) {
+  cudf::test::fixed_width_column_wrapper<double> col1 { 10./3, 22./7 };
+  cudf::test::fixed_width_column_wrapper<double> col2 { 31./3 - 21./3, 19./7 + 3./7 };
+
+  cudf::test::expect_columns_equivalent(col1, col2);
+}
+
+TEST_F(ColumnUtilitiesEquivalenceTest, NullabilityTest) {
+  auto all_valid = cudf::test::make_counting_transform_iterator(
+                                  0, [](auto i) { return true; });
+  cudf::test::fixed_width_column_wrapper<double> col1 { 1, 2, 3 };
+  cudf::test::fixed_width_column_wrapper<double> col2({ 1, 2, 3 }, all_valid);
+
+  cudf::test::expect_columns_equivalent(col1, col2);
 }
 
 struct ColumnUtilitiesStringsTest: public cudf::test::BaseFixture {};
@@ -104,7 +167,9 @@ TEST_F(ColumnUtilitiesStringsTest, StringsToHostAllNulls)
   cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
         thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
   auto host_data = cudf::test::to_host<std::string>(strings);
-  EXPECT_TRUE( host_data.first.empty() );
+  auto results = host_data.first;
+  EXPECT_EQ( 3, host_data.first.size() );
+  EXPECT_TRUE( std::all_of( results.begin(), results.end(), [] (auto s) { return s.empty();} ));
 }
 
 TYPED_TEST(ColumnUtilitiesTestNumeric, PrintColumnNumeric) {

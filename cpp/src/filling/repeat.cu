@@ -27,7 +27,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <rmm/thrust_rmm_allocator.h>
-#include <rmm/mr/device_memory_resource.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/constant_iterator.h>
@@ -143,7 +143,7 @@ std::unique_ptr<table> repeat(table_view const& input_table,
                       indices.begin());
 
   return gather(input_table, indices.begin(), indices.end(),
-                false, false, false, mr, stream);
+                false, mr, stream);
 }
 
 std::unique_ptr<table> repeat(table_view const& input_table,
@@ -171,7 +171,7 @@ std::unique_ptr<table> repeat(table_view const& input_table,
   auto map_end = map_begin + output_size;
 
   return gather(input_table, map_begin, map_end,
-                false, false, false, mr, stream);
+                false, mr, stream);
 }
 
 }  // namespace detail
@@ -180,12 +180,14 @@ std::unique_ptr<table> repeat(table_view const& input_table,
                               column_view const& count,
                               bool check_count,
                               rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   return detail::repeat(input_table, count, check_count, mr, 0);
 }
 
 std::unique_ptr<table> repeat(table_view const& input_table,
                               scalar const& count,
                               rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   return detail::repeat(input_table, count, mr, 0);
 }
 

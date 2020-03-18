@@ -17,6 +17,8 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
+
 #include <algorithm>
 
 namespace cudf {
@@ -41,11 +43,7 @@ namespace  {
                     indices.push_back(split); // This for the start
                 });
         
-        if (splits.back() != column_size) {
-            indices.push_back(column_size); // This to include rest of the elements
-        } else {
-            indices.pop_back(); // Not required as it is extra 
-        }
+        indices.push_back(column_size); // This to include rest of the elements
 
         return cudf::experimental::slice(input, indices);
     }   
@@ -53,11 +51,13 @@ namespace  {
 
 std::vector<cudf::column_view> split(cudf::column_view const& input,
                                                 std::vector<size_type> const& splits) {       
+    CUDF_FUNC_RANGE();
     return split(input, input.size(), splits);
 }
 
 std::vector<cudf::table_view> split(cudf::table_view const& input,
                                                 std::vector<size_type> const& splits) {            
+    CUDF_FUNC_RANGE();
     std::vector<table_view> result{};
     if(input.num_columns() == 0) {
         return result;

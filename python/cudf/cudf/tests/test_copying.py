@@ -1,10 +1,9 @@
 from __future__ import division, print_function
 
+import cupy
 import numpy as np
 import pandas as pd
 import pytest
-
-import rmm
 
 import cudf
 import cudf._lib as libcudf
@@ -17,7 +16,7 @@ def test_gather_single_col():
     col = column.as_column(np.arange(100), dtype=np.int32)
     gather_map = np.array([0, 1, 2, 3, 5, 8, 13, 21], dtype=np.int32)
 
-    device_gather_map = rmm.to_device(gather_map)
+    device_gather_map = cupy.asarray(gather_map)
 
     out = libcudf.copying.gather(col, device_gather_map)
 
@@ -33,7 +32,7 @@ def test_gather_cols():
 
     expected = np.array(gather_map * 0.2, dtype=np.float32)
 
-    device_gather_map = rmm.to_device(gather_map)
+    device_gather_map = cupy.asarray(gather_map)
 
     out = libcudf.copying.gather(cols, device_gather_map)
 
@@ -43,14 +42,14 @@ def test_gather_cols():
 
 def test_gather_string_col():
     col = column.as_column(["a", "b", "c", "d"])
-    gather_map = column.as_column([0, 2, 3], dtype="int32").data.mem
+    gather_map = column.as_column([0, 2, 3], dtype="int32").data_array_view
     result = libcudf.copying.gather(col, gather_map)
-    assert result.data.to_host() == ["a", "c", "d"]
+    assert result.data_array_view.to_host() == ["a", "c", "d"]
 
     col = column.as_column(["a", "b", None, "d"])
-    gather_map = column.as_column([0, 2, 3], dtype="int32").data.mem
+    gather_map = column.as_column([0, 2, 3], dtype="int32").data_array_view
     result = libcudf.copying.gather(col, gather_map)
-    assert result.data.to_host() == ["a", None, "d"]
+    assert result.data_array_view.to_host() == ["a", None, "d"]
 
 
 @pytest.mark.parametrize(

@@ -1,21 +1,20 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+
 import warnings
+from distutils.version import LooseVersion
 
 import numpy as np
 import pandas as pd
-from toolz import partition_all
+from tlz import partition_all
 
 import dask
 import dask.dataframe as dd
-from dask import compute
 from dask.base import normalize_token, tokenize
 from dask.compatibility import apply
 from dask.context import _globals
 from dask.core import flatten
-from dask.dataframe import from_delayed
 from dask.dataframe.core import Scalar, handle_out, map_partitions
 from dask.dataframe.utils import raise_on_meta_error
-from dask.delayed import delayed
 from dask.highlevelgraph import HighLevelGraph
 from dask.optimization import cull, fuse
 from dask.utils import M, OperatorMethodMixin, derived_from, funcname
@@ -23,12 +22,14 @@ from dask.utils import M, OperatorMethodMixin, derived_from, funcname
 import cudf
 import cudf._lib as libcudf
 
-from dask_cudf import batcher_sortnet
+from dask_cudf import sorting
 from dask_cudf.accessor import (
     CachedAccessor,
     CategoricalAccessor,
     DatetimeAccessor,
 )
+
+DASK_VERSION = LooseVersion(dask.__version__)
 
 
 def optimize(dsk, keys, **kwargs):
@@ -91,7 +92,7 @@ class _Frame(dd.core._Frame, OperatorMethodMixin):
                     self._partition_type.__name__, type(meta).__name__
                 )
             )
-        self._meta = dd.core.make_meta(meta)
+        self._meta = meta
         self.divisions = tuple(divisions)
 
     def __getstate__(self):
@@ -171,104 +172,96 @@ class DataFrame(_Frame, dd.core.DataFrame):
             on = list(on)
         return super().join(other, how=how, on=on, shuffle="tasks", **kwargs)
 
-    def set_index(self, other, **kwargs):
+    def set_index(self, other, sorted=False, divisions=None, **kwargs):
         if kwargs.pop("shuffle", "tasks") != "tasks":
             raise ValueError(
                 "Dask-cudf only supports task based shuffling, got %s"
                 % kwargs["shuffle"]
             )
-        return super().set_index(other, shuffle="tasks", **kwargs)
+        pre_sorted = sorted
+        del sorted
 
-    def reset_index(self, force=False, drop=False):
-        """Reset index to range based
-        """
-        if force:
-            dfs = self.to_delayed()
-            sizes = np.asarray(compute(*map(delayed(len), dfs)))
-            prefixes = np.zeros_like(sizes)
-            prefixes[1:] = np.cumsum(sizes[:-1])
+        if divisions == "quantile" or isinstance(
+            divisions, (cudf.DataFrame, cudf.Series)
+        ):
 
-            @delayed
-            def fix_index(df, startpos):
-                stoppos = startpos + len(df)
-                return df.set_index(
-                    cudf.core.index.RangeIndex(start=startpos, stop=stoppos)
+            # Let upstream-dask handle "pre-sorted" case
+            if pre_sorted:
+                return dd.shuffle.set_sorted_index(
+                    self, other, divisions=divisions, **kwargs
                 )
 
-            outdfs = [
-                fix_index(df, startpos) for df, startpos in zip(dfs, prefixes)
-            ]
-            return from_delayed(outdfs, meta=self._meta.reset_index(drop=True))
-        else:
-            return self.map_partitions(M.reset_index, drop=drop)
+            by = other
+            if not isinstance(other, list):
+                by = [by]
+            if len(by) > 1:
+                raise ValueError("Dask does not support MultiIndex (yet).")
+            if divisions == "quantile":
+                divisions = None
 
-    def sort_values(self, by, ignore_index=False):
-        """Sort by the given column
+            # Use dask_cudf's sort_values
+            # TODO: Handle `sorted=True`
+            df = self.sort_values(
+                by,
+                max_branch=kwargs.get("max_branch", None),
+                divisions=divisions,
+                set_divisions=True,
+                ignore_index=True,
+            )
 
-        Parameter
-        ---------
-        by : str
-        """
-        parts = self.to_delayed()
-        sorted_parts = batcher_sortnet.sort_delayed_frame(parts, by)
-        return from_delayed(sorted_parts, meta=self._meta).reset_index(
-            force=not ignore_index
+            # Ignore divisions if its a dataframe
+            if isinstance(divisions, cudf.DataFrame):
+                divisions = None
+
+            # Set index and repartition
+            df2 = df.map_partitions(
+                sorting.set_index_post,
+                index_name=other,
+                drop=kwargs.get("drop", True),
+                column_dtype=df.columns.dtype,
+            )
+            npartitions = kwargs.get("npartitions", self.npartitions)
+            partition_size = kwargs.get("partition_size", None)
+            if partition_size:
+                return df2.repartition(partition_size=partition_size)
+            if not divisions and df2.npartitions != npartitions:
+                return df2.repartition(npartitions=npartitions)
+            if divisions and df2.npartitions != len(divisions) - 1:
+                return df2.repartition(divisions=divisions)
+            return df2
+
+        return super().set_index(
+            other,
+            sorted=pre_sorted,
+            shuffle="tasks",
+            divisions=divisions,
+            **kwargs,
         )
 
-    def sort_values_binned(self, by):
-        """Sorty by the given column and ensure that the same key
-        doesn't spread across multiple partitions.
-        """
-        # Get sorted partitions
-        parts = self.sort_values(by=by).to_delayed()
+    def sort_values(
+        self,
+        by,
+        ignore_index=False,
+        max_branch=None,
+        divisions=None,
+        set_divisions=False,
+        **kwargs,
+    ):
+        if self.npartitions == 1:
+            df = self.map_partitions(M.sort_values, by)
+        else:
+            df = sorting.sort_values(
+                self,
+                by,
+                max_branch=max_branch,
+                divisions=divisions,
+                set_divisions=set_divisions,
+                ignore_index=ignore_index,
+            )
 
-        # Get unique keys in each partition
-        @delayed
-        def get_unique(p):
-            return set(p[by].unique())
-
-        uniques = list(compute(*map(get_unique, parts)))
-
-        joiner = {}
-        for i in range(len(uniques)):
-            joiner[i] = to_join = {}
-            for j in range(i + 1, len(uniques)):
-                intersect = uniques[i] & uniques[j]
-                # If the keys intersect
-                if intersect:
-                    # Remove keys
-                    uniques[j] -= intersect
-                    to_join[j] = frozenset(intersect)
-                else:
-                    break
-
-        @delayed
-        def join(df, other, keys):
-            others = [
-                other.query("{by}==@k".format(by=by)) for k in sorted(keys)
-            ]
-            return cudf.concat([df] + others)
-
-        @delayed
-        def drop(df, keep_keys):
-            locvars = locals()
-            for i, k in enumerate(keep_keys):
-                locvars["k{}".format(i)] = k
-
-            conds = [
-                "{by}==@k{i}".format(by=by, i=i) for i in range(len(keep_keys))
-            ]
-            expr = " or ".join(conds)
-            return df.query(expr)
-
-        for i in range(len(parts)):
-            if uniques[i]:
-                parts[i] = drop(parts[i], uniques[i])
-                for joinee, intersect in joiner[i].items():
-                    parts[i] = join(parts[i], parts[joinee], intersect)
-
-        results = [p for i, p in enumerate(parts) if uniques[i]]
-        return from_delayed(results, meta=self._meta).reset_index()
+        if ignore_index:
+            return df.reset_index(drop=True)
+        return df
 
     def to_parquet(self, path, *args, **kwargs):
         """ Calls dask.dataframe.io.to_parquet with CudfEngine backend """
@@ -318,6 +311,59 @@ class DataFrame(_Frame, dd.core.DataFrame):
             if isinstance(self, DataFrame):
                 result.divisions = (min(self.columns), max(self.columns))
             return handle_out(out, result)
+
+    def repartition_by_hash(
+        self,
+        columns=None,
+        npartitions=None,
+        max_branch=None,
+        ignore_index=True,
+        **kwargs,
+    ):
+        """Repartition a dask_cudf DataFrame by hashing.
+
+        Warning: By default, index will be ignored/dropped.
+
+        Parameter
+        ---------
+        columns : list, default None
+            List of columns (by name) to be used for hashing. If None,
+            all columns will be used.
+        npartitions : int, default None
+            Number of output partitions. If None, the output partitions
+            are chosen to match self.npartitions.
+        max_branch : int or False, default None
+            Passed to `rearrange_by_hash` - If False, single-stage shuffling
+            will be used (no matter the number of partitions).
+        ignore_index : bool, default True
+            Ignore the index values while shuffling data into new
+            partitions. This can boost performance significantly.
+        kwargs : dict
+            Other `repartition` arguments.  Ignored.
+        """
+        npartitions = npartitions or self.npartitions
+        columns = columns or [col for col in self.columns]
+
+        return sorting.rearrange_by_hash(
+            self,
+            columns,
+            npartitions,
+            max_branch=max_branch,
+            ignore_index=ignore_index,
+        )
+
+    def repartition(self, *args, **kwargs):
+        """ Wraps dask.dataframe DataFrame.repartition method.
+        Uses repartition_by_hash if `columns=` is specified.
+        """
+        columns = kwargs.pop("columns", None)
+        if columns:
+            warnings.warn(
+                "Repartitioning by column hash. Divisions will lost. "
+                "Set ignore_index=False to preserve Index values."
+            )
+            return self.repartition_by_hash(columns=columns, **kwargs)
+        return super().repartition(*args, **kwargs)
 
 
 def sum_of_squares(x):
@@ -424,28 +470,6 @@ class Series(_Frame, dd.core.Series):
 
 class Index(Series, dd.core.Index):
     _partition_type = cudf.Index
-
-
-def splits_divisions_sorted_cudf(df, chunksize):
-    segments = list(df.index.find_segments().to_array())
-    segments.append(len(df) - 1)
-
-    splits = [0]
-    last = current_size = 0
-    for s in segments:
-        size = s - last
-        last = s
-        current_size += size
-        if current_size >= chunksize:
-            splits.append(s)
-            current_size = 0
-    # Ensure end is included
-    if splits[-1] != segments[-1]:
-        splits.append(segments[-1])
-    divisions = tuple(df.index.take(np.array(splits)).values)
-    splits[-1] += 1  # Offset to extract to end
-
-    return splits, divisions
 
 
 def _extract_meta(x):
@@ -635,3 +659,33 @@ from_cudf = dd.from_pandas
 
 def from_dask_dataframe(df):
     return df.map_partitions(cudf.from_pandas)
+
+
+for name in [
+    "add",
+    "sub",
+    "mul",
+    "truediv",
+    "floordiv",
+    "mod",
+    "pow",
+    "radd",
+    "rsub",
+    "rmul",
+    "rtruediv",
+    "rfloordiv",
+    "rmod",
+    "rpow",
+]:
+    meth = getattr(cudf.DataFrame, name)
+    kwargs = {"original": cudf.DataFrame} if DASK_VERSION >= "2.11.1" else {}
+    DataFrame._bind_operator_method(name, meth, **kwargs)
+
+    meth = getattr(cudf.Series, name)
+    kwargs = {"original": cudf.Series} if DASK_VERSION >= "2.11.1" else {}
+    Series._bind_operator_method(name, meth, **kwargs)
+
+for name in ["lt", "gt", "le", "ge", "ne", "eq"]:
+    meth = getattr(cudf.Series, name)
+    kwargs = {"original": cudf.Series} if DASK_VERSION >= "2.11.1" else {}
+    Series._bind_comparison_method(name, meth, **kwargs)

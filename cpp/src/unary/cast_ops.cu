@@ -19,6 +19,7 @@
 #include <cudf/unary.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/detail/unary.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 
@@ -32,10 +33,17 @@ struct unary_cast {
       typename T = _T,
       typename R = _R,
       typename std::enable_if_t<
-          (cudf::is_numeric<T>() && cudf::is_numeric<R>()) ||
-          (cudf::is_timestamp<T>() && cudf::is_timestamp<R>())>* = nullptr>
+          (cudf::is_numeric<T>() && cudf::is_numeric<R>())>* = nullptr>
   CUDA_DEVICE_CALLABLE R operator()(T const element) {
     return static_cast<R>(element);
+  }
+  template <
+      typename T = _T,
+      typename R = _R,
+      typename std::enable_if_t<
+          (cudf::is_timestamp<T>() && cudf::is_timestamp<R>())>* = nullptr>
+  CUDA_DEVICE_CALLABLE R operator()(T const element) {
+    return static_cast<R>(simt::std::chrono::floor<R::duration>(element));
   }
   template <typename T = _T,
             typename R = _R,
@@ -130,6 +138,7 @@ std::unique_ptr<column> cast(column_view const& input,
 std::unique_ptr<column> cast(column_view const& input,
                              data_type type,
                              rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   return detail::cast(input, type, mr);
 }
 

@@ -24,9 +24,10 @@
 #include <cudf/strings/copying.hpp>
 #include <cudf/strings/detail/concatenate.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
+
 
 #include <rmm/device_buffer.hpp>
-#include <rmm/mr/device_memory_resource.hpp>
 
 #include <algorithm>
 #include <numeric>
@@ -130,6 +131,7 @@ mutable_column_view column::mutable_view() {
 
 // If the null count is known, return it. Else, compute and return it
 size_type column::null_count() const {
+  CUDF_FUNC_RANGE();
   if (_null_count <= cudf::UNKNOWN_NULL_COUNT) {
     _null_count = cudf::count_unset_bits(
         static_cast<bitmask_type const *>(_null_mask.data()), 0, size());
@@ -167,6 +169,7 @@ void column::set_null_count(size_type new_null_count) {
   }
   _null_count = new_null_count;
 }
+namespace{
 
 struct create_column_from_view {
   cudf::column_view view;
@@ -177,10 +180,20 @@ struct create_column_from_view {
            std::enable_if_t<std::is_same<ColumnType, cudf::string_view>::value>* = nullptr>
  std::unique_ptr<column> operator()() {
    cudf::strings_column_view sview(view);
-   auto col = cudf::strings::detail::slice(sview, view.offset(), -1, 1, stream, mr);
-   return col;
+   return cudf::strings::detail::slice(sview, 0, view.size(), 1, stream, mr);
  }
 
+ template <typename ColumnType,
+           std::enable_if_t<std::is_same<ColumnType, cudf::dictionary32>::value>* = nullptr>
+ std::unique_ptr<column> operator()() {
+   std::vector<std::unique_ptr<column>> children;
+   for (size_type i = 0; i < view.num_children(); ++i)
+     children.emplace_back(std::make_unique<column>(view.child(i), stream, mr));
+   return std::make_unique<column>(view.type(), view.size(), rmm::device_buffer{},
+                                   cudf::copy_bitmask(view, stream, mr),
+                                   view.null_count(), std::move(children));
+ }
+ 
  template <typename ColumnType,
            std::enable_if_t<cudf::is_fixed_width<ColumnType>()>* = nullptr>
  std::unique_ptr<column> operator()() {
@@ -190,15 +203,13 @@ struct create_column_from_view {
      children.emplace_back(std::make_unique<column>(view.child(i), stream, mr));
    }
 
-   auto col = std::make_unique<column>(view.type(), view.size(),
+   return std::make_unique<column>(view.type(), view.size(),
        rmm::device_buffer{
        static_cast<const char*>(view.head()) +
        (view.offset() * cudf::size_of(view.type())),
        view.size() * cudf::size_of(view.type()), stream, mr},
        cudf::copy_bitmask(view, stream, mr),
        view.null_count(), std::move(children));
-
-   return col;
  }
 
 };
@@ -224,6 +235,12 @@ struct create_column_from_view_vector {
    }
 
    return col;
+ }
+
+ template <typename ColumnType,
+           std::enable_if_t<std::is_same<ColumnType, cudf::dictionary32>::value>* = nullptr>
+ std::unique_ptr<column> operator()() {
+   CUDF_FAIL("dictionary not supported yet");
  }
 
  template <typename ColumnType,
@@ -266,11 +283,15 @@ struct create_column_from_view_vector {
  }
 
 };
+} // anonymous namespace
 
 // Copy from a view
 column::column(column_view view, cudaStream_t stream,
                rmm::mr::device_memory_resource *mr) :
-column( *cudf::experimental::type_dispatcher(view.type(), create_column_from_view{view, stream, mr})) {}
+  // Move is needed here because the dereference operator of unique_ptr returns
+  // an lvalue reference, which would otherwise dispatch to the copy constructor
+  column{std::move(*experimental::type_dispatcher(view.type(),
+                    create_column_from_view{view, stream, mr}))} {}
 
 // Concatenates the elements from a vector of column_views
 std::unique_ptr<column>

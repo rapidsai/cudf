@@ -539,7 +539,7 @@ gpuInitPages(EncColumnChunk *chunks, EncPage *pages, const EncColumnDesc *col_de
                             stats_hdr_len += 5 * 3 + 2 * max_stats_len;
                         }
                         else {
-                            stats_hdr_len += ((col_g.stats_dtype == dtype_int128) ? 10 : 5) * 3;
+                            stats_hdr_len += ((col_g.stats_dtype >= dtype_int64) ? 10 : 5) * 3;
                         }
                         page_g.max_hdr_size += stats_hdr_len;
                     }
@@ -1260,15 +1260,17 @@ __device__ uint8_t *EncodeStatistics(uint8_t *start, const statistics_chunk *s, 
     case dtype_int8:
     case dtype_int16:
     case dtype_int32:
+    case dtype_date32:
     case dtype_float32:
         dtype_len = 4;
         break;
     case dtype_int64:
     case dtype_timestamp64:
     case dtype_float64:
+    case dtype_decimal64:
         dtype_len = 8;
         break;
-    case dtype_int128:
+    case dtype_decimal128:
         dtype_len = 16;
         break;
     case dtype_string:

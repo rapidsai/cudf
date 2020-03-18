@@ -18,6 +18,7 @@
 #define ROLLING_DETAIL_HPP
 
 #include <cudf/detail/utilities/device_operators.cuh>
+#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/utilities/traits.hpp>
 
 namespace cudf
@@ -28,23 +29,48 @@ namespace detail
 {
   // return true if ColumnType is arithmetic type or
   // AggOp is min_op/max_op/count_op for wrapper (non-arithmetic) types
-  template <typename ColumnType, class AggOp, bool is_mean>
+  template <typename ColumnType, class AggOp, cudf::experimental::aggregation::Kind op, bool is_mean>
   static constexpr bool is_supported()
   {
-    constexpr bool comparable_countable_op =
+    constexpr bool is_comparable_countable_op =
       std::is_same<AggOp, DeviceMin>::value ||
       std::is_same<AggOp, DeviceMax>::value ||
       std::is_same<AggOp, DeviceCount>::value;
 
-    constexpr bool timestamp_mean =
-      is_mean &&
-      std::is_same<AggOp, DeviceSum>::value &&
-      cudf::is_timestamp<ColumnType>();
+    constexpr bool is_operation_supported = (op == experimental::aggregation::SUM) or
+                                             (op == experimental::aggregation::MIN) or
+                                             (op == experimental::aggregation::MAX) or
+                                             (op == experimental::aggregation::COUNT_VALID) or
+                                             (op == experimental::aggregation::COUNT_ALL) or
+                                             (op == experimental::aggregation::MEAN);
 
-    return !std::is_same<ColumnType, cudf::string_view>::value &&
-           (cudf::is_numeric<ColumnType>() ||
-            comparable_countable_op ||
-            timestamp_mean);
+    constexpr bool is_valid_timestamp_agg = cudf::is_timestamp<ColumnType>() and
+                                             (op == experimental::aggregation::MIN or
+                                              op == experimental::aggregation::MAX or 
+                                              op == experimental::aggregation::COUNT_VALID or
+                                              op == experimental::aggregation::COUNT_ALL or
+                                              op == experimental::aggregation::MEAN);
+
+
+    constexpr bool is_valid_numeric_agg = (cudf::is_numeric<ColumnType>() or
+                                          is_comparable_countable_op) and 
+                                          is_operation_supported;
+
+    constexpr bool is_valid_rolling_agg = !std::is_same<ColumnType, cudf::string_view>::value and
+                                          (is_valid_timestamp_agg or is_valid_numeric_agg);
+
+    return is_valid_rolling_agg and
+           cudf::experimental::detail::is_valid_aggregation<ColumnType, op>();
+  }
+
+  template <typename ColumnType, class AggOp, cudf::experimental::aggregation::Kind Op>
+  static constexpr bool is_string_supported()
+  {
+      return std::is_same<ColumnType, cudf::string_view>::value and
+          ((cudf::experimental::aggregation::MIN == Op and std::is_same<AggOp, DeviceMin>::value) or
+           (cudf::experimental::aggregation::MAX == Op and std::is_same<AggOp, DeviceMax>::value) or
+           (cudf::experimental::aggregation::COUNT_VALID == Op and std::is_same<AggOp, DeviceCount>::value) or
+           (cudf::experimental::aggregation::COUNT_ALL == Op and std::is_same<AggOp, DeviceCount>::value));
   }
 
   // store functor

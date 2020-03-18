@@ -7,9 +7,8 @@ import numpy as np
 import six
 from numba import cuda
 
-import rmm
-
-from cudf.utils import applyutils, cudautils
+from cudf.core.column import column_empty
+from cudf.utils import applyutils
 
 ENVREF_PREFIX = "__CUDF_ENVREF__"
 
@@ -216,14 +215,12 @@ def query_execute(df, expr, callenv):
             envargs.append(val)
     columns = compiled["colnames"]
     # prepare col args
-    colarrays = [df[col].data.mem for col in columns]
+    colarrays = [df[col]._column.data_array_view for col in columns]
     # allocate output buffer
     nrows = len(df)
-    out = rmm.device_array(nrows, dtype=np.bool_)
+    out = column_empty(nrows, dtype=np.bool_)
     # run kernel
     args = [out] + colarrays + envargs
     kernel.forall(nrows)(*args)
     out_mask = applyutils.make_aggregate_nullmask(df, columns=columns)
-    if out_mask is not None:
-        out = cudautils.fill_mask(out, out_mask.data.mem, False)
-    return out
+    return out.set_mask(out_mask).fillna(False)

@@ -336,7 +336,7 @@ struct nvtext_token_counter : base_tokenator
 };
 
 // return a count of the number of tokens for each string when applying the specified delimiter
-unsigned int NVText::token_count( NVStrings& strs, const char* delimiter, unsigned int* results, bool bdevmem )
+unsigned int NVText::token_count( const NVStrings& strs, const char* delimiter, unsigned int* results, bool bdevmem )
 {
     auto execpol = rmm::exec_policy(0);
     custring_view* d_delimiter = custring_from_host(delimiter);
@@ -359,6 +359,67 @@ unsigned int NVText::token_count( NVStrings& strs, const char* delimiter, unsign
         RMM_FREE(d_counts,0);
     }
     RMM_FREE(d_delimiter,0);
+    return 0;
+}
+
+// same but with multiple delimiters
+unsigned int NVText::token_count( const NVStrings& strs, const NVStrings& delims, unsigned int* results, bool bdevmem )
+{
+    unsigned int delims_count = delims.size();
+    if( delims_count==0 )
+        return NVText::token_count(strs, nullptr, results, bdevmem);
+
+    auto execpol = rmm::exec_policy(0);
+    rmm::device_vector<custring_view*> delimiters(delims_count,nullptr);
+    custring_view** d_delimiters = delimiters.data().get();
+    delims.create_custring_index(d_delimiters);
+
+    unsigned int count = strs.size();
+    unsigned int* d_counts = results;
+    if( !bdevmem )
+        d_counts = device_alloc<unsigned int>(count,0);
+
+    // count how many strings per string
+    rmm::device_vector<custring_view*> strings(count,nullptr);
+    custring_view** d_strings = strings.data().get();
+    strs.create_custring_index(d_strings);
+
+    // count how many tokens in each string
+    thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<unsigned int>(0), count,
+        [d_strings, d_delimiters, delims_count, d_counts] __device__(unsigned int idx){
+            custring_view* d_string = d_strings[idx];
+            if( !d_string || d_string->empty()){
+                d_counts[idx] = 0;
+                return;
+            }
+            int tokens = 1;
+            const char* sptr = d_string->data();
+            const char* eptr = sptr + d_string->size();
+            while( sptr < eptr )
+            {
+                int incr = 1;
+                for( int didx=0; didx < delims_count; ++didx )
+                {
+                    custring_view* d_delim = d_delimiters[didx];
+                    if( !d_delim || d_delim->empty() )
+                        continue;
+                    if( d_delim->compare(sptr,d_delim->size()) !=0 )
+                        continue;
+                    ++tokens;
+                    incr = d_delim->size();
+                    break;
+                }
+                sptr += incr;
+            }
+            d_counts[idx] = tokens;
+        });
+    //
+    if( !bdevmem )
+    {
+        CUDA_TRY( cudaMemcpyAsync(results,d_counts,count*sizeof(unsigned int),cudaMemcpyDeviceToHost))
+        RMM_FREE(d_counts,0);
+    }
+
     return 0;
 }
 

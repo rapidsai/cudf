@@ -1,23 +1,20 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
-
-# cython: profile=False
-# distutils: language = c++
-# cython: embedsignature = True
-# cython: language_level = 3
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
+from cudf._libxx.column cimport Column
 from libc.stdlib cimport free
 from libcpp.vector cimport vector
 
 from cudf._lib.includes.concat cimport gdf_column_concat
 
 
-def _column_concat(cols_to_concat, output_col):
+def _column_concat(cols_to_concat, Column output_col):
     cdef gdf_column* c_output_col = column_view_from_column(output_col)
     cdef vector[gdf_column*] c_input_cols
     cdef int num_cols = len(cols_to_concat)
 
+    cdef Column col
     for col in cols_to_concat:
         c_input_cols.push_back(column_view_from_column(col))
 
@@ -27,6 +24,8 @@ def _column_concat(cols_to_concat, output_col):
             c_input_cols.data(),
             num_cols
         )
+
+    output_col._null_count = None
 
     check_gdf_error(result)
 

@@ -108,6 +108,13 @@ namespace operation {
     };
 
     template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+    struct Equal {
+        TypeOut operator()(TypeLhs x, TypeRhs y) {
+            return (x == y);
+        }
+    };
+
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
     struct Less {
         TypeOut operator()(TypeLhs x, TypeRhs y) {
             return (x < y);
@@ -118,6 +125,20 @@ namespace operation {
     struct Greater {
         TypeOut operator()(TypeLhs x, TypeRhs y) {
             return (x > y);
+        }
+    };
+
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+    struct LessEqual {
+        TypeOut operator()(TypeLhs x, TypeRhs y) {
+            return (x <= y);
+        }
+    };
+
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+    struct GreaterEqual {
+        TypeOut operator()(TypeLhs x, TypeRhs y) {
+            return (x >= y);
         }
     };
 
@@ -153,6 +174,27 @@ namespace operation {
     struct LogicalOr {
         TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
             return TypeOut(lhs || rhs);
+        }
+    };
+
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+    struct ShiftLeft {
+        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+            return TypeOut(lhs << rhs);
+        }
+    };
+
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+    struct ShiftRight {
+        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+            return TypeOut(lhs >> rhs);
+        }
+    };
+
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+    struct ShiftRightUnsigned {
+        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+            return TypeOut(static_cast<std::make_unsigned_t<TypeLhs>>(lhs) >> rhs);
         }
     };
 
