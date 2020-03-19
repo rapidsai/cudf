@@ -549,6 +549,7 @@ add_library(cudf
             src/copying/scatter.cu
             src/copying/shift.cu
             src/copying/copy.cu
+            src/copying/concatenate.cu
             src/copying/slice.cpp
             src/copying/split.cpp
             src/copying/contiguous_split.cu
