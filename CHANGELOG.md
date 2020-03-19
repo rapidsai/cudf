@@ -66,6 +66,7 @@
 - PR #4288 Add libcudf++ shift Cython implementation
 - PR #4338 Add cudf::sequence() for generating an incrementing list of numeric values
 - PR #4456 Add argmin/max and string min/max to sort groupby
+- PR #4564 Added Java bindings for clamp operator.
 
 ## Improvements
 

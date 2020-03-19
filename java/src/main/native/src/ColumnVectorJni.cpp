@@ -17,6 +17,7 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/datetime.hpp>
 #include <cudf/concatenate.hpp>
 #include <cudf/filling.hpp>
@@ -1081,6 +1082,30 @@ JNIEXPORT jint JNICALL Java_ai_rapids_cudf_ColumnVector_getNativeNullCountColumn
     return static_cast<jint>(column->null_count());
   }
   CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_clamper(JNIEnv *env, jobject j_object, jlong handle,
+                                                            jlong j_lo_scalar, jlong j_lo_replace_scalar,
+                                                            jlong j_hi_scalar, jlong j_hi_replace_scalar) {
+
+    JNI_NULL_CHECK(env, handle, "native view handle is null", 0)
+    JNI_NULL_CHECK(env, j_lo_scalar, "lo scalar is null", 0)
+    JNI_NULL_CHECK(env, j_lo_replace_scalar, "lo scalar replace value is null", 0)
+    JNI_NULL_CHECK(env, j_hi_scalar, "lo scalar is null", 0)
+    JNI_NULL_CHECK(env, j_hi_replace_scalar, "lo scalar replace value is null", 0)
+    using cudf::experimental::clamp;
+    try {
+      cudf::column_view *column_view = reinterpret_cast<cudf::column_view *>(handle);
+      cudf::scalar *lo_scalar = reinterpret_cast<cudf::scalar *>(j_lo_scalar);
+      cudf::scalar *lo_replace_scalar = reinterpret_cast<cudf::scalar *>(j_lo_replace_scalar);
+      cudf::scalar *hi_scalar = reinterpret_cast<cudf::scalar *>(j_hi_scalar);
+      cudf::scalar *hi_replace_scalar = reinterpret_cast<cudf::scalar *>(j_hi_replace_scalar);
+
+      std::unique_ptr<cudf::column> result = clamp(*column_view, *lo_scalar, *lo_replace_scalar, *hi_scalar, *hi_replace_scalar);
+
+     return reinterpret_cast<jlong>(result.release());
+    }
+    CATCH_STD(env, 0);
 }
 
 } // extern "C"
