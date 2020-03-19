@@ -103,24 +103,32 @@ class MultiIndex(Index):
         self._levels = [Series(level) for level in levels]
         self._validate_levels_and_codes(self._levels, self._codes)
 
-        source_data = DataFrame()
-        for i, name in enumerate(self._codes.columns):
-            codes = as_index(self._codes[name]._column)
-            if -1 in self._codes[name].values:
-                # Must account for null(s) in _source_data column
+        pandas_multindex = kwargs.get("pandas", None)
+
+        if pandas_multindex is None:
+            source_data = DataFrame()
+            for i, name in enumerate(self._codes.columns):
+                codes = as_index(self._codes[name]._column)
+                if -1 in self._codes[name].values:
+                    # Must account for null(s) in _source_data column
+                    level = DataFrame(
+                        {name: [None] + list(self._levels[i])},
+                        index=range(-1, len(self._levels[i])),
+                    )
+                else:
+                    level = DataFrame({name: self._levels[i]})
+
                 level = DataFrame(
-                    {name: [None] + list(self._levels[i])},
-                    index=range(-1, len(self._levels[i])),
+                    {"original_order": self.codes[name].index}, index=codes
+                ).join(level)
+                level = level.sort_values(by="original_order").reset_index(
+                    True
                 )
-            else:
-                level = DataFrame({name: self._levels[i]})
-
-            level = DataFrame(
-                {"original_order": self.codes[name].index}, index=codes
-            ).join(level)
-            level = level.sort_values(by="original_order").reset_index(True)
-            source_data[name] = level[name].reset_index(drop=True)
-
+                source_data[name] = level[name].reset_index(drop=True)
+        else:
+            source_data = cudf.from_pandas(
+                pandas_multindex.to_frame().reset_index(drop=True)
+            )
         self._data = source_data._data
         self.names = names
 
@@ -684,12 +692,14 @@ class MultiIndex(Index):
                 levels=multiindex.levels,
                 codes=multiindex.codes,
                 names=multiindex.names,
+                pandas=multiindex,
             )
         else:
             mi = cls(
                 levels=multiindex.levels,
                 codes=multiindex.labels,
                 names=multiindex.names,
+                pandas=multiindex,
             )
         return mi
 
