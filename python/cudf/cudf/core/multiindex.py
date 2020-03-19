@@ -683,9 +683,6 @@ class MultiIndex(Index):
             )
         else:
             mi = cls(
-                levels=multiindex.levels,
-                codes=multiindex.labels,
-                names=multiindex.names,
                 source_data=multiindex.to_frame(),
             )
         return mi
