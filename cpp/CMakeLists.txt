@@ -112,6 +112,12 @@ set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-
 # TODO: remove `no-maybe-unitialized` used to suppress warnings in rmm::exec_policy
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Werror cross-execution-space-call -Xcompiler -Wall,-Werror,-Wno-error=deprecated-declarations")
 
+option(DISABLE_DEPRECATION_WARNING "Disable warnings generated from deprecated declarations." OFF)
+if(DISABLE_DEPRECATION_WARNING)
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler -Wno-deprecated-declarations")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations")
+endif(DISABLE_DEPRECATION_WARNING)
+
 # Option to enable line info in CUDA device compilation to allow introspection when profiling / memchecking
 option(CMAKE_CUDA_LINEINFO "Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler" OFF)
 if(CMAKE_CUDA_LINEINFO)
@@ -543,6 +549,7 @@ add_library(cudf
             src/copying/scatter.cu
             src/copying/shift.cu
             src/copying/copy.cu
+            src/copying/concatenate.cu
             src/copying/slice.cpp
             src/copying/split.cpp
             src/copying/contiguous_split.cu
@@ -635,6 +642,8 @@ add_library(cudf
             src/groupby/sort/group_sum.cu
             src/groupby/sort/group_min.cu
             src/groupby/sort/group_max.cu
+            src/groupby/sort/group_argmax.cu
+            src/groupby/sort/group_argmin.cu
             src/groupby/sort/group_count.cu
             src/groupby/sort/group_nunique.cu
             src/groupby/sort/group_nth_element.cu
