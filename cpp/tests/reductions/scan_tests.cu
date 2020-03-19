@@ -278,7 +278,7 @@ struct ScanStringTest : public cudf::test::BaseFixture {
 TEST_F(ScanStringTest, Min)
 {
     std::vector<std::string> v_std = {"one", "two", "three", "four", "five", "six", "seven", "eight", "nine"};
-    std::vector<bool>        b_std = {    1,     0,       1,      1,      0,     0,       1,       1,      1};
+    std::vector<bool>        b_std = {    1,     0,       1,      1,      0,     0,       1,       0,      1};
     std::vector<std::string> exact(v_std.size());
 
     thrust::host_vector<std::string> v(v_std);
