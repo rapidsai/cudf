@@ -280,6 +280,7 @@
 - PR #4571 Load JNI native dependencies for Scalar class
 - PR #4594 Fix exec dangling pointer issue in legacy groupby
 - PR #4591 Fix issue when reading consecutive rowgroups
+- PR #4600 Fix missing include in benchmark_fixture.hpp
 
 
 # cuDF 0.12.0 (04 Feb 2020)
