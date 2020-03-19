@@ -81,3 +81,11 @@ TEST_F(PartitionTest, MapInputSizeMismatch) {
   EXPECT_THROW(cudf::experimental::partition(cudf::table_view{{input}}, map, 3),
                cudf::logic_error);
 }
+
+TEST_F(PartitionTest, MapWithNullsThrows) {
+  fixed_width_column_wrapper<int32_t> input{1, 2, 3};
+  fixed_width_column_wrapper<int32_t> map{{1, 2},{1,0}};
+
+  EXPECT_THROW(cudf::experimental::partition(cudf::table_view{{input}}, map, 3),
+               cudf::logic_error);
+}
