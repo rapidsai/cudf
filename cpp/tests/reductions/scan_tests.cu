@@ -218,23 +218,31 @@ TYPED_TEST(ScanTest, Product)
 
 TYPED_TEST(ScanTest, Sum)
 {
-    std::vector<TypeParam>  v({-120, 5, 6, 113, -111, 64, -63, 9, 34, -16});
-    std::vector<bool> b({   1, 0, 1,   1,    0,  0,   1, 1,  1,   1});
-    std::vector<TypeParam> exact(v.size());
+    std::vector<TypeParam> v_std = {-120, 5, 6, 113, -111, 64, -63, 9, 34, -16};
+    std::vector<bool>      b_std = {   1, 0, 1,   1,    0,  0,   1, 1,  1,   1};
+    std::vector<TypeParam> exact(v_std.size());
 
-    std::transform(v.cbegin(), v.cend(),
-        exact.begin(),
-        [acc=0](auto i) mutable { acc += i; return acc; }
-        );
+    thrust::host_vector<TypeParam> v(v_std);
+    thrust::host_vector<bool>      b(b_std);
+
+    thrust::inclusive_scan(
+        v.cbegin(),
+        v.cend(),
+        exact.begin());
 
     this->scan_test({v.begin(), v.end()}, 
                     {exact.begin(), exact.end()},
                     cudf::experimental::make_sum_aggregation(), scan_type::INCLUSIVE);
 
-    std::transform(v.cbegin(), v.cend(), b.begin(),
+    auto const first = thrust::make_zip_iterator(thrust::make_tuple(v.begin(), b.begin()));
+    auto const last  = thrust::make_zip_iterator(thrust::make_tuple(v.end(),   b.end()));
+
+    thrust::transform_inclusive_scan(
+        first,
+        last,
         exact.begin(),
-        [acc=0](auto i, bool b) mutable { if(b) acc += i; return acc; }
-        );
+        value_or<TypeParam>{0},
+        thrust::plus<TypeParam>{});
 
     this->scan_test({v.begin(), v.end(), b.begin()}, 
                     {exact.begin(), exact.end(), b.begin()},
