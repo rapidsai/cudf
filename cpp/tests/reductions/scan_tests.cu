@@ -113,7 +113,7 @@ struct value_or {
 TYPED_TEST(ScanTest, Min)
 {
     std::vector<TypeParam> v_std = {123, 64, 63, 99, -5, 123, -16, -120, -111};
-    std::vector<bool>      b_std = {  1,  0,  1,  1,  1,   1,   0,    1,    1};
+    std::vector<bool>      b_std = {  1,  0,  1,  1,  1,   1,   0,    0,    1};
     std::vector<TypeParam> exact(v_std.size());
 
     thrust::host_vector<TypeParam> v(v_std);
@@ -150,7 +150,7 @@ TYPED_TEST(ScanTest, Min)
 TYPED_TEST(ScanTest, Max)
 {
     std::vector<TypeParam> v_std = {-120, 5, 0, -120, -111, 64, 63, 99, 123, -16};
-    std::vector<bool>      b_std = {   1, 0, 1,    1,    1,  1,  0,  1,   1,   1};
+    std::vector<bool>      b_std = {   1, 0, 1,    1,    1,  1,  0,  1,   0,   1};
     std::vector<TypeParam> exact(v_std.size());
 
     thrust::host_vector<TypeParam> v(v_std);
