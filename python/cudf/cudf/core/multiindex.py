@@ -185,7 +185,7 @@ class MultiIndex(Index):
         if self._levels is not None:
             mi._levels = [s.copy(deep) for s in self._levels]
         if self._codes is not None:
-            mi._codes = self._codes.copy()
+            mi._codes = self._codes.copy(deep)
         if self.names is not None:
             mi.names = self.names.copy()
         return mi
