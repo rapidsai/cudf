@@ -4,10 +4,11 @@ from libcpp.memory cimport unique_ptr
 
 from cudf._libxx.cpp.column.column cimport column
 from cudf._libxx.cpp.column.column_view cimport column_view
-cimport cudf._libxx.cpp.datetime as libcudf_datetime
 
 from cudf._libxx.move cimport move
 from cudf._libxx.column cimport Column
+
+cimport cudf._libxx.cpp.datetime as libcudf_datetime
 
 
 def extract_datetime_component(Column col, object field):
