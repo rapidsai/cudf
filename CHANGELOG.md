@@ -170,6 +170,7 @@
 - PR #4499 Adding changes to handle include `keep_index` and `RangeIndex`
 - PR #4493 Skip legacy testing in CI
 - PR #4524 Updating `__setitem__` for DataFrame to use scalar scatter
+- PR #4611 Fix to use direct slicing in iloc for multiindex than using gather under `_get_row_major` #4611
 
 ## Bug Fixes
 
