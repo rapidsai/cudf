@@ -20,9 +20,7 @@ from . import (
     rolling,
     search,
     sort,
-    stream_compaction,
     transpose,
     typecast,
-    unaryops,
     utils,
 )
