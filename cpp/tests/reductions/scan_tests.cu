@@ -401,45 +401,53 @@ TYPED_TEST(ScanTest, skip_nulls)
 
 TEST_F(ScanStringTest, skip_nulls)
 {
-  bool do_print=false;
-  // data and valid arrays
-  std::vector<std::string> v({"one", "two", "three", "four", "five", "six", "seven", "eight", "nine"});
-  std::vector<bool>        b({    1,     1,       1,      0,      0,     0,       1,       1,      1});
-  std::vector<std::string> exact(v.size());
-  std::vector<bool>      out_b(v.size());
+    bool do_print=false;
+    // data and valid arrays
+    std::vector<std::string> v({"one", "two", "three", "four", "five", "six", "seven", "eight", "nine"});
+    std::vector<bool>        b({    1,     1,       1,      0,      0,     0,       1,       1,      1});
+    std::vector<std::string> exact(v.size());
+    std::vector<bool>        out_b(v.size());
 
-  // test output calculation
-  std::transform(v.cbegin(), v.cend(), b.begin(),
+    // test output calculation
+    // TODO: `std::transform_inclusive_scan` with `std::string` and `thrust::tuple` won't
+    //       work due to Thrust bug: https://github.com/thrust/thrust/issues/1074
+    //       Update once fix is merged and available
+    std::transform(
+        v.cbegin(),
+        v.cend(),
+        b.begin(),
         exact.begin(),
-        [acc=v[0]](auto i, bool b) mutable { if(b) acc = std::max(acc, i); return acc; }
-        );
-  std::transform(b.cbegin(), b.cend(),
-      out_b.begin(),
-      [acc=true](auto i) mutable { acc = acc && i; return acc; }
-      );
-  // string column with nulls
-  cudf::test::strings_column_wrapper col_nulls(v.begin(), v.end(), b.begin());
-  cudf::test::strings_column_wrapper expected2(exact.begin(), exact.end(), out_b.begin());
-  std::unique_ptr<cudf::column> col_out;
-  //skipna=false
-  CUDF_EXPECT_NO_THROW(col_out = cudf::experimental::scan(col_nulls, 
-    cudf::experimental::make_max_aggregation(), scan_type::INCLUSIVE, include_nulls::YES));
-  if(do_print) {
-    print_view(expected2, "expect = ");
-    print_view(col_out->view(),   "result = ");
-  }
-  cudf::test::expect_column_properties_equal(expected2, col_out->view());
-  cudf::test::expect_columns_equal(expected2, col_out->view());
+        [acc=v[0]](auto i, bool b) mutable { if(b) acc = std::max(acc, i); return acc; });
 
-  //Exclusive scan string not supported.
-  CUDF_EXPECT_THROW_MESSAGE((cudf::experimental::scan(col_nulls, 
-  cudf::experimental::make_min_aggregation(), scan_type::EXCLUSIVE, include_nulls::NO)),
-  "String types supports only inclusive min/max for `cudf::scan`");
+    thrust::inclusive_scan(
+        b.cbegin(),
+        b.cend(),
+        out_b.begin(),
+        thrust::logical_and<bool>{});
 
-  CUDF_EXPECT_THROW_MESSAGE((cudf::experimental::scan(col_nulls, 
-  cudf::experimental::make_min_aggregation(), scan_type::EXCLUSIVE, include_nulls::YES)),
-  "String types supports only inclusive min/max for `cudf::scan`");
-}
+    // string column with nulls
+    cudf::test::strings_column_wrapper col_nulls(v.begin(), v.end(), b.begin());
+    cudf::test::strings_column_wrapper expected2(exact.begin(), exact.end(), out_b.begin());
+    std::unique_ptr<cudf::column> col_out;
+    //skipna=false
+    CUDF_EXPECT_NO_THROW(col_out = cudf::experimental::scan(col_nulls,
+        cudf::experimental::make_max_aggregation(), scan_type::INCLUSIVE, include_nulls::YES));
+    if(do_print) {
+        print_view(expected2, "expect = ");
+        print_view(col_out->view(),   "result = ");
+    }
+    cudf::test::expect_column_properties_equal(expected2, col_out->view());
+    cudf::test::expect_columns_equal(expected2, col_out->view());
+
+    //Exclusive scan string not supported.
+    CUDF_EXPECT_THROW_MESSAGE((cudf::experimental::scan(col_nulls,
+    cudf::experimental::make_min_aggregation(), scan_type::EXCLUSIVE, include_nulls::NO)),
+    "String types supports only inclusive min/max for `cudf::scan`");
+
+    CUDF_EXPECT_THROW_MESSAGE((cudf::experimental::scan(col_nulls,
+    cudf::experimental::make_min_aggregation(), scan_type::EXCLUSIVE, include_nulls::YES)),
+    "String types supports only inclusive min/max for `cudf::scan`");
+    }
 
 TYPED_TEST(ScanTest, EmptyColumnskip_nulls)
 {
