@@ -30,6 +30,7 @@ class MultiIndex(Index):
         self, levels=None, codes=None, labels=None, names=None, **kwargs
     ):
         from cudf.core.series import Series
+        from cudf import DataFrame
 
         super().__init__()
 
@@ -47,6 +48,9 @@ class MultiIndex(Index):
         # early termination enables lazy evaluation of codes
         if "source_data" in kwargs:
             source_data = kwargs["source_data"].reset_index(drop=True)
+
+            if isinstance(source_data, pd.DataFrame):
+                source_data = DataFrame.from_pandas(source_data)
             names = names if names is not None else source_data._data.names
             # if names are unique
             # try using those as the source_data column names:
@@ -78,8 +82,6 @@ class MultiIndex(Index):
 
         if len(levels) == 0:
             raise ValueError("Must pass non-zero number of levels/codes")
-
-        from cudf import DataFrame
 
         if not isinstance(codes, DataFrame) and not isinstance(
             codes[0], (Sequence, pd.core.indexes.frozen.FrozenNDArray)
@@ -114,8 +116,12 @@ class MultiIndex(Index):
                 )
             else:
                 level = DataFrame({name: self._levels[i]})
-            level = DataFrame(index=codes).join(level)
-            source_data[name] = level[name].reset_index(drop=True)
+
+            import cudf._libxx as libcudfxx
+
+            source_data[name] = libcudfxx.copying.gather(
+                level, codes._data.columns[0]
+            )._data[name]
 
         self._data = source_data._data
         self.names = names
@@ -672,15 +678,11 @@ class MultiIndex(Index):
 
         if hasattr(multiindex, "codes"):
             mi = cls(
-                levels=multiindex.levels,
-                codes=multiindex.codes,
-                names=multiindex.names,
+                names=multiindex.names, source_data=multiindex.to_frame(),
             )
         else:
             mi = cls(
-                levels=multiindex.levels,
-                codes=multiindex.labels,
-                names=multiindex.names,
+                names=multiindex.names, source_data=multiindex.to_frame(),
             )
         return mi
 

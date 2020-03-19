@@ -300,7 +300,11 @@
 - PR #4557 Disable compile-errors on deprecation warnings, for JNI
 - PR #4576 Fix typo in `serialize.py`
 - PR #4571 Load JNI native dependencies for Scalar class
+- PR #4598 Fix to handle `pd.DataFrame` in `DataFrame.__init__`
 - PR #4594 Fix exec dangling pointer issue in legacy groupby
+- PR #4591 Fix issue when reading consecutive rowgroups
+- PR #4600 Fix missing include in benchmark_fixture.hpp
+- PR #4588 Fix ordering issue in `MultiIndex`
 
 
 # cuDF 0.12.0 (04 Feb 2020)
