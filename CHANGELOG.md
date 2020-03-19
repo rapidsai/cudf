@@ -163,14 +163,14 @@
 - PR #4377 Support loading avro files that contain nested arrays
 - PR #4436 Enable `.str.cat` and fix `.str.split` on python side
 - PR #4405 Port nvstrings (Sub)string Comparisons functions to cuDF Python/Cython
-- PR #4316 Add Java and JNI bindings for substring expression
+- PR #4316 Add Java and JNI bindings for substring expressionhttps://github.com/rapidsai/cudf/pull/4611
 - PR #4314 Add Java and JNI bindings for string contains
 - PR #4461 Port nvstrings Miscellaneous functions to cuDF Python/Cython
 - PR #4503 Port binaryop.pyx to libcudf++ API
 - PR #4499 Adding changes to handle include `keep_index` and `RangeIndex`
 - PR #4493 Skip legacy testing in CI
 - PR #4524 Updating `__setitem__` for DataFrame to use scalar scatter
-- PR #4611 Fix to use direct slicing in iloc for multiindex than using gather under `_get_row_major` #4611
+- PR #4611 Fix to use direct slicing in iloc for multiindex than using gather under `_get_row_major`
 
 ## Bug Fixes
 
