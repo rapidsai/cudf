@@ -1,6 +1,6 @@
 import datetime as dt
 
-import cupy as cp
+import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -149,8 +149,8 @@ class DatetimeColumn(column.ColumnBase):
     def to_arrow(self):
         mask = None
         if self.nullable:
-            mask = pa.py_buffer(cp.asnumpy(self.mask_array_view))
-        data = pa.py_buffer(cp.asnumpy(self.as_numerical.data_array_view))
+            mask = pa.py_buffer(cupy.asnumpy(self.mask_array_view))
+        data = pa.py_buffer(cupy.asnumpy(self.as_numerical.data_array_view))
         pa_dtype = np_to_pa_dtype(self.dtype)
         return pa.Array.from_buffers(
             type=pa_dtype,

@@ -3,7 +3,7 @@ import pickle
 import warnings
 from numbers import Number
 
-import cupy as cp
+import cupy
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_dict_like
@@ -170,23 +170,23 @@ class Series(Frame):
             raise TypeError("Data must be numeric")
 
         if len(self) == 0:
-            return cp.asarray([], dtype=self.dtype)
+            return cupy.asarray([], dtype=self.dtype)
 
         if self.has_nulls:
             raise ValueError("Column must have no nulls.")
 
-        return cp.asarray(self._column.data_array_view)
+        return cupy.asarray(self._column.data_array_view)
 
     @property
     def values_host(self):
         if self.dtype == np.dtype("object"):
             return np.array(
-                cp.asnumpy(self._column.data_array_view), dtype="object",
+                cupy.asnumpy(self._column.data_array_view), dtype="object",
             )
         elif is_categorical_dtype(self.dtype):
             return self._column.to_pandas().values
         else:
-            return cp.asnumpy(self._column.data_array_view)
+            return cupy.asnumpy(self._column.data_array_view)
 
     @classmethod
     def from_arrow(cls, s):
