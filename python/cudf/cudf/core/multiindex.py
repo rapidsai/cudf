@@ -47,7 +47,6 @@ class MultiIndex(Index):
 
         # early termination enables lazy evaluation of codes
         if "source_data" in kwargs:
-            # import pdb; pdb.set_trace()
             source_data = kwargs["source_data"].reset_index(drop=True)
 
             if isinstance(source_data, pd.DataFrame):
