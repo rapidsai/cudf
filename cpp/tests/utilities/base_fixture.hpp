@@ -17,6 +17,7 @@
 #pragma once
 
 #include <tests/utilities/cudf_gtest.hpp>
+#include "cxxopts.hpp"
 #include <cudf/wrappers/bool.hpp>
 #include <cudf/utilities/traits.hpp>
 
@@ -164,10 +165,20 @@ class TempDirTestEnvironment : public ::testing::Environment {
 };
 
 class RmmTestEnvironment : public ::testing::Environment {
+ std::string mode;
  public:
-
+  RmmTestEnvironment(std::string const& mode):mode(mode){}
   void SetUp() {
-    rmmOptions_t opts{PoolAllocation};
+    rmmOptions_t opts{};
+    if (mode == "cuda")
+      opts.allocation_mode = CudaDefaultAllocation;
+    else if (mode == "pool")
+      opts.allocation_mode = PoolAllocation;
+    else if (mode == "managed")
+      opts.allocation_mode = CudaManagedMemory;
+    else 
+      CUDF_FAIL("Invalid RMM allocation mode");
+
     ASSERT_EQ(rmmInitialize(&opts), RMM_SUCCESS);
   }
 
@@ -179,9 +190,27 @@ class RmmTestEnvironment : public ::testing::Environment {
 }  // namespace test
 }  // namespace cudf
 
-#define CUDF_TEST_PROGRAM_MAIN() int main(int argc, char **argv) {\
+inline auto parse_cudf_opts(int argc, char **argv) {
+  try {
+    cxxopts::Options options(argv[0], " - cuDF tests command line options");
+    options
+      .allow_unrecognised_options()
+      .add_options()
+      ("rmm_mode", "RMM allocation mode", cxxopts::value<std::string>()->default_value("pool"))
+    ;
+
+    return options.parse(argc, argv);
+  }
+  catch (const cxxopts::OptionException& e) {
+    CUDF_FAIL("Error parsing command line options");
+  }
+}
+
+#define CUDF_TEST_PROGRAM_MAIN() int main(int argc, char **argv) { \
   ::testing::InitGoogleTest(&argc, argv); \
+  auto const cmd_opts = parse_cudf_opts(argc, argv); \
   ::testing::Environment* const rmm_env = \
-    ::testing::AddGlobalTestEnvironment(new cudf::test::RmmTestEnvironment); \
+    ::testing::AddGlobalTestEnvironment( \
+      new cudf::test::RmmTestEnvironment(cmd_opts["rmm_mode"].as<std::string>())); \
   return RUN_ALL_TESTS(); \
 }
