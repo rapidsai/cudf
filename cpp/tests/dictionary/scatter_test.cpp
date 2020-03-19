@@ -68,8 +68,7 @@ TEST_F(DictionaryScatterTest, WithNulls)
     auto decoded = cudf::dictionary::decode(cudf::dictionary_column_view(table_result.front()->view()));
 
     cudf::test::fixed_width_column_wrapper<int64_t> expected{ {1,9,5,7,7,1,4,1},{0,1,1,1,1,1,1,0} };
-    auto result_decoded = cudf::dictionary::decode(table_result.front()->view());
-    cudf::test::expect_columns_equal( expected, result_decoded->view() );
+    cudf::test::expect_columns_equal( expected, decoded->view() );
 }
 
 TEST_F(DictionaryScatterTest, Error)
