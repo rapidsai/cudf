@@ -38,6 +38,7 @@
 - PR #4321 Expose Python Semi and Anti Joins
 - PR #4291 Add Java callback support for RMM events
 - PR #4298 Port orc.pyx to libcudf++
+- PR #4344 Port concat.pyx to libcudf++
 - PR #4329 Add support for dictionary columns in scatter
 - PR #4352 Add factory function make_column_from_scalar
 - PR #4381 Add Java support for copying buffers with asynchronous streams
@@ -98,6 +99,8 @@
 - PR #4098 Remove legacy calls from libcudf strings column code
 - PR #4044 Port join.pyx to use libcudf++ APIs
 - PR #4111 Use `Buffer`'s to serialize `StringColumn`
+- PR #4567 Optimize `__reduce__` in `StringColumn`
+- PR #4590 Register a few more types for Dask serialization
 - PR #4113 Get `len` of `StringColumn`s without `nvstrings`
 - PR #4147 Remove workaround for UNKNOWN_NULL_COUNT in contiguous_split.
 - PR #4130 Renames in-place `cudf::experimental::fill` to `cudf::experimental::fill_in_place`
@@ -126,6 +129,7 @@
 - PR #4225 Remove stale notebooks
 - PR #4233 Porting replace.pyx to use new libcudf APIs
 - PR #4223 Fix a few of the Cython warnings
+- PR #4224 Optimize concatenate for many columns
 - PR #4234 Add BUILD_LEGACY_TESTS cmake option
 - PR #4231 Support for custom cuIO data_sink classes.
 - PR #4251 Add class to docs in `dask-cudf` `derived_from`
@@ -172,6 +176,8 @@
 - PR #4534 Disable deprecation warnings as errors.
 - PR #4506 Check for multi-dimensional data in column/Series creation
 - PR #4549 Add option to disable deprecation warnings.
+- PR #4516 Add negative value support for `.str.get`
+- PR #4563 Remove copying to host for metadata generation in `generate_pandas_metadata`
 
 ## Bug Fixes
 
@@ -267,8 +273,16 @@
 - PR #4482 Fix `.str.rsplit`, `.str.split`, `.str.find`, `.str.rfind`, `.str.index`, `.str.rindex` and enable related tests
 - PR #4513 Backport scalar virtual destructor fix
 - PR #4519 Remove `n` validation for `nlargest` & `nsmallest` and add negative support for `n`
+- PR #4596 Fix `_popn` issue with performance
 - PR #4526 Fix index slicing issue for index incase of an empty dataframe
+- PR #4538 Fix cudf::strings::slice_strings(step=-1) for empty strings
 - PR #4557 Disable compile-errors on deprecation warnings, for JNI
+- PR #4576 Fix typo in `serialize.py`
+- PR #4571 Load JNI native dependencies for Scalar class
+- PR #4598 Fix to handle `pd.DataFrame` in `DataFrame.__init__`
+- PR #4594 Fix exec dangling pointer issue in legacy groupby
+- PR #4591 Fix issue when reading consecutive rowgroups
+- PR #4600 Fix missing include in benchmark_fixture.hpp
 
 
 # cuDF 0.12.0 (04 Feb 2020)

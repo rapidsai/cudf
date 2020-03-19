@@ -253,6 +253,10 @@ def test_dataframe_basic():
     df_tup[(1, "foobar")] = data
     np.testing.assert_equal(data, df_tup[(1, "foobar")].to_array())
 
+    df = DataFrame(pd.DataFrame({"a": [1, 2, 3], "c": ["a", "b", "c"]}))
+    pdf = pd.DataFrame(pd.DataFrame({"a": [1, 2, 3], "c": ["a", "b", "c"]}))
+    assert_eq(df, pdf)
+
 
 def test_dataframe_drop_method():
     df = DataFrame()

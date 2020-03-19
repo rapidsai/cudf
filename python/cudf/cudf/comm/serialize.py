@@ -6,11 +6,14 @@ import cudf.core.groupby.groupby
 # all (de-)serializtion are attached to cudf Objects:
 # Series/DataFrame/Index/Column/Buffer/etc
 serializable_classes = (
+    cudf.CategoricalDtype,
     cudf.DataFrame,
+    cudf.Index,
+    cudf.MultiIndex,
     cudf.Series,
-    cudf.core.series.Series,
-    cudf.core.groupby.groupby.Groupby,
-    cudf.core.column.column.Column,
+    cudf.core.groupby.groupby.GroupBy,
+    cudf.core.groupby.groupby._Grouping,
+    cudf.core.column.column.ColumnBase,
     cudf.core.buffer.Buffer,
 )
 
