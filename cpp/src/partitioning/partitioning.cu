@@ -715,7 +715,7 @@ hash_partition(table_view const& input,
   return detail::hash_partition(input, columns_to_hash, num_partitions, mr);
 }
 
-// Partion based on an explicit partition map
+// Partition based on an explicit partition map
 std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>>
 partition(table_view const& t, column_view const& partition_map,
           size_type num_partitions, rmm::mr::device_memory_resource* mr) {
