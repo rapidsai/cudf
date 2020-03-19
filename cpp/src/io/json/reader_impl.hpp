@@ -62,7 +62,7 @@ private:
   // Used when the input data is compressed, to ensure the allocated uncompressed data is freed
   std::vector<char> uncomp_data_owner_;
   rmm::device_buffer data_;
-  thrust::device_vector<uint64_t> rec_starts_;
+  rmm::device_vector<uint64_t> rec_starts_;
 
   size_t byte_range_offset_ = 0;
   size_t byte_range_size_ = 0;
@@ -74,9 +74,9 @@ private:
   // parsing options
   const bool allow_newlines_in_strings_ = false;
   ParseOptions opts_{',', '\n', '\"', '.'};
-  thrust::device_vector<SerialTrieNode> d_true_trie_;
-  thrust::device_vector<SerialTrieNode> d_false_trie_;
-  thrust::device_vector<SerialTrieNode> d_na_trie_;
+  rmm::device_vector<SerialTrieNode> d_true_trie_;
+  rmm::device_vector<SerialTrieNode> d_false_trie_;
+  rmm::device_vector<SerialTrieNode> d_na_trie_;
 
   /**
    * @brief Ingest input JSON file/buffer, without decompression

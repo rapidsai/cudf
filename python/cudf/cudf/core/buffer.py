@@ -33,14 +33,14 @@ class Buffer:
         elif isinstance(data, _DevicePointer):
             self.ptr = data.ptr
             self.size = size
-            self._owner = data
+            self._owner = owner or data
         elif hasattr(data, "__array_interface__") or hasattr(
             data, "__cuda_array_interface__"
         ):
 
-            self._init_from_array_like(data)
+            self._init_from_array_like(data, owner)
         elif isinstance(data, memoryview):
-            self._init_from_array_like(np.asarray(data))
+            self._init_from_array_like(np.asarray(data), owner)
         elif isinstance(data, int):
             if not isinstance(size, int):
                 raise TypeError("size must be integer")
@@ -56,7 +56,7 @@ class Buffer:
                 data = memoryview(data)
             except TypeError:
                 raise TypeError("data must be Buffer, array-like or integer")
-            self._init_from_array_like(np.asarray(data))
+            self._init_from_array_like(np.asarray(data), owner)
 
     def __reduce__(self):
         return self.__class__, (self.to_host_array(),)
@@ -74,30 +74,30 @@ class Buffer:
             "data": (self.ptr, False),
             "shape": (self.size,),
             "strides": (1,),
-            "typestr": "|u1",
+            "typestr": "|i1",
             "version": 0,
         }
         return intf
 
     def to_host_array(self):
-        data = np.empty((self.size,), "i1")
-        rmm._lib.device_buffer.copy_ptr_to_host(self.ptr, data.view("u1"))
+        data = np.empty((self.size,), "u1")
+        rmm._lib.device_buffer.copy_ptr_to_host(self.ptr, data)
         return data
 
-    def _init_from_array_like(self, data):
+    def _init_from_array_like(self, data, owner):
         if hasattr(data, "__cuda_array_interface__"):
             ptr, size = _buffer_data_from_array_interface(
                 data.__cuda_array_interface__
             )
             self.ptr = ptr
             self.size = size
-            self._owner = data
+            self._owner = owner or data
         elif hasattr(data, "__array_interface__"):
             ptr, size = _buffer_data_from_array_interface(
                 data.__array_interface__
             )
             dbuf = DeviceBuffer(ptr=ptr, size=size)
-            self._init_from_array_like(dbuf)
+            self._init_from_array_like(dbuf, owner)
         else:
             raise TypeError(
                 f"Cannot construct Buffer from {data.__class__.__name__}"
@@ -105,14 +105,15 @@ class Buffer:
 
     def serialize(self):
         header = {}
-        header["type"] = pickle.dumps(type(self))
+        header["type-serialized"] = pickle.dumps(type(self))
+        header["constructor-kwargs"] = {}
         header["desc"] = self.__cuda_array_interface__.copy()
         frames = [self]
         return header, frames
 
     @classmethod
     def deserialize(cls, header, frames):
-        buf = cls(frames[0])
+        buf = cls(frames[0], **header["constructor-kwargs"])
 
         if header["desc"]["shape"] != buf.__cuda_array_interface__["shape"]:
             raise ValueError(
@@ -136,5 +137,8 @@ def _buffer_data_from_array_interface(array_interface):
     if ptr is None:
         ptr = 0
     itemsize = np.dtype(array_interface["typestr"]).itemsize
-    size = functools.reduce(operator.mul, array_interface["shape"])
+    shape = (
+        array_interface["shape"] if len(array_interface["shape"]) > 0 else (1,)
+    )
+    size = functools.reduce(operator.mul, shape)
     return ptr, size * itemsize

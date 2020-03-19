@@ -122,7 +122,8 @@ def test_from_dask_dataframe():
 
 
 @pytest.mark.parametrize("nelem", [10, 200, 1333])
-def test_set_index(nelem):
+@pytest.mark.parametrize("divisions", [None, "quantile"])
+def test_set_index(nelem, divisions):
     with dask.config.set(scheduler="single-threaded"):
         np.random.seed(0)
         # Use unique index range as the sort may not be stable-ordering
@@ -135,9 +136,23 @@ def test_set_index(nelem):
         dgdf = ddf.map_partitions(cudf.from_pandas)
 
         expect = ddf.set_index("x")
-        got = dgdf.set_index("x")
+        got = dgdf.set_index("x", divisions=divisions)
 
         dd.assert_eq(expect, got, check_index=False, check_divisions=False)
+
+
+@pytest.mark.parametrize("by", ["a", "b"])
+@pytest.mark.parametrize("nelem", [10, 500])
+@pytest.mark.parametrize("nparts", [1, 10])
+def test_set_index_quantile(nelem, nparts, by):
+    df = cudf.DataFrame()
+    df["a"] = np.ascontiguousarray(np.arange(nelem)[::-1])
+    df["b"] = np.random.choice(cudf.datasets.names, size=nelem)
+    ddf = dd.from_pandas(df, npartitions=nparts)
+
+    got = ddf.set_index(by, divisions="quantile")
+    expect = df.sort_values(by=by).set_index(by)
+    dd.assert_eq(got, expect)
 
 
 def assert_frame_equal_by_index_group(expect, got):
@@ -366,6 +381,69 @@ def test_repartition_simple_divisions(start, stop):
     dd.utils.assert_eq(a, b)
 
 
+def test_repartition_hash_staged():
+    by = ["b"]
+    datarange = 350
+    size = 1_000
+    gdf = cudf.DataFrame(
+        {
+            "a": np.arange(size, dtype="int64"),
+            "b": np.random.randint(datarange, size=size),
+        }
+    )
+    ddf = dgd.from_cudf(gdf, npartitions=35)
+    ddf_new = ddf.repartition(columns=by, max_branch=32)
+
+    # Check that the length was preserved
+    assert len(ddf_new) == len(ddf)
+
+    # Check that the partitions have unique keys,
+    # and that the key values are preserved
+    expect_unique = gdf[by].drop_duplicates().sort_values(by)
+    got_unique = cudf.concat(
+        [
+            part[by].compute().drop_duplicates()
+            for part in ddf_new[by].partitions
+        ],
+        ignore_index=True,
+    ).sort_values(by)
+    dd.assert_eq(got_unique, expect_unique, check_index=False)
+
+
+@pytest.mark.parametrize("by", [["b"], ["c"], ["d"], ["b", "c"]])
+@pytest.mark.parametrize("npartitions", [4, 5])
+def test_repartition_hash(by, npartitions):
+    npartitions_i = 4
+    datarange = 26
+    size = 100
+    gdf = cudf.DataFrame(
+        {
+            "a": np.arange(0, stop=size, dtype="int64"),
+            "b": np.random.randint(datarange, size=size),
+            "c": np.random.choice(list("abcdefgh"), size=size),
+            "d": np.random.choice(np.arange(26), size=size),
+        }
+    )
+    gdf.d = gdf.d.astype("datetime64[ms]")
+    ddf = dgd.from_cudf(gdf, npartitions=npartitions_i)
+    ddf_new = ddf.repartition(columns=by, npartitions=npartitions)
+
+    # Check that the length was preserved
+    assert len(ddf_new) == len(ddf)
+
+    # Check that the partitions have unique keys,
+    # and that the key values are preserved
+    expect_unique = gdf[by].drop_duplicates().sort_values(by)
+    got_unique = cudf.concat(
+        [
+            part[by].compute().drop_duplicates()
+            for part in ddf_new[by].partitions
+        ],
+        ignore_index=True,
+    ).sort_values(by)
+    dd.assert_eq(got_unique, expect_unique, check_index=False)
+
+
 @pytest.fixture
 def pdf():
     return pd.DataFrame(
@@ -479,3 +557,44 @@ def test_hash_object_dispatch(index):
     result = dd.utils.hash_object_dispatch(obj_multi, index=index)
     expected = dgd.backends.hash_object_cudf(obj_multi, index=index)
     dd.assert_eq(cudf.Series(result), cudf.Series(expected))
+
+
+@pytest.mark.parametrize(
+    "index",
+    [
+        "int8",
+        "int32",
+        "int64",
+        "float64",
+        "strings",
+        "cats",
+        "time_s",
+        "time_ms",
+        "time_ns",
+        ["int32", "int64"],
+        ["int8", "float64", "strings"],
+        ["cats", "int8", "float64"],
+        ["time_ms", "cats"],
+    ],
+)
+def test_make_meta_backends(index):
+
+    dtypes = ["int8", "int32", "int64", "float64"]
+    df = cudf.DataFrame(
+        {dt: np.arange(start=0, stop=3, dtype=dt) for dt in dtypes}
+    )
+    df["strings"] = ["cat", "dog", "fish"]
+    df["cats"] = df["strings"].astype("category")
+    df["time_s"] = np.array(
+        ["2018-10-07", "2018-10-08", "2018-10-09"], dtype="datetime64[s]"
+    )
+    df["time_ms"] = df["time_s"].astype("datetime64[ms]")
+    df["time_ns"] = df["time_s"].astype("datetime64[ns]")
+    df = df.set_index(index)
+    ddf = dgd.from_cudf(df, npartitions=1)
+
+    # Check "empty" metadata types
+    dd.assert_eq(ddf._meta.dtypes, df.dtypes)
+
+    # Check "non-empty" metadata types
+    dd.assert_eq(ddf._meta.dtypes, ddf._meta_nonempty.dtypes)

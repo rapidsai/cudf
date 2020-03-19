@@ -26,6 +26,15 @@
 namespace cudf {
 namespace jni {
 
+constexpr jint MINIMUM_JNI_VERSION = JNI_VERSION_1_6;
+
+constexpr char const* CUDA_ERROR_CLASS = "ai/rapids/cudf/CudaException";
+constexpr char const* CUDF_ERROR_CLASS = "ai/rapids/cudf/CudfException";
+constexpr char const* INDEX_OOB_CLASS = "java/lang/ArrayIndexOutOfBoundsException";
+constexpr char const* ILLEGAL_ARG_CLASS = "java/lang/IllegalArgumentException";
+constexpr char const* NPE_CLASS = "java/lang/NullPointerException";
+constexpr char const* OOM_CLASS = "java/lang/OutOfMemoryError";
+
 /**
  * @brief indicates that a JNI error of some kind was thrown and the main
  * function should return.
@@ -52,7 +61,7 @@ inline void throw_java_exception(JNIEnv *const env, const char *class_name, cons
  * exception so the flow control stop processing.
  */
 inline void check_java_exception(JNIEnv *const env) {
-  if (env->ExceptionOccurred()) {
+  if (env->ExceptionCheck()) {
     // Not going to try to get the message out of the Exception, too complex and
     // might fail.
     throw jni_exception("JNI Exception...");
@@ -186,20 +195,20 @@ public:
 
   N_TYPE operator[](int index) const {
     if (orig == NULL) {
-      throw_java_exception(env, "java/lang/NullPointerException", "pointer is NULL");
+      throw_java_exception(env, NPE_CLASS, "pointer is NULL");
     }
     if (index < 0 || index >= len) {
-      throw_java_exception(env, "java/lang/ArrayIndexOutOfBoundsException", "NOT IN BOUNDS");
+      throw_java_exception(env, INDEX_OOB_CLASS, "NOT IN BOUNDS");
     }
     return data()[index];
   }
 
   N_TYPE &operator[](int index) {
     if (orig == NULL) {
-      throw_java_exception(env, "java/lang/NullPointerException", "pointer is NULL");
+      throw_java_exception(env, NPE_CLASS, "pointer is NULL");
     }
     if (index < 0 || index >= len) {
-      throw_java_exception(env, "java/lang/ArrayIndexOutOfBoundsException", "NOT IN BOUNDS");
+      throw_java_exception(env, INDEX_OOB_CLASS, "NOT IN BOUNDS");
     }
     return data()[index];
   }
@@ -469,7 +478,7 @@ public:
 
   T get(int index) const {
     if (orig == NULL) {
-      throw_java_exception(env, "java/lang/NullPointerException", "jobjectArray pointer is NULL");
+      throw_java_exception(env, NPE_CLASS, "jobjectArray pointer is NULL");
     }
     T ret = static_cast<T>(env->GetObjectArrayElement(orig, index));
     check_java_exception(env);
@@ -478,7 +487,7 @@ public:
 
   void set(int index, const T &val) {
     if (orig == NULL) {
-      throw_java_exception(env, "java/lang/NullPointerException", "jobjectArray pointer is NULL");
+      throw_java_exception(env, NPE_CLASS, "jobjectArray pointer is NULL");
     }
     env->SetObjectArrayElement(orig, index, val);
     check_java_exception(env);
@@ -560,7 +569,7 @@ public:
 
   native_jstring &get(int index) const {
     if (arr.is_null()) {
-      throw_java_exception(env, "java/lang/NullPointerException", "jstringArray pointer is NULL");
+      throw_java_exception(env, cudf::jni::NPE_CLASS, "jstringArray pointer is NULL");
     }
     init_cache();
     return cache[index];
@@ -598,7 +607,7 @@ public:
  * @brief create a cuda exception from a given cudaError_t
  */
 inline jthrowable cuda_exception(JNIEnv *const env, cudaError_t status, jthrowable cause = NULL) {
-  jclass ex_class = env->FindClass("ai/rapids/cudf/CudaException");
+  jclass ex_class = env->FindClass(cudf::jni::CUDA_ERROR_CLASS);
   if (ex_class == NULL) {
     return NULL;
   }
@@ -733,6 +742,25 @@ native_jobjectArray<jobject> contiguous_table_array(JNIEnv* env, jsize length);
 
 std::unique_ptr<cudf::experimental::aggregation> map_jni_aggregation(jint op);
 
+/**
+ * Allocate a HostMemoryBuffer
+ */
+jobject allocate_host_buffer(JNIEnv* env, jlong amount, jboolean prefer_pinned);
+
+/**
+ * Get the address of a HostMemoryBuffer
+ */
+jlong get_host_buffer_address(JNIEnv* env, jobject buffer);
+
+/**
+ * Get the length of a HostMemoryBuffer
+ */
+jlong get_host_buffer_length(JNIEnv* env, jobject buffer);
+
+// Get the JNI environment, attaching the current thread to the JVM if necessary. If the thread
+// needs to be attached, the thread will automatically detach when the thread terminates.
+JNIEnv* get_jni_env(JavaVM* jvm);
+
 } // namespace jni
 } // namespace cudf
 
@@ -744,6 +772,15 @@ std::unique_ptr<cudf::experimental::aggregation> map_jni_aggregation(jint op);
     }                                                                                              \
     env->ThrowNew(ex_class, message);                                                              \
     return ret_val;                                                                                \
+  }
+
+// Throw a new exception only if one is not pending then always return with the specified value
+#define JNI_CHECK_THROW_NEW(env, class_name, message, ret_val)                                     \
+  {                                                                                                \
+    if (env->ExceptionOccurred()) {                                                                \
+      return ret_val;                                                                              \
+    }                                                                                              \
+    JNI_THROW_NEW(env, class_name, message, ret_val)                                               \
   }
 
 #define JNI_CUDA_TRY(env, ret_val, call)                                                           \
@@ -768,9 +805,11 @@ std::unique_ptr<cudf::experimental::aggregation> map_jni_aggregation(jint op);
       if (RMM_ERROR_CUDA_ERROR == internal_rmmStatus) {                                            \
         cuda_e = cudf::jni::cuda_exception(env, cudaGetLastError());                               \
       }                                                                                            \
-      jthrowable jt = cudf::jni::rmmException(env, internal_rmmStatus, cuda_e);                    \
-      if (jt != NULL) {                                                                            \
-        env->Throw(jt);                                                                            \
+      if (!env->ExceptionCheck()) {                                                                \
+        jthrowable jt = cudf::jni::rmmException(env, internal_rmmStatus, cuda_e);                  \
+        if (jt != NULL) {                                                                          \
+          env->Throw(jt);                                                                          \
+        }                                                                                          \
       }                                                                                            \
       return ret_val;                                                                              \
     }                                                                                              \
@@ -779,14 +818,14 @@ std::unique_ptr<cudf::experimental::aggregation> map_jni_aggregation(jint op);
 #define JNI_NULL_CHECK(env, obj, error_msg, ret_val)                                               \
   {                                                                                                \
     if ((obj) == 0) {                                                                              \
-      JNI_THROW_NEW(env, "java/lang/NullPointerException", error_msg, ret_val);                    \
+      JNI_THROW_NEW(env, cudf::jni::NPE_CLASS, error_msg, ret_val);                                \
     }                                                                                              \
   }
 
 #define JNI_ARG_CHECK(env, obj, error_msg, ret_val)                                                \
   {                                                                                                \
     if (!(obj)) {                                                                                  \
-      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", error_msg, ret_val);                \
+      JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, error_msg, ret_val);                        \
     }                                                                                              \
   }
 
@@ -799,16 +838,9 @@ std::unique_ptr<cudf::experimental::aggregation> map_jni_aggregation(jint op);
 
 #define CATCH_STD(env, ret_val)                                                                    \
   catch (const std::bad_alloc &e) {                                                                \
-    JNI_THROW_NEW(env, "java/lang/OutOfMemoryError", "Could not allocate native memory", ret_val); \
-  }                                                                                                \
-  catch (const cudf::jni::jni_exception &e) {                                                      \
-    /* indicates that a java exception happened, just return so java can throw                     \
-     * it. */                                                                                      \
-    return ret_val;                                                                                \
-  }                                                                                                \
-  catch (const cudf::cuda_error &e) {                                                              \
-    JNI_THROW_NEW(env, "ai/rapids/cudf/CudaException", e.what(), ret_val);                         \
+    JNI_CHECK_THROW_NEW(env, cudf::jni::OOM_CLASS, "Could not allocate native memory", ret_val);   \
   }                                                                                                \
   catch (const std::exception &e) {                                                                \
-    JNI_THROW_NEW(env, "ai/rapids/cudf/CudfException", e.what(), ret_val);                         \
+    /* If jni_exception caught then a Java exception is pending and this will not overwrite it. */ \
+    JNI_CHECK_THROW_NEW(env, cudf::jni::CUDF_ERROR_CLASS, e.what(), ret_val);                      \
   }

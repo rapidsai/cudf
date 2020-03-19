@@ -71,7 +71,11 @@ struct corresponding_operator<aggregation::SUM_OF_SQUARES> {
   using type = DeviceSum;
 };
 template <>
-struct corresponding_operator<aggregation::COUNT> {
+struct corresponding_operator<aggregation::COUNT_VALID> {
+  using type = DeviceCount;
+};
+template <>
+struct corresponding_operator<aggregation::COUNT_ALL> {
   using type = DeviceCount;
 };
  
@@ -154,8 +158,8 @@ struct update_target_element<Source, aggregation::SUM, target_has_nulls,
 
 template <typename Source, bool target_has_nulls, bool source_has_nulls>
 struct update_target_element<
-    Source, aggregation::COUNT, target_has_nulls, source_has_nulls,
-    std::enable_if_t<is_valid_aggregation<Source, aggregation::COUNT>()>> {
+    Source, aggregation::COUNT_VALID, target_has_nulls, source_has_nulls,
+    std::enable_if_t<is_valid_aggregation<Source, aggregation::COUNT_VALID>()>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index, column_device_view source,
                              size_type source_index) const noexcept {
@@ -163,10 +167,24 @@ struct update_target_element<
       return;
     }
 
-    using Target = target_type_t<Source, aggregation::COUNT>;
+    using Target = target_type_t<Source, aggregation::COUNT_VALID>;
     atomicAdd(&target.element<Target>(target_index), Target{1});
 
-    // It is assumed the output for COUNT is initialized to be all valid
+    // It is assumed the output for COUNT_VALID is initialized to be all valid
+  }
+};
+
+template <typename Source, bool target_has_nulls, bool source_has_nulls>
+struct update_target_element<
+    Source, aggregation::COUNT_ALL, target_has_nulls, source_has_nulls,
+    std::enable_if_t<is_valid_aggregation<Source, aggregation::COUNT_ALL>()>> {
+  __device__ void operator()(mutable_column_device_view target,
+                             size_type target_index, column_device_view source,
+                             size_type source_index) const noexcept {
+    using Target = target_type_t<Source, aggregation::COUNT_ALL>;
+    atomicAdd(&target.element<Target>(target_index), Target{1});
+
+    // It is assumed the output for COUNT_ALL is initialized to be all valid
   }
 };
 
@@ -262,9 +280,10 @@ struct elementwise_aggregator {
  * 
  * The initial value and validity of `R` depends on the aggregation:
  * SUM: 0 and NULL
- * COUNT: 0 and VALID
- * MIN: Max element of type and NULL
- * MAX: Min element of type and NULL
+ * MIN: Max value of type and NULL
+ * MAX: Min value of type and NULL
+ * COUNT_VALID: 0 and VALID
+ * COUNT_ALL:   0 and VALID
  * ARGMAX: `ARGMAX_SENTINEL` and NULL
  * ARGMIN: `ARGMIN_SENTINEL` and NULL
  * 
@@ -275,7 +294,7 @@ struct elementwise_aggregator {
  * SUM, MIN, MAX, ARGMIN, ARGMAX:
  *  - `source`: Skipped
  *  - `target`: Updated from null to valid upon first successful aggregation
- * COUNT:
+ * COUNT_VALID, COUNT_ALL:
  *  - `source`: Skipped
  *  - `target`: Cannot be null
  *
@@ -293,7 +312,7 @@ __device__ inline void aggregate_row(mutable_table_device_view target,
                                      size_type target_index,
                                      table_device_view source,
                                      size_type source_index,
-                                     aggregation::Kind* aggs) {
+                                     aggregation::Kind const* aggs) {
   for (auto i = 0; i < target.num_columns(); ++i) {
     dispatch_type_and_aggregation(
         source.column(i).type(), aggs[i],
@@ -301,6 +320,93 @@ __device__ inline void aggregate_row(mutable_table_device_view target,
         target.column(i), target_index, source.column(i), source_index);
   }
 }
+
+/**
+ * @brief Dispatched functor to initialize a column with the identity of an
+ * aggregation operation.
+ * 
+ * Given a type `T` and `aggregation kind k`, determines and sets the value of 
+ * each element of the passed column to the appropriate initial value for the 
+ * aggregation.
+ * 
+ * The initial values set as per aggregation are:
+ * SUM: 0
+ * COUNT_VALID: 0 and VALID
+ * COUNT_ALL:   0 and VALID
+ * MIN: Max value of type `T`
+ * MAX: Min value of type `T`
+ * ARGMAX: `ARGMAX_SENTINEL`
+ * ARGMIN: `ARGMIN_SENTINEL`
+ * 
+ * Only works on columns of fixed-width types.
+ */
+struct identity_initializer {
+ private:
+  template <typename T, aggregation::Kind k>
+  static constexpr bool is_supported() {
+    return cudf::is_fixed_width<T>() and
+           (k == aggregation::SUM or k == aggregation::MIN or 
+            k == aggregation::MAX or
+            k == aggregation::COUNT_VALID or k == aggregation::COUNT_ALL or
+            k == aggregation::ARGMAX or k == aggregation::ARGMIN);
+  }
+
+  template <typename T, aggregation::Kind k>
+  std::enable_if_t<not std::is_same<corresponding_operator_t<k>, void>::value, T>
+  identity_from_operator() {
+    return corresponding_operator_t<k>::template identity<T>();
+  }
+
+  template <typename T, aggregation::Kind k>
+  std::enable_if_t<std::is_same<corresponding_operator_t<k>, void>::value, T>
+  identity_from_operator() {
+    CUDF_FAIL("Unable to get identity/sentinel from device operator");
+  }
+
+  template <typename T, aggregation::Kind k>
+  T get_identity() {
+    if (k == aggregation::ARGMAX)
+      return ARGMAX_SENTINEL;
+    else if (k == aggregation::ARGMIN)
+      return ARGMIN_SENTINEL;
+    else
+      // In C++17, we can use compile time if and not make this function SFINAE
+      return identity_from_operator<T, k>();
+  }
+ 
+ public:
+  template <typename T, aggregation::Kind k>
+  std::enable_if_t<is_supported<T, k>(), void>
+  operator()(mutable_column_view const& col, cudaStream_t stream = 0) {
+    thrust::fill(rmm::exec_policy(stream)->on(stream), col.begin<T>(),
+                 col.end<T>(), get_identity<T, k>());
+  }
+
+  template <typename T, aggregation::Kind k>
+  std::enable_if_t<not is_supported<T, k>(), void>
+  operator()(mutable_column_view const& col, cudaStream_t stream = 0) {
+    CUDF_FAIL("Unsupported aggregation for initializing values");
+  }
+};
+
+/**
+ * @brief Initializes each column in a table with a corresponding identity value
+ * of an aggregation operation.
+ *
+ * The `i`th column will be initialized with the identity value of the `i`th
+ * aggregation operation in `aggs`.
+ *
+ * @throw cudf::logic_error if column type and corresponging agg are incompatible
+ * @throw cudf::logic_error if column type is not fixed-width
+ * 
+ * @param table The table of columns to initialize.
+ * @param aggs A vector of aggregation operations corresponding to the table 
+ * columns. The aggregations determine the identity value for each column.
+ */
+void initialize_with_identity(mutable_table_view & table,
+                              std::vector<aggregation::Kind> const& aggs,
+                              cudaStream_t stream = 0);
+
 }  // namespace detail
 }  // namespace experimental
 }  // namespace cudf

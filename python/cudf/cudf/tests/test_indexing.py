@@ -540,12 +540,14 @@ def test_empty_boolean_mask(dtype):
     gdf = cudf.datasets.randomdata(nrows=0, dtypes={"a": dtype})
     pdf = gdf.to_pandas()
 
-    expected = pdf[pdf.a == 1]
-    got = gdf[gdf.a == 1]
+    compare_val = dtype(1)
+
+    expected = pdf[pdf.a == compare_val]
+    got = gdf[gdf.a == compare_val]
     assert_eq(expected, got)
 
-    expected = pdf.a[pdf.a == 1]
-    got = gdf.a[gdf.a == 1]
+    expected = pdf.a[pdf.a == compare_val]
+    got = gdf.a[gdf.a == compare_val]
     assert_eq(expected, got)
 
 
@@ -885,3 +887,26 @@ def test_out_of_bounds_indexing():
         a[[0, 1, 9]] = 2
     with pytest.raises(IndexError):
         a[[0, 1, -4]] = 2
+
+
+def test_sliced_indexing():
+    a = list(range(4, 4 + 150))
+    b = list(range(0, 0 + 150))
+    pdf = pd.DataFrame({"a": a, "b": b})
+    gdf = DataFrame.from_pandas(pdf)
+    pdf = pdf.set_index("a")
+    gdf = gdf.set_index("a")
+    pidx = pdf.index[:75]
+    gidx = gdf.index[:75]
+
+    assert_eq(pdf.loc[pidx], gdf.loc[gidx])
+
+
+@pytest.mark.parametrize("index", [["a"], ["a", "a"], ["a", "a", "b", "c"]])
+def test_iloc_categorical_index(index):
+    gdf = cudf.DataFrame({"data": range(len(index))}, index=index)
+    gdf.index = gdf.index.astype("category")
+    pdf = gdf.to_pandas()
+    expect = pdf.iloc[:, 0]
+    got = gdf.iloc[:, 0]
+    assert_eq(expect, got)

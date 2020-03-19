@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
+#include <cudf/io/data_sink.hpp>
+
 #include <memory>
 #include <utility>
 
@@ -45,7 +47,10 @@ namespace orc {
  * @brief Options for the ORC writer.
  */
 struct writer_options {
+  /// Selects the compression format to use in the ORC file
   compression_type compression = compression_type::AUTO;
+  /// Enables writing column statistics in the ORC file
+  bool enable_statistics = true;
 
   writer_options() = default;
   writer_options(writer_options const&) = default;
@@ -55,7 +60,8 @@ struct writer_options {
    *
    * @param format Compression format to use
    */
-  explicit writer_options(compression_type format) : compression(format) {}
+  explicit writer_options(compression_type format, bool stats_en) :
+             compression(format), enable_statistics(stats_en) {}
 };
 
 /**
@@ -70,23 +76,12 @@ class writer {
   /**
    * @brief Constructor for output to a file.
    *
-   * @param filepath Path to the output file
+   * @param sinkp The data sink to write the data to
    * @param options Settings for controlling writing behavior
    * @param mr Optional resource to use for device memory allocation
    */
   explicit writer(
-      std::string const& filepath, writer_options const& options,
-      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-  
-  /**
-   * @brief Constructor for output to host buffer.
-   *
-   * @param buffer Pointer to the output vector
-   * @param options Settings for controlling writing behavior
-   * @param mr Optional resource to use for device memory allocation
-   */
-  explicit writer(
-      std::vector<char>* buffer, writer_options const& options,
+      std::unique_ptr<cudf::io::data_sink> sinkp, writer_options const& options,
       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
     
   /**
@@ -102,6 +97,28 @@ class writer {
    * @param stream Optional stream to use for device memory alloc and kernels
    */
   void write_all(table_view const& table, const table_metadata *metadata = nullptr, cudaStream_t stream = 0);
+
+  /**
+   * @brief Begins the chunked/streamed write process.
+   *
+   * @param[in] state State information that crosses _begin() / write_chunked() / _end() boundaries.
+   */
+  void write_chunked_begin(struct orc_chunked_state& state);
+
+  /**
+   * @brief Writes a single subtable as part of a larger ORC file/table write.
+   *
+   * @param[in] table The table information to be written
+   * @param[in] state State information that crosses _begin() / write_chunked() / _end() boundaries.
+   */
+  void write_chunked(table_view const& table, struct orc_chunked_state& state);
+
+  /**
+   * @brief Finishes the chunked/streamed write process.
+   *
+   * @param[in] state State information that crosses _begin() / write_chunked() / _end() boundaries.
+   */
+  void write_chunked_end(struct orc_chunked_state& state);
 };
 
 }  // namespace orc
@@ -143,16 +160,14 @@ class writer {
   /**
    * @brief Constructor for output to a file.
    *
-   * @param filepath Path to the output file
+   * @param sink The data sink to write the data to
    * @param options Settings for controlling writing behavior
    * @param mr Optional resource to use for device memory allocation
    */
   explicit writer(
-      std::string const& filepath, writer_options const& options,
-      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-  explicit writer(
-      std::vector<char>* buffer, writer_options const &options,
-      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+        std::unique_ptr<cudf::io::data_sink> sink, writer_options const& options,
+        rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header
    */
@@ -166,6 +181,28 @@ class writer {
    * @param stream Optional stream to use for device memory alloc and kernels
    */
   void write_all(table_view const& table, const table_metadata *metadata = nullptr, cudaStream_t stream = 0);
+
+  /**
+   * @brief Begins the chunked/streamed write process.
+   *
+   * @param[in] pq_chunked_state State information that crosses _begin() / write_chunked() / _end() boundaries.   
+   */
+  void write_chunked_begin(struct pq_chunked_state& state);                           
+  
+  /**
+   * @brief Writes a single subtable as part of a larger parquet file/table write.
+   *
+   * @param[in] table The table information to be written
+   * @param[in] pq_chunked_state State information that crosses _begin() / write_chunked() / _end() boundaries.   
+   */
+  void write_chunked(table_view const& table, struct pq_chunked_state& state);
+
+  /**
+   * @brief Finishes the chunked/streamed write process.
+   *
+   * @param[in] pq_chunked_state State information that crosses _begin() / write_chunked() / _end() boundaries.   
+   */
+  void write_chunked_end(struct pq_chunked_state& state);    
 };
 
 }  // namespace parquet

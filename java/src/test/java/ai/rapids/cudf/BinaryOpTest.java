@@ -18,6 +18,7 @@
 
 package ai.rapids.cudf;
 
+import ai.rapids.cudf.HostColumnVector.Builder;
 import org.junit.jupiter.api.Test;
 
 import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
@@ -34,58 +35,63 @@ public class BinaryOpTest extends CudfTestBase {
   private static final Double[] DOUBLES_2 = new Double[]{10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 100.0};
   private static final Boolean[] BOOLEANS_1 = new Boolean[]{true, true, false, false, null};
   private static final Boolean[] BOOLEANS_2 = new Boolean[]{true, false, true, false, true};
+  private static final int[] SHIFT_BY = new int[]{1, 2, 3, 4, 5, 10, 20};
 
   interface CpuOpVV {
-    void computeNullSafe(ColumnVector.Builder ret, ColumnVector lhs, ColumnVector rhs, int index);
+    void computeNullSafe(Builder ret, HostColumnVector lhs, HostColumnVector rhs, int index);
   }
 
   interface CpuOpVS<S> {
-    void computeNullSafe(ColumnVector.Builder ret, ColumnVector lhs, S rhs, int index);
+    void computeNullSafe(Builder ret, HostColumnVector lhs, S rhs, int index);
   }
 
   interface CpuOpSV<S> {
-    void computeNullSafe(ColumnVector.Builder ret, S lhs, ColumnVector rhs, int index);
+    void computeNullSafe(Builder ret, S lhs, HostColumnVector rhs, int index);
   }
 
   public static ColumnVector forEach(DType retType, ColumnVector lhs, ColumnVector rhs, CpuOpVV op) {
     int len = (int)lhs.getRowCount();
-    try (ColumnVector.Builder builder = ColumnVector.builder(retType, len)) {
+    try (HostColumnVector hostLHS  = lhs.copyToHost();
+         HostColumnVector hostRHS = rhs.copyToHost();
+         Builder builder = HostColumnVector.builder(retType, len)) {
       for (int i = 0; i < len; i++) {
-        if (lhs.isNull(i) || rhs.isNull(i)) {
+        if (hostLHS.isNull(i) || hostRHS.isNull(i)) {
           builder.appendNull();
         } else {
-          op.computeNullSafe(builder, lhs, rhs, i);
+          op.computeNullSafe(builder, hostLHS, hostRHS, i);
         }
       }
-      return builder.build();
+      return builder.buildAndPutOnDevice();
     }
   }
 
   public static <S> ColumnVector forEachS(DType retType, ColumnVector lhs, S rhs, CpuOpVS<S> op) {
     int len = (int)lhs.getRowCount();
-    try (ColumnVector.Builder builder = ColumnVector.builder(retType, len)) {
+    try (HostColumnVector hostLHS = lhs.copyToHost();
+         Builder builder = HostColumnVector.builder(retType, len)) {
       for (int i = 0; i < len; i++) {
-        if (lhs.isNull(i) || rhs == null) {
+        if (hostLHS.isNull(i) || rhs == null) {
           builder.appendNull();
         } else {
-          op.computeNullSafe(builder, lhs, rhs, i);
+          op.computeNullSafe(builder, hostLHS, rhs, i);
         }
       }
-      return builder.build();
+      return builder.buildAndPutOnDevice();
     }
   }
 
   public static <S> ColumnVector forEachS(DType retType, S lhs, ColumnVector rhs, CpuOpSV<S> op) {
     int len = (int)rhs.getRowCount();
-    try (ColumnVector.Builder builder = ColumnVector.builder(retType, len)) {
+    try (HostColumnVector hostRHS = rhs.copyToHost();
+        Builder builder = HostColumnVector.builder(retType, len)) {
       for (int i = 0; i < len; i++) {
-        if (rhs.isNull(i) || lhs == null) {
+        if (hostRHS.isNull(i) || lhs == null) {
           builder.appendNull();
         } else {
-          op.computeNullSafe(builder, lhs, rhs, i);
+          op.computeNullSafe(builder, lhs, hostRHS, i);
         }
       }
-      return builder.build();
+      return builder.buildAndPutOnDevice();
     }
   }
 
@@ -984,6 +990,93 @@ public class BinaryOpTest extends CudfTestBase {
            ColumnVector expected = forEachS(DType.BOOL8, false, icv1,
                (b, l, r, i) -> b.append(l || r.getBoolean(i)))) {
         assertColumnsAreEqual(expected, answer, "false OR boolean");
+      }
+    }
+  }
+
+  @Test
+  public void testShiftLeft() {
+    try (ColumnVector icv = ColumnVector.fromBoxedInts(INTS_2);
+         ColumnVector shiftBy = ColumnVector.fromInts(SHIFT_BY)) {
+      try (ColumnVector answer = icv.shiftLeft(shiftBy);
+           ColumnVector expected = forEach(DType.INT32, icv, shiftBy,
+               (b, l, r, i) -> b.append(l.getInt(i) << r.getInt(i)))) {
+        assertColumnsAreEqual(expected, answer, "int32 shifted left");
+      }
+
+      try (Scalar s = Scalar.fromInt(4);
+           ColumnVector answer = icv.shiftLeft(s, DType.INT64);
+           ColumnVector expected = forEachS(DType.INT64, icv, 4,
+               (b, l, r, i) -> b.append(((long)l.getInt(i) << r)))) {
+        assertColumnsAreEqual(expected, answer, "int32 << scalar = int64");
+      }
+
+      try (Scalar s = Scalar.fromShort((short) 0x0000FFFF);
+           ColumnVector answer = s.shiftLeft(shiftBy, DType.INT16);
+           ColumnVector expected = forEachS(DType.INT16, (short) 0x0000FFFF,  shiftBy,
+               (b, l, r, i) -> {
+                 int shifted = l << r.getInt(i);
+                 b.append((short) shifted);
+               })) {
+        assertColumnsAreEqual(expected, answer, "scalar short << int32");
+      }
+    }
+  }
+
+  @Test
+  public void testShiftRight() {
+    try (ColumnVector icv = ColumnVector.fromBoxedInts(INTS_2);
+         ColumnVector shiftBy = ColumnVector.fromInts(SHIFT_BY)) {
+      try (ColumnVector answer = icv.shiftRight(shiftBy);
+           ColumnVector expected = forEach(DType.INT32, icv, shiftBy,
+               (b, l, r, i) -> b.append(l.getInt(i) >> r.getInt(i)))) {
+        assertColumnsAreEqual(expected, answer, "int32 shifted right");
+      }
+
+      try (Scalar s = Scalar.fromInt(4);
+           ColumnVector answer = icv.shiftRight(s, DType.INT64);
+           ColumnVector expected = forEachS(DType.INT64, icv, 4,
+               (b, l, r, i) -> b.append(((long)(l.getInt(i) >> r))))) {
+        assertColumnsAreEqual(expected, answer, "int32 >> scalar = int64");
+      }
+
+      try (Scalar s = Scalar.fromShort((short) 0x0000FFFF);
+           ColumnVector answer = s.shiftRight(shiftBy, DType.INT16);
+           ColumnVector expected = forEachS(DType.INT16, (short) 0x0000FFFF,  shiftBy,
+               (b, l, r, i) -> {
+                 int shifted = l >> r.getInt(i);
+                 b.append((short) shifted);
+               })) {
+        assertColumnsAreEqual(expected, answer, "scalar short >> int32 = int16");
+      }
+    }
+  }
+
+  @Test
+  public void testShiftRightUnsigned() {
+    try (ColumnVector icv = ColumnVector.fromBoxedInts(INTS_2);
+         ColumnVector shiftBy = ColumnVector.fromInts(SHIFT_BY)) {
+      try (ColumnVector answer = icv.shiftRightUnsigned(shiftBy);
+           ColumnVector expected = forEach(DType.INT32, icv, shiftBy,
+               (b, l, r, i) -> b.append(l.getInt(i) >>> r.getInt(i)))) {
+        assertColumnsAreEqual(expected, answer, "int32 shifted right unsigned");
+      }
+
+      try (Scalar s = Scalar.fromInt(4);
+           ColumnVector answer = icv.shiftRightUnsigned(s, DType.INT64);
+           ColumnVector expected = forEachS(DType.INT64, icv, 4,
+               (b, l, r, i) -> b.append(((long)(l.getInt(i) >>> r))))) {
+        assertColumnsAreEqual(expected, answer, "int32 >>> scalar = int64");
+      }
+
+      try (Scalar s = Scalar.fromShort((short) 0x0000FFFF);
+           ColumnVector answer = s.shiftRightUnsigned(shiftBy, DType.INT16);
+           ColumnVector expected = forEachS(DType.INT16, (short) 0x0000FFFF,  shiftBy,
+               (b, l, r, i) -> {
+                 int shifted = l >>> r.getInt(i);
+                 b.append((short) shifted);
+               })) {
+        assertColumnsAreEqual(expected, answer, "scalar short >>> int32 = int16");
       }
     }
   }

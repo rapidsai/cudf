@@ -1,9 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
-
-# cython: profile=False
-# distutils: language = c++
-# cython: embedsignature = True
-# cython: language_level = 3
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from libc.stdint cimport (  # noqa: E211
@@ -22,8 +17,6 @@ from cudf._libxx.column cimport Column
 # Utility functions to build gdf_columns, gdf_context and error handling
 
 cpdef get_ctype_ptr(obj)
-cpdef get_column_data_ptr(obj)
-cpdef get_column_valid_ptr(obj)
 
 cpdef gdf_time_unit np_dtype_to_gdf_time_unit(dtype)
 cpdef gdf_time_unit_to_np_dtype(gdf_time_unit time_unit)
@@ -323,19 +316,6 @@ cdef extern from "cudf/cudf.h" nogil:
         bool right,
         size_type* out_indices
     ) except +
-
-    cdef gdf_error gdf_nvtx_range_push(
-        const char* const name,
-        gdf_color color
-    ) except +
-
-    cdef gdf_error gdf_nvtx_range_push_hex(
-        const char* const name,
-        unsigned int color
-    ) except +
-
-    cdef gdf_error gdf_nvtx_range_pop() except +
-
 
 cdef extern from "cudf/legacy/bitmask.hpp" nogil:
 

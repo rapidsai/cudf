@@ -22,10 +22,9 @@
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/column_utilities.hpp>
-#include "./utilities.h"
+#include <tests/strings/utilities.h>
 
 #include <vector>
-#include <gmock/gmock.h>
 
 
 struct StringsFillTest : public cudf::test::BaseFixture {};
@@ -55,6 +54,16 @@ TEST_F(StringsFillTest, Fill)
     {
         auto results = cudf::strings::detail::fill(view,5,5,cudf::string_scalar("zz"));
         cudf::test::expect_columns_equal(*results,view.parent());
+    }
+    {
+        auto results = cudf::strings::detail::fill(view,0,7,cudf::string_scalar(""));
+        cudf::test::strings_column_wrapper expected( {"","","","","","",""},{1,1,1,1,1,1,1} );
+        cudf::test::expect_columns_equal(*results,expected);
+    }
+    {
+        auto results = cudf::strings::detail::fill(view,0,7,cudf::string_scalar("",false));
+        cudf::test::strings_column_wrapper expected( {"","","","","","",""},{0,0,0,0,0,0,0} );
+        cudf::test::expect_columns_equal(*results,expected);
     }
 }
 

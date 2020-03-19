@@ -50,7 +50,7 @@ std::unique_ptr<cudf::column> slice( strings_column_view const& strings,
     //
     auto execpol = rmm::exec_policy(stream);
     // build indices
-    thrust::device_vector<size_type> indices(strings_count);
+    rmm::device_vector<size_type> indices(strings_count);
     thrust::sequence( execpol->on(stream), indices.begin(), indices.end(), start, step );
     // create a column_view as a wrapper of these indices
     column_view indices_view( data_type{INT32}, strings_count, indices.data().get(), nullptr, 0 );
