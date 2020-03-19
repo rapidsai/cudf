@@ -179,10 +179,14 @@ class DataFrame(Frame):
             self._index = as_index(index)
             return None
 
+        if isinstance(data, DataFrame):
+            self._data = data._data
+            self._index = data._index
+            self.columns = data.columns
+            return
+
         if isinstance(data, pd.DataFrame):
             data = self.from_pandas(data)
-
-        if isinstance(data, DataFrame):
             self._data = data._data
             self._index = data._index
             self.columns = data.columns
