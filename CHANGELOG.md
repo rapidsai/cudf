@@ -275,6 +275,7 @@
 - PR #4557 Disable compile-errors on deprecation warnings, for JNI
 - PR #4576 Fix typo in `serialize.py`
 - PR #4571 Load JNI native dependencies for Scalar class
+- PR #4598 Fix to handle `pd.DataFrame` in `DataFrame.__init__`
 
 
 # cuDF 0.12.0 (04 Feb 2020)
