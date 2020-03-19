@@ -31,6 +31,7 @@
 #include <cudf/strings/combine.hpp>
 #include <cudf/strings/contains.hpp>
 #include <cudf/strings/find.hpp>
+#include <cudf/strings/replace.hpp>
 #include <cudf/strings/substring.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/unary.hpp>
@@ -760,6 +761,23 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_substringLocate(JNIEnv 
     cudf::string_scalar* ss_scalar = reinterpret_cast<cudf::string_scalar*>(substring);
     
     std::unique_ptr<cudf::column> result = cudf::strings::find(scv, *ss_scalar, start, end);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringReplace(JNIEnv *env, jclass, jlong column_view,
+                                                                    jlong target, jlong replace) {
+  JNI_NULL_CHECK(env, column_view, "column is null", 0);
+  JNI_NULL_CHECK(env, target, "target string scalar is null", 0);
+  JNI_NULL_CHECK(env, replace, "replace string scalar is null", 0);
+  try {
+    cudf::column_view* cv = reinterpret_cast<cudf::column_view*>(column_view);
+    cudf::strings_column_view scv(*cv);
+    cudf::string_scalar* ss_target = reinterpret_cast<cudf::string_scalar*>(target);
+    cudf::string_scalar* ss_replace = reinterpret_cast<cudf::string_scalar*>(replace);
+
+    std::unique_ptr<cudf::column> result = cudf::strings::replace(scv, *ss_target, *ss_replace);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);

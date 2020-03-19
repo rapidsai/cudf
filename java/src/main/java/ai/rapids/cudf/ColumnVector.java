@@ -1753,6 +1753,32 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Returns a new strings column where target string within each string is replaced with the specified
+   * replacement string.
+   * The replacement proceeds from the beginning of the string to the end, for example,
+   * replacing "aa" with "b" in the string "aaa" will result in "ba" rather than "ab".
+   * Specifing an empty string for replace will essentially remove the target string if found in each string.
+   * Null string entries will return null output string entries.
+   * target Scalar should be string and should not be empty or null.
+   *
+   * @param target String to search for within each string.
+   * @param replace Replacement string if target is found.
+   * @return A new java column vector containing replaced strings
+   */
+  public ColumnVector stringReplace(Scalar target, Scalar replace) {
+
+    assert type == DType.STRING : "column type must be a String";
+    assert target != null : "target string may not be null";
+    assert target.getType() == DType.STRING : "target string must be a string scalar";
+    assert target.getJavaString().isEmpty() == false : "target scalar may not be empty";
+
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT32), "stringReplace")) {
+      return new ColumnVector(stringReplace(getNativeView(), target.getScalarHandle(),
+              replace.getScalarHandle()));
+    }
+  }
+
+  /**
    * Checks if each string in a column starts with a specified comparison string, resulting in a
    * parallel column of the boolean results.
    * @param pattern scalar containing the string being searched for at the beginning of the column's strings.
@@ -2003,6 +2029,15 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   private static native long substringColumn(long columnView, long startColumn, long endColumn)
           throws CudfException;
+
+  /**
+   * Native method to replace target string by repl string.
+   * @param columnView native handle of the cudf::column_view being operated on.
+   * @param target handle of scalar containing the string being searched.
+   * @param repl handle of scalar containing the string to replace.
+   */
+  private static native long stringReplace(long columnView, long target, long repl) throws CudfException;
+
   /**
    * Native method for checking if strings in a column starts with a specified comparison string.
    * @param cudfViewHandle native handle of the cudf::column_view being operated on.
