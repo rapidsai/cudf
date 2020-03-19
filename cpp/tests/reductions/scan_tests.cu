@@ -347,50 +347,56 @@ TEST_F(ScanStringTest, Max)
 
 TYPED_TEST(ScanTest, skip_nulls)
 {
-  bool do_print=false;
-  std::vector<TypeParam> v{1,2,3,4,5,6,7,8,1,1};
-  std::vector<bool>      b{1,1,1,1,1,0,1,0,1,1};
-  cudf::test::fixed_width_column_wrapper<TypeParam> const col_in{v.begin(), v.end(),
-                                                            b.begin()};
-  const column_view input_view = col_in;
-  std::unique_ptr<cudf::column> col_out;
-  
-  //test output calculation
-  std::vector<TypeParam> out_v(input_view.size());
-  std::vector<bool>      out_b(input_view.size());
+    bool do_print=false;
+    std::vector<TypeParam> v{1,2,3,4,5,6,7,8,1,1};
+    std::vector<bool>      b{1,1,1,1,1,0,1,0,1,1};
+    cudf::test::fixed_width_column_wrapper<TypeParam> const col_in{v.begin(), v.end(), b.begin()};
+    const column_view input_view = col_in;
+    std::unique_ptr<cudf::column> col_out;
 
-  std::transform(v.cbegin(), v.cend(), b.cbegin(),
-      out_v.begin(),
-      [acc=0](auto i, bool b) mutable { if(b) (acc += i); return acc; }
-      );
-  std::transform(b.cbegin(), b.cend(),
-      out_b.begin(),
-      [acc=true](auto i) mutable { acc = acc && i; return acc; }
-      );
+    //test output calculation
+    std::vector<TypeParam> out_v(input_view.size());
+    std::vector<bool>      out_b(input_view.size());
 
-  //skipna=true (default)
-  CUDF_EXPECT_NO_THROW(col_out = cudf::experimental::scan(input_view, 
-                      cudf::experimental::make_sum_aggregation(), scan_type::INCLUSIVE, include_nulls::NO));
-  cudf::test::fixed_width_column_wrapper<TypeParam> expected_col_out1{
-      out_v.begin(), out_v.end(), b.cbegin()};
-  cudf::test::expect_column_properties_equal(expected_col_out1, col_out->view());
-  cudf::test::expect_columns_equal(expected_col_out1, col_out->view());
-  if(do_print) {
-    print_view(expected_col_out1, "expect = ");
-    print_view(col_out->view(),   "result = ");
-  }
+    // TODO: `std::transform_inclusive_scan` with `std::string` and `thrust::tuple` won't
+    //       work due to Thrust bug: https://github.com/thrust/thrust/issues/1074
+    //       Update once fix is merged and available
+    std::transform(
+        v.cbegin(),
+        v.cend(),
+        b.cbegin(),
+        out_v.begin(),
+        [acc=0](auto i, bool b) mutable { if(b) (acc += i); return acc; });
 
-  //skipna=false
-  CUDF_EXPECT_NO_THROW(col_out = cudf::experimental::scan(input_view, 
-                      cudf::experimental::make_sum_aggregation(), scan_type::INCLUSIVE, include_nulls::YES));
-  cudf::test::fixed_width_column_wrapper<TypeParam> expected_col_out2{
-      out_v.begin(), out_v.end(), out_b.begin()};
-  if(do_print) {
-    print_view(expected_col_out2, "expect = ");
-    print_view(col_out->view(),   "result = ");
-  }
-  cudf::test::expect_column_properties_equal(expected_col_out2, col_out->view());
-  cudf::test::expect_columns_equal(expected_col_out2, col_out->view());
+    thrust::inclusive_scan(
+        b.cbegin(),
+        b.cend(),
+        out_b.begin(),
+        thrust::logical_and<bool>{});
+
+    //skipna=true (default)
+    CUDF_EXPECT_NO_THROW(col_out = cudf::experimental::scan(input_view,
+                        cudf::experimental::make_sum_aggregation(), scan_type::INCLUSIVE, include_nulls::NO));
+    cudf::test::fixed_width_column_wrapper<TypeParam> expected_col_out1{
+        out_v.begin(), out_v.end(), b.cbegin()};
+    cudf::test::expect_column_properties_equal(expected_col_out1, col_out->view());
+    cudf::test::expect_columns_equal(expected_col_out1, col_out->view());
+    if(do_print) {
+        print_view(expected_col_out1, "expect = ");
+        print_view(col_out->view(),   "result = ");
+    }
+
+    //skipna=false
+    CUDF_EXPECT_NO_THROW(col_out = cudf::experimental::scan(input_view,
+                        cudf::experimental::make_sum_aggregation(), scan_type::INCLUSIVE, include_nulls::YES));
+    cudf::test::fixed_width_column_wrapper<TypeParam> expected_col_out2{
+        out_v.begin(), out_v.end(), out_b.begin()};
+    if(do_print) {
+        print_view(expected_col_out2, "expect = ");
+        print_view(col_out->view(),   "result = ");
+    }
+    cudf::test::expect_column_properties_equal(expected_col_out2, col_out->view());
+    cudf::test::expect_columns_equal(expected_col_out2, col_out->view());
 }
 
 TEST_F(ScanStringTest, skip_nulls)
