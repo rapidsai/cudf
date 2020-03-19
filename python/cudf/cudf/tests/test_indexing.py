@@ -214,6 +214,10 @@ def test_dataframe_loc(scalar, step):
 
     df = DataFrame.from_pandas(pdf)
 
+    assert_eq(df.loc[:, ["a"]], pdf.loc[:, ["a"]])
+
+    assert_eq(df.loc[:, "d"], pdf.loc[:, "d"])
+
     # Scalar label
     assert_eq(df.loc[scalar], pdf.loc[scalar])
 
