@@ -144,47 +144,43 @@ void tie_break_ranks(rmm::device_vector<size_type> const &dense_rank,
 
 template<typename outputType>
 void rank_first(column_view sorted_order_view, mutable_column_view rank_mutable_view, cudaStream_t stream) {
-  auto rank_data = rank_mutable_view.data<outputType>();
   // stable sort order ranking (no ties)
   thrust::scatter(
       rmm::exec_policy(stream)->on(stream),
       thrust::make_counting_iterator<size_type>(1),
       thrust::make_counting_iterator<size_type>(rank_mutable_view.size() + 1),
       sorted_order_view.begin<size_type>(),
-      rank_data);
+      rank_mutable_view.begin<size_type>());
 }
 
 template<typename outputType>
 void rank_dense(rmm::device_vector<size_type> const &dense_rank_sorted,
                 column_view sorted_order_view, mutable_column_view rank_mutable_view, cudaStream_t stream) {
-  auto rank_data = rank_mutable_view.data<outputType>();
   // All equal values have same rank and rank always increases by 1 between groups
   thrust::scatter(
       rmm::exec_policy(stream)->on(stream),
       dense_rank_sorted.begin(),
       dense_rank_sorted.end(),
       sorted_order_view.begin<size_type>(),
-      rank_data);
+      rank_mutable_view.begin<size_type>());
 }
 
 template<typename outputType>
 void rank_min(rmm::device_vector<size_type> const &group_keys,
               column_view sorted_order_view, mutable_column_view rank_mutable_view, cudaStream_t stream) {
-  auto rank_data = rank_mutable_view.data<outputType>();
   // min of first in the group
   // All equal values have min of ranks among them.
   // algorithm: reduce_by_key(dense_rank, 1, n, min), scatter
-  tie_break_ranks(group_keys, sorted_order_view, rank_data, thrust::minimum<size_type>{}, stream);
+  tie_break_ranks(group_keys, sorted_order_view, rank_mutable_view.begin<size_type>(), thrust::minimum<size_type>{}, stream);
 }
 
 template<typename outputType>
 void rank_max(rmm::device_vector<size_type> const &group_keys,
               column_view sorted_order_view, mutable_column_view rank_mutable_view, cudaStream_t stream) {
-  auto rank_data = rank_mutable_view.data<outputType>();
   // max of first in the group
   // All equal values have max of ranks among them.
   // algorithm: reduce_by_key(dense_rank, 1, n, max), scatter
-  tie_break_ranks(group_keys, sorted_order_view, rank_data, thrust::maximum<size_type>{}, stream);
+  tie_break_ranks(group_keys, sorted_order_view, rank_mutable_view.begin<size_type>(), thrust::maximum<size_type>{}, stream);
 }
 
 void rank_average(rmm::device_vector<size_type> const &group_keys,
