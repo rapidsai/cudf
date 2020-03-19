@@ -277,6 +277,7 @@
 - PR #4557 Disable compile-errors on deprecation warnings, for JNI
 - PR #4576 Fix typo in `serialize.py`
 - PR #4571 Load JNI native dependencies for Scalar class
+- PR #4594 Fix exec dangling pointer issue in legacy groupby
 
 
 # cuDF 0.12.0 (04 Feb 2020)
