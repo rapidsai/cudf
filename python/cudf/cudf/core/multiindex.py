@@ -528,7 +528,7 @@ class MultiIndex(Index):
         df = self._source_data
         if index:
             df = df.set_index(self)
-        if name:
+        if name is not None:
             if len(name) != len(self.levels):
                 raise ValueError(
                     "'name' should have th same length as "

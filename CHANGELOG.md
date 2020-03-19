@@ -38,6 +38,7 @@
 - PR #4321 Expose Python Semi and Anti Joins
 - PR #4291 Add Java callback support for RMM events
 - PR #4298 Port orc.pyx to libcudf++
+- PR #4344 Port concat.pyx to libcudf++
 - PR #4329 Add support for dictionary columns in scatter
 - PR #4352 Add factory function make_column_from_scalar
 - PR #4381 Add Java support for copying buffers with asynchronous streams
