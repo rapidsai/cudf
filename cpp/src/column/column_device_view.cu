@@ -163,7 +163,7 @@ std::unique_ptr<mutable_column_device_view, std::function<void(mutable_column_de
 
 std::size_t mutable_column_device_view::extent(mutable_column_view source) {
   auto get_extent = thrust::make_transform_iterator(
-      thrust::make_constant_iterator(0),
+      thrust::make_counting_iterator(0),
       [&source](auto i) { return extent(source.child(i)); });
 
   return std::accumulate(get_extent, get_extent + source.num_children(),
