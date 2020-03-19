@@ -639,10 +639,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& grouping_keys,
 {
   if (input.size() == 0) return empty_like(input);
 
-  if (grouping_keys.num_columns() == 0) {
-    // No grouping_keys specified. Treat as non-grouped case.
-    return rolling_window(input, preceding_window, following_window, min_periods, aggr, mr);
-  }
+  CUDF_EXPECTS(grouping_keys.num_columns() > 0, "Cannot calculate grouped_rolling_window without grouping-key columns.");
 
   CUDF_EXPECTS((grouping_keys.num_rows() == input.size()), 
                "Size mismatch between grouping_keys and input vector.");
@@ -668,11 +665,9 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& grouping_keys,
   //   2. [0, 1000] indicates a single group, spanning the entire column (thus, equivalent to no groups.)
   //   3. [0, 500, 1000] indicates two equal-sized groups: [0,500), and [500,1000).
 
-#ifndef NDEBUG
-  CUDF_EXPECTS(group_offsets.size() >= 2 && group_offsets[0] == 0 
-               && group_offsets[group_offsets.size()-1] == input.size(),
-               "Must have at least one group.");
-#endif // NDEBUG
+  assert(group_offsets.size() >= 2 && group_offsets[0] == 0 
+               && group_offsets[group_offsets.size()-1] == input.size() 
+               && "Must have at least one group.");
 
   auto preceding_calculator = 
     [
@@ -811,11 +806,9 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
   auto const& group_labels{helper.group_labels()};
 
   // Assumes that `group_offsets` starts with `0`, ends with `input.size`
-#ifndef NDEBUG
-  CUDF_EXPECTS(group_offsets.size() >= 2 && group_offsets[0] == 0 
-               && group_offsets[group_offsets.size()-1] == input.size(),
-               "Must have at least one group.");
-#endif // NDEBUG
+  assert(group_offsets.size() >= 2 && group_offsets[0] == 0 
+               && group_offsets[group_offsets.size()-1] == input.size()
+               && "Must have at least one group.");
 
   // Assumes that `timestamp_column` is sorted in ascending, per group.
   CUDF_EXPECTS(is_supported_range_frame_unit(timestamp_column.type()),
