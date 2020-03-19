@@ -348,8 +348,10 @@ TEST_F(ScanStringTest, Max)
 TYPED_TEST(ScanTest, skip_nulls)
 {
     bool do_print=false;
-    std::vector<TypeParam> v{1,2,3,4,5,6,7,8,1,1};
-    std::vector<bool>      b{1,1,1,1,1,0,1,0,1,1};
+    std::vector<TypeParam> v_std{1,2,3,4,5,6,7,8,1,1};
+    std::vector<bool>      b_std{1,1,1,1,1,0,1,0,1,1};
+    thrust::host_vector<TypeParam> v(v_std);
+    thrust::host_vector<bool>      b(b_std);
     cudf::test::fixed_width_column_wrapper<TypeParam> const col_in{v.begin(), v.end(), b.begin()};
     const column_view input_view = col_in;
     std::unique_ptr<cudf::column> col_out;
@@ -358,15 +360,15 @@ TYPED_TEST(ScanTest, skip_nulls)
     std::vector<TypeParam> out_v(input_view.size());
     std::vector<bool>      out_b(input_view.size());
 
-    // TODO: `std::transform_inclusive_scan` with `std::string` and `thrust::tuple` won't
-    //       work due to Thrust bug: https://github.com/thrust/thrust/issues/1074
-    //       Update once fix is merged and available
-    std::transform(
-        v.cbegin(),
-        v.cend(),
-        b.cbegin(),
+    auto const first = thrust::make_zip_iterator(thrust::make_tuple(v.begin(), b.begin()));
+    auto const last  = thrust::make_zip_iterator(thrust::make_tuple(v.end(),   b.end()));
+
+    thrust::transform_inclusive_scan(
+        first,
+        last,
         out_v.begin(),
-        [acc=0](auto i, bool b) mutable { if(b) (acc += i); return acc; });
+        value_or<TypeParam>{0},
+        thrust::plus<TypeParam>{});
 
     thrust::inclusive_scan(
         b.cbegin(),
