@@ -441,7 +441,7 @@ protected:
     auto reference = create_reference_output(op, timestamp_column, input, expected_grouping, 
       preceding_window_in_days, following_window_in_days, min_periods);
 
-#ifndef DEBUG
+#ifndef NDEBUG
     std::cout << "input:\n";
     cudf::test::print(input, std::cout, ", ");
     std::cout << "\n";
