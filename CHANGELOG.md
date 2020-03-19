@@ -11,6 +11,7 @@
 - PR #4498 Adds in support for chunked writers to java
 - PR #4073 Enable contiguous split java test
 - PR #4527 Add JNI and java bindings for matches_re
+- PR #4606 Fix `scan` unit test and upgrade to more appropriate algorithms
 
 ## Bug Fixes
 
