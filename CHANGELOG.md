@@ -16,6 +16,7 @@
 
 - PR #4386 Update Java package to 0.14
 - PR #4402 Fix cudf::strings::join_strings logic with all-null strings and null narep
+- PR #4570 Fixing loc ordering issue in dataframe
 
 
 # cuDF 0.13.0 (Date TBD)
@@ -64,6 +65,7 @@
 - PR #4288 Add libcudf++ shift Cython implementation
 - PR #4338 Add cudf::sequence() for generating an incrementing list of numeric values
 - PR #4456 Add argmin/max and string min/max to sort groupby
+- PR #4564 Added Java bindings for clamp operator.
 
 ## Improvements
 
