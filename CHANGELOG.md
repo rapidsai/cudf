@@ -45,6 +45,7 @@
 - PR #4288 Add libcudf++ shift Cython implementation
 - PR #4338 Add cudf::sequence() for generating an incrementing list of numeric values
 - PR #4456 Add argmin/max and string min/max to sort groupby
+- PR #4602 Add Cython bindings for functions in `datetime.hpp`
 
 ## Improvements
 
@@ -280,7 +281,9 @@
 - PR #4571 Load JNI native dependencies for Scalar class
 - PR #4598 Fix to handle `pd.DataFrame` in `DataFrame.__init__`
 - PR #4594 Fix exec dangling pointer issue in legacy groupby
+- PR #4591 Fix issue when reading consecutive rowgroups
 - PR #4600 Fix missing include in benchmark_fixture.hpp
+- PR #4588 Fix ordering issue in `MultiIndex`
 
 
 # cuDF 0.12.0 (04 Feb 2020)
