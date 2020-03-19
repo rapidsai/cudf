@@ -44,6 +44,7 @@
 - PR #4288 Add libcudf++ shift Cython implementation
 - PR #4338 Add cudf::sequence() for generating an incrementing list of numeric values
 - PR #4456 Add argmin/max and string min/max to sort groupby
+- PR #4602 Add Cython bindings for functions in `datetime.hpp`
 
 ## Improvements
 
