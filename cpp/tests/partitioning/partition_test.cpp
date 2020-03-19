@@ -33,7 +33,7 @@ class PartitionTest : public cudf::test::BaseFixture {
 using types = cudf::test::CrossProduct<cudf::test::FixedWidthTypes,
                                        cudf::test::IntegralTypes>;
 
-//using types = cudf::test::Types<cudf::test::Types<int32_t, int32_t> >;
+// using types = cudf::test::Types<cudf::test::Types<int32_t, int32_t> >;
 
 TYPED_TEST_CASE(PartitionTest, types);
 
@@ -160,5 +160,49 @@ TYPED_TEST(PartitionTest, Reverse) {
       cudf::table_view{{expected_first, expected_strings}};
 
   run_partition_test(table_to_partition, map, 6, expected_partitioned_table,
+                     expected_offsets);
+}
+
+TYPED_TEST(PartitionTest, SinglePartition) {
+  using value_type = cudf::test::GetType<TypeParam, 0>;
+  using map_type = cudf::test::GetType<TypeParam, 1>;
+
+  fixed_width_column_wrapper<value_type> first{0, 1, 3, 7, 5, 13};
+  strings_column_wrapper strings{"this", "is", "a", "column", "of", "strings"};
+  auto table_to_partition = cudf::table_view{{first, strings}};
+
+  fixed_width_column_wrapper<map_type> map{0, 0, 0, 0, 0, 0};
+
+  std::vector<cudf::size_type> expected_offsets{0, 6};
+
+  fixed_width_column_wrapper<value_type> expected_first{13, 5, 7, 3, 1, 0};
+  strings_column_wrapper expected_strings{"strings", "of", "column",
+                                          "a",       "is", "this"};
+  auto expected_partitioned_table =
+      cudf::table_view{{expected_first, expected_strings}};
+
+  run_partition_test(table_to_partition, map, 1, expected_partitioned_table,
+                     expected_offsets);
+}
+
+TYPED_TEST(PartitionTest, EmptyPartitions) {
+  using value_type = cudf::test::GetType<TypeParam, 0>;
+  using map_type = cudf::test::GetType<TypeParam, 1>;
+
+  fixed_width_column_wrapper<value_type> first{0, 1, 3, 7, 5, 13};
+  strings_column_wrapper strings{"this", "is", "a", "column", "of", "strings"};
+  auto table_to_partition = cudf::table_view{{first, strings}};
+
+  fixed_width_column_wrapper<map_type> map{2, 2, 0, 0, 4, 4};
+
+  std::vector<cudf::size_type> expected_offsets{0, 2, 2, 4, 4, 6};
+
+  fixed_width_column_wrapper<value_type> expected_first{3, 7, 0, 1, 5, 13};
+  strings_column_wrapper expected_strings{"a",  "column", "this",
+                                          "is", "of",     "strings"};
+  auto expected_partitioned_table =
+      cudf::table_view{{expected_first, expected_strings}};
+
+  run_partition_test(table_to_partition, map, 5, expected_partitioned_table,
                      expected_offsets);
 }
