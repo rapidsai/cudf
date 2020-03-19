@@ -9,7 +9,7 @@ serializable_classes = (
     cudf.DataFrame,
     cudf.Series,
     cudf.core.series.Series,
-    cudf.core.groupby.groupby._Groupby,
+    cudf.core.groupby.groupby.GroupBy,
     cudf.core.column.column.Column,
     cudf.core.buffer.Buffer,
 )
@@ -44,7 +44,7 @@ try:
                     # some frames are empty -- meta/empty partitions/etc
                     if len(f) > 0:
                         assert hasattr(f, "__cuda_array_interface__")
-            if header["serializer"] == "dask":
+            elif header["serializer"] == "dask":
                 frames = [memoryview(f) for f in frames]
 
             cudf_typ = pickle.loads(header["type-serialized"])
