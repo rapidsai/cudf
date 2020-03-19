@@ -32,6 +32,7 @@
 #include <cudf/reduction.hpp>
 
 #include <thrust/device_vector.h>
+#include <thrust/transform_scan.h>
 
 #include <cudf/detail/aggregation/aggregation.hpp>
 using aggregation = cudf::experimental::aggregation;
@@ -95,32 +96,53 @@ struct ScanTest : public cudf::test::BaseFixture
 };
 
 using Types = cudf::test::NumericTypes;
-//using Types = testing::Types<int32_t>;
 
 TYPED_TEST_CASE(ScanTest, Types);
 
 // ------------------------------------------------------------------------
+
+template <typename T>
+struct value_or {
+    T _or;
+    explicit value_or(T value) : _or{value} {}
+   __host__ __device__ T operator()(thrust::tuple<T, bool> const& tuple) {
+       return thrust::get<1>(tuple) ? thrust::get<0>(tuple) : _or;
+   }
+};
+
 TYPED_TEST(ScanTest, Min)
 {
-    std::vector<TypeParam>  v({123, 64, 63, 99, -5, 123, -16, -120, -111});
-    std::vector<bool> b({  1,  0,  1,  1,  1,   1,   0,    1,    1});
-    std::vector<TypeParam> exact(v.size());
+    std::vector<TypeParam> v_std = {123, 64, 63, 99, -5, 123, -16, -120, -111};
+    std::vector<bool>      b_std = {  1,  0,  1,  1,  1,   1,   0,    1,    1};
+    std::vector<TypeParam> exact(v_std.size());
 
-    std::transform(v.cbegin(), v.cend(),
+    thrust::host_vector<TypeParam> v(v_std);
+    thrust::host_vector<bool>      b(b_std);
+
+    // TODO: potentially the original author was trying to avoid `thrust::inclusive_scan` for testing
+    // if this is the case, I can just replace this with `std::partial_sum` and lambda wrapped `std::min`
+    thrust::inclusive_scan(
+        v.cbegin(),
+        v.cend(),
         exact.begin(),
-        [acc=v[0]](auto i) mutable { acc = std::min(acc, i); return acc; }
-        );
+        thrust::minimum<TypeParam>{});
 
-    this->scan_test({v.begin(), v.end()}, 
+    this->scan_test({v.begin(), v.end()},
                     {exact.begin(), exact.end()},
                     cudf::experimental::make_min_aggregation(), scan_type::INCLUSIVE);
 
-    std::transform(v.cbegin(), v.cend(), b.begin(),
-        exact.begin(),
-        [acc=v[0]](auto i, bool b) mutable { if(b) acc = std::min(acc, i); return acc; }
-        );
+    auto const first = thrust::make_zip_iterator(thrust::make_tuple(v.begin(), b.begin()));
+    auto const last  = thrust::make_zip_iterator(thrust::make_tuple(v.end(),   b.end()));
 
-    this->scan_test({v.begin(), v.end(), b.begin()}, 
+    // TODO: same as comment above
+    thrust::transform_inclusive_scan(
+        first,
+        last,
+        exact.begin(),
+        value_or<TypeParam>{std::numeric_limits<TypeParam>::max()},
+        thrust::minimum<TypeParam>{});
+
+    this->scan_test({v.begin(), v.end(), b.begin()},
                     {exact.begin(), exact.end(), b.begin()},
                     cudf::experimental::make_min_aggregation(), scan_type::INCLUSIVE);
 }
