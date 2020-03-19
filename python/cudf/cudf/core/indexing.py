@@ -201,7 +201,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
         self._df = df
 
     def _getitem_scalar(self, arg):
-        return self._df[arg[1]].loc[arg[0]].to_frame()
+        return self._df[arg[1]].loc[arg[0]]
 
     def _getitem_tuple_arg(self, arg):
         from cudf.core.dataframe import Series, DataFrame
