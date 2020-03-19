@@ -679,9 +679,6 @@ class MultiIndex(Index):
 
         if hasattr(multiindex, "codes"):
             mi = cls(
-                levels=multiindex.levels,
-                codes=multiindex.codes,
-                names=multiindex.names,
                 source_data=multiindex.to_frame(),
             )
         else:
