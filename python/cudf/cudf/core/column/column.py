@@ -30,6 +30,7 @@ from cudf.core.dtypes import CategoricalDtype
 from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.dtypes import (
     is_categorical_dtype,
+    is_numerical_dtype,
     is_scalar,
     is_string_dtype,
     np_to_pa_dtype,
@@ -169,12 +170,6 @@ class ColumnBase(Column):
 
     @classmethod
     def _concat(cls, objs, dtype=None):
-        from cudf.core.series import Series
-        from cudf.core.column import (
-            StringColumn,
-            CategoricalColumn,
-            NumericalColumn,
-        )
 
         if len(objs) == 0:
             dtype = pd.api.types.pandas_dtype(dtype)
@@ -185,13 +180,13 @@ class ColumnBase(Column):
         # If all columns are `NumericalColumn` with different dtypes,
         # we cast them to a common dtype.
         # Notice, we can always cast pure null columns
-        not_null_cols = list(filter(lambda o: len(o) != o.null_count, objs))
+        not_null_cols = list(filter(lambda o: o.valid_count > 0, objs))
         if len(not_null_cols) > 0 and (
             len(
                 [
                     o
                     for o in not_null_cols
-                    if not isinstance(o, NumericalColumn)
+                    if not is_numerical_dtype(o.dtype)
                     or np.issubdtype(o.dtype, np.datetime64)
                 ]
             )
@@ -207,36 +202,40 @@ class ColumnBase(Column):
         # Find the first non-null column:
         head = objs[0]
         for i, obj in enumerate(objs):
-            if len(obj) != obj.null_count:
+            if obj.valid_count > 0:
                 head = obj
                 break
 
         for i, obj in enumerate(objs):
             # Check that all columns are the same type:
-            if not pd.api.types.is_dtype_equal(objs[i].dtype, head.dtype):
+            if not pd.api.types.is_dtype_equal(obj.dtype, head.dtype):
                 # if all null, cast to appropriate dtype
-                if len(obj) == obj.null_count:
-                    from cudf.core.column import column_empty_like
-
+                if obj.valid_count == 0:
                     objs[i] = column_empty_like(
                         head, dtype=head.dtype, masked=True, newsize=len(obj)
                     )
+                else:
+                    raise ValueError("All columns must be the same type")
 
-        # Handle categories for categoricals
-        if all(isinstance(o, CategoricalColumn) for o in objs):
+        cats = None
+        is_categorical = all(is_categorical_dtype(o.dtype) for o in objs)
+
+        # Combine CategoricalColumn categories
+        if is_categorical:
+            # Combine and de-dupe the categories
             cats = (
-                Series(ColumnBase._concat([o.categories for o in objs]))
+                cudf.concat([o.cat().categories for o in objs])
+                .to_series()
                 .drop_duplicates()
                 ._column
             )
             objs = [
                 o.cat()._set_categories(cats, is_unique=True) for o in objs
             ]
-
-        head = objs[0]
-        for obj in objs:
-            if not (obj.dtype == head.dtype):
-                raise ValueError("All series must be of same type")
+            # Map `objs` into a list of the codes until we port Categorical to
+            # use the libcudf++ Category data type.
+            objs = [o.cat().codes._column for o in objs]
+            head = head.cat().codes._column
 
         newsize = sum(map(len, objs))
         if newsize > libcudfxx.MAX_COLUMN_SIZE:
@@ -245,44 +244,19 @@ class ColumnBase(Column):
                 "size > {}".format(libcudfxx.MAX_COLUMN_SIZE_STR)
             )
 
-        # Handle strings separately
-        if all(isinstance(o, StringColumn) for o in objs):
-            result_nbytes = sum(o._nbytes for o in objs)
-            if result_nbytes > libcudfxx.MAX_STRING_COLUMN_BYTES:
-                raise MemoryError(
-                    "Result of concat cannot have > {}  bytes".format(
-                        libcudfxx.MAX_STRING_COLUMN_BYTES_STR
-                    )
-                )
-            # TODO: remove nvstrings when concat.pyx is ported
-            objs = [o.nvstrings for o in objs]
-            return as_column(nvstrings.from_strings(*objs))
-
         # Filter out inputs that have 0 length
         objs = [o for o in objs if len(o) > 0]
-        nulls = any(col.nullable for col in objs)
 
-        if is_categorical_dtype(head):
-            data_dtype = head.codes.dtype
-            data = None
-            children = (column_empty(newsize, dtype=head.codes.dtype),)
-        else:
-            data_dtype = head.dtype
-            data = Buffer.empty(size=newsize * data_dtype.itemsize)
-            children = ()
-
-        # Allocate output mask only if there's nulls in the input objects
-        mask = None
-        if nulls:
-            mask = create_null_mask(newsize, state=MaskState.UNINITIALIZED)
-
-        col = build_column(
-            data=data, dtype=head.dtype, mask=mask, children=children
-        )
-
-        # Performance the actual concatenation
+        # Perform the actual concatenation
         if newsize > 0:
-            col = libcudf.concat._column_concat(objs, col)
+            col = libcudfxx.concat.concat_columns(objs)
+        else:
+            col = column_empty(0, head.dtype, masked=True)
+
+        if is_categorical:
+            col = build_categorical_column(
+                categories=cats, codes=col, mask=col.mask
+            )
 
         return col
 
@@ -680,8 +654,6 @@ class ColumnBase(Column):
     def take(self, indices):
         """Return Column by taking values from the corresponding *indices*.
         """
-        from cudf.core.column import column_empty_like
-
         # Handle zero size
         if indices.size == 0:
             return column_empty_like(self, newsize=0)
@@ -958,9 +930,7 @@ def column_empty(row_count, dtype="object", masked=False):
         data = None
         children = (
             build_column(
-                data=Buffer.empty(
-                    (row_count + 1) * np.dtype("int32").itemsize
-                ),
+                data=Buffer(cupy.zeros(row_count + 1, dtype="int32")),
                 dtype="int32",
             ),
             build_column(
@@ -1160,36 +1130,8 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 col = col.set_mask(mask)
         elif np.issubdtype(col.dtype, np.datetime64):
             if nan_as_null or (mask is None and nan_as_null is None):
-                null = column_empty_like(col, masked=True, newsize=1)
-                col = libcudfxx.replace.replace(
-                    col,
-                    as_column(
-                        Buffer(
-                            np.array([np.datetime64("NaT")], dtype=col.dtype)
-                        ),
-                        dtype=col.dtype,
-                    ),
-                    null,
-                )
+                col = utils.time_col_replace_nulls(col)
         return col
-
-    elif isinstance(arbitrary, np.ndarray):
-        # CUDF assumes values are always contiguous
-        if not arbitrary.flags["C_CONTIGUOUS"]:
-            arbitrary = np.ascontiguousarray(arbitrary)
-
-        if dtype is not None:
-            arbitrary = arbitrary.astype(dtype)
-
-        if arbitrary.dtype.kind == "M":
-            data = datetime.DatetimeColumn.from_numpy(arbitrary)
-
-        elif arbitrary.dtype.kind in ("O", "U"):
-            data = as_column(
-                pa.Array.from_pandas(arbitrary), dtype=arbitrary.dtype
-            )
-        else:
-            data = as_column(cupy.asarray(arbitrary), nan_as_null=nan_as_null)
 
     elif isinstance(arbitrary, pa.Array):
         if isinstance(arbitrary, pa.StringArray):
@@ -1356,6 +1298,49 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 data = data.fillna(np.nan)
             elif np.issubdtype(data.dtype, np.datetime64):
                 data = data.fillna(np.datetime64("NaT"))
+
+    elif hasattr(arbitrary, "__array_interface__"):
+        # CUDF assumes values are always contiguous
+        desc = arbitrary.__array_interface__
+        shape = desc["shape"]
+        arb_dtype = np.dtype(desc["typestr"])
+        # CUDF assumes values are always contiguous
+        if len(shape) > 1:
+            raise ValueError("Data must be 1-dimensional")
+
+        arbitrary = np.asarray(arbitrary)
+        if not arbitrary.flags["C_CONTIGUOUS"]:
+            arbitrary = np.ascontiguousarray(arbitrary)
+
+        if dtype is not None:
+            arbitrary = arbitrary.astype(dtype)
+
+        if arb_dtype.kind == "M":
+
+            time_unit, _ = np.datetime_data(arbitrary.dtype)
+            cast_dtype = time_unit in ("D", "W", "M", "Y")
+
+            if cast_dtype:
+                arbitrary = arbitrary.astype(np.dtype("datetime64[s]"))
+
+            buffer = Buffer(arbitrary)
+            mask = None
+            if nan_as_null:
+                data = as_column(
+                    buffer, dtype=arbitrary.dtype, nan_as_null=nan_as_null
+                )
+                data = utils.time_col_replace_nulls(data)
+                mask = data.mask
+
+            data = datetime.DatetimeColumn(
+                data=buffer, mask=mask, dtype=arbitrary.dtype
+            )
+        elif arb_dtype.kind in ("O", "U"):
+            data = as_column(
+                pa.Array.from_pandas(arbitrary), dtype=arbitrary.dtype
+            )
+        else:
+            data = as_column(cupy.asarray(arbitrary), nan_as_null=nan_as_null)
 
     elif isinstance(arbitrary, memoryview):
         data = as_column(
