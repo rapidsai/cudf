@@ -163,6 +163,7 @@ class Frame(libcudfxx.table.Table):
             # result
             if keep_index is False and self.index is not None:
                 result.index = self.index[start:stop]
+            result.columns = self.columns
             return result
 
     def _normalize_scalars(self, other):

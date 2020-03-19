@@ -276,7 +276,10 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         # Iloc Step 2:
         # Gather the rows specified by the first tuple arg
         if isinstance(columns_df.index, MultiIndex):
-            df = columns_df.index._get_row_major(columns_df, arg[0])
+            if isinstance(arg[0], slice):
+                df = columns_df.__getitem__(arg[0])
+            else:
+                df = columns_df.index._get_row_major(columns_df, arg[0])
             if (len(df) == 1 and len(columns_df) >= 1) and not (
                 isinstance(arg[0], slice) or isinstance(arg[1], slice)
             ):
