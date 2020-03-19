@@ -581,8 +581,9 @@ hash_partition_table(table_view const& input,
             (row_output_locations, num_rows, num_partitions, scanned_block_partition_sizes_ptr);
 
     // Use the resulting scatter map to materialize the output
-    auto output = experimental::detail::scatter<size_type>(input, row_partition_numbers.begin(),
-      row_partition_numbers.end(), input, false, mr, stream);
+    auto output = experimental::detail::scatter(
+      input, row_partition_numbers.begin(), row_partition_numbers.end(),
+      input, false, mr, stream);
 
     return std::make_pair(std::move(output), std::move(partition_offsets));
   }
