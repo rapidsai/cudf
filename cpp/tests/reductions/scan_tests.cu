@@ -149,23 +149,32 @@ TYPED_TEST(ScanTest, Min)
 
 TYPED_TEST(ScanTest, Max)
 {
-    std::vector<TypeParam>  v({-120, 5, 0, -120, -111, 64, 63, 99, 123, -16});
-    std::vector<bool> b({   1, 0, 1,    1,    1,  1,  0,  1,   1,   1});
-    std::vector<TypeParam> exact(v.size());
+    std::vector<TypeParam> v_std = {-120, 5, 0, -120, -111, 64, 63, 99, 123, -16};
+    std::vector<bool>      b_std = {   1, 0, 1,    1,    1,  1,  0,  1,   1,   1};
+    std::vector<TypeParam> exact(v_std.size());
 
-    std::transform(v.cbegin(), v.cend(),
+    thrust::host_vector<TypeParam> v(v_std);
+    thrust::host_vector<bool>      b(b_std);
+
+    thrust::inclusive_scan(
+        v.cbegin(),
+        v.cend(),
         exact.begin(),
-        [acc=v[0]](auto i) mutable { acc = std::max(acc, i); return acc; }
-        );
+        thrust::maximum<TypeParam>{});
 
     this->scan_test({v.begin(), v.end()}, 
                     {exact.begin(), exact.end()},
                     cudf::experimental::make_max_aggregation(), scan_type::INCLUSIVE);
 
-    std::transform(v.cbegin(), v.cend(), b.begin(),
+    auto const first = thrust::make_zip_iterator(thrust::make_tuple(v.begin(), b.begin()));
+    auto const last  = thrust::make_zip_iterator(thrust::make_tuple(v.end(),   b.end()));
+
+    thrust::transform_inclusive_scan(
+        first,
+        last,
         exact.begin(),
-        [acc=v[0]](auto i, bool b) mutable { if(b) acc = std::max(acc, i); return acc; }
-        );
+        value_or<TypeParam>{std::numeric_limits<TypeParam>::lowest()},
+        thrust::maximum<TypeParam>{});
 
     this->scan_test({v.begin(), v.end(), b.begin()}, 
                     {exact.begin(), exact.end(), b.begin()},
