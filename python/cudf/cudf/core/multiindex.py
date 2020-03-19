@@ -30,6 +30,7 @@ class MultiIndex(Index):
         self, levels=None, codes=None, labels=None, names=None, **kwargs
     ):
         from cudf.core.series import Series
+        from cudf import DataFrame
 
         super().__init__()
 
@@ -46,7 +47,11 @@ class MultiIndex(Index):
 
         # early termination enables lazy evaluation of codes
         if "source_data" in kwargs:
+            # import pdb; pdb.set_trace()
             source_data = kwargs["source_data"].reset_index(drop=True)
+
+            if isinstance(source_data, pd.DataFrame):
+                source_data = DataFrame.from_pandas(source_data)
             names = names if names is not None else source_data._data.names
             # if names are unique
             # try using those as the source_data column names:
@@ -79,8 +84,6 @@ class MultiIndex(Index):
         if len(levels) == 0:
             raise ValueError("Must pass non-zero number of levels/codes")
 
-        from cudf import DataFrame
-
         if not isinstance(codes, DataFrame) and not isinstance(
             codes[0], (Sequence, pd.core.indexes.frozen.FrozenNDArray)
         ):
@@ -103,32 +106,24 @@ class MultiIndex(Index):
         self._levels = [Series(level) for level in levels]
         self._validate_levels_and_codes(self._levels, self._codes)
 
-        pandas_multindex = kwargs.get("pandas", None)
-
-        if pandas_multindex is None:
-            source_data = DataFrame()
-            for i, name in enumerate(self._codes.columns):
-                codes = as_index(self._codes[name]._column)
-                if -1 in self._codes[name].values:
-                    # Must account for null(s) in _source_data column
-                    level = DataFrame(
-                        {name: [None] + list(self._levels[i])},
-                        index=range(-1, len(self._levels[i])),
-                    )
-                else:
-                    level = DataFrame({name: self._levels[i]})
-
+        source_data = DataFrame()
+        for i, name in enumerate(self._codes.columns):
+            codes = as_index(self._codes[name]._column)
+            if -1 in self._codes[name].values:
+                # Must account for null(s) in _source_data column
                 level = DataFrame(
-                    {"original_order": self.codes[name].index}, index=codes
-                ).join(level)
-                level = level.sort_values(by="original_order").reset_index(
-                    True
+                    {name: [None] + list(self._levels[i])},
+                    index=range(-1, len(self._levels[i])),
                 )
-                source_data[name] = level[name].reset_index(drop=True)
-        else:
-            source_data = cudf.from_pandas(
-                pandas_multindex.to_frame().reset_index(drop=True)
-            )
+            else:
+                level = DataFrame({name: self._levels[i]})
+
+            import cudf._libxx as libcudfxx
+
+            source_data[name] = libcudfxx.copying.gather(
+                level, codes._data.columns[0]
+            )._data[name]
+
         self._data = source_data._data
         self.names = names
 
@@ -191,7 +186,7 @@ class MultiIndex(Index):
         if self._levels is not None:
             mi._levels = [s.copy(deep) for s in self._levels]
         if self._codes is not None:
-            mi._codes = self._codes.copy(deep)
+            mi._codes = self._codes.copy()
         if self.names is not None:
             mi.names = self.names.copy()
         return mi
@@ -692,14 +687,14 @@ class MultiIndex(Index):
                 levels=multiindex.levels,
                 codes=multiindex.codes,
                 names=multiindex.names,
-                pandas=multiindex,
+                source_data=multiindex.to_frame(),
             )
         else:
             mi = cls(
                 levels=multiindex.levels,
                 codes=multiindex.labels,
                 names=multiindex.names,
-                pandas=multiindex,
+                source_data=multiindex.to_frame(),
             )
         return mi
 
