@@ -157,7 +157,7 @@ class _DataFrameIndexer(object):
                 # Multiindex indexing with a slice
                 if any(isinstance(v, slice) for v in arg):
                     return False
-            if not isinstance(arg[1], list):
+            if not pd.api.types.is_list_like(arg[1]):
                 return True
         return False
 
