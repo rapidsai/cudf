@@ -136,7 +136,7 @@ std::unique_ptr<table> sort_by_key(
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**---------------------------------------------------------------------------*
- * @brief Computes the ranks of input column in a lexicographical sorted order.
+ * @brief Computes the ranks of input column in sorted order.
  * Rank indicate the position of each element in the sorted column and rank
  * value starts from 1.
  *
@@ -157,8 +157,10 @@ std::unique_ptr<table> sort_by_key(
  * for column
  * @param percentage flag to convert ranks to percentage in range (0,1}
  * @param mr The device memory resource used to allocate the returned column
- * @return std::unique_ptr<column> A column of FLOAT64 elements
- * containing the rank of the each element of the column of `input`
+ * @return std::unique_ptr<column> A column of containing the rank of the each
+ * element of the column of `input`. The output column type will be `size_type`
+ * column by default or else `double` when `method=rank_method::AVERAGE` or
+ *`percentage=True`
  *---------------------------------------------------------------------------**/
 std::unique_ptr<column> rank(
     column_view const &input,
