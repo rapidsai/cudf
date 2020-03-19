@@ -678,11 +678,11 @@ class MultiIndex(Index):
 
         if hasattr(multiindex, "codes"):
             mi = cls(
-                source_data=multiindex.to_frame(),
+                names=multiindex.names, source_data=multiindex.to_frame(),
             )
         else:
             mi = cls(
-                source_data=multiindex.to_frame(),
+                names=multiindex.names, source_data=multiindex.to_frame(),
             )
         return mi
 
