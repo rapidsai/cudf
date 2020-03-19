@@ -17,6 +17,7 @@
 - PR #4386 Update Java package to 0.14
 - PR #4402 Fix cudf::strings::join_strings logic with all-null strings and null narep
 - PR #4570 Fixing loc ordering issue in dataframe
+- PR #4614 Fix cuda-memcheck errors found in column_tests.cu and copying/utility_tests.cu
 
 
 # cuDF 0.13.0 (Date TBD)
