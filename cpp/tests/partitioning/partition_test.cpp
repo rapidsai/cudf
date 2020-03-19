@@ -27,9 +27,10 @@ class PartitionTest : public cudf::test::BaseFixture {
   using map_type = cudf::test::GetType<T, 1>;
 };
 
-using types = cudf::test::CrossProduct<cudf::test::FixedWidthTypes, cudf::test::IntegralTypes>;
+using types = cudf::test::CrossProduct<cudf::test::FixedWidthTypes,
+                                       cudf::test::IntegralTypes>;
 
-//using types = cudf::test::Types<cudf::test::Types<int32_t, int32_t> >;
+// using types = cudf::test::Types<cudf::test::Types<int32_t, int32_t> >;
 
 TYPED_TEST_CASE(PartitionTest, types);
 
@@ -76,6 +77,21 @@ TYPED_TEST(PartitionTest, MapWithNullsThrows) {
                cudf::logic_error);
 }
 
+void run_partition_test(cudf::table_view table_to_partition,
+                        cudf::column_view partition_map,
+                        cudf::size_type num_partitions,
+                        cudf::table_view expected_partitioned_table,
+                        std::vector<cudf::size_type> const& expected_offsets) {
+  auto result = cudf::experimental::partition(table_to_partition, partition_map,
+                                              num_partitions);
+  auto const& actual_partitioned_table = result.first;
+  auto const& actual_offsets = result.second;
+  EXPECT_EQ(actual_offsets, expected_offsets);
+
+  cudf::test::expect_tables_equal(*actual_partitioned_table,
+                                  expected_partitioned_table);
+}
+
 // Normal cases
 TYPED_TEST(PartitionTest, Identity) {
   using value_type = cudf::test::GetType<TypeParam, 0>;
@@ -87,17 +103,10 @@ TYPED_TEST(PartitionTest, Identity) {
 
   fixed_width_column_wrapper<map_type> map{0, 1, 2, 3, 4, 5};
 
-  auto result = cudf::experimental::partition(table_to_partition, map, 6);
-
-  auto const& actual_offsets = result.second;
   std::vector<cudf::size_type> expected_offsets{0, 1, 2, 3, 4, 5, 6};
 
-  EXPECT_TRUE(std::equal(expected_offsets.begin(), expected_offsets.end(),
-                         actual_offsets.begin()));
-
-  auto const& partitioned_table = result.first;
-
-  cudf::test::expect_tables_equal(*partitioned_table, table_to_partition);
+  run_partition_test(table_to_partition, map, 6, table_to_partition,
+                     expected_offsets);
 }
 
 TYPED_TEST(PartitionTest, Reverse) {
@@ -110,11 +119,7 @@ TYPED_TEST(PartitionTest, Reverse) {
 
   fixed_width_column_wrapper<map_type> map{5, 4, 3, 2, 1, 0};
 
-  auto result = cudf::experimental::partition(table_to_partition, map, 6);
-
-  auto const& actual_offsets = result.second;
   std::vector<cudf::size_type> expected_offsets{0, 1, 2, 3, 4, 5, 6};
-  EXPECT_EQ(expected_offsets, actual_offsets);
 
   fixed_width_column_wrapper<value_type> expected_first{13, 5, 7, 3, 1, 0};
   strings_column_wrapper expected_strings{"strings", "of", "column",
@@ -122,7 +127,6 @@ TYPED_TEST(PartitionTest, Reverse) {
   auto expected_partitioned_table =
       cudf::table_view{{expected_first, expected_strings}};
 
-  auto const& partitioned_table = result.first;
-  cudf::test::expect_tables_equal(*partitioned_table,
-                                  expected_partitioned_table);
+  run_partition_test(table_to_partition, map, 6, expected_partitioned_table,
+                     expected_offsets);
 }
