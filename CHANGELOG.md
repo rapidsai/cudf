@@ -2,13 +2,23 @@
 
 ## New Features
 
+
 ## Improvements
 - PR #4471 Consolidate partitioning functionality into a single header.
 - PR #4486 Remove explicit template parameter from detail::scatter.
 
+- PR #4479 Adding cuda 10.2 support via conda environment file addition
+- PR #4486 Remove explicit template parameter from detail::scatter.
+- PR #4471 Consolidate partitioning functionality into a single header.
+- PR #4498 Adds in support for chunked writers to java
+- PR #4073 Enable contiguous split java test
+- PR #4527 Add JNI and java bindings for matches_re
+
 ## Bug Fixes
+
 - PR #4386 Update Java package to 0.14
 - PR #4402 Fix cudf::strings::join_strings logic with all-null strings and null narep
+- PR #4570 Fixing loc ordering issue in dataframe
 
 
 # cuDF 0.13.0 (Date TBD)
@@ -185,6 +195,7 @@
 - PR #4534 Disable deprecation warnings as errors.
 - PR #4506 Check for multi-dimensional data in column/Series creation
 - PR #4549 Add option to disable deprecation warnings.
+- PR #4516 Add negative value support for `.str.get`
 - PR #4563 Remove copying to host for metadata generation in `generate_pandas_metadata`
 
 ## Bug Fixes
