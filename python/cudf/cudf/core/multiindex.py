@@ -203,12 +203,7 @@ class MultiIndex(Index):
         Removes n names, labels, and codes in order to build a new index
         for results.
         """
-        from cudf import DataFrame
-
-        codes = DataFrame()
-        for idx in self.codes.columns[n:]:
-            codes.insert(len(codes.columns), idx, self.codes[idx])
-        result = MultiIndex(self.levels[n:], codes)
+        result = MultiIndex(source_data=self._source_data.iloc[:, n:])
         if self.names is not None:
             result.names = self.names[n:]
         return result

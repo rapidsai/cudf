@@ -272,11 +272,14 @@
 - PR #4482 Fix `.str.rsplit`, `.str.split`, `.str.find`, `.str.rfind`, `.str.index`, `.str.rindex` and enable related tests
 - PR #4513 Backport scalar virtual destructor fix
 - PR #4519 Remove `n` validation for `nlargest` & `nsmallest` and add negative support for `n`
+- PR #4596 Fix `_popn` issue with performance
 - PR #4526 Fix index slicing issue for index incase of an empty dataframe
 - PR #4538 Fix cudf::strings::slice_strings(step=-1) for empty strings
 - PR #4557 Disable compile-errors on deprecation warnings, for JNI
 - PR #4576 Fix typo in `serialize.py`
 - PR #4571 Load JNI native dependencies for Scalar class
+- PR #4594 Fix exec dangling pointer issue in legacy groupby
+- PR #4600 Fix missing include in benchmark_fixture.hpp
 - PR #4588 Fix ordering issue in `MultiIndex`
 
 
