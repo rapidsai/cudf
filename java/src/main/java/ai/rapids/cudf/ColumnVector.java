@@ -1753,21 +1753,13 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Returns a new strings column where target string within each string is removed.
-   *
-   * @param target String to search for within each string.
-   * @return A new java column vector where target string is removed.
-   */
-  public ColumnVector stringReplace(Scalar target) {
-    Scalar replace = Scalar.fromString("");
-    return stringReplace(target, replace);
-  }
-
-  /**
    * Returns a new strings column where target string within each string is replaced with the specified
    * replacement string.
-   * Specifing an empty string for replace will essentially remove the target
-   * string if found in each string. Null string entries will return null output string entries.
+   * The replacement proceeds from the beginning of the string to the end, for example,
+   * replacing "aa" with "b" in the string "aaa" will result in "ba" rather than "ab".
+   * Specifing an empty string for replace will essentially remove the target string if found in each string.
+   * Null string entries will return null output string entries.
+   * target Scalar should be string and should not be empty or null.
    *
    * @param target String to search for within each string.
    * @param replace Replacement string if target is found.
