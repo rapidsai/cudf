@@ -1,5 +1,3 @@
-import numpy as np
-
 from libcpp.memory cimport unique_ptr
 
 from cudf._libxx.cpp.column.column cimport column
