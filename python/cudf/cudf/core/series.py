@@ -1592,7 +1592,7 @@ class Series(Frame):
         codes = Series(cupy.arange(len(cats), dtype=dtype))
 
         value = DataFrame({"value": cats, "code": codes})
-        codes = DataFrame({"value": self._data.columns[0], "order": order})
+        codes = DataFrame({"value": self.copy()._data.columns[0], "order": order})
         codes = codes.merge(value, on="value", how="left")
         codes = codes.sort_values("order")["code"].fillna(na_sentinel)
 
