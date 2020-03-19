@@ -32,6 +32,7 @@
 
 #include <algorithm>
 #include <array>
+#include <regex>
 
 namespace cudf {
 namespace experimental {
@@ -214,6 +215,23 @@ struct metadata : public FileMetaData {
   }
 
   /**
+   * @brief Returns the index_column section of the PANDAS JSON metadata
+   */
+  std::string get_pandas_index() const {
+    auto it =
+        std::find_if(key_value_metadata.begin(), key_value_metadata.end(),
+                     [](const auto &item) { return item.key == "pandas"; });
+    if (it != key_value_metadata.end()) {
+      std::regex index_columns_expr{R"(.*index_columns\s*=\s*\[(.*)\])"};
+      std::smatch sm;
+      if (std::regex_search(it->value, sm, index_columns_expr)) {
+        return sm[1].str();
+      }
+    }
+    return "";
+  }
+
+  /**
    * @brief Extracts the column name used for the row indexes in a dataframe
    *
    * PANDAS adds its own metadata to the key_value section when writing out the
@@ -223,37 +241,17 @@ struct metadata : public FileMetaData {
    * @param names List of column names to load, where index column name(s) will be added
    */
   void add_pandas_index_names(std::vector<std::string>& names) {
-    auto it =
-        std::find_if(key_value_metadata.begin(), key_value_metadata.end(),
-                     [](const auto &item) { return item.key == "pandas"; });
-
-    if (it != key_value_metadata.end()) {
-      const auto index_start = it->value.find("index_columns");
-      if (index_start != std::string::npos) {
-        auto pos = it->value.find('[', index_start);
-        while (pos != std::string::npos) {
-          auto begin = it->value.find_first_of("\"\']", pos, 3);
-          if (begin == std::string::npos)
-            break;
-          char ch = it->value[begin];
-          if (ch == ']')
-            break;
-          begin++;
-          auto end = it->value.find(ch, begin);
-          if (end == std::string::npos)
-            break;
-          if (end > begin) {
-            std::string pandas_index = it->value.substr(begin, end - begin);
-            if (std::find(names.begin(), names.end(), pandas_index) == names.end()) {
-              names.emplace_back(std::move(pandas_index));
-            }
-          }
-          pos = it->value.find_first_of(",]", end + 1);
-          if (pos == std::string::npos || it->value[pos] == ']')
-            break;
-          pos++;
+    std::string pandas_index = get_pandas_index();
+    // NOTE: Assumes doublequotes around the column name
+    std::regex index_name_expr{R"(\"(\w*)\"\,*\s*)"};
+    std::smatch sm;
+    while (std::regex_search(pandas_index, sm, index_name_expr)) {
+      if (sm.size() == 2) { // 2 = whole match, first item
+        if (std::find(names.begin(), names.end(), sm[1].str()) == names.end()) {
+          names.emplace_back(std::move(sm[1].str()));
         }
       }
+      pandas_index = sm.suffix();
     }
   }
 
