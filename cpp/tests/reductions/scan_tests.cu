@@ -313,28 +313,36 @@ TEST_F(ScanStringTest, Min)
 
 TEST_F(ScanStringTest, Max)
 {
-  // data and valid arrays
-  std::vector<std::string> v({"one", "two", "three", "four", "five", "six", "seven", "eight", "nine"});
-  std::vector<bool>        b({    1,     0,       1,      1,      0,     0,       1,       1,      1});
-  std::vector<std::string> exact(v.size());
+    std::vector<std::string> v_std = {"one", "two", "three", "four", "five", "six", "seven", "eight", "nine"};
+    std::vector<bool>        b_std = {    1,     0,       1,      1,      0,     0,       1,       1,      1};
+    std::vector<std::string> exact(v_std.size());
 
-  std::transform(v.cbegin(), v.cend(),
-                 exact.begin(),
-                 [acc = v[0]](auto i) mutable { acc = std::max(acc, i); return acc; });
+    thrust::host_vector<std::string> v(v_std);
+    thrust::host_vector<bool>        b(b_std);
 
-  // string column without nulls
-  cudf::test::strings_column_wrapper col_nonulls(v.begin(), v.end());
-  cudf::test::strings_column_wrapper expected1(exact.begin(), exact.end());
-  this->scan_test(col_nonulls, expected1, cudf::experimental::make_max_aggregation(), scan_type::INCLUSIVE);
+    thrust::inclusive_scan(
+        v.cbegin(),
+        v.cend(),
+        exact.begin(),
+        thrust::maximum<std::string>{});
 
-  std::transform(v.cbegin(), v.cend(), b.begin(),
+    // string column without nulls
+    cudf::test::strings_column_wrapper col_nonulls(v.begin(), v.end());
+    cudf::test::strings_column_wrapper expected1(exact.begin(), exact.end());
+    this->scan_test(col_nonulls, expected1, cudf::experimental::make_max_aggregation(), scan_type::INCLUSIVE);
+
+    // TODO: `std::transform_inclusive_scan` with `std::string` and `thrust::tuple` won't
+    //       work due to Thrust bug: https://github.com/thrust/thrust/issues/1074
+    //       Update once fix is merged and available
+    std::transform(v.cbegin(), v.cend(), b.begin(),
         exact.begin(),
         [acc=v[0]](auto i, bool b) mutable { if(b) acc = std::max(acc, i); return acc; }
         );
-  // string column with nulls
-  cudf::test::strings_column_wrapper col_nulls(v.begin(), v.end(), b.begin());
-  cudf::test::strings_column_wrapper expected2(exact.begin(), exact.end(), b.begin());
-  this->scan_test(col_nulls, expected2, cudf::experimental::make_max_aggregation(), scan_type::INCLUSIVE);
+
+    // string column with nulls
+    cudf::test::strings_column_wrapper col_nulls(v.begin(), v.end(), b.begin());
+    cudf::test::strings_column_wrapper expected2(exact.begin(), exact.end(), b.begin());
+    this->scan_test(col_nulls, expected2, cudf::experimental::make_max_aggregation(), scan_type::INCLUSIVE);
 }
 
 TYPED_TEST(ScanTest, skip_nulls)
