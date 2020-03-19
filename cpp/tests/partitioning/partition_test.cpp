@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <cudf/copying.hpp>
 #include <cudf/partitioning.hpp>
 #include <cudf/table/table.hpp>
 #include <tests/utilities/base_fixture.hpp>
@@ -20,6 +21,8 @@
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/table_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
+
+#include "cudf/sorting.hpp"
 
 template <typename T>
 class PartitionTest : public cudf::test::BaseFixture {
@@ -30,7 +33,7 @@ class PartitionTest : public cudf::test::BaseFixture {
 using types = cudf::test::CrossProduct<cudf::test::FixedWidthTypes,
                                        cudf::test::IntegralTypes>;
 
-// using types = cudf::test::Types<cudf::test::Types<int32_t, int32_t> >;
+//using types = cudf::test::Types<cudf::test::Types<int32_t, int32_t> >;
 
 TYPED_TEST_CASE(PartitionTest, types);
 
@@ -77,6 +80,35 @@ TYPED_TEST(PartitionTest, MapWithNullsThrows) {
                cudf::logic_error);
 }
 
+/**
+ * @brief Verifies that partitions indicated by `offsets` are equal between
+ * `expected` and `actual`.
+ *
+ * The order of rows within each partition may be different, so each partition
+ * is first sorted before being compared for equality.
+ *
+ */
+void expect_equal_partitions(cudf::table_view expected, cudf::table_view actual,
+                             std::vector<cudf::size_type> const& offsets) {
+  // Need to convert partition offsets into split points by dropping the first
+  // and last element
+  std::vector<cudf::size_type> split_points;
+  std::copy(std::next(offsets.begin()), std::prev(offsets.end()),
+            std::back_inserter(split_points));
+
+  // Split the partitions, sort each partition, then compare for equality
+  auto actual_split = cudf::experimental::split(actual, split_points);
+  auto expected_split = cudf::experimental::split(expected, split_points);
+  std::equal(expected_split.begin(), expected_split.end(), actual_split.begin(),
+             [](cudf::table_view expected, cudf::table_view actual) {
+               auto sorted_expected = cudf::experimental::sort(expected);
+               auto sorted_actual = cudf::experimental::sort(actual);
+               cudf::test::expect_tables_equal(*sorted_expected,
+                                               *sorted_actual);
+               return true;
+             });
+}
+
 void run_partition_test(cudf::table_view table_to_partition,
                         cudf::column_view partition_map,
                         cudf::size_type num_partitions,
@@ -88,8 +120,8 @@ void run_partition_test(cudf::table_view table_to_partition,
   auto const& actual_offsets = result.second;
   EXPECT_EQ(actual_offsets, expected_offsets);
 
-  cudf::test::expect_tables_equal(*actual_partitioned_table,
-                                  expected_partitioned_table);
+  expect_equal_partitions(expected_partitioned_table, *actual_partitioned_table,
+                          expected_offsets);
 }
 
 // Normal cases
