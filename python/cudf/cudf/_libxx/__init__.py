@@ -7,6 +7,7 @@ from . import (
     binaryop,
     concat,
     copying,
+    datetime,
     dlpack,
     filling,
     gpuarrow,
