@@ -173,6 +173,7 @@
 - PR #4493 Skip legacy testing in CI
 - PR #4346 Port groupby Cython/Python to use libcudf++ API
 - PR #4524 Updating `__setitem__` for DataFrame to use scalar scatter
+- PR #4611 Fix to use direct slicing in iloc for multiindex than using gather under `_get_row_major`
 - PR #4534 Disable deprecation warnings as errors.
 - PR #4542 Remove RMM init/finalize in cudf test fixture.
 - PR #4506 Check for multi-dimensional data in column/Series creation
