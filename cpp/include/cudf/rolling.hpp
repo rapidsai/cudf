@@ -95,7 +95,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
  *    { "user2",   40      }
  *  ]
  * 
- * Partitioning (grouping) by `user_id`, and ordering by `day` yields the following `sales_amt` vector 
+ * Partitioning (grouping) by `user_id` yields the following `sales_amt` vector 
  * (with 2 groups, one for each distinct `user_id`):
  * 
  *    [ 10,  20,  10,  50,  60,  20,  30,  80,  40 ]
@@ -137,15 +137,15 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
 /**
  * @brief  Applies a grouping-aware, timestamp-based rolling window function to the values in a column.
  *
- * Similarly to `rolling_window()` above, this function aggregates values in a window around each 
+ * Like `rolling_window()`, this function aggregates values in a window around each 
  * element of a specified `input` column. It differs from `rolling_window()` in two respects:
- *   1. The elements of the `input` column are grouped into distinct grouping-sets, determined by the correponding
- *      values of the columns under `grouping_keys`. The window-aggregation cannot cross the group-boundaries.
- *   2. Within a grouping-set, the aggregation window is calculated based on a time-interval (e.g. number of days
- *      preceding/following the current row). The timestamps for the input-data are specified by the `timestamp_column`
+ *   1. The elements of the `input` column are grouped into distinct groups (e.g. the result of a groupby), determined by 
+ *      the correponding values of the columns under `group_keys`. The window-aggregation cannot cross the group boundaries.
+ *   2. Within a group, the aggregation window is calculated based on a time interval (e.g. number of days
+ *      preceding/following the current row). The timestamps for the input data are specified by the `timestamp_column`
  *      argument.
  * 
- * Note: This method requires that the rows are pre-sorted by the grouping-key and timestamp values.
+ * Note: This method requires that the rows are presorted by the group keys and timestamp values.
  * 
  * Example: Consider a user-sales dataset, where the rows look as follows:
  *  { "user_id", sales_amt, date }
@@ -154,13 +154,13 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
  * and summing up the `sales_amt` column over a window of 3 days (1 preceding day, the current day, and 1 following day). 
  * 
  * In this example, 
- *    1. grouping_keys == [ `user_id` ]
- *    2. timestamp_column =- `date`
- *    3. input == `sales_amt` 
- * The data would be grouped by `user_id`, and ordered by `date`. The aggregation 
- * (SUM) would then be calculated for a window of 3 days around (and including) each row.
+ *    1. `group_keys == [ user_id ]`
+ *    2. `timestamp_column == date`
+ *    3. `input == sales_amt` 
+ * The data are grouped by `user_id`, and ordered by `date`. The aggregation 
+ * (SUM) is then calculated for a window of 3 days around (and including) each row.
  * 
- * If the input rows were as follows:
+ * For the following input:
  * 
  *  [ // user,  sales_amt,  YYYYMMDD (date)  
  *    { "user1",   10,      20200101    },
@@ -174,16 +174,15 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
  *    { "user2",   40,      20200104    }
  *  ]
  * 
- * Partitioning (grouping) by `user_id`, and ordering by `day` would yield the following `sales_amt` vector 
+ * Partitioning (grouping) by `user_id`, and ordering by `date` yields the following `sales_amt` vector 
  * (with 2 groups, one for each distinct `user_id`):
  * 
  * Date :(202001-)  [ 01,  02,  03,  07,  07,    01,   01,   02,  04 ]
  * Input:           [ 10,  20,  10,  50,  60,    20,   30,   80,  40 ]
  *                    <-------user1-------->|<---------user2--------->
  * 
- * The SUM aggregation would then be applied, with 1 day preceding, and 1 day following,
- * with a minimum of 1 period. The aggregation window is thus 3 *days* wide,
- * thereby yielding the following output column:
+ * The SUM aggregation is applied, with 1 day preceding, and 1 day following, with a minimum of 1 period. 
+ * The aggregation window is thus 3 *days* wide, yielding the following output column:
  * 
  *  Results:        [ 30,  40,  30,  110, 110,  130,  130,  130,  40 ]
  * 
@@ -199,7 +198,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
  * column of the same type as the input. Therefore it is suggested to convert integer column types
  * (especially low-precision integers) to `FLOAT32` or `FLOAT64` before doing a rolling `MEAN`.
  *
- * @param[in] grouping_keys The (pre-sorted) grouping columns
+ * @param[in] group_keys The (pre-sorted) grouping columns
  * @param[in] timestamp_column The (pre-sorted) timestamps for each row
  * @param[in] input The input column (to be aggregated)
  * @param[in] preceding_window_in_days The rolling window time-interval in the backward direction.
@@ -210,7 +209,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
  *
  * @returns   A nullable output column containing the rolling window results
  **/
-std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grouping_keys,
+std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& group_keys,
                                                           column_view const& timestamp_column,
                                                           column_view const& input,
                                                           size_type preceding_window_in_days,

@@ -629,7 +629,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
   }
 }
 
-std::unique_ptr<column> grouped_rolling_window(table_view const& grouping_keys,
+std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                                column_view const& input,
                                                size_type preceding_window,
                                                size_type following_window,
@@ -639,15 +639,15 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& grouping_keys,
 {
   if (input.size() == 0) return empty_like(input);
 
-  CUDF_EXPECTS(grouping_keys.num_columns() > 0, "Cannot calculate grouped_rolling_window without grouping-key columns.");
+  CUDF_EXPECTS(group_keys.num_columns() > 0, "Cannot calculate grouped_rolling_window without grouping-key columns.");
 
-  CUDF_EXPECTS((grouping_keys.num_rows() == input.size()), 
-               "Size mismatch between grouping_keys and input vector.");
+  CUDF_EXPECTS((group_keys.num_rows() == input.size()), 
+               "Size mismatch between group_keys and input vector.");
 
   CUDF_EXPECTS((min_periods > 0), "min_periods must be positive");
 
   using sort_groupby_helper = cudf::experimental::groupby::detail::sort::sort_groupby_helper;
-  sort_groupby_helper helper{grouping_keys, cudf::include_nulls::YES, cudf::sorted::YES};
+  sort_groupby_helper helper{group_keys, cudf::include_nulls::YES, cudf::sorted::YES};
 
   auto group_offsets{helper.group_offsets()};
   auto const& group_labels{helper.group_labels()};
@@ -781,7 +781,7 @@ namespace
 
 } // namespace detail;
 
-std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grouping_keys,
+std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& group_keys,
                                                           column_view const& timestamp_column,
                                                           column_view const& input,
                                                           size_type preceding_window_in_days,
@@ -792,15 +792,15 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
 
   if (input.size() == 0) return empty_like(input);
 
-  CUDF_EXPECTS((grouping_keys.num_columns() > 0), "Expected at least one grouping key.");
+  CUDF_EXPECTS((group_keys.num_columns() > 0), "Expected at least one grouping key.");
 
-  CUDF_EXPECTS((grouping_keys.num_rows() == input.size()), 
-               "Size mismatch between grouping_keys and input vector.");
+  CUDF_EXPECTS((group_keys.num_rows() == input.size()), 
+               "Size mismatch between group_keys and input vector.");
 
   CUDF_EXPECTS((min_periods > 0), "min_periods must be positive");
 
   using sort_groupby_helper = cudf::experimental::groupby::detail::sort::sort_groupby_helper;
-  sort_groupby_helper helper{grouping_keys, cudf::include_nulls::YES, cudf::sorted::YES};
+  sort_groupby_helper helper{group_keys, cudf::include_nulls::YES, cudf::sorted::YES};
 
   auto group_offsets{helper.group_offsets()};
   auto const& group_labels{helper.group_labels()};
