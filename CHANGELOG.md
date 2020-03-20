@@ -44,7 +44,7 @@
 - PR #4338 Add cudf::sequence() for generating an incrementing list of numeric values
 
 ## Improvements
-
+- PR #4628 Add groupby examples and replace method example in the cudf docs
 - PR #4140 Add cudf series examples and corr() method for dataframe in dataframe.py
 - PR #4187 exposed getNativeView method in Java bindings
 - PR #3525 build.sh option to disable nvtx
