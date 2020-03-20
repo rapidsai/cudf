@@ -1845,7 +1845,7 @@ class DataFrame(Frame):
             for key, col in self._data.items():
                 if key in mapper:
                     if mapper[key] in out.columns:
-                        out_column = mapper[key] + ("cudf_" + str(postfix),)
+                        out_column = mapper[key] + "cudf_" + str(postfix)
                         postfix += 1
                     else:
                         out_column = mapper[key]
