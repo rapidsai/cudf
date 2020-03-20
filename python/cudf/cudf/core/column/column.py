@@ -463,8 +463,7 @@ class ColumnBase(Column):
                         dtype=np.dtype(np.int32),
                     )
                 )
-                return self.as_frame()._gather(gather_map)._as_column()
-
+                return self.take(gather_map)
         else:
             arg = column.as_column(arg)
             if len(arg) == 0:
@@ -583,7 +582,7 @@ class ColumnBase(Column):
                 if "out of bounds" in str(e):
                     raise IndexError(
                         f"index out of bounds for column of size {len(self)}"
-                    )
+                    ) from e
                 raise
 
         self._mimic_inplace(out, inplace=True)
@@ -657,17 +656,14 @@ class ColumnBase(Column):
         # Handle zero size
         if indices.size == 0:
             return column_empty_like(self, newsize=0)
-
         try:
-            result = libcudf.copying.gather(self, indices)
+            return self.as_frame()._gather(indices)._as_column()
         except RuntimeError as e:
             if "out of bounds" in str(e):
                 raise IndexError(
                     f"index out of bounds for column of size {len(self)}"
-                )
+                ) from e
             raise
-
-        return result
 
     def as_mask(self):
         """Convert booleans to bitmask
