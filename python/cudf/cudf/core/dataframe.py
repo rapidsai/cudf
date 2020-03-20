@@ -1829,7 +1829,7 @@ class DataFrame(Frame):
           * Support axis='columns' only.
           * Not supporting: index, level
 
-        Rename will not overwite column names. If a list with duplicates it
+        Rename will not overwite column names. If a list with duplicates is
         passed, column names will be postfixed with a number.
         """
         # Pandas defaults to using columns over mapper
