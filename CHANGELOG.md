@@ -173,6 +173,7 @@
 - PR #4493 Skip legacy testing in CI
 - PR #4346 Port groupby Cython/Python to use libcudf++ API
 - PR #4524 Updating `__setitem__` for DataFrame to use scalar scatter
+- PR #4611 Fix to use direct slicing in iloc for multiindex than using gather under `_get_row_major`
 - PR #4534 Disable deprecation warnings as errors.
 - PR #4542 Remove RMM init/finalize in cudf test fixture.
 - PR #4506 Check for multi-dimensional data in column/Series creation
@@ -288,6 +289,8 @@
 - PR #4600 Fix missing include in benchmark_fixture.hpp
 - PR #4588 Fix ordering issue in `MultiIndex`
 - PR #4632 Fix handling of empty inputs to concatenate
+- PR #4630 Remove dangling reference to RMM exec policy in drop duplicates tests.
+- PR #4625 Fix hash-based repartition bug in dask_cudf
 
 
 # cuDF 0.12.0 (04 Feb 2020)
