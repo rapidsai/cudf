@@ -1895,9 +1895,7 @@ def test_dataframe_rename():
 
     gdf = DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
     rename_mapper = {"a": "z", "b": "z", "c": "z"}
-    expect = DataFrame(
-        {"z": [1, 2, 3], "zcudf_1": [4, 5, 6], "zcudf_2": [7, 8, 9]}
-    )
+    expect = DataFrame({"z": [1, 2, 3], "z_1": [4, 5, 6], "z_2": [7, 8, 9]})
     got = gdf.rename(columns=rename_mapper)
 
     assert_eq(expect, got)
