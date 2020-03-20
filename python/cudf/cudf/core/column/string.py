@@ -13,7 +13,6 @@ import nvstrings
 
 import cudf._libxx as libcudfxx
 import cudf._libxx.string_casting as str_cast
-from cudf._lib.nvtx import nvtx_range_pop, nvtx_range_push
 from cudf._libxx.nvtext.generate_ngrams import (
     generate_ngrams as cpp_generate_ngrams,
 )
@@ -26,6 +25,10 @@ from cudf._libxx.nvtext.normalize import (
 from cudf._libxx.nvtext.tokenize import (
     count_tokens as cpp_count_tokens,
     tokenize as cpp_tokenize,
+)
+from cudf._libxx.nvtx import (
+    range_pop as nvtx_range_pop,
+    range_push as nvtx_range_push,
 )
 from cudf._libxx.strings.attributes import (
     code_points as cpp_code_points,
@@ -2008,8 +2011,11 @@ class StringColumn(column.ColumnBase):
         return True in self.str().contains(f"^{item}$")
 
     def __reduce__(self):
-        cpumem = self.to_arrow()
-        return column.as_column, (cpumem, False, np.dtype("object"))
+        mask = None
+        if self.null_count > 0:
+            mask = self.mask
+
+        return column.build_column, (None, "str", mask, None, 0, self.children)
 
     def str(self, parent=None):
         return StringMethods(self, parent=parent)
