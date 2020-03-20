@@ -17,10 +17,12 @@ from cudf._libxx.cpp.table.table cimport table
 from cudf._libxx.cpp.table.table_view cimport table_view
 from cudf._libxx.cpp.search cimport lower_bound, upper_bound
 from cudf._libxx.cpp.sorting cimport(
-    rank, rank_method, underlying_type_t_rank_method, sorted_order,
-    is_sorted as cpp_is_sorted
+    rank, rank_method, sorted_order, is_sorted as cpp_is_sorted
 )
 from cudf._libxx.cpp.types cimport order, null_order, include_nulls
+
+from libc.stdint cimport int32_t
+ctypedef int32_t underlying_type_t_rank_method
 
 
 def is_sorted(

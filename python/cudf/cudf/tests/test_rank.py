@@ -1,5 +1,7 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+from itertools import chain, combinations_with_replacement, product
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -64,7 +66,7 @@ class TestRank:
             pct=pct,
         )
         # TODO: https://github.com/pandas-dev/pandas/issues/32593
-        # Dataframe (possible bug in pandas)
+        # Dataframe (bug in pandas)
         # _check(
         #     gdf,
         #     pdf,
@@ -81,10 +83,7 @@ class TestRank:
         gdf = DataFrame.from_pandas(pdf)
         with pytest.raises(KeyError):
             gdf["col1"].rank(
-                method="randomname",
-                na_option="keep",
-                ascending=True,
-                pct=True,
+                method="randomname", na_option="keep", ascending=True, pct=True
             )
         with pytest.raises(KeyError):
             gdf["col1"].rank(
@@ -93,3 +92,35 @@ class TestRank:
                 ascending=True,
                 pct=True,
             )
+
+    sort_group_args = [
+        np.full((3,), np.nan),
+        100 * np.random.random(10),
+        np.full((3,), np.inf),
+        np.full((3,), -np.inf),
+    ]
+    sort_dtype_args = [np.int32, np.float32, np.float64]
+    # TODO: np.int64, disabled because of bug
+    # https://github.com/pandas-dev/pandas/issues/32859
+
+    @pytest.mark.parametrize(
+        "elem,dtype",
+        list(
+            product(
+                combinations_with_replacement(sort_group_args, 4),
+                sort_dtype_args,
+            )
+        ),
+    )
+    def test_series_rank_combinations(self, elem, dtype):
+        np.random.seed(0)
+        gdf = DataFrame()
+        gdf["a"] = aa = np.fromiter(
+            chain.from_iterable(elem), np.float64
+        ).astype(dtype)
+        ranked_gs = gdf["a"].rank(method="first")
+        df = pd.DataFrame()
+        df["a"] = aa
+        ranked_ps = df["a"].rank(method="first")
+        # Check
+        assert_eq(ranked_ps, ranked_gs.to_pandas())

@@ -3,7 +3,6 @@
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
-from libc.stdint cimport int32_t
 
 from cudf._libxx.types import np_to_cudf_types, cudf_to_np_types
 
@@ -20,8 +19,6 @@ cdef extern from "cudf/sorting.hpp" namespace "cudf" nogil:
         MIN "cudf::rank_method::MIN"
         MAX "cudf::rank_method::MAX"
         DENSE "cudf::rank_method::DENSE"
-
-ctypedef int32_t underlying_type_t_rank_method
 
 cdef extern from "cudf/sorting.hpp" namespace "cudf::experimental" nogil:
     cdef unique_ptr[column] sorted_order(
