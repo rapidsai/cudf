@@ -287,6 +287,7 @@
 - PR #4591 Fix issue when reading consecutive rowgroups
 - PR #4600 Fix missing include in benchmark_fixture.hpp
 - PR #4588 Fix ordering issue in `MultiIndex`
+- PR #4630 Remove dangling reference to RMM exec policy in drop duplicates tests.
 
 
 # cuDF 0.12.0 (04 Feb 2020)
