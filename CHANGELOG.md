@@ -21,6 +21,7 @@
 - PR #4570 Fixing loc ordering issue in dataframe
 - PR #4613 Fix issue related to downcasting in `.loc`
 - PR #4615 Fix potential OOB write in ORC writer compression stage
+- PR #4587 Fix non-regex libcudf contains methods to return true when target is an empty string
 
 
 # cuDF 0.13.0 (Date TBD)
