@@ -257,14 +257,8 @@ __device__ inline int string_view::compare(const string_view& in) const
 __device__ inline int string_view::compare(const char* data, size_type bytes) const
 {
     size_type const len1 = size_bytes();
-    if( len1==0 && bytes==0 )
-        return 0;
     const unsigned char* ptr1 = reinterpret_cast<const unsigned char*>(this->data());
-    if(!ptr1)
-        return -1;
     const unsigned char* ptr2 = reinterpret_cast<const unsigned char*>(data);
-    if(!ptr2)
-        return 1;
     size_type idx = 0;
     for(; (idx < len1) && (idx < bytes); ++idx)
     {
