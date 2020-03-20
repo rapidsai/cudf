@@ -3931,13 +3931,15 @@ class DataFrame(Frame):
 
         # Collect datatypes and cast columns as that type
         common_type = np.result_type(*self.dtypes)
-        homogenized_cols = [
-            c.astype(common_type)
-            if not np.issubdtype(c.dtype, common_type)
-            else c
-            for c in self._columns
-        ]
-        data_col = libcudf.reshape.stack(homogenized_cols)
+        homogenized = DataFrame(
+            {c: (self._data[c].astype(common_type)
+                 if not np.issubdtype(self._data[c].dtype, common_type)
+                 else self._data[c])
+             for c in self._data
+             })
+
+        data_col = libcudfxx.reshape.interleave_columns(homogenized)
+
         result = Series(data=data_col, index=new_index)
         if dropna:
             return result.dropna()
