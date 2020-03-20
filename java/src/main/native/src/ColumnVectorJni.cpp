@@ -19,6 +19,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/datetime.hpp>
+#include <cudf/concatenate.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/quantiles.hpp>
 #include <cudf/reduction.hpp>
