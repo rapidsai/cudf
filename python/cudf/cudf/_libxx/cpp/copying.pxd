@@ -21,7 +21,8 @@ from cudf._libxx.cpp.types cimport size_type
 cdef extern from "cudf/copying.hpp" namespace "cudf::experimental" nogil:
     cdef unique_ptr[table] gather (
         const table_view& source_table,
-        const column_view& gather_map
+        const column_view& gather_map,
+        bool bounds_check
     ) except +
 
     cdef unique_ptr[column] shift(
