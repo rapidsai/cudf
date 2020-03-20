@@ -318,6 +318,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
         npartitions=None,
         max_branch=None,
         ignore_index=True,
+        concat_by_column=False,
         **kwargs,
     ):
         """Repartition a dask_cudf DataFrame by hashing.
@@ -350,6 +351,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
             npartitions,
             max_branch=max_branch,
             ignore_index=ignore_index,
+            concat_by_column=concat_by_column,
         )
 
     def repartition(self, *args, **kwargs):

@@ -8,6 +8,7 @@ import numpy as np
 import tlz as toolz
 
 from dask.base import tokenize
+from dask.dataframe import methods
 from dask.dataframe.core import DataFrame, Index, Series, _concat
 from dask.dataframe.shuffle import rearrange_by_column
 from dask.dataframe.utils import group_split_dispatch, hash_object_dispatch
@@ -16,6 +17,8 @@ from dask.utils import M, digit, insert
 
 import cudf as gd
 from cudf.utils.dtypes import is_categorical_dtype
+
+from . import core
 
 
 def set_partitions_hash(df, columns, npartitions):
@@ -36,8 +39,96 @@ def _shuffle_group(df, columns, stage, k, npartitions, ignore_index):
     )
 
 
+def _df_concat(df_list, ignore_index=True):
+    if not df_list:
+        return df_list
+
+    assert ignore_index
+
+    # We filter out empty partitions here because pandas frequently has
+    # inconsistent dtypes in results between empty and non-empty frames.
+    # Ideally this would be handled locally for each operation, but in practice
+    # this seems easier. TODO: don't do this.
+    dfs = [df for df in df_list if len(df)]
+    if len(dfs) == 0:
+        return df_list[0]
+
+    ret = type(dfs[0])()
+    col_names = list(dfs[0].columns)
+    for col_name in col_names:
+        ret.add_column(
+            col_name,
+            methods.concat(
+                [df[col_name] for df in dfs],
+                uniform=True,
+                ignore_index=ignore_index,
+            ),
+        )
+        for df in dfs:
+            df.drop(columns=[col_name])
+    return ret
+
+
+def _df_split(df):
+    ret = []
+    for col_name in df.columns:
+        ret.append(df[col_name])
+    return ret
+
+
+def _df_combine_cols(org_df, col_list):
+    ret = gd.DataFrame()
+    for col, name in zip(col_list, org_df.columns):
+        ret.add_column(name, col)
+    return ret
+
+
+def df_concat_dsk(org_df, innodes, outnode, ignore_index):
+    token = tokenize(*innodes)
+
+    # Split each df into its individual columns
+    split = {
+        ("df-split-" + token, i): (_df_split, innode)
+        for i, innode in enumerate(innodes)
+    }
+    get_items = {
+        ("df-getitems-" + token, i, col): (
+            getitem,
+            ("df-split-" + token, i),
+            col,
+        )
+        for i in range(len(innodes))
+        for col in range(len(org_df.columns))
+    }
+    col_cat = {
+        ("df-col-cat-" + token, col): (
+            _concat,
+            [("df-getitems-" + token, i, col) for i in range(len(innodes))],
+        )
+        for col in range(len(org_df.columns))
+    }
+
+    combine_cols = {
+        outnode: (
+            _df_combine_cols,
+            org_df,
+            [
+                ("df-col-cat-" + token, col)
+                for col in range(len(org_df.columns))
+            ],
+        )
+    }
+
+    return toolz.merge(split, get_items, col_cat, combine_cols)
+
+
 def rearrange_by_hash(
-    df, columns, npartitions, max_branch=None, ignore_index=True
+    df,
+    columns,
+    npartitions,
+    max_branch=None,
+    ignore_index=True,
+    concat_by_column=False,
 ):
     if npartitions and npartitions != df.npartitions:
         # Use main-line dask for new npartitions
@@ -55,7 +146,6 @@ def rearrange_by_hash(
             npartitions=npartitions,
             ignore_index=ignore_index,
         )
-
     n = df.npartitions
     if max_branch is False:
         stages = 1
@@ -115,25 +205,53 @@ def rearrange_by_hash(
             for inp in inputs
         }
 
-        combine = {  # concatenate those pieces together, with their friends
-            ("shuffle-combine-" + token, stage, inp): (
-                _concat,
-                [
-                    (
-                        "shuffle-split-" + token,
-                        stage,
-                        inp[stage - 1],
-                        insert(inp, stage - 1, j),
+        # concatenate those pieces together, with their friends
+        if concat_by_column and isinstance(df, core.DataFrame):
+            print("YAHOO")
+            combine = toolz.merge(
+                *[
+                    df_concat_dsk(
+                        df,
+                        [
+                            (
+                                "shuffle-split-" + token,
+                                stage,
+                                inp[stage - 1],
+                                insert(inp, stage - 1, j),
+                            )
+                            for j in range(k)
+                        ],
+                        ("shuffle-combine-" + token, stage, inp),
+                        ignore_index,
                     )
-                    for j in range(k)
-                ],
-                ignore_index,
+                    for inp in inputs
+                ]
             )
-            for inp in inputs
-        }
+        else:
+            combine = {
+                ("shuffle-combine-" + token, stage, inp): (
+                    _concat,
+                    [
+                        (
+                            "shuffle-split-" + token,
+                            stage,
+                            inp[stage - 1],
+                            insert(inp, stage - 1, j),
+                        )
+                        for j in range(k)
+                    ],
+                    ignore_index,
+                )
+                for inp in inputs
+            }
         groups.append(group)
         splits.append(split)
         combines.append(combine)
+
+        # visualize(dsk=combine, filename="transpose.svg")
+        # import pprint
+        # pprint.pprint(combine)
+        # assert False
 
     end = {
         ("shuffle-" + token, i): ("shuffle-combine-" + token, stages, inp)
@@ -146,6 +264,10 @@ def rearrange_by_hash(
     )
     df2 = DataFrame(graph, "shuffle-" + token, df, df.divisions)
     df2.divisions = (None,) * (df.npartitions + 1)
+    # import pprint
+
+    # pprint.pprint(dsk)
+    # df2.visualize(filename="transpose.svg", verbose=True)
 
     return df2
 

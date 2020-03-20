@@ -412,7 +412,8 @@ def test_repartition_hash_staged():
 
 @pytest.mark.parametrize("by", [["b"], ["c"], ["d"], ["b", "c"]])
 @pytest.mark.parametrize("npartitions", [4, 5])
-def test_repartition_hash(by, npartitions):
+@pytest.mark.parametrize("concat_by_column", [True, False])
+def test_repartition_hash(by, npartitions, concat_by_column):
     npartitions_i = 4
     datarange = 26
     size = 100
@@ -426,7 +427,9 @@ def test_repartition_hash(by, npartitions):
     )
     gdf.d = gdf.d.astype("datetime64[ms]")
     ddf = dgd.from_cudf(gdf, npartitions=npartitions_i)
-    ddf_new = ddf.repartition(columns=by, npartitions=npartitions)
+    ddf_new = ddf.repartition(
+        columns=by, npartitions=npartitions, concat_by_column=concat_by_column
+    )
 
     # Check that the length was preserved
     assert len(ddf_new) == len(ddf)
