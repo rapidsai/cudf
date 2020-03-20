@@ -198,6 +198,13 @@ namespace operation {
         }
     };
 
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+    struct LogBase {
+        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+            return TypeOut(std::log(static_cast<double>(lhs)) / std::log(static_cast<double>(rhs)));
+        }
+    };
+
 }  // namespace operation
 }  // namespace library
 }  // namespace cudf
