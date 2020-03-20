@@ -2,6 +2,7 @@
 
 ## New Features
 
+- PR #4626 LogBase binops
 
 ## Improvements
 
