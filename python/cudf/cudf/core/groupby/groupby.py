@@ -12,7 +12,7 @@ from cudf.utils.dtypes import is_scalar
 
 
 def columns_from_dataframe(df):
-    cols = list(df._data.columns)
+    cols = list(df._data.values())
     # strip column names
     for col in cols:
         col.name = None
@@ -28,18 +28,118 @@ def dataframe_from_columns(cols, index_cols=None, index=None, columns=None):
 
 class _Groupby(object):
     def sum(self):
+        """Compute the sum of each group
+
+        Examples
+        --------
+
+        .. code-block:: python
+
+          from cudf import DataFrame
+          df = DataFrame()
+          df['key'] = [0, 0, 1, 1, 2, 2, 2]
+          df['val'] = [0, 1, 2, 3, 4, 5, 6]
+          result = df.groupby(['key'],as_index=False).sum()
+
+          result
+
+            key  val
+          0   0    1
+          1   1    5
+          2   2   15
+        """
         return self._apply_aggregation("sum")
 
     def min(self):
+        """Compute the min of each group
+
+        Examples
+        --------
+
+        .. code-block:: python
+
+          from cudf import DataFrame
+          df = DataFrame()
+          df['key'] = [0, 0, 1, 1, 2, 2, 2]
+          df['val'] = [0, 1, 2, 3, 4, 5, 6]
+          result = df.groupby(['key'],as_index=False).min()
+
+          result
+
+            key  val
+          0   0    0
+          1   1    2
+          2   2    4
+        """
         return self._apply_aggregation("min")
 
     def max(self):
+        """Compute the max of each group
+
+        Examples
+        --------
+
+        .. code-block:: python
+
+          from cudf import DataFrame
+          df = DataFrame()
+          df['key'] = [0, 0, 1, 1, 2, 2, 2]
+          df['val'] = [0, 1, 2, 3, 4, 5, 6]
+          result = df.groupby(['key'],as_index=False).max()
+
+          result
+
+            key  val
+          0   0    1
+          1   1    3
+          2   2    6
+        """
         return self._apply_aggregation("max")
 
     def mean(self):
+        """Compute the mean of each group
+
+        Examples
+        --------
+
+        .. code-block:: python
+
+          from cudf import DataFrame
+          df = DataFrame()
+          df['key'] = [0, 0, 1, 1, 2, 2, 2]
+          df['val'] = [0, 1, 2, 3, 4, 5, 6]
+          result = df.groupby(['key'],as_index=False).mean()
+
+          result
+
+            key  val
+          0   0  0.5
+          1   1  2.5
+          2   2  5.0
+        """
         return self._apply_aggregation("mean")
 
     def count(self):
+        """Compute the count of each group
+
+        Examples
+        --------
+
+        .. code-block:: python
+
+          from cudf import DataFrame
+          df = DataFrame()
+          df['key'] = [0, 0, 1, 1, 2, 2, 2]
+          df['val'] = [0, 1, 2, 3, 4, 5, 6]
+          result = df.groupby(['key'],as_index=False).count()
+
+          result
+
+            key  val
+          0   0    2
+          1   1    2
+          2   2    3
+        """
         return self._apply_aggregation("count")
 
     def agg(self, func):
