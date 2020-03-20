@@ -235,7 +235,7 @@ class ColumnBase(Column):
 
         head = objs[0]
         for obj in objs:
-            if not (obj.dtype == head.dtype):
+            if not pd.api.types.is_dtype_equal(obj.dtype, head.dtype):
                 raise ValueError("All series must be of same type")
 
         newsize = sum(map(len, objs))

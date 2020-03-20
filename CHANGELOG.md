@@ -5,6 +5,7 @@
 
 ## Improvements
 
+- PR #4531 Add doc note on conda channel_priority
 - PR #4479 Adding cuda 10.2 support via conda environment file addition
 - PR #4486 Remove explicit template parameter from detail::scatter.
 - PR #4471 Consolidate partitioning functionality into a single header.
@@ -12,11 +13,13 @@
 - PR #4073 Enable contiguous split java test
 - PR #4527 Add JNI and java bindings for matches_re
 - PR #4606 Fix `scan` unit test and upgrade to more appropriate algorithms
+- PR #4599 Add Java and JNI bindings for string replace
 
 ## Bug Fixes
 
 - PR #4386 Update Java package to 0.14
 - PR #4402 Fix cudf::strings::join_strings logic with all-null strings and null narep
+- PR #4570 Fixing loc ordering issue in dataframe
 
 
 # cuDF 0.13.0 (Date TBD)
@@ -65,6 +68,7 @@
 - PR #4288 Add libcudf++ shift Cython implementation
 - PR #4338 Add cudf::sequence() for generating an incrementing list of numeric values
 - PR #4456 Add argmin/max and string min/max to sort groupby
+- PR #4564 Added Java bindings for clamp operator.
 
 ## Improvements
 
@@ -118,6 +122,7 @@
 - PR #4098 Remove legacy calls from libcudf strings column code
 - PR #4044 Port join.pyx to use libcudf++ APIs
 - PR #4111 Use `Buffer`'s to serialize `StringColumn`
+- PR #4567 Optimize `__reduce__` in `StringColumn`
 - PR #4113 Get `len` of `StringColumn`s without `nvstrings`
 - PR #4147 Remove workaround for UNKNOWN_NULL_COUNT in contiguous_split.
 - PR #4130 Renames in-place `cudf::experimental::fill` to `cudf::experimental::fill_in_place`
@@ -187,10 +192,13 @@
 - PR #4499 Adding changes to handle include `keep_index` and `RangeIndex`
 - PR #4533 Import `tlz` for optional `cytoolz` support
 - PR #4493 Skip legacy testing in CI
+- PR #4346 Port groupby Cython/Python to use libcudf++ API
 - PR #4524 Updating `__setitem__` for DataFrame to use scalar scatter
 - PR #4534 Disable deprecation warnings as errors.
 - PR #4506 Check for multi-dimensional data in column/Series creation
 - PR #4549 Add option to disable deprecation warnings.
+- PR #4516 Add negative value support for `.str.get`
+- PR #4563 Remove copying to host for metadata generation in `generate_pandas_metadata`
 
 ## Bug Fixes
 
@@ -288,7 +296,10 @@
 - PR #4513 Backport scalar virtual destructor fix
 - PR #4519 Remove `n` validation for `nlargest` & `nsmallest` and add negative support for `n`
 - PR #4526 Fix index slicing issue for index incase of an empty dataframe
+- PR #4538 Fix cudf::strings::slice_strings(step=-1) for empty strings
 - PR #4557 Disable compile-errors on deprecation warnings, for JNI
+- PR #4576 Fix typo in `serialize.py`
+- PR #4571 Load JNI native dependencies for Scalar class
 
 
 # cuDF 0.12.0 (04 Feb 2020)

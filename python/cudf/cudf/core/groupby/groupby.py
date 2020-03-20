@@ -1,694 +1,644 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2020, NVIDIA CORPORATION.
 
 import collections
+import functools
 import itertools
 import pickle
 
+import pandas as pd
+
 import cudf
-import cudf._lib as libcudf
-import cudf._libxx as libcudfxx
-from cudf import MultiIndex
-from cudf.core.column import deserialize_columns, serialize_columns
-from cudf.utils.dtypes import is_scalar
+import cudf._libxx.groupby as libgroupby
+from cudf._libxx.nvtx import range_pop, range_push
 
 
-def columns_from_dataframe(df):
-    cols = list(df._data.columns)
-    # strip column names
-    for col in cols:
-        col.name = None
-    return cols
+class GroupBy(object):
+    """
+    Group a DataFrame or Series by a set of columns.
 
+    Parameters
+    ----------
+    by : optional
+        Specifies the grouping columns. Can be any of the following:
+        - A Python function called on each value of the object's index
+        - A dict or Series that maps index labels to group names
+        - A cudf.Index object
+        - A str indicating a column name
+        - An array of the same length as the object
+        - A Grouper object
+        - A list of the above
+    level : int, level_name or list, optional
+        For objects with a MultiIndex, `level` can be used to specify
+        grouping by one or more levels of the MultiIndex.
+    sort : True, optional
+        If True (default), sort results by group9s). Note that
+        unlike Pandas, this also sorts values within each group.
+    as_index : bool, optional
+        If as_index=True (default), the group names appear
+        as the keys of the resulting DataFrame.
+        If as_index=False, the groups are returned as ordinary
+        columns of the resulting DataFrame, *if they are named columns*.
+    dropna : bool, optional
+        If True (default), do not include the "null" group.
+    """
 
-def dataframe_from_columns(cols, index_cols=None, index=None, columns=None):
-    df = cudf.DataFrame(dict(zip(range(len(cols)), cols)), index=index)
-    if columns is not None:
-        df.columns = columns
-    return df
-
-
-class _Groupby(object):
-    def sum(self):
-        return self._apply_aggregation("sum")
-
-    def min(self):
-        return self._apply_aggregation("min")
-
-    def max(self):
-        return self._apply_aggregation("max")
-
-    def mean(self):
-        return self._apply_aggregation("mean")
-
-    def count(self):
-        return self._apply_aggregation("count")
-
-    def agg(self, func):
-        return self._apply_aggregation(func)
-
-    def size(self):
-        from cudf.core.column import column_empty
-
-        nrows = len(self._groupby.obj)
-        data = cudf.Series(column_empty(nrows, "int8", masked=False))
-        return data.groupby(self._groupby.key_columns).count()
-
-    def serialize(self):
-        header, frames = self._groupby.serialize()
-        header["type-serialized"] = pickle.dumps(type(self))
-        return header, frames
-
-    @classmethod
-    def deserialize(cls, header, frames):
-        groupby_type = pickle.loads(header["type-serialized"])
-        _groupby = _GroupbyHelper.deserialize(header, frames)
-        by = None
-        if _groupby.level is None:
-            by = _groupby.by
-        return groupby_type(
-            _groupby.obj,
-            by=by,
-            level=_groupby.level,
-            sort=_groupby.sort,
-            as_index=_groupby.as_index,
-        )
-
-
-class SeriesGroupBy(_Groupby):
     def __init__(
-        self,
-        sr,
-        by=None,
-        level=None,
-        method="hash",
-        sort=True,
-        as_index=None,
-        dropna=True,
+        self, obj, by=None, level=None, sort=True, as_index=True, dropna=True
     ):
-        self._sr = sr
-        if as_index not in (True, None):
-            raise TypeError("as_index must be True for SeriesGroupBy")
-        self._groupby = _GroupbyHelper(
-            obj=self._sr, by=by, level=level, sort=sort, dropna=dropna
-        )
+        self.obj = obj
+        self._as_index = as_index
+        self._sort = sort
+        self._dropna = dropna
 
-    def _apply_aggregation(self, agg):
-        return self._groupby.compute_result(agg)
-
-    def quantile(self, q=0.5, interpolation="linear"):
-        raise NotImplementedError
-
-    def std(self, ddof=1):
-        raise NotImplementedError
-
-
-class DataFrameGroupBy(_Groupby):
-    def __init__(
-        self,
-        df,
-        by=None,
-        as_index=True,
-        level=None,
-        sort=True,
-        method="hash",
-        dropna=True,
-    ):
-
-        if by is not None and level is None:
-            df, by = _align_by_and_df(df, by)
-        self._df = df
-        self._groupby = _GroupbyHelper(
-            obj=self._df,
-            by=by,
-            as_index=as_index,
-            level=level,
-            sort=sort,
-            dropna=dropna,
-        )
-
-    def _apply_aggregation(self, agg):
-        """
-        Applies the aggregation function(s) ``agg`` on all columns
-        """
-        result = self._groupby.compute_result(agg)
-        libcudfxx.nvtx.range_pop()
-        return result
-
-    def __getitem__(self, arg):
-        if is_scalar(arg):
-            return self.__getattr__(arg)
+        if isinstance(by, _Grouping):
+            self.grouping = by
         else:
-            arg = list(arg)
-            by = None
-            if self._groupby.level is None:
-                by = self._groupby.key_columns
+            self.grouping = _Grouping(obj, by, level)
 
-            return self._df[arg].groupby(
-                by=by,
-                level=self._groupby.level,
-                as_index=self._groupby.as_index,
-                sort=self._groupby.sort,
-                dropna=self._groupby.dropna,
-            )
+        self._groupby = libgroupby.GroupBy(self.grouping.keys, dropna=dropna)
 
     def __getattr__(self, key):
-        if key == "_df":
-            # this guards against RecursionError during pickling/copying
-            raise AttributeError()
-        if key in self._df.columns:
-            by_list = []
-
-            for by_name, by in zip(
-                self._groupby.key_names, self._groupby.key_columns
-            ):
-                by_list.append(cudf.Series(by, name=by_name))
-            return self._df[key].groupby(
-                by_list,
-                as_index=self._groupby.as_index,
-                sort=self._groupby.sort,
-                dropna=self._groupby.dropna,
-            )
+        if key != "_agg_func_name_with_args":
+            if key in libgroupby._GROUPBY_AGGS:
+                return functools.partial(self._agg_func_name_with_args, key)
         raise AttributeError(
-            "'DataFrameGroupBy' object has no attribute " "'{}'".format(key)
+            f"'{self.__class__.__name__}' has no attribute '{key}'"
         )
 
-    def quantile(self, q=0.5, interpolation="linear"):
-        # Get Key_cols from _GroupbyHelper. It's generated at init.
-        key_cols = [
-            sr._column
-            if isinstance(sr, cudf.Series)
-            else cudf.Series(sr)._column
-            for sr in self._groupby.key_columns
-        ]
-        # Do the things that'll make it generate the value columns
-        self._groupby.normalize_agg("quantile")
-        self._groupby.normalize_values()
-        # Get the value_columns
-        val_cols = self._groupby.value_columns
+    def __iter__(self):
+        group_names, offsets, grouped_values = self._grouped()
+        for i, name in enumerate(group_names):
+            yield name, grouped_values[offsets[i] : offsets[i + 1]]
 
-        out_key_columns, out_value_columns = libcudf.quantile.group_quantile(
-            key_cols, val_cols, q, interpolation
-        )
-        return self._groupby.construct_result(
-            out_key_columns, out_value_columns
-        )
-
-    def std(self, ddof=1):
-        # Get Key_cols from _GroupbyHelper. It's generated at init.
-        key_cols = [
-            sr._column
-            if isinstance(sr, cudf.Series)
-            else cudf.Series(sr)._column
-            for sr in self._groupby.key_columns
-        ]
-        # Do the things that'll make it generate the value columns
-        self._groupby.normalize_agg("std")
-        self._groupby.normalize_values()
-        # Get the value_columns
-        val_cols = self._groupby.value_columns
-
-        out_key_columns, out_value_columns = libcudf.reduce.group_std(
-            key_cols, val_cols, ddof
-        )
-        return self._groupby.construct_result(
-            out_key_columns, out_value_columns
-        )
-
-
-class _GroupbyHelper(object):
-
-    NAMED_AGGS = ("sum", "mean", "min", "max", "count", "quantile", "std")
-
-    def __init__(
-        self, obj, by=None, level=None, as_index=True, sort=None, dropna=True
-    ):
+    def size(self):
         """
-        Helper class for both SeriesGroupBy and DataFrameGroupBy classes.
+        Return the size of each group.
         """
-        self.obj = obj
-        if by is None and level is None:
-            raise TypeError("Either 'by' or 'level' must be provided")
-        if level is not None:
-            if by is not None:
-                raise TypeError("Cannot use both 'by' and 'level'")
-            by = self.get_by_from_level(level)
-        self.level = level
-        self.by = by
-        self.as_index = as_index
-        self.sort = sort
-        self.dropna = dropna
-        self.normalize_keys()
-        self.original_aggs = None
+        return (
+            cudf.Series(
+                cudf.core.column.column_empty(
+                    len(self.obj), "int8", masked=False
+                )
+            )
+            .groupby(self.grouping)
+            .agg("size")
+        )
+
+    def agg(self, func):
+        """
+        Apply aggregation(s) to the groups.
+
+        Parameters
+        ----------
+        func : str, callable, list or dict
+
+        Returns
+        -------
+        A Series or DataFrame containing the combined results of the
+        aggregation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> a = cudf.DataFrame({'a': [1, 1, 2], 'b': [1, 2, 3]})
+        >>> a.groupby('a').agg('sum')
+           b
+        a
+        1  3
+        2  3
+
+        Specifying a list of aggregations to perform on each column.
+
+        >>> a.groupby('a').agg(['sum', 'min'])
+            b       c
+          sum min sum min
+        a
+        1   3   1   4   2
+        2   3   3   1   1
+
+        Using a dict to specify aggregations to perform per column.
+
+        >>> a.groupby('a').agg({'a': 'max', 'b': ['min', 'mean']})
+            a   b
+          max min mean
+        a
+        1   1   1  1.5
+        2   2   3  3.0
+
+        Using lambdas/callables to specify aggregations taking parameters.
+
+        >>> f1 = lambda x: x.quantile(0.5); f1.__name__ = "q0.5"
+        >>> f2 = lambda x: x.quantile(0.75); f2.__name__ = "q0.75"
+        >>> a.groupby('a').agg([f1, f2])
+             b          c
+          q0.5 q0.75 q0.5 q0.75
+        a
+        1  1.5  1.75  2.0   2.0
+        2  3.0  3.00  1.0   1.0
+        """
+        range_push("CUDF_GROUPBY", "purple")
+
+        normalized_aggs = self._normalize_aggs(func)
+
+        result = self._groupby.aggregate(self.obj, normalized_aggs)
+
+        result = cudf.DataFrame._from_table(result)
+
+        if self._sort:
+            result = result.sort_index()
+
+        if not _is_multi_agg(func):
+            try:
+                # drop the last level
+                if result.columns.nlevels > 1:
+                    result.columns = result.columns.droplevel(-1)
+            except IndexError:
+                # Pandas raises an IndexError if we are left
+                # with an all-nan MultiIndex when dropping
+                # the last level
+                if result.shape[1] == 1:
+                    result.columns = [None]
+                else:
+                    raise
+
+        # set index names to be group key names
+        result.index.names = self.grouping.names
+
+        # copy categorical information from keys to the result index:
+        result.index._copy_categories(self.grouping.keys)
+
+        if not self._as_index:
+            for col_name in reversed(self.grouping._named_columns):
+                result.insert(
+                    0,
+                    col_name,
+                    result.index.get_level_values(col_name)._values,
+                )
+            result.index = cudf.core.index.RangeIndex(len(result))
+
+        range_pop()
+        return result
+
+    aggregate = agg
+
+    def nth(self, n):
+        """
+        Return the nth row from each group.
+        """
+        result = self.agg(lambda x: x.nth(n))
+        sizes = self.size()
+        return result[n < sizes]
+
+    def nunique(self):
+        """
+        Return the number of unique values per group.
+        """
+        # Pandas includes key columns for nunique:
+        return self.agg(dict.fromkeys(self.obj._data.keys(), "nunique"))
 
     def serialize(self):
         header = {}
         frames = []
 
-        header["obj"], obj_frames = self.obj.serialize()
+        header["kwargs"] = {
+            "sort": self._sort,
+            "dropna": self._dropna,
+            "as_index": self._as_index,
+        }
+
+        obj_header, obj_frames = self.obj.serialize()
+        header["obj"] = obj_header
         header["obj_type"] = pickle.dumps(type(self.obj))
-        header["obj_frame_count"] = len(obj_frames)
+        header["num_obj_frames"] = len(obj_frames)
         frames.extend(obj_frames)
 
-        header["key_names"] = self.key_names
-        header["level"] = self.level
-        header["df_key_names"] = self.df_key_names
-        header["as_index"] = self.as_index
-        header["sort"] = self.sort
-
-        key_columns = [
-            sr._column
-            if isinstance(sr, cudf.Series)
-            else cudf.Series(sr)._column
-            for sr in self.key_columns
-        ]
-        key_columns_header, key_columns_frames = serialize_columns(key_columns)
-
-        header["key_columns"] = key_columns_header
-        frames.extend(key_columns_frames)
+        grouping_header, grouping_frames = self.grouping.serialize()
+        header["grouping"] = grouping_header
+        header["num_grouping_frames"] = len(grouping_frames)
+        frames.extend(grouping_frames)
 
         return header, frames
 
     @classmethod
     def deserialize(cls, header, frames):
-        obj_frames = frames[: header["obj_frame_count"]]
+
+        kwargs = header["kwargs"]
 
         obj_type = pickle.loads(header["obj_type"])
-        obj = obj_type.deserialize(header["obj"], obj_frames)
+        obj = obj_type.deserialize(
+            header["obj"], frames[: header["num_obj_frames"]]
+        )
+        grouping = _Grouping.deserialize(
+            header["grouping"], frames[header["num_obj_frames"] :]
+        )
+        return cls(obj, grouping, **kwargs)
 
-        as_index = header["as_index"]
-        sort = header["sort"]
-        df_key_names = header["df_key_names"]
-        level = header["level"]
+    def _grouped(self):
+        grouped_keys, grouped_values, offsets = self._groupby.groups(self.obj)
 
-        key_column_frames = frames[header["obj_frame_count"] :]
-        key_columns = deserialize_columns(
-            header["key_columns"], key_column_frames
+        grouped_keys = cudf.Index._from_table(grouped_keys)
+        grouped_values = self.obj.__class__._from_table(grouped_values)
+        grouped_values._copy_categories(self.obj)
+        group_names = grouped_keys.unique()
+        return (
+            group_names,
+            offsets,
+            grouped_values,
         )
 
-        for col_name, col in zip(header["key_names"], key_columns):
-            col.name = col_name
-
-        by = None
-        if level is None:
-            by = df_key_names
-            by.extend(key_columns[len(df_key_names) : :])
-
-        gby = cls(obj, by=by, level=level, as_index=as_index, sort=sort)
-
-        return gby
-
-    def get_by_from_level(self, level):
+    def _agg_func_name_with_args(self, func_name, *args, **kwargs):
         """
-        Converts the ``level`` argument to a ``by`` argument.
+        Aggregate given an aggregate function name
+        and arguments to the function, e.g.,
+        `_agg_func_name_with_args("quantile", 0.5)`
         """
-        if not isinstance(level, list):
-            level = [level]
-        by_list = []
-        if isinstance(self.obj.index, cudf.MultiIndex):
-            for lev in level:
-                by_list.append(self.obj.index.get_level_values(lev))
-            return by_list
+
+        def func(x):
+            return getattr(x, func_name)(*args, **kwargs)
+
+        func.__name__ = func_name
+        return self.agg(func)
+
+    def _normalize_aggs(self, aggs):
+        """
+        Normalize aggs to a dict mapping column names
+        to a list of aggregations.
+        """
+        if not isinstance(aggs, collections.abc.Mapping):
+            # Make col_name->aggs mapping from aggs.
+            # Do not include named key columns
+
+            # Can't do set arithmetic here as sets are
+            # not ordered
+            columns = [
+                col_name
+                for col_name in self.obj._data
+                if col_name not in self.grouping._named_columns
+            ]
+            out = dict.fromkeys(columns, aggs)
         else:
-            if len(level) > 1 or level[0] != 0:
-                raise ValueError("level != 0 only valid with MultiIndex")
-            by_list.append(cudf.Series(self.obj.index))
-        return by_list
+            out = aggs.copy()
 
-    def normalize_keys(self):
-        """
-        Sets self.key_names and self.key_columns
-        """
-        self.df_key_names = []
-        if isinstance(self.by, (list, tuple)):
-            self.key_names = []
-            self.key_columns = []
-            for by in self.by:
-                name, col = self.key_from_by(by)
-                self.key_names.append(name)
-                self.key_columns.append(col)
-        else:
-            # grouping by a single label or Series
-            name, col = self.key_from_by(self.by)
-            self.key_names = [name]
-            self.key_columns = [col]
-
-    def key_from_by(self, by):
-        """
-        Get (key_name, key_column) pair from a single *by* argument
-        """
-        if is_scalar(by):
-            self.df_key_names.append(by)
-            key_name = by
-            key_column = self.obj[by]
-        else:
-            if len(by) != len(self.obj):
-                raise NotImplementedError(
-                    "cuDF does not support arbitrary series index lengths "
-                    "for groupby"
-                )
-            key_name = by.name
-            key_column = by
-        return key_name, key_column
-
-    def compute_result(self, agg):
-        """
-        Computes the groupby result
-        """
-        self.normalize_agg(agg)
-        self.normalize_values()
-        aggs_as_list = self.get_aggs_as_list()
-
-        key_columns = [
-            sr._column
-            if isinstance(sr, cudf.Series)
-            else cudf.Series(sr)._column
-            for sr in self.key_columns
-        ]
-
-        out_key_columns, out_value_columns = _groupby_engine(
-            key_columns,
-            self.value_columns,
-            aggs_as_list,
-            self.sort,
-            self.dropna,
-        )
-
-        return self.construct_result(out_key_columns, out_value_columns)
-
-    def normalize_agg(self, agg):
-        """
-        Normalize agg to a dictionary with column names
-        as keys and lists of aggregations as values.
-
-        For a Series, the dictionary has a single key ``None``
-        """
-        if hasattr(agg, "copy"):
-            self.original_aggs = agg.copy()
-        else:
-            self.original_aggs = agg
-        if isinstance(agg, collections.abc.Mapping):
-            for col_name, agg_name in agg.items():
-                if not isinstance(agg_name, list):
-                    agg[col_name] = [agg_name]
-            self.aggs = agg
-            return
-        if isinstance(agg, str):
-            agg = [agg]
-        if isinstance(self.obj, cudf.Series):
-            value_col_names = [None]
-        else:
-            value_col_names = []
-            # add all non-key columns to value_col_names,
-            # dropping "nuisance columns".
-            # But don't drop if keys are supplied from
-            # some other individual series.
-            for col_name in self.obj.columns:
-                if col_name not in self.df_key_names:
-                    drop = False
-                    if isinstance(
-                        self.obj[col_name]._column,
-                        (
-                            cudf.core.column.StringColumn,
-                            cudf.core.column.CategoricalColumn,
-                        ),
-                    ):
-                        for agg_name in agg:
-                            if agg_name in ("mean", "sum"):
-                                drop = True
-                    if not drop:
-                        value_col_names.append(col_name)
-        agg_list = [agg] * len(value_col_names)
-        self.aggs = dict(zip(value_col_names, agg_list))
-        self.validate_aggs()
-
-    def validate_aggs(self):
-        for col_name, agg_list in self.aggs.items():
-            for agg in agg_list:
-                if agg not in self.NAMED_AGGS:
-                    raise ValueError(
-                        f"Aggregation function name {agg} not recognized"
-                    )
-
-    def normalize_values(self):
-        """
-        Sets self.value_names and self.value_columns
-        """
-        if isinstance(self.obj, cudf.Series):
-            # SeriesGroupBy
-            col = self.obj._column
-            agg_list = self.aggs[None]
-            if len(agg_list) == 1:
-                self.value_columns = [col]
-                self.value_names = [self.obj.name]
+        # Convert all values to list-like:
+        for col, agg in out.items():
+            if not pd.api.types.is_list_like(agg):
+                out[col] = [agg]
             else:
-                self.value_columns = [col] * len(agg_list)
-                self.value_names = agg_list
-        else:
-            # DataFrameGroupBy
-            self.value_columns = []
-            self.value_names = []
-            for col_name, agg_list in self.aggs.items():
-                col = self.obj[col_name]._column
-                if len(agg_list) == 1:
-                    self.value_columns.append(col)
-                    self.value_names.append(col_name)
-                else:
-                    self.value_columns.extend([col] * len(agg_list))
-                    self.value_names.extend([col_name] * len(agg_list))
+                out[col] = list(agg)
 
-    def construct_result(self, out_key_columns, out_value_columns):
-        if not self.as_index:
-            result = cudf.concat(
-                [
-                    dataframe_from_columns(
-                        out_key_columns, columns=self.key_names
-                    ),
-                    dataframe_from_columns(
-                        out_value_columns, columns=self.value_names
-                    ),
-                ],
-                axis=1,
-            )
-            return result
+        return out
 
-        result = dataframe_from_columns(
-            out_value_columns, columns=self.compute_result_column_index()
-        )
+    def apply(self, function):
+        """Apply a python transformation function over the grouped chunk.
 
-        index = self.compute_result_index(out_key_columns, out_value_columns)
-        if len(result) == 0 and len(index) != 0:
-            # Can't go through the setter in this case
-            result._index = index
-        else:
-            result.index = index
+        Parameters
+        ----------
+        func : function
+          The python transformation function that will be applied
+          on the grouped chunk.
 
-        if isinstance(self.obj, cudf.Series):
-            # May need to downcast from DataFrame to Series:
-            if len(self.aggs[None]) == 1:
-                result = result[result.columns[0]]
-                result.name = self.value_names[0]
+        Examples
+        --------
+        .. code-block:: python
+
+          from cudf import DataFrame
+          df = DataFrame()
+          df['key'] = [0, 0, 1, 1, 2, 2, 2]
+          df['val'] = [0, 1, 2, 3, 4, 5, 6]
+          groups = df.groupby(['key'])
+
+          # Define a function to apply to each row in a group
+          def mult(df):
+            df['out'] = df['key'] * df['val']
+            return df
+
+          result = groups.apply(mult)
+          print(result)
+
+        Output:
+
+        .. code-block:: python
+
+             key  val  out
+          0    0    0    0
+          1    0    1    0
+          2    1    2    2
+          3    1    3    3
+          4    2    4    8
+          5    2    5   10
+          6    2    6   12
+        """
+        if not callable(function):
+            raise TypeError("type {!r} is not callable", type(function))
+        _, offsets, grouped_values = self._grouped()
+        ends = itertools.chain(offsets[1:], [None])
+        chunks = [grouped_values[s:e] for s, e in zip(offsets, ends)]
+        result = cudf.concat([function(chk) for chk in chunks])
+        if self._sort:
+            result = result.sort_index()
+        return result
+
+    def apply_grouped(self, function, **kwargs):
+        """Apply a transformation function over the grouped chunk.
+
+        This uses numba's CUDA JIT compiler to convert the Python
+        transformation function into a CUDA kernel, thus will have a
+        compilation overhead during the first run.
+
+        Parameters
+        ----------
+        func : function
+          The transformation function that will be executed on the CUDA GPU.
+        incols: list
+          A list of names of input columns.
+        outcols: list
+          A dictionary of output column names and their dtype.
+        kwargs : dict
+          name-value of extra arguments. These values are passed directly into
+          the function.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            from cudf import DataFrame
+            from numba import cuda
+            import numpy as np
+
+            df = DataFrame()
+            df['key'] = [0, 0, 1, 1, 2, 2, 2]
+            df['val'] = [0, 1, 2, 3, 4, 5, 6]
+            groups = df.groupby(['key'])
+
+            # Define a function to apply to each group
+            def mult_add(key, val, out1, out2):
+                for i in range(cuda.threadIdx.x, len(key), cuda.blockDim.x):
+                    out1[i] = key[i] * val[i]
+                    out2[i] = key[i] + val[i]
+
+            result = groups.apply_grouped(mult_add,
+                                          incols=['key', 'val'],
+                                          outcols={'out1': np.int32,
+                                                   'out2': np.int32},
+                                          # threads per block
+                                          tpb=8)
+
+            print(result)
+
+        Output:
+
+        .. code-block:: python
+
+               key  val out1 out2
+            0    0    0    0    0
+            1    0    1    0    1
+            2    1    2    2    3
+            3    1    3    3    4
+            4    2    4    8    6
+            5    2    5   10    7
+            6    2    6   12    8
+
+
+
+        .. code-block:: python
+
+            import cudf
+            import numpy as np
+            from numba import cuda
+            import pandas as pd
+            from random import randint
+
+
+            # Create a random 15 row dataframe with one categorical
+            # feature and one random integer valued feature
+            df = cudf.DataFrame(
+                    {
+                        "cat": [1] * 5 + [2] * 5 + [3] * 5,
+                        "val": [randint(0, 100) for _ in range(15)],
+                    }
+                 )
+
+            # Group the dataframe by its categorical feature
+            groups = df.groupby("cat")
+
+            # Define a kernel which takes the moving average of a
+            # sliding window
+            def rolling_avg(val, avg):
+                win_size = 3
+                for i in range(cuda.threadIdx.x, len(val), cuda.blockDim.x):
+                    if i < win_size - 1:
+                        # If there is not enough data to fill the window,
+                        # take the average to be NaN
+                        avg[i] = np.nan
+                    else:
+                        total = 0
+                        for j in range(i - win_size + 1, i + 1):
+                            total += val[j]
+                        avg[i] = total / win_size
+
+            # Compute moving avgs on all groups
+            results = groups.apply_grouped(rolling_avg,
+                                           incols=['val'],
+                                           outcols=dict(avg=np.float64))
+            print("Results:", results)
+
+            # Note this gives the same result as its pandas equivalent
+            pdf = df.to_pandas()
+            pd_results = pdf.groupby('cat')['val'].rolling(3).mean()
+
+
+        Output:
+
+        .. code-block:: python
+
+            Results:
+                 cat  val                 avg
+            0    1   16
+            1    1   45
+            2    1   62                41.0
+            3    1   45  50.666666666666664
+            4    1   26  44.333333333333336
+            5    2    5
+            6    2   51
+            7    2   77  44.333333333333336
+            8    2    1                43.0
+            9    2   46  41.333333333333336
+            [5 more rows]
+
+        This is functionally equivalent to `pandas.DataFrame.Rolling
+        <https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.rolling.html>`_
+
+        """
+        if not callable(function):
+            raise TypeError("type {!r} is not callable", type(function))
+
+        _, offsets, grouped_values = self._grouped()
+        kwargs.update({"chunks": offsets})
+        return grouped_values.apply_chunks(function, **kwargs)
+
+
+class DataFrameGroupBy(GroupBy):
+    def __getattr__(self, key):
+        if key in self.obj:
+            return self.obj[key].groupby(self.grouping, dropna=self._dropna)
+        return super().__getattr__(key)
+
+    def __getitem__(self, key):
+        return self.obj[key].groupby(self.grouping, dropna=self._dropna)
+
+
+class SeriesGroupBy(GroupBy):
+    def agg(self, func):
+        result = super().agg(func)
+
+        # downcast the result to a Series:
+        if result.shape[1] == 1 and not pd.api.types.is_list_like(func):
+            return result.iloc[:, 0]
+
+        # drop the first level if we have a multiindex
+        if (
+            isinstance(result.columns, pd.MultiIndex)
+            and result.columns.nlevels > 1
+        ):
+            result.columns = result.columns.droplevel(0)
 
         return result
 
-    def compute_result_index(self, key_columns, value_columns):
-        """
-        Computes the index of the result
-        """
-        key_names = self.key_names
-        if (len(key_columns)) == 1:
-            return cudf.core.index.as_index(key_columns[0], name=key_names[0])
+
+class Grouper(object):
+    def __init__(self, key=None, level=None):
+        if key is not None and level is not None:
+            raise ValueError("Grouper cannot specify both key and level")
+        if key is None and level is None:
+            raise ValueError("Grouper must specify either key or level")
+        self.key = key
+        self.level = level
+
+
+class _Grouping(object):
+    def __init__(self, obj, by=None, level=None):
+        self._obj = obj
+        self._key_columns = []
+        self.names = []
+
+        # Need to keep track of named key columns
+        # to support `as_index=False` correctly
+        self._named_columns = []
+
+        if level is not None:
+            if by is not None:
+                raise ValueError("Cannot specify both by and level")
+            level_list = level if isinstance(level, list) else [level]
+            for level in level_list:
+                self._handle_level(level)
         else:
-            empty_keys = all([len(x) == 0 for x in key_columns])
-            if len(value_columns) == 0 and empty_keys:
-                return cudf.core.index.GenericIndex(
-                    cudf.Series([], dtype="object")
-                )
-            return MultiIndex(
-                source_data=dataframe_from_columns(
-                    key_columns, columns=key_names
+            by_list = by if isinstance(by, list) else [by]
+
+            for by in by_list:
+                if callable(by):
+                    self._handle_callable(by)
+                elif isinstance(by, cudf.Series):
+                    self._handle_series(by)
+                elif isinstance(by, cudf.Index):
+                    self._handle_index(by)
+                elif isinstance(by, collections.abc.Mapping):
+                    self._handle_mapping(by)
+                elif isinstance(by, Grouper):
+                    self._handle_grouper(by)
+                else:
+                    try:
+                        self._handle_label(by)
+                    except (KeyError, TypeError):
+                        self._handle_misc(by)
+
+    @property
+    def keys(self):
+        nkeys = len(self._key_columns)
+        if nkeys > 1:
+            return cudf.MultiIndex(
+                source_data=cudf.DataFrame(
+                    dict(zip(range(nkeys), self._key_columns))
                 ),
-                names=key_names,
+                names=self.names,
+            )
+        else:
+            return cudf.core.index.as_index(
+                self._key_columns[0], name=self.names[0]
             )
 
-    def compute_result_column_index(self):
-        """
-        Computes the column index of the result
-        """
-        value_names = self.value_names
-        aggs_as_list = self.get_aggs_as_list()
+    def _handle_callable(self, by):
+        by = by(self._obj.index)
+        self.__init__(self._obj, by)
 
-        if isinstance(self.obj, cudf.Series):
-            if len(aggs_as_list) == 1:
-                if self.obj.name is None:
-                    return self.obj.name
-                else:
-                    return [self.obj.name]
-            else:
-                return aggs_as_list
+    def _handle_series(self, by):
+        by = by._align_to_index(self._obj.index, how="right")
+        self._key_columns.append(by._column)
+        self.names.append(by.name)
+
+    def _handle_index(self, by):
+        self._key_columns.extend(by._data.columns)
+        self.names.extend(by._data.names)
+
+    def _handle_mapping(self, by):
+        by = cudf.Series(by.values(), index=by.keys())
+        self._handle_series(by)
+
+    def _handle_label(self, by):
+        self._key_columns.append(self._obj._data[by])
+        self.names.append(by)
+        self._named_columns.append(by)
+
+    def _handle_grouper(self, by):
+        if by.key:
+            self._handle_label(by.key)
         else:
-            return_multi_index = True
-            if isinstance(self.original_aggs, str):
-                return_multi_index = False
-            if isinstance(self.original_aggs, collections.abc.Mapping):
-                return_multi_index = False
-                for key in self.original_aggs:
-                    if not isinstance(self.original_aggs[key], str):
-                        return_multi_index = True
-                        break
-            if return_multi_index:
-                return MultiIndex.from_tuples(zip(value_names, aggs_as_list))
-            else:
-                return value_names
+            self._handle_level(by.level)
 
-    def get_aggs_as_list(self):
-        """
-        Returns self.aggs as a list of aggs
-        """
-        aggs_as_list = list(itertools.chain.from_iterable(self.aggs.values()))
-        return aggs_as_list
+    def _handle_level(self, by):
+        level_values = self._obj.index.get_level_values(by)
+        self._key_columns.append(level_values._values)
+        self.names.append(level_values.name)
 
+    def _handle_misc(self, by):
+        by = cudf.core.column.as_column(by)
+        if len(by) != len(self._obj):
+            raise ValueError("Grouper and object must have same length")
+        self._key_columns.append(by)
+        self.names.append(None)
 
-def _groupby_engine(key_columns, value_columns, aggs, sort, dropna):
-    """
-    Parameters
-    ----------
-    key_columns : list of Columns
-    value_columns : list of Columns
-    aggs : list of str
-    sort : bool
-    dropna : bool
-
-    Returns
-    -------
-    out_key_columns : list of Columns
-    out_value_columns : list of Columns
-    """
-    out_key_columns, out_value_columns = libcudf.groupby.groupby(
-        key_columns, value_columns, aggs, dropna=dropna
-    )
-
-    if sort:
-        key_names = ["key_" + str(i) for i in range(len(key_columns))]
-        value_names = ["value_" + str(i) for i in range(len(value_columns))]
-        value_names = _add_prefixes(value_names, aggs)
-
-        # concatenate
-        result = cudf.concat(
-            [
-                dataframe_from_columns(out_key_columns, columns=key_names),
-                dataframe_from_columns(out_value_columns, columns=value_names),
-            ],
-            axis=1,
+    def serialize(self):
+        header = {}
+        frames = []
+        header["names"] = pickle.dumps(self.names)
+        header["_named_columns"] = pickle.dumps(self._named_columns)
+        column_header, column_frames = cudf.core.column.serialize_columns(
+            self._key_columns
         )
+        header["columns"] = column_header
+        frames.extend(column_frames)
+        return header, frames
 
-        # sort values
-        result = result.sort_values(key_names)
-
-        # split
-        out_key_columns = columns_from_dataframe(result[key_names])
-        out_value_columns = columns_from_dataframe(result[value_names])
-
-    return out_key_columns, out_value_columns
-
-
-def _add_prefixes(names, prefixes):
-    """
-    Return a copy of ``names`` prefixed with ``prefixes``
-    """
-    prefixed_names = names.copy()
-    if isinstance(prefixes, str):
-        prefix = prefixes
-        for i, col_name in enumerate(names):
-            prefixed_names[i] = f"{prefix}_{col_name}"
-    else:
-        for i, (prefix, col_name) in enumerate(zip(prefixes, names)):
-            prefixed_names[i] = f"{prefix}_{col_name}"
-    return prefixed_names
-
-
-def _align_by_and_df(obj, by, how="inner"):
-    """
-    Returns a pair of dataframes and a list may be containing
-    combination of column names and Series  which are intersected
-    as per their indices.
-
-    Examples
-    --------
-    Dataframe and Series in the 'by' have different indices:
-
-    >>> import cudf
-    >>> import cudf.core.groupby.groupby as grp_by
-
-    >>> gdf = cudf.DataFrame(
-            {"x": [1.0, 2.0, 3.0], "y": [1, 2, 1]},
-            index=[1,2,3]
+    @classmethod
+    def deserialize(cls, header, frames):
+        names = pickle.loads(header["names"])
+        _named_columns = pickle.loads(header["_named_columns"])
+        key_columns = cudf.core.column.deserialize_columns(
+            header["columns"], frames
         )
-    >>> gsr = cudf.Series([0.0, 1.0, 2.0], name='a', index=[2,3,4])
-    >>> updtd_gdf, updtd_by = grp_by._align_by_and_df(gdf, ['x', gsr])
-    >>> print (gdf)
-        x     y
-    1 	1.0   1
-    2 	2.0   2
-    3 	3.0   1
-    >>> print(updtd_gdf)
-        x     y
-    2 	2.0   2
-    3 	3.0   1
-    >>> print(by)
-    ['x', 2    0.0
-          3    1.0
-          4    2.0
-          Name: a, dtype: float64]
-    >>> print(updtd_by)
-    ['x', 2    0.0
-          3    1.0
-          Name: a, dtype: float64]
+        out = _Grouping.__new__(_Grouping)
+        out.names = names
+        out._named_columns = _named_columns
+        out._key_columns = key_columns
+        return out
+
+
+def _is_multi_agg(aggs):
     """
-    if not isinstance(by, (list, tuple)):
-        by = [by]
-
-    series_count = 0
-    join_required = False
-    series = []
-    for by_col in by:
-        if not is_scalar(by_col) and not isinstance(by_col, cudf.Index):
-            sr = by_col
-            if not isinstance(by_col, cudf.Series):
-                sr = cudf.Series(by_col)
-            if not join_required and not obj.index.equals(sr.index):
-                join_required = True
-            series.append(sr)
-
-    new_obj = None
-    if join_required:
-        for sr in series:
-            if new_obj is None:
-                new_obj = sr.to_frame(series_count)
-            else:
-                new_obj = new_obj.join(
-                    sr.to_frame(series_count), how=how, sort="True"
-                )
-            series_count += 1
-
-    series_count = 0
-    new_by = []
-    if new_obj is not None:
-        new_obj = new_obj.join(obj, how=how, sort="True")
-        columns = new_obj.columns
-        for by_col in by:
-            if not is_scalar(by_col) and not isinstance(by_col, cudf.Index):
-                sr, sr.name = (
-                    cudf.Series(new_obj[columns[series_count]]),
-                    by_col.name,
-                )
-                new_by.append(sr)
-                series_count += 1
-            else:
-                new_by.append(by_col)
-
-        new_obj = new_obj[columns[series_count::]]
-    else:
-        new_obj = obj
-        new_by = by
-
-    return new_obj, new_by
+    Returns True if more than one aggregation is performed
+    on any of the columns as specified in `aggs`.
+    """
+    if isinstance(aggs, collections.abc.Mapping):
+        return any(pd.api.types.is_list_like(agg) for agg in aggs.values())
+    if pd.api.types.is_list_like(aggs):
+        return True
+    return False
