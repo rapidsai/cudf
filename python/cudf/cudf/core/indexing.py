@@ -157,7 +157,8 @@ class _DataFrameIndexer(object):
                 # Multiindex indexing with a slice
                 if any(isinstance(v, slice) for v in arg):
                     return False
-            return True
+            if not pd.api.types.is_list_like(arg[1]):
+                return True
         return False
 
     def _downcast_to_series(self, df, arg):
@@ -279,7 +280,10 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         # Iloc Step 2:
         # Gather the rows specified by the first tuple arg
         if isinstance(columns_df.index, MultiIndex):
-            df = columns_df.index._get_row_major(columns_df, arg[0])
+            if isinstance(arg[0], slice):
+                df = columns_df[arg[0]]
+            else:
+                df = columns_df.index._get_row_major(columns_df, arg[0])
             if (len(df) == 1 and len(columns_df) >= 1) and not (
                 isinstance(arg[0], slice) or isinstance(arg[1], slice)
             ):

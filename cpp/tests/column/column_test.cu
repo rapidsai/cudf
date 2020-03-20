@@ -398,36 +398,3 @@ TYPED_TEST(TypedColumnTest, ColumnViewConstructorWithMask) {
   EXPECT_NE(original_view.head(), copy_view.head());
   EXPECT_NE(original_view.null_mask(), copy_view.null_mask());
 }
-
-TYPED_TEST(TypedColumnTest, ConcatenateColumnView) {
-  cudf::column original{this->type(), this->num_elements(), this->data,
-                        this->mask};
-  std::vector<cudf::size_type> indices{
-    0, this->num_elements()/3,
-    this->num_elements()/3, this->num_elements()/2,
-    this->num_elements()/2, this->num_elements()};
-  std::vector<cudf::column_view> views = cudf::experimental::slice(original, indices);
-
-  auto concatenated_col = cudf::concatenate(views);
-
-  cudf::test::expect_columns_equal(original, *concatenated_col);
-}
-
-struct StringColumnTest : public cudf::test::BaseFixture {};
-
-TEST_F(StringColumnTest, ConcatenateColumnView) {
-    std::vector<const char*> h_strings{ "aaa", "bb", "", "cccc", "d", "ééé", "ff", "gggg", "", "h", "iiii", "jjj", "k", "lllllll", "mmmmm", "n", "oo", "ppp" };
-    cudf::test::strings_column_wrapper strings1( h_strings.data(), h_strings.data()+6 );
-    cudf::test::strings_column_wrapper strings2( h_strings.data()+6, h_strings.data()+10 );
-    cudf::test::strings_column_wrapper strings3( h_strings.data()+10, h_strings.data()+h_strings.size() );
-
-    std::vector<cudf::column_view> strings_columns;
-    strings_columns.push_back(strings1);
-    strings_columns.push_back(strings2);
-    strings_columns.push_back(strings3);
-
-    auto results = cudf::concatenate(strings_columns);
-
-    cudf::test::strings_column_wrapper expected( h_strings.begin(), h_strings.end() );
-    cudf::test::expect_columns_equal(*results,expected);
-}

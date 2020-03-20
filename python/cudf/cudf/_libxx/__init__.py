@@ -5,7 +5,9 @@ import numpy as np
 from . import (
     avro,
     binaryop,
+    concat,
     copying,
+    datetime,
     dlpack,
     filling,
     gpuarrow,
