@@ -81,7 +81,7 @@ TYPED_TEST(TypedColumnTest, ConcatenateEmptyColumns){
 
     auto concat = cudf::concatenate(columns_to_concat);
 
-    auto expected_type = cudf::column_view(empty_first)->type();
+    auto expected_type = cudf::column_view(empty_first).type();
     EXPECT_EQ(concat->size(), 0);
     EXPECT_EQ(concat->type(), expected_type);
 }
