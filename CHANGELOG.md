@@ -1,6 +1,7 @@
 # cuDF 0.14.0 (Date TBD)
 
 ## New Features
+- PR #4472 Add new `partition` API to replace `scatter_to_tables`.
 
 
 ## Improvements
