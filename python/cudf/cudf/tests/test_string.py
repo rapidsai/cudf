@@ -469,11 +469,8 @@ def test_string_extract(ps_gs, pat, expand, flags, flags_raise):
         ("a", False),
         ("a", True),
         ("f", False),
-        # TODO, PREM: Analyse and uncomment the
-        # two tests as they seem to pass when run
-        # as independent test but seem to fail as a group test.
-        # (r"[a-z]", True),
-        # (r"[A-Z]", True),
+        (r"[a-z]", True),
+        (r"[A-Z]", True),
         ("hello", False),
         ("FGHI", False),
     ],
@@ -537,8 +534,7 @@ def test_string_upper(ps_gs):
         ["a b", " c ", "   d", "e   ", "f"],
         ["a-b", "-c-", "---d", "e---", "f"],
         ["ab", "c", "d", "e", "f"],
-        # TODO, PREM: Uncomment in future PR
-        # [None, None, None, None, None],
+        [None, None, None, None, None],
     ],
 )
 @pytest.mark.parametrize("pat", [None, " ", "-"])
@@ -982,12 +978,16 @@ def test_string_no_children_properties():
         ["abcdefghij", "0123456789", "9876543210", None, "accénted", ""],
     ],
 )
-@pytest.mark.parametrize("index", [0, 1, 2, 3, 9, 10])
+@pytest.mark.parametrize(
+    "index", [-100, -5, -2, -6, -1, 0, 1, 2, 3, 9, 10, 100]
+)
 def test_string_get(string, index):
     pds = pd.Series(string)
     gds = Series(string)
 
-    assert_eq(pds.str.get(index).fillna(""), gds.str.get(index).fillna(""))
+    assert_eq(
+        pds.str.get(index).fillna(""), gds.str.get(index).fillna(""),
+    )
 
 
 @pytest.mark.parametrize(
@@ -1226,11 +1226,11 @@ def test_strings_rsplit(data, n, expand):
     gs = Series(data)
     ps = pd.Series(data)
 
-    # TODO: Uncomment this test once
-    # this is fixed: https://github.com/rapidsai/cudf/issues/4357
-    # assert_eq(
-    #     ps.str.rsplit(n=n, expand=expand), gs.str.rsplit(n=n, expand=expand)
-    # )
+    pd.testing.assert_frame_equal(
+        ps.str.rsplit(n=n, expand=expand).reset_index(),
+        gs.str.rsplit(n=n, expand=expand).to_pandas().reset_index(),
+        check_index_type=False,
+    )
     assert_eq(
         ps.str.rsplit(",", n=n, expand=expand),
         gs.str.rsplit(",", n=n, expand=expand),
@@ -1483,8 +1483,6 @@ def test_string_replace_multi():
     assert_eq(expect, got)
 
 
-# TODO, PREM: Uncomment this following tests after
-# this is fixed: https://github.com/rapidsai/cudf/issues/4380
 @pytest.mark.parametrize(
     "find",
     [
@@ -1492,22 +1490,15 @@ def test_string_replace_multi():
         "(\\d)(\\d)",
         "(\\d)(\\d)",
         "(\\d)(\\d)",
-        # "([a-z])-([a-z])",
+        "([a-z])-([a-z])",
         "([a-z])-([a-zé])",
         "([a-z])-([a-z])",
-        # "([a-z])-([a-zé])",
+        "([a-z])-([a-zé])",
     ],
 )
 @pytest.mark.parametrize(
     "replace",
-    [
-        "\\1-\\2",
-        "V\\2-\\1",
-        "\\1 \\2",
-        "\\2 \\1",
-        # "X\\1+\\2Z",
-        #  "X\\1+\\2Z"
-    ],
+    ["\\1-\\2", "V\\2-\\1", "\\1 \\2", "\\2 \\1", "X\\1+\\2Z", "X\\1+\\2Z"],
 )
 def test_string_replace_with_backrefs(find, replace):
     s = [
@@ -1517,7 +1508,7 @@ def test_string_replace_with_backrefs(find, replace):
         None,
         "tést-string",
         "two-thréé four-fivé",
-        # "abcd-éfgh",
+        "abcd-éfgh",
         "tést-string-again",
     ]
     ps = pd.Series(s)
@@ -1552,18 +1543,7 @@ def test_string_table_view_creation():
     ],
 )
 @pytest.mark.parametrize(
-    "pat",
-    [
-        # TODO, PREM: Uncomment after this issue is fixed
-        # '',
-        # None,
-        " ",
-        "a",
-        "abc",
-        "cat",
-        "$",
-        "\n",
-    ],
+    "pat", ["", None, " ", "a", "abc", "cat", "$", "\n"],
 )
 def test_string_starts_ends(data, pat):
     ps = pd.Series(data)
@@ -1587,57 +1567,28 @@ def test_string_starts_ends(data, pat):
     ],
 )
 @pytest.mark.parametrize(
-    "sub",
-    [
-        # TODO, PREM: Uncomment after this issue is fixed
-        # '',
-        # None,
-        " ",
-        "a",
-        "abc",
-        "cat",
-        "$",
-        "\n",
-    ],
+    "sub", ["", " ", "a", "abc", "cat", "$", "\n"],
 )
 def test_string_find(data, sub):
     ps = pd.Series(data)
     gs = Series(data)
 
-    assert_eq(ps.str.find(sub).fillna(-1), gs.str.find(sub), check_dtype=False)
+    assert_eq(ps.str.find(sub), gs.str.find(sub))
     assert_eq(
-        ps.str.find(sub, start=1).fillna(-1),
-        gs.str.find(sub, start=1),
-        check_dtype=False,
+        ps.str.find(sub, start=1), gs.str.find(sub, start=1),
     )
+    assert_eq(ps.str.find(sub, end=10), gs.str.find(sub, end=10))
     assert_eq(
-        ps.str.find(sub, end=10).fillna(-1),
-        gs.str.find(sub, end=10),
-        check_dtype=False,
-    )
-    assert_eq(
-        ps.str.find(sub, start=2, end=10).fillna(-1),
-        gs.str.find(sub, start=2, end=10),
-        check_dtype=False,
+        ps.str.find(sub, start=2, end=10), gs.str.find(sub, start=2, end=10),
     )
 
+    assert_eq(ps.str.rfind(sub), gs.str.rfind(sub))
+    assert_eq(ps.str.rfind(sub, start=1), gs.str.rfind(sub, start=1))
     assert_eq(
-        ps.str.rfind(sub).fillna(-1), gs.str.rfind(sub), check_dtype=False
+        ps.str.rfind(sub, end=10), gs.str.rfind(sub, end=10),
     )
     assert_eq(
-        ps.str.rfind(sub, start=1).fillna(-1),
-        gs.str.rfind(sub, start=1),
-        check_dtype=False,
-    )
-    assert_eq(
-        ps.str.rfind(sub, end=10).fillna(-1),
-        gs.str.rfind(sub, end=10),
-        check_dtype=False,
-    )
-    assert_eq(
-        ps.str.rfind(sub, start=2, end=10).fillna(-1),
-        gs.str.rfind(sub, start=2, end=10),
-        check_dtype=False,
+        ps.str.rfind(sub, start=2, end=10), gs.str.rfind(sub, start=2, end=10),
     )
 
 
@@ -1655,6 +1606,7 @@ def test_string_find(data, sub):
             "+",
             ValueError,
         ),
+        (["line to be wrapped", "another line to be wrapped"], "", None),
     ],
 )
 def test_string_str_index(data, sub, er):
@@ -1693,6 +1645,7 @@ def test_string_str_index(data, sub, er):
             "+",
             ValueError,
         ),
+        (["line to be wrapped", "another line to be wrapped"], "", None),
     ],
 )
 def test_string_str_rindex(data, sub, er):

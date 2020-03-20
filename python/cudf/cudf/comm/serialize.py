@@ -6,11 +6,14 @@ import cudf.core.groupby.groupby
 # all (de-)serializtion are attached to cudf Objects:
 # Series/DataFrame/Index/Column/Buffer/etc
 serializable_classes = (
+    cudf.CategoricalDtype,
     cudf.DataFrame,
+    cudf.Index,
+    cudf.MultiIndex,
     cudf.Series,
-    cudf.core.series.Series,
-    cudf.core.groupby.groupby._Groupby,
-    cudf.core.column.column.Column,
+    cudf.core.groupby.groupby.GroupBy,
+    cudf.core.groupby.groupby._Grouping,
+    cudf.core.column.column.ColumnBase,
     cudf.core.buffer.Buffer,
 )
 
@@ -40,10 +43,11 @@ try:
     def deserialize_cudf_object(header, frames):
         with log_errors():
             if header["serializer"] == "cuda":
-                assert all(
-                    hasattr(f, "__cuda_array_interface__") for f in frames
-                )
-            if header["serializer"] == "dask":
+                for f in frames:
+                    # some frames are empty -- meta/empty partitions/etc
+                    if len(f) > 0:
+                        assert hasattr(f, "__cuda_array_interface__")
+            elif header["serializer"] == "dask":
                 frames = [memoryview(f) for f in frames]
 
             cudf_typ = pickle.loads(header["type-serialized"])

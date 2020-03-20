@@ -474,6 +474,8 @@ struct read_parquet_args {
   /// Cast timestamp columns to a specific type
   data_type timestamp_type{EMPTY};
 
+  explicit read_parquet_args() = default;
+
   explicit read_parquet_args(source_info const& src) : source(src) {}
 };
 
