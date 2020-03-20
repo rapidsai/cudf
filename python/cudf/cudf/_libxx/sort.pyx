@@ -19,10 +19,8 @@ from cudf._libxx.cpp.search cimport lower_bound, upper_bound
 from cudf._libxx.cpp.sorting cimport(
     rank, rank_method, sorted_order, is_sorted as cpp_is_sorted
 )
+from cudf._libxx.sort cimport underlying_type_t_rank_method
 from cudf._libxx.cpp.types cimport order, null_order, include_nulls
-
-from libc.stdint cimport int32_t
-ctypedef int32_t underlying_type_t_rank_method
 
 
 def is_sorted(
