@@ -28,12 +28,16 @@ class ColumnAccessor(MutableMapping):
             may be passe.
         """
         # TODO: we should validate the keys of `data`
+        if isinstance(data, ColumnAccessor):
+            multiindex = multiindex or data.multiindex
+            level_names = level_names or data.level_names
+            self._data = data
+            self.multiindex = multiindex
+            self._level_names = level_names
+
         self._data = OrderedColumnDict(data)
         self.multiindex = multiindex
-        if level_names is None:
-            self.level_names = tuple((None,) * self.nlevels)
-        else:
-            self.level_names = tuple(level_names)
+        self._level_names = level_names
 
     def __iter__(self):
         return self._data.__iter__()
@@ -64,7 +68,16 @@ class ColumnAccessor(MutableMapping):
         )
 
     @property
+    def level_names(self):
+        if self._level_names is None:
+            return tuple((None,) * self.nlevels)
+        else:
+            return self._level_names
+
+    @property
     def nlevels(self):
+        if len(self._data) == 0:
+            return 0
         if not self.multiindex:
             return 1
         else:
@@ -72,6 +85,8 @@ class ColumnAccessor(MutableMapping):
 
     @property
     def name(self):
+        if len(self._data) == 0:
+            return None
         return self.level_names[-1]
 
     @property
@@ -112,7 +127,7 @@ class ColumnAccessor(MutableMapping):
         """"
         Convert the keys of the ColumnAccessor to a Pandas Index object.
         """
-        if self.multiindex:
+        if self.multiindex and len(self.level_names) > 0:
             # Using `from_frame()` instead of `from_tuples`
             # prevents coercion of values to a different type
             # (e.g., ''->NaT)
@@ -122,9 +137,7 @@ class ColumnAccessor(MutableMapping):
                 ),
             )
         else:
-            result = pd.Index(
-                self.names, name=self.level_names[0], tupleize_cols=False
-            )
+            result = pd.Index(self.names, name=self.name, tupleize_cols=False)
         return result
 
     def insert(self, name, value, loc=-1):
