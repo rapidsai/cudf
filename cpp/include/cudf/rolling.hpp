@@ -60,14 +60,14 @@ std::unique_ptr<column> rolling_window(column_view const& input,
 /**
  * @brief  Applies a grouping-aware, fixed-size rolling window function to the values in a column.
  *
- * Similarly to `rolling_window()` above, this function aggregates values in a window around each 
+ * Like `rolling_window()`, this function aggregates values in a window around each 
  * element of a specified `input` column. It differs from `rolling_window()` in that elements of the
- * `input` column are grouped into distinct grouping-sets. The window-aggregation cannot cross
- * the group-boundaries.
- * For a row `i` of `input`, the grouping-set is determined from the corresponding (i.e. i-th) values of 
- * the columns under `grouping_keys`. 
+ * `input` column are grouped into distinct groups (e.g. the result of a groupby). The window aggregation cannot cross
+ * the group boundaries.
+ * For a row `i` of `input`, the group is determined from the corresponding (i.e. i-th) values of 
+ * the columns under `group_keys`. 
  * 
- * Note: This method requires that the rows are pre-sorted by the grouping-key values.
+ * Note: This method requires that the rows are presorted by the `group_key` values.
  * 
  * Example: Consider a user-sales dataset, where the rows look as follows:
  *  { "user_id", sales_amt, day }
@@ -76,12 +76,12 @@ std::unique_ptr<column> rolling_window(column_view const& input,
  * and summing up the `sales_amt` column over a window of 3 rows (2 preceding (including current row), 1 row following). 
  * 
  * In this example, 
- *    1. grouping_keys == [ `user_id` ]
- *    2. input == `sales_amt` 
- * The data would be grouped by `user_id`, and ordered by `day`-string. The aggregation 
- * (SUM) would then be calculated for a window of 3 values around (and including) each row.
+ *    1. `group_keys == [ user_id ]`
+ *    2. `input == sales_amt` 
+ * The data are grouped by `user_id`, and ordered by `day`-string. The aggregation 
+ * (SUM) is then calculated for a window of 3 values around (and including) each row.
  * 
- * If the input rows were as follows:
+ * For the following input:
  * 
  *  [ // user,  sales_amt
  *    { "user1",   10      },
@@ -95,15 +95,15 @@ std::unique_ptr<column> rolling_window(column_view const& input,
  *    { "user2",   40      }
  *  ]
  * 
- * Partitioning (grouping) by `user_id`, and ordering by `day` would yield the following `sales_amt` vector 
+ * Partitioning (grouping) by `user_id`, and ordering by `day` yields the following `sales_amt` vector 
  * (with 2 groups, one for each distinct `user_id`):
  * 
  *    [ 10,  20,  10,  50,  60,  20,  30,  80,  40 ]
  *      <-------user1-------->|<------user2------->
  * 
- * The SUM aggregation would then be applied, with 1 preceding, and 1 following
+ * The SUM aggregation is applied with 1 preceding and 1 following
  * row, with a minimum of 1 period. The aggregation window is thus 3 rows wide,
- * thereby yielding the following column:
+ * yielding the following column:
  * 
  *    [ 30, 40,  80, 120, 100,  50, 130, 150, 120 ]
  * 
@@ -115,7 +115,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
  * column of the same type as the input. Therefore it is suggested to convert integer column types
  * (especially low-precision integers) to `FLOAT32` or `FLOAT64` before doing a rolling `MEAN`.
  *
- * @param[in] grouping_keys The (pre-sorted) grouping columns
+ * @param[in] group_keys The (pre-sorted) grouping columns
  * @param[in] input The input column (to be aggregated)
  * @param[in] preceding_window The static rolling window size in the backward direction.
  * @param[in] following_window The static rolling window size in the forward direction.
@@ -125,7 +125,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
  *
  * @returns   A nullable output column containing the rolling window results
  **/
-std::unique_ptr<column> grouped_rolling_window(table_view const& grouping_keys,
+std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                                column_view const& input,
                                                size_type preceding_window,
                                                size_type following_window,
