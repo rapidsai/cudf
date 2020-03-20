@@ -22,6 +22,8 @@
 - PR #4613 Fix issue related to downcasting in `.loc`
 - PR #4615 Fix potential OOB write in ORC writer compression stage
 - PR #4617 Fix memory leak in aggregation object destructor
+- PR #4609 Fix to handle `Series.factorize` when index is set
+
 
 # cuDF 0.13.0 (Date TBD)
 
