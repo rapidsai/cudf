@@ -286,6 +286,7 @@
 - PR #4591 Fix issue when reading consecutive rowgroups
 - PR #4600 Fix missing include in benchmark_fixture.hpp
 - PR #4588 Fix ordering issue in `MultiIndex`
+- PR #4625 Fix hash-based repartition bug in dask_cudf
 
 
 # cuDF 0.12.0 (04 Feb 2020)
