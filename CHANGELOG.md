@@ -17,6 +17,7 @@
 - PR #4386 Update Java package to 0.14
 - PR #4402 Fix cudf::strings::join_strings logic with all-null strings and null narep
 - PR #4570 Fixing loc ordering issue in dataframe
+- PR #4639 Fix java column of empty strings issue
 
 
 # cuDF 0.13.0 (Date TBD)
