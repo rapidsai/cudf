@@ -1817,3 +1817,14 @@ def test_string_str_decode_url(data):
     got = gs.str.url_decode()
     expected = pd.Series([urllib.parse.unquote(url) for url in data])
     assert_eq(expected, got)
+
+def test_to_pandas_nullable_string():
+    gsr_not_null = Series(['a','b','c'])
+    gsr_has_null = Series(['a','b', None])
+
+    # pandas initally casts to object for backwards compatibility
+    psr_not_null = pd.Series(['a', 'b', 'c'], dtype=pd.StringDtype())
+    psr_has_null = pd.Series(['a', 'b', None], dtype=pd.StringDtype())
+
+    assert_eq(gsr_not_null.to_pandas(), psr_not_null)
+    assert_eq(gsr_has_null.to_pandas(), psr_has_null)
