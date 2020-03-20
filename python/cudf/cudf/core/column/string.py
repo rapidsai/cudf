@@ -11,6 +11,8 @@ import pyarrow as pa
 
 import nvstrings
 
+from cudf.utils import cudautils
+
 import cudf._libxx as libcudfxx
 import cudf._libxx.string_casting as str_cast
 from cudf._lib.nvtx import nvtx_range_pop, nvtx_range_push
@@ -2055,9 +2057,15 @@ class StringColumn(column.ColumnBase):
             )
 
     def to_pandas(self, index=None):
-        pd_series = self.to_arrow().to_pandas()
-        if index is not None:
-            pd_series.index = index
+        pd_series = self.to_arrow().to_pandas().astype(pd.StringDtype())
+        if self.nullable:
+            mask_bytes = (
+                cudautils.expand_mask_bits(len(self), self.mask_array_view)
+                .copy_to_host()
+                .astype(bool)
+            )
+            pd_series[~mask_bytes] = pd.NA
+        pd_series.index = index
         return pd_series
 
     def to_array(self, fillna=None):
