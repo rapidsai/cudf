@@ -701,7 +701,7 @@ class Frame(libcudfxx.table.Table):
 
         is_sorted = libcudfxx.types.Sorted["YES" if is_sorted else "NO"]
 
-        sortmap = (
+        ordered_indices = (
             None
             if is_sorted
             else libcudfxx.sort.order_by(self, ascending, na_position)
@@ -709,7 +709,7 @@ class Frame(libcudfxx.table.Table):
 
         result = self.__class__._from_table(
             libcudfxx.quantiles.quantiles(
-                self, q, interpolation, sortmap, not retain_dtype
+                self, q, interpolation, ordered_indices, not retain_dtype
             )
         )
 

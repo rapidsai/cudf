@@ -24,19 +24,19 @@ cimport cudf._libxx.cpp.quantiles as cpp_quantiles
 def quantiles(Table source_table,
               vector[double] q,
               object interp,
-              Column sortmap,
+              Column ordered_indices,
               bool cast_to_doubles):
     cdef table_view c_input = source_table.data_view()
     cdef vector[double] c_q = q
     cdef libcudf_types.interpolation c_interp = <libcudf_types.interpolation>(
         <underlying_type_t_interpolation> interp
     )
-    cdef column_view c_sortmap
+    cdef column_view c_ordered_indices
 
-    if sortmap is None:
-        c_sortmap = column_view()
+    if ordered_indices is None:
+        c_ordered_indices = column_view()
     else:
-        c_sortmap = sortmap.view()
+        c_ordered_indices = ordered_indices.view()
 
     cdef bool c_cast_to_doubles = cast_to_doubles
 
@@ -48,7 +48,7 @@ def quantiles(Table source_table,
                 c_input,
                 c_q,
                 c_interp,
-                c_sortmap,
+                c_ordered_indices,
                 c_cast_to_doubles
             )
         )
