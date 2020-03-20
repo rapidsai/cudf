@@ -174,10 +174,12 @@
 - PR #4346 Port groupby Cython/Python to use libcudf++ API
 - PR #4524 Updating `__setitem__` for DataFrame to use scalar scatter
 - PR #4534 Disable deprecation warnings as errors.
+- PR #4542 Remove RMM init/finalize in cudf test fixture.
 - PR #4506 Check for multi-dimensional data in column/Series creation
 - PR #4549 Add option to disable deprecation warnings.
 - PR #4516 Add negative value support for `.str.get`
 - PR #4563 Remove copying to host for metadata generation in `generate_pandas_metadata`
+- PR #4554 Removed raw RMM allocation from `column_device_view`
 - PR #4619 Remove usage of `nvstrings` in `data_array_view`
 
 ## Bug Fixes
