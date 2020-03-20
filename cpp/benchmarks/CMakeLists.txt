@@ -48,6 +48,14 @@ link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT
                  "${RMM_LIBRARY}")
 
 ###################################################################################################
+# - column benchmarks -----------------------------------------------------------------------------
+
+set(COLUMN_CONCAT_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/column/concatenate_benchmark.cpp")
+
+ConfigureBench(COLUMN_CONCAT_BENCH "${COLUMN_CONCAT_BENCH_SRC}")
+
+###################################################################################################
 # - gather benchmark ------------------------------------------------------------------------------
 
 set(GATHER_BENCH_SRC
