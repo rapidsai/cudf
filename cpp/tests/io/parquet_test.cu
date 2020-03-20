@@ -435,7 +435,7 @@ TEST_F(ParquetWriterTest, MultiIndex) {
   expected_metadata.column_names.emplace_back("floats");
   expected_metadata.column_names.emplace_back("doubles");
   expected_metadata.user_data.insert(
-    {"pandas", "index_columns = [\"floats\", \"doubles\"]"});
+    {"pandas", "\"index_columns\": [\"floats\", \"doubles\"], \"column1\": [\"int8s\"]"});
 
   std::vector<std::unique_ptr<column>> cols;
   cols.push_back(col1.release());
