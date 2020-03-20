@@ -180,9 +180,7 @@ class Series(Frame):
     @property
     def values_host(self):
         if self.dtype == np.dtype("object"):
-            return np.array(
-                self._column.data_array_view.to_host(), dtype="object"
-            )
+            return self._column.to_array()
         elif is_categorical_dtype(self.dtype):
             return self._column.to_pandas().values
         else:
@@ -2557,33 +2555,33 @@ class DatetimeProperties(object):
 
     @property
     def year(self):
-        return self.get_dt_field("year")
+        return self._get_dt_field("year")
 
     @property
     def month(self):
-        return self.get_dt_field("month")
+        return self._get_dt_field("month")
 
     @property
     def day(self):
-        return self.get_dt_field("day")
+        return self._get_dt_field("day")
 
     @property
     def hour(self):
-        return self.get_dt_field("hour")
+        return self._get_dt_field("hour")
 
     @property
     def minute(self):
-        return self.get_dt_field("minute")
+        return self._get_dt_field("minute")
 
     @property
     def second(self):
-        return self.get_dt_field("second")
+        return self._get_dt_field("second")
 
     @property
     def weekday(self):
-        return self.get_dt_field("weekday")
+        return self._get_dt_field("weekday")
 
-    def get_dt_field(self, field):
+    def _get_dt_field(self, field):
         out_column = self.series._column.get_dt_field(field)
         return Series(
             data=out_column, index=self.series._index, name=self.series.name
