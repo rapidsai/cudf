@@ -178,6 +178,7 @@
 - PR #4549 Add option to disable deprecation warnings.
 - PR #4516 Add negative value support for `.str.get`
 - PR #4563 Remove copying to host for metadata generation in `generate_pandas_metadata`
+- PR #4619 Remove usage of `nvstrings` in `data_array_view`
 
 ## Bug Fixes
 
