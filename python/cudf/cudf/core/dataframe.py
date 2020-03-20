@@ -184,6 +184,13 @@ class DataFrame(Frame):
             self.columns = data.columns
             return
 
+        if isinstance(data, pd.DataFrame):
+            data = self.from_pandas(data)
+            self._data = data._data
+            self._index = data._index
+            self.columns = data.columns
+            return
+
         if data is None:
             if index is None:
                 self._index = RangeIndex(0)

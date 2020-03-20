@@ -85,9 +85,7 @@ class ColumnBase(Column):
         View the data as a device array object
         """
         if self.dtype == "object":
-            # TODO: Change this to raise exception once copying.pyx is ported
-            return self.nvstrings
-            # raise ValueError("Cannot get an array view of a StringColumn")
+            raise ValueError("Cannot get an array view of a StringColumn")
 
         if is_categorical_dtype(self.dtype):
             return self.codes.data_array_view
@@ -412,10 +410,13 @@ class ColumnBase(Column):
             index = len(self) + index
         if index > len(self) - 1:
             raise IndexError
-        # TODO: Remove this when copying.pyx is ported
-        val = self.data_array_view[index]  # this can raise IndexError
-        if isinstance(val, nvstrings.nvstrings):
-            val = val.to_host()[0]
+
+        val = self[index : (index + 1)]
+        if val.null_count == 1:
+            val = None
+        else:
+            val = val.to_array()[0]
+
         valid = (
             cudautils.mask_get.py_func(self.mask_array_view, index)
             if self.mask
