@@ -133,12 +133,14 @@ def gather(Table source_table, Column gather_map):
     cdef unique_ptr[table] c_result
     cdef table_view source_table_view = source_table.view()
     cdef column_view gather_map_view = gather_map.view()
+    cdef bool c_bounds_check = True
 
     with nogil:
         c_result = move(
             cpp_copying.gather(
                 source_table_view,
-                gather_map_view
+                gather_map_view,
+                c_bounds_check
             )
         )
 
