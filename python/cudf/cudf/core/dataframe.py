@@ -1829,8 +1829,8 @@ class DataFrame(Frame):
           * Support axis='columns' only.
           * Not supporting: index, level
 
-        Rename will not overwite column names. If a list with duplicates it
-        passed, column names will be postfixed.
+        Rename will not overwite column names. If a list with duplicates is
+        passed, column names will be postfixed with a number.
         """
         # Pandas defaults to using columns over mapper
         if columns:
@@ -1841,11 +1841,12 @@ class DataFrame(Frame):
             postfix = 1
             # It is possible for DataFrames with a MultiIndex columns object
             # to have columns with the same name. The followig use of
-            # _cols.items and ("cudf_"... allows the use of rename in this case
+            # _cols.items and ("_1", "_2"... allows the use of
+            # rename in this case
             for key, col in self._data.items():
                 if key in mapper:
                     if mapper[key] in out.columns:
-                        out_column = mapper[key] + ("cudf_" + str(postfix),)
+                        out_column = mapper[key] + "_" + str(postfix)
                         postfix += 1
                     else:
                         out_column = mapper[key]
