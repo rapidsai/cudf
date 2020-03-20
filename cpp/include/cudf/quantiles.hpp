@@ -16,32 +16,12 @@
 
 #pragma once
 
-#include <cudf/scalar/scalar.hpp>
+// #include <cudf/scalar/scalar.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
 namespace cudf {
 namespace experimental {
-
-/**
- * @brief Computes a value for a quantile by interpolating between the values on
- *        either side of the desired quantile.
- *
- * @param[in] input        Column used to compute quantile values.
- * @param[in] q            Desired quantile in range [0, 1].
- * @param[in] interp       Strategy used to interpolate between the two values
- *                         on either side of the desired quantile.
- * @param[in] column_order Indicates the sortedness of the column.
- *
- * @returns Value of the desired quantile, or null if the column has no valid
- *          elements.
- */
-
-std::unique_ptr<scalar>
-quantile(column_view const& input,
-         double q,
-         interpolation interp = interpolation::LINEAR,
-         order_info column_order = {});
 
 /**
  * @brief Returns the rows of the input corresponding to the requested quantiles.
@@ -64,26 +44,23 @@ quantile(column_view const& input,
  * @param q               Desired quantiles in range [0, 1].
  * @param interp          Strategy used to select between the two rows on either
  *                        side of the desired quantile.
- * @param sortmap         Indicates the sorted order of the inputs. If empty,
- *                        the input is assumed to be sorted.
+ * @param ordered_indices a column of integer indices that order `input`. If
+                          empty, `input` is assumed to be sorted.
  * @param retain_types    Indicates if the result should be cast to the input
  *                        data type after computing the double-based quantile,
  *                        possibly losing precision.
- *                        side of the desired quantile.
  *
  * @throws cudf::logic_error if `input` is empty
- * @throws cudf::logic_error if `input` contains non-numeric columns and one of:
-                            - `interp` is a non-discrete interpolation type.
-                            - `retain_types` is false.
- * @throws cudf::logic_error if `interp` is an arithmetic interpolation strategy
-                             but input non-numeric.
+ * @throws cudf::logic_error if `input` is non-numeric and `retain_types` is false:
+ * @throws cudf::logic_error if `input` is non-numeric and `interp` is either
+                             `LINEAR` or `MIDPOINT`
  */
 
 std::unique_ptr<table>
 quantiles(table_view const& input,
           std::vector<double> const& q,
           interpolation interp = interpolation::LINEAR,
-          column_view const& sortmap = {},
+          column_view const& ordered_indices = {},
           bool retain_types = false,
           rmm::mr::device_memory_resource* mr =
             rmm::mr::get_default_resource());

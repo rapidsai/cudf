@@ -60,7 +60,7 @@ TYPED_TEST(DiscreteQuantilesTest, TestMultiColumnZeroRows)
     auto interp = experimental::interpolation::NEAREST;
 
     EXPECT_THROW(
-        experimental::quantiles(input, { 0.0f }, interp),
+        experimental::quantiles(input, { 0.0f }, interp, {}, true),
         logic_error
     );
 }
@@ -74,7 +74,7 @@ TYPED_TEST(DiscreteQuantilesTest, TestZeroRequestedQuantiles)
 
     auto interp = experimental::interpolation::NEAREST;
 
-    auto actual = experimental::quantiles(input, { }, interp);
+    auto actual = experimental::quantiles(input, { }, interp, {}, true);
     auto expected = experimental::empty_like(input);
 
     expect_tables_equal(expected->view(), actual->view());
@@ -100,7 +100,8 @@ TYPED_TEST(DiscreteQuantilesTest, TestMultiUsingSortmap)
     auto actual = experimental::quantiles(input,
                                           { 0.0f, 0.5f, 0.7f, 0.25f, 1.0f },
                                           experimental::interpolation::NEAREST,
-                                          sortmap->view());
+                                          sortmap->view(),
+                                          true);
 
     auto expected_a = strings_column_wrapper(
         { "A", "C", "C", "B", "D" },
@@ -133,7 +134,9 @@ TYPED_TEST(DiscreteQuantilesTest, TestMultiColumnAssumedSorted)
 
     auto actual = experimental::quantiles(input,
                                           { 0.0f, 0.5f, 0.7f, 0.25f, 1.0f },
-                                          experimental::interpolation::NEAREST);
+                                          experimental::interpolation::NEAREST,
+                                          {},
+                                          true);
 
     auto expected_a = strings_column_wrapper(
         { "C", "D", "C", "D", "A" },
@@ -166,7 +169,7 @@ TYPED_TEST(ArithmeticQuantilesTest, TestCastToDouble)
     auto input = table_view({ input_a });
     auto expected_a = fixed_width_column_wrapper<double>({0});
     auto expected = table_view({ expected_a });
-    auto actual = experimental::quantiles(input, {0}, experimental::interpolation::LINEAR, {}, true);
+    auto actual = experimental::quantiles(input, {0}, experimental::interpolation::LINEAR);
 
     expect_tables_equal(expected, actual->view());
 }

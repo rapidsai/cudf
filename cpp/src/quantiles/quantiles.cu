@@ -36,7 +36,7 @@ namespace detail {
 template<typename SortMapIterator>
 std::unique_ptr<table>
 quantiles_discrete(table_view const& input,
-                   SortMapIterator sortmap,
+                   SortMapIterator ordered_indices,
                    std::vector<double> const& q,
                    interpolation interp,
                    rmm::mr::device_memory_resource* mr)
@@ -45,9 +45,12 @@ quantiles_discrete(table_view const& input,
 
     auto quantile_idx_iter = thrust::make_transform_iterator(
         q_device.begin(),
-        [sortmap, interp, size=input.num_rows()]
+        [ordered_indices, interp, size=input.num_rows()]
         __device__ (double q) {
-            return detail::select_quantile_data<size_type>(sortmap, size, q, interp);
+            return detail::select_quantile_data<size_type>(ordered_indices,
+                                                           size,
+                                                           q,
+                                                           interp);
         });
 
     return detail::gather(input,
@@ -86,7 +89,7 @@ template<typename SortMapIterator>
 struct quantiles_functor
 {
 
-    SortMapIterator sortmap;
+    SortMapIterator ordered_indices;
     std::vector<double> const& q;
     interpolation interp;
     bool retain_types;
@@ -124,7 +127,7 @@ struct quantiles_functor
         rmm::device_vector<double> q_device{q};
 
         auto sorted_data = thrust::make_permutation_iterator(input.data<T>(),
-                                                             sortmap);
+                                                             ordered_indices);
 
         if (retain_types)
         {
@@ -152,9 +155,9 @@ struct quantiles_functor
         if (input.nullable())
         {
             auto sorted_validity = thrust::make_transform_iterator(
-                sortmap,
-                [input=d_input.get()] __device__ (size_type idx) {
-                    return input->is_valid_nocheck(idx);
+                ordered_indices,
+                [input=*d_input] __device__ (size_type idx) {
+                    return input.is_valid_nocheck(idx);
                 });
 
             rmm::device_buffer mask;
@@ -170,7 +173,7 @@ struct quantiles_functor
                                                     q,
                                                     interp);
                 },
-                0,
+                stream,
                 mr);
 
             output->set_null_mask(std::move(mask), null_count);
@@ -183,17 +186,17 @@ struct quantiles_functor
 template<typename SortMapIterator>
 std::unique_ptr<table>
 quantiles(table_view const& input,
-          SortMapIterator sortmap,
+          SortMapIterator ordered_indices,
           std::vector<double> const& q,
           interpolation interp,
           bool retain_types,
           rmm::mr::device_memory_resource* mr)
 {
     auto is_input_numeric = all_of(input.begin(),
-                                      input.end(),
-                                      [](column_view const& col){
-                                          return cudf::is_numeric(col.type());
-                                      });
+                                   input.end(),
+                                   [](column_view const& col){
+                                       return cudf::is_numeric(col.type());
+                                   });
 
     CUDF_EXPECTS(is_input_numeric || retain_types,
                  "casting to doubles requires numeric column types");
@@ -204,7 +207,7 @@ quantiles(table_view const& input,
 
     if (is_discrete_interpolation and retain_types)
     {
-        return quantiles_discrete(input, sortmap, q, interp, mr);
+        return quantiles_discrete(input, ordered_indices, q, interp, mr);
     }
 
     CUDF_EXPECTS(is_input_numeric,
@@ -213,13 +216,16 @@ quantiles(table_view const& input,
     auto output_columns = std::vector<std::unique_ptr<column>>{};
     output_columns.reserve(input.num_columns());
 
-    auto output_inserter = std::back_inserter(output_columns);
-
-    auto functor = quantiles_functor<SortMapIterator>{sortmap, q, interp, retain_types, mr, 0};
+    auto functor = quantiles_functor<SortMapIterator>{ordered_indices,
+                                                      q,
+                                                      interp,
+                                                      retain_types,
+                                                      mr,
+                                                      0};
 
     std::transform(input.begin(),
                    input.end(),
-                   output_inserter,
+                   std::back_inserter(output_columns),
                    [&functor]
                    (column_view const& col) {
                        return type_dispatcher(col.type(), functor, col);
@@ -234,7 +240,7 @@ std::unique_ptr<table>
 quantiles(table_view const& input,
           std::vector<double> const& q,
           interpolation interp,
-          column_view const& sortmap,
+          column_view const& ordered_indices,
           bool retain_types,
           rmm::mr::device_memory_resource* mr)
 {
@@ -242,8 +248,11 @@ quantiles(table_view const& input,
     CUDF_EXPECTS(input.num_rows() > 0,
                  "quantiles requires at least one input row.");
 
-    if (sortmap.size() == 0)
+    if (ordered_indices.size() == 0)
     {
+        CUDF_EXPECTS(ordered_indices.type() == data_type{type_to_id<size_type>()},
+                     "`ordered_indicies` type must be `INT32`.");
+
         return detail::quantiles(input,
                                  thrust::make_counting_iterator<size_type>(0),
                                  q,
@@ -254,7 +263,7 @@ quantiles(table_view const& input,
     else
     {
         return detail::quantiles(input,
-                                 sortmap.data<size_type>(),
+                                 ordered_indices.data<size_type>(),
                                  q,
                                  interp,
                                  retain_types,
