@@ -23,6 +23,7 @@
 - PR #4615 Fix potential OOB write in ORC writer compression stage
 - PR #4587 Fix non-regex libcudf contains methods to return true when target is an empty string
 
+- PR #4617 Fix memory leak in aggregation object destructor
 
 # cuDF 0.13.0 (Date TBD)
 
