@@ -3600,6 +3600,11 @@ class DataFrame(Frame):
             numeric_only=numeric_only,
         )
 
+    def kurt(self, axis=None, skipna=None, level=None, numeric_only=None):
+        return self.kurtosis(
+            axis=None, skipna=None, level=None, numeric_only=None
+        )
+
     def skew(self, axis=None, skipna=None, level=None, numeric_only=None):
         if numeric_only not in (None, True):
             msg = "Skew only supports int, float, and bool dtypes."
