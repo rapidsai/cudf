@@ -164,10 +164,38 @@ class TempDirTestEnvironment : public ::testing::Environment {
   }
 };
 
+
+/**---------------------------------------------------------------------------*
+ * @brief Test environment that initializes the default rmm memory resource.
+ * 
+ * Required for tests programs that use rmm. It is recommended to include
+ * `CUDF_TEST_PROGRAM_MAIN()` in a code file instead of directly instantiating 
+ * an object of this type.
+ *---------------------------------------------------------------------------**/
 class RmmTestEnvironment : public ::testing::Environment {
- std::string mode;
- public:
+/**---------------------------------------------------------------------------*
+ * @brief String representing which RMM allocation mode is to be used.
+ *
+ * Valid values are 'cuda', 'pool' and 'managed'. 
+ *---------------------------------------------------------------------------**/
+  std::string mode;
+public:
+  /**
+   * @brief Constructor where the only argument is a string `mode`.
+   *
+   * Mode repesents the rmm allocation mode, @ref mode.
+   */
   RmmTestEnvironment(std::string const& mode):mode(mode){}
+
+  /**
+   * @brief Initializes the default RMM memory resource.
+   *
+   * Sets different allocation mode based on the value passed to the constructor.
+   * 
+   * @throws cudf::logic_error if mode value is invalid.
+   * 
+   * @return void
+   */
   void SetUp() {
     rmmOptions_t opts{};
     if (mode == "cuda")
@@ -182,6 +210,13 @@ class RmmTestEnvironment : public ::testing::Environment {
     ASSERT_EQ(rmmInitialize(&opts), RMM_SUCCESS);
   }
 
+  /**
+   * @brief Shuts down the rmm memory manager.
+   * 
+   * @throws cudf::logic_error if rmmFinalize is unsuccessful 
+   * 
+   * @return void
+   */
   void TearDown() {
     ASSERT_EQ(rmmFinalize(), RMM_SUCCESS);
   }
@@ -190,14 +225,22 @@ class RmmTestEnvironment : public ::testing::Environment {
 }  // namespace test
 }  // namespace cudf
 
-inline auto parse_cudf_opts(int argc, char **argv) {
+/**
+ * @brief Parses the cuDF test command line options.
+ *
+ * Currently only supports 'rmm_mode' string paramater, which set the rmm
+ * allocation mode. The default value of the parameter is 'pool'.
+ * 
+ * @return Parsing results in the form of unordered map
+ */
+inline auto parse_cudf_test_opts(int argc, char **argv) {
   try {
     cxxopts::Options options(argv[0], " - cuDF tests command line options");
     options
       .allow_unrecognised_options()
       .add_options()
-      ("rmm_mode", "RMM allocation mode", cxxopts::value<std::string>()->default_value("pool"))
-    ;
+      ("rmm_mode", "RMM allocation mode",
+        cxxopts::value<std::string>()->default_value("pool"));
 
     return options.parse(argc, argv);
   }
@@ -206,11 +249,20 @@ inline auto parse_cudf_opts(int argc, char **argv) {
   }
 }
 
-#define CUDF_TEST_PROGRAM_MAIN() int main(int argc, char **argv) { \
-  ::testing::InitGoogleTest(&argc, argv); \
-  auto const cmd_opts = parse_cudf_opts(argc, argv); \
-  ::testing::Environment* const rmm_env = \
-    ::testing::AddGlobalTestEnvironment( \
-      new cudf::test::RmmTestEnvironment(cmd_opts["rmm_mode"].as<std::string>())); \
-  return RUN_ALL_TESTS(); \
+/**
+ * @brief Macro that defines main function for gtest programs that use rmm
+ * 
+ * Should be included in every test program that uses rmm allocators.The `main`
+ * function is a wrapper around the google test generated `main`, mantaining
+ * the original functionality. In addition, the custom `main` function parses
+ * the command line to customize test behavior, like allocation mode.
+ *
+ */
+#define CUDF_TEST_PROGRAM_MAIN() int main(int argc, char **argv) {  \
+  ::testing::InitGoogleTest(&argc, argv);                           \
+  auto const cmd_opts = parse_cudf_test_opts(argc, argv);           \
+  auto const rmm_mode = cmd_opts["rmm_mode"].as<std::string>();     \
+  auto const rmm_env = ::testing::AddGlobalTestEnvironment(         \
+    new cudf::test::RmmTestEnvironment(rmm_mode));                  \
+  return RUN_ALL_TESTS();                                           \
 }

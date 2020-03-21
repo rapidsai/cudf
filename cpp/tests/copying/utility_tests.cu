@@ -156,7 +156,6 @@ TYPED_TEST(AllocateLikeTest, ColumnNumericTestSpecifiedSize) {
     auto input = make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, size, state);
     auto expected = make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, specified_size, cudf::mask_state::UNINITIALIZED);
     auto got = cudf::experimental::allocate_like(input->view(), specified_size);
-    //std::cerr << expected->null_count() << got->null_count() << '\n';
     cudf::test::expect_column_properties_equal(*expected, *got);
 }
 
