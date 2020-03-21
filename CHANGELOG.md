@@ -17,7 +17,6 @@
 - PR #4599 Add Java and JNI bindings for string replace
 - PR #4645 Add Alias for `kurtosis` as `kurt`
 
-
 ## Bug Fixes
 
 - PR #4386 Update Java package to 0.14
