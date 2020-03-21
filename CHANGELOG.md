@@ -7,7 +7,6 @@
 ## Improvements
 - PR #4471 Consolidate partitioning functionality into a single header.
 - PR #4486 Remove explicit template parameter from detail::scatter.
-
 - PR #4531 Add doc note on conda channel_priority
 - PR #4479 Adding cuda 10.2 support via conda environment file addition
 - PR #4486 Remove explicit template parameter from detail::scatter.
