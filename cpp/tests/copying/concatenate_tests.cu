@@ -87,7 +87,7 @@ TYPED_TEST(TypedColumnTest, ConcatenateEmptyColumns){
 }
 
 TYPED_TEST(TypedColumnTest, ConcatenateNoColumns){
-    std::vector<column_view> columns_to_concat();
+    std::vector<column_view> columns_to_concat{};
     EXPECT_THROW(cudf::concatenate(columns_to_concat), cudf::logic_error);
 }
 
