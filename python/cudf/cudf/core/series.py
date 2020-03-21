@@ -1932,7 +1932,11 @@ class Series(Frame):
         """Calculates Fisher's unbiased kurtosis of a sample. Alias for kurtosis.
         """
         return self.kurtosis(
-            axis=None, skipna=None, level=None, numeric_only=None, **kwargs
+            axis=axis,
+            skipna=skipna,
+            level=level,
+            numeric_only=numeric_only,
+            **kwargs,
         )
 
     def skew(self, axis=None, skipna=None, level=None, numeric_only=None):
