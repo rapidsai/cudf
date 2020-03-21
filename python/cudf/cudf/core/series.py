@@ -1883,15 +1883,26 @@ class Series(Frame):
             dtype=self.dtype,
         )
 
-    def kurtosis(self, axis=None, skipna=None, level=None, numeric_only=None):
+    def kurtosis(
+        self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
+    ):
         """Calculates Fisher's unbiased kurtosis of a sample.
         """
-        assert (
-            axis in (None, 0)
-            and skipna in (None, True)
-            and level in (None,)
-            and numeric_only in (None, True)
-        )
+        if axis not in (None, 0):
+            raise NotImplementedError("axis parameter is not implemented yet")
+
+        if skipna not in (None, True):
+            raise NotImplementedError(
+                "skipna parameter is not implemented yet"
+            )
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not implemented yet")
+
+        if numeric_only not in (None, True):
+            raise NotImplementedError(
+                "numeric_only parameter is not implemented yet"
+            )
 
         if self.empty:
             return np.nan
@@ -1915,9 +1926,13 @@ class Series(Frame):
         kurt = term_one_section_one * term_one_section_two - 3 * term_two
         return kurt
 
-    def kurt(self, axis=None, skipna=None, level=None, numeric_only=None):
+    def kurt(
+        self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
+    ):
+        """Calculates Fisher's unbiased kurtosis of a sample. Alias for kurtosis.
+        """
         return self.kurtosis(
-            axis=None, skipna=None, level=None, numeric_only=None
+            axis=None, skipna=None, level=None, numeric_only=None, **kwargs
         )
 
     def skew(self, axis=None, skipna=None, level=None, numeric_only=None):
