@@ -13,7 +13,6 @@ import cudf._libxx as libcudfxx
 from cudf.core.column import (
     ColumnBase,
     DatetimeColumn,
-    build_column,
     column,
     column_empty_like,
 )
@@ -2157,12 +2156,7 @@ class Series(Frame):
         return Series(mod_vals._column, index=self.index, name=self.name)
 
     def quantile(
-        self,
-        q=0.5,
-        interpolation="linear",
-        retain_dtype=False,
-        quant_index=True,
-        **kwargs,
+        self, q=0.5, interpolation="linear", retain_dtype=None, **kwargs,
     ):
         """
         Return values at the given quantile.
@@ -2191,37 +2185,62 @@ class Series(Frame):
         DataFrame
 
         """
+
         if hasattr(kwargs, "exact"):
             retain_dtype = not kwargs.exact
 
-        q_np = np.asarray(q)
-        if (q_np < 0).any() or (q_np > 1).any():
-            raise ValueError(
-                "percentiles should all be in the interval [0, 1]"
-            )
+        if retain_dtype is None:
+            retain_dtype = interpolation in ["higher", "lower", "nearest"]
 
-        if len(self) == 0:
-            if isinstance(q, Number):
-                return np.nan
+        if isinstance(q, Number):
+            q = [q]
 
-            if quant_index:
-                return build_column(
-                    dtype=(self.dtype if retain_dtype else np.dtype("float64"))
+        if len(self) == 0 or len(q) == 0:
+            return (
+                np.nan
+                if len(q) == 1
+                else Series(
+                    data=[None] * len(q),
+                    dtype=self.dtype if retain_dtype else "float64",
+                    index=q,
                 )
-
-        result = self.__class__._from_table(
-            self._quantiles(
-                q, interpolation.upper(), retain_dtype=retain_dtype
             )
-        )
 
-        if is_scalar(q):
+        result = self._quantiles(q, interpolation, retain_dtype=retain_dtype)
+
+        if len(q) == 1:
             return result[0]
 
-        if quant_index:
-            result.index = as_index(q)
+        result.index = q
 
         return result
+
+        # raise NotImplementedError
+
+        # q_np = np.asarray(q)
+
+        # if (q_np < 0).any() or (q_np > 1).any():
+        #     raise ValueError(
+        #         "percentiles should all be in the interval [0, 1]"
+        #     )
+
+        # if len(self) == 0:
+        #     return self.__class__(
+        #         data=[None] * len(q),
+        #         dtype=(self.dtype if retain_dtype else np.dtype("float64"))
+        #     )
+
+        # result = self._quantiles(
+        #     q, interpolation.upper(), retain_dtype=retain_dtype
+        # )
+
+        # if is_scalar(q):
+        #     return result[0]
+
+        # if quant_index:
+        #     result.index = as_index(q)
+
+        # return result
 
     def describe(self, percentiles=None, include=None, exclude=None):
         """Compute summary statistics of a Series. For numeric

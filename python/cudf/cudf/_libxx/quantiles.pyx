@@ -25,7 +25,7 @@ def quantiles(Table source_table,
               vector[double] q,
               object interp,
               Column ordered_indices,
-              bool cast_to_doubles):
+              bool retain_dtype):
     cdef table_view c_input = source_table.data_view()
     cdef vector[double] c_q = q
     cdef libcudf_types.interpolation c_interp = <libcudf_types.interpolation>(
@@ -38,7 +38,7 @@ def quantiles(Table source_table,
     else:
         c_ordered_indices = ordered_indices.view()
 
-    cdef bool c_cast_to_doubles = cast_to_doubles
+    cdef bool c_retain_types = retain_dtype
 
     cdef unique_ptr[table] c_result
 
@@ -49,7 +49,7 @@ def quantiles(Table source_table,
                 c_q,
                 c_interp,
                 c_ordered_indices,
-                c_cast_to_doubles
+                c_retain_types
             )
         )
 

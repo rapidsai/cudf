@@ -3391,7 +3391,7 @@ class DataFrame(Frame):
         numeric_only=True,
         interpolation="linear",
         columns=None,
-        retain_dtype=False,
+        retain_dtype=None,
         **kwargs,
     ):
         """
@@ -3423,38 +3423,27 @@ class DataFrame(Frame):
         DataFrame
 
         """
-        if hasattr(kwargs, "exact"):
-            retain_dtype = not kwargs.exact
-
-        if axis not in (0, None):
-            raise NotImplementedError("axis is not implemented yet")
-
-        if not numeric_only:
-            raise NotImplementedError("numeric_only is not implemented yet")
-
-        q_np = np.asarray(q)
-        if (q_np < 0).any() or (q_np > 1).any():
-            raise ValueError(
-                "percentiles should all be in the interval [0, 1]"
-            )
-
-        if columns is None:
-            columns = self.columns
-
-        result = self._quantiles(
-            q, interpolation.upper(), retain_dtype=retain_dtype
-        )
+        if len(self.columns) == 0:
+            raise ValueError
 
         if isinstance(q, numbers.Number):
-            result = result.fillna(np.nan)
-            result = result.iloc[0]
-            result.index = as_index(self.columns)
-            result.name = q
-            return result
-        else:
-            q = list(map(float, q))
-            result.index = q
-            return result
+            q = [q]
+
+        result = DataFrame(
+            data={
+                k: self[k].quantile(q, interpolation, retain_dtype)
+                for k in self.columns
+            },
+            index=q,
+        )
+
+        if len(q) == 1:
+            result = result.transpose()
+            return Series(
+                data=result._columns[0], index=result.index, name=q[0]
+            )
+
+        return result
 
     def quantiles(self, q=0.5, interpolation="nearest"):
         """

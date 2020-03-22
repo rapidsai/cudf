@@ -1578,16 +1578,6 @@ def test_quantile(pdf, gdf, q):
     assert_eq(pdf.quantile(q), gdf.quantile(q))
 
 
-def test_empty_quantile():
-    pdf = pd.DataFrame({"x": []})
-    df = gd.DataFrame({"x": []})
-
-    actual = df.quantile()
-    expected = pdf.quantile()
-
-    assert_eq(actual, expected)
-
-
 def test_from_pandas_function(pdf):
     gdf = gd.from_pandas(pdf)
     assert isinstance(gdf, gd.DataFrame)

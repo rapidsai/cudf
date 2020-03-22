@@ -18,5 +18,5 @@ cdef extern from "cudf/quantiles.hpp" namespace "cudf::experimental" nogil:
         const vector[double]& q,
         interpolation interp,
         const column_view & ordered_indices,
-        bool cast_to_doubles
+        bool retain_types
     ) except +

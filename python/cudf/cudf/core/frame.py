@@ -688,16 +688,13 @@ class Frame(libcudfxx.table.Table):
     def _quantiles(
         self,
         q,
-        interpolation="LINEAR",
+        interpolation="linear",
         is_sorted=False,
         ascending=(),
         na_position=(),
         retain_dtype=False,
     ):
-        if is_scalar(q):
-            q = [q]
-
-        interpolation = libcudfxx.types.Interpolation[interpolation]
+        interpolation = libcudfxx.types.Interpolation[interpolation.upper()]
 
         is_sorted = libcudfxx.types.Sorted["YES" if is_sorted else "NO"]
 
@@ -709,7 +706,7 @@ class Frame(libcudfxx.table.Table):
 
         result = self.__class__._from_table(
             libcudfxx.quantiles.quantiles(
-                self, q, interpolation, ordered_indices, not retain_dtype
+                self, q, interpolation, ordered_indices, retain_dtype
             )
         )
 
