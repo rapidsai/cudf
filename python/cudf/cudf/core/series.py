@@ -1926,18 +1926,8 @@ class Series(Frame):
         kurt = term_one_section_one * term_one_section_two - 3 * term_two
         return kurt
 
-    def kurt(
-        self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
-    ):
-        """Calculates Fisher's unbiased kurtosis of a sample. Alias for kurtosis.
-        """
-        return self.kurtosis(
-            axis=axis,
-            skipna=skipna,
-            level=level,
-            numeric_only=numeric_only,
-            **kwargs,
-        )
+    # Alias for kurtosis.
+    kurt = kurtosis
 
     def skew(self, axis=None, skipna=None, level=None, numeric_only=None):
         """Calculates the unbiased Fisher-Pearson skew of a sample.
