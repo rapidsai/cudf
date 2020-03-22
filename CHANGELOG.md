@@ -7,7 +7,6 @@
 ## Improvements
 - PR #4471 Consolidate partitioning functionality into a single header.
 - PR #4486 Remove explicit template parameter from detail::scatter.
-
 - PR #4531 Add doc note on conda channel_priority
 - PR #4479 Adding cuda 10.2 support via conda environment file addition
 - PR #4486 Remove explicit template parameter from detail::scatter.
@@ -16,6 +15,7 @@
 - PR #4073 Enable contiguous split java test
 - PR #4527 Add JNI and java bindings for matches_re
 - PR #4599 Add Java and JNI bindings for string replace
+- PR #4645 Add Alias for `kurtosis` as `kurt`
 
 ## Bug Fixes
 
