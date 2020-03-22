@@ -1,9 +1,12 @@
 # cuDF 0.14.0 (Date TBD)
 
 ## New Features
+- PR #4472 Add new `partition` API to replace `scatter_to_tables`.
 
 
 ## Improvements
+- PR #4471 Consolidate partitioning functionality into a single header.
+- PR #4486 Remove explicit template parameter from detail::scatter.
 
 - PR #4531 Add doc note on conda channel_priority
 - PR #4479 Adding cuda 10.2 support via conda environment file addition
@@ -20,9 +23,11 @@
 - PR #4386 Update Java package to 0.14
 - PR #4402 Fix cudf::strings::join_strings logic with all-null strings and null narep
 - PR #4570 Fixing loc ordering issue in dataframe
+- PR #4639 Fix java column of empty strings issue
 - PR #4613 Fix issue related to downcasting in `.loc`
 - PR #4615 Fix potential OOB write in ORC writer compression stage
 - PR #4617 Fix memory leak in aggregation object destructor
+- PR #4633 String concatenation fix in `DataFrame.rename`
 - PR #4609 Fix to handle `Series.factorize` when index is set
 
 
@@ -318,6 +323,7 @@
 - PR #4591 Fix issue when reading consecutive rowgroups
 - PR #4600 Fix missing include in benchmark_fixture.hpp
 - PR #4588 Fix ordering issue in `MultiIndex`
+- PR #4632 Fix handling of empty inputs to concatenate
 - PR #4630 Remove dangling reference to RMM exec policy in drop duplicates tests.
 - PR #4625 Fix hash-based repartition bug in dask_cudf
 

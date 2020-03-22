@@ -354,12 +354,18 @@ concatenate(std::vector<column_view> const& columns_to_concat,
             rmm::mr::device_memory_resource *mr,
             cudaStream_t stream) {
 
-  if (columns_to_concat.empty()) { return std::make_unique<column>(); }
+  CUDF_EXPECTS(not columns_to_concat.empty(),
+               "Unexpected empty list of columns to concatenate.");
 
   data_type const type = columns_to_concat.front().type();
   CUDF_EXPECTS(std::all_of(columns_to_concat.begin(), columns_to_concat.end(),
       [&type](auto const& c) { return c.type() == type; }),
       "Type mismatch in columns to concatenate.");
+
+  if (std::all_of(columns_to_concat.begin(), columns_to_concat.end(),
+                  [](column_view const& c) { return c.is_empty(); })) {
+    return experimental::empty_like(columns_to_concat.front());
+  }
 
   bool const has_nulls = std::any_of(
       columns_to_concat.begin(), columns_to_concat.end(),
