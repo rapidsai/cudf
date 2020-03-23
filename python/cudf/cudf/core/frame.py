@@ -561,13 +561,17 @@ class Frame(libcudfxx.table.Table):
 
     def _partition(self, scatter_map, npartitions, keep_index=True):
 
-        result = libcudfxx.partitioning.partition(
+        output_table, output_offsets = libcudfxx.partitioning.partition(
             self, scatter_map, npartitions, keep_index
         )
-        output_table = self.__class__._from_table(result[0])
-        output_table._copy_categories(self, include_index=keep_index)
+
+        # due to the split limitation mentioned
+        # here: https://github.com/rapidsai/cudf/issues/4607
+        # we need to remove first & last elements in offsets.
+        output_offsets = output_offsets[:-1][1:]
+
         result = libcudfxx.copying.table_split(
-            output_table, result[1][:-1][1:], keep_index=keep_index
+            output_table, output_offsets, keep_index=keep_index
         )
 
         result = [self.__class__._from_table(tbl) for tbl in result]
