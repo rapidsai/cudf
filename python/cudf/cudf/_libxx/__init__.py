@@ -18,6 +18,7 @@ from . import (
     nvtext,
     nvtx,
     orc,
+    partitioning,
     quantiles,
     reduce,
     replace,

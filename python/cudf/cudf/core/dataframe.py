@@ -3887,7 +3887,10 @@ class DataFrame(Frame):
                 "Use an integer array/column for better performance."
             )
 
-        tables = self._scatter_to_tables(map_index, keep_index)
+        if map_size is None:
+            map_size = len(map_index.unique())
+
+        tables = self._partition(map_index, map_size, keep_index)
 
         if map_size:
             # Make sure map_size is >= the number of uniques in map_index

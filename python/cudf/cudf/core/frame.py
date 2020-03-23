@@ -559,6 +559,24 @@ class Frame(libcudfxx.table.Table):
             result.index = self.index
             return result
 
+    def _partition(self, scatter_map, npartitions, keep_index=True):
+        # import pdb; pdb.set_trace()
+        result = libcudfxx.partitioning.partition(
+            self, scatter_map, npartitions, keep_index
+        )
+        output_table = self.__class__._from_table(result[0])
+        output_table._copy_categories(self, include_index=keep_index)
+        result = libcudfxx.copying.table_split(
+            output_table, result[1][:-1][1:], keep_index=keep_index
+        )
+
+        result = [self.__class__._from_table(tbl) for tbl in result]
+
+        for frame in result:
+            frame._copy_categories(self, include_index=keep_index)
+
+        return result
+
     def _scatter_to_tables(self, scatter_map, keep_index=True):
         """
        scatter the dataframe/table to a list of dataframes/tables
