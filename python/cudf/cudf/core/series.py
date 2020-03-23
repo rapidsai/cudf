@@ -2203,6 +2203,7 @@ class Series(Frame):
                     data=[None] * len(q),
                     dtype=self.dtype if retain_dtype else "float64",
                     index=q,
+                    name=self.name,
                 )
             )
 
@@ -2211,6 +2212,7 @@ class Series(Frame):
         if len(q) == 1:
             return result[0]
 
+        result.name = self.name
         result.index = q
 
         return result
