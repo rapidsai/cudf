@@ -182,6 +182,7 @@
 - PR #4563 Remove copying to host for metadata generation in `generate_pandas_metadata`
 - PR #4554 Removed raw RMM allocation from `column_device_view`
 - PR #4619 Remove usage of `nvstrings` in `data_array_view`
+- PR #XXXX Upgrade version of `numba` required to `>=0.48.0`
 
 ## Bug Fixes
 

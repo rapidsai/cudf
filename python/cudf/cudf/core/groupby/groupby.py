@@ -240,11 +240,7 @@ class GroupBy(object):
         grouped_values = self.obj.__class__._from_table(grouped_values)
         grouped_values._copy_categories(self.obj)
         group_names = grouped_keys.unique()
-        return (
-            group_names,
-            offsets,
-            grouped_values,
-        )
+        return (group_names, offsets, grouped_values)
 
     def _agg_func_name_with_args(self, func_name, *args, **kwargs):
         """
@@ -493,7 +489,8 @@ class SeriesGroupBy(GroupBy):
 
         # downcast the result to a Series:
         if result.shape[1] == 1 and not pd.api.types.is_list_like(func):
-            return result.iloc[:, 0]
+            return result[result.columns[0]]
+            # return result.iloc[:, 0]
 
         # drop the first level if we have a multiindex
         if (
