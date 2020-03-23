@@ -1868,7 +1868,7 @@ class Series(Frame):
         if not skipna and self.has_nulls:
             return np.nan
         # enforce linear in case the default ever changes
-        return self.quantile(0.5, interpolation="linear", exact=True)
+        return self.dropna().quantile(0.5, interpolation="linear", exact=True)
 
     def round(self, decimals=0):
         """Round a Series to a configurable number of decimal places.
@@ -2185,9 +2185,8 @@ class Series(Frame):
         DataFrame
 
         """
-
-        if hasattr(kwargs, "exact"):
-            retain_dtype = not kwargs.exact
+        if "exact" in kwargs and kwargs["exact"] is False:
+            interpolation = "lower"
 
         if retain_dtype is None:
             retain_dtype = interpolation in ["higher", "lower", "nearest"]
@@ -2218,33 +2217,6 @@ class Series(Frame):
         result.index = q
 
         return result
-
-        # raise NotImplementedError
-
-        # q_np = np.asarray(q)
-
-        # if (q_np < 0).any() or (q_np > 1).any():
-        #     raise ValueError(
-        #         "percentiles should all be in the interval [0, 1]"
-        #     )
-
-        # if len(self) == 0:
-        #     return self.__class__(
-        #         data=[None] * len(q),
-        #         dtype=(self.dtype if retain_dtype else np.dtype("float64"))
-        #     )
-
-        # result = self._quantiles(
-        #     q, interpolation.upper(), retain_dtype=retain_dtype
-        # )
-
-        # if is_scalar(q):
-        #     return result[0]
-
-        # if quant_index:
-        #     result.index = as_index(q)
-
-        # return result
 
     def describe(self, percentiles=None, include=None, exclude=None):
         """Compute summary statistics of a Series. For numeric

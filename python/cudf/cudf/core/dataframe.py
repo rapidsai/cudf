@@ -3391,7 +3391,7 @@ class DataFrame(Frame):
         numeric_only=True,
         interpolation="linear",
         columns=None,
-        retain_dtype=None,
+        retain_dtypes=None,
         **kwargs,
     ):
         """
@@ -3423,20 +3423,33 @@ class DataFrame(Frame):
         DataFrame
 
         """
+        if axis not in (0, None):
+            raise NotImplementedError("axis is not implemented yet")
+
+        if not numeric_only:
+            raise NotImplementedError("numeric_only is not implemented yet")
+
         if len(self.columns) == 0:
             raise ValueError
 
+        if columns is None:
+            columns = self.columns
+
         result = DataFrame(
             data={
-                k: self[k].quantile(q, interpolation, retain_dtype)
-                for k in self.columns
+                k: self[k].quantile(
+                    q,
+                    interpolation,
+                    retain_dtypes,
+                    exact=getattr(kwargs, "exact", None),
+                )
+                for k in columns
             },
             index=q,
         )
 
         if isinstance(q, numbers.Number):
-            result = result.transpose()
-            return Series(data=result._columns[0], index=result.index, name=q)
+            return Series(data=result.iloc[0], index=self.columns, name=q)
 
         return result
 
