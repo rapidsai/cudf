@@ -17,6 +17,7 @@
 - PR #4527 Add JNI and java bindings for matches_re
 - PR #4599 Add Java and JNI bindings for string replace
 - PR #4645 Add Alias for `kurtosis` as `kurt`
+- PR #4660 Plumb `cudf::partition` api to python/cython
 
 ## Bug Fixes
 
