@@ -122,7 +122,8 @@ def test_from_dask_dataframe():
 
 
 @pytest.mark.parametrize("nelem", [10, 200, 1333])
-def test_set_index(nelem):
+@pytest.mark.parametrize("divisions", [None, "quantile"])
+def test_set_index(nelem, divisions):
     with dask.config.set(scheduler="single-threaded"):
         np.random.seed(0)
         # Use unique index range as the sort may not be stable-ordering
@@ -135,9 +136,23 @@ def test_set_index(nelem):
         dgdf = ddf.map_partitions(cudf.from_pandas)
 
         expect = ddf.set_index("x")
-        got = dgdf.set_index("x")
+        got = dgdf.set_index("x", divisions=divisions)
 
         dd.assert_eq(expect, got, check_index=False, check_divisions=False)
+
+
+@pytest.mark.parametrize("by", ["a", "b"])
+@pytest.mark.parametrize("nelem", [10, 500])
+@pytest.mark.parametrize("nparts", [1, 10])
+def test_set_index_quantile(nelem, nparts, by):
+    df = cudf.DataFrame()
+    df["a"] = np.ascontiguousarray(np.arange(nelem)[::-1])
+    df["b"] = np.random.choice(cudf.datasets.names, size=nelem)
+    ddf = dd.from_pandas(df, npartitions=nparts)
+
+    got = ddf.set_index(by, divisions="quantile")
+    expect = df.sort_values(by=by).set_index(by)
+    dd.assert_eq(got, expect)
 
 
 def assert_frame_equal_by_index_group(expect, got):
@@ -364,6 +379,38 @@ def test_repartition_simple_divisions(start, stop):
     assert a.divisions == b.divisions
 
     dd.utils.assert_eq(a, b)
+
+
+def test_repartition_hash_staged():
+    by = ["b"]
+    datarange = 35
+    size = 100
+    gdf = cudf.DataFrame(
+        {
+            "a": np.arange(size, dtype="int64"),
+            "b": np.random.randint(datarange, size=size),
+        }
+    )
+    ddf = dgd.from_cudf(gdf, npartitions=5)
+    ddf_new = ddf.repartition(columns=by, max_branch=4)
+
+    # Make sure we are getting a dask_cudf dataframe
+    assert type(ddf_new) == type(ddf)
+
+    # Check that the length was preserved
+    assert len(ddf_new) == len(ddf)
+
+    # Check that the partitions have unique keys,
+    # and that the key values are preserved
+    expect_unique = gdf[by].drop_duplicates().sort_values(by)
+    got_unique = cudf.concat(
+        [
+            part[by].compute().drop_duplicates()
+            for part in ddf_new[by].partitions
+        ],
+        ignore_index=True,
+    ).sort_values(by)
+    dd.assert_eq(got_unique, expect_unique, check_index=False)
 
 
 @pytest.mark.parametrize("by", [["b"], ["c"], ["d"], ["b", "c"]])

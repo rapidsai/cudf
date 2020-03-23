@@ -253,6 +253,10 @@ def test_dataframe_basic():
     df_tup[(1, "foobar")] = data
     np.testing.assert_equal(data, df_tup[(1, "foobar")].to_array())
 
+    df = DataFrame(pd.DataFrame({"a": [1, 2, 3], "c": ["a", "b", "c"]}))
+    pdf = pd.DataFrame(pd.DataFrame({"a": [1, 2, 3], "c": ["a", "b", "c"]}))
+    assert_eq(df, pdf)
+
 
 def test_dataframe_drop_method():
     df = DataFrame()
@@ -1885,6 +1889,13 @@ def test_dataframe_rename():
 
     rename_mapper = {"a": "z", "b": "y", "c": "x"}
     expect = pdf.rename(columns=rename_mapper)
+    got = gdf.rename(columns=rename_mapper)
+
+    assert_eq(expect, got)
+
+    gdf = DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
+    rename_mapper = {"a": "z", "b": "z", "c": "z"}
+    expect = DataFrame({"z": [1, 2, 3], "z_1": [4, 5, 6], "z_2": [7, 8, 9]})
     got = gdf.rename(columns=rename_mapper)
 
     assert_eq(expect, got)

@@ -22,6 +22,46 @@
 
 namespace cudf {
 namespace experimental {
+
+/**
+ * @brief Partitions rows of `t` according to the mapping specified by
+ * `partition_map`.
+ *
+ * For each row at `i` in `t`, `partition_map[i]` indicates which partition row
+ * `i` belongs to. `partition` creates a new table by rearranging the rows of
+ * `t` such that rows in the same partition are contiguous. The returned table
+ * is in ascending partition order from `[0, num_partitions)`. The order within
+ * each partition is undefined.
+ *
+ * Returns a `vector<size_type>` of `num_partitions + 1` values that indicate
+ * the starting position of each partition within the returned table, i.e.,
+ * partition `i` starts at `offsets[i]` (inclusive) and ends at `offset[i+1]`
+ * (exclusive). As a result, if value `j` in `[0, num_partitions)` does not
+ * appear in `partition_map`, partition `j` will be empty, i.e.,
+ * `offsets[j+1] - offsets[j] == 0`.
+ *
+ * Values in `partition_map` must be in the range `[0, num_partitions)`,
+ * otherwise behavior is undefined.
+ *
+ * @throw cudf::logic_error when `partition_map` is a non-integer type
+ * @throw cudf::logic_error when `partition_map.has_nulls() == true`
+ * @throw cudf::logic_error when `partition_map.size() != t.num_rows()`
+ *
+ * @param t The table to partition
+ * @param partition_map Non-nullable column of integer values that map each row
+ * in `t` to it's partition.
+ * @param num_partitions The total number of partitions.
+ * @param mr The resource used to allocate the device memory for the returned
+ * table
+ * @return Pair containing the reordered table and vector of `num_partitions +
+ * 1` offsets to each partition such that the size of partition `i` is
+ * determined by `offset[i+1] - offset[i]`.
+ */
+std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
+    table_view const& t, column_view const& partition_map,
+    size_type num_partitions,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
 /**
  * @brief Partitions rows from the input table into multiple output tables.
  *
