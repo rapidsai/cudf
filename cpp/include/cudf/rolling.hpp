@@ -140,7 +140,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
  * Like `rolling_window()`, this function aggregates values in a window around each 
  * element of a specified `input` column. It differs from `rolling_window()` in two respects:
  *   1. The elements of the `input` column are grouped into distinct groups (e.g. the result of a groupby), determined by 
- *      the correponding values of the columns under `group_keys`. The window-aggregation cannot cross the group boundaries.
+ *      the corresponding values of the columns under `group_keys`. The window-aggregation cannot cross the group boundaries.
  *   2. Within a group, the aggregation window is calculated based on a time interval (e.g. number of days
  *      preceding/following the current row). The timestamps for the input data are specified by the `timestamp_column`
  *      argument.
