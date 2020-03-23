@@ -22,6 +22,7 @@
 
 - PR #4386 Update Java package to 0.14
 - PR #4402 Fix cudf::strings::join_strings logic with all-null strings and null narep
+- PR #4610 Fix validity bug in string scalar factory
 - PR #4570 Fixing loc ordering issue in dataframe
 - PR #4639 Fix java column of empty strings issue
 - PR #4613 Fix issue related to downcasting in `.loc`
