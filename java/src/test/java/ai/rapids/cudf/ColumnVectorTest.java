@@ -992,78 +992,55 @@ public class ColumnVectorTest extends CudfTestBase {
                                                    "IJ\"\u0100\u0101\u0500\u0501IJ\"\u0100\u0101\u0500\u0501",
                                                    "kl mkl m", "Nop1Nop1", "\\qRs2\\qRs2", "3tuV\'3tuV\'",
                                                    "wX4YzwX4Yz", "\ud720\ud721\ud720\ud721");
-         Scalar emptyString = Scalar.fromString("")) {
-      ColumnVector[] arr = new ColumnVector[2];
-      arr[0] = v;
-      arr[1] = v;
-      try (ColumnVector concat = ColumnVector.stringConcatenate(emptyString, emptyString, arr)) {
-        assertColumnsAreEqual(concat, e_concat);
-      }
+         Scalar emptyString = Scalar.fromString("");
+         ColumnVector concat = ColumnVector.stringConcatenate(emptyString, emptyString,
+                                                              new ColumnVector[]{v, v})) {
+      assertColumnsAreEqual(concat, e_concat);
     }
     assertThrows(AssertionError.class, () -> {
       try (ColumnVector sv = ColumnVector.fromStrings("B", "cd", "\u0480\u0481", "E\tf");
            ColumnVector cv = ColumnVector.fromInts(1, 2, 3, 4);
-           Scalar emptyString = Scalar.fromString("")) {
-        ColumnVector[] arr = new ColumnVector[2];
-        arr[0] = sv;
-        arr[1] = cv;
-        try (ColumnVector concat = ColumnVector.stringConcatenate(emptyString, emptyString, arr)) {}
-      }
+           Scalar emptyString = Scalar.fromString("");
+           ColumnVector concat = ColumnVector.stringConcatenate(emptyString, emptyString,
+                                                                new ColumnVector[]{sv, cv})) {}
     });
     assertThrows(AssertionError.class, () -> {
       try (ColumnVector sv1 = ColumnVector.fromStrings("a", "B", "cd");
            ColumnVector sv2 = ColumnVector.fromStrings("a", "B");
-           Scalar emptyString = Scalar.fromString("")) {
-        ColumnVector[] arr = new ColumnVector[2];
-        arr[0] = sv1;
-        arr[1] = sv2;
-        try (ColumnVector concat = ColumnVector.stringConcatenate(emptyString, emptyString, arr)) {}
-      }
-    });
-    assertThrows(AssertionError.class, () -> {
-      try (ColumnVector sv = ColumnVector.fromStrings("a", "B", "cd");
-           Scalar emptyString = Scalar.fromString("")) {
-        ColumnVector[] arr = new ColumnVector[1];
-        arr[0] = sv;
-        try (ColumnVector concat = ColumnVector.stringConcatenate(emptyString, emptyString, arr)) {}
-      }
+           Scalar emptyString = Scalar.fromString("");
+           ColumnVector concat = ColumnVector.stringConcatenate(emptyString, emptyString,
+                                                                new ColumnVector[]{sv1, sv2})) {}
     });
     assertThrows(AssertionError.class, () -> {
       try (ColumnVector sv = ColumnVector.fromStrings("a", "B", "cd");
            Scalar emptyString = Scalar.fromString("");
-           Scalar nullString = Scalar.fromString(null)) {
-        ColumnVector[] arr = new ColumnVector[2];
-        arr[0] = sv;
-        arr[1] = sv;
-        try (ColumnVector concat = ColumnVector.stringConcatenate(nullString, emptyString, arr)) {}
-      }
+           ColumnVector concat = ColumnVector.stringConcatenate(emptyString, emptyString,
+                                                                new ColumnVector[]{sv})) {}
     });
     assertThrows(AssertionError.class, () -> {
       try (ColumnVector sv = ColumnVector.fromStrings("a", "B", "cd");
-           Scalar emptyString = Scalar.fromString("")) {
-        ColumnVector[] arr = new ColumnVector[2];
-        arr[0] = sv;
-        arr[1] = sv;
-        try (ColumnVector concat = ColumnVector.stringConcatenate(null, emptyString, arr)) {}
-      }
+           Scalar emptyString = Scalar.fromString("");
+           Scalar nullString = Scalar.fromString(null);
+           ColumnVector concat = ColumnVector.stringConcatenate(nullString, emptyString,
+                                                                new ColumnVector[]{sv, sv})) {}
     });
     assertThrows(AssertionError.class, () -> {
       try (ColumnVector sv = ColumnVector.fromStrings("a", "B", "cd");
-           Scalar emptyString = Scalar.fromString("")) {
-        ColumnVector[] arr = new ColumnVector[2];
-        arr[0] = sv;
-        arr[1] = sv;
-        try (ColumnVector concat = ColumnVector.stringConcatenate(emptyString, null, arr)) {}
-      }
+           Scalar emptyString = Scalar.fromString("");
+           ColumnVector concat = ColumnVector.stringConcatenate(null, emptyString,
+                                                                new ColumnVector[]{sv, sv})) {}
     });
     assertThrows(AssertionError.class, () -> {
       try (ColumnVector sv = ColumnVector.fromStrings("a", "B", "cd");
-           Scalar emptyString = Scalar.fromString("")) {
-        ColumnVector[] arr = new ColumnVector[2];
-        arr[0] = sv;
-        arr[1] = null;
-        try (ColumnVector concat = ColumnVector.stringConcatenate(emptyString, emptyString, arr)) {}
-      }
+           Scalar emptyString = Scalar.fromString("");
+           ColumnVector concat = ColumnVector.stringConcatenate(emptyString, null,
+                                                                new ColumnVector[]{sv, sv})) {}
+    });
+    assertThrows(AssertionError.class, () -> {
+      try (ColumnVector sv = ColumnVector.fromStrings("a", "B", "cd");
+           Scalar emptyString = Scalar.fromString("");
+           ColumnVector concat = ColumnVector.stringConcatenate(emptyString, emptyString,
+                                                                new ColumnVector[]{sv, null})) {}
     });
   }
 
@@ -1079,13 +1056,10 @@ public class ColumnVectorTest extends CudfTestBase {
                                                    "kl mkl m", "Nop1Nop1", "\\qRs2\\qRs2", "NULLNULL",
                                                    "3tuV\'3tuV\'", "wX4YzwX4Yz", "\ud720\ud721\ud720\ud721");
           Scalar emptyString = Scalar.fromString("");
-          Scalar nullSubstitute = Scalar.fromString("NULL")) {
-      ColumnVector[] arr = new ColumnVector[2];
-      arr[0] = v;
-      arr[1] = v;
-      try (ColumnVector concat = ColumnVector.stringConcatenate(emptyString, nullSubstitute, arr)) {
-        assertColumnsAreEqual(concat, e_concat);
-      }
+          Scalar nullSubstitute = Scalar.fromString("NULL");
+         ColumnVector concat = ColumnVector.stringConcatenate(emptyString, nullSubstitute,
+                                                              new ColumnVector[]{v, v})) {
+      assertColumnsAreEqual(concat, e_concat);
     }
   }
 
@@ -1096,13 +1070,10 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector e_concat = ColumnVector.fromStrings("aA1\t\ud721b", "BA1\t\ud721C", "cdA1\t\ud721\u0500\u0501",
                                                           "\u0480\u0481A1\t\ud721x\nYz", null, null, null, null);
          Scalar separatorString = Scalar.fromString("A1\t\ud721");
-         Scalar nullString = Scalar.fromString(null)) {
-      ColumnVector[] arr = new ColumnVector[2];
-      arr[0] = sv1;
-      arr[1] = sv2;
-      try (ColumnVector concat = ColumnVector.stringConcatenate(separatorString, nullString, arr)) {
-        assertColumnsAreEqual(concat, e_concat);
-      }
+         Scalar nullString = Scalar.fromString(null);
+         ColumnVector concat = ColumnVector.stringConcatenate(separatorString, nullString,
+                                                              new ColumnVector[]{sv1, sv2})) {
+      assertColumnsAreEqual(concat, e_concat);
     }
   }
 
