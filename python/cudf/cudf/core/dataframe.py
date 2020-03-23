@@ -2790,7 +2790,11 @@ class DataFrame(Frame):
         -------
         partitioned: list of DataFrame
         """
-        idx = 0 if self._index is None else self._index._num_columns
+        idx = (
+            0
+            if (self._index is None or keep_index is False)
+            else self._index._num_columns
+        )
         key_indices = [self._data.names.index(k) + idx for k in columns]
         outdf, offsets = self._hash_partition(key_indices, nparts, keep_index)
         # Slice into partition
