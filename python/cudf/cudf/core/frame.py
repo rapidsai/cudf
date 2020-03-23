@@ -983,6 +983,12 @@ class Frame(libcudfxx.table.Table):
         1-D cupy array of insertion points
         """
         # Call libcudf++ search_sorted primitive
+        if len(self._columns) == 1:
+            dtype = self.dtype
+        else:
+            dtype = None
+
+        values = as_column(values, dtype=dtype).as_frame()
         outcol = libcudfxx.search.search_sorted(
             self, values, side, ascending=ascending, na_position=na_position
         )
