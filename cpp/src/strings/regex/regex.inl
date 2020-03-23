@@ -16,7 +16,6 @@
 
 #include <cuda_runtime.h>
 #include <cudf/strings/string_view.cuh>
-#include <strings/regex/regcomp.h>
 #include <strings/char_types/is_flags.h>
 #include <strings/utilities.cuh>
 
@@ -179,7 +178,7 @@ __device__ inline void reprog_device::set_stack_mem(u_char* s1, u_char* s2)
     _stack_mem2 = s2;
 }
 
-__host__ __device__ inline reinst* reprog_device::get_inst(int32_t idx) const
+__device__ inline reinst* reprog_device::get_inst(int32_t idx) const
 {
     assert( (idx >= 0) && (idx < _insts_count) );
     return _insts + idx;
