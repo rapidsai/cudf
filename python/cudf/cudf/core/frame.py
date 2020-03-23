@@ -983,18 +983,29 @@ class Frame(libcudfxx.table.Table):
         1-D cupy array of insertion points
         """
         # Call libcudf++ search_sorted primitive
-        if len(self._columns) == 1:
-            dtype = self.dtype
-        else:
-            dtype = None
 
-        values = as_column(values, dtype=dtype).as_frame()
+        from cudf.utils.dtypes import is_scalar
+
+        scalar_flag = None
+        if is_scalar(values):
+            scalar_flag = True
+
+        if not isinstance(values, Frame):
+            values = as_column(
+                values,
+                dtype=self.dtype if isinstance(self, cudf.Series) else None,
+            ).as_frame()
         outcol = libcudfxx.search.search_sorted(
             self, values, side, ascending=ascending, na_position=na_position
         )
 
-        # Retrun result as cupy array
-        return cupy.asarray(outcol.data_array_view)
+        # Retrun result as cupy array if the values is non-scalar
+        # If values is scalar, result is expected to be scalar.
+        result = cupy.asarray(outcol.data_array_view)
+        if scalar_flag:
+            return result[0].tolist()
+        else:
+            return result
 
     def sin(self):
         return self._unaryop("sin")
