@@ -1829,8 +1829,8 @@ class DataFrame(Frame):
           * Support axis='columns' only.
           * Not supporting: index, level
 
-        Rename will not overwite column names. If a list with duplicates it
-        passed, column names will be postfixed.
+        Rename will not overwite column names. If a list with duplicates is
+        passed, column names will be postfixed with a number.
         """
         # Pandas defaults to using columns over mapper
         if columns:
@@ -1841,11 +1841,12 @@ class DataFrame(Frame):
             postfix = 1
             # It is possible for DataFrames with a MultiIndex columns object
             # to have columns with the same name. The followig use of
-            # _cols.items and ("cudf_"... allows the use of rename in this case
+            # _cols.items and ("_1", "_2"... allows the use of
+            # rename in this case
             for key, col in self._data.items():
                 if key in mapper:
                     if mapper[key] in out.columns:
-                        out_column = mapper[key] + ("cudf_" + str(postfix),)
+                        out_column = mapper[key] + "_" + str(postfix)
                         postfix += 1
                     else:
                         out_column = mapper[key]
@@ -3585,7 +3586,11 @@ class DataFrame(Frame):
             "var", axis=axis, ddof=ddof, **kwargs
         )
 
-    def kurtosis(self, axis=None, skipna=None, level=None, numeric_only=None):
+    def kurtosis(
+        self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
+    ):
+        """Calculates Fisher's unbiased kurtosis of a sample.
+        """
         if numeric_only not in (None, True):
             msg = "Kurtosis only supports int, float, and bool dtypes."
             raise TypeError(msg)
@@ -3597,7 +3602,11 @@ class DataFrame(Frame):
             skipna=skipna,
             level=level,
             numeric_only=numeric_only,
+            **kwargs,
         )
+
+    # Alias for kurtosis.
+    kurt = kurtosis
 
     def skew(self, axis=None, skipna=None, level=None, numeric_only=None):
         if numeric_only not in (None, True):

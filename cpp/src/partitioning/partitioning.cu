@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cub/cub.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/gather.cuh>
@@ -576,6 +577,90 @@ hash_partition_table(table_view const& input, table_view const& table_to_hash,
   }
 }
 
+struct dispatch_map_type {
+  /**
+   * @brief Partitions the table `t` according to the `partition_map`.
+   *
+   * Algorithm:
+   * - Compute the histogram of the size each partition
+   * - Compute the exclusive scan of the histogram to get the offset for each
+   * partition in the final partitioned output
+   * - Use a transform iterator to materialize the scatter map of the rows from
+   * `t` into the final output.
+   *
+   * @note JH: It would likely be more efficient to avoid the atomic increments
+   * in the transform iterator. It would probably be faster to compute a
+   * per-thread block histogram and compute an exclusive scan of all of the
+   * per-block histograms (like in hash partition). But I'm purposefully trying
+   * to reduce memory pressure by avoiding intermediate materializations. Plus,
+   * atomics resolve in L2 and should be pretty fast since all the offsets will
+   * fit in L2.
+   *
+   */
+  template <typename MapType>
+  std::enable_if_t<
+      std::is_integral<MapType>::value and not is_boolean<MapType>(),
+      std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>>>
+  operator()(table_view const& t, column_view const& partition_map,
+             size_type num_partitions, rmm::mr::device_memory_resource* mr,
+             cudaStream_t stream) const {
+    // Build a histogram of the number of rows in each partition
+    rmm::device_vector<size_type> histogram(num_partitions + 1);
+    std::size_t temp_storage_bytes{};
+    std::size_t const num_levels = num_partitions + 1;
+    size_type const lower_level = 0;
+    size_type const upper_level = num_partitions;
+    cub::DeviceHistogram::HistogramEven(
+        nullptr, temp_storage_bytes, partition_map.begin<MapType>(),
+        histogram.data().get(), num_levels, lower_level, upper_level,
+        partition_map.size(), stream);
+
+    rmm::device_buffer temp_storage(temp_storage_bytes, stream);
+
+    cub::DeviceHistogram::HistogramEven(
+        temp_storage.data(), temp_storage_bytes, partition_map.begin<MapType>(),
+        histogram.data().get(), num_levels, lower_level, upper_level,
+        partition_map.size(), stream);
+
+    // `histogram` was created with an extra entry at the end such that an
+    // exclusive scan will put the total number of rows at the end
+    thrust::exclusive_scan(rmm::exec_policy()->on(stream), histogram.begin(),
+                           histogram.end(), histogram.begin());
+
+    // Copy offsets to host
+    std::vector<size_type> partition_offsets(histogram.size());
+    thrust::copy(histogram.begin(), histogram.end(), partition_offsets.begin());
+
+    // Unfortunately need to materialize the scatter map because
+    // `detail::scatter` requires multiple passes through the iterator
+    rmm::device_vector<MapType> scatter_map(partition_map.size());
+
+    // For each `partition_map[i]`, atomically increment the corresponding
+    // partition offset to determine `i`s location in the output
+    thrust::transform(
+        rmm::exec_policy(stream)->on(stream), partition_map.begin<MapType>(),
+        partition_map.end<MapType>(), scatter_map.begin(),
+        [offsets = histogram.data().get()] __device__(auto partition_number) {
+          return atomicAdd(&offsets[partition_number], 1);
+        });
+
+    // Scatter the rows into their partitions
+    auto scattered = cudf::experimental::detail::scatter(t, scatter_map.begin(),
+                                                         scatter_map.end(), t);
+
+    return std::make_pair(std::move(scattered), std::move(partition_offsets));
+  }
+
+  template <typename MapType>
+  std::enable_if_t<
+      not std::is_integral<MapType>::value or is_boolean<MapType>(),
+      std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>>>
+  operator()(table_view const& t, column_view const& partition_map,
+             size_type num_partitions, rmm::mr::device_memory_resource* mr,
+             cudaStream_t stream) const {
+    CUDF_FAIL("Unexpected, non-integral partition map.");
+  }
+};
 }  // namespace
 
 namespace detail {
@@ -601,7 +686,27 @@ hash_partition(table_view const& input,
                                        stream);
   }
 }
+
+std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>>
+partition(table_view const& t, column_view const& partition_map,
+          size_type num_partitions, rmm::mr::device_memory_resource* mr,
+          cudaStream_t stream = 0) {
+  CUDF_EXPECTS(t.num_rows() == partition_map.size(),
+               "Size mismatch between table and partition map.");
+  CUDF_EXPECTS(not partition_map.has_nulls(),
+               "Unexpected null values in partition_map.");
+
+  if (num_partitions == 0 or t.num_rows() == 0) {
+    return std::make_pair(empty_like(t), std::vector<size_type>{});
+  }
+
+  return cudf::experimental::type_dispatcher(
+      partition_map.type(), dispatch_map_type{}, t, partition_map,
+      num_partitions, mr, stream);
+}
 }  // namespace detail
+
+// Partition based on hash values
 std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>>
 hash_partition(table_view const& input,
                std::vector<size_type> const& columns_to_hash,
@@ -609,5 +714,14 @@ hash_partition(table_view const& input,
   CUDF_FUNC_RANGE();
   return detail::hash_partition(input, columns_to_hash, num_partitions, mr);
 }
+
+// Partition based on an explicit partition map
+std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>>
+partition(table_view const& t, column_view const& partition_map,
+          size_type num_partitions, rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
+  return detail::partition(t, partition_map, num_partitions, mr);
+}
+
 }  // namespace experimental
 }  // namespace cudf
