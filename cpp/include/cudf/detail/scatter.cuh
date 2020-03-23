@@ -25,6 +25,7 @@
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 namespace cudf {
 namespace experimental {
@@ -187,15 +188,18 @@ scatter(table_view const& source, MapIterator scatter_map_begin,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
     cudaStream_t stream = 0) {
 
-    using MapType = typename thrust::iterator_traits<MapIterator>::value_type;
+  CUDF_FUNC_RANGE();
 
-    if (check_bounds) {
-      auto const begin = -target.num_rows();
-      auto const end = target.num_rows();
-      auto bounds = bounds_checker<MapType>{begin, end};
-      CUDF_EXPECTS(std::distance(scatter_map_begin, scatter_map_end) == thrust::count_if(
-        rmm::exec_policy(stream)->on(stream),
-        scatter_map_begin, scatter_map_end, bounds),
+  using MapType = typename thrust::iterator_traits<MapIterator>::value_type;
+
+  if (check_bounds) {
+    auto const begin = -target.num_rows();
+    auto const end = target.num_rows();
+    auto bounds = bounds_checker<MapType>{begin, end};
+    CUDF_EXPECTS(
+        std::distance(scatter_map_begin, scatter_map_end) ==
+            thrust::count_if(rmm::exec_policy(stream)->on(stream),
+                             scatter_map_begin, scatter_map_end, bounds),
         "Scatter map index out of bounds");
     }
 
