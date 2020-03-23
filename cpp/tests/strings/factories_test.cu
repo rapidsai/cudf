@@ -163,6 +163,8 @@ TEST_F(StringsFactoriesTest, CreateScalar)
     auto string_s = static_cast<cudf::string_scalar*>(s.get());
 
     EXPECT_EQ(string_s->to_string(), value);
+    EXPECT_TRUE(string_s->is_valid());
+    EXPECT_TRUE(s->is_valid());
 }
 
 TEST_F(StringsFactoriesTest, EmptyStringsColumn)
