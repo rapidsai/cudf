@@ -3889,6 +3889,12 @@ class DataFrame(Frame):
 
         if map_size is None:
             map_size = len(map_index.unique())
+        else:
+            if map_size < len(map_index.unique()):
+                raise ValueError(
+                    "ERROR: map_size must be >= %d (got %d)."
+                    % (len(map_index.unique()), map_size)
+                )
 
         tables = self._partition(map_index, map_size, keep_index)
 
