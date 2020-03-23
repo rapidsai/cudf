@@ -1,6 +1,5 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from libc.stdint cimport uint32_t
 from libcpp cimport bool
 from libcpp.pair cimport pair
 from libcpp.memory cimport unique_ptr
@@ -10,7 +9,6 @@ from cudf._libxx.column cimport Column
 from cudf._libxx.table cimport Table
 from cudf._libxx.move cimport move
 
-from cudf._libxx.cpp.column.column cimport column
 from cudf._libxx.cpp.table.table cimport table
 from cudf._libxx.cpp.table.table_view cimport table_view
 from cudf._libxx.cpp.column.column_view cimport column_view
