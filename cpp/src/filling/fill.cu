@@ -83,6 +83,7 @@ struct out_of_place_fill_range_dispatch {
       cudf::size_type begin, cudf::size_type end,
       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(), 
       cudaStream_t stream = 0) {
+    CUDF_EXPECTS(input.type() == value.type(), "Data type mismatch.");
     auto p_ret = std::make_unique<cudf::column>(input, stream, mr);
 
     if (end != begin) {  // otherwise no fill
@@ -105,6 +106,7 @@ struct out_of_place_fill_range_dispatch {
       cudf::size_type begin, cudf::size_type end,
       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(), 
       cudaStream_t stream = 0) {
+    CUDF_EXPECTS(input.type() == value.type(), "Data type mismatch.");
     using ScalarType = cudf::experimental::scalar_type_t<T>;
     auto p_scalar = static_cast<ScalarType const*>(&value);
     return cudf::strings::detail::fill(cudf::strings_column_view(input),
@@ -119,34 +121,33 @@ struct out_of_place_fill_range_dispatch {
       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(), 
       cudaStream_t stream = 0) {
 
-        cudf::dictionary_column_view const target(input);
-        auto scalar_column = cudf::make_column_from_scalar(value,1,mr,stream);
+    cudf::dictionary_column_view const target(input);
+    CUDF_EXPECTS(target.keys().type() == value.type(), "Data type mismatch.");
 
-        // add the scalar to get the output dictionary keyset
-        auto target_matched = cudf::dictionary::detail::add_keys(target, scalar_column->view(), mr, stream);
-        cudf::column_view const target_indices = cudf::dictionary_column_view(target_matched->view()).get_indices_annotated();
-        //cudf::column_view target_indices( cudf::data_type{cudf::INT32}, target_matched->size(),
-        //                cudf::dictionary_column_view(target_matched->view()).indices().data<int32_t>(),
-        //                target_matched->view().null_mask(), target_matched->null_count(), 0 );
+    // add the scalar to get the output dictionary keyset
+    auto scalar_column = cudf::make_column_from_scalar(value,1,mr,stream);
+    auto target_matched = cudf::dictionary::detail::add_keys(target, scalar_column->view(), mr, stream);
+    cudf::column_view const target_indices = cudf::dictionary_column_view(target_matched->view()).get_indices_annotated();
 
-        auto index_of_value = cudf::dictionary::detail::get_index( target_matched->view(), value, mr, stream );
-        //cudf::numeric_scalar<int32_t> index_of_value{0};
-        out_of_place_fill_range_dispatch filler{*index_of_value,target_indices};
-        auto new_indices = filler.template operator()<int32_t>( begin, end, mr, stream);
-
-        auto const output_size = new_indices->size();       // record these
-        auto const null_count = new_indices->null_count();  // before the release
-        auto contents = new_indices->release();
-        auto indices_column = std::make_unique<cudf::column>( cudf::data_type{cudf::INT32},
+    // we need the index of the key just added
+    auto index_of_value = cudf::dictionary::detail::get_index( target_matched->view(), value, mr, stream );
+    // now call fill using just the indices column
+    out_of_place_fill_range_dispatch filler{*index_of_value,target_indices};
+    auto new_indices = filler.template operator()<int32_t>( begin, end, mr, stream);
+    auto const output_size = new_indices->size();       // record these
+    auto const null_count = new_indices->null_count();  // before the release
+    auto contents = new_indices->release();
+    // create the new indices column from the result
+    auto indices_column = std::make_unique<cudf::column>( cudf::data_type{cudf::INT32},
               static_cast<cudf::size_type>(output_size), std::move(*(contents.data.release())),
               rmm::device_buffer{}, 0 );
 
-        // take the keys from either matched column
-        std::unique_ptr<cudf::column> keys_column(std::move(target_matched->release().children.back()));
+    // take the keys from matched column
+    std::unique_ptr<cudf::column> keys_column(std::move(target_matched->release().children.back()));
 
-        // create column with keys_column and indices_column
-        return cudf::make_dictionary_column( std::move(keys_column), std::move(indices_column),
-                                             std::move(*(contents.null_mask.release())), null_count );
+    // create column with keys_column and indices_column
+    return cudf::make_dictionary_column( std::move(keys_column), std::move(indices_column),
+                                         std::move(*(contents.null_mask.release())), null_count );
   }
 };
 
@@ -192,7 +193,6 @@ std::unique_ptr<column> fill(column_view const& input,
                (end <= input.size()) &&
                (begin <= end),
                "Range is out of bounds.");
-  CUDF_EXPECTS(input.type() == value.type(), "Data type mismatch.");
 
   return cudf::experimental::type_dispatcher(
       input.type(),
