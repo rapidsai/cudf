@@ -60,31 +60,6 @@ quantiles_discrete(table_view const& input,
                           mr);
 }
 
-template<typename DataIterator, typename Result>
-struct quantiles_data_functor
-{
-    DataIterator data;
-    size_type size;
-    interpolation interp;
-
-    Result __device__ operator()(double q) {
-        return detail::select_quantile_data<Result>(data, size, q, interp);
-    }
-};
-
-template<typename ValidityIterator>
-struct quantiles_mask_functor
-{
-    ValidityIterator validity;
-    size_type size;
-    interpolation interp;
-
-    bool __device__  operator() (double q) {
-        return detail::select_quantile_validity(validity, size, q, interp);
-    }
-};
-
-
 template<typename SortMapIterator>
 struct quantiles_functor
 {
@@ -100,7 +75,7 @@ struct quantiles_functor
     std::enable_if_t<not std::is_arithmetic<T>::value, std::unique_ptr<column>>
     operator()(Args&&... args)
     {
-        CUDF_FAIL("Only arithmetic types are supported in quantiles.");
+        CUDF_FAIL("Only arithmetic types are supported for arithmetic interpolation schemes.");
     }
 
     template<typename T>
@@ -192,11 +167,11 @@ quantiles(table_view const& input,
           bool retain_types,
           rmm::mr::device_memory_resource* mr)
 {
-    auto is_input_numeric = all_of(input.begin(),
-                                   input.end(),
-                                   [](column_view const& col){
-                                       return cudf::is_numeric(col.type());
-                                   });
+    auto is_input_numeric = std::all_of(input.begin(),
+                                        input.end(),
+                                        [](column_view const& col){
+                                            return cudf::is_numeric(col.type());
+                                        });
 
     CUDF_EXPECTS(is_input_numeric || retain_types,
                  "casting to doubles requires numeric column types");
@@ -248,7 +223,7 @@ quantiles(table_view const& input,
     CUDF_EXPECTS(input.num_rows() > 0,
                  "quantiles requires at least one input row.");
 
-    if (ordered_indices.size() == 0)
+    if (ordered_indices.is_empty())
     {
         return detail::quantiles(input,
                                  thrust::make_counting_iterator<size_type>(0),

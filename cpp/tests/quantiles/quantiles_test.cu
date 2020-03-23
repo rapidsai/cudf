@@ -239,3 +239,30 @@ TYPED_TEST(NonNumericQuantilesTest, TestNonNumericWithoutRetainingTypes)
         logic_error
     );
 }
+
+template<typename T>
+struct QuantilesInt64UnderflowTest : public BaseFixture {
+};
+
+using QuantilesInt64UnderflowTestTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t>;
+
+TYPED_TEST_CASE(QuantilesInt64UnderflowTest, QuantilesInt64UnderflowTestTypes);
+
+TYPED_TEST(QuantilesInt64UnderflowTest, X)
+{
+    using T = TypeParam;
+
+    auto max = std::numeric_limits<T>::max();
+    auto min = std::numeric_limits<T>::min();
+
+    auto input_a = fixed_width_column_wrapper<T>({ min, min + 2, max - 2, max });
+    auto input = table_view({ input_a });
+    auto expected_a = fixed_width_column_wrapper<T>({ min + 1, max - 1 });
+    auto expected = table_view({ expected_a });
+
+    auto interp = experimental::interpolation::MIDPOINT;
+
+    auto actual = experimental::quantiles(input, { 0.2, 0.8 }, interp, {}, true);
+
+    expect_tables_equal(expected, actual->view());
+}
