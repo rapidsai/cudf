@@ -60,7 +60,7 @@ std::unique_ptr<column> find_fn( strings_column_view const& strings,
 {
     CUDF_EXPECTS( target.is_valid(), "Parameter target must be valid.");
     CUDF_EXPECTS( start >= 0, "Parameter start must be positive integer or zero.");
-    if( (stop) > 0 && (start > stop) )
+    if( (stop > 0) && (start > stop) )
         CUDF_FAIL( "Parameter start must be less than stop.");
     //
     auto d_target = string_view(target.data(),target.size());
