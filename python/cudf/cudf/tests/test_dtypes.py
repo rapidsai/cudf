@@ -37,7 +37,14 @@ def test_cdf_to_pandas(data, ordered):
 
 
 @pytest.mark.parametrize(
-    "data", [{"a": [[1, 2, 3]]}, pd.DataFrame({"a": [[1, 2, 3]]})]
+    "data",
+    [
+        {"a": [[]]},
+        {"a": [[1, 2, 3]]},
+        {"a": [[1, 2, 3]], "b": [2, 3, 4]},
+        {"a": [1], "b": [[1, 2, 3]]},
+        pd.DataFrame({"a": [[1, 2, 3]]}),
+    ],
 )
 def test_df_list_dtypes(data):
 
@@ -53,7 +60,9 @@ def test_df_list_dtypes(data):
             cudf.DataFrame.from_pandas(data)
 
 
-@pytest.mark.parametrize("data", [[[1, 2, 3]], pd.Series({"a": [[1, 2, 3]]})])
+@pytest.mark.parametrize(
+    "data", [[[]], [[1, 2, 3], [1, 2, 3]], pd.Series({"a": [[1, 2, 3]]})]
+)
 def test_sr_list_dtypes(data):
 
     expectation = pytest.raises(
