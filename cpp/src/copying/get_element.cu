@@ -60,7 +60,25 @@ struct get_element_functor {
     cudaStream_t stream,
     rmm::mr::device_memory_resource *mr)
   {
-    CUDF_FAIL("String columns unsupported for Get element");
+    auto device_col = column_device_view::create(input, stream);
+
+    rmm::device_scalar<string_view> temp_data;
+    rmm::device_scalar<bool> temp_valid;
+
+    thrust::for_each_n(rmm::exec_policy(stream)->on(stream), 
+                       thrust::make_constant_iterator(0), 1, 
+      [ 
+        buffer=temp_data.data(),
+        validity=temp_valid.data(),
+        d_col=*device_col,
+        index 
+      ] __device__ (auto) mutable {
+        *buffer = d_col.element<string_view>(index);
+        *validity = d_col.is_valid(index);
+      });
+
+    return std::make_unique<string_scalar>(
+      temp_data, temp_valid.value(stream), stream, mr);
   }
 
   template<typename T>

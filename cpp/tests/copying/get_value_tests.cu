@@ -67,5 +67,47 @@ TYPED_TEST(FixedWidthGetValueTest, GetNull) {
   EXPECT_FALSE(s->is_valid());
 }
 
+
+struct StringGetValueTest : public BaseFixture {};
+
+TEST_F(StringGetValueTest, BasicGet) {
+  strings_column_wrapper col{"this", "is", "a", "test"};
+  auto s = experimental::get_element(col, 3);
+
+  auto typed_s = static_cast<string_scalar const*>(s.get());
+
+  EXPECT_TRUE(s->is_valid());
+  EXPECT_EQ("test", typed_s->to_string());
+}
+
+TEST_F(StringGetValueTest, GetEmpty) {
+  strings_column_wrapper col{"this", "is", "", "test"};
+  auto s = experimental::get_element(col, 2);
+
+  auto typed_s = static_cast<string_scalar const*>(s.get());
+
+  EXPECT_TRUE(s->is_valid());
+  EXPECT_EQ("", typed_s->to_string());
+}
+
+TEST_F(StringGetValueTest, GetFromNullable) {
+  strings_column_wrapper col({"this", "is", "a", "test"},
+                             {     0,    1,   0,      1});
+  auto s = experimental::get_element(col, 1);
+
+  auto typed_s = static_cast<string_scalar const*>(s.get());
+
+  EXPECT_TRUE(s->is_valid());
+  EXPECT_EQ("is", typed_s->to_string());
+}
+
+TEST_F(StringGetValueTest, GetNull) {
+  strings_column_wrapper col({"this", "is", "a", "test"},
+                             {     0,    1,   0,      1});
+  auto s = experimental::get_element(col, 2);
+
+  EXPECT_FALSE(s->is_valid());
+}
+
 } // namespace test
 } // namespace cudf
