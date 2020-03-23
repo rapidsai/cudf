@@ -18,6 +18,7 @@
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 
 namespace cudf {
 namespace experimental {
@@ -32,8 +33,8 @@ struct get_element_functor {
   std::unique_ptr<scalar>> operator()(
     column_view const& input,
     size_type index,
-    cudaStream_t stream,
-    rmm::mr::device_memory_resource *mr)
+    cudaStream_t stream = 0,
+    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource())
   {
     auto s = make_fixed_width_scalar(data_type(type_to_id<T>()), stream, mr);
 
@@ -57,8 +58,8 @@ struct get_element_functor {
   std::unique_ptr<scalar>> operator()(
     column_view const& input,
     size_type index,
-    cudaStream_t stream,
-    rmm::mr::device_memory_resource *mr)
+    cudaStream_t stream = 0,
+    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource())
   {
     auto device_col = column_device_view::create(input, stream);
 
@@ -86,10 +87,16 @@ struct get_element_functor {
   std::unique_ptr<scalar>> operator()(
     column_view const& input,
     size_type index,
-    cudaStream_t stream,
-    rmm::mr::device_memory_resource *mr)
+    cudaStream_t stream = 0,
+    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource())
   {
-    CUDF_FAIL("Dictionary columns unsupported for Get element");
+    auto dict_view = dictionary_column_view(input);
+    auto key_index_scalar = get_element_functor{}.operator()<int32_t>(
+      dict_view.indices(), index, stream);
+
+    size_type key_index = static_cast<numeric_scalar<int32_t> const*>(key_index_scalar.get())->value(stream);
+    return type_dispatcher(dict_view.keys().type(), get_element_functor{},
+                           dict_view.keys(), key_index, stream, mr);
   }
 };
 
