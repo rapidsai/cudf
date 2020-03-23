@@ -43,8 +43,8 @@ cimport cudf._libxx.cpp.io.types as cudf_io_types
 cdef class BufferArrayFromVector:
     cdef unsigned length
     cdef unique_ptr[vector[uint8_t]] in_vec
-    # these two things declare part of the buffer interface
 
+    # these two things declare part of the buffer interface
     cdef Py_ssize_t shape[2]
     cdef Py_ssize_t strides[2]
 
@@ -63,8 +63,8 @@ cdef class BufferArrayFromVector:
 
         buffer.buf = <uint8_t *>&(dereference(self.in_vec)[0])
 
-        buffer.format = NULL                    # byte
-        buffer.internal = NULL                  # see References
+        buffer.format = NULL # byte
+        buffer.internal = NULL                  
         buffer.itemsize = itemsize
         buffer.len = self.length * itemsize   # product(shape) * itemsize
         buffer.ndim = 2
@@ -72,7 +72,7 @@ cdef class BufferArrayFromVector:
         buffer.readonly = 0
         buffer.shape = self.shape
         buffer.strides = self.strides
-        buffer.suboffsets = NULL                # for pointer arrays only
+        buffer.suboffsets = NULL          
 
     def __releasebuffer__(self, Py_buffer *buffer):
         pass
