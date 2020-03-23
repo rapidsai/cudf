@@ -207,21 +207,21 @@ ConfigureTest(LEGACY_GROUPBY_WO_AGG_TEST "${LEGACY_GROUPBY_WO_AGG_TEST_SRC}")
 # - groupby tests ---------------------------------------------------------------------------------
 
 set(GROUPBY_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/groupby_groups_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/group_argmin_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/group_argmax_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/groupby_keys_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_count_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_sum_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_min_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_max_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_mean_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_var_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_std_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_median_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_quantile_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_nunique_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/group_nth_element_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/groupby_groups_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_argmin_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_argmax_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/groupby_keys_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_count_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_sum_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_min_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_max_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_mean_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_var_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_std_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_median_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_quantile_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_nunique_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_nth_element_test.cu")
 
 ConfigureTest(GROUPBY_TEST "${GROUPBY_TEST_SRC}")
 
@@ -314,7 +314,8 @@ ConfigureTest(HASHING_TEST "${HASHING_TEST_SRC}")
 
 set(PARTITIONING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/partitioning/hash_partition_test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/partitioning/round_robin_test.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/partitioning/round_robin_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/partitioning/partition_test.cpp")
 
 ConfigureTest(PARTITIONING_TEST "${PARTITIONING_TEST_SRC}")
 
@@ -581,7 +582,8 @@ set(COPYING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/slice_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/shift_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/shift_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/concatenate_tests.cu")
 
 ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
 

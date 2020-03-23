@@ -13,6 +13,11 @@ from cudf._libxx.cpp.scalar.scalar cimport scalar
 from cudf._libxx.cpp.column.column cimport column, column_contents
 from cudf._libxx.cpp.column.column_view cimport column_view
 from cudf._libxx.cpp.table.table cimport table
+from cudf._libxx.cpp.groupby cimport (
+    groups,
+    aggregation_request,
+    aggregation_result
+)
 from cudf._libxx.cpp.table.table_view cimport table_view
 from pyarrow.includes.libarrow cimport CMessageReader
 cimport cudf._libxx.cpp.io.types as cudf_io_types
@@ -60,6 +65,12 @@ cdef extern from "<utility>" namespace "std" nogil:
         pair[unique_ptr[device_buffer], size_type]
     )
     cdef column_contents move(column_contents)
+    cdef groups move(groups)
+    cdef aggregation_request move(aggregation_request)
+    cdef aggregation_result move(aggregation_result)
+    cdef pair[unique_ptr[table], vector[aggregation_result]] move(
+        pair[unique_ptr[table], vector[aggregation_result]]
+    )
     cdef cudf_io_types.source_info move(cudf_io_types.source_info)
     cdef cudf_io_types.table_with_metadata move(
         cudf_io_types.table_with_metadata)

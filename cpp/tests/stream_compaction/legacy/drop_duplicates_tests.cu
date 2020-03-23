@@ -146,9 +146,8 @@ bool compare_columns_indexed(
   cudf::size_type* index_ptr = ((cudf::size_type*)index_col.data);
 
   rmm::device_vector<cudf::size_type> ordered(rows);
-  auto exec = rmm::exec_policy(0)->on(0);
-  thrust::sequence(exec, ordered.begin(), ordered.end());
-  thrust::sort_by_key(exec, index_ptr , index_ptr + rows, ordered.data().get());
+  thrust::sequence(rmm::exec_policy(0)->on(0), ordered.begin(), ordered.end());
+  thrust::sort_by_key(rmm::exec_policy(0)->on(0), index_ptr , index_ptr + rows, ordered.data().get());
 
   cudf::table destination_table(rows,
                                 cudf::column_dtypes(out_table),
