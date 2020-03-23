@@ -470,7 +470,7 @@ def test_multifile_warning(datadir):
         assert_eq(expect, got)
 
 
-# Validates the integrity of the GPU accelerated parquet writer.
+# Validates the metadata return path of the parquet writer
 def test_parquet_writer_return_metadata(tmpdir, simple_gdf):
     gdf_fname = tmpdir.join("data1.parquet")
 
@@ -481,8 +481,6 @@ def test_parquet_writer_return_metadata(tmpdir, simple_gdf):
     )
     df_metadata_list = [ df_metadata ]
     merged_metadata = merge_parquet_filemetadata(df_metadata_list)
-
-    assert os.path.exists(gdf_fname)
 
     # Verify that we got a valid parquet signature in the final metadata blob
     assert merged_metadata[0:4] == ['P','A','R','1']
