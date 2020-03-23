@@ -89,8 +89,9 @@ class Consumer(object):
                 cached=cached,
             )
         except RuntimeError:
-            print("RuntimeError thrown from C++")
-            return 0, 0
+            pass
+            # print("RuntimeError thrown from C++")
+            # return 0, 0
 
         if len(offsets) != 2:
             raise ValueError(
