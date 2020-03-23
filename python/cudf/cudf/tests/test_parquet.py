@@ -13,6 +13,7 @@ import pytest
 
 import cudf
 from cudf.tests.utils import assert_eq
+from cudf.io.parquet import merge_parquet_filemetadata
 
 
 @pytest.fixture(scope="module")
@@ -467,6 +468,24 @@ def test_multifile_warning(datadir):
         expect = pd.read_parquet(fname)
         expect = expect.apply(pd.to_numeric)
         assert_eq(expect, got)
+
+
+# Validates the integrity of the GPU accelerated parquet writer.
+def test_parquet_writer_return_metadata(tmpdir, simple_gdf):
+    gdf_fname = tmpdir.join("data1.parquet")
+
+    # Write out the gdf using the GPU accelerated writer
+    df_metadata = simple_gdf.to_parquet(
+        gdf_fname.strpath, index=None,
+        metadata_file_path="test/data1.parquet"
+    )
+    df_metadata_list = [ df_metadata ]
+    merged_metadata = merge_parquet_filemetadata(df_metadata_list)
+
+    assert os.path.exists(gdf_fname)
+
+    # Verify that we got a valid parquet signature in the final metadata blob
+    assert merged_metadata[0:4] == ['P','A','R','1']
 
 
 # Validates the integrity of the GPU accelerated parquet writer.
