@@ -19,6 +19,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <tests/utilities/column_utilities.hpp>
+#include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/type_lists.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/strings/detail/utilities.hpp>
@@ -42,44 +43,6 @@ TYPED_TEST(EmptyLikeTest, ColumnNumericTests) {
 
 struct EmptyLikeStringTest : public EmptyLikeTest <std::string> {};
 
-using string_index_pair = thrust::pair<const char*,cudf::size_type>;
-
-std::pair<rmm::device_vector<string_index_pair>, rmm::device_buffer> create_test_string () {
-    std::vector<const char*> h_test_strings{ "the quick brown fox jumps over the lazy dog",
-                                             "thé result does not include the value in the sum in",
-                                             "", nullptr, "absent stop words" };
-    cudf::size_type memsize = 0;
-    for( auto itr=h_test_strings.begin(); itr!=h_test_strings.end(); ++itr )
-        memsize += *itr ? (cudf::size_type)strlen(*itr) : 0;
-    cudf::size_type count = (cudf::size_type)h_test_strings.size();
-    thrust::host_vector<char> h_buffer(memsize);
-    rmm::device_buffer d_buffer(memsize);
-    thrust::host_vector<string_index_pair> strings(count);
-    thrust::host_vector<cudf::size_type> h_offsets(count+1);
-    cudf::size_type offset = 0;
-    cudf::size_type nulls = 0;
-    h_offsets[0] = 0;
-    for( cudf::size_type idx=0; idx < count; ++idx ) {
-        const char* str = h_test_strings[idx];
-        if( !str ) {
-            strings[idx] = string_index_pair{nullptr,0};
-            nulls++;
-        }
-        else {
-            cudf::size_type length = (cudf::size_type)strlen(str);
-            memcpy( h_buffer.data() + offset, str, length );
-            strings[idx] = string_index_pair{(char*)d_buffer.data()+offset,length};
-            offset += length;
-        }
-        h_offsets[idx+1] = offset;
-    }
-
-    rmm::device_vector<string_index_pair> d_strings(strings);
-    cudaMemcpy( d_buffer.data(), h_buffer.data(), memsize, cudaMemcpyHostToDevice );
-
-    return {std::move(d_strings), std::move(d_buffer)};
-}
-
 void check_empty_string_columns(cudf::column_view lhs, cudf::column_view rhs)
 {
     EXPECT_EQ(lhs.type(), rhs.type());
@@ -90,14 +53,16 @@ void check_empty_string_columns(cudf::column_view lhs, cudf::column_view rhs)
     // An empty column is not required to have children
 }
 
-TEST_F(EmptyLikeStringTest, ColumnStringTest) {
-    const auto d_strings = create_test_string();
+TEST_F(EmptyLikeStringTest, ColumnStringTest) 
+{
+    std::vector<const char*> h_strings{ "the quick brown fox jumps over the lazy dog",
+                                        "thé result does not include the value in the sum in",
+                                        "", nullptr, "absent stop words" };
+    cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
+        thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
 
-    auto column = cudf::make_strings_column(d_strings.first);
-
-    auto got = cudf::experimental::empty_like(column->view());
-
-    check_empty_string_columns(got->view(), column->view());
+    auto got = cudf::experimental::empty_like(strings);
+    check_empty_string_columns(got->view(), strings);
 }
 
 std::unique_ptr<cudf::experimental::table> create_table (cudf::size_type size, cudf::mask_state state){
