@@ -189,6 +189,19 @@ TYPED_TEST(ArithmeticQuantilesTest, TestCastToDouble)
     expect_tables_equal(expected, actual->view());
 }
 
+TYPED_TEST(ArithmeticQuantilesTest, TestRetainTypes)
+{
+    using T = TypeParam;
+
+    auto input_a = fixed_width_column_wrapper<T>({0});
+    auto input = table_view({ input_a });
+    auto expected_a = fixed_width_column_wrapper<T>({0});
+    auto expected = table_view({ expected_a });
+    auto actual = experimental::quantiles(input, {0}, experimental::interpolation::LINEAR, {}, true);
+
+    expect_tables_equal(expected, actual->view());
+}
+
 template<typename T>
 struct NonNumericQuantilesTest : public BaseFixture {
 };
