@@ -3416,6 +3416,8 @@ class DataFrame(Frame):
         retain_dtype : boolean
             Whether to cast quantile values to the input dtype, possibly losing
             precision. Required to be True for non-numeric inputs.
+            Default: True for "nearest", "higher", and "lower" interpolation,
+            False for "linear" and "midpoint".
 
         Returns
         -------

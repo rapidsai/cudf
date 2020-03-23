@@ -2176,8 +2176,8 @@ class Series(Frame):
         retain_dtype : boolean
             Whether to cast quantile values to the input dtype, possibly losing
             precision. Required to be True for non-numeric inputs.
-        quant_index : boolean
-            Whether to use the list of quantiles as index.
+            Default: True for "nearest", "higher", and "lower" interpolation,
+            False for "linear" and "midpoint".
 
         Returns
         -------
