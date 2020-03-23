@@ -101,46 +101,56 @@ TYPED_TEST_CASE(ScanTest, Types);
 
 // ------------------------------------------------------------------------
 
+template <typename I, typename I2, typename O, typename ZipOp, typename BinOp>
+void zip_scan(I first, I last, I2 first2, O output, ZipOp zipop, BinOp binop) {
+    // this could be implemented with a call to std::transform and then a
+    // subsequent call to std::partial_sum but that you be less memory efficient
+    if (first == last) return;
+    auto acc = zipop(*first, *first2);
+    *output = acc;
+    std::transform(
+        std::next(first),
+        last,
+        std::next(first2),
+        std::next(output),
+        [&] (auto const& e, auto const& mask) mutable {
+            acc = binop(acc, zipop(e, mask));
+            return acc;
+        });
+}
+
 template <typename T>
 struct value_or {
     T _or;
     explicit value_or(T value) : _or{value} {}
-   __host__ __device__ T operator()(thrust::tuple<T, bool> const& tuple) {
-       return thrust::get<1>(tuple) ? thrust::get<0>(tuple) : _or;
+    T operator()(T const& value, bool mask) {
+       return mask ? value : _or;
    }
 };
 
 TYPED_TEST(ScanTest, Min)
 {
-    std::vector<TypeParam> v_std = {123, 64, 63, 99, -5, 123, -16, -120, -111};
-    std::vector<bool>      b_std = {  1,  0,  1,  1,  1,   1,   0,    0,    1};
-    std::vector<TypeParam> exact(v_std.size());
+    std::vector<TypeParam> v = {123, 64, 63, 99, -5, 123, -16, -120, -111};
+    std::vector<bool>      b = {  1,  0,  1,  1,  1,   1,   0,    0,    1};
+    std::vector<TypeParam> exact(v.size());
 
-    thrust::host_vector<TypeParam> v(v_std);
-    thrust::host_vector<bool>      b(b_std);
-
-    // TODO: potentially the original author was trying to avoid `thrust::inclusive_scan` for testing
-    // if this is the case, I can just replace this with `std::partial_sum` and lambda wrapped `std::min`
-    thrust::inclusive_scan(
+    std::partial_sum(
         v.cbegin(),
         v.cend(),
         exact.begin(),
-        thrust::minimum<TypeParam>{});
+        [] (auto a, auto b) { return std::min(a, b); });
 
     this->scan_test({v.begin(), v.end()},
                     {exact.begin(), exact.end()},
                     cudf::experimental::make_min_aggregation(), scan_type::INCLUSIVE);
 
-    auto const first = thrust::make_zip_iterator(thrust::make_tuple(v.begin(), b.begin()));
-    auto const last  = thrust::make_zip_iterator(thrust::make_tuple(v.end(),   b.end()));
-
-    // TODO: same as comment above
-    thrust::transform_inclusive_scan(
-        first,
-        last,
+    zip_scan(
+        v.cbegin(),
+        v.cend(),
+        b.cbegin(),
         exact.begin(),
         value_or<TypeParam>{std::numeric_limits<TypeParam>::max()},
-        thrust::minimum<TypeParam>{});
+        [] (auto a, auto b) { return std::min(a, b); });
 
     this->scan_test({v.begin(), v.end(), b.begin()},
                     {exact.begin(), exact.end(), b.begin()},
@@ -149,32 +159,27 @@ TYPED_TEST(ScanTest, Min)
 
 TYPED_TEST(ScanTest, Max)
 {
-    std::vector<TypeParam> v_std = {-120, 5, 0, -120, -111, 64, 63, 99, 123, -16};
-    std::vector<bool>      b_std = {   1, 0, 1,    1,    1,  1,  0,  1,   0,   1};
-    std::vector<TypeParam> exact(v_std.size());
+    std::vector<TypeParam> v = {-120, 5, 0, -120, -111, 64, 63, 99, 123, -16};
+    std::vector<bool>      b = {   1, 0, 1,    1,    1,  1,  0,  1,   0,   1};
+    std::vector<TypeParam> exact(v.size());
 
-    thrust::host_vector<TypeParam> v(v_std);
-    thrust::host_vector<bool>      b(b_std);
-
-    thrust::inclusive_scan(
+    std::partial_sum(
         v.cbegin(),
         v.cend(),
         exact.begin(),
-        thrust::maximum<TypeParam>{});
+        [] (auto a, auto b) { return std::max(a, b); });
 
     this->scan_test({v.begin(), v.end()}, 
                     {exact.begin(), exact.end()},
                     cudf::experimental::make_max_aggregation(), scan_type::INCLUSIVE);
 
-    auto const first = thrust::make_zip_iterator(thrust::make_tuple(v.begin(), b.begin()));
-    auto const last  = thrust::make_zip_iterator(thrust::make_tuple(v.end(),   b.end()));
-
-    thrust::transform_inclusive_scan(
-        first,
-        last,
+    zip_scan(
+        v.cbegin(),
+        v.cend(),
+        b.cbegin(),
         exact.begin(),
         value_or<TypeParam>{std::numeric_limits<TypeParam>::lowest()},
-        thrust::maximum<TypeParam>{});
+        [] (auto a, auto b) { return std::max(a, b); });
 
     this->scan_test({v.begin(), v.end(), b.begin()}, 
                     {exact.begin(), exact.end(), b.begin()},
@@ -184,32 +189,27 @@ TYPED_TEST(ScanTest, Max)
 
 TYPED_TEST(ScanTest, Product)
 {
-    std::vector<TypeParam> v_std = {5, -1, 1, 3, -2, 4};
-    std::vector<bool>      b_std = {1,  1, 1, 0,  1, 1};
-    std::vector<TypeParam> exact(v_std.size());
+    std::vector<TypeParam> v = {5, -1, 1, 3, -2, 4};
+    std::vector<bool>      b = {1,  1, 1, 0,  1, 1};
+    std::vector<TypeParam> exact(v.size());
 
-    thrust::host_vector<TypeParam> v(v_std);
-    thrust::host_vector<bool>      b(b_std);
-
-    thrust::inclusive_scan(
+    std::partial_sum(
         v.cbegin(),
         v.cend(),
         exact.begin(),
-        thrust::multiplies<TypeParam>{});
+        std::multiplies<TypeParam>{});
 
     this->scan_test({v.begin(), v.end()}, 
                     {exact.begin(), exact.end()},
                     cudf::experimental::make_product_aggregation(), scan_type::INCLUSIVE);
 
-    auto const first = thrust::make_zip_iterator(thrust::make_tuple(v.begin(), b.begin()));
-    auto const last  = thrust::make_zip_iterator(thrust::make_tuple(v.end(),   b.end()));
-
-    thrust::transform_inclusive_scan(
-        first,
-        last,
+    zip_scan(
+        v.cbegin(),
+        v.cend(),
+        b.cbegin(),
         exact.begin(),
         value_or<TypeParam>{1},
-        thrust::multiplies<TypeParam>{});
+        std::multiplies<TypeParam>{});
 
     this->scan_test({v.begin(), v.end(), b.begin()}, 
                     {exact.begin(), exact.end(), b.begin()},
@@ -218,31 +218,27 @@ TYPED_TEST(ScanTest, Product)
 
 TYPED_TEST(ScanTest, Sum)
 {
-    std::vector<TypeParam> v_std = {-120, 5, 6, 113, -111, 64, -63, 9, 34, -16};
-    std::vector<bool>      b_std = {   1, 0, 1,   1,    0,  0,   1, 1,  1,   1};
-    std::vector<TypeParam> exact(v_std.size());
+    std::vector<TypeParam> v = {-120, 5, 6, 113, -111, 64, -63, 9, 34, -16};
+    std::vector<bool>      b = {   1, 0, 1,   1,    0,  0,   1, 1,  1,   1};
+    std::vector<TypeParam> exact(v.size());
 
-    thrust::host_vector<TypeParam> v(v_std);
-    thrust::host_vector<bool>      b(b_std);
-
-    thrust::inclusive_scan(
+    std::partial_sum(
         v.cbegin(),
         v.cend(),
-        exact.begin());
+        exact.begin(),
+        std::plus<TypeParam>{});
 
     this->scan_test({v.begin(), v.end()}, 
                     {exact.begin(), exact.end()},
                     cudf::experimental::make_sum_aggregation(), scan_type::INCLUSIVE);
 
-    auto const first = thrust::make_zip_iterator(thrust::make_tuple(v.begin(), b.begin()));
-    auto const last  = thrust::make_zip_iterator(thrust::make_tuple(v.end(),   b.end()));
-
-    thrust::transform_inclusive_scan(
-        first,
-        last,
+    zip_scan(
+        v.cbegin(),
+        v.cend(),
+        b.cbegin(),
         exact.begin(),
         value_or<TypeParam>{0},
-        thrust::plus<TypeParam>{});
+        std::plus<TypeParam>{});
 
     this->scan_test({v.begin(), v.end(), b.begin()}, 
                     {exact.begin(), exact.end(), b.begin()},
@@ -277,18 +273,15 @@ struct ScanStringTest : public cudf::test::BaseFixture {
 
 TEST_F(ScanStringTest, Min)
 {
-    std::vector<std::string> v_std = {"one", "two", "three", "four", "five", "six", "seven", "eight", "nine"};
-    std::vector<bool>        b_std = {    1,     0,       1,      1,      0,     0,       1,       0,      1};
-    std::vector<std::string> exact(v_std.size());
+    std::vector<std::string> v = {"one", "two", "three", "four", "five", "six", "seven", "eight", "nine"};
+    std::vector<bool>        b = {    1,     0,       1,      1,      0,     0,       1,       0,      1};
+    std::vector<std::string> exact(v.size());
 
-    thrust::host_vector<std::string> v(v_std);
-    thrust::host_vector<bool>        b(b_std);
-
-    thrust::inclusive_scan(
+    std::partial_sum(
         v.cbegin(),
         v.cend(),
         exact.begin(),
-        thrust::minimum<std::string>{});
+        [] (auto const& a, auto const& b) { return std::min(a, b); });
 
     // string column without nulls
     cudf::test::strings_column_wrapper col_nonulls(v.begin(), v.end());
@@ -296,13 +289,15 @@ TEST_F(ScanStringTest, Min)
     this->scan_test(col_nonulls, expected1,
                     cudf::experimental::make_min_aggregation(), scan_type::INCLUSIVE);
 
-    // TODO: `std::transform_inclusive_scan` with `std::string` and `thrust::tuple` won't
-    //       work due to Thrust bug: https://github.com/thrust/thrust/issues/1074
-    //       Update once fix is merged and available
-    std::transform(v.cbegin(), v.cend(), b.begin(),
-          exact.begin(),
-          [acc=v[0]](auto i, bool b) mutable { if(b) acc = std::min(acc, i); return acc; }
-          );
+    auto const STRING_MAX = std::string(1, char(127));
+
+    zip_scan(
+        v.cbegin(),
+        v.cend(),
+        b.cbegin(),
+        exact.begin(),
+        value_or<std::string>{STRING_MAX},
+        [] (auto const& a, auto const& b) { return std::min(a, b); });
 
     // string column with nulls
     cudf::test::strings_column_wrapper col_nulls(v.begin(), v.end(), b.begin());
@@ -313,31 +308,30 @@ TEST_F(ScanStringTest, Min)
 
 TEST_F(ScanStringTest, Max)
 {
-    std::vector<std::string> v_std = {"one", "two", "three", "four", "five", "six", "seven", "eight", "nine"};
-    std::vector<bool>        b_std = {    1,     0,       1,      1,      0,     0,       1,       1,      1};
-    std::vector<std::string> exact(v_std.size());
+    std::vector<std::string> v = {"one", "two", "three", "four", "five", "six", "seven", "eight", "nine"};
+    std::vector<bool>        b = {    1,     0,       1,      1,      0,     0,       1,       1,      1};
+    std::vector<std::string> exact(v.size());
 
-    thrust::host_vector<std::string> v(v_std);
-    thrust::host_vector<bool>        b(b_std);
-
-    thrust::inclusive_scan(
+    std::partial_sum(
         v.cbegin(),
         v.cend(),
         exact.begin(),
-        thrust::maximum<std::string>{});
+        [] (auto const& a, auto const& b) { return std::max(a, b); });
 
     // string column without nulls
     cudf::test::strings_column_wrapper col_nonulls(v.begin(), v.end());
     cudf::test::strings_column_wrapper expected1(exact.begin(), exact.end());
     this->scan_test(col_nonulls, expected1, cudf::experimental::make_max_aggregation(), scan_type::INCLUSIVE);
 
-    // TODO: `std::transform_inclusive_scan` with `std::string` and `thrust::tuple` won't
-    //       work due to Thrust bug: https://github.com/thrust/thrust/issues/1074
-    //       Update once fix is merged and available
-    std::transform(v.cbegin(), v.cend(), b.begin(),
+    auto const STRING_MIN = std::string(1, char(0));
+
+    zip_scan(
+        v.cbegin(),
+        v.cend(),
+        b.cbegin(),
         exact.begin(),
-        [acc=v[0]](auto i, bool b) mutable { if(b) acc = std::max(acc, i); return acc; }
-        );
+        value_or<std::string>{STRING_MIN},
+        [] (auto const& a, auto const& b) { return std::max(a, b); });
 
     // string column with nulls
     cudf::test::strings_column_wrapper col_nulls(v.begin(), v.end(), b.begin());
@@ -348,10 +342,8 @@ TEST_F(ScanStringTest, Max)
 TYPED_TEST(ScanTest, skip_nulls)
 {
     bool do_print=false;
-    std::vector<TypeParam> v_std{1,2,3,4,5,6,7,8,1,1};
-    std::vector<bool>      b_std{1,1,1,1,1,0,1,0,1,1};
-    thrust::host_vector<TypeParam> v(v_std);
-    thrust::host_vector<bool>      b(b_std);
+    std::vector<TypeParam> v{1,2,3,4,5,6,7,8,1,1};
+    std::vector<bool>      b{1,1,1,1,1,0,1,0,1,1};
     cudf::test::fixed_width_column_wrapper<TypeParam> const col_in{v.begin(), v.end(), b.begin()};
     const column_view input_view = col_in;
     std::unique_ptr<cudf::column> col_out;
@@ -360,21 +352,19 @@ TYPED_TEST(ScanTest, skip_nulls)
     std::vector<TypeParam> out_v(input_view.size());
     std::vector<bool>      out_b(input_view.size());
 
-    auto const first = thrust::make_zip_iterator(thrust::make_tuple(v.begin(), b.begin()));
-    auto const last  = thrust::make_zip_iterator(thrust::make_tuple(v.end(),   b.end()));
-
-    thrust::transform_inclusive_scan(
-        first,
-        last,
+    zip_scan(
+        v.cbegin(),
+        v.cend(),
+        b.cbegin(),
         out_v.begin(),
         value_or<TypeParam>{0},
-        thrust::plus<TypeParam>{});
+        std::plus<TypeParam>{});
 
-    thrust::inclusive_scan(
+    std::partial_sum(
         b.cbegin(),
         b.cend(),
         out_b.begin(),
-        thrust::logical_and<bool>{});
+        std::logical_and<bool>{});
 
     //skipna=true (default)
     CUDF_EXPECT_NO_THROW(col_out = cudf::experimental::scan(input_view,
@@ -410,22 +400,21 @@ TEST_F(ScanStringTest, skip_nulls)
     std::vector<std::string> exact(v.size());
     std::vector<bool>        out_b(v.size());
 
-    // test output calculation
-    // TODO: `std::transform_inclusive_scan` with `std::string` and `thrust::tuple` won't
-    //       work due to Thrust bug: https://github.com/thrust/thrust/issues/1074
-    //       Update once fix is merged and available
-    std::transform(
+    auto const STRING_MIN = std::string(1, char(0));
+
+    zip_scan(
         v.cbegin(),
         v.cend(),
-        b.begin(),
+        b.cbegin(),
         exact.begin(),
-        [acc=v[0]](auto i, bool b) mutable { if(b) acc = std::max(acc, i); return acc; });
+        value_or<std::string>{STRING_MIN},
+        [] (auto const& a, auto const& b) { return std::max(a, b); });
 
-    thrust::inclusive_scan(
+    std::partial_sum(
         b.cbegin(),
         b.cend(),
         out_b.begin(),
-        thrust::logical_and<bool>{});
+        std::logical_and<bool>{});
 
     // string column with nulls
     cudf::test::strings_column_wrapper col_nulls(v.begin(), v.end(), b.begin());
