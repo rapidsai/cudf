@@ -1,4 +1,3 @@
-import numpy as np
 import pandas as pd
 import pytest
 
@@ -38,11 +37,7 @@ def test_cdf_to_pandas(data, ordered):
 
 
 @pytest.mark.parametrize(
-    "data",
-    [
-        {"a": [[1, 2, 3]]},
-        pd.DataFrame({"a": [[1, 2, 3]]}),
-    ],
+    "data", [{"a": [[1, 2, 3]]}, pd.DataFrame({"a": [[1, 2, 3]]})]
 )
 def test_df_list_dtypes(data):
 
