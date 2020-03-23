@@ -111,23 +111,7 @@ TEST_F(StringGetValueTest, GetNull) {
 }
 
 template <typename T>
-struct DictionaryGetValueTest : public BaseFixture {
-
-  // std::unique_ptr<column> make_test_column(
-  //   fixed_width_column_wrapper<T>&& keys,
-  //   fixed_width_column_wrapper<int32_t>&& indices)
-  // {
-  //   auto keys_col = keys.release();
-  //   auto indices_col = indices.release();
-  //   auto indices_size = indices_col->size();
-  //   auto indices_contents = indices_col->release();
-  //   indices_col = std::make_unique<column>(
-  //     data_type(experimental::type_to_id<int32_t>()),
-  //     indices_size,
-  //     std::move(indices_contents.data));
-  //   return make_dictionary_column(std::unique_ptr<column> keys_column, std::unique_ptr<column> indices_column, rmm::device_buffer &&null_mask, size_type null_count)
-  // }
-};
+struct DictionaryGetValueTest : public BaseFixture {};
 
 TYPED_TEST_CASE(DictionaryGetValueTest, FixedWidthTypes);
 
@@ -135,7 +119,7 @@ TYPED_TEST(DictionaryGetValueTest, BasicGet) {
   fixed_width_column_wrapper<TypeParam> keys{6, 7, 8, 9};
   fixed_width_column_wrapper<int32_t> indices{0, 0, 1, 2, 1, 3, 3, 2};
   auto col = make_dictionary_column(keys, indices);
-  
+
   auto s = experimental::get_element(*col, 2);
   
   using ScalarType = experimental::scalar_type_t<TypeParam>;
@@ -143,6 +127,32 @@ TYPED_TEST(DictionaryGetValueTest, BasicGet) {
 
   EXPECT_TRUE(s->is_valid());
   EXPECT_EQ(TypeParam(7), typed_s->value());
+}
+
+TYPED_TEST(DictionaryGetValueTest, GetFromNullable) {
+  fixed_width_column_wrapper<TypeParam> keys{6, 7, 8, 9};
+  fixed_width_column_wrapper<int32_t> indices({0, 0, 1, 2, 1, 3, 3, 2},
+                                              {0, 1, 0, 1, 1, 1, 0, 0});
+  auto col = make_dictionary_column(keys, indices);
+
+  auto s = experimental::get_element(*col, 3);
+
+  using ScalarType = experimental::scalar_type_t<TypeParam>;
+  auto typed_s = static_cast<ScalarType const*>(s.get());
+
+  EXPECT_TRUE(s->is_valid());
+  EXPECT_EQ(TypeParam(8), typed_s->value());
+}
+
+TYPED_TEST(DictionaryGetValueTest, GetNull) {
+  fixed_width_column_wrapper<TypeParam> keys{6, 7, 8, 9};
+  fixed_width_column_wrapper<int32_t> indices({0, 0, 1, 2, 1, 3, 3, 2},
+                                              {0, 1, 0, 1, 1, 1, 0, 0});
+  auto col = make_dictionary_column(keys, indices);
+
+  auto s = experimental::get_element(*col, 2);
+
+  EXPECT_FALSE(s->is_valid());
 }
 
 } // namespace test

@@ -95,8 +95,20 @@ struct get_element_functor {
       dict_view.indices(), index, stream);
 
     size_type key_index = static_cast<numeric_scalar<int32_t> const*>(key_index_scalar.get())->value(stream);
-    return type_dispatcher(dict_view.keys().type(), get_element_functor{},
-                           dict_view.keys(), key_index, stream, mr);
+    auto result = type_dispatcher(dict_view.keys().type(), get_element_functor{},
+                                  dict_view.keys(), key_index, stream, mr);
+
+
+    auto result_validity = result->validity_data();
+    auto device_col = column_device_view::create(input, stream);
+    
+    thrust::for_each_n(rmm::exec_policy(stream)->on(stream), 
+                       thrust::make_constant_iterator(0), 1, 
+      [ result_validity, d_col=*device_col, index ] __device__ (auto) mutable {
+        *result_validity = d_col.is_valid(index);
+      });
+
+    return result;
   }
 };
 
