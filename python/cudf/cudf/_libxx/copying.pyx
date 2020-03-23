@@ -465,11 +465,9 @@ def table_split(Table input_table, object splits, bool keep_index=True):
             c_result[i],
             input_table,
             column_names=input_table._column_names,
-            index_names=(
-                input_table._index._column_names if (
-                    keep_index is True)
-                else None
-            )
+            index_names=input_table._index_names if (
+                keep_index is True)
+            else None
         ) for i in range(num_of_result_cols)]
 
     return result

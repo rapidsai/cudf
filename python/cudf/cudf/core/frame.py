@@ -560,7 +560,7 @@ class Frame(libcudfxx.table.Table):
             return result
 
     def _partition(self, scatter_map, npartitions, keep_index=True):
-        # import pdb; pdb.set_trace()
+
         result = libcudfxx.partitioning.partition(
             self, scatter_map, npartitions, keep_index
         )
@@ -864,7 +864,7 @@ class Frame(libcudfxx.table.Table):
             ):
                 self._data[name] = build_categorical_column(
                     categories=other_col.categories,
-                    codes=col,
+                    codes=as_column(col.base_data, dtype=col.dtype),
                     mask=col.base_mask,
                     ordered=other_col.ordered,
                     size=col.size,

@@ -28,7 +28,6 @@ namespace experimental {
 namespace  {
     template<typename T>
     std::vector<T> split(T const& input, size_type column_size, std::vector<size_type> const& splits) {
-        std::vector<T> result{};
 
         if(splits.size() == 0 or column_size == 0) {
             return std::vector<T>{input};
