@@ -51,7 +51,7 @@ namespace experimental {
  *                        possibly losing precision.
  *
  * @throws cudf::logic_error if `input` is empty
- * @throws cudf::logic_error if `input` is non-numeric and `retain_types` is false:
+ * @throws cudf::logic_error if `input` is non-numeric and `retain_types` is false
  * @throws cudf::logic_error if `input` is non-numeric and `interp` is either
                              `LINEAR` or `MIDPOINT`
  */
