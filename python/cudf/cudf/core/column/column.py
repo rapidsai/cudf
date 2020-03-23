@@ -1240,6 +1240,11 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 size=pa_size,
                 offset=pa_offset,
             )
+        elif isinstance(arbitrary, pa.ListArray):
+            raise ValueError(
+                "cudf Column doesn't support list like data types"
+            )
+
         else:
             pa_size, pa_offset, pamask, padata, _ = buffers_from_pyarrow(
                 arbitrary

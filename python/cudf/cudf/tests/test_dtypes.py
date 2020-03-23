@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -34,3 +35,39 @@ def test_cdf_to_pandas(data, ordered):
         pd.CategoricalDtype(data, ordered)
         == cudf.CategoricalDtype(categories=data, ordered=ordered).to_pandas()
     )
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": [[1, 2, 3]]},
+        pd.DataFrame({"a": [[1, 2, 3]]}),
+    ],
+)
+def test_df_list_dtypes(data):
+
+    expectation = pytest.raises(
+        ValueError, match="cudf Column doesn't support list like data types"
+    )
+
+    with expectation:
+        cudf.DataFrame(data)
+
+    if isinstance(data, pd.DataFrame):
+        with expectation:
+            cudf.DataFrame.from_pandas(data)
+
+
+@pytest.mark.parametrize("data", [[[1, 2, 3]], pd.Series({"a": [[1, 2, 3]]})])
+def test_sr_list_dtypes(data):
+
+    expectation = pytest.raises(
+        ValueError, match="cudf Column doesn't support list like data types"
+    )
+
+    with expectation:
+        cudf.Series(data)
+
+    if isinstance(data, pd.Series):
+        with expectation:
+            cudf.Series.from_pandas(data)
