@@ -1242,8 +1242,8 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 offset=pa_offset,
             )
         elif isinstance(arbitrary, pa.ListArray):
-            raise ValueError(
-                "cudf Column doesn't support list like data types"
+            raise NotImplementedError(
+                "cudf doesn't support list like data types"
             )
 
         else:

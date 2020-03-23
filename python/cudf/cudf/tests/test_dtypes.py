@@ -42,7 +42,7 @@ def test_cdf_to_pandas(data, ordered):
 def test_df_list_dtypes(data):
 
     expectation = pytest.raises(
-        ValueError, match="cudf Column doesn't support list like data types"
+        NotImplementedError, match="cudf doesn't support list like data types"
     )
 
     with expectation:
@@ -57,7 +57,7 @@ def test_df_list_dtypes(data):
 def test_sr_list_dtypes(data):
 
     expectation = pytest.raises(
-        ValueError, match="cudf Column doesn't support list like data types"
+        NotImplementedError, match="cudf doesn't support list like data types"
     )
 
     with expectation:
