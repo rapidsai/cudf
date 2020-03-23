@@ -47,7 +47,8 @@ TYPED_TEST(DiscreteQuantilesTest, TestZeroColumns)
 
     auto interp = experimental::interpolation::NEAREST;
 
-    EXPECT_THROW(experimental::quantiles(input, { 0.0f }, interp), logic_error);
+    EXPECT_THROW(experimental::quantiles(input, { 0.0f }, interp),
+                 logic_error);
 }
 
 TYPED_TEST(DiscreteQuantilesTest, TestMultiColumnZeroRows)
@@ -59,8 +60,22 @@ TYPED_TEST(DiscreteQuantilesTest, TestMultiColumnZeroRows)
 
     auto interp = experimental::interpolation::NEAREST;
 
+    EXPECT_THROW(experimental::quantiles(input, { 0.0f }, interp, {}, true),
+                 logic_error);
+}
+
+TYPED_TEST(DiscreteQuantilesTest, TestIncorrectIndicesType)
+{
+    using T = TypeParam;
+
+    auto input_a = fixed_width_column_wrapper<T>({ });
+    auto input = table_view({ input_a });
+    auto sorted_indices = fixed_width_column_wrapper<int>({ });
+
+    auto interp = experimental::interpolation::NEAREST;
+
     EXPECT_THROW(
-        experimental::quantiles(input, { 0.0f }, interp, {}, true),
+        experimental::quantiles(input, { 0.0f }, interp, sorted_indices, false),
         logic_error
     );
 }
@@ -172,4 +187,42 @@ TYPED_TEST(ArithmeticQuantilesTest, TestCastToDouble)
     auto actual = experimental::quantiles(input, {0}, experimental::interpolation::LINEAR);
 
     expect_tables_equal(expected, actual->view());
+}
+
+template<typename T>
+struct NonNumericQuantilesTest : public BaseFixture {
+};
+
+using NonNumericQuantilesTestTypes = RemoveIf<ContainedIn<NumericTypes>, AllTypes>;
+
+TYPED_TEST_CASE(NonNumericQuantilesTest, NonNumericQuantilesTestTypes);
+
+TYPED_TEST(NonNumericQuantilesTest, TestNonNumericInterpolation)
+{
+    using T = TypeParam;
+
+    auto input_a = fixed_width_column_wrapper<T>({ T{} });
+    auto input = table_view({ input_a });
+
+    auto interp = experimental::interpolation::LINEAR;
+
+    EXPECT_THROW(
+        experimental::quantiles(input, { 0.0f }, interp, {}, true),
+        logic_error
+    );
+}
+
+TYPED_TEST(NonNumericQuantilesTest, TestNonNumericWithoutRetainingTypes)
+{
+    using T = TypeParam;
+
+    auto input_a = fixed_width_column_wrapper<T>({ T{} });
+    auto input = table_view({ input_a });
+
+    auto interp = experimental::interpolation::NEAREST;
+
+    EXPECT_THROW(
+        experimental::quantiles(input, { 0.0f }, interp, {}, false),
+        logic_error
+    );
 }

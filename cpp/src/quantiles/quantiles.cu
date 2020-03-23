@@ -250,9 +250,6 @@ quantiles(table_view const& input,
 
     if (ordered_indices.size() == 0)
     {
-        CUDF_EXPECTS(ordered_indices.type() == data_type{type_to_id<size_type>()},
-                     "`ordered_indicies` type must be `INT32`.");
-
         return detail::quantiles(input,
                                  thrust::make_counting_iterator<size_type>(0),
                                  q,
@@ -262,6 +259,9 @@ quantiles(table_view const& input,
     }
     else
     {
+        CUDF_EXPECTS(ordered_indices.type() == data_type{type_to_id<size_type>()},
+                     "`ordered_indicies` type must be `INT32`.");
+
         return detail::quantiles(input,
                                  ordered_indices.data<size_type>(),
                                  q,
