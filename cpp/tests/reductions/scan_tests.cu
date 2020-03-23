@@ -31,9 +31,6 @@
 #include <cudf/cudf.h>
 #include <cudf/reduction.hpp>
 
-#include <thrust/device_vector.h>
-#include <thrust/transform_scan.h>
-
 #include <cudf/detail/aggregation/aggregation.hpp>
 using aggregation = cudf::experimental::aggregation;
 using cudf::experimental::scan_type;
