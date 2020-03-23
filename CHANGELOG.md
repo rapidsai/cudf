@@ -2,7 +2,6 @@
 
 ## New Features
 - PR #4472 Add new `partition` API to replace `scatter_to_tables`.
-
 - PR #4626 LogBase binops
 
 ## Improvements
@@ -31,6 +30,7 @@
 - PR #4617 Fix memory leak in aggregation object destructor
 - PR #4633 String concatenation fix in `DataFrame.rename`
 - PR #4609 Fix to handle `Series.factorize` when index is set
+- PR #4652 Fix misaligned error when computing regex device structs
 
 
 # cuDF 0.13.0 (Date TBD)
