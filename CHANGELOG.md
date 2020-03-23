@@ -3,6 +3,7 @@
 ## New Features
 - PR #4472 Add new `partition` API to replace `scatter_to_tables`.
 
+- PR #4626 LogBase binops
 
 ## Improvements
 - PR #4471 Consolidate partitioning functionality into a single header.
