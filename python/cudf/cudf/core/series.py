@@ -2192,13 +2192,15 @@ class Series(Frame):
         if retain_dtype is None:
             retain_dtype = interpolation in ["higher", "lower", "nearest"]
 
-        if isinstance(q, Number):
+        is_q_number = isinstance(q, Number)
+
+        if is_q_number:
             q = [q]
 
         if len(self) == 0 or len(q) == 0:
             return (
                 np.nan
-                if len(q) == 1
+                if is_q_number
                 else Series(
                     data=[None] * len(q),
                     dtype=self.dtype if retain_dtype else "float64",
@@ -2209,7 +2211,7 @@ class Series(Frame):
 
         result = self._quantiles(q, interpolation, retain_dtype=retain_dtype)
 
-        if len(q) == 1:
+        if is_q_number:
             return result[0]
 
         result.name = self.name

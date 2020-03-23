@@ -3426,9 +3426,6 @@ class DataFrame(Frame):
         if len(self.columns) == 0:
             raise ValueError
 
-        if isinstance(q, numbers.Number):
-            q = [q]
-
         result = DataFrame(
             data={
                 k: self[k].quantile(q, interpolation, retain_dtype)
@@ -3437,11 +3434,9 @@ class DataFrame(Frame):
             index=q,
         )
 
-        if len(q) == 1:
+        if isinstance(q, numbers.Number):
             result = result.transpose()
-            return Series(
-                data=result._columns[0], index=result.index, name=q[0]
-            )
+            return Series(data=result._columns[0], index=result.index, name=q)
 
         return result
 

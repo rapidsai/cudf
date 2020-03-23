@@ -4,7 +4,7 @@ import pytest
 import cudf
 from cudf.tests.utils import assert_eq
 
-quantile_test_values = [0, 1, [], [0.5, 0, 1]]
+quantile_test_values = [0, 1, [], [0.5], [0.5, 0, 1]]
 interpolation_test_values = [
     "linear",
     "midpoint",
