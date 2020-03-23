@@ -16,7 +16,6 @@
 
 #pragma once
 
-// #include <cudf/scalar/scalar.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
@@ -31,11 +30,10 @@ namespace experimental {
  * four equal-sized groups. See https://en.wikipedia.org/wiki/Quantile
  *
  * The indices used to gather rows are computed by interpolating between the
- * index on either side of the desired quantile. Since some columns may be
- * non-arithmetic, interpolation between rows is limited to non-arithmetic
- * strategies.
+ * index on either side of the desired quantile.
  *
- * Non-arithmetic interpolation strategies include HIGHER, LOWER, and NEAREST.
+ * Numeric and bool inputs can use all interpolation strategies. Non-numeric
+ * inputs are limited to HIGHER, LOWER, and NEAREST interpolation.
  *
  * quantiles `<= 0` correspond to row `0`. (first)
  * quantiles `>= 1` correspond to row `input.size() - 1`. (last)
