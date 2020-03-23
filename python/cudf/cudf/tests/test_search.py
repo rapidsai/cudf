@@ -1,5 +1,7 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 import cupy
+import numpy as np
+import pandas as pd
 import pytest
 
 import cudf
@@ -73,7 +75,6 @@ def test_searchsorted_dataframe(side, multiindex):
 
 @pytest.mark.parametrize("side", ["left", "right"])
 def test_searchsorted_categorical(side):
-    import pandas as pd
 
     cat1 = pd.Categorical(
         ["a", "a", "b", "c", "a"], categories=["a", "b", "c"], ordered=True
@@ -94,8 +95,6 @@ def test_searchsorted_categorical(side):
 
 @pytest.mark.parametrize("side", ["left", "right"])
 def test_searchsorted_datetime(side):
-    import numpy as np
-    import pandas as pd
 
     psr1 = pd.Series(
         pd.date_range("20190101", "20200101", freq="400h", name="times")
@@ -120,3 +119,32 @@ def test_searchsorted_datetime(side):
     got = sr1.searchsorted(sr2, side)
 
     assert_eq(expect, cupy.asnumpy(got))
+
+
+def test_searchsorted_misc():
+    psr = pd.Series([1, 2, 3.4, 6])
+    sr = cudf.from_pandas(psr)
+
+    assert_eq(psr.searchsorted(1), sr.searchsorted(1))
+    assert_eq(psr.searchsorted(0), sr.searchsorted(0))
+    assert_eq(psr.searchsorted(4), sr.searchsorted(4))
+    assert_eq(psr.searchsorted(5), sr.searchsorted(5))
+    assert_eq(
+        psr.searchsorted([-100, 3.4, 2.2, 2.0, 2.000000001]),
+        sr.searchsorted([-100, 3.4, 2.2, 2.0, 2.000000001]),
+    )
+
+    psr = pd.Series([1, 2, 3])
+    sr = cudf.from_pandas(psr)
+    assert_eq(psr.searchsorted(1), sr.searchsorted(1))
+    assert_eq(
+        psr.searchsorted([0, 1, 2, 3, 4, -4, -3, -2, -1, 0, -120]),
+        sr.searchsorted([0, 1, 2, 3, 4, -4, -3, -2, -1, 0, -120]),
+    )
+    assert_eq(psr.searchsorted(1.5), sr.searchsorted(1.5))
+    assert_eq(psr.searchsorted(1.99), sr.searchsorted(1.99))
+    assert_eq(psr.searchsorted(3.00001), sr.searchsorted(3.00001))
+    assert_eq(
+        psr.searchsorted([-100, 3.00001, 2.2, 2.0, 2.000000001]),
+        sr.searchsorted([-100, 3.00001, 2.2, 2.0, 2.000000001]),
+    )

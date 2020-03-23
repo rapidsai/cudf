@@ -991,10 +991,10 @@ class Frame(libcudfxx.table.Table):
             scalar_flag = True
 
         if not isinstance(values, Frame):
-            values = as_column(
-                values,
-                dtype=self.dtype if isinstance(self, cudf.Series) else None,
-            ).as_frame()
+            values = as_column(values)
+            if values.dtype != self.dtype:
+                self = self.astype(values.dtype)
+            values = values.as_frame()
         outcol = libcudfxx.search.search_sorted(
             self, values, side, ascending=ascending, na_position=na_position
         )
