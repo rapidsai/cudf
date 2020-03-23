@@ -13,6 +13,7 @@
 - PR #4073 Enable contiguous split java test
 - PR #4527 Add JNI and java bindings for matches_re
 - PR #4599 Add Java and JNI bindings for string replace
+- PR #4616 Enable different RMM allocation modes in unit tests
 
 ## Bug Fixes
 
