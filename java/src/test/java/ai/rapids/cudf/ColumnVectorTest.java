@@ -71,6 +71,68 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testClampDouble() {
+    try (ColumnVector cv = ColumnVector.fromDoubles(2.33d, 32.12d, -121.32d, 0.0d, 0.00001d,
+        Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY, Double.NaN);
+         Scalar num = Scalar.fromDouble(0);
+         Scalar loReplace = Scalar.fromDouble(-1);
+         Scalar hiReplace = Scalar.fromDouble(1);
+         ColumnVector result = cv.clamp(num, loReplace, num, hiReplace);
+         ColumnVector expected = ColumnVector.fromDoubles(1.0d, 1.0d, -1.0d, 0.0d, 1.0d, -1.0d,
+             1.0d, Double.NaN)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testClampFloat() {
+    try (ColumnVector cv = ColumnVector.fromBoxedFloats(2.33f, 32.12f, null, -121.32f, 0.0f, 0.00001f, Float.NEGATIVE_INFINITY,
+        Float.POSITIVE_INFINITY, Float.NaN);
+         Scalar num = Scalar.fromFloat(0);
+         Scalar loReplace = Scalar.fromFloat(-1);
+         Scalar hiReplace = Scalar.fromFloat(1);
+         ColumnVector result = cv.clamp(num, loReplace, num, hiReplace);
+         ColumnVector expected = ColumnVector.fromBoxedFloats(1.0f, 1.0f, null, -1.0f, 0.0f, 1.0f, -1.0f, 1.0f, Float.NaN)) {
+     assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testClampLong() {
+    try (ColumnVector cv = ColumnVector.fromBoxedLongs(1l, 3l, 6l, -2l, 23l, -0l, -90l, null);
+         Scalar num = Scalar.fromLong(0);
+         Scalar loReplace = Scalar.fromLong(-1);
+         Scalar hiReplace = Scalar.fromLong(1);
+         ColumnVector result = cv.clamp(num, loReplace, num, hiReplace);
+         ColumnVector expected = ColumnVector.fromBoxedLongs(1l, 1l, 1l, -1l, 1l, 0l, -1l, null)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testClampShort() {
+    try (ColumnVector cv = ColumnVector.fromShorts(new short[]{1, 3, 6, -2, 23, -0, -90});
+         Scalar lo = Scalar.fromShort((short)1);
+         Scalar hi = Scalar.fromShort((short)2);
+         ColumnVector result = cv.clamp(lo, hi);
+         ColumnVector expected = ColumnVector.fromShorts(new short[]{1, 2, 2, 1, 2, 1, 1})) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testClampInt() {
+      try (ColumnVector cv = ColumnVector.fromInts(1, 3, 6, -2, 23, -0, -90);
+           Scalar num = Scalar.fromInt(0);
+           Scalar hiReplace = Scalar.fromInt(1);
+           Scalar loReplace = Scalar.fromInt(-1);
+           ColumnVector result = cv.clamp(num, loReplace, num, hiReplace);
+           ColumnVector expected = ColumnVector.fromInts(1, 1, 1, -1, 1, 0, -1)) {
+          assertColumnsAreEqual(expected, result);
+      }
+  }
+
+ @Test
   void testStringCreation() {
     try (ColumnVector cv = ColumnVector.fromStrings("d", "sd", "sde", null, "END");
          HostColumnVector host = cv.copyToHost();
@@ -1193,6 +1255,17 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void emptyStringColumnFindReplaceAll() {
+    try (ColumnVector cv = ColumnVector.fromStrings(null, "A", "B", "C",   "");
+         ColumnVector expected = ColumnVector.fromStrings(null, "A", "B", "C",   null);
+         ColumnVector from = ColumnVector.fromStrings("");
+         ColumnVector to = ColumnVector.fromStrings((String)null);
+         ColumnVector replaced = cv.findAndReplaceAll(from, to)) {
+      assertColumnsAreEqual(expected, replaced);
+    }
+  }
+
+  @Test
   void testFixedWidthCast() {
     int[] values = new int[]{1,3,4,5,2};
     long[] longValues = Arrays.stream(values).asLongStream().toArray();
@@ -1638,6 +1711,27 @@ public class ColumnVectorTest extends CudfTestBase {
            ColumnVector end = ColumnVector.fromInts(5, 3, 1, 1, -1);
            ColumnVector substring = v.substring(start, end)) {
       }
+    });
+  }
+
+  @Test
+  void teststringReplace() {
+    try (ColumnVector v = ColumnVector.fromStrings("Héllo", "thésssé", null, "", "ARé", "sssstrings");
+         ColumnVector e_allParameters = ColumnVector.fromStrings("Héllo", "théSsé", null, "", "ARé", "SStrings");
+         Scalar target = Scalar.fromString("ss");
+         Scalar replace = Scalar.fromString("S");
+         ColumnVector replace_allParameters = v.stringReplace(target, replace)) {
+      assertColumnsAreEqual(e_allParameters, replace_allParameters);
+    }
+  }
+
+  @Test
+  void teststringReplaceThrowsException() {
+    assertThrows(AssertionError.class, () -> {
+      try (ColumnVector testStrings = ColumnVector.fromStrings("Héllo", "thésé", null, "", "ARé", "strings");
+           Scalar target= Scalar.fromString("");
+           Scalar replace=Scalar.fromString("a");
+           ColumnVector result = testStrings.stringReplace(target,replace)){}
     });
   }
 }

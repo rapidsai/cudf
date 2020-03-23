@@ -398,7 +398,7 @@ std::string to_string(cudf::column_view const& col, std::string const& delimiter
 }
 
 void print(cudf::column_view const& col, std::ostream &os, std::string const& delimiter) {
-  os << to_string(col, delimiter);
+  os << to_string(col, delimiter) << std::endl;
 }
 
 bool validate_host_masks(std::vector<bitmask_type> const& expected_mask,

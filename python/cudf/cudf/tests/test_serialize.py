@@ -247,7 +247,7 @@ def test_serialize_seriesgroupby():
     gdf = cudf.DataFrame({"a": [1, 2, 3, 4], "b": [5, 1, 2, 5]})
 
     gb = gdf.groupby(["a"]).b
-    recreated = cudf.core.groupby.groupby._Groupby.deserialize(*gb.serialize())
+    recreated = gb.__class__.deserialize(*gb.serialize())
     assert_eq(recreated.sum(), gb.sum())
 
 
