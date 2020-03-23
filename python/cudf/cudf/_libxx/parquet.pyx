@@ -8,6 +8,9 @@ import os
 import pyarrow as pa
 import json
 
+from cython.operator import dereference
+import numpy as np
+
 from cudf.utils.dtypes import np_to_pa_dtype, is_categorical_dtype
 from libc.stdlib cimport free
 from libc.stdint cimport uint8_t
@@ -36,6 +39,43 @@ from cudf._libxx.io.utils cimport (
 
 cimport cudf._libxx.cpp.types as cudf_types
 cimport cudf._libxx.cpp.io.types as cudf_io_types
+
+cdef class BufferArrayFromVector:
+    cdef unsigned length
+    cdef unique_ptr[vector[uint8_t]] in_vec
+    # these two things declare part of the buffer interface
+
+    cdef Py_ssize_t shape[2]
+    cdef Py_ssize_t strides[2]
+
+    cdef set_ptr(self, unique_ptr[vector[uint8_t]] in_vec):
+        self.in_vec = move(in_vec)
+        self.length = dereference(self.in_vec).size()
+
+    def __getbuffer__(self, Py_buffer *buffer, int flags):
+        cdef Py_ssize_t itemsize = sizeof(uint8_t)
+
+        self.shape[0] = 1 # ncolumns
+        self.shape[1] = self.length # nrows
+
+        self.strides[1] = 1 # 4 bytes per int
+        self.strides[0] = 1 * self.length # only one row but if there were more, this is the separation
+
+        buffer.buf = <uint8_t *>&(dereference(self.in_vec)[0])
+
+        buffer.format = NULL                    # byte
+        buffer.internal = NULL                  # see References
+        buffer.itemsize = itemsize
+        buffer.len = self.length * itemsize   # product(shape) * itemsize
+        buffer.ndim = 2
+        buffer.obj = self
+        buffer.readonly = 0
+        buffer.shape = self.shape
+        buffer.strides = self.strides
+        buffer.suboffsets = NULL                # for pointer arrays only
+
+    def __releasebuffer__(self, Py_buffer *buffer):
+        pass
 
 cpdef generate_pandas_metadata(Table table, index):
     col_names = []
@@ -252,9 +292,9 @@ cpdef write_parquet(
         out_metadata_c = move(parquet_writer(args))
 
     if metadata_file_path is not None:
-        out_metadata_py = \
-            out_metadata_c.get().data()[:out_metadata_c.get().size()]
-        return out_metadata_py
+        out_metadata_py = BufferArrayFromVector()
+        out_metadata_py.set_ptr(move(out_metadata_c))
+        return np.asarray(out_metadata_py)
     else:
         return None
 
@@ -278,5 +318,6 @@ cpdef merge_filemetadata(filemetadata_list):
     with nogil:
         output_c = move(parquet_merge_metadata(list_c))
 
-    output_py = output_c.get().data()[:output_c.get().size()]
-    return output_py
+    out_metadata_py = BufferArrayFromVector()
+    out_metadata_py.set_ptr(move(output_c))
+    return np.asarray(out_metadata_py)
