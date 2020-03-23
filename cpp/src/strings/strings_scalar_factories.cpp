@@ -24,7 +24,7 @@ std::unique_ptr<scalar> make_string_scalar(
     cudaStream_t stream,
     rmm::mr::device_memory_resource* mr)
 {
-    auto s = new string_scalar(string, false, stream, mr);
+    auto s = new string_scalar(string, true, stream, mr);
     return std::unique_ptr<scalar>(s);
 }
 

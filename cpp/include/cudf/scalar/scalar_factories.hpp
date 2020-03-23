@@ -17,6 +17,7 @@
 
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 #include "scalar.hpp"
 
 
@@ -80,4 +81,24 @@ std::unique_ptr<scalar> make_string_scalar(
  * @param type The desired element type
  */
 std::unique_ptr<scalar> make_default_constructed_scalar(data_type type);
+
+/**
+ * @brief Construct scalar using the given value of fixed width type
+ * 
+ * @tparam T Datatype of the value to be represented by the scalar
+ * @param value The value to store in the scalar object
+ * @param stream Optional stream on which to issue all memory allocations
+ * @param mr Optional resource to use for device memory
+ *           allocation of the scalar's `data` and `is_valid` bool.
+ */
+template<typename T>
+std::unique_ptr<scalar> make_fixed_width_scalar(
+    T value,
+    cudaStream_t stream = 0,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+{
+    return std::make_unique<experimental::scalar_type_t<T>>(
+        value, true, stream, mr);
+}
+
 }  // namespace cudf

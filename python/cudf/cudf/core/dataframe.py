@@ -3586,7 +3586,11 @@ class DataFrame(Frame):
             "var", axis=axis, ddof=ddof, **kwargs
         )
 
-    def kurtosis(self, axis=None, skipna=None, level=None, numeric_only=None):
+    def kurtosis(
+        self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
+    ):
+        """Calculates Fisher's unbiased kurtosis of a sample.
+        """
         if numeric_only not in (None, True):
             msg = "Kurtosis only supports int, float, and bool dtypes."
             raise TypeError(msg)
@@ -3598,7 +3602,11 @@ class DataFrame(Frame):
             skipna=skipna,
             level=level,
             numeric_only=numeric_only,
+            **kwargs,
         )
+
+    # Alias for kurtosis.
+    kurt = kurtosis
 
     def skew(self, axis=None, skipna=None, level=None, numeric_only=None):
         if numeric_only not in (None, True):
