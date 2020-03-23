@@ -180,9 +180,7 @@ class Series(Frame):
     @property
     def values_host(self):
         if self.dtype == np.dtype("object"):
-            return np.array(
-                self._column.data_array_view.to_host(), dtype="object"
-            )
+            return self._column.to_array()
         elif is_categorical_dtype(self.dtype):
             return self._column.to_pandas().values
         else:
@@ -1885,15 +1883,26 @@ class Series(Frame):
             dtype=self.dtype,
         )
 
-    def kurtosis(self, axis=None, skipna=None, level=None, numeric_only=None):
+    def kurtosis(
+        self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
+    ):
         """Calculates Fisher's unbiased kurtosis of a sample.
         """
-        assert (
-            axis in (None, 0)
-            and skipna in (None, True)
-            and level in (None,)
-            and numeric_only in (None, True)
-        )
+        if axis not in (None, 0):
+            raise NotImplementedError("axis parameter is not implemented yet")
+
+        if skipna not in (None, True):
+            raise NotImplementedError(
+                "skipna parameter is not implemented yet"
+            )
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not implemented yet")
+
+        if numeric_only not in (None, True):
+            raise NotImplementedError(
+                "numeric_only parameter is not implemented yet"
+            )
 
         if self.empty:
             return np.nan
@@ -1916,6 +1925,9 @@ class Series(Frame):
         term_two = ((n - 1) ** 2) / ((n - 2) * (n - 3))
         kurt = term_one_section_one * term_one_section_two - 3 * term_two
         return kurt
+
+    # Alias for kurtosis.
+    kurt = kurtosis
 
     def skew(self, axis=None, skipna=None, level=None, numeric_only=None):
         """Calculates the unbiased Fisher-Pearson skew of a sample.
@@ -2557,33 +2569,33 @@ class DatetimeProperties(object):
 
     @property
     def year(self):
-        return self.get_dt_field("year")
+        return self._get_dt_field("year")
 
     @property
     def month(self):
-        return self.get_dt_field("month")
+        return self._get_dt_field("month")
 
     @property
     def day(self):
-        return self.get_dt_field("day")
+        return self._get_dt_field("day")
 
     @property
     def hour(self):
-        return self.get_dt_field("hour")
+        return self._get_dt_field("hour")
 
     @property
     def minute(self):
-        return self.get_dt_field("minute")
+        return self._get_dt_field("minute")
 
     @property
     def second(self):
-        return self.get_dt_field("second")
+        return self._get_dt_field("second")
 
     @property
     def weekday(self):
-        return self.get_dt_field("weekday")
+        return self._get_dt_field("weekday")
 
-    def get_dt_field(self, field):
+    def _get_dt_field(self, field):
         out_column = self.series._column.get_dt_field(field)
         return Series(
             data=out_column, index=self.series._index, name=self.series.name

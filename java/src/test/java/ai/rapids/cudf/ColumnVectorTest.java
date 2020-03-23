@@ -1255,6 +1255,17 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void emptyStringColumnFindReplaceAll() {
+    try (ColumnVector cv = ColumnVector.fromStrings(null, "A", "B", "C",   "");
+         ColumnVector expected = ColumnVector.fromStrings(null, "A", "B", "C",   null);
+         ColumnVector from = ColumnVector.fromStrings("");
+         ColumnVector to = ColumnVector.fromStrings((String)null);
+         ColumnVector replaced = cv.findAndReplaceAll(from, to)) {
+      assertColumnsAreEqual(expected, replaced);
+    }
+  }
+
+  @Test
   void testFixedWidthCast() {
     int[] values = new int[]{1,3,4,5,2};
     long[] longValues = Arrays.stream(values).asLongStream().toArray();
