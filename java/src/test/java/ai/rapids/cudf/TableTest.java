@@ -1870,6 +1870,23 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testInvalidWindowTypeExceptions() {
+      try (Table table = new Table.TestBuilder().column(             1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
+                                                .column(             0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 2) // GBY Key
+                                                .timestampDayColumn( 1, 1, 2, 3, 3, 3, 4, 4, 5, 5, 6, 6, 7) // Timestamp Key
+                                                .column(             7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6, 8) // Agg Column
+                                                .build()) {
+
+        WindowOptions rowBasedWindow = WindowOptions.builder().minPeriods(1).window(1,1).build();
+        assertThrows(IllegalArgumentException.class, () -> table.groupBy(0, 1).aggregateWindowsOverTimeRanges(WindowAggregate.max(3, rowBasedWindow)));
+
+        WindowOptions rangeBasedWindow = WindowOptions.builder().minPeriods(1).window(1,1).timestampColumnIndex(2).build();
+        assertThrows(IllegalArgumentException.class, () -> table.groupBy(0, 1).aggregateWindows(WindowAggregate.max(3, rangeBasedWindow)));
+
+      }
+  }
+
+  @Test
   void testGroupByCountWithNulls() {
     try (Table t1 = new Table.TestBuilder().column(null, null,    1,    1,    1,    1)
                                            .column(   1,    1,    1,    1,    1,    1)

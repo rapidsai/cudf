@@ -1081,6 +1081,57 @@ public final class Table implements AutoCloseable {
       }
     }
 
+    /**
+     * Computes row-based window aggregation functions on the Table/projection, 
+     * based on windows specified in the argument.
+     * 
+     * This method enables queries such as the following SQL:
+     * 
+     *  SELECT user_id, 
+     *         MAX(sales_amt) OVER(PARTITION BY user_id ORDER BY date 
+     *                             ROWS BETWEEN 1 PRECEDING and 1 FOLLOWING)
+     *  FROM my_sales_table WHERE ...
+     * 
+     * Each window-aggregation is represented by a different {@link WindowAggregate} argument,
+     * indicating:
+     *  1. the {@link AggregateOp}, 
+     *  2. the number of rows preceding and following the current row, within a window,
+     *  3. the minimum number of observations within the defined window
+     * 
+     * This method returns a {@Table} instance, with one result column for each specified
+     * window aggregation.
+     * 
+     * In this example, for the following input:
+     * 
+     *  [ // user_id,  sales_amt
+     *    { "user1",     10      },
+     *    { "user2",     20      },
+     *    { "user1",     20      },
+     *    { "user1",     10      },
+     *    { "user2",     30      },
+     *    { "user2",     80      },
+     *    { "user1",     50      },
+     *    { "user1",     60      },
+     *    { "user2",     40      }
+     *  ]
+     * 
+     * Partitioning (grouping) by `user_id` yields the following `sales_amt` vector 
+     * (with 2 groups, one for each distinct `user_id`):
+     * 
+     *    [ 10,  20,  10,  50,  60,  20,  30,  80,  40 ]
+     *      <-------user1-------->|<------user2------->
+     * 
+     * The SUM aggregation is applied with 1 preceding and 1 following
+     * row, with a minimum of 1 period. The aggregation window is thus 3 rows wide,
+     * yielding the following column:
+     * 
+     *    [ 30, 40,  80, 120, 100,  50, 130, 150, 120 ]
+     * 
+     * @param windowAggregates the window-aggregations to be performed
+     * @return Table instance, with each column containing the result of each aggregation.
+     * @throws IllegalArgumentException if the window arguments are not of type {@link FrameType#ROWS},
+     * i.e. a timestamp column is specified for a window-aggregation.
+     */
     public Table aggregateWindows(WindowAggregate... windowAggregates) {
       // To improve performance and memory we want to remove duplicate operations
       // and also group the operations by column so hopefully cudf can do multiple aggregations
@@ -1092,6 +1143,10 @@ public final class Table implements AutoCloseable {
       int totalOps = 0;
       for (int outputIndex = 0; outputIndex < windowAggregates.length; outputIndex++) {
         WindowAggregate agg = windowAggregates[outputIndex];
+        if (agg.getOp().getWindowOptions().getFrameType() != WindowOptions.FrameType.ROWS) {
+          throw new IllegalArgumentException("Expected ROWS-based window specification. Unexpected window type: " 
+                  + agg.getOp().getWindowOptions().getFrameType());
+        }
         ColumnWindowOps ops = groupedOps.computeIfAbsent(agg.getColumnIndex(), (idx) -> new ColumnWindowOps());
         totalOps += ops.add(agg.getOp(), outputIndex);
       }
@@ -1144,6 +1199,58 @@ public final class Table implements AutoCloseable {
       }
     }
 
+    /**
+     * Computes time-range-based window aggregation functions on the Table/projection, 
+     * based on windows specified in the argument.
+     * 
+     * This method enables queries such as the following SQL:
+     * 
+     *  SELECT user_id, 
+     *         MAX(sales_amt) OVER(PARTITION BY user_id ORDER BY date 
+     *                             RANGE BETWEEN INTERVAL 1 DAY PRECEDING and CURRENT ROW)
+     *  FROM my_sales_table WHERE ...
+     * 
+     * Each window-aggregation is represented by a different {@link WindowAggregate} argument,
+     * indicating:
+     *  1. the {@link AggregateOp}, 
+     *  2. the index for the timestamp column to base the window definitions on
+     *  2. the number of DAYS preceding and following the current row's date, to consider in the window
+     *  3. the minimum number of observations within the defined window
+     * 
+     * This method returns a {@Table} instance, with one result column for each specified
+     * window aggregation.
+     * 
+     * In this example, for the following input:
+     * 
+     *  [ // user,  sales_amt,  YYYYMMDD (date)  
+     *    { "user1",   10,      20200101    },
+     *    { "user2",   20,      20200101    },
+     *    { "user1",   20,      20200102    },
+     *    { "user1",   10,      20200103    },
+     *    { "user2",   30,      20200101    },
+     *    { "user2",   80,      20200102    },
+     *    { "user1",   50,      20200107    },
+     *    { "user1",   60,      20200107    },
+     *    { "user2",   40,      20200104    }
+     *  ]
+     * 
+     * Partitioning (grouping) by `user_id`, and ordering by `date` yields the following `sales_amt` vector 
+     * (with 2 groups, one for each distinct `user_id`):
+     * 
+     * Date :(202001-)  [ 01,  02,  03,  07,  07,    01,   01,   02,  04 ]
+     * Input:           [ 10,  20,  10,  50,  60,    20,   30,   80,  40 ]
+     *                    <-------user1-------->|<---------user2--------->
+     * 
+     * The SUM aggregation is applied, with 1 day preceding, and 1 day following, with a minimum of 1 period. 
+     * The aggregation window is thus 3 *days* wide, yielding the following output column:
+     * 
+     *  Results:        [ 30,  40,  30,  110, 110,  130,  130,  130,  40 ]
+     * 
+     * @param windowAggregates the window-aggregations to be performed
+     * @return Table instance, with each column containing the result of each aggregation.
+     * @throws IllegalArgumentException if the window arguments are not of type {@link FrameType#RANGE}, 
+     * i.e. the timestamp-column was not specified for the aggregation.
+     */
     public Table aggregateWindowsOverTimeRanges(WindowAggregate... windowAggregates) {
       // To improve performance and memory we want to remove duplicate operations
       // and also group the operations by column so hopefully cudf can do multiple aggregations
@@ -1155,6 +1262,10 @@ public final class Table implements AutoCloseable {
       int totalOps = 0;
       for (int outputIndex = 0; outputIndex < windowAggregates.length; outputIndex++) {
         WindowAggregate agg = windowAggregates[outputIndex];
+        if (agg.getOp().getWindowOptions().getFrameType() != WindowOptions.FrameType.RANGE) {
+          throw new IllegalArgumentException("Expected time-range-based window specification. Unexpected window type: " 
+                  + agg.getOp().getWindowOptions().getFrameType());
+        }
         ColumnWindowOps ops = groupedOps.computeIfAbsent(agg.getColumnIndex(), (idx) -> new ColumnWindowOps());
         totalOps += ops.add(agg.getOp(), outputIndex);
       }
