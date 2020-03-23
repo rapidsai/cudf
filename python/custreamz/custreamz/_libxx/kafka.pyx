@@ -41,8 +41,8 @@ cpdef read_gdf(lines=True,
                byte_range=None,
                topic=None,
                partition=0,
-               start=-1,
-               end=-1,
+               start=0,
+               end=0,
                timeout=10000,
                delimiter="\n"):
 

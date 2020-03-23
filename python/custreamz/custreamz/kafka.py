@@ -33,8 +33,8 @@ class Consumer(object):
         byte_range=None,
         topic=None,
         partition=0,
-        start=-1,
-        end=-1,
+        start=0,
+        end=0,
         timeout=10000,
         delimiter="\n",
         *args,
@@ -81,15 +81,16 @@ class Consumer(object):
     def get_watermark_offsets(self, partition, timeout=10000, cached=False):
         """{docstring}"""
 
-        print("Topic: " + str(partition.topic))
-        print("Partition: " + str(partition.partition))
-
-        offsets = libkafka.get_watermark_offsets(
-            topic=partition.topic,
-            partition=partition.partition,
-            timeout=timeout,
-            cached=cached,
-        )
+        try:
+            offsets = libkafka.get_watermark_offsets(
+                topic=partition.topic,
+                partition=partition.partition,
+                timeout=timeout,
+                cached=cached,
+            )
+        except RuntimeError:
+            print("RuntimeError thrown from C++")
+            return 0, 0
 
         if len(offsets) != 2:
             raise ValueError(

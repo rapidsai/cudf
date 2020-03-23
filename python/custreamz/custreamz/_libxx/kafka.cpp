@@ -7,6 +7,7 @@
             "../../cpp/include/cudf/aggregation.hpp",
             "../../cpp/include/cudf/column/column.hpp",
             "../../cpp/include/cudf/column/column_view.hpp",
+            "../../cpp/include/cudf/groupby.hpp",
             "../../cpp/include/cudf/io/functions.hpp",
             "../../cpp/include/cudf/io/types.hpp",
             "../../cpp/include/cudf/scalar/scalar.hpp",
@@ -708,6 +709,7 @@ static CYTHON_INLINE float __PYX_NAN() {
 #include "cudf/aggregation.hpp"
 #include "cudf/wrappers/bool.hpp"
 #include "cudf/scalar/scalar.hpp"
+#include "cudf/groupby.hpp"
 #include <unordered_map>
 #include <unordered_set>
 #include <stdio.h>
@@ -2298,6 +2300,8 @@ static PyTypeObject *__pyx_ptype_4cudf_6_libxx_5table_Table = 0;
 
 /* Module declarations from 'cudf._libxx.cpp.scalar.scalar' */
 
+/* Module declarations from 'cudf._libxx.cpp.groupby' */
+
 /* Module declarations from 'libcpp.unordered_map' */
 
 /* Module declarations from 'libcpp.unordered_set' */
@@ -2992,12 +2996,12 @@ static PyObject *__pyx_f_9custreamz_6_libxx_5kafka_read_gdf(CYTHON_UNUSED int __
  *                byte_range=None,
  *                topic=None,             # <<<<<<<<<<<<<<
  *                partition=0,
- *                start=-1,
+ *                start=0,
  */
   PyObject *__pyx_v_topic = ((PyObject *)Py_None);
   PyObject *__pyx_v_partition = ((PyObject *)__pyx_int_0);
-  PyObject *__pyx_v_start = ((PyObject *)__pyx_int_neg_1);
-  PyObject *__pyx_v_end = ((PyObject *)__pyx_int_neg_1);
+  PyObject *__pyx_v_start = ((PyObject *)__pyx_int_0);
+  PyObject *__pyx_v_end = ((PyObject *)__pyx_int_0);
   PyObject *__pyx_v_timeout = ((PyObject *)__pyx_int_10000);
   PyObject *__pyx_v_delimiter = ((PyObject *)__pyx_kp_u_);
   PyObject *__pyx_v_json_str = 0;
@@ -3400,7 +3404,7 @@ static PyObject *__pyx_f_9custreamz_6_libxx_5kafka_read_gdf(CYTHON_UNUSED int __
 
 /* Python wrapper */
 static PyObject *__pyx_pw_9custreamz_6_libxx_5kafka_3read_gdf(PyObject *__pyx_self, PyObject *__pyx_args, PyObject *__pyx_kwds); /*proto*/
-static char __pyx_doc_9custreamz_6_libxx_5kafka_2read_gdf[] = "read_gdf(lines=True, dtype=True, compression=u'infer', dayfirst=True, byte_range=None, topic=None, partition=0, start=-1, end=-1, timeout=10000, delimiter=u'\\n')";
+static char __pyx_doc_9custreamz_6_libxx_5kafka_2read_gdf[] = "read_gdf(lines=True, dtype=True, compression=u'infer', dayfirst=True, byte_range=None, topic=None, partition=0, start=0, end=0, timeout=10000, delimiter=u'\\n')";
 static PyObject *__pyx_pw_9custreamz_6_libxx_5kafka_3read_gdf(PyObject *__pyx_self, PyObject *__pyx_args, PyObject *__pyx_kwds) {
   PyObject *__pyx_v_lines = 0;
   PyObject *__pyx_v_dtype = 0;
@@ -3454,12 +3458,12 @@ static PyObject *__pyx_pw_9custreamz_6_libxx_5kafka_3read_gdf(PyObject *__pyx_se
  *                byte_range=None,
  *                topic=None,             # <<<<<<<<<<<<<<
  *                partition=0,
- *                start=-1,
+ *                start=0,
  */
     values[5] = ((PyObject *)Py_None);
     values[6] = ((PyObject *)__pyx_int_0);
-    values[7] = ((PyObject *)__pyx_int_neg_1);
-    values[8] = ((PyObject *)__pyx_int_neg_1);
+    values[7] = ((PyObject *)__pyx_int_0);
+    values[8] = ((PyObject *)__pyx_int_0);
     values[9] = ((PyObject *)__pyx_int_10000);
     values[10] = ((PyObject *)__pyx_kp_u_);
     if (unlikely(__pyx_kwds)) {

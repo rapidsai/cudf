@@ -244,6 +244,7 @@ namespace external {
 
     if (err_ != RdKafka::ErrorCode::ERR_NO_ERROR) {
       printf("Error: '%s'\n", err2str(err_).c_str());
+      throw std::runtime_error(std::string(err2str(err_).c_str()));
     } else {
       results.insert(std::pair<std::string, int64_t>("low", low));
       results.insert(std::pair<std::string, int64_t>("high", high));
