@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -504,34 +504,34 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs, column_view const& 
                                     rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
 /**
-* @brief Creates a new column by shifting all values by an offset.
-*
-* Elements will be determined by `output[idx] = input[idx - offset]`.
-* Some elements in the output may be indeterminable from the input. For those
-* elements, the value will be determined by `fill_values`.
-*
-* Examples
-* -------------------------------------------------
-* input       = [0, 1, 2, 3, 4]
-* offset      = 3
-* fill_values = @
-* return      = [@, @, @, 0, 1]
-* -------------------------------------------------
-* input       = [5, 4, 3, 2, 1]
-* offset      = -2
-* fill_values = 7
-* return      = [3, 2, 1, 7, 7]
-*
-* @note if the input is nullable, the output will be nullable.
-* @note if the fill value is null, the output will be nullable.
-*
-* @param input      Column to be shifted.
-* @param offset     The offset by which to shift the input.
-* @param fill_value Fill value for indeterminable outputs.
-*
-* @throw cudf::logic_error if @p input dtype is not fixed-with.
-* @throw cudf::logic_error if @p fill_value dtype does not match @p input dtype.
-*/
+ * @brief Creates a new column by shifting all values by an offset.
+ *
+ * Elements will be determined by `output[idx] = input[idx - offset]`.
+ * Some elements in the output may be indeterminable from the input. For those
+ * elements, the value will be determined by `fill_values`.
+ *
+ * Examples
+ * -------------------------------------------------
+ * input       = [0, 1, 2, 3, 4]
+ * offset      = 3
+ * fill_values = @
+ * return      = [@, @, @, 0, 1]
+ * -------------------------------------------------
+ * input       = [5, 4, 3, 2, 1]
+ * offset      = -2
+ * fill_values = 7
+ * return      = [3, 2, 1, 7, 7]
+ *
+ * @note if the input is nullable, the output will be nullable.
+ * @note if the fill value is null, the output will be nullable.
+ *
+ * @param input      Column to be shifted.
+ * @param offset     The offset by which to shift the input.
+ * @param fill_value Fill value for indeterminable outputs.
+ *
+ * @throw cudf::logic_error if @p input dtype is not fixed-with.
+ * @throw cudf::logic_error if @p fill_value dtype does not match @p input dtype.
+ */
 std::unique_ptr<column> shift(column_view const& input,
                               size_type offset,
                               scalar const& fill_value,
@@ -648,9 +648,9 @@ std::unique_ptr<table> boolean_mask_scatter(
  * Example:
  * input: {11}
  * boolean_mask: {true, false, false, false, true, true, false, true, true, false}
- * target:       {{   2,     2,     3,     4,    4,     7,    7,    7,    8,    10}}
+ * target:      {{   2,     2,     3,     4,    4,     7,    7,    7,    8,    10}}
  *
- * output:       {{   11,    2,     3,     4,   11,    11,    7,   11,   11,    10}}
+ * output:      {{   11,    2,     3,     4,   11,    11,    7,   11,   11,    10}}
  *
  * @throw  cudf::logic_error if input.size() != target.num_columns()
  * @throws cudf::logic_error if any `i`th input_scalar type != `i`th target_column type
@@ -664,9 +664,22 @@ std::unique_ptr<table> boolean_mask_scatter(
  *
  * @returns Returns a table by scattering `input` into `target` as per `boolean_mask`.
  */
- std::unique_ptr<table> boolean_mask_scatter(
+std::unique_ptr<table> boolean_mask_scatter(
     std::vector<std::reference_wrapper<scalar>> const& input, table_view const& target,
     column_view const& boolean_mask,
+    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+
+/**
+ * @brief Get the element at specified index from a column
+ * 
+ * @param input Column view to get the element from
+ * @param index Index into `input` to get the element at
+ * @param mr Optional, The resource to use for all returned allocations
+ * @return std::unique_ptr<scalar> Scalar containing the single value
+ */
+std::unique_ptr<scalar> get_element(
+    column_view const& input,
+    size_type index,
     rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
 }  // namespace experimental
