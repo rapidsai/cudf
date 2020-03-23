@@ -73,6 +73,24 @@ struct TypedColumnTest : public cudf::test::BaseFixture {
 
 TYPED_TEST_CASE(TypedColumnTest, cudf::test::Types<int32_t>);
 
+TYPED_TEST(TypedColumnTest, ConcatenateEmptyColumns){
+    cudf::test::fixed_width_column_wrapper<TypeParam> empty_first{};
+    cudf::test::fixed_width_column_wrapper<TypeParam> empty_second{};
+    cudf::test::fixed_width_column_wrapper<TypeParam> empty_third{};
+    std::vector<column_view> columns_to_concat({empty_first, empty_second, empty_third});
+
+    auto concat = cudf::concatenate(columns_to_concat);
+
+    auto expected_type = cudf::column_view(empty_first).type();
+    EXPECT_EQ(concat->size(), 0);
+    EXPECT_EQ(concat->type(), expected_type);
+}
+
+TYPED_TEST(TypedColumnTest, ConcatenateNoColumns){
+    std::vector<column_view> columns_to_concat{};
+    EXPECT_THROW(cudf::concatenate(columns_to_concat), cudf::logic_error);
+}
+
 TYPED_TEST(TypedColumnTest, ConcatenateColumnView) {
   cudf::column original{this->type(), this->num_elements(), this->data,
                         this->mask};
