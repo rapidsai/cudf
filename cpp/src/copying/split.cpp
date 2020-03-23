@@ -31,7 +31,7 @@ namespace  {
         std::vector<T> result{};
 
         if(splits.size() == 0 or column_size == 0) {
-            return result;
+            return std::vector<T>{input};
         }
         CUDF_EXPECTS(splits.back() <= column_size, "splits can't exceed size of input columns");
 
