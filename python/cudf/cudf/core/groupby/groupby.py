@@ -489,8 +489,7 @@ class SeriesGroupBy(GroupBy):
 
         # downcast the result to a Series:
         if result.shape[1] == 1 and not pd.api.types.is_list_like(func):
-            return result[result.columns[0]]
-            # return result.iloc[:, 0]
+            return result.iloc[:, 0]
 
         # drop the first level if we have a multiindex
         if (
