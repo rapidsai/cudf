@@ -1622,10 +1622,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * Concatenate columns of strings together, combining a corresponding row from each column
    * into a single string row of a new column with no separator string inserted between each
    * combined string and maintaining null values in combined rows.
-   * @param columns indefinite number of columns containing strings.
+   * @param columns array of columns containing strings.
    * @return A new java column vector containing the concatenated strings.
    */
-  public ColumnVector stringConcatenate(ColumnVector... columns) {
+  public ColumnVector stringConcatenate(ColumnVector[] columns) {
     try (Scalar emptyString = Scalar.fromString("");
          Scalar nullString = Scalar.fromString(null)) {
       return stringConcatenate(emptyString, nullString, columns);
@@ -1639,10 +1639,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @param narep string scalar indicating null behavior. If set to null and any string in the row
    *              is null the resulting string will be null. If not null, null values in any column
    *              will be replaced by the specified string.
-   * @param columns indefinite number of columns containing strings, must be more than 2 columns
+   * @param columns array of columns containing strings, must be more than 2 columns
    * @return A new java column vector containing the concatenated strings.
    */
-  public static ColumnVector stringConcatenate(Scalar separator, Scalar narep, ColumnVector... columns) {
+  public static ColumnVector stringConcatenate(Scalar separator, Scalar narep, ColumnVector[] columns) {
     assert columns.length >= 2 : ".stringConcatenate() operation requires at least 2 columns";
     assert separator != null : "separator scalar provided may not be null";
     assert separator.getType() == DType.STRING : "separator scalar must be a string scalar";

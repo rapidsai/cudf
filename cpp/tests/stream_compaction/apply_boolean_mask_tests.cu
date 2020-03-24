@@ -133,3 +133,5 @@ TEST_F(ApplyBooleanMask, NoNullInput) {
   auto got = cudf::experimental::apply_boolean_mask(input, mask);
   cudf::test::expect_tables_equal(expected, got->view());
 }
+
+CUDF_TEST_PROGRAM_MAIN()

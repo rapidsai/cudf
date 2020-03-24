@@ -745,3 +745,5 @@ TYPED_TEST(MergeTest_, NMerge1KeyColumns) {
   cudf::test::expect_columns_equal(expected_column_view1, output_column_view1);
   cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
 }
+
+CUDF_TEST_PROGRAM_MAIN()
