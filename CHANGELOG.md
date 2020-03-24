@@ -35,6 +35,7 @@
 - PR #4609 Fix to handle `Series.factorize` when index is set
 - PR #4652 Fix misaligned error when computing regex device structs
 - PR #4651 Fix hashing benchmark missing includes
+- PR #4679 Fix comments for make_dictionary_column factory functions
 
 
 # cuDF 0.13.0 (Date TBD)
