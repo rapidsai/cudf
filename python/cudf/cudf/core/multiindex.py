@@ -30,6 +30,7 @@ class MultiIndex(Index):
         self, levels=None, codes=None, labels=None, names=None, **kwargs
     ):
         from cudf.core.series import Series
+        from cudf import DataFrame
 
         super().__init__()
 
@@ -47,8 +48,16 @@ class MultiIndex(Index):
         # early termination enables lazy evaluation of codes
         if "source_data" in kwargs:
             source_data = kwargs["source_data"].reset_index(drop=True)
-            self._names = names
+
+            if isinstance(source_data, pd.DataFrame):
+                source_data = DataFrame.from_pandas(source_data)
+            names = names if names is not None else source_data._data.names
+            # if names are unique
+            # try using those as the source_data column names:
+            if len(dict.fromkeys(names)) == len(names):
+                source_data.columns = names
             self._data = source_data._data
+            self.names = names
             self._codes = codes
             self._levels = levels
             return
@@ -72,8 +81,6 @@ class MultiIndex(Index):
 
         if len(levels) == 0:
             raise ValueError("Must pass non-zero number of levels/codes")
-
-        from cudf import DataFrame
 
         if not isinstance(codes, DataFrame) and not isinstance(
             codes[0], (Sequence, np.ndarray)
@@ -108,8 +115,12 @@ class MultiIndex(Index):
                 )
             else:
                 level = DataFrame({name: self._levels[i]})
-            level = DataFrame(index=codes).join(level)
-            source_data[name] = level[name].reset_index(drop=True)
+
+            import cudf._libxx as libcudfxx
+
+            source_data[name] = libcudfxx.copying.gather(
+                level, codes._data.columns[0]
+            )._data[name]
 
         self._data = source_data._data
         self.names = names
@@ -122,12 +133,14 @@ class MultiIndex(Index):
     def names(self, value):
         value = [None] * self.nlevels if value is None else value
         assert len(value) == self.nlevels
-        self._names = value
+        self._names = pd.core.indexes.frozen.FrozenList(value)
 
     @classmethod
-    def _from_table(cls, table):
+    def _from_table(cls, table, names=None):
         df = cudf.DataFrame(table._data)
-        return MultiIndex.from_frame(df, names=df.columns)
+        if names is None:
+            names = df.columns
+        return MultiIndex.from_frame(df, names=names)
 
     @property
     def _source_data(self):
@@ -136,6 +149,7 @@ class MultiIndex(Index):
     @_source_data.setter
     def _source_data(self, value):
         self._data = value._data
+        self._compute_levels_and_codes()
 
     @property
     def name(self):
@@ -187,12 +201,7 @@ class MultiIndex(Index):
         Removes n names, labels, and codes in order to build a new index
         for results.
         """
-        from cudf import DataFrame
-
-        codes = DataFrame()
-        for idx in self.codes.columns[n:]:
-            codes.insert(len(codes.columns), idx, self.codes[idx])
-        result = MultiIndex(self.levels[n:], codes)
+        result = MultiIndex(source_data=self._source_data.iloc[:, n:])
         if self.names is not None:
             result.names = self.names[n:]
         return result
@@ -415,7 +424,13 @@ class MultiIndex(Index):
             return False
         # Lazy comparison
         if isinstance(other, MultiIndex) or hasattr(other, "_source_data"):
-            return self._source_data.equals(other._source_data)
+            for self_col, other_col in zip(
+                self._source_data._data.values(),
+                other._source_data._data.values(),
+            ):
+                if not self_col.equals(other_col):
+                    return False
+            return self.names == other.names
         else:
             # Lazy comparison isn't possible - MI was created manually.
             # Actually compare the MI, not its source data (it doesn't have
@@ -513,7 +528,7 @@ class MultiIndex(Index):
         df = self._source_data
         if index:
             df = df.set_index(self)
-        if name:
+        if name is not None:
             if len(name) != len(self.levels):
                 raise ValueError(
                     "'name' should have th same length as "
@@ -523,6 +538,17 @@ class MultiIndex(Index):
         return df
 
     def get_level_values(self, level):
+        """
+        Return the values at the requested level
+
+        Parameters
+        ----------
+        level : int or label
+
+        Returns
+        -------
+        An Index containing the values at the requested level.
+        """
         colnames = list(self._source_data.columns)
         if level not in colnames:
             if isinstance(level, int):
@@ -532,9 +558,16 @@ class MultiIndex(Index):
                     raise IndexError(f"Invalid level number: '{level}'")
                 level_idx = level
                 level = colnames[level_idx]
+            elif level in self.names:
+                level_idx = list(self.names).index(level)
+                level = colnames[level_idx]
             else:
                 raise KeyError(f"Level not found: '{level}'")
-        level_values = self._source_data[level]
+        else:
+            level_idx = colnames.index(level)
+        level_values = as_index(
+            self._source_data._data[level], name=self.names[level_idx]
+        )
         return level_values
 
     def _to_frame(self):
@@ -593,6 +626,11 @@ class MultiIndex(Index):
         return result
 
     def to_pandas(self):
+        if hasattr(self, "_source_data"):
+            result = self._source_data.to_pandas()
+            result.columns = self.names
+            return pd.MultiIndex.from_frame(result)
+
         pandas_codes = []
         for code in self.codes.columns:
             pandas_codes.append(self.codes[code].to_array())
@@ -639,15 +677,11 @@ class MultiIndex(Index):
 
         if hasattr(multiindex, "codes"):
             mi = cls(
-                levels=multiindex.levels,
-                codes=multiindex.codes,
-                names=multiindex.names,
+                names=multiindex.names, source_data=multiindex.to_frame(),
             )
         else:
             mi = cls(
-                levels=multiindex.levels,
-                codes=multiindex.labels,
-                names=multiindex.names,
+                names=multiindex.names, source_data=multiindex.to_frame(),
             )
         return mi
 
@@ -674,6 +708,9 @@ class MultiIndex(Index):
                 ascending=[False] * len(self.levels), null_position=None
             )
         return self._is_monotonic_decreasing
+
+    def argsort(self, ascending=True):
+        return self._source_data.argsort(ascending=ascending)
 
     def unique(self):
         return MultiIndex.from_frame(self._source_data.drop_duplicates())

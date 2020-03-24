@@ -15,7 +15,7 @@
 #=============================================================================
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
-project(CUDA_DATAFRAME VERSION 0.13.0 LANGUAGES C CXX CUDA)
+project(CUDA_DATAFRAME VERSION 0.14.0 LANGUAGES C CXX CUDA)
 
 if(NOT CMAKE_CUDA_COMPILER)
   message(SEND_ERROR "CMake cannot locate a CUDA compiler")
@@ -48,7 +48,7 @@ set(CMAKE_CUDA_STANDARD 14)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
 if(CMAKE_COMPILER_IS_GNUCXX)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wno-error=deprecated-declarations")
 
     # Suppress parentheses warning which causes gmock to fail
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler -Wno-parentheses")
@@ -110,7 +110,13 @@ set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-
 
 # set warnings as errors
 # TODO: remove `no-maybe-unitialized` used to suppress warnings in rmm::exec_policy
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Werror cross-execution-space-call -Xcompiler -Wall,-Werror")
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Werror cross-execution-space-call -Xcompiler -Wall,-Werror,-Wno-error=deprecated-declarations")
+
+option(DISABLE_DEPRECATION_WARNING "Disable warnings generated from deprecated declarations." OFF)
+if(DISABLE_DEPRECATION_WARNING)
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler -Wno-deprecated-declarations")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations")
+endif(DISABLE_DEPRECATION_WARNING)
 
 # Option to enable line info in CUDA device compilation to allow introspection when profiling / memchecking
 option(CMAKE_CUDA_LINEINFO "Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler" OFF)
@@ -385,7 +391,7 @@ add_library(cudf
             src/column/legacy/context.cpp
             src/table/legacy/table.cpp
             src/merge/merge.cu
-            src/round_robin/round_robin.cu
+            src/partitioning/round_robin.cu
             src/strings/nvcategory_util.cpp
             src/join/legacy/joining.cu
             src/join/join.cu
@@ -437,6 +443,7 @@ add_library(cudf
             src/datetime/datetime_ops.cu
             src/datetime/datetime_util.cpp
             src/hash/hashing.cu
+            src/partitioning/partitioning.cu
             src/hash/legacy/hashing.cu
             src/quantiles/legacy/quantiles.cu
             src/quantiles/quantile.cu
@@ -543,6 +550,7 @@ add_library(cudf
             src/copying/scatter.cu
             src/copying/shift.cu
             src/copying/copy.cu
+            src/copying/concatenate.cu
             src/copying/slice.cpp
             src/copying/split.cpp
             src/copying/contiguous_split.cu
@@ -635,6 +643,8 @@ add_library(cudf
             src/groupby/sort/group_sum.cu
             src/groupby/sort/group_min.cu
             src/groupby/sort/group_max.cu
+            src/groupby/sort/group_argmax.cu
+            src/groupby/sort/group_argmin.cu
             src/groupby/sort/group_count.cu
             src/groupby/sort/group_nunique.cu
             src/groupby/sort/group_nth_element.cu

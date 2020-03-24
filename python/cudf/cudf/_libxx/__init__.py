@@ -5,7 +5,9 @@ import numpy as np
 from . import (
     avro,
     binaryop,
+    concat,
     copying,
+    datetime,
     dlpack,
     filling,
     gpuarrow,
@@ -13,6 +15,8 @@ from . import (
     join,
     merge,
     null_mask,
+    nvtext,
+    nvtx,
     orc,
     quantiles,
     reduce,
