@@ -60,8 +60,8 @@ cdef class BufferArrayFromVector:
 
         buffer.buf = <uint8_t *>&(dereference(self.in_vec)[0])
 
-        buffer.format = NULL # byte
-        buffer.internal = NULL                  
+        buffer.format = NULL  # byte
+        buffer.internal = NULL
         buffer.itemsize = itemsize
         buffer.len = self.length * itemsize   # product(shape) * itemsize
         buffer.ndim = 1
@@ -69,7 +69,7 @@ cdef class BufferArrayFromVector:
         buffer.readonly = 0
         buffer.shape = self.shape
         buffer.strides = self.strides
-        buffer.suboffsets = NULL          
+        buffer.suboffsets = NULL
 
     def __releasebuffer__(self, Py_buffer *buffer):
         pass
@@ -318,3 +318,4 @@ cpdef merge_filemetadata(filemetadata_list):
     out_metadata_py = BufferArrayFromVector()
     out_metadata_py.set_ptr(move(output_c))
     return np.asarray(out_metadata_py)
+
