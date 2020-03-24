@@ -1928,11 +1928,37 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   public ColumnVector matchesRe(String pattern) {
     assert type == DType.STRING : "column type must be a String";
     assert pattern != null : "pattern may not be null";
-    assert pattern.isEmpty() == false : "pattern string may not be empty";
+    assert !pattern.isEmpty() : "pattern string may not be empty";
     try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.BOOL8), "matchesRe")) {
       return new ColumnVector(matchesRe(getNativeView(), pattern));
     }
   }
+
+  /**
+   * Returns a boolean ColumnVector identifying rows which
+   * match the given regex pattern.
+   *
+   * ```
+   * cv = ["abc","123","def456"]
+   * result = cv.matches_re("\\d+")
+   * r is now [false, true, true]
+   * ```
+   * Any null string entries return corresponding null output column entries.
+   * For supported regex patterns refer to:
+   * @link https://rapidsai.github.io/projects/nvstrings/en/0.13.0/regex.html
+   *
+   * @param pattern Regex pattern to match to each string.
+   * @return New ColumnVector of boolean results for each string.
+   */
+  public ColumnVector containsRe(String pattern) {
+    assert type == DType.STRING : "column type must be a String";
+    assert pattern != null : "pattern may not be null";
+    assert !pattern.isEmpty() : "pattern string may not be empty";
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.BOOL8), "containsRe")) {
+      return new ColumnVector(containsRe(getNativeView(), pattern));
+    }
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS
   /////////////////////////////////////////////////////////////////////////////
@@ -2056,7 +2082,22 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   private static native long stringEndWith(long cudfViewHandle, long compString) throws CudfException;
 
-  private static native long matchesRe(long cudfViewHandle, String compString) throws CudfException;
+  /**
+   * Native method for checking if strings match the passed in regex pattern from the
+   * beginning of the string.
+   * @param cudfViewHandle native handle of the cudf::column_view being operated on.
+   * @param pattern string regex pattern.
+   * @return native handle of the resulting cudf column containing the boolean results.
+   */
+  private static native long matchesRe(long cudfViewHandle, String pattern) throws CudfException;
+
+  /**
+   * Native method for checking if strings match the passed in regex pattern.
+   * @param cudfViewHandle native handle of the cudf::column_view being operated on.
+   * @param pattern string regex pattern.
+   * @return native handle of the resulting cudf column containing the boolean results.
+   */
+  private static native long containsRe(long cudfViewHandle, String pattern) throws CudfException;
 
   /**
    * Native method for checking if strings in a column contains a specified comparison string.
