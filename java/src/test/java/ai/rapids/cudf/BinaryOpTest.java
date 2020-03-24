@@ -21,6 +21,10 @@ package ai.rapids.cudf;
 import ai.rapids.cudf.HostColumnVector.Builder;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
+import java.util.function.Function;
+import java.util.stream.Collector;
+
 import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
 
 public class BinaryOpTest extends CudfTestBase {
@@ -1078,6 +1082,28 @@ public class BinaryOpTest extends CudfTestBase {
                })) {
         assertColumnsAreEqual(expected, answer, "scalar short >>> int32 = int16");
       }
+    }
+  }
+
+  @Test
+  public void testLogBase10() {
+    try (ColumnVector dcv1 = ColumnVector.fromBoxedDoubles(DOUBLES_2)) {
+      ColumnVector answer = dcv1.log(10);
+      ColumnVector expected = ColumnVector.fromBoxedDoubles(Arrays.stream(DOUBLES_2)
+              .map(Math::log10)
+              .toArray(Double[]::new));
+      assertColumnsAreEqual(expected, answer, "log10");
+    }
+  }
+
+  @Test
+  public void testLogBase2() {
+    try (ColumnVector dcv1 = ColumnVector.fromBoxedDoubles(DOUBLES_2)) {
+      ColumnVector answer = dcv1.log(2);
+      ColumnVector expected = ColumnVector.fromBoxedDoubles(Arrays.stream(DOUBLES_2)
+              .map(n -> Math.log(n) / Math.log(2))
+              .toArray(Double[]::new));
+      assertColumnsAreEqual(expected, answer, "log2");
     }
   }
 }
