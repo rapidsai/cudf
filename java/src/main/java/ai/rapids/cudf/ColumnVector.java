@@ -1936,7 +1936,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   /**
    * Returns a boolean ColumnVector identifying rows which
-   * match the given regex pattern.
+   * match the given regex pattern starting at any location.
    *
    * ```
    * cv = ["abc","123","def456"]
@@ -2092,7 +2092,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   private static native long matchesRe(long cudfViewHandle, String pattern) throws CudfException;
 
   /**
-   * Native method for checking if strings match the passed in regex pattern.
+   * Native method for checking if strings match the passed in regex pattern starting at any location.
    * @param cudfViewHandle native handle of the cudf::column_view being operated on.
    * @param pattern string regex pattern.
    * @return native handle of the resulting cudf column containing the boolean results.

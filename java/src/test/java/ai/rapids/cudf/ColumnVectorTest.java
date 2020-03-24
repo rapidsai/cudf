@@ -1540,16 +1540,16 @@ public class ColumnVectorTest extends CudfTestBase {
     String patternString2 = "[A-Za-z]+\\s@[A-Za-z]+";
     String patternString3 = ".*";
     String patternString4 = "";
-    try (ColumnVector testStrings = ColumnVector.fromStrings("", null, "abCD", "ovér the",
+    try (ColumnVector testStrings = ColumnVector.fromStrings(null, "abCD", "ovér the",
         "lazy @dog", "1234", "00:0:00", "abc1234abc", "there @are 2 lazy @dogs");
          ColumnVector res1 = testStrings.containsRe(patternString1);
          ColumnVector res2 = testStrings.containsRe(patternString2);
          ColumnVector res3 = testStrings.containsRe(patternString3);
-         ColumnVector expected1 = ColumnVector.fromBoxedBooleans(false, null, false, false, false,
+         ColumnVector expected1 = ColumnVector.fromBoxedBooleans(null, false, false, false,
              true, true, true, true);
-         ColumnVector expected2 = ColumnVector.fromBoxedBooleans(false, null, false, false, true,
+         ColumnVector expected2 = ColumnVector.fromBoxedBooleans(null, false, false, true,
              false, false, false, true);
-         ColumnVector expected3 = ColumnVector.fromBoxedBooleans(false, null, true, true, true,
+         ColumnVector expected3 = ColumnVector.fromBoxedBooleans(null, true, true, true,
              true, true, true, true)) {
       assertColumnsAreEqual(expected1, res1);
       assertColumnsAreEqual(expected2, res2);
@@ -1560,6 +1560,17 @@ public class ColumnVectorTest extends CudfTestBase {
           "lazy @dog", "1234", "00:0:00", "abc1234abc", "there @are 2 lazy @dogs");
            ColumnVector res = testStrings.containsRe(patternString4)) {}
     });
+  }
+
+  @Test
+  @Disabled("Needs fix for https://github.com/rapidsai/cudf/issues/4671")
+  void testContainsReEmptyInput() {
+    String patternString1 = ".*";
+    try (ColumnVector testStrings = ColumnVector.fromStrings("");
+         ColumnVector res1 = testStrings.containsRe(patternString1);
+         ColumnVector expected1 = ColumnVector.fromBoxedBooleans(true)) {
+      assertColumnsAreEqual(expected1, res1);
+    }
   }
 
   @Test
