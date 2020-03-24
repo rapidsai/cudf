@@ -658,7 +658,7 @@ class Frame(libcudfxx.table.Table):
             ):
                 self._data[name] = build_categorical_column(
                     categories=other_col.categories,
-                    codes=col,
+                    codes=as_column(col.base_data, dtype=col.dtype),
                     mask=col.base_mask,
                     ordered=other_col.ordered,
                     size=col.size,
