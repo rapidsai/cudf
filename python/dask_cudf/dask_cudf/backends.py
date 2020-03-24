@@ -117,10 +117,7 @@ try:
 
     def _handle_string(s):
         if isinstance(s._column, StringColumn):
-            out_col = column.column_empty(len(s), dtype="int32", masked=False)
-            ptr = out_col.data_ptr
-            s._column.data_array_view.hash(devptr=ptr)
-            s = out_col
+            s = s._hash()
         return s
 
     def safe_hash(df):

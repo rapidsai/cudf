@@ -978,12 +978,16 @@ def test_string_no_children_properties():
         ["abcdefghij", "0123456789", "9876543210", None, "accénted", ""],
     ],
 )
-@pytest.mark.parametrize("index", [0, 1, 2, 3, 9, 10])
+@pytest.mark.parametrize(
+    "index", [-100, -5, -2, -6, -1, 0, 1, 2, 3, 9, 10, 100]
+)
 def test_string_get(string, index):
     pds = pd.Series(string)
     gds = Series(string)
 
-    assert_eq(pds.str.get(index).fillna(""), gds.str.get(index).fillna(""))
+    assert_eq(
+        pds.str.get(index).fillna(""), gds.str.get(index).fillna(""),
+    )
 
 
 @pytest.mark.parametrize(

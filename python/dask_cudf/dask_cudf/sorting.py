@@ -144,7 +144,7 @@ def rearrange_by_hash(
     graph = HighLevelGraph.from_collections(
         "shuffle-" + token, dsk, dependencies=[df]
     )
-    df2 = DataFrame(graph, "shuffle-" + token, df, df.divisions)
+    df2 = df.__class__(graph, "shuffle-" + token, df, df.divisions)
     df2.divisions = (None,) * (df.npartitions + 1)
 
     return df2

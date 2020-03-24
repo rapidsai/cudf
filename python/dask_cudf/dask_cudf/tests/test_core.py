@@ -383,16 +383,19 @@ def test_repartition_simple_divisions(start, stop):
 
 def test_repartition_hash_staged():
     by = ["b"]
-    datarange = 350
-    size = 1_000
+    datarange = 35
+    size = 100
     gdf = cudf.DataFrame(
         {
             "a": np.arange(size, dtype="int64"),
             "b": np.random.randint(datarange, size=size),
         }
     )
-    ddf = dgd.from_cudf(gdf, npartitions=35)
-    ddf_new = ddf.repartition(columns=by, max_branch=32)
+    ddf = dgd.from_cudf(gdf, npartitions=5)
+    ddf_new = ddf.repartition(columns=by, max_branch=4)
+
+    # Make sure we are getting a dask_cudf dataframe
+    assert type(ddf_new) == type(ddf)
 
     # Check that the length was preserved
     assert len(ddf_new) == len(ddf)
