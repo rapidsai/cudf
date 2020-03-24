@@ -84,7 +84,7 @@ TEST_F(StringsContainsTests, ContainsTest)
         "[Hh]ello [Ww]orld",
         "\\bworld\\b" };
 
-    std::vector<cudf::experimental::bool8> h_expecteds{ // strings.size x patterns.size
+    std::vector<bool> h_expecteds_std{ // strings.size x patterns.size
         true, false, false, true, false, false, false, true, true, true, true, true, true, true, true, true, true, false, false, false, true, true, false, false, false, false, false, false, false, false, false, false,
         true, true, false, true, false, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, false, false,
         false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, true, true, false, false, false, false, false, false, true, true, true, false, false, false,
@@ -102,12 +102,14 @@ TEST_F(StringsContainsTests, ContainsTest)
         false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, true, false, false, false, false, false, false, false, false, false, false, false, false, false
     };
 
+    thrust::host_vector<bool> h_expecteds(h_expecteds_std);
+
     for( int idx=0; idx < static_cast<int>(patterns.size()); ++idx )
     {
         std::string ptn = patterns[idx];
         auto results = cudf::strings::contains_re(strings_view,ptn);
-        cudf::experimental::bool8* h_expected = h_expecteds.data() + (idx * h_strings.size());
-        cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected( h_expected, h_expected+h_strings.size(),
+        bool* h_expected = h_expecteds.data() + (idx * h_strings.size());
+        cudf::test::fixed_width_column_wrapper<bool> expected( h_expected, h_expected+h_strings.size(),
             thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
         cudf::test::expect_columns_equal(*results,expected);
     }
@@ -124,22 +126,22 @@ TEST_F(StringsContainsTests, MatchesTest)
     auto strings_view = cudf::strings_column_view(strings);
     {
         auto results = cudf::strings::matches_re(strings_view,"lazy");
-        cudf::experimental::bool8 h_expected[] = {false,false,true,false,false,false,false};
-        cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected( h_expected, h_expected+h_strings.size(),
+        bool h_expected[] = {false,false,true,false,false,false,false};
+        cudf::test::fixed_width_column_wrapper<bool> expected( h_expected, h_expected+h_strings.size(),
             thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
         cudf::test::expect_columns_equal(*results,expected);
     }
     {
         auto results = cudf::strings::matches_re(strings_view,"\\d+");
-        cudf::experimental::bool8 h_expected[] = {false,false,false,true,true,false,false};
-        cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected( h_expected, h_expected+h_strings.size(),
+        bool h_expected[] = {false,false,false,true,true,false,false};
+        cudf::test::fixed_width_column_wrapper<bool> expected( h_expected, h_expected+h_strings.size(),
             thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
         cudf::test::expect_columns_equal(*results,expected);
     }
     {
         auto results = cudf::strings::matches_re(strings_view,"@\\w+");
-        cudf::experimental::bool8 h_expected[] = {false,false,false,false,false,false,false};
-        cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected( h_expected, h_expected+h_strings.size(),
+        bool h_expected[] = {false,false,false,false,false,false,false};
+        cudf::test::fixed_width_column_wrapper<bool> expected( h_expected, h_expected+h_strings.size(),
             thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
         cudf::test::expect_columns_equal(*results,expected);
     }
@@ -192,15 +194,15 @@ TEST_F(StringsContainsTests, MediumRegex)
     auto strings_view = cudf::strings_column_view(strings);
     {
         auto results = cudf::strings::contains_re(strings_view, medium_regex);
-        cudf::experimental::bool8 h_expected[] = {true, false, false};
-        cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected( h_expected, h_expected+h_strings.size(),
+        bool h_expected[] = {true, false, false};
+        cudf::test::fixed_width_column_wrapper<bool> expected( h_expected, h_expected+h_strings.size(),
             thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
         cudf::test::expect_columns_equal(*results,expected);
     }
     {
         auto results = cudf::strings::matches_re(strings_view, medium_regex);
-        cudf::experimental::bool8 h_expected[] = {true, false, false};
-        cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected( h_expected, h_expected+h_strings.size(),
+        bool h_expected[] = {true, false, false};
+        cudf::test::fixed_width_column_wrapper<bool> expected( h_expected, h_expected+h_strings.size(),
             thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
         cudf::test::expect_columns_equal(*results,expected);
     }
@@ -229,15 +231,15 @@ TEST_F(StringsContainsTests, LargeRegex)
     auto strings_view = cudf::strings_column_view(strings);
     {
         auto results = cudf::strings::contains_re(strings_view, large_regex);
-        cudf::experimental::bool8 h_expected[] = {true, false, false};
-        cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected( h_expected, h_expected+h_strings.size(),
+        bool h_expected[] = {true, false, false};
+        cudf::test::fixed_width_column_wrapper<bool> expected( h_expected, h_expected+h_strings.size(),
             thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
         cudf::test::expect_columns_equal(*results,expected);
     }
     {
         auto results = cudf::strings::matches_re(strings_view, large_regex);
-        cudf::experimental::bool8 h_expected[] = {true, false, false};
-        cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected( h_expected, h_expected+h_strings.size(),
+        bool h_expected[] = {true, false, false};
+        cudf::test::fixed_width_column_wrapper<bool> expected( h_expected, h_expected+h_strings.size(),
             thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
         cudf::test::expect_columns_equal(*results,expected);
     }

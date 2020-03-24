@@ -37,8 +37,8 @@ TEST_F(StringsConvertTest, ToBooleans)
     auto strings_view = cudf::strings_column_view(strings);
     auto results = cudf::strings::to_booleans(strings_view);
 
-    std::vector<cudf::experimental::bool8> h_expected{ false, false, false, true, false, false };
-    cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected( h_expected.begin(), h_expected.end(),
+    std::vector<bool> h_expected{ false, false, false, true, false, false };
+    cudf::test::fixed_width_column_wrapper<bool> expected( h_expected.begin(), h_expected.end(),
         thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
     cudf::test::expect_columns_equal(*results, expected);
 }
@@ -49,8 +49,8 @@ TEST_F(StringsConvertTest, FromBooleans)
     cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
         thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
 
-    std::vector<cudf::experimental::bool8> h_column{ true, false, false, true, true, false };
-    cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> column( h_column.begin(), h_column.end(),
+    std::vector<bool> h_column{ true, false, false, true, true, false };
+    cudf::test::fixed_width_column_wrapper<bool> column( h_column.begin(), h_column.end(),
         thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
 
     auto results = cudf::strings::from_booleans(column);

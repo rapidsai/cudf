@@ -38,7 +38,7 @@ TEST_P(StringsCharsTypesTest, AllTypes)
         "1.75", "-34", "+9.8", "17¼", "x³", "2³", " 12⅝",
         "1234567890", "de", "\t\r\n\f "};
 
-    cudf::experimental::bool8 expecteds[] = {
+    bool expecteds[] = {
                            0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,   // decimal
                            0,0,0,0,0,0,0,0,0,1,0,1,0,1,0,0,   // numeric
                            0,0,0,0,0,0,0,0,0,0,0,1,0,1,0,0,   // digit
@@ -59,9 +59,9 @@ TEST_P(StringsCharsTypesTest, AllTypes)
     int index = 0;
     int strings_count = static_cast<int>(h_strings.size());
     while( x >>= 1 ) ++index;
-    cudf::experimental::bool8* sub_expected = &expecteds[index * strings_count];
+    bool* sub_expected = &expecteds[index * strings_count];
 
-    cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected( sub_expected, sub_expected + strings_count,
+    cudf::test::fixed_width_column_wrapper<bool> expected( sub_expected, sub_expected + strings_count,
             thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
     cudf::test::expect_columns_equal(*results,expected);
 }
@@ -89,8 +89,8 @@ TEST_F(StringsCharsTest, Alphanumeric)
 
     auto results = cudf::strings::all_characters_of_type(strings_view,cudf::strings::string_character_types::ALPHANUM);
 
-    std::vector<cudf::experimental::bool8> h_expected{ 1,1,0,1,0,0,0,0,0,1,1,1,0,1,1,0 };
-    cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected( h_expected.begin(), h_expected.end(),
+    std::vector<bool> h_expected{ 1,1,0,1,0,0,0,0,0,1,1,1,0,1,1,0 };
+    cudf::test::fixed_width_column_wrapper<bool> expected( h_expected.begin(), h_expected.end(),
             thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
     cudf::test::expect_columns_equal(*results,expected);
 }
@@ -108,8 +108,8 @@ TEST_F(StringsCharsTest, AlphaNumericSpace)
     auto types = cudf::strings::string_character_types::ALPHANUM | cudf::strings::string_character_types::SPACE;
     auto results = cudf::strings::all_characters_of_type(strings_view, (cudf::strings::string_character_types)types);
 
-    std::vector<cudf::experimental::bool8> h_expected{ 1,1,0,1,1,0,0,0,0,1,1,1,1,1,1,1 };
-    cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected( h_expected.begin(), h_expected.end(),
+    std::vector<bool> h_expected{ 1,1,0,1,1,0,0,0,0,1,1,1,1,1,1,1 };
+    cudf::test::fixed_width_column_wrapper<bool> expected( h_expected.begin(), h_expected.end(),
             thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
     cudf::test::expect_columns_equal(*results,expected);
 }
@@ -129,8 +129,8 @@ TEST_F(StringsCharsTest, Numerics)
                  cudf::strings::string_character_types::NUMERIC;
     auto results = cudf::strings::all_characters_of_type(strings_view, (cudf::strings::string_character_types)types);
 
-    std::vector<cudf::experimental::bool8> h_expected{ 0,0,0,0,0,0,0,0,0,1,0,1,0,1,0,0 };
-    cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected( h_expected.begin(), h_expected.end(),
+    std::vector<bool> h_expected{ 0,0,0,0,0,0,0,0,0,1,0,1,0,1,0,0 };
+    cudf::test::fixed_width_column_wrapper<bool> expected( h_expected.begin(), h_expected.end(),
             thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
     cudf::test::expect_columns_equal(*results,expected);
 }
