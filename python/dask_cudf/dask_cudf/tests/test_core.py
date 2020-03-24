@@ -391,6 +391,8 @@ def test_repartition_hash_staged():
             "b": np.random.randint(datarange, size=size),
         }
     )
+    # WARNING: Specific npartitions-max_branch combination
+    # was specifically chosen to cover changes in #4676
     ddf = dgd.from_cudf(gdf, npartitions=17)
     ddf_new = ddf.repartition(columns=by, max_branch=4)
 
