@@ -135,7 +135,7 @@ int32_t reprog::starts_count() const
 class regex_parser
 {
     reprog& m_prog;
-
+    const char32_t* pattern;
     const char32_t* exprp;
     bool lexdone;
 
@@ -444,10 +444,41 @@ class regex_parser
             }
         }
 
+        // handle regex characters
         switch(yy)
         {
         case 0:
             return END;
+        case '(':
+            if (*exprp == '?' && *(exprp + 1) == ':')  // non-capturing group
+            {
+                exprp += 2;
+                return LBRA_NC;
+            }
+            return LBRA;
+        case ')':
+            return RBRA;
+        case '^':
+            return BOL;
+        case '$':
+            return EOL;
+        case '[':
+            return bldcclass();
+        case '.':
+            return dot_type;
+        }
+
+        // the quantifiers require at least one "real" previous item
+        if( m_items.empty() )
+            return CHAR; // throw cudf::logic_error("nothing to repeat at position 0");
+        auto prev_token = m_items.back().t;
+        if( (prev_token != CCLASS) && (prev_token != NCCLASS) &&
+            (prev_token != CHAR) && (prev_token != dot_type) )
+            return CHAR; // throw cudf::logic_error("nothing to repeat at position (exprp-pattern-1)");
+
+        // handle quantifiers
+        switch(yy)
+        {
         case '*':
             if (*exprp == '?')
             {
@@ -515,23 +546,6 @@ class regex_parser
         }
         case '|':
             return OR;
-        case '.':
-            return dot_type;
-        case '(':
-            if (*exprp == '?' && *(exprp + 1) == ':')  // non-capturing group
-            {
-                exprp += 2;
-                return LBRA_NC;
-            }
-            return LBRA;
-        case ')':
-            return RBRA;
-        case '^':
-            return BOL;
-        case '$':
-            return EOL;
-        case '[':
-            return bldcclass();
         }
         return CHAR;
     }
@@ -555,7 +569,7 @@ public:
     bool m_has_counted;
 
     regex_parser(const char32_t* pattern, int dot_type, reprog& prog)
-    : m_prog(prog), exprp(pattern), lexdone(false), m_has_counted(false)
+    : m_prog(prog), pattern(pattern), exprp(pattern), lexdone(false), m_has_counted(false)
     {
         int token = 0;
         while((token = lex(dot_type)) != END)
@@ -1041,8 +1055,10 @@ void reprog::optimize2()
         const reinst& inst = _insts[id];
         if(inst.type == OR)
         {
-            stack.push_back(inst.u2.left_id);
-            stack.push_back(inst.u1.right_id);
+            if( inst.u2.left_id!=id )
+                stack.push_back(inst.u2.left_id);
+            if( inst.u1.right_id!=id )
+                stack.push_back(inst.u1.right_id);
         }
         else
         {
