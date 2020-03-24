@@ -71,8 +71,6 @@ public:
      */
     size_type keys_size() const noexcept;
 
-private:
-    column_view _dictionary;
 };
 
 } // namespace cudf

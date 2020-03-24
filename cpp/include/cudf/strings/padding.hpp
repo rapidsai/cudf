@@ -54,6 +54,7 @@ enum class pad_side {
  *        Default is pad right (left justify).
  * @param fill_char Single UTF-8 character to use for padding.
  *        Default is the space character.
+ * @param mr Resource for allocating device memory.
  * @return New column with padded strings.
  */
 std::unique_ptr<column> pad( strings_column_view const& strings,
@@ -79,6 +80,7 @@ std::unique_ptr<column> pad( strings_column_view const& strings,
  *
  * @param strings Strings instance for this operation.
  * @param width The minimum number of characters for each string.
+ * @param mr Resource for allocating device memory.
  * @return New column of strings.
  */
 std::unique_ptr<column> zfill( strings_column_view const& strings,

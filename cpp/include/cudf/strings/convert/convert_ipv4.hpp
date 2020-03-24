@@ -65,7 +65,7 @@ std::unique_ptr<column> ipv4_to_integers( strings_column_view const& strings,
  *
  * @throw cudf::logic_error if the input column is not INT64 type.
  *
- * @param column Integer (INT64) column to convert.
+ * @param integers Integer (INT64) column to convert.
  * @param mr Resource for allocating device memory.
  * @return New strings column.
  */

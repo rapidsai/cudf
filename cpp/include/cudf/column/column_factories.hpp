@@ -344,13 +344,13 @@ std::unique_ptr<column> make_strings_column(
  * resulting strings column.
  *
  * @param num_strings The number of strings the column represents.
- * @param offsets The column of offset values for this column.
- *                The number of elements is one more than the total number
- *                of strings so the offset[last] - offset[0] is the total
- *                number of bytes in the strings vector.
- * @param chars The column of char bytes for all the strings for this column.
- *              Individual strings are identified by the offsets and the
- * nullmask.
+ * @param offsets_column The column of offset values for this column.
+ *                       The number of elements is one more than the total number
+ *                       of strings so the offset[last] - offset[0] is the total
+ *                       number of bytes in the strings vector.
+ * @param chars_column The column of char bytes for all the strings for this column.
+ *                     Individual strings are identified by the offsets and the
+ *                     nullmask.
  * @param null_count The number of null string entries.
  * @param null_mask The bits specifying the null strings in device memory.
  *                  Arrow format for nulls is used for interpeting this bitmask.
