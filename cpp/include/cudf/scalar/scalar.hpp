@@ -304,9 +304,7 @@ class string_scalar : public scalar {
    * 
    * @param stream The CUDA stream to do the operation in
    */
-  value_type value(cudaStream_t stream = 0) const {
-    return (is_valid(stream) && size()==0) ? value_type{"",0} : value_type{data(), size()};
-  }
+  value_type value(cudaStream_t stream = 0) const { return value_type{data(), size()}; }
   
   /**
    * @brief Returns the size of the string in bytes
