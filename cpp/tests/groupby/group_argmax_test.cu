@@ -163,3 +163,5 @@ TEST_F(groupby_argmax_string_test, zero_valid_values)
 
 } // namespace test
 } // namespace cudf
+
+CUDF_TEST_PROGRAM_MAIN()

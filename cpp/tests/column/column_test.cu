@@ -396,3 +396,5 @@ TYPED_TEST(TypedColumnTest, ColumnViewConstructorWithMask) {
   EXPECT_NE(original_view.head(), copy_view.head());
   EXPECT_NE(original_view.null_mask(), copy_view.null_mask());
 }
+
+CUDF_TEST_PROGRAM_MAIN()
