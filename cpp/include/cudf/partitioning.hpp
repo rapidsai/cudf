@@ -17,7 +17,6 @@
 #pragma once
 
 #include <cudf/types.hpp>
-#include <cudf/table/table.hpp>
 #include <memory>
 #include <vector>
 
