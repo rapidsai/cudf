@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include <cudf/partitioning.hpp>
+#include <cudf/table/table.hpp>
 
 #include <tests/utilities/column_wrapper.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
