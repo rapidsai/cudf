@@ -35,9 +35,9 @@ struct CopyTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_CASE(CopyTest, cudf::test::FixedWidthTypes);
 
-// to keep names shorter
+// to keep names shorter # CHTODO remove wrapper, clean all this up
 #define wrapper cudf::test::fixed_width_column_wrapper
-using bool_wrapper = wrapper<cudf::experimental::bool8>;
+using bool_wrapper = wrapper<bool>;
 
 TYPED_TEST(CopyTest, CopyIfElseTestShort) 
 { 
@@ -130,7 +130,7 @@ std::unique_ptr<cudf::column> tiny_grid_launch(cudf::column_view const& lhs, cud
 {
    auto bool_mask_device_p = cudf::column_device_view::create(boolean_mask);
    cudf::column_device_view bool_mask_device = *bool_mask_device_p;
-   auto filter = [bool_mask_device] __device__ (cudf::size_type i) { return bool_mask_device.element<cudf::experimental::bool8>(i); };
+   auto filter = [bool_mask_device] __device__ (cudf::size_type i) { return bool_mask_device.element<bool>(i); };
    return cudf::experimental::type_dispatcher(lhs.type(),
                                              copy_if_else_tiny_grid_functor{},
                                              lhs,
