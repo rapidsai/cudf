@@ -479,7 +479,7 @@ def test_parquet_writer_return_metadata(tmpdir, simple_gdf):
         gdf_fname.strpath, index=None,
         metadata_file_path="test/data1.parquet"
     )
-    df_metadata_list = [ df_metadata ]
+    df_metadata_list = [df_metadata]
     merged_metadata = merge_parquet_filemetadata(df_metadata_list)
 
     # Verify that we got a valid parquet signature in the final metadata blob
