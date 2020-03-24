@@ -55,11 +55,8 @@ cdef class BufferArrayFromVector:
     def __getbuffer__(self, Py_buffer *buffer, int flags):
         cdef Py_ssize_t itemsize = sizeof(uint8_t)
 
-        self.shape[0] = 1 # ncolumns
-        self.shape[1] = self.length # nrows
-
-        self.strides[1] = 1 # 4 bytes per int
-        self.strides[0] = 1 * self.length # only one row but if there were more, this is the separation
+        self.shape[0] = self.length
+        self.strides[0] = 1
 
         buffer.buf = <uint8_t *>&(dereference(self.in_vec)[0])
 
@@ -67,7 +64,7 @@ cdef class BufferArrayFromVector:
         buffer.internal = NULL                  
         buffer.itemsize = itemsize
         buffer.len = self.length * itemsize   # product(shape) * itemsize
-        buffer.ndim = 2
+        buffer.ndim = 1
         buffer.obj = self
         buffer.readonly = 0
         buffer.shape = self.shape
