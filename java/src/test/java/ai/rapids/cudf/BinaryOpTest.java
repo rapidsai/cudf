@@ -1090,8 +1090,8 @@ public class BinaryOpTest extends CudfTestBase {
     try (ColumnVector dcv1 = ColumnVector.fromBoxedDoubles(DOUBLES_2)) {
       ColumnVector answer = dcv1.log(10);
       ColumnVector expected = ColumnVector.fromBoxedDoubles(Arrays.stream(DOUBLES_2)
-              .map(Math::log10)
-              .toArray(Double[]::new));
+        .map(Math::log10)
+        .toArray(Double[]::new));
       assertColumnsAreEqual(expected, answer, "log10");
     }
   }
@@ -1101,8 +1101,8 @@ public class BinaryOpTest extends CudfTestBase {
     try (ColumnVector dcv1 = ColumnVector.fromBoxedDoubles(DOUBLES_2)) {
       ColumnVector answer = dcv1.log(2);
       ColumnVector expected = ColumnVector.fromBoxedDoubles(Arrays.stream(DOUBLES_2)
-              .map(n -> Math.log(n) / Math.log(2))
-              .toArray(Double[]::new));
+        .map(n -> Math.log(n) / Math.log(2))
+        .toArray(Double[]::new));
       assertColumnsAreEqual(expected, answer, "log2");
     }
   }
