@@ -29,8 +29,6 @@
 
 using namespace cudf::test;
 
-using bool8 = cudf::experimental::bool8;
-
 // =============================================================================
 // ---- test data --------------------------------------------------------------
 
@@ -68,16 +66,16 @@ auto nulls_before() {
     return fixed_width_column_wrapper<T>({ 0, 0 }, { 0, 1 });
 }
 
-// ----- bool8
+// ----- bool
 
 template<>
-auto ascending<bool8>() {
-    return fixed_width_column_wrapper<bool8>({ false, false, true, true });
+auto ascending<bool>() {
+    return fixed_width_column_wrapper<bool>({ false, false, true, true });
 }
 
 template<>
-auto descending<bool8>() {
-    return fixed_width_column_wrapper<bool8>({ true, true, false, false });
+auto descending<bool>() {
+    return fixed_width_column_wrapper<bool>({ true, true, false, false });
 }
 
 // ----- timestamp

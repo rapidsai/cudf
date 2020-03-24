@@ -71,7 +71,7 @@ struct ReductionTest : public cudf::test::BaseFixture
 {
     // Sum/Prod/SumOfSquare never support non arithmetics
     static constexpr bool ret_non_arithmetic =
-        (std::is_arithmetic<T>::value || std::is_same<T, cudf::experimental::bool8>::value)
+        (std::is_arithmetic<T>::value || std::is_same<T, bool>::value)
             ? true : false;
 
     ReductionTest(){}
@@ -228,7 +228,7 @@ TYPED_TEST(ReductionTest, SumOfSquare)
 }
 
 //TODO TYPED_TEST case for AllTypes
-struct ReductionAnyAllTest : public ReductionTest<cudf::experimental::bool8> {
+struct ReductionAnyAllTest : public ReductionTest<bool> {
     ReductionAnyAllTest(){}
     ~ReductionAnyAllTest(){}
 };
@@ -497,7 +497,7 @@ TEST_F(ReductionDtypeTest, different_precision)
          sum_agg, cudf::data_type(cudf::INT16));
 
     // not supported case:
-    // wrapper classes other than cudf::experimental::bool8 are not convertible
+    // wrapper classes other than bool are not convertible
     this->reduction_test<cudf::timestamp_D, cudf::timestamp_s>
         (int_values, static_cast<cudf::timestamp_s>(expected_value), false,
          sum_agg, cudf::data_type(cudf::TIMESTAMP_SECONDS));
@@ -530,7 +530,7 @@ TEST_F(ReductionDtypeTest, different_precision)
 
     std::vector<bool> v = convert_values<bool>(int_values);
 
-    // When summing bool8 values into an non-bool arithmetic type,
+    // When summing bool values into an non-bool arithmetic type,
     // it's an integer/float sum of ones and zeros.
     int expected = std::accumulate(v.begin(), v.end(), int{0});
 

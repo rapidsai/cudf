@@ -45,7 +45,7 @@ TYPED_TEST(groupby_nunique_test, basic)
     fixed_width_column_wrapper<R> expect_bool_vals { 2, 1, 1 };
 
     auto agg = cudf::experimental::make_nunique_aggregation();
-    if(std::is_same<V, cudf::experimental::bool8>())
+    if(std::is_same<V, bool>())
         test_single_agg(keys, vals, expect_keys, expect_bool_vals, std::move(agg));
     else
         test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
@@ -81,7 +81,7 @@ TYPED_TEST(groupby_nunique_test, basic_duplicates)
     fixed_width_column_wrapper<R> expect_bool_vals { 2, 1, 1 };
 
     auto agg = cudf::experimental::make_nunique_aggregation();
-    if(std::is_same<V, cudf::experimental::bool8>())
+    if(std::is_same<V, bool>())
         test_single_agg(keys, vals, expect_keys, expect_bool_vals, std::move(agg));
     else
         test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
@@ -138,7 +138,7 @@ TYPED_TEST(groupby_nunique_test, null_keys_and_values)
 
 
     auto agg = cudf::experimental::make_nunique_aggregation();
-    if(std::is_same<V, cudf::experimental::bool8>())
+    if(std::is_same<V, bool>())
         test_single_agg(keys, vals, expect_keys, expect_bool_vals, std::move(agg));
     else 
         test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
@@ -164,7 +164,7 @@ TYPED_TEST(groupby_nunique_test, null_keys_and_values_with_duplicates)
 
 
     auto agg = cudf::experimental::make_nunique_aggregation();
-    if(std::is_same<V, cudf::experimental::bool8>())
+    if(std::is_same<V, bool>())
         test_single_agg(keys, vals, expect_keys, expect_bool_vals, std::move(agg));
     else 
         test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
@@ -191,7 +191,7 @@ TYPED_TEST(groupby_nunique_test, include_nulls)
 
 
     auto agg = cudf::experimental::make_nunique_aggregation(include_nulls::YES);
-    if(std::is_same<V, cudf::experimental::bool8>())
+    if(std::is_same<V, bool>())
         test_single_agg(keys, vals, expect_keys, expect_bool_vals, std::move(agg));
     else 
         test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));

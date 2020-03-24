@@ -142,14 +142,14 @@ class ScatterToTablesInvalidIndexTypes : public cudf::test::BaseFixture {};
 
 // NOTE string types hit static assert in fixed_width_column_wrapper
 using InvalidIndexTypes = cudf::test::Concat<
-    cudf::test::Types<float, double, cudf::experimental::bool8>,
+    cudf::test::Types<float, double, bool>,
     cudf::test::TimestampTypes>;
 TYPED_TEST_CASE(ScatterToTablesInvalidIndexTypes, InvalidIndexTypes);
 
 TYPED_TEST(ScatterToTablesInvalidIndexTypes, InvalidPartitionMap)
 {
-  auto integers = std::vector<int16_t>({1, 2, 3, 4, 5, 6});
-  auto partition_map = std::vector<TypeParam>({3, 1, 1, 4, 1, 3});
+  auto integers      = std::vector<int16_t>({1, 2, 3, 4, 5, 6});
+  auto partition_map = cudf::test::make_type_param_vector<TypeParam>({3, 1, 1, 4, 1, 3});
 
   // Assemble input table
   auto integers_in = fixed_width_column_wrapper<int16_t>(integers.begin(), integers.end());
