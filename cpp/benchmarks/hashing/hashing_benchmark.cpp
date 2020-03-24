@@ -13,7 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/hashing.hpp>
+#include <cudf/partitioning.hpp>
+#include <cudf/table/table.hpp>
 
 #include <tests/utilities/column_wrapper.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
@@ -50,7 +51,7 @@ void BM_hash_partition(benchmark::State& state) {
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
-    auto output = cudf::hash_partition(input, columns_to_hash, num_partitions);
+    auto output = cudf::experimental::hash_partition(input, columns_to_hash, num_partitions);
   }
 }
 

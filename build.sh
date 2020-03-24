@@ -18,8 +18,8 @@ ARGS=$*
 # script, and that this script resides in the repo dir!
 REPODIR=$(cd $(dirname $0); pwd)
 
-VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf custreamz benchmarks external  --external-lib-dir -v -g -n --allgpuarch --disable_nvtx -h"
-HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [custreamz] [benchmarks] [external] [--external-lib-dir] [--disable_nvtx] [-v] [-g] [-n] [-h]
+VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf custreamz benchmarks external  --external-lib-dir -v -g -n -l --allgpuarch --disable_nvtx -h"
+HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [custreamz] [benchmarks] [external] [--external-lib-dir] [--disable_nvtx] [-v] [-g] [-n] [-h] [-l]
    clean                - remove all existing build artifacts and configuration (start
                         over)
    libnvstrings         - build the nvstrings C++ code only
@@ -34,6 +34,7 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [custreamz] [benchmarks] [external
    -v                   - verbose build mode
    -g                   - build for debug
    -n                   - no install step
+   -l                   - build legacy tests
    --disable_nvtx       - disable inserting NVTX profiling ranges
    --allgpuarch         - build for all supported GPU architectures
    -h                   - print this text
@@ -58,7 +59,8 @@ BENCHMARKS=OFF
 BUILD_EXTERNAL_DATASOURCES=OFF
 BUILD_ALL_GPU_ARCH=0
 BUILD_NVTX=ON
-BUILD_TESTS="OFF"
+BUILD_TESTS=OFF
+BUILD_LEGACY_TESTS=OFF
 
 # Set defaults for vars that may not have been defined externally
 #  FIXME: if INSTALL_PREFIX is not set, check PREFIX, then check
@@ -100,6 +102,9 @@ if hasArg -n; then
     INSTALL_TARGET=""
     LIBCUDF_BUILD_DIR=${LIB_BUILD_DIR}
     LIBNVSTRINGS_BUILD_DIR=${LIB_BUILD_DIR}
+fi
+if hasArg -l; then
+    BUILD_LEGACY_TESTS=ON
 fi
 if hasArg --allgpuarch; then
     BUILD_ALL_GPU_ARCH=1
@@ -155,6 +160,7 @@ if buildAll || hasArg libnvstrings || hasArg libcudf; then
           -DBUILD_EXTERNAL_DATASOURCES=${BUILD_EXTERNAL_DATASOURCES} \
           -DUSE_NVTX=${BUILD_NVTX} \
           -DBUILD_BENCHMARKS=${BENCHMARKS} \
+          -DBUILD_LEGACY_TESTS=${BUILD_LEGACY_TESTS} \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ..
 fi
 

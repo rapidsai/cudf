@@ -56,6 +56,14 @@ def numeric_normalize_types(*args):
     return [a.astype(dtype) for a in args]
 
 
+def is_numerical_dtype(obj):
+    return not is_categorical_dtype(obj) and (
+        np.issubdtype(obj, np.bool_)
+        or np.issubdtype(obj, np.floating)
+        or np.issubdtype(obj, np.signedinteger)
+    )
+
+
 def is_string_dtype(obj):
     return pd.api.types.is_string_dtype(obj) and not is_categorical_dtype(obj)
 
@@ -142,6 +150,8 @@ def to_cudf_compatible_scalar(val, dtype=None):
     """
     if val is None:
         return val
+
+    dtype = "str" if is_string_dtype(dtype) else dtype
 
     if not is_scalar(val):
         raise ValueError(
