@@ -84,6 +84,7 @@
 - PR #4456 Add argmin/max and string min/max to sort groupby
 - PR #4564 Added Java bindings for clamp operator.
 - PR #4602 Add Cython bindings for functions in `datetime.hpp`
+- PR #4670 Add java and JNI bindings for contains_re
 
 ## Improvements
 
