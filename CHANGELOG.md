@@ -86,6 +86,7 @@
 
 ## Improvements
 
+- PR #4641 Add replace example in dataframe.py and update 10min.ipynb
 - PR #4140 Add cudf series examples and corr() method for dataframe in dataframe.py
 - PR #4187 exposed getNativeView method in Java bindings
 - PR #3525 build.sh option to disable nvtx
