@@ -56,7 +56,7 @@ def _nonempty_series(s, idx=None):
         idx = _nonempty_index(s.index)
     dtype = s.dtype
     if is_categorical_dtype(dtype):
-        categories = ['a', 'b']
+        categories = ["a", "b"]
         codes = [0, 0]
         ordered = s._column.ordered
         data = column.build_categorical_column(
