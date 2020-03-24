@@ -304,7 +304,7 @@ TEST_F(BinaryOperationIntegrationTest,
 }
 
 TEST_F(BinaryOperationIntegrationTest, Logical_Or_Vector_Vector_B8_SI16_SI64) {
-  using TypeOut = cudf::experimental::bool8;
+  using TypeOut = bool;
   using TypeLhs = int16_t;
   using TypeRhs = int64_t;
 
@@ -320,7 +320,7 @@ TEST_F(BinaryOperationIntegrationTest, Logical_Or_Vector_Vector_B8_SI16_SI64) {
 }
 
 TEST_F(BinaryOperationIntegrationTest, Less_Scalar_Vector_B8_TSS_TSS) {
-  using TypeOut = cudf::experimental::bool8;
+  using TypeOut = bool;
   using TypeLhs = cudf::timestamp_s;
   using TypeRhs = cudf::timestamp_s;
 
@@ -336,7 +336,7 @@ TEST_F(BinaryOperationIntegrationTest, Less_Scalar_Vector_B8_TSS_TSS) {
 }
 
 TEST_F(BinaryOperationIntegrationTest, Greater_Scalar_Vector_B8_TSMS_TSS) {
-  using TypeOut = cudf::experimental::bool8;
+  using TypeOut = bool;
   using TypeLhs = cudf::timestamp_ms;
   using TypeRhs = cudf::timestamp_s;
 
@@ -352,7 +352,7 @@ TEST_F(BinaryOperationIntegrationTest, Greater_Scalar_Vector_B8_TSMS_TSS) {
 }
 
 TEST_F(BinaryOperationIntegrationTest, Less_Vector_Vector_B8_TSS_TSS) {
-  using TypeOut = cudf::experimental::bool8;
+  using TypeOut = bool;
   using TypeLhs = cudf::timestamp_s;
   using TypeRhs = cudf::timestamp_s;
 
@@ -368,7 +368,7 @@ TEST_F(BinaryOperationIntegrationTest, Less_Vector_Vector_B8_TSS_TSS) {
 }
 
 TEST_F(BinaryOperationIntegrationTest, Greater_Vector_Vector_B8_TSMS_TSS) {
-  using TypeOut = cudf::experimental::bool8;
+  using TypeOut = bool;
   using TypeLhs = cudf::timestamp_ms;
   using TypeRhs = cudf::timestamp_s;
 
@@ -389,7 +389,7 @@ TEST_F(BinaryOperationIntegrationTest, Greater_Vector_Vector_B8_TSMS_TSS) {
 }
 
 TEST_F(BinaryOperationIntegrationTest, Less_Scalar_Vector_B8_STR_STR) {
-  using TypeOut = cudf::experimental::bool8;
+  using TypeOut = bool;
   using TypeLhs = std::string;
   using TypeRhs = std::string;
 
@@ -405,7 +405,7 @@ TEST_F(BinaryOperationIntegrationTest, Less_Scalar_Vector_B8_STR_STR) {
 }
 
 TEST_F(BinaryOperationIntegrationTest, Less_Vector_Scalar_B8_STR_STR) {
-  using TypeOut = cudf::experimental::bool8;
+  using TypeOut = bool;
   using TypeLhs = std::string;
   using TypeRhs = std::string;
 
@@ -421,7 +421,7 @@ TEST_F(BinaryOperationIntegrationTest, Less_Vector_Scalar_B8_STR_STR) {
 }
 
 TEST_F(BinaryOperationIntegrationTest, Less_Vector_Vector_B8_STR_STR) {
-  using TypeOut = cudf::experimental::bool8;
+  using TypeOut = bool;
   using TypeLhs = std::string;
   using TypeRhs = std::string;
 
@@ -437,7 +437,7 @@ TEST_F(BinaryOperationIntegrationTest, Less_Vector_Vector_B8_STR_STR) {
 }
 
 TEST_F(BinaryOperationIntegrationTest, Greater_Vector_Vector_B8_STR_STR) {
-  using TypeOut = cudf::experimental::bool8;
+  using TypeOut = bool;
   using TypeLhs = std::string;
   using TypeRhs = std::string;
 
@@ -453,7 +453,7 @@ TEST_F(BinaryOperationIntegrationTest, Greater_Vector_Vector_B8_STR_STR) {
 }
 
 TEST_F(BinaryOperationIntegrationTest, Equal_Vector_Vector_B8_STR_STR) {
-  using TypeOut = cudf::experimental::bool8;
+  using TypeOut = bool;
   using TypeLhs = std::string;
   using TypeRhs = std::string;
 
@@ -469,7 +469,7 @@ TEST_F(BinaryOperationIntegrationTest, Equal_Vector_Vector_B8_STR_STR) {
 }
 
 TEST_F(BinaryOperationIntegrationTest, Equal_Vector_Scalar_B8_STR_STR) {
-  using TypeOut = cudf::experimental::bool8;
+  using TypeOut = bool;
   using TypeLhs = std::string;
   using TypeRhs = std::string;
 
@@ -485,7 +485,7 @@ TEST_F(BinaryOperationIntegrationTest, Equal_Vector_Scalar_B8_STR_STR) {
 }
 
 TEST_F(BinaryOperationIntegrationTest, LessEqual_Vector_Vector_B8_STR_STR) {
-  using TypeOut = cudf::experimental::bool8;
+  using TypeOut = bool;
   using TypeLhs = std::string;
   using TypeRhs = std::string;
 
@@ -501,7 +501,7 @@ TEST_F(BinaryOperationIntegrationTest, LessEqual_Vector_Vector_B8_STR_STR) {
 }
 
 TEST_F(BinaryOperationIntegrationTest, GreaterEqual_Vector_Vector_B8_STR_STR) {
-  using TypeOut = cudf::experimental::bool8;
+  using TypeOut = bool;
   using TypeLhs = std::string;
   using TypeRhs = std::string;
 
