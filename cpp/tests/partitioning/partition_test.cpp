@@ -62,7 +62,7 @@ TYPED_TEST(PartitionTest, MapInputSizeMismatch) {
   using value_type = cudf::test::GetType<TypeParam, 0>;
   using map_type = cudf::test::GetType<TypeParam, 1>;
 
-  fixed_width_column_wrapper<value_type> input{1, 2, 3};
+  fixed_width_column_wrapper<value_type, int32_t> input{1, 2, 3};
   fixed_width_column_wrapper<map_type> map{1, 2};
 
   EXPECT_THROW(cudf::experimental::partition(cudf::table_view{{input}}, map, 3),
@@ -73,7 +73,7 @@ TYPED_TEST(PartitionTest, MapWithNullsThrows) {
   using value_type = cudf::test::GetType<TypeParam, 0>;
   using map_type = cudf::test::GetType<TypeParam, 1>;
 
-  fixed_width_column_wrapper<value_type> input{1, 2, 3};
+  fixed_width_column_wrapper<value_type, int32_t> input{1, 2, 3};
   fixed_width_column_wrapper<map_type> map{{1, 2}, {1, 0}};
 
   EXPECT_THROW(cudf::experimental::partition(cudf::table_view{{input}}, map, 3),
@@ -129,7 +129,7 @@ TYPED_TEST(PartitionTest, Identity) {
   using value_type = cudf::test::GetType<TypeParam, 0>;
   using map_type = cudf::test::GetType<TypeParam, 1>;
 
-  fixed_width_column_wrapper<value_type> first{0, 1, 2, 3, 4, 5};
+  fixed_width_column_wrapper<value_type, int32_t> first{0, 1, 2, 3, 4, 5};
   strings_column_wrapper strings{"this", "is", "a", "column", "of", "strings"};
   auto table_to_partition = cudf::table_view{{first, strings}};
 
@@ -145,7 +145,7 @@ TYPED_TEST(PartitionTest, Reverse) {
   using value_type = cudf::test::GetType<TypeParam, 0>;
   using map_type = cudf::test::GetType<TypeParam, 1>;
 
-  fixed_width_column_wrapper<value_type> first{0, 1, 3, 7, 5, 13};
+  fixed_width_column_wrapper<value_type, int32_t> first{0, 1, 3, 7, 5, 13};
   strings_column_wrapper strings{"this", "is", "a", "column", "of", "strings"};
   auto table_to_partition = cudf::table_view{{first, strings}};
 
@@ -153,7 +153,7 @@ TYPED_TEST(PartitionTest, Reverse) {
 
   std::vector<cudf::size_type> expected_offsets{0, 1, 2, 3, 4, 5, 6};
 
-  fixed_width_column_wrapper<value_type> expected_first{13, 5, 7, 3, 1, 0};
+  fixed_width_column_wrapper<value_type, int32_t> expected_first{13, 5, 7, 3, 1, 0};
   strings_column_wrapper expected_strings{"strings", "of", "column",
                                           "a",       "is", "this"};
   auto expected_partitioned_table =
@@ -167,7 +167,7 @@ TYPED_TEST(PartitionTest, SinglePartition) {
   using value_type = cudf::test::GetType<TypeParam, 0>;
   using map_type = cudf::test::GetType<TypeParam, 1>;
 
-  fixed_width_column_wrapper<value_type> first{0, 1, 3, 7, 5, 13};
+  fixed_width_column_wrapper<value_type, int32_t> first{0, 1, 3, 7, 5, 13};
   strings_column_wrapper strings{"this", "is", "a", "column", "of", "strings"};
   auto table_to_partition = cudf::table_view{{first, strings}};
 
@@ -175,7 +175,7 @@ TYPED_TEST(PartitionTest, SinglePartition) {
 
   std::vector<cudf::size_type> expected_offsets{0, 6};
 
-  fixed_width_column_wrapper<value_type> expected_first{13, 5, 7, 3, 1, 0};
+  fixed_width_column_wrapper<value_type, int32_t> expected_first{13, 5, 7, 3, 1, 0};
   strings_column_wrapper expected_strings{"strings", "of", "column",
                                           "a",       "is", "this"};
   auto expected_partitioned_table =
@@ -189,7 +189,7 @@ TYPED_TEST(PartitionTest, EmptyPartitions) {
   using value_type = cudf::test::GetType<TypeParam, 0>;
   using map_type = cudf::test::GetType<TypeParam, 1>;
 
-  fixed_width_column_wrapper<value_type> first{0, 1, 3, 7, 5, 13};
+  fixed_width_column_wrapper<value_type, int32_t> first{0, 1, 3, 7, 5, 13};
   strings_column_wrapper strings{"this", "is", "a", "column", "of", "strings"};
   auto table_to_partition = cudf::table_view{{first, strings}};
 
@@ -197,7 +197,7 @@ TYPED_TEST(PartitionTest, EmptyPartitions) {
 
   std::vector<cudf::size_type> expected_offsets{0, 2, 2, 4, 4, 6};
 
-  fixed_width_column_wrapper<value_type> expected_first{3, 7, 0, 1, 5, 13};
+  fixed_width_column_wrapper<value_type, int32_t> expected_first{3, 7, 0, 1, 5, 13};
   strings_column_wrapper expected_strings{"a",  "column", "this",
                                           "is", "of",     "strings"};
   auto expected_partitioned_table =
