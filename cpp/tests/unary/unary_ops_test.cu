@@ -71,15 +71,15 @@ TYPED_TEST_CASE(cudf_logical_test, cudf::test::NumericTypes);
 TYPED_TEST(cudf_logical_test, LogicalNot) {
   cudf::size_type colSize = 1000;
   std::vector<TypeParam> h_input_v(colSize, false);
-  std::vector<cudf::experimental::bool8> h_expect_v(colSize);
+  std::vector<bool> h_expect_v(colSize);
 
   std::transform(
       std::cbegin(h_input_v), std::cend(h_input_v), std::begin(h_expect_v),
-      [](TypeParam e) -> cudf::bool8 { return static_cast<cudf::bool8>(!e); });
+      [](TypeParam e) -> bool { return static_cast<bool>(!e); });
 
   cudf::test::fixed_width_column_wrapper<TypeParam> input(
       std::cbegin(h_input_v), std::cend(h_input_v));
-  cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected(
+  cudf::test::fixed_width_column_wrapper<bool> expected(
       std::cbegin(h_expect_v), std::cend(h_expect_v));
 
   auto output = cudf::experimental::unary_operation(
@@ -91,7 +91,7 @@ TYPED_TEST(cudf_logical_test, LogicalNot) {
 TYPED_TEST(cudf_logical_test, SimpleLogicalNot) {
   cudf::test::fixed_width_column_wrapper<TypeParam> input{
       {true, true, true, true}};
-  cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected{
+  cudf::test::fixed_width_column_wrapper<bool> expected{
       {false, false, false, false}};
   auto output = cudf::experimental::unary_operation(
       input, cudf::experimental::unary_op::NOT);
@@ -102,7 +102,7 @@ TYPED_TEST(cudf_logical_test, SimpleLogicalNotWithNullMask) {
   // CHTODO
   cudf::test::fixed_width_column_wrapper<TypeParam> input{
       {true, true, true, true}, {1, 0, 1, 1}};
-  cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected{
+  cudf::test::fixed_width_column_wrapper<bool> expected{
       {false, true, false, false}, {1, 0, 1, 1}};
   auto output = cudf::experimental::unary_operation(
       input, cudf::experimental::unary_op::NOT);
@@ -111,7 +111,7 @@ TYPED_TEST(cudf_logical_test, SimpleLogicalNotWithNullMask) {
 
 TYPED_TEST(cudf_logical_test, EmptyLogicalNot) {
   cudf::test::fixed_width_column_wrapper<TypeParam> input{};
-  cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected{};
+  cudf::test::fixed_width_column_wrapper<bool> expected{};
   auto output = cudf::experimental::unary_operation(
       input, cudf::experimental::unary_op::NOT);
   cudf::test::expect_columns_equal(expected, output->view());
@@ -811,7 +811,7 @@ TYPED_TEST(IsNAN, AllValid) {
   using T = TypeParam;
 
   cudf::test::fixed_width_column_wrapper<T> col {{1, 2, NAN, 4, NAN, 6, 7}};
-  cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected = {false, false, true, false, true, false, false};
+  cudf::test::fixed_width_column_wrapper<bool> expected = {false, false, true, false, true, false, false};
 
   std::unique_ptr<cudf::column> got = cudf::experimental::is_nan(col);
 
@@ -823,7 +823,7 @@ TYPED_TEST(IsNAN, WithNull) {
 
   // The last NAN is null
   cudf::test::fixed_width_column_wrapper<T> col {{1, 2, NAN, 4, NAN, 6, 7}, {1, 0, 1, 1, 0, 1, 1}};
-  cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected = {false, false, true, false, false, false, false};
+  cudf::test::fixed_width_column_wrapper<bool> expected = {false, false, true, false, false, false, false};
 
   std::unique_ptr<cudf::column> got = cudf::experimental::is_nan(col);
 
@@ -834,7 +834,7 @@ TYPED_TEST(IsNAN, EmptyColumn) {
   using T = TypeParam;
 
   cudf::test::fixed_width_column_wrapper<T> col {};
-  cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected = {};
+  cudf::test::fixed_width_column_wrapper<bool> expected = {};
 
   std::unique_ptr<cudf::column> got = cudf::experimental::is_nan(col);
 
@@ -858,7 +858,7 @@ TYPED_TEST(IsNotNAN, AllValid) {
   using T = TypeParam;
 
   cudf::test::fixed_width_column_wrapper<T> col {{1, 2, NAN, 4, NAN, 6, 7}};
-  cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected = {true, true, false, true, false, true, true};
+  cudf::test::fixed_width_column_wrapper<bool> expected = {true, true, false, true, false, true, true};
 
   std::unique_ptr<cudf::column> got = cudf::experimental::is_not_nan(col);
 
@@ -870,7 +870,7 @@ TYPED_TEST(IsNotNAN, WithNull) {
 
   // The last NAN is null
   cudf::test::fixed_width_column_wrapper<T> col {{1, 2, NAN, 4, NAN, 6, 7}, {1, 0, 1, 1, 0, 1, 1}};
-  cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected = {true, true, false, true, true, true, true};
+  cudf::test::fixed_width_column_wrapper<bool> expected = {true, true, false, true, true, true, true};
 
   std::unique_ptr<cudf::column> got = cudf::experimental::is_not_nan(col);
 
@@ -881,7 +881,7 @@ TYPED_TEST(IsNotNAN, EmptyColumn) {
   using T = TypeParam;
 
   cudf::test::fixed_width_column_wrapper<T> col {};
-  cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected = {};
+  cudf::test::fixed_width_column_wrapper<bool> expected = {};
 
   std::unique_ptr<cudf::column> got = cudf::experimental::is_not_nan(col);
 
