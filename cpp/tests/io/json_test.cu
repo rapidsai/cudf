@@ -36,14 +36,14 @@
 #include <type_traits>
 
 #define wrapper cudf::test::fixed_width_column_wrapper
-using float_wrapper = wrapper<float>;
-using float64_wrapper = wrapper<double>;
-using int_wrapper = wrapper<int>;
-using int8_wrapper = wrapper<int8_t>;
-using int16_wrapper = wrapper<int16_t>;
-using int64_wrapper = wrapper<int64_t>;
+using float_wrapper        = wrapper<float>;
+using float64_wrapper      = wrapper<double>;
+using int_wrapper          = wrapper<int>;
+using int8_wrapper         = wrapper<int8_t>;
+using int16_wrapper        = wrapper<int16_t>;
+using int64_wrapper        = wrapper<int64_t>;
 using timestamp_ms_wrapper = wrapper<cudf::timestamp_ms>;
-using bool_wrapper = wrapper<cudf::experimental::bool8>;
+using bool_wrapper         = wrapper<bool>;
 
 namespace cudf_io = cudf::experimental::io;
 
