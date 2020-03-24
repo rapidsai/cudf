@@ -14,10 +14,11 @@
 * limitations under the License.
 */
 
+#include <cudf/utilities/error.hpp>
 #include <strings/regex/regcomp.h>
 
 #include <string.h>
-
+#include <map>
 
 namespace cudf
 {
@@ -52,6 +53,10 @@ static reclass ccls_s(2);  // all spaces or ctrl characters
 static reclass ccls_S(16); // not ccls_s
 static reclass ccls_d(4);  // digits [0-9]
 static reclass ccls_D(32); // not ccls_d plus '\n'
+
+// Tables for analyzing quantifiers
+std::set<int> valid_preceding_inst_types( {CHAR, CCLASS, NCCLASS, ANY, ANYNL} );
+std::set<char> quantifiers( {'*','?','+','{','|'} );
 
 } // namespace
 
@@ -468,13 +473,21 @@ class regex_parser
             return dot_type;
         }
 
+        if( quantifiers.find(static_cast<char>(yy)) == quantifiers.end() )
+            return CHAR;
+
         // the quantifiers require at least one "real" previous item
         if( m_items.empty() )
-            return CHAR; // throw cudf::logic_error("nothing to repeat at position 0");
-        auto prev_token = m_items.back().t;
-        if( (prev_token != CCLASS) && (prev_token != NCCLASS) &&
-            (prev_token != CHAR) && (prev_token != dot_type) )
-            return CHAR; // throw cudf::logic_error("nothing to repeat at position (exprp-pattern-1)");
+            CUDF_FAIL("invalid regex pattern: nothing to repeat at position 0");
+
+        if( valid_preceding_inst_types.find(m_items.back().t)
+            == valid_preceding_inst_types.end() )
+        {
+            std::ostringstream message;
+            message << "invalid regex pattern: ";
+            message << "nothing to repeat at position " << (exprp-pattern-1);
+            throw cudf::logic_error(message.str());
+        }
 
         // handle quantifiers
         switch(yy)
