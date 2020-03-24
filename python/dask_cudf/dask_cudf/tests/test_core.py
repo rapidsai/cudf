@@ -391,7 +391,7 @@ def test_repartition_hash_staged():
             "b": np.random.randint(datarange, size=size),
         }
     )
-    ddf = dgd.from_cudf(gdf, npartitions=5)
+    ddf = dgd.from_cudf(gdf, npartitions=17)
     ddf_new = ddf.repartition(columns=by, max_branch=4)
 
     # Make sure we are getting a dask_cudf dataframe
