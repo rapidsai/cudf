@@ -61,6 +61,8 @@ def test_column_offset_and_size(pandas_input, offset, size):
 
     slicer = slice(offset, size)
     expect = pandas_input.iloc[slicer].reset_index(drop=True)
+    if expect.dtype == np.dtype('O'):
+        expect = expect.astype(pd.StringDtype())
 
     assert_eq(expect, got)
 
