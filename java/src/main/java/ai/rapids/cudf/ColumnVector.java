@@ -906,6 +906,20 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Calculate the log with base 2, output is the same type as input.
+   */
+  public ColumnVector log2() {
+    return binaryOp(BinaryOp.LOG_BASE, Scalar.fromInt(2), getType());
+  }
+
+  /**
+   * Calculate the log with base 10, output is the same type as input.
+   */
+  public ColumnVector log10() {
+    return binaryOp(BinaryOp.LOG_BASE, Scalar.fromInt(10), getType());
+  }
+
+  /**
    * Calculate the sqrt, output is the same type as input.
    */
   public ColumnVector sqrt() {
