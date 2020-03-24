@@ -32,6 +32,7 @@
 - PR #4617 Fix memory leak in aggregation object destructor
 - PR #4633 String concatenation fix in `DataFrame.rename`
 - PR #4609 Fix to handle `Series.factorize` when index is set
+- PR #4651 Fix hashing benchmark missing includes
 
 
 # cuDF 0.13.0 (Date TBD)
