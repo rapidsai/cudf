@@ -3776,7 +3776,7 @@ class DataFrame(Frame):
         """{docstring}"""
         import cudf.io.parquet as pq
 
-        pq.to_parquet(self, path, *args, **kwargs)
+        return pq.to_parquet(self, path, *args, **kwargs)
 
     @ioutils.doc_to_feather()
     def to_feather(self, path, *args, **kwargs):
