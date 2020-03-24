@@ -353,7 +353,7 @@ TYPED_TEST(MergeTest_, Merge1KeyColumns) {
     auto seq_out1 = cudf::test::make_counting_transform_iterator(0, [outputRows](auto row) {
         if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8)
           {
-            cudf::experimental::bool8 ret = (row >= outputRows / 2); 
+            bool ret = (row >= outputRows / 2);
             return static_cast<TypeParam>(ret);
           }
         else
@@ -386,7 +386,7 @@ TYPED_TEST(MergeTest_, Merge2KeyColumns) {
     auto sequence1 = cudf::test::make_counting_transform_iterator(0, [inputRows](auto row) {
         if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8)
           {
-            cudf::experimental::bool8 ret = (row >= inputRows / 2); 
+            bool ret = (row >= inputRows / 2);
             return static_cast<TypeParam>(ret);
           }
         else
@@ -397,7 +397,7 @@ TYPED_TEST(MergeTest_, Merge2KeyColumns) {
     auto sequence2 = cudf::test::make_counting_transform_iterator(0, [inputRows](auto row) {
         if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8)
           {
-            cudf::experimental::bool8 ret = ((row / (inputRows / 4)) % 2 == 0); 
+            bool ret = ((row / (inputRows / 4)) % 2 == 0);
             return static_cast<TypeParam>(ret);
           }
         else
@@ -414,7 +414,7 @@ TYPED_TEST(MergeTest_, Merge2KeyColumns) {
     auto sequence3 = cudf::test::make_counting_transform_iterator(0, [inputRows](auto row) {
         if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8)
           {
-            cudf::experimental::bool8 ret = ((row / (inputRows / 4)) % 2 == 0); 
+            bool ret = ((row / (inputRows / 4)) % 2 == 0);
             return static_cast<TypeParam>(ret);
           }
         else
@@ -442,7 +442,7 @@ TYPED_TEST(MergeTest_, Merge2KeyColumns) {
     auto seq_out1 = cudf::test::make_counting_transform_iterator(0, [outputRows](auto row) {
         if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8)
           {
-            cudf::experimental::bool8 ret = (row >= outputRows / 2); 
+            bool ret = (row >= outputRows / 2);
             return static_cast<TypeParam>(ret);
           }
         else
@@ -453,7 +453,7 @@ TYPED_TEST(MergeTest_, Merge2KeyColumns) {
     auto seq_out2 = cudf::test::make_counting_transform_iterator(0, [outputRows](auto row) {
         if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8)
           {
-            cudf::experimental::bool8 ret = ((row / (outputRows / 4)) % 2 == 0); 
+            bool ret = ((row / (outputRows / 4)) % 2 == 0);
             return static_cast<TypeParam>(ret);
           }
         else
@@ -483,7 +483,7 @@ TYPED_TEST(MergeTest_, Merge1KeyNullColumns) {
     auto sequence1 = cudf::test::make_counting_transform_iterator(0, [inputRows](auto row) {
         if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8)
           {
-            cudf::experimental::bool8 ret = 0; 
+            bool ret = 0;
             return static_cast<TypeParam>(ret); // <- no shortcut to this can avoid compiler errors
           }
         else
@@ -502,7 +502,7 @@ TYPED_TEST(MergeTest_, Merge1KeyNullColumns) {
     auto sequence2 = cudf::test::make_counting_transform_iterator(0, [inputRows](auto row) {
         if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8)
           {
-            cudf::experimental::bool8 ret = 1; 
+            bool ret = 1;
             return static_cast<TypeParam>(ret);
           }
         else
@@ -546,7 +546,7 @@ TYPED_TEST(MergeTest_, Merge1KeyNullColumns) {
     auto seq_out1 = cudf::test::make_counting_transform_iterator(0, [outputRows, column1TotalNulls](auto row) {
         if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8)
           {
-            cudf::experimental::bool8 ret = (row >= (outputRows - column1TotalNulls) / 2); 
+            bool ret = (row >= (outputRows - column1TotalNulls) / 2);
             return static_cast<TypeParam>(ret);
           }
         else
@@ -572,7 +572,7 @@ TYPED_TEST(MergeTest_, Merge2KeyNullColumns) {
     auto sequence1 = cudf::test::make_counting_transform_iterator(0, [inputRows](auto row) {
         if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8)
           {
-            cudf::experimental::bool8 ret = (row >= inputRows / 2); 
+            bool ret = (row >= inputRows / 2);
             return static_cast<TypeParam>(ret);
           }
         else
@@ -587,7 +587,7 @@ TYPED_TEST(MergeTest_, Merge2KeyNullColumns) {
     auto sequence2 = cudf::test::make_counting_transform_iterator(0, [inputRows](auto row) {
         if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8)
           {
-            cudf::experimental::bool8 ret = ((row / (inputRows / 4)) % 2 == 0); 
+            bool ret = ((row / (inputRows / 4)) % 2 == 0);
             return static_cast<TypeParam>(ret);
           }
         else
@@ -607,7 +607,7 @@ TYPED_TEST(MergeTest_, Merge2KeyNullColumns) {
     auto sequence3 = cudf::test::make_counting_transform_iterator(0, [inputRows](auto row) {
         if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8)
           {
-            cudf::experimental::bool8 ret = ((row / (inputRows / 4)) % 2 == 0); 
+            bool ret = ((row / (inputRows / 4)) % 2 == 0);
             return static_cast<TypeParam>(ret);
           }
         else
@@ -639,7 +639,7 @@ TYPED_TEST(MergeTest_, Merge2KeyNullColumns) {
     auto seq_out1 = cudf::test::make_counting_transform_iterator(0, [outputRows](auto row) {
         if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8)
           {
-            cudf::experimental::bool8 ret = (row >= outputRows / 2); 
+            bool ret = (row >= outputRows / 2);
             return static_cast<TypeParam>(ret);
           }
         else
@@ -651,7 +651,7 @@ TYPED_TEST(MergeTest_, Merge2KeyNullColumns) {
     auto seq_out2 = cudf::test::make_counting_transform_iterator(0, [outputRows](auto row) {
         if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8)
           {
-            cudf::experimental::bool8 ret = ((row / (outputRows / 8)) % 2 == 0); 
+            bool ret = ((row / (outputRows / 8)) % 2 == 0);
             return static_cast<TypeParam>(ret);
           }
         else
