@@ -439,8 +439,8 @@ public interface BinaryOperable {
   /**
    * Calculate the log with the specified base, output is the same type as input.
    */
-  default ColumnVector log(double base) {
-    return binaryOp(BinaryOp.LOG_BASE, Scalar.fromDouble(base), getType());
+  default ColumnVector log(Scalar base) {
+    return binaryOp(BinaryOp.LOG_BASE, base, getType());
   }
 
 }

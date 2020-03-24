@@ -1087,8 +1087,9 @@ public class BinaryOpTest extends CudfTestBase {
 
   @Test
   public void testLogBase10() {
-    try (ColumnVector dcv1 = ColumnVector.fromBoxedDoubles(DOUBLES_2)) {
-      ColumnVector answer = dcv1.log(10);
+    try (ColumnVector dcv1 = ColumnVector.fromBoxedDoubles(DOUBLES_2);
+         Scalar base = Scalar.fromInt(10)) {
+      ColumnVector answer = dcv1.log(base);
       ColumnVector expected = ColumnVector.fromBoxedDoubles(Arrays.stream(DOUBLES_2)
         .map(Math::log10)
         .toArray(Double[]::new));
@@ -1098,8 +1099,9 @@ public class BinaryOpTest extends CudfTestBase {
 
   @Test
   public void testLogBase2() {
-    try (ColumnVector dcv1 = ColumnVector.fromBoxedDoubles(DOUBLES_2)) {
-      ColumnVector answer = dcv1.log(2);
+    try (ColumnVector dcv1 = ColumnVector.fromBoxedDoubles(DOUBLES_2);
+         Scalar base = Scalar.fromInt(2)) {
+      ColumnVector answer = dcv1.log(base);
       ColumnVector expected = ColumnVector.fromBoxedDoubles(Arrays.stream(DOUBLES_2)
         .map(n -> Math.log(n) / Math.log(2))
         .toArray(Double[]::new));
