@@ -122,3 +122,5 @@ TEST_F(StringScalarTest, MoveConstructor) {
   EXPECT_EQ(mask_ptr, s2.validity_data());
   EXPECT_EQ(data_ptr, s2.data());
 }
+
+CUDF_TEST_PROGRAM_MAIN()
