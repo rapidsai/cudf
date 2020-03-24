@@ -43,6 +43,8 @@ namespace cudf
  * d is now {["a","c","d"],[1,0,0,2,2]}
  * ```
  *
+ * The null_mask and null count for the output column are copied from the indices column.
+ *
  * @throw cudf::logic_error if keys_column contains nulls
  * @throw cudf::logic_error if indices_column type is not INT32
  *
@@ -68,8 +70,6 @@ std::unique_ptr<column> make_dictionary_column( column_view const& keys_column,
  * `keys_column[i+1]` for all `i in [0,n-1)` where `n` is the number of keys.
  *
  * The indices values must be in the range [0,keys_column.size()).
- *
- * The null_mask and null count for the output column are copied from the indices column.
  *
  * @throw cudf::logic_error if keys_column or indices_column contains nulls
  * @throw cudf::logic_error if indices_column type is not INT32
