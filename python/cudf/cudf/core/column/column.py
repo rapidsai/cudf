@@ -1047,7 +1047,11 @@ def build_categorical_column(
     ordered : bool
         Indicates whether the categories are ordered
     """
+    if len(categories) == 0 and len(codes):
+        raise ValueError("Cannot have nonempty codes for empty categories")
+
     dtype = CategoricalDtype(categories=as_column(categories), ordered=ordered)
+
     return build_column(
         data=None,
         dtype=dtype,
