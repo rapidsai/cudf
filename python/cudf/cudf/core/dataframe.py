@@ -29,13 +29,13 @@ from cudf.core import column
 from cudf.core._sort import get_sorted_inds
 from cudf.core.column import (
     CategoricalColumn,
-    ColumnBase,
     StringColumn,
     as_column,
     column_empty,
 )
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
+from cudf.core.groupby.groupby import DataFrameGroupBy
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
 from cudf.core.series import Series
@@ -184,6 +184,13 @@ class DataFrame(Frame):
             self.columns = data.columns
             return
 
+        if isinstance(data, pd.DataFrame):
+            data = self.from_pandas(data)
+            self._data = data._data
+            self._index = data._index
+            self.columns = data.columns
+            return
+
         if data is None:
             if index is None:
                 self._index = RangeIndex(0)
@@ -256,7 +263,8 @@ class DataFrame(Frame):
                 if is_scalar(data[col_name]):
                     num_rows = num_rows or 1
                 else:
-                    num_rows = len(column.as_column(data[col_name]))
+                    data[col_name] = column.as_column(data[col_name])
+                    num_rows = len(data[col_name])
             self._index = RangeIndex(0, num_rows)
         else:
             self._index = as_index(index)
@@ -267,11 +275,10 @@ class DataFrame(Frame):
         self.columns = columns
 
     @classmethod
-    def _from_table(cls, table):
-        if table._index is None:
-            index = None
-        else:
-            index = Index._from_table(table._index)
+    def _from_table(cls, table, index=None):
+        if index is None:
+            if table._index is not None:
+                index = Index._from_table(table._index)
         return cls(data=table._data, index=index)
 
     @staticmethod
@@ -513,10 +520,12 @@ class DataFrame(Frame):
                 for col_name in self._data:
                     scatter_map = arg[col_name]
                     if is_scalar(value):
-                        value = utils.scalar_broadcast_to(value, len(self))
-                    self._data[col_name][scatter_map] = column.as_column(
-                        value
-                    )[scatter_map]
+                        self._data[col_name][scatter_map] = value
+                    else:
+
+                        self._data[col_name][scatter_map] = column.as_column(
+                            value
+                        )[scatter_map]
         elif is_scalar(arg) or isinstance(arg, tuple):
             if isinstance(value, DataFrame):
                 _setitem_with_dataframe(
@@ -527,8 +536,6 @@ class DataFrame(Frame):
                 )
             else:
                 if arg in self._data:
-                    if is_scalar(value):
-                        value = utils.scalar_broadcast_to(value, len(self))
                     if len(self) == 0:
                         if isinstance(value, (pd.Series, Series)):
                             self._index = as_index(value.index)
@@ -545,12 +552,18 @@ class DataFrame(Frame):
                                     masked=True,
                                     newsize=len(value),
                                 )
+
                         self._data = new_data
+                        return
                     elif isinstance(value, (pd.Series, Series)):
                         value = Series(value)._align_to_index(
                             self._index, how="right", allow_non_unique=True
                         )
-                    self._data[arg] = column.as_column(value)
+                    if is_scalar(value):
+                        self._data[arg][:] = value
+                    else:
+                        value = as_column(value)
+                        self._data[arg] = value
                 else:
                     # disc. with pandas here
                     # pandas raises key error here
@@ -563,12 +576,9 @@ class DataFrame(Frame):
             if isinstance(mask, list):
                 mask = np.array(mask)
 
-            if is_scalar(value):
-                value = column.as_column(
-                    utils.scalar_broadcast_to(value, len(self))
-                )
-
             if mask.dtype == "bool":
+                mask = column.as_column(arg)
+
                 if isinstance(value, DataFrame):
                     _setitem_with_dataframe(
                         input_df=self,
@@ -577,10 +587,10 @@ class DataFrame(Frame):
                         mask=mask,
                     )
                 else:
+                    if not is_scalar(value):
+                        value = column.as_column(value)[mask]
                     for col_name in self._data:
-                        self._data[col_name][mask] = column.as_column(value)[
-                            mask
-                        ]
+                        self._data[col_name][mask] = value
             else:
                 if isinstance(value, DataFrame):
                     _setitem_with_dataframe(
@@ -590,11 +600,17 @@ class DataFrame(Frame):
                         mask=None,
                     )
                 else:
+                    if not is_scalar(value):
+                        value = column.as_column(value)
                     for col in arg:
                         # we will raise a key error if col not in dataframe
                         # this behavior will make it
                         # consistent to pandas >0.21.0
-                        self._data[col] = column.as_column(value)
+                        if not is_scalar(value):
+                            self._data[col] = value
+                        else:
+                            self._data[col][:] = value
+
         else:
             msg = "__setitem__ on type {!r} is not supported"
             raise TypeError(msg.format(type(arg)))
@@ -1308,10 +1324,13 @@ class DataFrame(Frame):
                 f"Length mismatch: expected {len(self.columns)} elements ,"
                 f"got {len(columns)} elements"
             )
+
+        data = dict(zip(columns, self._data.columns))
+        if len(columns) != len(data):
+            raise ValueError("Duplicate column names are not allowed")
+
         self._data = ColumnAccessor(
-            dict(zip(columns, self._data.columns)),
-            multiindex=is_multiindex,
-            level_names=columns.names,
+            data, multiindex=is_multiindex, level_names=columns.names,
         )
 
     def _rename_columns(self, new_names):
@@ -1851,50 +1870,6 @@ class DataFrame(Frame):
             df[col] = df[col].nans_to_nulls()
         return df
 
-    @classmethod
-    def _concat(cls, objs, axis=0, ignore_index=False):
-
-        libcudf.nvtx.nvtx_range_push("CUDF_CONCAT", "orange")
-
-        if ignore_index:
-            index = RangeIndex(sum(map(len, objs)))
-        elif isinstance(objs[0].index, cudf.core.multiindex.MultiIndex):
-            index = cudf.core.multiindex.MultiIndex._concat(
-                [o.index for o in objs]
-            )
-        else:
-            index = Index._concat([o.index for o in objs])
-
-        # Currently we only support sort = False
-        # Change below when we want to support sort = True
-        # below functions as an ordered set
-        all_columns_ls = [col for o in objs for col in o.columns]
-        unique_columns_ordered_ls = OrderedDict.fromkeys(all_columns_ls).keys()
-
-        # Concatenate cudf.series for all columns
-
-        data = {
-            i: ColumnBase._concat(
-                [
-                    o[c]._column
-                    if c in o.columns
-                    else column_empty(len(o), dtype=np.bool, masked=True)
-                    for o in objs
-                ]
-            )
-            for i, c in enumerate(unique_columns_ordered_ls)
-        }
-
-        out = cls(data, index=index)
-
-        if isinstance(objs[0].columns, pd.MultiIndex):
-            out.columns = objs[0].columns
-        else:
-            out.columns = unique_columns_ordered_ls
-
-        libcudf.nvtx.nvtx_range_pop()
-        return out
-
     def as_gpu_matrix(self, columns=None, order="F"):
         """Convert to a matrix in device memory.
 
@@ -2137,8 +2112,7 @@ class DataFrame(Frame):
             [column] = columns
         else:
             column = columns
-        if not (0 <= n <= len(self)):
-            raise ValueError("n out-of-bound")
+
         col = self[column].reset_index(drop=True)
         # Operate
         sorted_series = getattr(col, method)(n=n, keep=keep)
@@ -2295,7 +2269,7 @@ class DataFrame(Frame):
         4    3    13.0
         2    4    14.0    12.0
         """
-        libcudf.nvtx.nvtx_range_push("CUDF_JOIN", "blue")
+        libcudfxx.nvtx.range_push("CUDF_JOIN", "blue")
         if indicator:
             raise NotImplementedError(
                 "Only indicator=False is currently supported"
@@ -2336,7 +2310,7 @@ class DataFrame(Frame):
             how,
             method,
         )
-
+        libcudfxx.nvtx.range_pop()
         return gdf_result
 
     def join(
@@ -2375,7 +2349,7 @@ class DataFrame(Frame):
         - *on* is not supported yet due to lack of multi-index support.
         """
 
-        libcudf.nvtx.nvtx_range_push("CUDF_JOIN", "blue")
+        libcudfxx.nvtx.range_push("CUDF_JOIN", "blue")
 
         # Outer joins still use the old implementation
         if type != "":
@@ -2510,48 +2484,20 @@ class DataFrame(Frame):
             df.index.names = index_frame_l.columns
             for new_key, old_key in zip(index_frame_l.columns, idx_col_names):
                 df.index._data[new_key] = df.index._data.pop(old_key)
-
+        libcudfxx.nvtx.range_pop()
         return df
 
+    @copy_docstring(DataFrameGroupBy)
     def groupby(
         self,
         by=None,
         sort=True,
         as_index=True,
-        method="hash",
         level=None,
-        group_keys=True,
         dropna=True,
+        method=None,
+        group_keys=True,
     ):
-        """Groupby
-
-        Parameters
-        ----------
-        by : list-of-str or str
-            Column name(s) to form that groups by.
-        sort : bool, default True
-            Force sorting group keys.
-        as_index : bool, default True
-            Indicates whether the grouped by columns become the index
-            of the returned DataFrame
-        method : str, optional
-            A string indicating the method to use to perform the group by.
-            Valid values are "hash" or "cudf".
-            "cudf" method may be deprecated in the future, but is currently
-            the only method supporting group UDFs via the `apply` function.
-        dropna : bool, optional
-            If True (default), drop null keys.
-            If False, perform grouping by keys containing null(s).
-
-        Returns
-        -------
-        The groupby object
-
-        Notes
-        -----
-        No empty rows are returned.  (For categorical keys, pandas returns
-        rows for all categories even if they are no corresponding values.)
-        """
         if group_keys is not True:
             raise NotImplementedError(
                 "The group_keys keyword is not yet implemented"
@@ -2560,34 +2506,15 @@ class DataFrame(Frame):
             raise TypeError(
                 "groupby() requires either by or level to be" "specified."
             )
-        if method == "cudf":
-            from cudf.core.groupby.legacy_groupby import Groupby
 
-            if as_index:
-                warnings.warn(
-                    "as_index==True not supported due to the lack of "
-                    "multi-index with legacy groupby function. Use hash "
-                    "method for multi-index"
-                )
-            result = Groupby(self, by=by)
-            return result
-        else:
-            from cudf.core.groupby.groupby import DataFrameGroupBy
-
-            # The corresponding pop() is in
-            # DataFrameGroupBy._apply_aggregation()
-            libcudf.nvtx.nvtx_range_push("CUDF_GROUPBY", "purple")
-
-            result = DataFrameGroupBy(
-                self,
-                by=by,
-                method=method,
-                as_index=as_index,
-                sort=sort,
-                level=level,
-                dropna=dropna,
+        if method is not None:
+            warnings.warn(
+                "The 'method' argument is deprecated and will be unused",
+                DeprecationWarning,
             )
-            return result
+        return DataFrameGroupBy(
+            self, by=by, level=level, as_index=as_index, dropna=dropna
+        )
 
     @copy_docstring(Rolling)
     def rolling(
@@ -2674,7 +2601,7 @@ class DataFrame(Frame):
                 )
             )
 
-        libcudf.nvtx.nvtx_range_push("CUDF_QUERY", "purple")
+        libcudfxx.nvtx.range_push("CUDF_QUERY", "purple")
         # Get calling environment
         callframe = inspect.currentframe().f_back
         callenv = {
@@ -2691,7 +2618,7 @@ class DataFrame(Frame):
             newseries = self[col][selected]
             newdf[col] = newseries
         result = newdf
-        libcudf.nvtx.nvtx_range_pop()
+        libcudfxx.nvtx.range_pop()
         return result
 
     @applyutils.doc_apply()
@@ -2862,7 +2789,11 @@ class DataFrame(Frame):
         -------
         partitioned: list of DataFrame
         """
-        idx = 0 if self._index is None else self._index._num_columns
+        idx = (
+            0
+            if (self._index is None or keep_index is False)
+            else self._index._num_columns
+        )
         key_indices = [self._data.names.index(k) + idx for k in columns]
         outdf, offsets = self._hash_partition(key_indices, nparts, keep_index)
         # Slice into partition
@@ -2903,6 +2834,22 @@ class DataFrame(Frame):
         -------
         result : DataFrame
             DataFrame after replacement.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> gdf = cudf.DataFrame()
+        >>> gdf['id']= [0, 1, 2, -1, 4, -1, 6]
+        >>> gdf['id']= gdf['id'].replace(-1, None)
+        >>> gdf
+             id
+        0     0
+        1     1
+        2     2
+        3  null
+        4     4
+        5  null
+        6     6
         """
         outdf = self.copy()
 

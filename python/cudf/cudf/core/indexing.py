@@ -276,7 +276,10 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         # Iloc Step 2:
         # Gather the rows specified by the first tuple arg
         if isinstance(columns_df.index, MultiIndex):
-            df = columns_df.index._get_row_major(columns_df, arg[0])
+            if isinstance(arg[0], slice):
+                df = columns_df[arg[0]]
+            else:
+                df = columns_df.index._get_row_major(columns_df, arg[0])
             if (len(df) == 1 and len(columns_df) >= 1) and not (
                 isinstance(arg[0], slice) or isinstance(arg[1], slice)
             ):
@@ -297,13 +300,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         # Iloc Step 3:
         # Reindex
         if df.shape[0] == 1:  # we have a single row without an index
-            if isinstance(arg[0], slice):
-                start = arg[0].start
-                if start is None:
-                    start = 0
-                df.index = as_index(self._df.index[start])
-            else:
-                df.index = as_index(self._df.index[arg[0]])
+            df.index = as_index(self._df.index[arg[0]])
 
         # Iloc Step 4:
         # Downcast
@@ -313,7 +310,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         if df.shape[0] == 0 and df.shape[1] == 0 and isinstance(arg[0], slice):
             from cudf.core.index import RangeIndex
 
-            slice_len = arg[0].stop or len(self._df)
+            slice_len = len(self._df)
             start, stop, step = arg[0].indices(slice_len)
             df._index = RangeIndex(start, stop)
         return df

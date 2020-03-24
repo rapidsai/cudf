@@ -253,6 +253,10 @@ def test_dataframe_basic():
     df_tup[(1, "foobar")] = data
     np.testing.assert_equal(data, df_tup[(1, "foobar")].to_array())
 
+    df = DataFrame(pd.DataFrame({"a": [1, 2, 3], "c": ["a", "b", "c"]}))
+    pdf = pd.DataFrame(pd.DataFrame({"a": [1, 2, 3], "c": ["a", "b", "c"]}))
+    assert_eq(df, pdf)
+
 
 def test_dataframe_drop_method():
     df = DataFrame()
@@ -834,6 +838,28 @@ def test_dataframe_hash_partition_masked_keys(nrows):
             expected_value = row.val - 100 if valid else -1
             got_value = row.key
             assert expected_value == got_value
+
+
+@pytest.mark.parametrize("keep_index", [True, False])
+def test_dataframe_hash_partition_keep_index(keep_index):
+
+    gdf = DataFrame(
+        {"val": [1, 2, 3, 4], "key": [3, 2, 1, 4]}, index=[4, 3, 2, 1]
+    )
+
+    expected_df1 = DataFrame(
+        {"val": [1], "key": [3]}, index=[4] if keep_index else None
+    )
+    expected_df2 = DataFrame(
+        {"val": [2, 3, 4], "key": [2, 1, 4]},
+        index=[3, 2, 1] if keep_index else range(1, 4),
+    )
+    expected = [expected_df1, expected_df2]
+
+    parts = gdf.partition_by_hash(["key"], nparts=2, keep_index=keep_index)
+
+    for exp, got in zip(expected, parts):
+        assert_eq(exp, got)
 
 
 @pytest.mark.parametrize("dtype1", utils.supported_numpy_dtypes)
