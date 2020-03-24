@@ -12,8 +12,8 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.tests.utils import assert_eq
 from cudf.io.parquet import merge_parquet_filemetadata
+from cudf.tests.utils import assert_eq
 
 
 @pytest.fixture(scope="module")
@@ -476,14 +476,13 @@ def test_parquet_writer_return_metadata(tmpdir, simple_gdf):
 
     # Write out the gdf using the GPU accelerated writer
     df_metadata = simple_gdf.to_parquet(
-        gdf_fname.strpath, index=None,
-        metadata_file_path="test/data1.parquet"
+        gdf_fname.strpath, index=None, metadata_file_path="test/data1.parquet"
     )
     df_metadata_list = [df_metadata]
     merged_metadata = merge_parquet_filemetadata(df_metadata_list)
 
     # Verify that we got a valid parquet signature in the final metadata blob
-    assert merged_metadata.tobytes()[0:4] == b'PAR1'
+    assert merged_metadata.tobytes()[0:4] == b"PAR1"
 
 
 # Validates the integrity of the GPU accelerated parquet writer.
