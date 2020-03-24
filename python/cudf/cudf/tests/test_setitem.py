@@ -31,9 +31,9 @@ def test_dataframe_setitem_scaler_bool_inconsistency():
 
 
 @pytest.mark.parametrize("df", [pd.DataFrame({"a": [1, 2, 3]})])
-@pytest.mark.parametrize("arg", [["a"], "a"])
+@pytest.mark.parametrize("arg", [["a"], "a", "b"])
 @pytest.mark.parametrize("value", [-10, pd.DataFrame({"a": [-1, -2, -3]})])
-def test_dataframe_setitem_existing_columns(df, arg, value):
+def test_dataframe_setitem_columns(df, arg, value):
     gdf = DataFrame.from_pandas(df)
     cudf_replace_value = value
 
@@ -43,6 +43,23 @@ def test_dataframe_setitem_existing_columns(df, arg, value):
     df[arg] = value
     gdf[arg] = cudf_replace_value
     assert_eq(df, gdf, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    ("df", "arg", "value", "expected"),
+    [
+        (DataFrame(), ["a", "b"], 0, DataFrame({"a": [], "b": []})),
+        (
+            DataFrame({"a": [1, 2, 3]}),
+            ["b"],
+            9,
+            DataFrame({"a": [1, 2, 3], "b": [9, 9, 9]}),
+        ),
+    ],
+)
+def test_dataframe_setitem_non_existing_columns(df, arg, value, expected):
+    df[arg] = value
+    assert_eq(expected, df, check_dtype=False)
 
 
 @pytest.mark.parametrize("df", [pd.DataFrame({"a": [1, 2, 3]})])
