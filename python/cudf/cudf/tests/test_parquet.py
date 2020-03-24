@@ -483,7 +483,7 @@ def test_parquet_writer_return_metadata(tmpdir, simple_gdf):
     merged_metadata = merge_parquet_filemetadata(df_metadata_list)
 
     # Verify that we got a valid parquet signature in the final metadata blob
-    assert merged_metadata[0:4] == ['P','A','R','1']
+    assert merged_metadata.tobytes()[0:4] == b'PAR1'
 
 
 # Validates the integrity of the GPU accelerated parquet writer.
