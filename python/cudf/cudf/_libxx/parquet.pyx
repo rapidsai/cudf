@@ -318,4 +318,3 @@ cpdef merge_filemetadata(filemetadata_list):
     out_metadata_py = BufferArrayFromVector()
     out_metadata_py.set_ptr(move(output_c))
     return np.asarray(out_metadata_py)
-
