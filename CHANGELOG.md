@@ -1,31 +1,31 @@
 # cuDF 0.14.0 (Date TBD)
 
 ## New Features
-- PR #4472 Add new `partition` API to replace `scatter_to_tables`.
 
+- PR #4472 Add new `partition` API to replace `scatter_to_tables`.
 - PR #4626 LogBase binops
 
 ## Improvements
-- PR #4471 Consolidate partitioning functionality into a single header.
-- PR #4486 Remove explicit template parameter from detail::scatter.
-- PR #4531 Add doc note on conda channel_priority
+
+- PR #4531 Add doc note on conda `channel_priority`
 - PR #4479 Adding cuda 10.2 support via conda environment file addition
 - PR #4486 Remove explicit template parameter from detail::scatter.
 - PR #4471 Consolidate partitioning functionality into a single header.
 - PR #4498 Adds in support for chunked writers to java
 - PR #4073 Enable contiguous split java test
-- PR #4527 Add JNI and java bindings for matches_re
+- PR #4527 Add JNI and java bindings for `matches_re`
 - PR #4599 Add Java and JNI bindings for string replace
+- PR #4655 Raise error for list like dtypes in cudf
 - PR #4548 Remove string_view is_null method
 - PR #4645 Add Alias for `kurtosis` as `kurt`
 
 ## Bug Fixes
 
 - PR #4386 Update Java package to 0.14
-- PR #4402 Fix cudf::strings::join_strings logic with all-null strings and null narep
+- PR #4402 Fix `cudf::strings::join_strings` logic with all-null strings and null narep
 - PR #4610 Fix validity bug in string scalar factory
 - PR #4570 Fixing loc ordering issue in dataframe
-- PR #4614 Fix cuda-memcheck errors found in column_tests.cu and copying/utility_tests.cu
+- PR #4614 Fix cuda-memcheck errors found in `column_tests.cu` and `copying/utility_tests.cu`
 - PR #4639 Fix java column of empty strings issue
 - PR #4613 Fix issue related to downcasting in `.loc`
 - PR #4615 Fix potential OOB write in ORC writer compression stage
