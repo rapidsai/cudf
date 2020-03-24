@@ -17,6 +17,7 @@
 - PR #4527 Add JNI and java bindings for matches_re
 - PR #4599 Add Java and JNI bindings for string replace
 - PR #4645 Add Alias for `kurtosis` as `kurt`
+- PR #4668 Add Java bindings for log2/log10 unary ops and log_base binary op
 
 ## Bug Fixes
 
