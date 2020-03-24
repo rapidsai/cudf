@@ -25,7 +25,7 @@
 #include <cudf/legacy/table.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <io/utilities/datasource.hpp>
-#include <io/utilities/wrapper_utils.hpp>
+#include <io/utilities/legacy/wrapper_utils.hpp>
 #include <rmm/thrust_rmm_allocator.h>
 
 namespace cudf {
