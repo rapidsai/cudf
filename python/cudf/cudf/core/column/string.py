@@ -2160,7 +2160,8 @@ class StringColumn(column.ColumnBase):
                 .astype(bool)
             )
             pd_series[~mask_bytes] = pd.NA
-        pd_series.index = index
+        if index is not None:
+            pd_series.index = index
         return pd_series
 
     def to_array(self, fillna=None):
