@@ -69,6 +69,35 @@ using character_cases_table_type = uint16_t;
 const character_cases_table_type* get_character_cases_table();
 
 
+/**
+ * @brief Returns pointer to device memory that contains the special
+ * case mapping table. On first call, this will copy the table into
+ * device memory and is guaranteed to be thread-safe.
+ *
+ * This table is used to handle special case character mappings that
+ * don't trivially work with the normal character cases table.
+ *
+ * @return Device memory pointer to the special case mapping table
+ */
+const struct special_case_mapping* get_special_case_mapping_table();
+
+// Type for the character special case hash indices
+using character_special_case_hash_indices_table_type = uint16_t;
+
+/**
+ * @brief Returns pointer to device memory that contains special case
+ * hash indexing table. On first call, this will copy the table into
+ * device memory and is guaranteed to be thread-safe.
+ *
+ * This table is a 'perfect' hash table that allows us to map a codepoint
+ * directly to the special case mapping rules for it using a single %
+ * operation without worrying about collisions.
+ * 
+ * @return Device memory pointer to the special case hash indexing table
+ */
+const character_special_case_hash_indices_table_type* get_special_case_hash_indices_table(); 
+
+
 } // namespace detail
 } // namespace strings
 } // namespace cudf

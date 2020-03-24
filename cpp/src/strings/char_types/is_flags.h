@@ -18,11 +18,13 @@
 //
 // 8-bit flag for each code-point.
 //
-#define IS_DECIMAL(x)  ((x) & (1 << 0))
-#define IS_NUMERIC(x)  ((x) & (1 << 1))
-#define IS_DIGIT(x)    ((x) & (1 << 2))
-#define IS_ALPHA(x)    ((x) & (1 << 3))
-#define IS_SPACE(x)    ((x) & (1 << 4))
-#define IS_UPPER(x)    ((x) & (1 << 5))
-#define IS_LOWER(x)    ((x) & (1 << 6))
-#define IS_ALPHANUM(x) ((x) & (0x0F))
+#define IS_DECIMAL(x)         ((x) & (1 << 0))
+#define IS_NUMERIC(x)         ((x) & (1 << 1))
+#define IS_DIGIT(x)           ((x) & (1 << 2))
+#define IS_ALPHA(x)           ((x) & (1 << 3))
+#define IS_SPACE(x)           ((x) & (1 << 4))
+#define IS_UPPER(x)           ((x) & (1 << 5))
+#define IS_LOWER(x)           ((x) & (1 << 6))
+#define IS_SPECIAL(x)         ((x) & (1 << 7))
+#define IS_ALPHANUM(x)        ((x) & (0x0F))
+#define IS_UPPER_OR_LOWER(x)  ((x) & ((1 << 5) | (1 << 6)))
