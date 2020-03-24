@@ -2834,6 +2834,22 @@ class DataFrame(Frame):
         -------
         result : DataFrame
             DataFrame after replacement.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> gdf = cudf.DataFrame()
+        >>> gdf['id']= [0, 1, 2, -1, 4, -1, 6]
+        >>> gdf['id']= gdf['id'].replace(-1, None)
+        >>> gdf
+             id
+        0     0
+        1     1
+        2     2
+        3  null
+        4     4
+        5  null
+        6     6
         """
         outdf = self.copy()
 
