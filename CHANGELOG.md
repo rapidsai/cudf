@@ -16,6 +16,7 @@
 - PR #4073 Enable contiguous split java test
 - PR #4527 Add JNI and java bindings for matches_re
 - PR #4599 Add Java and JNI bindings for string replace
+- PR #4548 Remove string_view is_null method
 - PR #4645 Add Alias for `kurtosis` as `kurt`
 
 ## Bug Fixes
@@ -31,6 +32,7 @@
 - PR #4617 Fix memory leak in aggregation object destructor
 - PR #4633 String concatenation fix in `DataFrame.rename`
 - PR #4609 Fix to handle `Series.factorize` when index is set
+- PR #4651 Fix hashing benchmark missing includes
 
 
 # cuDF 0.13.0 (Date TBD)
@@ -85,6 +87,7 @@
 
 ## Improvements
 
+- PR #4641 Add replace example in dataframe.py and update 10min.ipynb
 - PR #4140 Add cudf series examples and corr() method for dataframe in dataframe.py
 - PR #4187 exposed getNativeView method in Java bindings
 - PR #3525 build.sh option to disable nvtx
@@ -328,6 +331,7 @@
 - PR #4632 Fix handling of empty inputs to concatenate
 - PR #4630 Remove dangling reference to RMM exec policy in drop duplicates tests.
 - PR #4625 Fix hash-based repartition bug in dask_cudf
+- PR #4662 Fix to handle `keep_index` in `partition_by_hash`
 
 
 # cuDF 0.12.0 (04 Feb 2020)
