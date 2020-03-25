@@ -49,6 +49,7 @@
 
 ## Improvements
 
+- PR #4641 Add replace example in dataframe.py and update 10min.ipynb
 - PR #4140 Add cudf series examples and corr() method for dataframe in dataframe.py
 - PR #4187 exposed getNativeView method in Java bindings
 - PR #3525 build.sh option to disable nvtx
@@ -293,6 +294,7 @@
 - PR #4625 Fix hash-based repartition bug in dask_cudf
 - PR #4662 Fix to handle `keep_index` in `partition_by_hash`
 - PR #4683 Fix Slicing issue with categorical column in DataFrame
+- PR #4676 Fix bug in `_shuffle_group` for repartition
 
 
 # cuDF 0.12.0 (04 Feb 2020)
