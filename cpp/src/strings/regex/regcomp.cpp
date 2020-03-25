@@ -476,7 +476,12 @@ class regex_parser
         if( quantifiers.find(static_cast<char>(yy)) == quantifiers.end() )
             return CHAR;
 
-        // the quantifiers require at least one "real" previous item
+        // The quantifiers require at least one "real" previous item.
+        // We are throwing an error in these two if checks for invalid quantifiers.
+        // Another option is to just return CHAR silently here which effectively
+        // treats the yy character as a literal instead as a quantifier.
+        // This could lead to confusion where sometimes unescaped special characters
+        // are treated as regex expressions and sometimes they are not.
         if( m_items.empty() )
             CUDF_FAIL("invalid regex pattern: nothing to repeat at position 0");
 
@@ -1068,9 +1073,9 @@ void reprog::optimize2()
         const reinst& inst = _insts[id];
         if(inst.type == OR)
         {
-            if( inst.u2.left_id!=id )
+            if( inst.u2.left_id!=id ) // prevents infinite while-loop here
                 stack.push_back(inst.u2.left_id);
-            if( inst.u1.right_id!=id )
+            if( inst.u1.right_id!=id ) // prevents infinite while-loop here
                 stack.push_back(inst.u1.right_id);
         }
         else
