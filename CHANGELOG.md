@@ -18,6 +18,7 @@
 - PR #4655 Raise error for list like dtypes in cudf
 - PR #4548 Remove string_view is_null method
 - PR #4645 Add Alias for `kurtosis` as `kurt`
+- PR #4668 Add Java bindings for log2/log10 unary ops and log_base binary op
 - PR #4616 Enable different RMM allocation modes in unit tests
 
 ## Bug Fixes
