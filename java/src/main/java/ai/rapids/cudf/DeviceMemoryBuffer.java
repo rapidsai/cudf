@@ -88,7 +88,7 @@ public class DeviceMemoryBuffer extends BaseDeviceMemoryBuffer {
     super(address, lengthInBytes, new DeviceBufferCleaner(address));
   }
 
-  private DeviceMemoryBuffer(long address, long lengthInBytes, BaseDeviceMemoryBuffer parent) {
+  private DeviceMemoryBuffer(long address, long lengthInBytes, DeviceMemoryBuffer parent) {
     super(address, lengthInBytes, parent);
   }
 
