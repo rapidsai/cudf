@@ -29,7 +29,6 @@ from cudf.core import column
 from cudf.core._sort import get_sorted_inds
 from cudf.core.column import (
     CategoricalColumn,
-    ColumnBase,
     StringColumn,
     as_column,
     column_empty,
@@ -180,6 +179,13 @@ class DataFrame(Frame):
             return None
 
         if isinstance(data, DataFrame):
+            self._data = data._data
+            self._index = data._index
+            self.columns = data.columns
+            return
+
+        if isinstance(data, pd.DataFrame):
+            data = self.from_pandas(data)
             self._data = data._data
             self._index = data._index
             self.columns = data.columns
@@ -1823,8 +1829,8 @@ class DataFrame(Frame):
           * Support axis='columns' only.
           * Not supporting: index, level
 
-        Rename will not overwite column names. If a list with duplicates it
-        passed, column names will be postfixed.
+        Rename will not overwite column names. If a list with duplicates is
+        passed, column names will be postfixed with a number.
         """
         # Pandas defaults to using columns over mapper
         if columns:
@@ -1835,11 +1841,12 @@ class DataFrame(Frame):
             postfix = 1
             # It is possible for DataFrames with a MultiIndex columns object
             # to have columns with the same name. The followig use of
-            # _cols.items and ("cudf_"... allows the use of rename in this case
+            # _cols.items and ("_1", "_2"... allows the use of
+            # rename in this case
             for key, col in self._data.items():
                 if key in mapper:
                     if mapper[key] in out.columns:
-                        out_column = mapper[key] + ("cudf_" + str(postfix),)
+                        out_column = mapper[key] + "_" + str(postfix)
                         postfix += 1
                     else:
                         out_column = mapper[key]
@@ -1863,50 +1870,6 @@ class DataFrame(Frame):
         for col in df.columns:
             df[col] = df[col].nans_to_nulls()
         return df
-
-    @classmethod
-    def _concat(cls, objs, axis=0, ignore_index=False):
-
-        libcudfxx.nvtx.range_push("CUDF_CONCAT", "orange")
-
-        if ignore_index:
-            index = RangeIndex(sum(map(len, objs)))
-        elif isinstance(objs[0].index, cudf.core.multiindex.MultiIndex):
-            index = cudf.core.multiindex.MultiIndex._concat(
-                [o.index for o in objs]
-            )
-        else:
-            index = Index._concat([o.index for o in objs])
-
-        # Currently we only support sort = False
-        # Change below when we want to support sort = True
-        # below functions as an ordered set
-        all_columns_ls = [col for o in objs for col in o.columns]
-        unique_columns_ordered_ls = OrderedDict.fromkeys(all_columns_ls).keys()
-
-        # Concatenate cudf.series for all columns
-
-        data = {
-            i: ColumnBase._concat(
-                [
-                    o[c]._column
-                    if c in o.columns
-                    else column_empty(len(o), dtype=np.bool, masked=True)
-                    for o in objs
-                ]
-            )
-            for i, c in enumerate(unique_columns_ordered_ls)
-        }
-
-        out = cls(data, index=index)
-
-        if isinstance(objs[0].columns, pd.MultiIndex):
-            out.columns = objs[0].columns
-        else:
-            out.columns = unique_columns_ordered_ls
-
-        libcudfxx.nvtx.range_pop()
-        return out
 
     def as_gpu_matrix(self, columns=None, order="F"):
         """Convert to a matrix in device memory.
@@ -2827,7 +2790,11 @@ class DataFrame(Frame):
         -------
         partitioned: list of DataFrame
         """
-        idx = 0 if self._index is None else self._index._num_columns
+        idx = (
+            0
+            if (self._index is None or keep_index is False)
+            else self._index._num_columns
+        )
         key_indices = [self._data.names.index(k) + idx for k in columns]
         outdf, offsets = self._hash_partition(key_indices, nparts, keep_index)
         # Slice into partition
@@ -2868,6 +2835,22 @@ class DataFrame(Frame):
         -------
         result : DataFrame
             DataFrame after replacement.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> gdf = cudf.DataFrame()
+        >>> gdf['id']= [0, 1, 2, -1, 4, -1, 6]
+        >>> gdf['id']= gdf['id'].replace(-1, None)
+        >>> gdf
+             id
+        0     0
+        1     1
+        2     2
+        3  null
+        4     4
+        5  null
+        6     6
         """
         outdf = self.copy()
 
@@ -3623,7 +3606,11 @@ class DataFrame(Frame):
             "var", axis=axis, ddof=ddof, **kwargs
         )
 
-    def kurtosis(self, axis=None, skipna=None, level=None, numeric_only=None):
+    def kurtosis(
+        self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
+    ):
+        """Calculates Fisher's unbiased kurtosis of a sample.
+        """
         if numeric_only not in (None, True):
             msg = "Kurtosis only supports int, float, and bool dtypes."
             raise TypeError(msg)
@@ -3635,7 +3622,11 @@ class DataFrame(Frame):
             skipna=skipna,
             level=level,
             numeric_only=numeric_only,
+            **kwargs,
         )
+
+    # Alias for kurtosis.
+    kurt = kurtosis
 
     def skew(self, axis=None, skipna=None, level=None, numeric_only=None):
         if numeric_only not in (None, True):

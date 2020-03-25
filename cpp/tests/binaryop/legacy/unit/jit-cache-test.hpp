@@ -18,16 +18,20 @@
 
 #include <boost/filesystem.hpp>
 
+#include <gmock/gmock.h>
+#include <gtest/gtest.h>
 #include <tests/utilities/legacy/column_wrapper.cuh>
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/cudf_gtest.hpp>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/cudf_test_utils.cuh>
+#include <cudf/types.hpp>
+#include <cudf/utilities/legacy/wrapper_types.hpp>
 
 #include <jit/cache.h>
 #include <cudf/cudf.h>
 #include <ftw.h>
 
 
-struct JitCacheTest : public cudf::test::BaseFixture
+struct JitCacheTest : public GdfTest
                     , public cudf::jit::cudfJitCache {
     JitCacheTest() : grid(1), block(1) {
     }

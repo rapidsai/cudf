@@ -224,6 +224,11 @@ public final class HostColumnVector implements AutoCloseable {
         if (type == DType.STRING) {
           // This needs a different type
           dataLen = getEndStringOffset(rows - 1);
+          if (dataLen == 0 && getNullCount() == 0) {
+            // This is a work around to an issue where a column of all empty strings must have at
+            // least one byte or it will not be interpreted correctly.
+            dataLen = 1;
+          }
         }
         data = DeviceMemoryBuffer.allocate(dataLen);
         data.copyFromHostBuffer(hdata, 0, dataLen);

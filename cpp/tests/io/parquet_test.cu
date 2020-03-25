@@ -26,6 +26,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/concatenate.hpp>
 
 #include <fstream>
 #include <type_traits>
@@ -943,3 +944,5 @@ TEST_F(ParquetWriterStressTest, DeviceWriteLargeTableWithValids)
   auto custom_tbl = cudf_io::read_parquet(custom_args);
   expect_tables_equal(custom_tbl.tbl->view(), expected->view()); 
 }
+
+CUDF_TEST_PROGRAM_MAIN()

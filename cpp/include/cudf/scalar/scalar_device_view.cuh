@@ -158,10 +158,7 @@ class string_scalar_device_view
   /**
    * @brief Returns string_view of the value of this scalar.
    */
-  __device__ string_view value() const noexcept {
-    return (is_valid() && _size==0) ? string_view{"",0} :
-              string_view(this->data(), _size);
-  }
+  __device__ ValueType value() const noexcept { return ValueType{this->data(), _size}; }
 
   /**
    * @brief Returns a raw pointer to the value in device memory
@@ -169,6 +166,11 @@ class string_scalar_device_view
   __device__ char const* data() const noexcept {
     return static_cast<char const*>(_data);
   }
+
+  /**
+   * @brief Returns the size of the string in bytes.
+   */
+  __device__ size_type size() const noexcept { return _size; }
 
  private:
   const char* _data{};  ///< Pointer to device memory containing the value
