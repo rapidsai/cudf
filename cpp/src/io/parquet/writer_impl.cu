@@ -781,13 +781,18 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::write_chunked_end(pq_chunked
 
   // Optionally output raw file metadata with the specified column chunk file path
   if (return_filemetadata) {
+    file_header_s fhdr = {PARQUET_MAGIC};
     buffer_.resize(0);
+    buffer_.insert(buffer_.end(), reinterpret_cast<const uint8_t *>(&fhdr),
+                                  reinterpret_cast<const uint8_t *>(&fhdr) + sizeof(fhdr));
     for (auto& rowgroup : state.md.row_groups) {
       for (auto& col : rowgroup.columns) {
         col.file_path = metadata_out_file_path;
       }
     }
-    cpw.write(&state.md);
+    fendr.footer_len = (uint32_t)cpw.write(&state.md);
+    buffer_.insert(buffer_.end(), reinterpret_cast<const uint8_t *>(&fendr),
+                                  reinterpret_cast<const uint8_t *>(&fendr) + sizeof(fendr));
     return std::make_unique<std::vector<uint8_t>>(std::move(buffer_));
   }
   else {
@@ -836,7 +841,9 @@ std::unique_ptr<std::vector<uint8_t>> writer::merge_rowgroup_metadata(
 
   md.row_groups.reserve(metadata_list.size());
   for (const auto& blob : metadata_list) {
-    CompactProtocolReader cpreader(blob.get()->data(), blob.get()->size());
+    CompactProtocolReader cpreader(blob.get()->data(),
+                                   std::max<size_t>(blob.get()->size(), sizeof(file_ender_s)) - sizeof(file_ender_s));
+    cpreader.skip_bytes(sizeof(file_header_s)); // Skip over file header
     if (md.num_rows == 0) {
       cpreader.read(&md);
     }
