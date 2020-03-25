@@ -544,6 +544,20 @@ public class HostMemoryBuffer extends MemoryBuffer {
   }
 
   /**
+   * Copy from a DeviceMemoryBuffer to a HostMemoryBuffer using the specified stream.
+   * The copy is async any may not have completed when this returns.
+   * @param deviceMemoryBuffer buffer to copy data from
+   * @param stream CUDA stream to use
+   */
+  public final void copyFromDeviceBufferAsync(BaseDeviceMemoryBuffer deviceMemoryBuffer,
+                                         Cuda.Stream stream) {
+    addressOutOfBoundsCheck(address, deviceMemoryBuffer.length, "copy range dest");
+    assert !deviceMemoryBuffer.closed;
+    Cuda.asyncMemcpy(address, deviceMemoryBuffer.address, deviceMemoryBuffer.length,
+        CudaMemcpyKind.DEVICE_TO_HOST, stream);
+  }
+
+  /**
    * Slice off a part of the host buffer.
    * @param offset where to start the slice at.
    * @param len how many bytes to slice

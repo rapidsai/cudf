@@ -169,18 +169,123 @@ public class HostMemoryBufferTest extends CudfTestBase {
 
   @Test
   public void testCopyWithStream() {
+    long length = 1 * 1024 * 1024;
+    long available = PinnedMemoryPool.getAvailableBytes();
+    if (available < (length * 2)) {
+      if (PinnedMemoryPool.isInitialized()) {
+        PinnedMemoryPool.shutdown();
+      }
+      PinnedMemoryPool.initialize(length * 2 + 2048);
+    }
     Random random = new Random(12345L);
-    byte[] data = new byte[4096];
+    byte[] data = new byte[(int)length];
     byte[] result = new byte[data.length];
     random.nextBytes(data);
     try (Cuda.Stream stream1 = new Cuda.Stream(true);
          Cuda.Stream stream2 = new Cuda.Stream(true);
-         HostMemoryBuffer hostBuffer = HostMemoryBuffer.allocate(data.length);
+         HostMemoryBuffer hostBuffer = PinnedMemoryPool.allocate(data.length);
          DeviceMemoryBuffer devBuffer = DeviceMemoryBuffer.allocate(data.length);
-         HostMemoryBuffer hostBuffer2 = HostMemoryBuffer.allocate(data.length)) {
+         HostMemoryBuffer hostBuffer2 = PinnedMemoryPool.allocate(data.length)) {
       hostBuffer.setBytes(0, data, 0, data.length);
       devBuffer.copyFromHostBuffer(hostBuffer, stream1);
       hostBuffer2.copyFromDeviceBuffer(devBuffer, stream2);
+      hostBuffer2.getBytes(result, 0, 0, result.length);
+      assertArrayEquals(data, result);
+    }
+  }
+
+  @Test
+  public void simpleEventTest() {
+    long length = 1 * 1024 * 1024;
+    long available = PinnedMemoryPool.getAvailableBytes();
+    if (available < (length * 2)) {
+      if (PinnedMemoryPool.isInitialized()) {
+        PinnedMemoryPool.shutdown();
+      }
+      PinnedMemoryPool.initialize(length * 2 + 2048);
+    }
+    Random random = new Random(12345L);
+    byte[] data = new byte[(int)length];
+    byte[] result = new byte[data.length];
+    random.nextBytes(data);
+    try (Cuda.Stream stream1 = new Cuda.Stream(true);
+         Cuda.Stream stream2 = new Cuda.Stream(true);
+         Cuda.Event event1 = new Cuda.Event();
+         Cuda.Event event2 = new Cuda.Event();
+         HostMemoryBuffer hostBuffer = PinnedMemoryPool.allocate(data.length);
+         DeviceMemoryBuffer devBuffer = DeviceMemoryBuffer.allocate(data.length);
+         HostMemoryBuffer hostBuffer2 = PinnedMemoryPool.allocate(data.length)) {
+      hostBuffer.setBytes(0, data, 0, data.length);
+      devBuffer.copyFromHostBufferAsync(hostBuffer, stream1);
+      event1.record(stream1);
+      stream2.waitOn(event1);
+      hostBuffer2.copyFromDeviceBufferAsync(devBuffer, stream2);
+      event2.record(stream2);
+      event2.sync();
+      hostBuffer2.getBytes(result, 0, 0, result.length);
+      assertArrayEquals(data, result);
+    }
+  }
+
+  @Test
+  public void simpleEventQueryTest() throws InterruptedException {
+    long length = 1 * 1024 * 1024;
+    long available = PinnedMemoryPool.getAvailableBytes();
+    if (available < (length * 2)) {
+      if (PinnedMemoryPool.isInitialized()) {
+        PinnedMemoryPool.shutdown();
+      }
+      PinnedMemoryPool.initialize(length * 2 + 2048);
+    }
+    Random random = new Random(12345L);
+    byte[] data = new byte[(int)length];
+    byte[] result = new byte[data.length];
+    random.nextBytes(data);
+    try (Cuda.Stream stream1 = new Cuda.Stream(true);
+         Cuda.Stream stream2 = new Cuda.Stream(true);
+         Cuda.Event event1 = new Cuda.Event();
+         Cuda.Event event2 = new Cuda.Event();
+         HostMemoryBuffer hostBuffer = PinnedMemoryPool.allocate(data.length);
+         DeviceMemoryBuffer devBuffer = DeviceMemoryBuffer.allocate(data.length);
+         HostMemoryBuffer hostBuffer2 = PinnedMemoryPool.allocate(data.length)) {
+      hostBuffer.setBytes(0, data, 0, data.length);
+      devBuffer.copyFromHostBufferAsync(hostBuffer, stream1);
+      event1.record(stream1);
+      stream2.waitOn(event1);
+      hostBuffer2.copyFromDeviceBufferAsync(devBuffer, stream2);
+      event2.record(stream2);
+      while (!event2.query()) {
+        Thread.sleep(100);
+      }
+      hostBuffer2.getBytes(result, 0, 0, result.length);
+      assertArrayEquals(data, result);
+    }
+  }
+
+  @Test
+  public void simpleStreamSynchTest() {
+    long length = 1 * 1024 * 1024;
+    long available = PinnedMemoryPool.getAvailableBytes();
+    if (available < (length * 2)) {
+      if (PinnedMemoryPool.isInitialized()) {
+        PinnedMemoryPool.shutdown();
+      }
+      PinnedMemoryPool.initialize(length * 2 + 2048);
+    }
+    Random random = new Random(12345L);
+    byte[] data = new byte[(int)length];
+    byte[] result = new byte[data.length];
+    random.nextBytes(data);
+    try (Cuda.Stream stream1 = new Cuda.Stream(true);
+         Cuda.Stream stream2 = new Cuda.Stream(true);
+         HostMemoryBuffer hostBuffer = PinnedMemoryPool.allocate(data.length);
+         DeviceMemoryBuffer devBuffer = DeviceMemoryBuffer.allocate(data.length);
+         HostMemoryBuffer hostBuffer2 = PinnedMemoryPool.allocate(data.length)) {
+      hostBuffer.setBytes(0, data, 0, data.length);
+      devBuffer.copyFromHostBufferAsync(hostBuffer, stream1);
+      stream1.sync();
+      hostBuffer2.copyFromDeviceBufferAsync(devBuffer, stream2);
+      stream2.sync();
       hostBuffer2.getBytes(result, 0, 0, result.length);
       assertArrayEquals(data, result);
     }

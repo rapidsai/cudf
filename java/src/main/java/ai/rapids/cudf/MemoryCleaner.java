@@ -21,6 +21,7 @@ package ai.rapids.cudf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
@@ -74,19 +75,19 @@ class MemoryCleaner {
     }
 
     public final void addRef() {
-      if (REF_COUNT_DEBUG) {
+      if (REF_COUNT_DEBUG && refCountDebug != null) {
         refCountDebug.add(new MemoryCleaner.RefCountDebugItem("INC"));
       }
     }
 
     public final void delRef() {
-      if (REF_COUNT_DEBUG) {
+      if (REF_COUNT_DEBUG && refCountDebug != null) {
         refCountDebug.add(new MemoryCleaner.RefCountDebugItem("DEC"));
       }
     }
 
     public final void logRefCountDebug(String message) {
-      if (REF_COUNT_DEBUG) {
+      if (REF_COUNT_DEBUG && refCountDebug != null) {
         log.error("{}: {}", message, MemoryCleaner.stringJoin("\n", refCountDebug));
       }
     }
@@ -123,13 +124,14 @@ class MemoryCleaner {
   static final AtomicLong leakCount = new AtomicLong();
   private static final Set<CleanerWeakReference> all =
       Collections.newSetFromMap(new ConcurrentHashMap()); // We want to be thread safe
+  private static final ReferenceQueue<?> collected = new ReferenceQueue<>();
 
   private static class CleanerWeakReference<T> extends WeakReference<T> {
 
     private final Cleaner cleaner;
 
-    public CleanerWeakReference(T orig, Cleaner cleaner) {
-      super(orig);
+    public CleanerWeakReference(T orig, Cleaner cleaner, ReferenceQueue collected) {
+      super(orig, collected);
       this.cleaner = cleaner;
     }
 
@@ -140,23 +142,18 @@ class MemoryCleaner {
     }
   }
 
-  private static synchronized void doCleanup() {
-    // Just to avoid the cleanup thread and this thread colliding...
-    Iterator<CleanerWeakReference> it = all.iterator();
-    while (it.hasNext()) {
-      CleanerWeakReference ref = it.next();
-      if (ref.get() == null) {
-        ref.clean();
-        it.remove();
-      }
-    }
-  }
-
   private static final Thread t = new Thread(() -> {
     try {
       while (true) {
-        Thread.sleep(100);
-        doCleanup();
+        CleanerWeakReference next = (CleanerWeakReference)collected.remove(100);
+        if (next != null) {
+          try {
+            next.clean();
+          } catch (Throwable t) {
+            log.error("CAUGHT EXCEPTION WHILE TRYING TO CLEAN " + next, t);
+          }
+          all.remove(next);
+        }
       }
     } catch (InterruptedException e) {
       // Ignored just exit
@@ -170,12 +167,23 @@ class MemoryCleaner {
       // If we are debugging things do a best effort to check for leaks at the end
       Runtime.getRuntime().addShutdownHook(new Thread(() -> {
         System.gc();
-        synchronized (MemoryCleaner.class) {
-          // Avoid issues on shutdown with the cleaner thread.
-          doCleanup();
-          for (CleanerWeakReference cwr : all) {
-            cwr.clean();
+        // Avoid issues on shutdown with the cleaner thread.
+        t.interrupt();
+        try {
+          t.join(1000);
+        } catch (InterruptedException e) {
+          // Ignored
+        }
+        Iterator<CleanerWeakReference> it = all.iterator();
+        while (it.hasNext()) {
+          CleanerWeakReference ref = it.next();
+          if (ref.get() == null) {
+            ref.clean();
+            it.remove();
           }
+        }
+        for (CleanerWeakReference cwr : all) {
+          cwr.clean();
         }
       }));
     }
@@ -183,17 +191,27 @@ class MemoryCleaner {
 
   public static void register(ColumnVector vec, Cleaner cleaner) {
     // It is now registered...
-    all.add(new CleanerWeakReference(vec, cleaner));
+    all.add(new CleanerWeakReference(vec, cleaner, collected));
   }
 
   public static void register(HostColumnVector vec, Cleaner cleaner) {
     // It is now registered...
-    all.add(new CleanerWeakReference(vec, cleaner));
+    all.add(new CleanerWeakReference(vec, cleaner, collected));
   }
 
   public static void register(MemoryBuffer buf, Cleaner cleaner) {
     // It is now registered...
-    all.add(new CleanerWeakReference(buf, cleaner));
+    all.add(new CleanerWeakReference(buf, cleaner, collected));
+  }
+
+  public static void register(Cuda.Stream stream, Cleaner cleaner) {
+    // It is now registered...
+    all.add(new CleanerWeakReference(stream, cleaner, collected));
+  }
+
+  public static void register(Cuda.Event event, Cleaner cleaner) {
+    // It is now registered...
+    all.add(new CleanerWeakReference(event, cleaner, collected));
   }
 
   /**
