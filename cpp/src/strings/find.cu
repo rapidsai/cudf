@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/find.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -177,6 +178,14 @@ std::unique_ptr<column> contains_fn( strings_column_view const& strings,
     if( strings_count == 0 )
         return make_numeric_column( data_type{BOOL8}, 0 );
 
+    if( target.size()==0 ) // empty target string returns true
+    {
+        auto true_scalar = make_fixed_width_scalar<experimental::bool8>( true, stream, mr );
+        auto results = make_column_from_scalar( *true_scalar, strings.size(), mr, stream );
+        results->set_null_mask( copy_bitmask( strings.parent(), stream, mr ), strings.null_count() );
+        return results;
+    }
+
     CUDF_EXPECTS( target.is_valid(), "Parameter target must be valid.");
     auto d_target = string_view( target.data(), target.size());
     auto strings_column = column_device_view::create(strings.parent(),stream);
@@ -210,9 +219,8 @@ std::unique_ptr<column> contains( strings_column_view const& strings,
                                   cudaStream_t stream=0 )
 {
     auto pfn = [] __device__ (string_view d_string, string_view d_target) {
-        return d_target.empty() || d_string.find( d_target )>=0;
+        return d_string.find( d_target )>=0;
     };
-
     return contains_fn( strings, target, pfn, mr, stream );
 }
 
@@ -222,7 +230,7 @@ std::unique_ptr<column> starts_with( strings_column_view const& strings,
                                      cudaStream_t stream=0 )
 {
     auto pfn = [] __device__ (string_view d_string, string_view d_target) {
-        return d_target.empty() || d_string.find( d_target )==0;
+        return d_string.find( d_target )==0;
     };
     return contains_fn( strings, target, pfn, mr, stream );
 }
@@ -232,15 +240,13 @@ std::unique_ptr<column> ends_with( strings_column_view const& strings,
                                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                    cudaStream_t stream=0 )
 {
-
     auto pfn = [] __device__ (string_view d_string, string_view d_target) {
         auto str_length = d_string.length();
         auto tgt_length = d_target.length();
         if( str_length < tgt_length )
             return false;
-        return d_target.empty() || d_string.find( d_target, str_length - tgt_length )>=0;
+        return d_string.find( d_target, str_length - tgt_length )>=0;
     };
-
     return contains_fn( strings, target, pfn, mr, stream );
 }
 
