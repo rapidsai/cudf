@@ -347,7 +347,7 @@ cdef class Column:
 
     cdef column_view _view(self, libcudf_types.size_type null_count) except *:
         if is_categorical_dtype(self.dtype):
-            col = self.codes
+            col = self.children[0]
         else:
             col = self
         data_dtype = col.dtype
