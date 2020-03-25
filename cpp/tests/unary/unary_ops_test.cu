@@ -901,3 +901,4 @@ TYPED_TEST(IsNotNAN, NonFloatingColumn) {
   EXPECT_THROW(std::unique_ptr<cudf::column> got = cudf::experimental::is_not_nan(col), cudf::logic_error);
 }
 
+CUDF_TEST_PROGRAM_MAIN()
