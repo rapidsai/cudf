@@ -1092,6 +1092,10 @@ public class ColumnVectorTest extends CudfTestBase {
       assertThrows(IllegalArgumentException.class, () -> WindowOptions.builder()
           .window(3, 2).minPeriods(3)
           .window(arraywindowCol, arraywindowCol).build());
+
+      assertThrows(IllegalArgumentException.class, 
+                   () -> arraywindowCol.rollingWindow(AggregateOp.SUM, 
+                                                      WindowOptions.builder().window(2, 1).minPeriods(1).timestampColumnIndex(0).build()));
     }
   }
 
