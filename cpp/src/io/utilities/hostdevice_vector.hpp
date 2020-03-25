@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <rmm/thrust_rmm_allocator.h>
+
 #include <cudf/utilities/error.hpp>
 
 /**
@@ -40,12 +42,11 @@ class hostdevice_vector {
       : num_elements(initial_size), max_elements(max_size) {
     if (max_elements != 0) {
       CUDA_TRY(cudaMallocHost(&h_data, sizeof(T) * max_elements));
-      RMM_ALLOC(&d_data, sizeof(T) * max_elements, stream);
+      d_data = rmm::device_vector<T>(max_elements, stream);
     }
   }
 
   ~hostdevice_vector() {
-    RMM_FREE(d_data, stream);
     cudaFreeHost(h_data);
   }
 
@@ -64,12 +65,17 @@ class hostdevice_vector {
 
   T &operator[](size_t i) const { return h_data[i]; }
   T *host_ptr(size_t offset = 0) const { return h_data + offset; }
-  T *device_ptr(size_t offset = 0) const { return d_data + offset; }
+  T *device_ptr(size_t offset = 0) { 
+      return d_data.data().get() + offset; 
+    }
+  T const* device_ptr(size_t offset = 0) const { 
+      return d_data.data().get() + offset; 
+    }
 
  private:
   cudaStream_t stream = 0;
   size_t max_elements = 0;
   size_t num_elements = 0;
   T *h_data = nullptr;
-  T *d_data = nullptr;
+  rmm::device_vector<T> d_data;
 };

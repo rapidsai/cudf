@@ -327,7 +327,7 @@ struct metadata : public FileMetaData {
 };
 
 size_t reader::impl::count_page_headers(
-    const hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
+    hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
     cudaStream_t stream) {
   size_t total_pages = 0;
 
@@ -348,8 +348,8 @@ size_t reader::impl::count_page_headers(
 }
 
 void reader::impl::decode_page_headers(
-    const hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
-    const hostdevice_vector<gpu::PageInfo> &pages, cudaStream_t stream) {
+    hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
+    hostdevice_vector<gpu::PageInfo> &pages, cudaStream_t stream) {
   for (size_t c = 0, page_count = 0; c < chunks.size(); c++) {
     chunks[c].max_num_pages =
         chunks[c].num_data_pages + chunks[c].num_dict_pages;
@@ -368,8 +368,8 @@ void reader::impl::decode_page_headers(
 }
 
 rmm::device_buffer reader::impl::decompress_page_data(
-    const hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
-    const hostdevice_vector<gpu::PageInfo> &pages, cudaStream_t stream) {
+    hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
+    hostdevice_vector<gpu::PageInfo> &pages, cudaStream_t stream) {
   auto for_each_codec_page = [&](parquet::Compression codec,
                                  const std::function<void(size_t)> &f) {
     for (size_t c = 0, page_count = 0; c < chunks.size(); c++) {
@@ -479,8 +479,8 @@ rmm::device_buffer reader::impl::decompress_page_data(
 }
 
 void reader::impl::decode_page_data(
-    const hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
-    const hostdevice_vector<gpu::PageInfo> &pages, size_t min_row,
+    hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
+    hostdevice_vector<gpu::PageInfo> &pages, size_t min_row,
     size_t total_rows, const std::vector<int> &chunk_map,
     std::vector<column_buffer> &out_buffers, cudaStream_t stream) {
   auto is_dict_chunk = [](const gpu::ColumnChunkDesc &chunk) {
