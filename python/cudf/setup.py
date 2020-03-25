@@ -10,6 +10,12 @@ from Cython.Build import cythonize
 from setuptools import find_packages, setup
 from setuptools.extension import Extension
 
+try:
+    from Cython.Distutils.build_ext import new_build_ext as build_ext
+except ImportError:
+    from setuptools.command.build_ext import build_ext
+
+
 install_requires = ["numba", "cython"]
 
 cython_files = ["cudf/**/*.pyx"]
@@ -61,6 +67,7 @@ extensions = [
 
 cmdclass = dict()
 cmdclass.update(versioneer.get_cmdclass())
+cmdclass["build_ext"] = build_ext
 
 setup(
     name="cudf",
