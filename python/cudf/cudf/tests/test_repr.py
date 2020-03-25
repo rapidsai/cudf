@@ -100,6 +100,7 @@ def test_full_dataframe_21(dtype, nrows, ncols):
         {idx: np.random.randint(0, 100, size) for idx in range(size)}
     ).astype(dtype)
     gdf = cudf.from_pandas(pdf)
+
     pd.options.display.max_rows = int(nrows)
     pd.options.display.max_columns = int(ncols)
     assert pdf.__repr__() == gdf.__repr__()
