@@ -95,7 +95,7 @@ TEST_F(SliceStringTest, StringWithNulls) {
     EXPECT_EQ(expected.size(), result.size());
 
     for (unsigned long index = 0; index < result.size(); index++) {
-        cudf::test::expect_column_properties_equal(expected[index], result[index]);
+        cudf::test::expect_columns_equal(expected[index], result[index]);
     }
 }
 
@@ -114,7 +114,7 @@ TEST_F(SliceStringTest, StringWithNullsAsColumn) {
     for (unsigned long index = 0; index < result.size(); index++) {
         // this materializes a column to test slicing + materialization
         auto result_col = cudf::column(result[index]);
-        cudf::test::expect_column_properties_equal(expected[index], result_col);
+        cudf::test::expect_columns_equal(expected[index], result_col);
     }
 }
 

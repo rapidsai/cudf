@@ -308,8 +308,8 @@ cdef class Column:
         data = <void*><uintptr_t>(col.base_data_ptr)
 
         cdef Column child_column
-        if self.base_children:
-            for child_column in self.base_children:
+        if col.base_children:
+            for child_column in col.base_children:
                 children.push_back(child_column.mutable_view())
 
         cdef libcudf_types.bitmask_type* mask
@@ -360,8 +360,8 @@ cdef class Column:
         data = <void*><uintptr_t>(col.base_data_ptr)
 
         cdef Column child_column
-        if self.base_children:
-            for child_column in self.base_children:
+        if col.base_children:
+            for child_column in col.base_children:
                 children.push_back(child_column.view())
 
         cdef libcudf_types.bitmask_type* mask
@@ -422,6 +422,8 @@ cdef class Column:
         from cudf.core.column import build_column
 
         column_owner = isinstance(owner, Column)
+        if column_owner and is_categorical_dtype(owner.dtype):
+            owner = owner.codes
 
         size = cv.size()
         offset = cv.offset()

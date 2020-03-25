@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cudf/concatenate.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/hashing.hpp>
 #include <cudf/io/functions.hpp>

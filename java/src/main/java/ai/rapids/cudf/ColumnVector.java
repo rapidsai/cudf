@@ -1622,10 +1622,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * Concatenate columns of strings together, combining a corresponding row from each column
    * into a single string row of a new column with no separator string inserted between each
    * combined string and maintaining null values in combined rows.
-   * @param columns indefinite number of columns containing strings.
+   * @param columns array of columns containing strings.
    * @return A new java column vector containing the concatenated strings.
    */
-  public ColumnVector stringConcatenate(ColumnVector... columns) {
+  public ColumnVector stringConcatenate(ColumnVector[] columns) {
     try (Scalar emptyString = Scalar.fromString("");
          Scalar nullString = Scalar.fromString(null)) {
       return stringConcatenate(emptyString, nullString, columns);
@@ -1639,10 +1639,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @param narep string scalar indicating null behavior. If set to null and any string in the row
    *              is null the resulting string will be null. If not null, null values in any column
    *              will be replaced by the specified string.
-   * @param columns indefinite number of columns containing strings, must be more than 2 columns
+   * @param columns array of columns containing strings, must be more than 2 columns
    * @return A new java column vector containing the concatenated strings.
    */
-  public static ColumnVector stringConcatenate(Scalar separator, Scalar narep, ColumnVector... columns) {
+  public static ColumnVector stringConcatenate(Scalar separator, Scalar narep, ColumnVector[] columns) {
     assert columns.length >= 2 : ".stringConcatenate() operation requires at least 2 columns";
     assert separator != null : "separator scalar provided may not be null";
     assert separator.getType() == DType.STRING : "separator scalar must be a string scalar";
@@ -1753,6 +1753,32 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Returns a new strings column where target string within each string is replaced with the specified
+   * replacement string.
+   * The replacement proceeds from the beginning of the string to the end, for example,
+   * replacing "aa" with "b" in the string "aaa" will result in "ba" rather than "ab".
+   * Specifing an empty string for replace will essentially remove the target string if found in each string.
+   * Null string entries will return null output string entries.
+   * target Scalar should be string and should not be empty or null.
+   *
+   * @param target String to search for within each string.
+   * @param replace Replacement string if target is found.
+   * @return A new java column vector containing replaced strings
+   */
+  public ColumnVector stringReplace(Scalar target, Scalar replace) {
+
+    assert type == DType.STRING : "column type must be a String";
+    assert target != null : "target string may not be null";
+    assert target.getType() == DType.STRING : "target string must be a string scalar";
+    assert target.getJavaString().isEmpty() == false : "target scalar may not be empty";
+
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT32), "stringReplace")) {
+      return new ColumnVector(stringReplace(getNativeView(), target.getScalarHandle(),
+              replace.getScalarHandle()));
+    }
+  }
+
+  /**
    * Checks if each string in a column starts with a specified comparison string, resulting in a
    * parallel column of the boolean results.
    * @param pattern scalar containing the string being searched for at the beginning of the column's strings.
@@ -1803,6 +1829,85 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       return new ColumnVector(stringContains(getNativeView(), compString.getScalarHandle()));
     }
   }
+
+  /**
+   * Replaces values less than `lo` in `input` with `lo`,
+   * and values greater than `hi` with `hi`.
+   *
+   * if `lo` is invalid, then lo will not be considered while
+   * evaluating the input (Essentially considered minimum value of that type).
+   * if `hi` is invalid, then hi will not be considered while
+   * evaluating the input (Essentially considered maximum value of that type).
+   *
+   * ```
+   * Example:
+   * input: {1, 2, 3, NULL, 5, 6, 7}
+   *
+   * valid lo and hi
+   * lo: 3, hi: 5, lo_replace : 0, hi_replace : 16
+   * output:{0, 0, 3, NULL, 5, 16, 16}
+   *
+   * invalid lo
+   * lo: NULL, hi: 5, lo_replace : 0, hi_replace : 16
+   * output:{1, 2, 3, NULL, 5, 16, 16}
+   *
+   * invalid hi
+   * lo: 3, hi: NULL, lo_replace : 0, hi_replace : 16
+   * output:{0, 0, 3, NULL, 5, 6, 7}
+   * ```
+   * @param lo - Minimum clamp value. All elements less than `lo` will be replaced by `lo`.
+   *           Ignored if null.
+   * @param hi - Maximum clamp value. All elements greater than `hi` will be replaced by `hi`.
+   *           Ignored if null.
+   * @return Returns a new clamped column as per `lo` and `hi` boundaries
+   */
+  public ColumnVector clamp(Scalar lo, Scalar hi) {
+    return new ColumnVector(clamper(this.getNativeView(), lo.getScalarHandle(),
+        lo.getScalarHandle(), hi.getScalarHandle(), hi.getScalarHandle()));
+  }
+
+  /**
+   * Replaces values less than `lo` in `input` with `lo_replace`,
+   * and values greater than `hi` with `hi_replace`.
+   *
+   * if `lo` is invalid, then lo will not be considered while
+   * evaluating the input (Essentially considered minimum value of that type).
+   * if `hi` is invalid, then hi will not be considered while
+   * evaluating the input (Essentially considered maximum value of that type).
+   *
+   * @note: If `lo` is valid then `lo_replace` should be valid
+   *        If `hi` is valid then `hi_replace` should be valid
+   *
+   * ```
+   * Example:
+   *    input: {1, 2, 3, NULL, 5, 6, 7}
+   *
+   *    valid lo and hi
+   *    lo: 3, hi: 5, lo_replace : 0, hi_replace : 16
+   *    output:{0, 0, 3, NULL, 5, 16, 16}
+   *
+   *    invalid lo
+   *    lo: NULL, hi: 5, lo_replace : 0, hi_replace : 16
+   *    output:{1, 2, 3, NULL, 5, 16, 16}
+   *
+   *    invalid hi
+   *    lo: 3, hi: NULL, lo_replace : 0, hi_replace : 16
+   *    output:{0, 0, 3, NULL, 5, 6, 7}
+   * ```
+   *
+   * @param lo - Minimum clamp value. All elements less than `lo` will be replaced by `loReplace`. Ignored if null.
+   * @param loReplace - All elements less than `lo` will be replaced by `loReplace`.
+   * @param hi - Maximum clamp value. All elements greater than `hi` will be replaced by `hiReplace`. Ignored if null.
+   * @param hiReplace - All elements greater than `hi` will be replaced by `hiReplace`.
+   * @return - a new clamped column as per `lo` and `hi` boundaries
+   */
+  public ColumnVector clamp(Scalar lo, Scalar loReplace, Scalar hi, Scalar hiReplace) {
+    return new ColumnVector(clamper(this.getNativeView(), lo.getScalarHandle(),
+        loReplace.getScalarHandle(), hi.getScalarHandle(), hiReplace.getScalarHandle()));
+  }
+
+  private static native long clamper(long nativeView, long loScalarHandle, long loScalarReplaceHandle,
+                                    long hiScalarHandle, long hiScalarReplaceHandle);
 
   /**
    * Returns a boolean ColumnVector identifying rows which
@@ -1924,6 +2029,15 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   private static native long substringColumn(long columnView, long startColumn, long endColumn)
           throws CudfException;
+
+  /**
+   * Native method to replace target string by repl string.
+   * @param columnView native handle of the cudf::column_view being operated on.
+   * @param target handle of scalar containing the string being searched.
+   * @param repl handle of scalar containing the string to replace.
+   */
+  private static native long stringReplace(long columnView, long target, long repl) throws CudfException;
+
   /**
    * Native method for checking if strings in a column starts with a specified comparison string.
    * @param cudfViewHandle native handle of the cudf::column_view being operated on.
