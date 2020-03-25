@@ -67,9 +67,29 @@ struct extract_component_operator {
   }
 };
 
-// Round up the date to the last day of the mont and return the
+// Round up the date to the last day of the month and return the
 // date only (without the time component)
 struct extract_last_day {
+  CUDA_DEVICE_CALLABLE auto days_in_month(simt::std::chrono::month mon,
+                                          bool is_leap_year) const -> uint8_t {
+    using namespace simt::std::chrono;
+    switch (static_cast<unsigned>(mon)) {
+      case January   : return 31;
+      case February  : return is_leap_year ? 29 : 28;
+      case March     : return 31;
+      case April     : return 30;
+      case May       : return 31;
+      case June      : return 30;
+      case July      : return 31;
+      case August    : return 31;
+      case September : return 30;
+      case October   : return 31;
+      case November  : return 30;
+      case December  : return 31;
+      default        : return 0;
+    }
+  }
+
   template <typename Timestamp>
   CUDA_DEVICE_CALLABLE timestamp_D operator()(Timestamp const ts) const {
     using namespace simt::std::chrono;
@@ -80,25 +100,11 @@ struct extract_last_day {
     //return timestamp_D(sys_days(ym_last_day));
 
     // Only has the days - time component is chopped off, which is what we want
-    auto days_since_epoch = floor<days>(ts);
+    auto const days_since_epoch = floor<days>(ts);
+    auto const date             = year_month_day(days_since_epoch);
+    auto const last_day         = days_in_month(date.month(), date.year().is_leap());
 
-    const auto chrono_year = year_month_day(days_since_epoch).year();
-
-    const auto chrono_month = year_month_day(days_since_epoch).month();
-    const unsigned month_val = static_cast<unsigned>(chrono_month);
-
-    static const uint8_t days_in_month[] = {31, 28, 31, 30, 31, 30,
-                                            31, 31, 30, 31, 30, 31};
-    day chrono_day(days_in_month[month_val - 1]);
-    // Handle leap years
-    if (chrono_month == month(February) && chrono_year.is_leap()) {
-      chrono_day++;
-    }
-    unsigned orig_day(year_month_day(days_since_epoch).day());
-    unsigned new_day(chrono_day);
-    days_since_epoch += days(new_day - orig_day);
-
-    return timestamp_D(days_since_epoch);
+    return timestamp_D(days_since_epoch + days(last_day - static_cast<unsigned>(date.day())));
   }
 };
 
