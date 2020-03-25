@@ -21,7 +21,7 @@ package ai.rapids.cudf;
 /**
  * Base class for all MemoryBuffers that are in device memory.
  */
-public class BaseDeviceMemoryBuffer extends MemoryBuffer {
+public abstract class BaseDeviceMemoryBuffer extends MemoryBuffer {
   protected BaseDeviceMemoryBuffer(long address, long length, MemoryBuffer parent) {
     super(address, length, parent);
   }
