@@ -18,6 +18,7 @@
 - PR #4655 Raise error for list like dtypes in cudf
 - PR #4548 Remove string_view is_null method
 - PR #4645 Add Alias for `kurtosis` as `kurt`
+- PR #4674 Refactor `build_categorical_column` callers and introduce assertion of children offsets
 
 ## Bug Fixes
 
