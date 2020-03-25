@@ -435,4 +435,12 @@ public interface BinaryOperable {
   default ColumnVector shiftRightUnsigned(BinaryOperable shiftBy) {
     return shiftRightUnsigned(shiftBy, implicitConversion(this, shiftBy));
   }
+
+  /**
+   * Calculate the log with the specified base, output is the same type as input.
+   */
+  default ColumnVector log(Scalar base) {
+    return binaryOp(BinaryOp.LOG_BASE, base, getType());
+  }
+
 }
