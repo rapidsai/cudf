@@ -399,3 +399,5 @@ TEST_F(FillErrorTestFixture, DTypeMismatch)
                  destination, 0, 10, *p_val),
                cudf::logic_error);
 }
+
+CUDF_TEST_PROGRAM_MAIN()

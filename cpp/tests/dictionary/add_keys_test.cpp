@@ -64,8 +64,8 @@ TEST_F(DictionaryAddKeysTest, FloatColumn)
 
 TEST_F(DictionaryAddKeysTest, WithNull)
 {
-    cudf::test::fixed_width_column_wrapper<int64_t> input{ { 555,0,333,111,222,222,222,555,0 }, {1,1,1,1,1,0,1,1,1}};
-    cudf::test::fixed_width_column_wrapper<int64_t> new_keys{ 0, 111, 444 };
+    cudf::test::fixed_width_column_wrapper<int64_t> input{ { 555,0,333,111,222,222,222,555,0 }, {1,1,1,0,1,1,1,1,1}};
+    cudf::test::fixed_width_column_wrapper<int64_t> new_keys{ 0, 111, 444, 777 };
 
     auto dictionary = cudf::dictionary::encode( input );
     auto result = cudf::dictionary::add_keys( cudf::dictionary_column_view(dictionary->view()), new_keys );
@@ -84,3 +84,5 @@ TEST_F(DictionaryAddKeysTest, Errors)
     cudf::test::fixed_width_column_wrapper<int64_t> null_keys{ {1,2,3},{1,0,1} };
     EXPECT_THROW( cudf::dictionary::add_keys( dictionary->view(), null_keys ), cudf::logic_error);
 }
+
+CUDF_TEST_PROGRAM_MAIN()

@@ -633,3 +633,5 @@ TYPED_TEST(IteratorTest, null_scalar_iterator) {
   auto it_pair_dev = cudf::experimental::detail::make_pair_iterator<T>(*s);
   this->iterator_test_thrust(value_and_validity, it_pair_dev, host_values.size());
 }
+
+CUDF_TEST_PROGRAM_MAIN()

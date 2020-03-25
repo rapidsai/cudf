@@ -266,3 +266,5 @@ TYPED_TEST(TypedDatetimeOpsTest,
   expect_columns_equal(*extract_minute(timestamps), expected_minutes);
   expect_columns_equal(*extract_second(timestamps), expected_seconds);
 }
+
+CUDF_TEST_PROGRAM_MAIN()
