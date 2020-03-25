@@ -38,9 +38,9 @@ namespace cudf
  *
  * ```
  * k = ["a","c","d"]
- * i = [1,0,0,2,2]
+ * i = [1,0,null,2,2]
  * d = make_dictionary_column(k,i)
- * d is now {["a","c","d"],[1,0,0,2,2]}
+ * d is now {["a","c","d"],[1,0,undefined,2,2]} bitmask={1,1,0,1,1}
  * ```
  *
  * The null_mask and null count for the output column are copied from the indices column.
@@ -61,8 +61,8 @@ std::unique_ptr<column> make_dictionary_column( column_view const& keys_column,
                                                 cudaStream_t stream = 0);
 
 /**
- * @brief Construct a dictionary column by using the provided keys
- * and indices.
+ * @brief Construct a dictionary column by taking ownership of the provided keys
+ * and indices columns.
  *
  * The keys_column and indices columns must contain no nulls.
  * It is assumed the elements in `keys_column` are unique and
