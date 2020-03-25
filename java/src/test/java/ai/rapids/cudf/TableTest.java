@@ -1655,17 +1655,19 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testGroupByCountWithNullsIncluded() {
-    try (Table t1 = new Table.TestBuilder().column(null, null,    1,    1,    1,    1)
+    try (Table t1 = new Table.TestBuilder()
+            .column(null, null,    1,    1,    1,    1)
             .column(   1,    1,    1,    1,    1,    1)
             .column(   1,    1, null, null,    1,    1)
             .column(   1,    1,    1, null,    1,    1)
             .build()) {
-      try (Table tmp = t1.groupBy(0).aggregate(count(1,true), count(2,true), count(3,true));
+      try (Table tmp = t1.groupBy(0).aggregate(count(1, true), count(2, true), count(3, true), count(3));
            Table t3 = tmp.orderBy(Table.asc(0, true));
            HostColumnVector groupCol = t3.getColumn(0).copyToHost();
            HostColumnVector countCol = t3.getColumn(1).copyToHost();
            HostColumnVector nullCountCol = t3.getColumn(2).copyToHost();
-           HostColumnVector nullCountCol2 = t3.getColumn(3).copyToHost()) {
+           HostColumnVector nullCountCol2 = t3.getColumn(3).copyToHost();
+           HostColumnVector nullCountCol3 = t3.getColumn(4).copyToHost()) {
         // verify t3
         assertEquals(2, t3.getRowCount());
 
@@ -1674,17 +1676,21 @@ public class TableTest extends CudfTestBase {
         assertEquals(groupCol.getInt(1), 1);
 
         // compare the agg columns
-        // count(1)
+        // count(1, true)
         assertEquals(countCol.getInt(0), 2);
         assertEquals(countCol.getInt(1), 4);
 
-        // count(2)
+        // count(2, true)
         assertEquals(nullCountCol.getInt(0), 2);
         assertEquals(nullCountCol.getInt(1), 4); // counts including nulls
 
-        // count(3)
+        // count(3, true)
         assertEquals(nullCountCol2.getInt(0), 2);
         assertEquals(nullCountCol2.getInt(1), 4); // counts including nulls
+
+        // count(3)
+        assertEquals(nullCountCol3.getInt(0), 2);
+        assertEquals(nullCountCol3.getInt(1), 3); // counts only the non-nulls
       }
     }
   }

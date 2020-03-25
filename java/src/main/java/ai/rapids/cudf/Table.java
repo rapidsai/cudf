@@ -984,10 +984,22 @@ public final class Table implements AutoCloseable {
     return new OrderByArg(index, true, isNullSmallest);
   }
 
+  /**
+   * Returns count aggregation with only valid values.
+   * Null values are skipped.
+   * @param index Column on which aggregation is to be performed
+   * @return count aggregation of column `index` with null values skipped.
+   */
   public static Aggregate count(int index) {
     return Aggregate.count(index, false);
   }
 
+  /**
+   * Returns count aggregation
+   * @param index Column on which aggregation is to be performed.
+   * @param include_nulls Include nulls if set to true
+   * @return count aggregation of column `index`
+   */
   public static Aggregate count(int index, boolean include_nulls) {
     return Aggregate.count(index, include_nulls);
   }

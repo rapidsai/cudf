@@ -32,11 +32,12 @@ public final class Aggregate {
 
   // Include null in count if include_nulls = true
   static Aggregate count(int index, boolean include_nulls) {
-    if (include_nulls == true) {
-      return new Aggregate(AggregateOp.COUNT_ALL, index);
-    }
-    return new Aggregate(AggregateOp.COUNT_VALID, index);
+    return new Aggregate(include_nulls ?
+            AggregateOp.COUNT_ALL :
+            AggregateOp.COUNT_VALID,
+            index);
   }
+
   static Aggregate max(int index) {
     return new Aggregate(AggregateOp.MAX, index);
   }
