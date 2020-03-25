@@ -29,7 +29,7 @@ def _shuffle_group(df, columns, stage, k, npartitions, ignore_index):
     c = np.mod(c, npartitions).astype(typ, copy=False)
     if stage > 0:
         np.floor_divide(c, k ** stage, out=c)
-    elif k < npartitions:
+    if k < int(npartitions / (k ** stage)):
         np.mod(c, k, out=c)
     return group_split_dispatch(
         df, c.astype(np.int32), k, ignore_index=ignore_index
