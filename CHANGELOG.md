@@ -294,6 +294,7 @@
 - PR #4625 Fix hash-based repartition bug in dask_cudf
 - PR #4662 Fix to handle `keep_index` in `partition_by_hash`
 - PR #4676 Fix bug in `_shuffle_group` for repartition
+- PR #XXXX Fix `test_repr` tests that were generating a `RangeIndex` for column names
 
 
 # cuDF 0.12.0 (04 Feb 2020)
