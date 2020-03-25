@@ -19,7 +19,7 @@
 - PR #4548 Remove string_view is_null method
 - PR #4645 Add Alias for `kurtosis` as `kurt`
 - PR #4616 Enable different RMM allocation modes in unit tests
-- PR #4660 Plumb `cudf::partition` api to python/cython
+- PR #4660 Port `cudf::partition` api to python/cython
 
 ## Bug Fixes
 
