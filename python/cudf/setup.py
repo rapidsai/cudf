@@ -6,7 +6,6 @@ from distutils.sysconfig import get_python_lib
 
 import numpy as np
 import versioneer
-from Cython.Build import cythonize
 from setuptools import find_packages, setup
 from setuptools.extension import Extension
 
@@ -39,11 +38,6 @@ if not os.path.isdir(CUDA_HOME):
 
 cuda_include_dir = os.path.join(CUDA_HOME, "include")
 
-try:
-    nthreads = int(os.environ.get("PARALLEL_LEVEL", "0") or "0")
-except Exception:
-    nthreads = 0
-
 extensions = [
     Extension(
         "*",
@@ -64,6 +58,10 @@ extensions = [
         extra_compile_args=["-std=c++14"],
     )
 ]
+for e in extensions:
+    e.cython_directives = dict(
+        profile=False, language_level=3, embedsignature=True
+    )
 
 cmdclass = dict()
 cmdclass.update(versioneer.get_cmdclass())
@@ -87,13 +85,7 @@ setup(
     ],
     # Include the separately-compiled shared library
     setup_requires=["cython"],
-    ext_modules=cythonize(
-        extensions,
-        nthreads=nthreads,
-        compiler_directives=dict(
-            profile=False, language_level=3, embedsignature=True
-        ),
-    ),
+    ext_modules=extensions,
     packages=find_packages(include=["cudf", "cudf.*"]),
     package_data=dict.fromkeys(
         find_packages(include=["cudf._lib*"]), ["*.pxd"],
