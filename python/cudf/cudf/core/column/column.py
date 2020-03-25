@@ -433,12 +433,14 @@ class ColumnBase(Column):
         elif isinstance(arg, slice):
 
             if is_categorical_dtype(self):
-                codes = self.codes[arg]
-                return build_column(
-                    data=None,
-                    dtype=self.dtype,
-                    mask=codes.mask,
-                    children=(codes,),
+                codes = self.children[0][arg]
+                return build_categorical_column(
+                    categories=self.categories,
+                    codes=codes,
+                    mask=codes.base_mask,
+                    ordered=self.ordered,
+                    size=codes.size,
+                    offset=codes.offset,
                 )
 
             start, stop, stride = arg.indices(len(self))

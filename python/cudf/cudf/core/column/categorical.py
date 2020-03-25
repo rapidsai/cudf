@@ -323,7 +323,7 @@ class CategoricalColumn(column.ColumnBase):
                 dtype=codes_column.dtype,
                 mask=codes_column.base_mask,
                 size=self.size,
-                offset=codes_column.offset,
+                offset=self.offset,
             )
             self._children = (codes_column,)
         return self._children
