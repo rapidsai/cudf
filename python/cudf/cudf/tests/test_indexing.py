@@ -214,6 +214,10 @@ def test_dataframe_loc(scalar, step):
 
     df = DataFrame.from_pandas(pdf)
 
+    assert_eq(df.loc[:, ["a"]], pdf.loc[:, ["a"]])
+
+    assert_eq(df.loc[:, "d"], pdf.loc[:, "d"])
+
     # Scalar label
     assert_eq(df.loc[scalar], pdf.loc[scalar])
 
@@ -887,6 +891,19 @@ def test_out_of_bounds_indexing():
         a[[0, 1, 9]] = 2
     with pytest.raises(IndexError):
         a[[0, 1, -4]] = 2
+
+
+def test_sliced_indexing():
+    a = list(range(4, 4 + 150))
+    b = list(range(0, 0 + 150))
+    pdf = pd.DataFrame({"a": a, "b": b})
+    gdf = DataFrame.from_pandas(pdf)
+    pdf = pdf.set_index("a")
+    gdf = gdf.set_index("a")
+    pidx = pdf.index[:75]
+    gidx = gdf.index[:75]
+
+    assert_eq(pdf.loc[pidx], gdf.loc[gidx])
 
 
 @pytest.mark.parametrize("index", [["a"], ["a", "a"], ["a", "a", "b", "c"]])

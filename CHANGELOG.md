@@ -1,3 +1,44 @@
+# cuDF 0.14.0 (Date TBD)
+
+## New Features
+
+- PR #4472 Add new `partition` API to replace `scatter_to_tables`.
+- PR #4626 LogBase binops
+
+## Improvements
+
+- PR #4531 Add doc note on conda `channel_priority`
+- PR #4479 Adding cuda 10.2 support via conda environment file addition
+- PR #4486 Remove explicit template parameter from detail::scatter.
+- PR #4471 Consolidate partitioning functionality into a single header.
+- PR #4498 Adds in support for chunked writers to java
+- PR #4073 Enable contiguous split java test
+- PR #4527 Add JNI and java bindings for `matches_re`
+- PR #4599 Add Java and JNI bindings for string replace
+- PR #4655 Raise error for list like dtypes in cudf
+- PR #4548 Remove string_view is_null method
+- PR #4645 Add Alias for `kurtosis` as `kurt`
+- PR #4616 Enable different RMM allocation modes in unit tests
+
+## Bug Fixes
+
+- PR #4386 Update Java package to 0.14
+- PR #4402 Fix `cudf::strings::join_strings` logic with all-null strings and null narep
+- PR #4610 Fix validity bug in string scalar factory
+- PR #4570 Fixing loc ordering issue in dataframe
+- PR #4612 Fix invalid index handling in cudf:dictionary:add-keys call to gather
+- PR #4614 Fix cuda-memcheck errors found in column_tests.cu and copying/utility_tests.cu
+- PR #4614 Fix cuda-memcheck errors found in `column_tests.cu` and `copying/utility_tests.cu`
+- PR #4639 Fix java column of empty strings issue
+- PR #4613 Fix issue related to downcasting in `.loc`
+- PR #4615 Fix potential OOB write in ORC writer compression stage
+- PR #4617 Fix memory leak in aggregation object destructor
+- PR #4633 String concatenation fix in `DataFrame.rename`
+- PR #4609 Fix to handle `Series.factorize` when index is set
+- PR #4652 Fix misaligned error when computing regex device structs
+- PR #4651 Fix hashing benchmark missing includes
+
+
 # cuDF 0.13.0 (Date TBD)
 
 ## New Features
@@ -45,6 +86,7 @@
 - PR #4288 Add libcudf++ shift Cython implementation
 - PR #4338 Add cudf::sequence() for generating an incrementing list of numeric values
 - PR #4456 Add argmin/max and string min/max to sort groupby
+- PR #4564 Added Java bindings for clamp operator.
 - PR #4602 Add Cython bindings for functions in `datetime.hpp`
 
 ## Improvements
@@ -261,6 +303,7 @@
 - PR #4358 Fix strings::concat where narep is an empty string
 - PR #4369 Fix race condition in gpuinflate
 - PR #4390 Disable ScatterValid and ScatterNull legacy tests
+- PR #4399 Make scalar destructor virtual.
 - PR #4398 Fixes the failure in groupby in MIN/MAX on strings when some groups are empty
 - PR #4406 Fix sorted merge issue with null values and ascending=False
 - PR #4445 Fix string issue for parquet reader and support `keep_index` for `scatter_to_tables`
@@ -1503,7 +1546,8 @@
 
 - PR #821 Fix flake8 issues revealed by flake8 update
 - PR #808 Resolved renamed `d_columns_valids` variable name
-- PR #820 CSV Reader: fix the issue where reader adds additional rows when file uses \r\n as a line terminator
+- PR #820 CSV Reader: fix the issue where reader adds additional rows when file uses 
+ as a line terminator
 - PR #780 CSV Reader: Fix scientific notation parsing and null values for empty quotes
 - PR #815 CSV Reader: Fix data parsing when tabs are present in the input CSV file
 - PR #850 Fix bug where left joins where the left df has 0 rows causes a crash

@@ -1590,7 +1590,9 @@ class Series(Frame):
         codes = Series(cupy.arange(len(cats), dtype=dtype))
 
         value = DataFrame({"value": cats, "code": codes})
-        codes = DataFrame({"value": self.copy(), "order": order})
+        codes = DataFrame(
+            {"value": self.copy(deep=False)._data.columns[0], "order": order}
+        )
         codes = codes.merge(value, on="value", how="left")
         codes = codes.sort_values("order")["code"].fillna(na_sentinel)
 
@@ -1881,15 +1883,26 @@ class Series(Frame):
             dtype=self.dtype,
         )
 
-    def kurtosis(self, axis=None, skipna=None, level=None, numeric_only=None):
+    def kurtosis(
+        self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
+    ):
         """Calculates Fisher's unbiased kurtosis of a sample.
         """
-        assert (
-            axis in (None, 0)
-            and skipna in (None, True)
-            and level in (None,)
-            and numeric_only in (None, True)
-        )
+        if axis not in (None, 0):
+            raise NotImplementedError("axis parameter is not implemented yet")
+
+        if skipna not in (None, True):
+            raise NotImplementedError(
+                "skipna parameter is not implemented yet"
+            )
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not implemented yet")
+
+        if numeric_only not in (None, True):
+            raise NotImplementedError(
+                "numeric_only parameter is not implemented yet"
+            )
 
         if self.empty:
             return np.nan
@@ -1912,6 +1925,9 @@ class Series(Frame):
         term_two = ((n - 1) ** 2) / ((n - 2) * (n - 3))
         kurt = term_one_section_one * term_one_section_two - 3 * term_two
         return kurt
+
+    # Alias for kurtosis.
+    kurt = kurtosis
 
     def skew(self, axis=None, skipna=None, level=None, numeric_only=None):
         """Calculates the unbiased Fisher-Pearson skew of a sample.

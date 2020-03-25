@@ -483,3 +483,5 @@ TEST_F(CopyBitmaskTest, TestCopyColumnViewVectorDiscontiguous) {
   cudf::test::expect_equal_buffers(concatenated_bitmask.data(), gold_mask.data(),
                                    num_elements / CHAR_BIT);
 }
+
+CUDF_TEST_PROGRAM_MAIN()

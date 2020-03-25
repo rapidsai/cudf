@@ -19,7 +19,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
-#include <cudf/round_robin.hpp>
+#include <cudf/partitioning.hpp>
 #include <rmm/thrust_rmm_allocator.h>
 #include <cudf/column/column_factories.hpp>
 #include <tests/utilities/column_utilities.hpp>
