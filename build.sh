@@ -18,7 +18,7 @@ ARGS=$*
 # script, and that this script resides in the repo dir!
 REPODIR=$(cd $(dirname $0); pwd)
 
-VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks tests -v -g -n -l --allgpuarch --disable_nvtx -h"
+VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks tests -v -g -n -l --allgpuarch --disable_nvtx --show_depr_warn -h"
 HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [-v] [-g] [-n] [-h] [-l]
    clean            - remove all existing build artifacts and configuration (start
                       over)
@@ -33,8 +33,9 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [-v] [-g] [-n
    -g               - build for debug
    -n               - no install step
    -l               - build legacy tests
-   --disable_nvtx   - disable inserting NVTX profiling ranges
    --allgpuarch     - build for all supported GPU architectures
+   --disable_nvtx   - disable inserting NVTX profiling ranges
+   --show_depr_warn - show cmake deprecation warnings
    -h               - print this text
 
    default action (no args) is to build and install 'libnvstrings' then
@@ -55,6 +56,7 @@ BUILD_ALL_GPU_ARCH=0
 BUILD_NVTX=ON
 BUILD_TESTS=OFF
 BUILD_LEGACY_TESTS=OFF
+BUILD_DISABLE_DEPRECATION_WARNING=ON
 
 # Set defaults for vars that may not have been defined externally
 #  FIXME: if INSTALL_PREFIX is not set, check PREFIX, then check
@@ -112,6 +114,9 @@ fi
 if hasArg --disable_nvtx; then
     BUILD_NVTX="OFF"
 fi
+if hasArg --show_depr_warn; then
+    BUILD_DISABLE_DEPRECATION_WARNING=OFF
+fi
 
 # If clean given, run it prior to any other steps
 if hasArg clean; then
@@ -148,6 +153,7 @@ if buildAll || hasArg libnvstrings || hasArg libcudf; then
           -DUSE_NVTX=${BUILD_NVTX} \
           -DBUILD_BENCHMARKS=${BENCHMARKS} \
           -DBUILD_LEGACY_TESTS=${BUILD_LEGACY_TESTS} \
+          -DDISABLE_DEPRECATION_WARNING=${BUILD_DISABLE_DEPRECATION_WARNING} \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ..
 fi
 
