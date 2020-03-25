@@ -438,7 +438,9 @@ class ColumnBase(Column):
                     data=None,
                     dtype=self.dtype,
                     mask=codes.mask,
-                    children=(codes,),
+                    children=(as_column(codes),),
+                    offset=self.offset,
+                    size=codes.size,
                 )
 
             start, stop, stride = arg.indices(len(self))

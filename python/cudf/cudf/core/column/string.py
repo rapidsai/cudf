@@ -1897,6 +1897,8 @@ class StringColumn(column.ColumnBase):
         dtype = np.dtype("object")
 
         if size is None:
+            for child in children:
+                assert child.offset == 0
             if len(children) == 0:
                 size = 0
             elif children[0].size == 0:

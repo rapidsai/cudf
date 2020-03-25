@@ -1252,8 +1252,10 @@ class Frame(libcudfxx.table.Table):
                 to_frame_data[name] = column.build_categorical_column(
                     categories=dtype.categories,
                     codes=cat_codes.get(name + "_codes", col),
-                    mask=col.mask,
+                    mask=col.base_mask,
                     ordered=dtype.ordered,
+                    size=col.size,
+                    offset=col.offset,
                 )
             else:
 

@@ -101,10 +101,11 @@ class CategoricalAccessor(object):
                     "number of items as old categories"
                 )
             out_col = column.build_categorical_column(
-                new_categories,
-                self._column.children[0],
-                self._column.mask,
-                self._column.size,
+                categories=new_categories,
+                codes=self._column.base_children[0],
+                mask=self._column.base_mask,
+                size=self._column.size,
+                offset=self._column.offset,
                 ordered=ordered,
             )
         else:
@@ -228,6 +229,9 @@ class CategoricalColumn(column.ColumnBase):
             respectively
         """
         if size is None:
+            for child in children:
+                assert child.offset == 0
+
             size = children[0].size
             size = size - offset
         if isinstance(dtype, pd.api.types.CategoricalDtype):
@@ -392,7 +396,9 @@ class CategoricalColumn(column.ColumnBase):
         col = column.build_categorical_column(
             categories=self.dtype.categories,
             codes=column.as_column(ary),
-            mask=self.mask,
+            mask=self.base_mask,
+            offset=self.offset,
+            size=self.size,
             ordered=self.dtype.ordered,
         )
         return col
