@@ -97,11 +97,6 @@ __host__ __device__ inline bool string_view::empty() const
     return _bytes == 0;
 }
 
-__host__ __device__ inline bool string_view::is_null() const
-{
-    return _data == nullptr;
-}
-
 // this custom iterator knows about UTF8 encoding
 __device__ inline string_view::const_iterator::const_iterator(const string_view& str, size_type pos)
     : p{str.data()}, bytes{str.size_bytes()},
@@ -261,13 +256,9 @@ __device__ inline int string_view::compare(const string_view& in) const
 
 __device__ inline int string_view::compare(const char* data, size_type bytes) const
 {
+    size_type const len1 = size_bytes();
     const unsigned char* ptr1 = reinterpret_cast<const unsigned char*>(this->data());
-    if(!ptr1)
-        return -1;
     const unsigned char* ptr2 = reinterpret_cast<const unsigned char*>(data);
-    if(!ptr2)
-        return 1;
-    size_type len1 = size_bytes();
     size_type idx = 0;
     for(; (idx < len1) && (idx < bytes); ++idx)
     {

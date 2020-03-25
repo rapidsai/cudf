@@ -38,7 +38,7 @@ TYPED_TEST(EmptyLikeTest, ColumnNumericTests) {
     auto input = make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, size, state);
     auto expected = make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, 0);
     auto got = cudf::experimental::empty_like(input->view());
-    cudf::test::expect_column_properties_equal(*expected, *got);
+    cudf::test::expect_columns_equal(*expected, *got);
 }
 
 struct EmptyLikeStringTest : public EmptyLikeTest <std::string> {};
@@ -123,3 +123,5 @@ TYPED_TEST(AllocateLikeTest, ColumnNumericTestSpecifiedSize) {
     auto got = cudf::experimental::allocate_like(input->view(), specified_size);
     cudf::test::expect_column_properties_equal(*expected, *got);
 }
+
+CUDF_TEST_PROGRAM_MAIN()

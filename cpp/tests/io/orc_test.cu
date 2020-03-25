@@ -664,3 +664,5 @@ TYPED_TEST(OrcChunkedWriterNumericTypeTest, UnalignedSize2)
 
   expect_tables_equal(*result.tbl, *expected);      
 }
+
+CUDF_TEST_PROGRAM_MAIN()
