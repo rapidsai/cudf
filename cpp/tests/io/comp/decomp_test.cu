@@ -99,13 +99,14 @@ struct SnappyDecompressTest : public DecompressTest<SnappyDecompressTest> {
  **/
 struct BrotliDecompressTest : public DecompressTest<BrotliDecompressTest> {
   cudaError_t dispatch() {
-    uint8_t* d_scratch = nullptr;
-    size_t scratch_size = cudf::io::get_gpu_debrotli_scratch_size(1);
+    rmm::device_buffer d_scratch(cudf::io::get_gpu_debrotli_scratch_size(1));
 
-    RMM_ALLOC(&d_scratch, scratch_size, 0);
-    auto ret = cudf::io::gpu_debrotli(d_inf_args.data().get(), d_inf_stat.data().get(), d_scratch, scratch_size, 1);
-    RMM_FREE(d_scratch, 0);
-    return ret;
+    return cudf::io::gpu_debrotli(
+      d_inf_args.data().get(), 
+      d_inf_stat.data().get(), 
+      d_scratch.data(), 
+      d_scratch.size(), 
+      1);
   }
 };
 
