@@ -178,6 +178,7 @@ std::unique_ptr<column> contains_fn( strings_column_view const& strings,
     if( strings_count == 0 )
         return make_numeric_column( data_type{BOOL8}, 0 );
 
+    CUDF_EXPECTS( target.is_valid(), "Parameter target must be valid.");
     if( target.size()==0 ) // empty target string returns true
     {
         auto true_scalar = make_fixed_width_scalar<experimental::bool8>( true, stream, mr );
@@ -186,7 +187,6 @@ std::unique_ptr<column> contains_fn( strings_column_view const& strings,
         return results;
     }
 
-    CUDF_EXPECTS( target.is_valid(), "Parameter target must be valid.");
     auto d_target = string_view( target.data(), target.size());
     auto strings_column = column_device_view::create(strings.parent(),stream);
     auto d_strings = *strings_column;
@@ -240,6 +240,7 @@ std::unique_ptr<column> ends_with( strings_column_view const& strings,
                                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                    cudaStream_t stream=0 )
 {
+
     auto pfn = [] __device__ (string_view d_string, string_view d_target) {
         auto str_length = d_string.length();
         auto tgt_length = d_target.length();
@@ -247,6 +248,7 @@ std::unique_ptr<column> ends_with( strings_column_view const& strings,
             return false;
         return d_string.find( d_target, str_length - tgt_length )>=0;
     };
+
     return contains_fn( strings, target, pfn, mr, stream );
 }
 
