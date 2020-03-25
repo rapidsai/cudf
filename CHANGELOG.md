@@ -19,6 +19,7 @@
 - PR #4548 Remove string_view is_null method
 - PR #4645 Add Alias for `kurtosis` as `kurt`
 - PR #4616 Enable different RMM allocation modes in unit tests
+- PR #4688 Add Java count aggregation to include nulll values
 
 ## Bug Fixes
 
