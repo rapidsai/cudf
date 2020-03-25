@@ -26,6 +26,8 @@
 - PR #4402 Fix `cudf::strings::join_strings` logic with all-null strings and null narep
 - PR #4610 Fix validity bug in string scalar factory
 - PR #4570 Fixing loc ordering issue in dataframe
+- PR #4612 Fix invalid index handling in cudf:dictionary:add-keys call to gather
+- PR #4614 Fix cuda-memcheck errors found in column_tests.cu and copying/utility_tests.cu
 - PR #4614 Fix cuda-memcheck errors found in `column_tests.cu` and `copying/utility_tests.cu`
 - PR #4639 Fix java column of empty strings issue
 - PR #4613 Fix issue related to downcasting in `.loc`
@@ -335,6 +337,8 @@
 - PR #4630 Remove dangling reference to RMM exec policy in drop duplicates tests.
 - PR #4625 Fix hash-based repartition bug in dask_cudf
 - PR #4662 Fix to handle `keep_index` in `partition_by_hash`
+- PR #4676 Fix bug in `_shuffle_group` for repartition
+- PR #4681 Fix `test_repr` tests that were generating a `RangeIndex` for column names
 
 
 # cuDF 0.12.0 (04 Feb 2020)
