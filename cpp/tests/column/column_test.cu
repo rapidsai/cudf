@@ -34,8 +34,6 @@
 
 template <typename T>
 struct TypedColumnTest : public cudf::test::BaseFixture {
-  static std::size_t data_size() { return 1000; }
-  static std::size_t mask_size() { return 100; }
   cudf::data_type type() {
     return cudf::data_type{cudf::experimental::type_to_id<T>()};
   }
@@ -45,8 +43,8 @@ struct TypedColumnTest : public cudf::test::BaseFixture {
         mask{cudf::bitmask_allocation_size_bytes(_num_elements)} {
     auto typed_data = static_cast<char*>(data.data());
     auto typed_mask = static_cast<char*>(mask.data());
-    thrust::sequence(thrust::device, typed_data, typed_data + data_size());
-    thrust::sequence(thrust::device, typed_mask, typed_mask + mask_size());
+    thrust::sequence(thrust::device, typed_data, typed_data + data.size());
+    thrust::sequence(thrust::device, typed_mask, typed_mask + mask.size());
   }
 
   cudf::size_type num_elements() { return _num_elements; }
@@ -398,3 +396,5 @@ TYPED_TEST(TypedColumnTest, ColumnViewConstructorWithMask) {
   EXPECT_NE(original_view.head(), copy_view.head());
   EXPECT_NE(original_view.null_mask(), copy_view.null_mask());
 }
+
+CUDF_TEST_PROGRAM_MAIN()

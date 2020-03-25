@@ -66,7 +66,6 @@ struct ScanTest : public cudf::test::BaseFixture
         CUDF_EXPECT_NO_THROW( col_out = cudf::experimental::scan(input_view, agg, inclusive) );
         const column_view result_view = col_out->view();
 
-        cudf::test::expect_column_properties_equal(input_view, result_view);
         cudf::test::expect_columns_equal(expected_col_out, result_view);
 
         auto host_result = cudf::test::to_host<T>(result_view);
@@ -218,7 +217,6 @@ struct ScanStringTest : public cudf::test::BaseFixture {
     CUDF_EXPECT_NO_THROW(col_out = cudf::experimental::scan(input_view, agg, inclusive));
     const column_view result_view = col_out->view();
 
-    cudf::test::expect_column_properties_equal(input_view, result_view);
     cudf::test::expect_columns_equal(expected_col_out, result_view);
 
     if (do_print) {
@@ -309,7 +307,6 @@ TYPED_TEST(ScanTest, skip_nulls)
                       cudf::experimental::make_sum_aggregation(), scan_type::INCLUSIVE, include_nulls::NO));
   cudf::test::fixed_width_column_wrapper<TypeParam> expected_col_out1{
       out_v.begin(), out_v.end(), b.cbegin()};
-  cudf::test::expect_column_properties_equal(expected_col_out1, col_out->view());
   cudf::test::expect_columns_equal(expected_col_out1, col_out->view());
   if(do_print) {
     print_view(expected_col_out1, "expect = ");
@@ -325,7 +322,6 @@ TYPED_TEST(ScanTest, skip_nulls)
     print_view(expected_col_out2, "expect = ");
     print_view(col_out->view(),   "result = ");
   }
-  cudf::test::expect_column_properties_equal(expected_col_out2, col_out->view());
   cudf::test::expect_columns_equal(expected_col_out2, col_out->view());
 }
 
@@ -358,7 +354,6 @@ TEST_F(ScanStringTest, skip_nulls)
     print_view(expected2, "expect = ");
     print_view(col_out->view(),   "result = ");
   }
-  cudf::test::expect_column_properties_equal(expected2, col_out->view());
   cudf::test::expect_columns_equal(expected2, col_out->view());
 
   //Exclusive scan string not supported.
@@ -389,7 +384,6 @@ TYPED_TEST(ScanTest, EmptyColumnskip_nulls)
     cudf::experimental::make_sum_aggregation(), scan_type::INCLUSIVE, include_nulls::NO));
   cudf::test::fixed_width_column_wrapper<TypeParam> expected_col_out1{
       out_v.begin(), out_v.end(), b.cbegin()};
-  cudf::test::expect_column_properties_equal(expected_col_out1, col_out->view());
   cudf::test::expect_columns_equal(expected_col_out1, col_out->view());
   if(do_print) {
     print_view(expected_col_out1, "expect = ");
@@ -405,6 +399,5 @@ TYPED_TEST(ScanTest, EmptyColumnskip_nulls)
     print_view(expected_col_out2, "expect = ");
     print_view(col_out->view(),   "result = ");
   }
-  cudf::test::expect_column_properties_equal(expected_col_out2, col_out->view());
   cudf::test::expect_columns_equal(expected_col_out2, col_out->view());
 }

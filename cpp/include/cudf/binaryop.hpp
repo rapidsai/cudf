@@ -58,6 +58,8 @@ enum class binary_operator : int32_t {
   // Logical right shift. Casts to an unsigned value before shifing.
   // approximates >>> from Java.
   SHIFT_RIGHT_UNSIGNED,   ///< operator >>> 
+
+  LOG_BASE,               ///< logarithm to the base
   
   INVALID_BINARY          ///< invalid operation
 };
