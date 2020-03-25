@@ -78,3 +78,12 @@ def test_column_series_multi_dim(data):
 
     with pytest.raises(ValueError):
         cudf.core.column.as_column(data)
+
+
+@pytest.mark.parametrize("data", [["1.0", "2", -3], ["1", "0.11", 0.1]])
+def test_column_series_misc_input(data):
+    psr = pd.Series(data)
+    sr = cudf.Series(data)
+
+    assert_eq(psr.dtype, sr.dtype)
+    assert_eq(psr.astype("str"), sr.astype("str"))
