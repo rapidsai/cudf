@@ -86,4 +86,4 @@ def test_column_series_misc_input(data):
     sr = cudf.Series(data)
 
     assert_eq(psr.dtype, sr.dtype)
-    assert_eq(psr.astype("str"), sr.astype("str"))
+    assert_eq(psr.astype("str"), sr)
