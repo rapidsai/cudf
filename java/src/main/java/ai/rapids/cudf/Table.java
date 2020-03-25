@@ -989,7 +989,6 @@ public final class Table implements AutoCloseable {
   }
 
   public static Aggregate count(int index, boolean include_nulls) {
-    assert include_nulls == true || include_nulls == false : "include_nulls must be boolean";
     return Aggregate.count(index, include_nulls);
   }
 
