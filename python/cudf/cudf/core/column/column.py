@@ -436,7 +436,7 @@ class ColumnBase(Column):
                 codes = self.children[0][arg]
                 return build_categorical_column(
                     categories=self.categories,
-                    codes=codes,
+                    codes=as_column(codes.base_data, dtype=codes.dtype),
                     mask=codes.base_mask,
                     ordered=self.ordered,
                     size=codes.size,
@@ -549,7 +549,7 @@ class ColumnBase(Column):
             if is_categorical_dtype(value.dtype):
                 out = build_categorical_column(
                     categories=value.categories,
-                    codes=out,
+                    codes=as_column(out.base_data, dtype=out.dtype),
                     mask=out.base_mask,
                     size=out.size,
                     offset=out.offset,
@@ -567,7 +567,7 @@ class ColumnBase(Column):
                     if is_categorical_dtype(self.dtype):
                         out = build_categorical_column(
                             categories=self.categories,
-                            codes=out,
+                            codes=as_column(out.base_data, dtype=out.dtype),
                             mask=out.base_mask,
                             size=out.size,
                             offset=out.offset,

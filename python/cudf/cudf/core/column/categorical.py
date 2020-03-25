@@ -321,7 +321,7 @@ class CategoricalColumn(column.ColumnBase):
             codes_column = column.build_column(
                 data=codes_column.base_data,
                 dtype=codes_column.dtype,
-                mask=codes_column.base_mask,
+                mask=self.base_mask,
                 size=self.size,
                 offset=self.offset,
             )
@@ -347,7 +347,7 @@ class CategoricalColumn(column.ColumnBase):
     @property
     def codes(self):
         if self._codes is None:
-            self._codes = self.children[0].set_mask(self.mask)
+            self._codes = self.children[0]
         return self._codes
 
     @property

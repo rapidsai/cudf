@@ -294,7 +294,7 @@ cdef class Column:
 
     cdef mutable_column_view mutable_view(self) except *:
         if is_categorical_dtype(self.dtype):
-            col = self.children[0]
+            col = self.codes
         else:
             col = self
         data_dtype = col.dtype
@@ -347,7 +347,7 @@ cdef class Column:
 
     cdef column_view _view(self, libcudf_types.size_type null_count) except *:
         if is_categorical_dtype(self.dtype):
-            col = self.children[0]
+            col = self.codes
         else:
             col = self
         data_dtype = col.dtype
@@ -423,7 +423,7 @@ cdef class Column:
 
         column_owner = isinstance(owner, Column)
         if column_owner and is_categorical_dtype(owner.dtype):
-            owner = owner.children[0]
+            owner = owner.codes
 
         size = cv.size()
         offset = cv.offset()
