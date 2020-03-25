@@ -433,7 +433,7 @@ class ColumnBase(Column):
         elif isinstance(arg, slice):
 
             if is_categorical_dtype(self):
-                codes = self.children[0][arg]
+                codes = self.codes[arg]
                 return build_categorical_column(
                     categories=self.categories,
                     codes=as_column(codes.base_data, dtype=codes.dtype),
