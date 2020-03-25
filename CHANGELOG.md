@@ -47,6 +47,7 @@
 - PR #4338 Add cudf::sequence() for generating an incrementing list of numeric values
 - PR #4456 Add argmin/max and string min/max to sort groupby
 - PR #4602 Add Cython bindings for functions in `datetime.hpp`
+- PR #4363 Grouped Rolling Window support
 
 ## Improvements
 
@@ -184,6 +185,7 @@
 - PR #4563 Remove copying to host for metadata generation in `generate_pandas_metadata`
 - PR #4554 Removed raw RMM allocation from `column_device_view`
 - PR #4619 Remove usage of `nvstrings` in `data_array_view`
+- PR #4654 Upgrade version of `numba` required to `>=0.48.0`
 
 ## Bug Fixes
 
@@ -266,6 +268,7 @@
 - PR #4445 Fix string issue for parquet reader and support `keep_index` for `scatter_to_tables`
 - PR #4423 Tighten up Dask serialization checks
 - PR #4537 Use `elif` in Dask deserialize check
+- PR #4682 Include frame lengths in Dask serialized header
 - PR #4438 Fix repl-template error for replace_with_backrefs
 - PR #4434 Fix join_strings logic with all-null strings and non-null narep
 - PR #4465 Fix use_pandas_index having no effect in libcudf++ parquet reader
@@ -283,6 +286,7 @@
 - PR #4526 Fix index slicing issue for index incase of an empty dataframe
 - PR #4538 Fix cudf::strings::slice_strings(step=-1) for empty strings
 - PR #4557 Disable compile-errors on deprecation warnings, for JNI
+- PR #4669 Fix `dask_cudf` categorical nonempty meta handling
 - PR #4576 Fix typo in `serialize.py`
 - PR #4571 Load JNI native dependencies for Scalar class
 - PR #4598 Fix to handle `pd.DataFrame` in `DataFrame.__init__`
@@ -294,6 +298,8 @@
 - PR #4630 Remove dangling reference to RMM exec policy in drop duplicates tests.
 - PR #4625 Fix hash-based repartition bug in dask_cudf
 - PR #4662 Fix to handle `keep_index` in `partition_by_hash`
+- PR #4676 Fix bug in `_shuffle_group` for repartition
+- PR #4681 Fix `test_repr` tests that were generating a `RangeIndex` for column names
 
 
 # cuDF 0.12.0 (04 Feb 2020)

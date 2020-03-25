@@ -19,6 +19,8 @@
 package ai.rapids.cudf;
 
 import ai.rapids.cudf.HostColumnVector.Builder;
+import ai.rapids.cudf.WindowOptions.FrameType;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -1220,11 +1222,19 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   /**
    * This function aggregates values in a window around each element i of the input
    * column. Please refer to WindowsOptions for various options that can be passed.
+   * Note: Only rows-based windows are supported.
    * @param op the operation to perform.
    * @param options various window function arguments.
    * @return Column containing aggregate function result.
+   * @throws IllegalArgumentException if unsupported window specification * (i.e. other than {@link FrameType#ROWS} is used.
    */
   public ColumnVector rollingWindow(AggregateOp op, WindowOptions options) {
+    // Check that only row-based windows are used.
+    if (!options.getFrameType().equals(FrameType.ROWS)) {
+      throw new IllegalArgumentException("Expected ROWS-based window specification. Unexpected window type: "
+            + options.getFrameType());
+    }
+
     return new ColumnVector(
         rollingWindow(this.getNativeView(),
             options.getMinPeriods(),
