@@ -212,25 +212,6 @@ rmm::device_buffer copy_bitmask(column_view const& view,
     cudaStream_t stream = 0,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-/**---------------------------------------------------------------------------*
- * @brief Concatenates `views[i]`'s bitmask from the bits
- * `[views[i].offset(), views[i].offset() + views[i].size())` for all elements
- * views[i] in views into a `device_buffer`
- *
- * Returns empty `device_buffer` if the column is not nullable
- *
- * @param views Vector of column views whose bitmask will to be concatenated
- * @param mr Optional, the memory resource that will be used for allocating
- * the device memory for the new device_buffer
- * @param stream Optional, stream on which all memory allocations and copies
- * will be performed
- * @return rmm::device_buffer A `device_buffer` containing the bitmasks of all
- * the column views in the views vector
- *---------------------------------------------------------------------------**/
-rmm::device_buffer concatenate_masks(std::vector<column_view> const &views,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0);
-
 /**
  * @brief Returns a bitwise AND of the bitmasks of columns of a table
  * 

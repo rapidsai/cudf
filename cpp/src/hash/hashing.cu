@@ -17,7 +17,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/table/table_device_view.cuh>
-#include <cudf/utilities/nvtx_utils.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/table/row_operators.cuh>
@@ -587,12 +587,6 @@ hash_partition_table(table_view const& input,
   }
 }
 
-// Add a wrapper around nvtx to automatically pop the range when the function scope ends
-struct nvtx_raii {
-  nvtx_raii(char const* name, nvtx::color color) { nvtx::range_push(name, color); }
-  ~nvtx_raii() { nvtx::range_pop(); }
-};
-
 }  // namespace
 
 namespace detail {
@@ -604,8 +598,7 @@ hash_partition(table_view const& input,
                rmm::mr::device_memory_resource* mr,
                cudaStream_t stream)
 {
-  // Push/pop nvtx range around the scope of this function
-  nvtx_raii("CUDF_HASH_PARTITION", nvtx::PARTITION_COLOR);
+  CUDF_FUNC_RANGE();
 
   auto table_to_hash = input.select(columns_to_hash);
 

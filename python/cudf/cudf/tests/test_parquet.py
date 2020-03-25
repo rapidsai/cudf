@@ -600,3 +600,13 @@ def test_parquet_write_to_dataset(tmpdir_factory, cols):
     expect = pd.read_parquet(dir1)
     got = pd.read_parquet(dir2)
     assert_eq(expect, got)
+
+    gdf = cudf.DataFrame(
+        {
+            "a": cudf.Series([1, 2, 3]),
+            "b": cudf.Series([1, 2, 3]),
+            "c": cudf.Series(["a", "b", "c"], dtype="category"),
+        }
+    )
+    with pytest.raises(ValueError):
+        gdf.to_parquet(dir1, partition_cols=cols)
