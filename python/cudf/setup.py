@@ -59,6 +59,9 @@ extensions = [
     )
 ]
 
+cmdclass = dict()
+cmdclass.update(versioneer.get_cmdclass())
+
 setup(
     name="cudf",
     version=versioneer.get_version(),
@@ -88,7 +91,7 @@ setup(
     package_data=dict.fromkeys(
         find_packages(include=["cudf._lib*"]), ["*.pxd"],
     ),
-    cmdclass=versioneer.get_cmdclass(),
+    cmdclass=cmdclass,
     install_requires=install_requires,
     zip_safe=False,
 )
