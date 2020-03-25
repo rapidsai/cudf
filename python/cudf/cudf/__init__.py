@@ -42,7 +42,7 @@ if gpus_count > 0:
         pass
     else:
         raise UnSupportedCUDAError(
-            "Please update your NVIDIA GPU Driver to support CUDA Runtime.\n"
+            "The detected driver version does not support the detected CUDA Runtime version. Please update your NVIDIA GPU Driver.\n"
             "Detected CUDA Runtime version : "
             + str(cuda_runtime_version)
             + "\n"
