@@ -40,6 +40,7 @@
 - PR #4652 Fix misaligned error when computing regex device structs
 - PR #4651 Fix hashing benchmark missing includes
 - PR #4679 Fix comments for make_dictionary_column factory functions
+- PR #4701 Fix issue related to mixed input types in `as_column`
 
 
 # cuDF 0.13.0 (Date TBD)
