@@ -1,5 +1,7 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+from enum import Enum
+
 import pandas as pd
 import numba
 import numpy as np
@@ -8,54 +10,211 @@ from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 from cudf.utils import cudautils
 
-from cudf._libxx.types import np_to_cudf_types, cudf_to_np_types
+from cudf._libxx.types import np_to_cudf_types, cudf_to_np_types, IncludeNulls
 from cudf._libxx.move cimport move
-
-from cudf._libxx.aggregation cimport get_aggregation
-from cudf._libxx.cpp.types cimport (
-    type_id,
-    size_type,
-    data_type,
-    interpolation
+from cudf._libxx.types cimport (
+    underlying_type_t_interpolation,
+    underlying_type_t_include_nulls
 )
+from cudf._libxx.types import Interpolation
+
+cimport cudf._libxx.cpp.types as libcudf_types
 cimport cudf._libxx.cpp.aggregation as libcudf_aggregation
 
 
-# need to update as and when we add new aggregations with additional options
-cdef unique_ptr[aggregation] get_aggregation(op, kwargs) except *:
+class AggregationKind(Enum):
+    SUM = libcudf_aggregation.aggregation.Kind.SUM
+    PRODUCT = libcudf_aggregation.aggregation.Kind.PRODUCT
+    MIN = libcudf_aggregation.aggregation.Kind.MIN
+    MAX = libcudf_aggregation.aggregation.Kind.MAX
+    COUNT = libcudf_aggregation.aggregation.Kind.COUNT_VALID
+    SIZE = libcudf_aggregation.aggregation.Kind.COUNT_ALL
+    ANY = libcudf_aggregation.aggregation.Kind.ANY
+    ALL = libcudf_aggregation.aggregation.Kind.ALL
+    SUM_OF_SQUARES = libcudf_aggregation.aggregation.Kind.SUM_OF_SQUARES
+    MEAN = libcudf_aggregation.aggregation.Kind.MEAN
+    VARIANCE = libcudf_aggregation.aggregation.Kind.VARIANCE
+    STD = libcudf_aggregation.aggregation.Kind.STD
+    MEDIAN = libcudf_aggregation.aggregation.Kind.MEDIAN
+    QUANTILE = libcudf_aggregation.aggregation.Kind.QUANTILE
+    ARGMAX = libcudf_aggregation.aggregation.Kind.ARGMAX
+    ARGMIN = libcudf_aggregation.aggregation.Kind.ARGMIN
+    NUNIQUE = libcudf_aggregation.aggregation.Kind.NUNIQUE
+    NTH = libcudf_aggregation.aggregation.Kind.NTH_ELEMENT
+    PTX = libcudf_aggregation.aggregation.Kind.PTX
+    CUDA = libcudf_aggregation.aggregation.Kind.CUDA
 
-    cdef type_id tid
-    cdef data_type out_dtype
-    cdef string cpp_str
-    cdef unique_ptr[aggregation] agg
 
-    if op == "sum":
-        agg = move(libcudf_aggregation.make_sum_aggregation())
-    elif op == "min":
-        agg = move(libcudf_aggregation.make_min_aggregation())
-    elif op == "max":
-        agg = move(libcudf_aggregation.make_max_aggregation())
-    elif op == "mean":
-        agg = move(libcudf_aggregation.make_mean_aggregation())
-    elif op == "count":
-        agg = move(libcudf_aggregation.make_count_aggregation())
-    elif op == "any":
-        agg = move(libcudf_aggregation.make_any_aggregation())
-    elif op == "all":
-        agg = move(libcudf_aggregation.make_all_aggregation())
-    elif op == "product":
-        agg = move(libcudf_aggregation.make_product_aggregation())
-    elif op == "sum_of_squares":
-        agg = move(libcudf_aggregation.make_sum_of_squares_aggregation())
-    elif op == "var":
-        agg = move(libcudf_aggregation.make_variance_aggregation(
-            kwargs['ddof'])
-        )
-    elif op == "std":
-        agg = move(libcudf_aggregation.make_std_aggregation(kwargs['ddof']))
-    elif op == "count":
-        agg = move(libcudf_aggregation.make_count_aggregation())
+cdef class Aggregation:
+
+    def __init__(self, op, **kwargs):
+        self.c_obj = move(make_aggregation(op, kwargs))
+
+    @property
+    def kind(self):
+        return AggregationKind(self.c_obj.get()[0].kind).name.lower()
+
+
+cdef unique_ptr[aggregation] make_aggregation(op, kwargs={}) except *:
+    """
+    Parameters
+    ----------
+    op : str or callable
+        If callable, must meet one of the following requirements:
+
+        * Is of the form lambda x: x.agg(*args, **kwargs), where
+          `agg` is the name of a supported aggregation. Used to
+          to specify aggregations that take arguments, e.g.,
+          `lambda x: x.quantile(0.5)`.
+        * Is a user defined aggregation function that operates on
+          group values. In this case, the output dtype must be
+          specified in the `kwargs` dictionary.
+
+    Returns
+    -------
+    unique_ptr[aggregation]
+    """
+    cdef Aggregation agg
+    if isinstance(op, str):
+        agg = getattr(_AggregationFactory, op)(**kwargs)
     elif callable(op):
+        if "dtype" in kwargs:
+            agg = _AggregationFactory.from_udf(op, **kwargs)
+        else:
+            agg = op(_AggregationFactory)
+    else:
+        raise TypeError("Unknown aggregation {}".format(op))
+    return move(agg.c_obj)
+
+# The Cython pattern below enables us to create an Aggregation
+# without ever calling its `__init__` method, which would otherwise
+# result in a RecursionError.
+cdef class _AggregationFactory:
+
+    @classmethod
+    def sum(cls):
+        cdef Aggregation agg = Aggregation.__new__(Aggregation)
+        agg.c_obj = move(libcudf_aggregation.make_sum_aggregation())
+        return agg
+
+    @classmethod
+    def min(cls):
+        cdef Aggregation agg = Aggregation.__new__(Aggregation)
+        agg.c_obj = move(libcudf_aggregation.make_min_aggregation())
+        return agg
+
+    @classmethod
+    def max(cls):
+        cdef Aggregation agg = Aggregation.__new__(Aggregation)
+        agg.c_obj = move(libcudf_aggregation.make_max_aggregation())
+        return agg
+
+    @classmethod
+    def mean(cls):
+        cdef Aggregation agg = Aggregation.__new__(Aggregation)
+        agg.c_obj = move(libcudf_aggregation.make_mean_aggregation())
+        return agg
+
+    @classmethod
+    def count(cls):
+        cdef Aggregation agg = Aggregation.__new__(Aggregation)
+        agg.c_obj = move(libcudf_aggregation.make_count_aggregation())
+        return agg
+
+    @classmethod
+    def size(cls):
+        cdef Aggregation agg = Aggregation.__new__(Aggregation)
+        agg.c_obj = move(libcudf_aggregation.make_count_aggregation(
+            <libcudf_types.include_nulls><underlying_type_t_include_nulls>(
+                IncludeNulls.YES
+            )
+        ))
+        return agg
+
+    @classmethod
+    def nunique(cls):
+        cdef Aggregation agg = Aggregation.__new__(Aggregation)
+        agg.c_obj = move(libcudf_aggregation.make_nunique_aggregation())
+        return agg
+
+    @classmethod
+    def nth(cls, libcudf_types.size_type size):
+        cdef Aggregation agg = Aggregation.__new__(Aggregation)
+        agg.c_obj = move(
+            libcudf_aggregation.make_nth_element_aggregation(size)
+        )
+        return agg
+
+    @classmethod
+    def any(cls):
+        cdef Aggregation agg = Aggregation.__new__(Aggregation)
+        agg.c_obj = move(libcudf_aggregation.make_any_aggregation())
+        return agg
+
+    @classmethod
+    def all(cls):
+        cdef Aggregation agg = Aggregation.__new__(Aggregation)
+        agg.c_obj = move(libcudf_aggregation.make_all_aggregation())
+        return agg
+
+    @classmethod
+    def product(cls):
+        cdef Aggregation agg = Aggregation.__new__(Aggregation)
+        agg.c_obj = move(libcudf_aggregation.make_product_aggregation())
+        return agg
+
+    @classmethod
+    def sum_of_squares(cls):
+        cdef Aggregation agg = Aggregation.__new__(Aggregation)
+        agg.c_obj = move(libcudf_aggregation.make_sum_of_squares_aggregation())
+        return agg
+
+    @classmethod
+    def var(cls, ddof=1):
+        cdef Aggregation agg = Aggregation.__new__(Aggregation)
+        agg.c_obj = move(libcudf_aggregation.make_variance_aggregation(ddof))
+        return agg
+
+    @classmethod
+    def std(cls, ddof=1):
+        cdef Aggregation agg = Aggregation.__new__(Aggregation)
+        agg.c_obj = move(libcudf_aggregation.make_std_aggregation(ddof))
+        return agg
+
+    @classmethod
+    def median(cls):
+        cdef Aggregation agg = Aggregation.__new__(Aggregation)
+        agg.c_obj = move(libcudf_aggregation.make_median_aggregation())
+        return agg
+
+    @classmethod
+    def quantile(cls, q=0.5, interpolation="linear"):
+        cdef Aggregation agg = Aggregation.__new__(Aggregation)
+
+        if not pd.api.types.is_list_like(q):
+            q = [q]
+
+        cdef vector[double] c_q = q
+        cdef libcudf_types.interpolation c_interp = (
+            <libcudf_types.interpolation> (
+                <underlying_type_t_interpolation> (
+                    Interpolation[interpolation.upper()]
+                )
+            )
+        )
+        agg.c_obj = move(
+            libcudf_aggregation.make_quantile_aggregation(c_q, c_interp)
+        )
+        return agg
+
+    @classmethod
+    def from_udf(cls, op, *args, **kwargs):
+        cdef Aggregation agg = Aggregation.__new__(Aggregation)
+
+        cdef libcudf_types.type_id tid
+        cdef libcudf_types.data_type out_dtype
+        cdef string cpp_str
+
         # Handling UDF type
         nb_type = numba.numpy_support.from_dtype(kwargs['dtype'])
         type_signature = (nb_type[:],)
@@ -69,12 +228,9 @@ cdef unique_ptr[aggregation] get_aggregation(op, kwargs) except *:
             )
         tid = np_to_cudf_types[output_np_dtype]
 
-        out_dtype = data_type(tid)
+        out_dtype = libcudf_types.data_type(tid)
 
-        agg = move(libcudf_aggregation.make_udf_aggregation(
+        agg.c_obj = move(libcudf_aggregation.make_udf_aggregation(
             libcudf_aggregation.udf_type.PTX, cpp_str, out_dtype
         ))
-    else:
-        assert False, "Invalid aggreagtion operation"
-
-    return move(agg)
+        return agg

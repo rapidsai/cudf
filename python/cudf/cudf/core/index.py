@@ -79,6 +79,18 @@ class Index(Frame):
     def __contains__(self, item):
         return item in self._values
 
+    def get_level_values(self, level):
+        if level == self.name:
+            return self
+        elif pd.api.types.is_integer(level):
+            if level != 0:
+                raise IndexError(
+                    f"Cannot get level: {level} " f"for index with 1 level"
+                )
+            return self
+        else:
+            raise KeyError(f"Requested level with name {level} " "not found")
+
     @classmethod
     def deserialize(cls, header, frames):
         """
@@ -334,7 +346,7 @@ class Index(Frame):
         values to the given dtype.
         If the dtype is not changed, ``self`` is returned.
         """
-        if dtype == self.dtype:
+        if pd.api.types.is_dtype_equal(dtype, self.dtype):
             return self
 
         return as_index(self._values.astype(dtype), name=self.name)
@@ -436,17 +448,16 @@ class Index(Frame):
         return ind
 
     @classmethod
-    def _from_table(cls, table):
+    def _from_table(cls, table, names=None):
         if not isinstance(table, RangeIndex):
             if table._num_columns == 0:
                 raise ValueError("Cannot construct Index from any empty Table")
+            if names is None:
+                names = table._data.names
             if table._num_columns == 1:
-                return as_index(
-                    next(iter(table._data.columns)),
-                    name=next(iter(table._data.keys())),
-                )
+                return as_index(table._data.columns[0], name=names[0])
             else:
-                return cudf.MultiIndex._from_table(table)
+                return cudf.MultiIndex._from_table(table, names=names)
         else:
             return as_index(table)
 
@@ -852,13 +863,11 @@ class DatetimeIndex(GenericIndex):
         # and then just dispatch upstream
         kwargs = _setdefault_name(values, kwargs)
         if isinstance(values, np.ndarray) and values.dtype.kind == "M":
-            values = DatetimeColumn.from_numpy(values)
+            values = column.as_column(values)
         elif isinstance(values, pd.DatetimeIndex):
-            values = DatetimeColumn.from_numpy(values.values)
+            values = column.as_column(values.values)
         elif isinstance(values, (list, tuple)):
-            values = DatetimeColumn.from_numpy(
-                np.array(values, dtype="<M8[ms]")
-            )
+            values = column.as_column(np.array(values, dtype="<M8[ms]"))
         super(DatetimeIndex, self).__init__(values, **kwargs)
 
     @property

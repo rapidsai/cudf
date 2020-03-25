@@ -83,10 +83,15 @@ def get(Column source_strings,
     """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
-
+    if index < 0:
+        next_index = index - 1
+        step = -1
+    else:
+        next_index = index + 1
+        step = 1
     cdef Scalar start_scalar = Scalar(index, np.int32)
-    cdef Scalar end_scalar = Scalar(index + 1, np.int32)
-    cdef Scalar step_scalar = Scalar(1, np.int32)
+    cdef Scalar end_scalar = Scalar(next_index, np.int32)
+    cdef Scalar step_scalar = Scalar(step, np.int32)
 
     cdef numeric_scalar[size_type]* start_numeric_scalar = \
         <numeric_scalar[size_type]*>(start_scalar.c_value.get())

@@ -29,6 +29,10 @@ import java.util.Objects;
  * A single scalar value.
  */
 public final class Scalar implements AutoCloseable, BinaryOperable {
+  static {
+    NativeDepsLoader.loadNativeDeps();
+  }
+
   private static final Logger LOG = LoggerFactory.getLogger(Scalar.class);
 
   private final DType type;

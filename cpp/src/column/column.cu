@@ -22,7 +22,6 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/strings/copying.hpp>
-#include <cudf/strings/detail/concatenate.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 
@@ -213,76 +212,6 @@ struct create_column_from_view {
  }
 
 };
-
-struct create_column_from_view_vector {
-  std::vector<cudf::column_view> views;
-  cudaStream_t stream;
-  rmm::mr::device_memory_resource *mr;
-
- template <typename ColumnType,
-           std::enable_if_t<std::is_same<ColumnType, cudf::string_view>::value>* = nullptr>
- std::unique_ptr<column> operator()() {
-   std::vector<cudf::strings_column_view> sviews;
-   sviews.reserve(views.size());
-   for (auto &v : views) { sviews.emplace_back(v); }
-
-   auto col = cudf::strings::detail::concatenate(sviews, mr, stream);
-
-   //If concatenated string column is nullable, proceed to calculate it
-   if (col->nullable()) {
-     cudf::detail::concatenate_masks(views,
-         (col->mutable_view()).null_mask(), stream);
-   }
-
-   return col;
- }
-
- template <typename ColumnType,
-           std::enable_if_t<std::is_same<ColumnType, cudf::dictionary32>::value>* = nullptr>
- std::unique_ptr<column> operator()() {
-   CUDF_FAIL("dictionary not supported yet");
- }
-
- template <typename ColumnType,
-           std::enable_if_t<cudf::is_fixed_width<ColumnType>()>* = nullptr>
- std::unique_ptr<column> operator()() {
-
-   auto type = views.front().type();
-   size_type total_element_count =
-     std::accumulate(views.begin(), views.end(), 0,
-         [](auto accumulator, auto const& v) { return accumulator + v.size(); });
-
-   bool has_nulls = std::any_of(views.begin(), views.end(),
-                      [](const column_view col) { return col.has_nulls(); });
-   using mask_policy = cudf::experimental::mask_allocation_policy;
-
-   mask_policy policy{mask_policy::NEVER};
-   if (has_nulls) { policy = mask_policy::ALWAYS; }
-
-   auto col = cudf::experimental::allocate_like(views.front(),
-       total_element_count, policy, mr);
-
-   auto m_view = col->mutable_view();
-   auto count = 0;
-   // TODO replace loop with a single kernel https://github.com/rapidsai/cudf/issues/2881
-   for (auto &v : views) {
-     thrust::copy(rmm::exec_policy()->on(stream),
-         v.begin<ColumnType>(),
-         v.end<ColumnType>(),
-         m_view.begin<ColumnType>() + count);
-     count += v.size();
-   }
-
-   //If concatenated column is nullable, proceed to calculate it
-   if (col->nullable()) {
-     cudf::detail::concatenate_masks(views,
-         (col->mutable_view()).null_mask(), stream);
-   }
-
-   return col;
- }
-
-};
 } // anonymous namespace
 
 // Copy from a view
@@ -292,19 +221,5 @@ column::column(column_view view, cudaStream_t stream,
   // an lvalue reference, which would otherwise dispatch to the copy constructor
   column{std::move(*experimental::type_dispatcher(view.type(),
                     create_column_from_view{view, stream, mr}))} {}
-
-// Concatenates the elements from a vector of column_views
-std::unique_ptr<column>
-concatenate(std::vector<column_view> const& columns_to_concat,
-            rmm::mr::device_memory_resource *mr, cudaStream_t stream) {
-  if (columns_to_concat.empty()) { return std::make_unique<column>(); }
-
-  data_type type = columns_to_concat.front().type();
-  CUDF_EXPECTS(std::all_of(columns_to_concat.begin(), columns_to_concat.end(),
-        [type](auto const& c) { return c.type() == type; }),
-      "Type mismatch in columns to concatenate.");
-  return cudf::experimental::type_dispatcher(type,
-      create_column_from_view_vector{columns_to_concat, stream, mr});
-}
 
 }  // namespace cudf

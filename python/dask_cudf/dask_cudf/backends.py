@@ -20,7 +20,7 @@ def _nonempty_index(idx):
     elif isinstance(idx, cudf.core.index.DatetimeIndex):
         start = "1970-01-01"
         data = np.array([start, "1970-01-02"], dtype=idx.dtype)
-        values = cudf.core.column.DatetimeColumn.from_numpy(data)
+        values = cudf.core.column.as_column(data)
         return cudf.core.index.DatetimeIndex(values, name=idx.name)
     elif isinstance(idx, cudf.core.index.StringIndex):
         return cudf.core.index.StringIndex(["cat", "dog"], name=idx.name)
@@ -56,7 +56,9 @@ def _nonempty_series(s, idx=None):
         idx = _nonempty_index(s.index)
     dtype = s.dtype
     if is_categorical_dtype(dtype):
-        categories = s._column.categories
+        categories = (
+            s._column.categories if len(s._column.categories) else ["a"]
+        )
         codes = [0, 0]
         ordered = s._column.ordered
         data = column.build_categorical_column(
@@ -117,10 +119,7 @@ try:
 
     def _handle_string(s):
         if isinstance(s._column, StringColumn):
-            out_col = column.column_empty(len(s), dtype="int32", masked=False)
-            ptr = out_col.data_ptr
-            s._column.data_array_view.hash(devptr=ptr)
-            s = out_col
+            s = s._hash()
         return s
 
     def safe_hash(df):

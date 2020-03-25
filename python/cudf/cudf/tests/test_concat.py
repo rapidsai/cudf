@@ -47,7 +47,7 @@ def make_frames(index=None, nulls="none"):
 @pytest.mark.parametrize("nulls", ["none", "some", "all"])
 @pytest.mark.parametrize("index", [False, "z", "y"])
 @pytest.mark.parametrize("axis", [0, "index"])
-def test_concat(index, nulls, axis):
+def test_concat_dataframe(index, nulls, axis):
     if index == "y" and nulls in ("some", "all"):
         pytest.skip("nulls in columns, dont index")
     df, df2, gdf, gdf2 = make_frames(index, nulls=nulls)
