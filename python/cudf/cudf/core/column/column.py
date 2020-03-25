@@ -1018,7 +1018,11 @@ def build_categorical_column(
     ordered : bool
         Indicates whether the categories are ordered
     """
+    if len(categories) == 0 and len(codes):
+        raise ValueError("Cannot have nonempty codes for empty categories")
+
     dtype = CategoricalDtype(categories=as_column(categories), ordered=ordered)
+
     return build_column(
         data=None,
         dtype=dtype,
@@ -1241,6 +1245,11 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 size=pa_size,
                 offset=pa_offset,
             )
+        elif isinstance(arbitrary, pa.ListArray):
+            raise NotImplementedError(
+                "cudf doesn't support list like data types"
+            )
+
         else:
             pa_size, pa_offset, pamask, padata, _ = buffers_from_pyarrow(
                 arbitrary

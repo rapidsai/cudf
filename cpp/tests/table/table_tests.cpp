@@ -148,3 +148,5 @@ TEST_F(TableTest, CreateFromViewVectorEmptyTables)
   TView final_view{views};
   EXPECT_EQ(final_view.num_columns(), 0);
 }
+
+CUDF_TEST_PROGRAM_MAIN()

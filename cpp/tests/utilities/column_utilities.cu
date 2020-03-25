@@ -41,11 +41,12 @@ template <bool check_exact_equality>
 void column_property_comparison(cudf::column_view const& lhs, cudf::column_view const& rhs) {
   EXPECT_EQ(lhs.type(), rhs.type());
   EXPECT_EQ(lhs.size(), rhs.size());
-  EXPECT_EQ(lhs.null_count(), rhs.null_count());
   if (lhs.size() > 0 and check_exact_equality) {
     EXPECT_EQ(lhs.nullable(), rhs.nullable());
   }
-  EXPECT_EQ(lhs.num_children(), rhs.num_children());
+  EXPECT_EQ(lhs.num_children(), rhs.num_children()); 
+
+  // TODO: compare children properties?
 }
 
 void expect_column_properties_equal(column_view const& lhs, column_view const& rhs) {
@@ -191,8 +192,6 @@ void column_comparison(cudf::column_view const& lhs, cudf::column_view const& rh
                                    thrust::make_counting_iterator(lhs.size()),
                                    differences.begin(),
                                    ComparatorType(*d_lhs, *d_rhs));
-
-  CUDA_TRY(cudaDeviceSynchronize());
 
   differences.resize(thrust::distance(differences.begin(), diff_iter));
 

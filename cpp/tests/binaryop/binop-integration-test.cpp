@@ -790,3 +790,5 @@ TEST_F(BinaryOperationIntegrationTest, LogBase_Vector_Vector_double_SI64_SI32) {
 }  // namespace binop
 }  // namespace test
 }  // namespace cudf
+
+CUDF_TEST_PROGRAM_MAIN()

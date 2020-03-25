@@ -366,3 +366,4 @@ struct IsSortedFixedWidthOnly : public cudf::test::BaseFixture {};
 
 TYPED_TEST_CASE(IsSortedFixedWidthOnly, cudf::test::FixedWidthTypes);
 
+CUDF_TEST_PROGRAM_MAIN()

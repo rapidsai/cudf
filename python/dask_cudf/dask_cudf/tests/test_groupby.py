@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import dask
 import dask.dataframe as dd
 
 import cudf
@@ -399,3 +400,23 @@ def test_groupby_reset_index_string_name():
 
     dd.assert_eq(got, expect)
     assert len(g_res) == len(p_res)
+
+
+def test_groupby_categorical_key():
+    # See https://github.com/rapidsai/cudf/issues/4608
+    df = dask.datasets.timeseries()
+    gddf = dask_cudf.from_dask_dataframe(df)
+    gddf["name"] = gddf["name"].astype("category")
+    ddf = gddf.to_dask_dataframe()
+
+    got = (
+        gddf.groupby("name")
+        .agg({"x": ["mean", "max"], "y": ["mean", "count"]})
+        .compute()
+    )
+    expect = (
+        ddf.groupby("name")
+        .agg({"x": ["mean", "max"], "y": ["mean", "count"]})
+        .compute()
+    )
+    dd.assert_eq(expect, got)
