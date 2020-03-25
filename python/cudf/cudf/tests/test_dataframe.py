@@ -840,6 +840,28 @@ def test_dataframe_hash_partition_masked_keys(nrows):
             assert expected_value == got_value
 
 
+@pytest.mark.parametrize("keep_index", [True, False])
+def test_dataframe_hash_partition_keep_index(keep_index):
+
+    gdf = DataFrame(
+        {"val": [1, 2, 3, 4], "key": [3, 2, 1, 4]}, index=[4, 3, 2, 1]
+    )
+
+    expected_df1 = DataFrame(
+        {"val": [1], "key": [3]}, index=[4] if keep_index else None
+    )
+    expected_df2 = DataFrame(
+        {"val": [2, 3, 4], "key": [2, 1, 4]},
+        index=[3, 2, 1] if keep_index else range(1, 4),
+    )
+    expected = [expected_df1, expected_df2]
+
+    parts = gdf.partition_by_hash(["key"], nparts=2, keep_index=keep_index)
+
+    for exp, got in zip(expected, parts):
+        assert_eq(exp, got)
+
+
 @pytest.mark.parametrize("dtype1", utils.supported_numpy_dtypes)
 @pytest.mark.parametrize("dtype2", utils.supported_numpy_dtypes)
 def test_dataframe_concat_different_numerical_columns(dtype1, dtype2):
