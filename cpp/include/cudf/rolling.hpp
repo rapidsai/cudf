@@ -105,7 +105,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
  * row, with a minimum of 1 period. The aggregation window is thus 3 rows wide,
  * yielding the following column:
  * 
- *    [ 30, 40,  80, 120, 100,  50, 130, 150, 120 ]
+ *    [ 30, 40,  80, 120, 110,  50, 130, 150, 120 ]
  * 
  * Note: The SUMs calculated at the group boundaries (i.e. indices 0, 4, 5, and 8)
  * consider only 2 values each, in spite of the window-size being 3.

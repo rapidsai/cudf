@@ -1125,7 +1125,7 @@ public final class Table implements AutoCloseable {
      * row, with a minimum of 1 period. The aggregation window is thus 3 rows wide,
      * yielding the following column:
      * 
-     *    [ 30, 40,  80, 120, 100,  50, 130, 150, 120 ]
+     *    [ 30, 40,  80, 120, 110,  50, 130, 150, 120 ]
      * 
      * @param windowAggregates the window-aggregations to be performed
      * @return Table instance, with each column containing the result of each aggregation.
