@@ -46,7 +46,8 @@ if gpus_count > 0:
             "Detected CUDA Runtime version : "
             + str(cuda_runtime_version)
             + "\n"
-            "Detected NVIDIA GPU Driver version : " + str(cuda_driver_version)
+            "Latest version of CUDA supported by current NVIDIA GPU Driver : "
+            + str(cuda_driver_version)
         )
 
 else:
