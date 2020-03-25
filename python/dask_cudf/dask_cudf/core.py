@@ -9,15 +9,12 @@ from tlz import partition_all
 
 import dask
 import dask.dataframe as dd
-from dask import compute
 from dask.base import normalize_token, tokenize
 from dask.compatibility import apply
 from dask.context import _globals
 from dask.core import flatten
-from dask.dataframe import from_delayed
 from dask.dataframe.core import Scalar, handle_out, map_partitions
 from dask.dataframe.utils import raise_on_meta_error
-from dask.delayed import delayed
 from dask.highlevelgraph import HighLevelGraph
 from dask.optimization import cull, fuse
 from dask.utils import M, OperatorMethodMixin, derived_from, funcname
@@ -25,7 +22,7 @@ from dask.utils import M, OperatorMethodMixin, derived_from, funcname
 import cudf
 import cudf._lib as libcudf
 
-from dask_cudf import batcher_sortnet
+from dask_cudf import sorting
 from dask_cudf.accessor import (
     CachedAccessor,
     CategoricalAccessor,
@@ -175,85 +172,96 @@ class DataFrame(_Frame, dd.core.DataFrame):
             on = list(on)
         return super().join(other, how=how, on=on, shuffle="tasks", **kwargs)
 
-    def set_index(self, other, **kwargs):
+    def set_index(self, other, sorted=False, divisions=None, **kwargs):
         if kwargs.pop("shuffle", "tasks") != "tasks":
             raise ValueError(
                 "Dask-cudf only supports task based shuffling, got %s"
                 % kwargs["shuffle"]
             )
-        return super().set_index(other, shuffle="tasks", **kwargs)
+        pre_sorted = sorted
+        del sorted
 
-    def sort_values(self, by, ignore_index=False):
-        """Sort by the given column
+        if divisions == "quantile" or isinstance(
+            divisions, (cudf.DataFrame, cudf.Series)
+        ):
 
-        Parameter
-        ---------
-        by : str
-        """
+            # Let upstream-dask handle "pre-sorted" case
+            if pre_sorted:
+                return dd.shuffle.set_sorted_index(
+                    self, other, divisions=divisions, **kwargs
+                )
+
+            by = other
+            if not isinstance(other, list):
+                by = [by]
+            if len(by) > 1:
+                raise ValueError("Dask does not support MultiIndex (yet).")
+            if divisions == "quantile":
+                divisions = None
+
+            # Use dask_cudf's sort_values
+            # TODO: Handle `sorted=True`
+            df = self.sort_values(
+                by,
+                max_branch=kwargs.get("max_branch", None),
+                divisions=divisions,
+                set_divisions=True,
+                ignore_index=True,
+            )
+
+            # Ignore divisions if its a dataframe
+            if isinstance(divisions, cudf.DataFrame):
+                divisions = None
+
+            # Set index and repartition
+            df2 = df.map_partitions(
+                sorting.set_index_post,
+                index_name=other,
+                drop=kwargs.get("drop", True),
+                column_dtype=df.columns.dtype,
+            )
+            npartitions = kwargs.get("npartitions", self.npartitions)
+            partition_size = kwargs.get("partition_size", None)
+            if partition_size:
+                return df2.repartition(partition_size=partition_size)
+            if not divisions and df2.npartitions != npartitions:
+                return df2.repartition(npartitions=npartitions)
+            if divisions and df2.npartitions != len(divisions) - 1:
+                return df2.repartition(divisions=divisions)
+            return df2
+
+        return super().set_index(
+            other,
+            sorted=pre_sorted,
+            shuffle="tasks",
+            divisions=divisions,
+            **kwargs,
+        )
+
+    def sort_values(
+        self,
+        by,
+        ignore_index=False,
+        max_branch=None,
+        divisions=None,
+        set_divisions=False,
+        **kwargs,
+    ):
         if self.npartitions == 1:
             df = self.map_partitions(M.sort_values, by)
         else:
-            parts = self.to_delayed()
-            sorted_parts = batcher_sortnet.sort_delayed_frame(parts, by)
-            df = from_delayed(sorted_parts, meta=self._meta)
+            df = sorting.sort_values(
+                self,
+                by,
+                max_branch=max_branch,
+                divisions=divisions,
+                set_divisions=set_divisions,
+                ignore_index=ignore_index,
+            )
+
         if ignore_index:
             return df.reset_index(drop=True)
         return df
-
-    def sort_values_binned(self, by):
-        """Sorty by the given column and ensure that the same key
-        doesn't spread across multiple partitions.
-        """
-        # Get sorted partitions
-        parts = self.sort_values(by=by).to_delayed()
-
-        # Get unique keys in each partition
-        @delayed
-        def get_unique(p):
-            return set(p[by].unique())
-
-        uniques = list(compute(*map(get_unique, parts)))
-
-        joiner = {}
-        for i in range(len(uniques)):
-            joiner[i] = to_join = {}
-            for j in range(i + 1, len(uniques)):
-                intersect = uniques[i] & uniques[j]
-                # If the keys intersect
-                if intersect:
-                    # Remove keys
-                    uniques[j] -= intersect
-                    to_join[j] = frozenset(intersect)
-                else:
-                    break
-
-        @delayed
-        def join(df, other, keys):
-            others = [
-                other.query("{by}==@k".format(by=by)) for k in sorted(keys)
-            ]
-            return cudf.concat([df] + others)
-
-        @delayed
-        def drop(df, keep_keys):
-            locvars = locals()
-            for i, k in enumerate(keep_keys):
-                locvars["k{}".format(i)] = k
-
-            conds = [
-                "{by}==@k{i}".format(by=by, i=i) for i in range(len(keep_keys))
-            ]
-            expr = " or ".join(conds)
-            return df.query(expr)
-
-        for i in range(len(parts)):
-            if uniques[i]:
-                parts[i] = drop(parts[i], uniques[i])
-                for joinee, intersect in joiner[i].items():
-                    parts[i] = join(parts[i], parts[joinee], intersect)
-
-        results = [p for i, p in enumerate(parts) if uniques[i]]
-        return from_delayed(results, meta=self._meta).reset_index()
 
     def to_parquet(self, path, *args, **kwargs):
         """ Calls dask.dataframe.io.to_parquet with CudfEngine backend """
@@ -336,7 +344,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
         npartitions = npartitions or self.npartitions
         columns = columns or [col for col in self.columns]
 
-        return batcher_sortnet.rearrange_by_hash(
+        return sorting.rearrange_by_hash(
             self,
             columns,
             npartitions,

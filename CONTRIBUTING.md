@@ -157,6 +157,7 @@ git submodule update --init --remote --recursive
 - Create the conda development environment `cudf_dev`:
 ```bash
 # create the conda environment (assuming in base `cudf` directory)
+# note: RAPIDS currently doesn't support `channel_priority: strict`; use `channel_priority: flexible` instead
 conda env create --name cudf_dev --file conda/environments/cudf_dev_cuda10.0.yml
 # activate the environment
 conda activate cudf_dev

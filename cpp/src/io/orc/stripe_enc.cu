@@ -1256,8 +1256,8 @@ gpuInitCompressionBlocks(StripeStream *strm_desc, EncChunk *chunks, gpu_inflate_
         uint32_t blk_size = min(comp_blk_size, ss.stream_size - min(b * comp_blk_size, ss.stream_size));
         blk_in->srcDevice = src + b * comp_blk_size;
         blk_in->srcSize = blk_size;
-        blk_in->dstDevice = dst + b * (3 + comp_blk_size) + 3;
-        blk_in->dstSize = blk_size + 3;
+        blk_in->dstDevice = dst + b * (3 + comp_blk_size) + 3; // reserve 3 bytes for block header
+        blk_in->dstSize = blk_size;
         blk_out->bytes_written = blk_size;
         blk_out->status = 1;
         blk_out->reserved = 0;
