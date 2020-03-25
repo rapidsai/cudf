@@ -4,7 +4,7 @@
 
 - PR #4472 Add new `partition` API to replace `scatter_to_tables`.
 - PR #4626 LogBase binops
-- PR #XXXX Compute last day of the month for a given date
+- PR #4689 Compute last day of the month for a given date
 
 ## Improvements
 
