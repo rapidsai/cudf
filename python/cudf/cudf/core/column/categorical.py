@@ -318,12 +318,22 @@ class CategoricalColumn(column.ColumnBase):
     def children(self):
         if self._children is None:
             codes_column = self.base_children[0]
+            if self._mask is None and self.base_mask is not None:
+                mask_column = self.base_children[0].set_mask(self.base_mask)
+
+                self._mask = mask_column[
+                    self.offset : self.offset + self.size
+                ].mask
+
+            buf = Buffer(codes_column.base_data)
+            buf.ptr = buf.ptr + (self.offset * codes_column.dtype.itemsize)
+            buf.size = self.size * codes_column.dtype.itemsize
+
             codes_column = column.build_column(
-                data=codes_column.base_data,
+                data=buf,
                 dtype=codes_column.dtype,
-                mask=self.base_mask,
+                mask=self.mask,
                 size=self.size,
-                offset=self.offset,
             )
             self._children = (codes_column,)
         return self._children

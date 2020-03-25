@@ -293,15 +293,18 @@ cdef class Column:
         return self._view(libcudf_types.UNKNOWN_NULL_COUNT).null_count()
 
     cdef mutable_column_view mutable_view(self) except *:
+        col_offset = self.offset
         if is_categorical_dtype(self.dtype):
             col = self.codes
+            # codes is already constructed with offset
+            col_offset = 0
         else:
             col = self
         data_dtype = col.dtype
 
         cdef libcudf_types.type_id tid = np_to_cudf_types[np.dtype(data_dtype)]
         cdef libcudf_types.data_type dtype = libcudf_types.data_type(tid)
-        cdef libcudf_types.size_type offset = col.offset
+        cdef libcudf_types.size_type offset = col_offset
         cdef vector[mutable_column_view] children
         cdef void* data
 
@@ -314,7 +317,7 @@ cdef class Column:
 
         cdef libcudf_types.bitmask_type* mask
         if self.nullable:
-            mask = <libcudf_types.bitmask_type*><uintptr_t>(self.base_mask_ptr)
+            mask = <libcudf_types.bitmask_type*><uintptr_t>(col.base_mask_ptr)
         else:
             mask = NULL
 
@@ -346,14 +349,16 @@ cdef class Column:
         return self._view(c_null_count)
 
     cdef column_view _view(self, libcudf_types.size_type null_count) except *:
+        col_offset = self.offset
         if is_categorical_dtype(self.dtype):
             col = self.codes
+            col_offset = 0
         else:
             col = self
         data_dtype = col.dtype
         cdef libcudf_types.type_id tid = np_to_cudf_types[np.dtype(data_dtype)]
         cdef libcudf_types.data_type dtype = libcudf_types.data_type(tid)
-        cdef libcudf_types.size_type offset = col.offset
+        cdef libcudf_types.size_type offset = col_offset
         cdef vector[column_view] children
         cdef void* data
 
@@ -366,7 +371,7 @@ cdef class Column:
 
         cdef libcudf_types.bitmask_type* mask
         if self.nullable:
-            mask = <libcudf_types.bitmask_type*><uintptr_t>(self.base_mask_ptr)
+            mask = <libcudf_types.bitmask_type*><uintptr_t>(col.base_mask_ptr)
         else:
             mask = NULL
 
