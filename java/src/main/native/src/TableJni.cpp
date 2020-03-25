@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cudf/aggregation.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/hashing.hpp>
 #include <cudf/io/functions.hpp>
@@ -223,27 +224,29 @@ std::unique_ptr<cudf::experimental::aggregation> map_jni_aggregation(jint op) {
       return cudf::experimental::make_min_aggregation();
     case 2: //MAX
       return cudf::experimental::make_max_aggregation();
-    case 3: //COUNT
-      return cudf::experimental::make_count_aggregation();
-    case 4: //MEAN
+    case 3: //COUNT_VALID
+      return cudf::experimental::make_count_aggregation(include_nulls::NO);
+    case 4: //COUNT_ALL
+      return cudf::experimental::make_count_aggregation(include_nulls::YES);
+    case 5: //MEAN
       return cudf::experimental::make_mean_aggregation();
-    case 5: //MEDIAN
+    case 6: //MEDIAN
       return cudf::experimental::make_median_aggregation();
-    case 7: // ARGMAX
+    case 8: // ARGMAX
       return cudf::experimental::make_argmax_aggregation();
-    case 8: // ARGMIN
+    case 9: // ARGMIN
       return cudf::experimental::make_argmin_aggregation();
-    case 9: // PRODUCT
+    case 10: // PRODUCT
       return cudf::experimental::make_product_aggregation();
-    case 10: // SUMOFSQUARES
+    case 11: // SUMOFSQUARES
       return cudf::experimental::make_sum_of_squares_aggregation();
-    case 11: // VAR
+    case 12: // VAR
       return cudf::experimental::make_variance_aggregation();
-    case 12: // STD
+    case 13: // STD
       return cudf::experimental::make_std_aggregation();
-    case 13: // ANY
+    case 14: // ANY
       return cudf::experimental::make_any_aggregation();
-    case 14: // ALL
+    case 15: // ALL
       return cudf::experimental::make_all_aggregation();
     default:
       throw std::logic_error("Unsupported Aggregation Operation");

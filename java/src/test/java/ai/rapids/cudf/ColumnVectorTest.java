@@ -1041,7 +1041,7 @@ public class ColumnVectorTest extends CudfTestBase {
       }
 
       try (ColumnVector expected = ColumnVector.fromInts(2, 3, 3, 3, 2);
-           ColumnVector result = v1.rollingWindow(AggregateOp.COUNT, options)) {
+           ColumnVector result = v1.rollingWindow(AggregateOp.COUNT_VALID, options)) {
         assertColumnsAreEqual(expected, result);
       }
     }

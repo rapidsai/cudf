@@ -30,10 +30,13 @@ public final class Aggregate {
     this.index = index;
   }
 
-  static Aggregate count(int index) {
-    return new Aggregate(AggregateOp.COUNT, index);
+  // Include null in count if include_nulls = true
+  static Aggregate count(int index, boolean include_nulls) {
+    if (include_nulls == true) {
+      return new Aggregate(AggregateOp.COUNT_ALL, index);
+    }
+    return new Aggregate(AggregateOp.COUNT_VALID, index);
   }
-
   static Aggregate max(int index) {
     return new Aggregate(AggregateOp.MAX, index);
   }
