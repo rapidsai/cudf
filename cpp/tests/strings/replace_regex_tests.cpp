@@ -94,6 +94,8 @@ TEST_F(StringsReplaceTests, InvalidRegex)
     EXPECT_THROW( cudf::strings::replace_re(strings_view,"|",cudf::string_scalar("")), cudf::logic_error );
     EXPECT_THROW( cudf::strings::replace_re(strings_view,"+",cudf::string_scalar("")), cudf::logic_error );
     EXPECT_THROW( cudf::strings::replace_re(strings_view,"ab(*)",cudf::string_scalar("")), cudf::logic_error );
+    EXPECT_THROW( cudf::strings::replace_re(strings_view,"\\",cudf::string_scalar("")), cudf::logic_error );
+    EXPECT_THROW( cudf::strings::replace_re(strings_view,"\\p",cudf::string_scalar("")), cudf::logic_error );
 }
 
 
