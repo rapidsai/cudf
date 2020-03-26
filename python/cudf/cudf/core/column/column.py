@@ -253,7 +253,11 @@ class ColumnBase(Column):
 
         if is_categorical:
             col = build_categorical_column(
-                categories=cats, codes=col, mask=col.mask
+                categories=cats,
+                codes=as_column(col.base_data, dtype=col.dtype),
+                mask=col.base_mask,
+                size=col.size,
+                offset=col.offset,
             )
 
         return col
@@ -895,7 +899,11 @@ def column_empty_like(column, dtype=None, masked=False, newsize=None):
     ):
         codes = column_empty_like(column.codes, masked=masked, newsize=newsize)
         return build_column(
-            data=None, dtype=dtype, mask=codes.mask, children=(codes,)
+            data=None,
+            dtype=dtype,
+            mask=codes.base_mask,
+            children=(as_column(codes.base_data, dtype=codes.dtype),),
+            size=codes.size,
         )
 
     return column_empty(row_count, dtype, masked)

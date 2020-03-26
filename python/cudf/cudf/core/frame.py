@@ -142,7 +142,9 @@ class Frame(libcudfxx.table.Table):
                 if idx in categories:
                     cols[name] = build_categorical_column(
                         categories=categories[idx],
-                        codes=cols[name],
+                        codes=as_column(
+                            cols[name].base_data, dtype=cols[name].dtype
+                        ),
                         mask=cols[name].base_mask,
                         offset=cols[name].offset,
                         size=cols[name].size,
@@ -518,7 +520,7 @@ class Frame(libcudfxx.table.Table):
                 if is_categorical_dtype(self[in_col_name].dtype):
                     result = build_categorical_column(
                         categories=self[in_col_name]._column.categories,
-                        codes=result,
+                        codes=as_column(result.base_data, dtype=result.dtype),
                         mask=result.base_mask,
                         size=result.size,
                         offset=result.offset,
@@ -548,7 +550,7 @@ class Frame(libcudfxx.table.Table):
             if is_categorical_dtype(self.dtype):
                 result = build_categorical_column(
                     categories=self._column.categories,
-                    codes=result,
+                    codes=as_column(result.base_data, dtype=result.dtype),
                     mask=result.base_mask,
                     size=result.size,
                     offset=result.offset,
@@ -1252,7 +1254,9 @@ class Frame(libcudfxx.table.Table):
                 to_frame_data[name] = column.build_categorical_column(
                     categories=dtype.categories,
                     codes=cat_codes.get(name + "_codes", col),
-                    mask=col.mask,
+                    mask=col.base_mask,
+                    size=col.size,
+                    offset=col.offset,
                     ordered=dtype.ordered,
                 )
             else:
