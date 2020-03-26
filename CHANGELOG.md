@@ -18,6 +18,7 @@
 - PR #4599 Add Java and JNI bindings for string replace
 - PR #4548 Remove string_view is_null method
 - PR #4645 Add Alias for `kurtosis` as `kurt`
+- PR #4703 Optimize strings concatenate for many columns
 
 ## Bug Fixes
 
