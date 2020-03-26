@@ -306,7 +306,6 @@ cpdef merge_filemetadata(filemetadata_list):
     cdef vector[unique_ptr[vector[uint8_t]]] list_c
     cdef vector[uint8_t] blob_c
     cdef unique_ptr[vector[uint8_t]] output_c
-    cdef bytes output_py
 
     for blob_py in filemetadata_list:
         blob_c = blob_py
