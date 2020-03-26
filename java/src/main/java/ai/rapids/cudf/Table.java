@@ -1005,7 +1005,7 @@ public final class Table implements AutoCloseable {
   }
 
   /**
-   * Returns max aggregation
+   * Returns max aggregation. Null values are skipped.
    * @param index Column on which max aggregation is to be performed.
    * @return max aggregation of column `index`
    */
@@ -1014,7 +1014,7 @@ public final class Table implements AutoCloseable {
   }
 
   /**
-   * Returns min aggregation
+   * Returns min aggregation. Null values are skipped.
    * @param index Column on which min aggregation is to be performed.
    * @return min aggregation of column `index`
    */
@@ -1023,7 +1023,7 @@ public final class Table implements AutoCloseable {
   }
 
   /**
-   * Returns sum aggregation
+   * Returns sum aggregation. Null values are skipped.
    * @param index Column on which sum aggregation is to be performed.
    * @return sum aggregation of column `index`
    */
@@ -1032,7 +1032,7 @@ public final class Table implements AutoCloseable {
   }
 
   /**
-   * Returns mean aggregation
+   * Returns mean aggregation. Null values are skipped.
    * @param index Column on which mean aggregation is to be performed.
    * @return mean aggregation of column `index`
    */
@@ -1041,7 +1041,7 @@ public final class Table implements AutoCloseable {
   }
 
   /**
-   * Returns median aggregation
+   * Returns median aggregation. Null values are skipped.
    * @param index Column on which median aggregation is to be performed.
    * @return median aggregation of column `index`
    */
