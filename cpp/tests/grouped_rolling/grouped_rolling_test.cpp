@@ -688,3 +688,5 @@ TYPED_TEST(GroupedTimeRangeRollingTest, SimplePartitionedStaticWindowsWithGroupK
 
   this->run_test_col_agg(grouping_keys, timestamp_days, input, expected_group_offsets, preceding_window_in_days, following_window_in_days, 1);
 }
+
+CUDF_TEST_PROGRAM_MAIN()
