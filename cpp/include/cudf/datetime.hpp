@@ -152,7 +152,7 @@ std::unique_ptr<cudf::column> extract_second(
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
  */
 
-std::unique_ptr<cudf::column> last_day(
+std::unique_ptr<cudf::column> last_day_of_month(
     cudf::column_view const& column,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 

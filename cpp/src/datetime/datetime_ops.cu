@@ -69,7 +69,7 @@ struct extract_component_operator {
 
 // Round up the date to the last day of the month and return the
 // date only (without the time component)
-struct extract_last_day {
+struct extract_last_day_of_month {
   CUDA_DEVICE_CALLABLE auto days_in_month(simt::std::chrono::month mon,
                                           bool is_leap_year) const -> uint8_t {
     using namespace simt::std::chrono;
@@ -214,10 +214,10 @@ std::unique_ptr<column> extract_second(column_view const& column,
       (column, 0, mr);
 }
 
-std::unique_ptr<column> last_day(column_view const& column,
-                                 rmm::mr::device_memory_resource* mr) {
+std::unique_ptr<column> last_day_of_month(column_view const& column,
+                                          rmm::mr::device_memory_resource* mr) {
   CUDF_FUNC_RANGE();
-  return detail::apply_datetime_op<detail::extract_last_day, cudf::TIMESTAMP_DAYS>
+  return detail::apply_datetime_op<detail::extract_last_day_of_month, cudf::TIMESTAMP_DAYS>
       (column, 0, mr);
 }
 

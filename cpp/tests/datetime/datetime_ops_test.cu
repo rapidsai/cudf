@@ -56,7 +56,7 @@ TYPED_TEST(NonTimestampTest, TestThrowsOnNonTimestamp) {
   EXPECT_THROW(extract_hour(col), cudf::logic_error);
   EXPECT_THROW(extract_minute(col), cudf::logic_error);
   EXPECT_THROW(extract_second(col), cudf::logic_error);
-  EXPECT_THROW(last_day(col), cudf::logic_error);
+  EXPECT_THROW(last_day_of_month(col), cudf::logic_error);
 }
 
 struct BasicDatetimeOpsTest : public cudf::test::BaseFixture {};
@@ -289,7 +289,7 @@ TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithSeconds) {
       -131968728,   // 1965-10-26 14:01:12 GMT
   };
 
-  expect_columns_equal(*last_day(timestamps_s),
+  expect_columns_equal(*last_day_of_month(timestamps_s),
                        fixed_width_column_wrapper<cudf::timestamp_D>{
                            7700,  // 1991-01-31
                           11016,  // 2000-02-29
@@ -328,7 +328,7 @@ TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithDate) {
       { false, true, true, true, false, true, true, false },
   };
 
-  expect_columns_equal(*last_day(timestamps_d),
+  expect_columns_equal(*last_day_of_month(timestamps_d),
                        fixed_width_column_wrapper<cudf::timestamp_D>{
                          {
                           999,    // Random nullable field
