@@ -64,7 +64,7 @@ struct contains_fn
         string_view d_str = d_strings.element<string_view>(idx);
         int32_t begin = 0;
         int32_t end = bmatch ? 1 : d_str.length(); // 1=match only the beginning of the string
-        return static_cast<experimental::bool8>(prog.find(idx,d_str,begin,end));
+        return static_cast<bool>(prog.find(idx,d_str,begin,end));
     }
 };
 

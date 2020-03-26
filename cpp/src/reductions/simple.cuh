@@ -106,7 +106,7 @@ public:
 template <typename Op>
 struct element_type_dispatcher {
 private:
-    // return true if ElementType is arithmetic type or bool8, or
+    // return true if ElementType is arithmetic type or bool, or
     // Op is DeviceMin or DeviceMax for wrapper (non-arithmetic) types
     template <typename ElementType>
     static constexpr bool is_supported_v()
