@@ -18,7 +18,9 @@
 - PR #4655 Raise error for list like dtypes in cudf
 - PR #4548 Remove string_view is_null method
 - PR #4645 Add Alias for `kurtosis` as `kurt`
+- PR #4668 Add Java bindings for log2/log10 unary ops and log_base binary op
 - PR #4616 Enable different RMM allocation modes in unit tests
+- PR #4691 Fix compiler argument syntax for ccache
 
 ## Bug Fixes
 
@@ -32,12 +34,15 @@
 - PR #4639 Fix java column of empty strings issue
 - PR #4613 Fix issue related to downcasting in `.loc`
 - PR #4615 Fix potential OOB write in ORC writer compression stage
+- PR #4587 Fix non-regex libcudf contains methods to return true when target is an empty string
+
 - PR #4617 Fix memory leak in aggregation object destructor
 - PR #4633 String concatenation fix in `DataFrame.rename`
 - PR #4609 Fix to handle `Series.factorize` when index is set
 - PR #4652 Fix misaligned error when computing regex device structs
 - PR #4651 Fix hashing benchmark missing includes
 - PR #4673 Fix regex infinite loop while parsing invalid quantifier pattern
+- PR #4679 Fix comments for make_dictionary_column factory functions
 
 
 # cuDF 0.13.0 (Date TBD)
@@ -89,6 +94,7 @@
 - PR #4456 Add argmin/max and string min/max to sort groupby
 - PR #4564 Added Java bindings for clamp operator.
 - PR #4602 Add Cython bindings for functions in `datetime.hpp`
+- PR #4670 Add java and JNI bindings for contains_re
 
 ## Improvements
 
@@ -226,6 +232,7 @@
 - PR #4563 Remove copying to host for metadata generation in `generate_pandas_metadata`
 - PR #4554 Removed raw RMM allocation from `column_device_view`
 - PR #4619 Remove usage of `nvstrings` in `data_array_view`
+- PR #4654 Upgrade version of `numba` required to `>=0.48.0`
 
 ## Bug Fixes
 
@@ -309,6 +316,7 @@
 - PR #4445 Fix string issue for parquet reader and support `keep_index` for `scatter_to_tables`
 - PR #4423 Tighten up Dask serialization checks
 - PR #4537 Use `elif` in Dask deserialize check
+- PR #4682 Include frame lengths in Dask serialized header
 - PR #4438 Fix repl-template error for replace_with_backrefs
 - PR #4434 Fix join_strings logic with all-null strings and non-null narep
 - PR #4465 Fix use_pandas_index having no effect in libcudf++ parquet reader
@@ -326,6 +334,7 @@
 - PR #4526 Fix index slicing issue for index incase of an empty dataframe
 - PR #4538 Fix cudf::strings::slice_strings(step=-1) for empty strings
 - PR #4557 Disable compile-errors on deprecation warnings, for JNI
+- PR #4669 Fix `dask_cudf` categorical nonempty meta handling
 - PR #4576 Fix typo in `serialize.py`
 - PR #4571 Load JNI native dependencies for Scalar class
 - PR #4598 Fix to handle `pd.DataFrame` in `DataFrame.__init__`

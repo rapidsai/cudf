@@ -27,6 +27,7 @@ try:
         with log_errors():
             header, frames = x.serialize()
             assert all((type(f) is cudf.core.buffer.Buffer) for f in frames)
+            header["lengths"] = [f.nbytes for f in frames]
             return header, frames
 
     # all (de-)serializtion are attached to cudf Objects:
