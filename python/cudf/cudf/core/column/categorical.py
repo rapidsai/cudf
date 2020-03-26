@@ -318,12 +318,9 @@ class CategoricalColumn(column.ColumnBase):
     def children(self):
         if self._children is None:
             codes_column = self.base_children[0]
-            if self._mask is None and self.base_mask is not None:
-                mask_column = self.base_children[0].set_mask(self.base_mask)
-
-                self._mask = mask_column[
-                    self.offset : self.offset + self.size
-                ].mask
+            mask_column = self.base_children[0][
+                self.offset : self.offset + self.size
+            ]
 
             buf = Buffer(codes_column.base_data)
             buf.ptr = buf.ptr + (self.offset * codes_column.dtype.itemsize)
@@ -332,7 +329,7 @@ class CategoricalColumn(column.ColumnBase):
             codes_column = column.build_column(
                 data=buf,
                 dtype=codes_column.dtype,
-                mask=self.mask,
+                mask=mask_column.mask,
                 size=self.size,
             )
             self._children = (codes_column,)
@@ -357,7 +354,7 @@ class CategoricalColumn(column.ColumnBase):
     @property
     def codes(self):
         if self._codes is None:
-            self._codes = self.children[0]
+            self._codes = self.children[0].set_mask(self.mask)
         return self._codes
 
     @property
