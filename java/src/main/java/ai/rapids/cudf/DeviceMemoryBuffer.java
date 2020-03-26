@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -109,6 +109,7 @@ public class DeviceMemoryBuffer extends BaseDeviceMemoryBuffer {
    * @param len how many bytes to slice
    * @return a device buffer that will need to be closed independently from this buffer.
    */
+  @Override
   public synchronized final DeviceMemoryBuffer slice(long offset, long len) {
     addressOutOfBoundsCheck(address + offset, len, "slice");
     refCount++;

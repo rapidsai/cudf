@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,6 +50,7 @@ std::unique_ptr<column> sorted_order(
 /**
  * @brief Computes the row indices that would produce `input` in a stable
  * lexicographical sorted order.
+ * The order of equivalent elements is guaranteed to be preserved.
  *
  * @copydetails cudf::experimental::detail::sorted_order
  */
