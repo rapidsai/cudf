@@ -478,7 +478,7 @@ class StringMethods(object):
 
         return self._return_or_inplace(
             cpp_replace_re(self._column, pat, Scalar(repl, "str"), n)
-            if regex is True
+            if regex is True and len(pat) > 1
             else cpp_replace(
                 self._column, Scalar(pat, "str"), Scalar(repl, "str"), n
             ),
