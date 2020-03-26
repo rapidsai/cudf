@@ -1,7 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 import cudf
-from cudf.core.column.column import as_column
 from cudf.utils.dtypes import is_categorical_dtype
 
 from libcpp.memory cimport unique_ptr
@@ -57,7 +56,8 @@ def transpose(Table source):
     if cats is not None:
         result = Table(index=result._index, data=[
             (name, cudf.core.column.column.build_categorical_column(
-                codes=as_column(col.base_data, dtype=col.dtype),
+                codes=cudf.core.column.column.as_column(
+                    col.base_data, dtype=col.dtype),
                 mask=col.base_mask,
                 size=col.size,
                 categories=cats

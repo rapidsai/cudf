@@ -235,7 +235,7 @@ class CategoricalColumn(column.ColumnBase):
         if size is None:
             for child in children:
                 assert child.offset == 0
-                assert child.mask is None
+                assert child.base_mask is None
             size = children[0].size
             size = size - offset
         if isinstance(dtype, pd.api.types.CategoricalDtype):
