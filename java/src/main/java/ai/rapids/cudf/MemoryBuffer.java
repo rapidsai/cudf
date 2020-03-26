@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -23,8 +23,11 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Abstract class for representing the Memory Buffer
+ *
+ * NOTE: MemoryBuffer is public to make it easier to work with the class hierarchy,
+ * subclassing beyond what is included in CUDF is not recommended and not supported.
  */
-abstract class MemoryBuffer implements AutoCloseable {
+abstract public class MemoryBuffer implements AutoCloseable {
   private static final Logger log = LoggerFactory.getLogger(MemoryBuffer.class);
   protected final long address;
   protected final long length;
@@ -132,6 +135,20 @@ abstract class MemoryBuffer implements AutoCloseable {
   public final long getAddress() {
     return address;
   }
+
+  /**
+   * Slice off a part of the buffer. Note that this is a zero copy operation and all
+   * slices must be closed along with the original buffer before the memory is released.
+   * So use this with some caution.
+   *
+   * Note that [[DeviceMemoryBuffer]] and [[HostMemoryBuffer]] support slicing, and override this
+   * function.
+   *
+   * @param offset where to start the slice at.
+   * @param len how many bytes to slice
+   * @return a slice of the original buffer that will need to be closed independently
+   */
+  public abstract MemoryBuffer slice(long offset, long len);
 
   /**
    * Close this buffer and free memory
