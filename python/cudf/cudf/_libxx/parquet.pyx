@@ -58,7 +58,7 @@ cdef class BufferArrayFromVector:
         self.shape[0] = self.length
         self.strides[0] = 1
 
-        buffer.buf = <uint8_t *>&(dereference(self.in_vec)[0])
+        buffer.buf = dereference(self.in_vec).data()
 
         buffer.format = NULL  # byte
         buffer.internal = NULL
