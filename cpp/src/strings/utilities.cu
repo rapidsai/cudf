@@ -144,7 +144,11 @@ __device__ character_cases_table_type character_cases_table[sizeof(g_character_c
 __device__ special_case_mapping character_special_case_mappings[sizeof(g_special_case_mappings)];
 __device__ character_special_case_hash_indices_table_type character_special_case_hash_indices[sizeof(g_special_case_hash_indices)];
 
-std::mutex g_flags_table_mutex, g_cases_table_mutex, g_special_case_mappings_mutex, g_special_case_hash_indices_mutex;
+// initialization mutexes
+std::mutex g_flags_table_mutex;
+std::mutex g_cases_table_mutex; 
+std::mutex g_special_case_mappings_mutex;
+std::mutex g_special_case_hash_indices_mutex;
 
 character_flags_table_type* d_character_codepoint_flags = nullptr;
 character_cases_table_type* d_character_cases_table = nullptr;

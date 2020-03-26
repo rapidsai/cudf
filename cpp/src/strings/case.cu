@@ -53,7 +53,7 @@ enum TwoPass
  * regenerate the mapping hash table (where you might want to generate 'incorrect' results
  * via an external verification tool).
  */
-#define __CUDF_ALLOW_SPECIAL_CASE_MAPPING
+#define CUDF_ALLOW_SPECIAL_CASE_MAPPING
 
 /**
  * @brief Per string logic for case conversion functions.
@@ -71,54 +71,26 @@ struct upper_lower_fn
     const special_case_mapping *d_special_case_mapping;
     const int32_t* d_offsets{};
     char* d_chars{};
-
-    // the special case mapping table is a perfect hash table with no collisions, allowing us
-    // to 'hash' by simply modding by the incoming codepoint
-    __device__ int32_t get_special_case_index(uint32_t code_point)
-    {
-        return d_special_case_hash_indices[(code_point % special_case_prime)];
-    }
     
-    // compute the size in bytes of the special case mapping for this codepoint
-    __device__ int32_t compute_special_case_bytes(uint32_t code_point, detail::character_flags_table_type flag)
-    {                        
-        special_case_mapping m = d_special_case_mapping[get_special_case_index(code_point)];        
-        size_type offset = 0;
+    // compute-size / copy the bytes representing the special case mapping for this codepoint
+    __device__ int32_t handle_special_case_bytes(uint32_t code_point, char*& d_buffer, detail::character_flags_table_type flag)
+    {
+        special_case_mapping m = d_special_case_mapping[d_special_case_hash_indices[get_special_case_hash_index(code_point)]];
+        size_type bytes = 0;
 
-        uint16_t count;
-        uint16_t *chars;
-        if(IS_LOWER(flag)){            
-            count = m.num_upper_chars;
-            chars = m.upper;
-        } else {            
-            count = m.num_lower_chars;
-            chars = m.lower;
-        }
+        auto const count = IS_LOWER(flag) ? m.num_upper_chars : m.num_lower_chars;
+        auto const *chars = IS_LOWER(flag) ? m.upper : m.lower;
         for(uint16_t idx=0; idx<count; idx++){
-            offset += detail::bytes_in_char_utf8(detail::codepoint_to_utf8(chars[idx]));
+            if(Pass ==SizeOnly){
+                bytes += detail::bytes_in_char_utf8(detail::codepoint_to_utf8(chars[idx]));
+            } else {
+                bytes += detail::from_char_utf8(detail::codepoint_to_utf8(chars[idx]), d_buffer + bytes);
+            }
         }
-        return offset;        
-    }
-
-    // copy the bytes representing the special case mapping for this codepoint
-    __device__ int32_t copy_special_case_bytes(uint32_t code_point, char* d_buffer, detail::character_flags_table_type flag)
-    {                
-        special_case_mapping m = d_special_case_mapping[get_special_case_index(code_point)];        
-        size_type offset = 0;
-
-        uint16_t count;
-        uint16_t *chars;
-        if(IS_LOWER(flag)){            
-            count = m.num_upper_chars;
-            chars = m.upper;
-        } else {
-            count = m.num_lower_chars;
-            chars = m.lower;
+        if(d_buffer != nullptr){
+            d_buffer += bytes;
         }
-        for(uint16_t idx=0; idx<count; idx++){                
-            offset += detail::from_char_utf8(detail::codepoint_to_utf8(chars[idx]), d_buffer + offset);                
-        }        
-        return offset;        
+        return bytes;
     }
 
     __device__ int32_t operator()(size_type idx)
@@ -138,16 +110,17 @@ struct upper_lower_fn
             // we apply special mapping in two cases:
             // - uncased characters with the special mapping flag, always
             // - cased characters with the special mapping flag, when matching the input case_flag
-            #if defined(__CUDF_ALLOW_SPECIAL_CASE_MAPPING) 
+            //
+            // This #ifdef is here as a utility for development situations where we may want to have 
+            // cudf produce incorrect mappings for special case characters to compare against some known
+            // correct source for a particular version of Unicode, such as Java.
+            #if defined(CUDF_ALLOW_SPECIAL_CASE_MAPPING)
             if( IS_SPECIAL(flag) && ((flag & case_flag) || !IS_UPPER_OR_LOWER(flag)) )
-            {                    
-                if( Pass == SizeOnly )
-                    bytes += compute_special_case_bytes(code_point, case_flag);
-                else 
-                    d_buffer += copy_special_case_bytes(code_point, d_buffer, case_flag);
-            } 
+            {
+                bytes += handle_special_case_bytes(code_point, d_buffer, case_flag);
+            }
             else              
-            #endif  // __CUDF_ALLOW_SPECIAL_CASE_MAPPING
+            #endif  // CUDF_ALLOW_SPECIAL_CASE_MAPPING
             if( flag & case_flag )
             {
                 if( Pass==SizeOnly )

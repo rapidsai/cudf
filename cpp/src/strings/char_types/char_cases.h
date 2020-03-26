@@ -708,7 +708,7 @@ struct special_case_mapping {
    uint16_t num_lower_chars;
    uint16_t lower[3];
 };
-const special_case_mapping g_special_case_mappings[] = {
+constexpr special_case_mapping g_special_case_mappings[] = {
    { 2, { 83, 83, 0 }, 0, {0, 0, 0} },
    { 0, { 0, 0, 0 }, 2, {105, 775, 0} },
    { 2, { 700, 78, 0 }, 0, {0, 0, 0} },
@@ -817,7 +817,7 @@ const special_case_mapping g_special_case_mappings[] = {
    { 2, { 1358, 1350, 0 }, 0, {0, 0, 0} },
    { 2, { 1348, 1341, 0 }, 0, {0, 0, 0} },
 };
-const uint16_t g_special_case_hash_indices[] = {
+constexpr uint16_t g_special_case_hash_indices[] = {
    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
@@ -869,7 +869,12 @@ const uint16_t g_special_case_hash_indices[] = {
    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
    0, 0, 0, 0, 0, 0, 6, 0, 7, 
 };
-const uint16_t special_case_prime = 499;
+// the special case mapping table is a perfect hash table with no collisions, allowing us
+// to 'hash' by simply modding by the incoming codepoint
+inline __device__ uint16_t get_special_case_hash_index(uint32_t code_point){
+   constexpr uint16_t special_case_prime = 499;
+   return code_point % special_case_prime;
+}
 
 } // namespace detail
 } // namespace strings

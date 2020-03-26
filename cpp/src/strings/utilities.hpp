@@ -90,7 +90,7 @@ using character_special_case_hash_indices_table_type = uint16_t;
  * device memory and is guaranteed to be thread-safe.
  *
  * This table is a 'perfect' hash table that allows us to map a codepoint
- * directly to the special case mapping rules for it using a single %
+ * directly to the special case mapping rules for it using a single modulo %
  * operation without worrying about collisions.
  * 
  * @return Device memory pointer to the special case hash indexing table

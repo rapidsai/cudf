@@ -37,7 +37,7 @@ namespace {
     uint16_t num_lower_chars;
     uint16_t lower[3];
   };
-  const std::vector<special_case_mapping_in> codepoint_mapping_in {
+  constexpr special_case_mapping_in codepoint_mapping_in[] = {
     { 2, {83, 83, 0}, 0, {0, 0, 0} },
     { 0, {0, 0, 0}, 2, {105, 775, 0} },
     { 2, {700, 78, 0}, 0, {0, 0, 0} },
@@ -146,7 +146,7 @@ namespace {
     { 2, {1358, 1350, 0}, 0, {0, 0, 0} },
     { 2, {1348, 1341, 0}, 0, {0, 0, 0} },
   };
-  const std::vector<uint16_t> codepoints_in {
+  constexpr uint16_t codepoints_in[] = {
     223,   304,   329,   453,   456,   459,   496,   498,   912,   944,
     1415,   7830,   7831,   7832,   7833,   7834,   8016,   8018,   8020,   8022,
     8064,   8065,   8066,   8067,   8068,   8069,   8070,   8071,   8072,   8073,
@@ -159,7 +159,7 @@ namespace {
     8179,   8180,   8182,   8183,   8188,   64256,   64257,   64258,   64259,   64260,
     64261,   64262,   64275,   64276,   64277,   64278,   64279,
   };
-  const std::vector<uint16_t> primes {
+  constexpr uint16_t primes[] = {
       227,    229,
       233,    239,    241,    251,    257,    263,    269,    271,    277,    281,
       283,    293,    307,    311,    313,    317,    331,    337,    347,    349,
@@ -191,17 +191,18 @@ namespace {
   };
 
   // find a prime number that generates no collisions for all possible input data
-  uint16_t find_collision_proof_prime(std::vector<uint16_t> const& data)
+  uint16_t find_collision_proof_prime()
   {
-    for( auto pitr=primes.begin(); pitr < primes.end(); ++pitr ){
+    for( auto pitr=primes; pitr < primes + (sizeof(primes) / sizeof(uint16_t)); ++pitr ){
         std::map<uint16_t,uint16_t> keys;
-        for( auto itr=data.begin(); itr<data.end(); ++itr){
+        size_t codepoints_in_size = sizeof(codepoints_in) / sizeof(uint16_t);
+        for( auto itr=codepoints_in; itr<codepoints_in + codepoints_in_size; ++itr){
           int key = *itr % *pitr;
           if( keys.find(key) == keys.end() ){
               keys[key] = *itr;
           }
         }
-        if( keys.size() == data.size() ){
+        if( keys.size() == codepoints_in_size ){
           return *pitr;
         }            
     }
@@ -217,7 +218,7 @@ namespace {
  */
 void generate_special_mapping_hash_table()
 {
-  uint16_t hash_prime = find_collision_proof_prime(codepoints_in);
+  uint16_t hash_prime = find_collision_proof_prime();
   if(hash_prime == 0){
       CUDF_FAIL("Could not find a usable prime number for hash table");
   }
@@ -226,7 +227,7 @@ void generate_special_mapping_hash_table()
   // size of the table is the prime #, since we're just doing (key % hash_prime)
   std::vector<uint16_t> hash_indices(hash_prime);      
   int count = 0;
-  std::for_each(codepoints_in.begin(), codepoints_in.end(), [&](uint16_t codepoint){      
+  std::for_each(codepoints_in, codepoints_in + sizeof(codepoints_in) / sizeof(uint16_t), [&](uint16_t codepoint){
       hash_indices[codepoint % hash_prime] = count;
       count++;
   });
@@ -240,16 +241,18 @@ void generate_special_mapping_hash_table()
   printf("   uint16_t num_lower_chars;\n");
   printf("   uint16_t lower[3];\n");
   printf("};\n");         
-  printf("const special_case_mapping g_special_case_mappings[] = {\n");
-  std::for_each(codepoint_mapping_in.begin(), codepoint_mapping_in.end(), [](special_case_mapping_in const& m){
-      printf("   { %d, { %d, %d, %d }, %d, {%d, %d, %d} },\n",
-        m.num_upper_chars, m.upper[0], m.upper[1], m.upper[2],
-        m.num_lower_chars, m.lower[0], m.lower[1], m.lower[2]);
-  });
+  printf("constexpr special_case_mapping g_special_case_mappings[] = {\n");
+  std::for_each(codepoint_mapping_in, codepoint_mapping_in + (sizeof(codepoint_mapping_in) / sizeof(special_case_mapping_in)), 
+    [](special_case_mapping_in const& m){
+        printf("   { %d, { %d, %d, %d }, %d, {%d, %d, %d} },\n",
+              m.num_upper_chars, m.upper[0], m.upper[1], m.upper[2],
+              m.num_lower_chars, m.lower[0], m.lower[1], m.lower[2]);
+    }
+  );
   printf("};\n");
 
   // the indices into the mappings from hashing
-  printf("const uint16_t g_special_case_hash_indices[] = {\n   ");
+  printf("constexpr uint16_t g_special_case_hash_indices[] = {\n   ");
   count = 0;
   std::for_each(hash_indices.begin(), hash_indices.end(), [&count](uint16_t index){
       printf("%d, ", index);
@@ -259,7 +262,12 @@ void generate_special_mapping_hash_table()
       }
   });
   printf("\n};\n");
-  printf("const uint16_t special_case_prime = %d;\n", hash_prime);
+  printf("// the special case mapping table is a perfect hash table with no collisions, allowing us\n"
+         "// to 'hash' by simply modding by the incoming codepoint\n"
+         "inline __device__ uint16_t get_special_case_hash_index(uint32_t code_point){\n"
+         "   constexpr uint16_t special_case_prime = %d;\n"
+         "   return code_point %% special_case_prime;"
+         "\n}\n", hash_prime);
 }
 
 } // namespace detail
