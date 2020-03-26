@@ -159,13 +159,13 @@ private:
 // We can't rely on --expt-relaxed-constexpr here because `bool8` is not a
 // scalar type. See CUDA Programming guide
 // https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#constexpr-variables
-#ifdef __CUDA_ARCH__
-__device__ __constant__ static bool8 true_v{bool8::value_type{1}};
-__device__ __constant__ static bool8 false_v{bool8::value_type{0}};
-#else
-static constexpr bool8 true_v{bool8::value_type{1}};
-static constexpr bool8 false_v{bool8::value_type{0}};
-#endif
+// #ifdef __CUDA_ARCH__
+// __device__ __constant__ static bool8 true_v{bool8::value_type{1}};
+// __device__ __constant__ static bool8 false_v{bool8::value_type{0}};
+// #else
+// static constexpr bool8 true_v{bool8::value_type{1}};
+// static constexpr bool8 false_v{bool8::value_type{0}};
+// #endif
 
 } // experimental
 }  // cudf

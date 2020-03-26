@@ -55,7 +55,7 @@ struct contains_fn
     column_device_view d_strings;
     bool bmatch{false}; // do not make this a template parameter to keep compile times down
 
-    __device__ cudf::experimental::bool8 operator()(size_type idx)
+    __device__ bool operator()(size_type idx)
     {
         if( d_strings.is_null(idx) )
             return 0;
@@ -86,7 +86,7 @@ std::unique_ptr<column> contains_util( strings_column_view const& strings,
     // create the output column
     auto results = make_numeric_column( data_type{BOOL8}, strings_count,
         copy_bitmask( strings.parent(), stream, mr), strings.null_count(), stream, mr);
-    auto d_results = results->mutable_view().data<cudf::experimental::bool8>();
+    auto d_results = results->mutable_view().data<bool>();
 
     // fill the output column
     auto execpol = rmm::exec_policy(stream);

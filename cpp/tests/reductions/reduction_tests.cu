@@ -555,10 +555,10 @@ TEST_F(ReductionDtypeTest, different_precision)
 
     // make sure boolean arithmetic semantics are obeyed when reducing to a bool
     this->reduction_test<bool, bool>
-        (int_values, cudf::experimental::true_v, true, sum_agg, cudf::data_type(cudf::BOOL8));
+        (int_values, true, true, sum_agg, cudf::data_type(cudf::BOOL8));
 
     this->reduction_test<int32_t, bool>
-        (int_values, cudf::experimental::true_v, true, sum_agg, cudf::data_type(cudf::BOOL8));
+        (int_values, true, true, sum_agg, cudf::data_type(cudf::BOOL8));
 
     // cudf::timestamp_s and int64_t are not convertible types.
     this->reduction_test<cudf::timestamp_s, int64_t>
