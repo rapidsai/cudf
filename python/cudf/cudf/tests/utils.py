@@ -77,25 +77,23 @@ def assert_eq(a, b, **kwargs):
     functions.
     """
     __tracebackhide__ = True
-
     
-    if hasattr(a, "to_pandas") or hasattr(b, "to_pandas"):
-        if hasattr(a, "to_pandas"):
-            a = a.to_pandas()
-        if hasattr(b, "to_pandas"):
-            b = b.to_pandas()
-        a, b = _normalize_nullable_types(a, b)
+    if hasattr(a, "to_pandas"):
+        a = a.to_pandas()
+    if hasattr(b, "to_pandas"):
+        b = b.to_pandas()
     if isinstance(a, cupy.ndarray):
         a = cupy.asnumpy(a)
     if isinstance(b, cupy.ndarray):
         b = cupy.asnumpy(b)
-
-    if isinstance(a, pd.DataFrame):
-        tm.assert_frame_equal(a, b, **kwargs)
-    elif isinstance(a, pd.Series):
-        tm.assert_series_equal(a, b, **kwargs)
-    elif isinstance(a, pd.Index):
-        tm.assert_index_equal(a, b, **kwargs)
+    if isinstance(a, (pd.DataFrame, pd.Series, pd.Index)):
+        a, b = _normalize_nullable_types(a, b)
+        if isinstance(a, pd.DataFrame):
+            tm.assert_frame_equal(a, b, **kwargs)
+        elif isinstance(a, pd.Series):
+            tm.assert_series_equal(a, b, **kwargs)
+        elif isinstance(a, pd.Index):
+            tm.assert_index_equal(a, b, **kwargs)
     elif isinstance(a, np.ndarray) and isinstance(b, np.ndarray):
         if np.issubdtype(a.dtype, np.floating) and np.issubdtype(
             b.dtype, np.floating
