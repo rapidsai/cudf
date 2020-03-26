@@ -298,6 +298,7 @@
 - PR #4630 Remove dangling reference to RMM exec policy in drop duplicates tests.
 - PR #4625 Fix hash-based repartition bug in dask_cudf
 - PR #4662 Fix to handle `keep_index` in `partition_by_hash`
+- PR #4683 Fix Slicing issue with categorical column in DataFrame
 - PR #4676 Fix bug in `_shuffle_group` for repartition
 - PR #4681 Fix `test_repr` tests that were generating a `RangeIndex` for column names
 
