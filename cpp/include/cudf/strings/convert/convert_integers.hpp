@@ -61,9 +61,8 @@ std::unique_ptr<column> to_integers( strings_column_view const& strings,
  *
  * @throw cudf::logic_error if integers column is not integral type.
  *
- * @param column Numeric column to convert.
+ * @param integers Numeric column to convert.
  * @param mr Resource for allocating device memory.
- * @param stream Stream to use for any kernels in this function.
  * @return New strings column with integers as strings.
  */
 std::unique_ptr<column> from_integers( column_view const& integers,
