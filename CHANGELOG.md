@@ -21,6 +21,7 @@
 - PR #4668 Add Java bindings for log2/log10 unary ops and log_base binary op
 - PR #4616 Enable different RMM allocation modes in unit tests
 - PR #4691 Fix compiler argument syntax for ccache
+- PR #4705 quantile cython bindings
 
 ## Bug Fixes
 
