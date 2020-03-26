@@ -489,10 +489,10 @@ class regex_parser
             return CHAR;
 
         // The quantifiers require at least one "real" previous item.
-        // We are throwing an error in these two if checks for invalid quantifiers.
+        // We are throwing an error in these two if-checks for invalid quantifiers.
         // Another option is to just return CHAR silently here which effectively
         // treats the yy character as a literal instead as a quantifier.
-        // This could lead to confusion where sometimes unescaped special characters
+        // This could lead to confusion where sometimes unescaped quantifier characters
         // are treated as regex expressions and sometimes they are not.
         if( m_items.empty() )
             CUDF_FAIL("invalid regex pattern: nothing to repeat at position 0");
