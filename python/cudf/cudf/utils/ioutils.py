@@ -177,16 +177,16 @@ cudf.io.orc.read_orc
 doc_to_parquet = docfmt_partial(docstring=_docstring_to_parquet)
 
 _docstring_merge_parquet_filemetadata = """
-Write a DataFrame to the parquet format.
+Merge multiple parquet metadata blobs
 
 Parameters
 ----------
 metadata_list : list
-    List of bytes objects returned by to_parquet
+    List of buffers returned by to_parquet
 
 Returns
 -------
-In-memory parquet file as bytes
+Combined parquet metadata blob
 
 See Also
 --------
