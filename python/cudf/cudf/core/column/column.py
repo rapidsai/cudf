@@ -21,6 +21,7 @@ from cudf._libxx.null_mask import (
     bitmask_allocation_size_bytes,
     create_null_mask,
 )
+from cudf._libxx.quantiles import quantile as cpp_quantile
 from cudf._libxx.scalar import Scalar
 from cudf._libxx.stream_compaction import unique_count as cpp_unique_count
 from cudf._libxx.transform import bools_to_mask
@@ -650,7 +651,20 @@ class ColumnBase(Column):
         else:
             msg = "`q` must be either a single element, list or numpy array"
             raise TypeError(msg)
-        return libcudf.quantile.quantile(self, quant, interpolation, exact)
+
+        is_sorted = libcudfxx.types.Sorted["NO"]
+        column_order = libcudfxx.types.Order["ASCENDING"]
+        null_precendence = libcudfxx.types.NullOrder["AFTER"]
+
+        return cpp_quantile(
+            self,
+            quant,
+            interpolation,
+            is_sorted,
+            column_order,
+            null_precendence,
+            exact,
+        )
 
     def take(self, indices):
         """Return Column by taking values from the corresponding *indices*.

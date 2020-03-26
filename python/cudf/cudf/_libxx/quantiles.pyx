@@ -38,16 +38,17 @@ def quantile(
     object interp,
     object is_sorted,
     object column_order,
-    object null_precedence
+    object null_precedence,
+    bool exact,
 
 ):
     cdef column_view c_input = input.view()
-    cdef double c_q = q
     cdef interpolation c_interp = <interpolation>(
         <underlying_type_t_interpolation> interp
     )
     cdef bool c_is_sorted = column_order.is_sorted
     cdef order_info c_column_order
+    cdef bool c_exact = exact
 
     c_column_order.ordering = <order>(
         <underlying_type_t_order> column_order.ordering
@@ -59,6 +60,12 @@ def quantile(
         <underlying_type_t_null_order> null_precedence
     )
 
+    cdef vector[double] c_q
+    c_q.reserve(len(q))
+
+    for value in q:
+        c_q.push_back(value)
+
     cdef unique_ptr[scalar] c_result
 
     with nogil:
@@ -67,7 +74,8 @@ def quantile(
                 c_input,
                 c_q,
                 c_interp,
-                c_column_order
+                c_column_order,
+                c_exact,
             )
         )
 

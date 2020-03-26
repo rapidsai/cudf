@@ -32,16 +32,20 @@ namespace experimental {
  * @param[in] interp       Strategy used to interpolate between the two values
  *                         on either side of the desired quantile.
  * @param[in] column_order Indicates the sortedness of the column.
- *
+ * @param exact If true, returns doubles. If false, returns same type as input.
+
  * @returns Value of the desired quantile, or null if the column has no valid
  *          elements.
  */
 
-std::unique_ptr<scalar>
+std::unique_ptr<column>
 quantile(column_view const& input,
-         double q,
+         std::vector<double> const& q,
          interpolation interp = interpolation::LINEAR,
-         order_info column_order = {});
+         column_view const& ordered_indices = {},
+         bool exact = true,
+         rmm::mr::device_memory_resource* mr =
+           rmm::mr::get_default_resource());
 
 /**
  * @brief Returns the rows of the input corresponding to the requested quantiles.

@@ -22,9 +22,10 @@ cdef extern from "cudf/quantiles.hpp" namespace "cudf::experimental" nogil:
 
     cdef unique_ptr[scalar] quantile (
         column_view input,
-        double q,
+        vector[double] q,
         interpolation interp,
-        order_info column_order
+        order_info column_order,
+        bool exact
     ) except +
 
     cdef unique_ptr[table] quantiles (
