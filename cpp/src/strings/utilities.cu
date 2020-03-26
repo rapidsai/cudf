@@ -45,15 +45,14 @@ std::unique_ptr<string_view, std::function<void(string_view*)>>
         return nullptr;
     auto length = std::strlen(str);
 
-    char* d_str{};
-    RMM_TRY(RMM_ALLOC( &d_str, length, stream ));
-    CUDA_TRY(cudaMemcpyAsync( d_str, str, length,
+    rmm::device_vector<char>* d_str = new rmm::device_vector<char>(length);
+    CUDA_TRY(cudaMemcpyAsync( d_str->data().get(), str, length,
                               cudaMemcpyHostToDevice, stream ));
     CUDA_TRY(cudaStreamSynchronize(stream));
 
-    auto deleter = [](string_view* sv) { RMM_FREE(const_cast<char*>(sv->data()),0); };
+    auto deleter = [d_str](string_view* sv) { delete d_str; };
     return std::unique_ptr<string_view,
-        decltype(deleter)>{ new string_view(d_str,length), deleter};
+        decltype(deleter)>{ new string_view(d_str->data().get(), length), deleter};
 }
 
 // build a vector of string_view objects from a strings column
