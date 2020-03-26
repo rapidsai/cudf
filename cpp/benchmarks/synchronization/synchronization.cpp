@@ -16,6 +16,8 @@
 
 #include "synchronization.hpp"
 
+#include <rmm/device_buffer.hpp>
+
 cuda_event_timer::cuda_event_timer(benchmark::State& state,
                                    bool flush_l2_cache,
                                    cudaStream_t stream):
@@ -30,10 +32,8 @@ cuda_event_timer::cuda_event_timer(benchmark::State& state,
     
     if (l2_cache_bytes > 0) {
       const int memset_value = 0;
-      int* l2_cache_buffer = nullptr;
-      RMM_TRY(RMM_ALLOC(&l2_cache_buffer, l2_cache_bytes, stream));
-      CUDA_TRY(cudaMemsetAsync(l2_cache_buffer, memset_value, l2_cache_bytes, stream));
-      RMM_TRY(RMM_FREE(l2_cache_buffer, stream));
+      rmm::device_buffer l2_cache_buffer (l2_cache_bytes, stream);
+      CUDA_TRY(cudaMemsetAsync(l2_cache_buffer.data(), memset_value, l2_cache_bytes, stream));
     }
   }
  
