@@ -22,6 +22,7 @@
 - PR #4616 Enable different RMM allocation modes in unit tests
 - PR #4699 Make Java's MemoryBuffer public and add MemoryBuffer.slice
 - PR #4691 Fix compiler argument syntax for ccache
+- PR #4716 Remove direct calls to RMM_ALLOC/RMM_FREE
 
 ## Bug Fixes
 
