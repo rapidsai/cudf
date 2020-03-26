@@ -139,7 +139,7 @@ JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_Cuda_eventQuery(JNIEnv* env, jcla
   auto event = reinterpret_cast<cudaEvent_t>(jevent);
   auto result = cudaEventQuery(event);
   if (result == cudaSuccess) {
-      return true;
+     return true;
   } else if (result == cudaErrorNotReady) {
      return false;
   } // else

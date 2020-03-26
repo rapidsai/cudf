@@ -58,12 +58,14 @@ import java.util.stream.StreamSupport;
 class MemoryCleaner {
   private static final boolean REF_COUNT_DEBUG = Boolean.getBoolean("ai.rapids.refcount.debug");
   private static Logger log = LoggerFactory.getLogger(MemoryCleaner.class);
+  private static final AtomicLong idGen = new AtomicLong(0);
 
   /**
    * API that can be used to clean up the resources for a vector, even if there was a leak
    */
   public static abstract class Cleaner {
     private final List<RefCountDebugItem> refCountDebug;
+    public final long id = idGen.incrementAndGet();
     private boolean leakExpected = false;
 
     public Cleaner() {
@@ -88,7 +90,7 @@ class MemoryCleaner {
 
     public final void logRefCountDebug(String message) {
       if (REF_COUNT_DEBUG && refCountDebug != null) {
-        log.error("{}: {}", message, MemoryCleaner.stringJoin("\n", refCountDebug));
+        log.error("{} (ID: {}): {}", message, id, MemoryCleaner.stringJoin("\n", refCountDebug));
       }
     }
 
@@ -173,14 +175,6 @@ class MemoryCleaner {
           t.join(1000);
         } catch (InterruptedException e) {
           // Ignored
-        }
-        Iterator<CleanerWeakReference> it = all.iterator();
-        while (it.hasNext()) {
-          CleanerWeakReference ref = it.next();
-          if (ref.get() == null) {
-            ref.clean();
-            it.remove();
-          }
         }
         for (CleanerWeakReference cwr : all) {
           cwr.clean();

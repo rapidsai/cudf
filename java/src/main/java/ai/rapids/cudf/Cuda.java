@@ -38,13 +38,14 @@ public class Cuda {
     @Override
     protected boolean cleanImpl(boolean logErrorIfNotClean) {
       boolean neededCleanup = false;
+      long origAddress = stream;
       if (stream != 0) {
         destroyStream(stream);
         stream = 0;
         neededCleanup = true;
       }
       if (neededCleanup && logErrorIfNotClean) {
-        log.error("YOU LEAKED A CUDA STREAM!!!!");
+        log.error("A CUDA STREAM WAS LEAKED (ID: " + id + " " + Long.toHexString(origAddress) + ")");
         logRefCountDebug("Leaked stream");
       }
       return neededCleanup;
@@ -55,6 +56,7 @@ public class Cuda {
   public static final class Stream implements AutoCloseable {
     private final StreamCleaner cleaner;
     boolean closed = false;
+    private final long id;
 
     /**
      * Create a new CUDA stream
@@ -62,6 +64,7 @@ public class Cuda {
      */
     public Stream(boolean isNonBlocking) {
       this.cleaner = new StreamCleaner(createStream(isNonBlocking));
+      this.id = cleaner.id;
       MemoryCleaner.register(this, cleaner);
       cleaner.addRef();
     }
@@ -69,6 +72,7 @@ public class Cuda {
     private Stream() {
       // No cleaner for the default stream...
       this.cleaner = null;
+      this.id = -1;
     }
 
     /**
@@ -94,16 +98,17 @@ public class Cuda {
 
     @Override
     public String toString() {
-      return "CUDA STREAM " + Long.toHexString(getStream());
+      return "CUDA STREAM (ID: " + id + " " + Long.toHexString(getStream()) + ")";
     }
 
     @Override
     public void close() {
-      cleaner.delRef();
+      if (cleaner != null) {
+        cleaner.delRef();
+      }
       if (closed) {
-        log.error("Close called too many times on {}", this);
         cleaner.logRefCountDebug("double free " + this);
-        throw new IllegalStateException("Close called too many times");
+        throw new IllegalStateException("Close called too many times " + this);
       }
       if (cleaner != null) {
         cleaner.clean(false);
@@ -124,13 +129,14 @@ public class Cuda {
     @Override
     protected boolean cleanImpl(boolean logErrorIfNotClean) {
       boolean neededCleanup = false;
+      long origAddress = event;
       if (event != 0) {
         destroyEvent(event);
         event = 0;
         neededCleanup = true;
       }
       if (neededCleanup && logErrorIfNotClean) {
-        log.error("YOU LEAKED A CUDA EVENT!!!!");
+        log.error("A CUDA EVENT WAS LEAKED (ID: " + id + " " + Long.toHexString(origAddress) + ")");
         logRefCountDebug("Leaked event");
       }
       return neededCleanup;
@@ -166,16 +172,16 @@ public class Cuda {
     }
 
     /**
-     * Check to see if the event has completed or not.
+     * Check to see if the event has completed or not. This is the equivalent of cudaEventQuery.
      * @return true it has completed else false.
      */
-    public boolean query() {
+    public boolean hasCompleted() {
       return eventQuery(getEvent());
     }
 
     /**
      * Captures the contents of stream at the time of this call. This event and stream must be on
-     * the same device. Calls such as query() or Stream.waitEvent() will then examine or wait for
+     * the same device. Calls such as hasCompleted() or Stream.waitEvent() will then examine or wait for
      * completion of the work that was captured. Uses of stream after this call do not modify event.
      * @param stream the stream to record the state of.
      */
@@ -200,16 +206,15 @@ public class Cuda {
 
     @Override
     public String toString() {
-      return "CUDA EVENT " + Long.toHexString(getEvent());
+      return "CUDA EVENT (ID: " + cleaner.id + " " + Long.toHexString(getEvent()) + ")";
     }
 
     @Override
     public void close() {
       cleaner.delRef();
       if (closed) {
-        log.error("Close called too many times on {}", this);
         cleaner.logRefCountDebug("double free " + this);
-        throw new IllegalStateException("Close called too many times");
+        throw new IllegalStateException("Close called too many times " + this);
       }
       cleaner.clean(false);
       closed = true;
@@ -391,7 +396,7 @@ public class Cuda {
   }
 
   private static native void asyncMemcpyOnStream(long dst, long src, long count, int kind,
-                                            long stream) throws CudaException;
+                                                 long stream) throws CudaException;
 
   /**
    * This should only be used for tests, to enable or disable tests if the current environment

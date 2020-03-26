@@ -21,33 +21,19 @@ package ai.rapids.cudf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.concurrent.atomic.AtomicLong;
-
 /**
  * Abstract class for representing the Memory Buffer
  */
 abstract class MemoryBuffer implements AutoCloseable {
   private static final Logger log = LoggerFactory.getLogger(MemoryBuffer.class);
-  private static final AtomicLong idGen = new AtomicLong(0);
   protected final long address;
   protected final long length;
   protected boolean closed = false;
   protected int refCount = 0;
   protected final MemoryBufferCleaner cleaner;
-  protected final long id = idGen.getAndIncrement();
+  protected final long id;
 
-  public static abstract class MemoryBufferCleaner extends MemoryCleaner.Cleaner {
-    private long id;
-
-    public long getId() {
-      return id;
-    }
-
-    public void setId(long id) {
-      this.id = id;
-    }
-  }
-
+  public static abstract class MemoryBufferCleaner extends MemoryCleaner.Cleaner{}
 
   private static final class SlicedBufferCleaner extends MemoryBufferCleaner {
     private MemoryBuffer parent;
@@ -58,17 +44,16 @@ abstract class MemoryBuffer implements AutoCloseable {
 
     @Override
     protected boolean cleanImpl(boolean logErrorIfNotClean) {
-      boolean neededCleanup = false;
       if (parent != null) {
+        if (logErrorIfNotClean) {
+          log.error("A SLICED BUFFER WAS LEAKED(ID: " + id + " parent: " + parent + ")");
+          logRefCountDebug("Leaked sliced buffer");
+        }
         parent.close();
         parent = null;
-        neededCleanup = true;
+        return true;
       }
-      if (neededCleanup && logErrorIfNotClean) {
-        log.error("WE LEAKED A SLICED BUFFER!!!!");
-        logRefCountDebug("Leaked sliced buffer");
-      }
-      return neededCleanup;
+      return false;
     }
   }
 
@@ -95,10 +80,12 @@ abstract class MemoryBuffer implements AutoCloseable {
     this.length = length;
     this.cleaner = cleaner;
     if (cleaner != null) {
-      cleaner.setId(id);
+      this.id = cleaner.id;
       refCount++;
       cleaner.addRef();
       MemoryCleaner.register(this, cleaner);
+    } else {
+      this.id = -1;
     }
   }
 
@@ -157,18 +144,22 @@ abstract class MemoryBuffer implements AutoCloseable {
         cleaner.clean(false);
         closed = true;
       } else if (refCount < 0) {
-        log.error("Close called too many times on {}", this);
         cleaner.logRefCountDebug("double free " + this);
-        throw new IllegalStateException("Close called too many times");
+        throw new IllegalStateException("Close called too many times " + this);
       }
     }
   }
 
   @Override
   public String toString() {
-    return "MemoryBuffer{" +
+    long id = -1;
+    if (cleaner != null) {
+      id = cleaner.id;
+    }
+    String name = this.getClass().getSimpleName();
+    return name + "{" +
         "address=0x" + Long.toHexString(address) +
         ", length=" + length +
-        '}';
+        ", id=" + id + "}";
   }
 }

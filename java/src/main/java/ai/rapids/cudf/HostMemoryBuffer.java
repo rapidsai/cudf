@@ -72,14 +72,15 @@ public class HostMemoryBuffer extends MemoryBuffer {
     @Override
     protected boolean cleanImpl(boolean logErrorIfNotClean) {
       boolean neededCleanup = false;
+      long origAddress = address;
       if (address != 0) {
         UnsafeMemoryAccessor.free(address);
-        MemoryListener.hostDeallocation(length, getId());
+        MemoryListener.hostDeallocation(length, id);
         address = 0;
         neededCleanup = true;
       }
       if (neededCleanup && logErrorIfNotClean) {
-        log.error("A HOST BUFFER WAS LEAKED!!!!");
+        log.error("A HOST BUFFER WAS LEAKED (ID: " + id + " " + Long.toHexString(origAddress) + ")");
         logRefCountDebug("Leaked host buffer");
       }
       return neededCleanup;

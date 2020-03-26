@@ -166,21 +166,33 @@ public class HostMemoryBufferTest extends CudfTestBase {
     }
   }
 
+  public static void initPinnedPoolIfNeeded(long size) {
+    long available = PinnedMemoryPool.getAvailableBytes();
+    if (available < size) {
+      if (PinnedMemoryPool.isInitialized()) {
+        PinnedMemoryPool.shutdown();
+      }
+      PinnedMemoryPool.initialize(size + 2048);
+    }
+  }
+
+  public static byte[] rba(int size, long seed) {
+    Random random = new Random(12345L);
+    byte[] data = new byte[size];
+    random.nextBytes(data);
+    return data;
+  }
+
+  public static byte[] rba(int size) {
+    return rba(size, 12345L);
+  }
 
   @Test
   public void testCopyWithStream() {
     long length = 1 * 1024 * 1024;
-    long available = PinnedMemoryPool.getAvailableBytes();
-    if (available < (length * 2)) {
-      if (PinnedMemoryPool.isInitialized()) {
-        PinnedMemoryPool.shutdown();
-      }
-      PinnedMemoryPool.initialize(length * 2 + 2048);
-    }
-    Random random = new Random(12345L);
-    byte[] data = new byte[(int)length];
+    initPinnedPoolIfNeeded(length * 2);
+    byte[] data = rba((int)length);
     byte[] result = new byte[data.length];
-    random.nextBytes(data);
     try (Cuda.Stream stream1 = new Cuda.Stream(true);
          Cuda.Stream stream2 = new Cuda.Stream(true);
          HostMemoryBuffer hostBuffer = PinnedMemoryPool.allocate(data.length);
@@ -197,17 +209,9 @@ public class HostMemoryBufferTest extends CudfTestBase {
   @Test
   public void simpleEventTest() {
     long length = 1 * 1024 * 1024;
-    long available = PinnedMemoryPool.getAvailableBytes();
-    if (available < (length * 2)) {
-      if (PinnedMemoryPool.isInitialized()) {
-        PinnedMemoryPool.shutdown();
-      }
-      PinnedMemoryPool.initialize(length * 2 + 2048);
-    }
-    Random random = new Random(12345L);
-    byte[] data = new byte[(int)length];
+    initPinnedPoolIfNeeded(length * 2);
+    byte[] data = rba((int)length);
     byte[] result = new byte[data.length];
-    random.nextBytes(data);
     try (Cuda.Stream stream1 = new Cuda.Stream(true);
          Cuda.Stream stream2 = new Cuda.Stream(true);
          Cuda.Event event1 = new Cuda.Event();
@@ -230,17 +234,9 @@ public class HostMemoryBufferTest extends CudfTestBase {
   @Test
   public void simpleEventQueryTest() throws InterruptedException {
     long length = 1 * 1024 * 1024;
-    long available = PinnedMemoryPool.getAvailableBytes();
-    if (available < (length * 2)) {
-      if (PinnedMemoryPool.isInitialized()) {
-        PinnedMemoryPool.shutdown();
-      }
-      PinnedMemoryPool.initialize(length * 2 + 2048);
-    }
-    Random random = new Random(12345L);
-    byte[] data = new byte[(int)length];
+    initPinnedPoolIfNeeded(length * 2);
+    byte[] data = rba((int)length);
     byte[] result = new byte[data.length];
-    random.nextBytes(data);
     try (Cuda.Stream stream1 = new Cuda.Stream(true);
          Cuda.Stream stream2 = new Cuda.Stream(true);
          Cuda.Event event1 = new Cuda.Event();
@@ -254,7 +250,7 @@ public class HostMemoryBufferTest extends CudfTestBase {
       stream2.waitOn(event1);
       hostBuffer2.copyFromDeviceBufferAsync(devBuffer, stream2);
       event2.record(stream2);
-      while (!event2.query()) {
+      while (!event2.hasCompleted()) {
         Thread.sleep(100);
       }
       hostBuffer2.getBytes(result, 0, 0, result.length);
@@ -265,17 +261,9 @@ public class HostMemoryBufferTest extends CudfTestBase {
   @Test
   public void simpleStreamSynchTest() {
     long length = 1 * 1024 * 1024;
-    long available = PinnedMemoryPool.getAvailableBytes();
-    if (available < (length * 2)) {
-      if (PinnedMemoryPool.isInitialized()) {
-        PinnedMemoryPool.shutdown();
-      }
-      PinnedMemoryPool.initialize(length * 2 + 2048);
-    }
-    Random random = new Random(12345L);
-    byte[] data = new byte[(int)length];
+    initPinnedPoolIfNeeded(length * 2);
+    byte[] data = rba((int)length);
     byte[] result = new byte[data.length];
-    random.nextBytes(data);
     try (Cuda.Stream stream1 = new Cuda.Stream(true);
          Cuda.Stream stream2 = new Cuda.Stream(true);
          HostMemoryBuffer hostBuffer = PinnedMemoryPool.allocate(data.length);

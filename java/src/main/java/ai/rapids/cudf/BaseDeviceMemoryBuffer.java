@@ -63,7 +63,7 @@ public class BaseDeviceMemoryBuffer extends MemoryBuffer {
 
   /**
    * Copy a subset of src to this buffer starting at destOffset using the specified CUDA stream.
-   * The copy is async any may not have completed when this returns.
+   * The copy is async and may not have completed when this returns.
    * @param destOffset the offset in this to start copying from.
    * @param src what to copy from
    * @param srcOffset offset into src to start out
@@ -71,7 +71,7 @@ public class BaseDeviceMemoryBuffer extends MemoryBuffer {
    * @param stream CUDA stream to use
    */
   public final void copyFromHostBufferAsync(long destOffset, HostMemoryBuffer src,
-                                       long srcOffset, long length, Cuda.Stream stream) {
+                                            long srcOffset, long length, Cuda.Stream stream) {
     addressOutOfBoundsCheck(address + destOffset, length, "copy range dest");
     src.addressOutOfBoundsCheck(src.address + srcOffset, length, "copy range src");
     Cuda.asyncMemcpy(address + destOffset, src.address + srcOffset, length,
@@ -80,7 +80,7 @@ public class BaseDeviceMemoryBuffer extends MemoryBuffer {
 
   /**
    * Copy a subset of src to this buffer starting at destOffset using the specified CUDA stream.
-   * The copy is async any may not have completed when this returns.
+   * The copy is async and may not have completed when this returns.
    * @param destOffset the offset in this to start copying from.
    * @param src what to copy from
    * @param srcOffset offset into src to start out
@@ -88,7 +88,7 @@ public class BaseDeviceMemoryBuffer extends MemoryBuffer {
    * @param stream CUDA stream to use
    */
   public final void copyFromDeviceBufferAsync(long destOffset, BaseDeviceMemoryBuffer src,
-                                            long srcOffset, long length, Cuda.Stream stream) {
+                                              long srcOffset, long length, Cuda.Stream stream) {
     addressOutOfBoundsCheck(address + destOffset, length, "copy range dest");
     src.addressOutOfBoundsCheck(src.address + srcOffset, length, "copy range src");
     Cuda.asyncMemcpy(address + destOffset, src.address + srcOffset, length,
@@ -126,7 +126,7 @@ public class BaseDeviceMemoryBuffer extends MemoryBuffer {
 
   /**
    * Copy entire host buffer starting at the beginning of this buffer using a CUDA stream.
-   * The copy is async any may not have completed when this returns.
+   * The copy is async and may not have completed when this returns.
    * @param src host buffer to copy from
    * @param stream CUDA stream to use
    */
