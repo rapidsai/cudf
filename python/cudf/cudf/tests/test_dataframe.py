@@ -815,7 +815,7 @@ def test_dataframe_hash_partition_masked_value(nrows):
         df = p.to_pandas()
         for row in df.itertuples():
             valid = bool(bytemask[row.key])
-            expected_value = row.key + 100 if valid else -1
+            expected_value = row.key + 100 if valid else pd.NA
             got_value = row.val
             assert expected_value == got_value
 
