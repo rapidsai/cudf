@@ -18,7 +18,7 @@ def validate_setup():
             #    Turing	                7.5
             #    Volta	                7.x
             #    Pascal	                6.x
-            #    Maxwell	            5.x
+            #    Maxwell	              5.x
             #    Kepler	                3.x
             #    Fermi	                2.x
             pass
