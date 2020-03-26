@@ -817,8 +817,15 @@ def test_dataframe_hash_partition_masked_value(nrows):
             valid = bool(bytemask[row.key])
             expected_value = row.key + 100 if valid else pd.NA
             got_value = row.val
-            assert expected_value == got_value
-
+            try:
+                if valid:
+                    assert expected_value == got_value
+                else:
+                    # pd.NA doesn't compare as bool
+                    assert expected_value is got_value
+            except:
+                import pdb
+                pdb.set_trace()
 
 @pytest.mark.parametrize("nrows", [3, 10, 50])
 def test_dataframe_hash_partition_masked_keys(nrows):
@@ -3873,16 +3880,12 @@ def test_df_astype_numeric_to_all(dtype, as_dtype):
 def test_df_astype_string_to_other(as_dtype):
     if "datetime64" in as_dtype:
         data = ["2001-01-01", "2002-02-02", "2000-01-05", None]
-        kwargs = {"format": "%Y-%m-%d"}
     elif as_dtype == "int32":
         data = [1, 2, 3, None]
-        kwargs = {}
     elif as_dtype == "category":
         data = ["1", "2", "3", None]
-        kwargs = {}
     elif "float" in as_dtype:
         data = [1.0, 2.0, 3.0, None]
-        kwargs = {}
 
     insert_data = Series.from_pandas(pd.Series(data, dtype="str"))
     expect_data = Series(data, dtype=as_dtype)
@@ -3896,7 +3899,7 @@ def test_df_astype_string_to_other(as_dtype):
     expect["foo"] = expect_data
     expect["bar"] = expect_data
 
-    got = gdf.astype(as_dtype, **kwargs)
+    got = gdf.astype(as_dtype)
     assert_eq(expect, got)
 
 
@@ -3958,7 +3961,6 @@ def test_df_astype_datetime_to_other(as_dtype):
 def test_df_astype_categorical_to_other(as_dtype):
     if "datetime64" in as_dtype:
         data = ["2001-01-01", "2002-02-02", "2000-01-05", "2001-01-01"]
-        kwargs = {"format": "%Y-%m-%d"}
     else:
         data = [1, 2, 3, 1]
         kwargs = {}
@@ -3967,7 +3969,7 @@ def test_df_astype_categorical_to_other(as_dtype):
     pdf["foo"] = psr
     pdf["bar"] = psr
     gdf = DataFrame.from_pandas(pdf)
-    assert_eq(pdf.astype(as_dtype), gdf.astype(as_dtype, **kwargs))
+    assert_eq(pdf.astype(as_dtype), gdf.astype(as_dtype))
 
 
 @pytest.mark.parametrize("ordered", [True, False])
@@ -3979,8 +3981,8 @@ def test_df_astype_to_categorical_ordered(ordered):
     gdf = DataFrame.from_pandas(pdf)
 
     assert_eq(
-        gdf.astype("int32", ordered=ordered),
-        gdf.astype("int32", ordered=ordered),
+        gdf.astype("int32"),
+        gdf.astype("int32"),
     )
 
 
