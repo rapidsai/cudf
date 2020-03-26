@@ -77,23 +77,6 @@ struct test_case {
     fixed_width_column_wrapper<cudf::size_type> ordered_indices;
 };
 
-// empty
-
-template<typename T>
-test_case<T>
-empty() {
-    return test_case<T> {
-        fixed_width_column_wrapper<T> ({ }),
-        {
-            q_expect{ -1.0 },
-            q_expect{  0.0 },
-            q_expect{  0.5 },
-            q_expect{  1.0 },
-            q_expect{  2.0 }
-        }
-    };
-}
-
 // interpolate_center
 
 template<typename T>
@@ -180,92 +163,6 @@ template<>
 test_case<bool8>
 interpolate_extrema_low<bool8>() {
     return interpolate_center<bool8>();
-}
-
-// sorted_ascending_null_before
-
-template<typename T>
-std::enable_if_t<std::is_floating_point<T>::value, test_case<T>>
-sorted_ascending_null_before() {
-    return test_case<T> {
-        fixed_width_column_wrapper<T> ({ 1, 2, 3, 4, 5, 6, 7, 8, 9 },
-                                       { 0, 0, 0, 0, 0, 1, 1, 1, 1 }),
-        {
-            q_expect{ 0.00, 6, 6, 6, 6, 6 },
-            q_expect{ 0.75, 9, 8, 8.25, 8.5, 8 },
-            q_expect{ 1.00, 9, 9, 9, 9, 9 }
-        }
-    };
-}
-
-template<typename T>
-std::enable_if_t<std::is_integral<T>::value and not cudf::is_boolean<T>(), test_case<T>>
-sorted_ascending_null_before() {
-    return test_case<T> {
-        fixed_width_column_wrapper<T> ({ 1, 2, 3, 4, 5, 6, 7, 8, 9 },
-                                       { 0, 0, 0, 0, 0, 1, 1, 1, 1 }),
-        {
-            q_expect{ 0.00, 6, 6, 6, 6, 6 },
-            q_expect{ 0.50, 8, 7, 7.5, 7.5, 8 },
-            q_expect{ 1.00, 9, 9, 9, 9, 9 }
-        }
-    };
-}
-
-template<typename T>
-std::enable_if_t<cudf::is_boolean<T>(), test_case<T>>
-sorted_ascending_null_before() {
-    return test_case<T> {
-        fixed_width_column_wrapper<T> ({ 1, 0, 1, },
-                                       { 0, 1, 1, }),
-        {
-            q_expect{ 0.00, 0, 0, 0, 0, 0 },
-            q_expect{ 0.50, 1, 0, 0.5, 0.5, 0 },
-            q_expect{ 1.50, 1, 1, 1, 1, 1 }
-        }
-    };
-}
-
-// sorted_descending_null_after
-
-template<typename T>
-std::enable_if_t<std::is_floating_point<T>::value, test_case<T>>
-sorted_descending_null_after() {
-    return test_case<T> {
-        fixed_width_column_wrapper<T> ({ 9, 8, 7, 6, 5, 4, 3, 2, 1 },
-                                       { 1, 1, 1, 1, 0, 0, 0, 0, 0 }),
-        {
-            q_expect{ 0.00, 6, 6, 6, 6, 6 },
-            q_expect{ 0.75, 9, 8, 8.25, 8.5, 8 },
-            q_expect{ 1.00, 9, 9, 9, 9, 9 }
-        }
-    };
-}
-
-template<typename T>
-std::enable_if_t<std::is_integral<T>::value and not cudf::is_boolean<T>(), test_case<T>>
-sorted_descending_null_after() {
-    return test_case<T> {
-        fixed_width_column_wrapper<T> ({ 9, 8, 7, 6, 5, 4, 3, 2, 1 },
-                                       { 1, 1, 1, 1, 0, 0, 0, 0, 0 }),
-        {
-            q_expect{ 0.00, 6, 6, 6, 6, 6 },
-            q_expect{ 0.50, 8, 7, 7.5, 7.5, 8 },
-            q_expect{ 1.00, 9, 9, 9, 9, 9 }
-        }
-    };
-}
-
-template<typename T>
-std::enable_if_t<cudf::is_boolean<T>(), test_case<T>>
-sorted_descending_null_after() {
-    return test_case<T> {
-        fixed_width_column_wrapper<T> ({ 1, 0, 1, },
-                                       { 1, 1, 0, }),
-        {
-            q_expect{ 0.50, 1, 0, 0.5, 0.5, 0 }
-        }
-    };
 }
 
 // single
@@ -517,17 +414,11 @@ struct QuantileTest : public BaseFixture {
 using TestTypes = NumericTypes;
 TYPED_TEST_CASE(QuantileTest, TestTypes);
 
-// // TODO(cwharris): ERROR CASE
-// TYPED_TEST(QuantileTest, TestEmpty)
-// {
-//     test(testdata::empty<TypeParam>());
-// }
-
 TYPED_TEST(QuantileTest, TestSingle)
 {
     test(testdata::single<TypeParam>());
 }
-// // TODO(cwharris): FIX
+
 TYPED_TEST(QuantileTest, TestSomeElementsInvalid)
 {
     test(testdata::some_invalid<TypeParam>());
@@ -556,6 +447,15 @@ TYPED_TEST(QuantileTest, TestInterpolateExtremaHigh)
 TYPED_TEST(QuantileTest, TestInterpolateExtremaLow)
 {
     test(testdata::interpolate_extrema_low<TypeParam>());
+}
+
+TYPED_TEST(QuantileTest, TestEmpty)
+{
+    auto input = fixed_width_column_wrapper<TypeParam> ({ });
+    std::unique_ptr<cudf::column> actual;
+
+    EXPECT_THROW(actual = cudf::experimental::quantile(input, { 0.5 }),
+                 cudf::logic_error);
 }
 
 template <typename T>

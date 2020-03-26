@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@ namespace experimental {
 namespace detail {
 
 template<bool exact, typename SortMapIterator>
-struct quantiles_functor
+struct quantile_functor
 {
     SortMapIterator ordered_indices;
     size_type size;
@@ -125,7 +125,7 @@ quantile(column_view const& input,
          bool retain_types,
          rmm::mr::device_memory_resource* mr)
 {
-    auto functor = quantiles_functor<exact, SortMapIterator>{
+    auto functor = quantile_functor<exact, SortMapIterator>{
         ordered_indices,
         size,
         q,
@@ -149,7 +149,7 @@ quantile(column_view const& input,
 {
     CUDF_FUNC_RANGE();
     CUDF_EXPECTS(input.size() > 0,
-                "quantiles requires at least one input row.");
+                "quantile requires at least one input row.");
 
     if (ordered_indices.is_empty())
     {
