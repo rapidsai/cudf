@@ -45,8 +45,8 @@ cdef class BufferArrayFromVector:
     cdef unique_ptr[vector[uint8_t]] in_vec
 
     # these two things declare part of the buffer interface
-    cdef Py_ssize_t shape[2]
-    cdef Py_ssize_t strides[2]
+    cdef Py_ssize_t shape[1]
+    cdef Py_ssize_t strides[1]
 
     cdef set_ptr(self, unique_ptr[vector[uint8_t]] in_vec):
         self.in_vec = move(in_vec)
