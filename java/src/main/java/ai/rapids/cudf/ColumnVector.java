@@ -19,6 +19,8 @@
 package ai.rapids.cudf;
 
 import ai.rapids.cudf.HostColumnVector.Builder;
+import ai.rapids.cudf.WindowOptions.FrameType;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -906,6 +908,24 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Calculate the log with base 2, output is the same type as input.
+   */
+  public ColumnVector log2() {
+    try (Scalar base = Scalar.fromInt(2)) {
+      return binaryOp(BinaryOp.LOG_BASE, base, getType());
+    }
+  }
+
+  /**
+   * Calculate the log with base 10, output is the same type as input.
+   */
+  public ColumnVector log10() {
+    try (Scalar base = Scalar.fromInt(10)) {
+      return binaryOp(BinaryOp.LOG_BASE, base, getType());
+    }
+  }
+
+  /**
    * Calculate the sqrt, output is the same type as input.
    */
   public ColumnVector sqrt() {
@@ -1220,11 +1240,19 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   /**
    * This function aggregates values in a window around each element i of the input
    * column. Please refer to WindowsOptions for various options that can be passed.
+   * Note: Only rows-based windows are supported.
    * @param op the operation to perform.
    * @param options various window function arguments.
    * @return Column containing aggregate function result.
+   * @throws IllegalArgumentException if unsupported window specification * (i.e. other than {@link FrameType#ROWS} is used.
    */
   public ColumnVector rollingWindow(AggregateOp op, WindowOptions options) {
+    // Check that only row-based windows are used.
+    if (!options.getFrameType().equals(FrameType.ROWS)) {
+      throw new IllegalArgumentException("Expected ROWS-based window specification. Unexpected window type: "
+            + options.getFrameType());
+    }
+
     return new ColumnVector(
         rollingWindow(this.getNativeView(),
             options.getMinPeriods(),
@@ -1622,10 +1650,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * Concatenate columns of strings together, combining a corresponding row from each column
    * into a single string row of a new column with no separator string inserted between each
    * combined string and maintaining null values in combined rows.
-   * @param columns indefinite number of columns containing strings.
+   * @param columns array of columns containing strings.
    * @return A new java column vector containing the concatenated strings.
    */
-  public ColumnVector stringConcatenate(ColumnVector... columns) {
+  public ColumnVector stringConcatenate(ColumnVector[] columns) {
     try (Scalar emptyString = Scalar.fromString("");
          Scalar nullString = Scalar.fromString(null)) {
       return stringConcatenate(emptyString, nullString, columns);
@@ -1639,10 +1667,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @param narep string scalar indicating null behavior. If set to null and any string in the row
    *              is null the resulting string will be null. If not null, null values in any column
    *              will be replaced by the specified string.
-   * @param columns indefinite number of columns containing strings, must be more than 2 columns
+   * @param columns array of columns containing strings, must be more than 2 columns
    * @return A new java column vector containing the concatenated strings.
    */
-  public static ColumnVector stringConcatenate(Scalar separator, Scalar narep, ColumnVector... columns) {
+  public static ColumnVector stringConcatenate(Scalar separator, Scalar narep, ColumnVector[] columns) {
     assert columns.length >= 2 : ".stringConcatenate() operation requires at least 2 columns";
     assert separator != null : "separator scalar provided may not be null";
     assert separator.getType() == DType.STRING : "separator scalar must be a string scalar";
@@ -1928,11 +1956,37 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   public ColumnVector matchesRe(String pattern) {
     assert type == DType.STRING : "column type must be a String";
     assert pattern != null : "pattern may not be null";
-    assert pattern.isEmpty() == false : "pattern string may not be empty";
+    assert !pattern.isEmpty() : "pattern string may not be empty";
     try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.BOOL8), "matchesRe")) {
       return new ColumnVector(matchesRe(getNativeView(), pattern));
     }
   }
+
+  /**
+   * Returns a boolean ColumnVector identifying rows which
+   * match the given regex pattern starting at any location.
+   *
+   * ```
+   * cv = ["abc","123","def456"]
+   * result = cv.matches_re("\\d+")
+   * r is now [false, true, true]
+   * ```
+   * Any null string entries return corresponding null output column entries.
+   * For supported regex patterns refer to:
+   * @link https://rapidsai.github.io/projects/nvstrings/en/0.13.0/regex.html
+   *
+   * @param pattern Regex pattern to match to each string.
+   * @return New ColumnVector of boolean results for each string.
+   */
+  public ColumnVector containsRe(String pattern) {
+    assert type == DType.STRING : "column type must be a String";
+    assert pattern != null : "pattern may not be null";
+    assert !pattern.isEmpty() : "pattern string may not be empty";
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.BOOL8), "containsRe")) {
+      return new ColumnVector(containsRe(getNativeView(), pattern));
+    }
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS
   /////////////////////////////////////////////////////////////////////////////
@@ -2056,7 +2110,22 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   private static native long stringEndWith(long cudfViewHandle, long compString) throws CudfException;
 
-  private static native long matchesRe(long cudfViewHandle, String compString) throws CudfException;
+  /**
+   * Native method for checking if strings match the passed in regex pattern from the
+   * beginning of the string.
+   * @param cudfViewHandle native handle of the cudf::column_view being operated on.
+   * @param pattern string regex pattern.
+   * @return native handle of the resulting cudf column containing the boolean results.
+   */
+  private static native long matchesRe(long cudfViewHandle, String pattern) throws CudfException;
+
+  /**
+   * Native method for checking if strings match the passed in regex pattern starting at any location.
+   * @param cudfViewHandle native handle of the cudf::column_view being operated on.
+   * @param pattern string regex pattern.
+   * @return native handle of the resulting cudf column containing the boolean results.
+   */
+  private static native long containsRe(long cudfViewHandle, String pattern) throws CudfException;
 
   /**
    * Native method for checking if strings in a column contains a specified comparison string.

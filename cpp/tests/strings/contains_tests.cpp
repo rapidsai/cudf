@@ -76,6 +76,7 @@ TEST_F(StringsContainsTests, ContainsTest)
         "[1-5]+",
         "[a-h]+",
         "[A-H]+",
+        "[a-h]*",
         "\n",
         "b.\\s*\n",
         ".*c",
@@ -93,6 +94,7 @@ TEST_F(StringsContainsTests, ContainsTest)
         true, false, false, true, false, false, false, true, true, true, false, false, false, false, false, false, false, false, false, false, true, true, false, false, false, false, false, false, false, false, false, false,
         false, true, false, false, false, true, true, false, true, false, false, false, false, false, false, false, false, true, true, true, false, false, true, true, false, true, true, true, true, true, false, false,
         false, false, false, false, false, false, false, false, false, true, false, false, false, false, false, false, false, true, true, true, false, true, false, false, true, false, false, false, false, false, false, false,
+        true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, false, false,
         false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, true, false, false, false,
         false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, true, false, false, false,
         false, false, false, false, false, false, true, false, true, false, false, false, false, false, false, false, false, false, false, true, false, false, false, true, false, true, true, true, true, true, false, false,
@@ -112,7 +114,6 @@ TEST_F(StringsContainsTests, ContainsTest)
         cudf::test::expect_columns_equal(*results,expected);
     }
 }
-
 
 TEST_F(StringsContainsTests, MatchesTest)
 {

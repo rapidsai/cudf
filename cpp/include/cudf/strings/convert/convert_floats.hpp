@@ -56,9 +56,8 @@ std::unique_ptr<column> to_floats( strings_column_view const& strings,
  *
  * @throw cudf::logic_error if floats column is not float type.
  *
- * @param column Numeric column to convert.
+ * @param floats Numeric column to convert.
  * @param mr Resource for allocating device memory.
- * @param stream Stream to use for any kernels in this function.
  * @return New strings column with floats as strings.
  */
 std::unique_ptr<column> from_floats( column_view const& floats,

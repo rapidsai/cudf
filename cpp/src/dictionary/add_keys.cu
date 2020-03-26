@@ -19,6 +19,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/stream_compaction.hpp>
+#include <cudf/detail/concatenate.cuh>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/search.hpp>
@@ -54,7 +55,7 @@ std::unique_ptr<column> add_keys( dictionary_column_view const& dictionary_colum
     CUDF_EXPECTS( new_keys.type()==old_keys.type(), "Keys must be the same type");
     // first, concatenate the keys together
     // [a,b,c,d,f] + [d,b,e] = [a,b,c,d,f,d,b,e]
-    auto combined_keys = cudf::concatenate(std::vector<column_view>{old_keys, new_keys}, mr, stream);
+    auto combined_keys = cudf::detail::concatenate(std::vector<column_view>{old_keys, new_keys}, mr, stream);
     // sort and remove any duplicates from the combined keys
     // drop_duplicates([a,b,c,d,f,d,b,e]) = [a,b,c,d,e,f]
     auto table_keys = experimental::detail::drop_duplicates( table_view{{*combined_keys}},
@@ -71,15 +72,16 @@ std::unique_ptr<column> add_keys( dictionary_column_view const& dictionary_colum
                     mr, stream);
     // now create the indices column -- map old values to the new ones
     // gather([4,0,3,1,2,2,2,4,0],[0,1,2,3,5]) = [5,0,3,1,2,2,2,5,0]
-    column_view indices_view( data_type{INT32}, dictionary_column.size(), 
+    column_view indices_view( data_type{INT32}, dictionary_column.size(),
                               dictionary_column.indices().data<int32_t>(),
                               nullptr, 0, dictionary_column.offset() );
     auto table_indices = cudf::experimental::detail::gather( table_view{{map_indices->view()}},
-                                                             indices_view, false, false, false,
+                                                             indices_view, false, true, false, // ignore out-of-bounds
                                                              mr, stream )->release();
-    std::unique_ptr<column> indices_column(std::move(table_indices.front()));
-    //
-    CUDF_EXPECTS( indices_column->type().id()==cudf::type_id::INT32, "expecting INT32 indices");
+    // the result may contain nulls if the input contains nulls and the corresponding index is therefore invalid
+    auto contents = table_indices.front()->release();
+    auto indices_column = std::make_unique<column>( data_type{INT32}, dictionary_column.size(),
+                                                    std::move(*(contents.data.release())), rmm::device_buffer{}, 0 );
 
     // create new dictionary column with keys_column and indices_column
     return make_dictionary_column( std::move(keys_column), std::move(indices_column),

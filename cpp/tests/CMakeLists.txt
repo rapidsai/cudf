@@ -314,7 +314,8 @@ ConfigureTest(HASHING_TEST "${HASHING_TEST_SRC}")
 
 set(PARTITIONING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/partitioning/hash_partition_test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/partitioning/round_robin_test.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/partitioning/round_robin_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/partitioning/partition_test.cpp")
 
 ConfigureTest(PARTITIONING_TEST "${PARTITIONING_TEST_SRC}")
 
@@ -524,7 +525,8 @@ ConfigureTest(JSON_TEST "${JSON_TEST_SRC}")
 # - sort tests ------------------------------------------------------------------------------------
 
 set(SORT_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/sort/sort_test.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/sort/sort_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/sort/rank_test.cpp")
 
 ConfigureTest(SORT_TEST "${SORT_TEST_SRC}")
 
@@ -581,7 +583,8 @@ set(COPYING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/slice_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/shift_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/shift_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/concatenate_tests.cu")
 
 ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
 
@@ -750,6 +753,14 @@ set(ROLLING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/rolling/rolling_test.cpp")
 
 ConfigureTest(ROLLING_TEST "${ROLLING_TEST_SRC}")
+
+###################################################################################################
+# - grouped rolling tests ---------------------------------------------------------------------------------
+
+set(GROUPED_ROLLING_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/grouped_rolling/grouped_rolling_test.cpp")
+
+ConfigureTest(GROUPED_ROLLING_TEST "${GROUPED_ROLLING_TEST_SRC}")
 
 ###################################################################################################
 # - filling test ----------------------------------------------------------------------------------
