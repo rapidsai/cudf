@@ -564,7 +564,7 @@ class ColumnBase(Column):
                 if is_scalar(value):
                     input = self
                     if is_categorical_dtype(self.dtype):
-                        input = self.children[0]
+                        input = self.codes
 
                     out = input.as_frame()._scatter(key, [value])._as_column()
 
