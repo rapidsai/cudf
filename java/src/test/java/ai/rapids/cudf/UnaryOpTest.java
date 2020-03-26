@@ -254,6 +254,24 @@ public class UnaryOpTest extends CudfTestBase {
   }
 
   @Test
+  public void testLog2() {
+    try (ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
+         ColumnVector answer = dcv.log2();
+         ColumnVector expected = forEach(dcv, doubleFun(n -> Math.log(n) / Math.log(2)))) {
+      assertColumnsAreEqual(expected, answer);
+    }
+  }
+
+  @Test
+  public void testLog10() {
+    try (ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
+         ColumnVector answer = dcv.log10();
+         ColumnVector expected = forEach(dcv, doubleFun(Math::log10))) {
+      assertColumnsAreEqual(expected, answer);
+    }
+  }
+
+  @Test
   public void testSqrt() {
     try (ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
          ColumnVector answer = dcv.sqrt();
