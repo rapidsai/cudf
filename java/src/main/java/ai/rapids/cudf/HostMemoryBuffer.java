@@ -221,7 +221,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param length     number of bytes to copy
    */
   public final void copyFromHostBuffer(long destOffset, HostMemoryBuffer srcData, long srcOffset,
-      long length) {
+                                       long length) {
     addressOutOfBoundsCheck(address + destOffset, length, "copy from dest");
     srcData.addressOutOfBoundsCheck(srcData.address + srcOffset, length, "copy from source");
     UnsafeMemoryAccessor.copyMemory(null, srcData.address + srcOffset, null,
@@ -537,7 +537,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param stream CUDA stream to use
    */
   public final void copyFromDeviceBuffer(BaseDeviceMemoryBuffer deviceMemoryBuffer,
-      Cuda.Stream stream) {
+                                         Cuda.Stream stream) {
     addressOutOfBoundsCheck(address, deviceMemoryBuffer.length, "copy range dest");
     assert !deviceMemoryBuffer.closed;
     Cuda.memcpy(address, deviceMemoryBuffer.address, deviceMemoryBuffer.length,
@@ -551,7 +551,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param stream CUDA stream to use
    */
   public final void copyFromDeviceBufferAsync(BaseDeviceMemoryBuffer deviceMemoryBuffer,
-                                         Cuda.Stream stream) {
+                                              Cuda.Stream stream) {
     addressOutOfBoundsCheck(address, deviceMemoryBuffer.length, "copy range dest");
     assert !deviceMemoryBuffer.closed;
     Cuda.asyncMemcpy(address, deviceMemoryBuffer.address, deviceMemoryBuffer.length,
