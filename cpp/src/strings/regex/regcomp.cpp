@@ -57,6 +57,9 @@ static reclass ccls_D(32); // not ccls_d plus '\n'
 // Tables for analyzing quantifiers
 std::set<int> valid_preceding_inst_types( {CHAR, CCLASS, NCCLASS, ANY, ANYNL} );
 std::set<char> quantifiers( {'*','?','+','{','|'} );
+// Valid regex characters that can be escaping to be used as literals
+std::set<char> escapable_chars( {'.', '-', '+', '*', '\\', '?', '^', '$',
+                                 '{', '}', '(', ')', '[', ']'  } );
 
 } // namespace
 
@@ -321,8 +324,6 @@ class regex_parser
         int quoted = nextc(yy);
         if(quoted)
         {
-            if (yy == 0)
-                return END;
             // treating all quoted numbers as Octal, since we are not supporting backreferences
             if (yy >= '0' && yy <= '7')
             {
@@ -444,7 +445,18 @@ class regex_parser
                     return BOL;
                 case 'Z':
                     return EOL;
+                default:
+                {
+                    // let valid escapable chars fall through as literal CHAR
+                    if( yy && (escapable_chars.find(static_cast<char>(yy)) != escapable_chars.end()) )
+                        break;
+                    // anything else is a bad escape so throw an error
+                    std::ostringstream message;
+                    message << "invalid regex pattern: bad escape ";
+                    message << "at position " << (exprp-pattern-1);
+                    throw cudf::logic_error(message.str());
                 }
+                } // end-switch
                 return CHAR;
             }
         }
