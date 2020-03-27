@@ -20,6 +20,7 @@
 - PR #4645 Add Alias for `kurtosis` as `kurt`
 - PR #4668 Add Java bindings for log2/log10 unary ops and log_base binary op
 - PR #4616 Enable different RMM allocation modes in unit tests
+- PR #4700 Expose events and more stream functionality in java
 - PR #4699 Make Java's MemoryBuffer public and add MemoryBuffer.slice
 - PR #4691 Fix compiler argument syntax for ccache
 
@@ -36,14 +37,15 @@
 - PR #4613 Fix issue related to downcasting in `.loc`
 - PR #4615 Fix potential OOB write in ORC writer compression stage
 - PR #4587 Fix non-regex libcudf contains methods to return true when target is an empty string
-
 - PR #4617 Fix memory leak in aggregation object destructor
 - PR #4633 String concatenation fix in `DataFrame.rename`
 - PR #4609 Fix to handle `Series.factorize` when index is set
+- PR #4659 Fix strings::replace_re handling empty regex pattern
 - PR #4652 Fix misaligned error when computing regex device structs
 - PR #4651 Fix hashing benchmark missing includes
 - PR #4673 Fix regex infinite loop while parsing invalid quantifier pattern
 - PR #4679 Fix comments for make_dictionary_column factory functions
+- PR #4711 Fix column leaks in Java unit test
 
 
 # cuDF 0.13.0 (Date TBD)
