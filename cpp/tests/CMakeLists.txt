@@ -525,7 +525,8 @@ ConfigureTest(JSON_TEST "${JSON_TEST_SRC}")
 # - sort tests ------------------------------------------------------------------------------------
 
 set(SORT_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/sort/sort_test.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/sort/sort_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/sort/rank_test.cpp")
 
 ConfigureTest(SORT_TEST "${SORT_TEST_SRC}")
 
@@ -754,6 +755,14 @@ set(ROLLING_TEST_SRC
 ConfigureTest(ROLLING_TEST "${ROLLING_TEST_SRC}")
 
 ###################################################################################################
+# - grouped rolling tests ---------------------------------------------------------------------------------
+
+set(GROUPED_ROLLING_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/grouped_rolling/grouped_rolling_test.cpp")
+
+ConfigureTest(GROUPED_ROLLING_TEST "${GROUPED_ROLLING_TEST_SRC}")
+
+###################################################################################################
 # - filling test ----------------------------------------------------------------------------------
 
 set(FILLING_TEST_SRC
@@ -905,17 +914,3 @@ ConfigureTest(DICTIONARY_TEST "${DICTIONARY_TEST_SRC}")
 ###################################################################################################
 
 enable_testing()
-
-###################################################################################################
-### benchmarks ####################################################################################
-###################################################################################################
-
-# only built if CMAKE_ENABLE_BENCHMARKS is set to ON
-
-###################################################################################################
-# - iterator benchmarks----------------------------------------------------------------------------
-
-set(LEGACY_ITERATOR_BENCH_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/iterator/iterator_bench.cu")
-
-  ConfigureBench(LEGACY_ITERATOR_BENCH "${LEGACY_ITERATOR_BENCH_SRC}")
