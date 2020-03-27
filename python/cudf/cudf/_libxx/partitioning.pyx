@@ -24,13 +24,13 @@ def partition(Table source_table, Column partition_map,
 
     cdef int c_num_partitions = num_partitions
     cdef table_view c_source_view
-    cdef column_view c_partition_map_view
+
     if keep_index is True:
         c_source_view = source_table.view()
     else:
         c_source_view = source_table.data_view()
 
-    c_partition_map_view = partition_map.view()
+    cdef column_view c_partition_map_view = partition_map.view()
 
     cdef pair[unique_ptr[table], vector[libcudf_types.size_type]] c_result
     with nogil:

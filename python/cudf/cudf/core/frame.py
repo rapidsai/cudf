@@ -570,7 +570,8 @@ class Frame(libcudfxx.table.Table):
         # due to the split limitation mentioned
         # here: https://github.com/rapidsai/cudf/issues/4607
         # we need to remove first & last elements in offsets.
-        output_offsets = output_offsets[:-1][1:]
+        # TODO: Remove this after the above issue is fixed.
+        output_offsets = output_offsets[1:-1]
 
         result = libcudfxx.copying.table_split(
             output_table, output_offsets, keep_index=keep_index
@@ -578,8 +579,10 @@ class Frame(libcudfxx.table.Table):
 
         result = [self.__class__._from_table(tbl) for tbl in result]
 
-        for frame in result:
+        [
             frame._copy_categories(self, include_index=keep_index)
+            for frame in result
+        ]
 
         return result
 
