@@ -154,10 +154,10 @@ cdef binaryop_s_v(Scalar lhs, Column rhs,
 
 
 def handle_null_for_string_column(Column input_col, op):
-    if op.name.lower() in ('eq', 'lt', 'le', 'gt', 'ge'):
+    if op in ('eq', 'lt', 'le', 'gt', 'ge'):
         return replace_nulls(input_col, False)
 
-    elif op.name.lower() == 'ne':
+    elif op == 'ne':
         return replace_nulls(input_col, True)
 
     # Nothing needs to be done
@@ -206,7 +206,7 @@ def binaryop(lhs, rhs, op, dtype):
         )
 
     if is_string_col is True:
-        return handle_null_for_string_column(result, op)
+        return handle_null_for_string_column(result, op.name.lower())
     else:
         return result
 
