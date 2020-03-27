@@ -742,6 +742,21 @@ native_jobjectArray<jobject> contiguous_table_array(JNIEnv* env, jsize length);
 
 std::unique_ptr<cudf::experimental::aggregation> map_jni_aggregation(jint op);
 
+/**
+ * Allocate a HostMemoryBuffer
+ */
+jobject allocate_host_buffer(JNIEnv* env, jlong amount, jboolean prefer_pinned);
+
+/**
+ * Get the address of a HostMemoryBuffer
+ */
+jlong get_host_buffer_address(JNIEnv* env, jobject buffer);
+
+/**
+ * Get the length of a HostMemoryBuffer
+ */
+jlong get_host_buffer_length(JNIEnv* env, jobject buffer);
+
 // Get the JNI environment, attaching the current thread to the JVM if necessary. If the thread
 // needs to be attached, the thread will automatically detach when the thread terminates.
 JNIEnv* get_jni_env(JavaVM* jvm);

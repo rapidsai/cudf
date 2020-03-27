@@ -7,7 +7,7 @@ import dask.dataframe as dd
 from dask.dataframe.io.parquet.arrow import ArrowEngine
 
 import cudf
-from cudf.core.column import build_categorical_column
+from cudf.core.column import as_column, build_categorical_column
 from cudf.io import write_to_dataset
 
 
@@ -86,7 +86,13 @@ class CudfEngine(ArrowEngine):
                 ]
                 sr = cudf.Series(index2).astype(type(index2)).repeat(len(df))
                 df[name] = build_categorical_column(
-                    categories=categories, codes=sr._column, ordered=False
+                    categories=categories,
+                    codes=as_column(
+                        sr._column.base_data, dtype=sr._column.dtype
+                    ),
+                    size=sr._column.size,
+                    offset=sr._column.offset,
+                    ordered=False,
                 )
 
         return df

@@ -237,6 +237,10 @@ def test_kurtosis(data, null_flag):
     expected = pdata.kurtosis()
     np.testing.assert_array_almost_equal(got, expected)
 
+    got = data.kurt()
+    expected = pdata.kurt()
+    np.testing.assert_array_almost_equal(got, expected)
+
 
 @pytest.mark.parametrize(
     "data",

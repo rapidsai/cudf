@@ -75,3 +75,8 @@ class Sorted(IntEnum):
 class NullOrder(IntEnum):
     BEFORE = <underlying_type_t_order> libcudf_types.null_order.BEFORE
     AFTER = <underlying_type_t_order> libcudf_types.null_order.AFTER
+
+
+class IncludeNulls(IntEnum):
+    YES = <underlying_type_t_include_nulls> libcudf_types.include_nulls.YES
+    NO = <underlying_type_t_include_nulls> libcudf_types.include_nulls.NO

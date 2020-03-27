@@ -9,7 +9,7 @@ from cudf._libxx.scalar cimport Scalar
 from cudf._libxx.column cimport Column
 from cudf._libxx.types import np_to_cudf_types
 from cudf._libxx.move cimport move
-from cudf._libxx.aggregation cimport get_aggregation, aggregation
+from cudf._libxx.aggregation cimport make_aggregation, aggregation
 from libcpp.memory cimport unique_ptr
 import numpy as np
 
@@ -36,7 +36,7 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
 
     cdef column_view c_incol_view = incol.view()
     cdef unique_ptr[scalar] c_result
-    cdef unique_ptr[aggregation] c_agg = move(get_aggregation(
+    cdef unique_ptr[aggregation] c_agg = move(make_aggregation(
         reduction_op, kwargs
     ))
     cdef type_id tid = np_to_cudf_types[np.dtype(col_dtype)]
@@ -76,7 +76,9 @@ def scan(scan_op, Column incol, inclusive, **kwargs):
     """
     cdef column_view c_incol_view = incol.view()
     cdef unique_ptr[column] c_result
-    cdef unique_ptr[aggregation] c_agg = move(get_aggregation(scan_op, kwargs))
+    cdef unique_ptr[aggregation] c_agg = move(
+        make_aggregation(scan_op, kwargs)
+    )
 
     cdef scan_type c_inclusive
     if inclusive is True:

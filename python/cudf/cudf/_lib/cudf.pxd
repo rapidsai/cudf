@@ -317,19 +317,6 @@ cdef extern from "cudf/cudf.h" nogil:
         size_type* out_indices
     ) except +
 
-    cdef gdf_error gdf_nvtx_range_push(
-        const char* const name,
-        gdf_color color
-    ) except +
-
-    cdef gdf_error gdf_nvtx_range_push_hex(
-        const char* const name,
-        unsigned int color
-    ) except +
-
-    cdef gdf_error gdf_nvtx_range_pop() except +
-
-
 cdef extern from "cudf/legacy/bitmask.hpp" nogil:
 
     cdef gdf_error gdf_count_nonzero_mask(

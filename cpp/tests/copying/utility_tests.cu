@@ -19,6 +19,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <tests/utilities/column_utilities.hpp>
+#include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/type_lists.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/strings/detail/utilities.hpp>
@@ -37,49 +38,10 @@ TYPED_TEST(EmptyLikeTest, ColumnNumericTests) {
     auto input = make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, size, state);
     auto expected = make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, 0);
     auto got = cudf::experimental::empty_like(input->view());
-    cudf::test::expect_column_properties_equal(*expected, *got);
+    cudf::test::expect_columns_equal(*expected, *got);
 }
 
 struct EmptyLikeStringTest : public EmptyLikeTest <std::string> {};
-
-rmm::device_vector<thrust::pair<const char*,cudf::size_type>> create_test_string () {
-    std::vector<const char*> h_test_strings{ "the quick brown fox jumps over the lazy dog",
-                                             "thé result does not include the value in the sum in",
-                                             "", nullptr, "absent stop words" };
-    cudf::size_type memsize = 0;
-    for( auto itr=h_test_strings.begin(); itr!=h_test_strings.end(); ++itr )
-        memsize += *itr ? (cudf::size_type)strlen(*itr) : 0;
-    cudf::size_type count = (cudf::size_type)h_test_strings.size();
-    thrust::host_vector<char> h_buffer(memsize);
-    thrust::device_vector<char> d_buffer(memsize);
-    thrust::host_vector<thrust::pair<const char*,cudf::size_type> > strings(count);
-    thrust::host_vector<cudf::size_type> h_offsets(count+1);
-    cudf::size_type offset = 0;
-    cudf::size_type nulls = 0;
-    h_offsets[0] = 0;
-    for( cudf::size_type idx=0; idx < count; ++idx )
-    {
-        const char* str = h_test_strings[idx];
-        if( !str )
-        {
-            strings[idx] = thrust::pair<const char*,cudf::size_type>{nullptr,0};
-            nulls++;
-        }
-        else
-        {
-            cudf::size_type length = (cudf::size_type)strlen(str);
-            memcpy( h_buffer.data() + offset, str, length );
-            strings[idx] = thrust::pair<const char*,cudf::size_type>{d_buffer.data().get()+offset,length};
-            offset += length;
-        }
-        h_offsets[idx+1] = offset;
-    }
-
-    rmm::device_vector<thrust::pair<const char*,cudf::size_type>> d_strings(strings);
-    cudaMemcpy( d_buffer.data().get(), h_buffer.data(), memsize, cudaMemcpyHostToDevice );
-
-    return d_strings;
-}
 
 void check_empty_string_columns(cudf::column_view lhs, cudf::column_view rhs)
 {
@@ -91,14 +53,16 @@ void check_empty_string_columns(cudf::column_view lhs, cudf::column_view rhs)
     // An empty column is not required to have children
 }
 
-TEST_F(EmptyLikeStringTest, ColumnStringTest) {
-    rmm::device_vector<thrust::pair<const char*,cudf::size_type>> d_strings = create_test_string();
+TEST_F(EmptyLikeStringTest, ColumnStringTest) 
+{
+    std::vector<const char*> h_strings{ "the quick brown fox jumps over the lazy dog",
+                                        "thé result does not include the value in the sum in",
+                                        "", nullptr, "absent stop words" };
+    cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
+        thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
 
-    auto column = cudf::make_strings_column(d_strings);
-
-    auto got = cudf::experimental::empty_like(column->view());
-
-    check_empty_string_columns(got->view(), column->view());
+    auto got = cudf::experimental::empty_like(strings);
+    check_empty_string_columns(got->view(), strings);
 }
 
 std::unique_ptr<cudf::experimental::table> create_table (cudf::size_type size, cudf::mask_state state){
@@ -159,3 +123,5 @@ TYPED_TEST(AllocateLikeTest, ColumnNumericTestSpecifiedSize) {
     auto got = cudf::experimental::allocate_like(input->view(), specified_size);
     cudf::test::expect_column_properties_equal(*expected, *got);
 }
+
+CUDF_TEST_PROGRAM_MAIN()

@@ -48,7 +48,7 @@ set(CMAKE_CUDA_STANDARD 14)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
 if(CMAKE_COMPILER_IS_GNUCXX)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wno-error=deprecated-declarations")
 
     # Suppress parentheses warning which causes gmock to fail
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler -Wno-parentheses")
@@ -100,17 +100,23 @@ endif()
 message("GPU_ARCHS = ${GPU_ARCHS}")
 
 foreach(arch ${GPU_ARCHS})
-  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode arch=compute_${arch},code=sm_${arch}")
+  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_${arch},code=sm_${arch}")
 endforeach()
 
 list(GET GPU_ARCHS -1 ptx)
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode arch=compute_${ptx},code=compute_${ptx}")
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_${ptx},code=compute_${ptx}")
 
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-constexpr")
 
 # set warnings as errors
 # TODO: remove `no-maybe-unitialized` used to suppress warnings in rmm::exec_policy
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Werror cross-execution-space-call -Xcompiler -Wall,-Werror")
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Werror=cross-execution-space-call -Xcompiler -Wall,-Werror,-Wno-error=deprecated-declarations")
+
+option(DISABLE_DEPRECATION_WARNING "Disable warnings generated from deprecated declarations." OFF)
+if(DISABLE_DEPRECATION_WARNING)
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler -Wno-deprecated-declarations")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations")
+endif(DISABLE_DEPRECATION_WARNING)
 
 # Option to enable line info in CUDA device compilation to allow introspection when profiling / memchecking
 option(CMAKE_CUDA_LINEINFO "Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler" OFF)
@@ -544,6 +550,7 @@ add_library(cudf
             src/copying/scatter.cu
             src/copying/shift.cu
             src/copying/copy.cu
+            src/copying/concatenate.cu
             src/copying/slice.cpp
             src/copying/split.cpp
             src/copying/contiguous_split.cu
@@ -577,6 +584,7 @@ add_library(cudf
             src/rolling/jit/code/operation.cpp
             src/sort/sort.cu
             src/sort/stable_sort.cu
+            src/sort/rank.cu
             src/column/legacy/interop.cpp
             src/strings/attributes.cu
             src/strings/case.cu
@@ -636,6 +644,8 @@ add_library(cudf
             src/groupby/sort/group_sum.cu
             src/groupby/sort/group_min.cu
             src/groupby/sort/group_max.cu
+            src/groupby/sort/group_argmax.cu
+            src/groupby/sort/group_argmin.cu
             src/groupby/sort/group_count.cu
             src/groupby/sort/group_nunique.cu
             src/groupby/sort/group_nth_element.cu
@@ -783,7 +793,7 @@ endif(USE_NVTX)
 option(HT_DEFAULT_ALLOCATOR "Use the default allocator for hash tables" ON)
 if(HT_DEFAULT_ALLOCATOR)
     message(STATUS "Using default allocator for hash tables")
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --define-macro HT_DEFAULT_ALLOCATOR")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DHT_DEFAULT_ALLOCATOR")
 endif(HT_DEFAULT_ALLOCATOR)
 
 ###################################################################################################
