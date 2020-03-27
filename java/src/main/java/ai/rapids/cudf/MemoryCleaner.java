@@ -27,7 +27,6 @@ import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
@@ -55,15 +54,15 @@ import java.util.stream.StreamSupport;
  * ColumnVector's reference count reaches 0 and the resources are released. At some point
  * later the Cleaner itself will be released.
  */
-class MemoryCleaner {
+final class MemoryCleaner {
   private static final boolean REF_COUNT_DEBUG = Boolean.getBoolean("ai.rapids.refcount.debug");
-  private static Logger log = LoggerFactory.getLogger(MemoryCleaner.class);
+  private static final Logger log = LoggerFactory.getLogger(MemoryCleaner.class);
   private static final AtomicLong idGen = new AtomicLong(0);
 
   /**
    * API that can be used to clean up the resources for a vector, even if there was a leak
    */
-  public static abstract class Cleaner {
+  static abstract class Cleaner {
     private final List<RefCountDebugItem> refCountDebug;
     public final long id = idGen.incrementAndGet();
     private boolean leakExpected = false;
@@ -144,11 +143,35 @@ class MemoryCleaner {
     }
   }
 
+  /**
+   * The default GPU as set by user threads.
+   */
+  private static volatile int defaultGpu = -1;
+  /**
+   * The default GPU as set by the cleaner thread.
+   */
+  private static volatile int currentGpuId = -1;
+
+  /**
+   * This should be called from RMM when it is initialized.
+   */
+  static void setDefaultGpu(int defaultGpuId) {
+    defaultGpu = defaultGpuId;
+  }
+
   private static final Thread t = new Thread(() -> {
     try {
       while (true) {
         CleanerWeakReference next = (CleanerWeakReference)collected.remove(100);
         if (next != null) {
+          try {
+            if (currentGpuId != defaultGpu) {
+              Cuda.setDevice(defaultGpu);
+              currentGpuId = defaultGpu;
+            }
+          } catch (Throwable t) {
+            log.error("ERROR TRYING TO SET GPU ID TO " + defaultGpu, t);
+          }
           try {
             next.clean();
           } catch (Throwable t) {
@@ -176,6 +199,9 @@ class MemoryCleaner {
         } catch (InterruptedException e) {
           // Ignored
         }
+        if (defaultGpu >= 0) {
+          Cuda.setDevice(defaultGpu);
+        }
         for (CleanerWeakReference cwr : all) {
           cwr.clean();
         }
@@ -183,27 +209,27 @@ class MemoryCleaner {
     }
   }
 
-  public static void register(ColumnVector vec, Cleaner cleaner) {
+  static void register(ColumnVector vec, Cleaner cleaner) {
     // It is now registered...
     all.add(new CleanerWeakReference(vec, cleaner, collected));
   }
 
-  public static void register(HostColumnVector vec, Cleaner cleaner) {
+  static void register(HostColumnVector vec, Cleaner cleaner) {
     // It is now registered...
     all.add(new CleanerWeakReference(vec, cleaner, collected));
   }
 
-  public static void register(MemoryBuffer buf, Cleaner cleaner) {
+  static void register(MemoryBuffer buf, Cleaner cleaner) {
     // It is now registered...
     all.add(new CleanerWeakReference(buf, cleaner, collected));
   }
 
-  public static void register(Cuda.Stream stream, Cleaner cleaner) {
+  static void register(Cuda.Stream stream, Cleaner cleaner) {
     // It is now registered...
     all.add(new CleanerWeakReference(stream, cleaner, collected));
   }
 
-  public static void register(Cuda.Event event, Cleaner cleaner) {
+  static void register(Cuda.Event event, Cleaner cleaner) {
     // It is now registered...
     all.add(new CleanerWeakReference(event, cleaner, collected));
   }
@@ -212,7 +238,7 @@ class MemoryCleaner {
    * Convert elements in it to a String and join them together. Only use for debug messages
    * where the code execution itself can be disabled as this is not fast.
    */
-  static <T> String stringJoin(String delim, Iterable<T> it) {
+  private static <T> String stringJoin(String delim, Iterable<T> it) {
     return String.join(delim,
         StreamSupport.stream(it.spliterator(), false)
             .map((i) -> i.toString())
@@ -222,7 +248,7 @@ class MemoryCleaner {
   /**
    * When debug is enabled holds information about inc and dec of ref count.
    */
-  static final class RefCountDebugItem {
+  private static final class RefCountDebugItem {
     final StackTraceElement[] stackTrace;
     final long timeMs;
     final String op;
