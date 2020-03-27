@@ -790,7 +790,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::write_chunked_end(pq_chunked
         col.file_path = metadata_out_file_path;
       }
     }
-    fendr.footer_len = (uint32_t)cpw.write(&state.md);
+    fendr.footer_len = static_cast<uint32_t>(cpw.write(&state.md));
     buffer_.insert(buffer_.end(), reinterpret_cast<const uint8_t *>(&fendr),
                                   reinterpret_cast<const uint8_t *>(&fendr) + sizeof(fendr));
     return std::make_unique<std::vector<uint8_t>>(std::move(buffer_));
