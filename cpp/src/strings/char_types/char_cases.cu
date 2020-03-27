@@ -225,11 +225,11 @@ void generate_special_mapping_hash_table()
 
   // generate hash index table   
   // size of the table is the prime #, since we're just doing (key % hash_prime)
-  std::vector<uint16_t> hash_indices(hash_prime);      
-  int count = 0;
+  std::vector<std::pair<bool, uint16_t>> hash_indices(hash_prime, std::pair<bool, uint16_t>(false, 0));        
+  int index = 0;
   std::for_each(codepoints_in, codepoints_in + sizeof(codepoints_in) / sizeof(uint16_t), [&](uint16_t codepoint){
-      hash_indices[codepoint % hash_prime] = count;
-      count++;
+      hash_indices[codepoint % hash_prime].first = true;
+      hash_indices[codepoint % hash_prime].second = index++;
   });
 
   // print out the code
@@ -242,26 +242,20 @@ void generate_special_mapping_hash_table()
   printf("   uint16_t lower[3];\n");
   printf("};\n");         
   printf("constexpr special_case_mapping g_special_case_mappings[] = {\n");
-  std::for_each(codepoint_mapping_in, codepoint_mapping_in + (sizeof(codepoint_mapping_in) / sizeof(special_case_mapping_in)), 
-    [](special_case_mapping_in const& m){
-        printf("   { %d, { %d, %d, %d }, %d, {%d, %d, %d} },\n",
-              m.num_upper_chars, m.upper[0], m.upper[1], m.upper[2],
-              m.num_lower_chars, m.lower[0], m.lower[1], m.lower[2]);
+  bool prev_empty = false;
+  std::for_each(hash_indices.begin(), hash_indices.end(), [&prev_empty](std::pair<bool, uint16_t> entry){
+    if(entry.first){
+      special_case_mapping_in m = codepoint_mapping_in[entry.second];
+      printf("%s   { %d, { %d, %d, %d }, %d, {%d, %d, %d} },\n", prev_empty ? "\n" : "",
+            m.num_upper_chars, m.upper[0], m.upper[1], m.upper[2],
+            m.num_lower_chars, m.lower[0], m.lower[1], m.lower[2]);      
+    } else {
+      printf("%s{},", prev_empty ? "" : "   ");
     }
-  );
-  printf("};\n");
-
-  // the indices into the mappings from hashing
-  printf("constexpr uint16_t g_special_case_hash_indices[] = {\n   ");
-  count = 0;
-  std::for_each(hash_indices.begin(), hash_indices.end(), [&count](uint16_t index){
-      printf("%d, ", index);
-      count++;
-      if(count % 10 == 0){
-        printf("\n   ");
-      }
+    prev_empty = !entry.first;
   });
-  printf("\n};\n");
+  printf("};\n");
+  
   printf("// the special case mapping table is a perfect hash table with no collisions, allowing us\n"
          "// to 'hash' by simply modding by the incoming codepoint\n"
          "inline __device__ uint16_t get_special_case_hash_index(uint32_t code_point){\n"

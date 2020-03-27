@@ -67,15 +67,19 @@ struct upper_lower_fn
     character_flags_table_type case_flag; // flag to check with on each character
     const character_flags_table_type* d_flags;
     const character_cases_table_type* d_case_table;
-    const character_special_case_hash_indices_table_type *d_special_case_hash_indices;
     const special_case_mapping *d_special_case_mapping;
     const int32_t* d_offsets{};
     char* d_chars{};
+
+    __device__ special_case_mapping get_special_case_mapping_for_code_point( uint32_t code_point )
+    {    
+        return d_special_case_mapping[get_special_case_hash_index(code_point)];
+    }
     
     // compute-size / copy the bytes representing the special case mapping for this codepoint
     __device__ int32_t handle_special_case_bytes(uint32_t code_point, char*& d_buffer, detail::character_flags_table_type flag)
     {
-        special_case_mapping m = d_special_case_mapping[d_special_case_hash_indices[get_special_case_hash_index(code_point)]];
+        special_case_mapping m = get_special_case_mapping_for_code_point(code_point);
         size_type bytes = 0;
 
         auto const count = IS_LOWER(flag) ? m.num_upper_chars : m.num_lower_chars;
@@ -168,13 +172,12 @@ std::unique_ptr<column> convert_case( strings_column_view const& strings,
     // get the lookup tables used for case conversion
     auto d_flags = get_character_flags_table();
     
-    auto d_case_table = get_character_cases_table();    
-    auto d_special_case_hash_indices = get_special_case_hash_indices_table();    
-    auto d_special_case_mapping = get_special_case_mapping_table();    
+    auto d_case_table = get_character_cases_table();
+    auto d_special_case_mapping = get_special_case_mapping_table();
 
     // build offsets column -- calculate the size of each output string
     auto offsets_transformer_itr = thrust::make_transform_iterator( thrust::make_counting_iterator<size_type>(0),
-        upper_lower_fn<SizeOnly>{d_column, case_flag, d_flags, d_case_table, d_special_case_hash_indices, d_special_case_mapping} );
+        upper_lower_fn<SizeOnly>{d_column, case_flag, d_flags, d_case_table, d_special_case_mapping} );
     auto offsets_column = detail::make_offsets_child_column(offsets_transformer_itr,
                                                offsets_transformer_itr+strings_count,
                                                mr, stream);
@@ -190,7 +193,7 @@ std::unique_ptr<column> convert_case( strings_column_view const& strings,
     thrust::for_each_n(execpol->on(stream),
         thrust::make_counting_iterator<size_type>(0), strings_count,
         upper_lower_fn<ExecuteOp>{d_column, case_flag, d_flags, 
-                                  d_case_table, d_special_case_hash_indices, d_special_case_mapping, 
+                                  d_case_table, d_special_case_mapping, 
                                   d_new_offsets, d_chars} );        
     //
     return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),

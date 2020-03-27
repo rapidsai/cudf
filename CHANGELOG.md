@@ -19,11 +19,11 @@
 - PR #4548 Remove string_view is_null method
 - PR #4645 Add Alias for `kurtosis` as `kurt`
 - PR #4616 Enable different RMM allocation modes in unit tests
+- PR #4520 Fix several single char -> single char case mapping values. Add support for single -> multi char mappings.
 
 ## Bug Fixes
 
 - PR #4386 Update Java package to 0.14
-- PR #4520 Fix several single char -> single char case mapping values. Add support for single -> multi char mappings.
 - PR #4402 Fix `cudf::strings::join_strings` logic with all-null strings and null narep
 - PR #4610 Fix validity bug in string scalar factory
 - PR #4570 Fixing loc ordering issue in dataframe

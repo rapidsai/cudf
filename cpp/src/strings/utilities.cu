@@ -142,18 +142,15 @@ namespace
 __device__ character_flags_table_type character_codepoint_flags[sizeof(g_character_codepoint_flags)];
 __device__ character_cases_table_type character_cases_table[sizeof(g_character_cases_table)];
 __device__ special_case_mapping character_special_case_mappings[sizeof(g_special_case_mappings)];
-__device__ character_special_case_hash_indices_table_type character_special_case_hash_indices[sizeof(g_special_case_hash_indices)];
 
 // initialization mutexes
 std::mutex g_flags_table_mutex;
 std::mutex g_cases_table_mutex; 
 std::mutex g_special_case_mappings_mutex;
-std::mutex g_special_case_hash_indices_mutex;
 
 character_flags_table_type* d_character_codepoint_flags = nullptr;
 character_cases_table_type* d_character_cases_table = nullptr;
 special_case_mapping* d_special_case_mappings = nullptr;
-character_special_case_hash_indices_table_type* d_special_case_hash_indices = nullptr;
 
 } // namespace
 
@@ -197,20 +194,6 @@ const special_case_mapping* get_special_case_mapping_table()
         CUDA_TRY(cudaGetSymbolAddress((void**)&d_special_case_mappings, character_special_case_mappings));
     }
     return d_special_case_mappings;       
-}
-
-/**
- * @copydoc cudf::strings::detail::get_special_case_hash_indices_table 
- */
-const character_special_case_hash_indices_table_type* get_special_case_hash_indices_table()
-{    
-    std::lock_guard<std::mutex> guard(g_special_case_hash_indices_mutex);
-    if( !d_special_case_hash_indices )
-    {        
-        CUDA_TRY(cudaMemcpyToSymbol(character_special_case_hash_indices, g_special_case_hash_indices, sizeof(g_special_case_hash_indices)));
-        CUDA_TRY(cudaGetSymbolAddress((void**)&d_special_case_hash_indices, character_special_case_hash_indices));
-    }
-    return d_special_case_hash_indices;
 }
 
 } // namespace detail
