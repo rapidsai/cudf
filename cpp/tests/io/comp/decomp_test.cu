@@ -15,7 +15,9 @@
  */
 
 #include <io/comp/gpuinflate.h>
-#include <tests/utilities/legacy/cudf_test_fixtures.h>
+// #include <tests/utilities/legacy/cudf_test_fixtures.h>
+#include <tests/utilities/base_fixture.hpp>
+#include <tests/utilities/cudf_gmock.hpp>
 
 #include <vector>
 
@@ -28,7 +30,7 @@
  * whose interface and setup is different for each codec.
  **/
 template <typename Decompressor>
-struct DecompressTest : public GdfTest {
+struct DecompressTest : public cudf::test::BaseFixture {
   void SetUp() override {
     ASSERT_CUDA_SUCCEEDED(
         cudaMallocHost((void**)&inf_args, sizeof(cudf::io::gpu_inflate_input_s)));

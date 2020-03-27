@@ -6,7 +6,6 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/copying.hpp>
-#include <utilities/legacy/error_utils.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>

@@ -17,7 +17,6 @@
 #pragma once
 
 #include <cudf/cudf.h>
-#include <tests/utilities/legacy/cudf_test_utils.cuh>
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/column_utilities.hpp>
 

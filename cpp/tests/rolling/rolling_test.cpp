@@ -19,7 +19,6 @@
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
 #include <tests/utilities/cudf_gtest.hpp>
-#include <tests/utilities/legacy/cudf_test_utils.cuh>
 
 #include <cudf/utilities/bit.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>

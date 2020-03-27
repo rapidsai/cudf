@@ -16,7 +16,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/legacy/binaryop.hpp>
+#include <cudf/binaryop.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
 #include <tests/utilities/base_fixture.hpp>
@@ -90,11 +90,11 @@ TYPED_TEST(TimestampColumnTest,
 
 template <typename Timestamp>
 struct compare_timestamp_elements {
-  gdf_binary_operator comp;
+  cudf::experimental::binary_operator comp;
   cudf::column_device_view lhs;
   cudf::column_device_view rhs;
 
-  compare_timestamp_elements(gdf_binary_operator _comp,
+  compare_timestamp_elements(cudf::experimental::binary_operator _comp,
                              cudf::column_device_view& _lhs,
                              cudf::column_device_view& _rhs)
       : comp(_comp), lhs(_lhs), rhs(_rhs) {}
@@ -103,13 +103,13 @@ struct compare_timestamp_elements {
     auto lhs_elt = lhs.element<Timestamp>(element_index);
     auto rhs_elt = rhs.element<Timestamp>(element_index);
     switch (comp) {
-      case GDF_LESS:
+      case cudf::experimental::binary_operator::LESS:
         return lhs_elt < rhs_elt;
-      case GDF_GREATER:
+      case cudf::experimental::binary_operator::GREATER:
         return lhs_elt > rhs_elt;
-      case GDF_LESS_EQUAL:
+      case cudf::experimental::binary_operator::LESS_EQUAL:
         return lhs_elt <= rhs_elt;
-      case GDF_GREATER_EQUAL:
+      case cudf::experimental::binary_operator::GREATER_EQUAL:
         return lhs_elt >= rhs_elt;
       default:
         return false;
@@ -139,28 +139,28 @@ TYPED_TEST(TimestampColumnTest, TimestampsCanBeComparedInDeviceCode) {
   EXPECT_TRUE(thrust::all_of(
       indices.begin(), indices.end(),
       compare_timestamp_elements<TypeParam>{
-          GDF_LESS,
+          cudf::experimental::binary_operator::LESS,
           *cudf::column_device_view::create(timestamp_lhs_col),
           *cudf::column_device_view::create(timestamp_rhs_col)}));
 
   EXPECT_TRUE(thrust::all_of(
       indices.begin(), indices.end(),
       compare_timestamp_elements<TypeParam>{
-          GDF_GREATER,
+          cudf::experimental::binary_operator::GREATER,
           *cudf::column_device_view::create(timestamp_rhs_col),
           *cudf::column_device_view::create(timestamp_lhs_col)}));
 
   EXPECT_TRUE(thrust::all_of(
       indices.begin(), indices.end(),
       compare_timestamp_elements<TypeParam>{
-          GDF_LESS_EQUAL,
+          cudf::experimental::binary_operator::LESS_EQUAL,
           *cudf::column_device_view::create(timestamp_lhs_col),
           *cudf::column_device_view::create(timestamp_lhs_col)}));
 
   EXPECT_TRUE(thrust::all_of(
       indices.begin(), indices.end(),
       compare_timestamp_elements<TypeParam>{
-          GDF_GREATER_EQUAL,
+          cudf::experimental::binary_operator::GREATER_EQUAL,
           *cudf::column_device_view::create(timestamp_rhs_col),
           *cudf::column_device_view::create(timestamp_rhs_col)}));
 }

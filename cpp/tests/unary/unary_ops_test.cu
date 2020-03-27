@@ -16,7 +16,6 @@
 
 #include <cudf/cudf.h>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/legacy/interop.hpp>
 #include <cudf/types.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/bit.hpp>
@@ -26,7 +25,6 @@
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/legacy/cudf_test_utils.cuh>
 #include <tests/utilities/type_lists.hpp>
 #include <vector>
 
@@ -75,7 +73,8 @@ TYPED_TEST(cudf_logical_test, LogicalNot) {
 
   std::transform(
       std::cbegin(h_input_v), std::cend(h_input_v), std::begin(h_expect_v),
-      [](TypeParam e) -> cudf::bool8 { return static_cast<cudf::bool8>(!e); });
+      [](TypeParam e) -> cudf::experimental::bool8 {
+        return static_cast<cudf::experimental::bool8>(!e); });
 
   cudf::test::fixed_width_column_wrapper<TypeParam> input(
       std::cbegin(h_input_v), std::cend(h_input_v));

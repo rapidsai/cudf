@@ -15,7 +15,7 @@
  */
 
 #include <cudf/cudf.h>
-#include <tests/utilities/legacy/cudf_test_fixtures.h>
+#include <tests/utilities/base_fixture.hpp>
 #include <hash/concurrent_unordered_map.cuh>
 
 #include <gtest/gtest.h>
@@ -38,7 +38,7 @@ struct key_value_types {
 };
 
 template <typename T>
-struct InsertTest : public GdfTest {
+struct InsertTest : public cudf::test::BaseFixture {
   using key_type = typename T::key_type;
   using value_type = typename T::value_type;
   using pair_type = typename T::pair_type;

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <tests/utilities/legacy/cudf_test_fixtures.h>
+#include <tests/utilities/base_fixture.hpp>
 
 #include <thrust/device_vector.h>
 
@@ -40,7 +40,7 @@ struct KeyValueTypes {
 // A new instance of this class will be created for each *TEST(MultimapTest,
 // ...) Put all repeated stuff for each test here
 template <class T>
-class MultimapTest : public GdfTest {
+class MultimapTest : public cudf::test::BaseFixture {
  public:
   using key_type = typename T::key_type;
   using value_type = typename T::value_type;

@@ -27,7 +27,6 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/strings/detail/copy_if_else.cuh>
-#include <iterator/legacy/iterator.cuh>
 
 #include <rmm/device_scalar.hpp>
 #include <cub/cub.cuh>

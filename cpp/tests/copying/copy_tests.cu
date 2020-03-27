@@ -17,9 +17,9 @@
 #include <tests/utilities/cudf_gtest.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy_if_else.cuh>
+#include <cudf/detail/iterator.cuh>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/type_lists.hpp>
-#include <tests/utilities/legacy/cudf_test_utils.cuh>
 
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/column_utilities.hpp>
@@ -28,7 +28,6 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/column/column_device_view.cuh>
 
-#include <iterator/legacy/iterator.cuh>
 
 template <typename T>
 struct CopyTest : public cudf::test::BaseFixture {};
@@ -103,9 +102,11 @@ struct copy_if_else_tiny_grid_functor {
       // output
       std::unique_ptr<cudf::column> out = cudf::experimental::allocate_like(lhs, lhs.size(), cudf::experimental::mask_allocation_policy::RETAIN, mr);
 
-      // device views      
-      auto lhs_iter = cudf::make_pair_iterator<false, T>((T*)lhs.begin<T>(), static_cast<cudf::bitmask_type*>(nullptr));
-      auto rhs_iter = cudf::make_pair_iterator<false, T>((T*)rhs.begin<T>(), static_cast<cudf::bitmask_type*>(nullptr));
+      // device views
+      auto lhs_view = cudf::column_device_view::create(lhs);
+      auto rhs_view = cudf::column_device_view::create(rhs);
+      auto lhs_iter = cudf::experimental::detail::make_pair_iterator<T>(*lhs_view);
+      auto rhs_iter = cudf::experimental::detail::make_pair_iterator<T>(*rhs_view);
       auto out_dv = cudf::mutable_column_device_view::create(*out);
              
       // call the kernel with an artificially small grid

@@ -28,7 +28,6 @@
 #include <tests/utilities/type_lists.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/cudf_gtest.hpp>
-#include <cudf/utilities/legacy/wrapper_types.hpp>
 
 #include <cassert>
 #include <vector>

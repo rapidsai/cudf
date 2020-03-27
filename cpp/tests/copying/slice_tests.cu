@@ -23,8 +23,6 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <tests/utilities/type_lists.hpp>
 #include <tests/utilities/column_wrapper.hpp>
-#include <cudf/legacy/interop.hpp>
-#include <tests/utilities/legacy/cudf_test_utils.cuh>
 #include <string>
 #include <vector>
 

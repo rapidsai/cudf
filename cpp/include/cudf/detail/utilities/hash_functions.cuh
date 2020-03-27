@@ -17,6 +17,8 @@
 #pragma once
 
 #include <cudf/wrappers/bool.hpp>
+
+// TODO (rmleg): removing this fails. need to fix
 #include <cudf/utilities/legacy/wrapper_types.hpp>
 #include <cudf/strings/string_view.cuh>
 

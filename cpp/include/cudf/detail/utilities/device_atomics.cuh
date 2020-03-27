@@ -39,6 +39,8 @@
 #include <cudf/utilities/error.hpp>
 #include <type_traits>
 #include <cudf/detail/utilities/device_operators.cuh>
+
+// TODO (rmleg): removing this fails. need to fix
 #include <cudf/utilities/legacy/wrapper_types.hpp>
 
 namespace cudf {
