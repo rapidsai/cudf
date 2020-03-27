@@ -18,13 +18,11 @@
 - PR #4655 Raise error for list like dtypes in cudf
 - PR #4548 Remove string_view is_null method
 - PR #4645 Add Alias for `kurtosis` as `kurt`
-- PR #4660 Plumb `cudf::partition` api to python/cython
 - PR #4668 Add Java bindings for log2/log10 unary ops and log_base binary op
 - PR #4616 Enable different RMM allocation modes in unit tests
 - PR #4700 Expose events and more stream functionality in java
 - PR #4699 Make Java's MemoryBuffer public and add MemoryBuffer.slice
 - PR #4691 Fix compiler argument syntax for ccache
-- PR #4616 Enable different RMM allocation modes in unit tests
 - PR #4660 Port `cudf::partition` api to python/cython
 
 ## Bug Fixes
