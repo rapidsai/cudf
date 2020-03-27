@@ -341,8 +341,7 @@ ConfigureTest(HASH_MAP_TEST "${HASH_MAP_TEST_SRC}")
 # - quantiles tests -------------------------------------------------------------------------------
 
 set(LEGACY_QUANTILES_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/legacy/group_quantiles_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/legacy/quantiles_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/legacy/group_quantiles_test.cu")
 
 ConfigureTest(LEGACY_QUANTILES_TEST "${LEGACY_QUANTILES_TEST_SRC}")
 
