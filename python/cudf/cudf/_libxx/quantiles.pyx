@@ -14,7 +14,7 @@ from cudf._libxx.types cimport (
     underlying_type_t_sorted,
     underlying_type_t_interpolation,
 )
-
+from cudf._libxx.types import Interpolation
 from cudf._libxx.cpp.column.column cimport column
 from cudf._libxx.cpp.column.column_view cimport column_view
 from cudf._libxx.cpp.table.table cimport table
@@ -35,7 +35,7 @@ from cudf._libxx.cpp.quantiles cimport (
 def quantile(
     Column input,
     object q,
-    object interp,
+    str interp,
     Column ordered_indices,
     bool exact,
 
@@ -46,7 +46,7 @@ def quantile(
         else ordered_indices.view()
     )
     cdef interpolation c_interp = <interpolation>(
-        <underlying_type_t_interpolation> interp
+        <underlying_type_t_interpolation> Interpolation[interp.upper()]
     )
     cdef bool c_exact = exact
 

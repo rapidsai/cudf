@@ -25,7 +25,6 @@ from cudf._libxx.quantiles import quantile as cpp_quantile
 from cudf._libxx.scalar import Scalar
 from cudf._libxx.stream_compaction import unique_count as cpp_unique_count
 from cudf._libxx.transform import bools_to_mask
-from cudf._libxx.types import Interpolation
 from cudf.core.buffer import Buffer
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils import cudautils, ioutils, utils
@@ -665,13 +664,7 @@ class ColumnBase(Column):
         sorted_indices = self.as_frame().get_sorted_inds(True, "after")
         sorted_indices = sorted_indices[self.null_count :]
 
-        return cpp_quantile(
-            self,
-            quant,
-            Interpolation[interpolation.upper()],
-            sorted_indices,
-            exact,
-        )
+        return cpp_quantile(self, quant, interpolation, sorted_indices, exact)
 
     def take(self, indices):
         """Return Column by taking values from the corresponding *indices*.
