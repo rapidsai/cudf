@@ -3,7 +3,6 @@
 import numpy as np
 from enum import IntEnum
 
-import cudf
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 
@@ -154,7 +153,7 @@ cdef binaryop_s_v(Scalar lhs, Column rhs,
     return Column.from_unique_ptr(move(c_result))
 
 
-def handle_none_for_string_column(Column input_col, op):
+def handle_null_for_string_column(Column input_col, op):
     if op in (
         BinaryOperation['EQ'], BinaryOperation['LT'],
         BinaryOperation['LE'], BinaryOperation['GT'],
@@ -211,7 +210,7 @@ def binaryop(lhs, rhs, op, dtype):
         )
 
     if is_string_col is True:
-        return handle_none_for_string_column(result, op)
+        return handle_null_for_string_column(result, op)
     else:
         return result
 
