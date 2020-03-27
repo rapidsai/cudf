@@ -18,7 +18,8 @@
 #include <strings/regex/regcomp.h>
 
 #include <string.h>
-#include <map>
+#include <array>
+#include <algorithm>
 
 namespace cudf
 {
@@ -55,11 +56,11 @@ static reclass ccls_d(4);  // digits [0-9]
 static reclass ccls_D(32); // not ccls_d plus '\n'
 
 // Tables for analyzing quantifiers
-std::set<int> valid_preceding_inst_types( {CHAR, CCLASS, NCCLASS, ANY, ANYNL} );
-std::set<char> quantifiers( {'*','?','+','{','|'} );
+const std::array<int,5> valid_preceding_inst_types{ {CHAR, CCLASS, NCCLASS, ANY, ANYNL} };
+const std::array<char,5> quantifiers{ {'*','?','+','{','|'} };
 // Valid regex characters that can be escaping to be used as literals
-std::set<char> escapable_chars( {'.', '-', '+', '*', '\\', '?', '^', '$',
-                                 '{', '}', '(', ')', '[', ']'  } );
+const std::array<char,14> escapable_chars{ {'.', '-', '+', '*', '\\', '?', '^', '$',
+                                            '{', '}', '(', ')', '[', ']'  } };
 
 } // namespace
 
@@ -448,7 +449,9 @@ class regex_parser
                 default:
                 {
                     // let valid escapable chars fall through as literal CHAR
-                    if( yy && (escapable_chars.find(static_cast<char>(yy)) != escapable_chars.end()) )
+                    if( yy &&
+                        (std::find( escapable_chars.begin(), escapable_chars.end(), static_cast<char>(yy))
+                         != escapable_chars.end()) )
                         break;
                     // anything else is a bad escape so throw an error
                     std::ostringstream message;
@@ -485,7 +488,7 @@ class regex_parser
             return dot_type;
         }
 
-        if( quantifiers.find(static_cast<char>(yy)) == quantifiers.end() )
+        if( std::find(quantifiers.begin(), quantifiers.end(), static_cast<char>(yy)) == quantifiers.end() )
             return CHAR;
 
         // The quantifiers require at least one "real" previous item.
@@ -497,7 +500,7 @@ class regex_parser
         if( m_items.empty() )
             CUDF_FAIL("invalid regex pattern: nothing to repeat at position 0");
 
-        if( valid_preceding_inst_types.find(m_items.back().t)
+        if( std::find(valid_preceding_inst_types.begin(), valid_preceding_inst_types.end(), m_items.back().t)
             == valid_preceding_inst_types.end() )
         {
             std::ostringstream message;
