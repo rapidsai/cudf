@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2019, NVIDIA CORPORATION.  All rights reserved.
+* Copyright (c) 2019-2020, NVIDIA CORPORATION.  All rights reserved.
 *
 * Licensed under the Apache License, Version 2.0 (the "License");
 * you may not use this file except in compliance with the License.
@@ -454,7 +454,8 @@ class regex_parser
                          != escapable_chars.end()) )
                         break;
                     // anything else is a bad escape so throw an error
-                    CUDF_FAIL("invalid regex pattern: bad escape character at position " + std::to_string(exprp-pattern-1));
+                    CUDF_FAIL("invalid regex pattern: bad escape character at position "
+                              + std::to_string(exprp-pattern-1));
                 }
                 } // end-switch
                 return CHAR;
@@ -499,7 +500,8 @@ class regex_parser
 
         if( std::find(valid_preceding_inst_types.begin(), valid_preceding_inst_types.end(), m_items.back().t)
             == valid_preceding_inst_types.end() )
-            CUDF_FAIL("invalid regex pattern: nothing to repeat at position " + std::to_string(exprp-pattern-1));
+            CUDF_FAIL("invalid regex pattern: nothing to repeat at position " 
+                      + std::to_string(exprp-pattern-1));
 
         // handle quantifiers
         switch(yy)

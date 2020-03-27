@@ -84,31 +84,6 @@ struct cuda_error : public std::runtime_error {
   throw cudf::logic_error("cuDF failure at: " __FILE__ \
                           ":" CUDF_STRINGIFY(__LINE__) ": " reason)
 
-/**
- * @brief Indicates that an erroneous code path has been taken.
- *
- * Should be only used in host code. This uses `std::string` to build
- * the error message.
- * 
- * This is the same as CUDF_FAIL except it does not require a string literal
- * for the `reason` parameter. This allows passing a more detailed error
- * message inside the exception.
- * 
- * Throws a `cudf::logic_error`.
- *
- * Example usage:
- * ```
- * CUDF_FAIL_STRING("invalid character at position " + std::to_string(position));
- * ```
- * 
- * @param[in] reason String description of the reason
- */
-#define CUDF_FAIL_STRING(reason)                              { \
-  std::string msg = "cuDF failure at: " + std::string(__FILE__) \
-                    + ":" + std::to_string(__LINE__) +  ": "    \
-                    + reason;                                   \
-  throw cudf::logic_error(msg); }
-
 namespace cudf {
 namespace detail {
 
