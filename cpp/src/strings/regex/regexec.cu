@@ -116,8 +116,8 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>>
     // allocate memory to store prog data
     std::vector<u_char> h_buffer(memsize);
     u_char* h_ptr = h_buffer.data(); // running pointer
-    auto* d_buffer = new rmm::device_vector<u_char>(memsize);
-    u_char* d_ptr = d_buffer->data().get(); // running device pointer
+    auto* d_buffer = new rmm::device_buffer(memsize, stream);
+    u_char* d_ptr = reinterpret_cast<u_char*>(d_buffer->data()); // running device pointer
     // put everything into a flat host buffer first
     reprog_device* d_prog = new reprog_device(h_prog);
     // copy the instructions array first (fixed-size structs)
@@ -160,12 +160,12 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>>
     rmm::device_buffer* d_relists{};
     if( rlm_size > 0 )
     {
-        d_relists->resize(rlm_size);
+        d_relists = new rmm::device_buffer(rlm_size, stream);
         d_prog->_relists_mem = d_relists->data();
     }
 
     // copy flat prog to device memory
-    CUDA_TRY(cudaMemcpy(d_buffer->data().get(),h_buffer.data(),memsize,cudaMemcpyHostToDevice));
+    CUDA_TRY(cudaMemcpy(d_buffer->data(),h_buffer.data(),memsize,cudaMemcpyHostToDevice));
     //
     auto deleter = [d_buffer, d_relists](reprog_device*t) {
         t->destroy(); 
