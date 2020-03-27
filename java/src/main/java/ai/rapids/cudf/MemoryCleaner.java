@@ -147,10 +147,6 @@ final class MemoryCleaner {
    * The default GPU as set by user threads.
    */
   private static volatile int defaultGpu = -1;
-  /**
-   * The default GPU as set by the cleaner thread.
-   */
-  private static volatile int currentGpuId = -1;
 
   /**
    * This should be called from RMM when it is initialized.
@@ -161,6 +157,7 @@ final class MemoryCleaner {
 
   private static final Thread t = new Thread(() -> {
     try {
+      int currentGpuId = -1;
       while (true) {
         CleanerWeakReference next = (CleanerWeakReference)collected.remove(100);
         if (next != null) {

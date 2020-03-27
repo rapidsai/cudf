@@ -37,7 +37,7 @@ public class Rmm {
    * @throws IllegalStateException if RMM has already been initialized
    */
   public static void initialize(int allocationMode, boolean enableLogging, long poolSize) {
-    initialize(allocationMode, enableLogging, poolSize, -1);
+    initialize(allocationMode, enableLogging, poolSize, Cuda.getDevice());
   }
 
   /**
