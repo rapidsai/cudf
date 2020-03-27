@@ -2473,7 +2473,12 @@ class DataFrame(Frame):
             else:
                 codes = df[name]._column
             df[name] = column.build_categorical_column(
-                categories=cats, codes=codes, ordered=False
+                categories=cats,
+                codes=as_column(codes.base_data, dtype=codes.dtype),
+                mask=codes.base_mask,
+                size=codes.size,
+                ordered=False,
+                offset=codes.offset,
             )
 
         if sort and len(df):

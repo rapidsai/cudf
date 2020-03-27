@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -20,6 +20,10 @@ package ai.rapids.cudf;
 
 import ai.rapids.cudf.HostColumnVector.Builder;
 import org.junit.jupiter.api.Test;
+
+import java.util.Arrays;
+import java.util.function.Function;
+import java.util.stream.Collector;
 
 import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
 
@@ -1078,6 +1082,30 @@ public class BinaryOpTest extends CudfTestBase {
                })) {
         assertColumnsAreEqual(expected, answer, "scalar short >>> int32 = int16");
       }
+    }
+  }
+
+  @Test
+  public void testLogBase10() {
+    try (ColumnVector dcv1 = ColumnVector.fromBoxedDoubles(DOUBLES_2);
+         Scalar base = Scalar.fromInt(10);
+         ColumnVector answer = dcv1.log(base);
+         ColumnVector expected = ColumnVector.fromBoxedDoubles(Arrays.stream(DOUBLES_2)
+            .map(Math::log10)
+            .toArray(Double[]::new))) {
+      assertColumnsAreEqual(expected, answer, "log10");
+    }
+  }
+
+  @Test
+  public void testLogBase2() {
+    try (ColumnVector dcv1 = ColumnVector.fromBoxedDoubles(DOUBLES_2);
+         Scalar base = Scalar.fromInt(2);
+         ColumnVector answer = dcv1.log(base);
+         ColumnVector expected = ColumnVector.fromBoxedDoubles(Arrays.stream(DOUBLES_2)
+             .map(n -> Math.log(n) / Math.log(2))
+             .toArray(Double[]::new))) {
+      assertColumnsAreEqual(expected, answer, "log2");
     }
   }
 }

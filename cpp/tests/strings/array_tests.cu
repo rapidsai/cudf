@@ -231,3 +231,5 @@ TEST_F(StringsColumnTest, ScatterZeroSizeStringsColumn)
     auto results = cudf::strings::detail::scatter(begin,begin,scatter_map.begin(),target);
     cudf::test::expect_strings_empty(results->view());
 }
+
+CUDF_TEST_PROGRAM_MAIN()
