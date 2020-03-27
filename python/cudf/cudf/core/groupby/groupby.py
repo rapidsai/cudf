@@ -240,11 +240,7 @@ class GroupBy(object):
         grouped_values = self.obj.__class__._from_table(grouped_values)
         grouped_values._copy_categories(self.obj)
         group_names = grouped_keys.unique()
-        return (
-            group_names,
-            offsets,
-            grouped_values,
-        )
+        return (group_names, offsets, grouped_values)
 
     def _agg_func_name_with_args(self, func_name, *args, **kwargs):
         """

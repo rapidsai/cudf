@@ -32,7 +32,7 @@ TEST_F(DictionaryDecodeTest, StringColumn)
     auto dictionary = cudf::dictionary::encode( strings );
     auto output = cudf::dictionary::decode( cudf::dictionary_column_view(dictionary->view()) );
 
-    cudf::test::expect_column_properties_equal(strings,*output);
+    cudf::test::expect_columns_equal(strings,*output);
 }
 
 TEST_F(DictionaryDecodeTest, FloatColumn)
@@ -42,7 +42,7 @@ TEST_F(DictionaryDecodeTest, FloatColumn)
     auto dictionary = cudf::dictionary::encode( input );
     auto output = cudf::dictionary::decode( cudf::dictionary_column_view(dictionary->view()) );
 
-    cudf::test::expect_column_properties_equal(input,*output);
+    cudf::test::expect_columns_equal(input,*output);
 }
 
 TEST_F(DictionaryDecodeTest, ColumnWithNull)
@@ -52,7 +52,7 @@ TEST_F(DictionaryDecodeTest, ColumnWithNull)
     auto dictionary = cudf::dictionary::encode( input );
     auto output = cudf::dictionary::decode( cudf::dictionary_column_view(dictionary->view()) );
 
-    cudf::test::expect_column_properties_equal(input,*output);
+    cudf::test::expect_columns_equal(input,*output);
 }
 
 TEST_F(DictionaryDecodeTest, EmptyColumn)
