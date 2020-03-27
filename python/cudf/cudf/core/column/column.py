@@ -256,7 +256,11 @@ class ColumnBase(Column):
 
         if is_categorical:
             col = build_categorical_column(
-                categories=cats, codes=col, mask=col.mask
+                categories=cats,
+                codes=as_column(col.base_data, dtype=col.dtype),
+                mask=col.base_mask,
+                size=col.size,
+                offset=col.offset,
             )
 
         return col
@@ -437,11 +441,13 @@ class ColumnBase(Column):
 
             if is_categorical_dtype(self):
                 codes = self.codes[arg]
-                return build_column(
-                    data=None,
-                    dtype=self.dtype,
-                    mask=codes.mask,
-                    children=(codes,),
+                return build_categorical_column(
+                    categories=self.categories,
+                    codes=as_column(codes.base_data, dtype=codes.dtype),
+                    mask=codes.base_mask,
+                    ordered=self.ordered,
+                    size=codes.size,
+                    offset=codes.offset,
                 )
 
             start, stop, stride = arg.indices(len(self))
@@ -550,7 +556,7 @@ class ColumnBase(Column):
             if is_categorical_dtype(value.dtype):
                 out = build_categorical_column(
                     categories=value.categories,
-                    codes=out,
+                    codes=as_column(out.base_data, dtype=out.dtype),
                     mask=out.base_mask,
                     size=out.size,
                     offset=out.offset,
@@ -568,7 +574,7 @@ class ColumnBase(Column):
                     if is_categorical_dtype(self.dtype):
                         out = build_categorical_column(
                             categories=self.categories,
-                            codes=out,
+                            codes=as_column(out.base_data, dtype=out.dtype),
                             mask=out.base_mask,
                             size=out.size,
                             offset=out.offset,
@@ -912,7 +918,11 @@ def column_empty_like(column, dtype=None, masked=False, newsize=None):
     ):
         codes = column_empty_like(column.codes, masked=masked, newsize=newsize)
         return build_column(
-            data=None, dtype=dtype, mask=codes.mask, children=(codes,)
+            data=None,
+            dtype=dtype,
+            mask=codes.base_mask,
+            children=(as_column(codes.base_data, dtype=codes.dtype),),
+            size=codes.size,
         )
 
     return column_empty(row_count, dtype, masked)
