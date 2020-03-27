@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -27,5 +27,13 @@ public class DeviceMemoryBufferView extends BaseDeviceMemoryBuffer {
   DeviceMemoryBufferView(long address, long lengthInBytes) {
     // Set the cleaner to null so we don't end up releasing anything
     super(address, lengthInBytes, (MemoryBufferCleaner) null);
+  }
+
+  /**
+   * At the moment we don't have use for slicing a view.
+   */
+  @Override
+  public synchronized final DeviceMemoryBufferView slice(long offset, long len) {
+    throw new UnsupportedOperationException("Slice on view is not supported");
   }
 }
