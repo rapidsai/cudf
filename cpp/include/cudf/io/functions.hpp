@@ -243,25 +243,106 @@ table_with_metadata read_csv(
  * @brief Settings to use for `write_csv()`
  */
 struct write_csv_args {
-  /// Specify the sink to use for writer output
-  sink_info sink;
-  /// Specify the compression format to use
-  compression_type compression;
-  /// Enable writing column statistics
-  bool enable_statistics;
-  /// Set of columns to output
-  table_view table;
-  /// Optional associated metadata
-  const table_metadata *metadata;
+  write_csv_args(sink_info const& snk,
+                 table_view const& table,
+                 std::string const& na,
+                 bool include_header,
+                 int rows_per_chunk,
+                 std::string line_term = std::string{"\n"},
+                 char delim = ',',
+                 std::string true_v = std::string{"true"},
+                 std::string false_v = std::string{"false"})
+      : sink_(snk),
+        table_(table),
+        na_rep_(na),
+        include_header_(include_header),
+        rows_per_chunk_(rows_per_chunk),
+        line_terminator_(line_term),
+        inter_column_delimiter_(delim),
+        true_value_(true_v),
+        false_value_(false_v)
+  {}
 
-  write_csv_args() = default;
+  sink_info const& sink(void) const
+  {
+    return sink_;
+  }
 
-  explicit write_csv_args(sink_info const& snk, table_view const& table_,
-                          const table_metadata *metadata_ = nullptr,
-                          compression_type compression_ = compression_type::AUTO,
-                          bool stats_en = true)
-      : sink(snk), table(table_), metadata(metadata_), compression(compression_),
-        enable_statistics(stats_en) {}
+  table_view const& table(void) const
+  {
+    return table_;
+  }
+
+  std::string const& na_rep(void) const
+  {
+    return na_rep_;
+  }
+
+  bool include_header(void) const
+  {
+    return include_header_;
+  }
+
+  int rows_per_chunk(void) const
+  {
+    return rows_per_chunk_;
+  }
+
+  std::string const& line_terminator(void) const
+  {
+    return line_terminator_;
+  }
+
+  char inter_column_delimiter(void) const
+  {
+    return inter_column_delimiter_;
+  }
+
+  std::string const& true_value(void) const
+  {
+    return true_value_;
+  }
+
+  std::string const& false_value(void) const
+  {
+    return false_value_;
+  }
+private:
+  // Specify the sink to use for writer output:
+  //
+  sink_info const& sink_;
+
+  // Set of columns to output:
+  //
+  table_view const& table_;
+
+  // string to use for null entries:
+  //
+  std::string const na_rep_;
+
+  // Indicates whether to write headers to csv:
+  //
+  bool include_header_;
+
+  // maximum number of rows to process for each file write:
+  //
+  int rows_per_chunk_;
+
+  // character to use for separating lines (default "\n"):
+  //
+  std::string const line_terminator_;
+
+  // character to use between each column entry (default ','):
+  //
+  char inter_column_delimiter_;
+
+  // string to use for values !=0 in GDF_INT8 types (default 'true'):
+  //
+  std::string const true_value_;
+
+  // string to use for values ==0 in GDF_INT8 types (default 'false'):
+  //
+  std::string const false_value_;
 };
 
 /**
