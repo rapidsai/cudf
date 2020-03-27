@@ -454,10 +454,7 @@ class regex_parser
                          != escapable_chars.end()) )
                         break;
                     // anything else is a bad escape so throw an error
-                    std::ostringstream message;
-                    message << "invalid regex pattern: bad escape ";
-                    message << "at position " << (exprp-pattern-1);
-                    throw cudf::logic_error(message.str());
+                    CUDF_FAIL("invalid regex pattern: bad escape character at position " + std::to_string(exprp-pattern-1));
                 }
                 } // end-switch
                 return CHAR;
@@ -502,12 +499,7 @@ class regex_parser
 
         if( std::find(valid_preceding_inst_types.begin(), valid_preceding_inst_types.end(), m_items.back().t)
             == valid_preceding_inst_types.end() )
-        {
-            std::ostringstream message;
-            message << "invalid regex pattern: ";
-            message << "nothing to repeat at position " << (exprp-pattern-1);
-            throw cudf::logic_error(message.str());
-        }
+            CUDF_FAIL("invalid regex pattern: nothing to repeat at position " + std::to_string(exprp-pattern-1));
 
         // handle quantifiers
         switch(yy)
