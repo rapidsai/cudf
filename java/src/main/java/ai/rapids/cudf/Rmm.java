@@ -119,7 +119,25 @@ public class Rmm {
   /**
    * Shut down any initialized rmm.
    */
-  public static native void shutdown() throws RmmException;
+  public static void shutdown() throws RmmException {
+    final int MAX_ATTEMPTS = 4;
+    int attempts = 0;
+    try {
+      while (!MemoryCleaner.bestEffortNoRmmBlockers() && attempts < MAX_ATTEMPTS) {
+        System.gc();
+        attempts++;
+        Thread.sleep(500);
+      }
+    } catch (InterruptedException e) {
+      // Ignored
+    }
+    if (attempts >= MAX_ATTEMPTS) {
+      throw new RmmException("Could not shut down RMM there appear to be outstanding allocations");
+    }
+    shutdownInternal();
+  }
+
+  private native static void shutdownInternal() throws RmmException;
 
   /**
    * ---------------------------------------------------------------------------*

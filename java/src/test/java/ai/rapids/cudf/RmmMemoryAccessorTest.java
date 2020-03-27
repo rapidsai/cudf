@@ -58,6 +58,18 @@ class RmmMemoryAccessorTest extends CudfTestBase {
   }
 
   @Test
+  public void shutdown() {
+    if (Rmm.isInitialized()) {
+      Rmm.shutdown();
+    }
+    Rmm.initialize(RmmAllocationMode.POOL, false, 2048);
+    try (DeviceMemoryBuffer buffer = DeviceMemoryBuffer.allocate(1024)) {
+      assertThrows(RmmException.class, () -> Rmm.shutdown());
+    }
+    Rmm.shutdown();
+  }
+
+  @Test
   public void allocate() {
     long address = Rmm.alloc(10, 0);
     try {

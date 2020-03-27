@@ -110,8 +110,9 @@ public final class PinnedMemoryPool implements AutoCloseable {
     @Override
     protected boolean cleanImpl(boolean logErrorIfNotClean) {
       boolean neededCleanup = false;
-      long origAddress = section.baseAddress;
+      long origAddress = 0;
       if (section != null) {
+        origAddress = section.baseAddress;
         PinnedMemoryPool.freeInternal(section);
         if (origLength > 0) {
           MemoryListener.hostDeallocation(origLength, id);
@@ -124,6 +125,11 @@ public final class PinnedMemoryPool implements AutoCloseable {
         logRefCountDebug("Leaked pinned host buffer");
       }
       return neededCleanup;
+    }
+
+    @Override
+    public boolean isClean() {
+      return section == null;
     }
   }
 
