@@ -45,6 +45,7 @@
 - PR #4651 Fix hashing benchmark missing includes
 - PR #4679 Fix comments for make_dictionary_column factory functions
 - PR #4711 Fix column leaks in Java unit test
+- PR #4722 Fix strings::pad when using pad::both with odd width
 
 
 # cuDF 0.13.0 (Date TBD)
