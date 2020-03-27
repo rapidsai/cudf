@@ -182,6 +182,28 @@ def test_series_compare(cmpop, obj_class, dtype):
     np.testing.assert_equal(result3.to_array(), cmpop(arr1, arr2))
 
 
+@pytest.mark.parametrize(
+    "obj", [pd.Series(["a", "b", None, "d", "e", None]), "a"]
+)
+@pytest.mark.parametrize("cmpop", _cmpops)
+@pytest.mark.parametrize(
+    "cmp_obj", [pd.Series(["b", "a", None, "d", "f", None]), "a"]
+)
+def test_string_series_compare(obj, cmpop, cmp_obj):
+
+    g_obj = obj
+    if isinstance(g_obj, pd.Series):
+        g_obj = Series.from_pandas(g_obj)
+    g_cmp_obj = cmp_obj
+    if isinstance(g_cmp_obj, pd.Series):
+        g_cmp_obj = Series.from_pandas(g_cmp_obj)
+
+    got = cmpop(g_obj, g_cmp_obj)
+    expected = cmpop(obj, cmp_obj)
+
+    utils.assert_eq(expected, got)
+
+
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
 @pytest.mark.parametrize("nelem", [1, 2, 100])
 @pytest.mark.parametrize("cmpop", _cmpops)

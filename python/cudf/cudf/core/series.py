@@ -2505,7 +2505,16 @@ class Series(Frame):
                 raise ValueError("Cannot align indices with non-unique values")
         lhs = self.to_frame(0)
         rhs = cudf.DataFrame(index=as_index(index))
-        result = lhs.join(rhs, how=how, sort=sort)[0]
+        if how == "left":
+            lhs["____"] = cupy.arange(len(lhs))
+        elif how == "right":
+            rhs["____"] = cupy.arange(len(rhs))
+        result = lhs.join(rhs, how=how, sort=sort)
+        if how == "left" or how == "right":
+            result = result.sort_values("____")[0]
+        else:
+            result = result[0]
+
         result.name = self.name
         result.index.names = index.names
         return result
