@@ -525,7 +525,8 @@ ConfigureTest(JSON_TEST "${JSON_TEST_SRC}")
 # - sort tests ------------------------------------------------------------------------------------
 
 set(SORT_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/sort/sort_test.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/sort/sort_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/sort/rank_test.cpp")
 
 ConfigureTest(SORT_TEST "${SORT_TEST_SRC}")
 
@@ -752,6 +753,14 @@ set(ROLLING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/rolling/rolling_test.cpp")
 
 ConfigureTest(ROLLING_TEST "${ROLLING_TEST_SRC}")
+
+###################################################################################################
+# - grouped rolling tests ---------------------------------------------------------------------------------
+
+set(GROUPED_ROLLING_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/grouped_rolling/grouped_rolling_test.cpp")
+
+ConfigureTest(GROUPED_ROLLING_TEST "${GROUPED_ROLLING_TEST_SRC}")
 
 ###################################################################################################
 # - filling test ----------------------------------------------------------------------------------
