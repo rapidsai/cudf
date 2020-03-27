@@ -131,7 +131,8 @@ quantile(column_view const& input,
          std::vector<double> const& q,
          interpolation interp,
          bool retain_types,
-         rmm::mr::device_memory_resource* mr)
+         rmm::mr::device_memory_resource* mr,
+         cudaStream_t stream)
 {
     auto functor = quantile_functor<exact, SortMapIterator>{
         ordered_indices,
@@ -140,7 +141,7 @@ quantile(column_view const& input,
         interp,
         retain_types,
         mr,
-        0};
+        stream};
 
     return type_dispatcher(input.type(), functor, input);
 }
@@ -167,7 +168,8 @@ quantile(column_view const& input,
                                           q,
                                           interp,
                                           exact,
-                                          mr);
+                                          mr,
+                                          0);
         }
         else
         {
@@ -177,7 +179,8 @@ quantile(column_view const& input,
                                            q,
                                            interp,
                                            exact,
-                                           mr);
+                                           mr,
+                                           0);
         }
         
     }
@@ -194,7 +197,8 @@ quantile(column_view const& input,
                                           q,
                                           interp,
                                           exact,
-                                          mr);
+                                          mr,
+                                          0);
         }
         else
         {
@@ -204,7 +208,8 @@ quantile(column_view const& input,
                                            q,
                                            interp,
                                            exact,
-                                           mr);
+                                           mr,
+                                           0);
         }
     }
 }

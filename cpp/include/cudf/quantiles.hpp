@@ -24,18 +24,23 @@ namespace cudf {
 namespace experimental {
 
 /**
- * @brief Computes a value for a quantile by interpolating between the values on
- *        either side of the desired quantile.
+ * @brief Computes values at desired quantiles by interpolating between the values on
+ *        either side of a desired quantile.
  *
- * @param[in] input        Column used to compute quantile values.
- * @param[in] q            Desired quantile in range [0, 1].
- * @param[in] interp       Strategy used to interpolate between the two values
- *                         on either side of the desired quantile.
- * @param[in] column_order Indicates the sortedness of the column.
- * @param exact If true, returns doubles. If false, returns same type as input.
+ * @param[in] input           Column used to compute quantile values.
+ * @param[in] q               Desired quantile in range [0, 1].
+ * @param[in] interp          Strategy used to interpolate between the two
+ *                            values on either side of the desired quantile.
+ * @param[in] ordered_indices Column containing the sorted order of `input`.
+ *                            If the column is empty, all `input` values are
+ *                            used in existing order. Indices must be in range
+ *                            [0, `input.size()`). but are not required to be
+ *                            unique. Values not indexed by this column will be
+ *                            ignored.
+ * @param[in] exact           If true, returns doubles.
+ *                            If false, returns same type as input.
 
- * @returns Value of the desired quantile, or null if the column has no valid
- *          elements.
+ * @returns Values at the desired quantiles, contains nulls for indeterminable values.
  */
 
 std::unique_ptr<column>
