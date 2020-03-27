@@ -655,9 +655,6 @@ class ColumnBase(Column):
 
         is_number = isinstance(q, Number)
 
-        if self.size == 0:
-            return None
-
         if is_number:
             quant = [float(q)]
         elif isinstance(q, list) or isinstance(q, np.ndarray):
@@ -666,14 +663,15 @@ class ColumnBase(Column):
             msg = "`q` must be either a single element, list or numpy array"
             raise TypeError(msg)
 
-        # account for null count here. (...)[:-self.null_count]
-        ordered_indicies = cpp_sorted_order(self.as_frame(), [True], 0)
+        # get sorted indicies and exclude nulls
+        ordered_indices = cpp_sorted_order(self.as_frame(), [True], 1)
+        ordered_indices = ordered_indices[self.null_count :]
 
         return cpp_quantile(
             self,
             quant,
             Interpolation[interpolation.upper()],
-            ordered_indicies,
+            ordered_indices,
             exact,
         )
 

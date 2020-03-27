@@ -63,7 +63,15 @@ struct quantile_functor
                                               stream,
                                               mr);
 
-        if (output->size() == 0) {
+        if (output->size() == 0)
+        {
+            return output;
+        }
+
+        if (input.size() == 0)
+        {
+            auto mask = create_null_mask(output->size(), mask_state::ALL_NULL, stream, mr);
+            output->set_null_mask(std::move(mask), output->size());
             return output;
         }
 
@@ -148,8 +156,6 @@ quantile(column_view const& input,
          rmm::mr::device_memory_resource* mr)
 {
     CUDF_FUNC_RANGE();
-    CUDF_EXPECTS(input.size() > 0,
-                "quantile requires at least one input row.");
 
     if (ordered_indices.is_empty())
     {
