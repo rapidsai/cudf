@@ -49,6 +49,9 @@ struct find_index_fn
                                                          rmm::mr::device_memory_resource* mr, cudaStream_t stream ) const
     {
         auto result = std::make_unique<numeric_scalar<int32_t>>( 0, false, stream, mr );
+        if( input.size()==0 )
+            return result;
+        CUDF_EXPECTS( input.keys().type()==key.type(), "search key type must match dictionary keys type" );
         auto keys_view = column_device_view::create(input.keys(),stream);
         auto find_key = static_cast<experimental::scalar_type_t<Element> const&>(key);
         auto iter = thrust::copy_if( rmm::exec_policy(stream)->on(stream), 
