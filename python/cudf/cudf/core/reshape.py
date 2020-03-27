@@ -5,7 +5,7 @@ import pandas as pd
 
 import cudf
 from cudf.core import DataFrame, Index, RangeIndex, Series
-from cudf.core.column import build_categorical_column
+from cudf.core.column import as_column, build_categorical_column
 from cudf.core.index import as_index
 from cudf.utils import cudautils
 from cudf.utils.dtypes import is_categorical_dtype, is_list_like
@@ -246,7 +246,12 @@ def melt(
 
     mdata[var_name] = Series(
         build_categorical_column(
-            categories=value_vars, codes=temp._column, ordered=False
+            categories=value_vars,
+            codes=as_column(temp._column.base_data, dtype=temp._column.dtype),
+            mask=temp._column.base_mask,
+            size=temp._column.size,
+            offset=temp._column.offset,
+            ordered=False,
         )
     )
 

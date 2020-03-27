@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -39,13 +39,14 @@ public class DeviceMemoryBuffer extends BaseDeviceMemoryBuffer {
     @Override
     protected boolean cleanImpl(boolean logErrorIfNotClean) {
       boolean neededCleanup = false;
+      long origAddress = address;
       if (address != 0) {
         Rmm.free(address, 0);
         address = 0;
         neededCleanup = true;
       }
       if (neededCleanup && logErrorIfNotClean) {
-        log.error("WE LEAKED A DEVICE BUFFER!!!!");
+        log.error("A DEVICE BUFFER WAS LEAKED (ID: " + id + " " + Long.toHexString(origAddress) + ")");
         logRefCountDebug("Leaked device buffer");
       }
       return neededCleanup;
@@ -109,6 +110,7 @@ public class DeviceMemoryBuffer extends BaseDeviceMemoryBuffer {
    * @param len how many bytes to slice
    * @return a device buffer that will need to be closed independently from this buffer.
    */
+  @Override
   public synchronized final DeviceMemoryBuffer slice(long offset, long len) {
     addressOutOfBoundsCheck(address + offset, len, "slice");
     refCount++;

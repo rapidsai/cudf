@@ -22,7 +22,6 @@
 using cudf::test::fixed_width_column_wrapper;
 using cudf::test::strings_column_wrapper;
 using cudf::test::expect_columns_equal;
-using cudf::test::expect_column_properties_equal;
 using cudf::experimental::bool8;
 
 class HashTest : public cudf::test::BaseFixture {};
@@ -174,3 +173,4 @@ TYPED_TEST(HashTestFloatTyped, TestExtremes)
   expect_columns_equal(output1->view(), output2->view(), true);
 }
 
+CUDF_TEST_PROGRAM_MAIN()
