@@ -23,7 +23,6 @@
 #include <vector>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_wrapper.hpp>
-// #include <tests/utilities/scalar_utilities.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/type_list_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>

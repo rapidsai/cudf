@@ -4,8 +4,8 @@ from libcpp cimport bool
 from libcpp.vector cimport vector
 from libcpp.memory cimport unique_ptr
 
+from cudf._libxx.cpp.column.column cimport column
 from cudf._libxx.cpp.column.column_view cimport column_view
-from cudf._libxx.cpp.scalar.scalar cimport scalar
 from cudf._libxx.cpp.table.table cimport table
 from cudf._libxx.cpp.table.table_view cimport table_view
 
@@ -20,12 +20,12 @@ from cudf._libxx.cpp.types cimport (
 
 cdef extern from "cudf/quantiles.hpp" namespace "cudf::experimental" nogil:
 
-    cdef unique_ptr[scalar] quantile (
+    cdef unique_ptr[column] quantile (
         column_view input,
         vector[double] q,
         interpolation interp,
-        order_info column_order,
-        bool exact
+        column_view ordered_indices,
+        bool exact,
     ) except +
 
     cdef unique_ptr[table] quantiles (
@@ -34,5 +34,5 @@ cdef extern from "cudf/quantiles.hpp" namespace "cudf::experimental" nogil:
         interpolation interp,
         sorted is_input_sorted,
         vector[order] column_order,
-        vector[null_order] null_precedence
+        vector[null_order] null_precedence,
     ) except +

@@ -15,8 +15,8 @@ from cudf._libxx.types cimport (
     underlying_type_t_interpolation,
 )
 
+from cudf._libxx.cpp.column.column cimport column
 from cudf._libxx.cpp.column.column_view cimport column_view
-from cudf._libxx.cpp.scalar.scalar cimport scalar
 from cudf._libxx.cpp.table.table cimport table
 from cudf._libxx.cpp.table.table_view cimport table_view
 from cudf._libxx.cpp.types cimport (
@@ -34,31 +34,21 @@ from cudf._libxx.cpp.quantiles cimport (
 
 def quantile(
     Column input,
-    double q,
+    object q,
     object interp,
-    object is_sorted,
-    object column_order,
-    object null_precedence,
+    Column ordered_indices,
     bool exact,
 
 ):
     cdef column_view c_input = input.view()
+    cdef column_view c_ordered_indices = (
+        column_view() if ordered_indices is None
+        else ordered_indices.view()
+    )
     cdef interpolation c_interp = <interpolation>(
         <underlying_type_t_interpolation> interp
     )
-    cdef bool c_is_sorted = column_order.is_sorted
-    cdef order_info c_column_order
     cdef bool c_exact = exact
-
-    c_column_order.ordering = <order>(
-        <underlying_type_t_order> column_order.ordering
-    )
-    c_column_order.ordering = <order>(
-        <underlying_type_t_order> column_order
-    )
-    c_column_order.null_ordering = <null_order>(
-        <underlying_type_t_null_order> null_precedence
-    )
 
     cdef vector[double] c_q
     c_q.reserve(len(q))
@@ -66,7 +56,7 @@ def quantile(
     for value in q:
         c_q.push_back(value)
 
-    cdef unique_ptr[scalar] c_result
+    cdef unique_ptr[column] c_result
 
     with nogil:
         c_result = move(
@@ -74,12 +64,12 @@ def quantile(
                 c_input,
                 c_q,
                 c_interp,
-                c_column_order,
+                c_ordered_indices,
                 c_exact,
             )
         )
 
-    return Scalar.from_unique_ptr(move(c_result))
+    return Column.from_unique_ptr(move(c_result))
 
 
 def quantiles(Table source_table,

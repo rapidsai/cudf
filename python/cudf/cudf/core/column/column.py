@@ -23,8 +23,10 @@ from cudf._libxx.null_mask import (
 )
 from cudf._libxx.quantiles import quantile as cpp_quantile
 from cudf._libxx.scalar import Scalar
+from cudf._libxx.sort import order_by as cpp_sorted_order
 from cudf._libxx.stream_compaction import unique_count as cpp_unique_count
 from cudf._libxx.transform import bools_to_mask
+from cudf._libxx.types import Interpolation
 from cudf.core._sort import get_sorted_inds
 from cudf.core.buffer import Buffer
 from cudf.core.dtypes import CategoricalDtype
@@ -644,7 +646,13 @@ class ColumnBase(Column):
         return ColumnBase._concat([self, as_column(other)])
 
     def quantile(self, q, interpolation, exact):
-        if isinstance(q, Number):
+
+        is_number = isinstance(q, Number)
+
+        if self.size == 0:
+            return None
+
+        if is_number:
             quant = [float(q)]
         elif isinstance(q, list) or isinstance(q, np.ndarray):
             quant = q
@@ -652,17 +660,14 @@ class ColumnBase(Column):
             msg = "`q` must be either a single element, list or numpy array"
             raise TypeError(msg)
 
-        is_sorted = libcudfxx.types.Sorted["NO"]
-        column_order = libcudfxx.types.Order["ASCENDING"]
-        null_precendence = libcudfxx.types.NullOrder["AFTER"]
+        # account for null count here. (...)[:-self.null_count]
+        ordered_indicies = cpp_sorted_order(self.as_frame(), [True], 0)
 
         return cpp_quantile(
             self,
             quant,
-            interpolation,
-            is_sorted,
-            column_order,
-            null_precendence,
+            Interpolation[interpolation.upper()],
+            ordered_indicies,
             exact,
         )
 
@@ -760,7 +765,7 @@ class ColumnBase(Column):
             return self.find_last_value(label, closest=True) + 1
 
     def sort_by_values(self, ascending=True, na_position="last"):
-        col_inds = get_sorted_inds(self, ascending, na_position)
+        col_inds = get_sorted_inds(self.as_frame(), ascending, na_position)
         col_keys = self[col_inds]
         return col_keys, col_inds
 
