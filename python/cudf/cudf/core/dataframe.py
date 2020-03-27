@@ -26,7 +26,6 @@ import cudf._libxx as libcudfxx
 from cudf._libxx.null_mask import MaskState, create_null_mask
 from cudf._libxx.transform import bools_to_mask
 from cudf.core import column
-from cudf.core._sort import get_sorted_inds
 from cudf.core.column import (
     CategoricalColumn,
     StringColumn,
@@ -2038,8 +2037,8 @@ class DataFrame(Frame):
         return outdf
 
     def argsort(self, ascending=True, na_position="last"):
-        return get_sorted_inds(
-            self, ascending=ascending, na_position=na_position
+        return self.get_sorted_inds(
+            ascending=ascending, na_position=na_position
         )
 
     def sort_index(self, ascending=True):

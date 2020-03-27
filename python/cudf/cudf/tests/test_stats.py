@@ -177,7 +177,7 @@ def test_approx_quantiles():
     q1 = gdf_series.quantile(quant_values, exact=False)
     q2 = pdf_series.quantile(quant_values)
 
-    np.testing.assert_allclose(q1.to_pandas().values, q2.values, rtol=1e-10)
+    np.testing.assert_allclose(q1.to_pandas(), q2, rtol=1e-10)
 
 
 def test_approx_quantiles_int():

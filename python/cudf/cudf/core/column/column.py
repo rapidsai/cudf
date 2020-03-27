@@ -23,11 +23,9 @@ from cudf._libxx.null_mask import (
 )
 from cudf._libxx.quantiles import quantile as cpp_quantile
 from cudf._libxx.scalar import Scalar
-from cudf._libxx.sort import order_by as cpp_sorted_order
 from cudf._libxx.stream_compaction import unique_count as cpp_unique_count
 from cudf._libxx.transform import bools_to_mask
 from cudf._libxx.types import Interpolation
-from cudf.core._sort import get_sorted_inds
 from cudf.core.buffer import Buffer
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils import cudautils, ioutils, utils
@@ -664,14 +662,14 @@ class ColumnBase(Column):
             raise TypeError(msg)
 
         # get sorted indicies and exclude nulls
-        ordered_indices = cpp_sorted_order(self.as_frame(), [True], 1)
-        ordered_indices = ordered_indices[self.null_count :]
+        sorted_indices = self.as_frame().get_sorted_inds(True, "after")
+        sorted_indices = sorted_indices[self.null_count :]
 
         return cpp_quantile(
             self,
             quant,
             Interpolation[interpolation.upper()],
-            ordered_indices,
+            sorted_indices,
             exact,
         )
 
@@ -769,7 +767,7 @@ class ColumnBase(Column):
             return self.find_last_value(label, closest=True) + 1
 
     def sort_by_values(self, ascending=True, na_position="last"):
-        col_inds = get_sorted_inds(self.as_frame(), ascending, na_position)
+        col_inds = self.as_frame().get_sorted_inds(ascending, na_position)
         col_keys = self[col_inds]
         return col_keys, col_inds
 
