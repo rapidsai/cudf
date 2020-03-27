@@ -120,9 +120,21 @@ struct out_of_place_fill_range_dispatch {
       cudf::size_type begin, cudf::size_type end,
       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(), 
       cudaStream_t stream = 0) {
-
+    
+    if( input.size()==0 )
+      return std::make_unique<cudf::column>(input,stream,mr);
     cudf::dictionary_column_view const target(input);
     CUDF_EXPECTS(target.keys().type() == value.type(), "Data type mismatch.");
+
+    // if the scalar is invalid, then just copy the column and fill the null mask
+    if( !value.is_valid() )
+    {
+      auto result = std::make_unique<cudf::column>(input,stream,mr);
+      auto mview = result->mutable_view();
+      cudf::set_null_mask( mview.null_mask(), begin, end, false, stream );
+      mview.set_null_count( input.null_count() + (end-begin) );
+      return result;
+    }
 
     // add the scalar to get the output dictionary keyset
     auto scalar_column = cudf::make_column_from_scalar(value,1,mr,stream);
