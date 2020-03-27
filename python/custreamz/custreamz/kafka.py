@@ -81,6 +81,8 @@ class Consumer(object):
     def get_watermark_offsets(self, partition, timeout=10000, cached=False):
         """{docstring}"""
 
+        offsets = ()
+
         try:
             offsets = libkafka.get_watermark_offsets(
                 topic=partition.topic,
@@ -89,9 +91,9 @@ class Consumer(object):
                 cached=cached,
             )
         except RuntimeError:
-            pass
-            # print("RuntimeError thrown from C++")
-            # return 0, 0
+            raise ValueError(
+                "Unable to connect to Kafka broker"
+            )
 
         if len(offsets) != 2:
             raise ValueError(
