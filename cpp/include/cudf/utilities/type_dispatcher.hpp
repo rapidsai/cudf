@@ -19,7 +19,6 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/detail/utilities/release_assert.cuh>
-#include <cudf/wrappers/bool.hpp>
 #include <cudf/wrappers/dictionary.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 #include <string>

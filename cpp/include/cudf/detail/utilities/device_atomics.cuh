@@ -33,7 +33,6 @@
  * ---------------------------------------------------------------------------**/
 
 #include <cudf/types.hpp>
-#include <cudf/wrappers/bool.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/error.hpp>
