@@ -93,7 +93,7 @@ class reader::impl {
    * @param stream Stream to use for memory allocation and kernels
    */
   void gather_row_offsets(const char *h_data, size_t h_size,
-                          size_t range_offset, cudaStream_t stream);
+                          size_t range_offset, cudaStream_t stream, const rmm::device_buffer* d_data = nullptr);
 
   /**
    * @brief Filters and discards row positions that are not used.
@@ -143,6 +143,7 @@ class reader::impl {
   const reader_options args_;
 
   rmm::device_buffer data_;
+  char* data_ptr{};
   rmm::device_vector<uint64_t> row_offsets;
   size_t num_records = 0;   // Number of rows with actual data
   long num_bits = 0;        // Numer of 64-bit bitmaps (different than valid)
