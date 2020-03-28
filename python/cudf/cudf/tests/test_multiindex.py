@@ -377,8 +377,22 @@ def test_multiindex_from_dataframe():
     assert_eq(pmi, gmi)
 
 
-def test_multiindex_from_product():
-    arrays = [["a", "a", "b", "b"], ["house", "store", "house", "store"]]
+@pytest.mark.parametrize(
+    "arrays",
+    [
+        [["a", "a", "b", "b"], ["house", "store", "house", "store"]],
+        [["a", "n", "n"] * 1000, ["house", "store", "house", "store"]],
+        [
+            ["a", "n", "n"],
+            ["house", "store", "house", "store", "store"] * 1000,
+        ],
+        [
+            ["a", "a", "n"] * 50,
+            ["house", "store", "house", "store", "store"] * 100,
+        ],
+    ],
+)
+def test_multiindex_from_product(arrays):
     pmi = pd.MultiIndex.from_product(arrays, names=["alpha", "location"])
     gmi = cudf.MultiIndex.from_product(arrays, names=["alpha", "location"])
     assert_eq(pmi, gmi)

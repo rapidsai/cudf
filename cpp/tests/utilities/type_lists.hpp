@@ -63,6 +63,13 @@ constexpr auto types_to_ids() {
 }
 }  // namespace detail
 
+
+/**
+ * @brief Type list for all integral types.
+ * 
+*/
+using IntegralTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t>;
+
 /**
  * @brief Provides a list of all floating point types supported in libcudf for
  * use in a GTest typed test.

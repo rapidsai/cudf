@@ -27,6 +27,7 @@ const char* operation =
 R"***(
     #pragma once
     #include "traits.h"
+    #include <cmath>
     using namespace simt::std;
 
     struct Add {
@@ -378,6 +379,20 @@ R"***(
             return (static_cast<make_unsigned_t<TypeLhs>>(y) >> x);            
         }
     };    
+
+    struct LogBase {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return (std::log(static_cast<double>(x)) / std::log(static_cast<double>(y)));
+        }
+    };
+
+    struct RLogBase {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return LogBase::operate<TypeOut, TypeLhs,TypeRhs>(y, x);
+        }
+    };
 )***";
 
 } // namespace code

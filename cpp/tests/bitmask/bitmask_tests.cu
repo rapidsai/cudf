@@ -16,6 +16,7 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/concatenate.hpp>
 #include <cudf/utilities/error.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
@@ -482,3 +483,5 @@ TEST_F(CopyBitmaskTest, TestCopyColumnViewVectorDiscontiguous) {
   cudf::test::expect_equal_buffers(concatenated_bitmask.data(), gold_mask.data(),
                                    num_elements / CHAR_BIT);
 }
+
+CUDF_TEST_PROGRAM_MAIN()

@@ -294,7 +294,7 @@ cdef class Column:
 
     cdef mutable_column_view mutable_view(self) except *:
         if is_categorical_dtype(self.dtype):
-            col = self.codes
+            col = self.base_children[0]
         else:
             col = self
         data_dtype = col.dtype
@@ -308,8 +308,8 @@ cdef class Column:
         data = <void*><uintptr_t>(col.base_data_ptr)
 
         cdef Column child_column
-        if self.base_children:
-            for child_column in self.base_children:
+        if col.base_children:
+            for child_column in col.base_children:
                 children.push_back(child_column.mutable_view())
 
         cdef libcudf_types.bitmask_type* mask
@@ -347,7 +347,7 @@ cdef class Column:
 
     cdef column_view _view(self, libcudf_types.size_type null_count) except *:
         if is_categorical_dtype(self.dtype):
-            col = self.codes
+            col = self.base_children[0]
         else:
             col = self
         data_dtype = col.dtype
@@ -360,8 +360,8 @@ cdef class Column:
         data = <void*><uintptr_t>(col.base_data_ptr)
 
         cdef Column child_column
-        if self.base_children:
-            for child_column in self.base_children:
+        if col.base_children:
+            for child_column in col.base_children:
                 children.push_back(child_column.view())
 
         cdef libcudf_types.bitmask_type* mask
@@ -422,6 +422,8 @@ cdef class Column:
         from cudf.core.column import build_column
 
         column_owner = isinstance(owner, Column)
+        if column_owner and is_categorical_dtype(owner.dtype):
+            owner = owner.base_children[0]
 
         size = cv.size()
         offset = cv.offset()

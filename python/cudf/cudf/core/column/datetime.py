@@ -86,9 +86,7 @@ class DatetimeColumn(column.ColumnBase):
         return self.get_dt_field("weekday")
 
     def get_dt_field(self, field):
-        out = column.column_empty_like_same_mask(self, dtype=np.int16)
-        libcudf.unaryops.apply_dt_extract_op(self, out, field)
-        return out
+        return libcudfxx.datetime.extract_datetime_component(self, field)
 
     def normalize_binop_value(self, other):
         if isinstance(other, dt.datetime):
