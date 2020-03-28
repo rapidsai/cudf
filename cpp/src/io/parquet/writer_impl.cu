@@ -773,7 +773,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::write_chunked_end(pq_chunked
   CompactProtocolWriter cpw(&buffer_);
   file_ender_s fendr;
   buffer_.resize(0);
-  fendr.footer_len = (uint32_t)cpw.write(&state.md);  
+  fendr.footer_len = static_cast<uint32_t>(cpw.write(&state.md));
   fendr.magic = PARQUET_MAGIC;
   out_sink_->host_write(buffer_.data(), buffer_.size());  
   out_sink_->host_write(&fendr, sizeof(fendr));  
