@@ -17,7 +17,7 @@ dependencies:
   - fastavro>=0.22.9
   - notebook>=0.5.0
   - cython>=0.29,<0.30
-  - fsspec>=0.3.3
+  - fsspec>=0.3.3,<0.7.0a0
   - pytest
   - sphinx
   - sphinx_rtd_theme
@@ -27,7 +27,7 @@ dependencies:
   - ipython
   - recommonmark
   - pandoc=<2.0.0
-  - cudatoolkit=9.2
+  - cudatoolkit=10.2
   - pip
   - partd
   - flake8
