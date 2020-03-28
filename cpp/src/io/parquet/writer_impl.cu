@@ -867,7 +867,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::merge_rowgroup_metadata(
   fhdr.magic = PARQUET_MAGIC;
   output.insert(output.end(), reinterpret_cast<const uint8_t *>(&fhdr),
                               reinterpret_cast<const uint8_t *>(&fhdr) + sizeof(fhdr));
-  fendr.footer_len = (uint32_t)cpw.write(&md);
+  fendr.footer_len = static_cast<uint32_t>(cpw.write(&md));
   fendr.magic = PARQUET_MAGIC;
   output.insert(output.end(), reinterpret_cast<const uint8_t *>(&fendr),
                               reinterpret_cast<const uint8_t *>(&fendr) + sizeof(fendr));
