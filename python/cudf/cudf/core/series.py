@@ -2082,11 +2082,6 @@ class Series(Frame):
                 rhs = Series(pd.Categorical.from_codes([-1], categories=[]))
                 rhs = rhs.cat.set_categories(lhs_cats).astype(self.dtype)
 
-        # fillna so we can find nulls
-        if rhs.has_nulls:
-            lhs = lhs.fillna(lhs._column.default_na_value())
-            rhs = rhs.fillna(lhs._column.default_na_value())
-
         lhs = DataFrame({"x": lhs, "orig_order": cupy.arange(len(lhs))})
         rhs = DataFrame({"x": rhs, "bool": cupy.ones(len(rhs), "bool")})
         res = lhs.merge(rhs, on="x", how="left").sort_values(by="orig_order")
