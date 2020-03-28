@@ -20,7 +20,6 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/char_types/char_types.hpp>
-#include <cudf/wrappers/bool.hpp>
 #include "../utilities.hpp"
 #include "../utilities.cuh"
 

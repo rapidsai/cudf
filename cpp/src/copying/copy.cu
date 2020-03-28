@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf/wrappers/bool.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy_if_else.cuh>
 #include <cudf/strings/string_view.cuh>
