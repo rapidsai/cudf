@@ -2020,14 +2020,43 @@ class Series(Frame):
             return np.nan
         return cov / lhs_std / rhs_std
 
-    def isin(self, test):
+    def isin(self, values):
+        """Check whether values are contained in Series.
+
+        Parameters
+        ----------
+        values : set or list-like
+            The sequence of values to test. Passing in a single string will
+            raise a TypeError. Instead, turn a single string into a list
+            of one element.
+        use_name : bool
+            If ``True`` then combine hashed column values
+            with hashed column name. This is useful for when the same
+            values in different columns should be encoded
+            with different hashed values.
+        Returns
+        -------
+        result: Series
+            Series of booleans indicating if each element is in values.
+        Raises
+        -------
+        TypeError
+            If values is a string
+        """
+
+        if is_scalar(values):
+            raise TypeError(
+                "only list-like objects are allowed to be passed "
+                f"to isin(), you passed a [{type(values).__name__}]"
+            )
+
         from cudf import DataFrame
 
         lhs = self
         rhs = None
 
         try:
-            rhs = column.as_column(test, dtype=self.dtype)
+            rhs = column.as_column(values, dtype=self.dtype)
             # if necessary, convert values via typecast
             rhs = Series(rhs.astype(self.dtype))
         except Exception:
@@ -2045,9 +2074,9 @@ class Series(Frame):
                 lhs = lhs.cat.set_categories(cats, is_unique=True)
                 rhs = rhs.cat.set_categories(cats, is_unique=True)
             else:
-                # If they're not the same dtype, short-circuit if the test
+                # If they're not the same dtype, short-circuit if the values
                 # list doesn't have any nulls. If it does have nulls, make
-                # the test list a Categorical with a single null
+                # the values list a Categorical with a single null
                 if not rhs.has_nulls:
                     return Series(cupy.zeros(len(self), dtype="bool"))
                 rhs = Series(pd.Categorical.from_codes([-1], categories=[]))

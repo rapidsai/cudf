@@ -3610,6 +3610,7 @@ def test_series_value_counts():
         [0, 12, 14],
         np.random.randint(-100, 100, 200),
         pd.Series([0.0, 1.0, None, 10.0]),
+        [None, None, None, None],
     ],
 )
 @pytest.mark.parametrize(
@@ -3617,17 +3618,10 @@ def test_series_value_counts():
     [
         np.random.randint(-100, 100, 10),
         [],
-        pytest.param([1.0, 12.0, None, None, 120], marks=pytest.mark.xfail),
-        pytest.param([None, None, None], marks=pytest.mark.xfail),
+        [1.0, 12.0, None, None, 120],
+        [None, None, None],
         ["0", "12", "14"],
-        pytest.param(
-            ["0", "12", "14", "a"],
-            marks=[
-                pytest.mark.xfail(
-                    reason="We don't gracefully handle typecasting errors."
-                )
-            ],
-        ),
+        ["0", "12", "14", "a"],
     ],
 )
 def test_isin_numeric(data, values):
@@ -3653,12 +3647,7 @@ def test_isin_numeric(data, values):
     "values",
     [
         [],
-        pytest.param(
-            [1514764800000000000, 1577664000000000000],
-            marks=[
-                pytest.mark.xfail(reason="We don't yet support nanoseconds.")
-            ],
-        ),
+        [1514764800000000000, 1577664000000000000],
         ["2019-04-03", "2019-12-30", "2012-01-01"],
     ],
 )
@@ -3684,7 +3673,8 @@ def test_isin_datetime(data, values):
     [
         [],
         ["this", "is"],
-        pytest.param([None, None, None], marks=pytest.mark.xfail),
+        [None, None, None],
+        ["12", "14", "19"],
         pytest.param(
             [12, 14, 19],
             marks=[
