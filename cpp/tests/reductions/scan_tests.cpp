@@ -23,10 +23,9 @@
 
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/type_lists.hpp>
-//TODO remove after PR 3490 merge
-#include <tests/utilities/legacy/cudf_test_utils.cuh>
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/column_utilities.hpp>
+#include <tests/utilities/cudf_gmock.hpp>
 
 #include <cudf/cudf.h>
 #include <cudf/reduction.hpp>
@@ -286,7 +285,7 @@ TEST_F(ScanStringTest, Min)
     this->scan_test(col_nonulls, expected1,
                     cudf::experimental::make_min_aggregation(), scan_type::INCLUSIVE);
 
-    auto const STRING_MAX = std::string(1, char(127));
+    auto const STRING_MAX = std::string("\xF7\xBF\xBF\xBF");
 
     zip_scan(
         v.cbegin(),
@@ -320,7 +319,7 @@ TEST_F(ScanStringTest, Max)
     cudf::test::strings_column_wrapper expected1(exact.begin(), exact.end());
     this->scan_test(col_nonulls, expected1, cudf::experimental::make_max_aggregation(), scan_type::INCLUSIVE);
 
-    auto const STRING_MIN = std::string(1, char(0));
+    auto const STRING_MIN = std::string{};
 
     zip_scan(
         v.cbegin(),
