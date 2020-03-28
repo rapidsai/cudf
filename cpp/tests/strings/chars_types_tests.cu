@@ -17,7 +17,6 @@
 #include <cudf/column/column.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/char_types/char_types.hpp>
-#include <cudf/wrappers/bool.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/column_utilities.hpp>

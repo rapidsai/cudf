@@ -19,7 +19,6 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/find.hpp>
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/wrappers/bool.hpp>
 
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_wrapper.hpp>
