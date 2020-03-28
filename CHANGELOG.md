@@ -23,6 +23,7 @@
 - PR #4700 Expose events and more stream functionality in java
 - PR #4699 Make Java's MemoryBuffer public and add MemoryBuffer.slice
 - PR #4691 Fix compiler argument syntax for ccache
+- PR #4731 Avoid redundant host->device copies when reading the entire CSV/JSON file
 
 ## Bug Fixes
 
