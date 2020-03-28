@@ -3608,6 +3608,7 @@ def test_series_value_counts():
     [
         [],
         [0, 12, 14],
+        [-1, 2, 3, None],
         np.random.randint(-100, 100, 200),
         pd.Series([0.0, 1.0, None, 10.0]),
         [None, None, None, None],
@@ -3618,6 +3619,7 @@ def test_series_value_counts():
     [
         np.random.randint(-100, 100, 10),
         [],
+        [-1, 2, None, 3],
         [1.0, 12.0, None, None, 120],
         [None, None, None],
         ["0", "12", "14"],
