@@ -20,6 +20,9 @@
 - PR #4645 Add Alias for `kurtosis` as `kurt`
 - PR #4668 Add Java bindings for log2/log10 unary ops and log_base binary op
 - PR #4616 Enable different RMM allocation modes in unit tests
+- PR #4700 Expose events and more stream functionality in java
+- PR #4699 Make Java's MemoryBuffer public and add MemoryBuffer.slice
+- PR #4691 Fix compiler argument syntax for ccache
 - PR #4543 Add `inplace` parameter support for `Series.replace` & `DataFrame.replace`
 
 ## Bug Fixes
@@ -34,12 +37,16 @@
 - PR #4639 Fix java column of empty strings issue
 - PR #4613 Fix issue related to downcasting in `.loc`
 - PR #4615 Fix potential OOB write in ORC writer compression stage
+- PR #4587 Fix non-regex libcudf contains methods to return true when target is an empty string
 - PR #4617 Fix memory leak in aggregation object destructor
 - PR #4633 String concatenation fix in `DataFrame.rename`
 - PR #4609 Fix to handle `Series.factorize` when index is set
+- PR #4659 Fix strings::replace_re handling empty regex pattern
 - PR #4652 Fix misaligned error when computing regex device structs
 - PR #4651 Fix hashing benchmark missing includes
 - PR #4679 Fix comments for make_dictionary_column factory functions
+- PR #4711 Fix column leaks in Java unit test
+- PR #4725 Fix issue java with not setting GPU on background thread
 
 
 # cuDF 0.13.0 (Date TBD)
@@ -76,6 +83,7 @@
 - PR #4276 Port avro.pyx to libcudf++
 - PR #4259 Ability to create Java host buffers from memory-mapped files
 - PR #4240 Add groupby::groups()
+- PR #4294 Add Series rank and Dataframe rank
 - PR #4304 Add new NVTX infrastructure and add ranges to all top-level compute APIs.
 - PR #4319 Add repartition_by_hash API to dask_cudf
 - PR #4315 ShiftLeft, ShiftRight, ShiftRightUnsigned binops
@@ -92,6 +100,7 @@
 - PR #4564 Added Java bindings for clamp operator.
 - PR #4602 Add Cython bindings for functions in `datetime.hpp`
 - PR #4670 Add java and JNI bindings for contains_re
+- PR #4363 Grouped Rolling Window support
 
 ## Improvements
 
@@ -343,8 +352,10 @@
 - PR #4630 Remove dangling reference to RMM exec policy in drop duplicates tests.
 - PR #4625 Fix hash-based repartition bug in dask_cudf
 - PR #4662 Fix to handle `keep_index` in `partition_by_hash`
+- PR #4683 Fix Slicing issue with categorical column in DataFrame
 - PR #4676 Fix bug in `_shuffle_group` for repartition
 - PR #4681 Fix `test_repr` tests that were generating a `RangeIndex` for column names
+- PR #4729 Fix `fsspec` versioning to prevent dask test failures
 
 
 # cuDF 0.12.0 (04 Feb 2020)
