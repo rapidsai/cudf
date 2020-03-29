@@ -3566,14 +3566,11 @@ class DataFrame(Frame):
             import numpy as np
 
             for col in self.columns:
-                if (
-                    np.issubdtype(self[col].dtype, np.dtype("object"))
-                    and np.issubdtype(values.dtype, np.dtype("object"))
-                ) or (
-                    is_categorical_dtype(self[col].dtype)
-                    and is_categorical_dtype(values.dtype)
-                ):
-                    result[col] = self[col] == values
+                if is_categorical_dtype(
+                    self[col].dtype
+                ) and is_categorical_dtype(values.dtype):
+                    res = self[col] == values
+                    result[col] = res._column
                 elif (
                     is_categorical_dtype(self[col].dtype)
                     or np.issubdtype(self[col].dtype, np.dtype("object"))
@@ -3582,13 +3579,26 @@ class DataFrame(Frame):
                     or np.issubdtype(values.dtype, np.dtype("object"))
                 ):
                     result[col] = utils.scalar_broadcast_to(False, len(self))
+                elif np.issubdtype(
+                    self[col].dtype, np.dtype("object")
+                ) and np.issubdtype(values.dtype, np.dtype("object")):
+                    result[col] = self[col] == values
                 else:
                     result[col] = self[col] == values
 
             result.index = self.index
             return result
         elif isinstance(values, DataFrame):
-            return self.__eq__(values).loc[self.index]
+            values = values.reindex(self.index)
+
+            result = DataFrame()
+            for col in self.columns:
+                if col in values.columns:
+                    result[col] = self[col].__eq__(values[col])
+                else:
+                    result[col] = utils.scalar_broadcast_to(False, len(self))
+            result.index = self.index
+            return result
         else:
             if not is_list_like(values):
                 raise TypeError(

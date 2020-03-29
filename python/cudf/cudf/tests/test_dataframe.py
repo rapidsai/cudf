@@ -3791,6 +3791,81 @@ def test_isin_multiindex(data, values, level):
     assert_eq(got, expected)
 
 
+@pytest.mark.parametrize(
+    "data",
+    [
+        pd.DataFrame(
+            {
+                "num_legs": [2, 4],
+                "num_wings": [2, 0],
+                "bird_cats": pd.Series(
+                    ["sparrow", "pigeon"],
+                    dtype="category",
+                    index=["falcon", "dog"],
+                ),
+            },
+            index=["falcon", "dog"],
+        ),
+        pd.DataFrame(
+            {"num_legs": [8, 2], "num_wings": [0, 2]},
+            index=["spider", "falcon"],
+        ),
+        pd.DataFrame(
+            {
+                "num_legs": [8, 2, 1, 0, 2, 4, 5],
+                "num_wings": [2, 0, 2, 1, 2, 4, -1],
+            }
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "values",
+    [
+        [0, 2],
+        {"num_wings": [0, 3]},
+        pd.DataFrame(
+            {"num_legs": [8, 2], "num_wings": [0, 2]},
+            index=["spider", "falcon"],
+        ),
+        pd.DataFrame(
+            {
+                "num_legs": [2, 4],
+                "num_wings": [2, 0],
+                "bird_cats": pd.Series(
+                    ["sparrow", "pigeon"],
+                    dtype="category",
+                    index=["falcon", "dog"],
+                ),
+            },
+            index=["falcon", "dog"],
+        ),
+        ["sparrow", "pigeon"],
+        pd.Series(["sparrow", "pigeon"], dtype="category"),
+        pd.Series([1, 2, 3, 4, 5]),
+        "abc",
+        123,
+    ],
+)
+def test_isin_dataframe(data, values):
+    from cudf.utils.dtypes import is_scalar
+
+    pdf = data
+    gdf = gd.from_pandas(pdf)
+
+    if is_scalar(values):
+        with pytest.raises(TypeError):
+            pdf.isin(values)
+        with pytest.raises(TypeError):
+            gdf.isin(values)
+    else:
+        expected = pdf.isin(values)
+        if isinstance(values, (pd.DataFrame, pd.Series)):
+            values = gd.from_pandas(values)
+        got = gdf.isin(values)
+
+        assert_eq(got, expected)
+
+
 def test_constructor_properties():
     df = DataFrame()
     key1 = "a"
