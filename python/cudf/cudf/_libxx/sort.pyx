@@ -5,16 +5,22 @@ import pandas as pd
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
+from enum import IntEnum
 
 from cudf._libxx.column cimport Column
 from cudf._libxx.table cimport Table
 from cudf._libxx.move cimport move
 
 from cudf._libxx.cpp.column.column cimport column
+from cudf._libxx.cpp.column.column_view cimport column_view
+from cudf._libxx.cpp.table.table cimport table
 from cudf._libxx.cpp.table.table_view cimport table_view
 from cudf._libxx.cpp.search cimport lower_bound, upper_bound
-from cudf._libxx.cpp.sorting cimport sorted_order, is_sorted as cpp_is_sorted
-from cudf._libxx.cpp.types cimport order, null_order
+from cudf._libxx.cpp.sorting cimport(
+    rank, rank_method, sorted_order, is_sorted as cpp_is_sorted
+)
+from cudf._libxx.sort cimport underlying_type_t_rank_method
+from cudf._libxx.cpp.types cimport order, null_order, include_nulls
 
 
 def is_sorted(
@@ -195,3 +201,81 @@ def digitize(Table source_values_table, Table bins, bool right=False):
             )
 
     return Column.from_unique_ptr(move(c_result))
+
+
+class RankMethod(IntEnum):
+    FIRST = < underlying_type_t_rank_method > rank_method.FIRST
+    AVERAGE = < underlying_type_t_rank_method > rank_method.AVERAGE
+    MIN = < underlying_type_t_rank_method > rank_method.MIN
+    MAX = < underlying_type_t_rank_method > rank_method.MAX
+    DENSE = < underlying_type_t_rank_method > rank_method.DENSE
+
+
+def rank_columns(Table source_table, object method, str na_option,
+                 bool ascending, bool pct
+                 ):
+    """
+    Compute numerical data ranks (1 through n) of each column in the dataframe
+    """
+    cdef table_view source_table_view = source_table.data_view()
+
+    cdef rank_method c_rank_method = < rank_method > (
+        < underlying_type_t_rank_method > method
+    )
+
+    cdef order column_order = (
+        order.ASCENDING
+        if ascending
+        else order.DESCENDING
+    )
+    # ascending
+    #    #top    = na_is_smallest
+    #    #bottom = na_is_largest
+    #    #keep   = na_is_largest
+    # descending
+    #    #top    = na_is_largest
+    #    #bottom = na_is_smallest
+    #    #keep   = na_is_smallest
+    cdef null_order null_precedence
+    if ascending:
+        if na_option == 'top':
+            null_precedence = null_order.BEFORE
+        else:
+            null_precedence = null_order.AFTER
+    else:
+        if na_option == 'top':
+            null_precedence = null_order.AFTER
+        else:
+            null_precedence = null_order.BEFORE
+    cdef include_nulls _include_nulls = (
+        include_nulls.NO
+        if na_option == 'keep'
+        else include_nulls.YES
+    )
+    cdef bool percentage = True if pct else False
+
+    cdef vector[unique_ptr[column]] c_results
+    cdef column_view c_view
+    cdef Column col
+    for col in source_table._columns:
+        c_view = col.view()
+        with nogil:
+            c_results.push_back(move(
+                rank(
+                    c_view,
+                    c_rank_method,
+                    column_order,
+                    _include_nulls,
+                    null_precedence,
+                    percentage
+                )
+            ))
+
+    cdef unique_ptr[table] c_result
+    c_result.reset(new table(move(c_results)))
+    out_table = Table.from_unique_ptr(
+        move(c_result),
+        column_names=source_table._column_names
+    )
+    out_table._index = source_table._index
+    return out_table
