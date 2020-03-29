@@ -73,20 +73,22 @@ struct extract_last_day_of_month {
   CUDA_DEVICE_CALLABLE auto days_in_month(simt::std::chrono::month mon,
                                           bool is_leap_year) const -> uint8_t {
     using namespace simt::std::chrono;
-    switch (static_cast<unsigned>(mon)) {
-      case January   : return 31;
-      case February  : return is_leap_year ? 29 : 28;
-      case March     : return 31;
-      case April     : return 30;
-      case May       : return 31;
-      case June      : return 30;
-      case July      : return 31;
-      case August    : return 31;
-      case September : return 30;
-      case October   : return 31;
-      case November  : return 30;
-      case December  : return 31;
-      default        : return 0;
+    // The expression in switch has to be integral/enumerated type.
+    // The constexpr in case has to match the switch type
+    switch (unsigned{mon}) {
+      case unsigned{January}   : return 31;
+      case unsigned{February}  : return is_leap_year ? 29 : 28;
+      case unsigned{March}     : return 31;
+      case unsigned{April}     : return 30;
+      case unsigned{May}       : return 31;
+      case unsigned{June}      : return 30;
+      case unsigned{July}      : return 31;
+      case unsigned{August}    : return 31;
+      case unsigned{September} : return 30;
+      case unsigned{October}   : return 31;
+      case unsigned{November}  : return 30;
+      case unsigned{December}  : return 31;
+      default                  : return 0;
     }
   }
 
