@@ -3572,8 +3572,7 @@ class DataFrame(Frame):
             result = DataFrame()
 
             for col in self.columns:
-                # if values.dtype == self[col].dtype:
-                result[col] = self[col].__eq__(values)
+                result[col] = self[col].isin(values)
 
             result.index = self.index
             return result
