@@ -36,7 +36,24 @@ public class Rmm {
    * @param poolSize       The initial pool size in bytes
    * @throws IllegalStateException if RMM has already been initialized
    */
-  public static void initialize(int allocationMode, boolean enableLogging, long poolSize)
+  public static void initialize(int allocationMode, boolean enableLogging, long poolSize) {
+    initialize(allocationMode, enableLogging, poolSize, Cuda.getDevice());
+  }
+
+  /**
+   * Initialize memory manager state and storage.
+   * @param allocationMode Allocation strategy to use. Bit set using
+   *                       {@link RmmAllocationMode#CUDA_DEFAULT},
+   *                       {@link RmmAllocationMode#POOL} and
+   *                       {@link RmmAllocationMode#CUDA_MANAGED_MEMORY}
+   * @param enableLogging  Enable logging memory manager events
+   * @param poolSize       The initial pool size in bytes
+   * @param gpuId          The GPU that RMM should use.  You are still responsible for
+   *                       setting this GPU yourself on each thread before calling RMM
+   *                       this just sets it for any internal threads used.
+   * @throws IllegalStateException if RMM has already been initialized
+   */
+  public static void initialize(int allocationMode, boolean enableLogging, long poolSize, int gpuId)
       throws RmmException {
     if (defaultInitialized) {
       synchronized(Rmm.class) {
@@ -47,6 +64,9 @@ public class Rmm {
       }
     }
     initializeInternal(allocationMode, enableLogging, poolSize);
+    if (gpuId >= 0) {
+      MemoryCleaner.setDefaultGpu(gpuId);
+    }
   }
 
   /**

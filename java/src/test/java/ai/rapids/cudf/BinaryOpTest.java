@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -1088,11 +1088,11 @@ public class BinaryOpTest extends CudfTestBase {
   @Test
   public void testLogBase10() {
     try (ColumnVector dcv1 = ColumnVector.fromBoxedDoubles(DOUBLES_2);
-         Scalar base = Scalar.fromInt(10)) {
-      ColumnVector answer = dcv1.log(base);
-      ColumnVector expected = ColumnVector.fromBoxedDoubles(Arrays.stream(DOUBLES_2)
-        .map(Math::log10)
-        .toArray(Double[]::new));
+         Scalar base = Scalar.fromInt(10);
+         ColumnVector answer = dcv1.log(base);
+         ColumnVector expected = ColumnVector.fromBoxedDoubles(Arrays.stream(DOUBLES_2)
+            .map(Math::log10)
+            .toArray(Double[]::new))) {
       assertColumnsAreEqual(expected, answer, "log10");
     }
   }
@@ -1100,11 +1100,11 @@ public class BinaryOpTest extends CudfTestBase {
   @Test
   public void testLogBase2() {
     try (ColumnVector dcv1 = ColumnVector.fromBoxedDoubles(DOUBLES_2);
-         Scalar base = Scalar.fromInt(2)) {
-      ColumnVector answer = dcv1.log(base);
-      ColumnVector expected = ColumnVector.fromBoxedDoubles(Arrays.stream(DOUBLES_2)
-        .map(n -> Math.log(n) / Math.log(2))
-        .toArray(Double[]::new));
+         Scalar base = Scalar.fromInt(2);
+         ColumnVector answer = dcv1.log(base);
+         ColumnVector expected = ColumnVector.fromBoxedDoubles(Arrays.stream(DOUBLES_2)
+             .map(n -> Math.log(n) / Math.log(2))
+             .toArray(Double[]::new))) {
       assertColumnsAreEqual(expected, answer, "log2");
     }
   }

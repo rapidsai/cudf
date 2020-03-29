@@ -19,11 +19,12 @@
 package ai.rapids.cudf;
 
 import ai.rapids.cudf.HostColumnVector.Builder;
+import ai.rapids.cudf.WindowOptions.FrameType;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
 /**
@@ -34,7 +35,6 @@ import java.util.function.Consumer;
  */
 public final class ColumnVector implements AutoCloseable, BinaryOperable {
   private static final Logger log = LoggerFactory.getLogger(ColumnVector.class);
-  private static final AtomicLong idGen = new AtomicLong(0);
 
   static {
     NativeDepsLoader.loadNativeDeps();
@@ -45,14 +45,13 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   private final long rows;
   private Optional<Long> nullCount = Optional.empty();
   private int refCount;
-  private final long internalId = idGen.incrementAndGet();
 
   /**
    * Wrap an existing on device cudf::column with the corresponding ColumnVector.
    */
   ColumnVector(long nativePointer) {
     assert nativePointer != 0;
-    offHeap = new OffHeapState(internalId, nativePointer);
+    offHeap = new OffHeapState(nativePointer);
     MemoryCleaner.register(this, offHeap);
     this.type = offHeap.getNativeType();
     this.rows = offHeap.getNativeRowCount();
@@ -60,7 +59,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     this.refCount = 0;
     incRefCountInternal(true);
 
-    MemoryListener.deviceAllocation(getDeviceMemorySize(), internalId);
+    MemoryListener.deviceAllocation(getDeviceMemorySize(), offHeap.id);
   }
 
   /**
@@ -84,7 +83,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       assert offsetBuffer == null : "offsets are only supported for STRING";
     }
 
-    offHeap = new OffHeapState(internalId, type, (int) rows, nullCount, dataBuffer, validityBuffer, offsetBuffer);
+    offHeap = new OffHeapState(type, (int) rows, nullCount, dataBuffer, validityBuffer, offsetBuffer);
     MemoryCleaner.register(this, offHeap);
     this.rows = rows;
     this.nullCount = nullCount;
@@ -93,7 +92,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     this.refCount = 0;
     incRefCountInternal(true);
 
-    MemoryListener.deviceAllocation(getDeviceMemorySize(), internalId);
+    MemoryListener.deviceAllocation(getDeviceMemorySize(), offHeap.id);
   }
 
   /**
@@ -105,7 +104,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @param contiguousBuffer the buffer that this is based off of.
    */
   private ColumnVector(long viewAddress, DeviceMemoryBuffer contiguousBuffer) {
-    offHeap = new OffHeapState(internalId, viewAddress, contiguousBuffer);
+    offHeap = new OffHeapState(viewAddress, contiguousBuffer);
     MemoryCleaner.register(this, offHeap);
     this.type = offHeap.getNativeType();
     this.rows = offHeap.getNativeRowCount();
@@ -113,7 +112,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     this.nullCount = Optional.empty();
     this.refCount = 0;
     incRefCountInternal(true);
-    MemoryListener.deviceAllocation(getDeviceMemorySize(), internalId);
+    MemoryListener.deviceAllocation(getDeviceMemorySize(), offHeap.id);
   }
 
   static ColumnVector fromViewWithContiguousAllocation(long columnViewAddress, DeviceMemoryBuffer buffer) {
@@ -140,9 +139,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     if (refCount == 0) {
       offHeap.clean(false);
     } else if (refCount < 0) {
-      log.error("Close called too many times on {}", this);
       offHeap.logRefCountDebug("double free " + this);
-      throw new IllegalStateException("Close called too many times");
+      throw new IllegalStateException("Close called too many times " + this);
     }
   }
 
@@ -1238,11 +1236,19 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   /**
    * This function aggregates values in a window around each element i of the input
    * column. Please refer to WindowsOptions for various options that can be passed.
+   * Note: Only rows-based windows are supported.
    * @param op the operation to perform.
    * @param options various window function arguments.
    * @return Column containing aggregate function result.
+   * @throws IllegalArgumentException if unsupported window specification * (i.e. other than {@link FrameType#ROWS} is used.
    */
   public ColumnVector rollingWindow(AggregateOp op, WindowOptions options) {
+    // Check that only row-based windows are used.
+    if (!options.getFrameType().equals(FrameType.ROWS)) {
+      throw new IllegalArgumentException("Expected ROWS-based window specification. Unexpected window type: "
+            + options.getFrameType());
+    }
+
     return new ColumnVector(
         rollingWindow(this.getNativeView(),
             options.getMinPeriods(),
@@ -2282,7 +2288,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * Holds the off heap state of the column vector so we can clean it up, even if it is leaked.
    */
   protected static final class OffHeapState extends MemoryCleaner.Cleaner {
-    private final long internalId;
     // This must be kept in sync with the native code
     public static final long UNKNOWN_NULL_COUNT = -1;
     private long columnHandle;
@@ -2294,8 +2299,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     /**
      * Make a column form an existing cudf::column *.
      */
-    public OffHeapState(long internalId, long columnHandle) {
-      this.internalId = internalId;
+    public OffHeapState(long columnHandle) {
       this.columnHandle = columnHandle;
       data = getNativeDataPointer();
       valid = getNativeValidPointer();
@@ -2305,11 +2309,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     /**
      * Create a cudf::column_view from device side data.
      */
-    public OffHeapState(long internalId, DType type, int rows, Optional<Long> nullCount,
+    public OffHeapState(DType type, int rows, Optional<Long> nullCount,
                         DeviceMemoryBuffer data, DeviceMemoryBuffer valid, DeviceMemoryBuffer offsets) {
       assert (nullCount.isPresent() && nullCount.get() <= Integer.MAX_VALUE)
           || !nullCount.isPresent();
-      this.internalId = internalId;
       int nc = nullCount.orElse(UNKNOWN_NULL_COUNT).intValue();
       this.data = data;
       this.valid = valid;
@@ -2328,9 +2331,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     /**
      * Create a cudf::column_view from contiguous device side data.
      */
-    public OffHeapState(long internalId, long viewHandle, DeviceMemoryBuffer contiguousBuffer) {
+    public OffHeapState(long viewHandle, DeviceMemoryBuffer contiguousBuffer) {
       assert viewHandle != 0;
-      this.internalId = internalId;
       this.viewHandle = viewHandle;
 
       data = contiguousBuffer.sliceFrom(getNativeDataPointer());
@@ -2418,19 +2420,24 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
     @Override
     public String toString() {
-      return String.valueOf(columnHandle == 0 ? viewHandle : columnHandle);
+      return "(ID: " + id + " " + Long.toHexString(columnHandle == 0 ? viewHandle : columnHandle) + ")";
     }
 
     @Override
     protected boolean cleanImpl(boolean logErrorIfNotClean) {
       long size = getDeviceMemorySize();
       boolean neededCleanup = false;
+      long address = 0;
       if (viewHandle != 0) {
+        address = viewHandle;
         deleteColumnView(viewHandle);
         viewHandle = 0;
         neededCleanup = true;
       }
       if (columnHandle != 0) {
+        if (address != 0) {
+          address = columnHandle;
+        }
         deleteCudfColumn(columnHandle);
         columnHandle = 0;
         neededCleanup = true;
@@ -2452,10 +2459,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       }
       if (neededCleanup) {
         if (logErrorIfNotClean) {
-          log.error("YOU LEAKED A DEVICE COLUMN VECTOR!!!!");
+          log.error("A DEVICE COLUMN VECTOR WAS LEAKED (ID: " + id + " " + Long.toHexString(address)+ ")");
           logRefCountDebug("Leaked vector");
         }
-        MemoryListener.deviceDeallocation(size, internalId);
+        MemoryListener.deviceDeallocation(size, id);
       }
       return neededCleanup;
     }
