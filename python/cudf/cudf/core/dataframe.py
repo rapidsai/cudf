@@ -3543,7 +3543,7 @@ class DataFrame(Frame):
             the DataFrame is contained in values.
 
         """
-        # import pdb;pdb.set_trace()
+
         if isinstance(values, dict):
 
             result_df = DataFrame()
@@ -3560,19 +3560,30 @@ class DataFrame(Frame):
             result_df.index = self.index
             return result_df
         elif isinstance(values, Series):
-            # values = values.to_frame(0 if values.name is None else values.nam
-            # e).reindex(values._index if self.index is None else self.index)
             values = values.reindex(self.index)
-            # result = self.__eq__(values)
-
-            # for col in result.columns:
-            #     if result[col].dtype != 'bool':
-            #         result[col] = result[col].astype('bool').fillna(False)
 
             result = DataFrame()
+            import numpy as np
 
             for col in self.columns:
-                result[col] = self[col].isin(values)
+                if (
+                    np.issubdtype(self[col].dtype, np.dtype("object"))
+                    and np.issubdtype(values.dtype, np.dtype("object"))
+                ) or (
+                    is_categorical_dtype(self[col].dtype)
+                    and is_categorical_dtype(values.dtype)
+                ):
+                    result[col] = self[col] == values
+                elif (
+                    is_categorical_dtype(self[col].dtype)
+                    or np.issubdtype(self[col].dtype, np.dtype("object"))
+                ) or (
+                    is_categorical_dtype(values.dtype)
+                    or np.issubdtype(values.dtype, np.dtype("object"))
+                ):
+                    result[col] = utils.scalar_broadcast_to(False, len(self))
+                else:
+                    result[col] = self[col] == values
 
             result.index = self.index
             return result
@@ -3586,13 +3597,13 @@ class DataFrame(Frame):
                     "you passed a "
                     "{0!r}".format(type(values).__name__)
                 )
-            # return DataFrame(
-            #     algorithms.isin(self.values.ravel(), values).reshape(
-            #         self.shape
-            #     ),
-            #     self.index,
-            #     self.columns,
-            # )
+
+            result_df = DataFrame()
+
+            for col in self.columns:
+                result_df[col] = self[col].isin(values)
+            result_df.index = self.index
+            return result_df
 
     #
     # Stats
