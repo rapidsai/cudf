@@ -3522,6 +3522,79 @@ class DataFrame(Frame):
             result.index = as_index(q)
             return result
 
+    def isin(self, values):
+        """
+        Whether each element in the DataFrame is contained in values.
+
+        Parameters
+        ----------
+
+        values : iterable, Series, DataFrame or dict
+            The result will only be true at a location if all
+            the labels match. If values is a Series, that’s the index.
+            If values is a dict, the keys must be the column names,
+            which must match. If values is a DataFrame, then both the
+            index and column labels must match.
+
+        Returns
+        -------
+        DataFrame:
+            DataFrame of booleans showing whether each element in
+            the DataFrame is contained in values.
+
+        """
+        # import pdb;pdb.set_trace()
+        if isinstance(values, dict):
+
+            result_df = DataFrame()
+
+            for col in self.columns:
+                if col in values:
+                    val = values[col]
+                    result_df[col] = self[col].isin(val)
+                else:
+                    result_df[col] = utils.scalar_broadcast_to(
+                        False, len(self)
+                    )
+
+            result_df.index = self.index
+            return result_df
+        elif isinstance(values, Series):
+            # values = values.to_frame(0 if values.name is None else values.nam
+            # e).reindex(values._index if self.index is None else self.index)
+            values = values.reindex(self.index)
+            # result = self.__eq__(values)
+
+            # for col in result.columns:
+            #     if result[col].dtype != 'bool':
+            #         result[col] = result[col].astype('bool').fillna(False)
+
+            result = DataFrame()
+
+            for col in self.columns:
+                # if values.dtype == self[col].dtype:
+                result[col] = self[col].__eq__(values)
+
+            result.index = self.index
+            return result
+        elif isinstance(values, DataFrame):
+            return self.__eq__(values).loc[self.index]
+        else:
+            if not is_list_like(values):
+                raise TypeError(
+                    "only list-like or dict-like objects are "
+                    "allowed to be passed to DataFrame.isin(), "
+                    "you passed a "
+                    "{0!r}".format(type(values).__name__)
+                )
+            # return DataFrame(
+            #     algorithms.isin(self.values.ravel(), values).reshape(
+            #         self.shape
+            #     ),
+            #     self.index,
+            #     self.columns,
+            # )
+
     #
     # Stats
     #
