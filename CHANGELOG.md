@@ -45,6 +45,7 @@
 - PR #4651 Fix hashing benchmark missing includes
 - PR #4679 Fix comments for make_dictionary_column factory functions
 - PR #4711 Fix column leaks in Java unit test
+- PR #4725 Fix issue java with not setting GPU on background thread
 - PR #4720 Fix issue related to `dtype` param not being adhered incase of cuda arrays
 
 
@@ -354,6 +355,7 @@
 - PR #4683 Fix Slicing issue with categorical column in DataFrame
 - PR #4676 Fix bug in `_shuffle_group` for repartition
 - PR #4681 Fix `test_repr` tests that were generating a `RangeIndex` for column names
+- PR #4729 Fix `fsspec` versioning to prevent dask test failures
 
 
 # cuDF 0.12.0 (04 Feb 2020)
