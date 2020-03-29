@@ -356,6 +356,7 @@
 - PR #4683 Fix Slicing issue with categorical column in DataFrame
 - PR #4676 Fix bug in `_shuffle_group` for repartition
 - PR #4681 Fix `test_repr` tests that were generating a `RangeIndex` for column names
+- PR #4729 Fix `fsspec` versioning to prevent dask test failures
 
 
 # cuDF 0.12.0 (04 Feb 2020)
