@@ -3756,7 +3756,39 @@ def test_isin_index(data, values):
     got = gsr.index.isin(values)
     expected = psr.index.isin(values)
 
-    assert_eq(got._column.data_array_view.copy_to_host(), expected)
+    assert_eq(got, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        pd.MultiIndex.from_arrays(
+            [[1, 2, 3], ["red", "blue", "green"]], names=("number", "color")
+        ),
+        pd.MultiIndex.from_arrays([[], []], names=("number", "color")),
+        pd.MultiIndex.from_arrays(
+            [[1, 2, 3, 10, 100], ["red", "blue", "green", "pink", "white"]],
+            names=("number", "color"),
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "values,level",
+    [
+        (["red", "orange", "yellow"], "color"),
+        (["red", "white", "yellow"], "color"),
+        ([0, 1, 2, 10, 11, 15], "number"),
+        ([(1, "red"), (3, "red")], None),
+    ],
+)
+def test_isin_multiindex(data, values, level):
+    pmdx = data
+    gmdx = gd.from_pandas(data)
+
+    got = gmdx.isin(values, level=level)
+    expected = pmdx.isin(values, level=level)
+
+    assert_eq(got, expected)
 
 
 def test_constructor_properties():

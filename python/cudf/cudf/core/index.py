@@ -428,8 +428,51 @@ class Index(Frame):
         else:
             return NotImplemented
 
-    def isin(self, values):
-        return self.to_series().isin(values)
+    def isin(self, values, level=None):
+        """Return a boolean array where the index values are in values.
+
+        Compute boolean array of whether each index value is found in
+        the passed set of values. The length of the returned boolean
+        array matches the length of the index.
+
+        Parameters
+        ----------
+        values : set or list-like
+            Sought values.
+        level : str or int, optional
+            Name or position of the index level to use (if the index
+            is a MultiIndex).
+        Returns
+        -------
+        is_contained : cupyarray
+            CuPy array of boolean values.
+
+        """
+
+        if isinstance(self, cudf.MultiIndex):
+            if level is None:
+                values_idx = cudf.MultiIndex.from_tuples(
+                    values, names=self.names
+                )
+
+                res = []
+                for name in self.names:
+                    level_idx = self.get_level_values(name)
+                    value_idx = values_idx.get_level_values(name)
+
+                    existence = level_idx.isin(value_idx)
+                    res.append(existence)
+
+                result = res[0]
+                for i in res[1:]:
+                    result = result & i
+            else:
+                level_series = self.get_level_values(level)
+                result = level_series.isin(values)
+        else:
+            result = self.to_series().isin(values).values
+
+        return result
 
     @property
     def __cuda_array_interface__(self):
