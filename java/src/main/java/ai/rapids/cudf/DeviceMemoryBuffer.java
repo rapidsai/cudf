@@ -51,6 +51,11 @@ public class DeviceMemoryBuffer extends BaseDeviceMemoryBuffer {
       }
       return neededCleanup;
     }
+
+    @Override
+    public boolean isClean() {
+      return address == 0;
+    }
   }
 
   private static final class RmmDeviceBufferCleaner extends MemoryBufferCleaner {
@@ -73,6 +78,11 @@ public class DeviceMemoryBuffer extends BaseDeviceMemoryBuffer {
         logRefCountDebug("Leaked device buffer");
       }
       return neededCleanup;
+    }
+
+    @Override
+    public boolean isClean() {
+      return rmmBufferAddress == 0;
     }
   }
 

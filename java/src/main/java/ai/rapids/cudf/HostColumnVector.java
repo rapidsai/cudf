@@ -519,6 +519,11 @@ public final class HostColumnVector implements AutoCloseable {
       }
     }
 
+    @Override
+    public boolean isClean() {
+      return data == null && valid == null && offsets == null;
+    }
+
     /**
      * This returns total memory allocated on the host for the ColumnVector.
      */
