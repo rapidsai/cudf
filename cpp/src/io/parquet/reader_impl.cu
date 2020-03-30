@@ -32,6 +32,7 @@
 
 #include <algorithm>
 #include <array>
+#include <regex>
 
 namespace cudf {
 namespace experimental {
@@ -214,51 +215,60 @@ struct metadata : public FileMetaData {
   }
 
   /**
-   * @brief Extracts the column name used for the row indexes in a dataframe
+   * @brief Extracts the pandas "index_columns" section
    *
    * PANDAS adds its own metadata to the key_value section when writing out the
    * dataframe to a file to aid in exact reconstruction. The JSON-formatted
    * metadata contains the index column(s) and PANDA-specific datatypes.
    *
+   * @return comma-separated index column names in quotes
+   */
+  std::string get_pandas_index() {
+    auto it = std::find_if(key_value_metadata.begin(), key_value_metadata.end(),
+                     [](const auto &item) { return item.key == "pandas"; });
+    if (it != key_value_metadata.end()) {
+      // Captures a list of quoted strings found inside square brackets after `"index_columns":`
+      // Inside quotes supports newlines, brackets, escaped quotes, etc. 
+      // One-liner regex:
+      // "index_columns"\s*:\s*\[\s*((?:"(?:|(?:.*?(?![^\\]")).?)[^\\]?",?\s*)*)\]
+      // Documented below.
+      std::regex index_columns_expr{
+        R"("index_columns"\s*:\s*\[\s*)"    // match preamble, opening square bracket, whitespace
+          R"(()"                            // Open first capturing group
+            R"((?:")"                       // Open non-capturing group match opening quote
+              R"((?:|(?:.*?(?![^\\]")).?))" // match empty string or anything between quotes
+              R"([^\\]?")"                  // Match closing non-escaped quote
+              R"(,?\s*)"                    // Match optional comma and whitespace
+            R"()*)"                         // Close non-capturing group and repeat 0 or more times
+          R"())"                            // Close first capturing group
+        R"(\])"                             // Match closing square brackets
+      };
+      std::smatch sm;
+      if (std::regex_search(it->value, sm, index_columns_expr)) {
+        return std::move(sm[1].str());
+      }
+    }
+    return "";
+  }
+
+  /**
+   * @brief Extracts the column name(s) used for the row indexes in a dataframe
+   *
    * @param names List of column names to load, where index column name(s) will be added
    */
   void add_pandas_index_names(std::vector<std::string>& names) {
-    auto it = std::find_if(key_value_metadata.begin(), key_value_metadata.end(),
-                     [](const auto &item) { return item.key == "pandas"; });
-    if (it == key_value_metadata.end()) {
-      return;
-    }
-    const auto& pandas = it->value;
-    const auto index_start = pandas.find("index_columns");
-    if (index_start != std::string::npos) {
-      const auto end_pos = pandas.length();
-      for (auto pos = pandas.find('[', index_start); pos != std::string::npos; ) {
-        std::string str;
-        // Find the start of the string
-        pos = pandas.find_first_of("\"]", pos, 2);
-        if (pos == std::string::npos || pandas[pos] != '\"')
-          break;
-        pos++;
-        for (char prev_ch = '\"'; pos < end_pos; ) {
-          char ch = pandas[pos++];
-          if (ch == '\"') {
-            if (prev_ch == '\\') {
-              str.back() = ch; // Handle escaped \"
-            }
-            else {
-              break; // Found the terminating quote
-            }
-          }
-          else {
-            str.push_back(ch);
-          }
-          prev_ch = ch;
-        }
-        if (str.length() != 0) {
-          if (std::find(names.begin(), names.end(), str) == names.end()) {
-            names.emplace_back(std::move(str));
+    auto str = get_pandas_index();
+    if (str.length() != 0) {
+      std::regex index_name_expr{R"(\"((?:\\.|[^\"])*)\")"};
+      std::smatch sm;
+      while (std::regex_search(str, sm, index_name_expr)) {
+        if (sm.size() == 2) { // 2 = whole match, first item
+          if (std::find(names.begin(), names.end(), sm[1].str()) == names.end()) {
+            std::regex esc_quote{R"(\\")"};
+            names.emplace_back(std::move(std::regex_replace(sm[1].str(), esc_quote, R"(")")));
           }
         }
+        str = sm.suffix();
       }
     }
   }
