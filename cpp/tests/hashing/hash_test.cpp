@@ -138,12 +138,8 @@ TYPED_TEST(HashTestTyped, EqualityNulls)
   using T = TypeParam;
 
   // Nulls with different values should be equal
-  auto const a = cudf::test::make_type_param_vector<T>({0, 127, 1, 2, 8});
-  auto const b = cudf::test::make_type_param_vector<T>({1, 127, 1, 2, 8});
-  std::vector<bool> const v{0, 1, 1, 1, 1};
-
-  fixed_width_column_wrapper<T> const col1(a.begin(), a.end(), v.begin());
-  fixed_width_column_wrapper<T> const col2(b.begin(), b.end(), v.begin());
+  fixed_width_column_wrapper<TypeParam, int32_t> const col1({0, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
+  fixed_width_column_wrapper<TypeParam, int32_t> const col2({1, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
 
   auto const input1 = cudf::table_view({col1});
   auto const input2 = cudf::table_view({col2});
