@@ -85,6 +85,11 @@ public class HostMemoryBuffer extends MemoryBuffer {
       }
       return neededCleanup;
     }
+
+    @Override
+    public boolean isClean() {
+      return address == 0;
+    }
   }
 
   private static final class MmapCleaner extends MemoryBufferCleaner {
@@ -109,6 +114,11 @@ public class HostMemoryBuffer extends MemoryBuffer {
         logRefCountDebug("Leaked mmap buffer");
       }
       return neededCleanup;
+    }
+
+    @Override
+    public boolean isClean() {
+      return address == 0;
     }
   }
 
