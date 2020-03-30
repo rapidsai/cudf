@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -22,10 +22,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.EOFException;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.channels.FileChannel.MapMode;
+
 
 /**
  * This class holds an off-heap buffer in the host/CPU memory.
@@ -43,7 +46,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
   private static final Logger log = LoggerFactory.getLogger(HostMemoryBuffer.class);
 
   // Make sure we loaded the native dependencies so we have a way to create a ByteBuffer
-  {
+  static {
     NativeDepsLoader.loadNativeDeps();
   }
 
@@ -53,6 +56,9 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * be used if the corresponding HostMemoryBuffer is closed.
    */
   private static native ByteBuffer wrapRangeInBuffer(long address, long len);
+
+  private static native long mmap(String file, int mode, long offset, long len) throws IOException;
+  private static native void munmap(long address, long length);
 
   private static final class HostBufferCleaner extends MemoryBufferCleaner {
     private long address;
@@ -66,15 +72,41 @@ public class HostMemoryBuffer extends MemoryBuffer {
     @Override
     protected boolean cleanImpl(boolean logErrorIfNotClean) {
       boolean neededCleanup = false;
+      long origAddress = address;
       if (address != 0) {
         UnsafeMemoryAccessor.free(address);
-        MemoryListener.hostDeallocation(length, getId());
+        MemoryListener.hostDeallocation(length, id);
         address = 0;
         neededCleanup = true;
       }
       if (neededCleanup && logErrorIfNotClean) {
-        log.error("A HOST BUFFER WAS LEAKED!!!!");
+        log.error("A HOST BUFFER WAS LEAKED (ID: " + id + " " + Long.toHexString(origAddress) + ")");
         logRefCountDebug("Leaked host buffer");
+      }
+      return neededCleanup;
+    }
+  }
+
+  private static final class MmapCleaner extends MemoryBufferCleaner {
+    private long address;
+    private final long length;
+
+    MmapCleaner(long address, long length) {
+      this.address = address;
+      this.length = length;
+    }
+
+    @Override
+    protected boolean cleanImpl(boolean logErrorIfNotClean) {
+      boolean neededCleanup = false;
+      if (address != 0) {
+        munmap(address, length);
+        address = 0;
+        neededCleanup = true;
+      }
+      if (neededCleanup && logErrorIfNotClean) {
+        log.error("A MEMORY MAPPED BUFFER WAS LEAKED!!!!");
+        logRefCountDebug("Leaked mmap buffer");
       }
       return neededCleanup;
     }
@@ -107,6 +139,38 @@ public class HostMemoryBuffer extends MemoryBuffer {
    */
   public static HostMemoryBuffer allocate(long bytes) {
     return allocate(bytes, defaultPreferPinned);
+  }
+
+  /**
+   * Create a host buffer that is memory-mapped to a file.
+   * @param path path to the file to map into host memory
+   * @param mode mapping type
+   * @param offset file offset where the map will start
+   * @param length the number of bytes to map
+   * @return file-mapped buffer
+   */
+  public static HostMemoryBuffer mapFile(File path, MapMode mode,
+      long offset, long length) throws IOException {
+    // mapping offset must be a multiple of the system page size
+    long offsetDelta = offset & (UnsafeMemoryAccessor.pageSize() - 1);
+    long address;
+    try {
+      address = mmap(path.getPath(), modeAsInt(mode), offset - offsetDelta, length + offsetDelta);
+    } catch (IOException e) {
+      throw new IOException("Error creating memory map for " + path, e);
+    }
+    return new HostMemoryBuffer(address + offsetDelta, length,
+        new MmapCleaner(address, length + offsetDelta));
+  }
+
+  private static int modeAsInt(MapMode mode) {
+    if (MapMode.READ_ONLY.equals(mode)) {
+      return 0;
+    } else if (MapMode.READ_WRITE.equals(mode)) {
+      return 1;
+    } else {
+      throw new UnsupportedOperationException("Unsupported mapping mode: " + mode);
+    }
   }
 
   HostMemoryBuffer(long address, long length) {
@@ -157,7 +221,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param length     number of bytes to copy
    */
   public final void copyFromHostBuffer(long destOffset, HostMemoryBuffer srcData, long srcOffset,
-      long length) {
+                                       long length) {
     addressOutOfBoundsCheck(address + destOffset, length, "copy from dest");
     srcData.addressOutOfBoundsCheck(srcData.address + srcOffset, length, "copy from source");
     UnsafeMemoryAccessor.copyMemory(null, srcData.address + srcOffset, null,
@@ -265,7 +329,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param srcOffset index in data to start at.
    */
   final void setShorts(long offset, short[] data, long srcOffset, long len) {
-    assert len > 0;
+    assert len >= 0 : "length is not allowed " + len;
     assert len <= data.length - srcOffset;
     long requestedAddress = this.address + offset;
     addressOutOfBoundsCheck(requestedAddress, len * 2, "setShorts");
@@ -301,7 +365,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param srcOffset index into data to start at
    */
   final void setInts(long offset, int[] data, long srcOffset, long len) {
-    assert len > 0;
+    assert len >= 0 : "length is not allowed " + len;
     assert len <= data.length - srcOffset;
     long requestedAddress = this.address + offset;
     addressOutOfBoundsCheck(requestedAddress, len * 4, "setInts");
@@ -337,7 +401,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param srcOffset index into data to start at.
    */
   final void setLongs(long offset, long[] data, long srcOffset, long len) {
-    assert len > 0;
+    assert len >= 0 : "length is not allowed " + len;
     assert len <= data.length - srcOffset;
     long requestedAddress = this.address + offset;
     addressOutOfBoundsCheck(requestedAddress, len * 8, "setLongs");
@@ -373,7 +437,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param srcOffset index into data to start at
    */
   final void setFloats(long offset, float[] data, long srcOffset, long len) {
-    assert len > 0;
+    assert len >= 0 : "length is not allowed " + len;
     assert len <= data.length - srcOffset;
     long requestedAddress = this.address + offset;
     addressOutOfBoundsCheck(requestedAddress, len * 4, "setFloats");
@@ -409,7 +473,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param srcOffset index into data to start at
    */
   final void setDoubles(long offset, double[] data, long srcOffset, long len) {
-    assert len > 0;
+    assert len >= 0 : "length is not allowed " + len;
     assert len <= data.length - srcOffset;
     long requestedAddress = this.address + offset;
     addressOutOfBoundsCheck(requestedAddress, len * 8, "setDoubles");
@@ -455,14 +519,43 @@ public class HostMemoryBuffer extends MemoryBuffer {
   }
 
   /**
-   * Method to copy from a DeviceMemoryBuffer to a HostMemoryBuffer
-   * @param deviceMemoryBuffer - Buffer to copy data from
+   * Synchronously copy from a DeviceMemoryBuffer to a HostMemoryBuffer
+   * @param deviceMemoryBuffer buffer to copy data from
    */
-  final void copyFromDeviceBuffer(DeviceMemoryBuffer deviceMemoryBuffer) {
+  public final void copyFromDeviceBuffer(BaseDeviceMemoryBuffer deviceMemoryBuffer) {
     addressOutOfBoundsCheck(address, deviceMemoryBuffer.length, "copy range dest");
     assert !deviceMemoryBuffer.closed;
     Cuda.memcpy(address, deviceMemoryBuffer.address, deviceMemoryBuffer.length,
         CudaMemcpyKind.DEVICE_TO_HOST);
+  }
+
+  /**
+   * Copy from a DeviceMemoryBuffer to a HostMemoryBuffer using the specified stream.
+   * The copy has completed when this returns, but the memory copy could overlap with
+   * operations occurring on other streams.
+   * @param deviceMemoryBuffer buffer to copy data from
+   * @param stream CUDA stream to use
+   */
+  public final void copyFromDeviceBuffer(BaseDeviceMemoryBuffer deviceMemoryBuffer,
+                                         Cuda.Stream stream) {
+    addressOutOfBoundsCheck(address, deviceMemoryBuffer.length, "copy range dest");
+    assert !deviceMemoryBuffer.closed;
+    Cuda.memcpy(address, deviceMemoryBuffer.address, deviceMemoryBuffer.length,
+        CudaMemcpyKind.DEVICE_TO_HOST, stream);
+  }
+
+  /**
+   * Copy from a DeviceMemoryBuffer to a HostMemoryBuffer using the specified stream.
+   * The copy is async and may not have completed when this returns.
+   * @param deviceMemoryBuffer buffer to copy data from
+   * @param stream CUDA stream to use
+   */
+  public final void copyFromDeviceBufferAsync(BaseDeviceMemoryBuffer deviceMemoryBuffer,
+                                              Cuda.Stream stream) {
+    addressOutOfBoundsCheck(address, deviceMemoryBuffer.length, "copy range dest");
+    assert !deviceMemoryBuffer.closed;
+    Cuda.asyncMemcpy(address, deviceMemoryBuffer.address, deviceMemoryBuffer.length,
+        CudaMemcpyKind.DEVICE_TO_HOST, stream);
   }
 
   /**
@@ -471,7 +564,8 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param len how many bytes to slice
    * @return a host buffer that will need to be closed independently from this buffer.
    */
-  final HostMemoryBuffer slice(long offset, long len) {
+  @Override
+  public final synchronized HostMemoryBuffer slice(long offset, long len) {
     addressOutOfBoundsCheck(address + offset, len, "slice");
     refCount++;
     cleaner.addRef();
@@ -484,7 +578,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param len how many bytes to slice
    * @return a host buffer that will need to be closed independently from this buffer.
    */
-  final HostMemoryBuffer sliceWithCopy(long offset, long len) {
+  public final HostMemoryBuffer sliceWithCopy(long offset, long len) {
     addressOutOfBoundsCheck(address + offset, len, "slice");
 
     HostMemoryBuffer ret = null;

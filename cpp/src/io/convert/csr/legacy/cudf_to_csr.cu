@@ -213,7 +213,7 @@ gdf_error runConverter(gdf_column **gdfData, csr_gdf *csrReturn, cudf::size_type
 
 		cudaCreateCSR<T><<<blocks, threads>>>(gdf->data, gdf->valid, gdf->dtype, colId, A, csrReturn->JA, offsets, numRows);
 
-		CUDA_CHECK_LAST();
+		CHECK_CUDA(0);
 	}
 
 	csrReturn->A = A;

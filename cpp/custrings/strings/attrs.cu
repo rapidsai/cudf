@@ -85,31 +85,23 @@ size_t NVStrings::byte_count(int* lengths, bool todevice)
         d_rtn = device_alloc<int>(count,0);
 
     custring_view** d_strings = pImpl->getStringsPtr();
-    thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<unsigned int>(0), count,
-        [d_strings, d_rtn] __device__(unsigned int idx){
-            custring_view* dstr = d_strings[idx];
-            if( dstr )
-                d_rtn[idx] = dstr->size();
-            else
-                d_rtn[idx] = -1;
+    thrust::transform(execpol->on(0), d_strings, d_strings+count, d_rtn,
+        [] __device__(custring_view* dstr) {
+            return (dstr ? static_cast<int>(dstr->size()) :-1 );
         });
     //
-    //printCudaError(cudaDeviceSynchronize(),"nvs-bytes");
-    size_t size = thrust::reduce(execpol->on(0), d_rtn, d_rtn+count, (size_t)0,
-         []__device__(int lhs, int rhs) {
-            if( lhs < 0 )
-                lhs = 0;
-            if( rhs < 0 )
-                rhs = 0;
-            return lhs + rhs;
-         });
+    size_t size = thrust::transform_reduce(execpol->on(0), d_rtn, d_rtn+count,
+        []__device__(int sz) {
+            return static_cast<size_t>(sz < 0 ? 0:sz);
+        },  static_cast<size_t>(0), thrust::plus<size_t>());
+
     if( !todevice )
     {   // copy result back to host
         if( lengths )
             CUDA_TRY( cudaMemcpyAsync(lengths,d_rtn,sizeof(int)*count,cudaMemcpyDeviceToHost))
         RMM_FREE(d_rtn,0);
     }
-    return (unsigned int)size;
+    return size;
 }
 
 

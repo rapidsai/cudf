@@ -14,41 +14,50 @@
  * limitations under the License.
  */
 
+#include <boost/filesystem.hpp>
 #include <cudf/utilities/error.hpp>
 #include <jit/cache.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <sys/stat.h>
 
 namespace cudf {
 namespace jit {
 
-std::string getCacheDir()
-{
-    char const *tmpdir_path;
-    std::string cache_dir{"cudf"};
-    cache_dir = cache_dir + '_' + CUDF_STRINGIFY(CUDF_VERSION) + '/';
-    
-    #if defined(__unix__)
+// Default `LIBCUDF_KERNEL_CACHE_PATH` to `$TEMPDIR/cudf_$CUDF_VERSION`.
+// This definition can be overridden at compile time by specifying a
+// `-DLIBCUDF_KERNEL_CACHE_PATH=/kernel/cache/path` CMake argument.
+// Use `boost::filesystem` for cross-platform path resolution and dir
+// creation. This path is used in the `getCacheDir()` function below.
+#if !defined(LIBCUDF_KERNEL_CACHE_PATH)
+#define LIBCUDF_KERNEL_CACHE_PATH            \
+  boost::filesystem::temp_directory_path() / \
+    ("cudf_" + std::string{CUDF_STRINGIFY(CUDF_VERSION)})
+#endif
 
-        (tmpdir_path = std::getenv("TMPDIR" )) ||
-        (tmpdir_path = std::getenv("TMP"    )) ||
-        (tmpdir_path = std::getenv("TEMP"   )) ||
-        (tmpdir_path = std::getenv("TEMPDIR"));
-
-        tmpdir_path = ( tmpdir_path != 0 ) ? tmpdir_path : "/tmp";
-        
-        cache_dir = std::string(tmpdir_path) + '/' + cache_dir;
-
-        // if it doesn't exist, make it
-        mkdir(cache_dir.c_str(), S_IRWXU);
-
-        return cache_dir;
-    #elif
-        #error Only unix is supported
-    #endif // __unix__
+/**
+ * @brief Get the string path to the JITIFY kernel cache directory.
+ *
+ * This path can be overridden at runtime by defining an environment variable
+ * named `LIBCUDF_KERNEL_CACHE_PATH`. The value of this variable must be a path
+ * under which the process' user has read/write priveleges.
+ *
+ * This function returns a path to the cache directory, creating it if it
+ * doesn't exist.
+ *
+ * The default cache directory `$TEMPDIR/cudf_$CUDF_VERSION`.
+ **/
+boost::filesystem::path getCacheDir() {
+  // The environment variable always overrides the
+  // default/compile-time value of `LIBCUDF_KERNEL_CACHE_PATH`
+  auto kernel_cache_path_env = std::getenv("LIBCUDF_KERNEL_CACHE_PATH");
+  auto kernel_cache_path = boost::filesystem::path(
+      kernel_cache_path_env != nullptr ? kernel_cache_path_env
+                                       : LIBCUDF_KERNEL_CACHE_PATH);
+  // `mkdir -p` the kernel cache path if it doesn't exist
+  boost::filesystem::create_directories(kernel_cache_path);
+  return kernel_cache_path;
 }
 
 cudfJitCache::cudfJitCache() { }
@@ -58,12 +67,12 @@ cudfJitCache::~cudfJitCache() { }
 std::mutex cudfJitCache::_kernel_cache_mutex;
 std::mutex cudfJitCache::_program_cache_mutex;
 
-named_prog<jitify_v2::Program> cudfJitCache::getProgram(
+named_prog<jitify::experimental::Program> cudfJitCache::getProgram(
     std::string const& prog_name, 
     std::string const& cuda_source,
     std::vector<std::string> const& given_headers,
     std::vector<std::string> const& given_options,
-    jitify_v2::file_callback_type file_callback)
+    jitify::experimental::file_callback_type file_callback)
 {
     // Lock for thread safety
     std::lock_guard<std::mutex> lock(_program_cache_mutex);
@@ -72,7 +81,7 @@ named_prog<jitify_v2::Program> cudfJitCache::getProgram(
         [&](){
             CUDF_EXPECTS( not cuda_source.empty(),
                 "Program not found in cache, Needs source string.");
-            return jitify_v2::Program(cuda_source,
+            return jitify::experimental::Program(cuda_source,
                                         given_headers,
                                         given_options,
                                         file_callback);
@@ -80,16 +89,16 @@ named_prog<jitify_v2::Program> cudfJitCache::getProgram(
     );
 }
 
-named_prog<jitify_v2::KernelInstantiation> cudfJitCache::getKernelInstantiation(
+named_prog<jitify::experimental::KernelInstantiation> cudfJitCache::getKernelInstantiation(
     std::string const& kern_name,
-    named_prog<jitify_v2::Program> const& named_program,
+    named_prog<jitify::experimental::Program> const& named_program,
     std::vector<std::string> const& arguments)
 {
     // Lock for thread safety
     std::lock_guard<std::mutex> lock(_kernel_cache_mutex);
 
     std::string prog_name = std::get<0>(named_program);
-    jitify_v2::Program& program = *std::get<1>(named_program);
+    jitify::experimental::Program& program = *std::get<1>(named_program);
 
     // Make instance name e.g. "prog_binop.kernel_v_v_int_int_long int_Add"
     std::string kern_inst_name = prog_name + '.' + kern_name;
@@ -106,7 +115,7 @@ named_prog<jitify_v2::KernelInstantiation> cudfJitCache::getKernelInstantiation(
 // kernel instantiations in one step
 // ------------------------------------------------------------------------
 /*
-jitify_v2::KernelInstantiation cudfJitCache::getKernelInstantiation(
+jitify::experimental::KernelInstantiation cudfJitCache::getKernelInstantiation(
     std::string const& kern_name,
     std::string const& prog_name,
     std::string const& cuda_source = "",

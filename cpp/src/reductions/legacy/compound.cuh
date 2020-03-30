@@ -48,7 +48,7 @@ gdf_scalar compound_reduction(gdf_column const& col, gdf_dtype const output_dtyp
     cudf::size_type valid_count = col.size - col.null_count;
 
     using intermediateOp = typename Op::template intermediate<ResultType>;
-    // IntermediateType: intermediate structure, output type of `reduction_op` and
+    // IntermediateType: intermediate structure, output type of `Op` and
     // input type of `intermediateOp::ComputeResult`
     using IntermediateType = typename intermediateOp::IntermediateType;
     IntermediateType intermediate{0};
@@ -60,7 +60,7 @@ gdf_scalar compound_reduction(gdf_column const& col, gdf_dtype const output_dtyp
     // initialize output by identity value
     CUDA_TRY(cudaMemcpyAsync(dev_result, &intermediate,
             sizeof(IntermediateType), cudaMemcpyHostToDevice, stream));
-    CHECK_STREAM(stream);
+    CHECK_CUDA(stream);
 
     // reduction by iterator
     auto it = Op::template make_iterator<has_nulls, ElementType, ResultType>(col);

@@ -1,8 +1,8 @@
 from cudf.core.column.categorical import CategoricalColumn  # noqa: F401
 from cudf.core.column.column import (  # noqa: F401
-    Column,
-    TypedColumnBase,
+    ColumnBase,
     as_column,
+    build_categorical_column,
     build_column,
     column_applymap,
     column_empty,

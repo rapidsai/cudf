@@ -6,7 +6,7 @@ import pyarrow as pa
 import pyarrow.orc as orc
 
 import cudf
-import cudf._lib as libcudf
+import cudf._libxx as libcudfxx
 from cudf.utils import ioutils
 
 
@@ -29,14 +29,18 @@ def read_orc(
     engine="cudf",
     columns=None,
     stripe=None,
+    stripe_count=None,
     skip_rows=None,
     num_rows=None,
     use_index=True,
     decimals_as_float=True,
     force_decimal_scale=None,
+    timestamp_type=None,
     **kwargs,
 ):
     """{docstring}"""
+
+    from cudf import DataFrame
 
     filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
         filepath_or_buffer, None, **kwargs
@@ -45,15 +49,19 @@ def read_orc(
         ValueError("URL content-encoding decompression is not supported")
 
     if engine == "cudf":
-        df = libcudf.orc.read_orc(
-            filepath_or_buffer,
-            columns,
-            stripe,
-            skip_rows,
-            num_rows,
-            use_index,
-            decimals_as_float,
-            force_decimal_scale,
+        df = DataFrame._from_table(
+            libcudfxx.orc.read_orc(
+                filepath_or_buffer,
+                columns,
+                stripe,
+                stripe_count,
+                skip_rows,
+                num_rows,
+                use_index,
+                decimals_as_float,
+                force_decimal_scale,
+                timestamp_type,
+            )
         )
     else:
         warnings.warn("Using CPU via PyArrow to read ORC dataset.")
@@ -70,7 +78,7 @@ def read_orc(
 
 
 @ioutils.doc_to_orc()
-def to_orc(df, fname, compression=None, *args, **kwargs):
+def to_orc(df, fname, compression=None, enable_statistics=False):
     """{docstring}"""
 
-    libcudf.orc.write_orc(df._cols, fname, compression)
+    libcudfxx.orc.write_orc(df, fname, compression, enable_statistics)

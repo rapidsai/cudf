@@ -205,7 +205,7 @@ struct column_gatherer {
 		   static_cast<column_type *>(destination_column->data));
     }
 
-    CHECK_STREAM(stream);
+    CHECK_CUDA(stream);
   }
 };
 

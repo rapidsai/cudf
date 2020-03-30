@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 #Upload cudf once per PYTHON
-if [[ "$CUDA" == "9.2" ]]; then
+if [[ "$CUDA" == "10.0" ]]; then
     export UPLOAD_CUDF=1
 else
     export UPLOAD_CUDF=0

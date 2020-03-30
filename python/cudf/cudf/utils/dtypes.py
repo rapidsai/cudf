@@ -56,6 +56,14 @@ def numeric_normalize_types(*args):
     return [a.astype(dtype) for a in args]
 
 
+def is_numerical_dtype(obj):
+    return not is_categorical_dtype(obj) and (
+        np.issubdtype(obj, np.bool_)
+        or np.issubdtype(obj, np.floating)
+        or np.issubdtype(obj, np.signedinteger)
+    )
+
+
 def is_string_dtype(obj):
     return pd.api.types.is_string_dtype(obj) and not is_categorical_dtype(obj)
 
@@ -73,7 +81,7 @@ def is_categorical_dtype(obj):
     is a pandas CategoricalDtype.
     """
     from cudf.core import Series, Index
-    from cudf.core.column import Column, CategoricalColumn
+    from cudf.core.column import ColumnBase, CategoricalColumn
     from cudf.core.index import CategoricalIndex
 
     if obj is None:
@@ -101,7 +109,7 @@ def is_categorical_dtype(obj):
     ):
         return True
     if isinstance(
-        obj, (Index, Series, Column, pd.Index, pd.Series, np.ndarray)
+        obj, (Index, Series, ColumnBase, pd.Index, pd.Series, np.ndarray)
     ):
         return is_categorical_dtype(obj.dtype)
 
@@ -129,7 +137,7 @@ def is_scalar(val):
         or isinstance(val, numbers.Number)
         or np.isscalar(val)
         or isinstance(val, pd.Timestamp)
-        or isinstance(val, pd.Categorical)
+        or (isinstance(val, pd.Categorical) and len(val) == 1)
     )
 
 
@@ -142,6 +150,8 @@ def to_cudf_compatible_scalar(val, dtype=None):
     """
     if val is None:
         return val
+
+    dtype = "str" if is_string_dtype(dtype) else dtype
 
     if not is_scalar(val):
         raise ValueError(

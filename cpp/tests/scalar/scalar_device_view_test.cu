@@ -57,13 +57,13 @@ TYPED_TEST(TypedScalarDeviceViewTest, Value) {
   rmm::device_scalar<bool> result;
 
   test_set_value<<<1, 1>>>(scalar_device_view, scalar_device_view1);
-  CUDA_CHECK_LAST();
+  CHECK_CUDA(0);
 
   EXPECT_EQ(s1.value(), value);
   EXPECT_TRUE(s1.is_valid());
 
   test_value<<<1, 1>>>(scalar_device_view, scalar_device_view1, result.data());
-  CUDA_CHECK_LAST();
+  CHECK_CUDA(0);
 
   EXPECT_TRUE(result.value());
 }
@@ -80,7 +80,7 @@ TYPED_TEST(TypedScalarDeviceViewTest, ConstructNull) {
   rmm::device_scalar<bool> result;
 
   test_null<<<1, 1>>>(scalar_device_view, result.data());
-  CUDA_CHECK_LAST();
+  CHECK_CUDA(0);
 
   EXPECT_FALSE(result.value());
 }
@@ -97,7 +97,7 @@ TYPED_TEST(TypedScalarDeviceViewTest, SetNull) {
   EXPECT_TRUE(s.is_valid());
 
   test_setnull<<<1, 1>>>(scalar_device_view);
-  CUDA_CHECK_LAST();
+  CHECK_CUDA(0);
 
   EXPECT_FALSE(s.is_valid());
 }
@@ -123,7 +123,7 @@ TEST_F(StringScalarDeviceViewTest, Value) {
 
   test_string_value<<<1, 1>>>(scalar_device_view, value_v.data().get(),
                               value.size(), result.data());
-  CUDA_CHECK_LAST();
+  CHECK_CUDA(0);
 
   EXPECT_TRUE(result.value());  
 }

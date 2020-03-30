@@ -17,7 +17,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/legacy/binaryop.hpp>
-#include <cudf/utilities/chrono.hpp>
+#include <cudf/wrappers/timestamps.hpp>
 
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/timestamp_utilities.cuh>

@@ -145,7 +145,7 @@ group_quantiles(cudf::table const& keys,
     gdf_column_free(&sorted_values);
   }
 
-  return std::make_pair(gb_obj.unique_keys(), result_table);
+  return std::make_pair(gb_obj.unique_keys(), std::move(result_table));
 }
     
 } // namespace cudf

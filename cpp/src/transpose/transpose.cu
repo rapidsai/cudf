@@ -21,6 +21,7 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 namespace cudf {
 
@@ -186,12 +187,12 @@ std::unique_ptr<experimental::table> transpose(table_view const& input,
 
   return output;
 }
-
 }  // namespace detail
 
 std::unique_ptr<experimental::table> transpose(table_view const& input,
                                  rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::transpose(input, mr);
 }
 

@@ -78,7 +78,7 @@ struct Launcher {
             functor
         );
 
-        CUDA_CHECK_LAST();
+        CHECK_CUDA(0);
         return GDF_SUCCESS;
     }
 };

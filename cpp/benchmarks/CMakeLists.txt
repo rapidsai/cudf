@@ -1,4 +1,4 @@
-﻿cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
 project(CUDF_BENCHS LANGUAGES C CXX CUDA)
 
@@ -48,6 +48,14 @@ link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT
                  "${RMM_LIBRARY}")
 
 ###################################################################################################
+# - column benchmarks -----------------------------------------------------------------------------
+
+set(COLUMN_CONCAT_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/column/concatenate_benchmark.cpp")
+
+ConfigureBench(COLUMN_CONCAT_BENCH "${COLUMN_CONCAT_BENCH_SRC}")
+
+###################################################################################################
 # - gather benchmark ------------------------------------------------------------------------------
 
 set(GATHER_BENCH_SRC
@@ -55,6 +63,7 @@ set(GATHER_BENCH_SRC
 
 ConfigureBench(GATHER_BENCH "${GATHER_BENCH_SRC}")
 
+###################################################################################################
 # - scatter benchmark -----------------------------------------------------------------------------
 
 set(SCATTER_BENCH_SRC
@@ -63,19 +72,44 @@ set(SCATTER_BENCH_SRC
 ConfigureBench(SCATTER_BENCH "${SCATTER_BENCH_SRC}")
 
 ###################################################################################################
-# - apply_boolean_mask benchmark ------------------------------------------------------------------------------
+# - contiguous_split benchmark  -------------------------------------------------------------------
+
+set(CONTIGUOUS_SPLIT_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/copying/contiguous_split_benchmark.cu")
+
+ConfigureBench(CONTIGUOUS_SPLIT_BENCH "${CONTIGUOUS_SPLIT_BENCH_SRC}")
+
+###################################################################################################
+# - shift benchmark -------------------------------------------------------------------------------
+
+set(SHIFT_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/copying/shift_benchmark.cu")
+
+ConfigureBench(SHIFT_BENCH "${SHIFT_BENCH_SRC}")
+
+###################################################################################################
+# - apply_boolean_mask benchmark ------------------------------------------------------------------
 
 set(APPLY_BOOLEAN_MASK_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/apply_boolean_mask_benchmark.cu")
 
 ConfigureBench(APPLY_BOOLEAN_MASK_BENCH "${APPLY_BOOLEAN_MASK_BENCH_SRC}")
 
+###################################################################################################
 # - join benchmark --------------------------------------------------------------------------------
 
 set(JOIN_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/join/join_benchmark.cu")
 
 ConfigureBench(JOIN_BENCH "${JOIN_BENCH_SRC}")
+
+###################################################################################################
+# - iterator benchmark ----------------------------------------------------------------------------
+
+set(ITERATOR_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/iterator/iterator_benchmark.cu")
+
+ConfigureBench(ITERATOR_BENCH "${ITERATOR_BENCH_SRC}")
 
 ###################################################################################################
 # - search benchmark ------------------------------------------------------------------------------
@@ -103,9 +137,58 @@ set(LEGACY_QUANTILES_BENCH_SRC
 ConfigureBench(LEGACY_QUANTILES_BENCH "${LEGACY_QUANTILES_BENCH_SRC}")
 
 ###################################################################################################
+# - groupby benchmark -----------------------------------------------------------------------------
+
+set(GROUPBY_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_sum_benchmark.cu"
+  "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_nth_benchmark.cu")
+
+ConfigureBench(GROUPBY_BENCH "${GROUPBY_BENCH_SRC}")
+
+###################################################################################################
 # - stack benchmark -------------------------------------------------------------------------------
 
 set(LEGACY_STACK_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/reshape/legacy/stack_benchmark.cu")
 
 ConfigureBench(LEGACY_STACK_BENCH "${LEGACY_STACK_BENCH_SRC}")
+
+###################################################################################################
+# - legacy hashing benchmark ----------------------------------------------------------------------
+
+set(LEGACY_HASHING_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/hashing/legacy/hashing_benchmark.cu")
+
+ConfigureBench(LEGACY_HASHING_BENCH "${LEGACY_HASHING_BENCH_SRC}")
+
+###################################################################################################
+# - hashing benchmark -----------------------------------------------------------------------------
+
+set(HASHING_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/hashing/hashing_benchmark.cpp")
+
+ConfigureBench(HASHING_BENCH "${HASHING_BENCH_SRC}")
+
+###################################################################################################
+# - merge benchmark -----------------------------------------------------------------------------
+
+set(MERGE_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/merge/merge_benchmark.cpp")
+
+ConfigureBench(MERGE_BENCH "${MERGE_BENCH_SRC}")
+
+###################################################################################################
+# - null_mask benchmark -----------------------------------------------------------------------------
+
+set(NULLMASK_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/null_mask/set_null_mask_benchmark.cpp")
+
+ConfigureBench(NULLMASK_BENCH "${NULLMASK_BENCH_SRC}")
+
+###################################################################################################
+# - parquet writer benchmark -----------------------------------------------------------------------------
+
+set(PARQUET_WRITER_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/io/parquet_writer_benchmark.cu")
+
+ConfigureBench(PARQUET_WRITER_BENCH "${PARQUET_WRITER_BENCH_SRC}")

@@ -105,7 +105,7 @@ struct AtomicsTest : public cudf::test::BaseFixture {
     exact[1] = *(std::min_element(v.begin(), v.end()));
     exact[2] = *(std::max_element(v.begin(), v.end()));
 
-    std::vector<T> result_init(6);
+    std::vector<T> result_init(9); // +3 padding for int8 tests
     result_init[0] = T{0};
     result_init[1] = std::numeric_limits<T>::max();
     result_init[2] = std::numeric_limits<T>::min();
@@ -130,7 +130,7 @@ struct AtomicsTest : public cudf::test::BaseFixture {
 
     thrust::host_vector<T> host_result(dev_result);
     cudaDeviceSynchronize();
-    CUDA_CHECK_LAST();
+    CHECK_CUDA(0);
 
     EXPECT_EQ(host_result[0], exact[0]) << "atomicAdd test failed";
     EXPECT_EQ(host_result[1], exact[1]) << "atomicMin test failed";
@@ -247,7 +247,8 @@ struct AtomicsBitwiseOpTest : public cudf::test::BaseFixture {
       return t;
     });
 
-    std::vector<T> identity = {T(~0ull), T(0), T(0), T(~0ull), T(0), T(0)};
+    std::vector<T> identity = {T(~0ull), T(0), T(0), T(~0ull), T(0), T(0),
+                               T(0), T(0), T(0)}; // +3 elements padding for int8 tests
     T exact[3];
     exact[0] = std::accumulate(v.begin(), v.end(), identity[0],
                                [](T acc, uint64_t i) { return acc & T(i); });
@@ -269,7 +270,7 @@ struct AtomicsBitwiseOpTest : public cudf::test::BaseFixture {
 
     thrust::host_vector<T> host_result(dev_result);
     cudaDeviceSynchronize();
-    CUDA_CHECK_LAST();
+    CHECK_CUDA(0);
 
     print_exact(exact, "exact");
     print_exact(host_result.data(), "result");

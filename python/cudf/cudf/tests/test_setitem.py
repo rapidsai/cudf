@@ -73,7 +73,6 @@ def test_dataframe_setitem_scaler_keyerror():
 
 
 # set_item_series inconsistency
-@pytest.mark.xfail()
 def test_series_setitem_index():
     df = pd.DataFrame(
         data={"b": [-1, -2, -3], "c": [1, 2, 3]}, index=[1, 2, 3]

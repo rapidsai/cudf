@@ -16,6 +16,7 @@
 
 #include <cudf/utilities/error.hpp>
 #include <cudf/legacy/copying.hpp>
+#include "cudf/types.hpp"
 
 #include <cudf/cudf.h>
 #include <cudf/types.h>
@@ -31,7 +32,7 @@ namespace cudf {
 
 namespace detail {
 
-cudf::table tile(const cudf::table &in, gdf_size_type count, 
+cudf::table tile(const cudf::table &in, gdf_size_type count,
                  cudaStream_t stream = 0)
 {
   CUDF_EXPECTS(count >= 0, "Count cannot be negative");

@@ -60,7 +60,7 @@ struct page_state_s {
     int32_t nz_count;               // number of valid entries in nz_idx (write position in circular buffer)
     int32_t dict_pos;               // write position of dictionary indices
     int32_t out_pos;                // read position of final output
-    int32_t int64_nanoscale;        // if non-zero, convert timestamp to nano
+    int32_t ts_scale;               // timestamp scale: <0: divide by -ts_scale, >0: multiply by ts_scale
     uint32_t nz_idx[NZ_BFRSZ];      // circular buffer of non-null row positions
     uint32_t dict_idx[NZ_BFRSZ];    // Dictionary index, boolean, or string offset values
     uint32_t str_len[NZ_BFRSZ];     // String length for plain encoding of strings
@@ -336,7 +336,7 @@ __device__ void gpuDecodeLevels(page_state_s *s, int32_t target_count, int t)
             coded_count += __popc(valid_mask);
         }
         value_count += batch_len;
-        if (!t && valid_map)
+        if (!t)
         {
             // If needed, adjust batch length to eliminate rows before the first row
             if (value_count < first_row + batch_len)
@@ -358,20 +358,23 @@ __device__ void gpuDecodeLevels(page_state_s *s, int32_t target_count, int t)
             valid_map_offset += batch_len;
             if (valid_map_offset >= 32)
             {
-                if (out_valid_mask == ~0) // Safe to output all 32 bits are within the current page
+                if (valid_map)
                 {
-                    *valid_map = out_valid;
-                }
-                else // Special case for the first valid row, which may not start on a 32-bit boundary (only setting some of the bits)
-                {
-                    atomicAnd(valid_map, ~out_valid_mask);
-                    atomicOr(valid_map, out_valid);
+                    if (out_valid_mask == ~0) // Safe to output all 32 bits are within the current page
+                    {
+                        *valid_map = out_valid;
+                    }
+                    else // Special case for the first valid row, which may not start on a 32-bit boundary (only setting some of the bits)
+                    {
+                        atomicAnd(valid_map, ~out_valid_mask);
+                        atomicOr(valid_map, out_valid);
+                    }
+                    valid_map++;
                 }
                 s->page.valid_count += __popc(out_valid);
                 valid_map_offset &= 0x1f;
                 out_valid = (valid_map_offset > 0) ? valid_mask >> (unsigned int)(batch_len - valid_map_offset) : 0;
                 out_valid_mask = ~0;
-                valid_map++;
             }
             __threadfence_block();
         }
@@ -381,14 +384,17 @@ __device__ void gpuDecodeLevels(page_state_s *s, int32_t target_count, int t)
         s->lvl_start[0] = cur_def;
         s->initial_rle_run[0] = def_run;
         s->initial_rle_value[0] = def_val;
-        if (value_count >= num_values && valid_map && valid_map_offset != 0)
+        if (value_count >= num_values && valid_map_offset != 0)
         {
             // Store the remaining valid bits at the end of the page
             out_valid_mask &= (1 << valid_map_offset) - 1;
             out_valid &= out_valid_mask;
             s->page.valid_count += __popc(out_valid);
-            atomicAnd(valid_map, ~out_valid_mask);
-            atomicOr(valid_map, out_valid);
+            if (valid_map)
+            {
+                atomicAnd(valid_map, ~out_valid_mask);
+                atomicOr(valid_map, out_valid);
+            }
             out_valid_mask = 0;
         }
         s->valid_map_offset = valid_map_offset;
@@ -657,7 +663,7 @@ inline __device__ void gpuOutputString(volatile page_state_s *s, int src_pos, vo
     {
         // Plain encoding
         uint32_t dict_pos = s->dict_idx[src_pos & (NZ_BFRSZ - 1)];
-        if (dict_pos < (uint32_t)s->dict_size)
+        if (dict_pos <= (uint32_t)s->dict_size)
         {
             ptr = reinterpret_cast<const char *>(s->data_start + dict_pos);
             len = s->str_len[src_pos & (NZ_BFRSZ - 1)];
@@ -787,7 +793,7 @@ inline __device__ void gpuOutputInt96Timestamp(volatile page_state_s *s, int src
     if (dict_pos + 4 < dict_size)
     {
         uint3 v;
-        int64_t nanos, day;
+        int64_t nanos, secs;
         v.x = *(const uint32_t *)(src8 + dict_pos + 0);
         v.y = *(const uint32_t *)(src8 + dict_pos + 4);
         v.z = *(const uint32_t *)(src8 + dict_pos + 8);
@@ -801,13 +807,12 @@ inline __device__ void gpuOutputInt96Timestamp(volatile page_state_s *s, int src
         nanos = v.y;
         nanos <<= 32;
         nanos |= v.x;
-        day = v.z;
         // Convert from Julian day at noon to UTC seconds
-        day = (day - 2440588) * (24 * 60 * 60); // TBD: Should be noon instead of midnight, but this matches pyarrow
+        secs = (v.z - 2440588) * (24 * 60 * 60); // TBD: Should be noon instead of midnight, but this matches pyarrow
         if (s->col.ts_clock_rate)
-            ts = (day * s->col.ts_clock_rate) + (nanos + (499999999 / s->col.ts_clock_rate)) / (1000000000 / s->col.ts_clock_rate); // Output to desired clock rate
+            ts = (secs * s->col.ts_clock_rate) + nanos / (1000000000 / s->col.ts_clock_rate); // Output to desired clock rate
         else
-            ts = (day * 1000000000) + nanos;
+            ts = (secs * 1000000000) + nanos;
     }
     else
     {
@@ -850,6 +855,7 @@ inline __device__ void gpuOutputInt64Timestamp(volatile page_state_s *s, int src
     {
         uint2 v;
         int64_t val;
+        int32_t ts_scale;
         v.x = *(const uint32_t *)(src8 + dict_pos + 0);
         v.y = *(const uint32_t *)(src8 + dict_pos + 4);
         if (ofs)
@@ -861,7 +867,18 @@ inline __device__ void gpuOutputInt64Timestamp(volatile page_state_s *s, int src
         val = v.y;
         val <<= 32;
         val |= v.x;
-        ts = ((val * s->int64_nanoscale) + (499999999 / s->col.ts_clock_rate)) / (1000000000 / s->col.ts_clock_rate); // Output to desired clock rate
+        // Output to desired clock rate
+        ts_scale = s->ts_scale;
+        if (ts_scale < 0)
+        {
+            // round towards negative infinity
+            int sign = (val < 0);
+            ts = ((val + sign) / -ts_scale) + sign;
+        }
+        else
+        {
+            ts = val * ts_scale;
+        }
     }
     else
     {
@@ -1119,7 +1136,7 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
             uint8_t *end = cur + s->page.uncompressed_page_size;
             size_t page_start_row = s->col.start_row + s->page.chunk_row;
             uint32_t dtype_len_out = s->col.data_type >> 3;
-            s->int64_nanoscale = 0;
+            s->ts_scale = 0;
             // Validate data type
             switch(s->col.data_type & 7)
             {
@@ -1133,12 +1150,13 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
             case INT64:
                 if (s->col.ts_clock_rate)
                 {
+                    int32_t units = 0;
                     if (s->col.converted_type == TIME_MICROS || s->col.converted_type == TIMESTAMP_MICROS)
-                        if (s->col.ts_clock_rate != 1000000)
-                            s->int64_nanoscale = 1000;
+                        units = 1000000;
                     else if (s->col.converted_type == TIME_MILLIS || s->col.converted_type == TIMESTAMP_MILLIS)
-                        if (s->col.ts_clock_rate != 1000)
-                            s->int64_nanoscale = 1000000;
+                        units = 1000;
+                    if (units && units != s->col.ts_clock_rate)
+                        s->ts_scale = (s->col.ts_clock_rate < units) ? -(units / s->col.ts_clock_rate) : (s->col.ts_clock_rate / units);
                 }
                 // Fall through to DOUBLE
             case DOUBLE:
@@ -1189,8 +1207,8 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
                 if (s->valid_map)
                 {
                     s->valid_map += (page_start_row - min_row) >> 5;
-                    s->valid_map_offset = (int32_t)((page_start_row - min_row) & 0x1f);
                 }
+                s->valid_map_offset = (int32_t)((page_start_row - min_row) & 0x1f);
                 s->first_row = 0;
             }
             else // First row starts after the beginning of the page
@@ -1281,14 +1299,15 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
     while (!s->error && (s->value_count < s->num_values || s->out_pos < s->nz_count))
     {
         int target_pos;
+        int out_pos = s->out_pos;
 
         if (t < out_thread0)
         {
-            target_pos = min(s->out_pos + 2 * (NTHREADS - out_thread0), s->nz_count + (NTHREADS - out_thread0));
+            target_pos = min(out_pos + 2 * (NTHREADS - out_thread0), s->nz_count + (NTHREADS - out_thread0));
         }
         else
         {
-            target_pos = min(s->nz_count, s->out_pos + NTHREADS - out_thread0);
+            target_pos = min(s->nz_count, out_pos + NTHREADS - out_thread0);
             if (out_thread0 > 32)
             {
                 target_pos = min(target_pos, s->dict_pos);
@@ -1324,7 +1343,7 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
         {
             // WARP1..WARP3: Decode values
             int dtype = s->col.data_type & 7;
-            int out_pos = s->out_pos + t - out_thread0;
+            out_pos += t - out_thread0;
             int row_idx = s->nz_idx[out_pos & (NZ_BFRSZ - 1)];
             if (out_pos < target_pos && row_idx >= 0 && s->first_row + row_idx < s->num_rows)
             {
@@ -1340,7 +1359,7 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
                     gpuOutputInt96Timestamp(s, out_pos, reinterpret_cast<int64_t *>(dst));
                 else if (dtype_len == 8)
                 {
-                    if (s->int64_nanoscale)
+                    if (s->ts_scale)
                         gpuOutputInt64Timestamp(s, out_pos, reinterpret_cast<int64_t *>(dst));
                     else
                         gpuOutputFast(s, out_pos, reinterpret_cast<uint2 *>(dst));

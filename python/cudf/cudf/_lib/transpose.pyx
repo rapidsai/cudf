@@ -1,9 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
-
-# cython: profile=False
-# distutils: language = c++
-# cython: embedsignature = True
-# cython: language_level = 3
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
@@ -40,13 +35,13 @@ def transpose(df):
 
     if any(t != dtype for t in df.dtypes):
         raise ValueError('all columns must have the same dtype')
-    has_null = any(c.null_count for c in df._cols.values())
+    has_null = any(c.null_count for c in df._data.columns)
 
     out_df = cudf.DataFrame()
 
     ncols = len(df.columns)
     cdef vector[gdf_column*] cols
-    for col in df._cols:
+    for col in df._data:
         cols.push_back(column_view_from_column(df[col]._column))
 
     new_nrow = ncols
@@ -75,9 +70,7 @@ def transpose(df):
 
     check_gdf_error(result)
 
-    for series in new_col_series:
-        series._column._update_null_count()
-
     for i in range(0, new_ncol):
-        out_df[str(i)] = new_col_series[i]
+        out_df[i] = new_col_series[i]
+
     return out_df

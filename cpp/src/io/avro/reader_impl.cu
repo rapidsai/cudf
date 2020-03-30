@@ -120,11 +120,20 @@ class metadata : public file_metadata {
         }
       }
     } else {
-      // Iterate backwards as fastavro returns from last-to-first?!
-      for (int i = num_avro_columns - 1; i >= 0; --i) {
-        auto col_type = to_type_id(&schema[columns[i].schema_data_idx]);
-        CUDF_EXPECTS(col_type != type_id::EMPTY, "Unsupported data type");
-        selection.emplace_back(i, columns[i].name);
+      for (int i = 0; i < num_avro_columns; ++i) {
+        // Exclude array columns (unsupported)
+        bool column_in_array = false;
+        for (int parent_idx = schema[columns[i].schema_data_idx].parent_idx; parent_idx > 0; parent_idx = schema[parent_idx].parent_idx) {
+          if (schema[parent_idx].kind == avro::type_array) {
+            column_in_array = true;
+            break;
+          }
+        }
+        if (!column_in_array) {
+          auto col_type = to_type_id(&schema[columns[i].schema_data_idx]);
+          CUDF_EXPECTS(col_type != type_id::EMPTY, "Unsupported data type");
+          selection.emplace_back(i, columns[i].name);
+        }
       }
     }
     CUDF_EXPECTS(selection.size() > 0, "Filtered out all columns");
@@ -261,11 +270,12 @@ void reader::impl::decode_data(
   for (size_t i = 0; i < _metadata->schema.size(); i++) {
     type_kind_e kind = _metadata->schema[i].kind;
     if (skip_field_cnt != 0) {
-      // Exclude union members from min_row_data_size
+      // Exclude union and array members from min_row_data_size
       skip_field_cnt += _metadata->schema[i].num_children - 1;
     } else {
       switch (kind) {
         case type_union:
+        case type_array:
           skip_field_cnt = _metadata->schema[i].num_children;
           // fall through
         case type_boolean:
@@ -316,8 +326,9 @@ void reader::impl::decode_data(
     if (_metadata->schema[schema_data_idx].kind == type_enum) {
       schema_desc[schema_data_idx].count = dict[i].first;
     }
-    CUDA_TRY(cudaMemsetAsync(out_buffers[i].null_mask(), -1,
-                             bitmask_allocation_size_bytes(num_rows), stream));
+    if (out_buffers[i].null_mask_size()) {
+      set_null_mask(out_buffers[i].null_mask(), 0, num_rows, true, stream);
+    }
   }
   rmm::device_buffer block_list(
       _metadata->block_list.data(),
@@ -330,7 +341,7 @@ void reader::impl::decode_data(
       static_cast<block_desc_s *>(block_list.data()), schema_desc.device_ptr(),
       reinterpret_cast<gpu::nvstrdesc_s *>(global_dictionary.device_ptr()),
       static_cast<const uint8_t *>(block_data.data()),
-      static_cast<uint32_t>(block_list.size()),
+      static_cast<uint32_t>(_metadata->block_list.size()),
       static_cast<uint32_t>(schema_desc.size()),
       static_cast<uint32_t>(total_dictionary_entries), _metadata->num_rows,
       _metadata->skip_rows, min_row_data_size, stream));
@@ -363,9 +374,10 @@ reader::impl::impl(std::unique_ptr<datasource> source,
   _metadata = std::make_unique<metadata>(_source.get());
 }
 
-std::unique_ptr<table> reader::impl::read(int skip_rows, int num_rows,
-                                          cudaStream_t stream) {
+table_with_metadata reader::impl::read(int skip_rows, int num_rows,
+                                       cudaStream_t stream) {
   std::vector<std::unique_ptr<column>> out_columns;
+  table_metadata metadata_out;
 
   // Select and read partial metadata / schema within the subset of rows
   _metadata->init_and_select_rows(skip_rows, num_rows);
@@ -443,7 +455,9 @@ std::unique_ptr<table> reader::impl::read(int skip_rows, int num_rows,
 
       std::vector<column_buffer> out_buffers;
       for (size_t i = 0; i < column_types.size(); ++i) {
-        out_buffers.emplace_back(column_types[i], num_rows, stream, _mr);
+        auto col_idx = selected_columns[i].first;
+        bool is_nullable = (_metadata->columns[col_idx].schema_null_idx >= 0);
+        out_buffers.emplace_back(column_types[i], num_rows, is_nullable, stream, _mr);
       }
 
       decode_data(block_data, dict, global_dictionary, total_dictionary_entries,
@@ -456,7 +470,15 @@ std::unique_ptr<table> reader::impl::read(int skip_rows, int num_rows,
     }
   }
 
-  return std::make_unique<table>(std::move(out_columns));
+  // Return column names (must match order of returned columns)
+  metadata_out.column_names.resize(selected_columns.size());
+  for (size_t i = 0; i < selected_columns.size(); i++) {
+    metadata_out.column_names[i] = selected_columns[i].second;
+  }
+  // Return user metadata
+  metadata_out.user_data = _metadata->user_data;
+
+  return { std::make_unique<table>(std::move(out_columns)), std::move(metadata_out) };
 }
 
 // Forward to implementation
@@ -481,12 +503,12 @@ reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
 reader::~reader() = default;
 
 // Forward to implementation
-std::unique_ptr<table> reader::read_all(cudaStream_t stream) {
+table_with_metadata reader::read_all(cudaStream_t stream) {
   return _impl->read(0, -1, stream);
 }
 
 // Forward to implementation
-std::unique_ptr<table> reader::read_rows(size_type skip_rows,
+table_with_metadata reader::read_rows(size_type skip_rows,
                                          size_type num_rows,
                                          cudaStream_t stream) {
   return _impl->read(skip_rows, (num_rows != 0) ? num_rows : -1, stream);

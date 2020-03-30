@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef RELEASE_ASSERT_CUH
-#define RELEASE_ASSERT_CUH
+#pragma once
 
 #include <cuda_runtime.h>
 
@@ -37,6 +36,4 @@
                       __PRETTY_FUNCTION__, sizeof(char)))
 #else
 #define release_assert(e) (static_cast<void>(0))
-#endif
-
 #endif

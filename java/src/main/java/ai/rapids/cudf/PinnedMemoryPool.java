@@ -110,16 +110,17 @@ public final class PinnedMemoryPool implements AutoCloseable {
     @Override
     protected boolean cleanImpl(boolean logErrorIfNotClean) {
       boolean neededCleanup = false;
+      long origAddress = section.baseAddress;
       if (section != null) {
         PinnedMemoryPool.freeInternal(section);
         if (origLength > 0) {
-          MemoryListener.hostDeallocation(origLength, getId());
+          MemoryListener.hostDeallocation(origLength, id);
         }
         section = null;
         neededCleanup = true;
       }
       if (neededCleanup && logErrorIfNotClean) {
-        log.error("A PINNED HOST BUFFER WAS LEAKED!!!!");
+        log.error("A PINNED HOST BUFFER WAS LEAKED (ID: " + id + " " + Long.toHexString(origAddress) + ")");
         logRefCountDebug("Leaked pinned host buffer");
       }
       return neededCleanup;
@@ -155,6 +156,15 @@ public final class PinnedMemoryPool implements AutoCloseable {
    * @param poolSize size of the pool to initialize.
    */
   public static synchronized void initialize(long poolSize) {
+    initialize(poolSize, -1);
+  }
+
+  /**
+   * Initialize the pool.
+   * @param poolSize size of the pool to initialize.
+   * @param gpuId gpu id to set to get memory pool from, -1 means to use default
+   */
+  public static synchronized void initialize(long poolSize, int gpuId) {
     if (isInitialized()) {
       throw new IllegalStateException("Can only initialize the pool once.");
     }
@@ -163,7 +173,7 @@ public final class PinnedMemoryPool implements AutoCloseable {
       t.setDaemon(true);
       return t;
     });
-    initFuture = initService.submit(() -> new PinnedMemoryPool(poolSize));
+    initFuture = initService.submit(() -> new PinnedMemoryPool(poolSize, gpuId));
     initService.shutdown();
   }
 
@@ -226,7 +236,12 @@ public final class PinnedMemoryPool implements AutoCloseable {
     return 0;
   }
 
-  private PinnedMemoryPool(long poolSize) {
+  private PinnedMemoryPool(long poolSize, int gpuId) {
+    if (gpuId > -1 ) {
+      // set the gpu device to use
+      Cuda.setDevice(gpuId);
+      Cuda.freeZero();
+    }
     this.pinnedPoolBase = Cuda.hostAllocPinned(poolSize);
     freeHeap.add(new MemorySection(pinnedPoolBase, poolSize));
     this.availableBytes = poolSize;

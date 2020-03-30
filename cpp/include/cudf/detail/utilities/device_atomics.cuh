@@ -39,6 +39,7 @@
 #include <cudf/utilities/error.hpp>
 #include <type_traits>
 #include <cudf/detail/utilities/device_operators.cuh>
+#include <cudf/utilities/legacy/wrapper_types.hpp>
 
 namespace cudf {
 namespace detail {

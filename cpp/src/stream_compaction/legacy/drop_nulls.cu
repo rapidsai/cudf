@@ -56,7 +56,7 @@ struct valid_table_filter
     RMM_TRY(RMM_ALLOC(&device_masks, masks_size, stream));
     CUDA_TRY(cudaMemcpyAsync(device_masks, h_masks.data(), masks_size,
                              cudaMemcpyHostToDevice, stream));
-    CHECK_STREAM(stream);
+    CHECK_CUDA(stream);
 
     auto deleter = [stream](valid_table_filter* f) { f->destroy(stream); };
     std::unique_ptr<valid_table_filter, decltype(deleter)> p {
@@ -64,7 +64,7 @@ struct valid_table_filter
       deleter
     };
 
-    CHECK_STREAM(stream);
+    CHECK_CUDA(stream);
 
     return p;
   }

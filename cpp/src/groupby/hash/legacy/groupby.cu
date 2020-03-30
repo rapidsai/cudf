@@ -87,9 +87,11 @@ auto build_aggregation_map(table const& input_keys, table const& input_values,
   using map_type =
       concurrent_unordered_map<cudf::size_type, cudf::size_type, decltype(hasher),
                                decltype(rows_equal)>;
+  using allocator_type = typename map_type::allocator_type;
 
   auto map = map_type::create(compute_hash_table_size(input_keys.num_rows()),
-                              unused_key, unused_value, hasher, rows_equal);
+                              unused_key, unused_value, hasher, rows_equal,
+                              allocator_type(), stream);
 
   // TODO: Explore optimal block size and work per thread.
   cudf::util::cuda::grid_config_1d grid_params{input_keys.num_rows(), 256};
@@ -107,9 +109,9 @@ auto build_aggregation_map(table const& input_keys, table const& input_values,
            stream>>>(*map, d_input_keys, d_input_values,
                      *d_sparse_output_values, d_ops.data().get(), nullptr);
   }
-  CHECK_STREAM(stream);
+  CHECK_CUDA(stream);
 
-  return std::make_pair(std::move(map), sparse_output_values);
+  return std::make_pair(std::move(map), std::move(sparse_output_values));
 }
 
 template <bool keys_have_nulls, bool values_have_nulls, typename Map>
@@ -146,7 +148,7 @@ auto extract_results(table const& input_keys, table const& input_values,
          stream>>>(map, d_input_keys, *d_output_keys, *d_sparse_output_values,
                    *d_output_values, d_result_size);
 
-  CHECK_STREAM(stream);
+  CHECK_CUDA(stream);
 
   cudf::size_type result_size{-1};
   CUDA_TRY(cudaMemcpyAsync(&result_size, d_result_size, sizeof(cudf::size_type),
@@ -165,7 +167,7 @@ auto extract_results(table const& input_keys, table const& input_values,
   std::transform(output_values.begin(), output_values.end(),
                  output_values.begin(), update_column);
 
-  return std::make_pair(output_keys, output_values);
+  return std::make_pair(std::move(output_keys), std::move(output_values));
 }
 
 /**---------------------------------------------------------------------------*
@@ -270,7 +272,7 @@ auto compute_hash_groupby(cudf::table const& keys, cudf::table const& values,
   cudf::table final_output_values = compute_original_requests(
       original_requests, simple_agg_columns, simple_output_values, stream);
 
-  return std::make_pair(output_keys, final_output_values);
+  return std::make_pair(std::move(output_keys), std::move(final_output_values));
 }
 
 /**---------------------------------------------------------------------------*
@@ -326,7 +328,7 @@ std::pair<cudf::table, cudf::table> groupby(cudf::table const& keys,
 
   update_nvcategories(keys, output_keys, values, output_values);
 
-  return std::make_pair(output_keys, output_values);
+  return std::make_pair(std::move(output_keys), std::move(output_values));
 }
 }  // namespace detail
 

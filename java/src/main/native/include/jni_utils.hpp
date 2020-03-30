@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,25 +15,25 @@
  */
 #pragma once
 
-#include <string>
-#include <utility>
-
 #include <jni.h>
 
-#include <nvstrings/NVCategory.h>
-#include <nvstrings/NVStrings.h>
 #include <rmm/rmm.h>
 
-#include "cudf/cudf.h"
-#include "cudf/legacy/table.hpp"
-#include "utilities/legacy/column_utils.hpp"
-#include "cudf/utilities/error.hpp"
-#include "utilities/legacy/error_utils.hpp"
+#include <cudf/copying.hpp>
+#include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/utilities/error.hpp>
 
 namespace cudf {
 namespace jni {
 
-jobject jscalar_from_scalar(JNIEnv *env, const gdf_scalar &scalar, gdf_time_unit time_unit);
+constexpr jint MINIMUM_JNI_VERSION = JNI_VERSION_1_6;
+
+constexpr char const* CUDA_ERROR_CLASS = "ai/rapids/cudf/CudaException";
+constexpr char const* CUDF_ERROR_CLASS = "ai/rapids/cudf/CudfException";
+constexpr char const* INDEX_OOB_CLASS = "java/lang/ArrayIndexOutOfBoundsException";
+constexpr char const* ILLEGAL_ARG_CLASS = "java/lang/IllegalArgumentException";
+constexpr char const* NPE_CLASS = "java/lang/NullPointerException";
+constexpr char const* OOM_CLASS = "java/lang/OutOfMemoryError";
 
 /**
  * @brief indicates that a JNI error of some kind was thrown and the main
@@ -61,7 +61,7 @@ inline void throw_java_exception(JNIEnv *const env, const char *class_name, cons
  * exception so the flow control stop processing.
  */
 inline void check_java_exception(JNIEnv *const env) {
-  if (env->ExceptionOccurred()) {
+  if (env->ExceptionCheck()) {
     // Not going to try to get the message out of the Exception, too complex and
     // might fail.
     throw jni_exception("JNI Exception...");
@@ -76,7 +76,7 @@ public:
 
   jlongArray newArray(JNIEnv *const env, int len) const { return env->NewLongArray(len); }
 
-  void setArrayRegion(JNIEnv *const env, jlongArray jarr, int start, int len, jlong *arr) const {
+  void setArrayRegion(JNIEnv *const env, jlongArray jarr, int start, int len, jlong const* arr) const {
     env->SetLongArrayRegion(jarr, start, len, arr);
   }
 
@@ -93,12 +93,29 @@ public:
 
   jintArray newArray(JNIEnv *const env, int len) const { return env->NewIntArray(len); }
 
-  void setArrayRegion(JNIEnv *const env, jintArray jarr, int start, int len, jint *arr) const {
+  void setArrayRegion(JNIEnv *const env, jintArray jarr, int start, int len, jint const* arr) const {
     env->SetIntArrayRegion(jarr, start, len, arr);
   }
 
   void releaseArrayElements(JNIEnv *const env, jintArray jarr, jint *arr, jint mode) const {
     env->ReleaseIntArrayElements(jarr, arr, mode);
+  }
+};
+
+class native_jbyteArray_accessor {
+public:
+  jbyte *getArrayElements(JNIEnv *const env, jbyteArray arr) const {
+    return env->GetByteArrayElements(arr, NULL);
+  }
+
+  jbyteArray newArray(JNIEnv *const env, int len) const { return env->NewByteArray(len); }
+
+  void setArrayRegion(JNIEnv *const env, jbyteArray jarr, int start, int len, jbyte const* arr) const {
+    env->SetByteArrayRegion(jarr, start, len, arr);
+  }
+
+  void releaseArrayElements(JNIEnv *const env, jbyteArray jarr, jbyte *arr, jint mode) const {
+    env->ReleaseByteArrayElements(jarr, arr, mode);
   }
 };
 
@@ -111,7 +128,7 @@ public:
   jbooleanArray newArray(JNIEnv *const env, int len) const { return env->NewBooleanArray(len); }
 
   void setArrayRegion(JNIEnv *const env, jbooleanArray jarr, int start, int len,
-                      jboolean *arr) const {
+                      jboolean const* arr) const {
     env->SetBooleanArrayRegion(jarr, start, len, arr);
   }
 
@@ -158,7 +175,7 @@ public:
     check_java_exception(env);
   }
 
-  native_jArray(JNIEnv *const env, N_TYPE *arr, int len)
+  native_jArray(JNIEnv *const env, N_TYPE const* arr, int len)
       : env(env), orig(access.newArray(env, len)), len(len), data_ptr(NULL) {
     check_java_exception(env);
     access.setArrayRegion(env, orig, 0, len, arr);
@@ -178,20 +195,20 @@ public:
 
   N_TYPE operator[](int index) const {
     if (orig == NULL) {
-      throw_java_exception(env, "java/lang/NullPointerException", "pointer is NULL");
+      throw_java_exception(env, NPE_CLASS, "pointer is NULL");
     }
     if (index < 0 || index >= len) {
-      throw_java_exception(env, "java/lang/ArrayIndexOutOfBoundsException", "NOT IN BOUNDS");
+      throw_java_exception(env, INDEX_OOB_CLASS, "NOT IN BOUNDS");
     }
     return data()[index];
   }
 
   N_TYPE &operator[](int index) {
     if (orig == NULL) {
-      throw_java_exception(env, "java/lang/NullPointerException", "pointer is NULL");
+      throw_java_exception(env, NPE_CLASS, "pointer is NULL");
     }
     if (index < 0 || index >= len) {
-      throw_java_exception(env, "java/lang/ArrayIndexOutOfBoundsException", "NOT IN BOUNDS");
+      throw_java_exception(env, INDEX_OOB_CLASS, "NOT IN BOUNDS");
     }
     return data()[index];
   }
@@ -233,6 +250,7 @@ public:
 
 typedef native_jArray<jlong, jlongArray, native_jlongArray_accessor> native_jlongArray;
 typedef native_jArray<jint, jintArray, native_jintArray_accessor> native_jintArray;
+typedef native_jArray<jbyte, jbyteArray, native_jbyteArray_accessor> native_jbyteArray;
 typedef native_jArray<jboolean, jbooleanArray, native_jbooleanArray_accessor> native_jbooleanArray;
 
 /**
@@ -460,7 +478,7 @@ public:
 
   T get(int index) const {
     if (orig == NULL) {
-      throw_java_exception(env, "java/lang/NullPointerException", "jobjectArray pointer is NULL");
+      throw_java_exception(env, NPE_CLASS, "jobjectArray pointer is NULL");
     }
     T ret = static_cast<T>(env->GetObjectArrayElement(orig, index));
     check_java_exception(env);
@@ -469,10 +487,14 @@ public:
 
   void set(int index, const T &val) {
     if (orig == NULL) {
-      throw_java_exception(env, "java/lang/NullPointerException", "jobjectArray pointer is NULL");
+      throw_java_exception(env, NPE_CLASS, "jobjectArray pointer is NULL");
     }
     env->SetObjectArrayElement(orig, index, val);
     check_java_exception(env);
+  }
+
+  jobjectArray wrapped() {
+    return orig;
   }
 };
 
@@ -547,7 +569,7 @@ public:
 
   native_jstring &get(int index) const {
     if (arr.is_null()) {
-      throw_java_exception(env, "java/lang/NullPointerException", "jstringArray pointer is NULL");
+      throw_java_exception(env, cudf::jni::NPE_CLASS, "jstringArray pointer is NULL");
     }
     init_cache();
     return cache[index];
@@ -582,202 +604,10 @@ public:
 };
 
 /**
- * Wrapper for gdf_column. This class owns the underlying gdf_column and
- * release() should be called before assuming ownership of the underlying
- * gdf_column.
- */
-class gdf_column_wrapper {
-private:
-  gdf_column *col = nullptr;
-
-public:
-  gdf_column_wrapper(cudf::size_type size, gdf_dtype dtype, bool has_validity_buffer) {
-    if (dtype == GDF_STRING || dtype == GDF_STRING_CATEGORY) {
-      throw std::logic_error("TYPES STRING AND STRING_CATEGORY ARE NOT SUPPORTED WITH THIS CONSTRUCTOR");
-    }
-    col = new gdf_column();
-    gdf_column_view(col, nullptr, nullptr, size, dtype);
-
-    if (size > 0) {
-      RMM_TRY(RMM_ALLOC(&col->data, size * cudf::size_of(col->dtype), 0));
-      if (has_validity_buffer) {
-        RMM_TRY(RMM_ALLOC(&col->valid, gdf_valid_allocation_size(size), 0));
-      }
-    }
-  }
-
-  /**
-   * Create a new column wrapper optionally with an empty string category columns.
-   * If empty_cat is true and the input dtype is a GDF_STRING_CATEGORY, the memory for the
-   * offsets array will be allocated, but the NVCategory pointer will not be allocated.
-   *
-   * This will allow you to set it to whatever you want when the time is right.
-   */
-  gdf_column_wrapper(cudf::size_type size, gdf_dtype dtype, bool has_validity_buffer, bool empty_cat) {
-    if (dtype == GDF_STRING) {
-      throw std::logic_error("STRING IS NOT SUPPORTED WITH THIS CONSTRUCTOR");
-    }
-    if (!empty_cat && dtype == GDF_STRING_CATEGORY) {
-      throw std::logic_error("STRING_CATEGORY WAS NOT ENABLED FOR THIS CONSTRUCTOR");
-    }
-    col = new gdf_column();
-    gdf_column_view(col, nullptr, nullptr, size, dtype);
-
-    if (size > 0) {
-      if (dtype == GDF_STRING_CATEGORY) {
-        // allocate offsets which is 1 larger than the number of entries
-        // start_offset = data[i], end_offset = data[i + 1]
-        RMM_TRY(RMM_ALLOC(&col->data, (size + 1) * cudf::size_of(GDF_INT32), 0));
-      } else {
-        RMM_TRY(RMM_ALLOC(&col->data, size * cudf::size_of(col->dtype), 0));
-      }
-      if (has_validity_buffer) {
-        RMM_TRY(RMM_ALLOC(&col->valid, gdf_valid_allocation_size(size), 0));
-      }
-    }
-  }
-
-
-  gdf_column_wrapper(cudf::size_type size, gdf_dtype dtype, int null_count, void *data,
-                     cudf::valid_type *valid, void *cat = NULL) {
-    col = new gdf_column();
-    gdf_column_view(col, data, valid, size, dtype);
-    col->dtype_info.category = cat;
-    col->null_count = null_count;
-  }
-
-  ~gdf_column_wrapper() {
-    if (col) {
-      // Purposely ignore the result, we don't want to throw in a destructor
-      gdf_column_free(col);
-      delete col;
-    }
-  }
-
-  gdf_column_wrapper(gdf_column_wrapper const &) = delete;
-
-  gdf_column_wrapper &operator=(gdf_column_wrapper const &) = delete;
-
-  gdf_column_wrapper(gdf_column_wrapper &&other) : col(other.col) { other.col = nullptr; }
-
-  gdf_column *operator->() const noexcept { return col; }
-
-  gdf_column *get() const noexcept { return col; }
-
-  gdf_column *release() noexcept {
-    auto temp = col;
-    col = nullptr;
-    return temp;
-  }
-};
-
-/**
- * Class to create tables used in outputs of operations. Please read the
- * constructor comments
- */
-class output_table {
-private:
-  std::vector<cudf::jni::gdf_column_wrapper> wrappers;
-  std::vector<gdf_column *> cols;
-  std::unique_ptr<cudf::table> cudf_table;
-  JNIEnv *const env;
-
-public:
-  /**
-   * @brief This constructs a vector of cudf::jni::gdf_column_wrapper using
-   * vector of gdf_columns from the provided cudf::table. The type and validity
-   * vectors of cudf::jni::gdf_column_wrappers are based on the input_cols and
-   * shouldn't be used with operations that expect the output table to be
-   * different in type from the input e.g. joins have more columns than either
-   * one of the input tables and they can also have nulls even if the input
-   * tables don't.
-   *
-   * @param in env - JNIEnv
-   * @param in input_table - cudf::table on which to base the output table
-   */
-  output_table(JNIEnv *env, cudf::table *const input_table) : env(env) {
-    gdf_column **const input_cols = input_table->begin();
-    cudf::size_type const size = input_table->num_rows();
-    for (int i = 0; i < input_table->num_columns(); ++i) {
-      wrappers.emplace_back(size, input_cols[i]->dtype, input_cols[i]->valid != NULL);
-    }
-  }
-
-  /**
-   * @brief This constructs a vector of cudf::jni::gdf_column_wrapper using
-   * vector of gdf_columns from the provided cudf::table. The type and validity
-   * vectors of cudf::jni::gdf_column_wrappers are based on the input_cols and
-   * shouldn't be used with operations that expect the output table to be
-   * different in type from the input e.g. joins have more columns than either
-   * one of the input tables and they can also have nulls even if the input
-   * tables don't.
-   *
-   * If empty_cat is true STRING_CATEGORY columns will be allocated, but the
-   * NVCategory pointer in them will not be set.  This is so the caller can decide
-   * what it should be set to.
-   *
-   * @param in env - JNIEnv
-   * @param in input_table - cudf::table on which to base the output table
-   * @param in empty_cat - true if STRING_CATEGORY columns should be supported, else false
-   */
-
-  output_table(JNIEnv *env, cudf::table *const input_table, bool empty_cat) : env(env) {
-    gdf_column **const input_cols = input_table->begin();
-    cudf::size_type const size = input_table->num_rows();
-    for (int i = 0; i < input_table->num_columns(); ++i) {
-      wrappers.emplace_back(size, input_cols[i]->dtype, input_cols[i]->valid != NULL, empty_cat);
-    }
-  }
-
-  /**
-   * @brief return a vector of gdf_column*. This object still owns the
-   * gdf_columns and will release them upon destruction
-   */
-  std::vector<gdf_column *> get_gdf_columns() {
-    if (cols.empty()) {
-      cols.resize(wrappers.size());
-
-      for (int i = 0; i < wrappers.size(); i++) {
-        cols[i] = wrappers[i].get();
-      }
-    }
-    return cols;
-  }
-
-  /**
-   * Returns a pointer to cudf::table
-   * Note: The cudf::table pointer will be released when output_table goes out
-   * of scope
-   */
-  cudf::table *get_cudf_table() {
-    get_gdf_columns();
-    if (!cudf_table) {
-      cudf_table.reset(new cudf::table(cols.data(), cols.size()));
-    }
-    return cudf_table.get();
-  }
-
-  /**
-   * This method return a jlongArray with the addresses of gdf_columns.
-   * Note: The caller owns the gdf_columns subsequently
-   */
-  jlongArray get_native_handles_and_release() {
-    get_gdf_columns();
-    cudf::jni::native_jlongArray native_handles(env, reinterpret_cast<jlong *>(cols.data()),
-                                                cols.size());
-    // release ownership so cudf::gdf_column_wrapper doesn't delete the columns
-    for (int i = 0; i < wrappers.size(); i++) {
-      wrappers[i].release();
-    }
-    return native_handles.get_jArray();
-  }
-};
-
-/**
  * @brief create a cuda exception from a given cudaError_t
  */
 inline jthrowable cuda_exception(JNIEnv *const env, cudaError_t status, jthrowable cause = NULL) {
-  jclass ex_class = env->FindClass("ai/rapids/cudf/CudaException");
+  jclass ex_class = env->FindClass(cudf::jni::CUDA_ERROR_CLASS);
   if (ex_class == NULL) {
     return NULL;
   }
@@ -788,29 +618,6 @@ inline jthrowable cuda_exception(JNIEnv *const env, cudaError_t status, jthrowab
   }
 
   jstring msg = env->NewStringUTF(cudaGetErrorString(status));
-  if (msg == NULL) {
-    return NULL;
-  }
-
-  jobject ret = env->NewObject(ex_class, ctor_id, msg, cause);
-  return (jthrowable)ret;
-}
-
-/**
- * @brief create a cudf exception from a given gdf_error
- */
-inline jthrowable cudf_exception(JNIEnv *const env, gdf_error status, jthrowable cause = NULL) {
-  jclass ex_class = env->FindClass("ai/rapids/cudf/CudfException");
-  if (ex_class == NULL) {
-    return NULL;
-  }
-  jmethodID ctor_id =
-      env->GetMethodID(ex_class, "<init>", "(Ljava/lang/String;Ljava/lang/Throwable;)V");
-  if (ctor_id == NULL) {
-    return NULL;
-  }
-
-  jstring msg = env->NewStringUTF(gdf_error_get_name(status));
   if (msg == NULL) {
     return NULL;
   }
@@ -929,19 +736,31 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
   }
 }
 
-inline void jni_cudf_check(JNIEnv *const env, gdf_error gdf_status) {
-  if (GDF_SUCCESS != gdf_status) {
-    jthrowable cuda_e = NULL;
-    if (GDF_CUDA_ERROR == gdf_status) {
-      cuda_e = cuda_exception(env, cudaGetLastError());
-    }
-    jthrowable jt = cudf_exception(env, gdf_status, cuda_e);
-    if (jt != NULL) {
-      env->Throw(jt);
-      throw jni_exception("CUDF ERROR");
-    }
-  }
-}
+jobject contiguous_table_from(JNIEnv* env, cudf::experimental::contiguous_split_result & split);
+
+native_jobjectArray<jobject> contiguous_table_array(JNIEnv* env, jsize length);
+
+std::unique_ptr<cudf::experimental::aggregation> map_jni_aggregation(jint op);
+
+/**
+ * Allocate a HostMemoryBuffer
+ */
+jobject allocate_host_buffer(JNIEnv* env, jlong amount, jboolean prefer_pinned);
+
+/**
+ * Get the address of a HostMemoryBuffer
+ */
+jlong get_host_buffer_address(JNIEnv* env, jobject buffer);
+
+/**
+ * Get the length of a HostMemoryBuffer
+ */
+jlong get_host_buffer_length(JNIEnv* env, jobject buffer);
+
+// Get the JNI environment, attaching the current thread to the JVM if necessary. If the thread
+// needs to be attached, the thread will automatically detach when the thread terminates.
+JNIEnv* get_jni_env(JavaVM* jvm);
+
 } // namespace jni
 } // namespace cudf
 
@@ -953,6 +772,15 @@ inline void jni_cudf_check(JNIEnv *const env, gdf_error gdf_status) {
     }                                                                                              \
     env->ThrowNew(ex_class, message);                                                              \
     return ret_val;                                                                                \
+  }
+
+// Throw a new exception only if one is not pending then always return with the specified value
+#define JNI_CHECK_THROW_NEW(env, class_name, message, ret_val)                                     \
+  {                                                                                                \
+    if (env->ExceptionOccurred()) {                                                                \
+      return ret_val;                                                                              \
+    }                                                                                              \
+    JNI_THROW_NEW(env, class_name, message, ret_val)                                               \
   }
 
 #define JNI_CUDA_TRY(env, ret_val, call)                                                           \
@@ -977,25 +805,11 @@ inline void jni_cudf_check(JNIEnv *const env, gdf_error gdf_status) {
       if (RMM_ERROR_CUDA_ERROR == internal_rmmStatus) {                                            \
         cuda_e = cudf::jni::cuda_exception(env, cudaGetLastError());                               \
       }                                                                                            \
-      jthrowable jt = cudf::jni::rmmException(env, internal_rmmStatus, cuda_e);                    \
-      if (jt != NULL) {                                                                            \
-        env->Throw(jt);                                                                            \
-      }                                                                                            \
-      return ret_val;                                                                              \
-    }                                                                                              \
-  }
-
-#define JNI_GDF_TRY(env, ret_val, call)                                                            \
-  {                                                                                                \
-    gdf_error internal_gdf_status = (call);                                                        \
-    if (GDF_SUCCESS != internal_gdf_status) {                                                      \
-      jthrowable cuda_e = NULL;                                                                    \
-      if (GDF_CUDA_ERROR == internal_gdf_status) {                                                 \
-        cuda_e = cudf::jni::cuda_exception(env, cudaGetLastError());                               \
-      }                                                                                            \
-      jthrowable jt = cudf::jni::cudf_exception(env, internal_gdf_status, cuda_e);                 \
-      if (jt != NULL) {                                                                            \
-        env->Throw(jt);                                                                            \
+      if (!env->ExceptionCheck()) {                                                                \
+        jthrowable jt = cudf::jni::rmmException(env, internal_rmmStatus, cuda_e);                  \
+        if (jt != NULL) {                                                                          \
+          env->Throw(jt);                                                                          \
+        }                                                                                          \
       }                                                                                            \
       return ret_val;                                                                              \
     }                                                                                              \
@@ -1003,15 +817,15 @@ inline void jni_cudf_check(JNIEnv *const env, gdf_error gdf_status) {
 
 #define JNI_NULL_CHECK(env, obj, error_msg, ret_val)                                               \
   {                                                                                                \
-    if (obj == 0) {                                                                                \
-      JNI_THROW_NEW(env, "java/lang/NullPointerException", error_msg, ret_val);                    \
+    if ((obj) == 0) {                                                                              \
+      JNI_THROW_NEW(env, cudf::jni::NPE_CLASS, error_msg, ret_val);                                \
     }                                                                                              \
   }
 
 #define JNI_ARG_CHECK(env, obj, error_msg, ret_val)                                                \
   {                                                                                                \
-    if (!obj) {                                                                                    \
-      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", error_msg, ret_val);                \
+    if (!(obj)) {                                                                                  \
+      JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, error_msg, ret_val);                        \
     }                                                                                              \
   }
 
@@ -1024,16 +838,9 @@ inline void jni_cudf_check(JNIEnv *const env, gdf_error gdf_status) {
 
 #define CATCH_STD(env, ret_val)                                                                    \
   catch (const std::bad_alloc &e) {                                                                \
-    JNI_THROW_NEW(env, "java/lang/OutOfMemoryError", "Could not allocate native memory", ret_val); \
-  }                                                                                                \
-  catch (const cudf::jni::jni_exception &e) {                                                      \
-    /* indicates that a java exception happened, just return so java can throw                     \
-     * it. */                                                                                      \
-    return ret_val;                                                                                \
-  }                                                                                                \
-  catch (const cudf::cuda_error &e) {                                                              \
-    JNI_THROW_NEW(env, "ai/rapids/cudf/CudaException", e.what(), ret_val);                         \
+    JNI_CHECK_THROW_NEW(env, cudf::jni::OOM_CLASS, "Could not allocate native memory", ret_val);   \
   }                                                                                                \
   catch (const std::exception &e) {                                                                \
-    JNI_THROW_NEW(env, "ai/rapids/cudf/CudfException", e.what(), ret_val);                         \
+    /* If jni_exception caught then a Java exception is pending and this will not overwrite it. */ \
+    JNI_CHECK_THROW_NEW(env, cudf::jni::CUDF_ERROR_CLASS, e.what(), ret_val);                      \
   }

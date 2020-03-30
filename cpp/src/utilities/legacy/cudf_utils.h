@@ -12,14 +12,6 @@
 #include <vector>
 #include <cassert>
 
-#ifdef __CUDACC__
-#define CUDA_HOST_DEVICE_CALLABLE __host__ __device__ inline
-#define CUDA_DEVICE_CALLABLE __device__ inline
-#else
-#define CUDA_HOST_DEVICE_CALLABLE inline
-#define CUDA_DEVICE_CALLABLE inline
-#endif
-
 /**---------------------------------------------------------------------------*
  * @brief Sets a @ref gdf_column 's (uninitialized) null_count value by
  * counting the zeros in its validity indicator bits (if it has them).
@@ -102,14 +94,6 @@ inline gdf_error soa_col_info(gdf_column const* const* cols, size_t ncols, void*
 	return GDF_SUCCESS;
 }
 
-
-inline bool isPtrManaged(cudaPointerAttributes attr) {
-#if CUDART_VERSION >= 10000
-    return (attr.type == cudaMemoryTypeManaged);
-#else
-    return attr.isManaged;
-#endif
-}
 
 inline bool isDeviceType(cudaPointerAttributes attrib) {
 #if CUDART_VERSION >= 10000

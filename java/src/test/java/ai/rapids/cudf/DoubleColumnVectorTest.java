@@ -18,6 +18,7 @@
 
 package ai.rapids.cudf;
 
+import ai.rapids.cudf.HostColumnVector.Builder;
 import org.junit.jupiter.api.Test;
 
 import java.util.Random;
@@ -39,7 +40,7 @@ public class DoubleColumnVectorTest extends CudfTestBase {
 
   @Test
   public void testArrayAllocation() {
-    try (ColumnVector doubleColumnVector = ColumnVector.fromDoubles(2.1, 3.02, 5.003)) {
+    try (HostColumnVector doubleColumnVector = HostColumnVector.fromDoubles(2.1, 3.02, 5.003)) {
       assertFalse(doubleColumnVector.hasNulls());
       assertEquals(doubleColumnVector.getDouble(0), 2.1, 0.01);
       assertEquals(doubleColumnVector.getDouble(1), 3.02, 0.01);
@@ -49,7 +50,7 @@ public class DoubleColumnVectorTest extends CudfTestBase {
 
   @Test
   public void testUpperIndexOutOfBoundsException() {
-    try (ColumnVector doubleColumnVector = ColumnVector.fromDoubles(2.1, 3.02, 5.003)) {
+    try (HostColumnVector doubleColumnVector = HostColumnVector.fromDoubles(2.1, 3.02, 5.003)) {
       assertThrows(AssertionError.class, () -> doubleColumnVector.getDouble(3));
       assertFalse(doubleColumnVector.hasNulls());
     }
@@ -57,7 +58,7 @@ public class DoubleColumnVectorTest extends CudfTestBase {
 
   @Test
   public void testLowerIndexOutOfBoundsException() {
-    try (ColumnVector doubleColumnVector = ColumnVector.fromDoubles(2.1, 3.02, 5.003)) {
+    try (HostColumnVector doubleColumnVector = HostColumnVector.fromDoubles(2.1, 3.02, 5.003)) {
       assertFalse(doubleColumnVector.hasNulls());
       assertThrows(AssertionError.class, () -> doubleColumnVector.getDouble(-1));
     }
@@ -65,8 +66,8 @@ public class DoubleColumnVectorTest extends CudfTestBase {
 
   @Test
   public void testAddingNullValues() {
-    try (ColumnVector cv =
-             ColumnVector.fromBoxedDoubles(2.0, 3.0, 4.0, 5.0, 6.0, 7.0, null, null)) {
+    try (HostColumnVector cv =
+             HostColumnVector.fromBoxedDoubles(2.0, 3.0, 4.0, 5.0, 6.0, 7.0, null, null)) {
       assertTrue(cv.hasNulls());
       assertEquals(2, cv.getNullCount());
       for (int i = 0; i < 6; i++) {
@@ -79,7 +80,7 @@ public class DoubleColumnVectorTest extends CudfTestBase {
 
   @Test
   public void testOverrunningTheBuffer() {
-    try (ColumnVector.Builder builder = ColumnVector.builder(DType.FLOAT64, 3)) {
+    try (Builder builder = HostColumnVector.builder(DType.FLOAT64, 3)) {
       assertThrows(AssertionError.class,
           () -> builder.append(2.1).appendNull().appendArray(new double[]{5.003, 4.0}).build());
     }
@@ -92,8 +93,8 @@ public class DoubleColumnVectorTest extends CudfTestBase {
       for (int dstPrefilledSize = 0; dstPrefilledSize < dstSize; dstPrefilledSize++) {
         final int srcSize = dstSize - dstPrefilledSize;
         for (int sizeOfDataNotToAdd = 0; sizeOfDataNotToAdd <= dstPrefilledSize; sizeOfDataNotToAdd++) {
-          try (ColumnVector.Builder dst = ColumnVector.builder(DType.FLOAT64, dstSize);
-               ColumnVector src = ColumnVector.buildOnHost(DType.FLOAT64, srcSize, (b) -> {
+          try (Builder dst = HostColumnVector.builder(DType.FLOAT64, dstSize);
+               HostColumnVector src = HostColumnVector.build(DType.FLOAT64, srcSize, (b) -> {
                  for (int i = 0; i < srcSize; i++) {
                    if (random.nextBoolean()) {
                      b.appendNull();
@@ -102,8 +103,7 @@ public class DoubleColumnVectorTest extends CudfTestBase {
                    }
                  }
                });
-               ColumnVector.Builder gtBuilder = ColumnVector.builder(DType.FLOAT64,
-                   dstPrefilledSize)) {
+               Builder gtBuilder = HostColumnVector.builder(DType.FLOAT64, dstPrefilledSize)) {
             assertEquals(dstSize, srcSize + dstPrefilledSize);
             //add the first half of the prefilled list
             for (int i = 0; i < dstPrefilledSize - sizeOfDataNotToAdd; i++) {
@@ -118,8 +118,8 @@ public class DoubleColumnVectorTest extends CudfTestBase {
             }
             // append the src vector
             dst.append(src);
-            try (ColumnVector dstVector = dst.buildOnHost();
-                 ColumnVector gt = gtBuilder.buildOnHost()) {
+            try (HostColumnVector dstVector = dst.build();
+                 HostColumnVector gt = gtBuilder.build()) {
               for (int i = 0; i < dstPrefilledSize - sizeOfDataNotToAdd; i++) {
                 assertEquals(gt.isNull(i), dstVector.isNull(i));
                 if (!gt.isNull(i)) {

@@ -1155,10 +1155,12 @@ inflate_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int p
         {
             int hdr_len = parse_gzip_header(p, src_size);
             src_size = (src_size >= 8) ? src_size - 8 : 0;  // ignore footer
-            if (hdr_len >= 0)
+            if (hdr_len >= 0) {
                 p += hdr_len;
-            else
+                src_size -= hdr_len;
+            } else {
                 state->err = hdr_len;
+            }
         }
         // Initialize shared state
         state->out = (uint8_t *)inputs[z].dstDevice;
@@ -1236,11 +1238,11 @@ inflate_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int p
         {
             copy_stored(state, t);
         }
-        __syncthreads();
         if (state->blast)
             break;
+        __syncthreads();
     }
-
+    __syncthreads();
     if (!t)
     {
         if (state->err == 0 && state->cur + ((state->bitpos + 7) >> 3) > state->end)

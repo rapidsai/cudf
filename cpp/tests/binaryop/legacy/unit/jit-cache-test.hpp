@@ -16,16 +16,22 @@
 
 #pragma once
 
+#include <boost/filesystem.hpp>
+
+#include <gmock/gmock.h>
+#include <gtest/gtest.h>
 #include <tests/utilities/legacy/column_wrapper.cuh>
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/cudf_gtest.hpp>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/cudf_test_utils.cuh>
+#include <cudf/types.hpp>
+#include <cudf/utilities/legacy/wrapper_types.hpp>
 
 #include <jit/cache.h>
 #include <cudf/cudf.h>
 #include <ftw.h>
 
 
-struct JitCacheTest : public cudf::test::BaseFixture
+struct JitCacheTest : public GdfTest
                     , public cudf::jit::cudfJitCache {
     JitCacheTest() : grid(1), block(1) {
     }
@@ -44,13 +50,8 @@ struct JitCacheTest : public cudf::test::BaseFixture
 
     void purgeFileCache() {
         #if defined(JITIFY_USE_CACHE)
-            std::string cachedir = cudf::jit::getCacheDir();
-            nftw(cachedir.c_str(), rm_files, 10, FTW_DEPTH|FTW_MOUNT|FTW_PHYS);
+            boost::filesystem::remove_all(cudf::jit::getCacheDir());
         #endif
-    }
-
-    static int rm_files(const char *pathname, const struct stat *sbuf, int type, struct FTW *ftwb) {
-        return remove(pathname);
     }
 
     void warmUp() {

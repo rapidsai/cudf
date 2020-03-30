@@ -25,14 +25,22 @@ public enum UnaryOp {
   ARCSIN(3),
   ARCCOS(4),
   ARCTAN(5),
-  EXP(6),
-  LOG(7),
-  SQRT(8),
-  CEIL(9),
-  FLOOR(10),
-  ABS(11),
-  BIT_INVERT(12),
-  NOT(13);
+  SINH(6),
+  COSH(7),
+  TANH(8),
+  ARCSINH(9),
+  ARCCOSH(10),
+  ARCTANH(11),
+  EXP(12),
+  LOG(13),
+  SQRT(14),
+  CBRT(15),
+  CEIL(16),
+  FLOOR(17),
+  ABS(18),
+  RINT(19),
+  BIT_INVERT(20),
+  NOT(21);
 
   private static final UnaryOp[] OPS = UnaryOp.values();
   final int nativeId;

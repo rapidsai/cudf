@@ -107,15 +107,17 @@ TEST_F(TestConvert, ToFloat)
         float expected[] = { 1234.0, 0,
             -876.0, 543.2, -0.12, 0.25, -0.002,
             0, nanval, 0, 123.0, 456.0, -178000.0,
-            -122.3364486694336, infval };
+            -122.33645, infval };
         for( int idx = 0; idx < (int) hstrs.size(); ++idx )
         {
             float fval1 = results[idx];
             float fval2 = expected[idx];
             if( std::isnan(fval1) )
                 EXPECT_TRUE( std::isnan(fval2) );
+            else if( std::isinf(fval1) )
+                EXPECT_TRUE( std::isinf(fval2) );
             else
-                EXPECT_EQ(fval1,fval2);
+                EXPECT_FLOAT_EQ(fval1,fval2);
         }
     }
 
@@ -127,15 +129,17 @@ TEST_F(TestConvert, ToFloat)
         double expected[] = { 1234.0, 0,
             -876.0, 543.2, -0.12, 0.25, -0.002,
             0, nanval, 0, 123.0, 456.0, -178000.0,
-            -122.3364478212345, infval };
+            -122.33644782123469, infval };
         for( int idx = 0; idx < (int) hstrs.size(); ++idx )
         {
             double fval1 = results[idx];
             double fval2 = expected[idx];
             if( std::isnan(fval1) )
                 EXPECT_TRUE( std::isnan(fval2) );
+            else if( std::isinf(fval1) )
+                EXPECT_TRUE( std::isinf(fval2) );
             else
-                EXPECT_EQ(fval1,fval2);
+                EXPECT_NEAR(fval1,fval2,1e-10);
         }
     }
 

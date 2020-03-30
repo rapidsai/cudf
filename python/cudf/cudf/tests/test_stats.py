@@ -237,6 +237,10 @@ def test_kurtosis(data, null_flag):
     expected = pdata.kurtosis()
     np.testing.assert_array_almost_equal(got, expected)
 
+    got = data.kurt()
+    expected = pdata.kurt()
+    np.testing.assert_array_almost_equal(got, expected)
+
 
 @pytest.mark.parametrize(
     "data",
@@ -372,3 +376,13 @@ def test_corr1d(data1, data2):
     got = gs1.corr(gs2)
     expected = ps1.corr(ps2)
     np.testing.assert_approx_equal(got, expected, significant=8)
+
+
+def test_df_corr():
+    from cudf.tests import utils
+
+    gdf = randomdata(100, {str(x): float for x in range(50)})
+    pdf = gdf.to_pandas()
+    got = gdf.corr()
+    expected = pdf.corr()
+    utils.assert_eq(got, expected)

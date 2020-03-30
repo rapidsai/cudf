@@ -63,6 +63,25 @@ constexpr auto types_to_ids() {
 }
 }  // namespace detail
 
+
+/**
+ * @brief Type list for all integral types.
+ * 
+*/
+using IntegralTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t>;
+
+/**
+ * @brief Provides a list of all floating point types supported in libcudf for
+ * use in a GTest typed test.
+ *
+ * Example:
+ * ```
+ * // Invokes all typed fixture tests for all floating point types in libcudf
+ * TYPED_TEST_CASE(MyTypedFixture, cudf::test::FloatingPointTypes);
+ * ```
+ */
+using FloatingPointTypes = cudf::test::Types<float, double>;
+
 /**---------------------------------------------------------------------------*
  * @brief Provides a list of all numeric types supported in libcudf for use in a
  * GTest typed test.
@@ -170,14 +189,13 @@ static constexpr std::array<cudf::type_id, 5> timestamp_type_ids{
  * This can be used for iterating over `type_id`s for custom testing, or used in
  * GTest value-parameterized tests.
  *---------------------------------------------------------------------------**/
-static constexpr std::array<cudf::type_id, 8> non_numeric_type_ids{
+static constexpr std::array<cudf::type_id, 7> non_numeric_type_ids{
     cudf::EMPTY,
     cudf::TIMESTAMP_DAYS,
     cudf::TIMESTAMP_SECONDS,
     cudf::TIMESTAMP_MILLISECONDS,
     cudf::TIMESTAMP_MICROSECONDS,
     cudf::TIMESTAMP_NANOSECONDS,
-    cudf::CATEGORY,
     cudf::STRING};
 
 /**---------------------------------------------------------------------------*
@@ -186,9 +204,8 @@ static constexpr std::array<cudf::type_id, 8> non_numeric_type_ids{
  * This can be used for iterating over `type_id`s for custom testing, or used in
  * GTest value-parameterized tests.
  *---------------------------------------------------------------------------**/
-static constexpr std::array<cudf::type_id, 3> non_fixed_width_type_ids{
+static constexpr std::array<cudf::type_id, 2> non_fixed_width_type_ids{
     cudf::EMPTY,    
-    cudf::CATEGORY,
     cudf::STRING};
 
 }  // namespace test

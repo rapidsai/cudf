@@ -54,7 +54,7 @@ void copy_and_replace_nulls(
     gpu_copy_and_replace_nulls << <gridSize, blockSize, 0, stream >> > (
         data, mask, size, results, identity);
 
-    CUDA_CHECK_LAST();
+    CHECK_CUDA(stream);
 }
 
 template <typename T, typename Op>
@@ -115,7 +115,7 @@ struct Scan {
     {
         cub::DeviceScan::ExclusiveScan(temp_storage, temp_storage_bytes,
             input, output, Op{}, Op::template identity<T>(), size, stream);
-        CUDA_CHECK_LAST();
+        CHECK_CUDA(stream);
     }
 
     static
@@ -124,7 +124,7 @@ struct Scan {
     {
         cub::DeviceScan::InclusiveScan(temp_storage, temp_storage_bytes,
             input, output, Op{}, size, stream);
-        CUDA_CHECK_LAST();
+        CHECK_CUDA(stream);
     }
 };
 

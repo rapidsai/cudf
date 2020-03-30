@@ -98,9 +98,9 @@ constexpr int32_t to_clockrate(type_id timestamp_type_id) {
   switch (timestamp_type_id) {
     case type_id::TIMESTAMP_SECONDS:
       return 1;
-    case type_id::TIMESTAMP_MICROSECONDS:
-      return 1000;
     case type_id::TIMESTAMP_MILLISECONDS:
+      return 1000;
+    case type_id::TIMESTAMP_MICROSECONDS:
       return 1000000;
     case type_id::TIMESTAMP_NANOSECONDS:
       return 1000000000;
@@ -183,16 +183,23 @@ class metadata {
    *
    * @return List of stripe info and total number of selected rows
    **/
-  auto select_stripes(int stripe, int &row_start, int &row_count) {
+  auto select_stripes(int stripe, int max_stripe_count, int &row_start, int &row_count) {
     std::vector<OrcStripeInfo> selection;
 
     if (stripe != -1) {
       CUDF_EXPECTS(stripe < get_num_stripes(), "Non-existent stripe");
-      selection.emplace_back(&ff.stripes[stripe], nullptr);
+      size_t stripe_rows = 0;
+      do {
+        if (row_count >= 0 && stripe_rows >= (size_t)row_count) {
+          break;
+        }
+        selection.emplace_back(&ff.stripes[stripe], nullptr);
+        stripe_rows += ff.stripes[stripe].numberOfRows;
+      } while (--max_stripe_count > 0 && ++stripe < get_num_stripes());
       if (row_count < 0) {
-        row_count = ff.stripes[stripe].numberOfRows;
+        row_count = (int)stripe_rows;
       } else {
-        row_count = std::min(row_count, (int)ff.stripes[stripe].numberOfRows);
+        row_count = std::min(row_count, (int)stripe_rows);
       }
     } else {
       row_start = std::max(row_start, 0);
@@ -602,13 +609,14 @@ reader::impl::impl(std::unique_ptr<datasource> source,
   _decimals_as_int_scale = options.forced_decimals_scale;
 }
 
-std::unique_ptr<table> reader::impl::read(int skip_rows, int num_rows,
-                                          int stripe, cudaStream_t stream) {
+table_with_metadata reader::impl::read(int skip_rows, int num_rows, int stripe,
+                                       int max_stripe_count, cudaStream_t stream) {
   std::vector<std::unique_ptr<column>> out_columns;
+  table_metadata out_metadata;
 
   // Select only stripes required (aka row groups)
   const auto selected_stripes =
-      _metadata->select_stripes(stripe, skip_rows, num_rows);
+      _metadata->select_stripes(stripe, max_stripe_count, skip_rows, num_rows);
 
   // Association between each ORC column and its gdf_column
   std::vector<int32_t> orc_col_map(_metadata->get_num_columns(), -1);
@@ -625,7 +633,12 @@ std::unique_ptr<table> reader::impl::read(int skip_rows, int num_rows,
     orc_col_map[col] = column_types.size() - 1;
   }
 
-  if (num_rows > 0 && selected_stripes.size() != 0) {
+  // If no rows or stripes to read, return empty columns
+  if (num_rows <= 0 || selected_stripes.size() == 0) {
+    std::transform(column_types.cbegin(), column_types.cend(),
+                   std::back_inserter(out_columns),
+                   [](auto const& dtype) { return make_empty_column(dtype); });
+  } else {
     const auto num_columns = _selected_columns.size();
     const auto num_chunks = selected_stripes.size() * num_columns;
     hostdevice_vector<gpu::ColumnDesc> chunks(num_chunks, stream);
@@ -754,7 +767,14 @@ std::unique_ptr<table> reader::impl::read(int skip_rows, int num_rows,
 
       std::vector<column_buffer> out_buffers;
       for (size_t i = 0; i < column_types.size(); ++i) {
-        out_buffers.emplace_back(column_types[i], num_rows, stream, _mr);
+        bool is_nullable = false;
+        for (size_t j = 0; j < selected_stripes.size(); ++j) {
+          if (chunks[j * num_columns + i].strm_len[gpu::CI_PRESENT] != 0) {
+            is_nullable = true;
+            break;
+          }
+        }
+        out_buffers.emplace_back(column_types[i], num_rows, is_nullable, stream, _mr);
       }
 
       decode_stream_data(
@@ -768,7 +788,17 @@ std::unique_ptr<table> reader::impl::read(int skip_rows, int num_rows,
     }
   }
 
-  return std::make_unique<table>(std::move(out_columns));
+  // Return column names (must match order of returned columns)
+  out_metadata.column_names.resize(_selected_columns.size());
+  for (size_t i = 0; i < _selected_columns.size(); i++) {
+    out_metadata.column_names[i] = _metadata->ff.GetColumnName(_selected_columns[i]);
+  }
+  // Return user metadata
+  for (const auto& kv : _metadata->ff.metadata) {
+    out_metadata.user_data.insert({kv.name, kv.value});
+  }
+
+  return { std::make_unique<table>(std::move(out_columns)), std::move(out_metadata) };
 }
 
 // Forward to implementation
@@ -793,21 +823,21 @@ reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
 reader::~reader() = default;
 
 // Forward to implementation
-std::unique_ptr<table> reader::read_all(cudaStream_t stream) {
-  return _impl->read(0, -1, -1, stream);
+table_with_metadata reader::read_all(cudaStream_t stream) {
+  return _impl->read(0, -1, -1, -1, stream);
 }
 
 // Forward to implementation
-std::unique_ptr<table> reader::read_stripe(size_type stripe,
-                                           cudaStream_t stream) {
-  return _impl->read(0, -1, stripe, stream);
+table_with_metadata reader::read_stripe(size_type stripe, size_type stripe_count,
+                                        cudaStream_t stream) {
+  return _impl->read(0, -1, stripe, stripe_count, stream);
 }
 
 // Forward to implementation
-std::unique_ptr<table> reader::read_rows(size_type skip_rows,
-                                         size_type num_rows,
-                                         cudaStream_t stream) {
-  return _impl->read(skip_rows, (num_rows != 0) ? num_rows : -1, -1, stream);
+table_with_metadata reader::read_rows(size_type skip_rows,
+                                      size_type num_rows,
+                                      cudaStream_t stream) {
+  return _impl->read(skip_rows, (num_rows != 0) ? num_rows : -1, -1, -1, stream);
 }
 
 }  // namespace orc

@@ -141,7 +141,7 @@ void trivial_full_join(
                               right_result->dtype_info,
                               right_result->col_name);
 
-    CUDA_CHECK_LAST();
+    CHECK_CUDA(0);
 }
 
 /* --------------------------------------------------------------------------*/
@@ -405,7 +405,7 @@ cudf::table construct_join_output_df(
       CUDF_EXPECTS(update_err == GDF_SUCCESS, "nvcategory_gather_table error");
     }
 
-    CHECK_STREAM(0);
+    CHECK_CUDA(0);
     nvtx::range_pop();
     return result;
 }
@@ -617,7 +617,7 @@ cudf::table join_call_compute_df(
       delete temp_columns_to_free[column_to_free];
   }
 
-  CHECK_STREAM(0);
+  CHECK_CUDA(0);
     
   return result;
 }

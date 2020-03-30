@@ -21,25 +21,20 @@
 #include <set>
 #include <map>
 #include <vector>
-#include <cudf/types.h>
-
-/**
-@brief Parse and Transform a piece of PTX code that contains the implementation 
-of a `__device__` function into a CUDA `__device__` `__inline__` function.
-
-@param `src` The input PTX code.
-
-@param `function_name` The User defined function that the output CUDA function
-will have.
-
-@param `output_arg_type` The output type of the PTX function, e.g. "int", "int64_t"
-
-@return The output CUDA `__device__` `__inline__` function
-*/
 
 namespace cudf {
 namespace jit {
 
+/**
+ * @brief Parse and transform a piece of PTX code that contains the implementation 
+ * of a `__device__` function into a CUDA `__device__` `__inline__` function.
+ * 
+ * @param `src` The input PTX code.
+ * @param `function_name` The User defined function that the output CUDA function
+ * will have.
+ * @param `output_arg_type` The output type of the PTX function, e.g. "int", "int64_t"
+ * @return The output CUDA `__device__` `__inline__` function
+*/
 class ptx_parser {
 
 private:

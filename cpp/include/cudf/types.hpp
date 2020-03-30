@@ -16,14 +16,12 @@
 
 #pragma once
 
-#ifndef CUDA_HOST_DEVICE_CALLABLE
 #ifdef __CUDACC__
 #define CUDA_HOST_DEVICE_CALLABLE __host__ __device__ inline
 #define CUDA_DEVICE_CALLABLE __device__ inline
 #else
 #define CUDA_HOST_DEVICE_CALLABLE inline
 #define CUDA_DEVICE_CALLABLE inline
-#endif
 #endif
 
 #include <cstddef>
@@ -100,6 +98,14 @@ enum class order : bool {
   DESCENDING  ///< Elements ordered from large to small
 };
 
+/**
+ * @brief Enum to specify whether to include nulls or exclude nulls
+ */
+enum class include_nulls : bool {
+  NO,
+  YES 
+};
+
 /**---------------------------------------------------------------------------*
  * @brief Indicates how null values compare against all other values.
  *---------------------------------------------------------------------------**/
@@ -109,29 +115,49 @@ enum class null_order : bool {
 };
 
 /**---------------------------------------------------------------------------*
+ * @brief Indicates whether a collection of values is known to be sorted.
+ *---------------------------------------------------------------------------**/
+enum class sorted : bool {
+    NO,
+    YES
+};
+
+/**---------------------------------------------------------------------------*
+ * @brief Indicates how a collection of values has been ordered.
+ *---------------------------------------------------------------------------**/
+struct order_info {
+   sorted is_sorted;
+   order ordering;
+   null_order null_ordering;
+};
+
+/**---------------------------------------------------------------------------*
  * @brief Controls the allocation/initialization of a null mask.
  *---------------------------------------------------------------------------**/
-enum mask_state {
+enum class mask_state : int32_t {
   UNALLOCATED,    ///< Null mask not allocated, (all elements are valid)
   UNINITIALIZED,  ///< Null mask allocated, but not initialized
   ALL_VALID,      ///< Null mask allocated, initialized to all elements valid
   ALL_NULL        ///< Null mask allocated, initialized to all elements NULL
 };
 
-namespace experimental{
+namespace experimental {
+
 /**
  * @brief Interpolation method to use when the desired quantile lies between
  * two data points i and j
  *
  */
-enum class interpolation {
+enum class interpolation : int32_t {
     LINEAR,  ///< Linear interpolation between i and j
     LOWER,       ///< Lower data point (i)
     HIGHER,      ///< Higher data point (j)
     MIDPOINT,    ///< (i + j)/2
     NEAREST      ///< i or j, whichever is nearest
 };
-}
+
+} // namespace experimental
+
 /**---------------------------------------------------------------------------*
  * @brief Identifies a column's logical element type
  *---------------------------------------------------------------------------**/
@@ -149,7 +175,7 @@ enum type_id {
   TIMESTAMP_MILLISECONDS,  ///< duration of milliseconds since Unix Epoch in int64
   TIMESTAMP_MICROSECONDS,  ///< duration of microseconds since Unix Epoch in int64
   TIMESTAMP_NANOSECONDS,  ///< duration of nanoseconds since Unix Epoch in int64
-  CATEGORY,   ///< Categorial/Dictionary type
+  DICTIONARY32, ///< Dictionary type using int32 indices
   STRING,     ///< String elements
   // `NUM_TYPE_IDS` must be last!
   NUM_TYPE_IDS  ///< Total number of type ids
@@ -214,5 +240,6 @@ inline bool operator==(data_type const& lhs, data_type const& rhs) {
  * @return Size in bytes of an element of the specified `data_type`
  */
 std::size_t size_of(data_type t);
+
 
 }  // namespace cudf

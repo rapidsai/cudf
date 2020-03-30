@@ -103,20 +103,6 @@ inline void throw_cuda_error(cudaError_t error, const char* file,
                   std::to_string(line) + ": " + std::to_string(error) + " " +
                   cudaGetErrorName(error) + " " + cudaGetErrorString(error)});
 }
-
-inline void check_stream(cudaStream_t stream, const char* file,
-                         unsigned int line) {
-  cudaError_t error{cudaSuccess};
-  error = cudaStreamSynchronize(stream);
-  if (cudaSuccess != error) {
-    throw_cuda_error(error, file, line);
-  }
-
-  error = cudaGetLastError();
-  if (cudaSuccess != error) {
-    throw_cuda_error(error, file, line);
-  }
-}
 }  // namespace detail
 }  // namespace cudf
 
@@ -124,7 +110,8 @@ inline void check_stream(cudaStream_t stream, const char* file,
  * @brief Error checking macro for CUDA runtime API functions.
  *
  * Invokes a CUDA runtime API function call, if the call does not return
- * cudaSuccess, throws an exception detailing the CUDA error that occurred.
+ * cudaSuccess, invokes cudaGetLastError() to clear the error and throws an
+ * exception detailing the CUDA error that occurred
  *
  * This macro supersedes GDF_REQUIRE and should be preferred in all instances.
  * GDF_REQUIRE should be considered deprecated.
@@ -134,17 +121,17 @@ inline void check_stream(cudaStream_t stream, const char* file,
   do {                                                            \
     cudaError_t const status = (call);                            \
     if (cudaSuccess != status) {                                  \
+      cudaGetLastError();                                         \
       cudf::detail::throw_cuda_error(status, __FILE__, __LINE__); \
     }                                                             \
   } while (0);
 
-#define CUDA_CHECK_LAST() CUDA_TRY(cudaPeekAtLastError())
-
 /**---------------------------------------------------------------------------*
- * @brief Debug macro to synchronize a stream and check for CUDA errors
+ * @brief Debug macro to check for CUDA errors
  *
- * In a non-release build, this macro will synchronize the specified stream, and
- * check for any CUDA errors returned from cudaGetLastError. If an error is
+ * In a non-release build, this macro will synchronize the specified stream
+ * before error checking. In both release and non-release builds, this macro
+ * checks for any pending CUDA errors from previous calls. If an error is
  * reported, an exception is thrown detailing the CUDA error that occurred.
  *
  * The intent of this macro is to provide a mechanism for synchronous and
@@ -152,12 +139,11 @@ inline void check_stream(cudaStream_t stream, const char* file,
  * be used after any asynchronous CUDA call, e.g., cudaMemcpyAsync, or an
  * asynchronous kernel launch.
  *
- * Similar to assert(), it is only present in non-Release builds.
- *
  *---------------------------------------------------------------------------**/
 #ifndef NDEBUG
-#define CHECK_STREAM(stream) \
-  cudf::detail::check_stream((stream), __FILE__, __LINE__)
+#define CHECK_CUDA(stream) \
+  CUDA_TRY(cudaStreamSynchronize(stream));
 #else
-#define CHECK_STREAM(stream) static_cast<void>(0)
+#define CHECK_CUDA(stream) \
+  CUDA_TRY(cudaPeekAtLastError());
 #endif

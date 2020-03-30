@@ -19,7 +19,13 @@
 package ai.rapids.cudf;
 
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -38,6 +44,55 @@ class CudfTestBase {
     this.rmmPoolSize = poolSize;
   }
 
+  static class Listener extends MemoryListener {
+    private static final Logger LOG = LoggerFactory.getLogger(Listener.class);
+    HashMap<Long, StackTraceElement[]> outstanding = new HashMap<>();
+
+    @Override
+    public void prediction(long amount, String note) {
+      LOG.debug("PREDICT {} {}", amount, note);
+    }
+
+    @Override
+    public void allocation(long amount, long id) {
+      LOG.debug("ALLOC {} {}", amount, id);
+      outstanding.put(id, Thread.currentThread().getStackTrace());
+    }
+
+    @Override
+    public void endPrediction(String note) {
+      LOG.debug("END PREDICT {}", note);
+    }
+
+    @Override
+    public void deallocation(long amount, long id) {
+      LOG.debug("DEALLOC {} {}", amount, id);
+      StackTraceElement[] was = outstanding.remove(id);
+      if (was == null) {
+        LOG.error("DEALLOC FOR SOMETHING THAT WAS NOT ALLOCATED", new Exception("__STACK_TRACE"));
+      }
+    }
+
+    public void checkOutstanding() {
+      if (outstanding.size() > 0) {
+        LOG.error("{} ALLOCATIONS NOT RELEASED", outstanding.size());
+        for (Map.Entry<Long, StackTraceElement[]> entry: outstanding.entrySet()) {
+          LOG.error("{}:", entry.getKey());
+          for (StackTraceElement elem: entry.getValue()) {
+            LOG.error("\t{}", elem);
+          }
+        }
+      }
+    }
+  }
+
+  static final Listener LISTENER = new Listener();
+
+  @BeforeAll
+  static void setupMemoryListener() {
+    MemoryListener.registerDeviceListener(LISTENER);
+  }
+
   @BeforeEach
   void beforeEach() {
     assumeTrue(Cuda.isEnvCompatibleForTesting());
@@ -51,5 +106,6 @@ class CudfTestBase {
     if (Rmm.isInitialized()) {
       Rmm.shutdown();
     }
+    LISTENER.checkOutstanding();
   }
 }

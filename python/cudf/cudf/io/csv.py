@@ -112,7 +112,7 @@ def to_csv(
         path = path.name
 
     return libcudf.csv.write_csv(
-        cols=df._cols,
+        cols=df._data,
         path=path,
         sep=sep,
         na_rep=na_rep,

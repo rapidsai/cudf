@@ -203,7 +203,7 @@ void generate_input_tables(
 
     init_curand<<<(num_states - 1) / block_size + 1, block_size>>>(devStates, num_states);
 
-    CHECK_STREAM(0);
+    CHECK_CUDA(0);
 
     key_type* build_tbl_sorted;
     RMM_TRY(RMM_ALLOC(&build_tbl_sorted, build_tbl_size * sizeof(key_type), 0));
@@ -222,7 +222,7 @@ void generate_input_tables(
         lottery, lottery_size, devStates, num_states
     );
 
-    CHECK_STREAM(0);
+    CHECK_CUDA(0);
 
     CUDA_TRY(cudaMemcpy(
         build_tbl_sorted, build_tbl, build_tbl_size * sizeof(key_type), cudaMemcpyDeviceToDevice
@@ -245,7 +245,7 @@ void generate_input_tables(
         lottery, lottery_size, selectivity, devStates, num_states
     );
 
-    CHECK_STREAM(0);
+    CHECK_CUDA(0);
 
     RMM_TRY(RMM_FREE(lottery, 0));
     RMM_TRY(RMM_FREE(build_tbl_sorted, 0));

@@ -1,9 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
-
-# cython: profile=False
-# distutils: language = c++
-# cython: embedsignature = True
-# cython: language_level = 3
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from libc.stdint cimport (  # noqa: E211
@@ -17,11 +12,11 @@ from libc.stdint cimport (  # noqa: E211
 )
 from libcpp.vector cimport vector
 
+from cudf._libxx.column cimport Column
+
 # Utility functions to build gdf_columns, gdf_context and error handling
 
 cpdef get_ctype_ptr(obj)
-cpdef get_column_data_ptr(obj)
-cpdef get_column_valid_ptr(obj)
 
 cpdef gdf_time_unit np_dtype_to_gdf_time_unit(dtype)
 cpdef gdf_time_unit_to_np_dtype(gdf_time_unit time_unit)
@@ -31,20 +26,12 @@ cdef np_dtype_from_gdf_column(gdf_column* col)
 
 cdef get_scalar_value(gdf_scalar scalar, dtype)
 
-cdef gdf_column* column_view_from_column(col, col_name=*) except? NULL
-cdef gdf_column* column_view_from_NDArrays(
-    size,
-    data,
-    mask,
-    dtype,
-    null_count
-) except? NULL
+cdef gdf_column* column_view_from_column(Column col, col_name=*) except? NULL
 cdef gdf_scalar* gdf_scalar_from_scalar(val, dtype=*) except? NULL
-cdef gdf_column_to_column(gdf_column* c_col, int_col_name=*)
-cdef gdf_column_to_column_mem(gdf_column* input_col)
-cdef update_nvstrings_col(col, uintptr_t category_ptr)
-cdef gdf_column* column_view_from_string_column(col, col_name=*) except? NULL
-cdef gdf_column** cols_view_from_cols(cols) except ? NULL
+cdef Column gdf_column_to_column(gdf_column* c_col)
+cdef gdf_column* column_view_from_string_column(Column col,
+                                                col_name=*) except? NULL
+cdef gdf_column** cols_view_from_cols(cols, names=*) except ? NULL
 cdef free_table(cudf_table* table0, gdf_column** cols=*)
 cdef free_column(gdf_column* c_col)
 
@@ -330,19 +317,6 @@ cdef extern from "cudf/cudf.h" nogil:
         size_type* out_indices
     ) except +
 
-    cdef gdf_error gdf_nvtx_range_push(
-        const char* const name,
-        gdf_color color
-    ) except +
-
-    cdef gdf_error gdf_nvtx_range_push_hex(
-        const char* const name,
-        unsigned int color
-    ) except +
-
-    cdef gdf_error gdf_nvtx_range_pop() except +
-
-
 cdef extern from "cudf/legacy/bitmask.hpp" nogil:
 
     cdef gdf_error gdf_count_nonzero_mask(
@@ -382,4 +356,6 @@ cdef extern from "cudf/legacy/table.hpp" namespace "cudf" nogil:
 #        gdf_column const* const* end() const
 #        gdf_column const* get_column(size_type index) const except +
 
-cpdef gdf_dtype gdf_dtype_from_value(col, dtype=*) except? GDF_invalid
+cdef gdf_dtype gdf_dtype_from_dtype(dtype) except? GDF_invalid
+
+cdef char* py_to_c_str(object py_str) except? NULL
