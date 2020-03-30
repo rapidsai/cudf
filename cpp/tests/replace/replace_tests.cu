@@ -68,9 +68,8 @@ TEST_F(ReplaceErrorTest, TypeMismatch)
 // Error: nulls in old-values
 TEST_F(ReplaceErrorTest, NullInOldValues)
 {
-  std::vector<cudf::valid_type> old_valid(gdf_valid_allocation_size(4), 0xA);
   cudf::test::fixed_width_column_wrapper<int32_t> gdf_input_column{ {7, 5, 6, 3, 1, 2, 8, 4}};
-  cudf::test::fixed_width_column_wrapper<int32_t> gdf_values_to_replace_column{ {10, 11, 12, 13}, old_valid.begin()};
+  cudf::test::fixed_width_column_wrapper<int32_t> gdf_values_to_replace_column{ {10, 11, 12, 13}, {1, 0, 0, 1}};
   cudf::test::fixed_width_column_wrapper<int32_t> gdf_replacement_values_column{ {15, 16, 17, 18}};
 
   EXPECT_THROW(cudf::experimental::find_and_replace_all(gdf_input_column,
