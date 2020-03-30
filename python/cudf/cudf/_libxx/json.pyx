@@ -1,10 +1,12 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
+# cython: boundscheck = False
+
+
 import cudf
 import collections.abc as abc
 import io
 import os
-
 from cudf._libxx.cpp.io.functions cimport (
     read_json as libcudf_read_json,
     read_json_args
@@ -75,8 +77,6 @@ cpdef read_json(filepath_or_buffer, dtype,
     with nogil:
         c_out_table = move(libcudf_read_json(args))
 
-    column_names = list(c_out_table.metadata.column_names)
-    column_names = [x.decode() for x in column_names]
-    tbl = Table.from_unique_ptr(move(c_out_table.tbl),
-                                column_names=column_names)
-    return cudf.DataFrame._from_table(tbl)
+    column_names = [x.decode() for x in c_out_table.metadata.column_names]
+    return Table.from_unique_ptr(move(c_out_table.tbl),
+                                 column_names=column_names)

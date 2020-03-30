@@ -51,9 +51,7 @@ cdef class Table:
     @property
     def _num_rows(self):
         if self._index is not None:
-            if len(self._index._data) == 0:
-                return 0
-            return self._index._num_rows
+            return len(self._index)
         return len(self._data.columns[0])
 
     @property
@@ -169,10 +167,10 @@ cdef class Table:
         of this Table.
         """
         if self._index is None:
-            return _make_table_view(
+            return make_table_view(
                 self._data.columns
             )
-        return _make_table_view(
+        return make_table_view(
             itertools.chain(
                 self._index._data.columns,
                 self._data.columns,
@@ -185,10 +183,10 @@ cdef class Table:
         (including index columns) of this Table.
         """
         if self._index is None:
-            return _make_mutable_table_view(
+            return make_mutable_table_view(
                 self._data.columns
             )
-        return _make_mutable_table_view(
+        return make_mutable_table_view(
             itertools.chain(
                 self._index._data.columns,
                 self._data.columns,
@@ -200,7 +198,7 @@ cdef class Table:
         Return a cudf::table_view of just the data columns
         of this Table.
         """
-        return _make_table_view(
+        return make_table_view(
             self._data.columns
         )
 
@@ -209,7 +207,7 @@ cdef class Table:
         Return a cudf::mutable_table_view of just the data columns
         of this Table.
         """
-        return _make_mutable_table_view(
+        return make_mutable_table_view(
             self._data.columns
         )
 
@@ -221,7 +219,7 @@ cdef class Table:
         if self._index is None:
             raise ValueError("Cannot get index_view of a Table "
                              "that has no index")
-        return _make_table_view(
+        return make_table_view(
             self._index.values()
         )
 
@@ -233,12 +231,12 @@ cdef class Table:
         if self._index is None:
             raise ValueError("Cannot get mutable_index_view of a Table "
                              "that has no index")
-        return _make_mutable_table_view(
+        return make_mutable_table_view(
             self._index._data.columns
         )
 
 
-cdef table_view _make_table_view(columns) except*:
+cdef table_view make_table_view(columns) except*:
     """
     Helper function to create a cudf::table_view from
     a list of Columns
@@ -251,7 +249,7 @@ cdef table_view _make_table_view(columns) except*:
 
     return table_view(column_views)
 
-cdef mutable_table_view _make_mutable_table_view(columns) except*:
+cdef mutable_table_view make_mutable_table_view(columns) except*:
     """
     Helper function to create a cudf::mutable_table_view from
     a list of Columns

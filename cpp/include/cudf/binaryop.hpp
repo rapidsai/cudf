@@ -27,7 +27,7 @@ namespace experimental {
 /**
  * @brief Types of binary operations that can be performed on data.
  */
-enum class binary_operator {
+enum class binary_operator : int32_t {
   ADD,                    ///< operator +
   SUB,                    ///< operator -
   MUL,                    ///< operator *
@@ -58,6 +58,8 @@ enum class binary_operator {
   // Logical right shift. Casts to an unsigned value before shifing.
   // approximates >>> from Java.
   SHIFT_RIGHT_UNSIGNED,   ///< operator >>> 
+
+  LOG_BASE,               ///< logarithm to the base
   
   INVALID_BINARY          ///< invalid operation
 };

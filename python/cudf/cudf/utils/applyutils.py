@@ -6,7 +6,7 @@ import cupy
 from numba import cuda, six
 from numba.utils import exec_, pysignature
 
-import cudf._lib as libcudf
+import cudf._libxx as libcudfxx
 from cudf.core.column import column
 from cudf.core.series import Series
 from cudf.utils import utils
@@ -116,8 +116,8 @@ def make_aggregate_nullmask(df, columns=None, op="and"):
             )
             continue
 
-        libcudf.binops.apply_op(
-            column.as_column(nullmask), out_mask, out_mask, op
+        out_mask = libcudfxx.binaryop.binaryop(
+            column.as_column(nullmask), out_mask, op, out_mask.dtype
         )
 
     return out_mask

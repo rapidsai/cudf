@@ -219,6 +219,10 @@ private:
         on_dealloc_threshold_method, "onDeallocThreshold", total_after);
   }
 
+  bool supports_get_mem_info() const noexcept override {
+    return resource->supports_get_mem_info();
+  }
+
   std::pair<size_t, size_t> do_get_mem_info(cudaStream_t stream) const override {
     return resource->get_mem_info(stream);
   }

@@ -422,6 +422,7 @@ TEST_F(CopyRangeErrorTestFixture, InvalidRange)
     thrust::make_counting_iterator(0) + size);
 
   cudf::mutable_column_view target_view{target};
+  cudf::column_view source_view{source};
 
   // empty_range == no-op, this is valid
   EXPECT_NO_THROW(cudf::experimental::copy_range_in_place(
@@ -447,10 +448,10 @@ TEST_F(CopyRangeErrorTestFixture, InvalidRange)
 
   // source_begin >= source.size()
   EXPECT_THROW(cudf::experimental::copy_range_in_place(
-                 source, target_view, 100, 100, 0),
+                 source, target_view, 101, 100, 0),
                cudf::logic_error);
   EXPECT_THROW(auto p_ret = cudf::experimental::copy_range(
-                 source, target, 100, 100, 0),
+                 source, target, 101, 100, 0),
                cudf::logic_error);
 
   // source_end > source.size()
@@ -484,6 +485,18 @@ TEST_F(CopyRangeErrorTestFixture, InvalidRange)
   EXPECT_THROW(auto p_ret = cudf::experimental::copy_range(
                  source, target, 50, 100, 80),
                cudf::logic_error);
+
+  // Empty column
+  target = cudf::test::fixed_width_column_wrapper<int32_t>{};
+  source = cudf::test::fixed_width_column_wrapper<int32_t>{};
+  target_view = target;
+  source_view = source;
+
+  // empty column == no-op, this is valid
+  EXPECT_NO_THROW(cudf::experimental::copy_range_in_place(
+                    source_view, target_view, 0, source_view.size(), 0));
+  EXPECT_NO_THROW(auto p_ret = cudf::experimental::copy_range(
+                    source_view, target, 0, source_view.size(), 0));
 }
 
 TEST_F(CopyRangeErrorTestFixture, DTypeMismatch)

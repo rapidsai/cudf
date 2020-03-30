@@ -107,6 +107,23 @@ cdef extern from "cudf/io/functions.hpp" \
         read_orc_args &args
     ) except +
 
+    cdef cppclass read_parquet_args:
+        cudf_io_types.source_info source
+        vector[string] columns
+        size_t row_group
+        size_t row_group_count
+        size_t skip_rows
+        size_t num_rows
+        bool strings_to_categorical
+        bool use_pandas_metadata
+        data_type timestamp_type
+
+        read_parquet_args() except +
+        read_parquet_args(cudf_io_types.source_info src) except +
+
+    cdef cudf_io_types.table_with_metadata read_parquet(
+        read_parquet_args args) except +
+
     cdef cppclass write_orc_args:
         cudf_io_types.sink_info sink
         cudf_io_types.compression_type compression

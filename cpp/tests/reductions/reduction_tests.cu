@@ -755,3 +755,5 @@ TEST_F(StringReductionTest, AllNull)
   std::unique_ptr<cudf::scalar> maxresult = cudf::experimental::reduce(col_nulls, cudf::experimental::make_max_aggregation(), output_dtype);
   EXPECT_FALSE(maxresult->is_valid());
 }
+
+CUDF_TEST_PROGRAM_MAIN()

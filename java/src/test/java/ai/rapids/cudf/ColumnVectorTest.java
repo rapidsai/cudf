@@ -71,6 +71,68 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testClampDouble() {
+    try (ColumnVector cv = ColumnVector.fromDoubles(2.33d, 32.12d, -121.32d, 0.0d, 0.00001d,
+        Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY, Double.NaN);
+         Scalar num = Scalar.fromDouble(0);
+         Scalar loReplace = Scalar.fromDouble(-1);
+         Scalar hiReplace = Scalar.fromDouble(1);
+         ColumnVector result = cv.clamp(num, loReplace, num, hiReplace);
+         ColumnVector expected = ColumnVector.fromDoubles(1.0d, 1.0d, -1.0d, 0.0d, 1.0d, -1.0d,
+             1.0d, Double.NaN)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testClampFloat() {
+    try (ColumnVector cv = ColumnVector.fromBoxedFloats(2.33f, 32.12f, null, -121.32f, 0.0f, 0.00001f, Float.NEGATIVE_INFINITY,
+        Float.POSITIVE_INFINITY, Float.NaN);
+         Scalar num = Scalar.fromFloat(0);
+         Scalar loReplace = Scalar.fromFloat(-1);
+         Scalar hiReplace = Scalar.fromFloat(1);
+         ColumnVector result = cv.clamp(num, loReplace, num, hiReplace);
+         ColumnVector expected = ColumnVector.fromBoxedFloats(1.0f, 1.0f, null, -1.0f, 0.0f, 1.0f, -1.0f, 1.0f, Float.NaN)) {
+     assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testClampLong() {
+    try (ColumnVector cv = ColumnVector.fromBoxedLongs(1l, 3l, 6l, -2l, 23l, -0l, -90l, null);
+         Scalar num = Scalar.fromLong(0);
+         Scalar loReplace = Scalar.fromLong(-1);
+         Scalar hiReplace = Scalar.fromLong(1);
+         ColumnVector result = cv.clamp(num, loReplace, num, hiReplace);
+         ColumnVector expected = ColumnVector.fromBoxedLongs(1l, 1l, 1l, -1l, 1l, 0l, -1l, null)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testClampShort() {
+    try (ColumnVector cv = ColumnVector.fromShorts(new short[]{1, 3, 6, -2, 23, -0, -90});
+         Scalar lo = Scalar.fromShort((short)1);
+         Scalar hi = Scalar.fromShort((short)2);
+         ColumnVector result = cv.clamp(lo, hi);
+         ColumnVector expected = ColumnVector.fromShorts(new short[]{1, 2, 2, 1, 2, 1, 1})) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testClampInt() {
+      try (ColumnVector cv = ColumnVector.fromInts(1, 3, 6, -2, 23, -0, -90);
+           Scalar num = Scalar.fromInt(0);
+           Scalar hiReplace = Scalar.fromInt(1);
+           Scalar loReplace = Scalar.fromInt(-1);
+           ColumnVector result = cv.clamp(num, loReplace, num, hiReplace);
+           ColumnVector expected = ColumnVector.fromInts(1, 1, 1, -1, 1, 0, -1)) {
+          assertColumnsAreEqual(expected, result);
+      }
+  }
+
+ @Test
   void testStringCreation() {
     try (ColumnVector cv = ColumnVector.fromStrings("d", "sd", "sde", null, "END");
          HostColumnVector host = cv.copyToHost();
@@ -932,7 +994,7 @@ public class ColumnVectorTest extends CudfTestBase {
                                                    "wX4YzwX4Yz", "\ud720\ud721\ud720\ud721");
          Scalar emptyString = Scalar.fromString("");
          ColumnVector concat = ColumnVector.stringConcatenate(emptyString, emptyString,
-                                                              v, v)) {
+                                                              new ColumnVector[]{v, v})) {
       assertColumnsAreEqual(concat, e_concat);
     }
     assertThrows(AssertionError.class, () -> {
@@ -940,45 +1002,45 @@ public class ColumnVectorTest extends CudfTestBase {
            ColumnVector cv = ColumnVector.fromInts(1, 2, 3, 4);
            Scalar emptyString = Scalar.fromString("");
            ColumnVector concat = ColumnVector.stringConcatenate(emptyString, emptyString,
-                                                                sv, cv)) {}
+                                                                new ColumnVector[]{sv, cv})) {}
     });
     assertThrows(AssertionError.class, () -> {
       try (ColumnVector sv1 = ColumnVector.fromStrings("a", "B", "cd");
            ColumnVector sv2 = ColumnVector.fromStrings("a", "B");
            Scalar emptyString = Scalar.fromString("");
            ColumnVector concat = ColumnVector.stringConcatenate(emptyString, emptyString,
-                                                                sv1, sv2)) {}
+                                                                new ColumnVector[]{sv1, sv2})) {}
     });
     assertThrows(AssertionError.class, () -> {
       try (ColumnVector sv = ColumnVector.fromStrings("a", "B", "cd");
            Scalar emptyString = Scalar.fromString("");
            ColumnVector concat = ColumnVector.stringConcatenate(emptyString, emptyString,
-                                                                sv)) {}
+                                                                new ColumnVector[]{sv})) {}
     });
     assertThrows(AssertionError.class, () -> {
       try (ColumnVector sv = ColumnVector.fromStrings("a", "B", "cd");
            Scalar emptyString = Scalar.fromString("");
            Scalar nullString = Scalar.fromString(null);
            ColumnVector concat = ColumnVector.stringConcatenate(nullString, emptyString,
-                                                                sv, sv)) {}
+                                                                new ColumnVector[]{sv, sv})) {}
     });
     assertThrows(AssertionError.class, () -> {
       try (ColumnVector sv = ColumnVector.fromStrings("a", "B", "cd");
            Scalar emptyString = Scalar.fromString("");
            ColumnVector concat = ColumnVector.stringConcatenate(null, emptyString,
-                                                                sv, sv)) {}
+                                                                new ColumnVector[]{sv, sv})) {}
     });
     assertThrows(AssertionError.class, () -> {
       try (ColumnVector sv = ColumnVector.fromStrings("a", "B", "cd");
            Scalar emptyString = Scalar.fromString("");
            ColumnVector concat = ColumnVector.stringConcatenate(emptyString, null,
-                                                                sv, sv)) {}
+                                                                new ColumnVector[]{sv, sv})) {}
     });
     assertThrows(AssertionError.class, () -> {
       try (ColumnVector sv = ColumnVector.fromStrings("a", "B", "cd");
            Scalar emptyString = Scalar.fromString("");
            ColumnVector concat = ColumnVector.stringConcatenate(emptyString, emptyString,
-                                                                sv, null)) {}
+                                                                new ColumnVector[]{sv, null})) {}
     });
   }
 
@@ -995,7 +1057,8 @@ public class ColumnVectorTest extends CudfTestBase {
                                                    "3tuV\'3tuV\'", "wX4YzwX4Yz", "\ud720\ud721\ud720\ud721");
           Scalar emptyString = Scalar.fromString("");
           Scalar nullSubstitute = Scalar.fromString("NULL");
-         ColumnVector concat = ColumnVector.stringConcatenate(emptyString, nullSubstitute, v, v)) {
+         ColumnVector concat = ColumnVector.stringConcatenate(emptyString, nullSubstitute,
+                                                              new ColumnVector[]{v, v})) {
       assertColumnsAreEqual(concat, e_concat);
     }
   }
@@ -1009,7 +1072,7 @@ public class ColumnVectorTest extends CudfTestBase {
          Scalar separatorString = Scalar.fromString("A1\t\ud721");
          Scalar nullString = Scalar.fromString(null);
          ColumnVector concat = ColumnVector.stringConcatenate(separatorString, nullString,
-                                                              sv1, sv2)) {
+                                                              new ColumnVector[]{sv1, sv2})) {
       assertColumnsAreEqual(concat, e_concat);
     }
   }
@@ -1092,6 +1155,10 @@ public class ColumnVectorTest extends CudfTestBase {
       assertThrows(IllegalArgumentException.class, () -> WindowOptions.builder()
           .window(3, 2).minPeriods(3)
           .window(arraywindowCol, arraywindowCol).build());
+
+      assertThrows(IllegalArgumentException.class, 
+                   () -> arraywindowCol.rollingWindow(AggregateOp.SUM, 
+                                                      WindowOptions.builder().window(2, 1).minPeriods(1).timestampColumnIndex(0).build()));
     }
   }
 
@@ -1189,6 +1256,17 @@ public class ColumnVectorTest extends CudfTestBase {
         ColumnVector expectedVector = ColumnVector.fromFloats(7.3f, Float.NaN, 1.3f, 5.7f, 3f, 3f, 7.3f, 2.6f, Float.NaN, 0);
         ColumnVector newVector = vector.findAndReplaceAll(oldValues, replacedValues)) {
       assertColumnsAreEqual(expectedVector, newVector);
+    }
+  }
+
+  @Test
+  void emptyStringColumnFindReplaceAll() {
+    try (ColumnVector cv = ColumnVector.fromStrings(null, "A", "B", "C",   "");
+         ColumnVector expected = ColumnVector.fromStrings(null, "A", "B", "C",   null);
+         ColumnVector from = ColumnVector.fromStrings("");
+         ColumnVector to = ColumnVector.fromStrings((String)null);
+         ColumnVector replaced = cv.findAndReplaceAll(from, to)) {
+      assertColumnsAreEqual(expected, replaced);
     }
   }
 
@@ -1434,6 +1512,73 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testMatchesRe() {
+    String patternString1 = "\\d+";
+    String patternString2 = "[A-Za-z]+\\s@[A-Za-z]+";
+    String patternString3 = ".*";
+    String patternString4 = "";
+    try (ColumnVector testStrings = ColumnVector.fromStrings("", null, "abCD", "ovér the",
+          "lazy @dog", "1234", "00:0:00");
+         ColumnVector res1 = testStrings.matchesRe(patternString1);
+         ColumnVector res2 = testStrings.matchesRe(patternString2);
+         ColumnVector res3 = testStrings.matchesRe(patternString3);
+         ColumnVector expected1 = ColumnVector.fromBoxedBooleans(false, null, false, false, false,
+           true, true);
+         ColumnVector expected2 = ColumnVector.fromBoxedBooleans(false, null, false, false, true,
+           false, false);
+         ColumnVector expected3 = ColumnVector.fromBoxedBooleans(true, null, true, true, true,
+           true, true)) {
+      assertColumnsAreEqual(expected1, res1);
+      assertColumnsAreEqual(expected2, res2);
+      assertColumnsAreEqual(expected3, res3);
+    }
+    assertThrows(AssertionError.class, () -> {
+      try (ColumnVector testStrings = ColumnVector.fromStrings("", null, "abCD", "ovér the",
+             "lazy @dog", "1234", "00:0:00");
+           ColumnVector res = testStrings.matchesRe(patternString4)) {}
+    });
+  }
+
+  @Test
+  void testContainsRe() {
+    String patternString1 = "\\d+";
+    String patternString2 = "[A-Za-z]+\\s@[A-Za-z]+";
+    String patternString3 = ".*";
+    String patternString4 = "";
+    try (ColumnVector testStrings = ColumnVector.fromStrings(null, "abCD", "ovér the",
+        "lazy @dog", "1234", "00:0:00", "abc1234abc", "there @are 2 lazy @dogs");
+         ColumnVector res1 = testStrings.containsRe(patternString1);
+         ColumnVector res2 = testStrings.containsRe(patternString2);
+         ColumnVector res3 = testStrings.containsRe(patternString3);
+         ColumnVector expected1 = ColumnVector.fromBoxedBooleans(null, false, false, false,
+             true, true, true, true);
+         ColumnVector expected2 = ColumnVector.fromBoxedBooleans(null, false, false, true,
+             false, false, false, true);
+         ColumnVector expected3 = ColumnVector.fromBoxedBooleans(null, true, true, true,
+             true, true, true, true)) {
+      assertColumnsAreEqual(expected1, res1);
+      assertColumnsAreEqual(expected2, res2);
+      assertColumnsAreEqual(expected3, res3);
+    }
+    assertThrows(AssertionError.class, () -> {
+      try (ColumnVector testStrings = ColumnVector.fromStrings("", null, "abCD", "ovér the",
+          "lazy @dog", "1234", "00:0:00", "abc1234abc", "there @are 2 lazy @dogs");
+           ColumnVector res = testStrings.containsRe(patternString4)) {}
+    });
+  }
+
+  @Test
+  @Disabled("Needs fix for https://github.com/rapidsai/cudf/issues/4671")
+  void testContainsReEmptyInput() {
+    String patternString1 = ".*";
+    try (ColumnVector testStrings = ColumnVector.fromStrings("");
+         ColumnVector res1 = testStrings.containsRe(patternString1);
+         ColumnVector expected1 = ColumnVector.fromBoxedBooleans(true)) {
+      assertColumnsAreEqual(expected1, res1);
+    }
+  }
+
+  @Test
   void testStringFindOperationsThrowsException() {
     assertThrows(AssertionError.class, () -> {
       try (ColumnVector sv = ColumnVector.fromStrings("a", "B", "cd");
@@ -1610,6 +1755,27 @@ public class ColumnVectorTest extends CudfTestBase {
            ColumnVector end = ColumnVector.fromInts(5, 3, 1, 1, -1);
            ColumnVector substring = v.substring(start, end)) {
       }
+    });
+  }
+
+  @Test
+  void teststringReplace() {
+    try (ColumnVector v = ColumnVector.fromStrings("Héllo", "thésssé", null, "", "ARé", "sssstrings");
+         ColumnVector e_allParameters = ColumnVector.fromStrings("Héllo", "théSsé", null, "", "ARé", "SStrings");
+         Scalar target = Scalar.fromString("ss");
+         Scalar replace = Scalar.fromString("S");
+         ColumnVector replace_allParameters = v.stringReplace(target, replace)) {
+      assertColumnsAreEqual(e_allParameters, replace_allParameters);
+    }
+  }
+
+  @Test
+  void teststringReplaceThrowsException() {
+    assertThrows(AssertionError.class, () -> {
+      try (ColumnVector testStrings = ColumnVector.fromStrings("Héllo", "thésé", null, "", "ARé", "strings");
+           Scalar target= Scalar.fromString("");
+           Scalar replace=Scalar.fromString("a");
+           ColumnVector result = testStrings.stringReplace(target,replace)){}
     });
   }
 }
