@@ -51,10 +51,10 @@ struct reduce_dispatch_functor {
       return reduction::max(col, output_dtype, mr, stream);
       break;
     case aggregation::COUNT_VALID:
-      // TODO return size-null_count as scalar.
+      return make_fixed_width_scalar(col.size()-col.null_count(), stream, mr);
       break;
     case aggregation::COUNT_ALL:
-      // TODO return size as scalar.
+      return make_fixed_width_scalar(col.size(), stream, mr);
       break;  
     case aggregation::ANY:
       return reduction::any(col, output_dtype, mr, stream);
