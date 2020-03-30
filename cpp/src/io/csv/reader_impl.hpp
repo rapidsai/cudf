@@ -91,6 +91,7 @@ class reader::impl {
    * @param h_size Number of bytes of uncompressed input data
    * @param range_offset Number of bytes offset from the start
    * @param stream Stream to use for memory allocation and kernels
+   * @param d_data Uncompressed input data in device memory (optional)
    */
   void gather_row_offsets(const char *h_data, size_t h_size,
                           size_t range_offset, cudaStream_t stream, const rmm::device_buffer* d_data = nullptr);
