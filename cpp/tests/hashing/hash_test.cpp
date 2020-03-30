@@ -119,10 +119,7 @@ TYPED_TEST_CASE(HashTestTyped, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(HashTestTyped, Equality)
 {
-  using T = TypeParam;
-
-  auto const tmp = cudf::test::make_type_param_vector<T>({0, 127, 1, 2, 8});
-  fixed_width_column_wrapper<T> const col(tmp.begin(), tmp.end());
+  fixed_width_column_wrapper<TypeParam, int32_t> const col({0, 127, 1, 2, 8});
   auto const input = cudf::table_view({col});
 
   // Hash of same input should be equal

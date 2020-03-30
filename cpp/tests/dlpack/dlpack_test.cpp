@@ -231,10 +231,7 @@ TYPED_TEST_CASE(DLPackNumericTests, NumericTypes);
 TYPED_TEST(DLPackNumericTests, ToDlpack1D)
 {
   // Test nullable column with no nulls
-  using T = TypeParam;
-  auto const col_tmp = cudf::test::make_type_param_vector<T>({1, 2, 3, 4});
-  std::vector<bool> validity = { 1, 1, 1, 1 };
-  fixed_width_column_wrapper<T> col(col_tmp.cbegin(), col_tmp.cend(), validity.cbegin());
+  fixed_width_column_wrapper<TypeParam, int32_t> col({1, 2, 3, 4}, {1, 1, 1, 1});
   auto const col_view = static_cast<cudf::column_view>(col);
   EXPECT_FALSE(col_view.has_nulls());
   EXPECT_TRUE(col_view.nullable());
@@ -301,9 +298,7 @@ TYPED_TEST(DLPackNumericTests, ToDlpack2D)
 TYPED_TEST(DLPackNumericTests, FromDlpack1D)
 {
   // Use to_dlpack to generate an input tensor
-  using T = TypeParam;
-  auto const col_tmp = cudf::test::make_type_param_vector<T>({1, 2, 3, 4});
-  fixed_width_column_wrapper<T> col(col_tmp.cbegin(), col_tmp.cend());
+  fixed_width_column_wrapper<TypeParam, int32_t> col({1, 2, 3, 4});
   cudf::table_view input({col});
   unique_managed_tensor tensor(cudf::to_dlpack(input));
 
@@ -350,14 +345,10 @@ TYPED_TEST(DLPackNumericTests, FromDlpackCpu)
   tensor.dl_tensor.byte_offset     = offset;
   tensor.dl_tensor.shape           = shape;
   tensor.dl_tensor.strides         = strides;
+  tensor.dl_tensor.data            = thrust::host_vector<T>(data.begin(), data.end()).data();
 
-  thrust::host_vector<T> host_vector (data.begin(), data.end());
-  tensor.dl_tensor.data            = host_vector.data();
-
-  auto const col1_tmp = cudf::test::make_type_param_vector<T>({1, 2, 3, 4});
-  auto const col2_tmp = cudf::test::make_type_param_vector<T>({5, 6, 7, 8});
-  fixed_width_column_wrapper<T> col1(col1_tmp.cbegin(), col1_tmp.cend());
-  fixed_width_column_wrapper<T> col2(col2_tmp.cbegin(), col2_tmp.cend());
+  fixed_width_column_wrapper<TypeParam, int32_t> col1({1, 2, 3, 4});
+  fixed_width_column_wrapper<TypeParam, int32_t> col2({5, 6, 7, 8});
   cudf::table_view expected({col1, col2});
 
   auto result = cudf::from_dlpack(&tensor);
