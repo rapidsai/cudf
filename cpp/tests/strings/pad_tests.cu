@@ -59,9 +59,27 @@ TEST_F(StringsPadTest, Padding)
     {
         auto results = cudf::strings::pad(strings_view, width, cudf::strings::pad_side::BOTH, phil);
 
-        std::vector<const char*> h_expected{ "eee ddd", "+bb cc", nullptr, "++++++", "++aa++", "++bbb+", "++ééé+", "+++o++" };
+        std::vector<const char*> h_expected{ "eee ddd", "bb cc+", nullptr, "++++++", "++aa++", "+bbb++", "+ééé++", "++o+++" };
         cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
              thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
+        cudf::test::expect_columns_equal(*results,expected);
+    }
+}
+
+TEST_F(StringsPadTest, PaddingBoth)
+{
+    cudf::test::strings_column_wrapper strings( {"koala", "foxx", "fox", "chameleon"} );
+    std::string phil = "+";
+    auto strings_view = cudf::strings_column_view(strings);
+
+    {   // even width left justify
+        auto results = cudf::strings::pad(strings_view, 6, cudf::strings::pad_side::BOTH, phil);
+        cudf::test::strings_column_wrapper expected( {"koala+", "+foxx+", "+fox++", "chameleon"} );
+        cudf::test::expect_columns_equal(*results,expected);
+    }
+    {   // odd width right justify
+        auto results = cudf::strings::pad(strings_view, 7, cudf::strings::pad_side::BOTH, phil);
+        cudf::test::strings_column_wrapper expected( {"+koala+", "++foxx+", "++fox++", "chameleon"} );
         cudf::test::expect_columns_equal(*results,expected);
     }
 }
