@@ -25,6 +25,7 @@
 - PR #4700 Expose events and more stream functionality in java
 - PR #4699 Make Java's MemoryBuffer public and add MemoryBuffer.slice
 - PR #4691 Fix compiler argument syntax for ccache
+- PR #4331 Improved test for double that considers an epsilon
 
 ## Bug Fixes
 
@@ -107,7 +108,6 @@
 
 ## Improvements
 
-- PR #4331 Improved test for double that considers an epsilon
 - PR #4641 Add replace example in dataframe.py and update 10min.ipynb
 - PR #4140 Add cudf series examples and corr() method for dataframe in dataframe.py
 - PR #4187 exposed getNativeView method in Java bindings
