@@ -1414,7 +1414,10 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                     data = as_column(sr, nan_as_null=nan_as_null)
                 else:
                     data = as_column(
-                        np.asarray(arbitrary, dtype=np.dtype(dtype)),
+                        np.asarray(
+                            arbitrary,
+                            dtype=dtype if dtype is None else np.dtype(dtype),
+                        ),
                         nan_as_null=nan_as_null,
                     )
     return data
