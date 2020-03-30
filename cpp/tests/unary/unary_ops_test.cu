@@ -567,9 +567,9 @@ void validate_cast_result(cudf::column_view expected,
   if (null_mask.size() == 0) {
     expect_columns_equal(make_column<R, T>(h_data), actual);
   } else {
-    thrust::host_vector<bool> h_null_mask{}; // CH algorithmize
+    thrust::host_vector<bool> h_null_mask(expected.size());
     for (cudf::size_type i = 0; i < expected.size(); ++i) {
-      h_null_mask.push_back(cudf::bit_is_set(null_mask.data(), i));
+      h_null_mask[i] = cudf::bit_is_set(null_mask.data(), i);
     }
     expect_columns_equal(make_column<R, T>(h_data, h_null_mask), actual);
   }
