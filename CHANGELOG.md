@@ -23,6 +23,7 @@
 - PR #4700 Expose events and more stream functionality in java
 - PR #4699 Make Java's MemoryBuffer public and add MemoryBuffer.slice
 - PR #4691 Fix compiler argument syntax for ccache
+- PR #3259 Add .clang-format
 
 ## Bug Fixes
 
@@ -398,7 +399,6 @@
 - PR #3463 Port NVStrings partition/rpartition to cudf strings column
 - PR #3502 ORC reader: add option to read DECIMALs as INT64
 - PR #3461 Add a new overload to allocate_like() that takes explicit type and size params.
-- PR #3259 Add .clang-format
 - PR #3590 Specialize hash functions for floating point
 - PR #3569 Use `np.asarray` in `StringColumn.deserialize`
 - PR #3553 Support Python NoneType in numeric binops
