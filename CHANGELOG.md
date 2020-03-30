@@ -49,6 +49,7 @@
 - PR #4673 Fix regex infinite loop while parsing invalid quantifier pattern
 - PR #4679 Fix comments for make_dictionary_column factory functions
 - PR #4711 Fix column leaks in Java unit test
+- pR #4721 Fix string binop to update nulls appropriately
 - PR #4722 Fix strings::pad when using pad::both with odd width
 - PR #4725 Fix issue java with not setting GPU on background thread
 - PR #4701 Fix issue related to mixed input types in `as_column`
