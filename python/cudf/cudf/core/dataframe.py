@@ -3504,7 +3504,7 @@ class DataFrame(Frame):
         if isinstance(q, numbers.Number):
             q_is_number = True
             q = [float(q)]
-        elif isinstance(q, (list, tuple, np.ndarray)):
+        elif pd.api.types.is_list_like(q):
             q_is_number = False
         else:
             msg = "`q` must be either a single element or list"
