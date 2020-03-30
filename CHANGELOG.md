@@ -53,6 +53,7 @@
 - PR #4722 Fix strings::pad when using pad::both with odd width
 - PR #4725 Fix issue java with not setting GPU on background thread
 - PR #4701 Fix issue related to mixed input types in `as_column`
+- PR #4748 Fix strings::all_characters_of_type to allow verify-types mask
 
 
 # cuDF 0.13.0 (Date TBD)
