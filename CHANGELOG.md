@@ -16,6 +16,7 @@
 - PR #4527 Add JNI and java bindings for matches_re
 - PR #4606 Fix `scan` unit test and upgrade to more appropriate algorithms
 - PR #4527 Add JNI and java bindings for `matches_re`
+- PR #4532 Parquet reader: add support for multiple pandas index columns
 - PR #4599 Add Java and JNI bindings for string replace
 - PR #4655 Raise error for list like dtypes in cudf
 - PR #4548 Remove string_view is_null method
