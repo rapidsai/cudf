@@ -181,7 +181,7 @@ std::unique_ptr<column> contains_fn( strings_column_view const& strings,
     CUDF_EXPECTS( target.is_valid(), "Parameter target must be valid.");
     if( target.size()==0 ) // empty target string returns true
     {
-        auto true_scalar = make_fixed_width_scalar<experimental::bool8>( true, stream, mr );
+        auto true_scalar = make_fixed_width_scalar<bool>( true, stream, mr );
         auto results = make_column_from_scalar( *true_scalar, strings.size(), mr, stream );
         results->set_null_mask( copy_bitmask( strings.parent(), stream, mr ), strings.null_count() );
         return results;

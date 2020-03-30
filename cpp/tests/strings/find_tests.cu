@@ -74,7 +74,7 @@ TEST_F(StringsFindTest, Find)
         cudf::test::expect_columns_equal(*results, expected);
     }
     {
-        cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected( {1,1,1,1,1,1}, {1,1,0,1,1,1} );
+        cudf::test::fixed_width_column_wrapper<bool> expected( {1,1,1,1,1,1}, {1,1,0,1,1,1} );
         auto results = cudf::strings::contains(strings_view, cudf::string_scalar(""));
         cudf::test::expect_columns_equal(*results, expected);
         results = cudf::strings::starts_with(strings_view, cudf::string_scalar(""));
