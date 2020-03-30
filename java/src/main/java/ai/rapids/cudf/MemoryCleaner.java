@@ -241,11 +241,11 @@ final class MemoryCleaner {
 
   /**
    * This is not 100% perfect and we can still run into situations where RMM buffers were not
-   * collected and this returns true because of thread race conditions. This is just a best effort.
-   * @return true if there are no rmm blockers else false.
+   * collected and this returns false because of thread race conditions. This is just a best effort.
+   * @return true if there are rmm blockers else false.
    */
-  static boolean bestEffortNoRmmBlockers() {
-    return !all.stream().anyMatch(cwr -> cwr.isRmmBlocker && !cwr.cleaner.isClean());
+  static boolean bestEffortHasRmmBlockers() {
+    return all.stream().anyMatch(cwr -> cwr.isRmmBlocker && !cwr.cleaner.isClean());
   }
 
   /**
