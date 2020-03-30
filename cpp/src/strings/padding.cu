@@ -124,8 +124,8 @@ std::unique_ptr<column> pad( strings_column_view const& strings,
                 string_view d_str = d_strings.element<string_view>(idx);
                 char* ptr = d_chars + d_offsets[idx];
                 int32_t pad = static_cast<int32_t>(width - d_str.length());
-                auto right_pad = pad/2;
-                auto left_pad = pad - right_pad;
+                auto right_pad = (width & 1) ? pad/2 : (pad - pad/2); // odd width = right-justify
+                auto left_pad = pad - right_pad; // e.g. width=7 gives "++foxx+" while width=6 gives "+fox++"
                 while( left_pad-- > 0 )
                     ptr += from_char_utf8(d_fill_char,ptr);
                 ptr = copy_string(ptr, d_str);
