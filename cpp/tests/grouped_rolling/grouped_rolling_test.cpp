@@ -112,8 +112,8 @@ protected:
                                 size_type min_periods)
   {
     size_type num_rows = input.size();
-    std::vector<cudf::size_type> ref_data(num_rows);
-    std::vector<bool> ref_valid(num_rows);
+    thrust::host_vector<cudf::size_type> ref_data(num_rows);
+    thrust::host_vector<bool>            ref_valid(num_rows);
 
     // input data and mask
   
@@ -160,11 +160,11 @@ protected:
                           size_type min_periods)
   {
     size_type num_rows = input.size();
-    std::vector<OutputType> ref_data(num_rows);
-    std::vector<bool> ref_valid(num_rows);
+    thrust::host_vector<OutputType> ref_data(num_rows);
+    thrust::host_vector<bool> ref_valid(num_rows);
 
     // input data and mask
-    std::vector<T> in_col;
+    thrust::host_vector<T> in_col;
     std::vector<bitmask_type> in_valid; 
     std::tie(in_col, in_valid) = cudf::test::to_host<T>(input); 
     bitmask_type* valid_mask = in_valid.data();
@@ -321,7 +321,7 @@ TYPED_TEST_CASE(GroupedRollingTest, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(GroupedRollingTest, SimplePartitionedStaticWindowsWithGroupKeys)
 {
-  const std::vector<TypeParam> col_data {0, 10, 20, 30, 40, 50, 60, 70, 80, 90};
+  const auto col_data = cudf::test::make_type_param_vector<TypeParam>({0, 10, 20, 30, 40, 50, 60, 70, 80, 90});
   const size_type DATA_SIZE {static_cast<size_type>(col_data.size())};
   const std::vector<bool>      col_mask (DATA_SIZE, true);
   fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
@@ -347,7 +347,7 @@ TYPED_TEST(GroupedRollingTest, SimplePartitionedStaticWindowsWithGroupKeys)
 // all rows are invalid
 TYPED_TEST(GroupedRollingTest, AllInvalid)
 {
-  const std::vector<TypeParam> col_data {0, 10, 20, 30, 40, 50, 60, 70, 80, 90};
+  const auto col_data = cudf::test::make_type_param_vector<TypeParam>({0, 10, 20, 30, 40, 50, 60, 70, 80, 90});
   const size_type DATA_SIZE {static_cast<size_type>(col_data.size())};
   const std::vector<bool>      col_mask (DATA_SIZE, false);
   fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
@@ -373,7 +373,7 @@ TYPED_TEST(GroupedRollingTest, AllInvalid)
 // window = following_window = 0
 TYPED_TEST(GroupedRollingTest, ZeroWindow)
 {
-  const std::vector<TypeParam> col_data {0, 10, 20, 30, 40, 50, 60, 70, 80, 90};
+  const auto col_data = cudf::test::make_type_param_vector<TypeParam>({0, 10, 20, 30, 40, 50, 60, 70, 80, 90});
   const size_type DATA_SIZE {static_cast<size_type>(col_data.size())};
   const std::vector<bool>      col_mask (DATA_SIZE, true);
   fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
@@ -501,8 +501,8 @@ protected:
     auto timestamp_vec = cudf::test::to_host<int32_t>(timestamp_column).first;
 
     size_type num_rows = input.size();
-    std::vector<cudf::size_type> ref_data(num_rows);
-    std::vector<bool> ref_valid(num_rows);
+    thrust::host_vector<cudf::size_type> ref_data(num_rows);
+    thrust::host_vector<bool> ref_valid(num_rows);
 
     // input data and mask
   
@@ -560,11 +560,11 @@ protected:
     auto timestamp_vec = cudf::test::to_host<int32_t>(timestamp_column).first;
 
     size_type num_rows = input.size();
-    std::vector<OutputType> ref_data(num_rows);
-    std::vector<bool> ref_valid(num_rows);
+    thrust::host_vector<OutputType> ref_data(num_rows);
+    thrust::host_vector<bool>       ref_valid(num_rows);
 
     // input data and mask
-    std::vector<T> in_col;
+    thrust::host_vector<T> in_col;
     std::vector<bitmask_type> in_valid; 
     std::tie(in_col, in_valid) = cudf::test::to_host<T>(input); 
     bitmask_type* valid_mask = in_valid.data();
