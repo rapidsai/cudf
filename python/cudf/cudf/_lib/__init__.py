@@ -1,3 +1,3 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from . import csv, cudf, gpuarrow, utils
+from . import csv, cudf, utils
