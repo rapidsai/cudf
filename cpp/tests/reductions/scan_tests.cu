@@ -105,7 +105,6 @@ TYPED_TEST(ScanTest, Min)
     std::vector<bool> b({ 1, 0, 1, 1, 1, 1, 0, 1, 1});
     std::vector<TypeParam> exact(v.size());
 
-    // #CHTODO
     std::transform(v.cbegin(), v.cend(),
         exact.begin(),
         [acc = *v.cbegin()](auto i) mutable { acc = std::min(acc, i); return acc; }

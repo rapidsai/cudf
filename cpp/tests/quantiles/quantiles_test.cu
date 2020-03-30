@@ -131,7 +131,7 @@ TYPED_TEST(QuantilesTest, TestMultiColumnUnsorted)
         { "C", "B", "A", "A", "D", "B", "D", "B", "D", "C", "C", "C", "D", "B", "D", "B", "C", "C", "A", "D", "B", "A", "A", "A" },
         {  1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1  });
 
-    auto input_b = fixed_width_column_wrapper<T>(
+    auto input_b = fixed_width_column_wrapper<T, int32_t>(
         {  4,   3,   5,   0,   1,   0,   4,   1,   5,   3,   0,   5,   2,   4,   3,   2,   1,   2,   3,   0,   5,   1,   4,   2 },
         {  1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1 }
     );
@@ -148,7 +148,7 @@ TYPED_TEST(QuantilesTest, TestMultiColumnUnsorted)
         { "A", "C", "C", "B", "D" },
         {  1,   1,   1,   1,   1  });
 
-    auto expected_b = fixed_width_column_wrapper<T>(
+    auto expected_b = fixed_width_column_wrapper<T, int32_t>(
         {  5,   5,   1,   5,   0  },
         {  1,   1,   1,   1,   1  }
     );
@@ -166,7 +166,7 @@ TYPED_TEST(QuantilesTest, TestMultiColumnAssumedSorted)
         { "C", "B", "A", "A", "D", "B", "D", "B", "D", "C", "C", "C", "D", "B", "D", "B", "C", "C", "A", "D", "B", "A", "A", "A" },
         {  1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1  });
 
-    auto input_b = fixed_width_column_wrapper<T>(
+    auto input_b = fixed_width_column_wrapper<T, int32_t>(
         {  4,   3,   5,   0,   1,   0,   4,   1,   5,   3,   0,   5,   2,   4,   3,   2,   1,   2,   3,   0,   5,   1,   4,   2 },
         {  1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1 }
     );
@@ -182,7 +182,7 @@ TYPED_TEST(QuantilesTest, TestMultiColumnAssumedSorted)
         { "C", "D", "C", "D", "A" },
         {  1,   1,   1,   1,   1  });
 
-    auto expected_b = fixed_width_column_wrapper<T>(
+    auto expected_b = fixed_width_column_wrapper<T, int32_t>(
         {  4,   2,   1,   4,   2  },
         {  1,   1,   1,   1,   1  }
     );

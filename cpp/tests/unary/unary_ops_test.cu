@@ -99,7 +99,6 @@ TYPED_TEST(cudf_logical_test, SimpleLogicalNot) {
 }
 
 TYPED_TEST(cudf_logical_test, SimpleLogicalNotWithNullMask) {
-  // CHTODO
   cudf::test::fixed_width_column_wrapper<TypeParam> input{
       {true, true, true, true}, {1, 0, 1, 1}};
   cudf::test::fixed_width_column_wrapper<bool> expected{

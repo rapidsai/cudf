@@ -123,7 +123,6 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions13_3) {
     auto expected_column_view1{static_cast<cudf::column_view const&>(expectedDataWrap1)};
     cudf::test::expect_columns_equal(expected_column_view1, output_column_view1);
 
-    // #CHTODO
     if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8) {
       fixed_width_column_wrapper<TypeParam> expectedDataWrap2({1,0,1,0,1,0,1,0,1,0,1,0,1});
       auto expected_column_view2{static_cast<cudf::column_view const&>(expectedDataWrap2)};

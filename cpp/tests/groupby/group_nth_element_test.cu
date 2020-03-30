@@ -38,24 +38,24 @@ TYPED_TEST(groupby_nth_element_test, basic)
     using V = TypeParam;
     using R = experimental::detail::target_type_t<V, experimental::aggregation::NTH_ELEMENT>;
 
-    fixed_width_column_wrapper<K> keys        { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
-    fixed_width_column_wrapper<V> vals        { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-    //keys                                    { 1, 1, 1, 2, 2, 2, 2, 3, 3, 3};
-    //vals                                    { 0, 3, 6, 1, 4, 5, 9, 2, 7, 8};
+    fixed_width_column_wrapper<K> keys         { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+    fixed_width_column_wrapper<V, int32_t> vals{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    //keys                                     { 1, 1, 1, 2, 2, 2, 2, 3, 3, 3};
+    //vals                                     { 0, 3, 6, 1, 4, 5, 9, 2, 7, 8};
 
     fixed_width_column_wrapper<K> expect_keys { 1, 2, 3 };
 
     //groupby.first()
     auto agg = cudf::experimental::make_nth_element_aggregation(0);
-    fixed_width_column_wrapper<R> expect_vals0 {0, 1, 2 };
+    fixed_width_column_wrapper<R, int32_t> expect_vals0 {0, 1, 2 };
     test_single_agg(keys, vals, expect_keys, expect_vals0, std::move(agg));
 
     agg = cudf::experimental::make_nth_element_aggregation(1);
-    fixed_width_column_wrapper<R> expect_vals1 {3, 4, 7 };
+    fixed_width_column_wrapper<R, int32_t> expect_vals1 {3, 4, 7 };
     test_single_agg(keys, vals, expect_keys, expect_vals1, std::move(agg));
 
     agg = cudf::experimental::make_nth_element_aggregation(2);
-    fixed_width_column_wrapper<R> expect_vals2 {6, 5, 8 };
+    fixed_width_column_wrapper<R, int32_t> expect_vals2 {6, 5, 8 };
     test_single_agg(keys, vals, expect_keys, expect_vals2, std::move(agg));
 }
 
@@ -81,13 +81,13 @@ TYPED_TEST(groupby_nth_element_test, basic_out_of_bounds)
     using V = TypeParam;
     using R = experimental::detail::target_type_t<V, experimental::aggregation::NTH_ELEMENT>;
 
-    fixed_width_column_wrapper<K> keys        { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
-    fixed_width_column_wrapper<V> vals        { 0, 1, 2, 3, 4, 5, 3, 2, 2, 9};
+    fixed_width_column_wrapper<K> keys         { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+    fixed_width_column_wrapper<V, int32_t> vals{ 0, 1, 2, 3, 4, 5, 3, 2, 2, 9};
 
     fixed_width_column_wrapper<K> expect_keys { 1, 2, 3 };
 
     auto agg = cudf::experimental::make_nth_element_aggregation(3);
-    fixed_width_column_wrapper<R> expect_vals { {0, 9, 0}, {0, 1, 0} };
+    fixed_width_column_wrapper<R, int32_t> expect_vals { {0, 9, 0}, {0, 1, 0} };
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
@@ -97,24 +97,24 @@ TYPED_TEST(groupby_nth_element_test, negative)
     using V = TypeParam;
     using R = experimental::detail::target_type_t<V, experimental::aggregation::NTH_ELEMENT>;
 
-    fixed_width_column_wrapper<K> keys        { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
-    fixed_width_column_wrapper<V> vals        { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-    //keys                                    { 1, 1, 1, 2, 2, 2, 2, 3, 3, 3};
-    //vals                                    { 0, 3, 6, 1, 4, 5, 9, 2, 7, 8};
+    fixed_width_column_wrapper<K> keys         { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+    fixed_width_column_wrapper<V, int32_t> vals{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    //keys                                     { 1, 1, 1, 2, 2, 2, 2, 3, 3, 3};
+    //vals                                     { 0, 3, 6, 1, 4, 5, 9, 2, 7, 8};
 
     fixed_width_column_wrapper<K> expect_keys { 1, 2, 3 };
 
     //groupby.last()
     auto agg = cudf::experimental::make_nth_element_aggregation(-1);
-    fixed_width_column_wrapper<R> expect_vals0 {6, 9, 8 };
+    fixed_width_column_wrapper<R, int32_t> expect_vals0 {6, 9, 8 };
     test_single_agg(keys, vals, expect_keys, expect_vals0, std::move(agg));
 
     agg = cudf::experimental::make_nth_element_aggregation(-2);
-    fixed_width_column_wrapper<R> expect_vals1 {3, 5, 7 };
+    fixed_width_column_wrapper<R, int32_t> expect_vals1 {3, 5, 7 };
     test_single_agg(keys, vals, expect_keys, expect_vals1, std::move(agg));
 
     agg = cudf::experimental::make_nth_element_aggregation(-3);
-    fixed_width_column_wrapper<R> expect_vals2 {0, 4, 2 };
+    fixed_width_column_wrapper<R, int32_t> expect_vals2 {0, 4, 2 };
     test_single_agg(keys, vals, expect_keys, expect_vals2, std::move(agg));
 }
 
@@ -124,13 +124,13 @@ TYPED_TEST(groupby_nth_element_test, negative_out_of_bounds)
     using V = TypeParam;
     using R = experimental::detail::target_type_t<V, experimental::aggregation::NTH_ELEMENT>;
 
-    fixed_width_column_wrapper<K> keys        { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
-    fixed_width_column_wrapper<V> vals        { 0, 1, 2, 3, 4, 5, 3, 2, 2, 9};
+    fixed_width_column_wrapper<K> keys          { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+    fixed_width_column_wrapper<V, int32_t> vals { 0, 1, 2, 3, 4, 5, 3, 2, 2, 9};
 
     fixed_width_column_wrapper<K> expect_keys { 1, 2, 3 };
 
     auto agg = cudf::experimental::make_nth_element_aggregation(-4);
-    fixed_width_column_wrapper<R> expect_vals { {0, 1, 0}, {0, 1, 0} };
+    fixed_width_column_wrapper<R, int32_t> expect_vals { {0, 1, 0}, {0, 1, 0} };
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
@@ -140,8 +140,8 @@ TYPED_TEST(groupby_nth_element_test, zero_valid_keys)
     using V = TypeParam;
     using R = experimental::detail::target_type_t<V, experimental::aggregation::NTH_ELEMENT>;
 
-    fixed_width_column_wrapper<K> keys      ( { 1, 2, 3}, all_null() );
-    fixed_width_column_wrapper<V> vals        { 3, 4, 5};
+    fixed_width_column_wrapper<K> keys        ( { 1, 2, 3}, all_null() );
+    fixed_width_column_wrapper<V, int32_t> vals{ 3, 4, 5};
 
     fixed_width_column_wrapper<K> expect_keys { };
     fixed_width_column_wrapper<R> expect_vals { };
@@ -156,11 +156,11 @@ TYPED_TEST(groupby_nth_element_test, zero_valid_values)
     using V = TypeParam;
     using R = experimental::detail::target_type_t<V, experimental::aggregation::NTH_ELEMENT>;
 
-    fixed_width_column_wrapper<K> keys        { 1, 1, 1};
-    fixed_width_column_wrapper<V> vals      ( { 3, 4, 5}, all_null() );
+    fixed_width_column_wrapper<K> keys           { 1, 1, 1};
+    fixed_width_column_wrapper<V, int32_t> vals( { 3, 4, 5}, all_null() );
 
     fixed_width_column_wrapper<K> expect_keys { 1};
-    fixed_width_column_wrapper<R> expect_vals { {3}, all_null()};
+    fixed_width_column_wrapper<R, int32_t> expect_vals { {3}, all_null()};
 
     auto agg = cudf::experimental::make_nth_element_aggregation(0);
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
@@ -172,16 +172,16 @@ TYPED_TEST(groupby_nth_element_test, null_keys_and_values)
     using V = TypeParam;
     using R = experimental::detail::target_type_t<V, experimental::aggregation::NTH_ELEMENT>;
 
-    fixed_width_column_wrapper<K> keys(       { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
-                                              { 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1});
-    fixed_width_column_wrapper<V> vals(       { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 4},
-                                              { 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0});
+    fixed_width_column_wrapper<K> keys(         { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
+                                                { 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1});
+    fixed_width_column_wrapper<V, int32_t> vals({ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 4},
+                                                { 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0});
 
                                           //  { 1, 1, 1   2,2,2,2    3, 3,    4}
     fixed_width_column_wrapper<K> expect_keys({ 1,        2,         3,       4}, all_valid());
                                           //  { -,3,6,    1,4,-,9,  2,8,      -}
-    fixed_width_column_wrapper<R> expect_vals({-1,        1,         2,      -1}, 
-                                               {0,        1,         1,       0});
+    fixed_width_column_wrapper<R, int32_t> expect_vals({-1,        1,         2,      -1}, 
+                                                       {0,        1,         1,       0});
 
 
     auto agg = cudf::experimental::make_nth_element_aggregation(0);
@@ -194,16 +194,16 @@ TYPED_TEST(groupby_nth_element_test, null_keys_and_values_out_of_bounds)
     using V = TypeParam;
     using R = experimental::detail::target_type_t<V, experimental::aggregation::NTH_ELEMENT>;
 
-    fixed_width_column_wrapper<K> keys(       { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
-                                              { 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1});
-    fixed_width_column_wrapper<V> vals(       { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 4},
-                                              { 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0});
+    fixed_width_column_wrapper<K> keys(         { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
+                                                { 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1});
+    fixed_width_column_wrapper<V, int32_t> vals({ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 4},
+                                                { 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0});
                                          //  { 1, 1, 1     2, 2, 2,   3, 3,    4}
     fixed_width_column_wrapper<K> expect_keys({ 1,        2,         3,       4}, all_valid());
                                           //  { -,3,6,    1,4,-, 9,  2,8,     -}
                                           //    value,    null,       out,     out
-    fixed_width_column_wrapper<R> expect_vals ({6,       -1,        -1,      -1}, 
-                                               {1,        0,         0,       0});
+    fixed_width_column_wrapper<R, int32_t> expect_vals ({6,       -1,        -1,      -1}, 
+                                                        {1,        0,         0,       0});
 
     auto agg = cudf::experimental::make_nth_element_aggregation(2);
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
@@ -215,10 +215,10 @@ TYPED_TEST(groupby_nth_element_test, exclude_nulls)
     using V = TypeParam;
     using R = experimental::detail::target_type_t<V, experimental::aggregation::NTH_ELEMENT>;
 
-    fixed_width_column_wrapper<K> keys(       { 1, 2, 3, 3, 1, 2, 2, 1, 3, 3, 2, 4, 4, 2},
-                                              { 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1});
-    fixed_width_column_wrapper<V> vals(       { 0, 1, 2, 2, 3, 4, 5, 6, 7, 8, 9, 4, 4, 2},
-                                              { 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 0, 0});
+    fixed_width_column_wrapper<K> keys(         { 1, 2, 3, 3, 1, 2, 2, 1, 3, 3, 2, 4, 4, 2},
+                                                { 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1});
+    fixed_width_column_wrapper<V, int32_t> vals({ 0, 1, 2, 2, 3, 4, 5, 6, 7, 8, 9, 4, 4, 2},
+                                                { 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 0, 0});
 
                                           //  { 1, 1, 1     2, 2, 2,        3, 3,    4}
     fixed_width_column_wrapper<K> expect_keys({ 1,          2,              3,       4}, all_valid());
@@ -227,14 +227,14 @@ TYPED_TEST(groupby_nth_element_test, exclude_nulls)
                                           //1  value,       value,          value,     null
                                           //2  value,       null,           value,     out
     //include_nulls::YES
-    fixed_width_column_wrapper<R> expect_nuls0{{-1,         1,              2,       -1}, {0,1,1,0}};
-    fixed_width_column_wrapper<R> expect_nuls1{{3,          4,              2,       -1}, {1,1,1,0}};
-    fixed_width_column_wrapper<R> expect_nuls2{{6,         -1,              8,       -1}, {1,0,1,0}};
+    fixed_width_column_wrapper<R, int32_t> expect_nuls0{{-1,         1,              2,       -1}, {0,1,1,0}};
+    fixed_width_column_wrapper<R, int32_t> expect_nuls1{{3,          4,              2,       -1}, {1,1,1,0}};
+    fixed_width_column_wrapper<R, int32_t> expect_nuls2{{6,         -1,              8,       -1}, {1,0,1,0}};
     
     //include_nulls::NO
-    fixed_width_column_wrapper<R> expect_vals0{{3,          1,              2,       -1}, {1,1,1,0}};
-    fixed_width_column_wrapper<R> expect_vals1{{6,          4,              2,       -1}, {1,1,1,0}};
-    fixed_width_column_wrapper<R> expect_vals2{{-1,         9,              8,       -1}, {0,1,1,0}};
+    fixed_width_column_wrapper<R, int32_t> expect_vals0{{3,          1,              2,       -1}, {1,1,1,0}};
+    fixed_width_column_wrapper<R, int32_t> expect_vals1{{6,          4,              2,       -1}, {1,1,1,0}};
+    fixed_width_column_wrapper<R, int32_t> expect_vals2{{-1,         9,              8,       -1}, {0,1,1,0}};
 
     auto 
     agg = cudf::experimental::make_nth_element_aggregation(0, cudf::include_nulls::YES);

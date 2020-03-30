@@ -102,8 +102,7 @@ using FloatingPointTypes = cudf::test::Types<float, double>;
  * TYPED_TEST_CASE(MyTypedFixture, cudf::test::NumericTypes);
  * ```
  *---------------------------------------------------------------------------**/
-using NumericTypesWithoutBool = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double> ; // #CH TODO delete
-using NumericTypes            = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double, bool> ;
+using NumericTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double, bool> ;
 
 /**---------------------------------------------------------------------------*
  * @brief Provides a list of all timestamp types supported in libcudf for use
@@ -151,7 +150,7 @@ using FixedWidthTypes = Concat<NumericTypes, TimestampTypes>;
  * TYPED_TEST_CASE(MyTypedFixture, cudf::test::ComparableTypes);
  * ```
  *---------------------------------------------------------------------------**/
-using ComparableTypes = Concat<NumericTypesWithoutBool, TimestampTypes, StringTypes>;
+using ComparableTypes = Concat<NumericTypes, TimestampTypes, StringTypes>;
 
 /**---------------------------------------------------------------------------*
  * @brief Provides a list of all types supported in libcudf for use in a GTest
@@ -166,7 +165,7 @@ using ComparableTypes = Concat<NumericTypesWithoutBool, TimestampTypes, StringTy
  * TYPED_TEST_CASE(MyTypedFixture, cudf::test::AllTypes);
  * ```
  *---------------------------------------------------------------------------**/
-using AllTypes = Concat<NumericTypesWithoutBool, TimestampTypes>;
+using AllTypes = Concat<NumericTypes, TimestampTypes>;
 
 /**---------------------------------------------------------------------------*
  * @brief `std::array` of all `cudf::type_id`s
@@ -182,7 +181,7 @@ static constexpr auto all_type_ids{detail::types_to_ids<AllTypes>()};
  * This can be used for iterating over `type_id`s for custom testing, or used in
  * GTest value-parameterized tests.
  *---------------------------------------------------------------------------**/
-static constexpr auto numeric_type_ids{detail::types_to_ids<NumericTypesWithoutBool>()};
+static constexpr auto numeric_type_ids{detail::types_to_ids<NumericTypes>()};
 
 /**---------------------------------------------------------------------------*
  * @brief `std::array` of all timestamp `cudf::type_id`s
