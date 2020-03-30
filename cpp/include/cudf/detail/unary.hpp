@@ -24,7 +24,7 @@ namespace experimental {
 namespace detail{
 
 /**
- * @brief Creates a column of `BOOL` elements by applying a predicate to every element between [`begin, `end`)
+ * @brief Creates a column of `BOOL8` elements by applying a predicate to every element between [`begin, `end`)
  * `true` indicates the value is satisfies the predicate and `false` indicates it doesn't.
  *
  * @tparam InputIterator Iterator type for `begin` and `end`
@@ -35,7 +35,7 @@ namespace detail{
  * @param mr Optional, The resource to use for all allocations
  * @param stream Optional CUDA stream on which to execute kernels
  *
- * @returns std::unique_ptr<cudf::column> A column of type `BOOL,` with `true` representing predicate is satisfied.
+ * @returns std::unique_ptr<cudf::column> A column of type `BOOL8,` with `true` representing predicate is satisfied.
  */
 
 template <typename InputIterator, typename Predicate>

@@ -494,7 +494,7 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
  * @throws cudf::logic_error if boolean mask is not of the same length as lhs and rhs  
  * @param[in] left-hand column_view
  * @param[in] right-hand column_view
- * @param[in] column of `BOOL` representing "left (true) / right (false)" boolean for each element and
+ * @param[in] column of `BOOL8` representing "left (true) / right (false)" boolean for each element and
  *            null element represents false.
  * @param[in] mr resource for allocating device memory
  *
@@ -551,7 +551,7 @@ std::unique_ptr<column> shift(column_view const& input,
  * @throws cudf::logic_error if boolean mask is not of the same length as rhs  
  * @param[in] left-hand scalar
  * @param[in] right-hand column_view
- * @param[in] column of `BOOL` representing "left (true) / right (false)" boolean for each element and
+ * @param[in] column of `BOOL8` representing "left (true) / right (false)" boolean for each element and
  *            null element represents false.
  * @param[in] mr resource for allocating device memory 
  *
@@ -572,7 +572,7 @@ std::unique_ptr<column> copy_if_else(scalar const& lhs, column_view const& rhs, 
  * @throws cudf::logic_error if boolean mask is not of the same length as lhs  
  * @param[in] left-hand column_view
  * @param[in] right-hand scalar
- * @param[in] column of `BOOL` representing "left (true) / right (false)" boolean for each element and
+ * @param[in] column of `BOOL8` representing "left (true) / right (false)" boolean for each element and
  *            null element represents false.
  * @param[in] mr resource for allocating device memory 
  *
@@ -591,7 +591,7 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs, scalar const& rhs, 
  * @throws cudf::logic_error if boolean mask is not of type bool
  * @param[in] left-hand scalar
  * @param[in] right-hand scalar
- * @param[in] column of `BOOL` representing "left (true) / right (false)" boolean for each element and
+ * @param[in] column of `BOOL8` representing "left (true) / right (false)" boolean for each element and
  *            null element represents false.
  * @param[in] mr resource for allocating device memory 
  *
