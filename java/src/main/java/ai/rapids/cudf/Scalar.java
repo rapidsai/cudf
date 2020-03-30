@@ -495,5 +495,10 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
       }
       return false;
     }
+
+    @Override
+    public boolean isClean() {
+      return scalarHandle == 0;
+    }
   }
 }
