@@ -144,6 +144,37 @@ std::vector<std::unique_ptr<table>> scatter_to_tables(
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
     cudaStream_t stream = 0);
 
+
+/**
+ * @copydoc cudf::experimental::boolean_mask_scatter(
+                      table_view const& source, table_view const& target,
+ *                    column_view const& boolean_mask,
+ *                    rmm::mr::device_memory_resource *mr)
+ *
+ * @param stream The stream to use for CUDA operations
+ */
+std::unique_ptr<table> boolean_mask_scatter(
+    table_view const& source, table_view const& target,
+    column_view const& boolean_mask,
+    rmm::mr::device_memory_resource *mr,
+    cudaStream_t stream = 0);
+
+/**
+ * @copydoc cudf::experimental::boolean_mask_scatter(
+ *                    std::vector<std::reference_wrapper<scalar>> const& source,
+ *                    table_view const& target,
+ *                    column_view const& boolean_mask,
+ *                    rmm::mr::device_memory_resource *mr)
+ *
+ * @param stream The stream to use for CUDA operations
+ */
+std::unique_ptr<table> boolean_mask_scatter(
+    std::vector<std::reference_wrapper<scalar>> const& source,
+    table_view const& target,
+    column_view const& boolean_mask,
+    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource(),
+    cudaStream_t stream = 0);
+
 }  // namespace detail
 }  // namespace experimental
 }  // namespace cudf

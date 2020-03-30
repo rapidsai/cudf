@@ -22,6 +22,7 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 #include <algorithm>
 
@@ -34,9 +35,9 @@ inline mask_state should_allocate_mask(mask_allocation_policy mask_alloc,
                                        bool mask_exists) {
   if ((mask_alloc == mask_allocation_policy::ALWAYS) ||
       (mask_alloc == mask_allocation_policy::RETAIN && mask_exists)) {
-    return UNINITIALIZED;
+    return mask_state::UNINITIALIZED;
   } else {
-    return UNALLOCATED;
+    return mask_state::UNALLOCATED;
   }
 }
 
@@ -90,12 +91,14 @@ std::unique_ptr<table> empty_like(table_view const& input_table) {
 std::unique_ptr<column> allocate_like(column_view const& input,
                                       mask_allocation_policy mask_alloc,
                                       rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   return detail::allocate_like(input, input.size(), mask_alloc, mr);
 }
 
 std::unique_ptr<column> allocate_like(column_view const& input, size_type size,
                                       mask_allocation_policy mask_alloc,
                                       rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   return detail::allocate_like(input, size, mask_alloc, mr);
 }
 

@@ -20,9 +20,6 @@
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/type_lists.hpp>
 
-#include <rmm/mr/default_memory_resource.hpp>
-#include <rmm/mr/device_memory_resource.hpp>
-
 #include <gmock/gmock.h>
 
 class ScalarFactoryTest : public cudf::test::BaseFixture {

@@ -26,6 +26,7 @@
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/replace.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 namespace cudf {
 namespace experimental {
@@ -189,6 +190,19 @@ clamper (column_view const& input,
                                 hi_itr, hi_replace_itr, mr, stream);
 }
 
+template <typename T, typename ScalarIterator>
+std::enable_if_t<std::is_same<T, dictionary32>::value, std::unique_ptr<cudf::column>>
+clamper (column_view const& input,
+         ScalarIterator const& lo_itr,
+         ScalarIterator const& lo_replace_itr,
+         ScalarIterator const& hi_itr,
+         ScalarIterator const& hi_replace_itr,
+         rmm::mr::device_memory_resource* mr,
+         cudaStream_t stream) {
+
+    CUDF_FAIL("dictionary type not supported");
+}
+
 } //namespace
 
 template<typename T, typename ScalarIterator>
@@ -273,8 +287,8 @@ std::unique_ptr<column> clamp(column_view const& input,
                               scalar const& hi,
                               scalar const& hi_replace,
                               rmm::mr::device_memory_resource* mr) {
-
-    return detail::clamp(input, lo, lo_replace, hi, hi_replace, mr);
+  CUDF_FUNC_RANGE();
+  return detail::clamp(input, lo, lo_replace, hi, hi_replace, mr);
 }
 
 // clamp input at lo and hi
@@ -282,8 +296,8 @@ std::unique_ptr<column> clamp(column_view const& input,
                               scalar const& lo,
                               scalar const& hi,
                               rmm::mr::device_memory_resource* mr) {
-
-    return detail::clamp(input, lo, lo, hi, hi, mr);
+  CUDF_FUNC_RANGE();
+  return detail::clamp(input, lo, lo, hi, hi, mr);
 }
 }// namespace experimental
 }// namespace cudf

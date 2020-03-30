@@ -17,9 +17,11 @@
 #ifndef CONCURRENT_UNORDERED_MAP_CUH
 #define CONCURRENT_UNORDERED_MAP_CUH
 
+#include <hash/managed.cuh>
 #include <utilities/legacy/device_atomics.cuh>
 #include <hash/helper_functions.cuh>
 #include <hash/hash_allocator.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 #include <cudf/utilities/error.hpp>
 #include <cudf/detail/utilities/hash_functions.cuh>
@@ -146,6 +148,7 @@ class concurrent_unordered_map {
       const Equality& equal = key_equal(),
       const allocator_type& allocator = allocator_type(), 
       cudaStream_t stream = 0) {
+    CUDF_FUNC_RANGE();
     using Self =
       concurrent_unordered_map<Key, Element, Hasher, Equality, Allocator>;
 
@@ -215,7 +218,7 @@ class concurrent_unordered_map {
     return const_iterator(m_hashtbl_values, m_hashtbl_values + m_capacity,
                           m_hashtbl_values + m_capacity);
   }
-  __device__ value_type* data() const { return m_hashtbl_values; }
+  __host__ __device__ value_type* data() const { return m_hashtbl_values; }
 
   __host__ __device__ key_type get_unused_key() const { return m_unused_key; }
 

@@ -20,6 +20,7 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/detail/utilities/release_assert.cuh>
 #include <cudf/wrappers/bool.hpp>
+#include <cudf/wrappers/dictionary.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 #include <string>
 
@@ -113,7 +114,7 @@ CUDF_TYPE_MAPPING(cudf::timestamp_s, type_id::TIMESTAMP_SECONDS);
 CUDF_TYPE_MAPPING(cudf::timestamp_ms, type_id::TIMESTAMP_MILLISECONDS);
 CUDF_TYPE_MAPPING(cudf::timestamp_us, type_id::TIMESTAMP_MICROSECONDS);
 CUDF_TYPE_MAPPING(cudf::timestamp_ns, type_id::TIMESTAMP_NANOSECONDS);
-
+CUDF_TYPE_MAPPING(dictionary32, type_id::DICTIONARY32);
 
 template <typename T>
 struct type_to_scalar_type_impl {
@@ -147,6 +148,12 @@ template <>
 struct type_to_scalar_type_impl<cudf::string_view> {
   using ScalarType = cudf::string_scalar;
   using ScalarDeviceType = cudf::string_scalar_device_view;
+};
+
+template <> // TODO: this is a temporary solution for make_pair_iterator
+struct type_to_scalar_type_impl<cudf::dictionary32> {
+  using ScalarType = cudf::numeric_scalar<int32_t>;
+  using ScalarDeviceType = cudf::numeric_scalar_device_view<int32_t>;
 };
 
 #ifndef MAP_TIMESTAMP_SCALAR
@@ -313,6 +320,9 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(
           std::forward<Ts>(args)...);
     case TIMESTAMP_NANOSECONDS:
       return f.template operator()<typename IdTypeMap<TIMESTAMP_NANOSECONDS>::type>(
+          std::forward<Ts>(args)...);
+    case DICTIONARY32:
+      return f.template operator()<typename IdTypeMap<DICTIONARY32>::type>(
           std::forward<Ts>(args)...);
     default: {
 #ifndef __CUDA_ARCH__

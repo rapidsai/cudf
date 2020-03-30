@@ -22,6 +22,7 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/detail/transform.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 namespace cudf {
 namespace experimental {
@@ -86,8 +87,8 @@ nans_to_nulls(column_view const& input,
 
 std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> 
 nans_to_nulls(column_view const& input, rmm::mr::device_memory_resource * mr) {
-
-    return detail::nans_to_nulls(input, mr);
+  CUDF_FUNC_RANGE();
+  return detail::nans_to_nulls(input, mr);
 }
 
 }// namespace experimental

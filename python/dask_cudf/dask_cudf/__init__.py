@@ -1,15 +1,10 @@
+from dask.dataframe import from_delayed
+
 import cudf
 from cudf._version import get_versions
 
 from . import backends
-from .core import (
-    DataFrame,
-    Series,
-    concat,
-    from_cudf,
-    from_dask_dataframe,
-    from_delayed,
-)
+from .core import DataFrame, Series, concat, from_cudf, from_dask_dataframe
 from .io import read_csv, read_json, read_orc, to_orc
 
 try:

@@ -47,7 +47,7 @@ namespace detail {
  * @tparam OutputType       the output type of reduction
  * ----------------------------------------------------------------------------**/
 template <typename Op, typename InputIterator, typename OutputType=typename thrust::iterator_value<InputIterator>::type,
-typename std::enable_if_t<!std::is_same<OutputType, string_view>::value>* = nullptr >
+typename std::enable_if_t<is_fixed_width<OutputType>()>* = nullptr>
 std::unique_ptr<scalar> reduce(InputIterator d_in, cudf::size_type num_items, op::simple_op<Op> sop,
   rmm::mr::device_memory_resource* mr, cudaStream_t stream)
 {
@@ -91,6 +91,15 @@ std::unique_ptr<scalar> reduce(InputIterator d_in, cudf::size_type num_items, op
   using ScalarType = cudf::experimental::scalar_type_t<OutputType>;
   auto s = new ScalarType(dev_result, true, stream, mr); //only for string_view, data is copied
   return std::unique_ptr<scalar>(s);
+}
+
+// @brief dictionary specialization of simple reduction
+template <typename Op, typename InputIterator, typename OutputType=typename thrust::iterator_value<InputIterator>::type,
+typename std::enable_if_t<std::is_same<OutputType, dictionary32>::value>* = nullptr >
+std::unique_ptr<scalar> reduce(InputIterator d_in, cudf::size_type num_items, op::simple_op<Op> sop,
+  rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+{
+  CUDF_FAIL("dictionary type not supported");
 }
 
 /** --------------------------------------------------------------------------*

@@ -20,8 +20,8 @@
 #include <cudf/wrappers/bool.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <rmm/mr/default_memory_resource.hpp>
-#include <rmm/mr/device_memory_resource.hpp>
+#include <rmm/mr/device/default_memory_resource.hpp>
+#include <rmm/mr/device/device_memory_resource.hpp>
 
 #include <ftw.h>
 #include <random>

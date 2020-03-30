@@ -161,14 +161,14 @@ TYPED_TEST(InterleaveColumnsTest, MismatchedDtypes)
 {
     using T = TypeParam;
 
-    if (std::is_same<int, T>::value) {
-        return;
+    if (not std::is_same<int, T>::value) {
+
+        fixed_width_column_wrapper<int> input_a({ 1, 4, 7 }, { 1, 0, 1 });
+        fixed_width_column_wrapper<T>   input_b({ 2, 5, 8 }, { 0, 1, 0 });
+
+        cudf::table_view input (std::vector<cudf::column_view>{ input_a, input_b });
+
+        EXPECT_THROW(cudf::experimental::interleave_columns(input), cudf::logic_error);
+        
     }
-
-    fixed_width_column_wrapper<int> input_a({ 1, 4, 7 }, { 1, 0, 1 });
-    fixed_width_column_wrapper<T>   input_b({ 2, 5, 8 }, { 0, 1, 0 });
-
-    cudf::table_view input (std::vector<cudf::column_view>{ input_a, input_b });
-
-    EXPECT_THROW(cudf::experimental::interleave_columns(input), cudf::logic_error);
 }

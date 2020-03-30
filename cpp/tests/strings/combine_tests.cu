@@ -24,10 +24,9 @@
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/column_utilities.hpp>
-#include "./utilities.h"
+#include <tests/strings/utilities.h>
 
 #include <vector>
-#include <gmock/gmock.h>
 
 
 struct StringsCombineTest : public cudf::test::BaseFixture {};
@@ -69,6 +68,14 @@ TEST_F(StringsCombineTest, Concatenate)
             thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
 
         auto results = cudf::strings::concatenate(table,cudf::string_scalar(":"),cudf::string_scalar("_"));
+        cudf::test::expect_columns_equal(*results,expected);
+    }
+    {
+        std::vector<const char*> h_expected{ "eeexyz", "bbabc", "d", "éa", "aa", "bbb", "éééf" };
+        cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
+            thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
+
+        auto results = cudf::strings::concatenate(table,cudf::string_scalar(""),cudf::string_scalar(""));
         cudf::test::expect_columns_equal(*results,expected);
     }
 }
@@ -117,4 +124,21 @@ TEST_F(StringsCombineTest, JoinZeroSizeStringsColumn)
     auto strings_view = cudf::strings_column_view(zero_size_strings_column);
     auto results = cudf::strings::join_strings(strings_view);
     cudf::test::expect_strings_empty(results->view());
+}
+
+TEST_F(StringsCombineTest, JoinAllNullStringsColumn)
+{
+    cudf::test::strings_column_wrapper strings( {"","",""}, {0,0,0} );
+
+    auto results = cudf::strings::join_strings(cudf::strings_column_view(strings));
+    cudf::test::strings_column_wrapper expected1( {""}, {0} );
+    cudf::test::expect_columns_equal(*results,expected1);
+
+    results = cudf::strings::join_strings(cudf::strings_column_view(strings),cudf::string_scalar(""),cudf::string_scalar("3"));
+    cudf::test::strings_column_wrapper expected2( {"333"} );
+    cudf::test::expect_columns_equal(*results,expected2);
+
+    results = cudf::strings::join_strings(cudf::strings_column_view(strings),cudf::string_scalar("-"),cudf::string_scalar("*"));
+    cudf::test::strings_column_wrapper expected3( {"*-*-*"} );
+    cudf::test::expect_columns_equal(*results,expected3);
 }

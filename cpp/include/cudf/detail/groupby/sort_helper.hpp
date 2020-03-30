@@ -30,7 +30,6 @@ namespace groupby {
 namespace detail { 
 namespace sort {
 
-// TODO (dm): update documentation for whole file
 /**
  * @brief Helper class for computing sort-based groupby
  * 
@@ -53,27 +52,28 @@ struct sort_groupby_helper {
   /**
    * @brief Construct a new helper object
    * 
-   * If `ignore_null_keys == true`, then any row in `keys` containing a null
+   * If `include_null_keys == NO`, then any row in `keys` containing a null
    * value will effectively be discarded. I.e., any values corresponding to
    * discarded rows in `keys` will not contribute to any aggregation. 
    *
    * @param keys table to group by
-   * @param ignore_null_keys Ignore rows in keys with nulls
+   * @param include_null_keys Include rows in keys with nulls
    * @param keys_pre_sorted Indicate if the keys are already sorted. Enables
    *                        optimizations to help skip re-sorting keys.
    */
-  sort_groupby_helper(table_view const& keys, bool ignore_null_keys = true,
-                      bool keys_pre_sorted = false)
+  sort_groupby_helper(table_view const& keys, 
+                      include_nulls include_null_keys = include_nulls::NO,
+                      sorted keys_pre_sorted = sorted::NO)
   : _keys(keys),
     _num_keys(-1),
-    _ignore_null_keys(ignore_null_keys),
+    _include_null_keys(include_null_keys),
     _keys_pre_sorted(keys_pre_sorted)
   {
-    if (keys_pre_sorted and
-        ignore_null_keys and
+    if (keys_pre_sorted == sorted::YES and
+        include_null_keys == include_nulls::NO and
         has_nulls(keys))
     {
-      _keys_pre_sorted = false;
+      _keys_pre_sorted = sorted::NO;
     }
   };
 
@@ -124,15 +124,24 @@ struct sort_groupby_helper {
     cudaStream_t stream = 0);
 
   /**
+   * @brief Get a table of sorted keys
+   *
+   * @return a new table containing the sorted keys.
+   */
+  std::unique_ptr<table> sorted_keys(
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+    cudaStream_t stream = 0);
+
+  /**
    * @brief Get the number of groups in `keys`
    */
-  size_type num_groups() { return group_offsets().size(); }
+  size_type num_groups() { return group_offsets().size() - 1; }
 
   /**
    * @brief Return the effective number of keys
    * 
-   * When ignore_null_keys = false, returned value is same as `keys.num_rows()`
-   * When ignore_null_keys = true, returned value is the number of rows in `keys`
+   * When include_null_keys = YES, returned value is same as `keys.num_rows()`
+   * When include_null_keys = NO, returned value is the number of rows in `keys`
    *  in which no element is null
    */
   size_type num_keys(cudaStream_t stream = 0);
@@ -141,6 +150,9 @@ struct sort_groupby_helper {
    * @brief Get the sorted order of `keys`.
    *
    * Gathering `keys` by sort order indices will produce the sorted key table.
+   *
+   * When ignore_null_keys = true, the result will not include indices
+   * for null keys.
    * 
    * Computes and stores the key sorted order on first invocation, and returns
    * the stored order on subsequent calls.
@@ -152,10 +164,13 @@ struct sort_groupby_helper {
   /**
    * @brief Get each group's offset into the sorted order of `keys`. 
    * 
-   * Computes and stores the group offsets on first invocation and returns
-   * the stored group offsets on subsequent calls.
-   * 
-   * @return vector of offsets of the starting point of each group in the sorted key table
+   * Computes and stores the group offsets on first invocation and returns 
+   * the stored group offsets on subsequent calls. 
+   * This returns a vector of size `num_groups() + 1` such that the size of 
+   * group `i` is `group_offsets[i+1] - group_offsets[i]`
+   *
+   * @return vector of offsets of the starting point of each group in the sorted
+   * key table
    */
   index_vector const& group_offsets(cudaStream_t stream = 0);
 
@@ -181,7 +196,7 @@ struct sort_groupby_helper {
    * Returns the group label for every row in the original `keys` table. For a
    * given unique key row, its group label is equivalent to what is returned by
    * `group_labels()`. However, if a row contains a null value, and
-   * `ignore_null_keys == true`, then its label is NULL. 
+   * `include_null_keys == NO`, then its label is NULL. 
    * 
    * Computes and stores unsorted labels on first invocation and returns stored
    * labels on subsequent calls.
@@ -215,9 +230,9 @@ struct sort_groupby_helper {
   index_vector_ptr    _group_offsets;         ///< Indices into sorted _keys indicating starting index of each groups
   index_vector_ptr    _group_labels;          ///< Group labels for sorted _keys
 
-  size_type           _num_keys;              ///< Number of effective rows in _keys (adjusted for _ignore_null_keys)
-  bool                _keys_pre_sorted;       ///< Whether _keys are pre-sorted
-  bool                _ignore_null_keys;      ///< Whether to use rows with nulls in _keys for grouping
+  size_type           _num_keys;              ///< Number of effective rows in _keys (adjusted for _include_null_keys)
+  sorted              _keys_pre_sorted;       ///< Whether _keys are pre-sorted
+  include_nulls       _include_null_keys;      ///< Whether to use rows with nulls in _keys for grouping
 };
 
 }  // namespace sort

@@ -18,6 +18,7 @@
 #include <cudf/detail/gather.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 namespace cudf {
 namespace experimental {
@@ -98,6 +99,7 @@ std::unique_ptr<column>
 interleave_columns(table_view const& input,
                    rmm::mr::device_memory_resource *mr)
 {
+    CUDF_FUNC_RANGE();
     CUDF_EXPECTS(input.num_columns() > 0, "input must have at least one column to determine dtype.");
 
     auto dtype = input.column(0).type();

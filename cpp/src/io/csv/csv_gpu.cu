@@ -25,57 +25,16 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/detail/utilities/trie.cuh>
 
+#include <io/utilities/parsing_utils.cuh>
+
 #include <cuda_runtime.h>
+
+using namespace::cudf::experimental::io;
 
 namespace cudf {
 namespace io {
 namespace csv {
 namespace gpu {
-
-/**
- * @brief CUDA kernel iterates over the data until the end of the current field
- *
- * Also iterates over (one or more) delimiter characters after the field.
- * Function applies to formats with field delimiters and line terminators.
- *
- * @param data The entire plain text data to read
- * @param opts A set of parsing options
- * @param pos Offset to start the seeking from
- * @param stop Offset of the end of the row
- *
- * @return long The position of the last character in the field, including the
- *  delimiter(s) following the field data
- */
-__device__ __inline__ long seek_field_end(const char *data,
-                                          ParseOptions const &opts, long pos,
-                                          long stop) {
-  bool quotation = false;
-  while (true) {
-    // Use simple logic to ignore control chars between any quote seq
-    // Handles nominal cases including doublequotes within quotes, but
-    // may not output exact failures as PANDAS for malformed fields
-    if (data[pos] == opts.quotechar) {
-      quotation = !quotation;
-    } else if (quotation == false) {
-      if (data[pos] == opts.delimiter) {
-        while (opts.multi_delimiter && pos < stop &&
-               data[pos + 1] == opts.delimiter) {
-          ++pos;
-        }
-        break;
-      } else if (data[pos] == opts.terminator) {
-        break;
-      } else if (data[pos] == '\r' &&
-                 (pos + 1 < stop && data[pos + 1] == '\n')) {
-        stop--;
-        break;
-      }
-    }
-    if (pos >= stop) break;
-    pos++;
-  }
-  return pos;
-}
 
 /**
  * @brief Checks whether the given character is a whitespace character.
@@ -256,7 +215,7 @@ __global__ void dataTypeDetection(const char *raw_csv, const ParseOptions opts,
       break;
     }
 
-    pos = seek_field_end(raw_csv, opts, pos, stop);
+    pos = cudf::experimental::io::gpu::seek_field_end(raw_csv, opts, pos, stop);
 
     // Checking if this is a column that the user wants --- user can filter
     // columns
@@ -355,138 +314,23 @@ __global__ void dataTypeDetection(const char *raw_csv, const ParseOptions opts,
   }
 }
 
-/**
- * @brief Returns the numeric value of an ASCII/UTF-8 character. Specialization
- * for integral types. Handles hexadecimal digits, both uppercase and lowercase.
- * If the character is not a valid numeric digit then `0` is returned and
- * valid_flag is set to false.
- *
- * @param c ASCII or UTF-8 character
- * @param valid_flag Set to false if input is not valid. Unchanged otherwise.
- *
- * @return uint8_t Numeric value of the character, or `0`
- */
-template <typename T,
-          typename std::enable_if_t<std::is_integral<T>::value> * = nullptr>
-__device__ __forceinline__ uint8_t decode_digit(char c, bool* valid_flag) {
-  if (c >= '0' && c <= '9') return c - '0';
-  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-
-  *valid_flag = false;
-  return 0;
-}
-
-/**
- * @brief Returns the numeric value of an ASCII/UTF-8 character. Specialization
- * for non-integral types. Handles only decimal digits. If the character is not
- * a valid numeric digit then `0` is returned and valid_flag is set to false.
- *
- * @param c ASCII or UTF-8 character
- * @param valid_flag Set to false if input is not valid. Unchanged otherwise.
- *
- * @return uint8_t Numeric value of the character, or `0`
- */
-template <typename T,
-          typename std::enable_if_t<!std::is_integral<T>::value> * = nullptr>
-__device__ __forceinline__ uint8_t decode_digit(char c, bool* valid_flag) {
-  if (c >= '0' && c <= '9') return c - '0';
-
-  *valid_flag = false;
-  return 0;
-}
-
-/**
- * @brief Parses a character string and returns its numeric value.
- *
- * @param data The character string for parse
- * @param start The index within data to start parsing from
- * @param end The end index within data to end parsing
- * @param opts The global parsing behavior options
- * @param base Base (radix) to use for conversion
- *
- * @return The parsed and converted value
- */
-template <typename T>
-__inline__ __device__ T parse_numeric(const char *data, long start, long end,
-                                      ParseOptions const &opts, int base = 10) {
-  T value = 0;
-  bool all_digits_valid = true;
-
-  // Handle negative values if necessary
-  int32_t sign = 1;
-  if (data[start] == '-') {
-    sign = -1;
-    start++;
-  }
-
-  // Handle the whole part of the number
-  long index = start;
-  while (index <= end) {
-    if (data[index] == opts.decimal) {
-      ++index;
-      break;
-    } else if (base == 10 && (data[index] == 'e' || data[index] == 'E')) {
-      break;
-    } else if (data[index] != opts.thousands && data[index] != '+') {
-      value = (value * base) + decode_digit<T>(data[index], &all_digits_valid);
-    }
-    ++index;
-  }
-
-  if (std::is_floating_point<T>::value) {
-    // Handle fractional part of the number if necessary
-    double divisor = 1;
-    while (index <= end) {
-      if (data[index] == 'e' || data[index] == 'E') {
-        ++index;
-        break;
-      } else if (data[index] != opts.thousands && data[index] != '+') {
-        divisor /= base;
-        value += decode_digit<T>(data[index], &all_digits_valid) * divisor;
-      }
-      ++index;
-    }
-
-    // Handle exponential part of the number if necessary
-    if (index <= end) {
-      const int32_t exponent_sign = data[index] == '-' ? -1 : 1;
-      if (data[index] == '-' || data[index] == '+') {
-        ++index;
-      }
-      int32_t exponent = 0;
-      while (index <= end) {
-          exponent = (exponent * 10) + decode_digit<T>(data[index++], &all_digits_valid);
-      }
-      if (exponent != 0) {
-        value *= exp10(double(exponent * exponent_sign));
-      }
-    }
-  }
-  if (!all_digits_valid){
-    return std::numeric_limits<T>::quiet_NaN();
-  }
-
-  return value * sign;
-}
-
 template <typename T, int base>
 __inline__ __device__ T decode_value(const char *data, long start, long end,
                                      ParseOptions const &opts) {
-  return parse_numeric<T>(data, start, end, opts, base);
+  return cudf::experimental::io::gpu::parse_numeric<T>(data, start, end, opts, base);
 }
 
 template <typename T>
 __inline__ __device__ T decode_value(const char *data, long start, long end,
                                      ParseOptions const &opts) {
-  return parse_numeric<T>(data, start, end, opts);
+  return cudf::experimental::io::gpu::parse_numeric<T>(data, start, end, opts);
 }
 
 template <>
 __inline__ __device__ cudf::experimental::bool8 decode_value(
     const char *data, long start, long end, ParseOptions const &opts) {
   using value_type = typename cudf::experimental::bool8::value_type;
-  return (parse_numeric<value_type>(data, start, end, opts) != 0)
+  return (cudf::experimental::io::gpu::parse_numeric<value_type>(data, start, end, opts) != 0)
              ? cudf::experimental::true_v
              : cudf::experimental::false_v;
 }
@@ -533,6 +377,12 @@ __inline__ __device__ cudf::string_view decode_value(const char *data,
                                                      long start, long end,
                                                      ParseOptions const &opts) {
   return cudf::string_view{};
+}
+template <>
+__inline__ __device__ cudf::dictionary32 decode_value(const char *data,
+                                                     long start, long end,
+                                                     ParseOptions const &opts) {
+  return cudf::dictionary32{};
 }
 
 /**
@@ -670,7 +520,7 @@ __global__ void convertCsvToGdf(const char *raw_csv, const ParseOptions opts,
   while (col < num_columns) {
     if (start > stop) break;
 
-    pos = seek_field_end(raw_csv, opts, pos, stop);
+    pos = cudf::experimental::io::gpu::seek_field_end(raw_csv, opts, pos, stop);
 
     if (flags[col] & column_parse::enabled) {
       // check if the entire field is a NaN string - consistent with pandas

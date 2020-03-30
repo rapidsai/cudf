@@ -1,9 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
-
-# cython: profile=False
-# distutils: language = c++
-# cython: embedsignature = True
-# cython: language_level = 3
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
 from libc.stdint cimport uintptr_t
 from libcpp.string cimport string
@@ -15,6 +10,7 @@ from cudf.utils import cudautils
 
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
+from cudf._libxx.null_mask import create_null_mask, MaskState
 cimport cudf._lib.includes.rolling as cpp_rolling
 
 
@@ -71,14 +67,14 @@ def rolling(inp, window, min_periods, center, op):
         if op not in ["count", "sum"]:
             null_count = len(inp)
             fill_value = inp.default_na_value()
-            mask = cudautils.make_empty_mask(null_count)
+            mask = create_null_mask(null_count, state=MaskState.ALL_NULL)
         data = cudautils.full(
             inp.data_array_view.size, fill_value, inp.data_array_view.dtype
         )
 
         out_col = build_column(Buffer(data),
                                dtype=data.dtype,
-                               mask=Buffer(mask))
+                               mask=mask)
     else:
         if callable(op):
             nb_type = numba.numpy_support.from_dtype(inp.dtype)

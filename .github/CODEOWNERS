@@ -3,6 +3,7 @@ cpp/               @rapidsai/cudf-cpp-codeowners
 
 #python code owners
 python/            @rapidsai/cudf-python-codeowners
+notebooks/         @rapidsai/cudf-python-codeowners
 python/dask_cudf/  @rapidsai/cudf-dask-codeowners
 
 #cmake code owners

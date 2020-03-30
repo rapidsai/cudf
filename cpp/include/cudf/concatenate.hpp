@@ -1,0 +1,90 @@
+/*
+ * Copyright (c) 2020, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+#pragma once
+
+#include <cudf/column/column_view.hpp>
+#include <cudf/table/table_view.hpp>
+
+#include <memory>
+#include <vector>
+
+namespace cudf {
+
+/**---------------------------------------------------------------------------*
+ * @brief Concatenates `views[i]`'s bitmask from the bits
+ * `[views[i].offset(), views[i].offset() + views[i].size())` for all elements
+ * views[i] in views into a `device_buffer`
+ *
+ * Returns empty `device_buffer` if the column is not nullable
+ *
+ * @param views Vector of column views whose bitmask will to be concatenated
+ * @param mr Optional, the memory resource that will be used for allocating
+ * the device memory for the new device_buffer
+ * @return rmm::device_buffer A `device_buffer` containing the bitmasks of all
+ * the column views in the views vector
+ *---------------------------------------------------------------------------**/
+rmm::device_buffer concatenate_masks(std::vector<column_view> const &views,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**---------------------------------------------------------------------------*
+ * @brief Concatenates multiple columns into a single column.
+ *
+ * @throws cudf::logic_error
+ * If types of the input columns mismatch
+ *
+ * @param columns_to_concat The column views to be concatenated into a single
+ * column
+ * @param mr Optional The resource to use for all allocations
+ * @return Unique pointer to a single table having all the rows from the
+ * elements of `columns_to_concat` respectively in the same order.
+ *---------------------------------------------------------------------------**/
+std::unique_ptr<column>
+concatenate(std::vector<column_view> const& columns_to_concat,
+            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+namespace experimental {
+
+/**---------------------------------------------------------------------------*
+ * @brief Columns of `tables_to_concat` are concatenated vertically to return a
+ * single table_view
+ *
+ * example:
+ * ```
+ * column_view c0; //Contains {0,1,2,3}
+ * column_view c1; //Contains {4,5,6,7}
+ * table_view t0{{c0, c0}};
+ * table_view t1{{c1, c1}};
+ * ...
+ * auto t = concatenate({t0.view(), t1.view()});
+ * column_view tc0 = (t->view()).column(0); //Contains {0,1,2,3,4,5,6,7}
+ * column_view tc1 = (t->view()).column(1); //Contains {0,1,2,3,4,5,6,7}
+ * ```
+ *
+ * @throws cudf::logic_error
+ * If number of columns mismatch
+ *
+ * @param tables_to_concat The table views to be concatenated into a single
+ * table
+ * @param mr Optional The resource to use for all allocations
+ * @return Unique pointer to a single table having all the rows from the
+ * elements of `tables_to_concat` respectively in the same order.
+ *---------------------------------------------------------------------------**/
+std::unique_ptr<table> concatenate(std::vector<table_view> const& tables_to_concat,
+            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+}  // namespace experimental
+
+}  // namespace cudf

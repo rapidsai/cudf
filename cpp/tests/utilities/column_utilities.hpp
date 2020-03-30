@@ -113,6 +113,21 @@ void print(cudf::column_view const& col, std:: ostream &os = std::cout, std::str
  *---------------------------------------------------------------------------**/
 std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c);
 
+/**---------------------------------------------------------------------------*
+ * @brief Validates bitmask situated in host as per `number_of_elements`
+ *
+ * This takes care of padded bits
+ *
+ * @param        expected_mask A vector representing expected mask
+ * @param        got_mask A vector representing mask obtained from column
+ * @param        number_of_elements number of elements the mask represent
+ *
+ * @returns      true if both vector match till the `number_of_elements`
+ *---------------------------------------------------------------------------**/
+bool validate_host_masks(std::vector<bitmask_type> const& expected_mask,
+                         std::vector<bitmask_type> const& got_mask_begin,
+                         size_type number_of_elements);
+
 /**
  * @brief Copies the data and bitmask of a `column_view` to the host.
  *
@@ -145,22 +160,18 @@ inline std::pair<std::vector<std::string>, std::vector<bitmask_type>> to_host(co
   thrust::host_vector<size_type> h_offsets(strings_data.second);
 
   // build std::string vector from chars and offsets
-  if( !h_chars.empty() ) { // check for all nulls case
-    std::vector<std::string> host_data;
-    host_data.reserve(c.size());
+  std::vector<std::string> host_data;
+  host_data.reserve(c.size());
 
-    // When C++17, replace this loop with std::adjacent_difference()
-    for( size_type idx=0; idx < c.size(); ++idx )
-    {
-        auto offset = h_offsets[idx];
-        auto length = h_offsets[idx+1] - offset;
-        host_data.push_back(std::string( h_chars.data()+offset, length));
-    }
-
-    return { host_data, bitmask_to_host(c) };
+  // When C++17, replace this loop with std::adjacent_difference()
+  for( size_type idx=0; idx < c.size(); ++idx )
+  {
+      auto offset = h_offsets[idx];
+      auto length = h_offsets[idx+1] - offset;
+      host_data.push_back(std::string( h_chars.data()+offset, length));
   }
-  else 
-    return { std::vector<std::string>{}, bitmask_to_host(c) };
+
+  return { host_data, bitmask_to_host(c) };
 }
 
 }  // namespace test

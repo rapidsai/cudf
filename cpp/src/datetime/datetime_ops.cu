@@ -18,6 +18,9 @@
 #include <cudf/datetime.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/column/column.hpp>
+#include <cudf/column/column_view.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 
@@ -112,42 +115,49 @@ std::unique_ptr<column> extract_component(column_view const& column,
 
 std::unique_ptr<column> extract_year(column_view const& column,
                                      rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   return detail::extract_component<detail::datetime_component::YEAR>(column, 0,
                                                                      mr);
 }
 
 std::unique_ptr<column> extract_month(column_view const& column,
                                       rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   return detail::extract_component<detail::datetime_component::MONTH>(column, 0,
                                                                       mr);
 }
 
 std::unique_ptr<column> extract_day(column_view const& column,
                                     rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   return detail::extract_component<detail::datetime_component::DAY>(column, 0,
                                                                     mr);
 }
 
 std::unique_ptr<column> extract_weekday(column_view const& column,
                                         rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   return detail::extract_component<detail::datetime_component::WEEKDAY>(column,
                                                                         0, mr);
 }
 
 std::unique_ptr<column> extract_hour(column_view const& column,
                                      rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   return detail::extract_component<detail::datetime_component::HOUR>(column, 0,
                                                                      mr);
 }
 
 std::unique_ptr<column> extract_minute(column_view const& column,
                                        rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   return detail::extract_component<detail::datetime_component::MINUTE>(column,
                                                                        0, mr);
 }
 
 std::unique_ptr<column> extract_second(column_view const& column,
                                        rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   return detail::extract_component<detail::datetime_component::SECOND>(column,
                                                                        0, mr);
 }

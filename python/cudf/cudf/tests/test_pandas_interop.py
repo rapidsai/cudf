@@ -6,6 +6,7 @@ import pytest
 
 import cudf
 from cudf.core import DataFrame
+from cudf.tests.utils import assert_eq
 
 
 def test_to_pandas():
@@ -49,9 +50,7 @@ def test_from_pandas():
 
 def test_from_pandas_ex1():
     pdf = pd.DataFrame({"a": [0, 1, 2, 3], "b": [0.1, 0.2, None, 0.3]})
-    print(pdf)
     df = DataFrame.from_pandas(pdf)
-    print(df)
 
     assert tuple(df.columns) == tuple(pdf.columns)
     assert np.all(df["a"].to_array() == pdf["a"])
@@ -68,12 +67,12 @@ def test_from_pandas_with_index():
     df = DataFrame.from_pandas(pdf)
 
     # Check columns
-    np.testing.assert_array_equal(df.a.to_array(fillna="pandas"), pdf.a)
-    np.testing.assert_array_equal(df.b.to_array(fillna="pandas"), pdf.b)
+    assert_eq(df.a, pdf.a)
+    assert_eq(df.b, pdf.b)
     # Check index
-    np.testing.assert_array_equal(df.index.values, pdf.index.values)
+    assert_eq(df.index.values, pdf.index.values)
     # Check again using pandas testing tool on frames
-    pd.util.testing.assert_frame_equal(df.to_pandas(), pdf)
+    assert_eq(df.to_pandas(), pdf)
 
 
 def test_from_pandas_rangeindex():
@@ -81,7 +80,7 @@ def test_from_pandas_rangeindex():
     idx2 = cudf.from_pandas(idx1)
 
     # Check index
-    np.testing.assert_array_equal(idx1.values, idx2.values)
+    assert_eq(idx1.values, idx2.values)
     assert idx1.name == idx2.name
 
 

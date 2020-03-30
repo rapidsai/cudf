@@ -29,9 +29,9 @@ public class Date64ColumnVectorTest extends CudfTestBase {
 
   @Test
   public void getYear() {
-    try (ColumnVector date64ColumnVector = ColumnVector.datesFromLongs(DATES);
-         ColumnVector result = date64ColumnVector.year()) {
-      result.ensureOnHost();
+    try (ColumnVector date64ColumnVector = ColumnVector.timestampMilliSecondsFromLongs(DATES);
+         ColumnVector tmp = date64ColumnVector.year();
+         HostColumnVector result = tmp.copyToHost()) {
       assertEquals(1965, result.getShort(0));
       assertEquals(2018, result.getShort(1));
       assertEquals(2023, result.getShort(2));
@@ -40,9 +40,9 @@ public class Date64ColumnVectorTest extends CudfTestBase {
 
   @Test
   public void getMonth() {
-    try (ColumnVector date64ColumnVector = ColumnVector.datesFromLongs(DATES);
-         ColumnVector result = date64ColumnVector.month()) {
-      result.ensureOnHost();
+    try (ColumnVector date64ColumnVector = ColumnVector.timestampMilliSecondsFromLongs(DATES);
+         ColumnVector tmp = date64ColumnVector.month();
+         HostColumnVector result = tmp.copyToHost()) {
       assertEquals(10, result.getShort(0));
       assertEquals(7, result.getShort(1));
       assertEquals(1, result.getShort(2));
@@ -51,9 +51,9 @@ public class Date64ColumnVectorTest extends CudfTestBase {
 
   @Test
   public void getDay() {
-    try (ColumnVector date64ColumnVector = ColumnVector.datesFromLongs(DATES);
-         ColumnVector result = date64ColumnVector.day()) {
-      result.ensureOnHost();
+    try (ColumnVector date64ColumnVector = ColumnVector.timestampMilliSecondsFromLongs(DATES);
+         ColumnVector tmp = date64ColumnVector.day();
+         HostColumnVector result = tmp.copyToHost()) {
       assertEquals(26, result.getShort(0));
       assertEquals(4, result.getShort(1));
       assertEquals(25, result.getShort(2));
@@ -62,9 +62,9 @@ public class Date64ColumnVectorTest extends CudfTestBase {
 
   @Test
   public void getHour() {
-    try (ColumnVector date64ColumnVector = ColumnVector.datesFromLongs(DATES);
-         ColumnVector result = date64ColumnVector.hour()) {
-      result.ensureOnHost();
+    try (ColumnVector date64ColumnVector = ColumnVector.timestampMilliSecondsFromLongs(DATES);
+         ColumnVector tmp = date64ColumnVector.hour();
+         HostColumnVector result = tmp.copyToHost()) {
       assertEquals(14, result.getShort(0));
       assertEquals(12, result.getShort(1));
       assertEquals(7, result.getShort(2));
@@ -73,9 +73,9 @@ public class Date64ColumnVectorTest extends CudfTestBase {
 
   @Test
   public void getMinute() {
-    try (ColumnVector date64ColumnVector = ColumnVector.datesFromLongs(DATES);
-         ColumnVector result = date64ColumnVector.minute()) {
-      result.ensureOnHost();
+    try (ColumnVector date64ColumnVector = ColumnVector.timestampMilliSecondsFromLongs(DATES);
+         ColumnVector tmp = date64ColumnVector.minute();
+         HostColumnVector result = tmp.copyToHost()) {
       assertEquals(1, result.getShort(0));
       assertEquals(0, result.getShort(1));
       assertEquals(32, result.getShort(2));
@@ -84,9 +84,9 @@ public class Date64ColumnVectorTest extends CudfTestBase {
 
   @Test
   public void getSecond() {
-    try (ColumnVector date64ColumnVector = ColumnVector.datesFromLongs(DATES);
-         ColumnVector result = date64ColumnVector.second()) {
-      result.ensureOnHost();
+    try (ColumnVector date64ColumnVector = ColumnVector.timestampMilliSecondsFromLongs(DATES);
+         ColumnVector tmp = date64ColumnVector.second();
+         HostColumnVector result = tmp.copyToHost()) {
       assertEquals(12, result.getShort(0));
       assertEquals(0, result.getShort(1));
       assertEquals(12, result.getShort(2));

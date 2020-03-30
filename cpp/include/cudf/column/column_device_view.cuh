@@ -266,7 +266,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @param h_ptr Host memory pointer on which to place any child data.
    * @param d_ptr Device memory pointer on which to base any child pointers.
    *---------------------------------------------------------------------------**/
-  column_device_view(column_view column, ptrdiff_t h_ptr, ptrdiff_t d_ptr);
+  column_device_view(column_view column, void* h_ptr, void* d_ptr);
 
   /**---------------------------------------------------------------------------*
    * @brief Returns reference to element at the specified index.
@@ -397,7 +397,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    *
    * @param source_view The `column_view` to use for this calculation.
    *---------------------------------------------------------------------------**/
-  static size_type extent(column_view source_view);
+  static std::size_t extent(column_view const& source_view);
 
   /**---------------------------------------------------------------------------*
    * @brief Returns the specified child
@@ -451,8 +451,8 @@ class alignas(16) mutable_column_device_view
    * @param h_ptr Host memory pointer on which to place any child data.
    * @param d_ptr Device memory pointer on which to base any child pointers.
    *---------------------------------------------------------------------------**/
-  mutable_column_device_view(mutable_column_view column, ptrdiff_t h_ptr,
-                             ptrdiff_t d_ptr);
+  mutable_column_device_view(mutable_column_view column, void* h_ptr,
+                             void* d_ptr);
 
   /**---------------------------------------------------------------------------*
    * @brief Factory to construct a column view that is usable in device memory.
@@ -637,7 +637,7 @@ class alignas(16) mutable_column_device_view
    *
    * @param source_view The `column_view` to use for this calculation.
    *---------------------------------------------------------------------------**/
-  static size_type extent(mutable_column_view source_view);
+  static std::size_t extent(mutable_column_view source_view);
 
  private:
   mutable_column_device_view*
@@ -688,6 +688,36 @@ __device__ inline string_view const column_device_view::element<string_view>(
       d_children[strings_column_view::chars_column_index].data<char>();
   size_type offset = d_offsets[index];
   return string_view{d_strings + offset, d_offsets[index + 1] - offset};
+}
+
+/**
+ * @brief Returns `dictionary32` element at the specified index for a
+ * dictionary column.
+ * 
+ * `dictionary32` is a strongly typed wrapper around an `int32_t` value that holds the
+ * offset into the dictionary keys for the specified element. 
+ *
+ * For example, given a dictionary column `d` with:
+ * ```c++
+ * keys: {"foo", "bar", "baz"}
+ * indices: {2, 0, 2, 1, 0}
+ *
+ * d.element<dictionary32>(0) == dictionary32{2};
+ * d.element<dictionary32>(1) == dictionary32{0};
+ * ```
+ *
+ * If the element at the specified index is NULL, i.e., `is_null(element_index) == true`,
+ * then any attempt to use the result will lead to undefined behavior.
+ *
+ * This function accounts for the offset.
+ *
+ * @param element_index Position of the desired element
+ * @return dictionary32 instance representing this element at this index
+ */
+template <>
+__device__ inline dictionary32 const column_device_view::element<dictionary32>(size_type element_index) const noexcept {
+  size_type index = element_index + offset();  // account for this view's _offset
+  return dictionary32{d_children[0].element<int32_t>(index)};
 }
 
 namespace detail {

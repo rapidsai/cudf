@@ -18,6 +18,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/copying.hpp>
 
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.hpp>
@@ -48,6 +49,23 @@ TEST_F(TableTest, EmptyColumnedTable)
     cudf::size_type expected = 0;
 
     EXPECT_EQ(input.num_columns(), expected);
+}
+
+TEST_F(TableTest, ValidateConstructorTableViewToTable)
+{
+    column_wrapper <int8_t>  col1{{1,2,3,4}};
+    column_wrapper <int8_t>  col2{{1,2,3,4}};
+
+    CVector cols;
+    cols.push_back(col1.release());
+    cols.push_back(col2.release());
+
+    Table input_table(std::move(cols));
+
+    Table out_table(input_table.view());
+
+    EXPECT_EQ(input_table.num_columns(), out_table.num_columns());
+    EXPECT_EQ(input_table.num_rows(), out_table.num_rows());
 }
 
 TEST_F(TableTest, GetTableWithSelectedColumns)
@@ -129,41 +147,4 @@ TEST_F(TableTest, CreateFromViewVectorEmptyTables)
   views.emplace_back(std::vector<column_view>{});
   TView final_view{views};
   EXPECT_EQ(final_view.num_columns(), 0);
-}
-
-TEST_F(TableTest, ConcatenateTables)
-{
-  std::vector<const char*> h_strings{
-    "Lorem", "ipsum", "dolor", "sit", "amet", "consectetur", "adipiscing", "elit" };
-
-  CVector cols_gold;
-  column_wrapper <int8_t > col1_gold{{1,2,3,4,5,6,7,8}};
-  column_wrapper <int16_t> col2_gold{{1,2,3,4,5,6,7,8}};
-  s_col_wrapper            col3_gold(h_strings.data(), h_strings.data() + h_strings.size());
-  cols_gold.push_back(col1_gold.release());
-  cols_gold.push_back(col2_gold.release());
-  cols_gold.push_back(col3_gold.release());
-  Table gold_table(std::move(cols_gold));
-
-  CVector cols_table1;
-  column_wrapper <int8_t > col1_table1{{1,2,3,4}};
-  column_wrapper <int16_t> col2_table1{{1,2,3,4}};
-  s_col_wrapper            col3_table1(h_strings.data(), h_strings.data() + 4);
-  cols_table1.push_back(col1_table1.release());
-  cols_table1.push_back(col2_table1.release());
-  cols_table1.push_back(col3_table1.release());
-  Table t1(std::move(cols_table1));
-
-  CVector cols_table2;
-  column_wrapper <int8_t > col1_table2{{5,6,7,8}};
-  column_wrapper <int16_t> col2_table2{{5,6,7,8}};
-  s_col_wrapper            col3_table2(h_strings.data() + 4, h_strings.data() + h_strings.size());
-  cols_table2.push_back(col1_table2.release());
-  cols_table2.push_back(col2_table2.release());
-  cols_table2.push_back(col3_table2.release());
-  Table t2(std::move(cols_table2));
-
-  auto concat_table = cudf::experimental::concatenate({t1.view(), t2.view()});
-
-  cudf::test::expect_tables_equal(*concat_table, gold_table);
 }

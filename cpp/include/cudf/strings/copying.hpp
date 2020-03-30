@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,29 +54,6 @@ std::unique_ptr<cudf::column> slice( strings_column_view const& strings,
                                      size_type step=1,
                                      cudaStream_t stream=0,
                                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
-
-/**
- * @brief Returns a new strings column using the specified indices to select
- * elements from the `strings` column.
- *
- * ```
- * s1 = ["a", "b", "c", "d", "e", "f"]
- * map = [0, 2]
- * s2 = gather( s1, map )
- * s2 is ["a", "c"]
- * ```
- *
- * @param strings Strings instance for this operation.
- * @param gather_map The indices with which to select strings for the new column.
- *        Values must be within [0,size()) range.
- * @param stream CUDA stream to use kernels in this method.
- * @param mr Resource for allocating device memory.
- * @return New strings column of size indices.size()
- */
-std::unique_ptr<cudf::column> gather( strings_column_view const& strings,
-                                      cudf::column_view gather_map,
-                                      cudaStream_t stream=0,
-                                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
 
 
 } // namespace detail

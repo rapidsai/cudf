@@ -20,6 +20,7 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/detail/transform.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 #include <jit/launcher.h>
 #include <jit/type.h>
@@ -53,12 +54,18 @@ void unary_operation(mutable_column_view output, column_view input,
       cudf::jit::parse_single_function_cuda(
           udf, "GENERIC_UNARY_OP") + code::kernel;
   }
+
+  const std::vector<std::string> compiler_flags{
+    "-std=c++14",
+    // Have jitify prune unused global variables
+    "-remove-unused-globals",
+    // suppress all NVRTC warnings
+    "-w"
+  };
   
   // Launch the jitify kernel
-  cudf::jit::launcher(
-    hash, cuda_source,
-    { cudf_types_hpp },
-    { "-std=c++14" }, nullptr, stream
+  cudf::jit::launcher(hash, cuda_source, { cudf_types_hpp },
+                      compiler_flags, nullptr, stream
   ).set_kernel_inst(
     "kernel", // name of the kernel we are launching
     { cudf::jit::get_type_name(output.type()), // list of template arguments
@@ -109,6 +116,7 @@ std::unique_ptr<column> transform(column_view const& input,
                                   data_type output_type, bool is_ptx,
                                   rmm::mr::device_memory_resource *mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::transform(input, unary_udf, output_type, is_ptx, mr);
 }
 

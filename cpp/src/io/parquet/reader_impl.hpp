@@ -76,12 +76,13 @@ class reader::impl {
    * @param skip_rows Number of rows to skip from the start
    * @param num_rows Number of rows to read
    * @param row_group Row group index to select
+   * @param max_rowgroup_count Max number of consecutive row groups if greater than 0
    * @param stream Stream to use for memory allocation and kernels
    *
    * @return The set of columns along with metadata
    */
   table_with_metadata read(int skip_rows, int num_rows, int row_group,
-                           cudaStream_t stream);
+                           int max_rowgroup_count, cudaStream_t stream);
 
  private:
   /**

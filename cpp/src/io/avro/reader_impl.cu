@@ -121,9 +121,19 @@ class metadata : public file_metadata {
       }
     } else {
       for (int i = 0; i < num_avro_columns; ++i) {
-        auto col_type = to_type_id(&schema[columns[i].schema_data_idx]);
-        CUDF_EXPECTS(col_type != type_id::EMPTY, "Unsupported data type");
-        selection.emplace_back(i, columns[i].name);
+        // Exclude array columns (unsupported)
+        bool column_in_array = false;
+        for (int parent_idx = schema[columns[i].schema_data_idx].parent_idx; parent_idx > 0; parent_idx = schema[parent_idx].parent_idx) {
+          if (schema[parent_idx].kind == avro::type_array) {
+            column_in_array = true;
+            break;
+          }
+        }
+        if (!column_in_array) {
+          auto col_type = to_type_id(&schema[columns[i].schema_data_idx]);
+          CUDF_EXPECTS(col_type != type_id::EMPTY, "Unsupported data type");
+          selection.emplace_back(i, columns[i].name);
+        }
       }
     }
     CUDF_EXPECTS(selection.size() > 0, "Filtered out all columns");
@@ -260,11 +270,12 @@ void reader::impl::decode_data(
   for (size_t i = 0; i < _metadata->schema.size(); i++) {
     type_kind_e kind = _metadata->schema[i].kind;
     if (skip_field_cnt != 0) {
-      // Exclude union members from min_row_data_size
+      // Exclude union and array members from min_row_data_size
       skip_field_cnt += _metadata->schema[i].num_children - 1;
     } else {
       switch (kind) {
         case type_union:
+        case type_array:
           skip_field_cnt = _metadata->schema[i].num_children;
           // fall through
         case type_boolean:
@@ -315,8 +326,9 @@ void reader::impl::decode_data(
     if (_metadata->schema[schema_data_idx].kind == type_enum) {
       schema_desc[schema_data_idx].count = dict[i].first;
     }
-    CUDA_TRY(cudaMemsetAsync(out_buffers[i].null_mask(), -1,
-                             bitmask_allocation_size_bytes(num_rows), stream));
+    if (out_buffers[i].null_mask_size()) {
+      set_null_mask(out_buffers[i].null_mask(), 0, num_rows, true, stream);
+    }
   }
   rmm::device_buffer block_list(
       _metadata->block_list.data(),
@@ -443,7 +455,9 @@ table_with_metadata reader::impl::read(int skip_rows, int num_rows,
 
       std::vector<column_buffer> out_buffers;
       for (size_t i = 0; i < column_types.size(); ++i) {
-        out_buffers.emplace_back(column_types[i], num_rows, stream, _mr);
+        auto col_idx = selected_columns[i].first;
+        bool is_nullable = (_metadata->columns[col_idx].schema_null_idx >= 0);
+        out_buffers.emplace_back(column_types[i], num_rows, is_nullable, stream, _mr);
       }
 
       decode_data(block_data, dict, global_dictionary, total_dictionary_entries,

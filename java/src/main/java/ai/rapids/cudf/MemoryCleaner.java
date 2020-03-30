@@ -186,6 +186,11 @@ class MemoryCleaner {
     all.add(new CleanerWeakReference(vec, cleaner));
   }
 
+  public static void register(HostColumnVector vec, Cleaner cleaner) {
+    // It is now registered...
+    all.add(new CleanerWeakReference(vec, cleaner));
+  }
+
   public static void register(MemoryBuffer buf, Cleaner cleaner) {
     // It is now registered...
     all.add(new CleanerWeakReference(buf, cleaner));

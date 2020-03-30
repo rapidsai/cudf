@@ -24,6 +24,7 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 #include <binaryop/jit/code/code.h>
 #include <jit/launcher.h>
@@ -87,6 +88,8 @@ const std::string hash = "prog_binop.experimental";
 
 const std::vector<std::string> compiler_flags{
     "-std=c++14",
+    // Have jitify prune unused global variables
+    "-remove-unused-globals",
     // suppress all NVRTC warnings
     "-w",
     // force libcudacxx to not include system headers
@@ -375,6 +378,7 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
                                          binary_operator op,
                                          data_type output_type,
                                          rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   return detail::binary_operation(lhs, rhs, op, output_type, mr);
 }
 
@@ -383,6 +387,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          binary_operator op,
                                          data_type output_type,
                                          rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   return detail::binary_operation(lhs, rhs, op, output_type, mr);
 }
 
@@ -391,6 +396,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          binary_operator op,
                                          data_type output_type,
                                          rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   return detail::binary_operation(lhs, rhs, op, output_type, mr);
 }
 
@@ -399,6 +405,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          std::string const& ptx,
                                          data_type output_type,
                                          rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   return detail::binary_operation(lhs, rhs, ptx, output_type, mr);
 }
 

@@ -65,6 +65,7 @@ struct aggregation_result {
   std::vector<std::unique_ptr<column>> results{};
 };
 
+
 /**
  * @brief Groups values by keys and computes aggregations on those groups.
  */
@@ -90,18 +91,19 @@ class groupby {
    * data viewed by the `keys` `table_view`.
    *
    * @param keys Table whose rows act as the groupby keys
-   * @param ignore_null_keys Indicates whether rows in `keys` that contain NULL
-   * values should be ignored
+   * @param include_nulls_keys Indicates whether rows in `keys` that contain 
+   * NULL values should be included
    * @param keys_are_sorted Indicates whether rows in `keys` are already sorted
-   * @param column_order If `keys_are_sorted == true`, indicates whether each
+   * @param column_order If `keys_are_sorted == YES`, indicates whether each
    * column is ascending/descending. If empty, assumes all  columns are
    * ascending. Ignored if `keys_are_sorted == false`.
-   * @param null_precedence If `keys_are_sorted == true`, indicates the ordering
+   * @param null_precedence If `keys_are_sorted == YES`, indicates the ordering
    * of null values in each column. Else, ignored. If empty, assumes all columns
    * use `null_order::BEFORE`. Ignored if `keys_are_sorted == false`.
    */
-  explicit groupby(table_view const& keys, bool ignore_null_keys = true,
-                   bool keys_are_sorted = false,
+  explicit groupby(table_view const& keys,
+                   include_nulls include_nulls_keys = include_nulls::NO,
+                   sorted keys_are_sorted = sorted::NO,
                    std::vector<order> const& column_order = {},
                    std::vector<null_order> const& null_precedence = {});
 
@@ -162,10 +164,42 @@ class groupby {
       std::vector<aggregation_request> const& requests,
       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
- private:
+  /**
+   * @brief The grouped data corresponding to a groupby operation on a set of values.
+   *
+   * A `groups` object holds two tables of identical number of rows:
+   * a table of grouped keys and a table of grouped values. In addition, it holds
+   * a vector of integer offsets into the rows of the tables, such that
+   * `offsets[i+1] - offsets[i]` gives the size of group `i`.
+   */
+  struct groups {
+    std::unique_ptr<table> keys;
+    std::vector<size_type> offsets;
+    std::unique_ptr<table> values;
+  };
+
+  /**
+   * @brief Get the grouped keys and values corresponding to a groupby operation on a set of values
+   *
+   * Returns a `groups` object representing the grouped keys and values.
+   * If values is not provided, only a grouping of the keys is performed,
+   * and the `values` of the `groups` object will be `nullptr`.
+   *
+   * @param values Table representing values on which a groupby operation is to be performed
+   * @param mr Memory resource used to allocate the returned tables
+   * @return A `groups` object representing grouped keys and values
+   */
+  groups get_groups(
+      cudf::table_view values={},
+      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()
+  );
+
+
+private:
   table_view _keys;                    ///< Keys that determine grouping
-  bool _ignore_null_keys{true};        ///< Ignore rows in keys with NULLs
-  bool _keys_are_sorted{false};        ///< Whether or not the keys are sorted
+  include_nulls _include_null_keys{include_nulls::NO}; ///< Include rows in keys 
+                                                       ///< with NULLs
+  sorted _keys_are_sorted{sorted::NO}; ///< Whether or not the keys are sorted
   std::vector<order> _column_order{};  ///< If keys are sorted, indicates
                                        ///< the order of each column
   std::vector<null_order> _null_precedence{};  ///< If keys are sorted,

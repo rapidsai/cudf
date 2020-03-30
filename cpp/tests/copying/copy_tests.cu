@@ -73,7 +73,8 @@ TYPED_TEST(CopyTest, CopyIfElseTestManyNulls)
    int num_els = 7;
 
    bool mask[]    = { 1, 0, 0, 0, 0, 0, 1 };
-   bool_wrapper mask_w(mask, mask + num_els);
+   bool mask_v[]  = { 1, 1, 1, 1, 1, 1, 0 };
+   bool_wrapper mask_w(mask, mask + num_els, mask_v);
 
    T lhs[]        = { 5, 5, 5, 5, 5, 5, 5 }; 
    bool lhs_v[]   = { 1, 1, 1, 1, 1, 1, 1 };
@@ -83,7 +84,7 @@ TYPED_TEST(CopyTest, CopyIfElseTestManyNulls)
    bool rhs_v[]   = { 1, 0, 0, 0, 0, 0, 1 };
    wrapper<T> rhs_w(rhs, rhs + num_els, rhs_v);
    
-   T expected[]   = { 5, 6, 6, 6, 6, 6, 5 };
+   T expected[]   = { 5, 6, 6, 6, 6, 6, 6 };
    bool exp_v[]   = { 1, 0, 0, 0, 0, 0, 1 };
    wrapper<T> expected_w(expected, expected + num_els, exp_v);
 
@@ -387,7 +388,8 @@ TYPED_TEST(CopyTestNumeric, CopyIfElseTestColumnScalar)
    int num_els = 4;
 
    bool mask[]    = { 1, 0, 0, 1 };
-   bool_wrapper mask_w(mask, mask + num_els);
+   bool mask_v[]  = { 1, 1, 1, 0 };
+   bool_wrapper mask_w(mask, mask + num_els, mask_v);
    
    T lhs[]        = { 5, 5, 5, 5 };
    bool lhs_v[]   = { 0, 1, 1, 1 };
@@ -395,7 +397,7 @@ TYPED_TEST(CopyTestNumeric, CopyIfElseTestColumnScalar)
 
    cudf::numeric_scalar<T> rhs_w(6);
    
-   T expected[]   = { 5, 6, 6, 5 };   
+   T expected[]   = { 5, 6, 6, 6};   
    wrapper<T> expected_w(expected, expected + num_els, lhs_v);
 
    auto out = cudf::experimental::copy_if_else(lhs_w, rhs_w, mask_w);
@@ -521,15 +523,16 @@ TEST_F(StringsCopyIfElseTest, CopyIfElse)
    std::vector<const char*> h_strings2{ "zz",  "", "yyy", "w", "ééé", "ooo" };
    cudf::test::strings_column_wrapper strings2( h_strings2.begin(), h_strings2.end(), valids );   
 
-   bool mask[] = { 1, 1, 0, 1, 0, 1 };
-   bool_wrapper mask_w(mask, mask + 6);
+   bool mask[] =   { 1, 1, 0, 1, 0, 1 };
+   bool mask_v[] = { 1, 1, 1, 1, 1, 0 };
+   bool_wrapper mask_w(mask, mask + 6, mask_v);
    
    auto results = cudf::experimental::copy_if_else(strings1, strings2, mask_w);
       
    std::vector<const char*> h_expected;
    for( cudf::size_type idx=0; idx < static_cast<cudf::size_type>(h_strings1.size()); ++idx )
    {
-       if( mask[idx] )
+       if( mask[idx] and mask_v[idx])
            h_expected.push_back( h_strings1[idx] );
        else
            h_expected.push_back( h_strings2[idx] );
@@ -547,15 +550,16 @@ TEST_F(StringsCopyIfElseTest, CopyIfElseScalarColumn)
    std::vector<const char*> h_strings2{ "zz",  "", "yyy", "w", "ééé", "ooo" };
    cudf::test::strings_column_wrapper strings2( h_strings2.begin(), h_strings2.end(), valids );   
 
-   bool mask[] = { 1, 0, 1, 0, 1, 0 };
-   bool_wrapper mask_w(mask, mask + 6);  
+   bool mask[] =   { 1, 0, 1, 0, 1, 0 };
+   bool mask_v[] = { 1, 1, 1, 1, 1, 0 };
+   bool_wrapper mask_w(mask, mask + 6, mask_v);
       
    auto results = cudf::experimental::copy_if_else(strings1, strings2, mask_w);
       
    std::vector<const char*> h_expected;
    for( cudf::size_type idx=0; idx < static_cast<cudf::size_type>(h_strings2.size()); ++idx )
    {
-      if( mask[idx] ){
+      if( mask[idx] and mask_v[idx]){
          h_expected.push_back( h_string1[0] );
       } else {
          h_expected.push_back( h_strings2[idx] );

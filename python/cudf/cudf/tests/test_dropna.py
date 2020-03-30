@@ -174,3 +174,14 @@ def test_dropna_thresh_cols(thresh, subset):
         pdf.dropna(axis=1, thresh=thresh, subset=subset),
         gdf.dropna(axis=1, thresh=thresh, subset=subset),
     )
+
+
+def test_dropna_dataframe_np_nan():
+    import cudf
+    import numpy as np
+
+    data = {"key": [1, 2], "val": [np.nan, 3]}
+    gdf = cudf.DataFrame(data)
+    pdf = pd.DataFrame(data)
+
+    assert_eq(pdf.dropna(), gdf.dropna(), check_dtype=False)
