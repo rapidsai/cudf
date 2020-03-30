@@ -33,7 +33,7 @@
 - PR #4633 String concatenation fix in `DataFrame.rename`
 - PR #4609 Fix to handle `Series.factorize` when index is set
 - PR #4651 Fix hashing benchmark missing includes
-- PR #4672 Fix `__setitem__` handling list of column names
+- PR #4672 Fix docs for `value_counts` and update test cases
 
 
 # cuDF 0.13.0 (Date TBD)

@@ -606,10 +606,6 @@ class DataFrame(Frame):
                         # consistent to pandas >0.21.0
                         if not is_scalar(value):
                             self._data[col] = column.as_column(value)
-                        elif col not in self._data.keys():
-                            self._data[col] = column.as_column(
-                                utils.scalar_broadcast_to(value, len(self))
-                            )
                         else:
                             self._data[col][:] = value
 
