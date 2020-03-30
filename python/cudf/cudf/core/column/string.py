@@ -604,16 +604,7 @@ class StringMethods(object):
         -------
         Series/Index of bool dtype
 
-        Notes
-        -----
-        Results are incompatible with standard python string logic. Use caution
-        when operating on data which contains non-alphabetical characters.
         """
-        warnings.warn(
-            "isupper currently returns False for non-cased characters whereas"
-            + "Pandas returns True, this will be fixed in the near future"
-        )
-
         return self._return_or_inplace(cpp_is_upper(self._column), **kwargs)
 
     def islower(self, **kwargs):
@@ -625,16 +616,7 @@ class StringMethods(object):
         -------
         Series/Index of bool dtype
 
-        Notes
-        -----
-        Results are incompatible with standard python string logic. Use caution
-        when operating on data which contains non-alphabetical characters.
         """
-        warnings.warn(
-            "islower currently returns False for non-cased characters whereas"
-            + "Pandas returns True, this will be fixed in the near future"
-        )
-
         return self._return_or_inplace(cpp_is_lower(self._column), **kwargs)
 
     def lower(self, **kwargs):
