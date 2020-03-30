@@ -25,6 +25,7 @@
 - PR #4700 Expose events and more stream functionality in java
 - PR #4699 Make Java's MemoryBuffer public and add MemoryBuffer.slice
 - PR #4691 Fix compiler argument syntax for ccache
+- PR #3581 Remove `bool8`
 
 ## Bug Fixes
 
@@ -427,7 +428,6 @@
 - PR #3673 Parquet reader: improve rounding of timestamp conversion to seconds
 - PR #3699 Stringify libcudacxx headers for binary op JIT
 - PR #3697 Improve column insert performance for wide frames
-- PR #3581 Remove `bool8`
 - PR #3653 Make `gather_bitmask_kernel` more reusable.
 - PR #3710 Remove multiple CMake configuration steps from root build script
 - PR #3657 Define and implement compiled binops for string column comparisons
