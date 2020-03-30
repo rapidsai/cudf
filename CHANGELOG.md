@@ -26,6 +26,7 @@
 - PR #4699 Make Java's MemoryBuffer public and add MemoryBuffer.slice
 - PR #4691 Fix compiler argument syntax for ccache
 - PR #4705 quantile cython bindings
+- PR #4627 Remove legacy Cython
 
 ## Bug Fixes
 
