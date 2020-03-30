@@ -49,13 +49,6 @@ enum TwoPass
 };
 
 /**
- * @brief Disable special case mappings.  This can be useful for situations when trying to
- * regenerate the mapping hash table (where you might want to generate 'incorrect' results
- * via an external verification tool).
- */
-#define CUDF_ALLOW_SPECIAL_CASE_MAPPING
-
-/**
  * @brief Per string logic for case conversion functions.
  *
  * @tparam Pass Determines if size calculation or output write is begin performed.
@@ -115,17 +108,11 @@ struct upper_lower_fn
             // - uncased characters with the special mapping flag, always
             // - cased characters with the special mapping flag, when matching the input case_flag
             //
-            // This #ifdef is here as a utility for development situations where we may want to have 
-            // cudf produce incorrect mappings for special case characters to compare against some known
-            // correct source for a particular version of Unicode, such as Java.
-            #if defined(CUDF_ALLOW_SPECIAL_CASE_MAPPING)
             if( IS_SPECIAL(flag) && ((flag & case_flag) || !IS_UPPER_OR_LOWER(flag)) )
             {
                 bytes += handle_special_case_bytes(code_point, d_buffer, case_flag);
             }
-            else              
-            #endif  // CUDF_ALLOW_SPECIAL_CASE_MAPPING
-            if( flag & case_flag )
+            else if( flag & case_flag )
             {
                 if( Pass==SizeOnly )
                     bytes += detail::bytes_in_char_utf8(detail::codepoint_to_utf8(d_case_table[code_point]));
