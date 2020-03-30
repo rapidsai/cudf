@@ -59,11 +59,19 @@ TEST_F(DictionaryFillTest, FillWithNull)
     cudf::test::expect_columns_equal(decoded->view(),expected);
 }
 
+TEST_F(DictionaryFillTest, Empty)
+{
+    auto dictionary = cudf::make_empty_column( cudf::data_type{cudf::DICTIONARY32} );
+    cudf::numeric_scalar<int64_t> fv(-10);
+    auto results = cudf::experimental::fill( dictionary->view(), 0,0, fv );
+    cudf::test::expect_columns_equal(results->view(),dictionary->view());
+}
+
 TEST_F(DictionaryFillTest, Errors)
 {
     cudf::test::strings_column_wrapper input{ "this string intentionally left blank" };
     auto dictionary = cudf::dictionary::encode( input );
-    cudf::numeric_scalar<int64_t> fv(-10);
+    cudf::numeric_scalar<int64_t> fv(-10); // mismatched key
     EXPECT_THROW( cudf::experimental::fill( dictionary->view(), 1,2, fv ),
                   cudf::logic_error );
 }
