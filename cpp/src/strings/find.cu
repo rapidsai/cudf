@@ -195,16 +195,15 @@ std::unique_ptr<column> contains_fn( strings_column_view const& strings,
         copy_bitmask( strings.parent(), stream, mr ), strings.null_count(), stream, mr);
     auto results_view = results->mutable_view();
     auto d_results = results_view.data<bool>();
-    // set the bool values but evaluating the passed function
+    // set the bool values by evaluating the passed function
     thrust::transform( rmm::exec_policy(stream)->on(stream),
         thrust::make_counting_iterator<size_type>(0),
         thrust::make_counting_iterator<size_type>(strings_count),
         d_results,
         [d_strings, pfn, d_target] __device__ (size_type idx) {
-            bool result = 0;
             if( !d_strings.is_null(idx) )
-                result = static_cast<bool>(pfn(d_strings.element<string_view>(idx), d_target));
-            return result;
+                return static_cast<bool>(pfn(d_strings.element<string_view>(idx), d_target));
+            return false;
         });
     results->set_null_count(strings.null_count());
     return results;

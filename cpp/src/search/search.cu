@@ -199,8 +199,7 @@ struct multi_contains_dispatch {
     mutable_column_view result_view = result.get()->mutable_view();
 
     if (needles.size() == 0) {
-      bool f = false;
-      thrust::fill(rmm::exec_policy(stream)->on(stream), result_view.begin<bool>(), result_view.end<bool>(), f);
+      thrust::fill(rmm::exec_policy(stream)->on(stream), result_view.begin<bool>(), result_view.end<bool>(), false);
       return result;
     }
 
