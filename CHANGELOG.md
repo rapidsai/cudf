@@ -25,7 +25,7 @@
 - PR #4700 Expose events and more stream functionality in java
 - PR #4699 Make Java's MemoryBuffer public and add MemoryBuffer.slice
 - PR #4691 Fix compiler argument syntax for ccache
-- PR #4738 Remove cap-gaps in StringMethods and enable related tests
+- PR #4738 Remove stop-gaps in StringMethods and enable related tests
 
 ## Bug Fixes
 
