@@ -2143,9 +2143,7 @@ class DataFrame(Frame):
         if self._num_columns == 0 or self._num_rows == 0:
             return DataFrame(index=index, columns=columns)
         # Cython renames the columns to the range [0...ncols]
-        result = self.__class__._from_table(
-            libcudf.transpose.transpose(self)
-        )
+        result = self.__class__._from_table(libcudf.transpose.transpose(self))
         # Set the old column names as the new index
         result._index = as_index(index)
         # Set the old index as the new column names
@@ -3964,11 +3962,15 @@ class DataFrame(Frame):
         # Collect datatypes and cast columns as that type
         common_type = np.result_type(*self.dtypes)
         homogenized = DataFrame(
-            {c: (self._data[c].astype(common_type)
-                 if not np.issubdtype(self._data[c].dtype, common_type)
-                 else self._data[c])
-             for c in self._data
-             })
+            {
+                c: (
+                    self._data[c].astype(common_type)
+                    if not np.issubdtype(self._data[c].dtype, common_type)
+                    else self._data[c]
+                )
+                for c in self._data
+            }
+        )
 
         data_col = libcudf.reshape.interleave_columns(homogenized)
 
