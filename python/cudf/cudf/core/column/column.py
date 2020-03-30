@@ -13,17 +13,17 @@ from numba import cuda, njit
 import nvstrings
 
 import cudf
-import cudf._libxx as libcudfxx
-from cudf._libxx.column import Column
-from cudf._libxx.null_mask import (
+import cudf._lib as libcudf
+from cudf._lib.column import Column
+from cudf._lib.null_mask import (
     MaskState,
     bitmask_allocation_size_bytes,
     create_null_mask,
 )
-from cudf._libxx.quantiles import quantile as cpp_quantile
-from cudf._libxx.scalar import Scalar
-from cudf._libxx.stream_compaction import unique_count as cpp_unique_count
-from cudf._libxx.transform import bools_to_mask
+from cudf._lib.quantiles import quantile as cpp_quantile
+from cudf._lib.scalar import Scalar
+from cudf._lib.stream_compaction import unique_count as cpp_unique_count
+from cudf._lib.transform import bools_to_mask
 from cudf.core.buffer import Buffer
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils import cudautils, ioutils, utils
@@ -152,12 +152,12 @@ class ColumnBase(Column):
     def all(self):
         if self.null_count != 0:
             return False
-        return bool(libcudfxx.reduce.reduce("all", self, dtype=np.bool_))
+        return bool(libcudf.reduce.reduce("all", self, dtype=np.bool_))
 
     def any(self):
         if self.valid_count == 0:
             return False
-        return bool(libcudfxx.reduce.reduce("any", self, dtype=np.bool_))
+        return bool(libcudf.reduce.reduce("any", self, dtype=np.bool_))
 
     def __sizeof__(self):
         n = self.data.size
@@ -235,10 +235,10 @@ class ColumnBase(Column):
             head = head.cat().codes._column
 
         newsize = sum(map(len, objs))
-        if newsize > libcudfxx.MAX_COLUMN_SIZE:
+        if newsize > libcudf.MAX_COLUMN_SIZE:
             raise MemoryError(
                 "Result of concat cannot have "
-                "size > {}".format(libcudfxx.MAX_COLUMN_SIZE_STR)
+                "size > {}".format(libcudf.MAX_COLUMN_SIZE_STR)
             )
 
         # Filter out inputs that have 0 length
@@ -246,7 +246,7 @@ class ColumnBase(Column):
 
         # Perform the actual concatenation
         if newsize > 0:
-            col = libcudfxx.concat.concat_columns(objs)
+            col = libcudf.concat.concat_columns(objs)
         else:
             col = column_empty(0, head.dtype, masked=True)
 
@@ -322,11 +322,11 @@ class ColumnBase(Column):
         fill_scalar = Scalar(fill_value, self.dtype)
 
         if not inplace:
-            return libcudfxx.filling.fill(self, begin, end, fill_scalar)
+            return libcudf.filling.fill(self, begin, end, fill_scalar)
 
         if is_string_dtype(self.dtype):
             return self._mimic_inplace(
-                libcudfxx.filling.fill(self, begin, end, fill_scalar),
+                libcudf.filling.fill(self, begin, end, fill_scalar),
                 inplace=True,
             )
 
@@ -334,7 +334,7 @@ class ColumnBase(Column):
             mask = create_null_mask(self.size, state=MaskState.ALL_VALID)
             self.set_base_mask(mask)
 
-        libcudfxx.filling.fill_in_place(self, begin, end, fill_scalar)
+        libcudf.filling.fill_in_place(self, begin, end, fill_scalar)
 
         return self
 
@@ -344,11 +344,11 @@ class ColumnBase(Column):
 
         result = self if inplace else self.copy()
 
-        libcudfxx.filling.fill_in_place(result.codes, begin, end, fill_scalar)
+        libcudf.filling.fill_in_place(result.codes, begin, end, fill_scalar)
         return result
 
     def shift(self, offset, fill_value):
-        return libcudfxx.copying.shift(self, offset, fill_value)
+        return libcudf.copying.shift(self, offset, fill_value)
 
     @property
     def valid_count(self):
@@ -370,7 +370,7 @@ class ColumnBase(Column):
         copies the references of the data and mask.
         """
         if deep:
-            return libcudfxx.copying.copy_column(self)
+            return libcudf.copying.copy_column(self)
         else:
             return build_column(
                 self.base_data,
@@ -458,7 +458,7 @@ class ColumnBase(Column):
             # compute mask slice
             if stride == 1 or stride is None:
 
-                return libcudfxx.copying.column_slice(self, [start, stop])[0]
+                return libcudf.copying.column_slice(self, [start, stop])[0]
             else:
                 # Need to create a gather map for given slice with stride
                 gather_map = as_column(
@@ -545,7 +545,7 @@ class ColumnBase(Column):
             and not is_scalar(value)
         ):
 
-            out = libcudfxx.copying.copy_range(
+            out = libcudf.copying.copy_range(
                 value, self, 0, nelem, key_start, key_stop, False
             )
             if is_categorical_dtype(value.dtype):
@@ -603,7 +603,7 @@ class ColumnBase(Column):
     def isnull(self):
         """Identify missing values in a Column.
         """
-        return libcudfxx.unary.is_null(self)
+        return libcudf.unary.is_null(self)
 
     def isna(self):
         """Identify missing values in a Column. Alias for isnull.
@@ -613,7 +613,7 @@ class ColumnBase(Column):
     def notnull(self):
         """Identify non-missing values in a Column.
         """
-        return libcudfxx.unary.is_valid(self)
+        return libcudf.unary.is_valid(self)
 
     def notna(self):
         """Identify non-missing values in a Column. Alias for notnull.
@@ -1103,12 +1103,12 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
     # TODO: Remove nvstrings here when nvstrings is fully removed
     elif isinstance(arbitrary, nvstrings.nvstrings):
         byte_count = arbitrary.byte_count()
-        if byte_count > libcudfxx.MAX_STRING_COLUMN_BYTES:
+        if byte_count > libcudf.MAX_STRING_COLUMN_BYTES:
             raise MemoryError(
                 "Cannot construct string columns "
                 "containing > {} bytes. "
                 "Consider using dask_cudf to partition "
-                "your data.".format(libcudfxx.MAX_STRING_COLUMN_BYTES_STR)
+                "your data.".format(libcudf.MAX_STRING_COLUMN_BYTES_STR)
             )
         sbuf = Buffer.empty(arbitrary.byte_count())
         obuf = Buffer.empty(
@@ -1144,7 +1144,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         col = build_column(data, dtype=dtype, mask=mask)
         if np.issubdtype(col.dtype, np.floating):
             if nan_as_null or (mask is None and nan_as_null is None):
-                mask = libcudfxx.transform.nans_to_nulls(col.fillna(np.nan))
+                mask = libcudf.transform.nans_to_nulls(col.fillna(np.nan))
                 col = col.set_mask(mask)
         elif np.issubdtype(col.dtype, np.datetime64):
             if nan_as_null or (mask is None and nan_as_null is None):

@@ -6,7 +6,7 @@ import pyarrow.parquet as pq
 from pyarrow.compat import guid
 
 import cudf
-import cudf._libxx.parquet as libparquet
+import cudf._lib.parquet as libparquet
 from cudf.utils import ioutils
 
 

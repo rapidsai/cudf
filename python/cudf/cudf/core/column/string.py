@@ -11,39 +11,37 @@ import pyarrow as pa
 
 import nvstrings
 
-import cudf._libxx as libcudfxx
-import cudf._libxx.string_casting as str_cast
-from cudf._libxx.nvtext.generate_ngrams import (
+import cudf._lib as libcudf
+import cudf._lib.string_casting as str_cast
+from cudf._lib.nvtext.generate_ngrams import (
     generate_ngrams as cpp_generate_ngrams,
 )
-from cudf._libxx.nvtext.ngrams_tokenize import (
+from cudf._lib.nvtext.ngrams_tokenize import (
     ngrams_tokenize as cpp_ngrams_tokenize,
 )
-from cudf._libxx.nvtext.normalize import (
-    normalize_spaces as cpp_normalize_spaces,
-)
-from cudf._libxx.nvtext.tokenize import (
+from cudf._lib.nvtext.normalize import normalize_spaces as cpp_normalize_spaces
+from cudf._lib.nvtext.tokenize import (
     count_tokens as cpp_count_tokens,
     tokenize as cpp_tokenize,
 )
-from cudf._libxx.nvtx import (
+from cudf._lib.nvtx import (
     range_pop as nvtx_range_pop,
     range_push as nvtx_range_push,
 )
-from cudf._libxx.strings.attributes import (
+from cudf._lib.strings.attributes import (
     code_points as cpp_code_points,
     count_characters as cpp_count_characters,
 )
-from cudf._libxx.strings.capitalize import (
+from cudf._lib.strings.capitalize import (
     capitalize as cpp_capitalize,
     title as cpp_title,
 )
-from cudf._libxx.strings.case import (
+from cudf._lib.strings.case import (
     swapcase as cpp_swapcase,
     to_lower as cpp_to_lower,
     to_upper as cpp_to_upper,
 )
-from cudf._libxx.strings.char_types import (
+from cudf._lib.strings.char_types import (
     is_alnum as cpp_is_alnum,
     is_alpha as cpp_is_alpha,
     is_decimal as cpp_is_decimal,
@@ -53,29 +51,29 @@ from cudf._libxx.strings.char_types import (
     is_space as cpp_isspace,
     is_upper as cpp_is_upper,
 )
-from cudf._libxx.strings.combine import (
+from cudf._lib.strings.combine import (
     concatenate as cpp_concatenate,
     join as cpp_join,
 )
-from cudf._libxx.strings.contains import (
+from cudf._lib.strings.contains import (
     contains_re as cpp_contains_re,
     count_re as cpp_count_re,
     match_re as cpp_match_re,
 )
-from cudf._libxx.strings.convert.convert_urls import (
+from cudf._lib.strings.convert.convert_urls import (
     url_decode as cpp_url_decode,
     url_encode as cpp_url_encode,
 )
-from cudf._libxx.strings.extract import extract as cpp_extract
-from cudf._libxx.strings.find import (
+from cudf._lib.strings.extract import extract as cpp_extract
+from cudf._lib.strings.find import (
     contains as cpp_contains,
     endswith as cpp_endswith,
     find as cpp_find,
     rfind as cpp_rfind,
     startswith as cpp_startswith,
 )
-from cudf._libxx.strings.findall import findall as cpp_findall
-from cudf._libxx.strings.padding import (
+from cudf._lib.strings.findall import findall as cpp_findall
+from cudf._lib.strings.padding import (
     PadSide,
     center as cpp_center,
     ljust as cpp_ljust,
@@ -83,37 +81,37 @@ from cudf._libxx.strings.padding import (
     rjust as cpp_rjust,
     zfill as cpp_zfill,
 )
-from cudf._libxx.strings.replace import (
+from cudf._lib.strings.replace import (
     insert as cpp_string_insert,
     replace as cpp_replace,
     replace_multi as cpp_replace_multi,
     slice_replace as cpp_slice_replace,
 )
-from cudf._libxx.strings.replace_re import (
+from cudf._lib.strings.replace_re import (
     replace_multi_re as cpp_replace_multi_re,
     replace_re as cpp_replace_re,
     replace_with_backrefs as cpp_replace_with_backrefs,
 )
-from cudf._libxx.strings.split.partition import (
+from cudf._lib.strings.split.partition import (
     partition as cpp_partition,
     rpartition as cpp_rpartition,
 )
-from cudf._libxx.strings.split.split import (
+from cudf._lib.strings.split.split import (
     rsplit as cpp_rsplit,
     split as cpp_split,
 )
-from cudf._libxx.strings.strip import (
+from cudf._lib.strings.strip import (
     lstrip as cpp_lstrip,
     rstrip as cpp_rstrip,
     strip as cpp_strip,
 )
-from cudf._libxx.strings.substring import (
+from cudf._lib.strings.substring import (
     get as cpp_string_get,
     slice_from as cpp_slice_from,
     slice_strings as cpp_slice_strings,
 )
-from cudf._libxx.strings.translate import translate as cpp_translate
-from cudf._libxx.strings.wrap import wrap as cpp_wrap
+from cudf._lib.strings.translate import translate as cpp_translate
+from cudf._lib.strings.wrap import wrap as cpp_wrap
 from cudf.core.buffer import Buffer
 from cudf.core.column import column, column_empty
 from cudf.utils import utils
@@ -204,7 +202,7 @@ class StringMethods(object):
                 # This branch indicates the passed as new_col
                 # is actually a table-like data
                 table = new_col
-                from cudf._libxx.table import Table
+                from cudf._lib.table import Table
 
                 if isinstance(table, Table):
                     return self._parent._constructor_expanddim(
@@ -294,7 +292,7 @@ class StringMethods(object):
         if sep is None:
             sep = ""
 
-        from cudf._libxx.scalar import Scalar
+        from cudf._lib.scalar import Scalar
 
         if others is None:
             data = cpp_join(self._column, Scalar(sep), Scalar(na_rep, "str"))
@@ -401,7 +399,7 @@ class StringMethods(object):
         elif na is not np.nan:
             raise NotImplementedError("`na` parameter is not yet supported")
 
-        from cudf._libxx.scalar import Scalar
+        from cudf._lib.scalar import Scalar
 
         return self._return_or_inplace(
             cpp_contains_re(self._column, pat)
@@ -474,7 +472,7 @@ class StringMethods(object):
         # Pandas treats 0 as all
         if n == 0:
             n = -1
-        from cudf._libxx.scalar import Scalar
+        from cudf._lib.scalar import Scalar
 
         # Pandas forces non-regex replace when pat is a single-character
         return self._return_or_inplace(
@@ -768,7 +766,7 @@ class StringMethods(object):
         if repl is None:
             repl = ""
 
-        from cudf._libxx.scalar import Scalar
+        from cudf._lib.scalar import Scalar
 
         return self._return_or_inplace(
             cpp_slice_replace(self._column, start, stop, Scalar(repl)),
@@ -799,7 +797,7 @@ class StringMethods(object):
         if repl is None:
             repl = ""
 
-        from cudf._libxx.scalar import Scalar
+        from cudf._lib.scalar import Scalar
 
         return self._return_or_inplace(
             cpp_string_insert(self._column, start, Scalar(repl)), **kwargs
@@ -860,7 +858,7 @@ class StringMethods(object):
         if pat is None:
             pat = ""
 
-        from cudf._libxx.scalar import Scalar
+        from cudf._lib.scalar import Scalar
 
         result_table = cpp_split(self._column, Scalar(pat, "str"), n)
         if len(result_table._data) == 1:
@@ -907,7 +905,7 @@ class StringMethods(object):
         if pat is None:
             pat = ""
 
-        from cudf._libxx.scalar import Scalar
+        from cudf._lib.scalar import Scalar
 
         result_table = cpp_rsplit(self._column, Scalar(pat), n)
         if len(result_table._data) == 1:
@@ -953,7 +951,7 @@ class StringMethods(object):
         if sep is None:
             sep = " "
 
-        from cudf._libxx.scalar import Scalar
+        from cudf._lib.scalar import Scalar
 
         return self._return_or_inplace(
             cpp_partition(self._column, Scalar(sep)), **kwargs
@@ -994,7 +992,7 @@ class StringMethods(object):
         if sep is None:
             sep = " "
 
-        from cudf._libxx.scalar import Scalar
+        from cudf._lib.scalar import Scalar
 
         return self._return_or_inplace(
             cpp_rpartition(self._column, Scalar(sep)), **kwargs
@@ -1211,7 +1209,7 @@ class StringMethods(object):
         if to_strip is None:
             to_strip = ""
 
-        from cudf._libxx.scalar import Scalar
+        from cudf._lib.scalar import Scalar
 
         return self._return_or_inplace(
             cpp_strip(self._column, Scalar(to_strip)), **kwargs
@@ -1241,7 +1239,7 @@ class StringMethods(object):
         if to_strip is None:
             to_strip = ""
 
-        from cudf._libxx.scalar import Scalar
+        from cudf._lib.scalar import Scalar
 
         return self._return_or_inplace(
             cpp_lstrip(self._column, Scalar(to_strip)), **kwargs
@@ -1272,7 +1270,7 @@ class StringMethods(object):
         if to_strip is None:
             to_strip = ""
 
-        from cudf._libxx.scalar import Scalar
+        from cudf._lib.scalar import Scalar
 
         return self._return_or_inplace(
             cpp_rstrip(self._column, Scalar(to_strip)), **kwargs
@@ -1455,7 +1453,7 @@ class StringMethods(object):
                 as cudf uses native strings instead of Python objects"
             )
 
-        from cudf._libxx.scalar import Scalar
+        from cudf._lib.scalar import Scalar
 
         # TODO: Cleanup if/else blocks after this issue is fixed:
         # https://github.com/rapidsai/cudf/issues/4500
@@ -1492,7 +1490,7 @@ class StringMethods(object):
                 as cudf uses native strings instead of Python objects"
             )
 
-        from cudf._libxx.scalar import Scalar
+        from cudf._lib.scalar import Scalar
 
         # TODO: Cleanup if/else blocks after this issue is fixed:
         # https://github.com/rapidsai/cudf/issues/4500
@@ -1533,7 +1531,7 @@ class StringMethods(object):
             msg = "expected a string object, not {0}"
             raise TypeError(msg.format(type(sub).__name__))
 
-        from cudf._libxx.scalar import Scalar
+        from cudf._lib.scalar import Scalar
 
         if end is None:
             end = -1
@@ -1583,7 +1581,7 @@ class StringMethods(object):
             msg = "expected a string object, not {0}"
             raise TypeError(msg.format(type(sub).__name__))
 
-        from cudf._libxx.scalar import Scalar
+        from cudf._lib.scalar import Scalar
 
         if end is None:
             end = -1
@@ -1636,7 +1634,7 @@ class StringMethods(object):
             msg = "expected a string object, not {0}"
             raise TypeError(msg.format(type(sub).__name__))
 
-        from cudf._libxx.scalar import Scalar
+        from cudf._lib.scalar import Scalar
 
         if end is None:
             end = -1
@@ -1684,7 +1682,7 @@ class StringMethods(object):
             msg = "expected a string object, not {0}"
             raise TypeError(msg.format(type(sub).__name__))
 
-        from cudf._libxx.scalar import Scalar
+        from cudf._lib.scalar import Scalar
 
         if end is None:
             end = -1
@@ -1844,8 +1842,8 @@ class StringMethods(object):
 
 
 def _massage_string_arg(value, name, allow_col=False):
-    from cudf._libxx.scalar import Scalar
-    from cudf._libxx.column import Column
+    from cudf._lib.scalar import Scalar
+    from cudf._lib.column import Column
     from cudf.utils.dtypes import is_string_dtype
 
     if isinstance(value, str):
@@ -2208,16 +2206,16 @@ class StringColumn(column.ColumnBase):
         """
         to_replace = column.as_column(to_replace, dtype=self.dtype)
         replacement = column.as_column(replacement, dtype=self.dtype)
-        return libcudfxx.replace.replace(self, to_replace, replacement)
+        return libcudf.replace.replace(self, to_replace, replacement)
 
     def fillna(self, fill_value):
         if not is_scalar(fill_value):
             fill_value = column.as_column(fill_value, dtype=self.dtype)
-        return libcudfxx.replace.replace_nulls(self, fill_value)
+        return libcudf.replace.replace_nulls(self, fill_value)
 
     def _find_first_and_last(self, value):
         found_indices = self.str().contains(f"^{value}$")
-        found_indices = libcudfxx.unary.cast(found_indices, dtype=np.int32)
+        found_indices = libcudf.unary.cast(found_indices, dtype=np.int32)
         first = column.as_column(found_indices).find_first_value(1)
         last = column.as_column(found_indices).find_last_value(1)
         return first, last
@@ -2289,7 +2287,7 @@ class StringColumn(column.ColumnBase):
 
 def _string_column_binop(lhs, rhs, op, out_dtype):
     nvtx_range_push("CUDF_BINARY_OP", "orange")
-    out = libcudfxx.binaryop.binaryop(lhs=lhs, rhs=rhs, op=op, dtype=out_dtype)
+    out = libcudf.binaryop.binaryop(lhs=lhs, rhs=rhs, op=op, dtype=out_dtype)
     nvtx_range_pop()
     return out
 
