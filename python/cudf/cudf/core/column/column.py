@@ -13,7 +13,6 @@ from numba import cuda, njit
 import nvstrings
 
 import cudf
-import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
 from cudf._libxx.column import Column
 from cudf._libxx.null_mask import (

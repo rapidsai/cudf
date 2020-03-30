@@ -21,7 +21,6 @@ from numba import cuda
 from pandas.api.types import is_dict_like
 
 import cudf
-import cudf._lib as libcudf
 import cudf._libxx as libcudfxx
 from cudf._libxx.null_mask import MaskState, create_null_mask
 from cudf._libxx.transform import bools_to_mask

@@ -1,14 +1,11 @@
 from __future__ import division, print_function
 
-import cupy
 import numpy as np
 import pandas as pd
 import pytest
 
 import cudf
-import cudf._lib as libcudf
 from cudf.core import Series
-from cudf.core.column import column
 from cudf.tests.utils import assert_eq
 
 
