@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cuda_runtime.h>
+#include <strings/regex/regcomp.h>
 #include <memory>
 #include <functional>
 
@@ -85,7 +86,12 @@ public:
     /**
      * @brief Returns the number of regex instructions.
      */
-    int32_t insts_counts() const  { return _insts_count; }
+    __host__ __device__ int32_t insts_counts() const  { return _insts_count; }
+
+    /**
+     * @brief Returns true if this is an empty program.
+     */
+    __device__ bool is_empty() const  { return insts_counts()==0 || get_inst(0)->type == END; }
 
     /**
      * @brief Returns the number of regex groups found in the expression.
@@ -102,7 +108,7 @@ public:
     /**
      * @brief Returns the regex instruction object for a given index.
      */
-    __host__ __device__ inline reinst* get_inst(int32_t idx) const;
+    __device__ inline reinst* get_inst(int32_t idx) const;
 
     /**
      * @brief Returns the regex class object for a given index.

@@ -450,3 +450,5 @@ TEST_F(FixedPointTest, DecimalXXThrustOnDevice) {
     EXPECT_EQ(vec2, vec3);
 
 }
+
+CUDF_TEST_PROGRAM_MAIN()
