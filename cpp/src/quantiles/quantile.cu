@@ -63,7 +63,15 @@ struct quantile_functor
                                               stream,
                                               mr);
 
-        if (output->size() == 0) {
+        if (output->size() == 0)
+        {
+            return output;
+        }
+
+        if (input.size() == 0)
+        {
+            auto mask = create_null_mask(output->size(), mask_state::ALL_NULL, stream, mr);
+            output->set_null_mask(std::move(mask), output->size());
             return output;
         }
 
@@ -123,7 +131,8 @@ quantile(column_view const& input,
          std::vector<double> const& q,
          interpolation interp,
          bool retain_types,
-         rmm::mr::device_memory_resource* mr)
+         rmm::mr::device_memory_resource* mr,
+         cudaStream_t stream)
 {
     auto functor = quantile_functor<exact, SortMapIterator>{
         ordered_indices,
@@ -132,7 +141,7 @@ quantile(column_view const& input,
         interp,
         retain_types,
         mr,
-        0};
+        stream};
 
     return type_dispatcher(input.type(), functor, input);
 }
@@ -148,8 +157,6 @@ quantile(column_view const& input,
          rmm::mr::device_memory_resource* mr)
 {
     CUDF_FUNC_RANGE();
-    CUDF_EXPECTS(input.size() > 0,
-                "quantile requires at least one input row.");
 
     if (ordered_indices.is_empty())
     {
@@ -161,7 +168,8 @@ quantile(column_view const& input,
                                           q,
                                           interp,
                                           exact,
-                                          mr);
+                                          mr,
+                                          0);
         }
         else
         {
@@ -171,7 +179,8 @@ quantile(column_view const& input,
                                            q,
                                            interp,
                                            exact,
-                                           mr);
+                                           mr,
+                                           0);
         }
         
     }
@@ -188,7 +197,8 @@ quantile(column_view const& input,
                                           q,
                                           interp,
                                           exact,
-                                          mr);
+                                          mr,
+                                          0);
         }
         else
         {
@@ -198,7 +208,8 @@ quantile(column_view const& input,
                                            q,
                                            interp,
                                            exact,
-                                           mr);
+                                           mr,
+                                           0);
         }
     }
 }

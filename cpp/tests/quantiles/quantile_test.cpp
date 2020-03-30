@@ -451,10 +451,8 @@ TYPED_TEST(QuantileTest, TestInterpolateExtremaLow)
 TYPED_TEST(QuantileTest, TestEmpty)
 {
     auto input = fixed_width_column_wrapper<TypeParam> ({ });
-    std::unique_ptr<cudf::column> actual;
-
-    EXPECT_THROW(actual = cudf::experimental::quantile(input, { 0.5 }),
-                 cudf::logic_error);
+    auto expected = cudf::test::fixed_width_column_wrapper<double>({ 0, 0 }, { 0, 0 });
+    auto actual = cudf::experimental::quantile(input, { 0.5 , 0.25 });
 }
 
 template <typename T>

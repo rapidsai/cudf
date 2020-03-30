@@ -2213,10 +2213,8 @@ class Series(Frame):
 
         if isinstance(q, Number):
             res = self._column.quantile(q, interpolation, exact)
-            if res is None:
-                return np.nan
-            else:
-                return res[0]
+            res = res[0]
+            return np.nan if res is None else res
 
         if not quant_index:
             return Series(
