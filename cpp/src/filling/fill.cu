@@ -136,18 +136,18 @@ struct out_of_place_fill_range_dispatch {
       return result;
     }
 
-    // add the scalar to get the output dictionary keyset
+    // add the scalar to get the output dictionary key-set
     auto scalar_column = cudf::make_column_from_scalar(value,1,mr,stream);
     auto target_matched = cudf::dictionary::detail::add_keys(target, scalar_column->view(), mr, stream);
     cudf::column_view const target_indices = cudf::dictionary_column_view(target_matched->view()).get_indices_annotated();
 
-    // we need the index of the key just added
+    // get the index of the key just added
     auto index_of_value = cudf::dictionary::detail::get_index( target_matched->view(), value, mr, stream );
-    // now call fill using just the indices column
+    // now call fill using just the indices column and the new index
     out_of_place_fill_range_dispatch filler{*index_of_value,target_indices};
     auto new_indices = filler.template operator()<int32_t>( begin, end, mr, stream);
     auto const output_size = new_indices->size();       // record these
-    auto const null_count = new_indices->null_count();  // before the release
+    auto const null_count = new_indices->null_count();  // before the release()
     auto contents = new_indices->release();
     // create the new indices column from the result
     auto indices_column = std::make_unique<cudf::column>( cudf::data_type{cudf::INT32},

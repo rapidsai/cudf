@@ -42,6 +42,14 @@ struct copy_if_fn
     }
 };
 
+/**
+ * @brief Find index of a given key within a dictionary's keys column.
+ * 
+ * The index is the position within the keys column where the given key (scalar) is found.
+ * The keys column is sorted and unique so only one value is expected.
+ * The result is an integer scalar identifing the index value.
+ * If the key is not found, the resulting scalar has `is_valid()=false`.
+ */
 struct find_index_fn
 {
     template<typename Element, std::enable_if_t<not std::is_same<Element, dictionary32>::value>* = nullptr>
