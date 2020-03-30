@@ -142,7 +142,9 @@ class Frame(libcudfxx.table.Table):
                 if idx in categories:
                     cols[name] = build_categorical_column(
                         categories=categories[idx],
-                        codes=cols[name],
+                        codes=as_column(
+                            cols[name].base_data, dtype=cols[name].dtype
+                        ),
                         mask=cols[name].base_mask,
                         offset=cols[name].offset,
                         size=cols[name].size,
@@ -518,7 +520,7 @@ class Frame(libcudfxx.table.Table):
                 if is_categorical_dtype(self[in_col_name].dtype):
                     result = build_categorical_column(
                         categories=self[in_col_name]._column.categories,
-                        codes=result,
+                        codes=as_column(result.base_data, dtype=result.dtype),
                         mask=result.base_mask,
                         size=result.size,
                         offset=result.offset,
@@ -548,7 +550,7 @@ class Frame(libcudfxx.table.Table):
             if is_categorical_dtype(self.dtype):
                 result = build_categorical_column(
                     categories=self._column.categories,
-                    codes=result,
+                    codes=as_column(result.base_data, dtype=result.dtype),
                     mask=result.base_mask,
                     size=result.size,
                     offset=result.offset,
@@ -718,6 +720,65 @@ class Frame(libcudfxx.table.Table):
         result._copy_categories(self)
         return result
 
+    def rank(
+        self,
+        axis=0,
+        method="average",
+        numeric_only=None,
+        na_option="keep",
+        ascending=True,
+        pct=False,
+    ):
+        """
+        Compute numerical data ranks (1 through n) along axis.
+        By default, equal values are assigned a rank that is the average of the
+        ranks of those values.
+        Parameters
+        ----------
+        axis : {0 or 'index', 1 or 'columns'}, default 0
+            Index to direct ranking.
+        method : {'average', 'min', 'max', 'first', 'dense'}, default 'average'
+            How to rank the group of records that have the same value
+            (i.e. ties):
+            * average: average rank of the group
+            * min: lowest rank in the group
+            * max: highest rank in the group
+            * first: ranks assigned in order they appear in the array
+            * dense: like 'min', but rank always increases by 1 between groups.
+        numeric_only : bool, optional
+            For DataFrame objects, rank only numeric columns if set to True.
+        na_option : {'keep', 'top', 'bottom'}, default 'keep'
+            How to rank NaN values:
+            * keep: assign NaN rank to NaN values
+            * top: assign smallest rank to NaN values if ascending
+            * bottom: assign highest rank to NaN values if ascending.
+        ascending : bool, default True
+            Whether or not the elements should be ranked in ascending order.
+        pct : bool, default False
+            Whether or not to display the returned rankings in percentile
+            form.
+        Returns
+        -------
+        same type as caller
+            Return a Series or DataFrame with data ranks as values.
+        """
+        if method not in {"average", "min", "max", "first", "dense"}:
+            raise KeyError(method)
+        method_enum = libcudfxx.sort.RankMethod[method.upper()]
+        if na_option not in {"keep", "top", "bottom"}:
+            raise KeyError(na_option)
+
+        # TODO code for selecting numeric columns
+        source = self
+        if numeric_only:
+            warnings.warn("numeric_only=True is not implemented yet")
+
+        out_rank_table = libcudfxx.sort.rank_columns(
+            source, method_enum, na_option, ascending, pct
+        )
+
+        return self._from_table(out_rank_table).astype(np.float64)
+
     def repeat(self, repeats, axis=None):
         """Repeats elements consecutively
 
@@ -846,7 +907,7 @@ class Frame(libcudfxx.table.Table):
             ):
                 self._data[name] = build_categorical_column(
                     categories=other_col.categories,
-                    codes=col,
+                    codes=as_column(col.base_data, dtype=col.dtype),
                     mask=col.base_mask,
                     ordered=other_col.ordered,
                     size=col.size,
@@ -989,6 +1050,52 @@ class Frame(libcudfxx.table.Table):
 
         # Retrun result as cupy array
         return cupy.asarray(outcol.data_array_view)
+
+    def get_sorted_inds(self, ascending=True, na_position="last"):
+        """
+            Sort by the values.
+
+            Parameters
+            ----------
+            ascending : bool or list of bool, default True
+                If True, sort values in ascending order, otherwise descending.
+            na_position : {‘first’ or ‘last’}, default ‘last’
+                Argument ‘first’ puts NaNs at the beginning, ‘last’ puts NaNs
+                at the end.
+            Returns
+            -------
+            out_column_inds : cuDF Column of indices sorted based on input
+
+            Difference from pandas:
+            * Support axis='index' only.
+            * Not supporting: inplace, kind
+            * Ascending can be a list of bools to control per column
+        """
+
+        # This needs to be updated to handle list of bools for ascending
+        if ascending is True:
+            if na_position == "last":
+                na_position = 0
+            elif na_position == "first":
+                na_position = 1
+        elif ascending is False:
+            if na_position == "last":
+                na_position = 1
+            elif na_position == "first":
+                na_position = 0
+        else:
+            warnings.warn(
+                "When using a sequence of booleans for `ascending`, "
+                "`na_position` flag is not yet supported and defaults to "
+                "treating nulls as greater than all numbers"
+            )
+            na_position = 0
+
+        # If given a scalar need to construct a sequence of length # of columns
+        if np.isscalar(ascending):
+            ascending = [ascending] * self._num_columns
+
+        return libcudfxx.sort.order_by(self, ascending, na_position)
 
     def sin(self):
         return self._unaryop("sin")
@@ -1252,7 +1359,9 @@ class Frame(libcudfxx.table.Table):
                 to_frame_data[name] = column.build_categorical_column(
                     categories=dtype.categories,
                     codes=cat_codes.get(name + "_codes", col),
-                    mask=col.mask,
+                    mask=col.base_mask,
+                    size=col.size,
+                    offset=col.offset,
                     ordered=dtype.ordered,
                 )
             else:

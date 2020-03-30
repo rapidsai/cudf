@@ -21,6 +21,10 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         ASCENDING "cudf::order::ASCENDING"
         DESCENDING "cudf::order::DESCENDING"
 
+    ctypedef enum include_nulls "cudf::include_nulls":
+        NO "cudf::include_nulls::NO"
+        YES "cudf::include_nulls::YES"
+
     ctypedef enum null_order "cudf::null_order":
         AFTER "cudf::null_order::AFTER"
         BEFORE "cudf::null_order::BEFORE"
@@ -28,6 +32,11 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
     ctypedef enum sorted "cudf::sorted":
         NO "cudf::sorted::NO"
         YES "cudf::sorted::YES"
+
+    cdef cppclass order_info:
+        sorted is_sorted
+        order ordering
+        null_order null_ordering
 
     ctypedef enum include_nulls "cudf::include_nulls":
         NO "cudf::include_nulls::NO"

@@ -26,7 +26,6 @@ import cudf._libxx as libcudfxx
 from cudf._libxx.null_mask import MaskState, create_null_mask
 from cudf._libxx.transform import bools_to_mask
 from cudf.core import column
-from cudf.core._sort import get_sorted_inds
 from cudf.core.column import (
     CategoricalColumn,
     StringColumn,
@@ -2038,8 +2037,8 @@ class DataFrame(Frame):
         return outdf
 
     def argsort(self, ascending=True, na_position="last"):
-        return get_sorted_inds(
-            self, ascending=ascending, na_position=na_position
+        return self.get_sorted_inds(
+            ascending=ascending, na_position=na_position
         )
 
     def sort_index(self, ascending=True):
@@ -2471,7 +2470,12 @@ class DataFrame(Frame):
             else:
                 codes = df[name]._column
             df[name] = column.build_categorical_column(
-                categories=cats, codes=codes, ordered=False
+                categories=cats,
+                codes=as_column(codes.base_data, dtype=codes.dtype),
+                mask=codes.base_mask,
+                size=codes.size,
+                ordered=False,
+                offset=codes.offset,
             )
 
         if sort and len(df):
@@ -3500,7 +3504,7 @@ class DataFrame(Frame):
         if isinstance(q, numbers.Number):
             q_is_number = True
             q = [float(q)]
-        elif isinstance(q, (list, tuple)):
+        elif isinstance(q, (list, tuple, np.ndarray)):
             q_is_number = False
         else:
             msg = "`q` must be either a single element or list"

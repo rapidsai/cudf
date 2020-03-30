@@ -110,16 +110,17 @@ public final class PinnedMemoryPool implements AutoCloseable {
     @Override
     protected boolean cleanImpl(boolean logErrorIfNotClean) {
       boolean neededCleanup = false;
+      long origAddress = section.baseAddress;
       if (section != null) {
         PinnedMemoryPool.freeInternal(section);
         if (origLength > 0) {
-          MemoryListener.hostDeallocation(origLength, getId());
+          MemoryListener.hostDeallocation(origLength, id);
         }
         section = null;
         neededCleanup = true;
       }
       if (neededCleanup && logErrorIfNotClean) {
-        log.error("A PINNED HOST BUFFER WAS LEAKED!!!!");
+        log.error("A PINNED HOST BUFFER WAS LEAKED (ID: " + id + " " + Long.toHexString(origAddress) + ")");
         logRefCountDebug("Leaked pinned host buffer");
       }
       return neededCleanup;
