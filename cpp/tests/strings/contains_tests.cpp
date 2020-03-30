@@ -83,7 +83,8 @@ TEST_F(StringsContainsTests, ContainsTest)
         "\\d\\d:\\d\\d:\\d\\d",
         "\\d\\d?:\\d\\d?:\\d\\d?",
         "[Hh]ello [Ww]orld",
-        "\\bworld\\b" };
+        "\\bworld\\b",
+        ".*" };
 
     std::vector<bool> h_expecteds_std{ // strings.size x patterns.size
         true, false, false, true, false, false, false, true, true, true, true, true, true, true, true, true, true, false, false, false, true, true, false, false, false, false, false, false, false, false, false, false,
@@ -94,14 +95,15 @@ TEST_F(StringsContainsTests, ContainsTest)
         true, false, false, true, false, false, false, true, true, true, false, false, false, false, false, false, false, false, false, false, true, true, false, false, false, false, false, false, false, false, false, false,
         false, true, false, false, false, true, true, false, true, false, false, false, false, false, false, false, false, true, true, true, false, false, true, true, false, true, true, true, true, true, false, false,
         false, false, false, false, false, false, false, false, false, true, false, false, false, false, false, false, false, true, true, true, false, true, false, false, true, false, false, false, false, false, false, false,
-        true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, false, false,
+        true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, false, true,
         false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, true, false, false, false,
         false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, true, false, false, false,
         false, false, false, false, false, false, true, false, true, false, false, false, false, false, false, false, false, false, false, true, false, false, false, true, false, true, true, true, true, true, false, false,
         false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false,
         false, false, false, false, false, false, false, false, false, false, true, true, true, true, true, true, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false,
         false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, true, true, false, false, false, false, false, false, false, false, false, false, false, false,
-        false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, true, false, false, false, false, false, false, false, false, false, false, false, false, false
+        false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, true, false, false, false, false, false, false, false, false, false, false, false, false, false,
+        true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, false, true
     };
 
     thrust::host_vector<bool> h_expecteds(h_expecteds_std);
@@ -142,6 +144,13 @@ TEST_F(StringsContainsTests, MatchesTest)
     {
         auto results = cudf::strings::matches_re(strings_view,"@\\w+");
         bool h_expected[] = {false,false,false,false,false,false,false};
+        cudf::test::fixed_width_column_wrapper<bool> expected( h_expected, h_expected+h_strings.size(),
+            thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
+        cudf::test::expect_columns_equal(*results,expected);
+    }
+    {
+        auto results = cudf::strings::matches_re(strings_view,".*");
+        bool h_expected[] = {true,true,true,true,true,false,true};
         cudf::test::fixed_width_column_wrapper<bool> expected( h_expected, h_expected+h_strings.size(),
             thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
         cudf::test::expect_columns_equal(*results,expected);
