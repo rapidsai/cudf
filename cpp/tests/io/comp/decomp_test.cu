@@ -48,9 +48,8 @@ struct DecompressTest : public GdfTest {
   }
   
   std::vector<uint8_t> vector_from_string(const char *str) const {
-    std::vector<uint8_t> v(reinterpret_cast<const uint8_t *>(str),
-                           reinterpret_cast<const_uint8_t *>(str) + strlen(str));
-    return v;
+    return std::vector<uint8_t>(reinterpret_cast<const uint8_t *>(str),
+                                reinterpret_cast<const uint8_t *>(str) + strlen(str));
   }
 
   void Decompress(std::vector<uint8_t>* decompressed, const uint8_t* compressed,
