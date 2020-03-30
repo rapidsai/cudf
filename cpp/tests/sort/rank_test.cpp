@@ -71,16 +71,16 @@ input_arg_t desc_bottom{order::DESCENDING, include_nulls::YES, null_order::BEFOR
 using test_case_t = std::tuple<table_view, table_view>;
 
 template <typename T>
-struct Rank : public BaseFixture {
+    struct Rank : public BaseFixture {
     
-    fixed_width_column_wrapper<T>   col1{{  5,   4,   3,   5,   8,   5}};
-    fixed_width_column_wrapper<T>   col2{{  5,   4,   3,   5,   8,   5}, {1, 1, 0, 1, 1, 1}};
+    fixed_width_column_wrapper<T, int32_t>   col1{{  5,   4,   3,   5,   8,   5}};
+    fixed_width_column_wrapper<T, int32_t>   col2{{  5,   4,   3,   5,   8,   5}, {1, 1, 0, 1, 1, 1}};
     strings_column_wrapper          col3{{"d", "e", "a", "d", "k", "d"}, {1, 1, 1, 1, 1, 1}};
 
     void run_all_tests(rank_method method, input_arg_t input_arg,
                        column_view const col1_rank, column_view const col2_rank,
                        column_view const col3_rank, bool percentage = false) {
-      if (std::is_same<T, cudf::experimental::bool8>::value) return;
+      if (std::is_same<T, bool>::value) return;
       for (auto const &test_case : {
                // Non-null column
                test_case_t{table_view{{col1}}, table_view{{col1_rank}}},
