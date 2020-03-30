@@ -241,13 +241,16 @@ table_with_metadata reader::impl::read(size_t range_offset,
       h_uncomp_data = h_uncomp_data_owner.data();
       h_uncomp_size = h_uncomp_data_owner.size();
     }
-    // Avoid uploading the data three times, if the entire file needs to be loaded eventually
+    // None of the parameters for row selection is used, we are parsing the entire file
     const bool load_whole_file = range_offset == 0 && range_size == 0 && 
-                           skip_rows == 0 && skip_end_rows == 0 && 
-                           num_rows == -1;
+                                 skip_rows == 0 && skip_end_rows == 0 && 
+                                 num_rows == -1;
+    
+    // Preload the intput data to device
     if (load_whole_file)
       data_ = rmm::device_buffer(h_uncomp_data, h_uncomp_size);
     
+    // Pass nullptr for the device data is the data is not preloaded (will cause additional copies)
     gather_row_offsets(h_uncomp_data, h_uncomp_size, range_offset, stream, (load_whole_file ? &data_ : nullptr));
 
     auto row_range = select_rows(h_uncomp_data, h_uncomp_size, range_size,
@@ -258,10 +261,11 @@ table_with_metadata reader::impl::read(size_t range_offset,
 
     num_bits = (data_size + 63) / 64;
     if (load_whole_file){
-      // Loaded the whole file, add the offset here (e.g. empty rows)
+      // Loaded the whole file, add the start offset (e.g. empty rows) to the pointer 
       data_ptr = static_cast<char *>(data_.data()) + row_range.first;
     }
     else{
+      // The start offset is applied to the device data buffer
       data_ = rmm::device_buffer(h_uncomp_data + row_range.first, data_size);
       data_ptr = static_cast<char *>(data_.data());
     }
