@@ -18,6 +18,7 @@
 
 #include <cudf/types.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/stream_compaction.hpp>
 
 namespace cudf {
 namespace experimental {

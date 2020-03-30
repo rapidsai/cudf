@@ -18,6 +18,7 @@
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/detail/reduction_functions.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/stream_compaction.hpp>
 #include <cudf/quantiles.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 
@@ -97,8 +98,12 @@ struct reduce_dispatch_functor {
       // TODO development in another PR
       CUDF_FAIL("Unsupported reduction operator");
       break;
-    case aggregation::NUNIQUE:
-      // TODO call unique_count
+    case aggregation::NUNIQUE: {
+    auto nunique_agg = static_cast<nunique_aggregation const*>(agg.get());
+      return make_fixed_width_scalar(
+        detail::unique_count(col, nunique_agg->_include_nulls, false),
+        stream, mr);
+      }
       break;
     case aggregation::NTH_ELEMENT:
       // TODO call col.element(n)
