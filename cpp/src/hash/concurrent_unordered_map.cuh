@@ -416,8 +416,8 @@ class concurrent_unordered_map {
     }
   }
 
-  gdf_error assign_async(const concurrent_unordered_map& other,
-                         cudaStream_t stream = 0) {
+  void assign_async(const concurrent_unordered_map& other,
+                    cudaStream_t stream = 0) {
     if (other.m_capacity <= m_capacity) {
       m_capacity = other.m_capacity;
     } else {
@@ -430,7 +430,6 @@ class concurrent_unordered_map {
     CUDA_TRY(cudaMemcpyAsync(m_hashtbl_values, other.m_hashtbl_values,
                              m_capacity * sizeof(value_type), cudaMemcpyDefault,
                              stream));
-    return GDF_SUCCESS;
   }
 
   void clear_async(cudaStream_t stream = 0) {
@@ -447,7 +446,7 @@ class concurrent_unordered_map {
     }
   }
 
-  gdf_error prefetch(const int dev_id, cudaStream_t stream = 0) {
+  void prefetch(const int dev_id, cudaStream_t stream = 0) {
     cudaPointerAttributes hashtbl_values_ptr_attributes;
     cudaError_t status = cudaPointerGetAttributes(
         &hashtbl_values_ptr_attributes, m_hashtbl_values);
@@ -457,8 +456,6 @@ class concurrent_unordered_map {
           m_hashtbl_values, m_capacity * sizeof(value_type), dev_id, stream));
     }
     CUDA_TRY(cudaMemPrefetchAsync(this, sizeof(*this), dev_id, stream));
-
-    return GDF_SUCCESS;
   }
 
   /**---------------------------------------------------------------------------*
