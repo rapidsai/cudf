@@ -345,7 +345,9 @@ TYPED_TEST(DLPackNumericTests, FromDlpackCpu)
   tensor.dl_tensor.byte_offset     = offset;
   tensor.dl_tensor.shape           = shape;
   tensor.dl_tensor.strides         = strides;
-  tensor.dl_tensor.data            = thrust::host_vector<T>(data.begin(), data.end()).data();
+
+  thrust::host_vector<T> host_vector(data.begin(), data.end());
+  tensor.dl_tensor.data            = host_vector.data();
 
   fixed_width_column_wrapper<TypeParam, int32_t> col1({1, 2, 3, 4});
   fixed_width_column_wrapper<TypeParam, int32_t> col2({5, 6, 7, 8});
