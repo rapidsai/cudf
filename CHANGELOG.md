@@ -239,6 +239,7 @@
 - PR #4554 Removed raw RMM allocation from `column_device_view`
 - PR #4619 Remove usage of `nvstrings` in `data_array_view`
 - PR #4654 Upgrade version of `numba` required to `>=0.48.0`
+- PR #3259 Add .clang-format
 
 ## Bug Fixes
 
