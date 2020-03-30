@@ -165,14 +165,14 @@ std::unique_ptr<experimental::table>
  * ignored, `NaN` is considered in unique count.
  *
  * @param[in] input         The column_view whose unique elements will be counted.
- * @param[in] ignore_nulls  flag to ignore `null` in unique count if true
+ * @param[in] _include_nulls flag to include or ignore `null` while counting
  * @param[in] nan_as_null   flag to consider `NaN==null` if true.
  * @param[in] mr Optional, The resource to use for all allocations
  *
  * @return number of unique elements
  */
 cudf::size_type unique_count(column_view const& input,
-                             bool const& ignore_nulls,
+                             include_nulls const& _include_nulls,
                              bool const& nan_as_null,
                              rmm::mr::device_memory_resource *mr =
                                  rmm::mr::get_default_resource());

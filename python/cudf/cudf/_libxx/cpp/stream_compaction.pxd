@@ -6,7 +6,7 @@ from libcpp cimport bool
 
 from cudf._libxx.types import np_to_cudf_types, cudf_to_np_types
 
-from cudf._libxx.cpp.types cimport size_type
+from cudf._libxx.cpp.types cimport size_type, include_nulls
 from cudf._libxx.cpp.column.column_view cimport column_view
 from cudf._libxx.cpp.table.table cimport table
 from cudf._libxx.cpp.table.table_view cimport table_view
@@ -34,5 +34,5 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf::experimental" \
                                            bool nulls_are_equal) except +
 
     cdef size_type unique_count(column_view source_table,
-                                bool ignore_nulls,
+                                include_nulls ignore_nulls,
                                 bool nan_as_null) except +

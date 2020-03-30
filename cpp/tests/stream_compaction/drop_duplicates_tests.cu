@@ -28,6 +28,7 @@
 #include <cmath> 
 #include <ctgmath>
 
+using cudf::include_nulls;
 template <typename T>
 struct UniqueCountCommon : public cudf::test::BaseFixture {};
 
@@ -42,7 +43,7 @@ TYPED_TEST(UniqueCountCommon, NoNull)
     cudf::test::fixed_width_column_wrapper<T> input_col{input.begin(), input.end()};
 
     cudf::size_type expected = std::set<double>( input.begin(), input.end() ).size();
-    EXPECT_EQ(expected, cudf::experimental::unique_count(input_col, false, false));
+    EXPECT_EQ(expected, cudf::experimental::unique_count(input_col, include_nulls::YES, false));
 }
 
 struct UniqueCount : public cudf::test::BaseFixture {};
@@ -58,7 +59,7 @@ TEST_F(UniqueCount, WithNull)
     cudf::test::fixed_width_column_wrapper<T> input_col{input.begin(), input.end(), valid.begin()};
 
     cudf::size_type expected = std::set<double>( input.begin(), input.end() ).size();
-    EXPECT_EQ(expected, cudf::experimental::unique_count(input_col, false, false));
+    EXPECT_EQ(expected, cudf::experimental::unique_count(input_col, include_nulls::YES, false));
 }
 
 
@@ -74,7 +75,7 @@ TEST_F(UniqueCount, IgnoringNull)
 
     cudf::size_type expected = std::set<T>( input.begin(), input.end() ).size();
     // Removing 2 from expected to remove count for 70 and 3
-    EXPECT_EQ(expected - 2, cudf::experimental::unique_count(input_col, true, false));
+    EXPECT_EQ(expected - 2, cudf::experimental::unique_count(input_col, include_nulls::NO, false));
 }
 
 TEST_F(UniqueCount, WithNansAndNull)
@@ -87,7 +88,7 @@ TEST_F(UniqueCount, WithNansAndNull)
     cudf::test::fixed_width_column_wrapper<T> input_col{input.begin(), input.end(), valid.begin()};
 
     cudf::size_type expected = std::set<T>( input.begin(), input.end() ).size();
-    EXPECT_EQ(expected, cudf::experimental::unique_count(input_col, false, false));
+    EXPECT_EQ(expected, cudf::experimental::unique_count(input_col, include_nulls::YES, false));
 }
 
 TEST_F(UniqueCount, WithNansOnly)
@@ -100,7 +101,7 @@ TEST_F(UniqueCount, WithNansOnly)
     cudf::test::fixed_width_column_wrapper<T> input_col{input.begin(), input.end(), valid.begin()};
 
     cudf::size_type expected = 5;
-    EXPECT_EQ(expected, cudf::experimental::unique_count(input_col, false, false));
+    EXPECT_EQ(expected, cudf::experimental::unique_count(input_col, include_nulls::YES, false));
 }
 
 TEST_F(UniqueCount, NansAsNullWithNoNull)
@@ -113,7 +114,7 @@ TEST_F(UniqueCount, NansAsNullWithNoNull)
     cudf::test::fixed_width_column_wrapper<T> input_col{input.begin(), input.end(), valid.begin()};
 
     cudf::size_type expected = 5;
-    EXPECT_EQ(expected, cudf::experimental::unique_count(input_col, false, true));
+    EXPECT_EQ(expected, cudf::experimental::unique_count(input_col, include_nulls::YES, true));
 }
 
 TEST_F(UniqueCount, NansAsNullWithNull)
@@ -126,7 +127,7 @@ TEST_F(UniqueCount, NansAsNullWithNull)
     cudf::test::fixed_width_column_wrapper<T> input_col{input.begin(), input.end(), valid.begin()};
 
     cudf::size_type expected = 4;
-    EXPECT_EQ(expected, cudf::experimental::unique_count(input_col, false, true));
+    EXPECT_EQ(expected, cudf::experimental::unique_count(input_col, include_nulls::YES, true));
 }
 
 TEST_F(UniqueCount, NansAsNullWithIgnoreNull)
@@ -139,7 +140,7 @@ TEST_F(UniqueCount, NansAsNullWithIgnoreNull)
     cudf::test::fixed_width_column_wrapper<T> input_col{input.begin(), input.end(), valid.begin()};
 
     cudf::size_type expected = 3;
-    EXPECT_EQ(expected, cudf::experimental::unique_count(input_col, true, true));
+    EXPECT_EQ(expected, cudf::experimental::unique_count(input_col, include_nulls::NO, true));
 }
 
 TEST_F(UniqueCount, EmptyColumn)
@@ -149,7 +150,7 @@ TEST_F(UniqueCount, EmptyColumn)
     cudf::test::fixed_width_column_wrapper<T> input_col{std::initializer_list<T>{}};
 
     cudf::size_type expected = 0;
-    EXPECT_EQ(expected, cudf::experimental::unique_count(input_col, true, true));
+    EXPECT_EQ(expected, cudf::experimental::unique_count(input_col, include_nulls::NO, true));
 }
 
 TEST_F(UniqueCount, StringColumnWithNull)
@@ -158,7 +159,7 @@ TEST_F(UniqueCount, StringColumnWithNull)
                                                  { 1,     1,    1,      1,      1,   1,         1,    1,     0,         1}};
 
     cudf::size_type expected = (std::vector<std::string> {"", "this", "is", "This", "a", "column", "of", "strings"}).size();
-    EXPECT_EQ(expected, cudf::experimental::unique_count(input_col, true, false));
+    EXPECT_EQ(expected, cudf::experimental::unique_count(input_col, include_nulls::NO, false));
 }
 
 struct DropDuplicate : public cudf::test::BaseFixture {};

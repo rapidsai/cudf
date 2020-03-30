@@ -226,8 +226,89 @@ std::unique_ptr<experimental::table>
   return detail::gather(input, unique_indices_view, false, false, false, mr, stream);
 }
 
+/**---------------------------------------------------------------------------*
+ * @brief A structure to be used for checking `NAN` at an index in a 
+ * `column_device_view`
+ *
+ * @tparam T The type of `column_device_view`
+ *---------------------------------------------------------------------------**/
+template <typename T>
+struct check_for_nan
+{
+  /**---------------------------------------------------------------------------*
+   * @brief Construct a strcuture
+   *
+   * @param[in] input The `column_device_view`
+   *---------------------------------------------------------------------------**/
+  check_for_nan(cudf::column_device_view input) :_input{input}{}
+
+
+  /**---------------------------------------------------------------------------*
+   * @brief Operator to be called to check for `NAN` at `index` in `_input`
+   *
+   * @param[in] index The index at which the `NAN` needs to be checked in `input`
+   *
+   * @returns bool true if value at `index` is `NAN` and not null, else false
+   *---------------------------------------------------------------------------**/
+  __device__
+  bool operator()(size_type index)
+  {
+    return std::isnan(_input.data<T>()[index]) and _input.is_valid(index);
+  }
+
+protected:
+  cudf::column_device_view _input;
+};
+
+/**---------------------------------------------------------------------------*
+ * @brief A structure to be used along with type_dispatcher to check if a
+ * `column_view` has `NAN`.
+ *---------------------------------------------------------------------------**/
+struct has_nans{
+
+  /**---------------------------------------------------------------------------*
+   * @brief Checks if `input` has `NAN`
+   *
+   * @note This will be applicable only for floating point type columns.
+   *
+   * @param[in] input The `column_view` which will be checked for `NAN`
+   * @param[in] stream Optional CUDA stream on which to execute kernels
+   *
+   * @returns bool true if `input` has `NAN` else false
+   *---------------------------------------------------------------------------**/
+  template <typename T,
+         std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
+  bool operator()(column_view const& input, cudaStream_t stream){
+      auto input_device_view = cudf::column_device_view::create(input, stream);
+      auto device_view = *input_device_view;
+      auto count = thrust::count_if(rmm::exec_policy(stream)->on(stream),
+                                    thrust::counting_iterator<cudf::size_type>(0),
+                                    thrust::counting_iterator<cudf::size_type>(input.size()),
+                                    check_for_nan<T>(device_view));
+      return count > 0;
+  }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Checks if `input` has `NAN`
+   *
+   * @note This will be applicable only for non-floating point type columns. And
+   * non-floating point columns can never have `NAN`, so it will always return 
+   * false
+   *
+   * @param[in] input The `column_view` which will be checked for `NAN`
+   * @param[in] stream Optional CUDA stream on which to execute kernels
+   *
+   * @returns bool Always false as non-floating point columns can't have `NAN`
+   *---------------------------------------------------------------------------**/
+  template <typename T,
+          std::enable_if_t<not std::is_floating_point<T>::value>* = nullptr>
+  bool operator()(column_view const& input, cudaStream_t stream){
+      return false;
+  }
+};
+
 cudf::size_type unique_count(column_view const& input,
-                             bool const& ignore_nulls,
+                             include_nulls const& _include_nulls,
                              bool const& nan_as_null,
                              cudaStream_t stream)
 {
@@ -253,7 +334,7 @@ cudf::size_type unique_count(column_view const& input,
   if (nan_as_null and has_nan and input.has_nulls())
     --count;
 
-  if(ignore_nulls and input.has_nulls())
+  if(_include_nulls==include_nulls::NO and input.has_nulls())
     return --count;
   else
     return count;
@@ -272,11 +353,11 @@ std::unique_ptr<experimental::table>
 }
 
 cudf::size_type unique_count(column_view const& input,
-                             bool const& ignore_nulls,
+                             include_nulls const& _include_nulls,
                              bool const& nan_as_null,
                              rmm::mr::device_memory_resource *mr) {
   CUDF_FUNC_RANGE();
-  return detail::unique_count(input, ignore_nulls, nan_as_null);
+  return detail::unique_count(input, _include_nulls, nan_as_null);
 }
 
 }// namespace experimental
