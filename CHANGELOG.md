@@ -4,6 +4,7 @@
 
 - PR #4472 Add new `partition` API to replace `scatter_to_tables`.
 - PR #4626 LogBase binops
+- PR #4744 Remove old NVTX functionality
 
 ## Improvements
 
