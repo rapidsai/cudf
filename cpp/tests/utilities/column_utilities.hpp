@@ -22,7 +22,6 @@
 #include <cudf/column/column.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-#include <boost/container/vector.hpp>
 
 namespace cudf {
 namespace test {
