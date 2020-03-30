@@ -1332,13 +1332,10 @@ def test_strings_filling_tests(data, width, fillchar):
     gs = Series(data)
     ps = pd.Series(data)
 
-    # TODO: uncomment .str.center tests once this
-    # is fixed: https://github.com/rapidsai/cudf/issues/4354
-    # as .str.center is nothing but .str.pad(side="both")
-    # assert_eq(
-    #     ps.str.center(width=width, fillchar=fillchar),
-    #     gs.str.center(width=width, fillchar=fillchar),
-    # )
+    assert_eq(
+        ps.str.center(width=width, fillchar=fillchar),
+        gs.str.center(width=width, fillchar=fillchar),
+    )
     assert_eq(
         ps.str.ljust(width=width, fillchar=fillchar),
         gs.str.ljust(width=width, fillchar=fillchar),
@@ -1381,14 +1378,7 @@ def test_strings_zfill_tests(data, width):
 )
 @pytest.mark.parametrize("width", [0, 1, 4, 9, 100])
 @pytest.mark.parametrize(
-    "side",
-    [
-        "left",
-        "right",
-        # TODO: Uncomment "both" once
-        # https://github.com/rapidsai/cudf/issues/4354 is fixed.
-        #  "both"
-    ],
+    "side", ["left", "right", "both"],
 )
 @pytest.mark.parametrize("fillchar", [" ", ".", "\n", "+", "\t"])
 def test_strings_pad_tests(data, width, side, fillchar):
