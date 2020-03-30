@@ -20,7 +20,7 @@ from dask.optimization import cull, fuse
 from dask.utils import M, OperatorMethodMixin, derived_from, funcname
 
 import cudf
-import cudf._lib as libcudf
+import cudf._libxx as libcudfxx
 
 from dask_cudf import sorting
 from dask_cudf.accessor import (
@@ -368,7 +368,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
 
 def sum_of_squares(x):
     x = x.astype("f8")._column
-    outcol = libcudf.reduce.reduce("sum_of_squares", x)
+    outcol = libcudfxx.reduce.reduce("sum_of_squares", x)
     return cudf.Series(outcol)
 
 
