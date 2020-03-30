@@ -661,7 +661,7 @@ class ColumnBase(Column):
             raise TypeError(msg)
 
         # get sorted indicies and exclude nulls
-        sorted_indices = self.as_frame().get_sorted_inds(True, "after")
+        sorted_indices = self.as_frame()._get_sorted_inds(True, "after")
         sorted_indices = sorted_indices[self.null_count :]
 
         return cpp_quantile(self, quant, interpolation, sorted_indices, exact)
@@ -760,7 +760,7 @@ class ColumnBase(Column):
             return self.find_last_value(label, closest=True) + 1
 
     def sort_by_values(self, ascending=True, na_position="last"):
-        col_inds = self.as_frame().get_sorted_inds(ascending, na_position)
+        col_inds = self.as_frame()._get_sorted_inds(ascending, na_position)
         col_keys = self[col_inds]
         return col_keys, col_inds
 

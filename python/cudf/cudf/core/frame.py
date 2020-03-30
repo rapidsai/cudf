@@ -1051,7 +1051,7 @@ class Frame(libcudfxx.table.Table):
         # Retrun result as cupy array
         return cupy.asarray(outcol.data_array_view)
 
-    def get_sorted_inds(self, ascending=True, na_position="last"):
+    def _get_sorted_inds(self, ascending=True, na_position="last"):
         """
             Sort by the values.
 

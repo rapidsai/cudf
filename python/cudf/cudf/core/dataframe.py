@@ -2037,7 +2037,7 @@ class DataFrame(Frame):
         return outdf
 
     def argsort(self, ascending=True, na_position="last"):
-        return self.get_sorted_inds(
+        return self._get_sorted_inds(
             ascending=ascending, na_position=na_position
         )
 
