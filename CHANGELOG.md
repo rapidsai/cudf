@@ -13,6 +13,8 @@
 - PR #4471 Consolidate partitioning functionality into a single header.
 - PR #4498 Adds in support for chunked writers to java
 - PR #4073 Enable contiguous split java test
+- PR #4527 Add JNI and java bindings for matches_re
+- PR #4606 Fix `scan` unit test and upgrade to more appropriate algorithms
 - PR #4527 Add JNI and java bindings for `matches_re`
 - PR #4599 Add Java and JNI bindings for string replace
 - PR #4655 Raise error for list like dtypes in cudf
