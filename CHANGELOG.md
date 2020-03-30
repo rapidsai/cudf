@@ -16,6 +16,7 @@
 - PR #4527 Add JNI and java bindings for matches_re
 - PR #4606 Fix `scan` unit test and upgrade to more appropriate algorithms
 - PR #4527 Add JNI and java bindings for `matches_re`
+- PR #4532 Parquet reader: add support for multiple pandas index columns
 - PR #4599 Add Java and JNI bindings for string replace
 - PR #4655 Raise error for list like dtypes in cudf
 - PR #4548 Remove string_view is_null method
@@ -25,6 +26,7 @@
 - PR #4700 Expose events and more stream functionality in java
 - PR #4699 Make Java's MemoryBuffer public and add MemoryBuffer.slice
 - PR #4691 Fix compiler argument syntax for ccache
+- PR #4688 Add Java count aggregation to include null values
 
 ## Bug Fixes
 
@@ -48,8 +50,10 @@
 - PR #4673 Fix regex infinite loop while parsing invalid quantifier pattern
 - PR #4679 Fix comments for make_dictionary_column factory functions
 - PR #4711 Fix column leaks in Java unit test
+- pR #4721 Fix string binop to update nulls appropriately
 - PR #4722 Fix strings::pad when using pad::both with odd width
 - PR #4725 Fix issue java with not setting GPU on background thread
+- PR #4701 Fix issue related to mixed input types in `as_column`
 - PR #4747 Fix random failures of decompression gtests
 
 

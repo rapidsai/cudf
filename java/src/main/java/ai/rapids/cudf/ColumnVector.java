@@ -2467,6 +2467,11 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       return neededCleanup;
     }
 
+    @Override
+    public boolean isClean() {
+      return viewHandle == 0 && columnHandle == 0 && data == null && valid == null && offsets == null;
+    }
+
     /**
      * This returns total memory allocated in device for the ColumnVector.
      * @return number of device bytes allocated for this column
