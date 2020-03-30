@@ -175,8 +175,8 @@ TEST_F(ColumnUtilitiesStringsTest, StringsToHostAllNulls)
 TYPED_TEST(ColumnUtilitiesTestNumeric, PrintColumnNumeric) {
   const char* delimiter = ",";
 
-  std::vector<TypeParam> std_col = cudf::test::make_type_param_vector<TypeParam>({1, 2, 3, 4, 5});
-  cudf::test::fixed_width_column_wrapper<TypeParam> cudf_col(std_col.begin(), std_col.end());
+  cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> cudf_col({1, 2, 3, 4, 5});
+  auto std_col = cudf::test::make_type_param_vector<TypeParam>({1, 2, 3, 4, 5});
 
   auto to_string = [] (auto e) { return std::to_string(e); };
   auto const expected = boost::join(std_col | boost::adaptors::transformed(to_string), delimiter);
@@ -187,9 +187,9 @@ TYPED_TEST(ColumnUtilitiesTestNumeric, PrintColumnNumeric) {
 TYPED_TEST(ColumnUtilitiesTestNumeric, PrintColumnWithInvalids) {
   const char* delimiter = ",";
 
-  std::vector<TypeParam> std_col = cudf::test::make_type_param_vector<TypeParam>({1, 2, 3, 4, 5});
-  std::vector<bool> mask = {1, 0, 1, 0, 1};
-  cudf::test::fixed_width_column_wrapper<TypeParam> cudf_col (std_col.begin(), std_col.end(), mask.begin());
+  cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> cudf_col{ {1, 2, 3, 4, 5},
+                                                                       {1, 0, 1, 0, 1} };
+  auto std_col = cudf::test::make_type_param_vector<TypeParam>({1, 2, 3, 4, 5});
 
   std::ostringstream tmp;
   tmp << std::to_string(std_col[0])
