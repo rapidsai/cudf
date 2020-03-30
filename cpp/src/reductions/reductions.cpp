@@ -41,20 +41,26 @@ struct reduce_dispatch_functor {
     case aggregation::SUM:
       return reduction::sum(col, output_dtype, mr, stream);
       break;
+    case aggregation::PRODUCT:
+      return reduction::product(col, output_dtype, mr, stream);
+      break;
     case aggregation::MIN:
       return reduction::min(col, output_dtype, mr, stream);
       break;
     case aggregation::MAX:
       return reduction::max(col, output_dtype, mr, stream);
       break;
+    case aggregation::COUNT_VALID:
+      // TODO return size-null_count as scalar.
+      break;
+    case aggregation::COUNT_ALL:
+      // TODO return size as scalar.
+      break;  
     case aggregation::ANY:
       return reduction::any(col, output_dtype, mr, stream);
       break;
     case aggregation::ALL:
       return reduction::all(col, output_dtype, mr, stream);
-      break;
-    case aggregation::PRODUCT:
-      return reduction::product(col, output_dtype, mr, stream);
       break;
     case aggregation::SUM_OF_SQUARES:
       return reduction::sum_of_squares(col, output_dtype, mr, stream);
@@ -72,6 +78,27 @@ struct reduce_dispatch_functor {
       return reduction::standard_deviation(col, output_dtype, var_agg->_ddof, mr, stream);
       }
       break;
+    case aggregation::MEDIAN:
+      // TODO call quantile.
+      break;
+    case aggregation::QUANTILE:
+      // TODO call quantile.
+      break;
+    case aggregation::ARGMAX:
+      // TODO development in another PR
+      CUDF_FAIL("Unsupported reduction operator");
+      break;
+    case aggregation::ARGMIN:
+      // TODO development in another PR
+      CUDF_FAIL("Unsupported reduction operator");
+      break;
+    case aggregation::NUNIQUE:
+      // TODO call unique_count
+      break;
+    case aggregation::NTH_ELEMENT:
+      // TODO call col.element(n)
+      break;
+    // XXX: PTX, CUDA support needed?
     default:
       CUDF_FAIL("Unsupported reduction operator");
     }
