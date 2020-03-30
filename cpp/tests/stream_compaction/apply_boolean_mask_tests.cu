@@ -125,10 +125,10 @@ TEST_F(ApplyBooleanMask, withoutNullString)
 }
 
 TEST_F(ApplyBooleanMask, NoNullInput) {
-  cudf::test::fixed_width_column_wrapper<int>  col ({9668,  9590, 9526,  9205,  9434, 9347,  9160, 9569,  9143, 9807,  9606,  9446, 9279,  9822, 9691});
-  cudf::test::fixed_width_column_wrapper<bool> mask({false, false, true, false, false, true, false, true, false, true, false, false, true, false, true});
+  cudf::test::fixed_width_column_wrapper<int32_t> col ({9668,  9590, 9526,  9205,  9434, 9347,  9160, 9569,  9143, 9807,  9606,  9446, 9279,  9822, 9691});
+  cudf::test::fixed_width_column_wrapper<bool>    mask({false, false, true, false, false, true, false, true, false, true, false, false, true, false, true});
   cudf::table_view input({col});
-  cudf::test::fixed_width_column_wrapper<int> col_expected({9526,9347,9569,9807,9279,9691});
+  cudf::test::fixed_width_column_wrapper<int32_t> col_expected({9526,9347,9569,9807,9279,9691});
   cudf::table_view expected({col_expected});
   auto got = cudf::experimental::apply_boolean_mask(input, mask);
   cudf::test::expect_tables_equal(expected, got->view());

@@ -170,40 +170,40 @@ TYPED_TEST(cudf_math_test, SQRT) {
 }
 
 TYPED_TEST(cudf_math_test, SimpleABS) {
-  cudf::test::fixed_width_column_wrapper<TypeParam, int> input   {{-2, -1, 1, 2}};
-  cudf::test::fixed_width_column_wrapper<TypeParam, int> expected{{ 2,  1, 1, 2}};
+  cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> input   {{-2, -1, 1, 2}};
+  cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> expected{{ 2,  1, 1, 2}};
   auto output = cudf::experimental::unary_operation(
       input, cudf::experimental::unary_op::ABS);
   cudf::test::expect_columns_equal(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_test, SimpleSQRT) {
-  cudf::test::fixed_width_column_wrapper<TypeParam, int> input   {{1, 4, 9, 16}};
-  cudf::test::fixed_width_column_wrapper<TypeParam, int> expected{{1, 2, 3, 4}};
+  cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> input   {{1, 4, 9, 16}};
+  cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> expected{{1, 2, 3, 4}};
   auto output = cudf::experimental::unary_operation(
       input, cudf::experimental::unary_op::SQRT);
   cudf::test::expect_columns_equal(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_test, SimpleCBRT) {
-  cudf::test::fixed_width_column_wrapper<TypeParam, int> input   {{1, 27, 125}};
-  cudf::test::fixed_width_column_wrapper<TypeParam, int> expected{{1, 3, 5}};
+  cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> input   {{1, 27, 125}};
+  cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> expected{{1, 3, 5}};
   auto output = cudf::experimental::unary_operation(
       input, cudf::experimental::unary_op::CBRT);
   cudf::test::expect_columns_equal(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_test, SimpleSQRTWithNullMask) {
-  cudf::test::fixed_width_column_wrapper<TypeParam, int> input   {{1, 4, 9, 16}, {1, 1, 0, 1}};
-  cudf::test::fixed_width_column_wrapper<TypeParam, int> expected{{1, 2, 9,  4}, {1, 1, 0, 1}};
+  cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> input   {{1, 4, 9, 16}, {1, 1, 0, 1}};
+  cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> expected{{1, 2, 9,  4}, {1, 1, 0, 1}};
   auto output = cudf::experimental::unary_operation(
       input, cudf::experimental::unary_op::SQRT);
   cudf::test::expect_columns_equal(expected, output->view());
 }
 
 TYPED_TEST(cudf_math_test, SimpleCBRTWithNullMask) {
-  cudf::test::fixed_width_column_wrapper<TypeParam, int> input   {{1, 27, 125}, {1, 1, 0}};
-  cudf::test::fixed_width_column_wrapper<TypeParam, int> expected{{1,  3, 125}, {1, 1, 0}};
+  cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> input   {{1, 27, 125}, {1, 1, 0}};
+  cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> expected{{1,  3, 125}, {1, 1, 0}};
   auto output = cudf::experimental::unary_operation(
       input, cudf::experimental::unary_op::CBRT);
   cudf::test::expect_columns_equal(expected, output->view());
