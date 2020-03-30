@@ -1053,23 +1053,23 @@ class Frame(libcudfxx.table.Table):
 
     def _get_sorted_inds(self, ascending=True, na_position="last"):
         """
-            Sort by the values.
+        Sort by the values.
 
-            Parameters
-            ----------
-            ascending : bool or list of bool, default True
-                If True, sort values in ascending order, otherwise descending.
-            na_position : {‘first’ or ‘last’}, default ‘last’
-                Argument ‘first’ puts NaNs at the beginning, ‘last’ puts NaNs
-                at the end.
-            Returns
-            -------
-            out_column_inds : cuDF Column of indices sorted based on input
+        Parameters
+        ----------
+        ascending : bool or list of bool, default True
+            If True, sort values in ascending order, otherwise descending.
+        na_position : {‘first’ or ‘last’}, default ‘last’
+            Argument ‘first’ puts NaNs at the beginning, ‘last’ puts NaNs
+            at the end.
+        Returns
+        -------
+        out_column_inds : cuDF Column of indices sorted based on input
 
-            Difference from pandas:
-            * Support axis='index' only.
-            * Not supporting: inplace, kind
-            * Ascending can be a list of bools to control per column
+        Difference from pandas:
+        * Support axis='index' only.
+        * Not supporting: inplace, kind
+        * Ascending can be a list of bools to control per column
         """
 
         # This needs to be updated to handle list of bools for ascending
