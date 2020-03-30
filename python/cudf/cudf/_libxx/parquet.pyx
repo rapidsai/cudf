@@ -41,7 +41,7 @@ cimport cudf._libxx.cpp.types as cudf_types
 cimport cudf._libxx.cpp.io.types as cudf_io_types
 
 cdef class BufferArrayFromVector:
-    cdef size_type length
+    cdef Py_ssize_t length
     cdef unique_ptr[vector[uint8_t]] in_vec
 
     # these two things declare part of the buffer interface
