@@ -22,7 +22,6 @@
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 
-
 class ScatterUntypedTests : public cudf::test::BaseFixture {};
 
 // Throw logic error if scatter map is longer than source
@@ -296,17 +295,14 @@ TYPED_TEST(ScatterInvalidIndexTypeTests, ScatterScalarInvalidIndexType)
   using cudf::test::expect_tables_equal;
   using scalar_ptr = std::unique_ptr<cudf::scalar>;
   using scalar_vector = std::vector<scalar_ptr>;
-  using T = TypeParam;
 
   // Initializers lists can't take move-only types
   scalar_vector source_vector;
   auto source = scalar_ptr(new scalar_type_t<int32_t>(100));
   source_vector.push_back(std::move(source));
 
-  auto const tmp = cudf::test::make_type_param_vector<T>({-3, 3, 1, -1});
-
   fixed_width_column_wrapper<int32_t> target({10, 20, 30, 40, 50, 60, 70, 80});
-  fixed_width_column_wrapper<T> scatter_map(tmp.begin(), tmp.end());
+  fixed_width_column_wrapper<TypeParam, int32_t> scatter_map({-3, 3, 1, -1});
 
   auto const target_table = cudf::table_view({target});
 
@@ -324,13 +320,9 @@ TYPED_TEST(ScatterDataTypeTests, EmptyScatterMap)
 {
   using cudf::test::fixed_width_column_wrapper;
   using cudf::test::expect_tables_equal;
-  using T = TypeParam;
 
-  auto const tmp1 = cudf::test::make_type_param_vector<T>({1, 2, 3, 4, 5, 6});
-  auto const tmp2 = cudf::test::make_type_param_vector<T>({10, 20, 30, 40, 50, 60, 70, 80});
-
-  fixed_width_column_wrapper<TypeParam> source(tmp1.begin(), tmp1.end());
-  fixed_width_column_wrapper<TypeParam> target(tmp2.begin(), tmp2.end());
+  fixed_width_column_wrapper<TypeParam, int32_t> source({1, 2, 3, 4, 5, 6});
+  fixed_width_column_wrapper<TypeParam, int32_t> target({10, 20, 30, 40, 50, 60, 70, 80});
   fixed_width_column_wrapper<int32_t> scatter_map({});
 
   auto const source_table = cudf::table_view({source, source});
@@ -351,16 +343,13 @@ TYPED_TEST(ScatterDataTypeTests, EmptyScalarScatterMap)
   using cudf::test::expect_tables_equal;
   using scalar_ptr = std::unique_ptr<cudf::scalar>;
   using scalar_vector = std::vector<scalar_ptr>;
-  using T = TypeParam;
 
   // Initializers lists can't take move-only types
   scalar_vector source_vector;
-  auto source = scalar_ptr(new scalar_type_t<T>(100));
+  auto source = scalar_ptr(new scalar_type_t<TypeParam>(100));
   source_vector.push_back(std::move(source));
 
-  auto const tmp = cudf::test::make_type_param_vector<T>({10, 20, 30, 40, 50, 60, 70, 80});
-
-  fixed_width_column_wrapper<T> target(tmp.begin(), tmp.end());
+  fixed_width_column_wrapper<TypeParam, int32_t> target({10, 20, 30, 40, 50, 60, 70, 80});
   fixed_width_column_wrapper<int32_t> scatter_map({});
 
   auto const target_table = cudf::table_view({target});
@@ -376,16 +365,11 @@ TYPED_TEST(ScatterDataTypeTests, ScatterNoNulls)
 {
   using cudf::test::fixed_width_column_wrapper;
   using cudf::test::expect_tables_equal;
-  using T = TypeParam;
 
-  auto const tmp0 = cudf::test::make_type_param_vector<T>({1, 2, 3, 4, 5, 6});
-  auto const tmp1 = cudf::test::make_type_param_vector<T>({10, 20, 30, 40, 50, 60, 70, 80});
-  auto const tmp2 = cudf::test::make_type_param_vector<T>({10, 3, 30, 2, 50, 1, 70, 4});
-
-  fixed_width_column_wrapper<TypeParam> source(tmp0.begin(), tmp0.end());
-  fixed_width_column_wrapper<TypeParam> target(tmp1.begin(), tmp1.end());
+  fixed_width_column_wrapper<TypeParam, int32_t> source({1, 2, 3, 4, 5, 6});
+  fixed_width_column_wrapper<TypeParam, int32_t> target({10, 20, 30, 40, 50, 60, 70, 80});
   fixed_width_column_wrapper<int32_t> scatter_map({-3, 3, 1, -1});
-  fixed_width_column_wrapper<TypeParam> expected(tmp2.begin(), tmp2.end());
+  fixed_width_column_wrapper<TypeParam, int32_t> expected({10, 3, 30, 2, 50, 1, 70, 4});
 
   auto const source_table = cudf::table_view({source, source});
   auto const target_table = cudf::table_view({target, target});
@@ -401,7 +385,6 @@ TYPED_TEST(ScatterDataTypeTests, ScatterBothNulls)
 {
   using cudf::test::fixed_width_column_wrapper;
   using cudf::test::expect_tables_equal;
-  using T = TypeParam;
 
   fixed_width_column_wrapper<TypeParam, int32_t> source({2, 4, 6, 8}, {1, 1, 0, 0});
   fixed_width_column_wrapper<TypeParam, int32_t> target({10, 20, 30, 40, 50, 60, 70, 80}, {0, 0, 0, 0, 1, 1, 1, 1});
@@ -422,7 +405,6 @@ TYPED_TEST(ScatterDataTypeTests, ScatterSourceNulls)
 {
   using cudf::test::fixed_width_column_wrapper;
   using cudf::test::expect_tables_equal;
-  using T = TypeParam;
 
   fixed_width_column_wrapper<TypeParam, int32_t> source({2, 4, 6, 8}, {1, 1, 0, 0});
   fixed_width_column_wrapper<TypeParam, int32_t> target({10, 20, 30, 40, 50, 60, 70, 80});
@@ -443,18 +425,11 @@ TYPED_TEST(ScatterDataTypeTests, ScatterTargetNulls)
 {
   using cudf::test::fixed_width_column_wrapper;
   using cudf::test::expect_tables_equal;
-  using T = TypeParam;
 
-  auto const tmp0 = cudf::test::make_type_param_vector<T>({2, 4, 6, 8});
-  auto const tmp1 = cudf::test::make_type_param_vector<T>({10, 20, 30, 40, 50, 60, 70, 80});
-  auto const tmp2 = cudf::test::make_type_param_vector<T>({10, 2, 30, 4, 50, 6, 70, 8});
-  std::vector<bool> const v1{0, 0, 0, 0, 1, 1, 1, 1};
-  std::vector<bool> const v2{0, 1, 0, 1, 1, 1, 1, 1};
-
-  fixed_width_column_wrapper<T> source(tmp0.begin(), tmp0.end());
-  fixed_width_column_wrapper<T> target(tmp1.begin(), tmp1.end(), v1.begin());
+  fixed_width_column_wrapper<TypeParam, int32_t> source({2, 4, 6, 8});
+  fixed_width_column_wrapper<TypeParam, int32_t> target({10, 20, 30, 40, 50, 60, 70, 80}, {0, 0, 0, 0, 1, 1, 1, 1});
   fixed_width_column_wrapper<int32_t> scatter_map({1, 3, -3, -1});
-  fixed_width_column_wrapper<T> expected(tmp2.begin(), tmp2.end(), v2.begin());
+  fixed_width_column_wrapper<TypeParam, int32_t> expected({10, 2, 30, 4, 50, 6, 70, 8}, {0, 1, 0, 1, 1, 1, 1, 1});
 
   auto const source_table = cudf::table_view({source, source});
   auto const target_table = cudf::table_view({target, target});
@@ -473,19 +448,15 @@ TYPED_TEST(ScatterDataTypeTests, ScatterScalarNoNulls)
   using cudf::test::expect_tables_equal;
   using scalar_ptr = std::unique_ptr<cudf::scalar>;
   using scalar_vector = std::vector<scalar_ptr>;
-  using T = TypeParam;
 
   // Initializers lists can't take move-only types
   scalar_vector source_vector;
   auto source = scalar_ptr(new scalar_type_t<TypeParam>(100));
   source_vector.push_back(std::move(source));
 
-  auto const tmp1 = cudf::test::make_type_param_vector<T>({10, 20, 30, 40, 50, 60, 70, 80});
-  auto const tmp2 = cudf::test::make_type_param_vector<T>({10, 100, 30, 100, 50, 100, 70, 100});
-
-  fixed_width_column_wrapper<T> target(tmp1.begin(), tmp1.end());
+  fixed_width_column_wrapper<TypeParam, int32_t> target({10, 20, 30, 40, 50, 60, 70, 80});
   fixed_width_column_wrapper<int32_t> scatter_map({-3, 3, 1, -1});
-  fixed_width_column_wrapper<T> expected(tmp2.begin(), tmp2.end());
+  fixed_width_column_wrapper<TypeParam, int32_t> expected({10, 100, 30, 100, 50, 100, 70, 100});
 
   auto const target_table = cudf::table_view({target});
   auto const expected_table = cudf::table_view({expected});
@@ -503,21 +474,15 @@ TYPED_TEST(ScatterDataTypeTests, ScatterScalarTargetNulls)
   using cudf::test::expect_tables_equal;
   using scalar_ptr = std::unique_ptr<cudf::scalar>;
   using scalar_vector = std::vector<scalar_ptr>;
-  using T = TypeParam;
 
   // Initializers lists can't take move-only types
   scalar_vector source_vector;
   auto source = scalar_ptr(new scalar_type_t<TypeParam>(100));
   source_vector.push_back(std::move(source));
 
-  auto const tmp1 = cudf::test::make_type_param_vector<T>({10, 20, 30, 40, 50, 60, 70, 80});
-  auto const tmp2 = cudf::test::make_type_param_vector<T>({10, 100, 30, 100, 50, 100, 70, 100});
-  std::vector<bool> const v1{0, 0, 0, 0, 1, 1, 1, 1};
-  std::vector<bool> const v2{0, 1, 0, 1, 1, 1, 1, 1};
-
-  fixed_width_column_wrapper<T> target(tmp1.begin(), tmp1.end(), v1.begin());
+  fixed_width_column_wrapper<TypeParam, int32_t> target({10, 20, 30, 40, 50, 60, 70, 80}, {0, 0, 0, 0, 1, 1, 1, 1});
   fixed_width_column_wrapper<int32_t> scatter_map({-3, 3, 1, -1});
-  fixed_width_column_wrapper<T> expected(tmp2.begin(), tmp2.end(), v2.begin());
+  fixed_width_column_wrapper<TypeParam, int32_t> expected({10, 100, 30, 100, 50, 100, 70, 100}, {0, 1, 0, 1, 1, 1, 1, 1});
 
   auto const target_table = cudf::table_view({target});
   auto const expected_table = cudf::table_view({expected});
@@ -568,14 +533,9 @@ TYPED_TEST(ScatterDataTypeTests, ScatterScalarBothNulls)
   source->set_valid(false);
   source_vector.push_back(std::move(source));
 
-  auto const a = cudf::test::make_type_param_vector<TypeParam>({10, 20, 30, 40, 50, 60, 70, 80});
-  std::vector<bool> b{0, 0, 0, 0, 1, 1, 1, 1};
-  auto const c = cudf::test::make_type_param_vector<TypeParam>({10, 100, 30, 100, 50, 100, 70, 100});
-  std::vector<bool> d{0, 0, 0, 0, 1, 0, 1, 0};
-
-  fixed_width_column_wrapper<TypeParam> target(a.begin(), a.end(), b.begin());
+  fixed_width_column_wrapper<TypeParam, int32_t> target({10, 20, 30, 40, 50, 60, 70, 80}, {0, 0, 0, 0, 1, 1, 1, 1});
   fixed_width_column_wrapper<int32_t> scatter_map({-3, 3, 1, -1});
-  fixed_width_column_wrapper<TypeParam> expected(c.begin(), c.end(), d.begin());
+  fixed_width_column_wrapper<TypeParam, int32_t> expected({10, 100, 30, 100, 50, 100, 70, 100}, {0, 0, 0, 0, 1, 0, 1, 0});
 
   auto const target_table = cudf::table_view({target});
   auto const expected_table = cudf::table_view({expected});
@@ -687,11 +647,11 @@ TYPED_TEST_CASE(BooleanMaskScatter, cudf::test::FixedWidthTypes);
 TYPED_TEST(BooleanMaskScatter, WithNoNullElementsInTarget)
 {
     using T = TypeParam;
-    cudf::test::fixed_width_column_wrapper<T, int> source({1, 5, 6, 8, 9});
-    cudf::test::fixed_width_column_wrapper<T, int> target({   2,     2,     3,     4,   11,   12,     7,    7,   10,    10});
-    cudf::test::fixed_width_column_wrapper<bool>   mask  ({true,  false, false, false, true, true, false, true, true, false});
+    cudf::test::fixed_width_column_wrapper<T, int32_t> source({1, 5, 6, 8, 9});
+    cudf::test::fixed_width_column_wrapper<T, int32_t> target({   2,     2,     3,     4,   11,   12,     7,    7,   10,    10});
+    cudf::test::fixed_width_column_wrapper<bool>       mask  ({true,  false, false, false, true, true, false, true, true, false});
 
-    cudf::test::fixed_width_column_wrapper<T, int> expected ({1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
+    cudf::test::fixed_width_column_wrapper<T, int32_t> expected ({1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
     auto source_table = cudf::table_view({source});
     auto target_table = cudf::table_view({target});
     auto expected_table = cudf::table_view({expected});
@@ -704,13 +664,13 @@ TYPED_TEST(BooleanMaskScatter, WithNoNullElementsInTarget)
 TYPED_TEST(BooleanMaskScatter, WithNull)
 {
     using T = TypeParam;
-    cudf::test::fixed_width_column_wrapper<T, int> source_col1({1, 5, 6, 8, 9}, {1, 0, 1, 0, 1});
+    cudf::test::fixed_width_column_wrapper<T, int32_t> source_col1({1, 5, 6, 8, 9}, {1, 0, 1, 0, 1});
     cudf::test::strings_column_wrapper source_col2 ({"This", "is", "cudf", "test", "column"}, {1, 0, 0, 1, 0});
-    cudf::test::fixed_width_column_wrapper<T, int>  target_col1({ 2, 2, 3, 4, 11, 12, 7, 7, 10, 10}, {1, 1, 0, 1, 1, 1, 1, 1, 1, 0});
+    cudf::test::fixed_width_column_wrapper<T, int32_t>  target_col1({ 2, 2, 3, 4, 11, 12, 7, 7, 10, 10}, {1, 1, 0, 1, 1, 1, 1, 1, 1, 0});
     cudf::test::strings_column_wrapper target_col2 ({"a", "bc", "cd", "ef", "gh", "ij", "jk", "lm", "no", "pq"}, {1, 1, 0, 1, 1, 1, 1, 1, 1, 0});
     cudf::test::fixed_width_column_wrapper<bool> mask({true,  false, false, false, true, true, false, true, true, false});
 
-    cudf::test::fixed_width_column_wrapper<T, int> expected_col1 ({1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, {1, 1, 0, 1, 0, 1, 1, 0, 1, 0});
+    cudf::test::fixed_width_column_wrapper<T, int32_t> expected_col1 ({1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, {1, 1, 0, 1, 0, 1, 1, 0, 1, 0});
     cudf::test::strings_column_wrapper expected_col2 ({"This", "bc", "cd", "ef", "is", "cudf", "jk", "test", "column", "pq"}, {1, 1, 0, 1, 0, 0, 1, 1, 0, 0});
     auto source_table = cudf::table_view({source_col1, source_col2});
     auto target_table = cudf::table_view({target_col1, target_col2});
@@ -844,10 +804,10 @@ TYPED_TEST(BooleanMaskScalarScatter, WithNoNullElementsInTarget)
     auto scalar = this->form_scalar(source, validity);
     std::vector<std::reference_wrapper<cudf::scalar>> scalar_vect;
     scalar_vect.push_back(*scalar);
-    cudf::test::fixed_width_column_wrapper<T, int> target({   2,     2,     3,     4,   11,   12,     7,    7,   10,    10});
-    cudf::test::fixed_width_column_wrapper<bool>   mask  ({true,  false, false, false, true, true, false, true, true, false});
+    cudf::test::fixed_width_column_wrapper<T, int32_t> target({   2,     2,     3,     4,   11,   12,     7,    7,   10,    10});
+    cudf::test::fixed_width_column_wrapper<bool>       mask  ({true,  false, false, false, true, true, false, true, true, false});
 
-    cudf::test::fixed_width_column_wrapper<T, int> expected ({11, 2, 3, 4, 11, 11, 7, 11, 11, 10});
+    cudf::test::fixed_width_column_wrapper<T, int32_t> expected ({11, 2, 3, 4, 11, 11, 7, 11, 11, 10});
     auto target_table = cudf::table_view({target});
     auto expected_table = cudf::table_view({expected});
 
@@ -867,11 +827,11 @@ TYPED_TEST(BooleanMaskScalarScatter, WithNull)
     std::vector<std::reference_wrapper<cudf::scalar>> scalar_vect;
     scalar_vect.push_back(*scalar_1);
     scalar_vect.push_back(*scalar_2);
-    cudf::test::fixed_width_column_wrapper<T, int>  target_col1(                     {   2,     2,     3,     4,   11,   12,     7,    7,   10,    10}, {1, 1, 0, 1, 1, 1, 1, 1, 1, 0});
+    cudf::test::fixed_width_column_wrapper<T, int32_t>  target_col1(                     {   2,     2,     3,     4,   11,   12,     7,    7,   10,    10}, {1, 1, 0, 1, 1, 1, 1, 1, 1, 0});
     cudf::test::strings_column_wrapper target_col2 ({"a", "bc", "cd", "ef", "gh", "ij", "jk", "lm", "no", "pq"}, {1, 1, 0, 1, 1, 1, 1, 1, 1, 0});
     cudf::test::fixed_width_column_wrapper<bool> mask({true,  false, false, false, true, true, false, true, true, false});
 
-    cudf::test::fixed_width_column_wrapper<T, int> expected_col1 ({11, 2, 3, 4, 11, 11, 7, 11, 11, 10}, {0, 1, 0, 1, 0, 0, 1, 0, 0, 0});
+    cudf::test::fixed_width_column_wrapper<T, int32_t> expected_col1 ({11, 2, 3, 4, 11, 11, 7, 11, 11, 10}, {0, 1, 0, 1, 0, 0, 1, 0, 0, 0});
     cudf::test::strings_column_wrapper expected_col2 ({"cudf", "bc", "cd", "ef", "cudf", "cudf", "jk", "cudf", "cudf", "pq"}, {1, 1, 0, 1, 1, 1, 1, 1, 1, 0});
     auto target_table = cudf::table_view({target_col1, target_col2});
     auto expected_table = cudf::table_view({expected_col1, expected_col2});
