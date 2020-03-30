@@ -41,16 +41,19 @@ cimport cudf._libxx.cpp.types as cudf_types
 cimport cudf._libxx.cpp.io.types as cudf_io_types
 
 cdef class BufferArrayFromVector:
-    cdef unsigned length
+    cdef size_type length
     cdef unique_ptr[vector[uint8_t]] in_vec
 
     # these two things declare part of the buffer interface
     cdef Py_ssize_t shape[1]
     cdef Py_ssize_t strides[1]
 
-    cdef set_ptr(self, unique_ptr[vector[uint8_t]] in_vec):
-        self.in_vec = move(in_vec)
-        self.length = dereference(self.in_vec).size()
+    @staticmethod
+    cdef BufferArrayFromVector from_unique_ptr(unique_ptr[vector[uint8_t]] in_vec):
+        cdef BufferArrayFromVector buf = BufferArrayFromVector()
+        buf.in_vec = move(in_vec)
+        buf.length = dereference(buf.in_vec).size()
+        return buf
 
     def __getbuffer__(self, Py_buffer *buffer, int flags):
         cdef Py_ssize_t itemsize = sizeof(uint8_t)
@@ -289,8 +292,7 @@ cpdef write_parquet(
         out_metadata_c = move(parquet_writer(args))
 
     if metadata_file_path is not None:
-        out_metadata_py = BufferArrayFromVector()
-        out_metadata_py.set_ptr(move(out_metadata_c))
+        out_metadata_py = BufferArrayFromVector.from_unique_ptr(move(out_metadata_c))
         return np.asarray(out_metadata_py)
     else:
         return None
@@ -314,6 +316,5 @@ cpdef merge_filemetadata(filemetadata_list):
     with nogil:
         output_c = move(parquet_merge_metadata(list_c))
 
-    out_metadata_py = BufferArrayFromVector()
-    out_metadata_py.set_ptr(move(output_c))
+    out_metadata_py = BufferArrayFromVector.from_unique_ptr(move(output_c))
     return np.asarray(out_metadata_py)
