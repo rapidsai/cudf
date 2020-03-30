@@ -690,6 +690,15 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     }
   }
 
+  private static native long normalizeNANsAndZeros(long viewHandle) throws CudfException;
+
+  public ColumnVector normalizeNANsAndZeros() {
+    try (DevicePrediction prediction =
+                 new DevicePrediction(getDeviceMemorySize(), "normalizeNANsAndZeros")) {
+      return new ColumnVector(normalizeNANsAndZeros(getNativeView()));
+    }
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // DATE/TIME
   /////////////////////////////////////////////////////////////////////////////

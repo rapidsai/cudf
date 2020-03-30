@@ -211,6 +211,39 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testNormalizeNANsAndZeros() {
+    // Must check boundaries of NaN representation, as described in javadoc for Double#longBitsToDouble.
+    // @see java.lang.Double#longBitsToDouble
+    // <quote>
+    //      If the argument is any value in the range 0x7ff0000000000001L through 0x7fffffffffffffffL,
+    //      or in the range 0xfff0000000000001L through 0xffffffffffffffffL, the result is a NaN.
+    // </quote>
+    final double MIN_PLUS_NaN  = Double.longBitsToDouble(0x7ff0000000000001L);
+    final double MAX_PLUS_NaN  = Double.longBitsToDouble(0x7fffffffffffffffL);
+    final double MAX_MINUS_NaN = Double.longBitsToDouble(0xfff0000000000001L);
+    final double MIN_MINUS_NaN = Double.longBitsToDouble(0xffffffffffffffffL);
+
+    Double[]  ins = new Double[] {0.0, -0.0, Double.NaN, MIN_PLUS_NaN, MAX_PLUS_NaN, MIN_MINUS_NaN, MAX_MINUS_NaN, null};
+    Double[] outs = new Double[] {0.0,  0.0, Double.NaN,   Double.NaN,   Double.NaN,    Double.NaN,    Double.NaN, null};
+
+    try (ColumnVector     input      = ColumnVector.fromBoxedDoubles(ins);
+         HostColumnVector expected   = ColumnVector.fromBoxedDoubles(outs).copyToHost();
+         HostColumnVector normalized = input.normalizeNANsAndZeros().copyToHost()) {
+      for (int i = 0; i<input.getRowCount(); ++i) {
+        if (expected.isNull(i)) {
+          assertTrue(normalized.isNull(i));
+        }
+        else {
+          assertEquals(
+                  Double.doubleToRawLongBits(expected.getDouble(i)),
+                  Double.doubleToRawLongBits(normalized.getDouble(i))
+          );
+        }
+      }
+    }
+  }
+
+  @Test
   void isNotNullTestEmptyColumn() {
     try (ColumnVector v = ColumnVector.fromBoxedInts();
          ColumnVector expected = ColumnVector.fromBoxedBooleans();

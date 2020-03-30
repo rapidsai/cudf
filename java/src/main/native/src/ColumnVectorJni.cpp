@@ -800,6 +800,20 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringReplace(JNIEnv *e
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_normalizeNANsAndZeros(JNIEnv *env,
+                                                                                jclass clazz,
+                                                                                jlong input_column) {
+    using cudf::column_view;
+
+    JNI_NULL_CHECK(env, input_column, "Input column is null", 0);
+    try {
+       return reinterpret_cast<jlong>(
+         cudf::normalize_nans_and_zeros(*reinterpret_cast<column_view*>(input_column)).release()
+       );
+    }
+    CATCH_STD(env, 0);
+}
+
 ////////
 // Native cudf::column_view life cycle and metadata access methods. Life cycle methods
 // should typically only be called from the CudfColumn inner class.
