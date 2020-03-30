@@ -1102,9 +1102,20 @@ public class ColumnVectorTest extends CudfTestBase {
            ColumnVector result = v1.rollingWindow(AggregateOp.MEAN, options)) {
         assertColumnsAreEqual(expected, result);
       }
+    }
+  }
 
+  @Test
+  void testWindowStaticCounts() {
+    WindowOptions options = WindowOptions.builder().window(2, 1)
+            .minPeriods(2).build();
+    try (ColumnVector v1 = ColumnVector.fromBoxedInts(5, 4, null, 6, 8)) {
+      try (ColumnVector expected = ColumnVector.fromInts(2, 2, 2, 2, 2);
+           ColumnVector result = v1.rollingWindow(AggregateOp.COUNT_VALID, options)) {
+        assertColumnsAreEqual(expected, result);
+      }
       try (ColumnVector expected = ColumnVector.fromInts(2, 3, 3, 3, 2);
-           ColumnVector result = v1.rollingWindow(AggregateOp.COUNT, options)) {
+           ColumnVector result = v1.rollingWindow(AggregateOp.COUNT_ALL, options)) {
         assertColumnsAreEqual(expected, result);
       }
     }
