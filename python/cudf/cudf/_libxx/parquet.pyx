@@ -49,7 +49,9 @@ cdef class BufferArrayFromVector:
     cdef Py_ssize_t strides[1]
 
     @staticmethod
-    cdef BufferArrayFromVector from_unique_ptr(unique_ptr[vector[uint8_t]] in_vec):
+    cdef BufferArrayFromVector from_unique_ptr(
+        unique_ptr[vector[uint8_t]] in_vec
+    ):
         cdef BufferArrayFromVector buf = BufferArrayFromVector()
         buf.in_vec = move(in_vec)
         buf.length = dereference(buf.in_vec).size()
@@ -292,7 +294,9 @@ cpdef write_parquet(
         out_metadata_c = move(parquet_writer(args))
 
     if metadata_file_path is not None:
-        out_metadata_py = BufferArrayFromVector.from_unique_ptr(move(out_metadata_c))
+        out_metadata_py = BufferArrayFromVector.from_unique_ptr(
+            move(out_metadata_c)
+        )
         return np.asarray(out_metadata_py)
     else:
         return None
