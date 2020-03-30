@@ -13,6 +13,8 @@
 - PR #4471 Consolidate partitioning functionality into a single header.
 - PR #4498 Adds in support for chunked writers to java
 - PR #4073 Enable contiguous split java test
+- PR #4527 Add JNI and java bindings for matches_re
+- PR #4606 Fix `scan` unit test and upgrade to more appropriate algorithms
 - PR #4527 Add JNI and java bindings for `matches_re`
 - PR #4599 Add Java and JNI bindings for string replace
 - PR #4655 Raise error for list like dtypes in cudf
@@ -46,6 +48,7 @@
 - PR #4679 Fix comments for make_dictionary_column factory functions
 - PR #4711 Fix column leaks in Java unit test
 - pR #4721 Fix string binop to update nulls appropriately
+- PR #4722 Fix strings::pad when using pad::both with odd width
 - PR #4725 Fix issue java with not setting GPU on background thread
 
 
