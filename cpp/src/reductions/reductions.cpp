@@ -18,6 +18,7 @@
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/detail/reduction_functions.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/quantiles.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 
 namespace cudf {
@@ -79,10 +80,14 @@ struct reduce_dispatch_functor {
       }
       break;
     case aggregation::MEDIAN:
-      // TODO call quantile.
+      return quantile(col, 0.5, interpolation::LINEAR);
       break;
-    case aggregation::QUANTILE:
-      // TODO call quantile.
+    case aggregation::QUANTILE: {
+      auto quantile_agg = static_cast<quantile_aggregation const*>(agg.get());
+      CUDF_EXPECTS(quantile_agg->_quantiles.size() == 1,
+                   "Reduction quantile accepts only one quantile value");
+      return quantile(col, quantile_agg->_quantiles[0], quantile_agg->_interpolation);
+      }
       break;
     case aggregation::ARGMAX:
       // TODO development in another PR
