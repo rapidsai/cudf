@@ -1563,22 +1563,40 @@ def test_string_find(data, sub):
     ps = pd.Series(data)
     gs = Series(data)
 
-    assert_eq(ps.str.find(sub), gs.str.find(sub))
+    assert_eq(ps.str.find(sub).fillna(-1), gs.str.find(sub), check_dtype=False)
     assert_eq(
-        ps.str.find(sub, start=1), gs.str.find(sub, start=1),
+        ps.str.find(sub, start=1).fillna(-1),
+        gs.str.find(sub, start=1),
+        check_dtype=False,
     )
-    assert_eq(ps.str.find(sub, end=10), gs.str.find(sub, end=10))
     assert_eq(
-        ps.str.find(sub, start=2, end=10), gs.str.find(sub, start=2, end=10),
+        ps.str.find(sub, end=10).fillna(-1),
+        gs.str.find(sub, end=10),
+        check_dtype=False,
+    )
+    assert_eq(
+        ps.str.find(sub, start=2, end=10).fillna(-1),
+        gs.str.find(sub, start=2, end=10),
+        check_dtype=False,
     )
 
-    assert_eq(ps.str.rfind(sub), gs.str.rfind(sub))
-    assert_eq(ps.str.rfind(sub, start=1), gs.str.rfind(sub, start=1))
     assert_eq(
-        ps.str.rfind(sub, end=10), gs.str.rfind(sub, end=10),
+        ps.str.rfind(sub).fillna(-1), gs.str.rfind(sub), check_dtype=False
     )
     assert_eq(
-        ps.str.rfind(sub, start=2, end=10), gs.str.rfind(sub, start=2, end=10),
+        ps.str.rfind(sub, start=1).fillna(-1),
+        gs.str.rfind(sub, start=1),
+        check_dtype=False,
+    )
+    assert_eq(
+        ps.str.rfind(sub, end=10).fillna(-1),
+        gs.str.rfind(sub, end=10),
+        check_dtype=False,
+    )
+    assert_eq(
+        ps.str.rfind(sub, start=2, end=10).fillna(-1),
+        gs.str.rfind(sub, start=2, end=10),
+        check_dtype=False,
     )
 
 
@@ -1646,14 +1664,14 @@ def test_string_str_rindex(data, sub, er):
         assert_eq(ps.str.rindex(sub), gs.str.rindex(sub), check_dtype=False)
 
     try:
-        ps.str.index(sub)
+        ps.str.rindex(sub)
     except er:
         pass
     else:
         assert not er
 
     try:
-        gs.str.index(sub)
+        gs.str.rindex(sub)
     except er:
         pass
     else:
