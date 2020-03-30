@@ -50,6 +50,11 @@ public class Cuda {
       }
       return neededCleanup;
     }
+
+    @Override
+    public boolean isClean() {
+      return stream == 0;
+    }
   }
 
   /** A class representing a CUDA stream */
@@ -140,6 +145,11 @@ public class Cuda {
         logRefCountDebug("Leaked event");
       }
       return neededCleanup;
+    }
+
+    @Override
+    public boolean isClean() {
+      return event == 0;
     }
   }
 

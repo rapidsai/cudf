@@ -13,6 +13,8 @@
 - PR #4471 Consolidate partitioning functionality into a single header.
 - PR #4498 Adds in support for chunked writers to java
 - PR #4073 Enable contiguous split java test
+- PR #4527 Add JNI and java bindings for matches_re
+- PR #4606 Fix `scan` unit test and upgrade to more appropriate algorithms
 - PR #4527 Add JNI and java bindings for `matches_re`
 - PR #4599 Add Java and JNI bindings for string replace
 - PR #4655 Raise error for list like dtypes in cudf
@@ -23,6 +25,7 @@
 - PR #4700 Expose events and more stream functionality in java
 - PR #4699 Make Java's MemoryBuffer public and add MemoryBuffer.slice
 - PR #4691 Fix compiler argument syntax for ccache
+- PR #4688 Add Java count aggregation to include null values
 - PR #4731 Avoid redundant host->device copies when reading the entire CSV/JSON file
 
 ## Bug Fixes
@@ -44,9 +47,13 @@
 - PR #4659 Fix strings::replace_re handling empty regex pattern
 - PR #4652 Fix misaligned error when computing regex device structs
 - PR #4651 Fix hashing benchmark missing includes
+- PR #4673 Fix regex infinite loop while parsing invalid quantifier pattern
 - PR #4679 Fix comments for make_dictionary_column factory functions
 - PR #4711 Fix column leaks in Java unit test
+- pR #4721 Fix string binop to update nulls appropriately
+- PR #4722 Fix strings::pad when using pad::both with odd width
 - PR #4725 Fix issue java with not setting GPU on background thread
+- PR #4701 Fix issue related to mixed input types in `as_column`
 
 
 # cuDF 0.13.0 (Date TBD)
@@ -355,6 +362,7 @@
 - PR #4683 Fix Slicing issue with categorical column in DataFrame
 - PR #4676 Fix bug in `_shuffle_group` for repartition
 - PR #4681 Fix `test_repr` tests that were generating a `RangeIndex` for column names
+- PR #4729 Fix `fsspec` versioning to prevent dask test failures
 
 
 # cuDF 0.12.0 (04 Feb 2020)
