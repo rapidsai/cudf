@@ -180,3 +180,5 @@ TYPED_TEST(InsertTest, IdenticalKeysUniqueValues) {
   EXPECT_FALSE(thrust::all_of(this->pairs.begin() + 1, this->pairs.end(),
                               find_pair<map_type, pair_type>{*this->map}));
 }
+
+CUDF_TEST_PROGRAM_MAIN()
