@@ -20,10 +20,10 @@
 #include <hash/managed.cuh>
 #include <hash/hash_allocator.cuh>
 #include <hash/helper_functions.cuh>
-#include <utilities/legacy/device_atomics.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 
 #include <cudf/utilities/error.hpp>
+#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
 
 #include <thrust/pair.h>
