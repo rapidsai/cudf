@@ -15,7 +15,8 @@
  */
 
 #include <io/comp/gpuinflate.h>
-#include <tests/utilities/legacy/cudf_test_fixtures.h>
+#include <tests/utilities/base_fixture.hpp>
+#include <tests/utilities/cudf_gmock.hpp>
 
 #include <vector>
 
@@ -28,16 +29,16 @@
  * whose interface and setup is different for each codec.
  **/
 template <typename Decompressor>
-struct DecompressTest : public GdfTest {
+struct DecompressTest : public cudf::test::BaseFixture {
   void SetUp() override {
     ASSERT_CUDA_SUCCEEDED(
         cudaMallocHost((void**)&inf_args, sizeof(cudf::io::gpu_inflate_input_s)));
     ASSERT_CUDA_SUCCEEDED(
         cudaMallocHost((void**)&inf_stat, sizeof(cudf::io::gpu_inflate_status_s)));
-    ASSERT_RMM_SUCCEEDED(
-        RMM_ALLOC(&d_inf_args, sizeof(cudf::io::gpu_inflate_input_s), 0));
-    ASSERT_RMM_SUCCEEDED(
-        RMM_ALLOC(&d_inf_stat, sizeof(cudf::io::gpu_inflate_status_s), 0));
+    ASSERT_EQ(
+        RMM_ALLOC(&d_inf_args, sizeof(cudf::io::gpu_inflate_input_s), 0), RMM_SUCCESS);
+    ASSERT_EQ(
+        RMM_ALLOC(&d_inf_stat, sizeof(cudf::io::gpu_inflate_status_s), 0), RMM_SUCCESS);
   }
 
   void TearDown() override {
@@ -148,3 +149,5 @@ TEST_F(BrotliDecompressTest, HelloWorld) {
   Decompress(&output, compressed, sizeof(compressed));
   EXPECT_STREQ(reinterpret_cast<char*>(output.data()), uncompressed);
 }
+
+CUDF_TEST_PROGRAM_MAIN()
