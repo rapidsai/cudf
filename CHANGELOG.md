@@ -65,6 +65,7 @@
 - PR #4749 Setting `nan_as_null=True` while creating a column in DataFrame creation
 - PR #4755 Fix Java build to deal with new quantiles API 
 
+
 # cuDF 0.13.0 (Date TBD)
 
 ## New Features
