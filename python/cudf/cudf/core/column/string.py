@@ -1458,7 +1458,7 @@ class StringMethods(object):
                 len(self._column), dtype="bool", masked=True
             )
         else:
-            from cudf._libxx.scalar import Scalar
+            from cudf._lib.scalar import Scalar
 
             result_col = cpp_endswith(self._column, Scalar(pat, "str"))
 
@@ -1491,7 +1491,7 @@ class StringMethods(object):
                 len(self._column), dtype="bool", masked=True
             )
         else:
-            from cudf._libxx.scalar import Scalar
+            from cudf._lib.scalar import Scalar
 
             result_col = cpp_startswith(self._column, Scalar(pat, "str"))
 
