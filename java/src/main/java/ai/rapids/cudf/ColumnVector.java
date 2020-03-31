@@ -1224,13 +1224,14 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Calculate the quantile of this ColumnVector
-   * @param method   the method used to calculate the quantile
-   * @param quantile the quantile value [0,1]
-   * @return the quantile as double. The type can be changed in future
+   * Calculate various quantiles of this ColumnVector.  It is assumed that this is already sorted
+   * in the desired order.
+   * @param method   the method used to calculate the quantiles
+   * @param quantiles the quantile values [0,1]
+   * @return the quantiles as doubles, in the same order passed in. The type can be changed in future
    */
-  public Scalar quantile(QuantileMethod method, double quantile) {
-    return new Scalar(type, quantile(getNativeView(), method.nativeId, quantile));
+  public ColumnVector quantile(QuantileMethod method, double[] quantiles) {
+    return new ColumnVector(quantile(getNativeView(), method.nativeId, quantiles));
   }
 
   /**
@@ -2175,7 +2176,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   private static native long upperStrings(long cudfViewHandle);
 
-  private static native long quantile(long cudfColumnHandle, int quantileMethod, double quantile) throws CudfException;
+  private static native long quantile(long cudfColumnHandle, int quantileMethod, double[] quantiles) throws CudfException;
 
   private static native long rollingWindow(long viewHandle, int min_periods, int agg_type,
                                            int preceding, int following,
