@@ -258,7 +258,9 @@ class Frame(libcudfxx.table.Table):
         if not pd.api.types.is_integer_dtype(gather_map.dtype):
             gather_map = gather_map.astype("int32")
         result = self.__class__._from_table(
-            libcudfxx.copying.gather(self, as_column(gather_map), keep_index=keep_index)
+            libcudfxx.copying.gather(
+                self, as_column(gather_map), keep_index=keep_index
+            )
         )
         result._copy_categories(self)
         return result
@@ -1322,12 +1324,9 @@ class Frame(libcudfxx.table.Table):
             for i, col in enumerate(by):
                 to_sort[i] = col
             inds = to_sort.argsort()
-            to_return = to_return.take(inds, keep_index=False)
-            if left_index or right_index:
-                name = to_return._index.name
-                to_return._index._data[name] = to_return._index._data[
-                    name
-                ].take(inds)
+            to_return = to_return.take(
+                inds, keep_index=(left_index or right_index)
+            )
             return to_return
         else:
             return to_return
