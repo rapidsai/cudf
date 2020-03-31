@@ -1332,13 +1332,10 @@ def test_strings_filling_tests(data, width, fillchar):
     gs = Series(data)
     ps = pd.Series(data)
 
-    # TODO: uncomment .str.center tests once this
-    # is fixed: https://github.com/rapidsai/cudf/issues/4354
-    # as .str.center is nothing but .str.pad(side="both")
-    # assert_eq(
-    #     ps.str.center(width=width, fillchar=fillchar),
-    #     gs.str.center(width=width, fillchar=fillchar),
-    # )
+    assert_eq(
+        ps.str.center(width=width, fillchar=fillchar),
+        gs.str.center(width=width, fillchar=fillchar),
+    )
     assert_eq(
         ps.str.ljust(width=width, fillchar=fillchar),
         gs.str.ljust(width=width, fillchar=fillchar),
@@ -1381,14 +1378,7 @@ def test_strings_zfill_tests(data, width):
 )
 @pytest.mark.parametrize("width", [0, 1, 4, 9, 100])
 @pytest.mark.parametrize(
-    "side",
-    [
-        "left",
-        "right",
-        # TODO: Uncomment "both" once
-        # https://github.com/rapidsai/cudf/issues/4354 is fixed.
-        #  "both"
-    ],
+    "side", ["left", "right", "both"],
 )
 @pytest.mark.parametrize("fillchar", [" ", ".", "\n", "+", "\t"])
 def test_strings_pad_tests(data, width, side, fillchar):
@@ -1549,8 +1539,10 @@ def test_string_starts_ends(data, pat):
     ps = pd.Series(data)
     gs = Series(data)
 
-    assert_eq(ps.str.startswith(pat), gs.str.startswith(pat))
-    assert_eq(ps.str.endswith(pat), gs.str.endswith(pat))
+    assert_eq(
+        ps.str.startswith(pat), gs.str.startswith(pat), check_dtype=False
+    )
+    assert_eq(ps.str.endswith(pat), gs.str.endswith(pat), check_dtype=False)
 
 
 @pytest.mark.parametrize(
@@ -1573,22 +1565,40 @@ def test_string_find(data, sub):
     ps = pd.Series(data)
     gs = Series(data)
 
-    assert_eq(ps.str.find(sub), gs.str.find(sub))
+    assert_eq(ps.str.find(sub).fillna(-1), gs.str.find(sub), check_dtype=False)
     assert_eq(
-        ps.str.find(sub, start=1), gs.str.find(sub, start=1),
+        ps.str.find(sub, start=1).fillna(-1),
+        gs.str.find(sub, start=1),
+        check_dtype=False,
     )
-    assert_eq(ps.str.find(sub, end=10), gs.str.find(sub, end=10))
     assert_eq(
-        ps.str.find(sub, start=2, end=10), gs.str.find(sub, start=2, end=10),
+        ps.str.find(sub, end=10).fillna(-1),
+        gs.str.find(sub, end=10),
+        check_dtype=False,
+    )
+    assert_eq(
+        ps.str.find(sub, start=2, end=10).fillna(-1),
+        gs.str.find(sub, start=2, end=10),
+        check_dtype=False,
     )
 
-    assert_eq(ps.str.rfind(sub), gs.str.rfind(sub))
-    assert_eq(ps.str.rfind(sub, start=1), gs.str.rfind(sub, start=1))
     assert_eq(
-        ps.str.rfind(sub, end=10), gs.str.rfind(sub, end=10),
+        ps.str.rfind(sub).fillna(-1), gs.str.rfind(sub), check_dtype=False
     )
     assert_eq(
-        ps.str.rfind(sub, start=2, end=10), gs.str.rfind(sub, start=2, end=10),
+        ps.str.rfind(sub, start=1).fillna(-1),
+        gs.str.rfind(sub, start=1),
+        check_dtype=False,
+    )
+    assert_eq(
+        ps.str.rfind(sub, end=10).fillna(-1),
+        gs.str.rfind(sub, end=10),
+        check_dtype=False,
+    )
+    assert_eq(
+        ps.str.rfind(sub, start=2, end=10).fillna(-1),
+        gs.str.rfind(sub, start=2, end=10),
+        check_dtype=False,
     )
 
 
@@ -1656,14 +1666,14 @@ def test_string_str_rindex(data, sub, er):
         assert_eq(ps.str.rindex(sub), gs.str.rindex(sub), check_dtype=False)
 
     try:
-        ps.str.index(sub)
+        ps.str.rindex(sub)
     except er:
         pass
     else:
         assert not er
 
     try:
-        gs.str.index(sub)
+        gs.str.rindex(sub)
     except er:
         pass
     else:
