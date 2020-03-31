@@ -1064,7 +1064,7 @@ class Frame(libcudfxx.table.Table):
         # If values is scalar, result is expected to be scalar.
         result = cupy.asarray(outcol.data_array_view)
         if scalar_flag:
-            return result[0].tolist()
+            return result[0].item()
         else:
             return result
 
