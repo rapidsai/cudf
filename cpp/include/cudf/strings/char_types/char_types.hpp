@@ -26,7 +26,7 @@ namespace strings
 /**
  * @brief Character type values.
  * These types can be or'd to check for any combination of types.
- * 
+ *
  * This cannot be turned into an enum class because or'd entries can
  * result in values that are not in the class.
  */
@@ -44,7 +44,7 @@ enum string_character_types : uint32_t {
 };
 
 // OR operators for combining types
-string_character_types operator|(string_character_types lhs, string_character_types rhs)  
+string_character_types operator|(string_character_types lhs, string_character_types rhs)
 {
     return static_cast<string_character_types>(
         static_cast<std::underlying_type<string_character_types>::type>(lhs) |
@@ -52,11 +52,11 @@ string_character_types operator|(string_character_types lhs, string_character_ty
     );
 }
 
-string_character_types& operator|=(string_character_types& lhs, string_character_types rhs)  
+string_character_types& operator|=(string_character_types& lhs, string_character_types rhs)
 {
     lhs = static_cast<string_character_types>(
         static_cast<std::underlying_type<string_character_types>::type>(lhs) |
-        static_cast<std::underlying_type<string_character_types>::type>(rhs)           
+        static_cast<std::underlying_type<string_character_types>::type>(rhs)
     );
     return lhs;
 }
@@ -69,21 +69,21 @@ string_character_types& operator|=(string_character_types& lhs, string_character
  * is empty or has at least one character not of the specified type. If all
  * characters fit the type then true is set in that output row entry.
  *
- * Any null string results in a null entry for that row in the output column.
- * 
  * To ignore all but specific types, set the `verify_types` to those types
- * which should be checked. Otherwise, the default 0 will verify all characters
- * match `types`.
- * 
+ * which should be checked. Otherwise, the default ALL_TYPES will verify all
+ * characters match `types`.
+ *
  * ```
  * Example:
- * s = ['ab', 'a b', 'a1', 'a B']
+ * s = ['ab', 'a b', 'a7', 'a B']
  * b1 = s.all_characters_of_type(s,LOWER)
  * b1 is [true, false, false, false]
  * b2 = s.all_characters_of_type(s,LOWER,LOWER|UPPER)
  * b2 is [true, true, true, false]
- * 
+ *
  * ```
+ *
+ * Any null row results in a null entry for that row in the output column.
  *
  * @param strings Strings instance for this operation.
  * @param types The character types to check in each string.
