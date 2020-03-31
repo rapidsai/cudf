@@ -2062,7 +2062,9 @@ class Series(Frame):
         except Exception:
             # pandas functionally returns all False when cleansing via
             # typecasting fails
-            return Series(cupy.zeros(len(self), dtype="bool"))
+            return Series(
+                cupy.zeros(len(self), dtype="bool"), index=self.index
+            )
 
         # If categorical, combine categories first
         if is_categorical_dtype(lhs):
@@ -2078,7 +2080,9 @@ class Series(Frame):
                 # list doesn't have any nulls. If it does have nulls, make
                 # the values list a Categorical with a single null
                 if not rhs.has_nulls:
-                    return Series(cupy.zeros(len(self), dtype="bool"))
+                    return Series(
+                        cupy.zeros(len(self), dtype="bool"), index=self.index
+                    )
                 rhs = Series(pd.Categorical.from_codes([-1], categories=[]))
                 rhs = rhs.cat.set_categories(lhs_cats).astype(self.dtype)
 
@@ -2088,6 +2092,7 @@ class Series(Frame):
         res = res.drop_duplicates(subset="orig_order").reset_index(drop=True)
         res = res["bool"].fillna(False)
         res.name = self.name
+        res.index = self.index
 
         return res
 

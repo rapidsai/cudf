@@ -3627,7 +3627,8 @@ def test_series_value_counts():
     ],
 )
 def test_isin_numeric(data, values):
-    psr = pd.Series(data)
+    index = np.random.randint(0, 100, len(data))
+    psr = pd.Series(data, index=index)
     gsr = Series.from_pandas(psr)
 
     got = gsr.isin(values)
