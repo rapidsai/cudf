@@ -68,6 +68,23 @@ inline void check_java_exception(JNIEnv *const env) {
   }
 }
 
+class native_jdoubleArray_accessor {
+public:
+  jdouble *getArrayElements(JNIEnv *const env, jdoubleArray arr) const {
+    return env->GetDoubleArrayElements(arr, NULL);
+  }
+
+  jdoubleArray newArray(JNIEnv *const env, int len) const { return env->NewDoubleArray(len); }
+
+  void setArrayRegion(JNIEnv *const env, jdoubleArray jarr, int start, int len, jdouble const* arr) const {
+    env->SetDoubleArrayRegion(jarr, start, len, arr);
+  }
+
+  void releaseArrayElements(JNIEnv *const env, jdoubleArray jarr, jdouble *arr, jint mode) const {
+    env->ReleaseDoubleArrayElements(jarr, arr, mode);
+  }
+};
+
 class native_jlongArray_accessor {
 public:
   jlong *getArrayElements(JNIEnv *const env, jlongArray arr) const {
@@ -248,6 +265,7 @@ public:
   ~native_jArray() { commit(); }
 };
 
+typedef native_jArray<jdouble, jdoubleArray, native_jdoubleArray_accessor> native_jdoubleArray;
 typedef native_jArray<jlong, jlongArray, native_jlongArray_accessor> native_jlongArray;
 typedef native_jArray<jint, jintArray, native_jintArray_accessor> native_jintArray;
 typedef native_jArray<jbyte, jbyteArray, native_jbyteArray_accessor> native_jbyteArray;
