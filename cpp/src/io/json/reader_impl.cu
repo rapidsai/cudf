@@ -140,12 +140,14 @@ void reader::impl::ingest_raw_input(size_t range_offset, size_t range_size) {
 
   byte_range_offset_ = range_offset;
   byte_range_size_ = range_size;
+  load_whole_file_ = byte_range_offset_ == 0 && byte_range_size_ == 0;
 }
 
 /**
  * @brief Decompress the input data, if needed
  *
  * Sets the uncomp_data_ and uncomp_size_ data members
+ * Loads the data into device memory if byte range parameters are not used
  *
  * @return void
  **/
@@ -166,6 +168,8 @@ void reader::impl::decompress_input() {
     uncomp_data_ = uncomp_data_owner_.data();
     uncomp_size_ = uncomp_data_owner_.size();
   }
+  if (load_whole_file_)
+    data_ = rmm::device_buffer(uncomp_data_, uncomp_size_);
 }
 
 /**
@@ -185,8 +189,13 @@ void reader::impl::set_record_starts(cudaStream_t stream) {
     chars_to_count.push_back('\"');
   }
   // If not starting at an offset, add an extra row to account for the first row in the file
-  const auto prefilter_count =
-      count_all_from_set(uncomp_data_, uncomp_size_, chars_to_count) + ((byte_range_offset_ == 0) ? 1 : 0);
+  cudf::size_type prefilter_count = ((byte_range_offset_ == 0) ? 1 : 0);
+  if (load_whole_file_){
+    prefilter_count += count_all_from_set(data_, chars_to_count);
+  }
+  else {
+    prefilter_count += count_all_from_set(uncomp_data_, uncomp_size_, chars_to_count);
+  }
 
   rec_starts_.resize(prefilter_count);
 
@@ -201,8 +210,13 @@ void reader::impl::set_record_starts(cudaStream_t stream) {
   if (allow_newlines_in_strings_) {
     chars_to_find.push_back('\"');
   }
-  // Passing offset = 1 to return positions AFTER the found character
-  find_all_from_set(uncomp_data_, uncomp_size_, chars_to_find, 1, find_result_ptr);
+  // Passing offset = 1 to return positions AFTER the found character  
+  if (load_whole_file_){
+    find_all_from_set(data_, chars_to_find, 1, find_result_ptr);
+  }
+  else {
+    find_all_from_set(uncomp_data_, uncomp_size_, chars_to_find, 1, find_result_ptr);
+  }
 
   // Previous call stores the record pinput_file.typeositions as encountered by all threads
   // Sort the record positions as subsequent processing may require filtering
