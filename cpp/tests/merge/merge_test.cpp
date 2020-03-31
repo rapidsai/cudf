@@ -205,9 +205,6 @@ TYPED_TEST(MergeTest_, MismatchedKeyColumnsAndOrderTypes) {
     std::vector<cudf::order> column_order {cudf::order::ASCENDING};
     std::vector<cudf::null_order> null_precedence{};
 
-    std::vector<cudf::size_type> sortByCols = {0, 1};
-    std::vector<order_by_type> orderByTypes = {GDF_ORDER_ASC};
-
     EXPECT_THROW(cudf::experimental::merge({left_view, right_view},
                                            key_cols,
                                            column_order,
