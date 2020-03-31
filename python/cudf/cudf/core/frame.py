@@ -1322,8 +1322,7 @@ class Frame(libcudfxx.table.Table):
             for i, col in enumerate(by):
                 to_sort[i] = col
             inds = to_sort.argsort()
-            for col in to_return.columns:
-                to_return._data[col] = to_return._data[col].take(inds)
+            to_return._data = to_return.take(inds)._data
             if left_index or right_index:
                 name = to_return._index.name
                 to_return._index._data[name] = to_return._index._data[
