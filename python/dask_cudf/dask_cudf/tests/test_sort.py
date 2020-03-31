@@ -15,9 +15,7 @@ def test_sort_values(nelem, nparts, by):
     df = cudf.DataFrame()
     df["a"] = np.ascontiguousarray(np.arange(nelem)[::-1])
     df["b"] = np.arange(100, nelem + 100)
-    df["c"] = df["b"].astype(
-        "str"
-    )  # np.random.choice(cudf.datasets.names, size=nelem)
+    df["c"] = df["b"].astype("str")
     df["d"] = df["a"].astype("category")
     ddf = dd.from_pandas(df, npartitions=nparts)
 
