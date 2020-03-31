@@ -21,10 +21,10 @@ from cudf._libxx.null_mask import (
     bitmask_allocation_size_bytes,
     create_null_mask,
 )
+from cudf._libxx.quantiles import quantile as cpp_quantile
 from cudf._libxx.scalar import Scalar
 from cudf._libxx.stream_compaction import unique_count as cpp_unique_count
 from cudf._libxx.transform import bools_to_mask
-from cudf.core._sort import get_sorted_inds
 from cudf.core.buffer import Buffer
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils import cudautils, ioutils, utils
@@ -649,14 +649,22 @@ class ColumnBase(Column):
         return ColumnBase._concat([self, as_column(other)])
 
     def quantile(self, q, interpolation, exact):
-        if isinstance(q, Number):
+
+        is_number = isinstance(q, Number)
+
+        if is_number:
             quant = [float(q)]
         elif isinstance(q, list) or isinstance(q, np.ndarray):
             quant = q
         else:
             msg = "`q` must be either a single element, list or numpy array"
             raise TypeError(msg)
-        return libcudf.quantile.quantile(self, quant, interpolation, exact)
+
+        # get sorted indicies and exclude nulls
+        sorted_indices = self.as_frame()._get_sorted_inds(True, "after")
+        sorted_indices = sorted_indices[self.null_count :]
+
+        return cpp_quantile(self, quant, interpolation, sorted_indices, exact)
 
     def take(self, indices):
         """Return Column by taking values from the corresponding *indices*.
@@ -752,7 +760,7 @@ class ColumnBase(Column):
             return self.find_last_value(label, closest=True) + 1
 
     def sort_by_values(self, ascending=True, na_position="last"):
-        col_inds = get_sorted_inds(self, ascending, na_position)
+        col_inds = self.as_frame()._get_sorted_inds(ascending, na_position)
         col_keys = self[col_inds]
         return col_keys, col_inds
 
@@ -1406,7 +1414,10 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                     data = as_column(sr, nan_as_null=nan_as_null)
                 else:
                     data = as_column(
-                        np.asarray(arbitrary, dtype=np.dtype(dtype)),
+                        np.asarray(
+                            arbitrary,
+                            dtype=dtype if dtype is None else np.dtype(dtype),
+                        ),
                         nan_as_null=nan_as_null,
                     )
     return data
