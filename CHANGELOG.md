@@ -4,10 +4,12 @@
 
 - PR #4472 Add new `partition` API to replace `scatter_to_tables`.
 - PR #4626 LogBase binops
+- PR #4750 Normalize NANs and Zeroes (JNI Bindings)
 - PR #4689 Compute last day of the month for a given date
 
 ## Improvements
 
+- PR #4450 Parquet writer: add parameter to retrieve the raw file metadata
 - PR #4531 Add doc note on conda `channel_priority`
 - PR #4479 Adding cuda 10.2 support via conda environment file addition
 - PR #4486 Remove explicit template parameter from detail::scatter.
@@ -31,8 +33,10 @@
 - PR #4688 Add Java count aggregation to include null values
 - PR #4331 Improved test for double that considers an epsilon
 - PR #4731 Avoid redundant host->device copies when reading the entire CSV/JSON file
+- PR #4738 Remove stop-gaps in StringMethods and enable related tests
 - PR #4745 Fix `fsspec` related issue and upgrade `fsspec` version
 - PR #4660 Port `cudf::partition` api to python/cython
+- PR #4765 Add in java support for sequence
 
 ## Bug Fixes
 
@@ -65,6 +69,7 @@
 - PR #4701 Fix issue related to mixed input types in `as_column`
 - PR #4747 Fix random failures of decompression gtests
 - PR #4749 Setting `nan_as_null=True` while creating a column in DataFrame creation
+- PR #4650 Fix type mismatch & result format issue in `searchsorted`
 - PR #4755 Fix Java build to deal with new quantiles API 
 - PR #4720 Fix issue related to `dtype` param not being adhered incase of cuda arrays
 
