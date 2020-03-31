@@ -127,12 +127,12 @@ def copy_range(Column input_column,
                            input_begin, input_end, target_begin)
 
 
-def gather(Table source_table, Column gather_map, index=True):
+def gather(Table source_table, Column gather_map, keep_index=True):
     assert pd.api.types.is_integer_dtype(gather_map.dtype)
 
     cdef unique_ptr[table] c_result
     cdef table_view source_table_view
-    if index is True:
+    if keep_index is True:
         source_table_view = source_table.view()
     else:
         source_table_view = source_table.data_view()
@@ -152,7 +152,7 @@ def gather(Table source_table, Column gather_map, index=True):
         index_names=(
             None if (
                 source_table._index is None)
-            or index is False
+            or keep_index is False
             else source_table._index_names
         )
     )
