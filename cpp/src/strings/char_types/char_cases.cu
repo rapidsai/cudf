@@ -193,18 +193,20 @@ namespace {
   // find a prime number that generates no collisions for all possible input data
   uint16_t find_collision_proof_prime()
   {
-    for( auto pitr=primes; pitr < primes + (sizeof(primes) / sizeof(uint16_t)); ++pitr ){
-        std::map<uint16_t,uint16_t> keys;
-        size_t codepoints_in_size = sizeof(codepoints_in) / sizeof(uint16_t);
-        for( auto itr=codepoints_in; itr<codepoints_in + codepoints_in_size; ++itr){
-          int key = *itr % *pitr;
-          if( keys.find(key) == keys.end() ){
-              keys[key] = *itr;
-          }
+    size_t codepoints_in_size = std::end(codepoints_in) - std::begin(codepoints_in);
+
+    for( auto pitr=std::begin(primes); pitr < std::end(primes); ++pitr ){
+      std::map<uint16_t,uint16_t> keys;      
+      std::for_each(std::begin(codepoints_in), std::end(codepoints_in), [&](uint16_t codepoint){
+        int key = codepoint % *pitr;
+        if( keys.find(key) == keys.end() ){
+          keys[key] = codepoint;
         }
-        if( keys.size() == codepoints_in_size ){
-          return *pitr;
-        }            
+      });
+            
+      if( keys.size() == codepoints_in_size ){
+        return *pitr;
+      }
     }
 
     // couldn't find a collision-proof prime

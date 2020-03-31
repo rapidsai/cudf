@@ -64,7 +64,7 @@ struct upper_lower_fn
     const int32_t* d_offsets{};
     char* d_chars{};
 
-    __device__ special_case_mapping get_special_case_mapping_for_code_point( uint32_t code_point )
+    __device__ special_case_mapping get_special_case_mapping( uint32_t code_point )
     {    
         return d_special_case_mapping[get_special_case_hash_index(code_point)];
     }
@@ -72,7 +72,7 @@ struct upper_lower_fn
     // compute-size / copy the bytes representing the special case mapping for this codepoint
     __device__ int32_t handle_special_case_bytes(uint32_t code_point, char*& d_buffer, detail::character_flags_table_type flag)
     {
-        special_case_mapping m = get_special_case_mapping_for_code_point(code_point);
+        special_case_mapping m = get_special_case_mapping(code_point);
         size_type bytes = 0;
 
         auto const count = IS_LOWER(flag) ? m.num_upper_chars : m.num_lower_chars;
