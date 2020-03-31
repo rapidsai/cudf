@@ -210,14 +210,16 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_reduce(JNIEnv *env, jcl
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_quantile(JNIEnv *env, jclass clazz,
                                                                          jlong input_column,
                                                                          jint quantile_method,
-                                                                         jdouble quantile) {
+                                                                         jdoubleArray jquantiles) {
   JNI_NULL_CHECK(env, input_column, "native handle is null", 0);
   try {
+    cudf::jni::native_jdoubleArray native_quantiles(env, jquantiles);
+    std::vector<double> quantiles(native_quantiles.data(), native_quantiles.data() + native_quantiles.size()); 
     cudf::column_view *n_input_column = reinterpret_cast<cudf::column_view *>(input_column);
     cudf::experimental::interpolation n_quantile_method =
         static_cast<cudf::experimental::interpolation>(quantile_method);
-    std::unique_ptr<cudf::scalar> result =
-        cudf::experimental::quantile(*n_input_column, quantile, n_quantile_method);
+    std::unique_ptr<cudf::column> result =
+        cudf::experimental::quantile(*n_input_column, quantiles, n_quantile_method);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);

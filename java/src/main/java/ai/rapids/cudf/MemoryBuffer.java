@@ -58,6 +58,11 @@ abstract public class MemoryBuffer implements AutoCloseable {
       }
       return false;
     }
+
+    @Override
+    public boolean isClean() {
+      return parent == null;
+    }
   }
 
   /**
