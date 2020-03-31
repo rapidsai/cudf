@@ -177,12 +177,11 @@ namespace external {
     int64_t batch_size = end_offset - start_offset;
     int64_t end = now() + batch_timeout;
     int remaining_timeout = batch_timeout;
-    RdKafka::Message *msg;
 
     update_consumer_toppar_assignment(topic, partition, start_offset);
 
     while (messages_read < batch_size) {
-      msg = consumer_->consume(remaining_timeout);
+      RdKafka::Message *msg = consumer_->consume(remaining_timeout);
 
       if (msg->err() == RdKafka::ErrorCode::ERR_NO_ERROR) {
         json_str.append(static_cast<char *>(msg->payload()));
@@ -197,10 +196,9 @@ namespace external {
       if (remaining_timeout < 0) {
         break;
       }
-    }
 
-    // librdkafka requires Message be explicity deleted using
-    delete msg;
+      delete msg;
+    }
 
     return json_str;
   }
