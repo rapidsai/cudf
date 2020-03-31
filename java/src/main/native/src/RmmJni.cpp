@@ -292,7 +292,7 @@ JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_Rmm_isInitializedInternal(JNIEnv 
   } CATCH_STD(env, false)
 }
 
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_shutdown(JNIEnv *env, jclass clazz) {
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_shutdownInternal(JNIEnv *env, jclass clazz) {
   try {
     set_java_device_memory_resource(env, nullptr, nullptr, nullptr);
     JNI_RMM_TRY(env, , rmmFinalize());

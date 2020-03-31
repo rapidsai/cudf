@@ -445,7 +445,6 @@ add_library(cudf
             src/hash/hashing.cu
             src/partitioning/partitioning.cu
             src/hash/legacy/hashing.cu
-            src/quantiles/legacy/quantiles.cu
             src/quantiles/quantile.cu
             src/quantiles/quantiles.cu
             src/quantiles/legacy/group_quantiles.cu
