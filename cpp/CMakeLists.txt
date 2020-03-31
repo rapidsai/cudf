@@ -112,7 +112,7 @@ set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-
 # TODO: remove `no-maybe-unitialized` used to suppress warnings in rmm::exec_policy
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Werror=cross-execution-space-call -Xcompiler -Wall,-Werror,-Wno-error=deprecated-declarations")
 
-option(DISABLE_DEPRECATION_WARNING "Disable warnings generated from deprecated declarations." OFF)
+option(DISABLE_DEPRECATION_WARNING "Disable warnings generated from deprecated declarations." ON)
 if(DISABLE_DEPRECATION_WARNING)
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler -Wno-deprecated-declarations")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations")
@@ -773,11 +773,6 @@ add_dependencies(cudf stringify_run)
 
 ###################################################################################################
 # - build options ---------------------------------------------------------------------------------
-
-
-# Link NVTX library
-find_library(NVTX_LIBRARY nvToolsExt PATH ${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES})
-target_link_libraries(cudf ${NVTX_LIBRARY})
 
 option(USE_NVTX "Build with NVTX support" ON)
 if(USE_NVTX)
