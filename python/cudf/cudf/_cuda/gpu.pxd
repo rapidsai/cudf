@@ -105,10 +105,9 @@ cdef extern from "cuda.h" nogil:
 
 cdef extern from "cuda_runtime_api.h" nogil:
 
-    int cudaDriverGetVersion(int* driverVersion) except +
-    int cudaRuntimeGetVersion(int* runtimeVersion) except +
-    int cudaGetDeviceCount(int* count) except +
-    int cudaDeviceGetAttribute(int* value, cudaDeviceAttr attr, int device) \
-        except +
+    int cudaDriverGetVersion(int* driverVersion)
+    int cudaRuntimeGetVersion(int* runtimeVersion)
+    int cudaGetDeviceCount(int* count)
+    int cudaDeviceGetAttribute(int* value, cudaDeviceAttr attr, int device)
 
 ctypedef int underlying_type_attribute
