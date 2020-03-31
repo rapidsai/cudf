@@ -127,7 +127,7 @@ def copy_range(Column input_column,
                            input_begin, input_end, target_begin)
 
 
-def gather(Table source_table, Column gather_map, keep_index=True):
+def gather(Table source_table, Column gather_map, bool keep_index=True):
     assert pd.api.types.is_integer_dtype(gather_map.dtype)
 
     cdef unique_ptr[table] c_result
