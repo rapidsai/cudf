@@ -32,6 +32,7 @@
 - PR #4331 Improved test for double that considers an epsilon
 - PR #4731 Avoid redundant host->device copies when reading the entire CSV/JSON file
 - PR #4745 Fix `fsspec` related issue and upgrade `fsspec` version
+- PR #4766 Update to use header-only NVTX v3 and remove need to link against nvtx.
 
 ## Bug Fixes
 
