@@ -17,7 +17,7 @@ dependencies:
   - fastavro>=0.22.9
   - notebook>=0.5.0
   - cython>=0.29,<0.30
-  - fsspec>=0.3.3,<0.7.0a0
+  - fsspec>=0.6.0
   - pytest
   - sphinx
   - sphinx_rtd_theme
