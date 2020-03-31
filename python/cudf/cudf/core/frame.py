@@ -1044,12 +1044,75 @@ class Frame(libcudfxx.table.Table):
         1-D cupy array of insertion points
         """
         # Call libcudf++ search_sorted primitive
+
+        from cudf.utils.dtypes import is_scalar
+
+        scalar_flag = None
+        if is_scalar(values):
+            scalar_flag = True
+
+        if not isinstance(values, Frame):
+            values = as_column(values)
+            if values.dtype != self.dtype:
+                self = self.astype(values.dtype)
+            values = values.as_frame()
         outcol = libcudfxx.search.search_sorted(
             self, values, side, ascending=ascending, na_position=na_position
         )
 
-        # Retrun result as cupy array
-        return cupy.asarray(outcol.data_array_view)
+        # Retrun result as cupy array if the values is non-scalar
+        # If values is scalar, result is expected to be scalar.
+        result = cupy.asarray(outcol.data_array_view)
+        if scalar_flag:
+            return result[0].item()
+        else:
+            return result
+
+    def _get_sorted_inds(self, ascending=True, na_position="last"):
+        """
+        Sort by the values.
+
+        Parameters
+        ----------
+        ascending : bool or list of bool, default True
+            If True, sort values in ascending order, otherwise descending.
+        na_position : {‘first’ or ‘last’}, default ‘last’
+            Argument ‘first’ puts NaNs at the beginning, ‘last’ puts NaNs
+            at the end.
+        Returns
+        -------
+        out_column_inds : cuDF Column of indices sorted based on input
+
+        Difference from pandas:
+        * Support axis='index' only.
+        * Not supporting: inplace, kind
+        * Ascending can be a list of bools to control per column
+        """
+
+        # This needs to be updated to handle list of bools for ascending
+        if ascending is True:
+            if na_position == "last":
+                na_position = 0
+            elif na_position == "first":
+                na_position = 1
+        elif ascending is False:
+            if na_position == "last":
+                na_position = 1
+            elif na_position == "first":
+                na_position = 0
+        else:
+            warnings.warn(
+                "When using a sequence of booleans for `ascending`, "
+                "`na_position` flag is not yet supported and defaults to "
+                "treating nulls as greater than all numbers"
+            )
+            na_position = 0
+
+        # If given a scalar need to construct a sequence of length # of columns
+        if np.isscalar(ascending):
+            ascending = [ascending] * self._num_columns
+
+        return libcudfxx.sort.order_by(self, ascending, na_position)
 
     def sin(self):
         return self._unaryop("sin")

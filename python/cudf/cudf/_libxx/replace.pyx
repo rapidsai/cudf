@@ -165,11 +165,8 @@ def normalize_nans_and_zeros_inplace(Column input_col):
     """
 
     cdef mutable_column_view input_col_view = input_col.mutable_view()
-    cdef unique_ptr[column] c_result
     with nogil:
         cpp_normalize_nans_and_zeros(input_col_view)
-
-    return Column.from_unique_ptr(move(c_result))
 
 
 def normalize_nans_and_zeros_column(Column input_col):

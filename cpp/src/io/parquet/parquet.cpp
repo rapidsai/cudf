@@ -139,6 +139,13 @@ bool CompactProtocolReader::skip_struct_field(int t, int depth)
 #define PARQUET_FLD_STRUCT(id, m)                \
             case id: if (t != ST_FLD_STRUCT || !read(&s->m)) return false; break; \
 
+#define PARQUET_FLD_STRUCT_BLOB(id, m)                     \
+            case id: if (t != ST_FLD_STRUCT) return false; \
+                { const uint8_t *start = m_cur;            \
+                  skip_struct_field(t);                    \
+                  if (m_cur > start) s->m.assign(start, m_cur - 1); \
+                  break; }                                  \
+
 #define PARQUET_END_STRUCT()              \
             default: /*printf("unknown fld %d of type %d\n", fld, t);*/ skip_struct_field(t);      \
             }                                   \
@@ -194,6 +201,7 @@ PARQUET_BEGIN_STRUCT(ColumnMetaData)
     PARQUET_FLD_INT64(9, data_page_offset)
     PARQUET_FLD_INT64(10, index_page_offset)
     PARQUET_FLD_INT64(11, dictionary_page_offset)
+    PARQUET_FLD_STRUCT_BLOB(12, statistics_blob)
 PARQUET_END_STRUCT()
 
 PARQUET_BEGIN_STRUCT(PageHeader)
