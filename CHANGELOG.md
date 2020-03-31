@@ -53,6 +53,7 @@
 - PR #4711 Fix column leaks in Java unit test
 - pR #4721 Fix string binop to update nulls appropriately
 - PR #4722 Fix strings::pad when using pad::both with odd width
+- PR #4743 Fix loc issue with Multiindex on DataFrame and Series
 - PR #4725 Fix issue java with not setting GPU on background thread
 - PR #4701 Fix issue related to mixed input types in `as_column`
 
