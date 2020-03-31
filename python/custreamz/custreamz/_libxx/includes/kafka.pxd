@@ -51,4 +51,4 @@ cdef extern from "kafka_datasource.hpp" namespace "cudf::io::external" nogil:
 
         bool unsubscribe() except +
 
-        bool close() except +
+        bool close(int timeout) except +

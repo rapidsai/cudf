@@ -26,6 +26,7 @@
 #include <chrono>
 #include <thread>
 #include <sys/time.h>
+#include <csignal>
 
 //#include <cudf/cudf.h>
 #include <librdkafka/rdkafkacpp.h>
@@ -55,6 +56,8 @@ class kafka_datasource : public external_datasource {
     int32_t kafka_batch_size_ = 10000;  // 10K is the Kafka standard. Max is 999,999
     int32_t default_timeout_ = 6000;  // 10 seconds
     int64_t msg_count_ = 0;  // Running tally of the messages consumed. Useful for retry logic.
+
+    volatile sig_atomic_t consumer_connected = 1;
 
     std::string buffer_;
 
@@ -86,7 +89,7 @@ class kafka_datasource : public external_datasource {
 
   bool unsubscribe();
 
-  bool close();
+  bool close(int timeout);
 
   const std::shared_ptr<arrow::Buffer> get_buffer(size_t offset,
                                                   size_t size) override {
@@ -124,6 +127,41 @@ class kafka_datasource : public external_datasource {
       return ((int64_t)tv.tv_sec * 1000) + (tv.tv_usec / 1000);
     }
 
+    class ExampleEventCb : public RdKafka::EventCb {
+      public:
+        void event_cb (RdKafka::Event &event) {
+          printf("HERE\n");
+          switch (event.type())
+          {
+            case RdKafka::Event::EVENT_ERROR:
+              if (event.fatal()) {
+                std::cerr << "FATAL ";
+                //run = 0;
+               //consumer_connected = 0;
+              }
+              std::cerr << "jeremy ERROR (" << RdKafka::err2str(event.err()) << "): " <<
+                  event.str() << std::endl;
+              printf("jeremy ERROR: '%s'\n", RdKafka::err2str(event.err()).c_str());
+              break;
+
+            case RdKafka::Event::EVENT_STATS:
+              std::cerr << "\"STATS\": " << event.str() << std::endl;
+              break;
+
+            case RdKafka::Event::EVENT_LOG:
+              fprintf(stderr, "LOG-%i-%s: %s\n",
+                      event.severity(), event.fac().c_str(), event.str().c_str());
+              break;
+
+            default:
+              std::cerr << "EVENT " << event.type() <<
+                  " (" << RdKafka::err2str(event.err()) << "): " <<
+                  event.str() << std::endl;
+              break;
+          }
+        }
+    };
+
     class ExampleRebalanceCb : public RdKafka::RebalanceCb {
       private:
         static void part_list_print (const std::vector<RdKafka::TopicPartition*>&partitions){
@@ -147,7 +185,7 @@ class kafka_datasource : public external_datasource {
             consumer->unassign();
           }
         }
-      };
+    };
 
     void handle_error(RdKafka::Message *msg) {
       err_ = msg->err();

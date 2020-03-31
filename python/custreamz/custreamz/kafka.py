@@ -138,5 +138,5 @@ class Consumer(object):
     def unsubscribe(self):
         return libkafka.unsubscribe()
 
-    def close(self):
-        return libkafka.close()
+    def close(self, timeout=10000):
+        return libkafka.close(timeout=timeout)

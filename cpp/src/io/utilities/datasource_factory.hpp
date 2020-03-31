@@ -32,9 +32,17 @@ namespace external {
 
 // Default `EXTERNAL_DATASOURCE_LIB_PATH` to `$CONDA_PREFIX/lib/external`.
 // This definition can be overridden at compile time by specifying a
-// `-DEXTERNAL_DATASOURCE_LIB_PATH=/home/lib/cudf_external_lib` CMake argument.
+// `-DEXTERNAL_DATASOURCE_LIB_PATH={YOUR_EXTERNAL_LIB_DIR}` CMake argument.
 // Use `boost::filesystem` for cross-platform path resolution and dir
 // creation. This path is used in the `getExternalLibDir()` function below.
+#if defined(CONDA_PREFIX)
+  #define EXTERNAL_DATASOURCE_BASE_PATH = getenv("CONDA_PREFIX")
+  #define EXTERNAL_DATASOURCE_LIB_PATH \
+    boost::filesystem::path("/usr/local/lib/cudf_external_lib")
+#else
+
+#endif
+
 #if !defined(EXTERNAL_DATASOURCE_LIB_PATH)
 #define EXTERNAL_DATASOURCE_LIB_PATH \
   boost::filesystem::path("/usr/local/lib/cudf_external_lib")

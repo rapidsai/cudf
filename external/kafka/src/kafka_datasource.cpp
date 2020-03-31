@@ -65,6 +65,9 @@ namespace external {
     ExampleRebalanceCb ex_rebalance_cb;
     kafka_conf_->set("rebalance_cb", &ex_rebalance_cb, errstr_);
 
+    ExampleEventCb ex_event_cb;
+    kafka_conf_->set("event_cb", &ex_event_cb, errstr_);
+
     consumer_ = std::unique_ptr<RdKafka::KafkaConsumer>(RdKafka::KafkaConsumer::create(kafka_conf_.get(), errstr_));
     producer_ = std::unique_ptr<RdKafka::Producer>(RdKafka::Producer::create(kafka_conf_.get(), errstr_));
 
@@ -236,6 +239,12 @@ namespace external {
     int64_t high;
     std::map<std::string, int64_t> results;
 
+    printf("HEREH C++\n");
+
+    // std::string err_code_local;
+    // err_ = consumer_->fatal_error(err_code_local);
+    // printf("ErrorCode Local: '%s'\n", err2str(err_).c_str());
+
     if (cached == true) {
       err_ = consumer_->get_watermark_offsets(topic, partition, &low, &high);
     } else {
@@ -244,7 +253,12 @@ namespace external {
 
     if (err_ != RdKafka::ErrorCode::ERR_NO_ERROR) {
       printf("Error: '%s'\n", err2str(err_).c_str());
-      throw std::runtime_error(std::string(err2str(err_).c_str()));
+      if (err_ == RdKafka::ErrorCode::ERR__PARTITION_EOF) {
+        results.insert(std::pair<std::string, int64_t>("low", low));
+        results.insert(std::pair<std::string, int64_t>("high", high));
+      } else {
+        throw std::runtime_error(std::string(err2str(err_).c_str()));
+      }
     } else {
       results.insert(std::pair<std::string, int64_t>("low", low));
       results.insert(std::pair<std::string, int64_t>("high", high));
@@ -276,7 +290,7 @@ namespace external {
     }
   }
 
-  bool kafka_datasource::close() {
+  bool kafka_datasource::close(int timeout) {
     err_ = consumer_.get()->close();
     if (err_ != RdKafka::ERR_NO_ERROR) {
       printf("Timeout occurred while closing Kafka Consumer\n");
@@ -284,6 +298,12 @@ namespace external {
     } else {
       return true;
     }
+    delete consumer_.get();
+
+    err_ = producer_.get()->flush(timeout);
+    delete producer_.get();
+
+    delete kafka_conf_.get();
   }
 
 }  // namespace external

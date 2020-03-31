@@ -107,5 +107,5 @@ cpdef flush(timeout=10000):
 cpdef unsubscribe():
     return kds.unsubscribe()
 
-cpdef close():
-    return kds.close()
+cpdef close(timeout=10000):
+    return kds.close(timeout)
