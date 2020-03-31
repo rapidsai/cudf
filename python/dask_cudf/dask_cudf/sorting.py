@@ -258,7 +258,7 @@ def _approximate_quantile(df, q):
     final_type = df._meta._constructor
 
     # Create metadata
-    meta = df._meta_nonempty.quantile(q=q)
+    meta = df._meta_nonempty.quantiles(q=q)
 
     # Define final action (create df with quantiles as index)
     def finalize_tsk(tsk):
