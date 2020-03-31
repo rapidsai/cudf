@@ -61,8 +61,7 @@ def scalar_broadcast_to(scalar, size, dtype=None, nan_as_null=False):
     from cudf.core.column import column_empty
 
     if (
-        (scalar is not None)
-        and (nan_as_null is True)
+        (nan_as_null is True)
         and isinstance(scalar, float)
         and np.isnan(scalar)
     ):

@@ -63,6 +63,7 @@
 - PR #4701 Fix issue related to mixed input types in `as_column`
 - PR #4747 Fix random failures of decompression gtests
 - PR #4749 Setting `nan_as_null=True` while creating a column in DataFrame creation
+- PR #4761 Fix issues with `nan_as_null` in certain case
 
 
 # cuDF 0.13.0 (Date TBD)
