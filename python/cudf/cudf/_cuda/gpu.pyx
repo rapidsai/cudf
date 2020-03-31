@@ -256,7 +256,7 @@ def getDeviceCount():
     return -1 if status != 0 else count
 
 
-def getDeviceAttribute(attr, device):
+def getDeviceAttribute(object attr, int device):
     """
     Returns information about the device.
 
