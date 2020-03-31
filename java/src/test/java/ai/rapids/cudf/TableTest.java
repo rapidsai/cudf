@@ -135,11 +135,11 @@ public class TableTest extends CudfTestBase {
                 "Column " + colName + " Row " + tableRow);
             break;
           case FLOAT32:
-            assertEquals(expected.getFloat(expectedRow), cv.getFloat(tableRow), 0.0001,
+            assertEqualsWithinPercentage(expected.getFloat(expectedRow), cv.getFloat(tableRow), 0.0001,
                 "Column " + colName + " Row " + tableRow);
             break;
           case FLOAT64:
-            assertEquals(expected.getDouble(expectedRow), cv.getDouble(tableRow), 0.0001,
+            assertEqualsWithinPercentage(expected.getDouble(expectedRow), cv.getDouble(tableRow), 0.0001,
                 "Column " + colName + " Row " + tableRow);
             break;
           case STRING:
@@ -2220,8 +2220,8 @@ public class TableTest extends CudfTestBase {
             .sorted(Comparator.naturalOrder())
             .collect(Collectors.toList());
 
-        assertEquals(3.5666f, sortedMean.get(0), 0.0001);
-        assertEquals(5.2666f, sortedMean.get(1), 0.0001);
+        assertEqualsWithinPercentage(3.5666f, sortedMean.get(0), 0.0001);
+        assertEqualsWithinPercentage(5.2666f, sortedMean.get(1), 0.0001);
 
         // verify sum
         List<Double> sortedSum = new ArrayList<>();
@@ -2231,8 +2231,8 @@ public class TableTest extends CudfTestBase {
             .sorted(Comparator.naturalOrder())
             .collect(Collectors.toList());
 
-        assertEquals(10.7f, sortedSum.get(0), 0.0001);
-        assertEquals(15.8f, sortedSum.get(1), 0.0001);
+        assertEqualsWithinPercentage(10.7f, sortedSum.get(0), 0.0001);
+        assertEqualsWithinPercentage(15.8f, sortedSum.get(1), 0.0001);
 
         // verify min
         List<Double> sortedMin = new ArrayList<>();
@@ -2242,8 +2242,8 @@ public class TableTest extends CudfTestBase {
             .sorted(Comparator.naturalOrder())
             .collect(Collectors.toList());
 
-        assertEquals(1.3f, sortedMin.get(0), 0.0001);
-        assertEquals(2.3f, sortedMin.get(1), 0.0001);
+        assertEqualsWithinPercentage(1.3f, sortedMin.get(0), 0.0001);
+        assertEqualsWithinPercentage(2.3f, sortedMin.get(1), 0.0001);
 
         // verify max
         List<Integer> sortedMax = new ArrayList<>();

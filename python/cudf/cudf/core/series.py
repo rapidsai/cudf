@@ -2090,7 +2090,7 @@ class Series(Frame):
         return self._column.unique_count(method, dropna)
 
     def value_counts(self, sort=True):
-        """Returns unique values of this Series.
+        """Return a Series containing counts of unique values.
         """
 
         if self.null_count == len(self):
@@ -2495,6 +2495,8 @@ class Series(Frame):
         """
         Align to the given Index. See _align_indices below.
         """
+        from uuid import uuid4
+
         index = as_index(index)
         if self.index.equals(index):
             return self
@@ -2505,7 +2507,18 @@ class Series(Frame):
                 raise ValueError("Cannot align indices with non-unique values")
         lhs = self.to_frame(0)
         rhs = cudf.DataFrame(index=as_index(index))
-        result = lhs.join(rhs, how=how, sort=sort)[0]
+        if how == "left":
+            tmp_col_id = str(uuid4())
+            lhs[tmp_col_id] = cupy.arange(len(lhs))
+        elif how == "right":
+            tmp_col_id = str(uuid4())
+            rhs[tmp_col_id] = cupy.arange(len(rhs))
+        result = lhs.join(rhs, how=how, sort=sort)
+        if how == "left" or how == "right":
+            result = result.sort_values(tmp_col_id)[0]
+        else:
+            result = result[0]
+
         result.name = self.name
         result.index.names = index.names
         return result
