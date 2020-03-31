@@ -66,6 +66,7 @@
 - PR #4749 Setting `nan_as_null=True` while creating a column in DataFrame creation
 - PR #4755 Fix Java build to deal with new quantiles API 
 - PR #4720 Fix issue related to `dtype` param not being adhered incase of cuda arrays
+- PR #4756 Fix regex error checking for valid quantifier condition
 
 
 # cuDF 0.13.0 (Date TBD)
