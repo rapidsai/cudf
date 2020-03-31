@@ -27,8 +27,10 @@
 - PR #4700 Expose events and more stream functionality in java
 - PR #4699 Make Java's MemoryBuffer public and add MemoryBuffer.slice
 - PR #4691 Fix compiler argument syntax for ccache
+- PR #4705 quantile cython bindings
 - PR #4688 Add Java count aggregation to include null values
 - PR #4331 Improved test for double that considers an epsilon
+- PR #4731 Avoid redundant host->device copies when reading the entire CSV/JSON file
 - PR #4745 Fix `fsspec` related issue and upgrade `fsspec` version
 
 ## Bug Fixes
@@ -60,6 +62,7 @@
 - PR #4743 Fix loc issue with Multiindex on DataFrame and Series
 - PR #4725 Fix issue java with not setting GPU on background thread
 - PR #4701 Fix issue related to mixed input types in `as_column`
+- PR #4747 Fix random failures of decompression gtests
 - PR #4749 Setting `nan_as_null=True` while creating a column in DataFrame creation
 
 
