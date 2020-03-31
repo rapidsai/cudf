@@ -1319,7 +1319,9 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
     elif np.isscalar(arbitrary) and not isinstance(arbitrary, memoryview):
         length = length or 1
         data = as_column(
-            utils.scalar_broadcast_to(arbitrary, length, dtype=dtype)
+            utils.scalar_broadcast_to(
+                arbitrary, length, dtype=dtype, nan_as_null=nan_as_null
+            )
         )
         if not nan_as_null:
             if np.issubdtype(data.dtype, np.floating):

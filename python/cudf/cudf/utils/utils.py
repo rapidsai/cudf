@@ -56,9 +56,19 @@ def check_equals_int(a, b):
     return a == b
 
 
-def scalar_broadcast_to(scalar, size, dtype=None):
+def scalar_broadcast_to(scalar, size, dtype=None, nan_as_null=False):
     from cudf.utils.dtypes import to_cudf_compatible_scalar, is_string_dtype
     from cudf.core.column import column_empty
+
+    if (
+        (scalar is not None)
+        and (nan_as_null is True)
+        and isinstance(scalar, float)
+        and np.isnan(scalar)
+    ):
+        scalar = None
+        if dtype is None:
+            dtype = np.dtype("float64")
 
     if isinstance(size, (tuple, list)):
         size = size[0]
@@ -69,7 +79,9 @@ def scalar_broadcast_to(scalar, size, dtype=None):
         return column_empty(size, dtype=dtype, masked=True)
 
     if isinstance(scalar, pd.Categorical):
-        return scalar_broadcast_to(scalar.categories[0], size).astype(dtype)
+        return scalar_broadcast_to(
+            scalar.categories[0], size, nan_as_null=nan_as_null
+        ).astype(dtype)
 
     if isinstance(scalar, str) and (is_string_dtype(dtype) or dtype is None):
         dtype = "object"
