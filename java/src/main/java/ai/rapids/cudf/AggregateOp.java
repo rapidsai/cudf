@@ -25,18 +25,19 @@ enum AggregateOp {
   SUM(0),
   MIN(1),
   MAX(2),
-  COUNT(3),
-  MEAN(4),
-  MEDIAN(5),
+  COUNT_VALID(3),
+  COUNT_ALL(4),
+  MEAN(5),
+  MEDIAN(6),
   // TODO Quantile
-  ARGMAX(7),
-  ARGMIN(8),
-  PRODUCT(9),
-  SUMOFSQUARES(10),
-  VAR(11), // This can take a delta degrees of freedom
-  STD(12), // This can take a delta degrees of freedom
-  ANY(13),
-  ALL(14);
+  ARGMAX(8),
+  ARGMIN(9),
+  PRODUCT(10),
+  SUMOFSQUARES(11),
+  VAR(12), // This can take a delta degrees of freedom
+  STD(13), // This can take a delta degrees of freedom
+  ANY(14),
+  ALL(15);
 
   final int nativeId;
 

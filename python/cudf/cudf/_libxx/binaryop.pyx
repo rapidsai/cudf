@@ -6,9 +6,12 @@ from enum import IntEnum
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 
+from cudf.utils.dtypes import is_string_dtype
+
 from cudf._libxx.binaryop cimport underlying_type_t_binary_operator
 from cudf._libxx.column cimport Column
 from cudf._libxx.move cimport move
+from cudf._libxx.replace import replace_nulls
 from cudf._libxx.scalar cimport Scalar
 from cudf._libxx.types import np_to_cudf_types
 
@@ -150,6 +153,17 @@ cdef binaryop_s_v(Scalar lhs, Column rhs,
     return Column.from_unique_ptr(move(c_result))
 
 
+def handle_null_for_string_column(Column input_col, op):
+    if op in ('eq', 'lt', 'le', 'gt', 'ge'):
+        return replace_nulls(input_col, False)
+
+    elif op == 'ne':
+        return replace_nulls(input_col, True)
+
+    # Nothing needs to be done
+    return input_col
+
+
 def binaryop(lhs, rhs, op, dtype):
     """
     Dispatches a binary op call to the appropriate libcudf function:
@@ -162,8 +176,10 @@ def binaryop(lhs, rhs, op, dtype):
     cdef data_type c_dtype = data_type(tid)
 
     if np.isscalar(lhs) or lhs is None:
+
+        is_string_col = is_string_dtype(rhs.dtype)
         s_lhs = Scalar(lhs, dtype=rhs.dtype if lhs is None else None)
-        return binaryop_s_v(
+        result = binaryop_s_v(
             s_lhs,
             rhs,
             c_op,
@@ -171,8 +187,9 @@ def binaryop(lhs, rhs, op, dtype):
         )
 
     elif np.isscalar(rhs) or rhs is None:
+        is_string_col = is_string_dtype(lhs.dtype)
         s_rhs = Scalar(rhs, dtype=lhs.dtype if rhs is None else None)
-        return binaryop_v_s(
+        result = binaryop_v_s(
             lhs,
             s_rhs,
             c_op,
@@ -180,12 +197,18 @@ def binaryop(lhs, rhs, op, dtype):
         )
 
     else:
-        return binaryop_v_v(
+        is_string_col = is_string_dtype(lhs.dtype)
+        result = binaryop_v_v(
             lhs,
             rhs,
             c_op,
             c_dtype
         )
+
+    if is_string_col is True:
+        return handle_null_for_string_column(result, op.name.lower())
+    else:
+        return result
 
 
 def binaryop_udf(Column lhs, Column rhs, udf_ptx, dtype):

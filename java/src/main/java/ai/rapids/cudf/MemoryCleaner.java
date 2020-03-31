@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -27,7 +27,6 @@ import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
@@ -55,15 +54,15 @@ import java.util.stream.StreamSupport;
  * ColumnVector's reference count reaches 0 and the resources are released. At some point
  * later the Cleaner itself will be released.
  */
-class MemoryCleaner {
+final class MemoryCleaner {
   private static final boolean REF_COUNT_DEBUG = Boolean.getBoolean("ai.rapids.refcount.debug");
-  private static Logger log = LoggerFactory.getLogger(MemoryCleaner.class);
+  private static final Logger log = LoggerFactory.getLogger(MemoryCleaner.class);
   private static final AtomicLong idGen = new AtomicLong(0);
 
   /**
    * API that can be used to clean up the resources for a vector, even if there was a leak
    */
-  public static abstract class Cleaner {
+  static abstract class Cleaner {
     private final List<RefCountDebugItem> refCountDebug;
     public final long id = idGen.incrementAndGet();
     private boolean leakExpected = false;
@@ -121,6 +120,12 @@ class MemoryCleaner {
     public void noWarnLeakExpected() {
       leakExpected = true;
     }
+
+    /**
+     * Check if the underlying memory has been cleaned up or not.
+     * @return true this is clean else false.
+     */
+    public abstract boolean isClean();
   }
 
   static final AtomicLong leakCount = new AtomicLong();
@@ -131,10 +136,12 @@ class MemoryCleaner {
   private static class CleanerWeakReference<T> extends WeakReference<T> {
 
     private final Cleaner cleaner;
+    final boolean isRmmBlocker;
 
-    public CleanerWeakReference(T orig, Cleaner cleaner, ReferenceQueue collected) {
+    public CleanerWeakReference(T orig, Cleaner cleaner, ReferenceQueue collected, boolean isRmmBlocker) {
       super(orig, collected);
       this.cleaner = cleaner;
+      this.isRmmBlocker = isRmmBlocker;
     }
 
     public void clean() {
@@ -144,11 +151,32 @@ class MemoryCleaner {
     }
   }
 
+  /**
+   * The default GPU as set by user threads.
+   */
+  private static volatile int defaultGpu = -1;
+
+  /**
+   * This should be called from RMM when it is initialized.
+   */
+  static void setDefaultGpu(int defaultGpuId) {
+    defaultGpu = defaultGpuId;
+  }
+
   private static final Thread t = new Thread(() -> {
     try {
+      int currentGpuId = -1;
       while (true) {
         CleanerWeakReference next = (CleanerWeakReference)collected.remove(100);
         if (next != null) {
+          try {
+            if (currentGpuId != defaultGpu) {
+              Cuda.setDevice(defaultGpu);
+              currentGpuId = defaultGpu;
+            }
+          } catch (Throwable t) {
+            log.error("ERROR TRYING TO SET GPU ID TO " + defaultGpu, t);
+          }
           try {
             next.clean();
           } catch (Throwable t) {
@@ -176,6 +204,9 @@ class MemoryCleaner {
         } catch (InterruptedException e) {
           // Ignored
         }
+        if (defaultGpu >= 0) {
+          Cuda.setDevice(defaultGpu);
+        }
         for (CleanerWeakReference cwr : all) {
           cwr.clean();
         }
@@ -183,36 +214,45 @@ class MemoryCleaner {
     }
   }
 
-  public static void register(ColumnVector vec, Cleaner cleaner) {
+  static void register(ColumnVector vec, Cleaner cleaner) {
     // It is now registered...
-    all.add(new CleanerWeakReference(vec, cleaner, collected));
+    all.add(new CleanerWeakReference(vec, cleaner, collected, true));
   }
 
-  public static void register(HostColumnVector vec, Cleaner cleaner) {
+  static void register(HostColumnVector vec, Cleaner cleaner) {
     // It is now registered...
-    all.add(new CleanerWeakReference(vec, cleaner, collected));
+    all.add(new CleanerWeakReference(vec, cleaner, collected, false));
   }
 
-  public static void register(MemoryBuffer buf, Cleaner cleaner) {
+  static void register(MemoryBuffer buf, Cleaner cleaner) {
     // It is now registered...
-    all.add(new CleanerWeakReference(buf, cleaner, collected));
+    all.add(new CleanerWeakReference(buf, cleaner, collected, buf instanceof BaseDeviceMemoryBuffer));
   }
 
-  public static void register(Cuda.Stream stream, Cleaner cleaner) {
+  static void register(Cuda.Stream stream, Cleaner cleaner) {
     // It is now registered...
-    all.add(new CleanerWeakReference(stream, cleaner, collected));
+    all.add(new CleanerWeakReference(stream, cleaner, collected, false));
   }
 
-  public static void register(Cuda.Event event, Cleaner cleaner) {
+  static void register(Cuda.Event event, Cleaner cleaner) {
     // It is now registered...
-    all.add(new CleanerWeakReference(event, cleaner, collected));
+    all.add(new CleanerWeakReference(event, cleaner, collected, false));
+  }
+
+  /**
+   * This is not 100% perfect and we can still run into situations where RMM buffers were not
+   * collected and this returns false because of thread race conditions. This is just a best effort.
+   * @return true if there are rmm blockers else false.
+   */
+  static boolean bestEffortHasRmmBlockers() {
+    return all.stream().anyMatch(cwr -> cwr.isRmmBlocker && !cwr.cleaner.isClean());
   }
 
   /**
    * Convert elements in it to a String and join them together. Only use for debug messages
    * where the code execution itself can be disabled as this is not fast.
    */
-  static <T> String stringJoin(String delim, Iterable<T> it) {
+  private static <T> String stringJoin(String delim, Iterable<T> it) {
     return String.join(delim,
         StreamSupport.stream(it.spliterator(), false)
             .map((i) -> i.toString())
@@ -222,7 +262,7 @@ class MemoryCleaner {
   /**
    * When debug is enabled holds information about inc and dec of ref count.
    */
-  static final class RefCountDebugItem {
+  private static final class RefCountDebugItem {
     final StackTraceElement[] stackTrace;
     final long timeMs;
     final String op;
