@@ -292,7 +292,7 @@ class DataFrame(Frame):
         if input_series:
             if index is not None:
                 aligned_input_series = [
-                    sr._align_to_index(index, how="right")
+                    sr._align_to_index(index, how="right", sort=False)
                     for sr in input_series
                 ]
 
@@ -555,7 +555,10 @@ class DataFrame(Frame):
                         return
                     elif isinstance(value, (pd.Series, Series)):
                         value = Series(value)._align_to_index(
-                            self._index, how="right", allow_non_unique=True
+                            self._index,
+                            how="right",
+                            sort=False,
+                            allow_non_unique=True,
                         )
                     if is_scalar(value):
                         self._data[arg][:] = value
@@ -1652,7 +1655,9 @@ class DataFrame(Frame):
                         )
                 self._data = new_data
         elif isinstance(value, (pd.Series, Series)):
-            value = Series(value)._align_to_index(self._index, how="right")
+            value = Series(value)._align_to_index(
+                self._index, how="right", sort=False
+            )
 
         value = column.as_column(value)
 
