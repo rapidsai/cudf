@@ -44,6 +44,11 @@ struct DecompressTest : public GdfTest {
     cudaFreeHost(inf_stat);
     cudaFreeHost(inf_args);
   }
+  
+  std::vector<uint8_t> vector_from_string(const char *str) const {
+    return std::vector<uint8_t>(reinterpret_cast<const uint8_t *>(str),
+                                reinterpret_cast<const uint8_t *>(str) + strlen(str));
+  }
 
   void Decompress(std::vector<uint8_t>* decompressed, const uint8_t* compressed,
                   size_t compressed_size) {
@@ -117,9 +122,10 @@ TEST_F(GzipDecompressTest, HelloWorld) {
       0x48, 0xcd, 0xc9, 0xc9, 0x57, 0x28, 0xcf, 0x2f, 0xca, 0x49, 0x1,
       0x0,  0x85, 0x11, 0x4a, 0xd,  0xb,  0x0,  0x0,  0x0};
 
-  std::vector<uint8_t> output(sizeof(uncompressed));
+  std::vector<uint8_t> input = vector_from_string(uncompressed);
+  std::vector<uint8_t> output(input.size());
   Decompress(&output, compressed, sizeof(compressed));
-  EXPECT_STREQ(reinterpret_cast<char*>(output.data()), uncompressed);
+  EXPECT_EQ(output, input);
 }
 
 TEST_F(SnappyDecompressTest, HelloWorld) {
@@ -127,18 +133,20 @@ TEST_F(SnappyDecompressTest, HelloWorld) {
   constexpr uint8_t compressed[] = {0xb,  0x28, 0x68, 0x65, 0x6c, 0x6c, 0x6f,
                                     0x20, 0x77, 0x6f, 0x72, 0x6c, 0x64};
 
-  std::vector<uint8_t> output(sizeof(uncompressed));
+  std::vector<uint8_t> input = vector_from_string(uncompressed);
+  std::vector<uint8_t> output(input.size());
   Decompress(&output, compressed, sizeof(compressed));
-  EXPECT_STREQ(reinterpret_cast<char*>(output.data()), uncompressed);
+  EXPECT_EQ(output, input);
 }
 
 TEST_F(SnappyDecompressTest, ShortLiteralAfterLongCopyAtStartup) {
   constexpr char uncompressed[] = "Aaaaaaaaaaaah!";
   constexpr uint8_t compressed[] = {14, 0x0, 'A', 0x0, 'a', (10-4)*4+1, 1, 0x4, 'h', '!'};
 
-  std::vector<uint8_t> output(sizeof(uncompressed));
+  std::vector<uint8_t> input = vector_from_string(uncompressed);
+  std::vector<uint8_t> output(input.size());
   Decompress(&output, compressed, sizeof(compressed));
-  EXPECT_STREQ(reinterpret_cast<char*>(output.data()), uncompressed);
+  EXPECT_EQ(output, input);
 }
 
 TEST_F(BrotliDecompressTest, HelloWorld) {
@@ -147,7 +155,8 @@ TEST_F(BrotliDecompressTest, HelloWorld) {
                                     0x6c, 0x6c, 0x6f, 0x20, 0x77,
                                     0x6f, 0x72, 0x6c, 0x64, 0x3};
 
-  std::vector<uint8_t> output(sizeof(uncompressed));
+  std::vector<uint8_t> input = vector_from_string(uncompressed);
+  std::vector<uint8_t> output(input.size());
   Decompress(&output, compressed, sizeof(compressed));
-  EXPECT_STREQ(reinterpret_cast<char*>(output.data()), uncompressed);
+  EXPECT_EQ(output, input);
 }
