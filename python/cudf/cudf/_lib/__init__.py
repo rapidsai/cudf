@@ -13,7 +13,6 @@ from . import (
     join,
     nvtx,
     orc,
-    quantile,
     reduce,
     replace,
     reshape,
