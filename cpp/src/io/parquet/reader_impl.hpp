@@ -64,13 +64,6 @@ class reader::impl {
                 rmm::mr::device_memory_resource *mr);
 
   /**
-   * @brief Returns the PANDAS-specific index column derived from the metadata.
-   *
-   * @return Name of the column
-   */
-  std::string get_pandas_index() const { return _pandas_index; }
-
-  /**
    * @brief Read an entire set or a subset of data and returns a set of columns
    *
    * @param skip_rows Number of rows to skip from the start
@@ -145,7 +138,6 @@ class reader::impl {
   std::unique_ptr<metadata> _metadata;
 
   std::vector<std::pair<int, std::string>> _selected_columns;
-  std::string _pandas_index;
   bool _strings_to_categorical = false;
   data_type _timestamp_type{type_id::EMPTY};
 };
