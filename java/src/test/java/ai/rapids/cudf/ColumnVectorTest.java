@@ -419,6 +419,83 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testSequenceInt() {
+    try (Scalar zero = Scalar.fromInt(0);
+         Scalar one = Scalar.fromInt(1);
+         Scalar negOne = Scalar.fromInt(-1);
+         Scalar nulls = Scalar.fromNull(DType.INT32)) {
+
+      try (
+          ColumnVector cv = ColumnVector.sequence(zero, 5);
+          ColumnVector expected = ColumnVector.fromInts(0, 1, 2, 3, 4)) {
+        assertColumnsAreEqual(expected, cv);
+      }
+
+
+      try (ColumnVector cv = ColumnVector.sequence(one, negOne,6);
+           ColumnVector expected = ColumnVector.fromInts(1, 0, -1, -2, -3, -4)) {
+        assertColumnsAreEqual(expected, cv);
+      }
+
+      try (ColumnVector cv = ColumnVector.sequence(zero, 0);
+           ColumnVector expected = ColumnVector.fromInts()) {
+        assertColumnsAreEqual(expected, cv);
+      }
+
+      assertThrows(IllegalArgumentException.class, () -> {
+        try (ColumnVector cv = ColumnVector.sequence(nulls, 5)) { }
+      });
+
+      assertThrows(CudfException.class, () -> {
+        try (ColumnVector cv = ColumnVector.sequence(zero, -3)) { }
+      });
+    }
+  }
+
+  @Test
+  void testSequenceDouble() {
+    try (Scalar zero = Scalar.fromDouble(0.0);
+         Scalar one = Scalar.fromDouble(1.0);
+         Scalar negOneDotOne = Scalar.fromDouble(-1.1)) {
+
+      try (
+          ColumnVector cv = ColumnVector.sequence(zero, 5);
+          ColumnVector expected = ColumnVector.fromDoubles(0, 1, 2, 3, 4)) {
+        assertColumnsAreEqual(expected, cv);
+      }
+
+
+      try (ColumnVector cv = ColumnVector.sequence(one, negOneDotOne,6);
+           ColumnVector expected = ColumnVector.fromDoubles(1, -0.1, -1.2, -2.3, -3.4, -4.5)) {
+        assertColumnsAreEqual(expected, cv);
+      }
+
+      try (ColumnVector cv = ColumnVector.sequence(zero, 0);
+           ColumnVector expected = ColumnVector.fromDoubles()) {
+        assertColumnsAreEqual(expected, cv);
+      }
+    }
+  }
+
+  @Test
+  void testSequenceOtherTypes() {
+    assertThrows(CudfException.class, () -> {
+      try (Scalar s = Scalar.fromString("0");
+      ColumnVector cv = ColumnVector.sequence(s, s, 5)) {}
+    });
+
+    assertThrows(CudfException.class, () -> {
+      try (Scalar s = Scalar.fromBool(false);
+           ColumnVector cv = ColumnVector.sequence(s, s, 5)) {}
+    });
+
+    assertThrows(CudfException.class, () -> {
+      try (Scalar s = Scalar.timestampDaysFromInt(100);
+           ColumnVector cv = ColumnVector.sequence(s, s, 5)) {}
+    });
+  }
+
+  @Test
   void testFromScalarZeroRows() {
     for (DType type : DType.values()) {
       Scalar s = null;
