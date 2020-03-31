@@ -1457,7 +1457,7 @@ class StringMethods(object):
 
         if pat is None:
             result_col = column.column_empty(
-                len(self._column), dtype="float64"
+                len(self._column), dtype="bool", masked=True
             )
         else:
             from cudf._libxx.scalar import Scalar
@@ -1490,7 +1490,7 @@ class StringMethods(object):
 
         if pat is None:
             result_col = column.column_empty(
-                len(self._column), dtype="float64"
+                len(self._column), dtype="bool", masked=True
             )
         else:
             from cudf._libxx.scalar import Scalar

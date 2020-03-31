@@ -1539,8 +1539,10 @@ def test_string_starts_ends(data, pat):
     ps = pd.Series(data)
     gs = Series(data)
 
-    assert_eq(ps.str.startswith(pat), gs.str.startswith(pat))
-    assert_eq(ps.str.endswith(pat), gs.str.endswith(pat))
+    assert_eq(
+        ps.str.startswith(pat), gs.str.startswith(pat), check_dtype=False
+    )
+    assert_eq(ps.str.endswith(pat), gs.str.endswith(pat), check_dtype=False)
 
 
 @pytest.mark.parametrize(
