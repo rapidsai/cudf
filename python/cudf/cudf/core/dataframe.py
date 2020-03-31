@@ -1531,7 +1531,7 @@ class DataFrame(Frame):
         else:
             return result
 
-    def take(self, positions):
+    def take(self, positions, index=True):
         """
         Return a new DataFrame containing the rows specified by *positions*
 
@@ -1565,7 +1565,7 @@ class DataFrame(Frame):
         positions = as_column(positions)
         if pd.api.types.is_bool_dtype(positions):
             return self._apply_boolean_mask(positions)
-        out = self._gather(positions)
+        out = self._gather(positions, index=index)
         out.columns = self.columns
         return out
 
