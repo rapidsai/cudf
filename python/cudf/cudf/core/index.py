@@ -437,7 +437,7 @@ class Index(Frame):
 
         Parameters
         ----------
-        values : set or list-like
+        values : set, list-like, Index or Multi-Index
             Sought values.
         level : str or int, optional
             Name or position of the index level to use (if the index
@@ -448,6 +448,9 @@ class Index(Frame):
             CuPy array of boolean values.
 
         """
+
+        if isinstance(values, Index):
+            values = column.as_column(values)
 
         if isinstance(self, cudf.MultiIndex):
             if level is None:

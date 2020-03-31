@@ -3779,6 +3779,24 @@ def test_isin_index(data, values):
         (["red", "white", "yellow"], "color"),
         ([0, 1, 2, 10, 11, 15], "number"),
         ([(1, "red"), (3, "red")], None),
+        (
+            pd.MultiIndex.from_arrays(
+                [[1, 2, 3], ["red", "blue", "green"]],
+                names=("number", "color"),
+            ),
+            None,
+        ),
+        (pd.MultiIndex.from_arrays([[], []], names=("number", "color")), None),
+        (
+            pd.MultiIndex.from_arrays(
+                [
+                    [1, 2, 3, 10, 100],
+                    ["red", "blue", "green", "pink", "white"],
+                ],
+                names=("number", "color"),
+            ),
+            None,
+        ),
     ],
 )
 def test_isin_multiindex(data, values, level):
