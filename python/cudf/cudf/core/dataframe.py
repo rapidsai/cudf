@@ -3573,8 +3573,10 @@ class DataFrame(Frame):
                 if is_categorical_dtype(
                     self[col].dtype
                 ) and is_categorical_dtype(values.dtype):
-                    res = self[col] == values
-                    result[col] = res._column
+                    res = self[col]._column.binary_operator(
+                        "eq", values._column
+                    )
+                    result[col] = res
                 elif (
                     is_categorical_dtype(self[col].dtype)
                     or np.issubdtype(self[col].dtype, np.dtype("object"))
@@ -3583,12 +3585,10 @@ class DataFrame(Frame):
                     or np.issubdtype(values.dtype, np.dtype("object"))
                 ):
                     result[col] = utils.scalar_broadcast_to(False, len(self))
-                elif np.issubdtype(
-                    self[col].dtype, np.dtype("object")
-                ) and np.issubdtype(values.dtype, np.dtype("object")):
-                    result[col] = self[col] == values
                 else:
-                    result[col] = self[col] == values
+                    result[col] = self[col]._column.binary_operator(
+                        "eq", values._column
+                    )
 
             result.index = self.index
             return result
@@ -3598,7 +3598,9 @@ class DataFrame(Frame):
             result = DataFrame()
             for col in self.columns:
                 if col in values.columns:
-                    result[col] = self[col].__eq__(values[col])
+                    result[col] = self[col]._column.binary_operator(
+                        "eq", values[col]._column
+                    )
                 else:
                     result[col] = utils.scalar_broadcast_to(False, len(self))
             result.index = self.index
