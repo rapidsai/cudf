@@ -36,6 +36,7 @@
 - PR #4738 Remove stop-gaps in StringMethods and enable related tests
 - PR #4745 Fix `fsspec` related issue and upgrade `fsspec` version
 - PR #4765 Add in java support for sequence
+- PR #4733 Fix `isin` docs for `DataFrame`, `Series`, `Index`, and add `DataFrame.isin` support
 
 ## Bug Fixes
 

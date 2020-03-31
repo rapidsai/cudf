@@ -444,7 +444,7 @@ class Index(Frame):
             is a MultiIndex).
         Returns
         -------
-        is_contained : cupyarray
+        is_contained : cupy array
             CuPy array of boolean values.
 
         """
