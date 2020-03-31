@@ -39,16 +39,22 @@ public class DeviceMemoryBuffer extends BaseDeviceMemoryBuffer {
     @Override
     protected boolean cleanImpl(boolean logErrorIfNotClean) {
       boolean neededCleanup = false;
+      long origAddress = address;
       if (address != 0) {
         Rmm.free(address, 0);
         address = 0;
         neededCleanup = true;
       }
       if (neededCleanup && logErrorIfNotClean) {
-        log.error("WE LEAKED A DEVICE BUFFER!!!!");
+        log.error("A DEVICE BUFFER WAS LEAKED (ID: " + id + " " + Long.toHexString(origAddress) + ")");
         logRefCountDebug("Leaked device buffer");
       }
       return neededCleanup;
+    }
+
+    @Override
+    public boolean isClean() {
+      return address == 0;
     }
   }
 
@@ -72,6 +78,11 @@ public class DeviceMemoryBuffer extends BaseDeviceMemoryBuffer {
         logRefCountDebug("Leaked device buffer");
       }
       return neededCleanup;
+    }
+
+    @Override
+    public boolean isClean() {
+      return rmmBufferAddress == 0;
     }
   }
 
