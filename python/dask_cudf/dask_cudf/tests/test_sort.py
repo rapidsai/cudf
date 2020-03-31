@@ -11,6 +11,7 @@ import cudf
 @pytest.mark.parametrize("nelem", [10, 500])
 @pytest.mark.parametrize("nparts", [1, 10])
 def test_sort_values(nelem, nparts, by):
+    np.random.seed(0)
     df = cudf.DataFrame()
     df["a"] = np.ascontiguousarray(np.arange(nelem)[::-1])
     df["b"] = np.arange(100, nelem + 100)
@@ -21,7 +22,7 @@ def test_sort_values(nelem, nparts, by):
     with dask.config.set(scheduler="single-threaded"):
         got = ddf.sort_values(by=by)
     expect = df.sort_values(by=by)
-    dd.assert_eq(got, expect, check_index=False)
+    dd.assert_eq(got.compute().sort_index(), expect)
 
 
 @pytest.mark.parametrize("by", ["a", "b", ["a", "b"]])
