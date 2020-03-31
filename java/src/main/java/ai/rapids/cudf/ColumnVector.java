@@ -670,6 +670,41 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Create a new vector of length rows, starting at the initialValue and going by step each time.
+   * Only numeric types are supported.
+   * @param initialValue the initial value to start at.
+   * @param step the step to add to each subsequent row.
+   * @param rows the total number of rows
+   * @return the new ColumnVector.
+   */
+  public static ColumnVector sequence(Scalar initialValue, Scalar step, int rows) {
+    if (!initialValue.isValid() || !step.isValid()) {
+      throw new IllegalArgumentException("nulls are not supported in sequence");
+    }
+    long amount = predictSizeFor(initialValue.getType().sizeInBytes, rows, false);
+    try (DevicePrediction ignored = new DevicePrediction(amount, "sequence")) {
+      return new ColumnVector(sequence(initialValue.getScalarHandle(), step.getScalarHandle(), rows));
+    }
+  }
+
+  /**
+   * Create a new vector of length rows, starting at the initialValue and going by 1 each time.
+   * Only numeric types are supported.
+   * @param initialValue the initial value to start at.
+   * @param rows the total number of rows
+   * @return the new ColumnVector.
+   */
+  public static ColumnVector sequence(Scalar initialValue, int rows) {
+    if (!initialValue.isValid()) {
+      throw new IllegalArgumentException("nulls are not supported in sequence");
+    }
+    long amount = predictSizeFor(initialValue.getType().sizeInBytes, rows, false);
+    try (DevicePrediction ignored = new DevicePrediction(amount, "sequence")) {
+      return new ColumnVector(sequence(initialValue.getScalarHandle(), 0, rows));
+    }
+  }
+
+  /**
    * Create a new vector by concatenating multiple columns together.
    * Note that all columns must have the same type.
    */
@@ -687,6 +722,28 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
         columnHandles[i] = columns[i].getNativeView();
       }
       return new ColumnVector(concatenate(columnHandles));
+    }
+  }
+
+  /**
+   * Create a new vector of "normalized" values, where:
+   *  1. All representations of NaN (and -NaN) are replaced with the normalized NaN value
+   *  2. All elements equivalent to 0.0 (including +0.0 and -0.0) are replaced with +0.0.
+   *  3. All elements that are not equivalent to NaN or 0.0 remain unchanged.
+   * 
+   * {@link https://docs.oracle.com/javase/8/docs/api/java/lang/Double.html#longBitsToDouble-long-}
+   * describes how equivalent values of NaN/-NaN might have different bitwise representations.
+   * 
+   * This method may be used to compare different bitwise values of 0.0 or NaN as logically
+   * equivalent. For instance, if these values appear in a groupby key column, without normalization
+   * 0.0 and -0.0 would be erroneously treated as distinct groups, as will each representation of NaN.
+   * 
+   * @return A new ColumnVector with all elements equivalent to NaN/0.0 replaced with a normalized equivalent.
+   */
+  public ColumnVector normalizeNANsAndZeros() {
+    try (DevicePrediction prediction =
+                 new DevicePrediction(getDeviceMemorySize(), "normalizeNANsAndZeros")) {
+      return new ColumnVector(normalizeNANsAndZeros(getNativeView()));
     }
   }
 
@@ -2186,6 +2243,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   private static native long concatenate(long[] viewHandles) throws CudfException;
 
+  private static native long sequence(long initialValue, long step, int rows);
+
   private static native long fromScalar(long scalarHandle, int rowCount) throws CudfException;
 
   private static native long replaceNulls(long viewHandle, long scalarHandle) throws CudfException;
@@ -2227,6 +2286,17 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   private static native long containsVector(long columnViewHaystack, long columnViewNeedles) throws CudfException;
   
   private static native long transform(long viewHandle, String udf, boolean isPtx);
+
+  /**
+   * Native method to normalize the various bitwise representations of NAN and zero.
+   * 
+   * All occurences of -NaN are converted to NaN. Likewise, all -0.0 are converted to 0.0.
+   * 
+   * @param viewHandle `long` representation of pointer to input column_view.
+   * @return Pointer to a new `column` of normalized values.
+   * @throws CudfException On failure to normalize.
+   */
+  private static native long normalizeNANsAndZeros(long viewHandle) throws CudfException;
 
   /**
    * Get the number of bytes needed to allocate a validity buffer for the given number of rows.

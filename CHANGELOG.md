@@ -4,6 +4,7 @@
 
 - PR #4472 Add new `partition` API to replace `scatter_to_tables`.
 - PR #4626 LogBase binops
+- PR #4750 Normalize NANs and Zeroes (JNI Bindings)
 - PR #4689 Compute last day of the month for a given date
 
 ## Improvements
@@ -35,6 +36,7 @@
 - PR #4731 Avoid redundant host->device copies when reading the entire CSV/JSON file
 - PR #4738 Remove stop-gaps in StringMethods and enable related tests
 - PR #4745 Fix `fsspec` related issue and upgrade `fsspec` version
+- PR #4765 Add in java support for sequence
 
 ## Bug Fixes
 
