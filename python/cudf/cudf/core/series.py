@@ -2090,7 +2090,7 @@ class Series(Frame):
         return self._column.unique_count(method, dropna)
 
     def value_counts(self, sort=True):
-        """Returns unique values of this Series.
+        """Return a Series containing counts of unique values.
         """
 
         if self.null_count == len(self):

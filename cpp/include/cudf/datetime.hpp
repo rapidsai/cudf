@@ -142,5 +142,19 @@ std::unique_ptr<cudf::column> extract_second(
     cudf::column_view const& column,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/**
+ * @brief  Computes the last day of the month in date time type and returns a TIMESTAMP_DAYS
+ * cudf::column.
+ *
+ * @param[in] cudf::column_view of the input datetime values
+ *
+ * @returns cudf::column containing last day of the month as TIMESTAMP_DAYS
+ * @throw cudf::logic_error if input column datatype is not TIMESTAMP
+ */
+
+std::unique_ptr<cudf::column> last_day_of_month(
+    cudf::column_view const& column,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
 }  // namespace datetime
 }  // namespace cudf

@@ -42,9 +42,9 @@ public class FloatColumnVectorTest extends CudfTestBase {
   public void testArrayAllocation() {
     try (HostColumnVector floatColumnVector = HostColumnVector.fromFloats(2.1f, 3.02f, 5.003f)) {
       assertFalse(floatColumnVector.hasNulls());
-      assertEquals(floatColumnVector.getFloat(0), 2.1, 0.01);
-      assertEquals(floatColumnVector.getFloat(1), 3.02, 0.01);
-      assertEquals(floatColumnVector.getFloat(2), 5.003, 0.001);
+      assertEqualsWithinPercentage(floatColumnVector.getFloat(0), 2.1, 0.01);
+      assertEqualsWithinPercentage(floatColumnVector.getFloat(1), 3.02, 0.01);
+      assertEqualsWithinPercentage(floatColumnVector.getFloat(2), 5.003, 0.001);
     }
   }
 
@@ -94,8 +94,8 @@ public class FloatColumnVectorTest extends CudfTestBase {
          HostColumnVector floatColumnVector1 = tmp1.copyToHost();
          ColumnVector tmp2 = shortColumnVector.asFloats();
          HostColumnVector floatColumnVector2 = tmp2.copyToHost()) {
-      assertEquals(4.3, floatColumnVector1.getFloat(0), 0.001);
-      assertEquals(3.8, floatColumnVector1.getFloat(1), 0.001);
+      assertEqualsWithinPercentage(4.3, floatColumnVector1.getFloat(0), 0.001);
+      assertEqualsWithinPercentage(3.8, floatColumnVector1.getFloat(1), 0.001);
       assertEquals(8, floatColumnVector1.getFloat(2));
       assertEquals(100, floatColumnVector2.getFloat(0));
     }
