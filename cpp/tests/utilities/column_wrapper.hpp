@@ -110,6 +110,8 @@ class column_wrapper {
  *---------------------------------------------------------------------------**/
 template <typename Element, typename InputIterator>
 rmm::device_buffer make_elements(InputIterator begin, InputIterator end) {
+    static_assert(cudf::is_fixed_width<Element>(),
+                  "Unexpected non-fixed width type.");
   thrust::host_vector<Element> elements(begin, end);
   return rmm::device_buffer{elements.data(), elements.size() * sizeof(Element)};
 }
