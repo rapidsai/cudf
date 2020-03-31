@@ -1603,11 +1603,6 @@ class StringMethods(object):
 
         result_col = cpp_find(self._column, Scalar(sub, "str"), start, end)
 
-        if self._column.has_nulls:
-            result_col = result_col.astype("float64")
-        else:
-            result_col = result_col.astype("int64")
-
         result = self._return_or_inplace(result_col, **kwargs)
 
         if (result == -1).any():
@@ -1648,11 +1643,6 @@ class StringMethods(object):
             end = -1
 
         result_col = cpp_rfind(self._column, Scalar(sub, "str"), start, end)
-
-        if self._column.has_nulls:
-            result_col = result_col.astype("float64")
-        else:
-            result_col = result_col.astype("int64")
 
         result = self._return_or_inplace(result_col, **kwargs)
 
