@@ -49,7 +49,7 @@ struct DecompressTest : public GdfTest {
   
   std::vector<uint8_t> vector_from_string(const char *str) const {
     return std::vector<uint8_t>(reinterpret_cast<const uint8_t *>(str),
-                                reinterpret_cast<const uint8_t *>(str) + strlen(str));
+                                reinterpret_cast<const uint8_t *>(str) + strlen(str) + 1);
   }
 
   void Decompress(std::vector<uint8_t>* decompressed, const uint8_t* compressed,
@@ -136,7 +136,7 @@ TEST_F(SnappyDecompressTest, HelloWorld) {
 
 TEST_F(SnappyDecompressTest, ShortLiteralAfterLongCopyAtStartup) {
   constexpr char uncompressed[] = "Aaaaaaaaaaaah!";
-  constexpr uint8_t compressed[] = {14, 0x0, 'A', 0x0, 'a', (10-4)*4+1, 1, 0x4, 'h', '!'};
+  constexpr uint8_t compressed[] = {14, 0x0, 'A', 0x0, 'a', (10-4)*4+1, 1, 0x6, 'h', '!', '\0'};
 
   std::vector<uint8_t> output(sizeof(uncompressed));
   Decompress(&output, compressed, sizeof(compressed));
