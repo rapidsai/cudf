@@ -670,6 +670,41 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Create a new vector of length rows, starting at the initialValue and going by step each time.
+   * Only numeric types are supported.
+   * @param initialValue the initial value to start at.
+   * @param step the step to add to each subsequent row.
+   * @param rows the total number of rows
+   * @return the new ColumnVector.
+   */
+  public static ColumnVector sequence(Scalar initialValue, Scalar step, int rows) {
+    if (!initialValue.isValid() || !step.isValid()) {
+      throw new IllegalArgumentException("nulls are not supported in sequence");
+    }
+    long amount = predictSizeFor(initialValue.getType().sizeInBytes, rows, false);
+    try (DevicePrediction ignored = new DevicePrediction(amount, "sequence")) {
+      return new ColumnVector(sequence(initialValue.getScalarHandle(), step.getScalarHandle(), rows));
+    }
+  }
+
+  /**
+   * Create a new vector of length rows, starting at the initialValue and going by 1 each time.
+   * Only numeric types are supported.
+   * @param initialValue the initial value to start at.
+   * @param rows the total number of rows
+   * @return the new ColumnVector.
+   */
+  public static ColumnVector sequence(Scalar initialValue, int rows) {
+    if (!initialValue.isValid()) {
+      throw new IllegalArgumentException("nulls are not supported in sequence");
+    }
+    long amount = predictSizeFor(initialValue.getType().sizeInBytes, rows, false);
+    try (DevicePrediction ignored = new DevicePrediction(amount, "sequence")) {
+      return new ColumnVector(sequence(initialValue.getScalarHandle(), 0, rows));
+    }
+  }
+
+  /**
    * Create a new vector by concatenating multiple columns together.
    * Note that all columns must have the same type.
    */
@@ -2207,6 +2242,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   private static native long lengths(long viewHandle) throws CudfException;
 
   private static native long concatenate(long[] viewHandles) throws CudfException;
+
+  private static native long sequence(long initialValue, long step, int rows);
 
   private static native long fromScalar(long scalarHandle, int rowCount) throws CudfException;
 

@@ -91,6 +91,23 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_concatenate(JNIEnv *env
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_sequence(JNIEnv *env, jclass,
+    jlong j_initial_val, jlong j_step, jint row_count) {
+  JNI_NULL_CHECK(env, j_initial_val, "scalar is null", 0);
+  try {
+    auto initial_val = reinterpret_cast<cudf::scalar const*>(j_initial_val);
+    auto step = reinterpret_cast<cudf::scalar const*>(j_step);
+    std::unique_ptr<cudf::column> col;
+    if (step) {
+      col = cudf::experimental::sequence(row_count, *initial_val, *step);
+    } else {
+      col = cudf::experimental::sequence(row_count, *initial_val);
+    }
+    return reinterpret_cast<jlong>(col.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromScalar(JNIEnv *env, jclass,
     jlong j_scalar, jint row_count) {
   JNI_NULL_CHECK(env, j_scalar, "scalar is null", 0);
