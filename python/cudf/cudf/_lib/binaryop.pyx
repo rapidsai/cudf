@@ -17,6 +17,10 @@ from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.types cimport (
+    data_type,
+    type_id,
+)
+
 from cudf.utils.dtypes import is_string_dtype
 
 from cudf._lib.cpp.binaryop cimport binary_operator
