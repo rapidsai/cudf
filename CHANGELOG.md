@@ -48,6 +48,8 @@
 - PR #4659 Fix strings::replace_re handling empty regex pattern
 - PR #4652 Fix misaligned error when computing regex device structs
 - PR #4651 Fix hashing benchmark missing includes
+- PR #4672 Fix docs for `value_counts` and update test cases
+- PR #4672 Fix `__setitem__` handling list of column names
 - PR #4673 Fix regex infinite loop while parsing invalid quantifier pattern
 - PR #4679 Fix comments for make_dictionary_column factory functions
 - PR #4711 Fix column leaks in Java unit test
