@@ -9,7 +9,7 @@ from libcpp.string cimport string
 from cudf._lib.binaryop cimport underlying_type_t_binary_operator
 from cudf._lib.column cimport Column
 from cudf._lib.move cimport move
-from cudf._libxx.replace import replace_nulls
+from cudf._lib.replace import replace_nulls
 from cudf._lib.scalar cimport Scalar
 from cudf._lib.types import np_to_cudf_types
 
