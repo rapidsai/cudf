@@ -26,7 +26,7 @@ def validate_setup():
             #    Turing	                7.5
             #    Volta	                7.x
             #    Pascal	                6.x
-            #    Maxwell	            5.x
+            #    Maxwell	              5.x
             #    Kepler	                3.x
             #    Fermi	                2.x
             pass
@@ -39,7 +39,7 @@ def validate_setup():
 
         cuda_runtime_version = runtimeGetVersion()
 
-        if cuda_runtime_version > 10000:
+        if cuda_runtime_version >= 10000:
             # CUDA Runtime Version Check: Runtime version is greater than 10000
             pass
         else:
@@ -92,5 +92,5 @@ def validate_setup():
     else:
 
         warnings.warn(
-            "You donot have an NVIDIA GPU, please install one and try again"
+            "No NVIDIA GPU detected"
         )
