@@ -508,7 +508,9 @@ std::unique_ptr<column> rolling_window_udf(column_view const &input,
     // Have jitify prune unused global variables
     "-remove-unused-globals",
     // suppress all NVRTC warnings
-    "-w"
+    "-w",
+    // Thrust include
+    "-I/usr/local/cuda-10.2/include"
   };
 
   // Launch the jitify kernel
@@ -520,7 +522,7 @@ std::unique_ptr<column> rolling_window_udf(column_view const &input,
                       { cudf::jit::get_type_name(input.type()), // list of template arguments
                         cudf::jit::get_type_name(output->type()),
                         udf_agg->_operator_name,
-                        static_window ? "cudf::size_type" : "cudf::size_type*"})
+                        static_window ? "cudf::size_type" : "thrust::transform_iterator<lambda [](cudf::size_type)->long, thrust::counting_iterator<cudf::size_type, thrust::use_default, thrust::use_default, thrust::use_default>, thrust::use_default, thrust::use_default>"})
     .launch(input.size(), cudf::jit::get_data_ptr(input), input.null_mask(),
             cudf::jit::get_data_ptr(output_view), output_view.null_mask(),
             device_valid_count.data(), preceding_window, following_window, min_periods);
@@ -691,12 +693,20 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
       return thrust::minimum<size_type>{}(following_window, (group_end - 1) - idx);
     };
 
-  return cudf::experimental::detail::rolling_window(
-    input,
-    thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), preceding_calculator),
-    thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), following_calculator),
-    min_periods, aggr, mr
-  );
+  auto grouped_preceding_window = thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), preceding_calculator);
+  auto grouped_following_window = thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), following_calculator);
+
+  if (aggr->kind == aggregation::CUDA || aggr->kind == aggregation::PTX) {
+    return cudf::experimental::detail::rolling_window_udf<false>(input,
+                                                                 grouped_preceding_window,
+                                                                 grouped_following_window,
+                                                                 min_periods, aggr, mr, 0); // XXX: What stream should be set here?
+  } else {
+    return cudf::experimental::detail::rolling_window(input,
+                                                      grouped_preceding_window,
+                                                      grouped_following_window,
+                                                      min_periods, aggr, mr, 0);
+  }
 }
 
 namespace
@@ -771,12 +781,20 @@ namespace
                - 1;
       };
 
-    return cudf::experimental::detail::rolling_window(
-      input,
-      thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), preceding_calculator),
-      thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), following_calculator),
-      min_periods, aggr, mr
-    );
+    auto grouped_preceding_window = thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), preceding_calculator);
+    auto grouped_following_window = thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), following_calculator);
+
+    if (aggr->kind == aggregation::CUDA || aggr->kind == aggregation::PTX) {
+      return cudf::experimental::detail::rolling_window_udf<false>(input,
+                                                                   grouped_preceding_window,
+                                                                   grouped_following_window,
+                                                                   min_periods, aggr, mr, 0);
+    } else {
+      return cudf::experimental::detail::rolling_window(input,
+                                                        grouped_preceding_window,
+                                                        grouped_following_window,
+                                                        min_periods, aggr, mr, 0);
+    }
   }
 
 } // namespace detail;

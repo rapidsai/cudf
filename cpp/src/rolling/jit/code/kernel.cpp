@@ -31,17 +31,13 @@ R"***(
 const char* kernel =
 R"***(
 #include "operation.h"
+#include <thrust/iterator/transform_iterator.h>
 
 template <typename WindowType>
-cudf::size_type get_window(WindowType window, cudf::size_type index) { return 0; }
+cudf::size_type get_window(WindowType window, cudf::size_type index) { return window[index]; }
 
 template <>
 cudf::size_type get_window(cudf::size_type window, cudf::size_type index) { return window; }
-
-template <>
-cudf::size_type get_window(cudf::size_type* window, cudf::size_type index) {
-  return window[index];
-}
 
 template <typename InType, typename OutType, class agg_op, typename WindowType>
 __global__
