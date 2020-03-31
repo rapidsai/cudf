@@ -239,12 +239,6 @@ namespace external {
     int64_t high;
     std::map<std::string, int64_t> results;
 
-    printf("HEREH C++\n");
-
-    // std::string err_code_local;
-    // err_ = consumer_->fatal_error(err_code_local);
-    // printf("ErrorCode Local: '%s'\n", err2str(err_).c_str());
-
     if (cached == true) {
       err_ = consumer_->get_watermark_offsets(topic, partition, &low, &high);
     } else {
