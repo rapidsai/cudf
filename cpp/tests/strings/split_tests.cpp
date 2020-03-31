@@ -28,7 +28,6 @@
 #include <tests/strings/utilities.h>
 
 #include <vector>
-#include <gmock/gmock.h>
 
 
 struct StringsSplitTest : public cudf::test::BaseFixture {};

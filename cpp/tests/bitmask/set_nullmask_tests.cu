@@ -17,8 +17,6 @@
 #include <algorithm>
 
 #include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/cudf_gmock.hpp>
-#include <gmock/gmock.h>
 
 #include <cudf/null_mask.hpp>
 

@@ -24,7 +24,6 @@
 #include "./utilities.h"
 
 #include <vector>
-#include <gmock/gmock.h>
 
 
 struct StringsStripTest : public cudf::test::BaseFixture {};

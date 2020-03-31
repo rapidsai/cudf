@@ -16,7 +16,6 @@
 
 #include <io/comp/gpuinflate.h>
 #include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/cudf_gmock.hpp>
 
 #include <vector>
 
@@ -150,7 +149,7 @@ TEST_F(SnappyDecompressTest, ShortLiteralAfterLongCopyAtStartup) {
   EXPECT_EQ(output, input);
 }
 
-TEST_F(BrotliDecompressTest, DISABLED_HelloWorld) {
+TEST_F(BrotliDecompressTest, HelloWorld) {
   constexpr char uncompressed[] = "hello world";
   constexpr uint8_t compressed[] = {0xb,  0x5,  0x80, 0x68, 0x65,
                                     0x6c, 0x6c, 0x6f, 0x20, 0x77,

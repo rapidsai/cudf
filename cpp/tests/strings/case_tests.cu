@@ -25,7 +25,6 @@
 #include "./utilities.h"
 
 #include <vector>
-#include <gmock/gmock.h>
 
 
 struct StringsCaseTest : public cudf::test::BaseFixture {};

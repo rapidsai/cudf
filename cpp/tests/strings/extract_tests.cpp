@@ -22,7 +22,6 @@
 #include <tests/utilities/table_utilities.hpp>
 #include <tests/strings/utilities.h>
 
-#include <gmock/gmock.h>
 #include <vector>
 
 

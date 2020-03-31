@@ -23,7 +23,6 @@
 #include <tests/utilities/type_lists.hpp>
 
 
-#include <gmock/gmock.h>
 
 class ColumnFactoryTest : public cudf::test::BaseFixture {
   cudf::size_type _size{1000};

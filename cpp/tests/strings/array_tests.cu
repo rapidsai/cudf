@@ -31,7 +31,6 @@
 #include <tests/strings/utilities.h>
 
 #include <vector>
-#include <gmock/gmock.h>
 #include <thrust/iterator/constant_iterator.h>
 
 

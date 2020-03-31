@@ -27,7 +27,6 @@
 #include <thrust/logical.h>
 #include <vector>
 
-#include <gmock/gmock.h>
 
 struct CompoundColumnTest : public cudf::test::BaseFixture {};
 

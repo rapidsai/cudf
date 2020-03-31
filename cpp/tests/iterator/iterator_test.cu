@@ -24,8 +24,6 @@
 #include <random>
 
 #include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/cudf_gmock.hpp>
-#include <gmock/gmock.h>
 #include <tests/utilities/type_lists.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 

@@ -15,7 +15,6 @@
  */
 
 #include <cudf/types.hpp>
-#include <tests/utilities/cudf_gmock.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>

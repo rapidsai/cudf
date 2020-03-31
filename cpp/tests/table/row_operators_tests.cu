@@ -24,7 +24,6 @@
 #include <tests/utilities/column_utilities.hpp>
 
 #include <vector>
-#include <gmock/gmock.h>
 
 struct RowOperatorTestForNAN : public cudf::test::BaseFixture {};
 

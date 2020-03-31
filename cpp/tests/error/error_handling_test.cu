@@ -19,19 +19,9 @@
 #include <rmm/rmm.h>
 
 #include <tests/utilities/cudf_gtest.hpp>
-// TODO (rmleg): update this whoe file to remove expect throw message
-#include <tests/utilities/cudf_gmock.hpp>
 
 #include <cstring>
 
-// If this test fails, it means an error code was added without
-// adding support to gdf_error_get_name().
-// TEST(ErrorTest, NameEveryError) {
-//   for (int i = 0; i < N_GDF_ERRORS; i++) {
-//     const char* res = gdf_error_get_name((gdf_error)i);
-//     ASSERT_EQ(0, strstr(res, "Unknown error"));
-//   }
-// }
 
 TEST(ExpectsTest, FalseCondition) {
   EXPECT_THROW(CUDF_EXPECTS(false, "condition is false"), cudf::logic_error);

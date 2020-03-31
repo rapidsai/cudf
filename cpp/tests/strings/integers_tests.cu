@@ -25,7 +25,6 @@
 
 #include <vector>
 #include <string>
-#include <gmock/gmock.h>
 
 
 struct StringsConvertTest : public cudf::test::BaseFixture {};

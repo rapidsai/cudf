@@ -20,7 +20,6 @@
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/type_lists.hpp>
 
-#include <gmock/gmock.h>
 
 class ScalarFactoryTest : public cudf::test::BaseFixture {
   cudaStream_t _stream{0};

@@ -24,7 +24,6 @@
 #include "./utilities.h"
 
 #include <vector>
-#include <gmock/gmock.h>
 
 
 struct StringsConcatenateTest : public cudf::test::BaseFixture {};
