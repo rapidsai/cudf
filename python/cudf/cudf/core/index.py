@@ -454,6 +454,7 @@ class Index(Frame):
         5    False
         dtype: bool
         """
+
         return self.to_series().isin(values)
 
     @property

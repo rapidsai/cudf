@@ -52,6 +52,7 @@
 - PR #4711 Fix column leaks in Java unit test
 - PR #4722 Fix strings::pad when using pad::both with odd width
 - PR #4725 Fix issue java with not setting GPU on background thread
+- PR #4768 Fix missing index in `Series.isin` result
 
 
 # cuDF 0.13.0 (Date TBD)
