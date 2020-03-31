@@ -31,6 +31,7 @@
 - PR #4688 Add Java count aggregation to include null values
 - PR #4331 Improved test for double that considers an epsilon
 - PR #4731 Avoid redundant host->device copies when reading the entire CSV/JSON file
+- PR #4745 Fix `fsspec` related issue and upgrade `fsspec` version
 
 ## Bug Fixes
 
