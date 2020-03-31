@@ -8,8 +8,12 @@ import os
 import pyarrow as pa
 import json
 
+from cython.operator import dereference
+import numpy as np
+
 from cudf.utils.dtypes import np_to_pa_dtype, is_categorical_dtype
 from libc.stdlib cimport free
+from libc.stdint cimport uint8_t
 from libcpp.memory cimport unique_ptr, make_unique
 from libcpp.string cimport string
 from libcpp.map cimport map
@@ -25,6 +29,7 @@ from cudf._lib.move cimport move
 from cudf._lib.cpp.io.functions cimport (
     write_parquet_args,
     write_parquet as parquet_writer,
+    merge_rowgroup_metadata as parquet_merge_metadata,
     read_parquet_args,
     read_parquet as parquet_reader
 )
@@ -34,6 +39,45 @@ from cudf._lib.io.utils cimport (
 
 cimport cudf._lib.cpp.types as cudf_types
 cimport cudf._lib.cpp.io.types as cudf_io_types
+
+cdef class BufferArrayFromVector:
+    cdef Py_ssize_t length
+    cdef unique_ptr[vector[uint8_t]] in_vec
+
+    # these two things declare part of the buffer interface
+    cdef Py_ssize_t shape[1]
+    cdef Py_ssize_t strides[1]
+
+    @staticmethod
+    cdef BufferArrayFromVector from_unique_ptr(
+        unique_ptr[vector[uint8_t]] in_vec
+    ):
+        cdef BufferArrayFromVector buf = BufferArrayFromVector()
+        buf.in_vec = move(in_vec)
+        buf.length = dereference(buf.in_vec).size()
+        return buf
+
+    def __getbuffer__(self, Py_buffer *buffer, int flags):
+        cdef Py_ssize_t itemsize = sizeof(uint8_t)
+
+        self.shape[0] = self.length
+        self.strides[0] = 1
+
+        buffer.buf = dereference(self.in_vec).data()
+
+        buffer.format = NULL  # byte
+        buffer.internal = NULL
+        buffer.itemsize = itemsize
+        buffer.len = self.length * itemsize   # product(shape) * itemsize
+        buffer.ndim = 1
+        buffer.obj = self
+        buffer.readonly = 0
+        buffer.shape = self.shape
+        buffer.strides = self.strides
+        buffer.suboffsets = NULL
+
+    def __releasebuffer__(self, Py_buffer *buffer):
+        pass
 
 cpdef generate_pandas_metadata(Table table, index):
     col_names = []
@@ -170,7 +214,8 @@ cpdef write_parquet(
         path,
         index=None,
         compression=None,
-        statistics="ROWGROUP"):
+        statistics="ROWGROUP",
+        metadata_file_path=None):
     """
     Cython function to call into libcudf API, see `write_parquet`.
 
@@ -231,6 +276,7 @@ cpdef write_parquet(
         raise ValueError("Unsupported `statistics_freq` type")
 
     cdef write_parquet_args args
+    cdef unique_ptr[vector[uint8_t]] out_metadata_c
 
     # Perform write
     with nogil:
@@ -239,4 +285,40 @@ cpdef write_parquet(
                                   tbl_meta.get(),
                                   comp_type,
                                   stat_freq)
-        parquet_writer(args)
+
+    if metadata_file_path is not None:
+        args.metadata_out_file_path = str.encode(metadata_file_path)
+        args.return_filemetadata = True
+
+    with nogil:
+        out_metadata_c = move(parquet_writer(args))
+
+    if metadata_file_path is not None:
+        out_metadata_py = BufferArrayFromVector.from_unique_ptr(
+            move(out_metadata_c)
+        )
+        return np.asarray(out_metadata_py)
+    else:
+        return None
+
+cpdef merge_filemetadata(filemetadata_list):
+    """
+    Cython function to call into libcudf API, see `merge_rowgroup_metadata`.
+
+    See Also
+    --------
+    cudf.io.parquet.merge_rowgroup_metadata
+    """
+    cdef vector[unique_ptr[vector[uint8_t]]] list_c
+    cdef vector[uint8_t] blob_c
+    cdef unique_ptr[vector[uint8_t]] output_c
+
+    for blob_py in filemetadata_list:
+        blob_c = blob_py
+        list_c.push_back(make_unique[vector[uint8_t]](blob_c))
+
+    with nogil:
+        output_c = move(parquet_merge_metadata(list_c))
+
+    out_metadata_py = BufferArrayFromVector.from_unique_ptr(move(output_c))
+    return np.asarray(out_metadata_py)

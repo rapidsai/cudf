@@ -1138,10 +1138,14 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
 
     elif hasattr(arbitrary, "__cuda_array_interface__"):
         desc = arbitrary.__cuda_array_interface__
-        dtype = np.dtype(desc["typestr"])
+        current_dtype = np.dtype(desc["typestr"])
         data = _data_from_cuda_array_interface_desc(arbitrary)
         mask = _mask_from_cuda_array_interface_desc(arbitrary)
-        col = build_column(data, dtype=dtype, mask=mask)
+        col = build_column(data, dtype=current_dtype, mask=mask)
+
+        if dtype is not None:
+            col = col.astype(dtype)
+
         if np.issubdtype(col.dtype, np.floating):
             if nan_as_null or (mask is None and nan_as_null is None):
                 mask = libcudf.transform.nans_to_nulls(col.fillna(np.nan))
