@@ -704,12 +704,14 @@ public class ColumnVectorTest extends CudfTestBase {
         {-1.0,   1.0,   1.0,   2.5,   9.0},  // MIDPOINT
         {  -1,     1,     1,     2,     9}}; // NEAREST
 
-    try (ColumnVector cv = ColumnVector.fromBoxedInts(7, 0, 3, 4, 2, 1, -1, 1, 6, 9)) {
-      // sorted: -1, 0, 1, 1, 2, 3, 4, 6, 7, 9
-      for (int j = 0 ; j < quantiles.length ; j++) {
-        for (int i = 0 ; i < methods.length ; i++) {
-          try(Scalar result = cv.quantile(methods[i], quantiles[j])) {
-            assertEqualsWithinPercentage(exactExpected[i][j], result.getDouble(), PERCENTAGE);
+    try (ColumnVector cv = ColumnVector.fromBoxedInts(-1, 0, 1, 1, 2, 3, 4, 6, 7, 9)) {
+      for (int i = 0 ; i < methods.length ; i++) {
+        try (ColumnVector result = cv.quantile(methods[i], quantiles);
+             HostColumnVector hostResult = result.copyToHost()) {
+          double[] expected = exactExpected[i];
+          assertEquals(expected.length, hostResult.getRowCount());
+          for (int j = 0; j < expected.length; j++) {
+            assertEqualsWithinPercentage(expected[j], hostResult.getDouble(j), PERCENTAGE, methods[i] + " " + quantiles[j]);
           }
         }
       }
@@ -725,12 +727,14 @@ public class ColumnVectorTest extends CudfTestBase {
         {-1.01, 0.8,  0.955, 2.13, 6.8},  // MIDPOINT
         {-1.01, 0.8,   1.11, 2.13, 6.8}}; // NEAREST
 
-    try (ColumnVector cv = ColumnVector.fromBoxedDoubles(6.8, 0.15, 3.4, 4.17, 2.13, 1.11, -1.01, 0.8, 5.7)) {
-      // sorted: -1.01, 0.15, 0.8, 1.11, 2.13, 3.4, 4.17, 5.7, 6.8
-      for (int j = 0; j < quantiles.length ; j++) {
-        for (int i = 0 ; i < methods.length ; i++) {
-          try (Scalar result = cv.quantile(methods[i], quantiles[j])) {
-            assertEqualsWithinPercentage(exactExpected[i][j], result.getDouble(), PERCENTAGE);
+    try (ColumnVector cv = ColumnVector.fromBoxedDoubles(-1.01, 0.15, 0.8, 1.11, 2.13, 3.4, 4.17, 5.7, 6.8)) {
+      for (int i = 0 ; i < methods.length ; i++) {
+        try (ColumnVector result = cv.quantile(methods[i], quantiles);
+             HostColumnVector hostResult = result.copyToHost()) {
+          double[] expected = exactExpected[i];
+          assertEquals(expected.length, hostResult.getRowCount());
+          for (int j = 0; j < expected.length; j++) {
+            assertEqualsWithinPercentage(expected[j], hostResult.getDouble(j), PERCENTAGE, methods[i] + " " + quantiles[j]);
           }
         }
       }

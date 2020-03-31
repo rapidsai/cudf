@@ -1,5 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pytest
@@ -102,3 +103,17 @@ def test_as_column_scalar_with_nan(nan_as_null):
     ).to_array()
 
     np.testing.assert_equal(expected, got)
+
+
+@pytest.mark.parametrize("data", [[1.1, 2.2, 3.3, 4.4], [1, 2, 3, 4]])
+@pytest.mark.parametrize("dtype", ["float32", "float64"])
+def test_column_series_cuda_array_dtype(data, dtype):
+    psr = pd.Series(np.asarray(data), dtype=dtype)
+    sr = cudf.Series(cp.asarray(data), dtype=dtype)
+
+    assert_eq(psr, sr)
+
+    psr = pd.Series(data, dtype=dtype)
+    sr = cudf.Series(data, dtype=dtype)
+
+    assert_eq(psr, sr)
