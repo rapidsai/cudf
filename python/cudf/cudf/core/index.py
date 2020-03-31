@@ -429,6 +429,31 @@ class Index(Frame):
             return NotImplemented
 
     def isin(self, values):
+        """ Check whether `values` are contained in Index.
+
+        Parameters
+        ----------
+        values : set or list-like
+
+        Returns
+        -------
+        Return a boolean Series showing whether each element
+        in the index matches an element in the passed sequence
+        of values exactly.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> sr=cudf.Series([1, 2, 3, 4, 4, 6], index=[2, 3, 1, 4, 6, 5])
+        >>> sr.index.isin([0, 2, 4])
+        0     True
+        1    False
+        2    False
+        3     True
+        4    False
+        5    False
+        dtype: bool
+        """
         return self.to_series().isin(values)
 
     @property
