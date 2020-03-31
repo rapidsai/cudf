@@ -33,6 +33,11 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         NO "cudf::sorted::NO"
         YES "cudf::sorted::YES"
 
+    cdef cppclass order_info:
+        sorted is_sorted
+        order ordering
+        null_order null_ordering
+
     cdef enum type_id:
         EMPTY = 0
         INT8 = 1

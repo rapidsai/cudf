@@ -40,7 +40,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class ColumnVectorTest extends CudfTestBase {
 
-  public static final double DELTA = 0.0001;
+  public static final double PERCENTAGE = 0.0001;
 
   // c = a * a - a
   static String ptx = "***(" +
@@ -704,12 +704,14 @@ public class ColumnVectorTest extends CudfTestBase {
         {-1.0,   1.0,   1.0,   2.5,   9.0},  // MIDPOINT
         {  -1,     1,     1,     2,     9}}; // NEAREST
 
-    try (ColumnVector cv = ColumnVector.fromBoxedInts(7, 0, 3, 4, 2, 1, -1, 1, 6, 9)) {
-      // sorted: -1, 0, 1, 1, 2, 3, 4, 6, 7, 9
-      for (int j = 0 ; j < quantiles.length ; j++) {
-        for (int i = 0 ; i < methods.length ; i++) {
-          try(Scalar result = cv.quantile(methods[i], quantiles[j])) {
-            assertEquals(exactExpected[i][j], result.getDouble(), DELTA);
+    try (ColumnVector cv = ColumnVector.fromBoxedInts(-1, 0, 1, 1, 2, 3, 4, 6, 7, 9)) {
+      for (int i = 0 ; i < methods.length ; i++) {
+        try (ColumnVector result = cv.quantile(methods[i], quantiles);
+             HostColumnVector hostResult = result.copyToHost()) {
+          double[] expected = exactExpected[i];
+          assertEquals(expected.length, hostResult.getRowCount());
+          for (int j = 0; j < expected.length; j++) {
+            assertEqualsWithinPercentage(expected[j], hostResult.getDouble(j), PERCENTAGE, methods[i] + " " + quantiles[j]);
           }
         }
       }
@@ -725,12 +727,14 @@ public class ColumnVectorTest extends CudfTestBase {
         {-1.01, 0.8,  0.955, 2.13, 6.8},  // MIDPOINT
         {-1.01, 0.8,   1.11, 2.13, 6.8}}; // NEAREST
 
-    try (ColumnVector cv = ColumnVector.fromBoxedDoubles(6.8, 0.15, 3.4, 4.17, 2.13, 1.11, -1.01, 0.8, 5.7)) {
-      // sorted: -1.01, 0.15, 0.8, 1.11, 2.13, 3.4, 4.17, 5.7, 6.8
-      for (int j = 0; j < quantiles.length ; j++) {
-        for (int i = 0 ; i < methods.length ; i++) {
-          try (Scalar result = cv.quantile(methods[i], quantiles[j])) {
-            assertEquals(exactExpected[i][j], result.getDouble(), DELTA);
+    try (ColumnVector cv = ColumnVector.fromBoxedDoubles(-1.01, 0.15, 0.8, 1.11, 2.13, 3.4, 4.17, 5.7, 6.8)) {
+      for (int i = 0 ; i < methods.length ; i++) {
+        try (ColumnVector result = cv.quantile(methods[i], quantiles);
+             HostColumnVector hostResult = result.copyToHost()) {
+          double[] expected = exactExpected[i];
+          assertEquals(expected.length, hostResult.getRowCount());
+          for (int j = 0; j < expected.length; j++) {
+            assertEqualsWithinPercentage(expected[j], hostResult.getDouble(j), PERCENTAGE, methods[i] + " " + quantiles[j]);
           }
         }
       }
@@ -1102,9 +1106,20 @@ public class ColumnVectorTest extends CudfTestBase {
            ColumnVector result = v1.rollingWindow(AggregateOp.MEAN, options)) {
         assertColumnsAreEqual(expected, result);
       }
+    }
+  }
 
+  @Test
+  void testWindowStaticCounts() {
+    WindowOptions options = WindowOptions.builder().window(2, 1)
+            .minPeriods(2).build();
+    try (ColumnVector v1 = ColumnVector.fromBoxedInts(5, 4, null, 6, 8)) {
+      try (ColumnVector expected = ColumnVector.fromInts(2, 2, 2, 2, 2);
+           ColumnVector result = v1.rollingWindow(AggregateOp.COUNT_VALID, options)) {
+        assertColumnsAreEqual(expected, result);
+      }
       try (ColumnVector expected = ColumnVector.fromInts(2, 3, 3, 3, 2);
-           ColumnVector result = v1.rollingWindow(AggregateOp.COUNT, options)) {
+           ColumnVector result = v1.rollingWindow(AggregateOp.COUNT_ALL, options)) {
         assertColumnsAreEqual(expected, result);
       }
     }

@@ -120,6 +120,12 @@ final class MemoryCleaner {
     public void noWarnLeakExpected() {
       leakExpected = true;
     }
+
+    /**
+     * Check if the underlying memory has been cleaned up or not.
+     * @return true this is clean else false.
+     */
+    public abstract boolean isClean();
   }
 
   static final AtomicLong leakCount = new AtomicLong();
@@ -130,10 +136,12 @@ final class MemoryCleaner {
   private static class CleanerWeakReference<T> extends WeakReference<T> {
 
     private final Cleaner cleaner;
+    final boolean isRmmBlocker;
 
-    public CleanerWeakReference(T orig, Cleaner cleaner, ReferenceQueue collected) {
+    public CleanerWeakReference(T orig, Cleaner cleaner, ReferenceQueue collected, boolean isRmmBlocker) {
       super(orig, collected);
       this.cleaner = cleaner;
+      this.isRmmBlocker = isRmmBlocker;
     }
 
     public void clean() {
@@ -208,27 +216,36 @@ final class MemoryCleaner {
 
   static void register(ColumnVector vec, Cleaner cleaner) {
     // It is now registered...
-    all.add(new CleanerWeakReference(vec, cleaner, collected));
+    all.add(new CleanerWeakReference(vec, cleaner, collected, true));
   }
 
   static void register(HostColumnVector vec, Cleaner cleaner) {
     // It is now registered...
-    all.add(new CleanerWeakReference(vec, cleaner, collected));
+    all.add(new CleanerWeakReference(vec, cleaner, collected, false));
   }
 
   static void register(MemoryBuffer buf, Cleaner cleaner) {
     // It is now registered...
-    all.add(new CleanerWeakReference(buf, cleaner, collected));
+    all.add(new CleanerWeakReference(buf, cleaner, collected, buf instanceof BaseDeviceMemoryBuffer));
   }
 
   static void register(Cuda.Stream stream, Cleaner cleaner) {
     // It is now registered...
-    all.add(new CleanerWeakReference(stream, cleaner, collected));
+    all.add(new CleanerWeakReference(stream, cleaner, collected, false));
   }
 
   static void register(Cuda.Event event, Cleaner cleaner) {
     // It is now registered...
-    all.add(new CleanerWeakReference(event, cleaner, collected));
+    all.add(new CleanerWeakReference(event, cleaner, collected, false));
+  }
+
+  /**
+   * This is not 100% perfect and we can still run into situations where RMM buffers were not
+   * collected and this returns false because of thread race conditions. This is just a best effort.
+   * @return true if there are rmm blockers else false.
+   */
+  static boolean bestEffortHasRmmBlockers() {
+    return all.stream().anyMatch(cwr -> cwr.isRmmBlocker && !cwr.cleaner.isClean());
   }
 
   /**
