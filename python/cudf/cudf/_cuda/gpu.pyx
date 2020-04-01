@@ -240,7 +240,8 @@ def driverGetVersion():
     CUDA 9.2 would be represented by 9020. If no driver is installed,
     then 0 is returned as the driver version.
 
-    This function returns -1 if driver version is NULL.
+    This function automatically raises CUDARuntimeError with error message
+    and status code.
     """
     cdef int version
     status = cudaDriverGetVersion(&version)
@@ -255,7 +256,8 @@ def runtimeGetVersion():
     The version is returned as (1000 major + 10 minor). For example,
     CUDA 9.2 would be represented by 9020.
 
-    This function returns -1 if runtime version is NULL.
+    This function automatically raises CUDARuntimeError with error message
+    and status code.
     """
 
     cdef int version
@@ -270,7 +272,8 @@ def getDeviceCount():
     Returns the number of devices with compute capability greater or
     equal to 2.0 that are available for execution.
 
-    This function returns -1 if NULL device pointer is assigned.
+    This function automatically raises CUDARuntimeError with error message
+    and status code.
     """
 
     cdef int count
@@ -290,6 +293,9 @@ def getDeviceAttribute(object attr, int device):
             Device attribute to query
         device : int
             Device number to query
+
+    This function automatically raises CUDARuntimeError with error message
+    and status code.
     """
 
     cdef int value
@@ -300,6 +306,18 @@ def getDeviceAttribute(object attr, int device):
 
 
 def getDeviceProperties(int device):
+    """
+    Returns information about the compute-device.
+
+    Parameters
+    ----------
+        device : int
+            Device number to query
+
+    This function automatically raises CUDARuntimeError with error message
+    and status code.
+    """
+
     cdef cudaDeviceProp prop
     status = cudaGetDeviceProperties(&prop, device)
     if status != 0:
