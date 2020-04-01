@@ -78,7 +78,7 @@
 - PR #4720 Fix issue related to `dtype` param not being adhered incase of cuda arrays
 
 
-# cuDF 0.13.0 (Date TBD)
+# cuDF 0.13.0 (31 Mar 2020)
 
 ## New Features
 
@@ -130,6 +130,9 @@
 - PR #4602 Add Cython bindings for functions in `datetime.hpp`
 - PR #4670 Add java and JNI bindings for contains_re
 - PR #4363 Grouped Rolling Window support
+- PR #3917 Add dictionary add_keys function
+- PR #3842 ORC writer: add support for column statistics
+- PR #4088 Added asString() on ColumnVector in Java that takes a format string
 
 ## Improvements
 
@@ -268,6 +271,10 @@
 - PR #4554 Removed raw RMM allocation from `column_device_view`
 - PR #4619 Remove usage of `nvstrings` in `data_array_view`
 - PR #4654 Upgrade version of `numba` required to `>=0.48.0`
+- PR #4035 Port NVText tokenize function to libcudf++
+- PR #4042 Port cudf/io/functions.hpp to Cython for use in IO bindings
+- PR #4058 Port hash.pyx to use libcudf++ APIs
+- PR #4133 Mask cleanup and fixes: use `int32` dtype, ensure 64 byte padding, handle offsets
 
 ## Bug Fixes
 
@@ -385,6 +392,10 @@
 - PR #4676 Fix bug in `_shuffle_group` for repartition
 - PR #4681 Fix `test_repr` tests that were generating a `RangeIndex` for column names
 - PR #4729 Fix `fsspec` versioning to prevent dask test failures
+- PR #4145 Support empty index case in DataFrame._from_table
+- PR #4108 Fix dtype bugs in dask_cudf metadata (metadata_nonempty overhaul)
+- PR #4138 Really fix strings concatenate logic with column offsets
+- PR #4119 Fix binary ops slowdown using jitify -remove-unused-globals
 
 
 # cuDF 0.12.0 (04 Feb 2020)
