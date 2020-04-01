@@ -6,7 +6,7 @@ import pyarrow as pa
 import pyarrow.orc as orc
 
 import cudf
-import cudf._libxx as libcudfxx
+import cudf._lib as libcudf
 from cudf.utils import ioutils
 
 
@@ -50,7 +50,7 @@ def read_orc(
 
     if engine == "cudf":
         df = DataFrame._from_table(
-            libcudfxx.orc.read_orc(
+            libcudf.orc.read_orc(
                 filepath_or_buffer,
                 columns,
                 stripe,
@@ -81,4 +81,4 @@ def read_orc(
 def to_orc(df, fname, compression=None, enable_statistics=False):
     """{docstring}"""
 
-    libcudfxx.orc.write_orc(df, fname, compression, enable_statistics)
+    libcudf.orc.write_orc(df, fname, compression, enable_statistics)

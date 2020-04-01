@@ -8,8 +8,8 @@ import pandas as pd
 import pyarrow as pa
 
 import cudf
-import cudf._libxx as libcudfxx
-from cudf._libxx.transform import bools_to_mask
+import cudf._lib as libcudf
+from cudf._lib.transform import bools_to_mask
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.core.dtypes import CategoricalDtype
@@ -488,7 +488,7 @@ class CategoricalColumn(column.ColumnBase):
             )
         )
 
-        output = libcudfxx.replace.replace(
+        output = libcudf.replace.replace(
             replaced, to_replace_col, replacement_col
         )
 
@@ -530,7 +530,7 @@ class CategoricalColumn(column.ColumnBase):
                 self.codes.dtype
             )
 
-        result = libcudfxx.replace.replace_nulls(self, fill_value)
+        result = libcudf.replace.replace_nulls(self, fill_value)
 
         result = column.build_categorical_column(
             categories=self.dtype.categories,
@@ -600,7 +600,7 @@ class CategoricalColumn(column.ColumnBase):
 
     def copy(self, deep=True):
         if deep:
-            copied_col = libcudfxx.copying.copy_column(self)
+            copied_col = libcudf.copying.copy_column(self)
 
             return column.build_categorical_column(
                 categories=self.dtype.categories,

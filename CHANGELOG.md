@@ -30,11 +30,13 @@
 - PR #4699 Make Java's MemoryBuffer public and add MemoryBuffer.slice
 - PR #4691 Fix compiler argument syntax for ccache
 - PR #4705 quantile cython bindings
+- PR #4627 Remove legacy Cython
 - PR #4688 Add Java count aggregation to include null values
 - PR #4331 Improved test for double that considers an epsilon
 - PR #4731 Avoid redundant host->device copies when reading the entire CSV/JSON file
 - PR #4738 Remove stop-gaps in StringMethods and enable related tests
 - PR #4745 Fix `fsspec` related issue and upgrade `fsspec` version
+- PR #4716 Remove direct calls to RMM_ALLOC/RMM_FREE
 - PR #4765 Add in java support for sequence
 - PR #4733 Fix `isin` docs for `DataFrame`, `Series`, `Index`, and add `DataFrame.isin` support
 
