@@ -3,8 +3,14 @@
 import warnings
 
 import pyarrow.parquet as pq
+from fsspec.implementations.local import (
+    LocalFileSystem as FSSpecLocalFileSystem,
+)
 from pyarrow.compat import guid
-from pyarrow.filesystem import resolve_filesystem_and_path
+from pyarrow.filesystem import (
+    LocalFileSystem as PyArrowLocalFileSystem,
+    resolve_filesystem_and_path,
+)
 
 import cudf
 import cudf._lib.parquet as libparquet
@@ -30,7 +36,10 @@ def _get_partition_groups(df, partition_cols, preserve_index=False):
 
 def _get_filesystem_and_path(passed_filesystem, path):
     if passed_filesystem is None:
-        return resolve_filesystem_and_path(path, passed_filesystem)
+        fs, path = resolve_filesystem_and_path(path, passed_filesystem)
+        if isinstance(fs, PyArrowLocalFileSystem):
+            return FSSpecLocalFileSystem(), path
+        return fs, path
     return passed_filesystem, path
 
 
