@@ -116,7 +116,7 @@ constexpr inline bool is_boolean() {
 
 struct is_boolean_impl {
   template <typename T>
-  bool operator()() {
+  constexpr bool operator()() {
     return is_boolean<T>();
   }
 };
